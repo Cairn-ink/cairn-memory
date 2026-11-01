@@ -68,7 +68,7 @@ function rawAncestryColumn(db, table) {
 }
 // Canonical S1 receipt validation is also part of a source-ref decision. It
 // cannot invoke a serving entry; its memo is distinct from completed decisions.
-function canonicalReceiptReadSafety(db, { namespace, receipt, memo, rawTargets = [] }) {
+function canonicalReceiptReadSafety(db, { namespace, receipt, memo, rawTargets = [], rawAncestryEmpty = false }) {
   const key = JSON.stringify([namespace, receipt]);
   const cache = memo && (memo.canonicalReceipts ??= new Map());
   if (cache?.has(key)) { const entry = cache.get(key); rawTargets.push(...entry.rawTargets); return entry.result; }
@@ -76,6 +76,10 @@ function canonicalReceiptReadSafety(db, { namespace, receipt, memo, rawTargets =
   const source = { client: receipt.client, sessionId: receipt.session_id, eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt };
   if (createHash('sha256').update(JSON.stringify(source)).digest('hex') !== receipt.receipt_key) return remember(denied('identity_mismatch'));
   try {
+    // Only a canonical row projection may supply this conservative proof:
+    // no stored/derived/kept ancestry, possible source session or session fence.
+    // Receipt identity was checked above; a possible root retains full S1.
+    if (rawAncestryEmpty === true && memo && db.isTransaction) return remember(allowed);
     const lineage = memo?.lineage ?? createRawLineageStorage(db);
     const enabled = memo ? memo.lineageEnabled ??= lineage.enabled() : lineage.enabled();
     if (enabled) lineage.assertStoredReceipts(namespace, [receipt], { readExisting: true, rawTargets });

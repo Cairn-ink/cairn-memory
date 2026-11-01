@@ -10,7 +10,8 @@
   ],
   "measuredNodes": [
     "22.16.0",
-    "24.15.0"
+    "24.15.0",
+    "24.22.1"
   ],
   "notApplicable": [
     "isSuppressed",
@@ -3770,6 +3771,162 @@
         "0",
         "absent",
         "semantic"
+      ]
+    },
+    {
+      "id": "recall-source-evidence-18-12",
+      "args": [
+        "core/testing/content-safety-s2h-path-cost-probe.mjs",
+        "memory",
+        "18",
+        "12",
+        "0",
+        "match",
+        "source-evidence",
+        "12"
+      ]
+    },
+    {
+      "id": "recall-rationale-evidence-18-12",
+      "args": [
+        "core/testing/content-safety-s2h-path-cost-probe.mjs",
+        "memory",
+        "18",
+        "12",
+        "0",
+        "match",
+        "rationale-evidence",
+        "12"
+      ]
+    },
+    {
+      "id": "recall-source-evidence-18-24",
+      "args": [
+        "core/testing/content-safety-s2h-path-cost-probe.mjs",
+        "memory",
+        "18",
+        "24",
+        "0",
+        "match",
+        "source-evidence",
+        "12"
+      ]
+    },
+    {
+      "id": "recall-rationale-evidence-18-24",
+      "args": [
+        "core/testing/content-safety-s2h-path-cost-probe.mjs",
+        "memory",
+        "18",
+        "24",
+        "0",
+        "match",
+        "rationale-evidence",
+        "12"
+      ]
+    },
+    {
+      "id": "recall-source-evidence-23-12",
+      "args": [
+        "core/testing/content-safety-s2h-path-cost-probe.mjs",
+        "memory",
+        "23",
+        "12",
+        "0",
+        "match",
+        "source-evidence",
+        "12"
+      ]
+    },
+    {
+      "id": "recall-rationale-evidence-23-12",
+      "args": [
+        "core/testing/content-safety-s2h-path-cost-probe.mjs",
+        "memory",
+        "23",
+        "12",
+        "0",
+        "match",
+        "rationale-evidence",
+        "12"
+      ]
+    },
+    {
+      "id": "recall-source-evidence-23-24",
+      "args": [
+        "core/testing/content-safety-s2h-path-cost-probe.mjs",
+        "memory",
+        "23",
+        "24",
+        "0",
+        "match",
+        "source-evidence",
+        "12"
+      ]
+    },
+    {
+      "id": "recall-rationale-evidence-23-24",
+      "args": [
+        "core/testing/content-safety-s2h-path-cost-probe.mjs",
+        "memory",
+        "23",
+        "24",
+        "0",
+        "match",
+        "rationale-evidence",
+        "12"
+      ]
+    },
+    {
+      "id": "recall-source-evidence-33-12",
+      "args": [
+        "core/testing/content-safety-s2h-path-cost-probe.mjs",
+        "memory",
+        "33",
+        "12",
+        "0",
+        "match",
+        "source-evidence",
+        "12"
+      ]
+    },
+    {
+      "id": "recall-rationale-evidence-33-12",
+      "args": [
+        "core/testing/content-safety-s2h-path-cost-probe.mjs",
+        "memory",
+        "33",
+        "12",
+        "0",
+        "match",
+        "rationale-evidence",
+        "12"
+      ]
+    },
+    {
+      "id": "recall-source-evidence-33-24",
+      "args": [
+        "core/testing/content-safety-s2h-path-cost-probe.mjs",
+        "memory",
+        "33",
+        "24",
+        "0",
+        "match",
+        "source-evidence",
+        "12"
+      ]
+    },
+    {
+      "id": "recall-rationale-evidence-33-24",
+      "args": [
+        "core/testing/content-safety-s2h-path-cost-probe.mjs",
+        "memory",
+        "33",
+        "24",
+        "0",
+        "match",
+        "rationale-evidence",
+        "12"
       ]
     }
   ],
@@ -14178,7 +14335,7 @@
     {
       "key": "[\"child\",\"public-topic-18-12-False\",\"readTopicMembers\",\"members\",null]",
       "counts": [
-        20,
+        42,
         4,
         0
       ]
@@ -14186,7 +14343,7 @@
     {
       "key": "[\"child\",\"public-topic-18-12-False\",\"readTopicMembers\",\"members-cursor\",null]",
       "counts": [
-        15,
+        26,
         3,
         0
       ]
@@ -14194,7 +14351,7 @@
     {
       "key": "[\"child\",\"public-topic-18-12-False\",\"readTopicOverview\",\"legacy\",null]",
       "counts": [
-        6,
+        63,
         3,
         0
       ]
@@ -14202,7 +14359,7 @@
     {
       "key": "[\"child\",\"public-topic-18-12-False\",\"readTopicOverview\",\"legacy-cursor\",null]",
       "counts": [
-        4,
+        10,
         2,
         0
       ]
@@ -14210,7 +14367,7 @@
     {
       "key": "[\"child\",\"public-topic-18-12-False\",\"readTopicOverview\",\"optin\",null]",
       "counts": [
-        15,
+        72,
         3,
         0
       ]
@@ -14218,7 +14375,7 @@
     {
       "key": "[\"child\",\"public-topic-18-12-False\",\"readTopicOverview\",\"optin-cursor\",null]",
       "counts": [
-        10,
+        16,
         2,
         0
       ]
@@ -14226,7 +14383,7 @@
     {
       "key": "[\"child\",\"public-topic-18-12-True\",\"readTopicMembers\",\"members\",null]",
       "counts": [
-        15,
+        25,
         3,
         0
       ]
@@ -14234,7 +14391,7 @@
     {
       "key": "[\"child\",\"public-topic-18-12-True\",\"readTopicOverview\",\"legacy\",null]",
       "counts": [
-        6,
+        17,
         3,
         0
       ]
@@ -14242,7 +14399,7 @@
     {
       "key": "[\"child\",\"public-topic-18-12-True\",\"readTopicOverview\",\"optin\",null]",
       "counts": [
-        15,
+        26,
         3,
         0
       ]
@@ -14250,7 +14407,7 @@
     {
       "key": "[\"child\",\"public-topic-18-24-False\",\"readTopicMembers\",\"members\",null]",
       "counts": [
-        20,
+        42,
         4,
         0
       ]
@@ -14258,7 +14415,7 @@
     {
       "key": "[\"child\",\"public-topic-18-24-False\",\"readTopicMembers\",\"members-cursor\",null]",
       "counts": [
-        15,
+        26,
         3,
         0
       ]
@@ -14266,7 +14423,7 @@
     {
       "key": "[\"child\",\"public-topic-18-24-False\",\"readTopicOverview\",\"legacy\",null]",
       "counts": [
-        8,
+        92,
         4,
         0
       ]
@@ -14274,7 +14431,7 @@
     {
       "key": "[\"child\",\"public-topic-18-24-False\",\"readTopicOverview\",\"legacy-cursor\",null]",
       "counts": [
-        4,
+        10,
         2,
         0
       ]
@@ -14282,7 +14439,7 @@
     {
       "key": "[\"child\",\"public-topic-18-24-False\",\"readTopicOverview\",\"optin\",null]",
       "counts": [
-        20,
+        104,
         4,
         0
       ]
@@ -14290,7 +14447,7 @@
     {
       "key": "[\"child\",\"public-topic-18-24-False\",\"readTopicOverview\",\"optin-cursor\",null]",
       "counts": [
-        10,
+        16,
         2,
         0
       ]
@@ -14298,7 +14455,7 @@
     {
       "key": "[\"child\",\"public-topic-18-24-True\",\"readTopicMembers\",\"members\",null]",
       "counts": [
-        15,
+        25,
         3,
         0
       ]
@@ -14306,7 +14463,7 @@
     {
       "key": "[\"child\",\"public-topic-18-24-True\",\"readTopicOverview\",\"legacy\",null]",
       "counts": [
-        6,
+        17,
         3,
         0
       ]
@@ -14314,7 +14471,7 @@
     {
       "key": "[\"child\",\"public-topic-18-24-True\",\"readTopicOverview\",\"optin\",null]",
       "counts": [
-        15,
+        26,
         3,
         0
       ]
@@ -14322,7 +14479,7 @@
     {
       "key": "[\"child\",\"public-topic-23-12-False\",\"readTopicMembers\",\"members\",null]",
       "counts": [
-        20,
+        42,
         4,
         0
       ]
@@ -14330,7 +14487,7 @@
     {
       "key": "[\"child\",\"public-topic-23-12-False\",\"readTopicMembers\",\"members-cursor\",null]",
       "counts": [
-        15,
+        26,
         3,
         0
       ]
@@ -14338,7 +14495,7 @@
     {
       "key": "[\"child\",\"public-topic-23-12-False\",\"readTopicOverview\",\"legacy\",null]",
       "counts": [
-        6,
+        63,
         3,
         0
       ]
@@ -14346,7 +14503,7 @@
     {
       "key": "[\"child\",\"public-topic-23-12-False\",\"readTopicOverview\",\"legacy-cursor\",null]",
       "counts": [
-        4,
+        10,
         2,
         0
       ]
@@ -14354,7 +14511,7 @@
     {
       "key": "[\"child\",\"public-topic-23-12-False\",\"readTopicOverview\",\"optin\",null]",
       "counts": [
-        15,
+        72,
         3,
         0
       ]
@@ -14362,7 +14519,7 @@
     {
       "key": "[\"child\",\"public-topic-23-12-False\",\"readTopicOverview\",\"optin-cursor\",null]",
       "counts": [
-        10,
+        16,
         2,
         0
       ]
@@ -14370,7 +14527,7 @@
     {
       "key": "[\"child\",\"public-topic-23-12-True\",\"readTopicMembers\",\"members\",null]",
       "counts": [
-        15,
+        25,
         3,
         0
       ]
@@ -14378,7 +14535,7 @@
     {
       "key": "[\"child\",\"public-topic-23-12-True\",\"readTopicOverview\",\"legacy\",null]",
       "counts": [
-        6,
+        17,
         3,
         0
       ]
@@ -14386,7 +14543,7 @@
     {
       "key": "[\"child\",\"public-topic-23-12-True\",\"readTopicOverview\",\"optin\",null]",
       "counts": [
-        15,
+        26,
         3,
         0
       ]
@@ -14394,7 +14551,7 @@
     {
       "key": "[\"child\",\"public-topic-23-24-False\",\"readTopicMembers\",\"members\",null]",
       "counts": [
-        20,
+        42,
         4,
         0
       ]
@@ -14402,7 +14559,7 @@
     {
       "key": "[\"child\",\"public-topic-23-24-False\",\"readTopicMembers\",\"members-cursor\",null]",
       "counts": [
-        15,
+        26,
         3,
         0
       ]
@@ -14410,7 +14567,7 @@
     {
       "key": "[\"child\",\"public-topic-23-24-False\",\"readTopicOverview\",\"legacy\",null]",
       "counts": [
-        8,
+        92,
         4,
         0
       ]
@@ -14418,7 +14575,7 @@
     {
       "key": "[\"child\",\"public-topic-23-24-False\",\"readTopicOverview\",\"legacy-cursor\",null]",
       "counts": [
-        4,
+        10,
         2,
         0
       ]
@@ -14426,7 +14583,7 @@
     {
       "key": "[\"child\",\"public-topic-23-24-False\",\"readTopicOverview\",\"optin\",null]",
       "counts": [
-        20,
+        104,
         4,
         0
       ]
@@ -14434,7 +14591,7 @@
     {
       "key": "[\"child\",\"public-topic-23-24-False\",\"readTopicOverview\",\"optin-cursor\",null]",
       "counts": [
-        10,
+        16,
         2,
         0
       ]
@@ -14442,7 +14599,7 @@
     {
       "key": "[\"child\",\"public-topic-23-24-True\",\"readTopicMembers\",\"members\",null]",
       "counts": [
-        15,
+        25,
         3,
         0
       ]
@@ -14450,7 +14607,7 @@
     {
       "key": "[\"child\",\"public-topic-23-24-True\",\"readTopicOverview\",\"legacy\",null]",
       "counts": [
-        6,
+        17,
         3,
         0
       ]
@@ -14458,7 +14615,7 @@
     {
       "key": "[\"child\",\"public-topic-23-24-True\",\"readTopicOverview\",\"optin\",null]",
       "counts": [
-        15,
+        26,
         3,
         0
       ]
@@ -14466,7 +14623,7 @@
     {
       "key": "[\"child\",\"public-topic-33-12-False\",\"readTopicMembers\",\"members\",null]",
       "counts": [
-        20,
+        42,
         4,
         0
       ]
@@ -14474,7 +14631,7 @@
     {
       "key": "[\"child\",\"public-topic-33-12-False\",\"readTopicMembers\",\"members-cursor\",null]",
       "counts": [
-        15,
+        26,
         3,
         0
       ]
@@ -14482,7 +14639,7 @@
     {
       "key": "[\"child\",\"public-topic-33-12-False\",\"readTopicOverview\",\"legacy\",null]",
       "counts": [
-        6,
+        63,
         3,
         0
       ]
@@ -14490,7 +14647,7 @@
     {
       "key": "[\"child\",\"public-topic-33-12-False\",\"readTopicOverview\",\"legacy-cursor\",null]",
       "counts": [
-        4,
+        10,
         2,
         0
       ]
@@ -14498,7 +14655,7 @@
     {
       "key": "[\"child\",\"public-topic-33-12-False\",\"readTopicOverview\",\"optin\",null]",
       "counts": [
-        15,
+        72,
         3,
         0
       ]
@@ -14506,7 +14663,7 @@
     {
       "key": "[\"child\",\"public-topic-33-12-False\",\"readTopicOverview\",\"optin-cursor\",null]",
       "counts": [
-        10,
+        16,
         2,
         0
       ]
@@ -14514,7 +14671,7 @@
     {
       "key": "[\"child\",\"public-topic-33-12-True\",\"readTopicMembers\",\"members\",null]",
       "counts": [
-        15,
+        25,
         3,
         0
       ]
@@ -14522,7 +14679,7 @@
     {
       "key": "[\"child\",\"public-topic-33-12-True\",\"readTopicOverview\",\"legacy\",null]",
       "counts": [
-        6,
+        17,
         3,
         0
       ]
@@ -14530,7 +14687,7 @@
     {
       "key": "[\"child\",\"public-topic-33-12-True\",\"readTopicOverview\",\"optin\",null]",
       "counts": [
-        15,
+        26,
         3,
         0
       ]
@@ -14538,7 +14695,7 @@
     {
       "key": "[\"child\",\"public-topic-33-24-False\",\"readTopicMembers\",\"members\",null]",
       "counts": [
-        20,
+        42,
         4,
         0
       ]
@@ -14546,7 +14703,7 @@
     {
       "key": "[\"child\",\"public-topic-33-24-False\",\"readTopicMembers\",\"members-cursor\",null]",
       "counts": [
-        15,
+        26,
         3,
         0
       ]
@@ -14554,7 +14711,7 @@
     {
       "key": "[\"child\",\"public-topic-33-24-False\",\"readTopicOverview\",\"legacy\",null]",
       "counts": [
-        8,
+        92,
         4,
         0
       ]
@@ -14562,7 +14719,7 @@
     {
       "key": "[\"child\",\"public-topic-33-24-False\",\"readTopicOverview\",\"legacy-cursor\",null]",
       "counts": [
-        4,
+        10,
         2,
         0
       ]
@@ -14570,7 +14727,7 @@
     {
       "key": "[\"child\",\"public-topic-33-24-False\",\"readTopicOverview\",\"optin\",null]",
       "counts": [
-        20,
+        104,
         4,
         0
       ]
@@ -14578,7 +14735,7 @@
     {
       "key": "[\"child\",\"public-topic-33-24-False\",\"readTopicOverview\",\"optin-cursor\",null]",
       "counts": [
-        10,
+        16,
         2,
         0
       ]
@@ -14586,7 +14743,7 @@
     {
       "key": "[\"child\",\"public-topic-33-24-True\",\"readTopicMembers\",\"members\",null]",
       "counts": [
-        15,
+        25,
         3,
         0
       ]
@@ -14594,7 +14751,7 @@
     {
       "key": "[\"child\",\"public-topic-33-24-True\",\"readTopicOverview\",\"legacy\",null]",
       "counts": [
-        6,
+        17,
         3,
         0
       ]
@@ -14602,7 +14759,7 @@
     {
       "key": "[\"child\",\"public-topic-33-24-True\",\"readTopicOverview\",\"optin\",null]",
       "counts": [
-        15,
+        26,
         3,
         0
       ]
@@ -16493,6 +16650,966 @@
         4,
         1,
         0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-12\",\"fetch\",null,\"hit\"]",
+      "counts": [
+        23,
+        3,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-12\",\"get\",null,\"hit\"]",
+      "counts": [
+        9,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-12\",\"list\",null,\"hit\"]",
+      "counts": [
+        4,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-12\",\"map\",null,\"hit\"]",
+      "counts": [
+        8,
+        2,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-12\",\"recall\",null,\"hit\"]",
+      "counts": [
+        683,
+        36,
+        22
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-12\",\"scope.get\",null,\"hit\"]",
+      "counts": [
+        5,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-12\",\"scope.list\",null,\"hit\"]",
+      "counts": [
+        27,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-12\",\"scope.search\",null,\"hit\"]",
+      "counts": [
+        27,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-12\",\"session\",null,\"hit\"]",
+      "counts": [
+        178,
+        2,
+        14
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-12\",\"sourceSnapshot\",null,\"hit\"]",
+      "counts": [
+        226,
+        2,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-24\",\"fetch\",null,\"hit\"]",
+      "counts": [
+        23,
+        3,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-24\",\"get\",null,\"hit\"]",
+      "counts": [
+        9,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-24\",\"list\",null,\"hit\"]",
+      "counts": [
+        4,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-24\",\"map\",null,\"hit\"]",
+      "counts": [
+        8,
+        2,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-24\",\"recall\",null,\"hit\"]",
+      "counts": [
+        719,
+        36,
+        22
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-24\",\"scope.get\",null,\"hit\"]",
+      "counts": [
+        5,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-24\",\"scope.list\",null,\"hit\"]",
+      "counts": [
+        27,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-24\",\"scope.search\",null,\"hit\"]",
+      "counts": [
+        27,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-24\",\"session\",null,\"hit\"]",
+      "counts": [
+        178,
+        2,
+        14
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-18-24\",\"sourceSnapshot\",null,\"overflow\"]",
+      "counts": [
+        5,
+        1,
+        1
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-12\",\"fetch\",null,\"hit\"]",
+      "counts": [
+        23,
+        3,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-12\",\"get\",null,\"hit\"]",
+      "counts": [
+        9,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-12\",\"list\",null,\"hit\"]",
+      "counts": [
+        4,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-12\",\"map\",null,\"hit\"]",
+      "counts": [
+        8,
+        2,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-12\",\"recall\",null,\"hit\"]",
+      "counts": [
+        683,
+        36,
+        22
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-12\",\"scope.get\",null,\"hit\"]",
+      "counts": [
+        5,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-12\",\"scope.list\",null,\"hit\"]",
+      "counts": [
+        27,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-12\",\"scope.search\",null,\"hit\"]",
+      "counts": [
+        27,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-12\",\"session\",null,\"hit\"]",
+      "counts": [
+        178,
+        2,
+        14
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-12\",\"sourceSnapshot\",null,\"hit\"]",
+      "counts": [
+        226,
+        2,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-24\",\"fetch\",null,\"hit\"]",
+      "counts": [
+        23,
+        3,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-24\",\"get\",null,\"hit\"]",
+      "counts": [
+        9,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-24\",\"list\",null,\"hit\"]",
+      "counts": [
+        4,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-24\",\"map\",null,\"hit\"]",
+      "counts": [
+        8,
+        2,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-24\",\"recall\",null,\"hit\"]",
+      "counts": [
+        719,
+        36,
+        22
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-24\",\"scope.get\",null,\"hit\"]",
+      "counts": [
+        5,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-24\",\"scope.list\",null,\"hit\"]",
+      "counts": [
+        27,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-24\",\"scope.search\",null,\"hit\"]",
+      "counts": [
+        27,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-24\",\"session\",null,\"hit\"]",
+      "counts": [
+        178,
+        2,
+        14
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-23-24\",\"sourceSnapshot\",null,\"overflow\"]",
+      "counts": [
+        5,
+        1,
+        1
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-12\",\"fetch\",null,\"hit\"]",
+      "counts": [
+        45,
+        3,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-12\",\"get\",null,\"hit\"]",
+      "counts": [
+        20,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-12\",\"list\",null,\"hit\"]",
+      "counts": [
+        4,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-12\",\"map\",null,\"hit\"]",
+      "counts": [
+        8,
+        2,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-12\",\"recall\",null,\"hit\"]",
+      "counts": [
+        1079,
+        36,
+        22
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-12\",\"scope.get\",null,\"hit\"]",
+      "counts": [
+        16,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-12\",\"scope.list\",null,\"hit\"]",
+      "counts": [
+        159,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-12\",\"scope.search\",null,\"hit\"]",
+      "counts": [
+        159,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-12\",\"session\",null,\"hit\"]",
+      "counts": [
+        442,
+        2,
+        14
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-12\",\"sourceSnapshot\",null,\"hit\"]",
+      "counts": [
+        490,
+        2,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-24\",\"fetch\",null,\"hit\"]",
+      "counts": [
+        45,
+        3,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-24\",\"get\",null,\"hit\"]",
+      "counts": [
+        20,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-24\",\"list\",null,\"hit\"]",
+      "counts": [
+        4,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-24\",\"map\",null,\"hit\"]",
+      "counts": [
+        8,
+        2,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-24\",\"recall\",null,\"hit\"]",
+      "counts": [
+        1115,
+        36,
+        22
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-24\",\"scope.get\",null,\"hit\"]",
+      "counts": [
+        16,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-24\",\"scope.list\",null,\"hit\"]",
+      "counts": [
+        159,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-24\",\"scope.search\",null,\"hit\"]",
+      "counts": [
+        159,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-24\",\"session\",null,\"hit\"]",
+      "counts": [
+        442,
+        2,
+        14
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-rationale-evidence-33-24\",\"sourceSnapshot\",null,\"overflow\"]",
+      "counts": [
+        5,
+        1,
+        1
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-12\",\"fetch\",null,\"hit\"]",
+      "counts": [
+        23,
+        3,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-12\",\"get\",null,\"hit\"]",
+      "counts": [
+        9,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-12\",\"list\",null,\"hit\"]",
+      "counts": [
+        4,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-12\",\"map\",null,\"hit\"]",
+      "counts": [
+        8,
+        2,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-12\",\"recall\",null,\"hit\"]",
+      "counts": [
+        503,
+        36,
+        22
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-12\",\"scope.get\",null,\"hit\"]",
+      "counts": [
+        5,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-12\",\"scope.list\",null,\"hit\"]",
+      "counts": [
+        27,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-12\",\"scope.search\",null,\"hit\"]",
+      "counts": [
+        27,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-12\",\"session\",null,\"hit\"]",
+      "counts": [
+        178,
+        2,
+        14
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-12\",\"sourceSnapshot\",null,\"hit\"]",
+      "counts": [
+        226,
+        2,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-24\",\"fetch\",null,\"hit\"]",
+      "counts": [
+        23,
+        3,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-24\",\"get\",null,\"hit\"]",
+      "counts": [
+        9,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-24\",\"list\",null,\"hit\"]",
+      "counts": [
+        4,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-24\",\"map\",null,\"hit\"]",
+      "counts": [
+        8,
+        2,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-24\",\"recall\",null,\"hit\"]",
+      "counts": [
+        539,
+        36,
+        22
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-24\",\"scope.get\",null,\"hit\"]",
+      "counts": [
+        5,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-24\",\"scope.list\",null,\"hit\"]",
+      "counts": [
+        27,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-24\",\"scope.search\",null,\"hit\"]",
+      "counts": [
+        27,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-24\",\"session\",null,\"hit\"]",
+      "counts": [
+        178,
+        2,
+        14
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-18-24\",\"sourceSnapshot\",null,\"overflow\"]",
+      "counts": [
+        5,
+        1,
+        1
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-12\",\"fetch\",null,\"hit\"]",
+      "counts": [
+        23,
+        3,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-12\",\"get\",null,\"hit\"]",
+      "counts": [
+        9,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-12\",\"list\",null,\"hit\"]",
+      "counts": [
+        4,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-12\",\"map\",null,\"hit\"]",
+      "counts": [
+        8,
+        2,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-12\",\"recall\",null,\"hit\"]",
+      "counts": [
+        503,
+        36,
+        22
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-12\",\"scope.get\",null,\"hit\"]",
+      "counts": [
+        5,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-12\",\"scope.list\",null,\"hit\"]",
+      "counts": [
+        27,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-12\",\"scope.search\",null,\"hit\"]",
+      "counts": [
+        27,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-12\",\"session\",null,\"hit\"]",
+      "counts": [
+        178,
+        2,
+        14
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-12\",\"sourceSnapshot\",null,\"hit\"]",
+      "counts": [
+        226,
+        2,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-24\",\"fetch\",null,\"hit\"]",
+      "counts": [
+        23,
+        3,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-24\",\"get\",null,\"hit\"]",
+      "counts": [
+        9,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-24\",\"list\",null,\"hit\"]",
+      "counts": [
+        4,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-24\",\"map\",null,\"hit\"]",
+      "counts": [
+        8,
+        2,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-24\",\"recall\",null,\"hit\"]",
+      "counts": [
+        539,
+        36,
+        22
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-24\",\"scope.get\",null,\"hit\"]",
+      "counts": [
+        5,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-24\",\"scope.list\",null,\"hit\"]",
+      "counts": [
+        27,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-24\",\"scope.search\",null,\"hit\"]",
+      "counts": [
+        27,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-24\",\"session\",null,\"hit\"]",
+      "counts": [
+        178,
+        2,
+        14
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-23-24\",\"sourceSnapshot\",null,\"overflow\"]",
+      "counts": [
+        5,
+        1,
+        1
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-12\",\"fetch\",null,\"hit\"]",
+      "counts": [
+        45,
+        3,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-12\",\"get\",null,\"hit\"]",
+      "counts": [
+        20,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-12\",\"list\",null,\"hit\"]",
+      "counts": [
+        4,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-12\",\"map\",null,\"hit\"]",
+      "counts": [
+        8,
+        2,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-12\",\"recall\",null,\"hit\"]",
+      "counts": [
+        701,
+        36,
+        22
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-12\",\"scope.get\",null,\"hit\"]",
+      "counts": [
+        16,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-12\",\"scope.list\",null,\"hit\"]",
+      "counts": [
+        159,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-12\",\"scope.search\",null,\"hit\"]",
+      "counts": [
+        159,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-12\",\"session\",null,\"hit\"]",
+      "counts": [
+        442,
+        2,
+        14
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-12\",\"sourceSnapshot\",null,\"hit\"]",
+      "counts": [
+        490,
+        2,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-24\",\"fetch\",null,\"hit\"]",
+      "counts": [
+        45,
+        3,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-24\",\"get\",null,\"hit\"]",
+      "counts": [
+        20,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-24\",\"list\",null,\"hit\"]",
+      "counts": [
+        4,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-24\",\"map\",null,\"hit\"]",
+      "counts": [
+        8,
+        2,
+        2
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-24\",\"recall\",null,\"hit\"]",
+      "counts": [
+        737,
+        36,
+        22
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-24\",\"scope.get\",null,\"hit\"]",
+      "counts": [
+        16,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-24\",\"scope.list\",null,\"hit\"]",
+      "counts": [
+        159,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-24\",\"scope.search\",null,\"hit\"]",
+      "counts": [
+        159,
+        1,
+        0
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-24\",\"session\",null,\"hit\"]",
+      "counts": [
+        442,
+        2,
+        14
+      ]
+    },
+    {
+      "key": "[\"child\",\"recall-source-evidence-33-24\",\"sourceSnapshot\",null,\"overflow\"]",
+      "counts": [
+        5,
+        1,
+        1
       ]
     },
     {
@@ -19381,6 +20498,102 @@
         561,
         44,
         7
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 optional MOC sources v18: same-engine ceiling, slope and exact safety pins\",18,12,null,\"contextRead\",\"moc-v1\"]",
+      "counts": [
+        470,
+        25,
+        64
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 optional MOC sources v18: same-engine ceiling, slope and exact safety pins\",18,12,null,\"findCandidates\",\"moc-v1\"]",
+      "counts": [
+        321,
+        21,
+        9
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 optional MOC sources v18: same-engine ceiling, slope and exact safety pins\",18,24,null,\"contextRead\",\"moc-v1\"]",
+      "counts": [
+        542,
+        25,
+        64
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 optional MOC sources v18: same-engine ceiling, slope and exact safety pins\",18,24,null,\"findCandidates\",\"moc-v1\"]",
+      "counts": [
+        393,
+        21,
+        9
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 optional MOC sources v23: same-engine ceiling, slope and exact safety pins\",23,12,null,\"contextRead\",\"moc-v1\"]",
+      "counts": [
+        470,
+        25,
+        64
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 optional MOC sources v23: same-engine ceiling, slope and exact safety pins\",23,12,null,\"findCandidates\",\"moc-v1\"]",
+      "counts": [
+        321,
+        21,
+        9
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 optional MOC sources v23: same-engine ceiling, slope and exact safety pins\",23,24,null,\"contextRead\",\"moc-v1\"]",
+      "counts": [
+        542,
+        25,
+        64
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 optional MOC sources v23: same-engine ceiling, slope and exact safety pins\",23,24,null,\"findCandidates\",\"moc-v1\"]",
+      "counts": [
+        393,
+        21,
+        9
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 optional MOC sources v33: same-engine ceiling, slope and exact safety pins\",33,12,null,\"contextRead\",\"moc-v1\"]",
+      "counts": [
+        734,
+        25,
+        64
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 optional MOC sources v33: same-engine ceiling, slope and exact safety pins\",33,12,null,\"findCandidates\",\"moc-v1\"]",
+      "counts": [
+        453,
+        21,
+        9
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 optional MOC sources v33: same-engine ceiling, slope and exact safety pins\",33,24,null,\"contextRead\",\"moc-v1\"]",
+      "counts": [
+        806,
+        25,
+        64
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 optional MOC sources v33: same-engine ceiling, slope and exact safety pins\",33,24,null,\"findCandidates\",\"moc-v1\"]",
+      "counts": [
+        525,
+        21,
+        9
       ]
     },
     {
@@ -30003,6 +31216,608 @@
       true,
       null,
       true
+    ],
+    "[\"child\",\"recall-source-evidence-18-12\",\"scope.get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-12\",\"scope.list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-12\",\"scope.search\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-12\",\"sourceSnapshot\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-12\",\"get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-12\",\"list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-12\",\"map\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-12\",\"fetch\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-12\",\"recall\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-12\",\"session\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-12\",\"scope.get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-12\",\"scope.list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-12\",\"scope.search\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-12\",\"sourceSnapshot\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-12\",\"get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-12\",\"list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-12\",\"map\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-12\",\"fetch\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-12\",\"recall\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-12\",\"session\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-24\",\"scope.get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-24\",\"scope.list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-24\",\"scope.search\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-24\",\"sourceSnapshot\",null,\"overflow\"]": [
+      false,
+      "context_item_too_large",
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-24\",\"get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-24\",\"list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-24\",\"map\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-24\",\"fetch\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-24\",\"recall\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-18-24\",\"session\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-24\",\"scope.get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-24\",\"scope.list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-24\",\"scope.search\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-24\",\"sourceSnapshot\",null,\"overflow\"]": [
+      false,
+      "context_item_too_large",
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-24\",\"get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-24\",\"list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-24\",\"map\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-24\",\"fetch\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-24\",\"recall\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-18-24\",\"session\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-12\",\"scope.get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-12\",\"scope.list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-12\",\"scope.search\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-12\",\"sourceSnapshot\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-12\",\"get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-12\",\"list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-12\",\"map\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-12\",\"fetch\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-12\",\"recall\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-12\",\"session\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-12\",\"scope.get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-12\",\"scope.list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-12\",\"scope.search\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-12\",\"sourceSnapshot\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-12\",\"get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-12\",\"list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-12\",\"map\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-12\",\"fetch\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-12\",\"recall\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-12\",\"session\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-24\",\"scope.get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-24\",\"scope.list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-24\",\"scope.search\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-24\",\"sourceSnapshot\",null,\"overflow\"]": [
+      false,
+      "context_item_too_large",
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-24\",\"get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-24\",\"list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-24\",\"map\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-24\",\"fetch\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-24\",\"recall\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-23-24\",\"session\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-24\",\"scope.get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-24\",\"scope.list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-24\",\"scope.search\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-24\",\"sourceSnapshot\",null,\"overflow\"]": [
+      false,
+      "context_item_too_large",
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-24\",\"get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-24\",\"list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-24\",\"map\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-24\",\"fetch\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-24\",\"recall\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-23-24\",\"session\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-12\",\"scope.get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-12\",\"scope.list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-12\",\"scope.search\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-12\",\"sourceSnapshot\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-12\",\"get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-12\",\"list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-12\",\"map\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-12\",\"fetch\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-12\",\"recall\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-12\",\"session\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-12\",\"scope.get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-12\",\"scope.list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-12\",\"scope.search\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-12\",\"sourceSnapshot\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-12\",\"get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-12\",\"list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-12\",\"map\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-12\",\"fetch\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-12\",\"recall\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-12\",\"session\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-24\",\"scope.get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-24\",\"scope.list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-24\",\"scope.search\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-24\",\"sourceSnapshot\",null,\"overflow\"]": [
+      false,
+      "context_item_too_large",
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-24\",\"get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-24\",\"list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-24\",\"map\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-24\",\"fetch\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-24\",\"recall\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-source-evidence-33-24\",\"session\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-24\",\"scope.get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-24\",\"scope.list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-24\",\"scope.search\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-24\",\"sourceSnapshot\",null,\"overflow\"]": [
+      false,
+      "context_item_too_large",
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-24\",\"get\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-24\",\"list\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-24\",\"map\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-24\",\"fetch\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-24\",\"recall\",null,\"hit\"]": [
+      true,
+      null,
+      false
+    ],
+    "[\"child\",\"recall-rationale-evidence-33-24\",\"session\",null,\"hit\"]": [
+      true,
+      null,
+      false
     ]
-  }
+  },
+  "round4MeasuredDate": "2026-11-02",
+  "round4Meter": "StatementSync executions, including statements prepared before measurement; fixed topic fixture IDs"
 }

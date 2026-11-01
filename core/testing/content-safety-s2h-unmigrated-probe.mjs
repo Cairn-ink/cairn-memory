@@ -4,7 +4,7 @@ import { assertCostGateCases } from './content-safety-s2h-cost-inventory.mjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-export const nativeCostFiles = ['card','catalog','context','cursor','embedded-semantic','embedded-local-guard','metadata','raw-metadata','role','runtime','port']
+export const nativeCostFiles = ['card','catalog','context','cursor','embedded-semantic','embedded-local-guard','metadata','raw-metadata','role','runtime','port','option']
  .map(name=>'core/test/content-safety-s2h-'+name+'-cost.test.mjs');
 const root=fileURLToPath(new URL('../../',import.meta.url));
 export const nativeCostKey = row => JSON.stringify(['native',row.testName,row.base,row.n??null,row.semantic??null,row.method,row.variant]);

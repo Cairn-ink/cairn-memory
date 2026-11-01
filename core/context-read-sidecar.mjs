@@ -354,8 +354,14 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     return result;
   }
   function textFor(stream, id, metrics) {
-    const row = canonical.prepare(stream.type === 'memory' ? `SELECT content AS text FROM memories WHERE ${where} AND id=?` :
+    const layout = cachedContentLayout(canonical);
+    const ancestry = stream.type === 'memory' && layout?.suppressionRevision && layout.rawLineage ? `,EXISTS(
+      SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id
+      LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id
+      AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry` : '';
+    const row = canonical.prepare(stream.type === 'memory' ? `SELECT content AS text${ancestry} FROM memories WHERE ${where} AND id=?` :
       `SELECT title||char(10)||body AS text FROM private_cards WHERE ${where} AND id=?`).get(...boundary(stream.ns), id);
+    if (row?.invalid_raw_ancestry) unavailable('stale_index');
     if (typeof row?.text !== 'string' || row.text.length > 2_000_000) fail('context_item_too_large');
     metrics.textRows++; metrics.textUnits += row.text.length; metrics.textBytes += Buffer.byteLength(row.text);
     return row.text;

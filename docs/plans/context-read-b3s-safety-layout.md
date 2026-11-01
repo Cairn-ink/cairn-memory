@@ -1168,3 +1168,19 @@ may enter the deferred category without a new decision. Stale and unmapped
 inventory entries still fail.
 
 Denial, zero tolerance, inert-port, E1 and R1 acceptance remain unchanged.
+
+## Revision 3.6 addendum: R2-A1 ratchet baseline (2026-11-01)
+
+Decision: **e9, 2026-11-01 23:35**. The deferred caps are the round 3 measured
+values: fix3b's 106 caps tied to the CSV hash recorded in
+`core/test/fixtures/content-safety-s2h-deferred-counts.json`. The decision
+shorthand "+87/+147" was relative to the zero-fact safety cell. Relative to
+legacy, Role five-fact n12/n24 is +141/+249, including 50/98 E1 calls.
+getEpisode ≤ 20 is the v34 value; v48 getEpisode is 24.
+
+After the round 4 fixes, every deferred cell is remeasured. A lower measurement
+regenerates its cap downward; a measurement above its round 3 cap requires e9
+before merge and must not raise that cap. The caps are the measured values.
+This supersedes revision 3.5's instruction to retain a higher round 3 cap when
+current measurements are lower. After merge, lowering a cap needs no approval;
+raising one needs e9. The S2h-3 target remains the R2-A1 formula.

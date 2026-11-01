@@ -1038,6 +1038,12 @@
           "variants": [
             "embedded semantic on; local singleton; host invokes engine beforeDispatch; 2/4 documents; cursor and no-hit; zero/five facts"
           ]
+        },
+        {
+          "gate": "option-cost",
+          "variants": [
+            "embedded sources:moc-v1, zero facts n12/n24"
+          ]
         }
       ],
       "missing": [],
@@ -1148,6 +1154,12 @@
           "gate": "embedded-local-guard-cost",
           "variants": [
             "embedded semantic on; local singleton; host invokes engine beforeDispatch; 2/4 documents; cursor and no-hit; zero/five facts"
+          ]
+        },
+        {
+          "gate": "option-cost",
+          "variants": [
+            "embedded sources:moc-v1, zero facts n12/n24"
           ]
         }
       ],
@@ -1907,6 +1919,13 @@
             "hit/absent",
             "three layouts"
           ]
+        },
+        {
+          "gate": "option-cost",
+          "variants": [
+            "source-evidence zero facts n12/n24",
+            "rationale-evidence zero facts n12/n24"
+          ]
         }
       ],
       "missing": []
@@ -2355,6 +2374,16 @@
       "recentReceipts:runtime",
       "recentReceipts:empty-count",
       "recentReceipts:missing-ref"
+    ],
+    "embedded-moc": [
+      "findCandidates:moc-v1",
+      "contextRead:moc-v1"
+    ],
+    "recall-source-evidence": [
+      "recall:source-evidence"
+    ],
+    "recall-rationale-evidence": [
+      "recall:rationale-evidence"
     ]
   },
   "surfaceClassifications": {

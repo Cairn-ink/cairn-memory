@@ -25,7 +25,7 @@ test('unmigrated v18/v23/v33: every gated method/variant stays within main a546e
  const records=collectUnmigratedCosts(fixture.jobs,fixture.outcomes),expectedByKey=new Map(expected.map(r=>[r.key,r.counts]));
  assert.equal(expectedByKey.size,expected.length,'unique main cells');
  assert.deepEqual(records.map(r=>r.key).sort(),[...expectedByKey.keys()].sort(),'exact complete main method/variant/cell/n set; no stale or missing cells');
- assert.equal(records.filter(r=>JSON.parse(r.key)[0]==='native').length,499,'493 native plus six Raw legacy cells');
+ assert.equal(records.filter(r=>JSON.parse(r.key)[0]==='native').length,511,'499 existing native plus twelve optional MOC source cells');
  for(const row of records)for(const [i,metric]of ['executed statements','BEGIN','host-port invocations'].entries())
   assert.ok(row.counts[i]<=expectedByKey.get(row.key)[i],'unmigrated '+metric+' exceeds main a546ee43: '+JSON.stringify({key:row.key,main:expectedByKey.get(row.key),branch:row.counts}));
  tReport(records);

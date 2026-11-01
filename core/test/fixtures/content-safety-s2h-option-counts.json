@@ -1,0 +1,122 @@
+{
+  "[\"moc\",18,12,\"findCandidates\"]": [
+    325,
+    21,
+    0
+  ],
+  "[\"moc\",18,12,\"contextRead\"]": [
+    524,
+    25,
+    50
+  ],
+  "[\"moc\",18,24,\"findCandidates\"]": [
+    397,
+    21,
+    0
+  ],
+  "[\"moc\",18,24,\"contextRead\"]": [
+    596,
+    25,
+    50
+  ],
+  "[\"moc\",23,12,\"findCandidates\"]": [
+    325,
+    21,
+    0
+  ],
+  "[\"moc\",23,12,\"contextRead\"]": [
+    524,
+    25,
+    50
+  ],
+  "[\"moc\",23,24,\"findCandidates\"]": [
+    397,
+    21,
+    0
+  ],
+  "[\"moc\",23,24,\"contextRead\"]": [
+    596,
+    25,
+    50
+  ],
+  "[\"moc\",33,12,\"findCandidates\"]": [
+    457,
+    21,
+    0
+  ],
+  "[\"moc\",33,12,\"contextRead\"]": [
+    788,
+    25,
+    50
+  ],
+  "[\"moc\",33,24,\"findCandidates\"]": [
+    529,
+    21,
+    0
+  ],
+  "[\"moc\",33,24,\"contextRead\"]": [
+    860,
+    25,
+    50
+  ],
+  "[\"recall\",18,12,\"source-evidence\"]": [
+    530,
+    36,
+    22
+  ],
+  "[\"recall\",18,24,\"source-evidence\"]": [
+    566,
+    36,
+    22
+  ],
+  "[\"recall\",18,12,\"rationale-evidence\"]": [
+    710,
+    36,
+    22
+  ],
+  "[\"recall\",18,24,\"rationale-evidence\"]": [
+    746,
+    36,
+    22
+  ],
+  "[\"recall\",23,12,\"source-evidence\"]": [
+    530,
+    36,
+    22
+  ],
+  "[\"recall\",23,24,\"source-evidence\"]": [
+    566,
+    36,
+    22
+  ],
+  "[\"recall\",23,12,\"rationale-evidence\"]": [
+    710,
+    36,
+    22
+  ],
+  "[\"recall\",23,24,\"rationale-evidence\"]": [
+    746,
+    36,
+    22
+  ],
+  "[\"recall\",33,12,\"source-evidence\"]": [
+    727,
+    36,
+    22
+  ],
+  "[\"recall\",33,24,\"source-evidence\"]": [
+    763,
+    36,
+    22
+  ],
+  "[\"recall\",33,12,\"rationale-evidence\"]": [
+    1105,
+    36,
+    22
+  ],
+  "[\"recall\",33,24,\"rationale-evidence\"]": [
+    1141,
+    36,
+    22
+  ]
+}

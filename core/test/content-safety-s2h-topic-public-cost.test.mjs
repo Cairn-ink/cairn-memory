@@ -3,6 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
+const pins=JSON.parse(readFileSync(new URL('./fixtures/content-safety-s2h-topic-counts.json',import.meta.url),'utf8'));
 const probe=fileURLToPath(new URL('../testing/content-safety-s2h-topic-cost-probe.mjs',import.meta.url));
 for(const [v,base]of [[34,18],[38,23],[48,33]])test(`R2 public topic v${v}: legacy/optin/member sessions and all cursor pages`,t=>{
  const fixed=new Map(),miss=new Map();
@@ -16,6 +18,7 @@ for(const [v,base]of [[34,18],[38,23],[48,33]])test(`R2 public topic v${v}: lega
    records.push({physical,facts,rows});
   }
   t.diagnostic('R3_TOPIC_PUBLIC_COUNTS '+JSON.stringify({v,base,n,absent,records}));
+  for(const cell of records)for(const row of cell.rows)assert.deepEqual([row.statements,row.begin,row.hostInvocations],pins[JSON.stringify([cell.physical,n,cell.facts,absent,row.method,row.variant])],'exact corrected topic execution pin');
   const [legacy,zero,five]=records;
   for(const current of [zero,five])for(const [i,row]of current.rows.entries()){
    const old=legacy.rows[i],delta=row.statements-old.statements;assert.ok(row.begin<=old.begin,'R2-A1 BEGIN <= same-engine legacy: '+row.variant);assert.equal(row.ports,0);assert.equal(delta,current.facts?6:4,row.variant);

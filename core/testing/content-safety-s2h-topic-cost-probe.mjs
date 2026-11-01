@@ -7,7 +7,17 @@ import assert from 'node:assert/strict';
 import { initializeProbe } from './content-safety-s2h-probe-harness.mjs';
 import { measureContentRead } from './content-safety-cost-meter.mjs';
 const [version,size,factCount='0',miss='match']=process.argv.slice(2),physical=Number(version),n=Number(size),absent=miss==='absent';
-const state=await initializeProbe({physical,n,model:{countTokens:()=>1}}),{core,canonical,load,dbs,transaction,ns,memories}=state;
+// Test-only mutation exercises retained prepared statements through the public
+// dispatcher. The exact source assertion prevents a silent no-op mutation.
+if (process.argv[6] === 'retained-statement-mutation') register('data:text/javascript,' + encodeURIComponent(`
+export async function load(url, context, next) {
+ const result = await next(url, context);
+ if (!url.endsWith('/core/topic-overview-storage.mjs')) return result;
+ const source = String(result.source), needle = 'function snapshot(namespace) {';
+ if (source.split(needle).length !== 2) throw Error('topic_meter_mutation_target');
+ return { ...result, source: source.replace(needle, needle + '\\n    stateRow.get(...boundary(namespace));') };
+}`), import.meta.url);
+const state=await initializeProbe({physical,n,deterministicIds:true,model:{countTokens:()=>1}}),{core,canonical,load,dbs,transaction,ns,memories}=state;
 for(let i=0;i<2;i++){
  const index=core.map({namespace:ns});assert.equal(index.ok,true,JSON.stringify(index));
  const placed=core.applyPlacement({namespace:ns,expectedIndexRevision:index.value.indexRevision,expectedMemoryRevisions:[{memoryId:memories[i].id,revision:memories[i].revision}],proposal:{items:[{memoryId:memories[i].id,parentIds:[],newL1:{title:'Synthetic topic '+i,parentL2Ids:[],newL2Title:'Synthetic root '+i}}]}});assert.equal(placed.ok,true,JSON.stringify(placed));
