@@ -815,22 +815,28 @@ if renewal occurs during dispatch; neither renewal nor restart erases charges.
 Persist the full outstanding reservation before process replacement whenever
 settlement is uncertain. Counters never refund unknown work.
 
-The observation-cadence and known-usage refund rules above remain lexical-only. An embedding-enabled pump (below) also skips window/renewal
+The observation-cadence and known-usage refund rules above remain
+lexical-only. An embedding-enabled pump (below) also skips window/renewal
 tails that cannot fit its configured quantum, without reserving or advancing
-round-robin position; validation uses its own configured time bound. Its resident cache
-includes constructor policy. Continuous renewal reuses residents; inactive renewal
-retires them inside the next reserved turn, draining before a replacement opens.
-Opening failures retain their cleanup IDs even when accounting settlement also
-fails. Completion waits for opening disposal; a failed or unproven drain makes
-completion `reader_failed`, retaining the initiating cause privately. Late open,
-control and reservation replies lose dispatch authority after close or renewal;
-a late handle is drained. A parent watchdog bounds each turn, including coordinator
-control overhead. Control `timeout` maps to `read_timeout`, and `ledger_unavailable`
-maps to `reader_failed`. Existing coordinator codes (including `budget_denied`,
-`provider_error` and `rate_limited`) and public reader codes stay unchanged. Unknown
-or missing codes map to `reader_failed`. Bounded private initiating and
-secondary cause counters use the existing sanitized failure records and valid
-process-wide ordinals; public DTOs are unchanged.
+round-robin position; validation uses its own configured time bound. Its
+resident cache includes constructor policy. Continuous renewal reuses
+residents; inactive renewal retires them inside the next reserved turn,
+draining before a replacement opens. Opening failures retain their cleanup IDs
+even when accounting settlement also fails. Completion waits for opening
+disposal; a failed or unproven drain makes completion `reader_failed`,
+retaining the initiating cause privately. Late open, control and reservation
+replies lose dispatch authority after close or renewal; a late handle is
+drained. A parent watchdog bounds each turn, including coordinator control
+overhead. A coordinator control timeout, including one cut by the turn
+watchdog, reports `timeout`. Hosts should retire and reopen the coordinator on
+that code: the engine does not yet close a timed-out coordinator. Reader
+cutoffs report `read_timeout`. Resident disposal and its proof are unchanged
+by this public-code distinction. `ledger_unavailable` maps to `reader_failed`.
+Existing coordinator codes (including `budget_denied`, `provider_error` and
+`rate_limited`) and public reader codes stay unchanged. Unknown or missing
+codes map to `reader_failed`. Bounded private initiating and secondary cause
+counters use the existing sanitized failure records and valid process-wide
+ordinals; public DTOs are unchanged.
 It still schedules a nominal sweep from its own ticks. Actual-observation cadence,
 spacing/pacing, miss accounting, startup/validation cursors and item/ms refunds
 remain parity work. Durable window-fenced settlement and monotone usage floors

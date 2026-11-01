@@ -61,7 +61,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
   function cycle(){const epoch=++completionEpoch;settled=false;completion=new Promise(resolve=>{resolveCompletion=value=>{if(epoch===completionEpoch)settled=true;resolve(value);};});}cycle();
   const handles=new Map(),writers=new Map(),completeTargets=new Set();let targetSetDigest=null,firstComplete=false,startup=true,residentEpoch=0,parkedUntil;
   // Lifecycle ownership is independent of accounting-window settlement (PR D).
-  let generation=0,activeTurn,turnNumber=0,lastFailure=null,secondaryFailure=null,drainFailed=false;
+  let generation=0,activeTurn,turnNumber=0,lastFailure=null,secondaryFailure=null,drainFailed=false,timeoutDisposal=false;
   const failureCounts=maintenanceFailureCounts(),secondaryFailureCounts=maintenanceFailureCounts();
   const drains=new Map(),disposed=new WeakMap(),openings=new Set(),seenFailures=new WeakSet(),readerCounts=new WeakMap();
   const interrupted=Symbol('retired turn');
@@ -80,8 +80,9 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
   const observeCoverage=observation=>{firstComplete=observation.complete;validationPending=observation.pending;};
   // Preserve coordinator codes already exposed by the pump. Normalize only
   // transport timeout/unavailability and codes outside the existing vocabularies.
-  const controlCodes=Object.freeze({timeout:'read_timeout',ledger_unavailable:'reader_failed',not_enabled:'not_enabled',purge_pending:'purge_pending',backfill_ceiling:'backfill_ceiling',price_unavailable:'price_unavailable',budget_denied:'budget_denied',provider_error:'provider_error',rate_limited:'rate_limited',dimension_mismatch:'dimension_mismatch',provider_unavailable:'provider_unavailable'});
+  const controlCodes=Object.freeze({timeout:'timeout',ledger_unavailable:'reader_failed',not_enabled:'not_enabled',purge_pending:'purge_pending',backfill_ceiling:'backfill_ceiling',price_unavailable:'price_unavailable',budget_denied:'budget_denied',provider_error:'provider_error',rate_limited:'rate_limited',dimension_mismatch:'dimension_mismatch',provider_unavailable:'provider_unavailable'});
   const publicCode=code=>Object.hasOwn(controlCodes,code)?controlCodes[code]:productFailure(code).error.code;
+  const terminalCode=code=>{const value=publicCode(code);timeoutDisposal=value==='timeout'||value==='read_timeout';return value;};
   function saveFailure(failure,secondary=false,counts) {
     const {stall,...fields}=failure;failure=Object.freeze(fields); // Causes only; no stall reporting.
     const kind=maintenanceFailureKind(failure),target=secondary?secondaryFailureCounts:failureCounts;
@@ -102,8 +103,9 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
     const raw=code??value?.error?.code??value?.code;
     const source=captured??maintenanceFailureRecord(kind??(raw===undefined?'call_error':publicCode(raw)===raw||raw==='timeout'?'engine':'unmapped'),
       {engineCode:raw,errorName:maintenanceErrorName(value),ordinal:ctx.ordinal,stage});
-    const family=maintenanceFailureKind(source);
-    if(!ctx.failures.has(family)){saveFailure(Object.freeze({...source,stage:source.stage??stage,number:ctx.number}),ctx.failures.size>0||stage==='close'&&lastFailure!==null);ctx.failures.add(family);}
+    // Propagated records/errors share identity; distinct failures may share a family.
+    const identity=captured??(value&&typeof value==='object'?value:source);
+    if(!ctx.failures.has(identity)){saveFailure(Object.freeze({...source,stage:source.stage??stage,number:ctx.number}),ctx.failures.size>0||stage==='close'&&lastFailure!==null);ctx.failures.add(identity);}
     if(captured)seenFailures.add(captured);readerSecondary(value,ctx);
   }
   function drain(identity,close,ctx) {
@@ -111,21 +113,22 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
     if(typeof identity==='object'&&disposed.has(identity))return disposed.get(identity);
     const disposal={...ctx,ordinal:identity===ctx.handle?ctx.ordinal:undefined,failures:new Set()};
     const pending=Promise.resolve().then(close).then(()=>readerSecondary(identity,disposal),failure=>{
-      note(failure,disposal,'close','cleanup');drainFailed=true;error='reader_failed';throw failure;
+      note(failure,disposal,'close','cleanup');drainFailed=true;error=terminalCode('reader_failed');throw failure;
     });
     drains.set(identity,pending);if(typeof identity==='object')disposed.set(identity,pending);
     void pending.finally(()=>drains.delete(identity)).catch(()=>{});return pending;
   }
-  const dispose=(h,ctx)=>drain(h,()=>disposeProductReader(h,error==='read_timeout'?'read_timeout':'store_closed',ctx.until,ctx.handle===h?lastFailure:undefined),ctx);
+  const dispose=(h,ctx)=>drain(h,()=>disposeProductReader(h,timeoutDisposal?'read_timeout':'store_closed',ctx.until,ctx.handle===h?lastFailure:undefined),ctx);
   function owns(ctx){return !stopped&&!error&&generation===ctx.generation&&now()<ctx.end;}
   function check(ctx){if(stopped||error)throw interrupted;if(now()>=ctx.until){expire(ctx);throw interrupted;}if(generation!==ctx.generation||now()>=ctx.end)throw interrupted;}
   function expire(ctx){
     if(activeTurn!==ctx||stopped||error)return;
     if(now()<ctx.until){clearTimer(ctx.watchdog);ctx.watchdog=setTimer(()=>expire(ctx),Math.ceil(ctx.until-now()));return;}
-    note(undefined,ctx,ctx.stage,'engine','read_timeout');error='read_timeout';ctx.cancel();void stop();
+    const code=ctx.coordinator?'timeout':'read_timeout';
+    note(undefined,ctx,ctx.stage,'engine',code);error=terminalCode(code);ctx.cancel();void stop();
   }
-  async function wait(ctx,work,stage) {
-    check(ctx);ctx.stage=stage;
+  async function wait(ctx,work,stage,coordinator=false) {
+    ctx.stage=stage;ctx.coordinator=coordinator;check(ctx);
     const result=await Promise.race([Promise.resolve().then(()=>{check(ctx);return work();}),ctx.cancelled]);check(ctx);return result;
   }
   async function turn(maxMs,work) {
@@ -133,7 +136,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
     const control=maintenanceDispatchControl(),ctx={control,ordinal:maintenanceControlState(control).ordinal,number:turnNumber,generation,end:dutyEnd(),until:now()+maxMs,stage:'call',failures:new Set()};
     turnNumber=add(turnNumber,1);ctx.cancelled=new Promise((_,reject)=>{ctx.cancel=()=>reject(interrupted);});activeTurn=ctx;
     ctx.watchdog=setTimer(()=>expire(ctx),maxMs);
-    try{return await work(ctx);}catch(e){if(e!==interrupted){note(e,ctx,ctx.stage);error??=publicCode(e.code);}}finally{clearTimer(ctx.watchdog);if(activeTurn===ctx)activeTurn=undefined;}
+    try{return await work(ctx);}catch(e){if(e!==interrupted){note(e,ctx,ctx.stage);error??=terminalCode(e.code);}}finally{clearTimer(ctx.watchdog);if(activeTurn===ctx)activeTurn=undefined;}
   }
   function schedule(){
     if(stopped||error||exhausted()||now()>=renewedUntil){if(!stopped&&!error)resolveCompletion(status());return;}
@@ -142,7 +145,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
   }
   function fits(maxMs){const end=dutyEnd();parkedUntil=end-now()>=maxMs?undefined:end;return parkedUntil===undefined;}
   async function control(ctx,method,input) {
-    const result=await wait(ctx,()=>handle.pumpCall(method,input,Math.max(1,Math.ceil(ctx.until-now()))),'call');check(ctx);return result;
+    const result=await wait(ctx,()=>handle.pumpCall(method,input,Math.max(1,Math.ceil(ctx.until-now()))),'call',true);check(ctx);return result;
   }
   async function reserve(ctx,mode,maxItems,maxMs,maxUsd,bindingId) {
     const result=await control(ctx,'pumpReserve',{mode,maxItems,maxMs,bindingId,window:{...window,usedItems,usedMs,usedUsd},budgets,maxUsd,remainingMs:Math.floor(window.endsAtMonoMs-now())});
@@ -197,10 +200,10 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
       try {
         const settled=await control(ctx,'pumpFinish',{id:reservation.id,known:!failure&&result?.ok===true});
         check(ctx);usedItems=settled.usedItems;usedMs=settled.usedMs;usedUsd=settled.usedUsd;
-      }catch(e){if(e!==interrupted){note(e,ctx,'call');error=publicCode(e.code);}if(!failure)failure=e;}
+      }catch(e){if(e!==interrupted){note(e,ctx,'call');error=terminalCode(e.code);}if(!failure)failure=e;}
     }
     // A known failure survives retirement of its accounting await.
-    if(result&&!result.ok)error??=publicCode(result.error?.code);
+    if(result&&!result.ok)error??=terminalCode(result.error?.code);
     if(failure)throw failure;return result;
   }
   async function validation(ctx) {
@@ -209,11 +212,11 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
     if(!fits(first.maxMs))return;
     const maxMs=Math.min(first.maxMs,budgets.maxMs-usedMs,Math.floor(window.endsAtMonoMs-now()),Math.floor(renewedUntil-now()));
     if(maxMs<1)return;const reservation=await reserve(ctx,'validation',0,maxMs,'0');check(ctx);
-    const result=await wait(ctx,()=>coordinator.validateOwnerSemanticCoverage({ownerId:handle.ownerId,expectedTargetDigest:targetSetDigest,budget:{maxTargets:first.maxTargets,maxMs:Math.max(1,Math.floor(ctx.until-now()))}},semanticCredential),'call');check(ctx);
+    const result=await wait(ctx,()=>coordinator.validateOwnerSemanticCoverage({ownerId:handle.ownerId,expectedTargetDigest:targetSetDigest,budget:{maxTargets:first.maxTargets,maxMs:Math.max(1,Math.floor(ctx.until-now()))}},semanticCredential),'call',true);check(ctx);
     if(!result.ok)note(result,ctx,'call');
     try{await finish(ctx,reservation,result.ok===true);}
-    catch(failure){if(failure!==interrupted)error=publicCode(failure.code);throw failure;}
-    finally{if(!result.ok)error??=publicCode(result.error.code);}
+    catch(failure){if(failure!==interrupted)error=terminalCode(failure.code);throw failure;}
+    finally{if(!result.ok)error??=terminalCode(result.error.code);}
     if(!result.ok)return;check(ctx);firstComplete=result.value.status==='complete';const current=await control(ctx,'firstCoverage');check(ctx);observeCoverage(current);
   }
   async function regular(ctx) {
@@ -265,7 +268,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
       if(drainFailed||results.some(r=>r.status==='rejected'))throw Error('reader_failed');
       registry.finish(record);all.delete(c.id);resolveCompletion(status());
     })();
-    closing.catch(()=>{error='reader_failed';registry.finish(record,false);all.delete(c.id);resolveCompletion(status());});return closing;
+    closing.catch(()=>{error=terminalCode('reader_failed');registry.finish(record,false);all.delete(c.id);resolveCompletion(status());});return closing;
   }
   function completePrevious() {
     const report=resolveCompletion,value=status(),work=running;

@@ -63,7 +63,7 @@ function release(control) {
 }
 const realNs = () => { const [seconds, nanos] = process.hrtime(); return BigInt(seconds) * 1000000000n + BigInt(nanos); };
 
-async function setup(t, { expectedCleanupFailure = false, isolated = false, targetTypes = [['memory']] } = {}) {
+async function setup(t, { expectedCleanupFailure = false, isolated = false, targetTypes = [['memory']], coordinatorHost = hostUrl } = {}) {
   // Same accounting identity as the existing offline semantic tests. A closed
   // fixture's inode binding must not be mistaken for the next fresh ledger.
   assert.equal(globalThis[Symbol.for('context-read-product-p2e-v1/coordinators')]?.size ?? 0, 0);
@@ -120,7 +120,7 @@ async function setup(t, { expectedCleanupFailure = false, isolated = false, targ
     refreshCaps: { steady: { maxItemsPerUtcDay: 2000, maxUsdPerUtcDay: '0.05' },
       backfill: { maxItemsPerUtcDay: 20000, maxUsdPerUtcDay: '0.50', maxUsdTotal: '5' } },
     backfillTargets: targetTypes.map(types => ({ canonicalPath: f.path, readSet: [ns], types, intents: ['current', 'history'] })),
-    priceTable, host: { moduleUrl: hostUrl, configuration: {
+    priceTable, host: { moduleUrl: coordinatorHost, configuration: {
       semanticServiceBinding: binding, anchorPath, state, priceTable, utcClock, cutoffControl,
     } },
   }), 'coordinator open');
@@ -173,7 +173,8 @@ function pumpRuntime(s, hooks = {}) {
       workerData: data, transferList: [data.semanticPort], env: {}, execArgv: [], stdout: true, stderr: true,
       resourceLimits: { maxOldGenerationSizeMb: 192 },
     });
-    const capture = { worker, data, outbound: [], resources: new Int32Array(data.resources), errors: [], stderr: '' };
+    const cleanupId=[...supervisorOwner(s.supervisor).owner.records].find(record=>record.resources===data.resources)?.id;
+    const capture = { worker, data, cleanupId, outbound: [], resources: new Int32Array(data.resources), errors: [], stderr: '' };
     let exited;
     capture.exited = new Promise(resolve => { exited = resolve; });
     worker.on('error', error => capture.errors.push({ message: error.message, code: error.code, stack: error.stack }));
@@ -724,7 +725,7 @@ for(const action of ['stop','renew','window'])for(const stage of ['open','status
   if(stage==='open'){
     assert.equal(runtime.results.length,0,'late_open_never_refreshes');assert.equal(openingRecord.state,'complete','late_open_is_drained');
   }
-  if(action==='window'){await previousCompletion;const current=pump.completion;assert.equal((await current).error,'read_timeout','late_old_window_keeps_terminal_cutoff');assert.equal(pump.completion,current,'old_completion_cannot_replace_current_cycle');}
+  if(action==='window'){await previousCompletion;const current=pump.completion;assert.equal((await current).error,['firstCoverage','embeddingAdmission','pumpReserve','pumpFinish','validation'].includes(stage)?'timeout':'read_timeout','late_old_window_keeps_terminal_cutoff');assert.equal(pump.completion,current,'old_completion_cannot_replace_current_cycle');}
   if(action==='renew')assert.equal(pump.getStatus().error,null);if(action!=='stop')await pump.close();
 });
 
@@ -734,7 +735,7 @@ for(const code of ['timeout','ledger_unavailable','provider_error','budget_denie
   const client=semanticHandle(s.coordinator),call=client.pumpCall;
   client.pumpCall=(method,...args)=>method==='firstCoverage'?Promise.reject(Object.assign(new TypeError('private marker'),{code})):call(method,...args);
   await runtime.tick();const terminal=await pump.completion;
-  assert.equal(terminal.error,code==='timeout'?'read_timeout':['ledger_unavailable','synthetic_secret_code/unsafe'].includes(code)?'reader_failed':code,'control_failure_uses_existing_public_code');
+  assert.equal(terminal.error,['ledger_unavailable','synthetic_secret_code/unsafe'].includes(code)?'reader_failed':code,'control_failure_uses_existing_public_code');
   const diagnostic=maintenancePumpDiagnostic(terminal);assert.ok(diagnostic,'semantic_cause_snapshot_exists');
   assert.equal(Object.values(diagnostic.failureCounts).reduce((a,b)=>a+b,0),1,'control_failure_counted_once');
   assert.equal(diagnostic.lastFailure.stage,'call');assert.ok(Number.isSafeInteger(diagnostic.lastFailure.ordinal)&&diagnostic.lastFailure.ordinal>0,'control_cause_has_valid_ordinal');
@@ -802,8 +803,8 @@ for(const method of ['firstCoverage','pumpFinish'])test(`semantic lifecycle pare
   const before={reservations:runtime.reservations.length,dispatches:dispatchCount(runtime)};
   let terminal;
   try{await s.advance(500,{waitForWorkers:false});runtime.fireWatchdog();await guard(ticking,'watchdog releases tick');terminal=await guard(pump.completion,'watchdog completion');}
-  finally{gate.release();}assert.equal(terminal.error,'read_timeout','parent_watchdog_maps_control_timeout');
-  const diagnostic=maintenancePumpDiagnostic(terminal);assert.equal(diagnostic.lastFailure.cause,'engine');assert.equal(diagnostic.lastFailure.engineCode,'read_timeout');
+  finally{gate.release();}assert.equal(terminal.error,'timeout','parent_watchdog_maps_control_timeout');
+  const diagnostic=maintenancePumpDiagnostic(terminal);assert.equal(diagnostic.lastFailure.cause,'engine');assert.equal(diagnostic.lastFailure.engineCode,'timeout');assert.equal(diagnostic.lastFailure.stage,'call');
   gate.release();await new Promise(resolve=>setImmediate(resolve));
   assert.equal(runtime.reservations.length,before.reservations,'late_control_never_reserves');assert.equal(dispatchCount(runtime),before.dispatches+1,'late_control_never_refreshes');
   assert.equal(diagnostic.failureCounts.engine,1,'watchdog_cause_counted_once');
@@ -885,7 +886,7 @@ test('semantic round1 early watchdog rearms against its absolute deadline',async
     await s.advance(499,{waitForWorkers:false});runtime.fireWatchdog();
     assert.equal(pump.getStatus().error,null,'early_watchdog_preserves_absolute_deadline');assert.equal(runtime.nextDelay,1,'early_watchdog_rearms_only_the_remainder');
     await s.advance(1,{waitForWorkers:false});runtime.fireWatchdog();await ticking;
-    assert.equal((await pump.completion).error,'read_timeout','watchdog_terminates_at_unchanged_deadline');assert.equal(runtime.nextDelay,undefined,'watchdog_cleanup_clears_rearmed_timer');
+    assert.equal((await pump.completion).error,'timeout','watchdog_terminates_at_unchanged_deadline');assert.equal(runtime.nextDelay,undefined,'watchdog_cleanup_clears_rearmed_timer');
   }finally{gate.release();await ticking;}
 });
 
@@ -904,6 +905,74 @@ test('semantic round1 shared-window refusal preserves budget_denied',async t=>{
   const second=b.renew(b.config);s.f.workspace.defer(()=>second.close());await b.tick();const terminal=await second.completion;
   assert.equal(terminal.error,'budget_denied','shared_window_refusal_retains_public_code');assert.equal(b.spawned.length,0);
   assert.equal(maintenancePumpDiagnostic(terminal).lastFailure.engineCode,'budget_denied','preserved_control_failure_keeps_sanitized_cause');
+});
+
+
+function assertTimeoutDisposal(s,runtime,terminal,pendingReserve=false) {
+  assert.equal(runtime.reservations.every(r=>r.maxMs===500),true,'timeout_reserves_full_quantum');
+  const chargedMs=runtime.reservations.length*500,chargedItems=runtime.reservations.reduce((n,r)=>n+r.maxItems,0);
+  const ledger=new DatabaseSync(s.ledgerPath,{readOnly:true});try{
+    const stored=JSON.parse(ledger.prepare('SELECT state FROM semantic_owners').get().state).windows[terminal.windowId];
+    assert.equal(stored.usedMs,chargedMs,'timeout_keeps_all_time_reservations');assert.equal(stored.usedItems,chargedItems,'timeout_keeps_all_item_reservations');
+  }finally{ledger.close();}
+  assert.equal(terminal.usedMs,chargedMs-(pendingReserve?500:0),'unreceived_reserve_does_not_rewrite_local_time_snapshot');
+  assert.equal(terminal.usedItems,chargedItems-(pendingReserve?runtime.reservations.at(-1).maxItems:0),'unreceived_reserve_does_not_rewrite_local_item_snapshot');
+  for(const opened of runtime.opened){const diagnostic=maintenanceReaderFailureDiagnostic(opened);assert.equal(diagnostic.lastFailure.engineCode,'read_timeout','timeout_disposal_reason_stays_read_timeout');}
+  for(const capture of runtime.spawned){
+    const record=s.supervisor.getCleanupStatus(capture.cleanupId);
+    assert.equal(record.state,'complete','timeout_has_confirmed_disposal');for(const bit of bits)assert.equal(record[bit],true,bit);
+    assert.deepEqual([...capture.resources],[1,1,0,0]);
+  }
+}
+
+for(const kind of ['reply','watchdog'])test(`semantic round2 native accounting ${kind} retains distinct engine causes`,async t=>{
+  const s=await setup(t,{isolated:true,coordinatorHost:new URL('./fixtures/context-semantic-pump-accounting-host.mjs',import.meta.url).href});
+  const runtime=pumpRuntime(s),host=runtime.config.projections[0].options.host;
+  host.moduleUrl=new URL('./fixtures/context-semantic-pump-failure-host.mjs',import.meta.url).href;host.configuration.failureCode='storage_error';
+  const state=new Int32Array(host.configuration.state),client=semanticHandle(s.coordinator),call=client.pumpCall,gate=replyGate();let finishes=0;
+  client.pumpCall=async(method,...args)=>{if(method==='pumpFinish'&&++finishes===3){if(kind==='reply')Atomics.store(state,3,1);else await gate.hold();}return call(method,...args);};
+  const pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close());const ticking=runtime.tick();
+  try{
+    if(kind==='watchdog'){await gate.entered;await s.advance(500,{waitForWorkers:false});runtime.fireWatchdog();}
+    await ticking;const terminal=await guard(pump.completion,'accounting timeout completion'),diagnostic=maintenancePumpDiagnostic(terminal);
+    assert.ok(diagnostic.secondaryFailure,'distinct_engine_accounting_cause_is_retained');
+    assert.equal(diagnostic.lastFailure.engineCode,'storage_error');assert.equal(diagnostic.lastFailure.stage,'refresh');
+    assert.equal(diagnostic.secondaryFailure.engineCode,'timeout');assert.equal(diagnostic.secondaryFailure.stage,'call');
+    assert.equal(diagnostic.failureCounts.engine,1);assert.equal(diagnostic.secondaryFailureCounts.engine,1,'same_family_failures_count_independently');
+    assert.equal(terminal.error,'timeout','accounting_timeout_keeps_coordinator_code');
+    const ledger=new DatabaseSync(s.ledgerPath,{readOnly:true});try{
+      const stored=JSON.parse(ledger.prepare('SELECT state FROM semantic_owners').get().state);
+      assert.equal(Object.values(stored.windows).flatMap(w=>Object.values(w.quanta)).filter(q=>q.status==='reserved').length,1,'unknown_accounting_keeps_reservation');
+    }finally{ledger.close();}
+    assertTimeoutDisposal(s,runtime,terminal);await pump.close();
+    assert.deepEqual(maintenancePumpDiagnostic(pump.getStatus()),diagnostic,'propagated_accounting_error_is_not_recounted');
+  }finally{gate.release();await ticking;}
+});
+
+for(const method of ['firstCoverage','pumpReserve','pumpFinish','embeddingAdmission','validation'])test(`semantic round2 coordinator watchdog ${method} preserves disposal`,async t=>{
+  const s=await setup(t,{isolated:true}),runtime=pumpRuntime(s),gate=replyGate();
+  const pump=method==='validation'?await validationPending(s,runtime):runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close());
+  if(method!=='validation')await runtime.tick();
+  if(method==='validation')validationReplyGate=gate;else gateControl(s,method,gate);
+  const ticking=runtime.tick();await guard(gate.entered,'coordinator stage barrier');
+  try{
+    await s.advance(500,{waitForWorkers:false});runtime.fireWatchdog();await ticking;const terminal=await pump.completion;
+    assert.equal(terminal.error,'timeout','coordinator_watchdog_keeps_timeout_code');
+    const diagnostic=maintenancePumpDiagnostic(terminal);assert.equal(diagnostic.lastFailure.engineCode,'timeout');assert.equal(diagnostic.lastFailure.stage,'call');
+    assertTimeoutDisposal(s,runtime,terminal,method==='pumpReserve');
+  }finally{gate.release();validationReplyGate=undefined;await ticking;}
+});
+
+// Passing controls: reader-stage cutoffs keep main's read_timeout semantics.
+for(const method of ['open','status','refresh'])test(`semantic round2 reader watchdog ${method} preserves read_timeout`,async t=>{
+  const s=await setup(t,{isolated:true}),hooks={},runtime=pumpRuntime(s,hooks),gate=replyGate(),pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close());
+  if(method==='refresh')await runtime.tick();hooks[method]=()=>gate.hold();const ticking=runtime.tick();await gate.entered;
+  try{
+    await s.advance(500,{waitForWorkers:false});runtime.fireWatchdog();gate.release();await ticking;const terminal=await pump.completion;
+    assert.equal(terminal.error,'read_timeout','reader_watchdog_keeps_reader_cutoff_code');
+    const diagnostic=maintenancePumpDiagnostic(terminal);assert.equal(diagnostic.lastFailure.engineCode,'read_timeout');assert.equal(diagnostic.lastFailure.stage,method==='status'?'call':method==='open'?'open':'refresh');
+    assertTimeoutDisposal(s,runtime,terminal);
+  }finally{gate.release();await ticking;}
 });
 
 // Last: the deliberately failed proof retains process-wide inode quarantine.
