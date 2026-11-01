@@ -9,8 +9,9 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fixture, ns, ok } from '../testing/context-read-fixture.mjs';
 import { createExclusiveSqliteFile } from '../sqlite-journal-probe.mjs';
-import { provisionSemanticOwner } from '../context-semantic-ledger.mjs';
+import { provisionSemanticOwner, stateBytes, stateDigest } from '../context-semantic-ledger.mjs';
 import { canonicalJson } from '../context-product-validation.mjs';
+import { dollars } from '../context-semantic-input.mjs';
 import { credentialDigest, PRODUCT_PROFILE } from '../context-product-control.mjs';
 import { createProductReaderRuntime, maintenanceReaderFailureDiagnostic, maintenanceFailureDiagnostic } from '../context-product-reader.mjs';
 import { createMaintenancePumpRuntime, maintenancePumpDiagnostic } from '../context-product-pump.mjs';
@@ -561,6 +562,7 @@ test(`semantic parity ${kind} renewal owns the correct resident epoch`, async t 
   if (kind === 'spent quota') runtime.config.budgets.maxMs = 1500;
   const pump = runtime.renew(runtime.config); s.f.workspace.defer(() => pump.close());
   await guard(runtime.tick(), 'initial turn');
+  if (kind === 'spent quota') runtime.renew({...runtime.config,window:{...runtime.config.window,usedMs:1500}});
   if (kind === 'closed resident') await guard(runtime.opened[0].close(), 'already closed resident');
   const end = kind === 'renewal gap' ? testClock.now() + 1000 : runtime.config.window.endsAtMonoMs;
   await guard(s.advance(end - testClock.now() + (['continuous', 'spent quota'].includes(kind) ? 0 : 1)), 'renewal boundary');
@@ -582,6 +584,7 @@ test('semantic parity spent items retire an idle resident while validation remai
   const s = await setup(t), runtime = pumpRuntime(s);
   runtime.config.window.endsAtMonoMs = testClock.now() + 60000;
   const pump = await validationPending(s, runtime, 256); s.f.workspace.defer(() => pump.close());
+  runtime.renew({...runtime.config,window:{...runtime.config.window,usedItems:256}});
   assert.equal(pump.getStatus().usedItems, 256); assert.equal(pump.getStatus().state, 'active');
   await s.advance(runtime.config.window.endsAtMonoMs - testClock.now(), { waitForWorkers: false });
   await guard(runtime.spawned[0].exited, 'native idle disposal');
@@ -840,7 +843,7 @@ for(const code of ['storage_error','read_timeout'])test(`semantic round1 renewal
   host.moduleUrl=new URL('./fixtures/context-semantic-pump-failure-host.mjs',import.meta.url).href;
   host.configuration.failureCode=code;
   const client=semanticHandle(s.coordinator),call=client.pumpCall;let finishes=0;
-  client.pumpCall=async(method,...args)=>{const result=await call(method,...args);if(method==='pumpFinish'&&++finishes===3)await gate.hold();return result;};
+  client.pumpCall=async(method,...args)=>{const result=await call(method,...args);if(method==='pumpFinish'&&!Object.hasOwn(args[0],'usage')&&++finishes===3)await gate.hold();return result;};
   const pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close());
   const ticking=runtime.tick();await guard(gate.entered,'failed refresh before settlement');
   assert.equal(runtime.results.at(-1).result.error.code,code);const before=dispatchCount(runtime);
@@ -903,25 +906,31 @@ test('semantic round1 opening timeout joins the actual Worker ordinal',async t=>
   assert.equal(maintenancePumpDiagnostic(terminal).lastFailure.ordinal,ordinal,'opening_watchdog_joins_actual_worker_ordinal');
 });
 
-test('semantic round1 shared-window refusal preserves budget_denied',async t=>{
-  const s=await setup(t,{isolated:true}),a=pumpRuntime(s);a.config.projections[0].modes=['lexical'];a.config.quantum.maxMs=300;a.config.budgets.maxMs=2000;
-  const first=a.renew(a.config);s.f.workspace.defer(()=>first.close());for(let n=0;n<4;n++)await a.tick();assert.equal(first.getStatus().usedMs,1800);
-  const b=pumpRuntime(s);b.config.projections[0].modes=['lexical'];b.config.budgets.maxMs=2000;b.config.window={...a.config.window,usedItems:0,usedMs:0,usedUsd:'0'};
-  const second=b.renew(b.config);s.f.workspace.defer(()=>second.close());await b.tick();const terminal=await second.completion;
-  assert.equal(terminal.error,'budget_denied','shared_window_refusal_retains_public_code');assert.equal(b.spawned.length,0);
-  assert.equal(maintenancePumpDiagnostic(terminal).lastFailure.engineCode,'budget_denied','preserved_control_failure_keeps_sanitized_cause');
+test('semantic durable shared-window exhaustion is distinct from policy budget_denied',async t=>{
+  const s=await setup(t,{isolated:true}),runtime=pumpRuntime(s);runtime.config.budgets.maxMs=2000;
+  const input=accountingInput(s,{window:{...runtime.config.window},budgets:runtime.config.budgets});
+  const client=semanticHandle(s.coordinator);for(let n=0;n<4;n++)await client.pumpCall('pumpReserve',input);
+  const pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close());await runtime.tick();const terminal=await pump.completion;
+  assert.equal(terminal.state,'budget_exhausted','shared_window_exhaustion_has_existing_public_state');
+  assert.equal(terminal.error,null);assert.equal(runtime.spawned.length,0);
+
 });
 
 
-function assertTimeoutDisposal(s,runtime,terminal,pendingReserve=false) {
+function assertTimeoutDisposal(s,runtime,terminal,pendingReserve=false,reservedTurn=true) {
   assert.equal(runtime.reservations.every(r=>r.maxMs===500),true,'timeout_reserves_full_quantum');
-  const chargedMs=runtime.reservations.length*500,chargedItems=runtime.reservations.reduce((n,r)=>n+r.maxItems,0);
+  let chargedMs,chargedItems;
   const ledger=new DatabaseSync(s.ledgerPath,{readOnly:true});try{
     const stored=JSON.parse(ledger.prepare('SELECT state FROM semantic_owners').get().state).windows[terminal.windowId];
-    assert.equal(stored.usedMs,chargedMs,'timeout_keeps_all_time_reservations');assert.equal(stored.usedItems,chargedItems,'timeout_keeps_all_item_reservations');
+    const quanta=Object.values(stored.quanta);
+    chargedMs=quanta.reduce((sum,q)=>sum+(q.accounting?.usage?.elapsedMs??q.accounting?.ms??500),0);
+    chargedItems=quanta.some(q=>!q.accounting)?runtime.reservations.reduce((sum,r)=>sum+r.maxItems,0):quanta.reduce((sum,q)=>sum+(q.accounting.usage?.items??q.accounting.items),0);
+    assert.equal(stored.usedMs,chargedMs,'timeout_keeps_unknown_time_and_prior_settled_usage');assert.equal(stored.usedItems,chargedItems,'timeout_keeps_unknown_items_and_prior_settled_usage');
   }finally{ledger.close();}
-  assert.equal(terminal.usedMs,chargedMs-(pendingReserve?500:0),'unreceived_reserve_does_not_rewrite_local_time_snapshot');
-  assert.equal(terminal.usedItems,chargedItems-(pendingReserve?runtime.reservations.at(-1).maxItems:0),'unreceived_reserve_does_not_rewrite_local_item_snapshot');
+  // Earlier receipts may be locally refunded before their next durable admission.
+  assert.ok(terminal.usedMs<=chargedMs,'local_known_receipts_do_not_exceed_durable_charge');
+  assert.ok(terminal.usedItems<=chargedItems,'local_known_item_receipts_do_not_exceed_durable_charge');
+  if(reservedTurn){assert.ok(terminal.usedMs>=500,'unknown_active_time_stays_fully_charged');assert.ok(terminal.usedItems>=runtime.reservations.at(-1).maxItems,'unknown_active_items_stay_fully_charged');}
   for(const opened of runtime.opened){const diagnostic=maintenanceReaderFailureDiagnostic(opened);assert.equal(diagnostic.lastFailure.engineCode,'read_timeout','timeout_disposal_reason_stays_read_timeout');}
   for(const capture of runtime.spawned){
     const record=s.supervisor.getCleanupStatus(capture.cleanupId);
@@ -935,7 +944,7 @@ for(const kind of ['reply','watchdog'])test(`semantic round2 native accounting $
   const runtime=pumpRuntime(s),host=runtime.config.projections[0].options.host;
   host.moduleUrl=new URL('./fixtures/context-semantic-pump-failure-host.mjs',import.meta.url).href;host.configuration.failureCode='storage_error';
   const state=new Int32Array(host.configuration.state),client=semanticHandle(s.coordinator),call=client.pumpCall,gate=replyGate();let finishes=0;
-  client.pumpCall=async(method,...args)=>{if(method==='pumpFinish'&&++finishes===3){if(kind==='reply')Atomics.store(state,3,1);else await gate.hold();}return call(method,...args);};
+  client.pumpCall=async(method,...args)=>{if(method==='pumpFinish'&&!Object.hasOwn(args[0],'usage')&&++finishes===3){if(kind==='reply')Atomics.store(state,3,1);else await gate.hold();}return call(method,...args);};
   const pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close());const ticking=runtime.tick();
   try{
     if(kind==='watchdog'){await gate.entered;await s.advance(500,{waitForWorkers:false});runtime.fireWatchdog();}
@@ -964,7 +973,7 @@ for(const method of ['firstCoverage','pumpReserve','pumpFinish','embeddingAdmiss
     await s.advance(500,{waitForWorkers:false});runtime.fireWatchdog();await ticking;const terminal=await pump.completion;
     assert.equal(terminal.error,'timeout','coordinator_watchdog_keeps_timeout_code');
     const diagnostic=maintenancePumpDiagnostic(terminal);assert.equal(diagnostic.lastFailure.engineCode,'timeout');assert.equal(diagnostic.lastFailure.stage,'call');
-    assertTimeoutDisposal(s,runtime,terminal,method==='pumpReserve');
+    assertTimeoutDisposal(s,runtime,terminal,method==='pumpReserve',!['firstCoverage','embeddingAdmission'].includes(method));
   }finally{gate.release();validationReplyGate=undefined;await ticking;}
 });
 
@@ -1042,6 +1051,242 @@ test('semantic round3 opening cutoff counts one reconstructed failure',async t=>
     assertTimeoutDisposal(s,runtime,terminal);await pump.close();
     assert.deepEqual(maintenancePumpDiagnostic(pump.getStatus()),diagnostic,'opening_propagation_never_recounts');
   }finally{release(s.control);await ticking;}
+});
+
+// Durable accounting probes use the real coordinator Worker and SQL snapshots.
+function accountingState(s) {
+  const db=new DatabaseSync(s.ledgerPath,{readOnly:true});
+  try{return JSON.parse(db.prepare('SELECT state FROM semantic_owners').get().state);}finally{db.close();}
+}
+function replaceAccountingState(s,state) {
+  const digest=stateDigest(state),db=new DatabaseSync(s.ledgerPath),authority=new DatabaseSync(join(s.f.workspace.path,'authority.sqlite'));
+  try{
+    db.prepare('UPDATE semantic_owners SET state=?,state_digest=? WHERE owner_id=?').run(stateBytes(state),digest,ns.ownerId);
+    const anchor=JSON.parse(authority.prepare('SELECT anchor FROM anchors WHERE owner=?').get(ns.ownerId).anchor);anchor.stateDigest=digest;
+    authority.prepare('UPDATE anchors SET anchor=? WHERE owner=?').run(canonicalJson(anchor),ns.ownerId);
+  }finally{authority.close();db.close();}
+}
+function legacyQuantum(s,windowId,id) {
+  const state=accountingState(s);delete state.windows[windowId].quanta[id].accounting;replaceAccountingState(s,state);
+}
+function accountingInput(s,patch={}) {
+  const remainingMs=10000;
+  return {mode:'lexical',maxItems:8,maxMs:500,maxUsd:'0',
+    window:{id:randomUUID(),endsAtMonoMs:testClock.now()+remainingMs,usedItems:0,usedMs:0,usedUsd:'0'},
+    budgets:{maxItems:100,maxMs:20000,maxUsd:'0.50'},remainingMs,
+    accounting:{version:1,generation:0,floors:{items:0,ms:0},endsMonoNs:String(process.hrtime.bigint()+BigInt(remainingMs)*1000000n)},...patch};
+}
+async function accountingFinish(s,reservation,usage,patch={}) {
+  const client=semanticHandle(s.coordinator),input={id:reservation.id,windowId:reservation.windowId,generation:0,known:true,floors:{items:0,ms:0},...patch};
+  await client.pumpCall('pumpFinish',input);
+  return client.pumpCall('pumpFinish',{...input,usage});
+}
+
+test('semantic durable no-op refunds attempts and the rounded reserve-to-receipt span',async t=>{
+  const s=await setup(t,{isolated:true}),hooks={},runtime=pumpRuntime(s,hooks),client=semanticHandle(s.coordinator),call=client.pumpCall;
+  runtime.config.projections[0].modes=['lexical'];
+  t.after(()=>testClock.advance(Math.ceil(testClock.now())-testClock.now(),{waitForWorkers:false}));
+  const spans=[];let entered;
+  hooks.open=()=>testClock.advance(5.25);
+  hooks.refresh=()=>testClock.advance(12.25);
+  client.pumpCall=async(method,...args)=>{
+    if(method==='pumpReserve')entered=testClock.now();
+    const result=await call(method,...args);
+    if(method==='pumpFinish'&&!Object.hasOwn(args[0],'usage')){
+      await testClock.advance(2.25);spans.push(Math.ceil(testClock.now()-entered));
+    }return result;
+  };
+  const pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close());await runtime.tick();
+  assert.equal(runtime.results[0].result.value.progress.transformed,0);
+  assert.equal(pump.getStatus().usedItems,0,'noop_refunds_unused_items');
+  const expected=spans.reduce((a,b)=>a+b,0);
+  const storedBefore=accountingState(s).windows[runtime.config.window.id];
+  const pending=Object.values(storedBefore.quanta).find(q=>q.accounting.stage==='receipt');assert.ok(pending,'last_receipt_retains_full_durable_charge_until_next_admission');
+  await runtime.tick();const stored=accountingState(s).windows[runtime.config.window.id];
+  assert.equal(pump.getStatus().usedItems,0,'noop_refunds_unused_items');
+  assert.equal(pump.getStatus().usedMs,spans.reduce((a,b)=>a+b,0),'time_includes_finish_reply_delivery_rounded_up');
+  assert.equal(stored.quanta[pending.id].accounting.usage.elapsedMs,spans[2],'receipt_refund_is_durable_at_next_admission');
+  assert.equal(stored.usedItems,1,'only_last_unacknowledged_reservation_stays_durably_charged');
+  assert.equal(stored.usedMs,expected+500,'previous_rounded_spans_are_durable');
+});
+
+for(const [mode,items] of [['lexical',3],['embeddings',2]])test(`semantic durable known ${mode} attempts stay charged`,async t=>{
+  const s=await setup(t,{isolated:true}),client=semanticHandle(s.coordinator),input=accountingInput(s,{mode}),r=await client.pumpCall('pumpReserve',input);
+  const result=await accountingFinish(s,r,{version:1,items,elapsedMs:17});
+  assert.equal(result.usedItems,items,'known_attempt_count_remains_charged');assert.equal(result.usedMs,17,'known_unused_time_is_refunded');
+  const stored=accountingState(s).windows[input.window.id];assert.equal(stored.quanta[r.id].accounting.items,8,'original_reservation_is_preserved');
+  assert.equal(stored.quanta[r.id].accounting.ms,500);assert.equal(stored.usedItems,items);
+});
+
+for(const usage of [null,{version:1,items:-1,elapsedMs:10},{version:1,items:9,elapsedMs:10},{version:2,items:0,elapsedMs:0},{version:1,items:0,elapsedMs:501}])test(`semantic durable invalid usage ${JSON.stringify(usage)} keeps full charge (control)`,async t=>{
+  const s=await setup(t,{isolated:true}),client=semanticHandle(s.coordinator),r=await client.pumpCall('pumpReserve',accountingInput(s));
+  const result=await accountingFinish(s,r,usage);assert.equal(result.usedItems,8);assert.equal(result.usedMs,500);
+  const duplicate=await client.pumpCall('pumpFinish',{id:r.id,known:true,usage:{version:1,items:0,elapsedMs:0}});
+  assert.equal(duplicate.usedItems,8,'invalid_usage_cannot_be_replaced_by_duplicate');assert.equal(duplicate.usedMs,500);
+});
+for(const kind of ['failed','missing','duplicate','legacy'])test(`semantic durable ${kind} settlement keeps full reservation (control)`,async t=>{
+  const s=await setup(t,{isolated:true}),client=semanticHandle(s.coordinator),input=accountingInput(s);
+  if(kind==='legacy')delete input.accounting;
+  const r=await client.pumpCall('pumpReserve',input),finish={id:r.id,known:kind!=='failed'};
+  if(kind==='legacy')legacyQuantum(s,input.window.id,r.id);
+  await client.pumpCall('pumpFinish',finish);
+  if(kind==='duplicate')await client.pumpCall('pumpFinish',finish);
+  const result=await client.pumpCall('pumpFinish',{...finish,...(kind==='missing'?{}:{usage:{version:1,items:0,elapsedMs:0}})});
+  assert.equal(result.usedItems,8,'unknown_or_legacy_items_stay_charged');assert.equal(result.usedMs,500,'unknown_or_legacy_ms_stay_charged');
+});
+test('semantic durable duplicate successful usage never refunds twice',async t=>{
+  const s=await setup(t,{isolated:true}),client=semanticHandle(s.coordinator),input=accountingInput(s),r=await client.pumpCall('pumpReserve',input);
+  await accountingFinish(s,r,{version:1,items:2,elapsedMs:10});
+  const other=await client.pumpCall('pumpReserve',input);
+  const result=await client.pumpCall('pumpFinish',{id:r.id,known:true,usage:{version:1,items:0,elapsedMs:0}});
+  assert.equal(result.usedItems,10,'successful_usage_is_applied_exactly_once');assert.equal(result.usedMs,510);
+  assert.notEqual(other.id,r.id);
+});
+
+test('semantic durable worker floors raised after reserve survive finish',async t=>{
+  const s=await setup(t,{isolated:true}),client=semanticHandle(s.coordinator),input=accountingInput(s),a=await client.pumpCall('pumpReserve',input);
+  const raised={...input,accounting:{...input.accounting,floors:{items:20,ms:1000}}};
+  await client.pumpCall('pumpReserve',raised);
+  const result=await accountingFinish(s,a,{version:1,items:0,elapsedMs:0});
+  assert.equal(result.usedItems,20,'later_cumulative_item_floor_survives_refund');assert.equal(result.usedMs,1000,'later_cumulative_ms_floor_survives_refund');
+});
+
+for(const method of ['pumpReserve','pumpFinish'])for(const renewal of ['window','floor'])test(`semantic durable held ${method} reply cannot overwrite ${renewal}`,async t=>{
+  const s=await setup(t,{isolated:true}),runtime=pumpRuntime(s),pump=runtime.renew(runtime.config),gate=replyGate();s.f.workspace.defer(()=>pump.close());
+  gateControl(s,method,gate);const ticking=runtime.tick();await gate.entered;
+  assert.equal(pump.getStatus().usedMs,500,'pending_reserve_stays_charged_in_captured_window');
+  let next;
+  if(renewal==='window'){
+    await s.advance(runtime.config.window.endsAtMonoMs-testClock.now(),{waitForWorkers:false});next=nextWindow(runtime);
+  }else next={...runtime.config,window:{...runtime.config.window,usedItems:30,usedMs:3000,usedUsd:'0.1'}};
+  runtime.renew(next);gate.release();await ticking;
+  const current=pump.getStatus();assert.equal(current.windowId,next.window.id);
+  assert.equal(current.usedItems,next.window.usedItems,'late_reply_never_lowers_current_item_floor');
+  assert.equal(current.usedMs,next.window.usedMs,'late_reply_never_lowers_current_ms_floor');assert.equal(current.usedUsd,next.window.usedUsd);
+  const old=accountingState(s).windows[runtime.config.window.id];
+  assert.equal(old.usedMs,500,'captured_window_keeps_unknown_charge');
+});
+
+for(const delay of [125,10025])test(`semantic durable delayed reserve ${delay} cannot extend persisted expiry`,async t=>{
+  const s=await setup(t,{isolated:true}),client=semanticHandle(s.coordinator),input=accountingInput(s),start=Date.now();
+  await s.advance(delay);const admission=await client.pumpCall('pumpReserve',input);
+  const stored=accountingState(s).windows[input.window.id];
+  assert.equal(stored.endsUtcMs,start+input.remainingMs,'transport_delay_never_extends_window');
+  if(delay<input.remainingMs)await s.advance(input.remainingMs-delay);
+  else assert.equal(admission.exhausted,true,'expired_message_never_allocates_a_quantum');
+  const next=accountingInput(s);await client.pumpCall('pumpReserve',next);
+  const state=accountingState(s);assert.equal(state.activeWindowId,next.window.id,'new_window_is_not_refused_by_delayed_old_expiry');
+  assert.equal(state.windows[input.window.id].usedMs,delay<input.remainingMs?500:0,'expired_unknown_charge_is_not_released');
+});
+
+test('semantic durable authoritative exhaustion is non-error budget_exhausted',async t=>{
+  const s=await setup(t,{isolated:true}),runtime=pumpRuntime(s),input=accountingInput(s);
+  runtime.config.budgets.maxMs=2000;input.window={...runtime.config.window};input.budgets={...runtime.config.budgets};
+  // Populate the same durable window without changing the parent usage floor.
+  for(let n=0;n<4;n++)await semanticHandle(s.coordinator).pumpCall('pumpReserve',input);
+  const pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close());await runtime.tick();
+  const result=await guard(pump.completion,'durable completion');
+  assert.equal(result.state,'budget_exhausted','authoritative_window_exhaustion_uses_existing_state');assert.equal(result.error,null,'window_exhaustion_is_not_provider_denial');
+  assert.equal(runtime.spawned.length,0,'exhausted_window_never_opens');
+});
+
+test('semantic durable exhausted admission retains active window',async t=>{
+  const s=await setup(t,{isolated:true}),client=semanticHandle(s.coordinator),input=accountingInput(s);
+  input.window.usedMs=input.budgets.maxMs;input.accounting.floors.ms=input.budgets.maxMs;
+  const result=await client.pumpCall('pumpReserve',input).catch(error=>({denied:error.code}));
+  const stored=accountingState(s);assert.equal(stored.activeWindowId,input.window.id,'exhausted_window_keeps_admission_fence');
+  assert.equal(result.exhausted,true,'full_floor_is_normal_window_exhaustion');
+  assert.equal(Object.keys(stored.windows[input.window.id].quanta).length,0,'refused_admission_allocates_no_quantum');
+  await assert.rejects(client.pumpCall('pumpReserve',accountingInput(s)),{code:'ledger_unavailable'},'another_window_cannot_bypass_exhausted_window');
+  await s.advance(input.remainingMs);await client.pumpCall('pumpReserve',accountingInput(s));
+  assert.equal(accountingState(s).windows[input.window.id].usedMs,input.budgets.maxMs,'expiry_preserves_old_full_floor');
+});
+
+test('semantic durable authoritative quota retires an idle resident (control)',async t=>{
+  const s=await setup(t,{isolated:true}),runtime=pumpRuntime(s);runtime.config.quantum.maxItems=4;runtime.config.budgets.maxItems=5;
+  runtime.config.window.endsAtMonoMs=testClock.now()+60000;
+  const pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close());await runtime.tick();
+  const fill=accountingInput(s,{mode:'validation',maxItems:0,window:{...runtime.config.window,usedItems:4},budgets:runtime.config.budgets,remainingMs:60000});
+  fill.accounting={...fill.accounting,floors:{items:4,ms:0},endsMonoNs:String(process.hrtime.bigint()+60000000000n)};
+  await semanticHandle(s.coordinator).pumpCall('pumpReserve',fill);await runtime.tick();
+  assert.equal((await guard(pump.completion,'quota completion')).state,'budget_exhausted');
+  await s.advance(runtime.config.window.endsAtMonoMs-testClock.now(),{waitForWorkers:false});
+  assert.equal(await guard(runtime.spawned[0].exited,'idle predecessor disposal'),0);
+  runtime.renew(nextWindow(runtime));await guard(runtime.tick(),'renewal after authoritative quota');
+  assert.equal(pump.getStatus().error,null,'authoritative_exhaustion_retires_idle_resident');
+  assert.equal(runtime.spawned.length,2,'authoritative_exhaustion_opens_a_new_resident_epoch');
+});
+
+test('semantic durable resident drain is included in known time',async t=>{
+  const s=await setup(t,{isolated:true}),runtime=pumpRuntime(s),p=runtime.config.projections[0];p.modes=['lexical'];
+  p.options.host.moduleUrl=new URL('./fixtures/context-semantic-accounting-cost-host.mjs',import.meta.url).href;
+  p.options.host.configuration.closeCostMs=7.25;
+  runtime.config.projections.push({...p,options:{...p.options,host:{...p.options.host,configuration:{...p.options.host.configuration,constructorTag:'replacement'}}}});
+  t.after(()=>testClock.advance(Math.ceil(testClock.now())-testClock.now(),{waitForWorkers:false}));
+  const pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close());
+  for(let n=0;n<3;n++)await guard(runtime.tick(),'known drain turn');
+  assert.equal(runtime.spawned.length,2,'incompatible_policy_replaces_resident');
+  assert.equal(await runtime.spawned[0].exited,0,'predecessor_exits_gracefully');
+  const record=s.supervisor.getCleanupStatus(runtime.spawned[0].cleanupId);for(const bit of bits)assert.equal(record[bit],true,bit);
+  assert.equal(pump.getStatus().usedMs,8,'resident_drain_is_inside_charged_span_rounded_up');
+});
+
+test('semantic durable rolled-back transformation keeps the full reservation (control)',async t=>{
+  const s=await setup(t,{isolated:true}),runtime=pumpRuntime(s),host=runtime.config.projections[0].options.host;
+  const client=semanticHandle(s.coordinator),call=client.pumpCall;let failedId;
+  client.pumpCall=(method,...args)=>{if(method==='pumpFinish'&&args[0].known===false)failedId=args[0].id;return call(method,...args);};
+  const core=openMemoryCore({path:s.f.path});
+  try{ok(core.admit({namespace:ns,memory:{content:'new lexical transformation',kind:'fact'},receipts:[{client:'synthetic',sessionId:'rollback',eventId:randomUUID(),role:'user',excerpt:'new lexical transformation'}]}));}finally{core.close();}
+  host.moduleUrl=new URL('./fixtures/context-semantic-accounting-rollback-host.mjs',import.meta.url).href;
+  const pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close());await runtime.tick();
+  const terminal=await guard(pump.completion,'durable completion');assert.equal(runtime.results.at(-1).result.ok,false,'real_transformation_failure_is_observed');
+  const w=accountingState(s).windows[runtime.config.window.id],failed=w.quanta[failedId];
+  assert.ok(failed,'rolled_back_attempt_has_unknown_full_charge');assert.equal(failed.status,'settled');
+  if(failed.accounting){assert.equal(failed.accounting.known,false);assert.equal(failed.accounting.usage,null);}
+  assert.equal(w.usedItems,runtime.config.quantum.maxItems,'rolled_back_attempt_is_never_refunded');assert.ok(w.usedMs>=500,'rolled_back_time_stays_reserved');
+  assert.equal(terminal.usedItems,w.usedItems);assert.equal(terminal.usedMs,w.usedMs);
+});
+
+test('semantic durable successful fence rollback charges transformed attempts',async t=>{
+  const s=await setup(t,{isolated:true}),runtime=pumpRuntime(s),host=runtime.config.projections[0].options.host;
+  const core=openMemoryCore({path:s.f.path});let admitted;
+  try{admitted=ok(core.admit({namespace:ns,memory:{content:'tentative transformation',kind:'fact'},receipts:[{client:'synthetic',sessionId:'fence-rollback',eventId:randomUUID(),role:'user',excerpt:'tentative transformation'}]})).memory;}finally{core.close();}
+  runtime.config.quantum.maxItems=8;host.moduleUrl=new URL('./fixtures/context-semantic-accounting-rollback-host.mjs',import.meta.url).href;
+  Object.assign(host.configuration,{rollbackFence:true,canonicalPath:s.f.path});
+  const pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close());await runtime.tick();
+  const result=runtime.results.at(-1).result;assert.equal(result.ok,true);assert.equal(result.value.status,'rebuilding');
+  assert.ok(result.value.progress.transformed>0,'recognized_rollback_reports_attempts');
+  const sidecar=new DatabaseSync(s.f.path+'.context-read-product-v1.1.sqlite',{readOnly:true});
+  try{assert.equal(sidecar.prepare('SELECT count(*) AS n FROM documents WHERE id=?').get(admitted.id).n,0,'tentative_document_was_rolled_back');}finally{sidecar.close();}
+  assert.equal(pump.getStatus().usedItems,result.value.progress.transformed,'rolled_back_transformed_attempts_stay_charged');
+});
+
+test('semantic durable embedding attempts count even with zero vectors and unknown USD',async t=>{
+  const s=await setup(t,{isolated:true}),runtime=pumpRuntime(s);runtime.config.quantum.maxItems=8;
+  const pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close());await runtime.tick();
+  const state=new Int32Array(runtime.config.projections[0].options.host.configuration.state);Atomics.store(state,7,1);
+  await runtime.tick();const result=runtime.results.at(-1).result;
+  assert.equal(result.ok,true);assert.ok(result.value.progress.embeddingAttempts>0,'provider_was_attempted');
+  assert.equal(result.value.progress.embedded,0,'no_committed_vectors_is_not_zero_work');
+  const stored=accountingState(s),w=stored.windows[runtime.config.window.id];
+  assert.equal(pump.getStatus().usedItems,result.value.progress.embeddingAttempts,'embedding_refund_counts_attempts_never_embedded');
+  const exposure=Object.values(stored.reservations).filter(r=>r.status!=='released').reduce((sum,r)=>sum+BigInt(r.cost),0n);
+  assert.ok(exposure>0n,'unknown_provider_exposure_is_present');assert.equal(pump.getStatus().usedUsd,dollars(exposure),'unknown_USD_bound_is_not_refunded');
+  assert.equal(w.usedUsd,String(exposure),'unknown_USD_charge_is_durable');
+});
+
+test('semantic durable legacy charges survive a new known refund',async t=>{
+  const s=await setup(t,{isolated:true}),client=semanticHandle(s.coordinator),input=accountingInput(s),legacy={...input};delete legacy.accounting;
+  const old=await client.pumpCall('pumpReserve',legacy);legacyQuantum(s,input.window.id,old.id);await client.pumpCall('pumpFinish',{id:old.id,known:true});
+  const fresh=await client.pumpCall('pumpReserve',input),result=await accountingFinish(s,fresh,{version:1,items:0,elapsedMs:0});
+  assert.equal(result.usedItems,8,'legacy_items_never_gain_refund_entitlement');assert.equal(result.usedMs,500,'legacy_time_never_gains_refund_entitlement');
+});
+
+test('semantic durable unknown accounting version is rejected on authenticated read',async t=>{
+  const s=await setup(t,{isolated:true}),client=semanticHandle(s.coordinator),input=accountingInput(s),r=await client.pumpCall('pumpReserve',input),state=accountingState(s);
+  state.windows[input.window.id].quanta[r.id].accounting={version:2,mode:'lexical',items:8,ms:500,stage:'reserved',known:false,usage:null};
+  replaceAccountingState(s,state);
+  await assert.rejects(client.pumpCall('pumpFinish',{id:r.id,known:false}),{code:'ledger_unavailable'},'unknown_accounting_version_is_rejected_before_settlement');
 });
 
 // Last: the deliberately failed proof retains process-wide inode quarantine.

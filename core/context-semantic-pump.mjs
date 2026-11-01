@@ -60,7 +60,14 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
   let resolveCompletion,completion,settled=false,completionEpoch=0;
   function cycle(){const epoch=++completionEpoch;settled=false;completion=new Promise(resolve=>{resolveCompletion=value=>{if(epoch===completionEpoch)settled=true;resolve(value);};});}cycle();
   const handles=new Map(),writers=new Map(),completeTargets=new Set();let targetSetDigest=null,firstComplete=false,startup=true,residentEpoch=0,parkedUntil;
-  // Lifecycle ownership is independent of accounting-window settlement (PR D).
+  const accountingWindow=w=>{
+    // Sample the shared clock first: conversion may shorten, never extend the
+    // parent's window, even if scheduling pauses between the two samples.
+    const mono=process.hrtime.bigint(),at=now();
+    return {id:w.id,endsAtMonoMs:w.endsAtMonoMs,endsMonoNs:String(mono+BigInt(Math.floor((w.endsAtMonoMs-at)*1e6))),items:w.usedItems,ms:w.usedMs,usd:w.usedUsd,floorItems:w.usedItems,floorMs:w.usedMs};
+  };
+  let account=accountingWindow(w),windowExhausted=false,pendingUsage;
+  // Lifecycle ownership is independent of accounting-window settlement.
   let generation=0,activeTurn,turnNumber=0,lastFailure=null,secondaryFailure=null,drainFailed=false,timeoutDisposal=false;
   const failureCounts=maintenanceFailureCounts(),secondaryFailureCounts=maintenanceFailureCounts();
   const drains=new Map(),disposed=new WeakMap(),openings=new Set(),seenFailures=new WeakSet(),readerCounts=new WeakMap();
@@ -73,7 +80,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
       usedItems,usedMs,usedUsd,maxItems:budgets.maxItems,maxMs:budgets.maxMs,maxUsd:budgets.maxUsd,error});
     return attach(value);
   };
-  const exhausted=()=>now()>=window.endsAtMonoMs||usedMs>=budgets.maxMs||usedItems>=budgets.maxItems&&!validationPending&&!startup;
+  const exhausted=()=>windowExhausted||now()>=window.endsAtMonoMs||usedMs>=budgets.maxMs||usedItems>=budgets.maxItems&&!validationPending&&!startup;
   const dutyEnd=()=>Math.min(window.endsAtMonoMs,renewedUntil);
   const validationRequired=()=>validationPending||completeTargets.size===handle.targets.length*2&&!firstComplete;
   const turnMs=()=>!startup&&validationRequired()?first.maxMs:q.maxMs;
@@ -137,7 +144,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
   }
   async function turn(maxMs,work) {
     maxMs=Math.min(maxMs,budgets.maxMs-usedMs);if(maxMs<1)return;
-    const control=maintenanceDispatchControl(),ctx={control,ordinal:maintenanceControlState(control).ordinal,number:turnNumber,generation,end:dutyEnd(),until:now()+maxMs,stage:'call',failures:new Set()};
+    const control=maintenanceDispatchControl(),ctx={control,ordinal:maintenanceControlState(control).ordinal,number:turnNumber,generation,account,end:dutyEnd(),until:now()+maxMs,stage:'call',failures:new Set()};
     turnNumber=add(turnNumber,1);ctx.cancelled=new Promise((_,reject)=>{ctx.cancel=()=>reject(interrupted);});activeTurn=ctx;
     ctx.watchdog=setTimer(()=>expire(ctx),maxMs);
     try{return await work(ctx);}catch(e){if(e!==interrupted){note(e,ctx,ctx.stage);error??=terminalCode(e.code);}}finally{clearTimer(ctx.watchdog);if(activeTurn===ctx)activeTurn=undefined;}
@@ -151,13 +158,44 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
   async function control(ctx,method,input) {
     const result=await wait(ctx,()=>handle.pumpCall(method,input,Math.max(1,Math.ceil(ctx.until-now()))),'call',true);check(ctx);return result;
   }
+  function apply(ctx,result) {
+    const a=ctx.account;
+    if(result.windowId!==a.id||result.generation!==ctx.generation)fail('reader_failed');
+    // A renewed generation cannot apply a stale reply, even in the same window.
+    if(a===account&&generation!==ctx.generation)return;
+    a.floorItems=Math.max(a.floorItems,result.floors?.items??0);a.floorMs=Math.max(a.floorMs,result.floors?.ms??0);
+    a.items=Math.max(a.floorItems,result.usedItems);a.ms=Math.max(a.floorMs,result.usedMs);a.usd=result.usedUsd;
+    if(a===account){usedItems=a.items;usedMs=a.ms;usedUsd=a.usd;}
+  }
+  const floors=a=>({items:a.floorItems,ms:a.floorMs});
   async function reserve(ctx,mode,maxItems,maxMs,maxUsd,bindingId) {
-    const result=await control(ctx,'pumpReserve',{mode,maxItems,maxMs,bindingId,window:{...window,usedItems,usedMs,usedUsd},budgets,maxUsd,remainingMs:Math.floor(window.endsAtMonoMs-now())});
-    check(ctx);usedItems=result.usedItems;usedMs=result.usedMs;usedUsd=result.usedUsd;return result;
+    ctx.reservedAt=now();
+    const a=ctx.account,remainingMs=Math.max(0,Math.floor(a.endsAtMonoMs-ctx.reservedAt));
+    const pending=pendingUsage,sentWindow={...window,usedItems,usedMs,usedUsd};
+    // Charge locally before transport too. A lost reserve reply is unknown,
+    // and its captured window keeps the reservation across any renewal.
+    a.items+=maxItems;a.ms+=maxMs;usedItems=a.items;usedMs=a.ms;
+    const result=await control(ctx,'pumpReserve',{mode,maxItems,maxMs,bindingId,window:sentWindow,budgets,maxUsd,remainingMs,...(pending?{reconcile:{...pending.input,floors:floors(pending.account)}}:{}),
+      accounting:{version:1,generation:ctx.generation,floors:floors(a),endsMonoNs:a.endsMonoNs}});
+    apply(ctx,result);check(ctx);if(pendingUsage===pending)pendingUsage=undefined;if(result.exhausted){windowExhausted=true;throw interrupted;}return {...result,mode,maxItems,maxMs};
   }
-  async function finish(ctx,reservation,known) {
-    const result=await control(ctx,'pumpFinish',{id:reservation.id,known});check(ctx);usedItems=result.usedItems;usedMs=result.usedMs;usedUsd=result.usedUsd;
+  async function finish(ctx,reservation,known,items) {
+    const input={id:reservation.id,known,windowId:ctx.account.id,generation:ctx.generation,floors:floors(ctx.account)};
+    const result=await control(ctx,'pumpFinish',input);apply(ctx,result);check(ctx);
+    // The receipt closes the measured span, including its own delivery. The
+    // next reserved admission persists this acknowledgement inside that next
+    // charge; no reconciliation RPC escapes both measured spans. Losing the
+    // acknowledgement leaves the durable original reservation charged.
+    const elapsedMs=Math.ceil(now()-ctx.reservedAt);
+    const usage=known&&Number.isSafeInteger(items)&&items>=0&&items<=reservation.maxItems&&elapsedMs>=0&&elapsedMs<=reservation.maxMs
+      ?{version:1,items,elapsedMs}:null;
+    pendingUsage={account:ctx.account,input:{...input,usage}};
+    if(usage){
+      const a=ctx.account;a.items=Math.max(a.floorItems,a.items-reservation.maxItems+items);a.ms=Math.max(a.floorMs,a.ms-reservation.maxMs+elapsedMs);
+      usedItems=a.items;usedMs=a.ms;
+    }
   }
+
   async function maintainer(ctx,p) {
     const id=JSON.stringify([residentKeys.get(p),residentEpoch]),writer=JSON.stringify([resolve(p.options.path),p.options.readSet]);let h=handles.get(id);
     if(!h){
@@ -202,8 +240,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
     // leaves its full reservation charged; no late dispatch or known refund.
     if(generation===ctx.generation&&!stopped&&now()<ctx.until&&now()<ctx.end){
       try {
-        const settled=await control(ctx,'pumpFinish',{id:reservation.id,known:!failure&&result?.ok===true});
-        check(ctx);usedItems=settled.usedItems;usedMs=settled.usedMs;usedUsd=settled.usedUsd;
+        await finish(ctx,reservation,!failure&&result?.ok===true,method==='getContextIndexStatus'?0:result?.value?.progress?.[reservation.mode==='embeddings'?'embeddingAttempts':'transformed']);
       }catch(e){if(e!==interrupted){note(e,ctx,'call');error=terminalCode(e.code);}if(!failure)failure=e;}
     }
     // A known failure survives retirement of its accounting await.
@@ -221,7 +258,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
     // Keep that private origin; public classification follows coordinator timeouts.
     const code=!result.ok&&result.error.code==='read_timeout'?'timeout':result.error?.code;
     if(!result.ok){note(result,ctx,'call');if(code==='timeout')timeoutDisposal=true;}
-    try{await finish(ctx,reservation,result.ok===true);}
+    try{await finish(ctx,reservation,result.ok===true,0);}
     catch(failure){if(failure!==interrupted)error=terminalCode(failure.code);throw failure;}
     finally{if(!result.ok)error??=terminalCode(code);}
     if(!result.ok)return;check(ctx);firstComplete=result.value.status==='complete';const current=await control(ctx,'firstCoverage');check(ctx);observeCoverage(current);
@@ -290,9 +327,11 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
   const entry={api,fingerprint,supervisor:c.supervisor,coordinator,semanticCredentialDigest:credentialDigest(semanticCredential),first,renew(next,w,b){
     if(stopped)fail('store_closed');if(JSON.stringify(next.quantum)!==JSON.stringify(c.quantum)||next.pollMs!==c.pollMs)fail('invalid_input');
     // Settled item exhaustion ends resident duty even if validation can continue.
-    const inactive=now()>renewedUntil||now()>window.endsAtMonoMs||!running&&(usedMs>=budgets.maxMs||usedItems>=budgets.maxItems);
-    if(w.id!==window.id){if(now()<window.endsAtMonoMs)fail('invalid_input');completePrevious();window=w;budgets=b;usedItems=w.usedItems;usedMs=w.usedMs;usedUsd=w.usedUsd;cycle();}
+    const inactive=now()>renewedUntil||now()>window.endsAtMonoMs||!running&&(windowExhausted||usedMs>=budgets.maxMs||usedItems>=budgets.maxItems);
+    if(w.id!==window.id){if(now()<window.endsAtMonoMs)fail('invalid_input');completePrevious();window=w;budgets=b;account=accountingWindow(w);windowExhausted=false;usedItems=w.usedItems;usedMs=w.usedMs;usedUsd=w.usedUsd;cycle();}
     else{if(JSON.stringify(b)!==JSON.stringify(budgets)||w.endsAtMonoMs!==window.endsAtMonoMs)fail('invalid_input');usedItems=Math.max(usedItems,w.usedItems);usedMs=Math.max(usedMs,w.usedMs);usedUsd=dollars(usd(usedUsd)>usd(w.usedUsd)?usd(usedUsd):usd(w.usedUsd));}
+    account.floorItems=Math.max(account.floorItems,w.usedItems);account.floorMs=Math.max(account.floorMs,w.usedMs);
+    account.items=usedItems;account.ms=usedMs;account.usd=usedUsd;
     generation++;
     if(inactive)residentEpoch++;
     if(settled)cycle();renewedUntil=now()+next.renewalMs;parkedUntil=undefined;clearTimer(timer);if(!running)schedule();

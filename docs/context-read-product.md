@@ -857,10 +857,10 @@ if renewal occurs during dispatch; neither renewal nor restart erases charges.
 Persist the full outstanding reservation before process replacement whenever
 settlement is uncertain. Counters never refund unknown work.
 
-The observation-cadence and known-usage refund rules above remain
-lexical-only. An embedding-enabled pump (below) also skips window/renewal
-tails that cannot fit its configured quantum, without reserving or advancing
-round-robin position; validation uses its own configured time bound. Its
+The observation-cadence rules above remain lexical-only. An embedding-enabled
+pump (below) also skips window/renewal tails that cannot fit its configured
+quantum, without reserving or advancing round-robin position; validation uses
+its own configured time bound. Its
 resident cache includes constructor policy. Continuous renewal reuses
 residents; inactive renewal retires them inside the next reserved turn,
 draining before a replacement opens. Opening failures retain their cleanup IDs
@@ -879,13 +879,36 @@ Existing coordinator codes (including `budget_denied`, `provider_error` and
 codes map to `reader_failed`. Bounded private initiating and secondary cause
 counters use the existing sanitized failure records and valid process-wide
 ordinals; public DTOs are unchanged.
-It still schedules a nominal sweep from its own ticks. Actual-observation cadence,
-spacing/pacing, miss accounting, startup/validation cursors and item/ms refunds
-remain parity work. Durable window-fenced settlement and monotone usage floors
-remain accounting work.
-Time-accounting parity must charge the full parent-monotonic reserve-to-finish
-span, including open, drain and control RPCs; only validated known usage permits
-refunds. Unknown USD tails and legacy records without refund metadata stay charged.
+
+Semantic accounting captures each reservation's window and pump generation.
+Late replies cannot replace a renewed window or lower newly supplied cumulative
+floors. Durable window floors are monotone; an old quantum settles only its own
+window. New quantum records carry validated, versioned original item/time
+reservations; legacy records without this metadata retain their full charge.
+Successful known lexical usage counts `transformed`; embedding usage counts
+`embeddingAttempts`, including attempts yielding no committed vectors, never
+`embedded`. Status and coverage validation count zero item attempts. Invalid,
+missing, failed or uncertain usage retains the full reservation, and repeated
+settlement cannot refund twice. Recognized rolled-back attempts stay charged.
+Elapsed milliseconds round up from parent reserve entry through finish-receipt
+delivery, including resident opening, drain and control overhead. A full-charge
+finish receipt precedes item/ms reconciliation on the next reserved admission,
+whose own span charges that reconciliation overhead. The parent can report the
+known refund on receipt; until the next admission the durable ledger retains
+the full charge. Losing the receipt or acknowledgement retains that charge.
+USD settlement is unchanged: success or zero committed vectors alone never
+refunds unknown provider exposure. Owner, UTC-day and lifetime limits are
+unchanged.
+
+Admission derives durable UTC expiry from the parent's absolute monotonic
+window deadline, subtracting transport and queue delay; an existing expiry can
+only tighten. Expiry never releases old unknown charges. Authoritative pump
+window exhaustion reports the existing `budget_exhausted` state with no error.
+An exhausted admission still binds that window until its deadline.
+An existing `budget_denied` error from a provider or policy remains unchanged.
+It still schedules a nominal sweep from its own ticks. Actual-observation
+cadence, spacing/pacing, miss accounting and startup/validation cursors remain
+separate parity work.
 Canonical selection/intent observation duty belongs to lexical refreshes only;
 embedding, status and validation work use capacity without earning observation
 credit. Semantic coverage lag concerns recall. Unsuccessful turns and genuine

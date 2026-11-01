@@ -41,7 +41,8 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   // Hosted P2e closure, shared maintenance admission, private open timing and attribution, content safety and retained receipt lineage.
   // S2h-1 storage and the gated B3 comparator stay behind the SQLite Worker boundary.
   // Keep the exact closure pin and independently verify the installed edges.
-  assert.equal(expected.length, 112);
+  assert.equal(expected.length, 113, 'private_semantic_accounting_closure_pin');
+  assert.ok(expected.includes('core/context-semantic-accounting.mjs'), 'semantic_accounting_is_in_installed_worker_closure');
   assert.ok(expected.includes('core/context-product-comparison.mjs'));
   assert.ok(expected.includes('core/context-product-verification-batch.mjs'));
   for (const file of ['core/content-safety-layout.mjs','core/content-safety-schema.mjs',
