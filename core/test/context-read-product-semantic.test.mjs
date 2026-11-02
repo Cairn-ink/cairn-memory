@@ -1114,7 +1114,13 @@ async function quarantineRefusal(s,record) {
 test('coordinator termination bound: real SQLite native wait outlives close with frozen clock',async t=>{
   const s=await closeSetup(t,{open:false,expectedCleanupFailure:true});
   const blockPath=join(s.f.workspace.path,'close-block.sqlite');createExclusiveSqliteFile(blockPath);
-  const blocker=new DatabaseSync(blockPath);blocker.exec('CREATE TABLE barrier(value);BEGIN IMMEDIATE');
+  const blocker=new DatabaseSync(blockPath);
+  const releaseBlocker=()=>{
+    if(!blocker.isOpen)return;
+    try{if(blocker.isTransaction)blocker.exec('ROLLBACK');}finally{blocker.close();}
+  };
+  s.f.workspace.defer(releaseBlocker);
+  blocker.exec('CREATE TABLE barrier(value);BEGIN IMMEDIATE');
   s.options.host.configuration.closeBlockPath=blockPath;
   s.coordinator=await openContextSemanticCoordinator(s.options);
   const record=coordinatorRecord(s),capture=captureCloseWorker(t),before=testClock.now();
@@ -1143,7 +1149,7 @@ test('coordinator termination bound: real SQLite native wait outlives close with
     await assert.rejects(closeGuard(s.supervisor.close(),'supervisor_delivers_failed_proof'),{code:'reader_failed'});
     t.diagnostic(JSON.stringify({closeMs:elapsed,terminationMaxMs:TERMINATION_GRACE_MS,workerAliveAtDelivery:true}));
   } finally {
-    if(blocker.isTransaction)blocker.exec('ROLLBACK');blocker.close();
+    releaseBlocker();
     await closeGuard(exit,'native_worker_cleanup');await closeGuard(outcome,'native_close_cleanup');retainCoordinatorFile(s);
   }
 });

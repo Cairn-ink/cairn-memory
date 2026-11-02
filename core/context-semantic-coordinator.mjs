@@ -14,7 +14,8 @@ import { fail } from './validation.mjs';
 import { semanticClient } from './context-semantic-client.mjs';
 import { addAbortListener } from 'node:events';
 
-// One native WAL wait is at most 980 ms; the graceful budget precedes this.
+// The 980-ms SQLite bound covers lock waiting, not native statement execution.
+// This allowance bounds failed-proof delivery; native work may still outlive it.
 export const TERMINATION_GRACE_MS = 1_000;
 
 const handles=globalThis[Symbol.for('context-read-product-p2e-v1/handles')]??=new WeakMap();
