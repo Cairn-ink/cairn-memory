@@ -1443,16 +1443,36 @@ test('semantic cadence real Workers interleave bounded startup and regular refre
   assert.ok(d.observation.atMonoMs<=testClock.now());assert.equal(pump.getStatus().error,null);
 });
 
+test('semantic native missing observation timing retains its full reservation',async t=>{
+  const s=await setup(t,{isolated:true}),runtime=pumpRuntime(s),pump=runtime.renew(runtime.config);
+  s.f.workspace.defer(()=>pump.close());
+  await runtime.step();
+  const worker=runtime.spawned[0].worker,emit=worker.emit;
+  let stripped=0;
+  worker.emit=function(event,response,...rest){
+    if(event==='message'&&response?.result?.ok&&response.result.value?.progress&&response.observedAtMonoMs!==undefined){
+      response={...response};delete response.observedAtMonoMs;stripped++;
+    }
+    return Reflect.apply(emit,this,[event,response,...rest]);
+  };
+  await runtime.step();
+  const terminal=await guard(pump.completion,'missing observation completion');
+  assert.equal(stripped,1);assert.equal(terminal.error,'reader_failed');
+  assert.equal(terminal.usedItems,1,'native_invalid_observation_retains_full_items');
+  assert.equal(terminal.usedMs,500,'native_invalid_observation_retains_full_time');
+});
+
 // Last: the deliberately failed proof retains process-wide inode quarantine.
 test('semantic parity rejected retirement keeps reader_failed and quarantine', async t => {
   const s = await setup(t, { expectedCleanupFailure: true }), runtime = pumpRuntime(s), pump = runtime.renew(runtime.config);
   s.f.workspace.defer(() => pump.close().catch(() => {})); await guard(runtime.tick(), 'initial resident');
+  await guard(runtime.tick(), 'advance to regular retirement slot');
   await guard(s.advance(runtime.config.window.endsAtMonoMs - testClock.now() + 1), 'inactive boundary');
   Atomics.store(s.control, 13, 2); runtime.renew(nextWindow(runtime)); await guard(runtime.tick(), 'rejected retirement');
   assert.equal(pump.getStatus().error, 'reader_failed', 'rejected_retirement_is_reader_failed');
   const terminal = await guard(pump.completion, 'failed retirement completion');
   assert.equal(terminal.error, 'reader_failed');
-  assert.equal(terminal.usedItems, runtime.reservations.at(-1).maxItems); assert.equal(terminal.usedMs, 500, 'failed_retirement_keeps_full_reservation');
+  assert.equal(terminal.usedItems, 1); assert.equal(terminal.usedMs, 500, 'failed_retirement_keeps_full_reservation');
   assert.equal(runtime.spawned.length, 1, 'failed_disposal_never_opens_replacement');
   const record = [...supervisorOwner(s.supervisor).owner.records].find(r => r.resources === runtime.spawned[0].data.resources);
   assert.equal(record.state, 'failed'); assert.equal(record.safety, true);

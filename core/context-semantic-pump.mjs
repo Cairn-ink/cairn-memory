@@ -273,7 +273,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
     }return h;
   }
   async function operation(ctx,p,method,input,reservation) {
-    let result,failure;
+    let result,failure,invalidTiming=false;
     try {
       const h=await maintainer(ctx,p),remaining=Math.floor(ctx.until-now());check(ctx);if(remaining<1)fail('read_timeout');
       // Opening claims its control; later calls require their own joined ordinal.
@@ -282,16 +282,24 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
       const args=method==='refreshContextIndex'?{...input,budget:{...input.budget,maxMs:remaining}}:{...input,deadlineMs:remaining};
       result=await wait(ctx,()=>h[method](args,credential,ctx.control),ctx.stage);check(ctx);
       if(!result.ok)note(result,ctx,ctx.stage);
+      if(result.ok&&method==='refreshContextIndex'&&reservation.mode==='lexical'){
+        ctx.observedAt=observedAt(result);
+        // Invalid observation timing is uncertain work, so validate before
+        // known settlement can refund any of the reservation.
+        invalidTiming=!Number.isFinite(ctx.observedAt)||ctx.observedAt<lastTick||ctx.observedAt>now();
+        if(invalidTiming)note(result,ctx,'observation','observation_timing');
+      }
     }catch(e){failure=e;if(e!==interrupted)note(e,ctx,ctx.stage);}
     // A still-owned failed operation settles conservatively. Lost ownership
     // leaves its full reservation charged; no late dispatch or known refund.
     if(generation===ctx.generation&&!stopped&&now()<ctx.until&&now()<ctx.end){
       try {
-        await finish(ctx,reservation,!failure&&result?.ok===true,method==='getContextIndexStatus'?0:result?.value?.progress?.[reservation.mode==='embeddings'?'embeddingAttempts':'transformed']);
+        await finish(ctx,reservation,!failure&&!invalidTiming&&result?.ok===true,method==='getContextIndexStatus'?0:result?.value?.progress?.[reservation.mode==='embeddings'?'embeddingAttempts':'transformed']);
       }catch(e){if(e!==interrupted){note(e,ctx,'call');error=terminalCode(e.code);}if(!failure)failure=e;}
     }
     // A known failure survives retirement of its accounting await.
     if(result&&!result.ok)error??=terminalCode(result.error?.code);
+    if(invalidTiming)error??='reader_failed';
     if(failure)throw failure;return result;
   }
   async function validation(ctx) {
@@ -320,8 +328,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
     const result=await operation(ctx,p,'refreshContextIndex',{readSet:p.options.readSet,types:p.types,intent:p.intent,mode:p.mode,budget:{maxItems,...(isEmbedding?{maxUsd:reservation.maxUsd}:{})}},reservation);check(ctx);
     if(!result?.ok||error||stopped)return;
     if(!isEmbedding){
-      const time=observedAt(result),finished=now();
-      if(!Number.isFinite(time)||time<lastTick||time>finished){note(result,ctx,'observation','observation_timing');error='reader_failed';return;}
+      const time=ctx.observedAt,finished=now();
       checkCadence(time);
       lastObservation=Object.freeze({projection:slot.index,atMonoMs:time,gapMs:time-observations[slot.index],cadenceMiss:missed[slot.index]});
       observations[slot.index]=time;missed[slot.index]=false;checkCadence(finished);

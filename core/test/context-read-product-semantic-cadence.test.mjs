@@ -53,7 +53,7 @@ function setup(t, patch={}, hooks={}) {
       async getContextIndexStatus(input){events.push({kind:'status',at:clock,intent:input.intent});return {ok:true,value:{lexical:{state:'ready'},semantic:{coverage:{status:hooks.covered?'complete':'partial'}}}};},
       async refreshContextIndex(input){
         events.push({kind:'refresh',at:clock,mode:input.mode,intent:input.intent});await hooks.refresh?.(input,advance);
-        const result=hooks.result?.(input)??{ok:true,value:{status:'complete',progress:{transformed:0,embeddingAttempts:0}}};times.set(result,clock);return result;
+        const result=hooks.result?.(input)??{ok:true,value:{status:'complete',progress:{transformed:0,embeddingAttempts:0}}};times.set(result,hooks.observedAt?hooks.observedAt(clock):clock);return result;
       },async close(){events.push({kind:'close',at:clock});}};}};
   const renew=input=>semanticPump(input,dependencies);
   let pump;
@@ -171,6 +171,17 @@ test('semantic a slow coverage reply shares the reserved turn deadline with subs
   assert.equal(p.getStatus().error,'timeout','control_overhead_cannot_start_a_fresh_deadline');
   assert.equal(s.events.filter(e=>e.kind==='refresh').length,refreshed,'expired_control_cannot_dispatch');
   assert.equal(p.getStatus().usedItems,1);assert.equal(p.getStatus().usedMs,700,'unknown_reserve_is_fully_charged');
+});
+
+for(const timing of ['missing','future'])test(`semantic ${timing} observation timing fails with the full reservation`,async t=>{
+  const s=setup(t,{}, {observedAt:clock=>timing==='missing'?undefined:clock+1}),p=s.start();
+  await s.regular();
+  const terminal=await p.completion;
+  assert.equal(terminal.error,'reader_failed');
+  assert.equal(terminal.usedItems,1,'invalid_observation_retains_full_items');
+  assert.equal(terminal.usedMs,700,'invalid_observation_retains_full_time');
+  assert.equal(s.events.filter(e=>e.kind==='pumpFinish').at(-1).input.known,false,'invalid_observation_is_not_known');
+  assert.equal(diagnostic(p).lastFailure.cause,'observation_timing');
 });
 
 for(const code of ['authority_required','storage_error','read_timeout'])test(`semantic terminal ${code} stays terminal and fully charged (control)`,async t=>{
