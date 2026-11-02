@@ -1,7 +1,7 @@
 {
   "revision": "R2-A1 / 3.5",
   "decision": "e9, 2026-11-01 17:15",
-  "mainSha": "a69cc9795f97596b3e1c9829d65545b3cdf3dbd7",
+  "mainSha": "93bfa28cb73e101e98990e88f289d6deec1568f8",
   "measuredDate": "2026-11-02",
   "metrics": [
     "executed statements",
@@ -20597,6 +20597,198 @@
       ]
     },
     {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v18: 1 expansions, same-engine ceiling and slope\",18,12,null,\"contextRead\",\"relations-one-hop-v1/1\"]",
+      "counts": [
+        221,
+        25,
+        24
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v18: 1 expansions, same-engine ceiling and slope\",18,12,null,\"findCandidates\",\"relations-one-hop-v1/1\"]",
+      "counts": [
+        169,
+        21,
+        9
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v18: 1 expansions, same-engine ceiling and slope\",18,24,null,\"contextRead\",\"relations-one-hop-v1/1\"]",
+      "counts": [
+        221,
+        25,
+        24
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v18: 1 expansions, same-engine ceiling and slope\",18,24,null,\"findCandidates\",\"relations-one-hop-v1/1\"]",
+      "counts": [
+        169,
+        21,
+        9
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v18: 4 expansions, same-engine ceiling and slope\",18,12,null,\"contextRead\",\"relations-one-hop-v1/4\"]",
+      "counts": [
+        474,
+        25,
+        64
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v18: 4 expansions, same-engine ceiling and slope\",18,12,null,\"findCandidates\",\"relations-one-hop-v1/4\"]",
+      "counts": [
+        307,
+        21,
+        9
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v18: 4 expansions, same-engine ceiling and slope\",18,24,null,\"contextRead\",\"relations-one-hop-v1/4\"]",
+      "counts": [
+        594,
+        25,
+        64
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v18: 4 expansions, same-engine ceiling and slope\",18,24,null,\"findCandidates\",\"relations-one-hop-v1/4\"]",
+      "counts": [
+        307,
+        21,
+        9
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v23: 1 expansions, same-engine ceiling and slope\",23,12,null,\"contextRead\",\"relations-one-hop-v1/1\"]",
+      "counts": [
+        222,
+        25,
+        24
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v23: 1 expansions, same-engine ceiling and slope\",23,12,null,\"findCandidates\",\"relations-one-hop-v1/1\"]",
+      "counts": [
+        170,
+        21,
+        9
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v23: 1 expansions, same-engine ceiling and slope\",23,24,null,\"contextRead\",\"relations-one-hop-v1/1\"]",
+      "counts": [
+        222,
+        25,
+        24
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v23: 1 expansions, same-engine ceiling and slope\",23,24,null,\"findCandidates\",\"relations-one-hop-v1/1\"]",
+      "counts": [
+        170,
+        21,
+        9
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v23: 4 expansions, same-engine ceiling and slope\",23,12,null,\"contextRead\",\"relations-one-hop-v1/4\"]",
+      "counts": [
+        478,
+        25,
+        64
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v23: 4 expansions, same-engine ceiling and slope\",23,12,null,\"findCandidates\",\"relations-one-hop-v1/4\"]",
+      "counts": [
+        311,
+        21,
+        9
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v23: 4 expansions, same-engine ceiling and slope\",23,24,null,\"contextRead\",\"relations-one-hop-v1/4\"]",
+      "counts": [
+        598,
+        25,
+        64
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v23: 4 expansions, same-engine ceiling and slope\",23,24,null,\"findCandidates\",\"relations-one-hop-v1/4\"]",
+      "counts": [
+        311,
+        21,
+        9
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v33: 1 expansions, same-engine ceiling and slope\",33,12,null,\"contextRead\",\"relations-one-hop-v1/1\"]",
+      "counts": [
+        266,
+        25,
+        24
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v33: 1 expansions, same-engine ceiling and slope\",33,12,null,\"findCandidates\",\"relations-one-hop-v1/1\"]",
+      "counts": [
+        192,
+        21,
+        9
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v33: 1 expansions, same-engine ceiling and slope\",33,24,null,\"contextRead\",\"relations-one-hop-v1/1\"]",
+      "counts": [
+        266,
+        25,
+        24
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v33: 1 expansions, same-engine ceiling and slope\",33,24,null,\"findCandidates\",\"relations-one-hop-v1/1\"]",
+      "counts": [
+        192,
+        21,
+        9
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v33: 4 expansions, same-engine ceiling and slope\",33,12,null,\"contextRead\",\"relations-one-hop-v1/4\"]",
+      "counts": [
+        742,
+        25,
+        64
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v33: 4 expansions, same-engine ceiling and slope\",33,12,null,\"findCandidates\",\"relations-one-hop-v1/4\"]",
+      "counts": [
+        443,
+        21,
+        9
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v33: 4 expansions, same-engine ceiling and slope\",33,24,null,\"contextRead\",\"relations-one-hop-v1/4\"]",
+      "counts": [
+        994,
+        25,
+        64
+      ]
+    },
+    {
+      "key": "[\"native\",\"R2 relations-one-hop-v1 v33: 4 expansions, same-engine ceiling and slope\",33,24,null,\"findCandidates\",\"relations-one-hop-v1/4\"]",
+      "counts": [
+        443,
+        21,
+        9
+      ]
+    },
+    {
       "key": "[\"native\",\"R2 temporal/admission/review v18 1 items\",18,1,null,\"epoch\",\"runtime\"]",
       "counts": [
         1,
@@ -31821,5 +32013,7 @@
   "round4MeasuredDate": "2026-11-02",
   "round4Meter": "StatementSync executions, including statements prepared before measurement; fixed topic fixture IDs",
   "round4bPreviousMainSha": "a546ee4372e72ad06e713fd0449ca84f168a340b",
-  "round4bDecision": "e9, 2026-11-02 03:10"
+  "round4bDecision": "e9, 2026-11-02 03:10",
+  "round5PreviousMainSha": "a69cc9795f97596b3e1c9829d65545b3cdf3dbd7",
+  "round5Decision": "e9, 2026-11-02 15:01"
 }

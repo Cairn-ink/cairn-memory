@@ -226,6 +226,13 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // by protection predicates. context-product-attribution's validation_invalid
   // (1) is a failure-reason string. None is a canonical content identity or a
   // field returned by a writer acknowledgement.
+  // Composite 93bfa28c (#534, #535, #536):
+  // uid/gid protection predicates move from the sidecars to the shared journal
+  // probe: sidecar uid counts are now 1/0; probe uid/gid counts are 3/1.
+  // These are file-stat owner/group fields, not canonical content identities.
+  // The pump's new windowId reconciles a private semantic accounting quantum;
+  // the worker's three windowId results bind reservation/settlement accounting.
+  // They identify budget windows, not retained content or writer acknowledgements.
   // The terminal writer and acknowledgement field guard are unchanged.
   // These changes retain the native guard's fail-closed walker.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));

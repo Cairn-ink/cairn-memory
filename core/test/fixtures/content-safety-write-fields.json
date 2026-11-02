@@ -411,7 +411,7 @@
     "key:storeId": 1,
     "literal:gid": 1,
     "literal:id": 1,
-    "literal:uid": 2
+    "literal:uid": 1
   },
   "core/contract.mjs": {
     "key:actionId": 1,
@@ -475,7 +475,9 @@
     "literal:storeId": 2
   },
   "core/sqlite-journal-probe.mjs": {
-    "literal:application_id": 1
+    "literal:application_id": 1,
+    "literal:gid": 1,
+    "literal:uid": 3
   },
   "core/isolated-file-read-child.mjs": {
     "key:invalid": 1
@@ -1348,7 +1350,6 @@
     "literal:comparison_base_invalid": 1,
     "literal:memoryId": 2,
     "literal:term_id": 1,
-    "literal:uid": 1,
     "literal:validation_invalid": 6
   },
   "core/context-product-verification-batch.mjs": {
@@ -1421,7 +1422,7 @@
     "key:bindingId": 1,
     "key:id": 3,
     "key:ownerId": 1,
-    "key:windowId": 1,
+    "key:windowId": 2,
     "literal:id": 1
   },
   "core/context-semantic-worker.mjs": {
@@ -1429,6 +1430,7 @@
     "key:bindingId": 1,
     "key:credentialBindingId": 1,
     "key:id": 7,
+    "key:windowId": 3,
     "literal:ownerId": 1,
     "literal:validation_invalid": 1
   },

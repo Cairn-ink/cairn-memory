@@ -222,7 +222,14 @@ export function sourceReader(db, identity, features, input, budget, sharedContex
     return refs.map(ref => endpoint(ref, options));
   }
   function receipt(memoryId, receiptId, expected, ns = input.readSet[0]) {
-    if (!metadata(ns, 'memory', memoryId).scoped || suppressionRevision && contentSuppressionReasonInside(charged, ns, { kind: 'receipt', key: receiptId })) return false;
+    const memory = metadata(ns, 'memory', memoryId);
+    // The classified Memory projection covers every stored receipt's Raw
+    // namespace ancestry in this snapshot. Reuse that same proof for the
+    // receipt fact check; any Raw fact still takes the full ancestry UNION.
+    // The exact receipt-to-Memory and digest checks below remain mandatory.
+    if (!memory.scoped || suppressionRevision && contentSuppressionReasonInside(charged, ns, {
+      kind: 'receipt', key: receiptId, ancestryChecked: rawAncestry && memory.row.invalid_raw_ancestry === 0,
+    })) return false;
     budget.ensure(4); privateBudget.ensure(4);
     // ID is UNIQUE. Never hide a mismatched receipt behind a memory_id WHERE
     // residual: visit/classify it once, but expose its prose only for the

@@ -1,0 +1,249 @@
+{
+  "legacy": {
+    "[18,12,1,\"findCandidates\"]": [
+      169,
+      21,
+      0
+    ],
+    "[18,12,1,\"contextRead\"]": [
+      221,
+      25,
+      10
+    ],
+    "[18,24,1,\"findCandidates\"]": [
+      169,
+      21,
+      0
+    ],
+    "[18,24,1,\"contextRead\"]": [
+      221,
+      25,
+      10
+    ],
+    "[18,12,4,\"findCandidates\"]": [
+      307,
+      21,
+      0
+    ],
+    "[18,12,4,\"contextRead\"]": [
+      474,
+      25,
+      50
+    ],
+    "[18,24,4,\"findCandidates\"]": [
+      307,
+      21,
+      0
+    ],
+    "[18,24,4,\"contextRead\"]": [
+      594,
+      25,
+      50
+    ],
+    "[23,12,1,\"findCandidates\"]": [
+      170,
+      21,
+      0
+    ],
+    "[23,12,1,\"contextRead\"]": [
+      222,
+      25,
+      10
+    ],
+    "[23,24,1,\"findCandidates\"]": [
+      170,
+      21,
+      0
+    ],
+    "[23,24,1,\"contextRead\"]": [
+      222,
+      25,
+      10
+    ],
+    "[23,12,4,\"findCandidates\"]": [
+      311,
+      21,
+      0
+    ],
+    "[23,12,4,\"contextRead\"]": [
+      478,
+      25,
+      50
+    ],
+    "[23,24,4,\"findCandidates\"]": [
+      311,
+      21,
+      0
+    ],
+    "[23,24,4,\"contextRead\"]": [
+      598,
+      25,
+      50
+    ],
+    "[33,12,1,\"findCandidates\"]": [
+      192,
+      21,
+      0
+    ],
+    "[33,12,1,\"contextRead\"]": [
+      266,
+      25,
+      10
+    ],
+    "[33,24,1,\"findCandidates\"]": [
+      192,
+      21,
+      0
+    ],
+    "[33,24,1,\"contextRead\"]": [
+      266,
+      25,
+      10
+    ],
+    "[33,12,4,\"findCandidates\"]": [
+      443,
+      21,
+      0
+    ],
+    "[33,12,4,\"contextRead\"]": [
+      742,
+      25,
+      50
+    ],
+    "[33,24,4,\"findCandidates\"]": [
+      443,
+      21,
+      0
+    ],
+    "[33,24,4,\"contextRead\"]": [
+      994,
+      25,
+      50
+    ]
+  },
+  "safety": {
+    "[18,12,1,\"findCandidates\"]": [
+      173,
+      21,
+      0
+    ],
+    "[18,12,1,\"contextRead\"]": [
+      235,
+      25,
+      10
+    ],
+    "[18,24,1,\"findCandidates\"]": [
+      173,
+      21,
+      0
+    ],
+    "[18,24,1,\"contextRead\"]": [
+      235,
+      25,
+      10
+    ],
+    "[18,12,4,\"findCandidates\"]": [
+      311,
+      21,
+      0
+    ],
+    "[18,12,4,\"contextRead\"]": [
+      528,
+      25,
+      50
+    ],
+    "[18,24,4,\"findCandidates\"]": [
+      311,
+      21,
+      0
+    ],
+    "[18,24,4,\"contextRead\"]": [
+      648,
+      25,
+      50
+    ],
+    "[23,12,1,\"findCandidates\"]": [
+      174,
+      21,
+      0
+    ],
+    "[23,12,1,\"contextRead\"]": [
+      236,
+      25,
+      10
+    ],
+    "[23,24,1,\"findCandidates\"]": [
+      174,
+      21,
+      0
+    ],
+    "[23,24,1,\"contextRead\"]": [
+      236,
+      25,
+      10
+    ],
+    "[23,12,4,\"findCandidates\"]": [
+      315,
+      21,
+      0
+    ],
+    "[23,12,4,\"contextRead\"]": [
+      532,
+      25,
+      50
+    ],
+    "[23,24,4,\"findCandidates\"]": [
+      315,
+      21,
+      0
+    ],
+    "[23,24,4,\"contextRead\"]": [
+      652,
+      25,
+      50
+    ],
+    "[33,12,1,\"findCandidates\"]": [
+      196,
+      21,
+      0
+    ],
+    "[33,12,1,\"contextRead\"]": [
+      280,
+      25,
+      10
+    ],
+    "[33,24,1,\"findCandidates\"]": [
+      196,
+      21,
+      0
+    ],
+    "[33,24,1,\"contextRead\"]": [
+      280,
+      25,
+      10
+    ],
+    "[33,12,4,\"findCandidates\"]": [
+      447,
+      21,
+      0
+    ],
+    "[33,12,4,\"contextRead\"]": [
+      796,
+      25,
+      50
+    ],
+    "[33,24,4,\"findCandidates\"]": [
+      447,
+      21,
+      0
+    ],
+    "[33,24,4,\"contextRead\"]": [
+      1048,
+      25,
+      50
+    ]
+  },
+  "mainSha": "93bfa28cb73e101e98990e88f289d6deec1568f8",
+  "measuredDate": "2026-11-02",
+  "safetyPinRule": "Expected measured pre-fix statements minus the repeated receipt Raw/fact UNION executions; verified by final gates."
+}

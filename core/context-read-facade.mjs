@@ -118,6 +118,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     try { if (readOnly && !options.product?.sqlite) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path, options.product?.observer); }
     catch (error) { if (options.product && error?.code === 'read_timeout') guardTimeouts.add(error); throw error; }
   };
+  const facadeFailure = error => guardTimeouts.has(error)
+    ? { ok: false, error: { code: 'read_timeout', retryable: false } } : failure(error);
   const db = database?.db;
   function ready() {
     if (closed || db && (!db.isOpen || isConnectionDiscarded(db))) fail('store_closed');
@@ -752,7 +754,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         return success(result);
       });
     } catch (error) {
-      return guardTimeouts.has(error) ? { ok: false, error: { code: 'read_timeout', retryable: false } } : failure(error);
+      return facadeFailure(error);
     }
   }
   return { fileIdentity: database?.fileIdentity, productCapabilities: { types: supportedTypes },
@@ -786,7 +788,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         }
         read(()=>{for(const ns of scopes)if(['personal','project'].includes(ns.scope)&&db.prepare(`SELECT 1 FROM content_suppressions INDEXED BY content_suppression_target
           WHERE (owner_id,scope,project_id)=(?,?,?) LIMIT 1`).get(ns.ownerId,ns.scope,ns.projectId??''))fail('index_unavailable');});
-      }, noOwner: ['getContextReadCapabilities'], failure: error => failure(error) }), close() {
+      }, noOwner: ['getContextReadCapabilities'], failure: facadeFailure }), close() {
     if (closed) return;
     closed = true; for (const controller of controllers) assertContentPort({invoke:()=>controller.abort()});
     rankings.clear(); retainedSourceBytes = 0; for (const entry of indexes.values()) entry.storage.close(); indexes.clear(); if (db?.isOpen) db.close();

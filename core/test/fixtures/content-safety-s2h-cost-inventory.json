@@ -1044,6 +1044,12 @@
           "variants": [
             "embedded sources:moc-v1, zero facts n12/n24"
           ]
+        },
+        {
+          "gate": "fix5-relations-cost",
+          "variants": [
+            "embedded sources:relations-one-hop-v1, zero facts n12/n24, one and four actual expansions; all three layout pairs"
+          ]
         }
       ],
       "missing": [],
@@ -1160,6 +1166,12 @@
           "gate": "option-cost",
           "variants": [
             "embedded sources:moc-v1, zero facts n12/n24"
+          ]
+        },
+        {
+          "gate": "fix5-relations-cost",
+          "variants": [
+            "embedded sources:relations-one-hop-v1, zero facts n12/n24, one and four actual expansions; all three layout pairs"
           ]
         }
       ],
@@ -3338,7 +3350,7 @@
   "unmigratedGate": {
     "gate": "unmigrated-cost",
     "fixture": "content-safety-s2h-unmigrated-counts.json",
-    "main": "a546ee43",
-    "measured": "2026-11-01"
+    "main": "93bfa28c",
+    "measured": "2026-11-02"
   }
 }

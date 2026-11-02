@@ -465,6 +465,14 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     },
     requestScope: withContentSuppressionRequest,
     portGuard: scopes => maintenance ? undefined : contentScopeEpochGuard(db,scopes),
-    failure: error => failure(error.code === 'memory_not_found' ? 'evidence_unavailable' : error.code ?? 'storage_error') }).run,close(){storage.close();rankings.clear();},assembly:{representation:'representation-v2',defaults:ASSEMBLY_DEFAULTS,policies:ASSEMBLY_POLICIES,
+    failure: error => {
+      // Entry and final safety fences use the method's native classification
+      // and private attribution, including failures before run's guarded body.
+      attribution?.captureFailure(error); attribution?.selectFailure(error);
+      const code = error.code === 'ERR_SQLITE_ERROR'
+        ? [5,6].includes(error.errcode & 255) ? 'storage_busy' : 'storage_error'
+        : error.code === 'memory_not_found' ? 'evidence_unavailable' : error.code ?? 'storage_error';
+      return failure(code);
+    } }).run,close(){storage.close();rankings.clear();},assembly:{representation:'representation-v2',defaults:ASSEMBLY_DEFAULTS,policies:ASSEMBLY_POLICIES,
     defaultPolicy:'rank-first-whole-v1',counter:counter?{id:counter.id}:null,limits:ASSEMBLY_LIMITS}};
 }
