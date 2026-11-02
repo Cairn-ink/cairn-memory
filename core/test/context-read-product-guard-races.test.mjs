@@ -101,6 +101,50 @@ for(const kind of ['canonical','sidecar'])test(`guard replacement recheck: ${kin
   } finally {if(existsSync(journal))unlinkSync(journal);}
 });
 
+for(const kind of ['canonical','sidecar'])test(`guard replacement recheck: ${kind}, symlink with reused inode refuses`,t=>{
+  const s=setup(t,kind),journal=s.path+'-journal';writeFileSync(journal,'first',{mode:0o600});
+  const native=fs.lstatSync,original=native(journal,{bigint:true});let afterChild=false,sampled=false;
+  intercept(t,(args,run)=>{
+    const result=run();unlinkSync(journal);symlinkSync(s.path,journal);afterChild=true;return result;
+  });
+  t.mock.method(fs,'lstatSync',function(path,...args){
+    const value=Reflect.apply(native,this,[path,...args]);
+    if(afterChild&&path===journal&&value.isSymbolicLink()) {
+      sampled=true;
+      value.dev=typeof value.dev==='bigint'?original.dev:Number(original.dev);
+      value.ino=typeof value.ino==='bigint'?original.ino:Number(original.ino);
+    }
+    return value;
+  });syncBuiltinESMExports();
+  try {
+    assert.throws(s.check,{code:'index_unavailable',reason:kind==='canonical'?'auxiliary_file':'storage_unavailable'},
+      kind==='canonical'?'symlink replacement uses auxiliary_file even with a reused inode':
+        'passing control: product symlink replacement retains storage_unavailable');
+    assert.equal(sampled,true,'passing control: recheck sees symlink metadata with the original identity');
+  } finally {if(existsSync(journal))unlinkSync(journal);}
+});
+
+for(const kind of ['canonical','sidecar'])test(`guard replacement recheck: ${kind}, wal after predicate refuses`,t=>{
+  const s=setup(t,kind),journal=s.path+'-journal';writeFileSync(journal,'first',{mode:0o600});
+  const native=fs.lstatSync;let afterChild=false,samples=0,created=false;
+  intercept(t,(args,run)=>{
+    const result=run();renameSync(journal,journal+'.old');writeFileSync(journal,'replacement',{mode:0o600});
+    afterChild=true;return result;
+  });
+  t.mock.method(fs,'lstatSync',function(path,...args){
+    const value=Reflect.apply(native,this,[path,...args]);
+    if(afterChild&&path===journal&&++samples===2) {
+      writeFileSync(s.path+'-wal','late companion',{mode:0o600});created=true;
+    }
+    return value;
+  });syncBuiltinESMExports();
+  try {
+    assert.throws(s.check,{code:'index_unavailable',reason:kind==='canonical'?'auxiliary_file':'storage_unavailable'},
+      'passing control: a WAL companion retains the old refusal');
+    assert.equal(created,true,'the protected replacement passes the predicate before the WAL appears');
+  } finally {for(const suffix of ['-journal','-wal'])if(existsSync(s.path+suffix))unlinkSync(s.path+suffix);}
+});
+
 for(const kind of ['canonical','sidecar'])test(`guard replacement recheck: ${kind}, no in-process opens`,t=>{
   const s=setup(t,kind),journal=s.path+'-journal';writeFileSync(journal,'first',{mode:0o600});
   let opens=0;

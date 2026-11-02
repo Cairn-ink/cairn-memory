@@ -3,6 +3,24 @@ import { spawnSync } from 'node:child_process';
 import { lstatSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
+// Pure metadata predicates shared by the number-stat and bigint-stat guards.
+// Callers supply lstat snapshots; these predicates perform no filesystem access.
+export const sameJournal = (actual, expected) =>
+  ['dev','ino','mode','uid','nlink'].every(key => actual[key] === expected[key]);
+const sameProof = (actual, expected) => actual && expected &&
+  ['dev','ino','mode','uid','gid','nlink'].every(key => actual[key] === expected[key]);
+export function protectedDeleteJournal({ main, directory, journal, wal, shm }, proof = { main, directory, journal }) {
+  const uid = process.getuid?.();
+  const file = entry => entry?.isFile() && !entry.isSymbolicLink() &&
+    (process.platform === 'win32' || (Number(entry.mode) & 0o777) === 0o600);
+  return file(main) && file(journal) && Number(main.nlink) === 1 && Number(journal.nlink) === 1 &&
+    directory?.isDirectory() && !directory.isSymbolicLink() &&
+    (process.platform === 'win32' || (Number(directory.mode) & 0o777) === 0o700 &&
+      uid !== undefined && [main, journal, directory].every(entry => Number(entry.uid) === uid)) &&
+    sameProof(main, proof.main) && sameProof(directory, proof.directory) &&
+    ['mode','uid','nlink'].every(key => journal[key] === proof.journal[key]) && !wal && !shm;
+}
+
 // A normal read-only PRAGMA can create WAL/SHM. nolock refuses WAL without
 // creating either, but must NEVER run in the host: its VFS close could drop
 // locks on another host connection. Isolate the SQLite-only header query in a

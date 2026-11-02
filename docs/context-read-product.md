@@ -517,7 +517,8 @@ journal identity/protection and WAL/SHM absence are checked again afterward.
 **Amendment v1: protected replacement DELETE journals.** For both guards, a
 replacement journal that passes the original protection predicate and one final
 identity/protection check is retryable `storage_busy`; in the product sidecar,
-this changes the `storage_unavailable` reason to `storage_busy`. Unsafe or
+the outcome changes from `index_unavailable` with reason `storage_unavailable`
+to `storage_busy`. Unsafe or
 repeatedly replaced journals, changed main/directory proofs, opened-inode swaps,
 and WAL/SHM companions retain their refusals; no retry, read-through, adoption or
 recovery is added, and hosts retain their bounded busy rule.
