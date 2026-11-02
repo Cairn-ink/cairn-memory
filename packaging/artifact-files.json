@@ -324,6 +324,7 @@
   "core/context-semantic-gate.mjs",
   "core/context-semantic-gates.mjs",
   "core/context-semantic-input.mjs",
+  "core/context-semantic-accounting.mjs",
   "core/context-semantic-ledger.mjs",
   "core/context-semantic-maintenance.mjs",
   "core/context-semantic-pump.mjs",

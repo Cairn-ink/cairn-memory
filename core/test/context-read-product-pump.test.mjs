@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { Worker } from 'node:worker_threads';
 import * as attribution from '../context-product-attribution.mjs';
 import * as productReader from '../context-product-reader.mjs';
 const { openContextIndexMaintainer } = productReader;
@@ -553,17 +554,15 @@ for(const cutoff of ['native','parent'])test(`Fix A2 ${cutoff} quantum cutoff af
   assert.equal(s.timers.size,0);await p.close();assert.equal(s.closed.length,s.opened.length);
 });
 
-test('Fix A1 Worker epoch observation time stays outside the public DTO',async t=>{
-  const f=fixture(t),service=configured(t,f.path,[personal],{service:true});
-  const h=await openContextIndexMaintainer({...service.options,deadlineMs:5000});t.after(()=>h.close());
-  const before=Number(process.hrtime.bigint())/1e6;
-  const result=await h.refreshContextIndex({readSet:[personal],types:['memory'],intent:'current',mode:'lexical',
-    budget:{maxItems:128,maxMs:1000}},service.token);
-  assert.equal(result.ok,true);
-  const time=productReader.maintenanceObservation?.(result);
-  assert.ok(time>=before&&time<=Number(process.hrtime.bigint())/1e6,'timestamp from the fresh final Worker snapshot');
-  assert.deepEqual(Object.keys(result).sort(),['ok','value']);
-  assert.deepEqual(Object.keys(result.value).sort(),['channels','coverage','progress','status']);
+test('Fix A1 Worker epoch observation time stays outside the public DTO',async()=>{
+  // Isolate the injected clock from the mock scheduler cases in this file.
+  const worker=new Worker(new URL('./fixtures/context-product-epoch-observation.mjs',import.meta.url),{env:{},execArgv:[],stdout:true,stderr:true});
+  worker.stdout.resume();worker.stderr.resume();let timer,failure,expired=false;
+  try{await new Promise((resolve,reject)=>{
+    worker.once('error',error=>{failure=error;});
+    worker.once('exit',code=>{clearTimeout(timer);if(failure)reject(failure);else if(expired||code!==0)reject(Error('epoch observation hang or Worker failure'));else resolve();});
+    timer=setTimeout(()=>{expired=true;void worker.terminate();},60000);
+  });}finally{clearTimeout(timer);await worker.terminate();}
 });
 
 
