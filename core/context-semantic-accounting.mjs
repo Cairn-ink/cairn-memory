@@ -1,6 +1,17 @@
 import { exact, integer } from './context-semantic-input.mjs';
 import { fail } from './validation.mjs';
 
+// status, accounting stage, known, usage kind. Every other combination fails.
+const QUANTUM_STATES = [
+  ['reserved','reserved',false,'none'],
+  ['settled','receipt',true,'none'],
+  ['settled','closed',false,'none'],
+  ['settled','closed',true,'none'],
+  ['settled','closed',true,'known'],
+  // Older finish/recovery preserves these bytes: semantically closed, full charge.
+  ['settled','reserved',false,'none'],
+];
+
 // Optional v1 metadata upgrades new quanta only; legacy charges are immutable.
 export function validatePumpAccounting(w) {
   if(w.accounting!==undefined){
@@ -8,12 +19,15 @@ export function validatePumpAccounting(w) {
     if(a.version!==1)fail('index_unavailable');integer(a.floorItems);integer(a.floorMs);
     if(w.usedItems<a.floorItems||w.usedMs<a.floorMs)fail('index_unavailable');
   }
-  for(const q of Object.values(w.quanta))if(q.accounting!==undefined){
+  for(const q of Object.values(w.quanta)){
+    if(!QUANTUM_STATES.some(row=>row[0]===q.status))fail('index_unavailable');
+    if(q.accounting===undefined)continue;
     const a=exact(q.accounting,'version,mode,items,ms,stage,known,usage');
-    if(a.version!==1||!['lexical','embeddings','validation'].includes(a.mode)||!['reserved','receipt','closed'].includes(a.stage)||typeof a.known!=='boolean')fail('index_unavailable');
+    if(a.version!==1||!['lexical','embeddings','validation'].includes(a.mode)||typeof a.known!=='boolean')fail('index_unavailable');
     integer(a.items,0,1024);integer(a.ms,1,5000);
-    if((q.status==='reserved')!==(a.stage==='reserved')||a.stage==='receipt'&&!a.known)fail('index_unavailable');
-    if(a.usage!==null){const u=exact(a.usage,'items,elapsedMs');integer(u.items,0,a.items);integer(u.elapsedMs,0,a.ms);if(a.stage!=='closed'||!a.known)fail('index_unavailable');}
+    if(a.usage!==null){const u=exact(a.usage,'items,elapsedMs');integer(u.items,0,a.items);integer(u.elapsedMs,0,a.ms);}
+    const usage=a.usage===null?'none':'known';
+    if(!QUANTUM_STATES.some(row=>row[0]===q.status&&row[1]===a.stage&&row[2]===a.known&&row[3]===usage))fail('index_unavailable');
   }
 }
 export function pumpFloors(w,floors) {
@@ -34,10 +48,9 @@ export function pumpExpiry(input,time,monoNow) {
 }
 export function pumpUsage(w,q,input) {
   const a=q.accounting;if(!a)return; // Legacy: never infer a refund entitlement.
-  if(a.stage==='reserved'){
-    a.known=input.known===true;a.stage=a.known&&!Object.hasOwn(input,'usage')?'receipt':'closed';return;
-  }
-  if(a.stage!=='receipt')return; // Exactly once, including invalid reconciliation.
+  // Called only by funded reserve reconciliation. Older settled/reserved-stage
+  // records are closed for accounting and must never acquire a receipt.
+  if(q.status!=='settled'||a.stage!=='receipt')return;
   a.stage='closed';
   try {
     const u=exact(input.usage,'version,items,elapsedMs');

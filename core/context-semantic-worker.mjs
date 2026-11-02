@@ -331,9 +331,12 @@ async function internalCall(message,metadata) {
       if(q.status==='reserved') {
         const actual=Object.values(s.reservations).filter(r=>r.quantumId===q.id&&r.status!=='released').reduce((sum,r)=>sum+BigInt(r.cost),0n);
         w.usedUsd=String(BigInt(w.usedUsd)+(input.known?actual:BigInt(q.maxUsd)));q.status='settled';
+        if(q.accounting){
+          q.accounting.known=input.known===true;
+          q.accounting.stage=q.accounting.known&&!Object.hasOwn(input,'usage')?'receipt':'closed';
+        }
         if(q.bindingId&&s.pumpBindings[q.bindingId]===q.id)delete s.pumpBindings[q.bindingId];
       }
-      pumpUsage(w,q,input);
       const reserved=Object.values(w.quanta).filter(q=>q.status==='reserved').reduce((sum,q)=>sum+BigInt(q.maxUsd),0n);
       result={windowId:w.id,generation:input.generation,floors:{items:w.accounting?.floorItems??0,ms:w.accounting?.floorMs??0},usedUsd:dollars(BigInt(w.usedUsd)+reserved),usedItems:w.usedItems,usedMs:w.usedMs};
     });return result;

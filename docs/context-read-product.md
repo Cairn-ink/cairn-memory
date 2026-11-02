@@ -885,6 +885,9 @@ Late replies cannot replace a renewed window or lower newly supplied cumulative
 floors. Durable window floors are monotone; an old quantum settles only its own
 window. New quantum records carry validated, versioned original item/time
 reservations; legacy records without this metadata retain their full charge.
+Repinning to an older engine and forward preserves existing charges and window
+floors. New-format reservations settled by older finish or recovery code stay
+fully charged and nonrefundable when opened again by the new engine.
 Successful known lexical usage counts `transformed`; embedding usage counts
 `embeddingAttempts`, including attempts yielding no committed vectors, never
 `embedded`. Status and coverage validation count zero item attempts. Invalid,
@@ -895,9 +898,10 @@ delivery, including resident opening, drain and control overhead. A full-charge
 finish receipt precedes item/ms reconciliation on the next reserved admission,
 whose own span charges that reconciliation overhead. A refused admission keeps
 the prior full charge and leaves reconciliation for a later reserved turn.
-The parent can report the
-known refund on receipt; until the next admission the durable ledger retains
-the full charge. Losing the receipt or acknowledgement retains that charge.
+Duplicate standalone finishes preserve receipt eligibility and cannot consume
+usage. The parent can report the known refund on receipt; until the next
+admission the durable ledger retains the full charge. Losing the receipt or
+acknowledgement retains that charge.
 USD settlement is unchanged: success or zero committed vectors alone never
 refunds unknown provider exposure. Owner, UTC-day and lifetime limits are
 unchanged.

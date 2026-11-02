@@ -9,11 +9,14 @@ let h;
 try {
   const f=fixture(t),service=configured(t,f.path,[personal],{service:true});
   h=await openContextIndexMaintainer({...service.options,deadlineMs:5000});
+  const openedAt=testClock.now();
+  await testClock.advance(25);
   const before=testClock.now();
   const result=await h.refreshContextIndex({readSet:[personal],types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:128,maxMs:1000}},service.token);
   assert.equal(result.ok,true,JSON.stringify(result));
-  const time=maintenanceObservation(result);
-  assert.ok(time>=before&&time<=testClock.now(),'timestamp from the fresh final Worker snapshot');
+  const fresh=time=>assert.ok(time>=before&&time<=testClock.now(),'fresh_epoch_observation_after_open');
+  assert.throws(()=>fresh(openedAt),{code:'ERR_ASSERTION'},'stale_opening_timestamp_is_rejected');
+  fresh(maintenanceObservation(result));
   assert.deepEqual(Object.keys(result).sort(),['ok','value']);
   assert.deepEqual(Object.keys(result.value).sort(),['channels','coverage','progress','status']);
 } finally {

@@ -9,9 +9,10 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fixture, ns, ok } from '../testing/context-read-fixture.mjs';
 import { createExclusiveSqliteFile } from '../sqlite-journal-probe.mjs';
-import { provisionSemanticOwner, stateBytes, stateDigest } from '../context-semantic-ledger.mjs';
+import { openSemanticLedger, provisionSemanticOwner, stateBytes, stateDigest } from '../context-semantic-ledger.mjs';
 import { canonicalJson } from '../context-product-validation.mjs';
 import { dollars } from '../context-semantic-input.mjs';
+import { createProductSqlitePolicy } from '../context-product-sqlite.mjs';
 import { credentialDigest, PRODUCT_PROFILE } from '../context-product-control.mjs';
 import { createProductReaderRuntime, maintenanceReaderFailureDiagnostic, maintenanceFailureDiagnostic } from '../context-product-reader.mjs';
 import { createMaintenancePumpRuntime, maintenancePumpDiagnostic } from '../context-product-pump.mjs';
@@ -1076,10 +1077,30 @@ function accountingInput(s,patch={}) {
     budgets:{maxItems:100,maxMs:20000,maxUsd:'0.50'},remainingMs,
     accounting:{version:1,generation:0,floors:{items:0,ms:0},endsMonoNs:String(process.hrtime.bigint()+BigInt(remainingMs)*1000000n)},...patch};
 }
+async function accountingReconcile(s,reservation,usage,patch={}) {
+  const w=accountingState(s).windows[reservation.windowId],remainingMs=w.endsUtcMs-Date.now();
+  const input=accountingInput(s,{mode:'validation',maxItems:0,maxMs:1,remainingMs,
+    window:{id:w.id,endsAtMonoMs:testClock.now()+remainingMs,usedItems:0,usedMs:0,usedUsd:'0'},
+    budgets:{maxItems:w.maxItems,maxMs:w.maxMs,maxUsd:dollars(BigInt(w.maxUsd))}});
+  input.accounting.endsMonoNs=String(process.hrtime.bigint()+BigInt(remainingMs)*1000000n);
+  return semanticHandle(s.coordinator).pumpCall('pumpReserve',{...input,reconcile:{
+    id:reservation.id,windowId:w.id,generation:0,known:true,floors:{items:0,ms:0},...patch,...(usage===undefined?{}:{usage})}});
+}
 async function accountingFinish(s,reservation,usage,patch={}) {
-  const client=semanticHandle(s.coordinator),input={id:reservation.id,windowId:reservation.windowId,generation:0,known:true,floors:{items:0,ms:0},...patch};
-  await client.pumpCall('pumpFinish',input);
-  return client.pumpCall('pumpFinish',{...input,usage});
+  await semanticHandle(s.coordinator).pumpCall('pumpFinish',{id:reservation.id,windowId:reservation.windowId,generation:0,known:true,floors:{items:0,ms:0},...patch});
+  // The validation reservation stays charged: every helper refund is funded.
+  return accountingReconcile(s,reservation,usage,patch);
+}
+async function authenticateAccountingState(s) {
+  const authority=new DatabaseSync(join(s.f.workspace.path,'authority.sqlite'),{readOnly:true}),policy=createProductSqlitePolicy();let ledger;
+  policy.start(testClock.now()+5000);
+  try {
+    ledger=openSemanticLedger({path:s.ledgerPath,identity:{accountingDomainId:'synthetic-accounting',ledgerId:'synthetic-ledger'},policy,authority:{
+      load:async owner=>JSON.parse(authority.prepare('SELECT anchor FROM anchors WHERE owner=?').get(owner).anchor),
+      compareAndSwap:async()=>false,listOwners:async()=>[ns.ownerId],
+    }});
+    return await ledger.authenticate(ns.ownerId);
+  }finally{ledger?.close();authority.close();}
 }
 
 test('semantic durable no-op refunds attempts and the rounded reserve-to-receipt span',async t=>{
@@ -1113,16 +1134,18 @@ test('semantic durable no-op refunds attempts and the rounded reserve-to-receipt
 for(const [mode,items] of [['lexical',3],['embeddings',2]])test(`semantic durable known ${mode} attempts stay charged`,async t=>{
   const s=await setup(t,{isolated:true}),client=semanticHandle(s.coordinator),input=accountingInput(s,{mode}),r=await client.pumpCall('pumpReserve',input);
   const result=await accountingFinish(s,r,{version:1,items,elapsedMs:17});
-  assert.equal(result.usedItems,items,'known_attempt_count_remains_charged');assert.equal(result.usedMs,17,'known_unused_time_is_refunded');
+  assert.equal(result.usedItems,items,'known_attempt_count_remains_charged');assert.equal(result.usedMs,18,'known_unused_time_refund_includes_funded_reconciliation');
   const stored=accountingState(s).windows[input.window.id];assert.equal(stored.quanta[r.id].accounting.items,8,'original_reservation_is_preserved');
   assert.equal(stored.quanta[r.id].accounting.ms,500);assert.equal(stored.usedItems,items);
 });
 
 for(const usage of [null,{version:1,items:-1,elapsedMs:10},{version:1,items:9,elapsedMs:10},{version:2,items:0,elapsedMs:0},{version:1,items:0,elapsedMs:501}])test(`semantic durable invalid usage ${JSON.stringify(usage)} keeps full charge (control)`,async t=>{
   const s=await setup(t,{isolated:true}),client=semanticHandle(s.coordinator),r=await client.pumpCall('pumpReserve',accountingInput(s));
-  const result=await accountingFinish(s,r,usage);assert.equal(result.usedItems,8);assert.equal(result.usedMs,500);
+  const result=await accountingFinish(s,r,usage);assert.equal(result.usedItems,8);assert.equal(result.usedMs,501);
   const duplicate=await client.pumpCall('pumpFinish',{id:r.id,known:true,usage:{version:1,items:0,elapsedMs:0}});
-  assert.equal(duplicate.usedItems,8,'invalid_usage_cannot_be_replaced_by_duplicate');assert.equal(duplicate.usedMs,500);
+  assert.equal(duplicate.usedItems,8,'invalid_usage_cannot_be_replaced_by_duplicate');assert.equal(duplicate.usedMs,501);
+  const replay=await accountingReconcile(s,r,{version:1,items:0,elapsedMs:0});
+  assert.equal(replay.usedItems,8,'invalid_usage_cannot_be_replaced_by_funded_replay');assert.equal(replay.usedMs,502);
 });
 for(const kind of ['failed','missing','duplicate','legacy'])test(`semantic durable ${kind} settlement keeps full reservation (control)`,async t=>{
   const s=await setup(t,{isolated:true}),client=semanticHandle(s.coordinator),input=accountingInput(s);
@@ -1131,16 +1154,20 @@ for(const kind of ['failed','missing','duplicate','legacy'])test(`semantic durab
   if(kind==='legacy')legacyQuantum(s,input.window.id,r.id);
   await client.pumpCall('pumpFinish',finish);
   if(kind==='duplicate')await client.pumpCall('pumpFinish',finish);
-  const result=await client.pumpCall('pumpFinish',{...finish,...(kind==='missing'?{}:{usage:{version:1,items:0,elapsedMs:0}})});
-  assert.equal(result.usedItems,8,'unknown_or_legacy_items_stay_charged');assert.equal(result.usedMs,500,'unknown_or_legacy_ms_stay_charged');
+  const result=await accountingReconcile(s,r,['missing','duplicate'].includes(kind)?undefined:{version:1,items:0,elapsedMs:0},{known:kind!=='failed'});
+  assert.equal(result.usedItems,8,'unknown_or_legacy_items_stay_charged');assert.equal(result.usedMs,501,'unknown_or_legacy_ms_and_funding_stay_charged');
+  const replay=await accountingReconcile(s,r,{version:1,items:0,elapsedMs:0});
+  assert.equal(replay.usedItems,8,'unknown_or_legacy_usage_cannot_be_replaced');assert.equal(replay.usedMs,502);
 });
 test('semantic durable duplicate successful usage never refunds twice',async t=>{
   const s=await setup(t,{isolated:true}),client=semanticHandle(s.coordinator),input=accountingInput(s),r=await client.pumpCall('pumpReserve',input);
   await accountingFinish(s,r,{version:1,items:2,elapsedMs:10});
   const other=await client.pumpCall('pumpReserve',input);
   const result=await client.pumpCall('pumpFinish',{id:r.id,known:true,usage:{version:1,items:0,elapsedMs:0}});
-  assert.equal(result.usedItems,10,'successful_usage_is_applied_exactly_once');assert.equal(result.usedMs,510);
+  assert.equal(result.usedItems,10,'successful_usage_is_applied_exactly_once');assert.equal(result.usedMs,511);
   assert.notEqual(other.id,r.id);
+  const replay=await accountingReconcile(s,r,{version:1,items:0,elapsedMs:0});
+  assert.equal(replay.usedItems,10,'funded_replay_never_refunds_twice');assert.equal(replay.usedMs,512);
 });
 
 test('semantic durable worker floors raised after reserve survive finish',async t=>{
@@ -1148,7 +1175,7 @@ test('semantic durable worker floors raised after reserve survive finish',async 
   const raised={...input,accounting:{...input.accounting,floors:{items:20,ms:1000}}};
   await client.pumpCall('pumpReserve',raised);
   const result=await accountingFinish(s,a,{version:1,items:0,elapsedMs:0});
-  assert.equal(result.usedItems,20,'later_cumulative_item_floor_survives_refund');assert.equal(result.usedMs,1000,'later_cumulative_ms_floor_survives_refund');
+  assert.equal(result.usedItems,20,'later_cumulative_item_floor_survives_refund');assert.equal(result.usedMs,1001,'later_cumulative_ms_floor_survives_refund');
 });
 
 for(const method of ['pumpReserve','pumpFinish'])for(const renewal of ['window','floor'])test(`semantic durable held ${method} reply cannot overwrite ${renewal}`,async t=>{
@@ -1279,7 +1306,7 @@ test('semantic durable legacy charges survive a new known refund',async t=>{
   const s=await setup(t,{isolated:true}),client=semanticHandle(s.coordinator),input=accountingInput(s),legacy={...input};delete legacy.accounting;
   const old=await client.pumpCall('pumpReserve',legacy);legacyQuantum(s,input.window.id,old.id);await client.pumpCall('pumpFinish',{id:old.id,known:true});
   const fresh=await client.pumpCall('pumpReserve',input),result=await accountingFinish(s,fresh,{version:1,items:0,elapsedMs:0});
-  assert.equal(result.usedItems,8,'legacy_items_never_gain_refund_entitlement');assert.equal(result.usedMs,500,'legacy_time_never_gains_refund_entitlement');
+  assert.equal(result.usedItems,8,'legacy_items_never_gain_refund_entitlement');assert.equal(result.usedMs,501,'legacy_time_and_funding_stay_charged');
 });
 
 test('semantic durable unknown accounting version is rejected on authenticated read',async t=>{
@@ -1306,6 +1333,73 @@ test('semantic durable unfunded reconciliation waits for a reserved admission',a
   const settled=accountingState(s).windows[a.window.id];
   assert.equal(settled.usedItems,0,'funded_admission_applies_captured_window_refund');
   assert.equal(settled.usedMs,0,'funded_admission_persists_known_elapsed_usage');
+});
+
+test('semantic fix1 standalone finish cannot consume or close a receipt',async t=>{
+  const s=await setup(t,{isolated:true}),client=semanticHandle(s.coordinator),r=await client.pumpCall('pumpReserve',accountingInput(s));
+  const finish={id:r.id,windowId:r.windowId,known:true};await client.pumpCall('pumpFinish',finish);
+  for(const tail of [{usage:{version:1,items:0,elapsedMs:0}},{},{known:false}]){
+    const result=await client.pumpCall('pumpFinish',{...finish,...tail});
+    assert.equal(result.usedItems,8,'standalone_finish_keeps_full_item_charge');assert.equal(result.usedMs,500,'standalone_finish_keeps_full_time_charge');
+    assert.equal(accountingState(s).windows[r.windowId].quanta[r.id].accounting.stage,'receipt','duplicate_finish_preserves_receipt_eligibility');
+  }
+  const funded=await accountingReconcile(s,r,{version:1,items:0,elapsedMs:0});
+  assert.equal(funded.usedItems,0);assert.equal(funded.usedMs,1,'only_the_funded_admission_can_refund');
+});
+
+test('semantic fix1 authenticated accounting combinations form a closed state table',async t=>{
+  const s=await setup(t,{isolated:true}),r=await semanticHandle(s.coordinator).pumpCall('pumpReserve',accountingInput(s)),original=accountingState(s);
+  // Independent protocol oracle, exercised through the signed SQL ledger loader.
+  const legal=new Set(['reserved/reserved/false/none','settled/receipt/true/none','settled/closed/false/none',
+    'settled/closed/true/none','settled/closed/true/known','settled/reserved/false/none']);
+  try {
+    for(const status of ['reserved','settled','unknown'])for(const stage of ['reserved','receipt','closed','unknown'])for(const known of [false,true])for(const usageKind of ['none','known']){
+      const key=[status,stage,known,usageKind].join('/');
+      await t.test('semantic fix1 state '+key,async()=>{
+        const state=structuredClone(original),q=state.windows[r.windowId].quanta[r.id];
+        q.status=status;Object.assign(q.accounting,{stage,known,usage:usageKind==='none'?null:{items:0,elapsedMs:0}});replaceAccountingState(s,state);
+        if(legal.has(key))await assert.doesNotReject(authenticateAccountingState(s),'legal_accounting_state_loads:'+key);
+        else await assert.rejects(authenticateAccountingState(s),{code:'index_unavailable'},'illegal_accounting_state_is_rejected:'+key);
+      });
+    }
+    for(const [name,patch] of [['known type',{known:1}],['item bounds',{stage:'closed',known:true,usage:{items:9,elapsedMs:0}}],['time bounds',{stage:'closed',known:true,usage:{items:0,elapsedMs:-1}}],['usage shape',{stage:'closed',known:true,usage:{items:0}}],['legacy status',null]]){
+      await t.test('semantic fix1 malformed '+name,async()=>{
+        const state=structuredClone(original),q=state.windows[r.windowId].quanta[r.id];
+        if(patch)Object.assign(q.accounting,patch);else{q.status='unknown';delete q.accounting;}
+        replaceAccountingState(s,state);await assert.rejects(authenticateAccountingState(s),{code:'index_unavailable'},'malformed_accounting_is_rejected:'+name);
+      });
+    }
+  }finally{replaceAccountingState(s,original);}
+});
+
+for(const transition of ['recovery','finish-known','finish-unknown'])test(`semantic fix1 repin ${transition} preserves floors and denies refunds across two round trips`,async t=>{
+  const s=await setup(t,{isolated:true}),client=semanticHandle(s.coordinator),input=accountingInput(s);
+  input.window.usedItems=12;input.window.usedMs=600;input.accounting.floors={items:12,ms:600};
+  let r=await client.pumpCall('pumpReserve',input),items=20,ms=1100;
+  for(let round=0;round<2;round++){
+    // Old recovery and pumpFinish write status/USD only; metadata is preserved.
+    const state=accountingState(s),w=state.windows[r.windowId],q=w.quanta[r.id];q.status='settled';
+    if(transition==='recovery'){for(const old of Object.values(w.quanta))if(old.status==='reserved')old.status='settled';w.usedUsd=String(BigInt(w.usedUsd)+0n);}
+    else w.usedUsd=String(BigInt(w.usedUsd)+(transition==='finish-known'?0n:BigInt(q.maxUsd)));
+    // Old pumpReserve merges floors with max and adds its original reservation.
+    if(round===0){
+      const id=randomUUID();w.usedItems=Math.max(w.usedItems,0)+4;w.usedMs=Math.max(w.usedMs,0)+100;
+      w.quanta[id]={id,bindingId:null,maxUsd:'0',planned:'0',status:'reserved'};items+=4;ms+=100;
+    }
+    assert.ok(w.usedItems>=w.accounting.floorItems&&w.usedMs>=w.accounting.floorMs,'old_writes_preserve_window_floors');
+    replaceAccountingState(s,state);
+    await assert.doesNotReject(authenticateAccountingState(s),'repinned_accounting_loader_opens');
+    const authenticated=await authenticateAccountingState(s);
+    assert.equal(authenticated.state.windows[w.id].usedItems,items,'repin_keeps_full_items');assert.equal(authenticated.state.windows[w.id].usedMs,ms,'repin_keeps_full_time');
+    const ignored=await client.pumpCall('pumpFinish',{id:r.id,known:true,usage:{version:1,items:0,elapsedMs:0}});
+    assert.equal(ignored.usedItems,items);assert.equal(ignored.usedMs,ms,'older_settlement_never_gains_a_receipt');
+    const next=await accountingReconcile(s,r,{version:1,items:0,elapsedMs:0});ms++;
+    assert.equal(next.usedItems,items,'repin_reconciliation_never_refunds_items');assert.equal(next.usedMs,ms,'repin_reconciliation_never_refunds_time');
+    const retained=accountingState(s).windows[w.id].quanta[r.id].accounting;
+    assert.notEqual(retained.stage,'receipt','older_settlement_never_becomes_refundable');
+    assert.equal(retained.known,false);assert.equal(retained.usage,null);
+    r=next;
+  }
 });
 
 // Last: the deliberately failed proof retains process-wide inode quarantine.
