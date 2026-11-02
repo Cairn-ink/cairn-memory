@@ -1190,6 +1190,11 @@ the lexical validation digest; representation is part of that digest, while
 embedder identity and owner purge epoch changes invalidate reuse directly.
 On this base, product reads do not yet enforce suppression at read time.
 Publication reuse removes an accidental overlap degradation that the base had.
+Only sequential reads are equivalent to the base, including returning suppressed
+content. A semantic query that overlaps a suppression and a no-op refresh may now
+serve a suppressed target that only semantic retrieval finds, where the base
+happened to degrade. Two known-gap `todo` tests reproduce this overlap and assert
+that the target is not served; they become must-pass when the fence lands.
 The suppression guarantee comes from the safety layer's read-time epoch fence
 when it lands and does not depend on publication rotation.
 
