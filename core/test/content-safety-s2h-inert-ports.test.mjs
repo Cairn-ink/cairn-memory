@@ -149,7 +149,14 @@ test(`embedder ${method} ${shape}: materialize before one epoch read`,async t=>{
  embeds=0;counters=0;armed=true;
  const input=method==='refreshContextIndex'?{...projection,budget:{maxItems:1024,maxMs:5000}}:method==='findCandidates'?{...projection,query:'ProtectedSyntheticVector',semantic:true,limit:12,deadlineMs:5000}:{...projection,query:'ProtectedSyntheticVector',semantic:true,budget:{maxTokens:4000,maxItems:12},deadlineMs:5000};
  const result=await core[method](input,{});
- assert.equal(erased,true,JSON.stringify(result));assert.equal(embeds,1);assert.equal(readsBeforeGetter,0,'all caller vector hooks precede the sole E1 observation');assert.equal(counters,0);assert.equal(result.ok,false);assert.doesNotMatch(JSON.stringify(result),/ProtectedSyntheticVector/);
+ if(shape==='typed-iterator'){
+  // Fix4b copies built-in typed-array slots through intrinsics. This poisoned
+  // own iterator is never called, so it cannot commit its erasure side effect.
+  assert.equal(erased,false);assert.equal(readsBeforeGetter,undefined);
+  assert.equal(embeds,method==='refreshContextIndex'?2:1);assert.equal(result.ok,true,JSON.stringify(result));
+ }else{
+  assert.equal(erased,true,JSON.stringify(result));assert.equal(embeds,1);assert.equal(readsBeforeGetter,0,'all caller vector hooks precede the sole E1 observation');assert.equal(counters,0);assert.equal(result.ok,false);assert.doesNotMatch(JSON.stringify(result),/ProtectedSyntheticVector/);
+ }
 });
 
 test('embedding estimator erasure stops before the first embedder dispatch',async t=>{

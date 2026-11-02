@@ -1,5 +1,5 @@
 import { types } from 'node:util';
-import { assertContentPort } from './content-safety-boundary.mjs';
+import { assertContentPort, hasContentPortBoundary } from './content-safety-boundary.mjs';
 import { fail } from './validation.mjs';
 
 // Only engine-created projection counters have this provenance. Caller IDs
@@ -17,9 +17,10 @@ export function engineProjectionCounter(tokenCounts) {
   return counter;
 }
 
-// Looking up a callback must not itself execute caller code between two
-// dispatches. Accept inherited data methods, refuse accessors and Proxy chains.
+// Within a protected S2h read, lookup must not execute caller code between
+// dispatches. Elsewhere retain main's ordinary property lookup semantics.
 export function modelPortValue(model, key, code) {
+  if (!hasContentPortBoundary()) return model?.[key];
   if (!model || !['object','function'].includes(typeof model)) return undefined;
   for (let target=model;target;target=Object.getPrototypeOf(target)) {
     if (types.isProxy(target)) fail(code);
@@ -33,14 +34,24 @@ export function modelPortValue(model, key, code) {
 
 // The host supplies the exact tokenizer for its model. No heuristic fallback.
 export function countTokens(model, text, afterReturn) {
+  if (!hasContentPortBoundary()) {
+    // Main intentionally looks up the method for validation and again for the
+    // call. Preserve getters, Proxy traps, receiver and exception ordering.
+    if (typeof model?.countTokens !== 'function') fail('token_count_unavailable');
+    let count;
+    try { count = model.countTokens(text); } catch { fail('token_count_unavailable'); }
+    if (!Number.isSafeInteger(count) || count < 0) fail('token_count_unavailable');
+    afterReturn?.();
+    return count;
+  }
   const internal = projectionCounters.has(model);
   const counter = modelPortValue(model,'countTokens','token_count_unavailable');
   if (typeof counter !== 'function') fail('token_count_unavailable');
   if (!internal) assertContentPort({before:true});
   let count;
   try {
-    // Resolve a caller getter within the boundary too. Counts must already be
-    // primitive integers: never retain a caller coercion or thenable.
+    // Counts must already be primitive integers: never retain a caller
+    // coercion or thenable across the boundary.
     const invoke = () => {
       const value = Reflect.apply(counter,model,[text]);
       if (typeof value !== 'number') fail('token_count_unavailable');

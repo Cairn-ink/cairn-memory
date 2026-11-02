@@ -1348,6 +1348,9 @@
     "literal:term_id": 1,
     "literal:validation_invalid": 6
   },
+  "core/context-product-verification-batch.mjs": {
+    "literal:term_id": 1
+  },
   "core/context-product-comparison.mjs": {
     "key:comparisonId": 1,
     "key:memoryId": 1,

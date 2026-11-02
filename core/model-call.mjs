@@ -1,4 +1,4 @@
-import { assertContentPort, inertContentPortValue, hasLegacyContentReadBoundary } from './content-safety-boundary.mjs';
+import { assertContentPort, inertContentPortValue, hasLegacyContentReadBoundary, hasContentPortBoundary } from './content-safety-boundary.mjs';
 import { countTokens, modelPortValue } from './model-budget.mjs';
 import { fail, MemoryStoreError } from './validation.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
@@ -20,6 +20,7 @@ export const modelRequestText = (system, input) =>
 export async function callModel(model, method, system, input,
   { validateFresh = () => {}, failureCode = 'recall_failed', deadline } = {}) {
   const legacyFreshness = hasLegacyContentReadBoundary();
+  const protectedRead = hasContentPortBoundary();
   const reject = (code, reason = code) => { emitDiagnostic(model, method, 'core_call', reason); fail(code); };
   let controller;
   let aborted=false;
@@ -46,9 +47,16 @@ export async function callModel(model, method, system, input,
     finally { check(); }
   };
   check();
-  const provider = modelPortValue(model,method,'model_not_configured'), contextWindow = modelPortValue(model,'contextWindow','context_budget_exceeded');
-  if (typeof provider !== 'function') reject('model_not_configured');
-  if (!Number.isSafeInteger(contextWindow) || contextWindow < 8192) reject('context_budget_exceeded');
+  let provider;
+  if (protectedRead) {
+    provider = modelPortValue(model,method,'model_not_configured');
+    if (typeof provider !== 'function') reject('model_not_configured');
+    const contextWindow = modelPortValue(model,'contextWindow','context_budget_exceeded');
+    if (!Number.isSafeInteger(contextWindow) || contextWindow < 8192) reject('context_budget_exceeded');
+  } else {
+    if (typeof model?.[method] !== 'function') reject('model_not_configured');
+    if (!Number.isSafeInteger(model.contextWindow) || model.contextWindow < 8192) reject('context_budget_exceeded');
+  }
   const request = { system, input, maxOutputTokens: MODEL_OUTPUT_TOKENS };
   if (tokens(modelRequestText(system, input)) > MODEL_INPUT_TOKENS) reject('context_budget_exceeded');
   check();
@@ -76,7 +84,9 @@ export async function callModel(model, method, system, input,
         providerInvoked = true;
         return assertContentPort({invoke:async()=>{
           try {
-            const result = await Reflect.apply(provider,model,[{ ...detached, signal: controller.signal }]);
+            const result = await (protectedRead
+              ? Reflect.apply(provider,model,[{ ...detached, signal: controller.signal }])
+              : model[method]({ ...detached, signal: controller.signal }));
             if (observeAbort()) return { aborted: true };
             let snapshot;
             try {

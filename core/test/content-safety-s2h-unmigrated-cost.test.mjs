@@ -17,8 +17,8 @@ test('unmigrated cost probe counts authority, policy, counter, embedder and Raw 
  assert.equal(calls,8);assert.equal(contentHostInvocations()-before,8,'every configured caller function is counted once');
 });
 
-test('unmigrated v18/v23/v33: every gated method/variant stays within main a546ee43',()=>{
- assert.match(fixture.mainSha,/^a546ee43[0-9a-f]{32}$/);assert.equal(fixture.measuredDate,'2026-11-01');
+test('unmigrated v18/v23/v33: every gated method/variant stays within main a69cc979',()=>{
+ assert.match(fixture.mainSha,/^a69cc979[0-9a-f]{32}$/);assert.equal(fixture.measuredDate,'2026-11-02');
  assert.deepEqual(fixture.notApplicable,['isSuppressed','listSuppressionsSince']);
  const expected=fixture.byNode?.[process.version.slice(1)]??(fixture.enginesAgree?fixture.records:undefined);
  assert.ok(expected,'a measured main-engine fixture is required');
@@ -27,7 +27,7 @@ test('unmigrated v18/v23/v33: every gated method/variant stays within main a546e
  assert.deepEqual(records.map(r=>r.key).sort(),[...expectedByKey.keys()].sort(),'exact complete main method/variant/cell/n set; no stale or missing cells');
  assert.equal(records.filter(r=>JSON.parse(r.key)[0]==='native').length,511,'499 existing native plus twelve optional MOC source cells');
  for(const row of records)for(const [i,metric]of ['executed statements','BEGIN','host-port invocations'].entries())
-  assert.ok(row.counts[i]<=expectedByKey.get(row.key)[i],'unmigrated '+metric+' exceeds main a546ee43: '+JSON.stringify({key:row.key,main:expectedByKey.get(row.key),branch:row.counts}));
+  assert.ok(row.counts[i]<=expectedByKey.get(row.key)[i],'unmigrated '+metric+' exceeds main a69cc979: '+JSON.stringify({key:row.key,main:expectedByKey.get(row.key),branch:row.counts}));
  tReport(records);
 });
 function tReport(records){console.log('S2H_UNMIGRATED_COUNTS '+JSON.stringify({node:process.version,mainSha:fixture.mainSha,cells:records.length,records}));}

@@ -1,8 +1,8 @@
 {
   "revision": "R2-A1 / 3.5",
   "decision": "e9, 2026-11-01 17:15",
-  "mainSha": "a546ee4372e72ad06e713fd0449ca84f168a340b",
-  "measuredDate": "2026-11-01",
+  "mainSha": "a69cc9795f97596b3e1c9829d65545b3cdf3dbd7",
+  "measuredDate": "2026-11-02",
   "metrics": [
     "executed statements",
     "BEGIN",
@@ -31819,5 +31819,7 @@
     ]
   },
   "round4MeasuredDate": "2026-11-02",
-  "round4Meter": "StatementSync executions, including statements prepared before measurement; fixed topic fixture IDs"
+  "round4Meter": "StatementSync executions, including statements prepared before measurement; fixed topic fixture IDs",
+  "round4bPreviousMainSha": "a546ee4372e72ad06e713fd0449ca84f168a340b",
+  "round4bDecision": "e9, 2026-11-02 03:10"
 }

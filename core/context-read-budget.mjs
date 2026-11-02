@@ -66,7 +66,7 @@ export function contextBudget(options) {
     ledger.requests++; ledger.usd += usd; ledger.active++;
     let operation, invoked = false, actualUsd;
     const invoke = controls => assertContentPort({invoke:async()=>{
-      try { return inertContentPortValue(await port.embed(texts, controls), 'provider_error'); }
+      try { return inertContentPortValue(await port.embed(texts, controls), 'provider_error', { rejectProxies: true }); }
       catch (error) {
         throw portError(error);
       }

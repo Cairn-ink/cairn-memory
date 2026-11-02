@@ -659,7 +659,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       const budgetPort=isBudgetEmbeddingPort(embedder);
       assertContentPort({before:true});
       try {
-        const invoke=async()=>{try{return inertContentPortValue(await port.embed(texts, { signal, beforeDispatch: dispatch }), 'invalid_input');}
+        const invoke=async()=>{try{return inertContentPortValue(await port.embed(texts, { signal, beforeDispatch: dispatch }), 'invalid_input', { rejectProxies: true });}
           catch(error){
             if(budgetPort||!hasContentPortBoundary())throw error;
             let frame;try{frame=inertContentPortValue({code:error?.code,name:error?.name,status:error?.status,reason:error?.reason},'invalid_input');}catch{fail('invalid_input');}

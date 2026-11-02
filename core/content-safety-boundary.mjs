@@ -104,7 +104,13 @@ export function contentSafetyFacade(api, { check, noOwner = [], failure, select 
           return types.isPromise(result) ? result.then(deliver).catch(rejected) : deliver(result);
         } catch (error) {
           if (failure) { const result = rejected(error); return asynchronous ? Promise.resolve(result) : result; }
-          if (scopes && !delivering) { delivering = true; check(scopes,{delivery:true}); }
+          // The enclosing sourceSnapshot contract immediately returns its
+          // failure envelope and supplies the final delivery fence. Its nested
+          // runtime snapshot cannot deliver content or dispatch another port
+          // after failure; share that fence just as on nested read success.
+          if (scopes && !delivering && !(nestedRead && method === 'sourceSnapshot')) {
+            delivering = true; check(scopes,{delivery:true});
+          }
           if (asynchronous) return Promise.reject(error);
           throw error;
         }
@@ -147,15 +153,51 @@ export function assertContentPort(phase) {
 // Materialize caller data while still inside its port boundary. Property,
 // Proxy and iterator hooks run here, before the single epoch observation. No
 // caller prototype, accessor, iterator or coercion hook survives the copy.
-export function inertContentPortValue(value, code = 'invalid_input') {
+// Capture the built-in operations once. Caller constructors, iterators and
+// shadowed length properties never participate in a typed-array snapshot.
+const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype);
+const typedArrayLength = Object.getOwnPropertyDescriptor(typedArrayPrototype,'length').get;
+const typedArrayAt = typedArrayPrototype.at;
+const typedArrayKinds = [
+  [types.isInt8Array,Int8Array], [types.isUint8Array,Uint8Array],
+  [types.isUint8ClampedArray,Uint8ClampedArray], [types.isInt16Array,Int16Array],
+  [types.isUint16Array,Uint16Array], [types.isInt32Array,Int32Array],
+  [types.isUint32Array,Uint32Array], [types.isFloat32Array,Float32Array],
+  [types.isFloat64Array,Float64Array], [types.isBigInt64Array,BigInt64Array],
+  [types.isBigUint64Array,BigUint64Array],
+];
+if (types.isFloat16Array && globalThis.Float16Array) typedArrayKinds.push([types.isFloat16Array,globalThis.Float16Array]);
+export function inertContentPortValue(value, code = 'invalid_input', { rejectProxies = false } = {}) {
   let remaining = 3_000_000;
   const active = new Set();
   function copy(input, depth = 0) {
     if (--remaining < 0 || depth > 32) fail(code);
     if (input === null || ['undefined','string','number','boolean','bigint'].includes(typeof input)) return input;
-    if (typeof input !== 'object' || active.has(input)) fail(code);
+    if (typeof input !== 'object' || active.has(input) || rejectProxies && types.isProxy(input)) fail(code);
     active.add(input);
     try {
+      if (types.isTypedArray(input)) {
+        const kind = typedArrayKinds.find(([isType]) => isType(input));
+        if (!kind || Object.getPrototypeOf(input) !== kind[1].prototype) fail(code);
+        const length = Reflect.apply(typedArrayLength,input,[]);
+        if (!Number.isSafeInteger(length) || length < 0 || length > remaining) fail(code);
+        // Integer-indexed elements cannot be accessors. Reject shadow accessors
+        // without invoking them; data overrides of constructor/iterator are ignored.
+        const fields = Reflect.ownKeys(input);
+        if (fields.length > remaining) fail(code);
+        for (const key of fields) {
+          if (typeof key === 'string') {
+            const index = Number(key);
+            if (Number.isInteger(index) && index >= 0 && index < length && String(index) === key) continue;
+          }
+          remaining--; // Ignored metadata still consumes the existing copy budget.
+          if (!Object.hasOwn(Object.getOwnPropertyDescriptor(input,key),'value')) fail(code);
+        }
+        remaining -= length;
+        const result = new kind[1](length);
+        for (let index=0;index<length;index++) result[index] = Reflect.apply(typedArrayAt,input,[index]);
+        return result;
+      }
       if (Array.isArray(input) || ArrayBuffer.isView(input)) {
         const length = input.length;
         if (!Number.isSafeInteger(length) || length < 0 || length > remaining) fail(code);

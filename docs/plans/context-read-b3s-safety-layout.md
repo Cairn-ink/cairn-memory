@@ -1184,3 +1184,42 @@ before merge and must not raise that cap. The caps are the measured values.
 This supersedes revision 3.5's instruction to retain a higher round 3 cap when
 current measurements are lower. After merge, lowering a cap needs no approval;
 raising one needs e9. The S2h-3 target remains the R2-A1 formula.
+
+
+## Revision 3.7 addendum: model ports at protected read boundaries (2026-11-02)
+
+Decision: **e9, 2026-11-02 03:10**. The fix4b acceptance regressions are part
+of the current P1 correction round. Revisions 3.5 and 3.6 remain unchanged.
+The unmigrated comparison fixture is remeasured against merged main
+`a69cc9795f97596b3e1c9829d65545b3cdf3dbd7` on 2026-11-02; the comparison
+rule and downward-only deferred caps are unchanged.
+
+Model-port lookup refuses Proxy objects anywhere in the lookup's prototype
+chain, and refuses accessor properties, only while `hasContentPortBoundary()`
+is active for a protected content read on an S2h layout with a suppression
+revision. This applies to token-counter preflight and invocation, provider
+methods, context-window metadata and diagnostic observers. No caller lookup
+hook may run between an E1 observation and the next protected dispatch.
+
+Every unmigrated v18/v23/v33 layout, and work outside protected content reads
+on any layout, retains main's property lookup and call semantics, including
+Proxy/accessor behavior, repeated lookups and callback receivers. The existing
+qualification-fit capability contract is unchanged.
+
+**Known limitation:** On a migrated store (v34/v38/v48), a Proxy or accessor
+model port is refused inside protected content reads. Applications using these
+ports must provide ordinary data methods for those reads. Non-protected work
+on the same migrated store retains main's behavior.
+
+`sourceSnapshot` validates the injected counter with empty text before reading
+any source, outside a database transaction. Its caller-return epoch observation
+uses the existing E1 allowance. Typed-array embedding returns are copied into
+fresh engine-created instances of the same built-in type using intrinsic type,
+length and element operations; caller constructors, iterators and getters do
+not participate. Zero tolerance, E1 and the R2-A1 bounds remain unchanged.
+
+A failed nested runtime `sourceSnapshot` shares its enclosing contract delivery
+fence, as nested read success already does. The contract immediately returns
+the failure envelope; no content or subsequent caller port can follow the
+failed snapshot. Normal caller-return E1 observations remain unchanged, and
+the final delivery fence remains in place.

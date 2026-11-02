@@ -42,7 +42,9 @@ for(const [v,base] of [[34,18],[38,23],[48,33]])for(const kind of ['topic','memo
      assert.equal(row.portCalls,old.portCalls,'safety adds no counter/provider invocations');
      assert.equal(row.portCalls,row.counterCalls+row.providerCalls,'all caller invocations are counted');
      const count=re=>row.safety.filter(s=>re.test(s.q)).reduce((n,s)=>n+s.c,0);
-     const proofs=row.case==='overflow'?3:2;
+     // Empty-text source validation runs before its first snapshot; its
+     // entry proof is fixed, and a nested failure shares the final fence.
+     const proofs=row.method==='sourceSnapshot'||row.case==='overflow'?3:2;
      assert.equal(count(/SELECT schema_version AS cookie/),proofs,'exact entry/delivery/refusal proofs: '+JSON.stringify({method:row.method,n,limit}));
      assert.equal(count(/^SELECT epoch_hi,epoch_lo FROM owner_suppression_epochs/),ports+proofs,'one epoch per actual caller invocation, plus fixed entry/delivery/refusal proofs');
     }

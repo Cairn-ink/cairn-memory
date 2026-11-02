@@ -726,8 +726,8 @@ export function createMemoryCore(input, internal) {
         parentRef = { mocId: contractId(input.parentRef.mocId), revision: contractRevision(input.parentRef.revision) };
       }
       // Require a counter before accessing content, even for an empty map.
-      if(typeof modelPortValue(model,'countTokens','token_count_unavailable')!=='function')throw new MemoryStoreError('token_count_unavailable');
       const safetyLayout = runtime.suppressionFence(ns, true);
+      if(safetyLayout&&typeof modelPortValue(model,'countTokens','token_count_unavailable')!=='function')throw new MemoryStoreError('token_count_unavailable');
       if (!safetyLayout) countTokens(model, '');
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'map',
         p: parentRef ? JSON.stringify(parentRef) : '', f: purpose, l: count, b: budget };
@@ -829,9 +829,8 @@ export function createMemoryCore(input, internal) {
       if (count > 12 || budget > 4000) throw new MemoryStoreError('invalid_input');
       // The injected counter is caller code: validate it before reading sources,
       // then invoke it only outside the snapshot's database transactions.
-      if(typeof modelPortValue(model,'countTokens','token_count_unavailable')!=='function')throw new MemoryStoreError('token_count_unavailable');
-      const snapshot = runtime.sourceSnapshot(namespaces, count);
       countTokens(model, '');
+      const snapshot = runtime.sourceSnapshot(namespaces, count);
       const encoded = JSON.stringify(success(snapshot));
       if (Buffer.byteLength(encoded, 'utf8') > 24000 || countTokens(model, encoded) > budget) {
         throw new MemoryStoreError('context_item_too_large');

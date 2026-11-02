@@ -218,6 +218,9 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // the envelope id, store binding, observation input and fence-row columns.
   // The sidecar adds the comparison store binding, base generation ids and two
   // reason strings; the pump adds a reservation id. None is an ack field.
+  // Main a69cc979: verificationMeter's term_id names the private posting column
+  // sized for a bounded statistics-reset SELECT. It is not a canonical content
+  // identity or a field returned by a writer acknowledgement.
   // The terminal writer and acknowledgement field guard are unchanged.
   // These changes retain the native guard's fail-closed walker.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));

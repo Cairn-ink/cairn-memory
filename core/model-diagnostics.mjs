@@ -24,6 +24,16 @@ const reasons = {
 /** Trusted observer only; never pass model data or an exception across this boundary. */
 export function emitDiagnostic(model, stage, layer, reason) {
   if (!stages.has(stage) || !Object.hasOwn(reasons, layer) || !reasons[layer].has(reason)) return;
+  if (!hasContentPortBoundary()) {
+    // Main's observer call is unbound, and all observer failures are isolated.
+    try {
+      const observer = model?.onDiagnostic;
+      if (typeof observer !== 'function') return;
+      const result = observer(Object.freeze({ version: 1, stage, layer, reason }));
+      Promise.resolve(result).catch(() => {});
+    } catch { /* Observation must not change the operation's result. */ }
+    return;
+  }
   let observer;
   try { observer=modelPortValue(model,'onDiagnostic','evidence_unavailable'); }
   catch { return; } // Refused accessors/Proxies never execute caller code.
