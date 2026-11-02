@@ -71,10 +71,10 @@ test(`guard proof: ${kind}, ${race}`,t=>{
   try {
     const busy=race==='journal removed'||race==='journal replaced';
     const reason=kind==='sidecar'?'storage_unavailable':
-      race==='journal mode'?'unsafe_file':'auxiliary_file';
+      ['replacement mode','replacement symlink','journal symlink','journal mode'].includes(race)?'unsafe_file':'auxiliary_file';
     assert.throws(s.check,busy?{code:'storage_busy'}:{code:'index_unavailable',reason},
       race==='journal replaced'?'protected replacement stays contention':
-        kind==='canonical'&&['replacement mode','replacement symlink','journal symlink'].includes(race)?'replacement recheck failures use auxiliary_file':
+        kind==='canonical'&&['replacement mode','replacement symlink','journal symlink'].includes(race)?'unsafe journal replacements retain unsafe_file':
         'passing control: disappearance stays contention and unsafe replacements retain their refusal');
     assert.equal(reached,true,'mutation occurs across the actual header child');
   } finally {for(const suffix of ['-journal','-wal','-shm'])if(existsSync(s.path+suffix))unlinkSync(s.path+suffix);}
@@ -117,8 +117,8 @@ for(const kind of ['canonical','sidecar'])test(`guard replacement recheck: ${kin
     return value;
   });syncBuiltinESMExports();
   try {
-    assert.throws(s.check,{code:'index_unavailable',reason:kind==='canonical'?'auxiliary_file':'storage_unavailable'},
-      kind==='canonical'?'symlink replacement uses auxiliary_file even with a reused inode':
+    assert.throws(s.check,{code:'index_unavailable',reason:kind==='canonical'?'unsafe_file':'storage_unavailable'},
+      kind==='canonical'?'symlink replacement retains unsafe_file even with a reused inode':
         'passing control: product symlink replacement retains storage_unavailable');
     assert.equal(sampled,true,'passing control: recheck sees symlink metadata with the original identity');
   } finally {if(existsSync(journal))unlinkSync(journal);}
