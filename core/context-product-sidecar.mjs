@@ -108,7 +108,9 @@ function auxiliaries(path, writable, expectedIdentity, observer) {
           uid === undefined || [main, journal, directory].some(entry => entry.uid !== BigInt(uid)))) unavailable('storage_unavailable');
     if (!contextReadDeleteJournal(path, observer, { main, directory, expectedIdentity })) unavailable('storage_unavailable');
     const current = productStat(path + '-journal', true);
-    if (current && !['dev','ino','mode','uid','nlink'].every(key => current[key] === journal[key])) unavailable('storage_unavailable');
+    // A DELETE writer can commit and create its next protected journal while
+    // the child runs. Recheck protection rather than requiring the old inode.
+    if (current && !['mode','uid','nlink'].every(key => current[key] === journal[key])) unavailable('storage_unavailable');
     for (const suffix of ['-wal','-shm']) if (productStat(path + suffix, true)) unavailable('storage_unavailable');
     fail('storage_busy');
   }

@@ -512,7 +512,9 @@ WAL headers and unsafe files retain their existing non-retryable refusals.
 The isolated header child uses the remaining operation cutoff, capped at 5,000 ms;
 an expired cutoff or child timeout refuses with `read_timeout`, without retrying.
 Its verdict is bound to the opened inode and rechecked main/directory metadata;
-journal identity/protection and WAL/SHM absence are checked again afterward.
+journal protection and WAL/SHM absence are checked again afterward. A replacement
+journal that independently passes the same protection checks remains retryable
+`storage_busy`, as does a journal that disappears after a writer commits.
 An in-place header change after that read remains a residual race: once the
 journal disappears, a new sidecar connection refuses the WAL header or its
 companions non-retryably. A warm sidecar connection reuses its handle

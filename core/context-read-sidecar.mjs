@@ -103,7 +103,9 @@ function auxiliaries(path, readOnly, observer) {
           uid === undefined || [main, journal, directory].some(entry => entry.uid !== uid))) unavailable('auxiliary_file');
     if (!contextReadDeleteJournal(path, observer, { main, directory })) unavailable('auxiliary_file');
     const current = protectedFile(path + '-journal', false);
-    if (current && !['dev','ino','mode','uid','nlink'].every(key => current[key] === journal[key])) unavailable('auxiliary_file');
+    // A DELETE writer can commit and create its next protected journal while
+    // the child runs. Recheck protection rather than requiring the old inode.
+    if (current && !['mode','uid','nlink'].every(key => current[key] === journal[key])) unavailable('auxiliary_file');
     for (const suffix of ['-wal','-shm']) if (protectedFile(path + suffix, false)) unavailable('auxiliary_file');
     fail('storage_busy');
   }
