@@ -13,6 +13,7 @@ import { vectorIdentity } from './context-vector-validation.mjs';
 import { validateEmbedder, validateVector } from './context-read-embedder.mjs';
 import { productFailure } from './context-product-reader.mjs';
 import { fail } from './validation.mjs';
+import { pumpFloors, pumpExpiry, pumpUsage } from './context-semantic-accounting.mjs';
 
 const ownerId=c.binding.ownerId,resources=new Int32Array(c.resources),owned=[],active=new Set(),clients=new Set(),operations=new Map();
 const sqlContext=new AsyncLocalStorage();sqlContext.enterWith({until:-Infinity});
@@ -284,34 +285,60 @@ async function internalCall(message,metadata) {
     const s=(await current()).state;return {allowed:s.policy.semantic&&!s.blocked&&!s.validationPending&&!['pending','running','failed'].includes(s.purge.state)};
   }
   if(metadata.pump&&method==='pumpReserve') {
+    integer(input.maxItems,0,1024);integer(input.maxMs,1,5000);
+    if(!['lexical','embeddings','validation'].includes(input.mode))fail('invalid_input');
     const id=randomUUID();let result;
     await change(s=>{
-      const time=utc(),old=s.activeWindowId&&s.windows[s.activeWindowId];
+      let undoUsage;
+      if(input.reconcile){
+        const r=input.reconcile,w=s.windows[r.windowId],q=w?.quanta[r.id];
+        if(!q||q.status!=='settled')fail('invalid_input');pumpFloors(w,r.floors);
+        const before={items:w.usedItems,ms:w.usedMs,accounting:q.accounting&&structuredClone(q.accounting)};
+        pumpUsage(w,q,r);
+        undoUsage=()=>{
+          w.usedItems=Math.max(w.accounting?.floorItems??0,before.items);w.usedMs=Math.max(w.accounting?.floorMs??0,before.ms);
+          if(before.accounting)q.accounting=before.accounting;
+        };
+      }
+      const time=utc(),expiry=input.accounting?pumpExpiry(input.accounting,time,process.hrtime.bigint()):time+Math.max(0,input.remainingMs),old=s.activeWindowId&&s.windows[s.activeWindowId];
       if(old&&old.id!==input.window.id&&time<old.endsUtcMs)fail('invalid_input');
       let w=s.windows[input.window.id];
       const maxUsd=usd(input.budgets.maxUsd),floor=usd(input.window.usedUsd);
-      if(!w)w=s.windows[input.window.id]={id:input.window.id,endsUtcMs:time+Math.max(0,input.remainingMs),maxItems:input.budgets.maxItems,maxMs:input.budgets.maxMs,maxUsd:String(maxUsd),usedItems:input.window.usedItems,usedMs:input.window.usedMs,usedUsd:String(floor),quanta:Object.create(null)};
+      if(!w)w=s.windows[input.window.id]={id:input.window.id,endsUtcMs:expiry,maxItems:input.budgets.maxItems,maxMs:input.budgets.maxMs,maxUsd:String(maxUsd),usedItems:input.window.usedItems,usedMs:input.window.usedMs,usedUsd:String(floor),quanta:Object.create(null)};
       if(w.maxItems!==input.budgets.maxItems||w.maxMs!==input.budgets.maxMs||w.maxUsd!==String(maxUsd))fail('invalid_input');
-      w.usedItems=Math.max(w.usedItems,input.window.usedItems);w.usedMs=Math.max(w.usedMs,input.window.usedMs);w.usedUsd=String(BigInt(w.usedUsd)>floor?BigInt(w.usedUsd):floor);
+      w.endsUtcMs=Math.min(w.endsUtcMs,expiry);
+      pumpFloors(w,input.accounting?.floors??{items:input.window.usedItems,ms:input.window.usedMs});
+      w.usedUsd=String(BigInt(w.usedUsd)>floor?BigInt(w.usedUsd):floor);
+      s.activeWindowId=w.id;
       const amount=usd(input.maxUsd),reserved=Object.values(w.quanta).filter(q=>q.status==='reserved').reduce((sum,q)=>sum+BigInt(q.maxUsd),0n);
-      if(time>=w.endsUtcMs||w.usedItems+input.maxItems>w.maxItems||w.usedMs+input.maxMs>w.maxMs||amount+reserved+BigInt(w.usedUsd)>maxUsd)fail('budget_denied');
+      if(time>=w.endsUtcMs||w.usedItems+input.maxItems>w.maxItems||w.usedMs+input.maxMs>w.maxMs||amount+reserved+BigInt(w.usedUsd)>maxUsd){
+        // Reconciliation needs this admission's reserved span. A refusal keeps
+        // the previous full charge and its receipt eligible for a later turn.
+        undoUsage?.();
+        result={exhausted:true,windowId:w.id,generation:input.accounting?.generation,floors:{items:w.accounting?.floorItems??0,ms:w.accounting?.floorMs??0},usedItems:w.usedItems,usedMs:w.usedMs,usedUsd:dollars(BigInt(w.usedUsd)+reserved)};return;
+      }
       w.usedItems+=input.maxItems;w.usedMs+=input.maxMs;
-      w.quanta[id]={id,bindingId:input.bindingId??null,maxUsd:String(amount),planned:'0',status:'reserved'};
+      w.quanta[id]={id,bindingId:input.bindingId??null,maxUsd:String(amount),planned:'0',status:'reserved',accounting:{version:1,mode:input.mode,items:input.maxItems,ms:input.maxMs,stage:'reserved',known:false,usage:null}};
       if(input.bindingId&&input.mode==='embeddings')s.pumpBindings[input.bindingId]=id;
-      s.activeWindowId=w.id;result={id,maxUsd:dollars(amount),usedItems:w.usedItems,usedMs:w.usedMs,usedUsd:dollars(BigInt(w.usedUsd)+reserved+amount)};
+      result={id,windowId:w.id,generation:input.accounting?.generation,floors:{items:w.accounting?.floorItems??0,ms:w.accounting?.floorMs??0},maxUsd:dollars(amount),usedItems:w.usedItems,usedMs:w.usedMs,usedUsd:dollars(BigInt(w.usedUsd)+reserved+amount)};
     });return result;
   }
   if(metadata.pump&&method==='pumpFinish') {
     let result;
     await change(s=>{
-      const w=Object.values(s.windows).find(w=>w.quanta[input.id]),q=w?.quanta[input.id];if(!q)fail('invalid_input');
+      const w=Object.values(s.windows).find(w=>w.quanta[input.id]),q=w?.quanta[input.id];if(!q||input.windowId!==undefined&&input.windowId!==w.id)fail('invalid_input');
+      pumpFloors(w,input.floors);
       if(q.status==='reserved') {
         const actual=Object.values(s.reservations).filter(r=>r.quantumId===q.id&&r.status!=='released').reduce((sum,r)=>sum+BigInt(r.cost),0n);
         w.usedUsd=String(BigInt(w.usedUsd)+(input.known?actual:BigInt(q.maxUsd)));q.status='settled';
+        if(q.accounting){
+          q.accounting.known=input.known===true;
+          q.accounting.stage=q.accounting.known&&!Object.hasOwn(input,'usage')?'receipt':'closed';
+        }
         if(q.bindingId&&s.pumpBindings[q.bindingId]===q.id)delete s.pumpBindings[q.bindingId];
       }
       const reserved=Object.values(w.quanta).filter(q=>q.status==='reserved').reduce((sum,q)=>sum+BigInt(q.maxUsd),0n);
-      result={usedUsd:dollars(BigInt(w.usedUsd)+reserved),usedItems:w.usedItems,usedMs:w.usedMs};
+      result={windowId:w.id,generation:input.generation,floors:{items:w.accounting?.floorItems??0,ms:w.accounting?.floorMs??0},usedUsd:dollars(BigInt(w.usedUsd)+reserved),usedItems:w.usedItems,usedMs:w.usedMs};
     });return result;
   }
   if(method==='catalog') {
@@ -376,6 +403,7 @@ try {
       for(const w of Object.values(s.windows))for(const q of Object.values(w.quanta))if(q.status==='reserved'){
         const exposure=Object.values(s.reservations).filter(r=>r.quantumId===q.id&&r.status!=='released').reduce((sum,r)=>sum+BigInt(r.cost),0n);
         w.usedUsd=String(BigInt(w.usedUsd)+exposure);q.status='settled';
+        if(q.accounting){q.accounting.stage='closed';q.accounting.known=false;q.accounting.usage=null;}
       }
       s.pumpBindings=Object.create(null);
     });lastState=recovered.state;
