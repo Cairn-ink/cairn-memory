@@ -117,13 +117,17 @@ test(`event-time direct migration ${safety ? {18:34,23:38,33:48}[base] : base} t
   db = f.connect();
   assert.deepEqual(db.prepare('SELECT * FROM receipts').all().map(row => ({ ...row })), rows.map(row => ({ ...row, occurred_at: null })));
   assert.equal(attestContentSafety(db).base, base);
+  assert.equal(attestContentSafety(db).receiptEventTime, true);
+  assert.equal(db.prepare('SELECT receipt_event_time FROM content_safety_control').get().receipt_event_time, 1);
   if (safety) {
-    assert.deepEqual(db.prepare('SELECT * FROM content_safety_control').get(), control);
+    assert.deepEqual(db.prepare('SELECT * FROM content_safety_control').get(), Object.assign(Object.create(null), control, { receipt_event_time: 1 }));
     assert.deepEqual(db.prepare('SELECT * FROM content_suppressions').all(), facts);
   }
   const schemaAfter = db.prepare("SELECT type,name,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' ORDER BY name").all();
-  for (const row of schemaBefore.filter(row => !['receipts','safety_receipt_identity'].includes(row.name)))
+  for (const row of schemaBefore.filter(row => !['receipts','safety_receipt_identity','content_safety_control','safety_control_update'].includes(row.name)))
     assert.deepEqual(schemaAfter.find(next => next.name === row.name), row, row.name);
+  if (safety) assert.deepEqual(schemaBefore.filter(row => JSON.stringify(schemaAfter.find(next => next.name === row.name)) !== JSON.stringify(row)).map(row => row.name).sort(),
+    ['content_safety_control','receipts','safety_control_update','safety_receipt_identity'].sort(), 'only the four declared schema objects change');
   db.close();
   await assert.rejects(() => migrateEventTime(f), { code: 'unsupported_database' });
 });

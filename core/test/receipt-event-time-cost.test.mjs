@@ -22,7 +22,7 @@ function measure(kind, physical, n, facts, absent) {
 }
 
 test('event-time cost inventory maps exactly 51/52/53 and every declared path variant', () => {
-  assert.deepEqual(Object.fromEntries(SAFETY_SCHEMA_VERSIONS.filter(v => resolveContentLayout(v).receiptEventTime).map(v => [v,resolveContentLayout(v).base])),inventory.cells);
+  assert.deepEqual(Object.fromEntries(SAFETY_SCHEMA_VERSIONS.filter(v => resolveContentLayout(v).attestedFeatures).map(v => [v,resolveContentLayout(v).base])),inventory.cells);
   assert.deepEqual(Object.keys(inventory.paths).sort(),['memory','topic','card','raw','query','context','status','evidence','maintenance'].sort());
 });
 

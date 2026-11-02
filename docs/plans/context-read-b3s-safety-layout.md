@@ -162,23 +162,37 @@ comparison uses `new db.constructor(':memory:')` (`core/card-current-schema.mjs:
 
 ### §3 revision 3.8 addendum: receipt event time (D-33, 2026-11-03)
 
-D-33 assigns three additional physical cells. Each retains its base's S2h
-feature set and adds only nullable `receipts.occurred_at TEXT` and an identity
-trigger that also freezes that column.
+D-33 uses three per-base family integers: 51→18, 52→23 and 53→33.
+The integer selects the base family; it does not encode installed feature
+combinations. Features and revisions are attested in `content_safety_control`.
+The family format adds `receipt_event_time INTEGER NOT NULL CHECK
+(receipt_event_time IN (0,1))` to the existing revision tuple. The migration
+sets it to 1 and adds nullable `receipts.occurred_at TEXT` and an identity
+trigger that also freezes that column. The control guard freezes the flag.
 
-| Physical version | Base layout | Suppression revision | Card lineage | Receipt event time |
+| Family integer | Base layout | Suppression revision | Card lineage revision at migration | receipt_event_time at migration |
 | --- | --- | --- | --- | --- |
-| 51 | 18 | 1 | absent | present |
-| 52 | 23 | 1 | absent | present |
-| 53 | 33 | 1 | absent | present |
+| 51 | 18 | 1 | 0 | 1 |
+| 52 | 23 | 1 | 0 | 1 |
+| 53 | 33 | 1 | 0 | 1 |
 
 Explicit, offline `safety migrate --quiescent` migrates directly from 18 or 34
 to 51, 23 or 38 to 52, and 33 or 48 to 53. Existing receipts receive null;
-installed features, retained safety facts, owner epochs and domains are preserved.
-Ordinary open never upgrades. Versions 34/38/48 retain their original meaning.
-This binary still rejects 49/50 until S2c's gate. S2c + event-time combination
-cells are not assigned here and come with the seam review. Reserved 35–37 and
-39–47 remain unmapped.
+installed features, retained safety facts, owner epochs and all existing control
+values are preserved. Ordinary open never upgrades. Versions 34/38/48 retain
+their original schema and meaning.
+
+A binary opens a family store only when every attested feature and revision is
+in its supported set and the exact DDL matches that tuple. This binary supports
+`receipt_event_time` 0 or 1, suppression revision 1 and card lineage revision 0;
+unknown columns, feature values or revisions refuse with `unsupported_database`.
+The feature flag is read from the control row, never inferred from numeric order.
+Old binaries reject 51–53 through their finite version lists (or exact DDL
+attestation for a pre-attested-family PR 1 binary).
+
+S2c will set `card_lineage_revision=1` on families 52/53 with matching DDL,
+instead of assigning new combination cells. There is no base-18 lineage feature.
+49/50 remain reserved and rejected, as do 35–37 and 39–47.
 
 ## 4. S2h storage, guards and transactional writers
 

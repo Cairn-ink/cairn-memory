@@ -1,0 +1,72 @@
+[
+  {
+    "file": "core/content-safety-layout.mjs",
+    "start": null,
+    "end": null,
+    "purpose": "finite family mapping; no feature inferred from the integer",
+    "sha256": "8f6de3ea2f593f68795b40f7bb2f96483f5de2c9ac503dd43185027ba44f7c21"
+  },
+  {
+    "file": "core/content-safety-schema.mjs",
+    "start": null,
+    "end": null,
+    "purpose": "control tuple, exact DDL and cached attestation",
+    "sha256": "1c5e810b17a2c430b3a1376bea25b09a69a9e91df73104b7095e2b7900d56e82"
+  },
+  {
+    "file": "core/content-safety-migration.mjs",
+    "start": null,
+    "end": null,
+    "purpose": "offline migration selects and installs the attested tuple",
+    "sha256": "1219cd56a26f85f35b289d14bc802b1cb0b86d89b7e5750b9bf67f1cb75e0069"
+  },
+  {
+    "file": "core/validation.mjs",
+    "start": null,
+    "end": null,
+    "purpose": "input timestamp normalizer; no attested layout access",
+    "sha256": "305ced7b94efa69da65945c4d6bb45a174b91b1b0f9919ce7a8f765cfe55698d"
+  },
+  {
+    "file": "core/runtime.mjs",
+    "start": "  function attach(",
+    "end": "  // Selection already owns",
+    "purpose": "receipts insert and retained duplicate validation",
+    "sha256": "71460b627be589e08e1d2bae2b69e88753675840aa5e46bd14c412d7b89cf805"
+  },
+  {
+    "file": "core/runtime.mjs",
+    "start": "  function validateReceiptTimes(",
+    "end": "  // Caller owns the transaction",
+    "purpose": "receipt write preflight refuses unsupported timestamps",
+    "sha256": "e9455e1628d0f38ec46aa1777b452bd2331827ce9c72472e809682a68f90cf48"
+  },
+  {
+    "file": "core/context-product-schema.mjs",
+    "start": "    if (JSON.stringify(actualColumns)",
+    "end": "    const actualIndexes",
+    "purpose": "receipts column check only",
+    "sha256": "4dfbb47161a175b64c38b433cd43cc02eb874f92b9bf243d9a3012ead56f98ed"
+  },
+  {
+    "file": "core/context-read-facade.mjs",
+    "start": "  return { fileIdentity: database?.fileIdentity, productCapabilities:",
+    "end": "\n",
+    "purpose": "internal product capabilities projection",
+    "sha256": "38b5f6068aa5028c5524af6693131b03b6cae76aa6126b09916dcc1a5d58ebf6"
+  },
+  {
+    "file": "core/context-read-facade.mjs",
+    "start": "    return success(structuredClone({ version: CONTEXT_VERSION",
+    "end": "  }, findCandidates",
+    "purpose": "public embedded capabilities projection",
+    "sha256": "4b5c3ed21f4ebe58e63cb4d87d0858a1026f7b68c7928b7081f8b64116db1c2c"
+  },
+  {
+    "file": "core/context-product-worker.mjs",
+    "start": "function capabilities() {",
+    "end": "\ntry {",
+    "purpose": "public Worker capabilities projection",
+    "sha256": "0c2a07b5f20bc4eea4f945ab029170111297d77b0c4c7e00081c42d3a45d5c7d"
+  }
+]

@@ -132,8 +132,14 @@ const canonical = [
   ['private_cards', 'card', 'id=NEW.id OR rowid=NEW.rowid', 20],
   ['raw_conversations', 'raw', 'id=NEW.id OR rowid=NEW.rowid OR (owner_id,scope,project_id,client,session_key)=(NEW.owner_id,NEW.scope,NEW.project_id,NEW.client,NEW.session_key)', 24],
 ];
-export function contentSafetyDDL(base, receiptEventTime = false) {
+export function contentSafetyDDL(base, receiptEventTime = false, attestedFeatures = false) {
   let sql = tables + guards;
+  if (attestedFeatures) {
+    sql = sql.replace(" migration_state TEXT",
+      ' receipt_event_time INTEGER NOT NULL CHECK (receipt_event_time IN (0,1)),\n migration_state TEXT')
+      .replace('WHEN NEW.singleton IS NOT OLD.singleton',
+        'WHEN NEW.receipt_event_time IS NOT OLD.receipt_event_time OR NEW.singleton IS NOT OLD.singleton');
+  }
   for (const [table, kind, collision, first] of canonical) {
     if (base < first) continue;
     sql += `CREATE TRIGGER safety_${table}_insert BEFORE INSERT ON ${table}
@@ -158,11 +164,11 @@ CREATE TRIGGER safety_${table}_identity BEFORE UPDATE ON ${table}
 }
 const normalize = sql => sql.trim().replace(/;$/, '').replace(/\s+/g, ' ');
 const expected = new Map();
-function expectedSchema(base, receiptEventTime = false) {
-  const key = base + ":" + receiptEventTime;
+function expectedSchema(base, receiptEventTime = false, attestedFeatures = false) {
+  const key = JSON.stringify([base, receiptEventTime, attestedFeatures]);
   if (!expected.has(key)) {
     // Comparison needs no SQLite handle: use the closed normative declarations.
-    const sql = contentSafetyDDL(base, receiptEventTime);
+    const sql = contentSafetyDDL(base, receiptEventTime, attestedFeatures);
     const declarations = sql.match(/CREATE (?:TABLE|INDEX)[\s\S]*?;|CREATE TRIGGER[\s\S]*?END;/g);
     expected.set(key, new Map(declarations.map(sql => {
       const [, type, name] = sql.match(/^CREATE (TABLE|INDEX|TRIGGER) (\w+)/);
@@ -171,11 +177,20 @@ function expectedSchema(base, receiptEventTime = false) {
   }
   return expected.get(key);
 }
+const matchesSafetySchema = (rows, layout, receiptEventTime) => {
+  const wanted = expectedSchema(layout.base, receiptEventTime, layout.attestedFeatures);
+  return rows.length === wanted.size && rows.every(row => wanted.has(row.name) &&
+    row.type === wanted.get(row.name).type && normalize(row.sql ?? '') === wanted.get(row.name).sql);
+};
 const safetyObjects = `SELECT schema_version AS cookie,name,type,sql FROM pragma_schema_version LEFT JOIN sqlite_schema ON (
  name GLOB 'content_safety_*' OR name GLOB 'content_identity_*' OR name='owner_suppression_epochs'
  OR name GLOB 'content_suppression*' OR name GLOB 'safety_*') LIMIT 65`;
 export function verifyContentSafetyDDL(db, physical) {
-  const layout = resolveContentLayout(physical), wanted = expectedSchema(layout.base, layout.receiptEventTime);
+  const layout = resolveContentLayout(physical);
+  const receiptEventTime = layout.attestedFeatures
+    ? supportedReceiptEventTime(db.prepare('SELECT receipt_event_time FROM content_safety_control WHERE singleton=1').get()?.receipt_event_time)
+    : false;
+  const wanted = expectedSchema(layout.base, receiptEventTime, layout.attestedFeatures);
   const rows = db.prepare(safetyObjects).all().filter(row => row.name !== null);
   if (!layout.suppressionRevision || rows.length !== wanted.size || rows.some(row => !wanted.has(row.name) ||
       row.type !== wanted.get(row.name).type || normalize(row.sql ?? '') !== wanted.get(row.name).sql)) fail('unsupported_database');
@@ -212,9 +227,14 @@ const layouts = new WeakMap();
 const refused = new WeakSet();
 const controlFields = ['singleton','base_layout','suppression_revision','card_lineage_revision','migration_state',
   'suppression_domain','migration_id','inventory_digest'];
-const headerSQL = safety => `SELECT schema_version AS cookie,(SELECT user_version FROM pragma_user_version) AS physical,
- (SELECT application_id FROM pragma_application_id) AS applicationId${safety ?
-    ',(SELECT json_array(' + controlFields.join(',') + ') FROM content_safety_control WHERE singleton=1) AS control' : ''}
+const attestedControlFields = layout => layout.attestedFeatures ? [...controlFields, 'receipt_event_time'] : controlFields;
+const supportedReceiptEventTime = value => {
+  if (value !== 0 && value !== 1) fail('unsupported_database');
+  return value === 1;
+};
+const headerSQL = layout => `SELECT schema_version AS cookie,(SELECT user_version FROM pragma_user_version) AS physical,
+ (SELECT application_id FROM pragma_application_id) AS applicationId${layout?.suppressionRevision ?
+    ',(SELECT json_array(' + attestedControlFields(layout).join(',') + ') FROM content_safety_control WHERE singleton=1) AS control' : ''}
  FROM pragma_schema_version`;
 /** Metadata only: version, bounded schema and a final coherent header/control.
  * No population scan, DDL, repair or seeding on open. */
@@ -222,7 +242,7 @@ export function attestContentSafety(db, physical) {
   if (refused.has(contentSafetyConnection(db))) fail('unsupported_database');
   try {
     if (physical === undefined) physical = db.prepare('PRAGMA user_version').get().user_version;
-    const layout = resolveContentLayout(physical);
+    let layout = resolveContentLayout(physical);
     // The schema rows and their cookie share one statement snapshot. Compare
     // with the final header without adding any opener statements.
     const scanned = metadataRows(db.prepare(safetyObjects));
@@ -232,9 +252,10 @@ export function attestContentSafety(db, physical) {
     if (!layout.suppressionRevision) {
       if (rows.length) fail('unsupported_database');
     } else {
-      const wanted = expectedSchema(layout.base, layout.receiptEventTime);
-      if (rows.length !== wanted.size || rows.some(row => !wanted.has(row.name) ||
-          row.type !== wanted.get(row.name).type || normalize(row.sql ?? '') !== wanted.get(row.name).sql)) fail('unsupported_database');
+      // Reject unknown DDL before reading any control values. Families admit
+      // only the two supported tuple shapes; the row must then select exactly
+      // the matching shape. Legacy cells retain their original preflight.
+      if (!(layout.attestedFeatures ? [false, true] : [false]).some(flag => matchesSafetySchema(rows, layout, flag))) fail('unsupported_database');
       // Read the control population and final schema/version header together.
       // This retains the cookie fence without a separate singleton statement.
       const control = metadataRows(db.prepare(`SELECT c.*,schema_version AS cookie,
@@ -246,7 +267,12 @@ export function attestContentSafety(db, physical) {
           row.suppression_revision !== 1 || row.card_lineage_revision !== 0 || row.migration_state !== 'complete' ||
           ![row.suppression_domain, row.migration_id].every(value => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value)) ||
           !/^[0-9a-f]{64}$/.test(row.inventory_digest)) fail('unsupported_database');
-      controlBinding = JSON.stringify(controlFields.map(field => row[field]));
+      if (layout.attestedFeatures) layout = Object.freeze({ ...layout,
+        receiptEventTime: supportedReceiptEventTime(row.receipt_event_time) });
+      if (!matchesSafetySchema(rows, layout, layout.receiptEventTime)) fail('unsupported_database');
+      // Exact DDL closes the feature/revision vocabulary; the control row selects
+      // only supported values. Missing, extra or future columns refuse above.
+      controlBinding = JSON.stringify(attestedControlFields(layout).map(field => row[field]));
       header = { cookie: row.cookie, physical: row.physical, applicationId: row.applicationId, control: controlBinding };
     }
     header ??= db.prepare(headerSQL(false)).get();
@@ -275,7 +301,7 @@ export function installedContentLayout(db) {
   const cached = layouts.get(contentSafetyConnection(db));
   if (!cached) return attestContentSafety(db);
   let header;
-  try { header = db.prepare(headerSQL(cached.layout.suppressionRevision)).get(); }
+  try { header = db.prepare(headerSQL(cached.layout)).get(); }
   catch (error) { if (contentSafetyBudgetError(error) || [5,6].includes(Number(error?.errcode) & 255)) throw error; refused.add(contentSafetyConnection(db)); if ([7,10].includes(Number(error?.errcode) & 255)) throw error; fail('unsupported_database'); }
   if (header.cookie !== cached.header.cookie || header.physical !== cached.header.physical ||
       header.applicationId !== cached.header.applicationId || header.control !== cached.header.control) {

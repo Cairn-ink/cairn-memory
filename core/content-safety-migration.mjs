@@ -178,7 +178,16 @@ async function migrateSafety({ path, backupPath, expected, quiescence }, eventTi
 export function installReceiptEventTimeInside(db, base) {
   if (!db.isTransaction || attestContentSafety(db).physical !== safetyPhysicalVersion(base)) fail('unsupported_database');
   const physical = { 18: 51, 23: 52, 33: 53 }[base];
+  // Add the attested flag atomically, preserving every existing control value.
   db.exec('ALTER TABLE receipts ADD COLUMN occurred_at TEXT; DROP TRIGGER safety_receipt_identity;');
+  db.exec(`DROP TRIGGER safety_control_insert; DROP TRIGGER safety_control_delete; DROP TRIGGER safety_control_update;
+    ALTER TABLE content_safety_control RENAME TO event_time_control_before;`);
+  const declarations = contentSafetyDDL(base, true, true);
+  db.exec(declarations.match(/CREATE TABLE content_safety_control[\s\S]*?;/)[0]);
+  db.exec(`INSERT INTO content_safety_control SELECT singleton,base_layout,suppression_revision,card_lineage_revision,1,
+      migration_state,suppression_domain,migration_id,inventory_digest FROM event_time_control_before;
+    DROP TABLE event_time_control_before;`);
+  for (const trigger of declarations.match(/CREATE TRIGGER safety_control_(?:insert|delete|update)[\s\S]*?END;/g)) db.exec(trigger);
   const trigger = contentSafetyDDL(base, true).match(/CREATE TRIGGER safety_receipt_identity[\s\S]*?END;/)[0];
   db.exec(trigger);
   verifyContentSafetyDDL(db, physical);

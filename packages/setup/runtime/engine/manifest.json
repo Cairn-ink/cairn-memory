@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "65d7cda4051d3fcbaf1c34cc452cca0039151e5c297d13aae89b5da5c5c274b1",
-  "bytes": 1105405,
+  "sha256": "92d42ffec56caeb2d4990ea46dc97d527a844d081f3f41515ab51b5c6b90d798",
+  "bytes": 1106144,
   "files": [
     "LICENSE",
     "README.md",
@@ -699,9 +699,9 @@
     "core/context-vector-validation.mjs": "6c41a7eb081eeb61ce09c82cfd27682454e9cdcbdd54e538435d5796b29f0d6e",
     "docs/plans/context-read-p2e-impl.md": "daf884b2995458d7d0d61832bbd163e51066cfc4e00f66e3f01c144eaeb89028",
     "adapters/mcp/safety-migrate-command.mjs": "e63ed654f3c052f3bc026faeee5b7d0868786feaf94bb93c2fccc311d793a38f",
-    "core/content-safety-layout.mjs": "8168ae7c0001ffed1768b4b0a56521d9523d05122294c2bb13caaad86f4f8cd1",
-    "core/content-safety-migration.mjs": "7c989ed4dd0e9b0e961fd955402e0eeea4ca6e9497ac72f3923ce196055c5f24",
-    "core/content-safety-schema.mjs": "30984f289a5c5cda12f203c6ac44761a1a3e1fa8ebeca1d9a9ecf4595f5973fa",
+    "core/content-safety-layout.mjs": "8f6de3ea2f593f68795b40f7bb2f96483f5de2c9ac503dd43185027ba44f7c21",
+    "core/content-safety-migration.mjs": "1219cd56a26f85f35b289d14bc802b1cb0b86d89b7e5750b9bf67f1cb75e0069",
+    "core/content-safety-schema.mjs": "1c5e810b17a2c430b3a1376bea25b09a69a9e91df73104b7095e2b7900d56e82",
     "core/content-suppression-storage.mjs": "3b45e29926945c9134c79d6769ef58324e229ad0ccc9049b8dd80cad12441320",
     "core/content-suppression-input.mjs": "d22fe3b5ca43a0ce44d5e019fe4da9e09b456834281480b1ce1b23ec0b0d29cd",
     "core/content-suppression-evidence.mjs": "fbf3adae9b81b76eda37561fe4c6cec32552ad007c23286e59c16f11eef2c7bd",
