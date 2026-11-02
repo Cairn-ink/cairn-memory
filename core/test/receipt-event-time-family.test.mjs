@@ -10,7 +10,7 @@ import { openReadDatabase } from '../read-database.mjs';
 import { createTopicSession } from '../topic-members-session.mjs';
 import { existingStoreOption, validateExistingStore } from '../existing-store.mjs';
 import { contentSafetyPin, resolveContentLayout } from '../content-safety-layout.mjs';
-import { attestContentSafety, installedContentLayout, contentSafetyDDL, bindContentSafetyConnection } from '../content-safety-schema.mjs';
+import { receiptEventTimeEnabled, attestContentSafety, installedContentLayout, contentSafetyDDL, verifyContentSafetyDDL, bindContentSafetyConnection } from '../content-safety-schema.mjs';
 import { validateContextProductLayout } from '../context-product-schema.mjs';
 import { storeIdentity } from '../store-fence.mjs';
 import { openMemoryCore } from '../index.mjs';
@@ -41,12 +41,12 @@ function withoutEventTime(db, base) {
 
 for (const base of [18,23,33]) test(`family ${base}: attested 0 and 1 select exact DDL and capabilities at the same integer`, async t => {
   const f = await eventTimeFixture(t, base), db = f.connect(); t.after(() => db.close());
-  assert.equal(attestContentSafety(db).receiptEventTime, true);
+  assert.equal(receiptEventTimeEnabled(attestContentSafety(db)), true);
   assert.throws(() => db.exec('UPDATE content_safety_control SET receipt_event_time=0'), /safety_immutable/);
   assert.throws(() => db.exec('UPDATE content_safety_control SET receipt_event_time=0,card_lineage_revision=1'), /safety_immutable/);
   withoutEventTime(db, base);
   assert.equal(attestContentSafety(db).physical, {18:51,23:52,33:53}[base]);
-  assert.equal(attestContentSafety(db).receiptEventTime, false);
+  assert.equal(receiptEventTimeEnabled(attestContentSafety(db)), false);
   for (const open of openers(f, db)) assert.doesNotThrow(open);
   const trusted = host();
   const core = openMemoryCore({ path: f.path, contextRead: { version: 'context-read-v1', authority: trusted.authority } }); t.after(() => core.close());
@@ -135,4 +135,52 @@ test(`family migration rollback after ${phase}, safety=${safety}`, async t => {
   finally { DatabaseSync.prototype.exec = exec; }
   assert.equal(fired, true);
   assert.deepEqual(readSqliteFixture(f.path), before);
+});
+
+// Matching canonical triggers are essential here: these stores must get past
+// the old DDL-only attestation before the column/flag check refuses them.
+for (const base of [18,23,33]) for (const flag of [0,1])
+test(`family ${base}: column/flag mismatch with matching trigger, flag=${flag}`, async t => {
+  const f = await eventTimeFixture(t, base), db = f.connect();
+  try {
+    db.exec('DROP TRIGGER safety_receipt_identity; DROP TRIGGER safety_control_update');
+    db.exec(`UPDATE content_safety_control SET receipt_event_time=${flag}`);
+    if (flag === 1) db.exec('ALTER TABLE receipts DROP COLUMN occurred_at');
+    db.exec(contentSafetyDDL(base, Boolean(flag), true).match(/CREATE TRIGGER safety_receipt_identity[\s\S]*?END;/)[0]);
+    db.exec(controlGuard(base, Boolean(flag)));
+    // Positive control for the old check: tuple and exact safety DDL match.
+    assert.doesNotThrow(() => verifyContentSafetyDDL(db, {18:51,23:52,33:53}[base]));
+    assert.equal(db.prepare("SELECT count(*) n FROM pragma_table_xinfo('receipts') WHERE name='occurred_at'").get().n, 1 - flag);
+  } finally { db.close(); }
+  const names = ['writer', 'ordinary reader', 'product validator', 'topic preparation', 'existing store', 'store identity', 'safety attestation'];
+  for (const [i, name] of names.entries()) await t.test(name, () => {
+    // Independent native handles: an earlier refusal must not mask a gap in
+    // another opener through the connection's permanent refusal cache.
+    const fresh = f.connect();
+    try {
+      const open = [...openers(f, fresh), () => attestContentSafety(fresh)][i];
+      assert.throws(open, { code: 'unsupported_database' });
+    } finally { fresh.close(); }
+  });
+});
+
+for (const base of [18,23,33]) for (const flag of [0,1])
+test(`family ${base}: cached column mismatch reattests, flag=${flag}`, async t => {
+  const f = await eventTimeFixture(t, base), db = f.connect(); t.after(() => db.close());
+  if (flag === 0) withoutEventTime(db, base);
+  const layout = attestContentSafety(db);
+  assert.equal(receiptEventTimeEnabled(layout), Boolean(flag));
+  assert.equal(Reflect.has(layout, 'receiptEventTime'), false);
+  assert.equal(receiptEventTimeEnabled({ ...layout }), false, 'copies carry no private attestation');
+  const statements = [];
+  const adapter = bindContentSafetyConnection({ prepare(sql) { statements.push(sql); return db.prepare(sql); } }, db);
+  assert.equal(installedContentLayout(adapter), layout);
+  assert.equal(statements.length, 1, 'cached attestation still executes only its header');
+  assert.doesNotMatch(statements[0], /pragma_table_(?:xinfo|info)/, 'no per-read receipt column scan');
+  db.exec('DROP TRIGGER safety_receipt_identity');
+  if (flag === 0) db.exec('ALTER TABLE receipts ADD COLUMN occurred_at TEXT');
+  else db.exec('ALTER TABLE receipts DROP COLUMN occurred_at');
+  db.exec(contentSafetyDDL(base, Boolean(flag), true).match(/CREATE TRIGGER safety_receipt_identity[\s\S]*?END;/)[0]);
+  assert.throws(() => installedContentLayout(adapter), { code: 'unsupported_database' });
+  assert.ok(statements.some(sql => sql.includes("pragma_table_xinfo('receipts')")), 'schema cookie change runs the shared check');
 });

@@ -1,4 +1,4 @@
-import { attestContentSafety } from './content-safety-schema.mjs';
+import { receiptEventTimeEnabled, attestContentSafety } from './content-safety-schema.mjs';
 import { fail } from './validation.mjs';
 
 // Product-only metadata attestation. These shapes come from the canonical
@@ -181,7 +181,7 @@ export function validateContextProductLayout(db, layout = attestContentSafety(db
     if (version < first || !layouts[name]) continue;
     const expected = layouts[name].findLast(([first]) => version >= first)[1];
     const actualColumns = columns.all(name).map(r => [r.name,r.type,r.notnull,r.pk]);
-    if (JSON.stringify(actualColumns) !== JSON.stringify(name === 'receipts' && layout.receiptEventTime
+    if (JSON.stringify(actualColumns) !== JSON.stringify(name === 'receipts' && receiptEventTimeEnabled(layout)
           ? [...expected.columns, ['occurred_at','TEXT',0,0]] : expected.columns) ||
         db.prepare('SELECT strict FROM pragma_table_list WHERE schema=? AND name=?').get('main', name)?.strict !== 1) fail('unsupported_database');
     const actualIndexes = indexes.all(name).map(r => ({ ...r, ...(r.partial ? { predicate: indexPredicate(indexSql.get(r.name)?.sql) } : {}),

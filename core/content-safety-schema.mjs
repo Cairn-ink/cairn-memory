@@ -223,6 +223,10 @@ export function withContentSafetyLayoutInside(db, work, proof) {
   const layout=proof ?? installedContentLayout(db);
   return servingLayout.run({native:contentSafetyConnection(db),layout},()=>work(layout));
 }
+// Feature values never travel on layout objects: copies, aliases, computed
+// property access and destructuring cannot expose the attested bit.
+const eventTimeLayouts = new WeakSet();
+export function receiptEventTimeEnabled(layout) { return eventTimeLayouts.has(layout); }
 const layouts = new WeakMap();
 const refused = new WeakSet();
 const controlFields = ['singleton','base_layout','suppression_revision','card_lineage_revision','migration_state',
@@ -242,7 +246,7 @@ export function attestContentSafety(db, physical) {
   if (refused.has(contentSafetyConnection(db))) fail('unsupported_database');
   try {
     if (physical === undefined) physical = db.prepare('PRAGMA user_version').get().user_version;
-    let layout = resolveContentLayout(physical);
+    const layout = resolveContentLayout(physical);
     // The schema rows and their cookie share one statement snapshot. Compare
     // with the final header without adding any opener statements.
     const scanned = metadataRows(db.prepare(safetyObjects));
@@ -260,16 +264,21 @@ export function attestContentSafety(db, physical) {
       // This retains the cookie fence without a separate singleton statement.
       const control = metadataRows(db.prepare(`SELECT c.*,schema_version AS cookie,
         (SELECT user_version FROM pragma_user_version) AS physical,
-        (SELECT application_id FROM pragma_application_id) AS applicationId
+        (SELECT application_id FROM pragma_application_id) AS applicationId,
+        EXISTS(SELECT 1 FROM pragma_table_xinfo('receipts') WHERE name='occurred_at') AS receiptEventTimeColumn
         FROM pragma_schema_version LEFT JOIN content_safety_control c ON 1 LIMIT 2`));
       const row = control[0];
       if (control.length !== 1 || row.singleton !== 1 || row.base_layout !== layout.base ||
           row.suppression_revision !== 1 || row.card_lineage_revision !== 0 || row.migration_state !== 'complete' ||
           ![row.suppression_domain, row.migration_id].every(value => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value)) ||
           !/^[0-9a-f]{64}$/.test(row.inventory_digest)) fail('unsupported_database');
-      if (layout.attestedFeatures) layout = Object.freeze({ ...layout,
-        receiptEventTime: supportedReceiptEventTime(row.receipt_event_time) });
-      if (!matchesSafetySchema(rows, layout, layout.receiptEventTime)) fail('unsupported_database');
+      const eventTime = layout.attestedFeatures ? supportedReceiptEventTime(row.receipt_event_time) : false;
+      // Shared by every safety-attested opener, including legacy ordinary
+      // readers and lazy topic preparation. Metadata only, in the existing
+      // final header snapshot; cached reads retain their single header check.
+      if (Boolean(row.receiptEventTimeColumn) !== eventTime ||
+          !matchesSafetySchema(rows, layout, eventTime)) fail('unsupported_database');
+      if (eventTime) eventTimeLayouts.add(layout);
       // Exact DDL closes the feature/revision vocabulary; the control row selects
       // only supported values. Missing, extra or future columns refuse above.
       controlBinding = JSON.stringify(attestedControlFields(layout).map(field => row[field]));

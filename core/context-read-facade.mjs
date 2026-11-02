@@ -1,6 +1,6 @@
 import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade, assertContentPort, contentAuthorityPort } from './content-safety-boundary.mjs';
-import { cachedContentLayout } from './content-safety-schema.mjs';
+import { receiptEventTimeEnabled, cachedContentLayout } from './content-safety-schema.mjs';
 import { resolveContentLayout } from './content-safety-layout.mjs';
 import { sampleLocalStatus } from './context-read-local-status.mjs';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -757,10 +757,10 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       return facadeFailure(error);
     }
   }
-  return { fileIdentity: database?.fileIdentity, productCapabilities: { types: supportedTypes, receiptEventTime: cachedContentLayout(db)?.receiptEventTime === true },
+  return { fileIdentity: database?.fileIdentity, productCapabilities: { types: supportedTypes, receiptEventTime: receiptEventTimeEnabled(cachedContentLayout(db)) },
     ...(options.product ? { productPort: { db, read, ready, evidence, bind, encode, decode, identity, features: info, canonicalFence } } : {}),
     methods: contentSafetyFacade({ getContextReadCapabilities() {
-    return success(structuredClone({ version: CONTEXT_VERSION, methods: [...CONTEXT_METHODS], receiptEventTime: cachedContentLayout(db)?.receiptEventTime === true, types: [...supportedTypes], intents: ['current', 'history'],
+    return success(structuredClone({ version: CONTEXT_VERSION, methods: [...CONTEXT_METHODS], receiptEventTime: receiptEventTimeEnabled(cachedContentLayout(db)), types: [...supportedTypes], intents: ['current', 'history'],
       channels: { lexical: { enabled: true }, semantic: { configured: Boolean(options.embedder), budgetConfigured: Boolean(dispatch) } },
       ...configuration, limits: { ...CONTEXT_LIMITS, ...(options.sources ? { horizon: 32, sources: SOURCE_LIMITS } : {}) }, maintenance: !readOnly && !memoryOnly,
       assembly: { representation: 'representation-v2', defaults: ASSEMBLY_DEFAULTS, policies: [...ASSEMBLY_POLICIES], defaultPolicy: DEFAULT_ASSEMBLY_POLICY,

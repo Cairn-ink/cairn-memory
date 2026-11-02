@@ -159,7 +159,7 @@ async function migrateSafety({ path, backupPath, expected, quiescence }, eventTi
       const current = sqliteFileStat(path);
       if (source.dev !== current.dev || source.ino !== current.ino || db.prepare('PRAGMA journal_mode').get().journal_mode !== 'delete') fail('unsafe_database_file');
       const layout = attestContentSafety(db);
-      if ((!eventTime && layout.suppressionRevision || layout.receiptEventTime) || layout.base !== base ||
+      if ((!eventTime && layout.suppressionRevision || layout.attestedFeatures) || layout.base !== base ||
           db.prepare('PRAGMA application_id').get().application_id !== 0x43414952 ||
           db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id !== storeId) fail('unsupported_database');
       validateContextProductLayout(db, layout); verifyIntegrity(db);

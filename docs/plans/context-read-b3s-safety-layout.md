@@ -187,6 +187,19 @@ in its supported set and the exact DDL matches that tuple. This binary supports
 `receipt_event_time` 0 or 1, suppression revision 1 and card lineage revision 0;
 unknown columns, feature values or revisions refuse with `unsupported_database`.
 The feature flag is read from the control row, never inferred from numeric order.
+Safety attestation also checks, in its existing final header statement, that
+`receipts.occurred_at` exists exactly when the flag is 1. All safety-attested
+openers share this bounded metadata check, including ordinary readers on bases
+18/23 and lazy topic preparation. Cached reads retain their existing header check;
+a schema-cookie change forces full attestation again.
+
+The attested bit is held privately, never as a layout property. Only receipt
+writes/validation, the product receipts-column check and capabilities obtain it
+through `receiptEventTimeEnabled(layout)`. The static gate closes that accessor's
+import graph across production `.mjs`, `.js` and `.cjs` modules and local edges,
+rejecting namespace/dynamic imports, aliases and re-exports of the accessor.
+Reviewed sink regions and metadata authorities remain byte-pinned, so layout
+copies, computed property reads and destructuring cannot reveal the private bit.
 Old binaries reject 51–53 through their finite version lists (or exact DDL
 attestation for a pre-attested-family PR 1 binary).
 

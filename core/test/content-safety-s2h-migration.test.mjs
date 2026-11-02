@@ -104,6 +104,7 @@ test('S2h raw seeding reconciles independent retained exclusions and deletion ef
 for (const base of [18,23,33]) for (const safety of [false,true])
 test(`event-time direct migration ${safety ? {18:34,23:38,33:48}[base] : base} to ${{18:51,23:52,33:53}[base]} preserves receipts and exact base schema`, async t => {
   const { migrateEventTime } = await import('../testing/receipt-event-time-fixture.mjs');
+  const { receiptEventTimeEnabled } = await import('../content-safety-schema.mjs');
   const f = safetyFixture(t, base), core = openMemoryCore({ path: f.path });
   ok(core.admit({ namespace: ns, memory: { content: 'Synthetic retained migration content', kind: 'fact' }, receipts: [receipt('retained')] })); core.close();
   if (safety) await f.migrate();
@@ -117,7 +118,7 @@ test(`event-time direct migration ${safety ? {18:34,23:38,33:48}[base] : base} t
   db = f.connect();
   assert.deepEqual(db.prepare('SELECT * FROM receipts').all().map(row => ({ ...row })), rows.map(row => ({ ...row, occurred_at: null })));
   assert.equal(attestContentSafety(db).base, base);
-  assert.equal(attestContentSafety(db).receiptEventTime, true);
+  assert.equal(receiptEventTimeEnabled(attestContentSafety(db)), true);
   assert.equal(db.prepare('SELECT receipt_event_time FROM content_safety_control').get().receipt_event_time, 1);
   if (safety) {
     assert.deepEqual(db.prepare('SELECT * FROM content_safety_control').get(), Object.assign(Object.create(null), control, { receipt_event_time: 1 }));

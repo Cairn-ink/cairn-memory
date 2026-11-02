@@ -9,7 +9,7 @@ export function resolveContentLayout(physical) {
   if (!Number.isSafeInteger(physical) || physical < 0 || physical > 33 && !cells.has(physical)) fail('unsupported_database');
   const base = cells.get(physical) ?? physical;
   return Object.freeze({ physical, base, suppressionRevision: cells.has(physical) ? 1 : 0,
-    cardLineageRevision: 0, attestedFeatures: families.has(physical), receiptEventTime: false, cards: base >= 20, raw: base >= 24, rawCapture: base >= 25,
+    cardLineageRevision: 0, attestedFeatures: families.has(physical), cards: base >= 20, raw: base >= 24, rawCapture: base >= 25,
     rawLineage: base >= 26, rawDeletion: base >= 27, rawSources: base >= 28,
     localControls: base >= 29, methods: base >= 30, assets: base >= 31,
     roles: base >= 32, currentDependencies: base >= 33 });

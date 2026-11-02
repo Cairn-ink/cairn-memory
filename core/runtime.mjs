@@ -1,6 +1,6 @@
 import { registerContentWriteBoundary } from './content-write-context.mjs';
 import { contentScopeEpochGuard, assertContentOutput, contentReceiptCount, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
-import { cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
+import { receiptEventTimeEnabled, cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
 import { writeContentSuppressionInside, suppressReceiptsInside, requireSuppressionTransaction, allocateContentKey, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, hasContentSuppressionRequestInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { roleProfileOptions } from './role-profile-input.mjs';
@@ -140,7 +140,7 @@ export function createMemoryRuntime(input, internal) {
 
   function attach(id, receipt, now, inserted = [], origin = 'independent', occurredAt = null) {
     occurredAt = receiptEventTime(occurredAt, now);
-    const eventTime = cachedContentLayout(db)?.receiptEventTime === true;
+    const eventTime = receiptEventTimeEnabled(cachedContentLayout(db));
     if (occurredAt !== null && !eventTime) fail('unsupported_database');
     const key = receiptKey(receipt);
     // Read retained dedup first: BEFORE INSERT guards must also stop REPLACE.
@@ -248,7 +248,7 @@ export function createMemoryRuntime(input, internal) {
 
   function validateReceiptTimes(value, now) {
     for (const time of value.receiptTimes ?? []) {
-      if (receiptEventTime(time, now) !== null && !cachedContentLayout(db)?.receiptEventTime) fail('unsupported_database');
+      if (receiptEventTime(time, now) !== null && !receiptEventTimeEnabled(cachedContentLayout(db))) fail('unsupported_database');
     }
   }
 
