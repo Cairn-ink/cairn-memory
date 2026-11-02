@@ -1,0 +1,51 @@
+[
+  {
+    "file": "core/context-product-worker.mjs",
+    "line": 113,
+    "expression": "import(workerData.host.moduleUrl)",
+    "reason": "Configured host factory: the namespace is used only for createContextReadHost, which the safety schema does not export; no computed access or accessor forwarding.",
+    "sha256": "073071759a46698824ffd029a5fe48fbd737513c5c6936ba826b5d413be32bbe"
+  },
+  {
+    "file": "core/context-semantic-worker.mjs",
+    "line": 379,
+    "expression": "import(c.host.moduleUrl)",
+    "reason": "Configured semantic host factory: the namespace is used only for createContextReadHost, which the safety schema does not export; no computed access or accessor forwarding.",
+    "sha256": "ef2961fcb0114b9d9062084d57babea2adfad4d0753619c500728ca657da5fa5"
+  },
+  {
+    "file": "adapters/local-embedder/runtime.mjs",
+    "line": 53,
+    "expression": "import(pathToFileURL(join(pack.packPath, 'runtime/node_modules/@huggingface/transformers/dist/transformers.node.mjs')).href)",
+    "reason": "Verified model-pack entry: resolutionGuard fences transitive loads to verified pack files and builtins, excluding the repository safety schema; consumes only AutoTokenizer, AutoModel and env.",
+    "sha256": "2d3b46ad6c0f08085d8de34444ff476f646c30a6f0f720b20fff4d04c783c561"
+  },
+  {
+    "file": "integrations/codex/qualification.mjs",
+    "line": 83,
+    "expression": "createRequire(launcher).resolve(packageName+'/package.json')",
+    "reason": "Resolves platform package metadata to locate the Codex binary; never invokes the returned require function or executes the resolved module.",
+    "sha256": "9c37710cfffa802fbc42286c6e9bf8c3bf8bdf3d4c34a0c163d672868714cdac"
+  },
+  {
+    "file": "core/context-product-telemetry.mjs",
+    "line": 195,
+    "expression": "Reflect.construct(object.constructor, args)",
+    "reason": "Native database wrapper reconstructs the observed SQLite class; the pinned module neither compiles source strings nor exposes a module-loader constructor.",
+    "sha256": "fc12ecb54c0fba3d9a6d02ad2dbd20b480f185e533a24f4ccee795d7b6bdcbbe"
+  },
+  {
+    "file": "core/context-product-sqlite.mjs",
+    "line": 106,
+    "expression": "if (key === 'constructor') return object.constructor;",
+    "reason": "SQLite policy proxies preserve the native database/statement constructor for schema probes; pinned source only forwards native classes and does not construct executable source.",
+    "sha256": "03d69f0bdb2e5e8acd1b6e08e566d3333bfbc9e22fdfac97514aa8023618c207"
+  },
+  {
+    "file": "core/topic-reader-sqlite.mjs",
+    "line": 114,
+    "expression": "if (key === 'constructor') return object.constructor;",
+    "reason": "Read-only SQLite proxies preserve native database/statement constructors for schema probes; pinned source only forwards native classes and does not construct executable source.",
+    "sha256": "78547baf2b9eea0572ad69e8be2ef0bb2e8dcc8314aa4e58fc0b4dda87ce679f"
+  }
+]

@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { moduleEdges } from './receipt-event-time-modules.mjs';
 
 export const featureRoot = fileURLToPath(new URL('../../', import.meta.url));
 const moduleFile = /\.(?:mjs|js|cjs)$/;
@@ -25,11 +26,9 @@ export function featureSources(root = featureRoot) {
   sources.set('bin/cairn-memory.mjs', readFileSync(join(root, 'packaging/bin/cairn-memory.mjs'), 'utf8'));
   for (const [file, source] of sources) {
     const local = createRequire(resolve(root, file));
-    for (const edge of source.matchAll(/(['"])(\.\.?\/[^'"\n]*)\1/g)) {
-      const specifier = edge[2];
-      // Non-module assets are not executable edges. Extensionless specifiers
-      // use Node's resolver, which also handles directory package entry points.
-      if (!moduleFile.test(specifier) && !/\brequire\s*\(\s*$/.test(source.slice(0, edge.index))) continue;
+    for (const edge of moduleEdges(file, source)) {
+      const specifier = edge.path;
+      if (!specifier.startsWith('.')) continue;
       const target = moduleFile.test(specifier) ? resolve(root, dirname(file), specifier) : local.resolve(specifier);
       const path = relative(root, target);
       assert.ok(!path.startsWith('../'), 'runtime edge escapes repository: ' + file);
@@ -48,17 +47,34 @@ const consumers = ['core/runtime.mjs', 'core/context-product-schema.mjs', 'core/
 // Other imports from the owner remain ordinary named imports. The accessor
 // itself cannot be aliased or re-exported, and its uses are pinned at the sinks.
 export function assertFeatureImports(sources) {
+  const edges = new Map([...sources].map(([file, source]) => [file, moduleEdges(file, source)]));
+  const targetOf = (file, edge) => edge.path.startsWith('.')
+    ? relative(featureRoot, resolve(featureRoot, dirname(file), edge.path)) : edge.path;
+  // Include every forwarding hop before checking consumers. Refuse forwarding
+  // itself as before, even when a downstream use hides the accessor's spelling.
+  const sensitive = new Set([owner]);
+  let changed;
+  do {
+    changed = false;
+    for (const [file, imports] of edges) {
+      if (!sensitive.has(file) && imports.some(edge => edge.kind === 'export' && sensitive.has(targetOf(file, edge)))) {
+        sensitive.add(file);
+        changed = true;
+      }
+    }
+  } while (changed);
   const importers = [];
-  for (const [file, source] of sources) {
-    for (const edge of source.matchAll(/(['"])(\.\.?\/[^'"\n]*)\1/g)) {
-      if (relative(featureRoot, resolve(featureRoot, dirname(file), edge[2])) !== owner) continue;
-      const declaration = /\bimport\s*\{([^{}]*)\}\s*from\s*$/.exec(source.slice(0, edge.index));
-      assert.ok(declaration, 'unreviewed feature namespace/forwarding/dynamic import: ' + file);
-      for (const binding of declaration[1].split(',').map(value => value.trim()).filter(Boolean)) {
-        const parts = /^(\w+)(?:\s+as\s+(\w+))?$/.exec(binding);
-        assert.ok(parts, 'unsupported feature import syntax: ' + file);
-        if (parts[1] !== accessor) continue;
-        assert.equal(parts[2] ?? parts[1], accessor, 'unreviewed feature accessor alias: ' + file);
+  for (const [file, imports] of edges) {
+    for (const edge of imports) {
+      if (!sensitive.has(targetOf(file, edge))) continue;
+      // Keep the existing stricter named-import boundary in all modules,
+      // including the three consumers. This rejects every computed namespace
+      // member, alias, spread, destructure and dynamic namespace escape.
+      assert.ok(edge.kind === 'import' && edge.node.specifiers.every(binding => binding.type === 'ImportSpecifier'),
+        'unreviewed feature namespace/forwarding/dynamic import: ' + file);
+      for (const binding of edge.node.specifiers) {
+        if ((binding.imported.name ?? binding.imported.value) !== accessor) continue;
+        assert.equal(binding.local.name, accessor, 'unreviewed feature accessor alias: ' + file);
         assert.ok(consumers.includes(file), 'unreviewed feature accessor importer: ' + file);
         importers.push(file);
       }

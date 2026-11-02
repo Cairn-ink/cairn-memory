@@ -5,6 +5,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { featureSources, assertFeatureImports } from '../testing/receipt-event-time-audit.mjs';
+import { moduleLoadingExceptions, moduleEdges } from '../testing/receipt-event-time-modules.mjs';
 import { resolveContentLayout } from '../content-safety-layout.mjs';
 
 const reviewed = JSON.parse(readFileSync(new URL('./fixtures/receipt-event-time-static-gate.json', import.meta.url), 'utf8'));
@@ -16,7 +17,6 @@ const digest = value => createHash('sha256').update(value).digest('hex');
 // escape or select another S2h path inside an otherwise approved module.
 // Unknown syntax/consumers require review, rather than guessed dataflow.
 function assertFeatureConsumers(sources) {
-  assertFeatureImports(sources);
   for (const pin of reviewed) {
     const source = sources.get(pin.file);
     assert.equal(typeof source, 'string', 'missing reviewed feature region: ' + pin.file);
@@ -26,6 +26,7 @@ function assertFeatureConsumers(sources) {
     if (pin.start !== null) assert.equal(source.indexOf(pin.start, start + 1), -1, 'ambiguous feature region');
     assert.equal(digest(source.slice(start, end)), pin.sha256, 'review feature consumer: ' + pin.purpose);
   }
+  assertFeatureImports(sources);
   for (const [file, original] of sources) {
     let source = original;
     const regions = reviewed.filter(pin => pin.file === file).map(pin => {
@@ -148,4 +149,101 @@ test('static gate rejects restoring a public flag on the layout authority', () =
   sources.set('core/content-safety-layout.mjs', sources.get('core/content-safety-layout.mjs').replace(
     'return Object.freeze({ physical,', 'return Object.freeze({ receiptEventTime: true, physical,'));
   assert.throws(() => assertFeatureConsumers(sources), /review feature consumer/);
+});
+
+// These are the complete unresolved loaders and constructor capabilities, not pattern exemptions.
+// Their full source is pinned, including the namespace uses and resolution fence.
+test('static gate pins the exact unresolved-loader allowlist and its reviewed source', () => {
+  assert.deepEqual(moduleLoadingExceptions.map(({ file, line, expression }) => ({ file, line, expression })), [
+    { file: 'core/context-product-worker.mjs', line: 113, expression: 'import(workerData.host.moduleUrl)' },
+    { file: 'core/context-semantic-worker.mjs', line: 379, expression: 'import(c.host.moduleUrl)' },
+    { file: 'adapters/local-embedder/runtime.mjs', line: 53, expression: "import(pathToFileURL(join(pack.packPath, 'runtime/node_modules/@huggingface/transformers/dist/transformers.node.mjs')).href)" },
+    { file: 'integrations/codex/qualification.mjs', line: 83, expression: "createRequire(launcher).resolve(packageName+'/package.json')" },
+    { file: 'core/context-product-telemetry.mjs', line: 195, expression: 'Reflect.construct(object.constructor, args)' },
+    { file: 'core/context-product-sqlite.mjs', line: 106, expression: "if (key === 'constructor') return object.constructor;" },
+    { file: 'core/topic-reader-sqlite.mjs', line: 114, expression: "if (key === 'constructor') return object.constructor;" },
+  ]);
+  const sources = featureSources();
+  for (const entry of moduleLoadingExceptions) {
+    const source = sources.get(entry.file);
+    assert.equal(digest(source), entry.sha256);
+    assert.ok(entry.reason.length > 40);
+    assert.ok(source.split('\n')[entry.line - 1].includes(entry.expression));
+    const mutated = new Map(sources);
+    mutated.set(entry.file, source + "\nconst safety = await import(path); safety[key](layout);\n");
+    assert.throws(() => assertFeatureConsumers(mutated), /review module-loading exception/);
+  }
+});
+
+for (const [name, code] of [
+  ['review exact template reproduction', "const safety = await import(`./content-safety-schema.mjs`); if (safety[['receipt', 'EventTimeEnabled'].join('')](layout)) chooseOtherS2hPath();"],
+  ['concatenated import path', "const safety = await import('./content-safety-' + 'schema.mjs'); safety[key](layout);"],
+  ['variable import path', "const path = './content-safety-schema.mjs'; const safety = await import(path); safety[key](layout);"],
+  ['interpolated import path', "const safety = await import(`./${name}.mjs`); safety[key](layout);"],
+  ['require variable', "const path = './content-safety-schema.mjs'; const safety = require(path); safety[key](layout);"],
+  ['require template', "const safety = require(`./content-safety-schema.mjs`); safety[key](layout);"],
+  ['require concatenation', "const safety = require('./content-safety-' + 'schema.mjs'); safety[key](layout);"],
+  ['require alias', "const load = require; const safety = load(path); safety[key](layout);"],
+  ['require bind', "const load = require.bind(null); load(path);"],
+  ['createRequire alias', "import { createRequire as makeLoader } from 'node:module'; const load = makeLoader(import.meta.url); load(path);"],
+  ['module namespace loader', "const loaders = await import('node:module'); loaders[key](import.meta.url)(path);"],
+  ['module forwarding loader', "export * from 'node:module';"],
+  ['Function construction', "const load = new Function('path', 'return import(path)'); load(path);"],
+  ['Function alias', "const build = Function; build(code)();"],
+  ['Function constructor alias', "const build = (() => {}).constructor; build(code)();"],
+  ['computed callable constructor', "const f = () => {}; f[['con', 'structor'].join('')](code)();"],
+  ['computed global Function', "globalThis[['Fun', 'ction'].join('')](code)();"],
+  ['aliased global eval', "const g = globalThis; g[key](code);"],
+  ['aliased process loader', "const p = process; p[key]('module')[key](path);"],
+  ['CommonJS computed loader', "module[['req', 'uire'].join('')](path);"],
+  ['process namespace loader', "import * as p from 'node:process'; p[key]('module')[key](path);"],
+  ['Worker imported alias', "import { Worker as W } from 'node:worker_threads'; new W(path);"],
+  ['Worker value alias', "import { Worker } from 'node:worker_threads'; const W = Worker; new W(path);"],
+  ['Worker namespace', "import * as w from 'node:worker_threads'; new w[key](path);"],
+  ['query path', "const safety = await import('./content-safety-schema.mjs?tag'); safety[key](layout);"],
+  ['encoded path', "const safety = await import('./content-safety%2dschema.mjs'); safety[key](layout);"],
+  ['eval construction', "eval(code);"],
+  ['indirect eval', "(0, eval)(code);"],
+  ['global eval', "globalThis.eval(code);"],
+  ['function constructor', "(() => {}).constructor(code)();"],
+  ['computed process loader', "process[['getBuiltin', 'Module'].join('')]('module')[key](path);"],
+  ['vm construction', "import * as vm from 'node:vm'; vm.runInThisContext(code);"],
+  ['Worker variable', "new Worker(path);"],
+  ['URL import', "const safety = await import(new URL('./content-safety-schema.mjs', import.meta.url)); safety[key](layout);"],
+  ['data import', "await import('data:text/javascript,export default 1');"],
+  ['escaped require', "\\u0072equire(path);"],
+]) for (const extension of ['mjs', 'js', 'cjs']) test(`static gate fails closed for ${name} in .${extension}`, () => {
+  const sources = featureSources();
+  sources.set('core/unresolved-loader.' + extension, code);
+  assert.throws(() => assertFeatureConsumers(sources), /unreviewed module loading|unsupported production syntax/);
+});
+
+test('static gate rejects an indirect re-export with an obfuscated downstream accessor', () => {
+  const sources = featureSources();
+  // Insert the consumer first to exercise transitive closure independent of order.
+  sources.set('core/indirect-consumer.mjs', "import * as safety from './bridge-two.mjs'; safety[['receipt', 'EventTimeEnabled'].join('')](layout);");
+  sources.set('core/bridge-two.mjs', "export * from './bridge-one.mjs';");
+  sources.set('core/bridge-one.mjs', "export * from './content-safety-schema.mjs';");
+  assert.throws(() => assertFeatureConsumers(sources), /unreviewed feature namespace.*core\/indirect-consumer/);
+});
+
+test('static gate parses comments, regexes, string decoys and template interpolations as JavaScript', () => {
+  assert.deepEqual(moduleEdges('core/nonloading-decoys.mjs', `
+    // import(variable); require(variable); eval(code);
+    const text = 'import(variable)';
+    const pattern = /import\\(variable\\)/;
+    const value = \`require(variable)\`;
+  `), []);
+  const sources = featureSources();
+  sources.set('core/template-interpolation.mjs', 'const text = `prefix ${await import(path)}`;');
+  assert.throws(() => assertFeatureConsumers(sources), /unreviewed module loading/);
+});
+
+test('static gate rejects unresolved loading while closing over production dependencies', t => {
+  const workspace = createTestWorkspace(t, { prefix: 'receipt-loader-gate-' });
+  for (const directory of ['core', 'adapters', 'integrations/client', 'integrations/codex', 'packaging/bin', 'delegated']) mkdirSync(join(workspace.path, directory), { recursive: true });
+  writeFileSync(join(workspace.path, 'packaging/bin/cairn-memory.mjs'), '');
+  writeFileSync(join(workspace.path, 'core/entry.mjs'), "import '../delegated/loader.cjs';");
+  writeFileSync(join(workspace.path, 'delegated/loader.cjs'), "const path = './hidden.js'; require(path);");
+  assert.throws(() => featureSources(workspace.path), /unreviewed module loading.*delegated\/loader.cjs/);
 });
