@@ -14,6 +14,9 @@ import { fail } from './validation.mjs';
 import { semanticClient } from './context-semantic-client.mjs';
 import { addAbortListener } from 'node:events';
 
+// One native WAL wait is at most 980 ms; the graceful budget precedes this.
+export const TERMINATION_GRACE_MS = 1_000;
+
 const handles=globalThis[Symbol.for('context-read-product-p2e-v1/handles')]??=new WeakMap();
 const coordinatorsKey=Symbol.for('context-read-product-p2e-v1/coordinators');
 export function semanticHandle(value) {const h=handles.get(value);if(!h||h.closed())fail('invalid_input');return h;}
@@ -82,9 +85,16 @@ export async function openContextSemanticCoordinator(original,controls={}) {
           const force=()=>{
             if(!live)return;
             detach();
-            // Termination supplies no native/provider disposal proof.
-            try{Promise.resolve(worker.terminate()).then(()=>resolve(false),()=>resolve(false));}
-            catch{resolve(false);}
+            // Termination supplies no native/provider disposal proof, even if
+            // native code delays exit beyond this final bounded wait. Keep a
+            // real timer as well: an injected operation clock may be frozen.
+            const abort=new AbortController();
+            const finished=()=>{clearTimeout(timer);abort.abort();resolve(false);};
+            timer=setTimeout(finished,TERMINATION_GRACE_MS);
+            void safetyDelay(TERMINATION_GRACE_MS,undefined,{signal:abort.signal})
+              .then(finished,error=>{if(error.name!=='AbortError')finished();});
+            try{Promise.resolve(worker.terminate()).then(finished,finished);}
+            catch{finished();}
           };
           const done=code=>{if(!live)return;detach();resolve(code===0);};
           const armSafety=remaining=>{
