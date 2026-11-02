@@ -6,7 +6,7 @@ import { performance } from 'node:perf_hooks';
 import { dirname } from 'node:path';
 import { createExclusiveSqliteFile, probeRollbackJournal, sqliteFileStat } from './sqlite-journal-probe.mjs';
 import { readTransaction } from './database.mjs';
-import { contextCardEligible, contextReadDeleteJournal } from './context-read-sidecar.mjs';
+import { contextCardEligible, contextReadDeleteJournal, protectedDeleteJournal, sameJournal } from './context-read-sidecar.mjs';
 import { cardDependencyFence } from './card-current-storage.mjs';
 import { termFrequencies, tokenizeT1, TOKENIZER_VERSION, REPRESENTATION_VERSION } from './context-read-tokenize.mjs';
 import { scoreBM25, rankScores } from './context-read-bm25.mjs';
@@ -19,7 +19,6 @@ import { fail } from './validation.mjs';
 import { VECTOR_DDL } from './context-product-vectors.mjs';
 import { verificationBatch, verificationMeter, verificationBound } from './context-product-verification-batch.mjs';
 import { comparisonWorkFields } from './context-product-attribution.mjs';
-import { protectedDeleteJournal, sameJournal } from './context-read-journal-guard.mjs';
 
 export const PRODUCT_SIDECAR_FORMAT = 3;
 export const PRODUCT_SIDECAR_SUFFIX = '.context-read-product-v1.1.sqlite';
