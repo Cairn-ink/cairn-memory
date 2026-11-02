@@ -1,3 +1,5 @@
+import { setTimeout as safetyDelay } from 'node:timers/promises';
+import { hrtime } from 'node:process';
 import { Worker, MessageChannel } from 'node:worker_threads';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -7,7 +9,7 @@ import { supervisorOwner } from './context-read-supervisor.mjs';
 import { boundedData, hostConfiguration, credentialDigest, requestRecord, operationRecord, mono } from './context-product-control.mjs';
 import { SEMANTIC_VERSION, hostedSelection, ledgerIdentity, caps, priceTable, backfillTargets, semanticBinding, safePath, semanticOperationInput, exact } from './context-semantic-input.mjs';
 import { deadline } from './context-product-control.mjs';
-import { productFailure, signalAborted, signalCancelled } from './context-product-reader.mjs';
+import { productFailure, signalAborted, signalCancelled, DISPOSAL_GRACE_MS } from './context-product-reader.mjs';
 import { fail } from './validation.mjs';
 import { semanticClient } from './context-semantic-client.mjs';
 import { addAbortListener } from 'node:events';
@@ -67,13 +69,44 @@ export async function openContextSemanticCoordinator(original,controls={}) {
   async function stop() {
     if(closing)return closing;
     closed=true;Atomics.store(new BigInt64Array(ownerState),6,1n);registry.cleanup(resource);
+    // Calls lose authority immediately; their results cannot depend on a
+    // provider or host close that ignores cancellation. Cleanup stays owned.
+    reject('store_closed');
     return closing=(async()=>{
       if(worker&&!exited) {
-        await new Promise((resolve,reject)=>{
-          worker.ref();worker.once('exit',code=>code===0?resolve():reject(Error('reader_failed')));worker.once('error',reject);worker.postMessage({kind:'close'});
-        }).then(()=>registry.finish(resource),()=>registry.finish(resource,false));
+        const graceful=await new Promise(resolve=>{
+          const until=Number(process.hrtime.bigint())/1e6+DISPOSAL_GRACE_MS;
+          let timer,safety,live=true,realUntil=Infinity;
+          const realNow=()=>{const [seconds,nanos]=hrtime();return seconds*1000+nanos/1e6;};
+          const detach=()=>{live=false;clearTimeout(timer);safety?.abort();worker.off('exit',done);worker.off('error',force);};
+          const force=()=>{
+            if(!live)return;
+            detach();
+            // Termination supplies no native/provider disposal proof.
+            try{Promise.resolve(worker.terminate()).then(()=>resolve(false),()=>resolve(false));}
+            catch{resolve(false);}
+          };
+          const done=code=>{if(!live)return;detach();resolve(code===0);};
+          const armSafety=remaining=>{
+            realUntil=Math.min(realUntil,realNow()+Math.max(0,remaining));
+            safety?.abort();safety=new AbortController();
+            void safetyDelay(Math.ceil(Math.max(0,realUntil-realNow())),undefined,{signal:safety.signal})
+              .then(()=>{if(!live)return;const left=realUntil-realNow();if(left>0)armSafety(left);else force();},
+                error=>{if(error.name!=='AbortError')force();});
+          };
+          worker.once('exit',done);worker.once('error',force);
+          try{
+            const remaining=Math.max(0,until-Number(process.hrtime.bigint())/1e6);
+            armSafety(remaining);timer=setTimeout(force,remaining);
+            worker.ref();worker.postMessage({kind:'close'});
+          }catch{force();}
+        });
+        registry.finish(resource,graceful);
       } else registry.finish(resource);
-      all.delete(key);reject('store_closed',true);await resource.delivery;
+      all.delete(key);reject('store_closed',true);
+      // finish() settles delivery synchronously, including failed proof. Its
+      // rejection is retained; a delivery failure is never a successful close.
+      await resource.delivery;
     })();
   }
   resource.stop=()=>{void stop().catch(()=>{});};

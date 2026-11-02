@@ -389,12 +389,13 @@ try {
     policy=e.policy;
   }
   const {openSemanticLedger}=await import('./context-semantic-ledger.mjs');ledger=openSemanticLedger({path:c.ledgerPath,identity:c.ledgerIdentity,authority:host.semanticLedgerAuthority,policy:sqlite});
-  lastState=(await ledger.authenticate(ownerId,{recoverPrepared:true})).state;
-  if(lastState.ledgerEpoch!==c.binding.ledgerEpoch||lastState.bindingRevision!==c.binding.bindingRevision)fail('authority_required');
   try{sqliteFileStat(ownershipPath);}catch(error){if(error.code!=='ENOENT')throw error;try{createExclusiveSqliteFile(ownershipPath);}catch(error){if(error.code!=='EEXIST')throw error;}}
   const {DatabaseSync}=await import('node:sqlite');
   ownership=sqlite.open(new DatabaseSync(ownershipPath),ownershipPath).db;
   ownership.exec('BEGIN EXCLUSIVE');ownership.prepare('PRAGMA schema_version').get();
+  // Recovery callbacks and their compare-and-swap run only under ownership.
+  lastState=(await ledger.authenticate(ownerId,{recoverPrepared:true})).state;
+  if(lastState.ledgerEpoch!==c.binding.ledgerEpoch||lastState.bindingRevision!==c.binding.bindingRevision)fail('authority_required');
   if(Object.values(lastState.reservations).some(r=>['reserved','may_transmit'].includes(r.status))) {
     const a=await admission();
     if(typeof host.semanticLedgerAuthority.confirmDisposed!=='function'||await host.semanticLedgerAuthority.confirmDisposed(a.anchor)!==true)fail('read_in_progress');
