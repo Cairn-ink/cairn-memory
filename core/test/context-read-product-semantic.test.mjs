@@ -876,6 +876,7 @@ async function recoveryWorker(t,s) {
   const exit=new Promise(resolve=>worker.once('exit',resolve));
   s.f.workspace.defer(()=>worker.terminate());
   const result=await closeGuard(new Promise((resolve,reject)=>{
+    worker.once('exit',code=>reject(Error(`recovery_exit_before_ready:${code}`)));
     worker.on('error',reject);worker.on('message',message=>{
       if(message.kind==='identity')worker.postMessage({kind:'identity-ack',operation});
       if(message.kind==='ready')resolve(message.result);
@@ -946,10 +947,13 @@ test('F recovery: contended ownership never asks for prepared-anchor disposal',a
   try{assert.equal(s.control[7],0,'no_disposal_callback_without_ownership');assert.equal(s.control[15],0,'no_recovery_cas_without_ownership');assert.deepEqual(next.result,{ok:false,error:{code:'storage_busy',retryable:true}});}
   finally{await next.worker.terminate();}
   await s.coordinator.close();s.control[10]=1;s.control[14]=1;
-  const opening=recoveryWorker(t,s);await closeUntil(()=>s.control[11]===1);
-  assert.equal(s.control[7],1);assert.equal(s.control[8],1,'prepared_callback_under_ownership');assert.equal(s.control[15],0,'recovery_waits_for_proof');
-  releaseClose(s.control,12);const recovered=await opening;ok(recovered.result);
-  assert.equal(s.control[15],1);assert.equal(s.control[16],1,'recovery_cas_under_ownership');await recovered.close();
+  const opening=recoveryWorker(t,s);
+  try {
+    await closeUntil(()=>s.control[11]===1);
+    assert.equal(s.control[7],1);assert.equal(s.control[8],1,'prepared_callback_under_ownership');assert.equal(s.control[15],0,'recovery_waits_for_proof');
+    releaseClose(s.control,12);const recovered=await opening;ok(recovered.result);
+    assert.equal(s.control[15],1);assert.equal(s.control[16],1,'recovery_cas_under_ownership');
+  } finally {releaseClose(s.control,12);await opening.then(recovered=>recovered.close(),()=>{});}
 });
 
 test('F recovery: failed proof releases ownership for a later recovery',async t=>{
@@ -972,16 +976,19 @@ test('F recovery: reservation proof remains owned and unknown quanta stay fully 
     s.authority.prepare('UPDATE anchors SET anchor=? WHERE owner=?').run(canonicalJson(anchor),ns.ownerId);
   } finally {db.close();}
   s.control[10]=1;s.control[14]=1;
-  const opening=recoveryWorker(t,s);await closeUntil(()=>s.control[11]===1);
-  assert.equal(s.control[7],1);assert.equal(s.control[8],1);assert.equal(s.control[15],0);
-  releaseClose(s.control,12);const recovered=await opening;ok(recovered.result);assert.equal(s.control[16],1);
-  const read=new DatabaseSync(s.ledgerPath,{readOnly:true});
+  const opening=recoveryWorker(t,s);
   try {
-    const state=JSON.parse(read.prepare('SELECT state FROM semantic_owners WHERE owner_id=?').get(ns.ownerId).state),q=state.windows.w.quanta.q;
-    assert.equal(state.reservations.reserved.status,'released');assert.equal(state.reservations.transmitted.status,'unknown');
-    assert.equal(q.status,'settled');assert.equal(q.accounting.stage,'closed');assert.equal(q.accounting.known,false);assert.equal(q.accounting.usage,null);
-    assert.equal(state.windows.w.usedItems,8);assert.equal(state.windows.w.usedMs,500);assert.equal(state.windows.w.usedUsd,'11');
-  } finally {read.close();await recovered.close();}
+    await closeUntil(()=>s.control[11]===1);
+    assert.equal(s.control[7],1);assert.equal(s.control[8],1);assert.equal(s.control[15],0);
+    releaseClose(s.control,12);const recovered=await opening;ok(recovered.result);assert.equal(s.control[16],1);
+    const read=new DatabaseSync(s.ledgerPath,{readOnly:true});
+    try {
+      const state=JSON.parse(read.prepare('SELECT state FROM semantic_owners WHERE owner_id=?').get(ns.ownerId).state),q=state.windows.w.quanta.q;
+      assert.equal(state.reservations.reserved.status,'released');assert.equal(state.reservations.transmitted.status,'unknown');
+      assert.equal(q.status,'settled');assert.equal(q.accounting.stage,'closed');assert.equal(q.accounting.known,false);assert.equal(q.accounting.usage,null);
+      assert.equal(state.windows.w.usedItems,8);assert.equal(state.windows.w.usedMs,500);assert.equal(state.windows.w.usedUsd,'11');
+    } finally {read.close();}
+  } finally {releaseClose(s.control,12);await opening.then(recovered=>recovered.close(),()=>{});}
 });
 
 test('F close: real safety fallback survives a frozen operation clock',async t=>{
