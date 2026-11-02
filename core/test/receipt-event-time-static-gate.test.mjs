@@ -1,3 +1,8 @@
+// Scope: this gate covers an honest engineer who accidentally reads the
+// event-time feature flag in another S2h path. Deliberately obtaining it by
+// reflection or constructed access is out of scope and is caught in code
+// review, the same as for any other module-private state.
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';

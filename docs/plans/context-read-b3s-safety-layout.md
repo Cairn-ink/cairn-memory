@@ -203,6 +203,18 @@ copies, computed property reads and destructuring cannot reveal the private bit.
 Old binaries reject 51–53 through their finite version lists (or exact DDL
 attestation for a pre-attested-family PR 1 binary).
 
+e9 decision (2026-11-03 06:1x): stop the bypass rounds; `37374c54` passes.
+The gate covers an honest engineer who accidentally reads the event-time feature
+flag in another S2h path. Deliberately obtaining it by reflection or constructed
+access is out of scope and is caught in code review, the same as for any other
+module-private state.
+
+Every other S2h path is identical on 48 and 53: 5b's seam review found exact cost
+equality over 9 path kinds. The accessor reads module-private state held in a
+`WeakSet`, and only the three approved consumers import it by name. Before PR 1
+merges, S2h-2's own gates will also run on the shipped cells 51/52/53, using a
+subset chosen by 5b.
+
 S2c will set `card_lineage_revision=1` on families 52/53 with matching DDL,
 instead of assigning new combination cells. There is no base-18 lineage feature.
 49/50 remain reserved and rejected, as do 35–37 and 39–47.
