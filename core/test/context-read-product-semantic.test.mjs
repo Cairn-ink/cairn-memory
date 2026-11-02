@@ -949,7 +949,7 @@ test('F recovery: contended ownership never asks for prepared-anchor disposal',a
   await s.coordinator.close();s.control[10]=1;s.control[14]=1;
   const opening=recoveryWorker(t,s);
   try {
-    await closeUntil(()=>s.control[11]===1);
+    await rendezvous(s.control,11,opening);
     assert.equal(s.control[7],1);assert.equal(s.control[8],1,'prepared_callback_under_ownership');assert.equal(s.control[15],0,'recovery_waits_for_proof');
     releaseClose(s.control,12);const recovered=await opening;ok(recovered.result);
     assert.equal(s.control[15],1);assert.equal(s.control[16],1,'recovery_cas_under_ownership');
@@ -978,7 +978,7 @@ test('F recovery: reservation proof remains owned and unknown quanta stay fully 
   s.control[10]=1;s.control[14]=1;
   const opening=recoveryWorker(t,s);
   try {
-    await closeUntil(()=>s.control[11]===1);
+    await rendezvous(s.control,11,opening);
     assert.equal(s.control[7],1);assert.equal(s.control[8],1);assert.equal(s.control[15],0);
     releaseClose(s.control,12);const recovered=await opening;ok(recovered.result);assert.equal(s.control[16],1);
     const read=new DatabaseSync(s.ledgerPath,{readOnly:true});
