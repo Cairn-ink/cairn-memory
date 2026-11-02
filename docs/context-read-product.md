@@ -513,6 +513,18 @@ The isolated header child uses the remaining operation cutoff, capped at 5,000 m
 an expired cutoff or child timeout refuses with `read_timeout`, without retrying.
 Its verdict is bound to the opened inode and rechecked main/directory metadata;
 journal identity/protection and WAL/SHM absence are checked again afterward.
+
+**Amendment v1: protected replacement DELETE journals.** For both guards, a
+replacement journal that passes the original protection predicate and one final
+identity/protection check is retryable `storage_busy`; in the product sidecar,
+the outcome changes from `index_unavailable` with reason `storage_unavailable`
+to `storage_busy`. Unsafe or
+repeatedly replaced journals, changed main/directory proofs, opened-inode swaps,
+and WAL/SHM companions retain their refusals; no retry, read-through, adoption or
+recovery is added, and hosts retain their bounded busy rule.
+For this product-sidecar case, busy propagation replaces the unavailable status
+DTO and the private maintenance record's index reason `storage_unavailable`.
+
 An in-place header change after that read remains a residual race: once the
 journal disappears, a new sidecar connection refuses the WAL header or its
 companions non-retryably. A warm sidecar connection reuses its handle
@@ -857,10 +869,10 @@ if renewal occurs during dispatch; neither renewal nor restart erases charges.
 Persist the full outstanding reservation before process replacement whenever
 settlement is uncertain. Counters never refund unknown work.
 
-The observation-cadence and known-usage refund rules above remain
-lexical-only. An embedding-enabled pump (below) also skips window/renewal
-tails that cannot fit its configured quantum, without reserving or advancing
-round-robin position; validation uses its own configured time bound. Its
+The observation-cadence rules above remain lexical-only. An embedding-enabled
+pump (below) also skips window/renewal tails that cannot fit its configured
+quantum, without reserving or advancing round-robin position; validation uses
+its own configured time bound. Its
 resident cache includes constructor policy. Continuous renewal reuses
 residents; inactive renewal retires them inside the next reserved turn,
 draining before a replacement opens. Opening failures retain their cleanup IDs
@@ -879,18 +891,54 @@ Existing coordinator codes (including `budget_denied`, `provider_error` and
 codes map to `reader_failed`. Bounded private initiating and secondary cause
 counters use the existing sanitized failure records and valid process-wide
 ordinals; public DTOs are unchanged.
-It still schedules a nominal sweep from its own ticks. Actual-observation cadence,
-spacing/pacing, miss accounting, startup/validation cursors and item/ms refunds
-remain parity work. Durable window-fenced settlement and monotone usage floors
-remain accounting work.
-Time-accounting parity must charge the full parent-monotonic reserve-to-finish
-span, including open, drain and control RPCs; only validated known usage permits
-refunds. Unknown USD tails and legacy records without refund metadata stay charged.
+
+Semantic accounting captures each reservation's window and pump generation.
+Late replies cannot replace a renewed window or lower newly supplied cumulative
+floors. Durable window floors are monotone; an old quantum settles only its own
+window. New quantum records carry validated, versioned original item/time
+reservations; legacy records without this metadata retain their full charge.
+Repinning to an older engine and forward preserves existing charges and window
+floors. New-format reservations settled by older finish or recovery code stay
+fully charged and nonrefundable when opened again by the new engine.
+Successful known lexical usage counts `transformed`; embedding usage counts
+`embeddingAttempts`, including attempts yielding no committed vectors, never
+`embedded`. Status and coverage validation count zero item attempts. Invalid,
+missing, failed or uncertain usage retains the full reservation, and repeated
+settlement cannot refund twice. Recognized rolled-back attempts stay charged.
+Elapsed milliseconds round up from parent reserve entry through finish-receipt
+delivery, including resident opening, drain and control overhead. A full-charge
+finish receipt precedes item/ms reconciliation on the next reserved admission,
+whose own span charges that reconciliation overhead. A refused admission keeps
+the prior full charge and leaves reconciliation for a later reserved turn.
+Duplicate standalone finishes preserve receipt eligibility and cannot consume
+usage. The parent can report the known refund on receipt; until the next
+admission the durable ledger retains the full charge. Losing the receipt or
+acknowledgement retains that charge.
+USD settlement is unchanged: success or zero committed vectors alone never
+refunds unknown provider exposure. Owner, UTC-day and lifetime limits are
+unchanged.
+
+Admission derives durable UTC expiry from the parent's absolute monotonic
+window deadline, subtracting transport and queue delay; an existing expiry can
+only tighten. Expiry never releases old unknown charges. Authoritative pump
+window exhaustion reports the existing `budget_exhausted` state with no error.
+An exhausted admission still binds that window until its deadline.
+An existing `budget_denied` error from a provider or policy remains unchanged.
+It still schedules a nominal sweep from its own ticks. Actual-observation
+cadence, spacing/pacing, miss accounting and startup/validation cursors remain
+separate parity work.
 Canonical selection/intent observation duty belongs to lexical refreshes only;
 embedding, status and validation work use capacity without earning observation
 credit. Semantic coverage lag concerns recall. Unsuccessful turns and genuine
 semantic cutoffs remain terminal. The lexical cutoff exception stays disabled.
-Bounded coordinator disposal also remains separate work.
+Coordinator close uses the reader's existing 10,000-ms graceful-disposal bound.
+Pending coordinator calls settle as `store_closed`; after that bound the parent
+terminates a Worker whose provider or host close has not settled. A forced or
+unproven close rejects with `reader_failed` and retains the existing quarantine;
+only the unchanged four-bit disposal proof permits successful cleanup. This
+bounds the graceful wait, not a claim about termination scheduling or cadence.
+Actual-observation cadence, pacing, misses and startup/validation cursors remain
+separate parity work.
 
 A recognized canonical/dependency fence change during a batch rolls back that
 batch and returns successful `rebuilding` progress. Earlier committed batches
@@ -1070,7 +1118,12 @@ sequence/digests cannot initialize another allowance. Pending preparations bar
 admission. After independently confirmed resource disposal, the trusted
 `confirmDisposed` recovery decision may finish an exact committed preparation
 or cancel an exact uncommitted one. A timeout or PID observation supplies no
-such proof. Failed opening returns a supervised `cleanupId`; await its drain
+such proof. The engine calls `confirmDisposed` and performs recovery
+compare-and-swap only while holding the owner's SQLite ownership transaction,
+for both prepared anchors and outstanding reservations. A contended ownership
+open refuses with `storage_busy` without calling `confirmDisposed`. Opening
+failure after acquisition releases ownership through ordinary disposal. Failed
+opening returns a supervised `cleanupId`; await its drain
 before replacing the service. Loss/migration recovery requires the host's
 separate authenticated reconciliation procedure, preserving or increasing
 unknown/spent exposure, latch and epoch barriers and rotating binding/ledger

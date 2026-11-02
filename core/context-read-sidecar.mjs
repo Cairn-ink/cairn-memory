@@ -7,7 +7,7 @@ import { bindContentSafetyConnection, checkInstalledContentSafety, cachedContent
 import { contentReadSafety, memoryReadEligible } from './content-safety.mjs';
 import { createCardCurrentStorage, cardDependencyFence } from './card-current-storage.mjs';
 import { lstatSync, unlinkSync } from 'node:fs';
-import { probeRollbackJournal, createExclusiveSqliteFile } from './sqlite-journal-probe.mjs';
+import { probeRollbackJournal, createExclusiveSqliteFile, protectedDeleteJournal, sameJournal } from './sqlite-journal-probe.mjs';
 import { isAbsolute, dirname } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
@@ -40,8 +40,7 @@ function stat(path) {
     unavailable('unsafe_file');
   }
 }
-function protectedFile(path, required = true) {
-  const value = stat(path);
+function protectedFile(path, required = true, value = stat(path)) {
   if (!value && !required) return null;
   if (!value || !value.isFile() || value.isSymbolicLink() || process.platform !== 'win32' && (value.mode & 0o777) !== 0o600)
     unavailable('unsafe_file');
@@ -101,8 +100,10 @@ export function contextReadDeleteJournal(path, observer, validated) {
 
 function auxiliaries(path, readOnly, observer) {
   let journal;
+  const companions = {};
   for (const suffix of ['-wal', '-shm', '-journal']) {
     const entry = protectedFile(path + suffix, false);
+    companions[suffix] = entry;
     if (entry && readOnly && suffix === '-journal') { journal = entry; continue; }
     if (entry && (readOnly || suffix !== '-journal')) unavailable('auxiliary_file');
   }
@@ -111,13 +112,28 @@ function auxiliaries(path, readOnly, observer) {
     // The isolated header check cannot recover or admit a read through it.
     let main, directory;
     try { main = protectedFile(path); directory = stat(dirname(path)); } catch { unavailable('auxiliary_file'); }
-    const uid = process.getuid?.();
-    if (main.nlink !== 1 || journal.nlink !== 1 || !directory?.isDirectory() || directory.isSymbolicLink() ||
-        process.platform !== 'win32' && ((directory.mode & 0o777) !== 0o700 ||
-          uid === undefined || [main, journal, directory].some(entry => entry.uid !== uid))) unavailable('auxiliary_file');
+    const proof = { main, directory, journal };
+    if (!protectedDeleteJournal({ ...proof, wal: companions['-wal'], shm: companions['-shm'] })) unavailable('auxiliary_file');
     if (!contextReadDeleteJournal(path, observer, { main, directory })) unavailable('auxiliary_file');
-    const current = protectedFile(path + '-journal', false);
-    if (current && !['dev','ino','mode','uid','nlink'].every(key => current[key] === journal[key])) unavailable('auxiliary_file');
+    const current = stat(path + '-journal');
+    // Preserve protection failures from the same post-child metadata sample.
+    if (current) protectedFile(path + '-journal', false, current);
+    if (current && !sameJournal(current, journal)) {
+      let checked;
+      try { checked = { main: stat(path), directory: stat(dirname(path)), journal: current,
+        wal: stat(path + '-wal'), shm: stat(path + '-shm') }; } catch { unavailable('auxiliary_file'); }
+      if (!protectedDeleteJournal(checked, proof)) unavailable('auxiliary_file');
+      // Sample the journal first so the remaining proof also covers this window.
+      // Disappearance is busy only while the remaining protection proof holds.
+      try {
+        const finalJournal = stat(path + '-journal');
+        const final = { journal: finalJournal ?? current, main: stat(path), directory: stat(dirname(path)),
+          wal: stat(path + '-wal'), shm: stat(path + '-shm') };
+        if (!protectedDeleteJournal(final, proof) || finalJournal && !sameJournal(finalJournal, current))
+          unavailable('auxiliary_file');
+      } catch { unavailable('auxiliary_file'); }
+      fail('storage_busy');
+    }
     for (const suffix of ['-wal','-shm']) if (protectedFile(path + suffix, false)) unavailable('auxiliary_file');
     fail('storage_busy');
   }

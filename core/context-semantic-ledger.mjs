@@ -6,6 +6,7 @@ import { createProductSqlitePolicy } from './context-product-sqlite.mjs';
 import { canonicalJson } from './context-product-validation.mjs';
 import { exact, ascii, hash, integer, LEDGER_VERSION } from './context-semantic-input.mjs';
 import { fail } from './validation.mjs';
+import { validatePumpAccounting } from './context-semantic-accounting.mjs';
 
 // State contains engine-produced data only. It can outgrow an IPC envelope;
 // neither its text nor its complete inventory is sent to a request Worker.
@@ -34,7 +35,7 @@ function attest(db) {
 function stateRecords(state) {
   for(const key of ['days','reservations','identities','prices','receipts','hints','windows','pumpBindings','catalog'])
     state[key]=Object.assign(Object.create(null),state[key]);
-  for(const window of Object.values(state.windows))window.quanta=Object.assign(Object.create(null),window.quanta);
+  for(const window of Object.values(state.windows)){window.quanta=Object.assign(Object.create(null),window.quanta);validatePumpAccounting(window);}
   return state;
 }
 export function zeroSemanticOwner(ownerId, ledgerEpoch = 1, bindingRevision = 1) {
