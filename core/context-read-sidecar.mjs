@@ -121,7 +121,8 @@ function auxiliaries(path, readOnly, observer) {
     if (!contextReadDeleteJournal(path, observer, { main, directory })) unavailable('auxiliary_file');
     const current = stat(path + '-journal');
     // Preserve in-place protection failures without sampling the journal again.
-    if (current && current.dev === journal.dev && current.ino === journal.ino) protectedFile(path + '-journal', false, current);
+    if (current?.isFile() && !current.isSymbolicLink() && current.dev === journal.dev && current.ino === journal.ino)
+      protectedFile(path + '-journal', false, current);
     if (current && !sameJournal(current, journal)) {
       let checked;
       try { checked = { main: stat(path), directory: stat(dirname(path)), journal: current,
