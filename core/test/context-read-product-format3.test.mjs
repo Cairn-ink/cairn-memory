@@ -26,7 +26,7 @@ function setup(t,count=3) {
   t.after(()=>{db.close();storage.close();facade.close();});
   const vectors=productVectors({storage,facade});
   const quantum=()=>maintenanceQuantum({now:testClock.now,cutoff:testClock.now()+5000,maxMs:5000});
-  const put=(publication=lexical,selection=p)=>{for(let i=0;i<100;i++){const rows=vectors.plan(selection,publication,snapshot,64);if(!rows.length)return;vectors.put(selection,publication,snapshot,rows,rows.map(()=>{const v=Array(1536).fill(0);v[0]=1;return v;}));}assert.fail('vector planning must finish');};
+  const put=(publication=lexical,selection=p,selected=snapshot)=>{for(let i=0;i<100;i++){const rows=vectors.plan(selection,publication,selected,64);if(!rows.length)return;vectors.put(selection,publication,selected,rows,rows.map(()=>{const v=Array(1536).fill(0);v[0]=1;return v;}));}assert.fail('vector planning must finish');};
   return {f,facade,storage,p,access,build,lexical,db,vectors,put,quantum};
 }
 for(const format of [1,2])test(`format 3 refuses deployed format ${format} without semantic configuration`,t=>{
@@ -96,11 +96,12 @@ test('format 3 vector verification commits every admitted row before advancing a
 test('format 3 GC deletes retired and superseded integer-key vectors after documents, preserving other intents',t=>{
   const a=setup(t);a.put();a.vectors.certify(a.p,a.lexical,snapshot,a.quantum());
   const oldVector=a.db.prepare('SELECT storage_id FROM vector_generations').get().storage_id;
-  // A second certificate supersedes only the vector publication.
-  a.vectors.certify(a.p,a.lexical,snapshot,a.quantum());
+  // A real epoch change supersedes the vector publication; a no-op must keep it.
+  const next={...snapshot,policy:{...snapshot.policy,purgeEpoch:1}};
+  a.put(a.lexical,a.p,next);a.vectors.certify(a.p,a.lexical,next,a.quantum());
   a.storage.refresh(a.p,a.access,budget);
   assert.equal(a.db.prepare('SELECT count(*) n FROM vector_rows WHERE generation=?').get(oldVector).n,0);
-  const history=a.build({...a.p,intent:'history'});a.put(history,{...a.p,intent:'history'});a.vectors.certify({...a.p,intent:'history'},history,snapshot,a.quantum());
+  const history=a.build({...a.p,intent:'history'});a.put(history,{...a.p,intent:'history'},next);a.vectors.certify({...a.p,intent:'history'},history,next,a.quantum());
   const keep=a.db.prepare('SELECT storage_id FROM vector_generations WHERE lexical_generation=(SELECT storage_id FROM generations WHERE id=?)').get(history.generation.id).storage_id;
   const retired=a.db.prepare('SELECT storage_id FROM generations WHERE id=?').get(a.lexical.generation.id).storage_id;
   const selected={...a.p,readSet:[four[0]],ownerCoverage:descriptor([four[0]])};a.build(selected);

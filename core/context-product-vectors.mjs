@@ -64,6 +64,13 @@ export function productVectors({storage,facade}) {
     const key=lexicalKey(db,lexical),owner=p.readSet[0].ownerId,id=digest(snapshot.identity),epoch=snapshot.policy.purgeEpoch,ld=digest(lexical);
     if(db.prepare('SELECT publication FROM publications WHERE projection=?').get(lexical.projectionDigest)?.publication!==lexical.publicationId)fail('index_unavailable');
     let g=db.prepare('SELECT g.* FROM vector_work w JOIN vector_generations g ON g.storage_id=w.generation WHERE w.projection=?').get(lexical.projectionDigest);
+    if(!g) {
+      const published=db.prepare('SELECT g.* FROM vector_publications p JOIN vector_generations g ON g.storage_id=p.generation WHERE p.projection=?').get(lexical.projectionDigest);
+      if(published?.lexical===ld&&published.identity===id&&published.epoch===epoch&&published.published===1) {
+        const state=unseal(published.state);
+        if(state.phase===3&&Object.values(state.counts.byType).every(c=>c.eligible===c.embedded))g=published;
+      }
+    }
     if(!g||g.lexical!==ld||g.identity!==id||g.epoch!==epoch) {
       const prior=db.prepare('SELECT pointer FROM vector_publications WHERE projection=?').get(lexical.projectionDigest);
       const sequence=prior?JSON.parse(prior.pointer).generation.sequence+1:1;
@@ -131,7 +138,9 @@ export function productVectors({storage,facade}) {
   }
   function plan(p,lexical,snapshot,maximum,quantum) {
     const planned=storage.vectors(db=>{
-      const {s}=work(db,p,lexical,snapshot,undefined,false),cursor=s.planning??={stream:0,after:'',pending:null,complete:false};
+      const {g,s}=work(db,p,lexical,snapshot,undefined,false);
+      if(g.published===1)return null;
+      const cursor=s.planning??={stream:0,after:'',pending:null,complete:false};
       const found=[],id=digest(snapshot.identity),epoch=snapshot.policy.purgeEpoch,owner=p.readSet[0].ownerId,streams=orderedStreams(p);
       const admit=kind=>quantum?quantum.admit(kind):performance.now()<p.deadlineAt;
       const measure=(fn,kind)=>quantum?quantum.measure(fn,kind):fn();
@@ -169,7 +178,9 @@ export function productVectors({storage,facade}) {
     // When dispatch can proceed, put() commits the cursor with the received
     // vectors. Otherwise commit planning now, after releasing the read snapshot.
     if(!planned.found.length||quantum&&!quantum.admit('embedding-item'))storage.vectors(db=>{
-      const {g,s}=work(db,p,lexical,snapshot);s.planning=planned.cursor;s.checkpoint++;
+      const {g,s}=work(db,p,lexical,snapshot);
+      if(g.published===1)return;
+      s.planning=planned.cursor;s.checkpoint++;
       db.prepare('UPDATE vector_generations SET state=? WHERE id=?').run(seal(s),g.id);
     },true);
     return planned.found;
@@ -178,6 +189,7 @@ export function productVectors({storage,facade}) {
     return storage.vectors(db=>{
       if(!facade.port.read(()=>storage.vectorFence(p,lexical)))fail('index_unavailable');
       const {g,s}=work(db,p,lexical,snapshot);
+      if(g.published===1)return;
       for(let i=0;i<rows.length;i++) {
         const r=rows[i];db.prepare('INSERT OR IGNORE INTO semantic_vectors VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(lexicalKey(db,lexical),r.doc,p.readSet[0].ownerId,digest(snapshot.identity),snapshot.policy.purgeEpoch,r.identity,r.revision,r.body_revision,r.representation,canonicalVectorBytes(vectors[i],snapshot.identity),sortKey(r.identity));
       }
@@ -201,6 +213,7 @@ export function productVectors({storage,facade}) {
     while(quantum.admit('vector-scan')&&quantum.admit('vector-verification')) {
       const done=storage.vectors(db=>{
         const {g,s}=work(db,p,lexical,snapshot);
+        if(g.published===1)return true;
         if(s.phase===0) {
           const page=quantum.measure(()=>db.prepare(`SELECT * FROM documents WHERE generation=? AND eligible=1 ${s.after?'AND identity>?':''} ORDER BY identity LIMIT 128`).all(lexicalKey(db,lexical),...(s.after?[s.after]:[])),'vector-scan');
           let processed=0;

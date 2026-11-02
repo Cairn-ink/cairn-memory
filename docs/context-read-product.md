@@ -1178,6 +1178,23 @@ checkpointed, independently HMAC-authenticated and bound to the complete
 lexical publication, selected six-field vector identity and owner purge epoch.
 Partial staging cannot authorize hybrid reads.
 
+An embedding refresh reuses the published, complete vector generation when the
+lexical validation digest, vector identity and owner purge epoch all match.
+It keeps the publication ID, generation sequence and checkpoint, creates no
+new generation or validation record, and does not repeat certification.
+Unpublished work and partial coverage retain their existing planning and
+publication behaviour. Forget, correction and a new lexical publication change
+the lexical validation digest; representation is part of that digest, while
+embedder identity and owner purge epoch changes invalidate reuse directly.
+Suppression is enforced by the safety layer's read-time epoch fence and does
+not depend on publication rotation; this base predates that product integration.
+
+Public status and refresh DTOs expose lexical progress, not vector publication
+IDs or vector generation checkpoints. Private vector pointers and validation
+records retain their IDs and generation checkpoints on a no-op; provisional
+coverage hints retain the corresponding certificate digest. Existing owner
+coverage and purge checkpoints keep their separate meanings.
+
 The initial 1–32 target descriptors expand into both intents. They freeze before
 first dispatch and cannot be dropped to obtain completion. Every embedding
 refresh records a provisional hint before its final sample. Once all targets
