@@ -138,7 +138,12 @@ console.log(contentSafetyInventory(db)); db.exec('COMMIT'); } finally { db.close
 /** Explicit maintenance only. These assertions are supplied by the operator
  * controlling admissions and all old processes; SQLite cannot revoke idle handles.
  * Failure leaves admissions closed. A backup is never restored to serving. */
-export async function migrateContentSafety({ path, backupPath, expected, quiescence }) {
+export async function migrateContentSafety(input) { return migrateSafety(input, false); }
+
+/** Latest offline maintenance target; the S2h installer and its cells stay frozen. */
+export async function migrateReceiptEventTime(input) { return migrateSafety(input, true); }
+
+async function migrateSafety({ path, backupPath, expected, quiescence }, eventTime) {
   if (!quiescence || ['admissionsClosed','writersStopped','readersDrained','oldHandlesClosed'].some(key => quiescence[key] !== true)) fail('invalid_input');
   const storeId = identifier(expected?.storeId), base = expected?.base;
   safetyPhysicalVersion(base);
@@ -154,12 +159,32 @@ export async function migrateContentSafety({ path, backupPath, expected, quiesce
       const current = sqliteFileStat(path);
       if (source.dev !== current.dev || source.ino !== current.ino || db.prepare('PRAGMA journal_mode').get().journal_mode !== 'delete') fail('unsafe_database_file');
       const layout = attestContentSafety(db);
-      if (layout.suppressionRevision || layout.base !== base ||
+      if ((!eventTime && layout.suppressionRevision || layout.receiptEventTime) || layout.base !== base ||
           db.prepare('PRAGMA application_id').get().application_id !== 0x43414952 ||
           db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id !== storeId) fail('unsupported_database');
       validateContextProductLayout(db, layout); verifyIntegrity(db);
       if (contentSafetyInventory(db) !== inventory) fail('unsupported_database');
-      return installContentSafetyInside(db, layout.base, inventory, retainedFacts(db, layout.base));
+      const installed = layout.suppressionRevision ? undefined :
+        installContentSafetyInside(db, layout.base, inventory, retainedFacts(db, layout.base));
+      if (!eventTime) return installed;
+      const physical = installReceiptEventTimeInside(db, base);
+      return Object.freeze({ ...(installed ?? { base, storeId, suppressionRevision: 1, cardLineageRevision: 0 }),
+        physical, receiptEventTime: true });
     });
   } finally { db.close(); }
+}
+
+/** Internal installer; caller owns the offline migration transaction. */
+export function installReceiptEventTimeInside(db, base) {
+  if (!db.isTransaction || attestContentSafety(db).physical !== safetyPhysicalVersion(base)) fail('unsupported_database');
+  const physical = { 18: 51, 23: 52, 33: 53 }[base];
+  db.exec('ALTER TABLE receipts ADD COLUMN occurred_at TEXT; DROP TRIGGER safety_receipt_identity;');
+  const trigger = contentSafetyDDL(base, true).match(/CREATE TRIGGER safety_receipt_identity[\s\S]*?END;/)[0];
+  db.exec(trigger);
+  verifyContentSafetyDDL(db, physical);
+  db.exec(`PRAGMA user_version=${physical}`);
+  validateContextProductLayout(db);
+  attestContentSafety(db, physical);
+  verifyIntegrity(db);
+  return physical;
 }

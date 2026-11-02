@@ -132,7 +132,7 @@ const canonical = [
   ['private_cards', 'card', 'id=NEW.id OR rowid=NEW.rowid', 20],
   ['raw_conversations', 'raw', 'id=NEW.id OR rowid=NEW.rowid OR (owner_id,scope,project_id,client,session_key)=(NEW.owner_id,NEW.scope,NEW.project_id,NEW.client,NEW.session_key)', 24],
 ];
-export function contentSafetyDDL(base) {
+export function contentSafetyDDL(base, receiptEventTime = false) {
   let sql = tables + guards;
   for (const [table, kind, collision, first] of canonical) {
     if (base < first) continue;
@@ -149,30 +149,33 @@ CREATE TRIGGER safety_${table}_identity BEFORE UPDATE ON ${table}
   for (const statement of statements) {
     if (statement.includes(' ON receipts') || statement.includes(' ON memories') ||
         base >= 20 && (statement.includes(' ON card_notes') || statement.includes(' ON private_cards')) ||
-        base >= 24 && (statement.includes(' ON raw_messages') || statement.includes(' ON raw_parts'))) sql += statement + '\n';
+        base >= 24 && (statement.includes(' ON raw_messages') || statement.includes(' ON raw_parts'))) sql += (receiptEventTime && statement.includes('CREATE TRIGGER safety_receipt_identity ')
+          ? statement.replaceAll('NEW.receipt_key)', 'NEW.receipt_key,NEW.occurred_at)')
+            .replaceAll('OLD.receipt_key)', 'OLD.receipt_key,OLD.occurred_at)') : statement) + '\n';
   }
   if (base >= 20) sql += cardFallback;
   return sql;
 }
 const normalize = sql => sql.trim().replace(/;$/, '').replace(/\s+/g, ' ');
 const expected = new Map();
-function expectedSchema(base) {
-  if (!expected.has(base)) {
+function expectedSchema(base, receiptEventTime = false) {
+  const key = base + ":" + receiptEventTime;
+  if (!expected.has(key)) {
     // Comparison needs no SQLite handle: use the closed normative declarations.
-    const sql = contentSafetyDDL(base);
+    const sql = contentSafetyDDL(base, receiptEventTime);
     const declarations = sql.match(/CREATE (?:TABLE|INDEX)[\s\S]*?;|CREATE TRIGGER[\s\S]*?END;/g);
-    expected.set(base, new Map(declarations.map(sql => {
+    expected.set(key, new Map(declarations.map(sql => {
       const [, type, name] = sql.match(/^CREATE (TABLE|INDEX|TRIGGER) (\w+)/);
       return [name, { type: type.toLowerCase(), sql: normalize(sql) }];
     })));
   }
-  return expected.get(base);
+  return expected.get(key);
 }
 const safetyObjects = `SELECT schema_version AS cookie,name,type,sql FROM pragma_schema_version LEFT JOIN sqlite_schema ON (
  name GLOB 'content_safety_*' OR name GLOB 'content_identity_*' OR name='owner_suppression_epochs'
  OR name GLOB 'content_suppression*' OR name GLOB 'safety_*') LIMIT 65`;
 export function verifyContentSafetyDDL(db, physical) {
-  const layout = resolveContentLayout(physical), wanted = expectedSchema(layout.base);
+  const layout = resolveContentLayout(physical), wanted = expectedSchema(layout.base, layout.receiptEventTime);
   const rows = db.prepare(safetyObjects).all().filter(row => row.name !== null);
   if (!layout.suppressionRevision || rows.length !== wanted.size || rows.some(row => !wanted.has(row.name) ||
       row.type !== wanted.get(row.name).type || normalize(row.sql ?? '') !== wanted.get(row.name).sql)) fail('unsupported_database');
@@ -229,7 +232,7 @@ export function attestContentSafety(db, physical) {
     if (!layout.suppressionRevision) {
       if (rows.length) fail('unsupported_database');
     } else {
-      const wanted = expectedSchema(layout.base);
+      const wanted = expectedSchema(layout.base, layout.receiptEventTime);
       if (rows.length !== wanted.size || rows.some(row => !wanted.has(row.name) ||
           row.type !== wanted.get(row.name).type || normalize(row.sql ?? '') !== wanted.get(row.name).sql)) fail('unsupported_database');
       // Read the control population and final schema/version header together.

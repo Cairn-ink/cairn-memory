@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { boundedText, denseArray, fail, identifier, object, revision } from './validation.mjs';
+import { boundedText, denseArray, fail, identifier, object, receiptEventTime, revision } from './validation.mjs';
 
 const kinds = ['fact', 'preference', 'decision', 'instruction', 'context'];
 
@@ -17,7 +17,7 @@ export function captureSnapshot(input, captureQualification, captureSourcePolicy
       causal = { streamId: identifier(input.causal.streamId), sequence: revision(input.causal.sequence) };
     }
     const messages = denseArray(input.messages, 1, 24).map((message) => {
-      object(message, ['id', 'role', 'content']);
+      object(message, ['id', 'role', 'content', 'occurredAt']);
       const id = identifier(message.id);
       const role = message.role;
       if (!['user', 'assistant'].includes(role)) fail('invalid_input');
@@ -25,18 +25,21 @@ export function captureSnapshot(input, captureQualification, captureSourcePolicy
           (typeof message.content !== 'string' || !message.content.isWellFormed())) {
         fail('invalid_input');
       }
-      return { id, role, content: boundedText(message.content, 4000) };
+      const occurredAt = receiptEventTime(message.occurredAt);
+      return { id, role, content: boundedText(message.content, 4000), ...(occurredAt !== null ? { occurredAt } : {}) };
     });
     if (new Set(messages.map((message) => message.id)).size !== messages.length ||
         messages.reduce((sum, message) => sum + message.content.length, 0) > 20000) {
       fail('invalid_input');
     }
+    const timed = messages.some(message => message.occurredAt != null);
     const payloadDigest = createHash('sha256').update(JSON.stringify([
       captureSourcePolicy === 'indexed-evidence-v1' ? 'cairn.capture.indexed-evidence.v1' :
         captureSourcePolicy ? 'cairn.capture.indexed-windows.v1' :
         captureQualification ? 'cairn.capture.v3' : causal ? 'cairn.capture.v2' : 'cairn.capture.v1',
       [namespace.ownerId, namespace.scope, namespace.projectId],
-      client, eventId, sessionId, messages.map(({ id, role, content }) => [id, role, content]),
+      client, eventId, sessionId, messages.map(({ id, role, content, occurredAt }) =>
+        [id, role, content, ...(timed ? [occurredAt ?? null] : [])]),
       ...(causal ? [[causal.streamId, causal.sequence]] : []),
       ...(captureQualification ? [captureQualification] : []),
       ...(captureSourcePolicy ? [captureSourcePolicy, 'nonoverlap-800-v1'] : []),
@@ -54,7 +57,8 @@ export function retainedSourceView(snapshot) {
     const messages = snapshot.messages.map((message, index) => {
       const content = boundedText(boundedText(message.content, 800, true), 800, true);
       if (content !== message.content) truncatedMessageIndices.push(index);
-      return Object.freeze({ ...message, content });
+      const { occurredAt, ...source } = message;
+      return Object.freeze({ ...source, content });
     });
     return Object.freeze({ messages: Object.freeze(messages),
       retainedSourceWindow: Object.freeze({ maxUnitsPerMessage: 800,

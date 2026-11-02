@@ -548,3 +548,46 @@ advances it. New hints before a keyset cursor appear on a fresh listing.
 Fresh conflict evidence replaces a non-pending pair's outcome. Supersession
 holds re-arm only dropped rows; pending, unresolved and applied proof is retained.
 The pair tables are not an append-only audit trail.
+
+
+## Receipt event time v1 (physical 51/52/53, 2026-11-03)
+
+The [layout §3 addendum](plans/context-read-b3s-safety-layout.md) records D-33's
+mapping and direct offline migration paths. Receipts on these layouts carry
+optional immutable `occurred_at TEXT NULL`; existing receipts migrate as null.
+There is no automatic upgrade or time backfill. A non-null time on an older
+layout is refused with `unsupported_database`; untimed writes retain their
+existing behavior. Context-read capabilities expose `receiptEventTime`, a
+boolean describing only the installed layout's column support.
+
+Optional input fields are `messages[].occurredAt` on `core.capture`, and
+`receipt.occurredAt` on `remember` and correction, or each receipt's `occurredAt`
+on contract `admit`, `supersede` and admission finish items. Engine episode
+capture uses each source message's existing `occurredAt`. Null or absence means
+no time. Only the receipt derived from that message receives its asserted time;
+no session range, neighboring message or episode supplies a fallback. Raw-derived
+receipts always receive null, independently of Raw timestamps and capture order.
+
+One receipt validation helper requires exact millisecond UTC ISO strings with
+an exact round trip and no lower bound. Input parsing checks shape; admission
+checks the upper bound of the store clock plus five minutes using the exact
+instant persisted as `created_at`. Invalid times produce `invalid_input`.
+Raw input validation retains its independent existing rules.
+
+The time travels beside the receipt identity, outside receipt hashing, Raw
+lineage attachment and source-root updates. Identity key bytes remain unchanged.
+For duplicate receipts, two different non-null times produce `storage_error`;
+a retained null stays null when a time arrives, and a retained time stays when
+an untimed duplicate arrives. The immutable column is deleted with its receipt
+by correction, forget or host erasure; it has no separate lifecycle.
+
+Capture's digest appends a per-message time slot only if at least one message
+carries a non-null time, using null slots for untimed messages. Untimed digests
+remain byte-identical, while a changed time under the same event ID is refused
+as `event_payload_conflict`. Admission claim is unchanged and carries no receipts:
+its `payloadDigest` is opaque to the engine, and the caller's digest binds the
+payload, exactly as for excerpts. Finish strips each receipt's optional time
+into the side parameter before hashing. There is no claim/finish time comparison;
+a finish retry with a changed retained non-null time uses the duplicate rule
+and fails with `storage_error`. Read results and diagnostics expose no receipt
+event times in this version.

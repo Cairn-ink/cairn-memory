@@ -39,8 +39,8 @@ globalThis.__probe={
 const {openMemoryCore}=await load('contract');
 const {openDatabase,transaction}=await load('database');
 const authority=cardsAuthority ?? {authorize:()=>null,isCurrent:()=>null};
-const rawBase=[23,33,38,48].includes(physical)?{privateCards:{version:'private-cards-local-v1',source:'submitted-note-v1',storage:'local-plain-v1',disclosure:'explicit-submitted-note-v1',authority,currentDependencies:{version:'card-current-dependencies-v1'}},methodPackages:{version:'method-packages-local-v1',storage:'local-plain-v1',authority}}:{};
-if ([23,38].includes(physical)) { delete rawBase.methodPackages; delete rawBase.privateCards.currentDependencies; }
+const rawBase=[23,33,38,48,52,53].includes(physical)?{privateCards:{version:'private-cards-local-v1',source:'submitted-note-v1',storage:'local-plain-v1',disclosure:'explicit-submitted-note-v1',authority,currentDependencies:{version:'card-current-dependencies-v1'}},methodPackages:{version:'method-packages-local-v1',storage:'local-plain-v1',authority}}:{};
+if ([23,38,52].includes(physical)) { delete rawBase.methodPackages; delete rawBase.privateCards.currentDependencies; }
 const core=openMemoryCore(trackContentHostOptions({path:':memory:',model,...rawBase}));const canonical=__probe.latest;
 const ns={ownerId:'synthetic-probe-owner',scope:'personal',projectId:null};
 const memories=[];
@@ -48,11 +48,14 @@ for(let i=0;i<n;i++){
  const r=core.admit({namespace:ns,memory:{content:'probecommon synthetic memory '+String(i).padStart(5,'0'),kind:'fact'},receipts:[{client:'synthetic',sessionId:'probe',eventId:String(i),role:'user',excerpt:'synthetic receipt '+i}]});
  assert.equal(r.ok,true,JSON.stringify(r));memories.push(r.value.memory);
 }
-const base=[33,48].includes(physical)?33:[23,38].includes(physical)?23:18;
+const base=[33,48,53].includes(physical)?33:[23,38,52].includes(physical)?23:18;
 assert.equal(canonical.prepare('PRAGMA user_version').get().user_version,base);
-if([34,38,48].includes(physical)){
- const {installContentSafetyInside,contentSafetyInventory}=await load('content-safety-migration');
- transaction(canonical,()=>installContentSafetyInside(canonical,base,contentSafetyInventory(canonical)));
+if([34,38,48,51,52,53].includes(physical)){
+ const {installContentSafetyInside,installReceiptEventTimeInside,contentSafetyInventory}=await load('content-safety-migration');
+ transaction(canonical,()=>{
+  installContentSafetyInside(canonical,base,contentSafetyInventory(canonical));
+  if ([51,52,53].includes(physical)) installReceiptEventTimeInside(canonical,base);
+ });
 }
 const {attestContentSafety}=await load('content-safety-schema');attestContentSafety(canonical);
 assert.equal(canonical.prepare('PRAGMA user_version').get().user_version,physical,'native physical cell after setup');

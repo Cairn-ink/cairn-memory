@@ -160,6 +160,26 @@ are parameters; execution imports `node:sqlite` inside functions, as at
 `integrations/client/raw/local-setup.mjs:61`. No `createRequire` hiding. Schema
 comparison uses `new db.constructor(':memory:')` (`core/card-current-schema.mjs:65`).
 
+### §3 revision 3.8 addendum: receipt event time (D-33, 2026-11-03)
+
+D-33 assigns three additional physical cells. Each retains its base's S2h
+feature set and adds only nullable `receipts.occurred_at TEXT` and an identity
+trigger that also freezes that column.
+
+| Physical version | Base layout | Suppression revision | Card lineage | Receipt event time |
+| --- | --- | --- | --- | --- |
+| 51 | 18 | 1 | absent | present |
+| 52 | 23 | 1 | absent | present |
+| 53 | 33 | 1 | absent | present |
+
+Explicit, offline `safety migrate --quiescent` migrates directly from 18 or 34
+to 51, 23 or 38 to 52, and 33 or 48 to 53. Existing receipts receive null;
+installed features, retained safety facts, owner epochs and domains are preserved.
+Ordinary open never upgrades. Versions 34/38/48 retain their original meaning.
+This binary still rejects 49/50 until S2c's gate. S2c + event-time combination
+cells are not assigned here and come with the seam review. Reserved 35–37 and
+39–47 remain unmapped.
+
 ## 4. S2h storage, guards and transactional writers
 
 SQL is normative. All new tables are STRICT/WITHOUT ROWID; no rowid REPLACE route.

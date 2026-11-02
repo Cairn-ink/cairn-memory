@@ -23,7 +23,7 @@ export async function memoryProbe(state, {facts,absent,limitItems,mode}) {
 
 assert.equal(core.rebuildIndex({namespace:absent?{...ns,scope:'project',projectId:'absent'}:ns,expectedIndexRevision:core.map({namespace:absent?{...ns,scope:'project',projectId:'absent'}:ns}).value.indexRevision}).ok,true);
 if(facts){const {writeContentSuppressionInside}=await load('content-suppression-storage');transaction(canonical,()=>{for(let i=0;i<facts;i++)writeContentSuppressionInside(canonical,{namespace:absent?{...ns,scope:'project',projectId:'absent'}:ns,kind:'memory',key:'unrelated-'+i,reason:'purge',actionId:'unrelated-'+i});});}
-const actualFacts=[34,38,48].includes(physical)?canonical.prepare('SELECT count(*) n FROM content_suppressions WHERE owner_id=?').get(ns.ownerId).n:0;assert.equal(actualFacts,facts);
+const actualFacts=[34,38,48,51,52,53].includes(physical)?canonical.prepare('SELECT count(*) n FROM content_suppressions WHERE owner_id=?').get(ns.ownerId).n:0;assert.equal(actualFacts,facts);
 const counter={get:0,all:0,iterate:0,run:0,exec:0}, sql=new Map();let active=false,headerStacks=[];
 const p=DatabaseSync.prototype.prepare,e=DatabaseSync.prototype.exec;
 DatabaseSync.prototype.prepare=function(q){const st=p.call(this,q);return new Proxy(st,{get(t,k){const v=Reflect.get(t,k,t);return typeof v!=='function'?v:(...args)=>{if(active&&['get','all','iterate','run'].includes(k)){counter[k]++;sql.set(q,(sql.get(q)??0)+1);if(process.env.CAIRN_S2H_STACKS&&/schema_version AS cookie/.test(q)&&headerStacks.length<30)headerStacks.push(new Error().stack);}return v.apply(t,args);};}});};
@@ -44,12 +44,12 @@ export async function topicProbe(state, {facts,absent,limitItems}) {
 
 const {readTransaction}=await load('database'),{contentReadSafety,createContentReadMemo}=await load('content-safety'),{createTopicMembersStorage}=await load('topic-members-storage'),{createTopicOverviewStorage}=await load('topic-overview-storage');
 if(facts){const {writeContentSuppressionInside}=await load('content-suppression-storage');transaction(canonical,()=>{for(let i=0;i<facts;i++)writeContentSuppressionInside(canonical,{namespace:ns,kind:'memory',key:'unrelated-'+i,reason:'purge',actionId:'unrelated-'+i});});}
-const actualFacts=[34,38,48].includes(physical)?canonical.prepare('SELECT count(*) n FROM content_suppressions WHERE owner_id=?').get(ns.ownerId).n:0;assert.equal(actualFacts,facts);
+const actualFacts=[34,38,48,51,52,53].includes(physical)?canonical.prepare('SELECT count(*) n FROM content_suppressions WHERE owner_id=?').get(ns.ownerId).n:0;assert.equal(actualFacts,facts);
 const nativePrepare=DatabaseSync.prototype.prepare,nativeExec=DatabaseSync.prototype.exec;let active=false,total=0,factSql=0,headerSql=0,begins=0;
 DatabaseSync.prototype.prepare=function(sql){const st=nativePrepare.call(this,sql);return new Proxy(st,{get(t,k){const v=Reflect.get(t,k,t);return typeof v!=='function'?v:(...args)=>{if(active&&['get','all','iterate','run'].includes(k)){total++;if(/FROM content_suppressions/.test(sql))factSql++;if(/SELECT schema_version AS cookie/.test(sql))headerSql++;}return v.apply(t,args);};}});};
 DatabaseSync.prototype.exec=function(sql){if(active){const parts=sql.split(';').filter(x=>x.trim());total+=parts.length;begins+=parts.filter(x=>/^BEGIN/.test(x)).length;}return nativeExec.call(this,sql);};
 const namespace=absent?{...ns,scope:'project',projectId:'absent'}:{...ns,projectId:''};
-const members=createTopicMembersStorage(canonical,{rawAncestry:physical===48,createReadMemo:()=>createContentReadMemo(canonical),memoryReadable:[18,23,33].includes(physical)?()=>true:(namespace,row,memo)=>contentReadSafety(canonical,{namespace,memo,selectedMemory:row,ref:{type:'memory',namespace,memoryId:row.id,revision:row.revision}}).allowed});
+const members=createTopicMembersStorage(canonical,{rawAncestry:[48,53].includes(physical),createReadMemo:()=>createContentReadMemo(canonical),memoryReadable:[18,23,33].includes(physical)?()=>true:(namespace,row,memo)=>contentReadSafety(canonical,{namespace,memo,selectedMemory:row,ref:{type:'memory',namespace,memoryId:row.id,revision:row.revision}}).allowed});
 const overview=createTopicOverviewStorage(canonical);
 for(const kind of ['members','overview']){
  total=factSql=headerSql=0,begins=0;let items=[];const hostBefore=contentHostInvocations();active=true;
@@ -74,7 +74,7 @@ export async function cardProbe(state, {facts,absent,limitItems}) {
 
 const cards=[];for(let i=0;i<n;i++){const r=core.createCardDraft({namespace:ns,actionId:'card-'+i,drafting:'authored',input:{title:'Synthetic Card '+i,body:'Synthetic Card body '+i,authoredInput:{text:'Synthetic authored input '+i,occurredAt:null}}},{});assert.equal(r.ok,true,JSON.stringify(r));cards.push(r.value);}
 if(facts){const {writeContentSuppressionInside}=await load('content-suppression-storage');transaction(canonical,()=>{for(let i=0;i<facts;i++)writeContentSuppressionInside(canonical,{namespace:ns,kind:'memory',key:'unrelated-'+i,reason:'purge',actionId:'unrelated-'+i});});}
-const actualFacts=[34,38,48].includes(physical)?canonical.prepare('SELECT count(*) n FROM content_suppressions WHERE owner_id=?').get(ns.ownerId).n:0;assert.equal(actualFacts,facts);
+const actualFacts=[34,38,48,51,52,53].includes(physical)?canonical.prepare('SELECT count(*) n FROM content_suppressions WHERE owner_id=?').get(ns.ownerId).n:0;assert.equal(actualFacts,facts);
 const nativePrepare=DatabaseSync.prototype.prepare,nativeExec=DatabaseSync.prototype.exec;let active=false,count=0,begins=0,factSql=0;
 DatabaseSync.prototype.prepare=function(sql){const stmt=nativePrepare.call(this,sql);return new Proxy(stmt,{get(t,k){const v=Reflect.get(t,k,t);return typeof v!=='function'?v:(...args)=>{if(active&&['get','all','iterate','run'].includes(k)){count++;if(/FROM content_suppressions/.test(sql))factSql++;}return v.apply(t,args);};}});};
 DatabaseSync.prototype.exec=function(sql){if(active)for(const x of sql.split(';').filter(x=>x.trim())){count++;if(/^BEGIN/.test(x))begins++;}return nativeExec.call(this,sql);};
@@ -93,7 +93,7 @@ const {openMemoryCore}=await load('contract');
 const live=openMemoryCore(trackContentHostOptions({path:':memory:',model:{contextWindow:8192,countTokens:()=>1,extract:()=>({items:[]})},rawConversations:{mode:'raw-v1',port,capBytes:1048576,readPolicy:()=>({generation:'synthetic',reason:null})}}));
 let id;for(const part of splitRaw('abcd',{id:'message',size:1})){const r=await live.captureRaw(rawRequest(part,{namespace:ns,client:'codex',sessionId:'raw-probe',eventId:'raw-'+part.part.index}));assert.equal(r.ok,true,JSON.stringify(r));id=r.value.raw.conversationId;}
 if(facts){const {writeContentSuppressionInside}=await load('content-suppression-storage');transaction(canonical,()=>{for(let i=0;i<facts;i++)writeContentSuppressionInside(canonical,{namespace:ns,kind:'memory',key:'unrelated-'+i,reason:'purge',actionId:'unrelated-'+i});});}
-const actualFacts=[34,38,48].includes(physical)?canonical.prepare('SELECT count(*) n FROM content_suppressions WHERE owner_id=?').get(ns.ownerId).n:0;assert.equal(actualFacts,facts);
+const actualFacts=[34,38,48,51,52,53].includes(physical)?canonical.prepare('SELECT count(*) n FROM content_suppressions WHERE owner_id=?').get(ns.ownerId).n:0;assert.equal(actualFacts,facts);
 const nativePrepare=DatabaseSync.prototype.prepare,nativeExec=DatabaseSync.prototype.exec;let active=false,count=0,begins=0;
 DatabaseSync.prototype.prepare=function(sql){const stmt=nativePrepare.call(this,sql);return new Proxy(stmt,{get(t,k){const v=Reflect.get(t,k,t);return typeof v!=='function'?v:(...args)=>{if(active&&['get','all','iterate','run'].includes(k))count++;return v.apply(t,args);};}});};
 DatabaseSync.prototype.exec=function(sql){if(active)for(const x of sql.split(';').filter(x=>x.trim())){count++;if(/^BEGIN/.test(x))begins++;}return nativeExec.call(this,sql);};
@@ -104,7 +104,7 @@ DatabaseSync.prototype.prepare=nativePrepare;DatabaseSync.prototype.exec=nativeE
 
 const [kind,version,size,factCount='0',miss='match',mode='lexical',limit='12']=process.argv.slice(2);
 const options={physical:Number(version),n:Number(size),facts:Number(factCount),absent:miss==='absent',mode,limitItems:Number(limit)};
-if(['context','status','evidence','maintenance'].includes(kind))await runProductProbe({...options,kind,factCount});
+if(['query','context','status','evidence','maintenance'].includes(kind))await runProductProbe({...options,kind,factCount});
 else {
  const state=await initializeProbe({...options,model:{contextWindow:8192,countTokens:()=>{globalThis.__counterCalls=(globalThis.__counterCalls??0)+1;return 1;},select:({input})=>{globalThis.__providerCalls=(globalThis.__providerCalls??0)+1;return {refs:input.maps.flatMap(m=>m.items.filter(i=>i.type==='unfiled').slice(0,6).map(i=>({namespaceIndex:m.namespaceIndex,...i.ref}))) };},rank:({input})=>{globalThis.__providerCalls=(globalThis.__providerCalls??0)+1;return {refs:input.candidates.slice(0,input.limit).map(c=>({namespaceIndex:c.namespaceIndex,memoryId:c.memory.id,revision:c.memory.revision}))};}},cardsAuthority:{authorize(request){const {input,...binding}=request;return {...binding,accessGeneration:1};},isCurrent:grant=>grant}});
  const probes={memory:memoryProbe,topic:topicProbe,card:cardProbe,raw:rawProbe};

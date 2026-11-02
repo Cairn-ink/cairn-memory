@@ -23,7 +23,7 @@ for (const base of [18,23,33]) test(`S2h CLI explicit ${base} maintenance entry 
   const run = selected => spawnSync(process.execPath, [cli, ...selected], { encoding: 'utf8', timeout: 30000 });
   const missing = run(args.slice(0, -1)); assert.equal(missing.status, 1, missing.stderr); assert.equal(JSON.parse(missing.stdout).ok, false);
   const success = run(args); assert.equal(success.status, 0, success.stdout + success.stderr);
-  assert.equal(JSON.parse(success.stdout).value.physical, { 18:34, 23:38, 33:48 }[base]);
+  assert.equal(JSON.parse(success.stdout).value.physical, { 18:51, 23:52, 33:53 }[base]);
   const again = run(args); assert.equal(again.status, 1); assert.equal(JSON.parse(again.stdout).error.admissionsRemainClosed, true);
 });
 

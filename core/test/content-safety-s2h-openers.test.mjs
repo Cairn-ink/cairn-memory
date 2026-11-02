@@ -33,8 +33,8 @@ function attempts(f, db, physical) {
   ];
 }
 
-test('S2h resolver is SQLite-free and has exactly three safety mappings', () => {
-  for (const [physical, base] of [[34,18],[38,23],[48,33]]) assert.equal(resolveContentLayout(physical).base, base);
+test('S2h resolver is SQLite-free and has exactly six safety mappings', () => {
+  for (const [physical, base] of [[34,18],[38,23],[48,33],[51,18],[52,23],[53,33]]) assert.equal(resolveContentLayout(physical).base, base);
   for (const physical of [35,36,37,39,40,41,42,43,44,45,46,47,49,50,100]) assert.throws(() => resolveContentLayout(physical), { code: 'unsupported_database' });
 });
 for (const base of [18,23,33]) test(`S2h ${base} openers accept exact cells without DDL; old pins and every feature upgrade refuse`, async t => {
@@ -162,4 +162,19 @@ test('S2h hosted v34 topic and legacy fetch fallback keep working and suppress f
   const initial = await invoke(); assert.ok(JSON.stringify(initial).includes('Synthetic fallback content'));
   ok(core.forget({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision }));
   assert.doesNotMatch(JSON.stringify(await invoke()), /Synthetic fallback content|user_forget/);
+});
+
+for (const base of [18,23,33]) test(`event-time ${base} openers accept only their exact base and installed features`, async t => {
+  const { migrateEventTime } = await import('../testing/receipt-event-time-fixture.mjs');
+  const f = safetyFixture(t, base), migrated = await migrateEventTime(f), db = f.connect();
+  t.after(() => db.close());
+  const before = schema(db);
+  for (const [name, open] of attempts(f, db, migrated.physical)) { assert.doesNotThrow(open, name); assert.equal(schema(db), before); }
+  for (const [feature, first] of [['privateCards',20],['rawConversations',24],['currentDependencies',33]]) {
+    if (base < first) assert.throws(() => openDatabase(f.path, { [feature]: true }), { code: 'unsupported_database' });
+    else { const d = openDatabase(f.path, { [feature]: true }); d.close(); }
+    assert.equal(schema(db), before);
+  }
+  db.exec(`DROP TRIGGER safety_control_update; UPDATE content_safety_control SET base_layout=${base === 18 ? 23 : 18}`);
+  for (const [name, open] of attempts(f, db, migrated.physical)) assert.throws(open, { code: 'unsupported_database' }, name);
 });
