@@ -42,7 +42,7 @@ function setup(t,kind) {
     return observed;
   }};
 }
-for(const kind of ['canonical','sidecar'])for(const race of ['journal removed','journal replaced','journal mode','journal symlink','wal appears','shm appears','opened inode swapped'])
+for(const kind of ['canonical','sidecar'])for(const race of ['journal removed','journal replaced','replacement mode','replacement hard link','replacement symlink','replacement with wal','journal mode','journal symlink','wal appears','shm appears','opened inode swapped'])
 test(`guard proof: ${kind}, ${race}`,t=>{
   const s=setup(t,kind),journal=s.path+'-journal';writeFileSync(journal,'synthetic protected journal',{mode:0o600});
   let reached=false;
@@ -55,16 +55,143 @@ test(`guard proof: ${kind}, ${race}`,t=>{
     }
     const result=run();
     if(race==='journal removed')unlinkSync(journal);
-    if(race==='journal replaced'){renameSync(journal,journal+'.old');writeFileSync(journal,'replacement',{mode:0o600});}
+    if(race==='journal replaced'||race.startsWith('replacement ')) {
+      renameSync(journal,journal+'.old');
+      if(race==='replacement hard link') {
+        writeFileSync(journal+'.linked','replacement',{mode:0o600});linkSync(journal+'.linked',journal);
+      } else if(race==='replacement symlink')symlinkSync(journal+'.old',journal);
+      else writeFileSync(journal,'replacement',{mode:race==='replacement mode'?0o644:0o600});
+      if(race==='replacement with wal')writeFileSync(s.path+'-wal','synthetic companion',{mode:0o600});
+    }
     if(race==='journal mode')chmodSync(journal,0o644);
     if(race==='journal symlink'){unlinkSync(journal);symlinkSync(s.path,journal);}
     if(race==='wal appears'||race==='shm appears')writeFileSync(s.path+(race==='wal appears'?'-wal':'-shm'),'synthetic companion',{mode:0o600});
     return result;
   });
   try {
-    assert.throws(s.check,{code:race==='journal removed'?'storage_busy':'index_unavailable'},race==='journal removed'?'passing control: disappearance stays contention':'post-child proof must refuse the changed file');
+    const busy=race==='journal removed'||race==='journal replaced';
+    const reason=kind==='sidecar'?'storage_unavailable':
+      ['replacement mode','replacement symlink','journal symlink','journal mode'].includes(race)?'unsafe_file':'auxiliary_file';
+    assert.throws(s.check,busy?{code:'storage_busy'}:{code:'index_unavailable',reason},
+      race==='journal replaced'?'protected replacement stays contention':
+        kind==='canonical'&&['replacement mode','replacement symlink','journal symlink'].includes(race)?'unsafe journal replacements retain unsafe_file':
+        'passing control: disappearance stays contention and unsafe replacements retain their refusal');
     assert.equal(reached,true,'mutation occurs across the actual header child');
   } finally {for(const suffix of ['-journal','-wal','-shm'])if(existsSync(s.path+suffix))unlinkSync(s.path+suffix);}
+});
+
+for(const kind of ['canonical','sidecar'])test(`guard replacement recheck: ${kind}, second replacement refuses`,t=>{
+  const s=setup(t,kind),journal=s.path+'-journal';writeFileSync(journal,'first',{mode:0o600});
+  const native=fs.lstatSync;let afterChild=false,samples=0;
+  intercept(t,(args,run)=>{
+    const result=run();renameSync(journal,journal+'.old');writeFileSync(journal,'replacement',{mode:0o600});
+    afterChild=true;return result;
+  });
+  t.mock.method(fs,'lstatSync',function(path,...args){
+    const value=Reflect.apply(native,this,[path,...args]);
+    if(afterChild&&path===journal&&++samples===1) {
+      renameSync(journal,journal+'.replacement');writeFileSync(journal,'second replacement',{mode:0o600});
+    }
+    return value;
+  });syncBuiltinESMExports();
+  try {
+    assert.throws(s.check,{code:'index_unavailable',reason:kind==='canonical'?'auxiliary_file':'storage_unavailable'},
+      'passing control: a second replacement retains the old refusal');
+    assert.equal(samples,2,'replacement recheck takes exactly one final journal lstat');
+  } finally {if(existsSync(journal))unlinkSync(journal);}
+});
+
+for(const kind of ['canonical','sidecar'])test(`guard replacement recheck: ${kind}, symlink with reused inode refuses`,t=>{
+  const s=setup(t,kind),journal=s.path+'-journal';writeFileSync(journal,'first',{mode:0o600});
+  const native=fs.lstatSync,original=native(journal,{bigint:true});let afterChild=false,sampled=false;
+  intercept(t,(args,run)=>{
+    const result=run();unlinkSync(journal);symlinkSync(s.path,journal);afterChild=true;return result;
+  });
+  t.mock.method(fs,'lstatSync',function(path,...args){
+    const value=Reflect.apply(native,this,[path,...args]);
+    if(afterChild&&path===journal&&value.isSymbolicLink()) {
+      sampled=true;
+      value.dev=typeof value.dev==='bigint'?original.dev:Number(original.dev);
+      value.ino=typeof value.ino==='bigint'?original.ino:Number(original.ino);
+    }
+    return value;
+  });syncBuiltinESMExports();
+  try {
+    assert.throws(s.check,{code:'index_unavailable',reason:kind==='canonical'?'unsafe_file':'storage_unavailable'},
+      kind==='canonical'?'symlink replacement retains unsafe_file even with a reused inode':
+        'passing control: product symlink replacement retains storage_unavailable');
+    assert.equal(sampled,true,'passing control: recheck sees symlink metadata with the original identity');
+  } finally {if(existsSync(journal))unlinkSync(journal);}
+});
+
+for(const kind of ['canonical','sidecar'])test(`guard replacement recheck: ${kind}, wal after predicate refuses`,t=>{
+  const s=setup(t,kind),journal=s.path+'-journal';writeFileSync(journal,'first',{mode:0o600});
+  const native=fs.lstatSync;let afterChild=false,samples=0,created=false;
+  intercept(t,(args,run)=>{
+    const result=run();renameSync(journal,journal+'.old');writeFileSync(journal,'replacement',{mode:0o600});
+    afterChild=true;return result;
+  });
+  t.mock.method(fs,'lstatSync',function(path,...args){
+    const value=Reflect.apply(native,this,[path,...args]);
+    if(afterChild&&path===journal&&++samples===2) {
+      writeFileSync(s.path+'-wal','late companion',{mode:0o600});created=true;
+    }
+    return value;
+  });syncBuiltinESMExports();
+  try {
+    assert.throws(s.check,{code:'index_unavailable',reason:kind==='canonical'?'auxiliary_file':'storage_unavailable'},
+      'passing control: a WAL companion retains the old refusal');
+    assert.equal(created,true,'the protected replacement passes the predicate before the WAL appears');
+  } finally {for(const suffix of ['-journal','-wal'])if(existsSync(s.path+suffix))unlinkSync(s.path+suffix);}
+});
+
+for(const kind of ['canonical','sidecar'])test(`guard replacement recheck: ${kind}, no in-process opens`,t=>{
+  const s=setup(t,kind),journal=s.path+'-journal';writeFileSync(journal,'first',{mode:0o600});
+  let opens=0;
+  intercept(t,(args,run)=>{
+    const result=run();renameSync(journal,journal+'.old');writeFileSync(journal,'replacement',{mode:0o600});
+    for(const method of ['open','openSync']) {
+      const native=fs[method];t.mock.method(fs,method,function(path,...rest){
+        if(path===journal||path===s.path){opens++;throw Error('unexpected in-process database or journal open');}
+        return Reflect.apply(native,this,[path,...rest]);
+      });
+    }
+    syncBuiltinESMExports();return result;
+  });
+  try {
+    assert.throws(s.check,{code:'storage_busy'},'metadata-only protected replacement remains contention');
+    assert.equal(opens,0,'passing control: recheck opens neither the journal nor the database');
+  } finally {if(existsSync(journal))unlinkSync(journal);}
+});
+
+for(const kind of ['canonical','sidecar'])test(`guard proof: ${kind}, real writer replaces journal during header child`,async t=>{
+  const s=setup(t,kind),journal=s.path+'-journal',signal=s.path+'.rollover',completed=s.path+'.held';
+  async function child(name,args) {
+    const c=childProcess.fork(new URL('./fixtures/'+name,import.meta.url),args,{env:{},execArgv:[],stdio:['ignore','ignore','pipe','ipc']});
+    let stderr='';c.stderr.on('data',b=>{stderr+=b;});
+    const exited=once(c,'exit');let ended=false;c.once('exit',()=>{ended=true;});
+    t.after(async()=>{if(!ended){c.kill();await exited;}});
+    const ready=await once(c,'message');
+    return {c,ready:ready[0],async close(command){c.send(command);assert.equal((await exited)[0],0,'passing control: child exits cleanly: '+stderr);}};
+  }
+  const writer=await child('context-product-journal-rollover.mjs',[s.path,kind,signal,completed]);
+  assert.equal(writer.ready.held,true,'passing control: real writer holds its first transaction');
+  const pin=await child('context-product-wal-process.mjs',['pin-journal',s.path]);
+  assert.equal(pin.ready.ready,true,'passing control: isolated pin prevents journal inode reuse');
+  const before=fs.lstatSync(journal,{bigint:true});let reached=false;
+  intercept(t,(args,run)=>{
+    const result=run();reached=true;writeFileSync(signal,'commit and begin',{mode:0o600});
+    const deadline=Date.now()+5000;
+    while(!existsSync(completed)) {
+      assert.ok(Date.now()<deadline,'passing control: writer completes rollover inside the child window');
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,5);
+    }
+    assert.notEqual(fs.lstatSync(journal,{bigint:true}).ino,before.ino,'passing control: next real transaction has a new journal inode');
+    return result;
+  });
+  assert.throws(s.check,{code:'storage_busy'},'real DELETE commit and next write remain contention, never index_unavailable');
+  assert.equal(reached,true,'passing control: rollover occurs across the actual header child');
+  await writer.close('close');await pin.close({id:1,command:'close'});
 });
 
 for(const kind of ['canonical','sidecar'])for(const race of ['main mode','main link','main replacement','directory mode','directory symlink'])
