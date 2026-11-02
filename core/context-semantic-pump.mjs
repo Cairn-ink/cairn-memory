@@ -6,7 +6,7 @@ import { semanticConfiguration } from './context-semantic-coordinator.mjs';
 import { supervisorOwner } from './context-read-supervisor.mjs';
 import { integer, usd, dollars, exact } from './context-semantic-input.mjs';
 import { fail } from './validation.mjs';
-import { productFailure, disposeProductReader, maintenanceFailureDiagnostic, maintenanceReaderFailureDiagnostic } from './context-product-reader.mjs';
+import { productFailure, disposeProductReader, maintenanceObservation, maintenanceFailureDiagnostic, maintenanceReaderFailureDiagnostic } from './context-product-reader.mjs';
 import { add, maintenanceDispatchControl, maintenanceControlState, maintenanceFailureCounts, maintenanceFailureRecord, maintenanceFailureKind, maintenanceErrorName } from './context-product-attribution.mjs';
 import { resolve } from 'node:path';
 
@@ -21,7 +21,7 @@ function optionIdentity(value) {
   if(value&&typeof value==='object')return ['object',Object.keys(value).sort().map(k=>[k,optionIdentity(value[k])])];
   return value;
 }
-export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
+export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=maintenanceObservation,snapshot}) {
   const c=ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential','semanticConfig','semanticServiceCredential','firstCoverageValidation']);
   const selected=semanticConfiguration(c.semanticConfig,{maintenance:true}),coordinator=c.semanticConfig.coordinator,handle=selected.handle;
   handle.validatePumpCredential(c.semanticServiceCredential);
@@ -56,10 +56,39 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
   const old=all.get(c.id);
   if(old){if(old.fingerprint!==fingerprint||old.supervisor!==c.supervisor||old.coordinator!==coordinator||old.semanticCredentialDigest!==credentialDigest(semanticCredential)||JSON.stringify(old.first)!==JSON.stringify(first))fail('read_in_progress');old.renew(c,w,b);return old.api;}
   const {owner,registry}=supervisorOwner(c.supervisor),record=registry.register(owner,{path:projections[0].options.path,domain:'context-read-product-p2e-v1/pump/'+c.id});
-  let window=w,budgets=b,usedItems=w.usedItems,usedMs=w.usedMs,usedUsd=w.usedUsd,at=0,timer,running,closing,stopped=false,error=null,renewedUntil=now()+c.renewalMs,lastTick=now(),validationPending=false;
+  let window=w,budgets=b,usedItems=w.usedItems,usedMs=w.usedMs,usedUsd=w.usedUsd,cursor=0,timer,running,closing,stopped=false,error=null,renewedUntil=now()+c.renewalMs,lastTick=now(),validationPending=false;
   let resolveCompletion,completion,settled=false,completionEpoch=0;
   function cycle(){const epoch=++completionEpoch;settled=false;completion=new Promise(resolve=>{resolveCompletion=value=>{if(epoch===completionEpoch)settled=true;resolve(value);};});}cycle();
-  const handles=new Map(),writers=new Map(),completeTargets=new Set();let targetSetDigest=null,firstComplete=false,startup=true,residentEpoch=0,parkedUntil;
+  const handles=new Map(),writers=new Map(),completeTargets=new Set();let targetSetDigest=null,firstComplete=false,startupAt=0,residentEpoch=0,parkedUntil;
+  const spacing=Math.max(c.pollMs,q.maxMs,first.maxMs);
+  const startupProjections=handle.targets.flatMap(target=>['current','history'].map(intent=>projections.find(p=>
+    p.options.path===target.canonicalPath&&JSON.stringify(p.options.readSet)===JSON.stringify(target.readSet)&&JSON.stringify(p.types)===JSON.stringify(target.types)&&p.intent===intent)));
+  // Startup is a finite cursor, interleaved with regular work. Validation gets
+  // one slot per sweep and keeps the coordinator's bounded validation cursor.
+  const slots=[];
+  for(let i=0;i<Math.max(projections.length,startupProjections.length);i++){
+    if(i<startupProjections.length)slots.push({kind:'startup',index:i,p:startupProjections[i]});
+    if(i<projections.length)slots.push({kind:'regular',index:i,p:projections[i]});
+  }
+  slots.push({kind:'validation'});
+  const startup=()=>startupAt<startupProjections.length;
+  const lexical=projections.map((p,i)=>p.mode==='lexical'?i:-1).filter(i=>i>=0);
+  const observations=projections.map(()=>lastTick),missed=projections.map(()=>false);
+  let cadenceMisses=0,worstGapMs=0,lastObservation=null,cadenceUntil=usedItems>=b.maxItems?now():Infinity;
+  function checkCadence(time){
+    const until=Math.min(time,dutyEnd(),cadenceUntil);
+    for(const i of lexical){
+      const gap=until-observations[i];if(gap<=5000)continue;
+      if(!missed[i]){missed[i]=true;cadenceMisses=add(cadenceMisses,1);}
+      worstGapMs=Math.max(worstGapMs,gap);
+    }
+  }
+  function plan(lookahead=false){
+    return slots.map((_,offset)=>(cursor+offset)%slots.length).filter(index=>{
+      const slot=slots[index];return slot.kind==='startup'?slot.index>=startupAt:
+        slot.kind==='validation'?lookahead||validationRequired():usedItems<budgets.maxItems;
+    });
+  }
   const accountingWindow=w=>{
     // Sample the shared clock first: conversion may shorten, never extend the
     // parent's window, even if scheduling pauses between the two samples.
@@ -73,17 +102,17 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
   const drains=new Map(),disposed=new WeakMap(),openings=new Set(),seenFailures=new WeakSet(),readerCounts=new WeakMap();
   const interrupted=Symbol('retired turn');
   const attach=value=>{
-    snapshot(value,Object.freeze({lastFailure,failureCounts:Object.freeze({...failureCounts}),secondaryFailure,secondaryFailureCounts:Object.freeze({...secondaryFailureCounts})}));return value;
+    snapshot(value,Object.freeze({cadenceMisses,worstGapMs,observation:lastObservation,lastFailure,failureCounts:Object.freeze({...failureCounts}),secondaryFailure,secondaryFailureCounts:Object.freeze({...secondaryFailureCounts})}));return value;
   };
   const status=()=>{
     const value=Object.freeze({id:c.id,state:error?'failed':stopped?'stopped':exhausted()?'budget_exhausted':now()>=renewedUntil?'renewal_expired':'active',windowId:window.id,
       usedItems,usedMs,usedUsd,maxItems:budgets.maxItems,maxMs:budgets.maxMs,maxUsd:budgets.maxUsd,error});
     return attach(value);
   };
-  const exhausted=()=>windowExhausted||now()>=window.endsAtMonoMs||usedMs>=budgets.maxMs||usedItems>=budgets.maxItems&&!validationPending&&!startup;
+  const exhausted=()=>windowExhausted||now()>=window.endsAtMonoMs||usedMs>=budgets.maxMs||usedItems>=budgets.maxItems&&!validationRequired()&&!startup();
   const dutyEnd=()=>Math.min(window.endsAtMonoMs,renewedUntil);
   const validationRequired=()=>validationPending||completeTargets.size===handle.targets.length*2&&!firstComplete;
-  const turnMs=()=>!startup&&validationRequired()?first.maxMs:q.maxMs;
+  const turnMs=()=>slots[plan()[0]]?.kind==='validation'?first.maxMs:q.maxMs;
   const observeCoverage=observation=>{firstComplete=observation.complete;validationPending=observation.pending;};
   // Preserve coordinator codes already exposed by the pump. Normalize only
   // transport timeout/unavailability and codes outside the existing vocabularies.
@@ -149,10 +178,28 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
     ctx.watchdog=setTimer(()=>expire(ctx),maxMs);
     try{return await work(ctx);}catch(e){if(e!==interrupted){note(e,ctx,ctx.stage);error??=terminalCode(e.code);}}finally{clearTimer(ctx.watchdog);if(activeTurn===ctx)activeTurn=undefined;}
   }
+  function interval(count){
+    const turns=Math.min(budgets.maxItems/q.maxItems,budgets.maxMs/Math.max(q.maxMs,first.maxMs));
+    return Math.max(spacing,Math.min(5000/Math.max(projections.length+1,count),60000/Math.max(1,turns)));
+  }
   function schedule(){
+    if(exhausted()||usedItems>=budgets.maxItems)cadenceUntil=Math.min(cadenceUntil,now());
+    checkCadence(now());
     if(stopped||error||exhausted()||now()>=renewedUntil){if(!stopped&&!error)resolveCompletion(status());return;}
     fits(turnMs());
-    timer=setTimer(tick,parkedUntil===undefined?Math.max(0,c.pollMs-(now()-lastTick)):Math.max(1,Math.min(parkedUntil,dutyEnd())-now()));
+    if(parkedUntil!==undefined){timer=setTimer(tick,Math.max(1,parkedUntil-now()));return;}
+    const order=plan(true);
+    // Only lexical refreshes discharge canonical selection/intent duty. Include
+    // status, embedding and the potential validation slot in that lookahead.
+    // The initial last lexical slot precedes validation; after the first status
+    // slot, at most N+2T slots remain. The existing (N+1+2T)*S guard therefore
+    // leaves a full Q of headroom without changing arithmetic admission.
+    const due=Math.min(...order.map((index,position)=>{
+      const slot=slots[index];return slot.kind==='regular'&&slot.p.mode==='lexical'
+        ?observations[slot.index]+5000-q.maxMs-position*spacing:Infinity;
+    }));
+    const next=Math.min(Math.max(lastTick+spacing,Math.min(lastTick+interval(order.length),due)),dutyEnd());
+    timer=setTimer(tick,Math.max(0,next-now()));
   }
   function fits(maxMs){const end=dutyEnd();parkedUntil=end-now()>=maxMs?undefined:end;return parkedUntil===undefined;}
   async function control(ctx,method,input) {
@@ -248,7 +295,6 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
     if(failure)throw failure;return result;
   }
   async function validation(ctx) {
-    const observation=await control(ctx,'firstCoverage');check(ctx);targetSetDigest=observation.targetSetDigest;observeCoverage(observation);
     if(!targetSetDigest||firstComplete)return;
     if(!fits(first.maxMs))return;
     const maxMs=Math.min(first.maxMs,budgets.maxMs-usedMs,Math.floor(window.endsAtMonoMs-now()),Math.floor(renewedUntil-now()));
@@ -263,43 +309,47 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
     finally{if(!result.ok)error??=terminalCode(code);}
     if(!result.ok)return;check(ctx);firstComplete=result.value.status==='complete';const current=await control(ctx,'firstCoverage');check(ctx);observeCoverage(current);
   }
-  async function regular(ctx) {
+  async function regular(ctx,slot) {
     if(error||stopped||exhausted()||usedItems>=budgets.maxItems||parkedUntil!==undefined||!fits(q.maxMs))return;
-    const p=projections[at%projections.length],isEmbedding=p.mode==='embeddings';
-    if(isEmbedding){const admission=await control(ctx,'embeddingAdmission');check(ctx);if(!admission.allowed||usd(usedUsd)>=usd(budgets.maxUsd)){at++;return;}}
+    const p=slot.p,isEmbedding=p.mode==='embeddings';
+    if(isEmbedding){const admission=await control(ctx,'embeddingAdmission');check(ctx);if(!admission.allowed||usd(usedUsd)>=usd(budgets.maxUsd)){cursor=(slots.indexOf(slot)+1)%slots.length;return;}}
     check(ctx);if(!fits(q.maxMs))return;
     const maxItems=Math.min(q.maxItems,budgets.maxItems-usedItems),maxMs=Math.min(q.maxMs,budgets.maxMs-usedMs,Math.floor(window.endsAtMonoMs-now()),Math.floor(renewedUntil-now()));
     if(maxItems<1||maxMs<1)return;
-    const reservation=await reserve(ctx,p.mode,maxItems,maxMs,isEmbedding?dollars(usd(q.maxUsd)<usd(budgets.maxUsd)-usd(usedUsd)?usd(q.maxUsd):usd(budgets.maxUsd)-usd(usedUsd)):'0',p.bindingId);check(ctx);at++;
+    const reservation=await reserve(ctx,p.mode,maxItems,maxMs,isEmbedding?dollars(usd(q.maxUsd)<usd(budgets.maxUsd)-usd(usedUsd)?usd(q.maxUsd):usd(budgets.maxUsd)-usd(usedUsd)):'0',p.bindingId);check(ctx);cursor=(slots.indexOf(slot)+1)%slots.length;
     const result=await operation(ctx,p,'refreshContextIndex',{readSet:p.options.readSet,types:p.types,intent:p.intent,mode:p.mode,budget:{maxItems,...(isEmbedding?{maxUsd:reservation.maxUsd}:{})}},reservation);check(ctx);
     if(!result?.ok||error||stopped)return;
+    if(!isEmbedding){
+      const time=observedAt(result),finished=now();
+      if(!Number.isFinite(time)||time<lastTick||time>finished){note(result,ctx,'observation','observation_timing');error='reader_failed';return;}
+      checkCadence(time);
+      lastObservation=Object.freeze({projection:slot.index,atMonoMs:time,gapMs:time-observations[slot.index],cadenceMiss:missed[slot.index]});
+      observations[slot.index]=time;missed[slot.index]=false;checkCadence(finished);
+    }
     if(isEmbedding){const current=await control(ctx,'firstCoverage');check(ctx);observeCoverage(current);if(result.value.status==='complete')completeTargets.add(JSON.stringify([p.options.path,p.types,p.intent]));}
   }
   async function tick() {
-    if(stopped||error||running)return;if(exhausted()||now()>=renewedUntil){resolveCompletion(status());return;}
-    const tickGeneration=generation;parkedUntil=undefined;return running=(async()=>{
-      if(!fits(turnMs()))return;lastTick=now();
-      if(startup){
-        for(const target of handle.targets)for(const intent of ['current','history']){
-          if(stopped||error||exhausted()||!fits(q.maxMs))return;
-          const p=projections.find(p=>p.options.path===target.canonicalPath&&JSON.stringify(p.options.readSet)===JSON.stringify(target.readSet)&&JSON.stringify(p.types)===JSON.stringify(target.types)&&p.intent===intent);
-          await turn(Math.min(q.maxMs,budgets.maxMs-usedMs),async ctx=>{
-            const reservation=await reserve(ctx,'validation',0,Math.min(q.maxMs,budgets.maxMs-usedMs),'0');
-            const result=await operation(ctx,p,'getContextIndexStatus',{readSet:p.options.readSet,types:p.types,intent},reservation);check(ctx);
-            if(result?.ok&&!error&&result.value.lexical.state==='ready'&&result.value.semantic.coverage.status==='complete')completeTargets.add(JSON.stringify([p.options.path,p.types,intent]));
-          });
-          if(stopped||error||generation!==tickGeneration)return;
-        }startup=false;
-      }
-      if(stopped||error||usedMs>=budgets.maxMs||now()>=dutyEnd())return;
-      let validated=false;
-      await turn(turnMs(),async ctx=>{const current=await control(ctx,'firstCoverage');check(ctx);observeCoverage(current);validated=validationRequired();});
-      if(validated&&!error&&!stopped&&generation===tickGeneration){
-        await turn(first.maxMs,validation);
-      }
-      // Select a fresh regular context after observing the actual phase.
-      if(!error&&!stopped&&generation===tickGeneration&&parkedUntil===undefined&&fits(q.maxMs))await turn(q.maxMs,regular);
-    })().finally(async()=>{await Promise.allSettled([...openings]);running=null;if(error){void stop();return;}schedule();});
+    if(stopped||error||running)return;checkCadence(now());
+    if(exhausted()||now()>=renewedUntil){resolveCompletion(status());return;}
+    parkedUntil=undefined;
+    // Early callbacks and renewal cannot bypass minimum start spacing.
+    if(now()<lastTick+spacing){schedule();return;}
+    const index=plan()[0],slot=slots[index];if(!slot){schedule();return;}
+    if(!fits(turnMs())){schedule();return;}
+    lastTick=now();return running=turn(turnMs(),async ctx=>{
+      const current=await control(ctx,'firstCoverage');check(ctx);targetSetDigest=current.targetSetDigest;observeCoverage(current);
+      if(slot.kind==='validation'){
+        await validation(ctx);check(ctx);cursor=(index+1)%slots.length;
+      }else if(slot.kind==='startup'){
+        if(!fits(q.maxMs))return;
+        const reservation=await reserve(ctx,'validation',0,Math.min(q.maxMs,budgets.maxMs-usedMs),'0');
+        const p=slot.p,result=await operation(ctx,p,'getContextIndexStatus',{readSet:p.options.readSet,types:p.types,intent:p.intent},reservation);check(ctx);
+        if(result?.ok&&!error){
+          if(result.value.lexical.state==='ready'&&result.value.semantic.coverage.status==='complete')completeTargets.add(JSON.stringify([p.options.path,p.types,p.intent]));
+          startupAt++;cursor=(index+1)%slots.length;
+        }
+      }else await regular(ctx,slot);
+    }).finally(async()=>{await Promise.allSettled([...openings]);running=null;if(error){void stop();return;}schedule();});
   }
   function stop() {
     if(closing)return closing;stopped=true;generation++;activeTurn?.cancel();clearTimer(timer);registry.cleanup(record);
@@ -328,12 +378,13 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
     if(stopped)fail('store_closed');if(JSON.stringify(next.quantum)!==JSON.stringify(c.quantum)||next.pollMs!==c.pollMs)fail('invalid_input');
     // Settled item exhaustion ends resident duty even if validation can continue.
     const inactive=now()>renewedUntil||now()>window.endsAtMonoMs||!running&&(windowExhausted||usedMs>=budgets.maxMs||usedItems>=budgets.maxItems);
+    checkCadence(now());
     if(w.id!==window.id){if(now()<window.endsAtMonoMs)fail('invalid_input');completePrevious();window=w;budgets=b;account=accountingWindow(w);windowExhausted=false;usedItems=w.usedItems;usedMs=w.usedMs;usedUsd=w.usedUsd;cycle();}
     else{if(JSON.stringify(b)!==JSON.stringify(budgets)||w.endsAtMonoMs!==window.endsAtMonoMs)fail('invalid_input');usedItems=Math.max(usedItems,w.usedItems);usedMs=Math.max(usedMs,w.usedMs);usedUsd=dollars(usd(usedUsd)>usd(w.usedUsd)?usd(usedUsd):usd(w.usedUsd));}
     account.floorItems=Math.max(account.floorItems,w.usedItems);account.floorMs=Math.max(account.floorMs,w.usedMs);
     account.items=usedItems;account.ms=usedMs;account.usd=usedUsd;
     generation++;
-    if(inactive)residentEpoch++;
+    if(inactive){residentEpoch++;observations.fill(now());missed.fill(false);cadenceUntil=Infinity;}
     if(settled)cycle();renewedUntil=now()+next.renewalMs;parkedUntil=undefined;clearTimer(timer);if(!running)schedule();
   }};
   all.set(c.id,entry);schedule();return api;

@@ -1,5 +1,5 @@
 // Keep the existing native-Worker operation clock deterministic under load.
-import '../../testing/context-product-test-clock.mjs';
+import { testClock } from '../../testing/context-product-test-clock.mjs';
 import assert from 'node:assert/strict';
 import threads from 'node:worker_threads';
 import { syncBuiltinESMExports } from 'node:module';
@@ -148,7 +148,7 @@ try {
         ok(capture('enable result', await coordinator.setOwnerSemantic({ ownerId: ns.ownerId, semantic: true, expectedRevision: 0 }, token)));
         const m = maintainerOptions(coordinator), timers = new Map(), turns = [];
         const renew = createMaintenancePumpRuntime({
-          setTimer(fn) { const id = {}; timers.set(id, fn); return id; }, clearTimer(id) { timers.delete(id); },
+          setTimer(fn,ms) { const id = {}; timers.set(id, {fn,at:testClock.now()+ms}); return id; }, clearTimer(id) { timers.delete(id); },
           async open(o) {
             const h = await openContextIndexMaintainer(o);
             capture('open diagnostics', productOpenPhaseDiagnostic(h));
@@ -167,9 +167,10 @@ try {
           serviceCredential: m.credential, semanticConfig: m.options.semanticConfig, semanticServiceCredential: token,
           firstCoverageValidation: { maxTargets: 1, maxMs: 700 } });
         f.workspace.defer(() => pump.close());
-        for (let i = 0; i < 2; i++) {
-          const [id, tick] = timers.entries().next().value ?? [];
-          assert.ok(tick, 'next scheduled turn'); timers.delete(id); await tick();
+        for (let i = 0; i < 8 && turns.length < 2; i++) {
+          const [id, timer] = timers.entries().next().value ?? [];
+          assert.ok(timer, 'next scheduled turn'); timers.delete(id);
+          await testClock.advance(Math.max(0,Math.ceil(timer.at-testClock.now())));await timer.fn();
           capture('pump status', pump.getStatus());
         }
         assert.equal(turns.length, 2);
