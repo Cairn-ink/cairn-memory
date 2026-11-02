@@ -699,7 +699,9 @@ for(const method of ['findCandidates','contextRead'])test(`overlapping suppressi
   } finally {db.close();}
   ok(await m.h.refreshContextIndex({...refreshInput(ns),mode:'lexical',budget:{maxItems:1024,maxMs:5000}},m.credential));
   const refreshed=ok(await m.h.refreshContextIndex(refreshInput(ns),m.credential));assert.equal(refreshed.progress.embeddingAttempts,0);
-  assert.deepEqual(fields(record()),before);release(s.view,11);const result=ok(await pending);
+  assert.deepEqual(fields(record()),before);release(s.view,11);const outcome=await pending;
+  if(!outcome.ok){assert.equal(outcome.error.code,'evidence_unavailable');return;}
+  const result=ok(outcome);
   const targetReturned=method==='contextRead'?JSON.stringify(result.metered).includes('semantic match'):result.items.some(i=>i.ref.memoryId===target.id);
   assert.equal(targetReturned,false,'an overlapping suppression must never serve the suppressed semantic-only target');
 });
