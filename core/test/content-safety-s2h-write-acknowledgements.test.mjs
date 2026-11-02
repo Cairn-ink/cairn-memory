@@ -221,6 +221,11 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // Main a69cc979: verificationMeter's term_id names the private posting column
   // sized for a bounded statistics-reset SELECT. It is not a canonical content
   // identity or a field returned by a writer acknowledgement.
+  // Main 80bc3474 (#530): context-read-sidecar's uid (2) and gid (1), and
+  // context-product-sidecar's uid (1), are file-stat owner/group fields used
+  // by protection predicates. context-product-attribution's validation_invalid
+  // (1) is a failure-reason string. None is a canonical content identity or a
+  // field returned by a writer acknowledgement.
   // The terminal writer and acknowledgement field guard are unchanged.
   // These changes retain the native guard's fail-closed walker.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));

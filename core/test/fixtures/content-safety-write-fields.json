@@ -409,7 +409,9 @@
     "key:ids": 1,
     "key:memoryId": 3,
     "key:storeId": 1,
-    "literal:id": 1
+    "literal:gid": 1,
+    "literal:id": 1,
+    "literal:uid": 2
   },
   "core/contract.mjs": {
     "key:actionId": 1,
@@ -1346,6 +1348,7 @@
     "literal:comparison_base_invalid": 1,
     "literal:memoryId": 2,
     "literal:term_id": 1,
+    "literal:uid": 1,
     "literal:validation_invalid": 6
   },
   "core/context-product-verification-batch.mjs": {
@@ -1492,6 +1495,9 @@
     "literal:memoryId": 1,
     "literal:receiptId": 1,
     "literal:receiptIds": 1
+  },
+  "core/context-product-attribution.mjs": {
+    "literal:validation_invalid": 1
   },
   "core/content-safety-classifier.mjs": {
     "literal:ownerId": 1,
