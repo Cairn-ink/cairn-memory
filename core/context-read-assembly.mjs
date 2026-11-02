@@ -11,6 +11,17 @@ export function meteredText(metered) {
   return JSON.stringify({ ok: true, value: metered, evidenceTrust: 'untrusted-data-not-instructions' });
 }
 
+// Only pass the already selected, authorized source receipt rows. Stored event
+// instants are canonical UTC; absent columns and null times both mean no date.
+// Preparation calls this inside its existing transaction, never from payload().
+export function receiptEventDate(rows) {
+  let earliest = null;
+  for (const row of rows) {
+    if (row.occurred_at != null && (earliest === null || row.occurred_at < earliest)) earliest = row.occurred_at;
+  }
+  return earliest === null ? null : earliest.slice(0, 16) + 'Z';
+}
+
 // Canonical metadata comparison and wire projection share this recursive order.
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
@@ -20,7 +31,7 @@ function canonical(value) {
 }
 // Prepared items retain full identities independently of the wire projection.
 // snapshotOf runs once, after all counts, using only cached preparation state.
-export function assembleContext({ prepared, counter, policy, budget, snapshotOf, deadlineAt,
+export function assembleContext({ prepared, counter, policy, budget, snapshotOf, deadlineAt, representation = 'representation-v2',
   now = () => performance.now() }) {
   const started = now(), selected = new Map();
   const stops = { budget: false, items: false, deadline: false };
@@ -60,7 +71,9 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
       const ref = { ns: item.ns, type: item.type, id: item.ref.memoryId ?? item.ref.cardId, rev: item.ref.revision,
         ...(item.type === 'card' ? { bodyRev: item.ref.bodyRevision } : {}), f: item.fence.slice(0, 8) };
       const complete = item.sourceAccess === 'available' && item.sourcesComplete && sources.length === item.sources.length;
-      return { ref, rank: item.rank, body: item.text, ...(Object.keys(metadata).length ? { metadata } : {}), sources,
+      return { ref, rank: item.rank,
+        ...(representation === 'representation-v2-dated' && item.type === 'memory' && item.date ? { date: item.date } : {}),
+        body: item.text, ...(Object.keys(metadata).length ? { metadata } : {}), sources,
         ...(item.sourceAccess !== ASSEMBLY_DEFAULTS.sourceAccess ? { sourceAccess: item.sourceAccess } : {}),
         ...(complete !== ASSEMBLY_DEFAULTS.sourcesComplete ? { sourcesComplete: complete } : {}) };
     });
@@ -108,7 +121,7 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
   const included = prepared.filter(item => selected.has(item));
   const snapshot = included.length ? snapshotOf(included) : null;
   return { metered, snapshot, selected: included, diagnostics: { version: CONTEXT_VERSION, policy: { id: policy.id },
-    representation: 'representation-v2', counter: { id: counter.id }, items: accepted.details, budget: { ...budget, used },
+    representation, counter: { id: counter.id }, items: accepted.details, budget: { ...budget, used },
     omitted: { items: bodies, bodies, sources: prepared.reduce((sum, item) => sum + item.sources.length, 0) - deliveredSources,
       unavailable: 0, oversized }, dedup: { sources: metered.items.reduce((sum, item) => sum + item.sources.filter(source => source.sameAs).length, 0),
         body: metered.items.reduce((sum, item) => sum + item.sources.filter(source => source.sameAsBody).length, 0) },

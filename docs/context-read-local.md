@@ -375,3 +375,28 @@ For the explicitly selected optional FP32 CPU model pack, see
 [local bge-m3 embedding](local-embedder-bge-m3.md). It documents install/verify,
 local resource policy, lifecycle diagnostics, completion criteria and the separate
 qualification workflow. No local embedder is selected by default.
+
+
+## Receipt event dates (addendum v1, 2026-11-03)
+
+Core `contextRead` and MCP `read_memory_context` accept the optional top-level
+field `representation: 'representation-v2-dated'`. Omission or explicit
+`'representation-v2'` preserves the default v2 text. Unknown ids are invalid
+input. Capabilities list both ids in `assembly.representations`; assembly
+diagnostics report the selected id even when every date is absent.
+
+The dated representation inserts `date` immediately after `rank` on Memory
+items, as a sibling of `ref`, for example `"date":"2023-05-22T05:54Z"`.
+Refs, metadata and sources keep their v2 projection. Cards have no date.
+The value is the earliest non-null receipt event instant from exactly the
+rows already used to prepare v2 sources: `created_at,id` order, `LIMIT 16`,
+then the existing visible receipt-metadata filter. Receipts outside that window
+cannot affect it; unavailable source access contributes no dates.
+
+UTC minute precision truncates seconds rather than rounding, with explicit
+`Z` and no zone input. Missing receipt event-time columns and null values both
+omit `date`. There is no recorded-time (`created_at`) fallback. The selection
+does not migrate a store, change sidecar representation, add SQL or fence inputs,
+or change counter visits and structural limits. Public role/task reads keep
+their existing v2 projection. Contract §15.9 records lifecycle safety for up to
+16 receipts and the existing receipt-window limitation above that bound.

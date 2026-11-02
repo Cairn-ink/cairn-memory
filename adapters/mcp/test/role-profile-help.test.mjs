@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { removeReviewedRoleHelpAdditions } from './fixtures/role-profile-help-compat.mjs';
+import { removeReviewedRoleHelpAdditions, removeReviewedDatedContextOption } from './fixtures/role-profile-help-compat.mjs';
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/role-profile-pre-u5c1.json', import.meta.url)));
 const allowlist = JSON.parse(readFileSync(new URL('./fixtures/role-profile-help-additions.json', import.meta.url)));
@@ -83,5 +83,48 @@ test('C05 help allowance never exempts tools, DTOs, errors, CLI checks or schema
     const actual = structuredClone(fixture.value); actual.cli.stdout[0] = reviewedHelp(); mutate(actual);
     actual.cli.stdout[0] = removeReviewedRoleHelpAdditions(actual.cli.stdout[0]);
     assert.throws(() => assert.deepEqual(actual, fixture.value));
+  }
+});
+
+function reviewedDatedProbe() {
+  const value = structuredClone(fixture.value);
+  for (const mode of ['context', 'combined']) {
+    const listed = JSON.parse(value[mode].tools);
+    listed.tools.find(tool => tool.name === 'read_memory_context').inputSchema.properties.representation =
+      { type: 'string', enum: ['representation-v2', 'representation-v2-dated'] };
+    value[mode].tools = JSON.stringify(listed);
+  }
+  return value;
+}
+
+test('C05 dated allowance removes only the exact optional representation knob in both context modes', () => {
+  assert.deepEqual(removeReviewedDatedContextOption(reviewedDatedProbe()), fixture.value);
+});
+
+test('C05 dated allowance rejects changed schemas and preserves every unrelated pinned byte', () => {
+  const schemaChange = mutate => value => {
+    const listed = JSON.parse(value.context.tools);
+    mutate(listed.tools.find(tool => tool.name === 'read_memory_context').inputSchema);
+    value.context.tools = JSON.stringify(listed);
+  };
+  const mutations = [
+    schemaChange(schema => { delete schema.properties.representation; }),
+    schemaChange(schema => { schema.properties.representation.enum.reverse(); }),
+    schemaChange(schema => { schema.properties.representation.enum.push('future'); }),
+    schemaChange(schema => { schema.required.push('representation'); }),
+    schemaChange(schema => { schema.properties.representation.default = 'representation-v2'; }),
+    schemaChange(schema => { schema.properties.query.maxLength++; }),
+    value => { value.context.tools += ' '; },
+    value => { value.plain.tools += ' '; },
+    value => { value.context.populatedDTOs[0] += ' '; },
+    value => { value.context.invalid += ' '; },
+    value => { value.context.core += ' '; },
+    value => { value.context.schema += ' '; },
+    value => { value.cli.stdout[1] += ' '; },
+    value => { value.cli.parse += ' '; },
+  ];
+  for (const mutate of mutations) {
+    const actual = reviewedDatedProbe(); mutate(actual);
+    assert.throws(() => assert.deepEqual(removeReviewedDatedContextOption(actual), fixture.value));
   }
 });

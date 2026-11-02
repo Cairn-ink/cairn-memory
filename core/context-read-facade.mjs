@@ -24,9 +24,9 @@ import { fuseCandidates, RRF_PRESETS } from './context-read-fusion.mjs';
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION } from './context-read-tokenize.mjs';
 import { validateVector } from './context-read-embedder.mjs';
 import { contextBudget } from './context-read-budget.mjs';
-import { assembleContext } from './context-read-assembly.mjs';
+import { assembleContext, receiptEventDate } from './context-read-assembly.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
-import { CONTEXT_VERSION, CONTEXT_METHODS, CONTEXT_LIMITS, SOURCE_LIMITS, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES, ASSEMBLY_DEFAULTS, DEFAULT_ASSEMBLY_POLICY,
+import { CONTEXT_VERSION, CONTEXT_METHODS, CONTEXT_LIMITS, SOURCE_LIMITS, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_DEFAULTS, DEFAULT_ASSEMBLY_POLICY,
   contextOptions, contextInput, contextRefs, namespaceKey } from './context-read-input.mjs';
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -641,18 +641,19 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             unavailable++; continue;
           }
           const { type, ref, state, origin } = item;
-          const sources = type === 'memory' && item.provenance.sourceAccess === 'available' ?
-            db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id))
-              .map((row, index) => {
-                const { role, excerpt } = validateSourceReceipt(ref.memoryId, row, source =>
-                  createHash('sha256').update(JSON.stringify(source)).digest('hex'));
-                return { index, role, excerpt };
-              }) : [];
+          const sourceRows = type === 'memory' && item.provenance.sourceAccess === 'available' ?
+            db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)) : [];
+          const date = receiptEventDate(sourceRows);
+          const sources = sourceRows.map((row, index) => {
+            const { role, excerpt } = validateSourceReceipt(ref.memoryId, row, source =>
+              createHash('sha256').update(JSON.stringify(source)).digest('hex'));
+            return { index, role, excerpt };
+          });
           items.push({ type, ref, ns: input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), rank: candidate.rank,
             metadata: type === 'memory' ? { state, reviewState: item.reviewState, filing: item.filing,
               kind: item.kind, origin, confidence: item.confidence } : { state, support: item.support, origin },
             text: type === 'memory' ? item.content : item.title + '\n' + item.body,
-            sources, sourceAccess: type === 'memory' ? item.provenance.sourceAccess : 'unsupported',
+            date, sources, sourceAccess: type === 'memory' ? item.provenance.sourceAccess : 'unsupported',
             sourcesComplete: type === 'memory' && item.provenance.coverage.status === 'complete',
             fence: bind('snapshot-item', item),
             dependencyCount: item.support?.currentDependency ? item.support.currentDependency.versions?.length ?? 0 : null });
@@ -663,7 +664,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       const generationsFor = items => prepared.generations.map(value => ({ memory: value.memory,
         ...(items.some(item => item.type === 'card') ? { card: value.card } : {}) }));
       const { selected: delivered, ...assembled } = assembleContext({ prepared: prepared.items, counter: options.counter, policy: input.policy,
-        budget: input.budget, deadlineAt, snapshotOf: items => encode('snapshot', { v: 1, scope, intent: input.intent,
+        budget: input.budget, representation: input.representation, deadlineAt, snapshotOf: items => encode('snapshot', { v: 1, scope, intent: input.intent,
           refs: items.map(({ ref }) => [input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), ref.type,
             ref.memoryId ?? ref.cardId, ref.revision, ...(ref.type === 'card' ? [ref.bodyRevision] : [])]),
           generations: generationsFor(items), access: access.accessGenerations, fences: items.map(item => item.fence) }, 16384) });
@@ -763,7 +764,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     return success(structuredClone({ version: CONTEXT_VERSION, methods: [...CONTEXT_METHODS], receiptEventTime: receiptEventTimeEnabled(cachedContentLayout(db)), types: [...supportedTypes], intents: ['current', 'history'],
       channels: { lexical: { enabled: true }, semantic: { configured: Boolean(options.embedder), budgetConfigured: Boolean(dispatch) } },
       ...configuration, limits: { ...CONTEXT_LIMITS, ...(options.sources ? { horizon: 32, sources: SOURCE_LIMITS } : {}) }, maintenance: !readOnly && !memoryOnly,
-      assembly: { representation: 'representation-v2', defaults: ASSEMBLY_DEFAULTS, policies: [...ASSEMBLY_POLICIES], defaultPolicy: DEFAULT_ASSEMBLY_POLICY,
+      assembly: { representation: 'representation-v2', representations: [...ASSEMBLY_REPRESENTATIONS], defaults: ASSEMBLY_DEFAULTS, policies: [...ASSEMBLY_POLICIES], defaultPolicy: DEFAULT_ASSEMBLY_POLICY,
         counter: options.counter ? { id: options.counter.id } : null, limits: { ...ASSEMBLY_LIMITS, ...(options.sources ? { candidates: 32, counterCalls: 1634 } : {}) } },
       unsupported: ['role-profiles', ...(!options.sources?.includes('relations-one-hop-v1') ? ['relations'] : []),
         ...(!options.sources?.includes('moc-v1') ? ['moc'] : []), 'raw-search', 'partial-semantic-search'] }));

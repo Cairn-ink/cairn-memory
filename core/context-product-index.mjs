@@ -5,11 +5,11 @@ import { performance } from 'node:perf_hooks';
 import { randomUUID, createHash } from 'node:crypto';
 import { productSidecar } from './context-product-sidecar.mjs';
 import { digest } from './context-product-validation.mjs';
-import { contextInput, namespaceKey, ASSEMBLY_DEFAULTS, ASSEMBLY_POLICIES, ASSEMBLY_LIMITS } from './context-read-input.mjs';
+import { contextInput, namespaceKey, ASSEMBLY_DEFAULTS, ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_LIMITS } from './context-read-input.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { deadline, PRODUCT_PROFILE } from './context-product-control.mjs';
 import { fuseCandidates } from './context-read-fusion.mjs';
-import { assembleContext } from './context-read-assembly.mjs';
+import { assembleContext, receiptEventDate } from './context-read-assembly.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { TOKENIZER_VERSION, REPRESENTATION_VERSION } from './context-read-tokenize.mjs';
 import { fail } from './validation.mjs';
@@ -132,20 +132,22 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         const ref=candidate.ref; let item;
         try {item=evidence.itemsInside(ref.namespace,[ref],p.intent,p.readSet)[0];}
         catch(e) {if(['evidence_unavailable','revision_conflict'].includes(e.code)){unavailable++;continue;}throw e;}
-        const sources=item.type==='memory' && item.provenance.sourceAccess==='available'
-          ? db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)).map((row,index)=>{
-            const {role,excerpt}=validateSourceReceipt(ref.memoryId,row,source=>createHash('sha256').update(JSON.stringify(source)).digest('hex'));
-            return {index,role,excerpt};
-          }):[];
+        const sourceRows=item.type==='memory' && item.provenance.sourceAccess==='available'
+          ? db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)):[];
+        const date=receiptEventDate(sourceRows);
+        const sources=sourceRows.map((row,index)=>{
+          const {role,excerpt}=validateSourceReceipt(ref.memoryId,row,source=>createHash('sha256').update(JSON.stringify(source)).digest('hex'));
+          return {index,role,excerpt};
+        });
         items.push({type:item.type,ref,ns:p.readSet.findIndex(ns=>namespaceKey(ns)===namespaceKey(ref.namespace)),rank:candidate.rank,
           metadata:item.type==='memory'?{state:item.state,reviewState:item.reviewState,filing:item.filing,kind:item.kind,origin:item.origin,confidence:item.confidence}
             :{state:item.state,support:item.support,origin:item.origin},text:item.type==='memory'?item.content:item.title+'\n'+item.body,
-          sources,sourceAccess:item.type==='memory'?item.provenance.sourceAccess:'unsupported',sourcesComplete:item.type==='memory' && item.provenance.coverage.status==='complete',fence:bind('snapshot-item',item)});
+          date,sources,sourceAccess:item.type==='memory'?item.provenance.sourceAccess:'unsupported',sourcesComplete:item.type==='memory' && item.provenance.coverage.status==='complete',fence:bind('snapshot-item',item)});
       }
       return {generations,items,unavailable};
     });
     const generationsFor=items=>prepared.generations.map(g=>({memory:g.memory,...(items.some(i=>i.type==='card')?{card:g.card}:{})}));
-    const {selected:delivered,...assembled}=assembleContext({prepared:prepared.items,counter,policy:p.policy,budget:p.budget,deadlineAt:p.deadlineAt,
+    const {selected:delivered,...assembled}=assembleContext({prepared:prepared.items,counter,policy:p.policy,budget:p.budget,representation:p.representation,deadlineAt:p.deadlineAt,
       snapshotOf:items=>encode('snapshot',{v:1,scope:bind('snapshot-scope',p.readSet),intent:p.intent,
         refs:items.map(({ref,ns})=>[ns,ref.type,ref.memoryId??ref.cardId,ref.revision,...(ref.type==='card'?[ref.bodyRevision]:[])]),
         generations:generationsFor(items),access:access.accessGenerations,fences:items.map(i=>i.fence)},16384)});
@@ -473,6 +475,6 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         ? [5,6].includes(error.errcode & 255) ? 'storage_busy' : 'storage_error'
         : error.code === 'memory_not_found' ? 'evidence_unavailable' : error.code ?? 'storage_error';
       return failure(code);
-    } }).run,discard(){storage.discard();},close(){storage.close();rankings.clear();},assembly:{representation:'representation-v2',defaults:ASSEMBLY_DEFAULTS,policies:ASSEMBLY_POLICIES,
+    } }).run,discard(){storage.discard();},close(){storage.close();rankings.clear();},assembly:{representation:'representation-v2',representations:ASSEMBLY_REPRESENTATIONS,defaults:ASSEMBLY_DEFAULTS,policies:ASSEMBLY_POLICIES,
     defaultPolicy:'rank-first-whole-v1',counter:counter?{id:counter.id}:null,limits:ASSEMBLY_LIMITS}};
 }

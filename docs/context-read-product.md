@@ -1387,3 +1387,28 @@ cannot refund an unknown `progress.transformed`: it keeps the full item and time
 reservation for that quantum, including an idle quantum. This contract changes
 neither the pump nor its inputs. Reservation/refund policy is pending the
 separate performance-track decision.
+
+
+## Receipt event dates (addendum v1, 2026-11-03)
+
+Select dates per call with the top-level field
+`contextRead({ ...input, representation: 'representation-v2-dated' }, credential)`.
+The default remains `representation-v2`; unknown ids refuse `invalid_input`.
+`assembly.representations` advertises both ids, and assembly diagnostics report
+the selected id. Candidate/index diagnostics and stored `candidate-text-v1`
+content are unchanged.
+
+Each dated Memory item may contain `date` immediately after `rank`, for example
+`"rank":1,"date":"2023-05-22T05:54Z"`. The date is outside `ref`, whose keys and
+bytes remain unchanged. It is the earliest non-null event time among exactly
+the existing v2 source receipt rows: the first 16 in `created_at,id` order,
+filtered through visible receipt metadata. A receipt outside that recorded-order
+window never supplies the date. Source-access denials and Card omissions apply
+unchanged; Cards do not receive dates.
+
+Dates are UTC instants truncated to the minute, ending in `Z`. No time-zone
+input or recorded-time fallback is supported. Null times or layouts without
+the receipt event-time column omit the key and still report the dated id.
+Selection adds no SQL, fence input or counter visit; the 16-receipt bound is
+unchanged. Storage migration is separate. See contract §15.9 for the lifecycle
+safety guarantee and the existing window limitation above 16 receipts.
