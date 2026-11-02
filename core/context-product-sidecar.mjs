@@ -19,6 +19,7 @@ import { fail } from './validation.mjs';
 import { VECTOR_DDL } from './context-product-vectors.mjs';
 import { verificationBatch, verificationMeter, verificationBound } from './context-product-verification-batch.mjs';
 import { comparisonWorkFields } from './context-product-attribution.mjs';
+import { protectedDeleteJournal, sameJournal } from './context-read-journal-guard.mjs';
 
 export const PRODUCT_SIDECAR_FORMAT = 3;
 export const PRODUCT_SIDECAR_SUFFIX = '.context-read-product-v1.1.sqlite';
@@ -92,8 +93,10 @@ export function productFile(path, optional = false) {
 }
 function auxiliaries(path, writable, expectedIdentity, observer) {
   let journal;
+  const companions = {};
   for (const suffix of ['-wal','-shm','-journal']) {
     const entry = productStat(path + suffix, true);
+    companions[suffix] = entry;
     if (!entry) continue;
     if (!writable && suffix === '-journal') { journal = entry; continue; }
     if (!writable || suffix !== '-journal') unavailable('storage_unavailable');
@@ -102,15 +105,20 @@ function auxiliaries(path, writable, expectedIdentity, observer) {
     let main, directory;
     try { main = productStat(path); directory = sqliteFileStat(dirname(path)); } catch { unavailable('storage_unavailable'); }
     if (expectedIdentity && (String(main.dev) !== expectedIdentity.device || String(main.ino) !== expectedIdentity.inode)) unavailable('storage_unavailable');
-    const uid = process.getuid?.();
-    if (main.nlink !== 1n || journal.nlink !== 1n || !directory.isDirectory() || directory.isSymbolicLink() ||
-        process.platform !== 'win32' && ((directory.mode & 0o777n) !== 0o700n ||
-          uid === undefined || [main, journal, directory].some(entry => entry.uid !== BigInt(uid)))) unavailable('storage_unavailable');
+    const proof = { main, directory, journal };
+    if (!protectedDeleteJournal({ ...proof, wal: companions['-wal'], shm: companions['-shm'] })) unavailable('storage_unavailable');
     if (!contextReadDeleteJournal(path, observer, { main, directory, expectedIdentity })) unavailable('storage_unavailable');
     const current = productStat(path + '-journal', true);
-    // A DELETE writer can commit and create its next protected journal while
-    // the child runs. Recheck protection rather than requiring the old inode.
-    if (current && !['mode','uid','nlink'].every(key => current[key] === journal[key])) unavailable('storage_unavailable');
+    if (current && !sameJournal(current, journal)) {
+      let checked;
+      try { checked = { main: sqliteFileStat(path), directory: sqliteFileStat(dirname(path)), journal: current,
+        wal: productStat(path + '-wal', true), shm: productStat(path + '-shm', true) }; } catch { unavailable('storage_unavailable'); }
+      if (!protectedDeleteJournal(checked, proof)) unavailable('storage_unavailable');
+      // One final metadata sample, never an open or a retry. Disappearance is busy.
+      let final;
+      try { final = sqliteFileStat(path + '-journal'); } catch (error) { if (error.code !== 'ENOENT') unavailable('storage_unavailable'); }
+      if (final && !sameJournal(final, current)) unavailable('storage_unavailable');
+    }
     for (const suffix of ['-wal','-shm']) if (productStat(path + suffix, true)) unavailable('storage_unavailable');
     fail('storage_busy');
   }

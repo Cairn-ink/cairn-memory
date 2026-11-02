@@ -13,6 +13,7 @@ import { fail } from './validation.mjs';
 import { rankScores, scoreBM25 } from './context-read-bm25.mjs';
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION, termFrequencies, tokenizeT1 } from './context-read-tokenize.mjs';
 import { cosine, encodeVector, loadVector, semanticCapacity, validateEmbedder } from './context-read-embedder.mjs';
+import { protectedDeleteJournal, sameJournal } from './context-read-journal-guard.mjs';
 
 export const SIDECAR_FORMAT = 1;
 const APPLICATION_ID = 0x43525831;
@@ -26,8 +27,7 @@ function stat(path) {
     unavailable('unsafe_file');
   }
 }
-function protectedFile(path, required = true) {
-  const value = stat(path);
+function protectedFile(path, required = true, value = stat(path)) {
   if (!value && !required) return null;
   if (!value || !value.isFile() || value.isSymbolicLink() || process.platform !== 'win32' && (value.mode & 0o777) !== 0o600)
     unavailable('unsafe_file');
@@ -87,8 +87,10 @@ export function contextReadDeleteJournal(path, observer, validated) {
 
 function auxiliaries(path, readOnly, observer) {
   let journal;
+  const companions = {};
   for (const suffix of ['-wal', '-shm', '-journal']) {
     const entry = protectedFile(path + suffix, false);
+    companions[suffix] = entry;
     if (entry && readOnly && suffix === '-journal') { journal = entry; continue; }
     if (entry && (readOnly || suffix !== '-journal')) unavailable('auxiliary_file');
   }
@@ -97,15 +99,22 @@ function auxiliaries(path, readOnly, observer) {
     // The isolated header check cannot recover or admit a read through it.
     let main, directory;
     try { main = protectedFile(path); directory = stat(dirname(path)); } catch { unavailable('auxiliary_file'); }
-    const uid = process.getuid?.();
-    if (main.nlink !== 1 || journal.nlink !== 1 || !directory?.isDirectory() || directory.isSymbolicLink() ||
-        process.platform !== 'win32' && ((directory.mode & 0o777) !== 0o700 ||
-          uid === undefined || [main, journal, directory].some(entry => entry.uid !== uid))) unavailable('auxiliary_file');
+    const proof = { main, directory, journal };
+    if (!protectedDeleteJournal({ ...proof, wal: companions['-wal'], shm: companions['-shm'] })) unavailable('auxiliary_file');
     if (!contextReadDeleteJournal(path, observer, { main, directory })) unavailable('auxiliary_file');
-    const current = protectedFile(path + '-journal', false);
-    // A DELETE writer can commit and create its next protected journal while
-    // the child runs. Recheck protection rather than requiring the old inode.
-    if (current && !['mode','uid','nlink'].every(key => current[key] === journal[key])) unavailable('auxiliary_file');
+    const current = stat(path + '-journal');
+    // Preserve in-place protection failures without sampling the journal again.
+    if (current && current.dev === journal.dev && current.ino === journal.ino) protectedFile(path + '-journal', false, current);
+    if (current && !sameJournal(current, journal)) {
+      let checked;
+      try { checked = { main: stat(path), directory: stat(dirname(path)), journal: current,
+        wal: stat(path + '-wal'), shm: stat(path + '-shm') }; } catch { unavailable('auxiliary_file'); }
+      if (!protectedDeleteJournal(checked, proof)) unavailable('auxiliary_file');
+      // One final metadata sample, never an open or a retry. Disappearance is busy.
+      let final;
+      try { final = stat(path + '-journal'); } catch { unavailable('auxiliary_file'); }
+      if (final && !sameJournal(final, current)) unavailable('auxiliary_file');
+    }
     for (const suffix of ['-wal','-shm']) if (protectedFile(path + suffix, false)) unavailable('auxiliary_file');
     fail('storage_busy');
   }
