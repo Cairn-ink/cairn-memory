@@ -65,10 +65,22 @@ export function productVectors({storage,facade}) {
     if(db.prepare('SELECT publication FROM publications WHERE projection=?').get(lexical.projectionDigest)?.publication!==lexical.publicationId)fail('index_unavailable');
     let g=db.prepare('SELECT g.* FROM vector_work w JOIN vector_generations g ON g.storage_id=w.generation WHERE w.projection=?').get(lexical.projectionDigest);
     if(!g) {
-      const published=db.prepare('SELECT g.* FROM vector_publications p JOIN vector_generations g ON g.storage_id=p.generation WHERE p.projection=?').get(lexical.projectionDigest);
-      if(published?.lexical===ld&&published.identity===id&&published.epoch===epoch&&published.published===1) {
-        const state=unseal(published.state);
-        if(state.phase===3&&Object.values(state.counts.byType).every(c=>c.eligible===c.embedded))g=published;
+      const published=db.prepare('SELECT g.*,p.owner AS pointer_owner,substr(p.pointer,1,4097) AS pointer FROM vector_publications p JOIN vector_generations g ON g.storage_id=p.generation WHERE p.projection=?').get(lexical.projectionDigest);
+      if(published?.lexical===ld&&published.identity===id&&published.epoch===epoch&&published.published===1&&
+        published.pointer_owner===owner&&published.owner===owner&&published.projection===lexical.projectionDigest&&published.lexical_generation===key) {
+        try {
+          const evidence=db.prepare('SELECT publication,substr(record,1,16385) AS record FROM vector_validation_records WHERE generation=? AND owner=?').get(published.storage_id,owner);
+          const record=verifyVectorRecord(store.cursorSecret,evidence?.record,lexical,snapshot.identity,epoch);
+          verifyVectorPointer(published.pointer,record);
+          if(Buffer.byteLength(published.state)>8192)throw Error('invalid');
+          const state=unseal(published.state);
+          if(evidence.publication===record.publicationId&&state.sidecarIdentityDigest===digest({format:3,...lexical.sidecar})&&state.phase===3&&
+            same({id:published.id,sequence:state.sequence,checkpoint:state.checkpoint,incarnation:state.incarnation},record.generation)&&
+            same(state.counts,record.counts)&&Object.values(record.counts.byType).every(c=>c.eligible===c.embedded))g=published;
+        } catch(error) {
+          if(error.code==='ERR_SQLITE_ERROR')throw error;
+          // Invalid publication evidence must take the existing rebuild path.
+        }
       }
     }
     if(!g||g.lexical!==ld||g.identity!==id||g.epoch!==epoch) {

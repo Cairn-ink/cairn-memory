@@ -54,6 +54,23 @@ function unchangedRefresh(s,selected=snapshot()) {
   assert.deepEqual(s.inventory(),before,'no generation, validation record, pointer or checkpoint writes');
 }
 
+for(const fault of ['stale pointer','deleted validation record','wrong pointer owner','wrong generation owner','wrong generation projection'])test(`invalid publication evidence rebuilds: ${fault}`,t=>{
+  const s=setup(t),before=s.refresh(),count=s.inventory().vector_generations.length;
+  s.sql(db=>{
+    const projection=s.lexical.projectionDigest;
+    if(fault==='stale pointer')db.prepare('UPDATE vector_publications SET pointer=? WHERE projection=?').run(JSON.stringify({...before,publicationId:'stale-publication'}),projection);
+    else if(fault==='deleted validation record')db.prepare('DELETE FROM vector_validation_records WHERE publication=?').run(before.publicationId);
+    else if(fault==='wrong pointer owner')db.prepare('UPDATE vector_publications SET owner=? WHERE projection=?').run('another-owner',projection);
+    else db.prepare(`UPDATE vector_generations SET ${fault==='wrong generation owner'?'owner':'projection'}=? WHERE id=?`).run('another-binding',before.generation.id);
+  });
+  s.refresh();const observed=s.observe();
+  assert.equal(observed.status,'complete','refresh must recover invalid publication evidence');
+  assert.notEqual(observed.record.publicationId,before.publicationId);
+  assert.notEqual(observed.record.generation.id,before.generation.id);
+  assert.equal(s.inventory().vector_generations.length,count+1);
+  assert.equal(observed.rows.length,1);unchangedRefresh(s);
+});
+
 test('repeated no-op plans and certification preserve every publication row and checkpoint',t=>{
   const s=setup(t);s.refresh();unchangedRefresh(s);
   assert.equal(s.inventory().vector_generations.length,1);assert.equal(s.inventory().vector_validation_records.length,1);assert.equal(s.inventory().vector_work.length,0);
@@ -124,11 +141,11 @@ test('unpublished planning resumes in place and a published partial generation i
   assert.equal(s.observe().status,'complete');assert.equal(s.observe().rows.length,2);unchangedRefresh(s);
 });
 
-// Suppression is enforced by the safety layer's read-time epoch fence and
-// does not depend on publication rotation. This base predates that product
-// integration: compare the same vector-observation outcome with its base bytes.
+// Product reads on this base lack the safety layer's read-time suppression
+// epoch fence. Publication rotation does not provide that guarantee. These
+// sequential vector observations compare outcomes with the same base bytes.
 const baseSuppressionOutcome='{"suppressed":true,"lexicalState":"ready","semanticStatus":"complete","reason":null,"rows":[{"target":true,"revision":1,"score":1}]}';
-test('suppression outcome remains byte-for-byte identical to base across refresh',t=>{
+test('sequential suppression outcomes remain byte-for-byte identical to base across refresh',t=>{
   const s=setup(t,{safety:true});s.refresh();const old=s.lexical,db=openDatabase(s.f.path);let suppressed;
   try {
     transaction(db,()=>writeContentSuppressionInside(db,{namespace:ns,kind:'memory',key:s.memories[0].id,reason:'purge',actionId:'suppress-specimen'}));
