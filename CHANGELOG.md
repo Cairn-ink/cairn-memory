@@ -15,7 +15,7 @@
   repository README entry points. These metadata and documentation changes are
   not in the published installer; installer version and behavior are unchanged.
 
-## 0.6.3 — Unreleased: Codex 0.164.0–0.166.0 format requalification
+## 0.6.3 — 2026-11-03: Codex 0.164.0–0.166.0 format requalification
 
 - Requalify Codex 0.163.0–0.166.0 using offline native schemas and rollouts.
   Installations that lost their sign-in around 2026-10-22 stopped capturing
@@ -33,6 +33,12 @@
   recall placement on all four hosts. Local compaction was also produced.
   Dynamic-tool replacement and security-risk rows were not produced; the
   documented parser exclusions and fail-closed handling remain.
+- `npx @cairn-ink/memory` now runs 0.6.3. Existing cloud-mode Codex users must
+  rerun `npx @cairn-ink/memory setup` to install the updated runtime; Codex
+  hooks keep using the previously installed runtime until then.
+- The npm package was built from `5c39dc26`. It ships the engine bundle built
+  from `be2bc543` with only the three Codex format qualification modules
+  changed, so other engine changes merged after `be2bc543` are not in 0.6.3.
 
 ## 0.6.2 — 2026-10-28: hosted Codex inspection TMPDIR fallback
 

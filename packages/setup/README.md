@@ -9,10 +9,12 @@ local MCP tools or cloud automatic memory.
 
 Requires Node ≥22.16 and the selected CLI on PATH. The installer itself has no
 runtime dependencies.
-This README describes **installer 0.6.3**. The Claude plugin is **0.3.3**.
-0.6.3 requalifies Codex 0.164.0–0.166.0; the engine is unchanged from 0.6.2
-except the Codex format qualification modules. Existing EOF boundaries,
-pending batches and permanent format latches keep their behaviour.
+This README describes **installer 0.6.3**, published on 2026-11-03. The Claude
+plugin is **0.3.3**. 0.6.3 requalifies Codex 0.164.0–0.166.0; the engine is
+unchanged from 0.6.2 except the Codex format qualification modules. Existing
+EOF boundaries, pending batches and permanent format latches keep their
+behaviour. Existing cloud-mode Codex users must rerun setup to install the
+updated runtime.
 
 ## Setup / 安裝
 
