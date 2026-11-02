@@ -1,5 +1,6 @@
 import { testClock } from '../testing/context-product-test-clock.mjs';
 import test,{after} from 'node:test';
+import { setTimeout as realDelay } from 'node:timers/promises';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import assert from 'node:assert/strict';
 import { card } from '../testing/context-product-owner-fixture.mjs';
@@ -16,13 +17,13 @@ import { Worker } from 'node:worker_threads';
 import { join } from 'node:path';
 import { fixture,ns,ok } from '../testing/context-read-fixture.mjs';
 import { createExclusiveSqliteFile } from '../sqlite-journal-probe.mjs';
-import { provisionSemanticOwner } from '../context-semantic-ledger.mjs';
+import { provisionSemanticOwner,stateBytes,stateDigest } from '../context-semantic-ledger.mjs';
 import { createMaintenancePumpRuntime } from '../context-product-pump.mjs';
 import { supervisorOwner } from '../context-read-supervisor.mjs';
 import { semanticHandle } from '../context-semantic-coordinator.mjs';
 import { queryEmbeddingCutoff,tokenCost,usd,dollars } from '../context-semantic-input.mjs';
-import { canonicalJson } from '../context-product-validation.mjs';
-import { credentialDigest, PRODUCT_PROFILE } from '../context-product-control.mjs';
+import { canonicalJson,digest } from '../context-product-validation.mjs';
+import { credentialDigest, requestRecord, operationRecord, PRODUCT_PROFILE } from '../context-product-control.mjs';
 import { openMemoryCore,openContextSemanticCoordinator,openContextIndexMaintainer,openContextProductReader,createContextReadSupervisor } from '../index.mjs';
 
 const hostUrl=new URL('../testing/context-semantic-host.mjs',import.meta.url).href;
@@ -33,7 +34,7 @@ const retainedQuarantines=[];
 // at that test's end and allow the next fixture to reuse the quarantined ID.
 after(async()=>{for(const workspace of retainedQuarantines)await workspace.cleanup();});
 const query={readSet:[ns],types:['memory'],intent:'current',query:'semantic',deadlineMs:5000,semantic:true};
-async function setup(t,{localRuntime=false,open=true,expectedCleanupFailure=false,host={},caps:capPatch,corpus,readSet=[ns],version=18,canonicalMode='DELETE',sidecarMode='DELETE'}={}) {
+async function setup(t,{localRuntime=false,open=true,expectedCleanupFailure=false,host={},caps:capPatch,corpus,readSet=[ns],version=18,canonicalMode='DELETE',sidecarMode='DELETE',coordinatorHost=hostUrl}={}) {
   // Each fixture is an independent process-policy universe. Never reset while
   // a coordinator is live; same-test duplicate-file probes share the binding.
   if(!globalThis[Symbol.for('context-read-product-p2e-v1/coordinators')]?.size)
@@ -55,7 +56,7 @@ async function setup(t,{localRuntime=false,open=true,expectedCleanupFailure=fals
   const time=host.utcClock?Number(new BigInt64Array(host.utcClock)[0]):Date.now(),priceTable={authorityId:host.priceAuthorityId??'synthetic-price',revision:'one',sequence:1,effectiveFromUtcMs:time-1000,effectiveUntilUtcMs:time+3600000,usdPerMillionInputTokens:{'text-embedding-3-small':host.priceRate??'0.02'}};
   const options={version:'context-read-product-p2e-v1',supervisor,ledgerPath,ledgerIdentity,provider:selection,
     refreshCaps:{steady:{maxItemsPerUtcDay:2000,maxUsdPerUtcDay:'0.05'},backfill:{maxItemsPerUtcDay:20000,maxUsdPerUtcDay:'0.50',maxUsdTotal:'5'}},backfillTargets:[{canonicalPath:f.path,readSet,types,intents:['current','history']}],priceTable,
-    host:{moduleUrl:hostUrl,configuration:{semanticServiceBinding:b,anchorPath,state,priceTable,localRuntime,...host}}};
+    host:{moduleUrl:coordinatorHost,configuration:{semanticServiceBinding:b,anchorPath,state,priceTable,localRuntime,...host}}};
   if(capPatch)options.refreshCaps=capPatch;
   const coordinator=open?await openContextSemanticCoordinator(options):null;if(coordinator)f.workspace.defer(()=>coordinator.close().catch(error=>{if(!expectedCleanupFailure)throw error;assert.equal(error.code,'reader_failed');}));
   function configure(service,selected=readSet) {
@@ -838,4 +839,158 @@ test('Integration fix round 1: collecting a captured lexical generation is recov
   assert.equal(ok(await h.getContextIndexStatus({...input,deadlineMs:5000},m.credential)).lexical.state,'ready');
   const resumed=ok(await h.refreshContextIndex({...input,mode:'embeddings',budget:{maxItems:1024,maxMs:5000,maxUsd:'0.50'}},m.credential));
   assert.equal(resumed.status,'complete',JSON.stringify(resumed));
+});
+
+// F: use native Workers and host barriers; real time only detects a hung test.
+async function closeGuard(promise,label,ms=15000) {
+  const abort=new AbortController();
+  try{return await Promise.race([promise,realDelay(ms,undefined,{signal:abort.signal}).then(()=>{throw Error(label);})]);}
+  finally{abort.abort();}
+}
+async function closeUntil(predicate) {
+  let stopped=false;
+  try{await closeGuard((async()=>{while(!stopped&&!predicate())await realDelay(2);})(),'host_barrier');}
+  finally{stopped=true;}
+}
+const releaseClose=(view,at)=>{Atomics.store(view,at,1);Atomics.notify(view,at);};
+function retainCoordinatorFile(s) {
+  const retained=createTestWorkspace(null,{prefix:'semantic-close-quarantine-'});
+  linkSync(s.ledgerPath,join(retained.path,'ledger.sqlite'));retainedQuarantines.push(retained);
+}
+function coordinatorRecord(s) {return [...supervisorOwner(s.supervisor).owner.records].find(r=>r.resources&&r.domain==='context-read-product-p2e-v1/coordinator');}
+async function closeSetup(t,{open=true,expectedCleanupFailure=false}={}) {
+  const closeControl=new SharedArrayBuffer(80),control=new Int32Array(closeControl);
+  const s=await setup(t,{open:false,expectedCleanupFailure,host:{closeControl},coordinatorHost:new URL('./fixtures/context-semantic-close-host.mjs',import.meta.url).href});
+  s.options.host.configuration.ownershipPath=s.ledgerPath+'.semantic-owner-'+digest(ns.ownerId)+'.lock.sqlite';
+  s.control=control;
+  if(open){s.coordinator=await openContextSemanticCoordinator(s.options);s.f.workspace.defer(()=>s.coordinator.close().catch(error=>{if(!expectedCleanupFailure)throw error;assert.equal(error.code,'reader_failed');}));}
+  return s;
+}
+// A separate real service Worker bypasses only the parent's duplicate-handle
+// short circuit, as an independent process would. Ownership remains native.
+async function recoveryWorker(t,s) {
+  const request=requestRecord({requestId:randomUUID(),handleId:randomUUID(),credentialBindingId:s.options.host.configuration.semanticServiceBinding.credentialBindingId,credentialExpiresUtcMs:null,requestMaxMs:5000},process.hrtime.bigint(),Date.now());
+  const operation=operationRecord(request,process.hrtime.bigint(),5000,1);
+  const worker=new Worker(new URL('../context-semantic-worker.mjs',import.meta.url),{env:{},execArgv:[],workerData:{...s.options,
+    supervisor:undefined,binding:s.options.host.configuration.semanticServiceBinding,request,operation,resources:new SharedArrayBuffer(16),ownerState:new SharedArrayBuffer(64)}});
+  const exit=new Promise(resolve=>worker.once('exit',resolve));
+  s.f.workspace.defer(()=>worker.terminate());
+  const result=await closeGuard(new Promise((resolve,reject)=>{
+    worker.on('error',reject);worker.on('message',message=>{
+      if(message.kind==='identity')worker.postMessage({kind:'identity-ack',operation});
+      if(message.kind==='ready')resolve(message.result);
+    });
+  }),'recovery_open');
+  return {result,worker,async close(){worker.postMessage({kind:'close'});assert.equal(await closeGuard(exit,'recovery_close'),0);}};
+}
+function prepareAnchor(s) {
+  const a=JSON.parse(s.authority.prepare('SELECT anchor FROM anchors WHERE owner=?').get(ns.ownerId).anchor);
+  a.pending={sequence:a.sequence+1,stateDigest:a.stateDigest};
+  s.authority.prepare('UPDATE anchors SET anchor=? WHERE owner=?').run(canonicalJson(a),ns.ownerId);
+}
+
+test('F close: hanging host close is bounded, settles calls and quarantines uncertainty',async t=>{
+  const s=await closeSetup(t,{expectedCleanupFailure:true}),record=coordinatorRecord(s);
+  let worker;const post=Worker.prototype.postMessage;
+  const capture=t.mock.method(Worker.prototype,'postMessage',function(message,...args){if(message.kind==='call')worker=this;return Reflect.apply(post,this,[message,...args]);});
+  s.control[4]=1;
+  const pending=s.coordinator.getOwnerSemanticStatus({ownerId:ns.ownerId},s.token);
+  await closeUntil(()=>s.control[5]===1);capture.mock.restore();assert.ok(worker);
+  const callRecord=[...supervisorOwner(s.supervisor).owner.records].find(r=>r.parent===record);assert.ok(callRecord);
+  const terminate=t.mock.method(worker,'terminate');s.control[0]=1;
+  const closing=s.coordinator.close(),outcome=closing.then(()=>null,error=>error);
+  try {
+    assert.deepEqual(await closeGuard(pending,'pending_close_call'),bare('store_closed'));
+    assert.equal(callRecord.state,'pending','prompt_result_does_not_prove_disposal');
+    releaseClose(s.control,6);await closeUntil(()=>s.control[1]===1);
+    await testClock.advance(9999,{waitForWorkers:false});assert.equal(terminate.mock.calls.length,0);
+    await testClock.advance(1,{waitForWorkers:false});
+    assert.equal((await closeGuard(outcome,'close_grace_exhausted')).code,'reader_failed');
+    assert.equal(terminate.mock.calls.length,1);
+    const proof=s.supervisor.getCleanupStatus(record.id);assert.equal(proof.state,'failed');assert.equal(proof.nativeDisposed,false);assert.equal(proof.leasesReleased,false);
+    await assert.rejects(openContextSemanticCoordinator(s.options),{code:'reader_failed'});
+    await assert.rejects(closeGuard(s.supervisor.close(),'supervisor_close_settles'),{code:'reader_failed'});
+  } finally {releaseClose(s.control,6);releaseClose(s.control,2);await closeGuard(outcome,'close_cleanup');retainCoordinatorFile(s);}
+});
+
+test('F close: provider ignoring abort is bounded and retains provider quarantine',async t=>{
+  const abortState=new SharedArrayBuffer(8),aborts=new Int32Array(abortState);
+  const s=await setup(t,{expectedCleanupFailure:true,host:{abortState}});await prepared(s);s.view[7]=7;
+  const r=s.configure(false),reader=await openContextProductReader(r.options);s.f.workspace.defer(()=>reader.close());
+  const pending=reader.findCandidates(query,r.credential);await closeUntil(()=>s.view[10]===1);
+  const record=coordinatorRecord(s),abortedBefore=Atomics.load(aborts,1),closing=s.coordinator.close(),outcome=closing.then(()=>null,error=>error);
+  try {
+    await closeUntil(()=>Atomics.load(aborts,1)>abortedBefore);
+    await testClock.advance(10000,{waitForWorkers:false});
+    assert.equal((await closeGuard(outcome,'provider_close_grace')).code,'reader_failed');
+    const proof=s.supervisor.getCleanupStatus(record.id);assert.equal(proof.state,'failed');assert.equal(proof.providersSettled,false);assert.equal(proof.nativeDisposed,false);
+    await assert.rejects(openContextSemanticCoordinator(s.options),{code:'reader_failed'});
+    await closeGuard(pending,'borrower_settles');
+  } finally {releaseClose(s.view,11);await closeGuard(outcome,'provider_cleanup');retainCoordinatorFile(s);}
+});
+
+test('F close: normal close proves disposal without termination (control)',async t=>{
+  const s=await closeSetup(t),record=coordinatorRecord(s),post=Worker.prototype.postMessage;let worker;
+  const capture=t.mock.method(Worker.prototype,'postMessage',function(message,...args){if(message.kind==='call')worker=this;return Reflect.apply(post,this,[message,...args]);});
+  ok(await s.coordinator.getOwnerSemanticStatus({ownerId:ns.ownerId},s.token));capture.mock.restore();
+  const terminate=t.mock.method(worker,'terminate');await closeGuard(s.coordinator.close(),'normal_close');
+  assert.equal(terminate.mock.calls.length,0);assert.equal(s.control[1],1);
+  const proof=s.supervisor.getCleanupStatus(record.id);assert.equal(proof.state,'complete');
+  for(const bit of ['workerStopped','nativeDisposed','leasesReleased','providersSettled'])assert.equal(proof[bit],true);
+  const successor=await openContextSemanticCoordinator(s.options);await successor.close();
+});
+
+test('F recovery: contended ownership never asks for prepared-anchor disposal',async t=>{
+  const s=await closeSetup(t);prepareAnchor(s);s.control[14]=1;
+  const next=await recoveryWorker(t,s);
+  try{assert.equal(s.control[7],0,'no_disposal_callback_without_ownership');assert.equal(s.control[15],0,'no_recovery_cas_without_ownership');assert.deepEqual(next.result,{ok:false,error:{code:'storage_busy',retryable:true}});}
+  finally{await next.worker.terminate();}
+  await s.coordinator.close();s.control[10]=1;s.control[14]=1;
+  const opening=recoveryWorker(t,s);await closeUntil(()=>s.control[11]===1);
+  assert.equal(s.control[7],1);assert.equal(s.control[8],1,'prepared_callback_under_ownership');assert.equal(s.control[15],0,'recovery_waits_for_proof');
+  releaseClose(s.control,12);const recovered=await opening;ok(recovered.result);
+  assert.equal(s.control[15],1);assert.equal(s.control[16],1,'recovery_cas_under_ownership');await recovered.close();
+});
+
+test('F recovery: failed proof releases ownership for a later recovery',async t=>{
+  const s=await closeSetup(t,{open:false});prepareAnchor(s);s.control[13]=1;
+  const failed=await recoveryWorker(t,s);assert.deepEqual(failed.result,bare('index_unavailable'));
+  // The failed Worker remains alive: success must rely on dispose(), not exit.
+  assert.notEqual(failed.worker.threadId,-1);assert.equal(s.control[8],1,'failed_callback_under_ownership');
+  s.control[13]=0;const retry=await recoveryWorker(t,s);ok(retry.result);assert.equal(s.control[7],2);assert.equal(s.control[8],1);await retry.close();await failed.worker.terminate();
+});
+
+test('F recovery: reservation proof remains owned and unknown quanta stay fully charged (control)',async t=>{
+  const s=await closeSetup(t,{open:false}),db=new DatabaseSync(s.ledgerPath);
+  try {
+    const state=JSON.parse(db.prepare('SELECT state FROM semantic_owners WHERE owner_id=?').get(ns.ownerId).state);
+    state.reservations.reserved={status:'reserved',cost:'7',quantumId:'q'};
+    state.reservations.transmitted={status:'may_transmit',cost:'11',quantumId:'q',usage:'unknown'};
+    state.windows.w={id:'w',usedItems:8,usedMs:500,usedUsd:'0',quanta:{q:{id:'q',status:'reserved',maxUsd:'18',accounting:{version:1,mode:'lexical',items:8,ms:500,stage:'reserved',known:false,usage:null}}}};
+    const hash=stateDigest(state);db.prepare('UPDATE semantic_owners SET state=?,state_digest=? WHERE owner_id=?').run(stateBytes(state),hash,ns.ownerId);
+    const anchor=JSON.parse(s.authority.prepare('SELECT anchor FROM anchors WHERE owner=?').get(ns.ownerId).anchor);anchor.stateDigest=hash;
+    s.authority.prepare('UPDATE anchors SET anchor=? WHERE owner=?').run(canonicalJson(anchor),ns.ownerId);
+  } finally {db.close();}
+  s.control[10]=1;s.control[14]=1;
+  const opening=recoveryWorker(t,s);await closeUntil(()=>s.control[11]===1);
+  assert.equal(s.control[7],1);assert.equal(s.control[8],1);assert.equal(s.control[15],0);
+  releaseClose(s.control,12);const recovered=await opening;ok(recovered.result);assert.equal(s.control[16],1);
+  const read=new DatabaseSync(s.ledgerPath,{readOnly:true});
+  try {
+    const state=JSON.parse(read.prepare('SELECT state FROM semantic_owners WHERE owner_id=?').get(ns.ownerId).state),q=state.windows.w.quanta.q;
+    assert.equal(state.reservations.reserved.status,'released');assert.equal(state.reservations.transmitted.status,'unknown');
+    assert.equal(q.status,'settled');assert.equal(q.accounting.stage,'closed');assert.equal(q.accounting.known,false);assert.equal(q.accounting.usage,null);
+    assert.equal(state.windows.w.usedItems,8);assert.equal(state.windows.w.usedMs,500);assert.equal(state.windows.w.usedUsd,'11');
+  } finally {read.close();await recovered.close();}
+});
+
+test('F close: real safety fallback survives a frozen operation clock',async t=>{
+  const s=await closeSetup(t,{expectedCleanupFailure:true}),record=coordinatorRecord(s),before=testClock.now();
+  s.control[0]=1;const outcome=s.coordinator.close().then(()=>null,error=>error);
+  try {
+    await closeUntil(()=>s.control[1]===1);
+    assert.equal((await closeGuard(outcome,'frozen_clock_close',20000)).code,'reader_failed');
+    assert.equal(testClock.now(),before,'operation_clock_did_not_advance');
+    assert.equal(s.supervisor.getCleanupStatus(record.id).state,'failed');
+  } finally {releaseClose(s.control,2);await closeGuard(outcome,'frozen_clock_cleanup');retainCoordinatorFile(s);}
 });

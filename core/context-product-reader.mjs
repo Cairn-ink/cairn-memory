@@ -21,7 +21,7 @@ import { fail } from './validation.mjs';
 import { semanticConfiguration } from './context-semantic-coordinator.mjs';
 import { openDiagnosticBuffer, openDiagnosticClock, openDiagnosticSnapshot } from './context-product-open-diagnostic.mjs';
 
-const DISPOSAL_GRACE_MS = 10_000;
+export const DISPOSAL_GRACE_MS = 10_000;
 
 // Engine-internal only. A patch is added only after native and quiet-window
 // qualification. Neither public configuration nor environment can enable this.
