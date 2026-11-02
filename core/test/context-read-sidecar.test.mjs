@@ -356,7 +356,7 @@ test('R12 read-only missing/stale/hot/auxiliary/unsafe sidecars create no files,
     for (const path of [f.path, f.path + '.context-read-v1.sqlite']) {
       writeFileSync(path + suffix, Buffer.alloc(1024, 1), { mode: 0o600 });
       const files = readdirSync(f.workspace.path).sort();
-      unavailable(() => f.index({ readOnly: true }));
+      assert.throws(() => f.index({ readOnly: true }), { code: suffix === '-journal' ? 'storage_busy' : 'index_unavailable' });
       assert.deepEqual(readdirSync(f.workspace.path).sort(), files); unlinkSync(path + suffix);
     }
   }

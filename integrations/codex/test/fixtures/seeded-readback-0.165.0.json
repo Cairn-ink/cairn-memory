@@ -1,0 +1,271 @@
+{
+  "version": "0.165.0",
+  "exits": [
+    {
+      "code": 0,
+      "signal": null
+    },
+    {
+      "code": 0,
+      "signal": null
+    }
+  ],
+  "cases": [
+    {
+      "name": "partial-final",
+      "turns": {
+        "data": [
+          {
+            "id": "synthetic-partial-final",
+            "rootTurnId": null,
+            "items": [
+              {
+                "type": "userMessage",
+                "id": "user-partial-final",
+                "clientId": null,
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Synthetic question.",
+                    "text_elements": []
+                  }
+                ]
+              },
+              {
+                "type": "agentMessage",
+                "id": "partial-partial-final",
+                "text": "First stable section.",
+                "phase": "partial_answer",
+                "memoryCitation": null,
+                "delivery": null,
+                "questions": null
+              },
+              {
+                "type": "agentMessage",
+                "id": "final-partial-final",
+                "text": "Second terminal section.",
+                "phase": "final_answer",
+                "memoryCitation": null,
+                "delivery": null,
+                "questions": null
+              }
+            ],
+            "itemsView": "full",
+            "status": "completed",
+            "error": null,
+            "startedAt": null,
+            "completedAt": null,
+            "durationMs": null
+          }
+        ],
+        "nextCursor": null,
+        "backwardsCursor": "{\"requestedThreadId\":\"01a18f1d-5545-7492-8d2b-769db9250049\",\"rolloutOrdinal\":1,\"includeAnchor\":true,\"scope\":{\"kind\":\"turns\"}}"
+      },
+      "items": {
+        "data": [
+          {
+            "turnId": "synthetic-partial-final",
+            "item": {
+              "type": "userMessage",
+              "id": "user-partial-final",
+              "clientId": null,
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Synthetic question.",
+                  "text_elements": []
+                }
+              ]
+            },
+            "startedAtMs": null,
+            "completedAtMs": 1
+          },
+          {
+            "turnId": "synthetic-partial-final",
+            "item": {
+              "type": "agentMessage",
+              "id": "partial-partial-final",
+              "text": "First stable section.",
+              "phase": "partial_answer",
+              "memoryCitation": null,
+              "delivery": null,
+              "questions": null
+            },
+            "startedAtMs": 1,
+            "completedAtMs": 2
+          },
+          {
+            "turnId": "synthetic-partial-final",
+            "item": {
+              "type": "agentMessage",
+              "id": "final-partial-final",
+              "text": "Second terminal section.",
+              "phase": "final_answer",
+              "memoryCitation": null,
+              "delivery": null,
+              "questions": null
+            },
+            "startedAtMs": 1,
+            "completedAtMs": 2
+          }
+        ],
+        "nextCursor": null,
+        "backwardsCursor": "{\"requestedThreadId\":\"01a18f1d-5545-7492-8d2b-769db9250049\",\"rolloutOrdinal\":2,\"includeAnchor\":true,\"scope\":{\"kind\":\"itemsByCreatedAtOrdinal\"}}"
+      }
+    },
+    {
+      "name": "interrupted",
+      "turns": {
+        "data": [
+          {
+            "id": "synthetic-interrupted",
+            "rootTurnId": null,
+            "items": [
+              {
+                "type": "userMessage",
+                "id": "user-interrupted",
+                "clientId": null,
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Synthetic question.",
+                    "text_elements": []
+                  }
+                ]
+              },
+              {
+                "type": "agentMessage",
+                "id": "partial-interrupted",
+                "text": "First stable section.",
+                "phase": "partial_answer",
+                "memoryCitation": null,
+                "delivery": null,
+                "questions": null
+              }
+            ],
+            "itemsView": "full",
+            "status": "interrupted",
+            "error": null,
+            "startedAt": null,
+            "completedAt": null,
+            "durationMs": null
+          }
+        ],
+        "nextCursor": null,
+        "backwardsCursor": "{\"requestedThreadId\":\"01a18f1d-555d-71d1-8595-c5bcf625a3cc\",\"rolloutOrdinal\":1,\"includeAnchor\":true,\"scope\":{\"kind\":\"turns\"}}"
+      },
+      "items": {
+        "data": [
+          {
+            "turnId": "synthetic-interrupted",
+            "item": {
+              "type": "userMessage",
+              "id": "user-interrupted",
+              "clientId": null,
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Synthetic question.",
+                  "text_elements": []
+                }
+              ]
+            },
+            "startedAtMs": null,
+            "completedAtMs": 1
+          },
+          {
+            "turnId": "synthetic-interrupted",
+            "item": {
+              "type": "agentMessage",
+              "id": "partial-interrupted",
+              "text": "First stable section.",
+              "phase": "partial_answer",
+              "memoryCitation": null,
+              "delivery": null,
+              "questions": null
+            },
+            "startedAtMs": 1,
+            "completedAtMs": 2
+          }
+        ],
+        "nextCursor": null,
+        "backwardsCursor": "{\"requestedThreadId\":\"01a18f1d-555d-71d1-8595-c5bcf625a3cc\",\"rolloutOrdinal\":2,\"includeAnchor\":true,\"scope\":{\"kind\":\"itemsByCreatedAtOrdinal\"}}"
+      }
+    },
+    {
+      "name": "unknown",
+      "turns": {
+        "data": [
+          {
+            "id": "synthetic-unknown",
+            "rootTurnId": null,
+            "items": [
+              {
+                "type": "userMessage",
+                "id": "user-unknown",
+                "clientId": null,
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Synthetic question.",
+                    "text_elements": []
+                  }
+                ]
+              }
+            ],
+            "itemsView": "full",
+            "status": "interrupted",
+            "error": null,
+            "startedAt": null,
+            "completedAt": null,
+            "durationMs": null
+          }
+        ],
+        "nextCursor": null,
+        "backwardsCursor": "{\"requestedThreadId\":\"01a18f1d-556f-7f42-9de1-d2c4858df6ef\",\"rolloutOrdinal\":1,\"includeAnchor\":true,\"scope\":{\"kind\":\"turns\"}}"
+      },
+      "items": {
+        "data": [
+          {
+            "turnId": "synthetic-unknown",
+            "item": {
+              "type": "userMessage",
+              "id": "user-unknown",
+              "clientId": null,
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Synthetic question.",
+                  "text_elements": []
+                }
+              ]
+            },
+            "startedAtMs": null,
+            "completedAtMs": 1
+          }
+        ],
+        "nextCursor": null,
+        "backwardsCursor": "{\"requestedThreadId\":\"01a18f1d-556f-7f42-9de1-d2c4858df6ef\",\"rolloutOrdinal\":2,\"includeAnchor\":true,\"scope\":{\"kind\":\"itemsByCreatedAtOrdinal\"}}"
+      }
+    }
+  ],
+  "isolation": {
+    "networkNamespace": "fresh",
+    "interfaces": [
+      "lo"
+    ],
+    "loopbackUp": true,
+    "externalRoutes": 0
+  },
+  "modelCalls": 0,
+  "mockRequests": 0,
+  "scriptSha256": "b5132675c2d0519ae42de5cc793c35dab47c47f0917cc24d342a6ac45c867e36",
+  "isolationScriptSha256": "4935f93410d4a5fadc1dbfd75b5f73fed4859c82d8c28a943f2fa8a3c453a5b8",
+  "methods": [
+    "initialize",
+    "thread/start",
+    "thread/resume",
+    "thread/turns/list",
+    "thread/items/list"
+  ]
+}

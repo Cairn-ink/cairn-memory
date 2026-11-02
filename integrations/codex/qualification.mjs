@@ -15,11 +15,15 @@ function sort(value) {
   return value && typeof value==='object' ? Object.fromEntries(Object.keys(value).sort().map(key=>[key,sort(value[key])])) : value;
 }
 export const fingerprint = evidence => sha(canonical(evidence));
-// Frozen from the native 0.160.1/0.161.0 evidence, including transitive $refs.
-// 0.162.0 adds stable partial_answer messages; binary searchOccurrences SQL and
-// canonical item_completed capture are frozen separately from the A7 evidence.
-export const KNOWN_FORMATS = Object.freeze(['a64741d8899f84513232c3145595ed279325abfdf190b7705b94dcb81b14ab1a',
-  '66fc10979c1594fdb2ba648983d36f10f2c4c1b33c01afe853ba92925b707b87']);
+// Native 0.160.1–0.166.0 evidence, with transitive $refs and the section 18
+// marker profile. Equal snapshots share an entry; versions do not grant access.
+// Refreshing this registry also invalidates old qualified AND changed verdicts.
+export const KNOWN_FORMATS = Object.freeze([
+  '6325ee9b3e97378b2ddfbb5a8a763e89f183df78850b74a702570c1fd364ce71',
+  'f3ea8d1075a12ed48be85664d221d146f02423a90cfeb0ebcbbd8fd0e42cc01d',
+  '79214a75034e013259c75a074b7de1173785d5a879281022f4cc1586d9a8d1c0',
+  'd6b9a0c5e2e89207703eb4b3cc66c02d26f473425a89c4cad0be5a7a67fbdd36',
+]);
 const policy = sha(canonical(KNOWN_FORMATS));
 export const validVersion = value => typeof value==='string' && /^\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.-]+)?$/u.test(value) && value.length<=100;
 export async function binaryIdentity(binaryPath) {

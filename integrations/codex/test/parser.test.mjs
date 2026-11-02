@@ -28,8 +28,9 @@ test('0.160.1 binary evidence is immutable and qualifies exactly the observed pa
   assert.equal(output.definitions.UserPromptSubmitHookSpecificOutputWire.properties.additionalContext.type,'string');
 });
 test('unseeded creators need qualification evidence, while malformed versions fail closed',()=>{
-  assert.deepEqual(QUALIFIED_CREATORS,['0.157.1','0.160.1','0.161.0','0.162.0']);
-  for (const version of ['0.157.2','0.160.0','0.160.2','0.160.99','0.163.0','0.160.1-dev']) {
+  assert.deepEqual(QUALIFIED_CREATORS,['0.157.1','0.160.1','0.161.0','0.162.0',
+    '0.163.0','0.164.0','0.165.0','0.166.0']);
+  for (const version of ['0.157.2','0.160.0','0.160.2','0.160.99','0.167.0','0.160.1-dev']) {
     const row=JSON.parse(lines[0]);row.payload.cli_version=version;
     assert.throws(()=>verifyHeader(Buffer.from(JSON.stringify(row)),sessionId),/creator_unqualified/);
     assert.equal(verifyHeader(Buffer.from(JSON.stringify(row)),sessionId,{qualifiedCreatorVersion:version}),FORMAT);

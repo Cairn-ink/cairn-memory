@@ -5,6 +5,15 @@ import { readFile,mkdir,lstat,writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { resolve,join } from 'node:path';
 
+// Limited type/tag evidence; native rollout probes qualify persistent records.
+export const SERDE_MARKERS = Object.freeze([
+  'internally tagged enum AgentMessageContent',
+  'struct variant AgentMessageContent::Text with 1 element',
+  'internally tagged enum RolloutItemWire',
+  'hook_started',
+  'hook_completed',
+]);
+
 export async function collectEvidence(binaryArg,outArg) {
 if (!binaryArg || !outArg) throw new Error('invalid_probe');
 const binary=resolve(binaryArg),out=resolve(outArg);
@@ -40,10 +49,7 @@ for(const name of ['HookEventName','HookMetadata','HookTrustStatus','HooksListPa
 await save('app-server-selected.json',selected);
 const bytes=await readFile(binary);
 const markers={};
-for(const marker of ['internally tagged enum AgentMessageContent',
-  'struct variant ThreadItem::AgentMessage with 6 elements','struct variant ThreadItem::UserMessage with 3 elements',
-  'HookStartedhook_startedHookCompletedhook_completed','RolloutItemWiremessagereplacement_history',
-  'struct variant AgentMessageContent::Text','struct variant AgentMessageContent::Text with 1 element']) {
+for(const marker of SERDE_MARKERS) {
   const offset=bytes.indexOf(Buffer.from(marker));
   if(offset<0)throw new Error('serde_marker_missing');
   markers[marker]={offset,excerpt:bytes.subarray(Math.max(0,offset-100),offset+500).toString('utf8')};

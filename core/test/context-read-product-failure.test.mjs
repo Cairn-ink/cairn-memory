@@ -6,7 +6,8 @@ import { randomUUID } from 'node:crypto';
 import * as reader from '../context-product-reader.mjs';
 import * as pump from '../context-product-pump.mjs';
 import * as attribution from '../context-product-attribution.mjs';
-import { createContextReadSupervisor,createSupervisorRegistry } from '../context-read-supervisor.mjs';
+import { sealNative } from '../context-product-telemetry.mjs';
+import { createContextReadSupervisor,createSupervisorRegistry,supervisorOwner } from '../context-read-supervisor.mjs';
 import { credentialDigest,PRODUCT_PROFILE } from '../context-product-control.mjs';
 import { personal,descriptor } from '../testing/context-product-owner-fixture.mjs';
 
@@ -84,6 +85,56 @@ function fakeWorker(data,{identity=false,send=false,error=false,fileIdentity='12
   }});
   queueMicrotask(()=>worker.emit('message',identity?{kind:'identity',operation:data.operation,fileIdentity}:{operation:data.operation,result:{ok:true,value:null},fileIdentity}));return worker;
 }
+for(const failedProof of [false,true])test(`opening rebind: ${failedProof?'failed proof refuses with identity cause':'waits and succeeds after the other owner proof'}`,{timeout:30000},async t=>{
+  let releaseClose,identityAcknowledged,closeStarted;
+  const heldClose=new Promise(resolve=>{releaseClose=resolve;}),acknowledged=new Promise(resolve=>{identityAcknowledged=resolve;}),closing=new Promise(resolve=>{closeStarted=resolve;});
+  t.after(()=>releaseClose());
+  let pending,firstData,ackCount=0;
+  function actor(data,hold) {
+    const worker=new EventEmitter();
+    Object.assign(worker,{ref(){},unref(){},terminate(){return Promise.resolve(0);},postMessage(message){
+      if(message.kind==='identity-ack') {
+        if(hold)queueMicrotask(()=>worker.emit('message',{operation:data.operation,result:{ok:true,value:null},fileIdentity:'12:34'}));
+        else {ackCount++;identityAcknowledged();}return;
+      }
+      if(message.method==='close') {
+        if(hold){closeStarted();void heldClose.then(()=>{sealNative(data.frame);worker.emit('exit',0);});}
+        else {sealNative(data.frame);queueMicrotask(()=>worker.emit('exit',0));}
+      }
+    }});
+    queueMicrotask(()=>worker.emit('message',{kind:'identity',operation:data.operation,fileIdentity:'12:34'}));
+    return worker;
+  }
+  const a=setup(t,'closing-owner',{maintenance:false,isolated:true,fake:data=>{firstData=data;return actor(data,true);}});
+  const b=setup(t,'opening-owner',{isolated:true,fake:data=>{pending={data,worker:actor(data,false)};return pending.worker;}});
+  b.options.supervisor=supervisorOwner(a.options.supervisor).registry.supervisor();t.after(()=>b.options.supervisor.close().catch(()=>{}));
+  b.options.path=a.options.path;
+  const namespace={...personal,ownerId:'synthetic-rebinding-owner'};b.options.readSet=[namespace];
+  Object.assign(b.options.host.configuration.serviceBinding,{serviceId:'synthetic-rebind-service',ownerId:namespace.ownerId,namespaces:{readSet:[namespace],ownerCoverage:descriptor([namespace])}});
+  const first=await a.open(a.options);let settled=false;
+  const opening=b.open(b.options).then(value=>{settled=true;return {value};},error=>{settled=true;return {error};});
+  let disposal;
+  try {
+    await acknowledged;assert.equal(ackCount,1,'identity is acknowledged while no owner holds cleanup');
+    if(failedProof)Atomics.add(new Int32Array(firstData.resources),0,1); // Deliberately unproven lease.
+    disposal=first.close().catch(error=>error);await closing;
+    pending.worker.emit('message',{operation:pending.data.operation,result:{ok:true,value:null},fileIdentity:'12:34'});
+    for(let i=0;i<30;i++)await Promise.resolve();
+    assert.equal(settled,false,'validated opening waits for the other owner disposal proof');
+    assert.equal(ackCount,1,'held rebind never acknowledges again');
+    releaseClose();await disposal;
+    const outcome=await opening;
+    if(failedProof) {
+      assert.equal(outcome.error?.code,'reader_failed','failed proof refuses the admitted bind');
+      const failure=reader.maintenanceFailureDiagnostic(outcome.error);assert.equal(failure?.cause,'identity');
+      assert.equal(Object.hasOwn(failure,'protocolKind'),false,'failed proof is never a result_shape protocol failure');
+    } else {
+      assert.equal(outcome.error,undefined,'complete proof admits the already validated opening');
+      assert.ok(outcome.value);await outcome.value.close();
+    }
+    assert.equal(ackCount,1,'held opening sends no extra acknowledgement');
+  } finally {releaseClose();await disposal;await first.close().catch(()=>{});}
+});
 for(const [mode,cause,fake] of [['spawn','spawn',()=>{throw new TypeError('private spawn text');}],['dispatch','dispatch',data=>fakeWorker(data,{send:true})],['identity','identity',data=>fakeWorker(data,{identity:true})],['bounded_error','worker_error',data=>fakeWorker(data,{error:true})]])
 test(`failure cause: ${mode} records the collapsed parent boundary`,async t=>{
   const s=setup(t,mode,{fake}),p=s.renew(s.config);t.after(()=>p.close().catch(()=>{}));await s.step();const final=await p.completion;

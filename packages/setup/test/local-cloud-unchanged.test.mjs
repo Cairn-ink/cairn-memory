@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { fixture } from './clients.test.mjs';
+import { KNOWN_FORMATS } from '../runtime/integrations/codex/qualification.mjs';
 
 // Extract immutable historical git objects, never current source, with the same
 // fakes and private homes. No credentials or machine paths are recorded.
@@ -73,7 +74,7 @@ function assertProbeDelta(baseline, current, client, home) {
   for (const call of current) {
     if (JSON.stringify(args(call)) === JSON.stringify(args(baseline[index]))) { index++; continue; }
     const expected = client === 'claude' ? 'plugin list --json' : 'mcp list --json';
-    assert.equal(call.args.join(' '), expected, 'Only the new read-only detection probes may be added');
+    assert.equal(call.args.join(' '), expected, 'Only the new read-only detection probes may be added; next historical call: ' + JSON.stringify(args(baseline[index])));
     if (client === 'codex') assert.notEqual(call.home, home, 'The extra probe must use an inspection copy');
   }
   assert.equal(index, baseline.length, 'Existing native calls must remain in order');
@@ -87,28 +88,80 @@ const normalizeRuntime = (text, home) => text.replace(new RegExp(
 const generationPath = new RegExp('^\\.codex/cairn/runtime/(' + runtimeId + ')(/.*)?$', 'u');
 // PR #454 intentionally changes hosted cancellation and protocol R16 permit
 // restoration. Only these runtime sources may differ from immutable 0.5.3.
+// Contract section 18 (0.6.3) adds the three Codex format qualification modules.
 const hostedRuntimeExceptions = [
   'integrations/client/control-state.mjs',
   'integrations/client/file-lock.mjs',
   'integrations/client/pairing.mjs',
   'integrations/client/transport-hosted.mjs',
+  'integrations/codex/parser.mjs',
+  'integrations/codex/qualification.mjs',
+  'integrations/codex/schema-evidence.mjs',
 ];
 const packagedHostedRuntime = new Map(await Promise.all(hostedRuntimeExceptions.map(async path =>
   [path, await readFile(new URL('../runtime/' + path, import.meta.url))])));
 const packagedHostedManifest = await readFile(new URL('../runtime/manifest.json', import.meta.url));
 
+// Contract section 18, Rule 8 (v0.21): an independent historical-verdict oracle.
+// Do not import production canonical/fingerprint or derive expected values from
+// a current verdict. These frozen historical inputs also guard registry drift.
+const historicalFormats = Object.freeze([
+  'a64741d8899f84513232c3145595ed279325abfdf190b7705b94dcb81b14ab1a',
+  '66fc10979c1594fdb2ba648983d36f10f2c4c1b33c01afe853ba92925b707b87',
+]);
+const historicalPolicy = 'a4e32a525989152d59714e6125e3704ea9ee131e1d1b1439c2b5ee638df6cef3';
+const markerProfile = ['internally tagged enum AgentMessageContent',
+  'struct variant AgentMessageContent::Text with 1 element',
+  'internally tagged enum RolloutItemWire', 'hook_started', 'hook_completed'].sort();
+function oracleCanonical(value) {
+  if (Array.isArray(value)) return '[' + value.map(oracleCanonical).join(',') + ']';
+  if (value && typeof value === 'object') return '{' + Object.keys(value).sort()
+    .map(key => JSON.stringify(key) + ':' + oracleCanonical(value[key])).join(',') + '}';
+  return JSON.stringify(value);
+}
+const oracleHash = value => createHash('sha256').update(oracleCanonical(value)).digest('hex');
+assert.equal(oracleHash(historicalFormats), historicalPolicy);
+const mappedFingerprints = new Map(), derivedFormats = new Set();
+for (const version of ['0.160.1', '0.161.0', '0.162.0', '0.163.0', '0.164.0', '0.165.0', '0.166.0']) {
+  const original = JSON.parse(await readFile(new URL(`../../../integrations/codex/test/fixtures/binary-${version}/format.json`, import.meta.url)));
+  const refreshed = oracleHash({ ...original, serdeMarkers: markerProfile });
+  derivedFormats.add(refreshed);
+  if (['0.160.1', '0.161.0', '0.162.0'].includes(version)) {
+    const previous = oracleHash(original);
+    assert.ok(historicalFormats.includes(previous));
+    if (mappedFingerprints.has(previous)) assert.equal(mappedFingerprints.get(previous), refreshed);
+    mappedFingerprints.set(previous, refreshed);
+  }
+}
+assert.deepEqual([...mappedFingerprints.keys()], historicalFormats);
+assert.deepEqual(KNOWN_FORMATS, [...derivedFormats]);
+const expectedPolicy = oracleHash([...derivedFormats]);
+const qualificationVerdictPath = /^\.codex\/cairn\/qualification\/[a-f0-9]{64}\.json$/u;
+
 // Walk JSON token positions so only exact field paths change, retaining every
 // whitespace byte and string escape elsewhere. Hosted installation.json has no
 // installerVersion field; its schema version and every nested field stay raw.
-function normalizeFile(name, bytes, home) {
+function normalizeFile(name, bytes, home, { historical = false } = {}) {
   const installation = name === '.codex/cairn/installation.json';
   const runtimeManifest = generationPath.exec(name)?.[2] === '/manifest.json';
-  if (!installation && !runtimeManifest && name !== '.codex/hooks.json') return bytes;
-  const text = bytes.toString();
-  JSON.parse(text);
+  const verdict = historical && qualificationVerdictPath.test(name);
+  if (!installation && !runtimeManifest && name !== '.codex/hooks.json' && !verdict) return bytes;
+  const text = verdict ? new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) : bytes.toString();
+  const parsed = JSON.parse(text), translatedValues = new Map();
+  if (verdict) {
+    assert.ok(parsed && typeof parsed === 'object' && !Array.isArray(parsed), 'Malformed qualification verdict');
+    const oldPolicy = parsed.policy === historicalPolicy;
+    assert.ok(oldPolicy || parsed.policy === expectedPolicy, 'Unsupported qualification policy');
+    translatedValues.set('policy', expectedPolicy);
+    if (Object.hasOwn(parsed, 'fingerprint')) {
+      const current = derivedFormats.has(parsed.fingerprint);
+      assert.ok(current || (oldPolicy && mappedFingerprints.has(parsed.fingerprint)), 'Unsupported qualification fingerprint');
+      translatedValues.set('fingerprint', current ? parsed.fingerprint : mappedFingerprints.get(parsed.fingerprint));
+    }
+  }
   const tokens = [...text.matchAll(/"(?:[^"\\]|\\.)*"|[{}\[\]:,]|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null/gu)];
   let at = 0;
-  const edits = [];
+  const edits = [], seenVerdictValues = new Set();
   function value(path) {
     const token = tokens[at++], raw = token[0];
     if (raw === '{') {
@@ -125,6 +178,15 @@ function normalizeFile(name, bytes, home) {
         if (tokens[at++][0] === ']') return;
       }
     } else if (raw.startsWith('"')) {
+      if (verdict) {
+        if (path.length === 1 && translatedValues.has(path[0])) {
+          assert.ok(!seenVerdictValues.has(path[0]), 'Duplicate qualification value');
+          seenVerdictValues.add(path[0]);
+          const expected = translatedValues.get(path[0]);
+          if (JSON.parse(raw) !== expected) edits.push([token.index, raw.length, JSON.stringify(expected)]);
+        }
+        return;
+      }
       if (runtimeManifest) {
         // Preserve paths, order, formatting and every other manifest byte.
         if (path.length === 2 && path[0] === 'files' && hostedRuntimeExceptions.includes(path[1])) {
@@ -161,7 +223,7 @@ function fileInventory(entries, normalize, home, { historical = false } = {}) {
       bytes = packaged;
     }
     const hash = bytes === null ? '<directory>' : createHash('sha256')
-      .update(normalize ? normalizeFile(name, bytes, home) : bytes).digest('hex');
+      .update(normalize ? normalizeFile(name, bytes, home, { historical }) : bytes).digest('hex');
     if (normalize && generation) {
       if (!generations.has(generation[1])) generations.set(generation[1], {});
       generations.get(generation[1])[generation[2] ?? '/'] = hash;
@@ -239,6 +301,7 @@ test('L06 version normalization preserves unrelated bytes and complete runtime g
     normalized('Cairn.ink Memory setup 0.5.3\nunrelated 0.5.3', home));
 });
 test('L06 hosted runtime exceptions require packaged bytes and preserve all other comparisons', async () => {
+  assert.equal(hostedRuntimeExceptions.length, 7);
   const home = '/synthetic/.codex';
   const oldRuntime = '.codex/cairn/runtime/0.5.3-0123456789ab/';
   const newRuntime = '.codex/cairn/runtime/0.6.0-abcdef012345/';
@@ -283,6 +346,88 @@ test('L06 hosted runtime exceptions require packaged bytes and preserve all othe
   // Even an approved hash cannot hide a corrupt installed manifest copy.
   assert.throws(() => files([[manifestName, oldManifest]]), { code: 'ERR_ASSERTION' });
 });
+
+test('L06/L33/L24 verdict exception edits only historical value spans using the independent oracle', () => {
+  const name = '.codex/cairn/qualification/' + 'a'.repeat(64) + '.json', home = '/synthetic/.codex';
+  const previousFingerprint = historicalFormats[0], targetFingerprint = mappedFingerprints.get(previousFingerprint);
+  // Deliberate whitespace, escapes and nested lookalikes must survive unchanged.
+  const oldText = '  {\r\n "identity":"' + 'a'.repeat(64) + '", "policy" : "' + historicalPolicy + '",\r\n' +
+    ' "version":"0.160.\\u0031", "status":"qualified", "fingerprint":"' + previousFingerprint + '",\r\n' +
+    ' "binarySha256":"' + 'b'.repeat(64) + '", "nested":{"policy":"' + historicalPolicy + '"} }\r\n';
+  const currentText = oldText.replace('"' + historicalPolicy + '"', '"' + expectedPolicy + '"')
+    .replace('"' + previousFingerprint + '"', '"' + targetFingerprint + '"');
+  const old = Buffer.from(oldText), current = Buffer.from(currentText);
+  const historical = bytes => normalizeFile(name, bytes, home, { historical: true });
+  assert.deepEqual(historical(old), current);
+  assert.deepEqual(historical(current), current); // already-current values stay verbatim
+  assert.strictEqual(normalizeFile(name, current, home), current); // current is never rewritten
+  assert.strictEqual(normalizeFile(name, old, home), old);
+  const mixed = Buffer.from(oldText.replace(previousFingerprint, targetFingerprint));
+  assert.deepEqual(historical(mixed), current);
+  const escapedFingerprint = '\\u00' + targetFingerprint.charCodeAt(0).toString(16) + targetFingerprint.slice(1);
+  const escaped = Buffer.from(currentText.replace(targetFingerprint, escapedFingerprint));
+  assert.deepEqual(historical(escaped), escaped); // not decoded/re-serialized
+  const absent = Buffer.from(oldText.replace(', "fingerprint":"' + previousFingerprint + '"', ''));
+  const absentExpected = Buffer.from(currentText.replace(', "fingerprint":"' + targetFingerprint + '"', ''));
+  assert.deepEqual(historical(absent), absentExpected);
+  assert.equal(Object.hasOwn(JSON.parse(historical(absent)), 'fingerprint'), false);
+
+  const files = (entries, historical = false, normalize = true) => fileInventory(entries, normalize, home, { historical });
+  assert.deepEqual(files([[name, old]], true), files([[name, current]]));
+  assert.notDeepEqual(files([[name, old]]), files([[name, current]])); // current/current stays strict
+  assert.notDeepEqual(files([[name, old]], true, false), files([[name, current]], false, false)); // no-write inventory stays strict
+  for (const otherName of [name.replace('.json', '.pending'), name.replace('a'.repeat(64), 'observed-cli'),
+    name.replace('a'.repeat(64), 'A'.repeat(64)), name.replace('/qualification/', '/qualification/nested/'),
+    name.replace('/qualification/', '/other/')]) {
+    assert.strictEqual(normalizeFile(otherName, old, home, { historical: true }), old);
+    assert.notDeepEqual(files([[otherName, old]], true), files([[otherName, current]]));
+  }
+});
+
+test('L06/L33/L24 verdict exception rejects every unrelated byte, value and inventory change', () => {
+  const name = '.codex/cairn/qualification/' + 'a'.repeat(64) + '.json', home = '/synthetic/.codex';
+  const oldFingerprint = historicalFormats[0], newFingerprint = mappedFingerprints.get(oldFingerprint);
+  const before = '{"identity":"' + 'a'.repeat(64) + '","policy":"' + historicalPolicy + '","version":"0.160.1",' +
+    '"status":"qualified","fingerprint":"' + oldFingerprint + '","binarySha256":"' + 'b'.repeat(64) + '"}\n';
+  const after = before.replace(historicalPolicy, expectedPolicy).replace(oldFingerprint, newFingerprint);
+  const files = (entries, historical = false) => fileInventory(entries, true, home, { historical });
+  const baseline = files([[name, Buffer.from(before)]], true);
+  const current = text => files([[name, Buffer.from(text)]]);
+  for (const [label, changed] of [
+    ['qualified to changed', after.replace('"qualified"', '"changed"')],
+    ['different identity', after.replace('a'.repeat(64), 'c'.repeat(64))],
+    ['version', after.replace('0.160.1', '0.160.2')],
+    ['binary hash', after.replace('b'.repeat(64), 'c'.repeat(64))],
+    ['reordered keys', after.replace('"status":"qualified","fingerprint":"' + newFingerprint + '"',
+      '"fingerprint":"' + newFingerprint + '","status":"qualified"')],
+    ['added key', after.replace('}\n', ',"extra":true}\n')],
+    ['deleted key', after.replace('"status":"qualified",', '')],
+    ['missing fingerprint', after.replace('"fingerprint":"' + newFingerprint + '",', '')],
+    ['whitespace', '{ ' + after.slice(1)],
+    ['key escape', after.replace('"status"', '"sta\\u0074us"')],
+    ['unsupported current policy', after.replace(expectedPolicy, 'c'.repeat(64))],
+    ['unsupported current fingerprint', after.replace(newFingerprint, 'c'.repeat(64))],
+    ['old current policy', before],
+    ['old fingerprint under current policy', after.replace(newFingerprint, oldFingerprint)],
+    ['malformed current JSON', after.slice(0, -2)],
+  ]) assert.throws(() => assert.deepEqual(current(changed), baseline), { code: 'ERR_ASSERTION' }, label);
+  for (const bad of [before.replace(historicalPolicy, 'c'.repeat(64)), before.replace(oldFingerprint, 'c'.repeat(64)),
+    before.replace(oldFingerprint, newFingerprint).replace(historicalPolicy, 'c'.repeat(64)),
+    after.replace(newFingerprint, oldFingerprint), before.slice(0, -2), '\ufeff' + before,
+    before.replace('"policy":"' + historicalPolicy + '"', '"policy":null'),
+    before.replace('"fingerprint":"' + oldFingerprint + '"', '"fingerprint":null')])
+    assert.throws(() => files([[name, Buffer.from(bad)]], true));
+  assert.throws(() => files([[name, Buffer.from([0xff])]], true));
+  assert.throws(() => assert.deepEqual(files([]), baseline), { code: 'ERR_ASSERTION' });
+  assert.throws(() => assert.deepEqual(files([[name, Buffer.from(after)],
+    [name.replace('a'.repeat(64), 'c'.repeat(64)), Buffer.from(after)]]), baseline), { code: 'ERR_ASSERTION' });
+  const noFingerprintBefore = before.replace('"fingerprint":"' + oldFingerprint + '",', '').replace('"qualified"', '"changed"');
+  const noFingerprintAfter = noFingerprintBefore.replace(historicalPolicy, expectedPolicy);
+  assert.deepEqual(files([[name, Buffer.from(noFingerprintBefore)]], true), current(noFingerprintAfter));
+  assert.throws(() => assert.deepEqual(files([[name, Buffer.from(noFingerprintBefore)]], true),
+    current(noFingerprintAfter.replace('"status"', '"fingerprint":"' + newFingerprint + '","status"'))), { code: 'ERR_ASSERTION' });
+});
+
 for (const lang of ['zh', 'en']) test(`L02 fresh cloud choice preserves hosted flow (${lang})`, async t => {
   const baselineFixture = await fixture(t), routedFixture = await fixture(t);
   const args = ['setup', '--lang', lang];
@@ -317,6 +462,16 @@ for (const { scenario, args, label } of cells) test(`${label} hosted baseline: $
     await writeFile(join(f.home, '.claude.json'), JSON.stringify({ mcpServers: { cairn: { type: 'stdio', command: 'legacy', args: [] } } }));
   }
   if (scenario === 'Claude inspection failure') await f.setClaudeState({ fail: 'plugin list --json', failCode: 7 });
+  // Fixture setup used the current policy. Start BOTH comparison runs without
+  // that derived verdict, so the historical policy does not uniquely incur
+  // schema probes while current gets a cache hit. Setup/status then write the
+  // independently checked verdicts. Keep native call-order checks strict and
+  // preserve observed-host descriptors and pending locks.
+  const verdictDirectory = join(f.codexHome, 'cairn/qualification');
+  const verdictNames = await readdir(verdictDirectory).catch(error => {
+    if (error.code !== 'ENOENT') throw error; return [];
+  });
+  for (const name of verdictNames.filter(name => /^[a-f0-9]{64}\.json$/u.test(name))) await rm(join(verdictDirectory, name));
   let inspectionTmpdir;
   if (label === 'L33/L24') {
     inspectionTmpdir = join(f.home, 'tmp'); await mkdir(inspectionTmpdir);

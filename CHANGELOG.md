@@ -15,6 +15,25 @@
   repository README entry points. These metadata and documentation changes are
   not in the published installer; installer version and behavior are unchanged.
 
+## 0.6.3 — Unreleased: Codex 0.164.0–0.166.0 format requalification
+
+- Requalify Codex 0.163.0–0.166.0 using offline native schemas and rollouts.
+  Installations that lost their sign-in around 2026-10-22 stopped capturing
+  then. Codex 0.164.0 and later have been paused since those hosts were
+  installed, about 2026-10-24 on the observed machine.
+- After successful current-policy qualification, later eligible hooks resume
+  automatic capture and recall. The observing pending hook stays closed.
+  Existing EOF boundaries, pending batches and permanent `unsupported_format`
+  latches keep their existing behaviour; qualification does not clear them.
+- The engine is unchanged from 0.6.2 except the Codex format qualification
+  modules. The embedded engine is rebuilt with only those three module changes;
+  no storage, retrieval or safety engine changes are included.
+- Native evidence covers final/two-turn/interrupt/partial-final/resume/tool
+  lifecycles, trusted hook execution, context inventory and developer-role
+  recall placement on all four hosts. Local compaction was also produced.
+  Dynamic-tool replacement and security-risk rows were not produced; the
+  documented parser exclusions and fail-closed handling remain.
+
 ## 0.6.2 — 2026-10-28: hosted Codex inspection TMPDIR fallback
 
 - Fix the 0.6.1 known limitation: cloud-mode Codex setup and `status` no longer
