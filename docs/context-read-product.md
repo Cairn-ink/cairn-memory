@@ -919,7 +919,14 @@ Canonical selection/intent observation duty belongs to lexical refreshes only;
 embedding, status and validation work use capacity without earning observation
 credit. Semantic coverage lag concerns recall. Unsuccessful turns and genuine
 semantic cutoffs remain terminal. The lexical cutoff exception stays disabled.
-Bounded coordinator disposal also remains separate work.
+Coordinator close uses the reader's existing 10,000-ms graceful-disposal bound.
+Pending coordinator calls settle as `store_closed`; after that bound the parent
+terminates a Worker whose provider or host close has not settled. A forced or
+unproven close rejects with `reader_failed` and retains the existing quarantine;
+only the unchanged four-bit disposal proof permits successful cleanup. This
+bounds the graceful wait, not a claim about termination scheduling or cadence.
+Actual-observation cadence, pacing, misses and startup/validation cursors remain
+separate parity work.
 
 A recognized canonical/dependency fence change during a batch rolls back that
 batch and returns successful `rebuilding` progress. Earlier committed batches
@@ -1099,7 +1106,12 @@ sequence/digests cannot initialize another allowance. Pending preparations bar
 admission. After independently confirmed resource disposal, the trusted
 `confirmDisposed` recovery decision may finish an exact committed preparation
 or cancel an exact uncommitted one. A timeout or PID observation supplies no
-such proof. Failed opening returns a supervised `cleanupId`; await its drain
+such proof. The engine calls `confirmDisposed` and performs recovery
+compare-and-swap only while holding the owner's SQLite ownership transaction,
+for both prepared anchors and outstanding reservations. A contended ownership
+open refuses with `storage_busy` without calling `confirmDisposed`. Opening
+failure after acquisition releases ownership through ordinary disposal. Failed
+opening returns a supervised `cleanupId`; await its drain
 before replacing the service. Loss/migration recovery requires the host's
 separate authenticated reconciliation procedure, preserving or increasing
 unknown/spent exposure, latch and epoch barriers and rotating binding/ledger
