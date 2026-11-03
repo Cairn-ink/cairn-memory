@@ -1188,15 +1188,17 @@ Unpublished work and partial coverage retain their existing planning and
 publication behaviour. Forget, correction and a new lexical publication change
 the lexical validation digest; representation is part of that digest, while
 embedder identity and owner purge epoch changes invalidate reuse directly.
-On this base, product reads do not yet enforce suppression at read time.
-Publication reuse removes an accidental overlap degradation that the base had.
-Only sequential reads are equivalent to the base, including returning suppressed
-content. A semantic query that overlaps a suppression and a no-op refresh may now
-serve a suppressed target that only semantic retrieval finds, where the base
-happened to degrade. Two known-gap `todo` tests reproduce this overlap and assert
-that the target is not served; they become must-pass when the fence lands.
-The suppression guarantee comes from the safety layer's read-time epoch fence
-when it lands and does not depend on publication rotation.
+On safety layouts v34, v38 and v48, S2h-2 product reads enforce suppression at
+read time through the owner-epoch fence. Sequential and overlapping reads exclude
+the suppressed target independently of vector publication rotation or reuse.
+The required `overlapping suppression excludes the semantic-only target from
+${method}` and `sequential suppression excludes the semantic-only
+target from ${method}` tests cover `findCandidates` and
+`contextRead` on cells 34 and 38. On unmigrated layouts v18, v23 and v33,
+behaviour is unchanged from main `6d8ced65`: there is no suppression epoch or
+read-time suppression fence. Canonical forget, correction and deletion checks
+still apply; publication reuse does not add a suppression guarantee to those
+layouts.
 
 Public status and refresh DTOs expose lexical progress, not vector publication
 IDs or vector generation checkpoints. Private vector pointers and validation

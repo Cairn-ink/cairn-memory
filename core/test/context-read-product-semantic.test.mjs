@@ -681,9 +681,7 @@ test('public refresh recovers a deleted vector certificate',async t=>{
   assert.notEqual(after.publicationId,before.publicationId);assert.notEqual(after.generation.id,before.generation.id);
 });
 
-for(const method of ['findCandidates','contextRead'])test(`overlapping suppression excludes the semantic-only target from ${method}`,{
-  todo:"Becomes must-pass when the safety layer's read-time suppression fence lands."
-},async t=>{
+for(const method of ['findCandidates','contextRead'])test(`overlapping suppression excludes the semantic-only target from ${method}`,async t=>{
   const {writeContentSuppressionInside,memorySuppressionObservationInside}=await import('../content-suppression-storage.mjs');
   const {transaction,readTransaction}=await import('../database.mjs');
   const s=await setup(t,{safety:true}),m=await prepared(s),r=s.configure(false),reader=await openContextProductReader(r.options);s.f.workspace.defer(()=>reader.close());
@@ -698,12 +696,85 @@ for(const method of ['findCandidates','contextRead'])test(`overlapping suppressi
     assert.equal(readTransaction(db,()=>memorySuppressionObservationInside(db,ns,{memoryId:target.id,revision:target.revision})).suppressed,true);
   } finally {db.close();}
   ok(await m.h.refreshContextIndex({...refreshInput(ns),mode:'lexical',budget:{maxItems:1024,maxMs:5000}},m.credential));
-  const refreshed=ok(await m.h.refreshContextIndex(refreshInput(ns),m.credential));assert.equal(refreshed.progress.embeddingAttempts,0);
+  const calls=s.view[4],sends=s.view[6],refreshed=ok(await m.h.refreshContextIndex(refreshInput(ns),m.credential));assert.equal(refreshed.progress.embeddingAttempts,null,'a safety cell masks refresh progress after a suppression');assert.equal(s.view[4],calls,'the embedding refresh must not call the embedder');assert.equal(s.view[6],sends,'the embedding refresh must not dispatch');
   assert.deepEqual(fields(record()),before);release(s.view,11);const outcome=await pending;
   if(!outcome.ok){assert.equal(outcome.error.code,'evidence_unavailable');return;}
   const result=ok(outcome);
   const targetReturned=method==='contextRead'?JSON.stringify(result.metered).includes('semantic match'):result.items.some(i=>i.ref.memoryId===target.id);
   assert.equal(targetReturned,false,'an overlapping suppression must never serve the suppressed semantic-only target');
+});
+
+for(const method of ['findCandidates','contextRead'])test(`overlapping suppression excludes the semantic-only target from ${method} (cell 38)`,async t=>{
+  const {writeContentSuppressionInside,memorySuppressionObservationInside}=await import('../content-suppression-storage.mjs');
+  const {transaction,readTransaction}=await import('../database.mjs');
+  const s=await setup(t,{version:23,safety:true}),m=await prepared(s),r=s.configure(false),reader=await openContextProductReader(r.options);s.f.workspace.defer(()=>reader.close());
+  const input={...query,types:s.types,query:'needle',...(method==='contextRead'?{budget:{maxTokens:4000,maxItems:12}}:{})};
+  const target=s.f.db.prepare("SELECT id,revision FROM memories WHERE content='semantic match'").get(),vectors=sidecar(s);
+  const record=()=>JSON.parse(vectors.prepare("SELECT v.record FROM vector_validation_records v JOIN vector_publications p ON json_extract(p.pointer,'$.publicationId')=v.publication JOIN selections s ON s.projection=p.projection WHERE s.intent='current'").get().record);
+  const fields=r=>({ld:r.lexical.validationDigest,identity:digest(r.identity),purgeEpoch:r.purgeEpoch}),before=fields(record());
+  s.view[7]=7;s.f.workspace.defer(()=>release(s.view,11));const pending=reader[method](input,r.credential);await rendezvous(s.view,10,pending);
+  const db=openDatabase(s.f.path);
+  try {
+    transaction(db,()=>writeContentSuppressionInside(db,{namespace:ns,kind:'memory',key:target.id,reason:'purge',actionId:'overlap-suppression'}));
+    assert.equal(readTransaction(db,()=>memorySuppressionObservationInside(db,ns,{memoryId:target.id,revision:target.revision})).suppressed,true);
+  } finally {db.close();}
+  ok(await m.h.refreshContextIndex({...refreshInput(ns),types:s.types,mode:'lexical',budget:{maxItems:1024,maxMs:5000}},m.credential));
+  const calls=s.view[4],sends=s.view[6],refreshed=ok(await m.h.refreshContextIndex({...refreshInput(ns),types:s.types},m.credential));assert.equal(refreshed.progress.embeddingAttempts,null,'a safety cell masks refresh progress after a suppression');assert.equal(s.view[4],calls,'the embedding refresh must not call the embedder');assert.equal(s.view[6],sends,'the embedding refresh must not dispatch');
+  assert.deepEqual(fields(record()),before);release(s.view,11);const outcome=await pending;
+  if(!outcome.ok){assert.equal(outcome.error.code,'evidence_unavailable');return;}
+  const result=ok(outcome);
+  const targetReturned=method==='contextRead'?JSON.stringify(result.metered).includes('semantic match'):result.items.some(i=>i.ref.memoryId===target.id);
+  assert.equal(targetReturned,false,'an overlapping suppression must never serve the suppressed semantic-only target');
+});
+
+for(const method of ['findCandidates','contextRead'])test(`sequential suppression excludes the semantic-only target from ${method}`,async t=>{
+  const {writeContentSuppressionInside,memorySuppressionObservationInside}=await import('../content-suppression-storage.mjs');
+  const {transaction,readTransaction}=await import('../database.mjs');
+  const s=await setup(t,{safety:true}),m=await prepared(s),r=s.configure(false),reader=await openContextProductReader(r.options);s.f.workspace.defer(()=>reader.close());
+  const input={...query,query:'needle',...(method==='contextRead'?{budget:{maxTokens:4000,maxItems:12}}:{})};
+  const target=s.f.db.prepare("SELECT id,revision FROM memories WHERE content='semantic match'").get(),lexical=s.f.db.prepare("SELECT id FROM memories WHERE content='lexical needle'").get(),vectors=sidecar(s);
+  const record=()=>JSON.parse(vectors.prepare("SELECT v.record FROM vector_validation_records v JOIN vector_publications p ON json_extract(p.pointer,'$.publicationId')=v.publication JOIN selections s ON s.projection=p.projection WHERE s.intent='current'").get().record);
+  const fields=r=>({ld:r.lexical.validationDigest,identity:digest(r.identity),purgeEpoch:r.purgeEpoch}),before=fields(record());
+  const db=openDatabase(s.f.path);
+  try {
+    transaction(db,()=>writeContentSuppressionInside(db,{namespace:ns,kind:'memory',key:target.id,reason:'purge',actionId:'sequential-suppression'}));
+    assert.equal(readTransaction(db,()=>memorySuppressionObservationInside(db,ns,{memoryId:target.id,revision:target.revision})).suppressed,true);
+  } finally {db.close();}
+  ok(await m.h.refreshContextIndex({...refreshInput(ns),mode:'lexical',budget:{maxItems:1024,maxMs:5000}},m.credential));
+  const calls=s.view[4],sends=s.view[6],refreshed=ok(await m.h.refreshContextIndex(refreshInput(ns),m.credential));assert.equal(refreshed.progress.embeddingAttempts,null,'a safety cell masks refresh progress after a suppression');assert.equal(s.view[4],calls,'the embedding refresh must not call the embedder');assert.equal(s.view[6],sends,'the embedding refresh must not dispatch');
+  assert.deepEqual(fields(record()),before);
+  const result=ok(await reader[method](input,r.credential)),serialized=JSON.stringify(result),detail=method==='contextRead'?result.diagnostics.candidates:result;
+  assert.equal(serialized.includes('semantic match'),false,'suppressed content must be absent from every result surface');
+  assert.equal(serialized.includes(target.id),false,'suppressed memory IDs must be absent from items, refs, metered, diagnostics and trace');
+  const items=method==='contextRead'?result.metered.items:result.items;
+  assert.ok(items.some(i=>(method==='contextRead'?i.ref.id:i.ref.memoryId)===lexical.id),'the lexical match must still be delivered');
+  if(method==='contextRead')assert.ok(JSON.stringify(result.metered).includes('lexical needle'),'the lexical content must still be delivered');
+  t.diagnostic('sequential suppression trace.effective='+detail.trace.effective);
+});
+
+for(const method of ['findCandidates','contextRead'])test(`sequential suppression excludes the semantic-only target from ${method} (cell 38)`,async t=>{
+  const {writeContentSuppressionInside,memorySuppressionObservationInside}=await import('../content-suppression-storage.mjs');
+  const {transaction,readTransaction}=await import('../database.mjs');
+  const s=await setup(t,{version:23,safety:true}),m=await prepared(s),r=s.configure(false),reader=await openContextProductReader(r.options);s.f.workspace.defer(()=>reader.close());
+  const input={...query,types:s.types,query:'needle',...(method==='contextRead'?{budget:{maxTokens:4000,maxItems:12}}:{})};
+  const target=s.f.db.prepare("SELECT id,revision FROM memories WHERE content='semantic match'").get(),lexical=s.f.db.prepare("SELECT id FROM memories WHERE content='lexical needle'").get(),vectors=sidecar(s);
+  const record=()=>JSON.parse(vectors.prepare("SELECT v.record FROM vector_validation_records v JOIN vector_publications p ON json_extract(p.pointer,'$.publicationId')=v.publication JOIN selections s ON s.projection=p.projection WHERE s.intent='current'").get().record);
+  const fields=r=>({ld:r.lexical.validationDigest,identity:digest(r.identity),purgeEpoch:r.purgeEpoch}),before=fields(record());
+  const db=openDatabase(s.f.path);
+  try {
+    transaction(db,()=>writeContentSuppressionInside(db,{namespace:ns,kind:'memory',key:target.id,reason:'purge',actionId:'sequential-suppression'}));
+    assert.equal(readTransaction(db,()=>memorySuppressionObservationInside(db,ns,{memoryId:target.id,revision:target.revision})).suppressed,true);
+  } finally {db.close();}
+  ok(await m.h.refreshContextIndex({...refreshInput(ns),types:s.types,mode:'lexical',budget:{maxItems:1024,maxMs:5000}},m.credential));
+  const calls=s.view[4],sends=s.view[6],refreshed=ok(await m.h.refreshContextIndex({...refreshInput(ns),types:s.types},m.credential));assert.equal(refreshed.progress.embeddingAttempts,null,'a safety cell masks refresh progress after a suppression');assert.equal(s.view[4],calls,'the embedding refresh must not call the embedder');assert.equal(s.view[6],sends,'the embedding refresh must not dispatch');
+  assert.deepEqual(fields(record()),before);
+  const result=ok(await reader[method](input,r.credential)),serialized=JSON.stringify(result),detail=method==='contextRead'?result.diagnostics.candidates:result;
+  assert.equal(serialized.includes('semantic match'),false,'suppressed content must be absent from every result surface');
+  assert.equal(serialized.includes(target.id),false,'suppressed memory IDs must be absent from items, refs, metered, diagnostics and trace');
+  const items=method==='contextRead'?result.metered.items:result.items;
+  assert.ok(items.some(i=>(method==='contextRead'?i.ref.id:i.ref.memoryId)===lexical.id),'the lexical match must still be delivered');
+  if(method==='contextRead')assert.ok(JSON.stringify(result.metered).includes('lexical needle'),'the lexical content must still be delivered');
+  t.diagnostic('sequential suppression trace.effective='+detail.trace.effective);
 });
 
 test('replacement of an unpublished vector generation still degrades the overlapping query with validation_invalid',async t=>{

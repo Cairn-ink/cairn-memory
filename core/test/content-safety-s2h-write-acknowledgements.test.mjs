@@ -233,6 +233,14 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // The pump's new windowId reconciles a private semantic accounting quantum;
   // the worker's three windowId results bind reservation/settlement accounting.
   // They identify budget windows, not retained content or writer acknowledgements.
+  // Main 6d8ced65 (#538):
+  // Publication reuse compares the private vector generation id with the
+  // authenticated record (key:id 4 -> 5). The new oversized-state check uses
+  // the private invalid-evidence marker (literal:invalid 7 -> 8). Neither is
+  // a canonical content identity or a writer acknowledgement field.
+  // Attribution guard:
+  // failureSelected is private read-only state and adds no identity-shaped
+  // occurrence, canonical identity or writer acknowledgement field.
   // The terminal writer and acknowledgement field guard are unchanged.
   // These changes retain the native guard's fail-closed walker.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));

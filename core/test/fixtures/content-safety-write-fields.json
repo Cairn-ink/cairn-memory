@@ -1391,13 +1391,13 @@
     "key:id": 1
   },
   "core/context-product-vectors.mjs": {
-    "key:id": 4,
+    "key:id": 5,
     "key:memoryId": 1,
     "key:projectId": 1,
     "key:publicationId": 2,
     "key:storeId": 1,
     "literal:cardId": 1,
-    "literal:invalid": 7,
+    "literal:invalid": 8,
     "literal:memoryId": 1,
     "literal:validation_invalid": 1
   },
