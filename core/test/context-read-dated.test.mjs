@@ -195,7 +195,7 @@ test('dated budget uses the exact emitted envelope bytes, including reordered al
   assert.equal(smaller.diagnostics.budget.used, Buffer.byteLength(meteredText(smaller.metered)));
 });
 
-test('reordered alias growth keeps relevance selection and applies the existing final budget refusal', () => {
+test('reordered alias growth packs emitted bytes within budget instead of refusing', () => {
   const prepared = fixedPrepared().slice(0, 2).map((item, index) => ({ ...item,
     text: 'Synthetic boundary body ' + index, date: index ? '2023-01-01T00:00Z' : '2024-01-01T00:00Z' }));
   const shared = { index: 0, role: 'user', excerpt: 'Shared synthetic boundary receipt' };
@@ -212,11 +212,84 @@ test('reordered alias growth keeps relevance selection and applies the existing 
   const previousBytes = Buffer.byteLength(meteredText(relevance));
   assert.equal(full.diagnostics.budget.used, previousBytes + 1, 'alias source position grows from 0 to 11');
   assert.equal(full.metered.items[1].sources[0].sameAs.source, 11);
-  counted.length = 0;
-  assert.throws(() => assembleContext({ ...options, budget: { maxTokens: previousBytes, maxItems: 2 } }),
-    { code: 'context_item_too_large' });
-  assert.ok(counted.includes(meteredText(relevance)), 'selection accepted the exact previous relevance-order trial');
-  assert.equal(counted.at(-1), meteredText(full.metered), 'final gate refuses the unchanged selection instead of dropping a source');
+  for (const id of ['rank-first-whole-v1', 'coverage-first-v1']) {
+    const limited = { ...options, policy: { id }, budget: { maxTokens: previousBytes, maxItems: 2 } };
+    assert.equal(assembleContext({ ...limited, representation: 'representation-v2' }).metered.items.length, 2);
+    counted.length = 0;
+    const result = assembleContext(limited), emitted = meteredText(result.metered);
+    assert.deepEqual(result.metered.items.map(item => item.rank), [2, 1]);
+    assert.equal(result.metered.items[0].sources.length, 11, 'last source is omitted to fit date-order bytes');
+    assert.equal(result.metered.items[1].sources[0].excerpt, shared.excerpt, 'remaining receipt becomes concrete');
+    assert.ok(result.diagnostics.stops.budget);
+    assert.ok(result.diagnostics.budget.used <= previousBytes);
+    assert.equal(result.diagnostics.budget.used, Buffer.byteLength(emitted));
+    assert.ok(counted.includes(meteredText(full.metered)), 'trial measures the overflowing date-order payload');
+    assert.ok(!counted.includes(meteredText(relevance)), 'trial never measures relevance-order bytes');
+    assert.equal(counted.at(-1), emitted);
+    for (const text of counted.filter(text => text.startsWith('{"ok":true,'))) {
+      const items = JSON.parse(text).value.items;
+      assert.deepEqual(items.map(item => item.rank), items.map(item => item.rank).sort((a, b) => b - a),
+        'every envelope count, including the minimal probe, uses date order');
+    }
+  }
+});
+
+test('fixed-seed generated reads never gain a dated refusal and always meter emitted date order', () => {
+  let state = 0x5eedcafe;
+  const random = limit => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state % limit; };
+  const base = fixedPrepared()[0], counted = [];
+  const bytes = { id: 'synthetic-generated-bytes', countTokens(text) { counted.push(text); return Buffer.byteLength(text); } };
+  let successes = 0, budgetStops = 0, refusals = 0;
+  for (let fixture = 0; fixture < 300; fixture++) {
+    const prepared = Array.from({ length: 2 + random(13) }, (_, index) => {
+      const text = 'Synthetic generated body ' + index + ' ' + 'x'.repeat(random(80));
+      const item = { ...structuredClone(base), rank: index + 1,
+        ref: { ...base.ref, memoryId: 'generated-' + index }, text,
+        date: random(4) ? `202${random(5)}-01-01T00:00Z` : null,
+        sources: Array.from({ length: random(17) }, (_, source) => ({ index: source,
+          role: random(3) ? 'user' : 'assistant', excerpt: random(5) ? 'Shared generated receipt ' + random(6) : text })) };
+      if (random(7) === 0) Object.assign(item, { type: 'card',
+        ref: { ...item.ref, memoryId: undefined, cardId: 'generated-card-' + index, bodyRevision: 1 },
+        metadata: { state: 'confirmed', support: {}, origin: {} }, sourceAccess: 'unsupported', sources: [] });
+      return item;
+    });
+    for (const id of ['rank-first-whole-v1', 'rank-first-first-source-v1', 'coverage-first-v1']) {
+      const options = { prepared, counter: bytes, policy: { id },
+        budget: { maxTokens: 1000000, maxItems: 1 + random(prepared.length) }, deadlineAt: Infinity, snapshotOf: () => null };
+      const full = assembleContext({ ...options, representation: dated });
+      const emptyBytes = Buffer.byteLength(meteredText({ framing: full.metered.framing, items: [] }));
+      const fullBytes = full.diagnostics.budget.used;
+      const maxTokens = [emptyBytes - 1, emptyBytes, fullBytes - 1, fullBytes, fullBytes + 1,
+        emptyBytes + random(fullBytes - emptyBytes + 1)][fixture % 6];
+      const budget = { ...options.budget, maxTokens }, label = `fixture ${fixture}, ${id}, budget ${maxTokens}`;
+      let v2;
+      try { v2 = assembleContext({ ...options, budget }); }
+      catch (error) { assert.equal(error.code, 'context_item_too_large', label); refusals++; continue; }
+      counted.length = 0;
+      const result = assembleContext({ ...options, budget, representation: dated });
+      successes++;
+      if (result.diagnostics.stops.budget) budgetStops++;
+      const emitted = meteredText(result.metered);
+      assert.ok(Buffer.byteLength(emitted) <= maxTokens, label);
+      assert.equal(result.diagnostics.budget.used, Buffer.byteLength(emitted), label);
+      assert.equal(counted.at(-1), emitted, label);
+      // Independently derive the timeline from selected prepared items: Cards
+      // and undated memories follow dated memories, with relevance as tie-break.
+      const time = item => item.type === 'memory' && item.date ? Date.parse(item.date) : Infinity;
+      const expected = [...result.selected].sort((a, b) => time(a) - time(b) || a.rank - b.rank);
+      assert.deepEqual(result.metered.items.map(item => item.rank), expected.map(item => item.rank), label);
+      for (const text of counted.filter(text => text.startsWith('{"ok":true,'))) {
+        const items = JSON.parse(text).value.items;
+        const ranks = new Set(items.map(item => item.rank));
+        const timeline = prepared.filter(item => ranks.has(item.rank))
+          .sort((a, b) => time(a) - time(b) || a.rank - b.rank);
+        assert.deepEqual(items.map(item => item.rank), timeline.map(item => item.rank), label + ' trial/probe');
+      }
+      assert.equal(v2.diagnostics.representation, 'representation-v2');
+    }
+  }
+  assert.equal(successes + refusals, 900, '300 fixtures across all three greedy policies');
+  assert.ok(successes >= 700 && budgetStops >= 100 && refusals >= 100, 'exercise success, budget pressure and shared empty-envelope refusals');
 });
 
 for (const column of [false, true]) test(`all preparation paths: ${column ? 'bounded event dates' : 'old layout without column'}`, async t => {

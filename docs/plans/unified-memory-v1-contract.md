@@ -1843,10 +1843,9 @@ relevance order. Date ties keep relevance order, and `rank` is relevance.
 Selection still visits items and sources in relevance order; aliases and their
 item/source positions are computed in emitted order. The final metered text
 must fit the token budget. Old-layout stores without dates keep v2 item order.
-Selection and its budget/item/deadline stops remain in relevance order. If
-recomputed aliases make that unchanged selection exceed the final token budget,
-the existing `context_item_too_large` gate refuses; it does not reselect or drop
-items or sources to accommodate emission order.
+Selection visits remain in relevance order, but every trial measures emitted
+date-order bytes, so rare near-limit reads can select a different last source
+or item than v2 while staying within budget without an ordering-only refusal.
 
 Missing event-time columns and null times are equivalent: if none of the
 selected rows carries a time, omit `date`, while retaining the selected dated

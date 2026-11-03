@@ -83,7 +83,8 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
     });
     return { metered: { framing: ASSEMBLY_FRAMING, items }, details };
   }
-  let accepted = payload(selected);
+  const dateOrder = representation === 'representation-v2-dated';
+  let accepted = payload(selected, dateOrder);
   if (count(meteredText(accepted.metered), true) > budget.maxTokens) fail('context_item_too_large');
   function visit(item, source) {
     if (expired()) return;
@@ -93,7 +94,7 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
     if (stops.deadline) return;
     const trial = new Map(selected), current = selected.get(item);
     trial.set(item, source ? { ...current, sources: [...current.sources, { source, tokens }] } : { tokens, sources: [] });
-    const value = payload(trial), used = count(meteredText(value.metered));
+    const value = payload(trial, dateOrder), used = count(meteredText(value.metered));
     if (stops.deadline) return;
     if (used <= budget.maxTokens) {
       selected.set(item, trial.get(item)); accepted = value;
@@ -102,7 +103,7 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
     }
     stops.budget = true;
     const minimal = new Map([[item, source ? { tokens: current.tokens, sources: [{ source, tokens }] } : { tokens, sources: [] }]]);
-    const minimum = count(meteredText(payload(minimal).metered));
+    const minimum = count(meteredText(payload(minimal, dateOrder).metered));
     if (minimum !== null && minimum > budget.maxTokens) oversized++;
   }
   if (policy.id !== 'coverage-first-v1') {
@@ -118,9 +119,6 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
       if (stops.deadline) break;
     }
   }
-  // Keep all selection trials and stops in relevance order. Rebuild aliases on
-  // the emitted timeline, then apply the existing final exact-text budget gate.
-  if (representation === 'representation-v2-dated') accepted = payload(selected, true);
   const metered = deepFreeze(accepted.metered), used = count(meteredText(metered), true);
   if (used > budget.maxTokens) fail('context_item_too_large');
   const deliveredSources = metered.items.reduce((sum, item) => sum + item.sources.length, 0);
