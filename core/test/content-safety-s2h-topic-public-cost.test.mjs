@@ -1,3 +1,4 @@
+import { familyCostParity } from '../testing/receipt-event-time-gates.mjs';
 import { assertCostGateCases } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -27,4 +28,22 @@ for(const [v,base]of [[34,18],[38,23],[48,33]])test(`R2 public topic v${v}: lega
    if(absent){const key=JSON.stringify([current.facts,row.method,row.variant]);if(miss.has(key))assert.deepEqual([row.statements,row.begin],miss.get(key),'corpus-independent no-hit');else miss.set(key,[row.statements,row.begin]);}
   }
  }
+});
+
+
+test('R2 product family gate B: topic-public smallest case, exact zero/five-fact parity', async t => {
+  await familyCostParity(t, 33, async (f, db, facts) => {
+
+  const physical = db.prepare('PRAGMA user_version').get().user_version;
+  return { method: 'readTopicOverview', variant: 'optin',
+    measure() {
+      const child = spawnSync(process.execPath, [probe, String(physical), '12', String(facts), 'match'], { encoding: 'utf8', timeout: 120000, maxBuffer: 16*1024*1024 });
+      assert.equal(child.error, undefined); assert.equal(child.signal, null); assert.equal(child.status, 0, child.stderr + child.stdout.slice(-5000));
+      const rows = child.stdout.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line))
+        .filter(row => row.method === 'readTopicOverview' && row.variant === 'optin');
+      assert.equal(rows.length, 1, 'one representative public topic case');
+      const row = rows[0]; assert.equal(row.node, process.version); assert.equal(row.physical, physical); assert.equal(Number(row.factCount), facts);
+      return { ...row, result: { ok: true } };
+    }, check(result) { assert.equal(result.ok, true); } };
+  });
 });

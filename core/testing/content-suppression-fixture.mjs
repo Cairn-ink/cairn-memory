@@ -8,8 +8,8 @@ import { writeContentSuppressionInside } from '../content-suppression-storage.mj
 import { safetyFixture, ns, ok, receipt } from './content-safety-s2h-fixture.mjs';
 export { ns, ok, receipt };
 
-export async function suppressionFixture(t, base = 18) {
-  const f = safetyFixture(t,base); await f.migrate();
+export async function suppressionFixture(t, base = 18, makeFixture = safetyFixture) {
+  const f = makeFixture(t,base); await f.migrate();
   const db = f.connect(), core = openMemoryCore({ path:f.path }), handles = [];
   t.after(async () => { for (const h of handles) await h.close(); core.close(); db.close(); });
   const expected = { storeId:f.storeId,suppressionDomain:db.prepare('SELECT suppression_domain FROM content_safety_control').get().suppression_domain };

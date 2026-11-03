@@ -1,3 +1,5 @@
+import { eventTimeSafetyFixture } from '../testing/receipt-event-time-fixture.mjs';
+import { assertFamilyCostCell } from '../testing/receipt-event-time-gates.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -113,4 +115,41 @@ test('R5 receipt ancestry proof retains refusal: ' + kind, async t => {
     assert.equal(reader.metadata(ns, 'memory', memory.id).row.invalid_raw_ancestry, kind === 'own Raw fact' ? 0 : 1, 'actual canonical ancestry proof');
     assert.equal(reader.receipt(memory.id, stored.id, expected), false, 'canonical ancestry and Raw facts still refuse the receipt');
   }));
+});
+
+
+test('R2 product family gate C: six relations cases on v51/v52/v53', async t => {
+  let completed = 0;
+  for (const base of [18, 23, 33]) for (const method of ['findCandidates', 'contextRead']) {
+    await t.test(`family gate C: relations-one-hop-v1 v${{18:51,23:52,33:53}[base]} ${method}`, async t => {
+      const n = 12, expansions = 1;
+      const f = eventTimeSafetyFixture(t, base); await f.migrate();
+      const db = f.connect(); let calls = 0, edges = [];
+      const core = openMemoryCore({ path: f.path,
+        model: { contextWindow: 32768, countTokens: () => 1, relate: () => ({ edges }) },
+        contextRead: { version: 'context-read-v1', authority, sources: ['relations-one-hop-v1'],
+          counter: { id: 'synthetic', countTokens() { calls++; return 1; } } } });
+      t.after(() => { core.close(); db.close(); });
+      const memories = Array.from({ length: n }, (_, i) => ok(core.admit({ namespace: ns,
+        memory: { content: (i === 0 ? 'needle seed ' : 'unrelated endpoint ') + String(i).padStart(5, '0'), kind: 'fact' },
+        receipts: [receipt('relation-' + i)] })).memory);
+      edges = [{ from: 1, to: 0, fromReceipt: 0, toReceipt: 0, relation: 'supports-decision' }];
+      assert.equal(ok(await core.reviewRationale({ namespace: ns,
+        refs: memories.slice(0, 2).map(m => ({ memoryId: m.id, revision: m.revision })) })).inserted, 1);
+      const p = { readSet: [ns], types: ['memory'], intent: 'current' };
+      ok(await core.refreshContextIndex({ ...p, budget: { maxItems: 1024, maxMs: 5000 } }, {}));
+      assertFamilyCostCell(db, {18:51,23:52,33:53}[base], 0);
+      const row = await measureContentRead(method, 'relations-one-hop-v1/1', () => core[method]({ ...p,
+        query: 'needle', semantic: false, sources: ['relations-one-hop-v1'], deadlineMs: 5000,
+        ...(method === 'findCandidates' ? { limit: 12 } : { budget: { maxTokens: 4000, maxItems: 12 } }) }, {}), () => calls);
+      const result = ok(row.result);
+      assert.equal((result.metered?.items ?? result.items).length, 2, 'public edge produces every candidate');
+      const trace = method === 'contextRead' ? result.diagnostics.candidates.trace : result.trace;
+      assert.equal(trace.sources['relations-one-hop-v1'].added, 1, 'one actual expansion');
+      assert.deepEqual([row.statements, row.begin, row.ports], pins.safety[JSON.stringify([base, n, expansions, method])],
+        'family equals exact safety pin');
+      completed++;
+    });
+  }
+  assert.equal(completed, 6, 'gate C: exact completed family/method count');
 });

@@ -11,7 +11,7 @@ import { installRoleProfiles } from '../role-profile-schema.mjs';
 import { installCardCurrentDependencies } from '../card-current-schema.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash,createHmac,randomUUID } from 'node:crypto';
-import { copyFileSync,linkSync,unlinkSync } from 'node:fs';
+import { copyFileSync,linkSync,unlinkSync,readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
 import { join } from 'node:path';
@@ -26,6 +26,15 @@ import { queryEmbeddingCutoff,tokenCost,usd,dollars } from '../context-semantic-
 import { canonicalJson,digest } from '../context-product-validation.mjs';
 import { credentialDigest, requestRecord, operationRecord, PRODUCT_PROFILE } from '../context-product-control.mjs';
 import { openMemoryCore,openContextSemanticCoordinator,openContextIndexMaintainer,openContextProductReader,createContextReadSupervisor } from '../index.mjs';
+import { eventTimeSafetyFixture } from '../testing/receipt-event-time-fixture.mjs';
+import { familyGate } from '../testing/receipt-event-time-gates.mjs';
+
+test('test clock installs before imports can capture product timer defaults',()=>{
+  // Reader singletons capture timers during module evaluation, before tests run.
+  assert.ok(readFileSync(new URL(import.meta.url),'utf8').startsWith(
+    "import { testClock } from '../testing/context-product-test-clock.mjs';\n"),
+    'keep the test clock import first, ahead of transitive product imports');
+});
 
 const hostUrl=new URL('../testing/context-semantic-host.mjs',import.meta.url).href;
 const selection={provider:'openai',model:'text-embedding-3-small',dimensions:1536,normalization:'l2',requestTimeoutMs:3000,maxBatchDocuments:64};
@@ -35,13 +44,14 @@ const retainedQuarantines=[];
 // at that test's end and allow the next fixture to reuse the quarantined ID.
 after(async()=>{for(const workspace of retainedQuarantines)await workspace.cleanup();});
 const query={readSet:[ns],types:['memory'],intent:'current',query:'semantic',deadlineMs:5000,semantic:true};
-async function setup(t,{localRuntime=false,open=true,expectedCleanupFailure=false,host={},safety=false,caps:capPatch,corpus,readSet=[ns],version=18,canonicalMode='DELETE',sidecarMode='DELETE',coordinatorHost=hostUrl}={}) {
+async function setup(t,{localRuntime=false,open=true,expectedCleanupFailure=false,host={},safety=false,family=false,caps:capPatch,corpus,readSet=[ns],version=18,canonicalMode='DELETE',sidecarMode='DELETE',coordinatorHost=hostUrl}={}) {
   // Each fixture is an independent process-policy universe. Never reset while
   // a coordinator is live; same-test duplicate-file probes share the binding.
   if(!globalThis[Symbol.for('context-read-product-p2e-v1/coordinators')]?.size)
     globalThis[Symbol.for('context-read-product-p2e-v1/physical-policy')]?.clear();
-  const f=fixture(t,{cards:version>=23,coreOptions:safety?{contentSafety:'s2h-v1'}:{}}),types=version>=23?['memory','card']:['memory'];for(const [text,namespace] of corpus??[['lexical needle',ns],['semantic match',ns]])f.admit(text,namespace);
+  const f=family?familySemanticFixture(t):fixture(t,{cards:version>=23,coreOptions:safety?{contentSafety:'s2h-v1'}:{}}),types=version>=23?['memory','card']:['memory'];for(const [text,namespace] of corpus??[['lexical needle',ns],['semantic match',ns]])f.admit(text,namespace);
   if(version>=23)for(const namespace of readSet)card(f,namespace,'semantic','beta');f.core.close();
+  if(family){assert.equal(version,18);await f.migrate();f.db=new DatabaseSync(f.path,{readOnly:true});f.workspace.defer(()=>f.db.close());assert.equal(f.db.prepare('PRAGMA user_version').get().user_version,51);}
   if(version===33){const db=openDatabase(f.path);try{migrateMethodPrerequisites(db);installAssets(db);installRoleProfiles(db);installCardCurrentDependencies(db);db.exec('PRAGMA user_version=33');}finally{db.close();}}
   if(canonicalMode==='WAL'){const db=new DatabaseSync(f.path);try{db.exec('PRAGMA journal_mode=WAL');}finally{db.close();}}
   const supervisor=createContextReadSupervisor();f.workspace.defer(()=>supervisor.close().catch(error=>{if(!expectedCleanupFailure)throw error;assert.equal(error.code,'reader_failed');}));
@@ -1271,4 +1281,67 @@ test('coordinator forced-close quarantine after exit (existing-behavior control)
     try{ownership.exec('PRAGMA busy_timeout=0;BEGIN EXCLUSIVE;ROLLBACK');}finally{ownership.close();}
     await quarantineRefusal(s,record);
   } finally {releaseClose(s.control,2);await worker.terminate();await closeGuard(outcome,'control_cleanup');retainCoordinatorFile(s);}
+});
+
+
+function familySemanticFixture(t) {
+  const f = eventTimeSafetyFixture(t, 18), core = openMemoryCore({ path: f.path });
+  f.workspace.defer(() => core.close());
+  return { ...f, core, admit(content, namespace) {
+    return ok(core.admit({ namespace, memory: { content, kind: 'fact' },
+      receipts: [{ client: 'synthetic', sessionId: 'family-semantic', eventId: content, role: 'user', excerpt: content }] })).memory;
+  } };
+}
+const completeFamilySemantic = familyGate('D', 4);
+
+for(const method of ['findCandidates','contextRead'])test(`family gate D: v51 overlapping suppression excludes the semantic-only target from ${method}`,async t=>{
+  const {writeContentSuppressionInside,memorySuppressionObservationInside}=await import('../content-suppression-storage.mjs');
+  const {transaction,readTransaction}=await import('../database.mjs');
+  const s=await setup(t,{safety:true,family:true}),m=await prepared(s),r=s.configure(false),reader=await openContextProductReader(r.options);s.f.workspace.defer(()=>reader.close());
+  const input={...query,query:'needle',...(method==='contextRead'?{budget:{maxTokens:4000,maxItems:12}}:{})};
+  const target=s.f.db.prepare("SELECT id,revision FROM memories WHERE content='semantic match'").get(),vectors=sidecar(s);
+  const record=()=>JSON.parse(vectors.prepare("SELECT v.record FROM vector_validation_records v JOIN vector_publications p ON json_extract(p.pointer,'$.publicationId')=v.publication JOIN selections s ON s.projection=p.projection WHERE s.intent='current'").get().record);
+  const fields=r=>({ld:r.lexical.validationDigest,identity:digest(r.identity),purgeEpoch:r.purgeEpoch}),before=fields(record());
+  s.view[7]=7;s.f.workspace.defer(()=>release(s.view,11));const pending=reader[method](input,r.credential);await rendezvous(s.view,10,pending);
+  const db=openDatabase(s.f.path);
+  try {
+    transaction(db,()=>writeContentSuppressionInside(db,{namespace:ns,kind:'memory',key:target.id,reason:'purge',actionId:'overlap-suppression'}));
+    assert.equal(readTransaction(db,()=>memorySuppressionObservationInside(db,ns,{memoryId:target.id,revision:target.revision})).suppressed,true);
+  } finally {db.close();}
+  ok(await m.h.refreshContextIndex({...refreshInput(ns),mode:'lexical',budget:{maxItems:1024,maxMs:5000}},m.credential));
+  const calls=s.view[4],sends=s.view[6],refreshed=ok(await m.h.refreshContextIndex(refreshInput(ns),m.credential));assert.equal(refreshed.progress.embeddingAttempts,null,'a safety cell masks refresh progress after a suppression');assert.equal(s.view[4],calls,'the embedding refresh must not call the embedder');assert.equal(s.view[6],sends,'the embedding refresh must not dispatch');
+  assert.deepEqual(fields(record()),before);release(s.view,11);const outcome=await pending;
+  if(!outcome.ok){assert.equal(outcome.error.code,'evidence_unavailable');}
+  else {
+  const result=ok(outcome);
+  const targetReturned=method==='contextRead'?JSON.stringify(result.metered).includes('semantic match'):result.items.some(i=>i.ref.memoryId===target.id);
+  assert.equal(targetReturned,false,'an overlapping suppression must never serve the suppressed semantic-only target');
+  }
+  completeFamilySemantic(`overlapping/${method}`);
+});
+
+for(const method of ['findCandidates','contextRead'])test(`family gate D: v51 sequential suppression excludes the semantic-only target from ${method}`,async t=>{
+  const {writeContentSuppressionInside,memorySuppressionObservationInside}=await import('../content-suppression-storage.mjs');
+  const {transaction,readTransaction}=await import('../database.mjs');
+  const s=await setup(t,{safety:true,family:true}),m=await prepared(s),r=s.configure(false),reader=await openContextProductReader(r.options);s.f.workspace.defer(()=>reader.close());
+  const input={...query,query:'needle',...(method==='contextRead'?{budget:{maxTokens:4000,maxItems:12}}:{})};
+  const target=s.f.db.prepare("SELECT id,revision FROM memories WHERE content='semantic match'").get(),lexical=s.f.db.prepare("SELECT id FROM memories WHERE content='lexical needle'").get(),vectors=sidecar(s);
+  const record=()=>JSON.parse(vectors.prepare("SELECT v.record FROM vector_validation_records v JOIN vector_publications p ON json_extract(p.pointer,'$.publicationId')=v.publication JOIN selections s ON s.projection=p.projection WHERE s.intent='current'").get().record);
+  const fields=r=>({ld:r.lexical.validationDigest,identity:digest(r.identity),purgeEpoch:r.purgeEpoch}),before=fields(record());
+  const db=openDatabase(s.f.path);
+  try {
+    transaction(db,()=>writeContentSuppressionInside(db,{namespace:ns,kind:'memory',key:target.id,reason:'purge',actionId:'sequential-suppression'}));
+    assert.equal(readTransaction(db,()=>memorySuppressionObservationInside(db,ns,{memoryId:target.id,revision:target.revision})).suppressed,true);
+  } finally {db.close();}
+  ok(await m.h.refreshContextIndex({...refreshInput(ns),mode:'lexical',budget:{maxItems:1024,maxMs:5000}},m.credential));
+  const calls=s.view[4],sends=s.view[6],refreshed=ok(await m.h.refreshContextIndex(refreshInput(ns),m.credential));assert.equal(refreshed.progress.embeddingAttempts,null,'a safety cell masks refresh progress after a suppression');assert.equal(s.view[4],calls,'the embedding refresh must not call the embedder');assert.equal(s.view[6],sends,'the embedding refresh must not dispatch');
+  assert.deepEqual(fields(record()),before);
+  const result=ok(await reader[method](input,r.credential)),serialized=JSON.stringify(result),detail=method==='contextRead'?result.diagnostics.candidates:result;
+  assert.equal(serialized.includes('semantic match'),false,'suppressed content must be absent from every result surface');
+  assert.equal(serialized.includes(target.id),false,'suppressed memory IDs must be absent from items, refs, metered, diagnostics and trace');
+  const items=method==='contextRead'?result.metered.items:result.items;
+  assert.ok(items.some(i=>(method==='contextRead'?i.ref.id:i.ref.memoryId)===lexical.id),'the lexical match must still be delivered');
+  if(method==='contextRead')assert.ok(JSON.stringify(result.metered).includes('lexical needle'),'the lexical content must still be delivered');
+  t.diagnostic('sequential suppression trace.effective='+detail.trace.effective);
+  completeFamilySemantic(`sequential/${method}`);
 });

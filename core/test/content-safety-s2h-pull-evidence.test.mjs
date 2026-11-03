@@ -1,3 +1,5 @@
+import { eventTimeSafetyFixture } from '../testing/receipt-event-time-fixture.mjs';
+import { familyGate } from '../testing/receipt-event-time-gates.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
@@ -116,4 +118,30 @@ test('S2h canonical ancestry enumeration refuses a bounded prefix instead of cla
   const { handle } = await f.reader();
   const result = await handle.isSuppressed(ns.ownerId,[c],{ expected:f.checkpoint(0) },f.credential);
   refused(result); assert.equal(result.error.code,'context_item_too_large'); f.clean(result);
+});
+
+
+const completeFamilyPull = familyGate('H/pull-evidence', 1);
+test('family gate H: v53 pull-evidence', async t => {
+  const f = await suppressionFixture(t,33,eventTimeSafetyFixture), memory = f.memory(), c = f.descriptor(memory), { handle } = await f.reader();
+  const row = ok(f.core.get({ namespace:ns,memoryId:memory.id })).receipts[0];
+  const receipt = { ...c,kind:'receipt',key:row.id,incarnation:row.id,memoryId:memory.id,ancestors:[c] };
+  const call = values => handle.isSuppressed(ns.ownerId,values,{ expected:f.checkpoint(0) },f.credential);
+  assert.deepEqual(ok(await call([c,receipt,c])).results.map(r => r.inputIndex),[0,1,2]);
+  for (const patch of [{ boundRevision:undefined },{ storeId:undefined },{ incarnation:randomUUID() },{ ancestors:undefined },
+    { extra:'Synthetic receipt secret' },{ namespace:{ ...ns,sourceName:'synthetic-source-name' } }]) {
+    const result = await call([{ ...c,...patch }]); refused(result); f.clean(result);
+  }
+  refused(await call([{ ...receipt,ancestors:[] }]));
+  refused(await call([{ ...receipt,memoryId:randomUUID() }]));
+  refused(await call([c,{ ...c,ancestors:[{ ...c,kind:'raw',messageId:'message',span:{ start:0,end:1,precision:'exact' },contentIdentity:'a'.repeat(43) }] }]));
+  const cycle = { ...c }; cycle.ancestors = [cycle]; refused(await call([cycle]));
+  const semanticCycle = { ...c,ancestors:[{ ...c,ancestors:[] }] }; refused(await call([semanticCycle]));
+  f.db.prepare('UPDATE memories SET revision=revision+1 WHERE id=?').run(memory.id);
+  refused(await call([c])); refused(await call([receipt]));
+  // A known denial can identify an old, removed source without filling fields.
+  f.fact(c); assert.equal(ok(await call([c])).results[0].suppressed,true);
+  refused(await call([{ ...c,boundRevision:undefined }]));
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 53);
+  completeFamilyPull('pull-evidence');
 });

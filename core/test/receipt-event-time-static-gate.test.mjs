@@ -12,9 +12,72 @@ import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { featureSources, assertFeatureImports } from '../testing/receipt-event-time-audit.mjs';
 import { moduleLoadingExceptions, moduleEdges } from '../testing/receipt-event-time-modules.mjs';
 import { resolveContentLayout } from '../content-safety-layout.mjs';
+import { parse } from '../../tools/testing/vendor/acorn/acorn.mjs';
 
 const reviewed = JSON.parse(readFileSync(new URL('./fixtures/receipt-event-time-static-gate.json', import.meta.url), 'utf8'));
 const digest = value => createHash('sha256').update(value).digest('hex');
+
+// Gate A rejects unreviewed safety-cell literals outside the three authorities.
+// Checking literals also covers aliases, Sets, lookup tables and switch cases.
+// These exact non-layout expressions use the same integers as codepoints,
+// corpus counts and a tar header byte; none may exempt a whole module.
+function assertNoPhysicalCellBranches(sources) {
+  const cells = new Set([34, 38, 48, 51, 52, 53]);
+  const authorities = new Set(['core/content-safety-layout.mjs', 'core/content-safety-schema.mjs', 'core/content-safety-migration.mjs']);
+  const unrelated = new Map([
+    ['integrations/codex/schema-evidence.mjs:char===34', 2],
+    ['core/context-product-comparison.mjs:p===34', 1],
+    ['core/context-semantic-gates.mjs:primary.length!==48', 1],
+    ['core/context-semantic-gates.mjs:new Set(primary.map(s=>cellKey(s.cell))).size!==48', 1],
+    ['adapters/local-embedder/install.mjs:[0, 48].includes(header[156])', 1],
+    ['core/topic-overview-storage.mjs:48 + parent.id.length * 2', 1],
+    ['core/context-read-fusion.mjs:unionMaximum: 48', 1],
+  ]);
+  const seen = new Map();
+  const cell = node => node?.type === 'Literal' && cells.has(Number(node.value));
+  function walk(node, file, source, ancestors = []) {
+    if (!node || typeof node.type !== 'string') return;
+    if (cell(node)) {
+      const key = ancestors.map(parent => file + ':' + source.slice(parent.start, parent.end))
+        .find(candidate => unrelated.has(candidate));
+      assert.ok(key, 'physical cell branch outside layout/schema/migration: ' + file + ':' + source.slice(node.start, node.end));
+      seen.set(key, (seen.get(key) ?? 0) + 1);
+    }
+    const parents = [...ancestors, node];
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) for (const child of value) walk(child, file, source, parents);
+      else if (value && typeof value === 'object') walk(value, file, source, parents);
+    }
+  }
+  let scanned = 0;
+  for (const [file, source] of sources) if (!authorities.has(file)) {
+    walk(parse(source, { ecmaVersion: 2025, sourceType: 'module', allowReturnOutsideFunction: true }), file, source);
+    scanned++;
+  }
+  assert.equal(scanned, sources.size - authorities.size, 'every non-authority production module scanned');
+  assert.deepEqual([...seen].sort(), [...unrelated].sort(), 'exact unrelated-expression inventory');
+  return scanned;
+}
+
+test('family gate A: physical cell branches fail on an injected copy and pass on the real tree', t => {
+  const sources = featureSources(), scanned = assertNoPhysicalCellBranches(sources);
+  const mutations = [
+    'if ([34,38,48].includes(physical)) chooseOtherS2hPath();',
+    'if (layout.physical === 53) chooseOtherS2hPath();',
+    'if (row.user_version !== 51) chooseOtherS2hPath();',
+    'if (52 === version) chooseOtherS2hPath();',
+    'switch (physical) { case 38: chooseOtherS2hPath(); }',
+  ];
+  let rejected = 0;
+  for (const mutation of mutations) {
+    const copy = new Map(sources), file = 'core/content-safety.mjs';
+    copy.set(file, copy.get(file) + '\n' + mutation);
+    assert.throws(() => assertNoPhysicalCellBranches(copy), /physical cell branch outside/);
+    rejected++;
+  }
+  assert.equal(rejected, 5, 'exact mutation-control count');
+  t.diagnostic(`family gate A: 1 real tree, ${rejected} rejected injected copies, ${scanned} production modules`);
+});
 
 // A closed, sink-oriented gate: metadata defines/attests the tuple; serving
 // consumers are byte-pinned receipt writes/validation, the receipts column

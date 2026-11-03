@@ -1,3 +1,4 @@
+import { familyCostParity } from '../testing/receipt-event-time-gates.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
@@ -46,4 +47,25 @@ for(const base of [18,23,33])for(const n of [2,4])test(`enabled embedded local g
   const epochs=row.trace.filter(r=>/^SELECT epoch_hi,epoch_lo FROM owner_suppression_epochs/.test(r.sql));
   assert.equal(epochs.length,row.ports+2,'entry/delivery plus one E1 per actual host counter or embedder invocation');assert.ok(epochs.slice(1,-1).every(r=>!r.transaction));
  }
+});
+
+
+test('R2 product family gate B: embedded-local-guard smallest case, exact zero/five-fact parity', async t => {
+  await familyCostParity(t, 33, async (f, db, facts) => {
+
+  let calls = 0, exposedEngineContext = false;
+  const fake = createFakeEmbedder({ dimensions: 8 });
+  const core = openMemoryCore({ path: f.path, contextRead: { version: 'context-read-v1', authority,
+    counter: { id: 'synthetic', countTokens() { calls++; return 1; } },
+    embedder: { ...fake, embed(texts, options) { calls++; exposedEngineContext ||= Object.hasOwn(options.beforeDispatch, 'asyncResource'); options.beforeDispatch(); return texts.map(() => new Float32Array([1,0,0,0,0,0,0,0])); } },
+    localStatus: () => ({ state: 'ready', reason: null }), policy: { family: 'local', maxRequests: 10000, maxConcurrent: 1, maxBatchDocuments: 1 } } });
+  t.after(() => core.close());
+  for (let i = 0; i < 2; i++) ok(core.admit({ namespace: ns, memory: { content: 'probecommon synthetic semantic ' + i, kind: 'fact' }, receipts: [receipt('semantic-' + i)] }));
+  const p = { readSet: [ns], types: ['memory'], intent: 'current' };
+  ok(await core.refreshContextIndex({ ...p, budget: { maxItems: 1024, maxMs: 5000 } }, {}));
+  return { method: 'findCandidates', variant: 'hit', ports: () => calls,
+    call: () => core.findCandidates({ ...p, query: 'probecommon', semantic: true, limit: 1, deadlineMs: 5000 }, {}),
+    check(result) { assert.equal(result.ok, true, JSON.stringify(result)); assert.equal(result.value.channels.semantic.state, 'ready');
+      assert.equal(result.value.items.length, 1); assert.equal(exposedEngineContext, false); } };
+  }, { factNamespace: { ...ns, scope: 'project', projectId: 'unrelated' } });
 });
