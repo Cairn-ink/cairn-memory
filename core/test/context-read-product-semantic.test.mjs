@@ -34,12 +34,12 @@ const retainedQuarantines=[];
 // at that test's end and allow the next fixture to reuse the quarantined ID.
 after(async()=>{for(const workspace of retainedQuarantines)await workspace.cleanup();});
 const query={readSet:[ns],types:['memory'],intent:'current',query:'semantic',deadlineMs:5000,semantic:true};
-async function setup(t,{localRuntime=false,open=true,expectedCleanupFailure=false,host={},caps:capPatch,corpus,readSet=[ns],version=18,canonicalMode='DELETE',sidecarMode='DELETE',coordinatorHost=hostUrl}={}) {
+async function setup(t,{localRuntime=false,open=true,expectedCleanupFailure=false,host={},safety=false,caps:capPatch,corpus,readSet=[ns],version=18,canonicalMode='DELETE',sidecarMode='DELETE',coordinatorHost=hostUrl}={}) {
   // Each fixture is an independent process-policy universe. Never reset while
   // a coordinator is live; same-test duplicate-file probes share the binding.
   if(!globalThis[Symbol.for('context-read-product-p2e-v1/coordinators')]?.size)
     globalThis[Symbol.for('context-read-product-p2e-v1/physical-policy')]?.clear();
-  const f=fixture(t,{cards:version>=23}),types=version>=23?['memory','card']:['memory'];for(const [text,namespace] of corpus??[['lexical needle',ns],['semantic match',ns]])f.admit(text,namespace);
+  const f=fixture(t,{cards:version>=23,coreOptions:safety?{contentSafety:'s2h-v1'}:{}}),types=version>=23?['memory','card']:['memory'];for(const [text,namespace] of corpus??[['lexical needle',ns],['semantic match',ns]])f.admit(text,namespace);
   if(version>=23)for(const namespace of readSet)card(f,namespace,'semantic','beta');f.core.close();
   if(version===33){const db=openDatabase(f.path);try{migrateMethodPrerequisites(db);installAssets(db);installRoleProfiles(db);installCardCurrentDependencies(db);db.exec('PRAGMA user_version=33');}finally{db.close();}}
   if(canonicalMode==='WAL'){const db=new DatabaseSync(f.path);try{db.exec('PRAGMA journal_mode=WAL');}finally{db.close();}}
@@ -655,17 +655,97 @@ test('Fix1 failed final comparison invalidates only the affected receipt and per
   const state=JSON.parse(ownerRow(db).state);assert.equal(Object.keys(state.receipts).length,1);assert.equal(state.validationPending,false);assert.equal(state.firstCoverageComplete,false);
 });
 
-for(const method of ['findCandidates','contextRead'])test(`Fix1 vector republication preserves lexical ${method} with honest degradation`,async t=>{
+for(const method of ['findCandidates','contextRead'])test(`no-op vector refresh preserves hybrid ${method} across preflight and final validation`,async t=>{
   const s=await setup(t),m=await prepared(s),r=s.configure(false),reader=await openContextProductReader(r.options);s.f.workspace.defer(()=>reader.close());
   const input=method==='contextRead'?{...query,budget:{maxTokens:4000,maxItems:12}}:query;
-  const expected=ok(await reader[method]({...input,semantic:false},r.credential));s.view[7]=7;s.f.workspace.defer(()=>release(s.view,11));
+  const expected=ok(await reader[method](input,r.credential));s.view[7]=7;s.f.workspace.defer(()=>release(s.view,11));
   const pending=reader[method](input,r.credential);await rendezvous(s.view,10,pending);
   const vectorDb=sidecar(s),before=vectorDb.prepare('SELECT pointer FROM vector_publications ORDER BY projection').all(),lexical=vectorDb.prepare('SELECT record FROM validation_records ORDER BY publication').all();
-  const refresh=ok(await m.h.refreshContextIndex(refreshInput(ns),m.credential));assert.equal(refresh.progress.embeddingAttempts,0);
-  assert.notDeepEqual(vectorDb.prepare('SELECT pointer FROM vector_publications ORDER BY projection').all(),before);assert.deepEqual(vectorDb.prepare('SELECT record FROM validation_records ORDER BY publication').all(),lexical);
+  const sends=s.view[6],refresh=ok(await m.h.refreshContextIndex(refreshInput(ns),m.credential));assert.equal(refresh.progress.embeddingAttempts,0);assert.equal(s.view[6],sends);
   release(s.view,11);const value=ok(await pending),detail=method==='contextRead'?value.diagnostics.candidates:value;
-  assert.equal(detail.trace.effective,'lexical');assert.equal(detail.trace.semantic.degradedReason,'validation_invalid');assert.equal(detail.trace.semantic.queryEmbeddingAttempts,1);
+  assert.equal(detail.trace.effective,'hybrid','a no-op refresh must preserve the query publication');assert.equal(detail.trace.semantic.degradedReason,null);assert.equal(detail.trace.semantic.queryEmbeddingAttempts,1);
+  assert.deepEqual(vectorDb.prepare('SELECT pointer FROM vector_publications ORDER BY projection').all(),before);assert.deepEqual(vectorDb.prepare('SELECT record FROM validation_records ORDER BY publication').all(),lexical);
   assert.deepEqual(method==='contextRead'?value.metered.items:value.items,method==='contextRead'?expected.metered.items:expected.items);
+});
+
+test('public refresh recovers a deleted vector certificate',async t=>{
+  const s=await setup(t),m=await prepared(s),db=sidecar(s),r=s.configure(false),reader=await openContextProductReader(r.options);s.f.workspace.defer(()=>reader.close());
+  const selected=db.prepare("SELECT p.* FROM vector_publications p JOIN selections s ON s.projection=p.projection WHERE s.intent='current'").get();
+  const before=JSON.parse(selected.pointer);
+  db.prepare('DELETE FROM vector_validation_records WHERE publication=?').run(before.publicationId);
+  let refreshed;
+  for(let i=0;i<2;i++)refreshed=ok(await m.h.refreshContextIndex(refreshInput(ns),m.credential));
+  assert.equal(refreshed.status,'complete','public refresh must recover a deleted certificate');
+  const current=ok(await reader.findCandidates(query,r.credential));assert.equal(current.trace.effective,'hybrid');
+  const after=JSON.parse(db.prepare('SELECT pointer FROM vector_publications WHERE projection=?').get(selected.projection).pointer);
+  assert.notEqual(after.publicationId,before.publicationId);assert.notEqual(after.generation.id,before.generation.id);
+});
+
+for(const method of ['findCandidates','contextRead'])test(`overlapping suppression excludes the semantic-only target from ${method}`,{
+  todo:"Becomes must-pass when the safety layer's read-time suppression fence lands."
+},async t=>{
+  const {writeContentSuppressionInside,memorySuppressionObservationInside}=await import('../content-suppression-storage.mjs');
+  const {transaction,readTransaction}=await import('../database.mjs');
+  const s=await setup(t,{safety:true}),m=await prepared(s),r=s.configure(false),reader=await openContextProductReader(r.options);s.f.workspace.defer(()=>reader.close());
+  const input={...query,query:'needle',...(method==='contextRead'?{budget:{maxTokens:4000,maxItems:12}}:{})};
+  const target=s.f.db.prepare("SELECT id,revision FROM memories WHERE content='semantic match'").get(),vectors=sidecar(s);
+  const record=()=>JSON.parse(vectors.prepare("SELECT v.record FROM vector_validation_records v JOIN vector_publications p ON json_extract(p.pointer,'$.publicationId')=v.publication JOIN selections s ON s.projection=p.projection WHERE s.intent='current'").get().record);
+  const fields=r=>({ld:r.lexical.validationDigest,identity:digest(r.identity),purgeEpoch:r.purgeEpoch}),before=fields(record());
+  s.view[7]=7;s.f.workspace.defer(()=>release(s.view,11));const pending=reader[method](input,r.credential);await rendezvous(s.view,10,pending);
+  const db=openDatabase(s.f.path);
+  try {
+    transaction(db,()=>writeContentSuppressionInside(db,{namespace:ns,kind:'memory',key:target.id,reason:'purge',actionId:'overlap-suppression'}));
+    assert.equal(readTransaction(db,()=>memorySuppressionObservationInside(db,ns,{memoryId:target.id,revision:target.revision})).suppressed,true);
+  } finally {db.close();}
+  ok(await m.h.refreshContextIndex({...refreshInput(ns),mode:'lexical',budget:{maxItems:1024,maxMs:5000}},m.credential));
+  const refreshed=ok(await m.h.refreshContextIndex(refreshInput(ns),m.credential));assert.equal(refreshed.progress.embeddingAttempts,0);
+  assert.deepEqual(fields(record()),before);release(s.view,11);const outcome=await pending;
+  if(!outcome.ok){assert.equal(outcome.error.code,'evidence_unavailable');return;}
+  const result=ok(outcome);
+  const targetReturned=method==='contextRead'?JSON.stringify(result.metered).includes('semantic match'):result.items.some(i=>i.ref.memoryId===target.id);
+  assert.equal(targetReturned,false,'an overlapping suppression must never serve the suppressed semantic-only target');
+});
+
+test('replacement of an unpublished vector generation still degrades the overlapping query with validation_invalid',async t=>{
+  const s=await setup(t),m=await prepared(s),r=s.configure(false),reader=await openContextProductReader(r.options);s.f.workspace.defer(()=>reader.close());
+  s.view[7]=7;s.f.workspace.defer(()=>release(s.view,11));const pending=reader.findCandidates(query,r.credential);await rendezvous(s.view,10,pending);
+  const db=sidecar(s),before=db.prepare('SELECT pointer FROM vector_publications ORDER BY projection').all();
+  db.prepare('UPDATE vector_generations SET published=0 WHERE storage_id IN (SELECT generation FROM vector_publications)').run();
+  const refreshed=ok(await m.h.refreshContextIndex(refreshInput(ns),m.credential));assert.equal(refreshed.progress.embeddingAttempts,0);
+  assert.notDeepEqual(db.prepare('SELECT pointer FROM vector_publications ORDER BY projection').all(),before);
+  release(s.view,11);const value=ok(await pending);assert.equal(value.trace.effective,'lexical');assert.equal(value.trace.semantic.degradedReason,'validation_invalid');assert.equal(value.trace.semantic.queryEmbeddingAttempts,1);
+});
+
+for(const mutation of ['forget','correction'])test(`real ${mutation} refresh rejects an overlapping semantic query and excludes the old revision`,async t=>{
+  const s=await setup(t),m=await prepared(s),r=s.configure(false),reader=await openContextProductReader(r.options);s.f.workspace.defer(()=>reader.close());
+  // Only the unchanged document matches lexically, so the control can return
+  // its original lexical horizon after discarding the stale semantic horizon.
+  const input={...query,query:'needle'},db=sidecar(s),before=JSON.parse(db.prepare("SELECT record FROM vector_validation_records WHERE publication=(SELECT json_extract(pointer,'$.publicationId') FROM vector_publications WHERE projection=(SELECT projection FROM selections WHERE intent='current'))").get().record);
+  const old=s.f.db.prepare("SELECT id,revision FROM memories WHERE content='semantic match'").get();
+  s.view[7]=7;s.f.workspace.defer(()=>release(s.view,11));const pending=reader.findCandidates(input,r.credential);await rendezvous(s.view,10,pending);
+  const writer=openMemoryCore({path:s.f.path});
+  try {
+    const target={namespace:ns,memoryId:old.id,expectedRevision:old.revision};
+    if(mutation==='forget')ok(writer.forget(target));
+    else ok(writer.correct({...target,content:'replacement body',kind:'fact',receipt:{client:'synthetic',sessionId:'edit',eventId:'replacement',role:'user',excerpt:'replacement body'}}));
+  } finally {writer.close();}
+  ok(await m.h.refreshContextIndex({...refreshInput(ns),mode:'lexical',budget:{maxItems:1024,maxMs:5000}},m.credential));
+  // The query is already waiting. Let a refresh provider call complete while
+  // keeping that query behind its rendezvous.
+  s.view[7]=0;ok(await m.h.refreshContextIndex(refreshInput(ns),m.credential));
+  const after=JSON.parse(db.prepare("SELECT record FROM vector_validation_records WHERE publication=(SELECT json_extract(pointer,'$.publicationId') FROM vector_publications WHERE projection=?)").get(before.projectionDigest).record);
+  assert.notEqual(after.lexical.validationDigest,before.lexical.validationDigest);assert.notEqual(after.publicationId,before.publicationId);
+  release(s.view,11);const overlap=await pending;
+  // Canonical fence changes already fail closed on base before delivery.
+  assert.equal(overlap.ok,false);assert.equal(overlap.error.code,'index_unavailable');
+  for(let n=0;n<2;n++) {
+    const current=ok(await reader.findCandidates(query,r.credential));assert.equal(current.trace.effective,'hybrid');
+    assert.ok(current.items.every(item=>item.ref.memoryId!==old.id||mutation==='correction'&&item.ref.revision>old.revision));
+    const assembled=ok(await reader.contextRead({...query,budget:{maxTokens:4000,maxItems:12}},r.credential));assert.ok(!JSON.stringify(assembled.metered).includes('semantic match'));
+    const sends=s.view[6],refreshed=ok(await m.h.refreshContextIndex(refreshInput(ns),m.credential));assert.equal(refreshed.progress.embeddingAttempts,0);assert.equal(s.view[6],sends);
+  }
+  const stale=db.prepare('SELECT r.item,r.revision FROM vector_rows r JOIN vector_publications p ON p.generation=r.generation WHERE p.projection=?').all(before.projectionDigest);
+  assert.ok(stale.every(row=>JSON.parse(row.item).at(-1)!==old.id||mutation==='correction'&&row.revision>old.revision));
 });
 
 test('Fix1 ledger failure retains configured provider with unknown owner enablement',async t=>{
@@ -792,7 +872,7 @@ for(const failure of ['counter','termination'])test(`Fix2 assembly publication g
   }
   assert.equal(Atomics.load(new BigInt64Array(semanticHandle(s.coordinator).ownerState),5),0n);
   const value=ok(await m.h.refreshContextIndex(refreshInput(ns),m.credential));assert.equal(value.progress.embeddingAttempts,0);assert.equal(value.status,'complete');
-  assert.notDeepEqual(db.prepare('SELECT pointer FROM vector_publications ORDER BY projection').all(),before);
+  assert.deepEqual(db.prepare('SELECT pointer FROM vector_publications ORDER BY projection').all(),before);
 });
 
 test('format 3 fresh public lexical build, vector refresh, semantic read and integer-key owner purge',async t=>{
