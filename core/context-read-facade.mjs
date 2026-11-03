@@ -24,7 +24,7 @@ import { fuseCandidates, RRF_PRESETS } from './context-read-fusion.mjs';
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION } from './context-read-tokenize.mjs';
 import { validateVector } from './context-read-embedder.mjs';
 import { contextBudget } from './context-read-budget.mjs';
-import { assembleContext, receiptEventDate } from './context-read-assembly.mjs';
+import { assembleContext, receiptEventDate, completeResponseBytes } from './context-read-assembly.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { CONTEXT_VERSION, CONTEXT_METHODS, CONTEXT_LIMITS, SOURCE_LIMITS, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_DEFAULTS, DEFAULT_ASSEMBLY_POLICY,
   contextOptions, contextInput, contextRefs, namespaceKey } from './context-read-input.mjs';
@@ -663,23 +663,35 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       const scope = bind('snapshot-scope', input.readSet);
       const generationsFor = items => prepared.generations.map(value => ({ memory: value.memory,
         ...(items.some(item => item.type === 'card') ? { card: value.card } : {}) }));
+      const snapshotValue = items => ({ v: 1, scope, intent: input.intent,
+        refs: items.map(({ ref }) => [input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), ref.type,
+          ref.memoryId ?? ref.cardId, ref.revision, ...(ref.type === 'card' ? [ref.bodyRevision] : [])]),
+        generations: generationsFor(items), access: access.accessGenerations, fences: items.map(item => item.fence) });
+      const dependencyReserve = items => {
+        const declared = items.filter(item => item.dependencyCount !== null);
+        if (!declared.length) return {};
+        const resolutions = declared.reduce((n, item) => n + item.dependencyCount, 0);
+        return { finalDependencyValidationReserve: { records: declared.length,
+          resolutions, bindingProbes: 4 * resolutions, manifestRows: 256 * resolutions } };
+      };
+      const candidateDetails = () => ({ count: candidates.items.length, channels: candidates.channels, coverage: candidates.coverage,
+        trace: options.localStatus ? { ...candidates.trace, localEmbedder: sampleLocalStatus(options.localStatus) } : candidates.trace });
+      // Sample host status once. Dated trials and final delivery must use the
+      // same candidate trace; the v2 sampling point remains after assembly.
+      const datedCandidates = input.representation === 'representation-v2-dated' ? candidateDetails() : null;
       const { selected: delivered, ...assembled } = assembleContext({ prepared: prepared.items, counter: options.counter, policy: input.policy,
-        budget: input.budget, representation: input.representation, deadlineAt, snapshotOf: items => encode('snapshot', { v: 1, scope, intent: input.intent,
-          refs: items.map(({ ref }) => [input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), ref.type,
-            ref.memoryId ?? ref.cardId, ref.revision, ...(ref.type === 'card' ? [ref.bodyRevision] : [])]),
-          generations: generationsFor(items), access: access.accessGenerations, fences: items.map(item => item.fence) }, 16384) });
+        budget: input.budget, representation: input.representation, deadlineAt,
+        responseBytes: datedCandidates ? ({ meteredBytes, diagnostics, selected }) => completeResponseBytes(success({ metered: null, snapshot: null,
+          diagnostics: { ...diagnostics, omitted: { ...diagnostics.omitted, unavailable: prepared.unavailable },
+            trace: { ...diagnostics.trace, ...dependencyReserve(selected) }, candidates: datedCandidates } }),
+          meteredBytes, selected.length ? snapshotValue(selected) : null) <= CONTEXT_LIMITS.responseBytes : undefined,
+        snapshotOf: items => encode('snapshot', snapshotValue(items), 16384) });
       const diagnostics = assembled.diagnostics;
       diagnostics.omitted.unavailable = prepared.unavailable;
       // Reserve one complete final pass for admitted declarations. These are
       // upper bounds; source/lifecycle/ownership work keeps its existing charge.
-      const declared = delivered.filter(item => item.dependencyCount !== null);
-      if (declared.length) {
-        const resolutions = declared.reduce((n, item) => n + item.dependencyCount, 0);
-        diagnostics.trace.finalDependencyValidationReserve = { records: declared.length,
-          resolutions, bindingProbes: 4 * resolutions, manifestRows: 256 * resolutions };
-      }
-      const candidateTrace = options.localStatus ? { ...candidates.trace, localEmbedder: sampleLocalStatus(options.localStatus) } : candidates.trace;
-      diagnostics.candidates = { count: candidates.items.length, channels: candidates.channels, coverage: candidates.coverage, trace: candidateTrace };
+      Object.assign(diagnostics.trace, dependencyReserve(delivered));
+      diagnostics.candidates = datedCandidates ?? candidateDetails();
       diagnostics.stops.deadline ||= deadline;
       access.check();
       diagnostics.stops.deadline ||= performance.now() >= deadlineAt;

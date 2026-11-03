@@ -1843,9 +1843,17 @@ relevance order. Date ties keep relevance order, and `rank` is relevance.
 Selection still visits items and sources in relevance order; aliases and their
 item/source positions are computed in emitted order. The final metered text
 must fit the token budget. Old-layout stores without dates keep v2 item order.
-Selection visits remain in relevance order, but every trial measures emitted
-date-order bytes, so rare near-limit reads can select a different last source
-or item than v2 while staying within budget without an ordering-only refusal.
+Every dated trial must fit both `maxTokens` in emitted date order and the
+65,536-byte complete-response packing budget. Each enclosing reader supplies
+the response-size check, including its snapshot and candidate diagnostics;
+volatile diagnostic scalars reserve a proven upper bound. Trials over either
+budget are omitted and set `stops.budget`, so near-limit reads may select
+different sources or items than v2. Byte-only rejection adds no counter call.
+The final token and complete-response gates remain defensive. Date keys and
+alias-position growth cannot by themselves cause a final byte-limit refusal
+when the minimal response fits the reader's bound; a minimal response that
+cannot fit may still refuse `context_item_too_large`. V2 keeps its existing
+bytes, counter schedule and outer-gate refusal behavior.
 
 Missing event-time columns and null times are equivalent: if none of the
 selected rows carries a time, omit `date`, while retaining the selected dated

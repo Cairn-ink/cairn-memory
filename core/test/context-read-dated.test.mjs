@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
-import { chmodSync } from 'node:fs';
+import { chmodSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { assembleContext, meteredText, receiptEventDate } from '../context-read-assembly.mjs';
-import { ASSEMBLY_REPRESENTATIONS, ASSEMBLY_LIMITS, contextInput } from '../context-read-input.mjs';
+import { assembleContext, meteredText, receiptEventDate, completeResponseBytes } from '../context-read-assembly.mjs';
+import { ASSEMBLY_REPRESENTATIONS, ASSEMBLY_LIMITS, ASSEMBLY_DEFAULTS, CONTEXT_LIMITS, contextInput, namespaceKey } from '../context-read-input.mjs';
 import { assemblyQuery, fixedPrepared, ns, ok } from '../testing/context-read-assembly-fixture.mjs';
 import { host, receipt } from '../testing/context-read-core-fixture.mjs';
 import { openMemoryCore, openContextReader } from '../index.mjs';
@@ -22,6 +22,11 @@ import { migrateEventTime } from '../testing/receipt-event-time-fixture.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 import { rationaleModel } from '../testing/rationale-model.mjs';
 import { savedSource, cardHost } from '../testing/raw-source-fixtures.mjs';
+
+import { createContextCounter } from '../../adapters/openai/context-counter.mjs';
+import { validateSourceReceipt } from '../source-evidence.mjs';
+import { MemoryStoreError, fail } from '../validation.mjs';
+import { deepFreeze } from '../private-card-input.mjs';
 
 const dated = 'representation-v2-dated';
 const counter = { id: 'synthetic-all-fit', countTokens: () => 1 };
@@ -234,7 +239,131 @@ test('reordered alias growth packs emitted bytes within budget instead of refusi
   }
 });
 
-test('fixed-seed generated reads never gain a dated refusal and always meter emitted date order', () => {
+// Execute the enclosing production functions unchanged, with deterministic I/O
+// ports. This covers preparation, reader-owned diagnostics/snapshots and the
+// defensive outer gates, without depending on lexical scores or random IDs.
+function enclosingReader(kind, definitions, port, { unavailable = 0, localStatus = false, safety = false } = {}) {
+  const namespace = safety ? { ownerId: 'synthetic-owner', scope: 'project', projectId: 'synthetic-project' } : { ownerId: 'owner', scope: 'personal', projectId: null };
+  const canonical = new Map(), rows = new Map(), counts = [], predictions = [];
+  for (const [index, definition] of definitions.entries()) {
+    const id = definition.id, ref = { type: 'memory', namespace, memoryId: id, revision: 1 };
+    const receipts = definition.sources.map((excerpt, source) => {
+      const value = { client: 'synthetic', sessionId: 'session', eventId: `event-${index}-${source}`, role: 'user', excerpt };
+      return { id: `receipt-${index}-${source}`, memory_id: id, client: value.client, session_id: value.sessionId,
+        event_id: value.eventId, role: value.role, excerpt, occurred_at: definition.date,
+        receipt_key: createHash('sha256').update(JSON.stringify(value)).digest('hex') };
+    });
+    rows.set(id, receipts);
+    canonical.set(id, { type: 'memory', ref, ...ASSEMBLY_DEFAULTS.metadata.memory, content: definition.text,
+      provenance: { sourceAccess: 'available', receiptMetadata: receipts.map(row => ({ receiptId: row.id })), coverage: { status: 'complete' } } });
+  }
+  const candidates = { items: [...canonical.values()].map((item, i) => ({ ref: item.ref, rank: i + 1 })),
+    channels: { lexical: { state: 'ready', causes: [] }, semantic: { state: 'disabled', causes: ['disabled'] } },
+    coverage: { byType: { memory: { eligible: definitions.length, indexed: definitions.length, scanned: 0,
+      embeddedFraction: null, scannedFraction: 0 } }, freshness: 'current',
+      maintenance: { available: true, state: 'ready', buildState: 'ready', reason: null, progress: null },
+      depths: { lexical: 24, semantic: 0 }, omitted: { lexical: 0, semantic: null, horizon: 0 }, stops: { deadline: false, budget: false } },
+    trace: { requested: 'lexical', effective: 'lexical', family: 'local', preset: 'rrf-k60-d12', embedder: null,
+      tokenizer: 'hr1-t1-v1', representation: 'candidate-text-v1',
+      timings: { maintenanceMs: 0, lexicalMs: 0, semanticPreflightMs: 0, embeddingMs: 0, fusionMs: 0 } },
+    observed: { publication: { publicationId: 'synthetic' } } };
+  if (safety) Object.assign(candidates, { channels: {}, coverage: {}, trace: {} });
+  for (let i = 0; i < unavailable; i++) candidates.items.push({ ref: { type: 'memory', namespace, memoryId: 'missing-' + i, revision: 1 }, rank: definitions.length + i + 1 });
+  const size = value => Buffer.byteLength(JSON.stringify(value));
+  const bind = (purpose, value) => createHash('sha256').update(JSON.stringify([purpose, value])).digest('base64url');
+  const encode = (purpose, value) => Buffer.from(JSON.stringify(value)).toString('base64url') + '.' + bind(purpose, value);
+  const access = { accessGenerations: safety ? 'a'.repeat(43) : 'access', check() {} };
+  const counter = { id: port.id, countTokens(text) { counts.push(text); return port.countTokens(text); } };
+  const dependencies = { counter, options: { counter, ...(localStatus ? { localStatus: {} } : {}) }, supportedTypes: ['memory'],
+    performance: { now: () => 0 }, ready() {}, contextInput, authorize: () => access,
+    searchCandidates: async () => ({ ok: true, horizon: candidates, check() {} }), read: work => work(),
+    canonicalFence: () => [{ memory: 1 }], cardDependencyFence: () => ({}),
+    db: { prepare(sql) { assert.match(sql, /^SELECT \* FROM receipts/); return { all: id => rows.get(id) }; } },
+    evidence: { itemsInside: (_ns, refs) => refs.map(ref => { const item = canonical.get(ref.memoryId); if (!item) fail('evidence_unavailable'); return item; }) },
+    namespaceKey, receiptEventDate, validateSourceReceipt, createHash, bind, encode, ASSEMBLY_LIMITS, CONTEXT_LIMITS,
+    success: value => ({ ok: true, value }), failure: error => ({ ok: false, error: { code: error.code } }), MemoryStoreError, fail, deepFreeze,
+    same: (a, b) => JSON.stringify(a) === JSON.stringify(b), bytes: size,
+    final: (_p, _access, _publication, work) => work(), sampleLocalStatus: () => ({ state: 'ready', detail: 'synthetic status' }),
+    assembleContext: args => assembleContext({ ...args, now: () => 0 }),
+    completeResponseBytes(envelope, meteredBytes, snapshotValue) {
+      const bytes = completeResponseBytes(envelope, meteredBytes, snapshotValue);
+      predictions.push({ bytes, items: structuredClone(envelope.value.diagnostics.items), used: envelope.value.diagnostics.budget.used });
+      // Exact arithmetic against an independent serialization, even with UTF-8,
+      // escaping, and every base64 remainder in snapshot payloads.
+      const snapshot = snapshotValue === null ? null : encode('snapshot', snapshotValue);
+      assert.equal(bytes, size({ ...envelope, value: { ...envelope.value, snapshot } }) - 4 + meteredBytes);
+      return bytes;
+    } };
+  const file = kind === 'product' ? '../context-product-index.mjs' : '../context-read-facade.mjs';
+  const source = readFileSync(new URL(file, import.meta.url), 'utf8');
+  const start = kind === 'product' ? '  function assemble(' : '  async function contextRead(';
+  const end = kind === 'product' ? '  function statusDelivery(' : '  function fetchCandidateEvidence(';
+  const implementation = source.slice(source.indexOf(start), source.indexOf(end));
+  assert.ok(implementation.includes('context_item_too_large'), 'exercise the enclosing defensive byte gate');
+  const read = new Function(...Object.keys(dependencies), 'return (' + implementation + ');')(...Object.values(dependencies));
+  return { counts, predictions, candidates, namespace,
+    async run(representation, { maxTokens = 4000, maxItems = definitions.length, policy = 'rank-first-whole-v1' } = {}) {
+      counts.length = 0; predictions.length = 0;
+      const input = { readSet: [namespace], types: ['memory'], intent: 'current', query: 'assembly',
+        deadlineMs: 5000, budget: { maxTokens, maxItems }, policy: { id: policy }, representation };
+      try {
+        const result = kind === 'product' ? read({ ...input, policy: { id: policy }, deadlineAt: Infinity }, access, candidates) : await read(input);
+        if (result.ok) {
+          const value = result.value;
+          // Compare the actual reader prediction (including conservative scalar
+          // reserves) with the complete bytes actually returned by that reader.
+          if (representation === dated) {
+            const accepted = predictions.find(prediction => JSON.stringify(prediction.items) === JSON.stringify(value.diagnostics.items));
+            assert.ok(accepted, 'accepted selection has a reader-supplied byte prediction');
+            assert.ok(size(result) <= accepted.bytes, `${kind}: measured ${size(result)}, predicted ${accepted.bytes}`);
+            assert.ok(accepted.bytes - size(result) < 40, 'reserve is limited to volatile diagnostic scalars');
+          } else assert.equal(predictions.length, 0, 'v2 never invokes the byte predictor');
+        }
+        return result;
+      } catch (error) { return { ok: false, error: { code: error.code, message: error.message } }; }
+    } };
+}
+function boundaryDefinitions(kind) {
+  return Array.from({ length: kind === 'spec' ? 24 : 12 }, (_, i) => {
+    const id = kind === 'spec' ? 'memory-' + String(i).padStart(2, '0') : '00000000-0000-4000-8000-' + String(i).padStart(12, '0');
+    return { id, text: 'assembly ' + (kind === 'spec' ? id : id.slice(-3)) + ' ' + (kind === 'spec' ? '_'.repeat(2004 + (i === 23 ? 7 : 0)) : '.'.repeat(3922)),
+      date: kind === 'spec' ? (i === 0 ? '2024-01-01T00:00:00.000Z' : i === 23 ? '2023-01-01T00:00:00.000Z' : null) : '2023-01-01T00:00:00.000Z',
+      sources: kind === 'spec' ? (i === 0 ? ['Shared boundary receipt'] : i === 23 ? [...Array.from({ length: 11 }, (_, j) => 'Unique receipt ' + j), 'Shared boundary receipt'] : ['assembly receipt ' + i]) : ['source ' + id + ' ' + '.'.repeat(700)] };
+  });
+}
+
+for (const kind of ['product', 'facade']) test(`${kind}: both reviewer byte-boundary fixtures pack the complete dated response`, async () => {
+  const real = await createContextCounter();
+  for (const fixture of ['spec', 'safety']) {
+    const definitions = boundaryDefinitions(fixture), reader = enclosingReader(kind, definitions, real, { safety: fixture === 'safety' });
+    const options = { maxTokens: fixture === 'spec' ? 4000 : 3000 };
+    const baseline = await reader.run('representation-v2', options), baselineCalls = [...reader.counts];
+    assert.equal(baseline.ok, true, JSON.stringify(baseline));
+    assert.equal(baseline.value.metered.items.length, definitions.length);
+    assert.equal(reader.counts.length, fixture === 'spec' ? 120 : 50);
+    // Frozen against the enclosing readers and assembler at the pre-fix head.
+    assert.equal(createHash('sha256').update(JSON.stringify(baseline)).digest('hex'), fixture === 'spec'
+      ? 'b48a4955943cf55e755b9ab83bf85afb835bb5f9193d69dd0d8791ade509872d'
+      : '9a3619ceb76aeadd93437c61e001a30c19820aae33fa87947e9647af87f784cc');
+    assert.equal(createHash('sha256').update(JSON.stringify(baselineCalls)).digest('hex'), fixture === 'spec'
+      ? '82edbf4502cf7deb41cce3f5f7cb57f9910b1d5ce3890602c21976c18692e0be'
+      : 'd307f52edcf6fd295c6ce1d20ea6cba1ec7a2b3c5d7d7bc16b55658f6e7e173d');
+    const result = await reader.run(dated, options);
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.ok(Buffer.byteLength(JSON.stringify(result)) <= 65536);
+    assert.ok(result.value.diagnostics.stops.budget, `${fixture}: baseline ${Buffer.byteLength(JSON.stringify(baseline))}, dated ${Buffer.byteLength(JSON.stringify(result))}; byte pressure is a packing stop`);
+    assert.ok(result.value.diagnostics.budget.used <= options.maxTokens);
+    assert.ok(reader.counts.length <= baselineCalls.length, 'byte rejection adds no minimal token probe');
+    const time = item => item.date ? Date.parse(item.date) : Infinity;
+    const items = result.value.metered.items;
+    assert.deepEqual(items.map(item => item.rank), [...items].sort((a, b) => time(a) - time(b) || a.rank - b.rank).map(item => item.rank));
+    const repeated = await reader.run('representation-v2', options);
+    assert.deepEqual(repeated, baseline, 'dated packing never changes subsequent v2 bytes');
+    assert.deepEqual(reader.counts, baselineCalls, 'v2 counter text and calls stay identical');
+  }
+});
+
+test('fixed-seed generated reads never gain a dated refusal and always meter emitted date order', async () => {
   let state = 0x5eedcafe;
   const random = limit => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state % limit; };
   const base = fixedPrepared()[0], counted = [];
@@ -290,6 +419,32 @@ test('fixed-seed generated reads never gain a dated refusal and always meter emi
   }
   assert.equal(successes + refusals, 900, '300 fixtures across all three greedy policies');
   assert.ok(successes >= 700 && budgetStops >= 100 && refusals >= 100, 'exercise success, budget pressure and shared empty-envelope refusals');
+  const compressed = { id: 'synthetic-padding-compression', countTokens: text => Math.ceil(Buffer.byteLength(text.replace(/[_.]{32,}/g, '')) / 4) };
+  let enclosingSuccesses = 0, outerRefusals = 0, byteStops = 0;
+  for (let fixture = 0; fixture < 100; fixture++) {
+    const definitions = Array.from({ length: 18 + random(7) }, (_, index) => ({ id: 'padded-' + index,
+      text: 'assembly padded body ' + index + ' ' + (index % 2 ? '_' : '.').repeat(2200 + random(1500)),
+      date: random(4) ? `202${random(5)}-01-01T00:00:00.000Z` : null,
+      sources: Array.from({ length: 1 + random(4) }, () => 'Shared padded receipt ' + random(9)) }));
+    for (const policy of ['rank-first-whole-v1', 'rank-first-first-source-v1', 'coverage-first-v1']) {
+      for (const kind of ['product', 'facade']) {
+        const reader = enclosingReader(kind, definitions, compressed, { unavailable: fixture % 3, localStatus: fixture % 2 === 0 });
+        const options = { policy, maxTokens: [64, 1000, 3000, 4000][fixture % 4] };
+        const baseline = await reader.run('representation-v2', options);
+        if (!baseline.ok) { assert.equal(baseline.error.code, 'context_item_too_large'); outerRefusals++; continue; }
+        const result = await reader.run(dated, options);
+        assert.equal(result.ok, true, `${kind} fixture ${fixture}, ${policy}: ${JSON.stringify(result)}`);
+        enclosingSuccesses++;
+        assert.ok(Buffer.byteLength(JSON.stringify(result)) <= 65536);
+        assert.ok(result.value.diagnostics.budget.used <= options.maxTokens);
+        if (result.value.diagnostics.stops.budget) byteStops++;
+        const items = result.value.metered.items, time = item => item.date ? Date.parse(item.date) : Infinity;
+        assert.deepEqual(items.map(item => item.rank), [...items].sort((a, b) => time(a) - time(b) || a.rank - b.rank).map(item => item.rank));
+      }
+    }
+  }
+  assert.equal(enclosingSuccesses + outerRefusals, 600);
+  assert.ok(enclosingSuccesses > 100 && outerRefusals > 10 && byteStops > 10, 'exercise enclosing-reader success, byte pressure and unchanged v2 outer refusals');
 });
 
 for (const column of [false, true]) test(`all preparation paths: ${column ? 'bounded event dates' : 'old layout without column'}`, async t => {

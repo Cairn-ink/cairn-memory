@@ -1407,9 +1407,12 @@ window never supplies the date. Source-access denials and Card omissions apply
 unchanged; Cards do not receive dates.
 Items are emitted in date order, earliest first; undated items follow in
 relevance order. Date ties keep relevance order, and `rank` is relevance.
-Selection still visits items and sources in relevance order, but every trial
-counts emitted date-order bytes, so rare near-limit reads can select a different
-last source or item than v2 while staying within budget.
+Selection still visits items and sources in relevance order. Every trial must
+fit both the token budget in emitted date order and a reader-supplied upper
+bound on the complete 65,536-byte response, including snapshots and diagnostics.
+A trial over either budget is omitted and sets `stops.budget`; near-limit reads
+may therefore select different sources or items than v2. Byte-only rejections
+add no counter calls. The outer response-size gate remains defensive.
 Old-layout stores without dates keep v2 item order.
 
 Dates are UTC instants truncated to the minute, ending in `Z`. No time-zone

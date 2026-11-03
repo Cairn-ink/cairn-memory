@@ -9,7 +9,7 @@ import { contextInput, namespaceKey, ASSEMBLY_DEFAULTS, ASSEMBLY_POLICIES, ASSEM
 import { ownData } from './local-authority-input.mjs';
 import { deadline, PRODUCT_PROFILE } from './context-product-control.mjs';
 import { fuseCandidates } from './context-read-fusion.mjs';
-import { assembleContext, receiptEventDate } from './context-read-assembly.mjs';
+import { assembleContext, receiptEventDate, completeResponseBytes } from './context-read-assembly.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { TOKENIZER_VERSION, REPRESENTATION_VERSION } from './context-read-tokenize.mjs';
 import { fail } from './validation.mjs';
@@ -147,12 +147,17 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       return {generations,items,unavailable};
     });
     const generationsFor=items=>prepared.generations.map(g=>({memory:g.memory,...(items.some(i=>i.type==='card')?{card:g.card}:{})}));
+    const snapshotValue=items=>({v:1,scope:bind('snapshot-scope',p.readSet),intent:p.intent,
+      refs:items.map(({ref,ns})=>[ns,ref.type,ref.memoryId??ref.cardId,ref.revision,...(ref.type==='card'?[ref.bodyRevision]:[])]),
+      generations:generationsFor(items),access:access.accessGenerations,fences:items.map(i=>i.fence)});
+    const candidateDetails={count:c.items.length,channels:c.channels,coverage:c.coverage,trace:c.trace};
+    const decorate=diagnostics=>({...diagnostics,omitted:{...diagnostics.omitted,unavailable:prepared.unavailable},candidates:candidateDetails});
     const {selected:delivered,...assembled}=assembleContext({prepared:prepared.items,counter,policy:p.policy,budget:p.budget,representation:p.representation,deadlineAt:p.deadlineAt,
-      snapshotOf:items=>encode('snapshot',{v:1,scope:bind('snapshot-scope',p.readSet),intent:p.intent,
-        refs:items.map(({ref,ns})=>[ns,ref.type,ref.memoryId??ref.cardId,ref.revision,...(ref.type==='card'?[ref.bodyRevision]:[])]),
-        generations:generationsFor(items),access:access.accessGenerations,fences:items.map(i=>i.fence)},16384)});
-    assembled.diagnostics.omitted.unavailable=prepared.unavailable;
-    assembled.diagnostics.candidates={count:c.items.length,channels:c.channels,coverage:c.coverage,trace:c.trace};
+      responseBytes:p.representation==='representation-v2-dated'?({meteredBytes,diagnostics,selected})=>
+        completeResponseBytes(success({metered:null,snapshot:null,diagnostics:decorate(diagnostics)}),meteredBytes,
+          selected.length?snapshotValue(selected):null)<=ASSEMBLY_LIMITS.responseBytes:undefined,
+      snapshotOf:items=>encode('snapshot',snapshotValue(items),16384)});
+    assembled.diagnostics=decorate(assembled.diagnostics);
     const result=success(assembled);
     if(Buffer.byteLength(JSON.stringify(result))>65536)fail('context_item_too_large');
     const complete=()=>{
