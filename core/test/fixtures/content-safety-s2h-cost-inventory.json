@@ -3350,7 +3350,7 @@
   "unmigratedGate": {
     "gate": "unmigrated-cost",
     "fixture": "content-safety-s2h-unmigrated-counts.json",
-    "main": "6d8ced65",
+    "main": "26f9e467",
     "measured": "2026-11-03"
   }
 }
