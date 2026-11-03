@@ -1178,6 +1178,32 @@ checkpointed, independently HMAC-authenticated and bound to the complete
 lexical publication, selected six-field vector identity and owner purge epoch.
 Partial staging cannot authorize hybrid reads.
 
+An embedding refresh reuses the published, complete vector generation when its
+publication evidence verifies and the lexical validation digest, vector identity
+and owner purge epoch all match. The pointer and validation record must be valid
+and bound to the expected owner, projection and generation.
+It keeps the publication ID, generation sequence and checkpoint, creates no
+new generation or validation record, and does not repeat certification.
+Unpublished work and partial coverage retain their existing planning and
+publication behaviour. Forget, correction and a new lexical publication change
+the lexical validation digest; representation is part of that digest, while
+embedder identity and owner purge epoch changes invalidate reuse directly.
+On this base, product reads do not yet enforce suppression at read time.
+Publication reuse removes an accidental overlap degradation that the base had.
+Only sequential reads are equivalent to the base, including returning suppressed
+content. A semantic query that overlaps a suppression and a no-op refresh may now
+serve a suppressed target that only semantic retrieval finds, where the base
+happened to degrade. Two known-gap `todo` tests reproduce this overlap and assert
+that the target is not served; they become must-pass when the fence lands.
+The suppression guarantee comes from the safety layer's read-time epoch fence
+when it lands and does not depend on publication rotation.
+
+Public status and refresh DTOs expose lexical progress, not vector publication
+IDs or vector generation checkpoints. Private vector pointers and validation
+records retain their IDs and generation checkpoints on a no-op; provisional
+coverage hints retain the corresponding certificate digest. Existing owner
+coverage and purge checkpoints keep their separate meanings.
+
 The initial 1–32 target descriptors expand into both intents. They freeze before
 first dispatch and cannot be dropped to obtain completion. Every embedding
 refresh records a provisional hint before its final sample. Once all targets
