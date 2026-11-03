@@ -933,10 +933,20 @@ credit. Semantic coverage lag concerns recall. Unsuccessful turns and genuine
 semantic cutoffs remain terminal. The lexical cutoff exception stays disabled.
 Coordinator close uses the reader's existing 10,000-ms graceful-disposal bound.
 Pending coordinator calls settle as `store_closed`; after that bound the parent
-terminates a Worker whose provider or host close has not settled. A forced or
-unproven close rejects with `reader_failed` and retains the existing quarantine;
-only the unchanged four-bit disposal proof permits successful cleanup. This
-bounds the graceful wait, not a claim about termination scheduling or cadence.
+terminates a Worker whose provider or host close has not settled and waits at
+most another 1,000 ms (`TERMINATION_GRACE_MS`) for termination. Coordinator close
+therefore waits at most 11,000 ms (10,000 ms grace + 1,000 ms termination), plus
+event-loop scheduling delay. The termination allowance covers the engine's
+980-ms maximum SQLite WAL busy wait with headroom; normal Worker termination
+is much faster. Native statements and host code can still outlive this allowance.
+A forced or unproven close rejects with `reader_failed` and retains the existing
+quarantine; only the unchanged four-bit disposal proof permits successful
+cleanup. This bounds delivery of close, not the lifetime of a thread stuck in
+native code.
+While that thread holds ownership, another process receives `storage_busy`.
+Same-process reopening receives `reader_failed` without invoking the host's
+`confirmDisposed` or acquiring ownership, including after the thread exits;
+quarantine lasts until process restart.
 Actual-observation cadence, pacing, misses and startup/validation cursors remain
 separate parity work.
 
