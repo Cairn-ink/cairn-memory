@@ -45,6 +45,15 @@ export async function createContextReadHost(c) {
   },async close() {
     entered(1);
     if(Atomics.load(control,0)===1)await wait(2);
+    if(c.closeBlockPath) {
+      // Deliberately bypass the engine's bounded busy policy in this fixture:
+      // a real synchronous native call must outlive the parent's close bound.
+      const db=new DatabaseSync(c.closeBlockPath);
+      try {
+        db.exec('PRAGMA busy_timeout=60000');entered(18);
+        db.exec('BEGIN IMMEDIATE');db.exec('ROLLBACK');
+      } finally {db.close();}
+    }
     return host.close();
   }};
 }

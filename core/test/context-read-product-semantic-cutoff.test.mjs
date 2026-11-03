@@ -187,8 +187,8 @@ function pumpRuntime(s, hooks = {}) {
     worker.postMessage = (message, ...args) => { capture.outbound.push(message); return post(message, ...args); };
     return worker;
   } });
-  const renew = createMaintenancePumpRuntime({ now: testClock.now,
-    setTimer(fn, ms) { const id = ++next; timers.set(id, { fn, ms }); return id; },
+  const runtimeRenew = createMaintenancePumpRuntime({ now: testClock.now,
+    setTimer(fn, ms) { const id = ++next; timers.set(id, { fn, ms, at:testClock.now()+ms }); return id; },
     clearTimer: id => timers.delete(id),
     async open(options, control) {
       try {
@@ -211,11 +211,27 @@ function pumpRuntime(s, hooks = {}) {
     budgets: { maxItems: 100, maxMs: 20000, maxUsd: '0.50' },
     quantum: { maxItems: 1, maxMs: 500, maxUsd: '0.01' }, pollMs: 500, renewalMs: 60000,
   };
-  return { renew, config, spawned, results, opened, errors, reservations, controlCalls, fireWatchdog(){const entry=[...timers].at(-1);assert.ok(entry,'parent_watchdog_is_armed');timers.delete(entry[0]);return entry[1].fn();},
-    get nextDelay() { return timers.values().next().value?.ms; }, tick() {
-    assert.equal(timers.size, 1, 'exactly one pump tick is scheduled');
-    const [id, { fn }] = timers.entries().next().value; timers.delete(id); return fn();
-  } };
+  let pump,renewedEnd,activeWindowEnd,renewals=0;
+  const renew=value=>{renewals++;renewedEnd=testClock.now()+value.renewalMs;activeWindowEnd=value.window.endsAtMonoMs;return pump=runtimeRenew(value);};
+  // A step is one actual scheduled turn. Legacy disposal/accounting probes use
+  // tick() to reach the next regular/validation operation across startup turns.
+  // Every step advances the shared native clock to its scheduled admission.
+  async function step({early=false}={}) {
+    assert.equal(timers.size,1,'exactly one pump tick is scheduled');
+    const [id,{fn,at}]=timers.entries().next().value;timers.delete(id);
+    if(!early&&at<Math.min(activeWindowEnd,renewedEnd)&&at>testClock.now())await s.advance(Math.ceil(at-testClock.now()));
+    return fn();
+  }
+  return { renew, config, spawned, results, opened, errors, reservations, controlCalls, step, fireWatchdog(){const entry=[...timers].at(-1);assert.ok(entry,'parent_watchdog_is_armed');timers.delete(entry[0]);return entry[1].fn();},
+    get nextDelay() { const timer=timers.values().next().value;return timer?Math.max(0,timer.at-testClock.now()):undefined; }, async tick() {
+      for(let n=0;n<8;n++){
+        const before={results:results.length,validations:validationDispatches,controls:controlCalls.length,renewals};
+        await step();
+        if(renewals!==before.renewals||pump.getStatus().state!=='active'||results.length>before.results||validationDispatches>before.validations||controlCalls.slice(before.controls).includes('embeddingAdmission')||controlCalls.length===before.controls)return;
+      }
+      throw Error('native scheduler cursor did not reach work');
+    }
+  };
 }
 
 async function cleanupRecords(t, s, records, onFailure) {
@@ -436,11 +452,12 @@ for (const [stage, limit, tail] of [
   ['validation', 'window', 699], ['validation', 'renewal', 699],
 ]) test(`semantic parity ${stage} ${limit} ${tail} ms tail skips a full quantum`, async t => {
   const s = await setup(t), runtime = pumpRuntime(s);
-  if (limit === 'renewal') runtime.config.renewalMs = 2000;
+  if (limit === 'renewal' && stage === 'startup') runtime.config.renewalMs = 2000;
   if (stage === 'validation') runtime.config.firstCoverageValidation.maxMs = 700;
   const pump = stage === 'validation' ? await validationPending(s, runtime) : runtime.renew(runtime.config);
   s.f.workspace.defer(() => pump.close());
   if (stage === 'regular') await guard(runtime.tick(), 'initial lexical turn');
+  if(limit==='renewal'){runtime.config.renewalMs=2000;runtime.renew(runtime.config);}
   const end = limit === 'window' ? runtime.config.window.endsAtMonoMs
     : testClock.now() + runtime.config.renewalMs;
   await guard(s.advance(end - testClock.now() - tail), 'enter tail');
@@ -478,7 +495,7 @@ test('semantic parity initial short window parks at expiry without a quantum', a
   assert.equal(runtime.reservations.length, 0); assert.equal(runtime.spawned.length, 0);
 });
 
-test('semantic parity review F1 fitting validation clears stale parking at a fast poll', async t => {
+test('semantic parity fitting validation uses its own bound then parks the next regular turn', async t => {
   const s = await setup(t), runtime = pumpRuntime(s); runtime.config.firstCoverageValidation.maxMs = 300;
   runtime.config.pollMs = 1;
   const pump = await validationPending(s, runtime); s.f.workspace.defer(() => pump.close());
@@ -490,9 +507,9 @@ test('semantic parity review F1 fitting validation clears stale parking at a fas
   assert.equal(validationDispatches, dispatched + 1);
   const status = ok(await s.coordinator.getOwnerSemanticStatus({ ownerId: ns.ownerId }, s.token));
   assert.equal(status.firstCoverage.state, 'validating', 'validation_remains_pending');
-  assert.equal(runtime.nextDelay, 1, 'fitting_validation_clears_stale_parking');
-  await s.advance(1); await guard(runtime.tick(), 'next fitting validation');
-  assert.equal(validationDispatches, dispatched + 2, 'next_fitting_validation_is_dispatched');
+  assert.equal(runtime.nextDelay, 350, 'next_regular_turn_parks_at_expiry');
+  await s.advance(1); await guard(runtime.step({early:true}), 'early callback in regular tail');
+  assert.equal(validationDispatches, dispatched + 1, 'spacing_and_cursor_prevent_repeated_validation');
   assert.equal(pump.getStatus().error, null);
 });
 
@@ -559,13 +576,13 @@ test('semantic parity renewal constructor identity follows shared buffers, not t
 for (const kind of ['continuous', 'window gap', 'renewal gap', 'closed resident', 'spent quota'])
 test(`semantic parity ${kind} renewal owns the correct resident epoch`, async t => {
   const s = await setup(t), runtime = pumpRuntime(s);
-  if (kind === 'renewal gap') runtime.config.renewalMs = 1000;
+  if (kind === 'renewal gap') runtime.config.renewalMs = 3000;
   if (kind === 'spent quota') runtime.config.budgets.maxMs = 1500;
   const pump = runtime.renew(runtime.config); s.f.workspace.defer(() => pump.close());
   await guard(runtime.tick(), 'initial turn');
   if (kind === 'spent quota') runtime.renew({...runtime.config,window:{...runtime.config.window,usedMs:1500}});
   if (kind === 'closed resident') await guard(runtime.opened[0].close(), 'already closed resident');
-  const end = kind === 'renewal gap' ? testClock.now() + 1000 : runtime.config.window.endsAtMonoMs;
+  const end = kind === 'renewal gap' ? testClock.now() + runtime.config.renewalMs : runtime.config.window.endsAtMonoMs;
   await guard(s.advance(end - testClock.now() + (['continuous', 'spent quota'].includes(kind) ? 0 : 1)), 'renewal boundary');
   const next = kind === 'renewal gap' ? { ...runtime.config, renewalMs: 60000 } : nextWindow(runtime);
   const closes = s.control[14];
@@ -587,10 +604,11 @@ test('semantic parity spent items retire an idle resident while validation remai
   const pump = await validationPending(s, runtime, 256); s.f.workspace.defer(() => pump.close());
   runtime.renew({...runtime.config,window:{...runtime.config.window,usedItems:256}});
   assert.equal(pump.getStatus().usedItems, 256); assert.equal(pump.getStatus().state, 'active');
-  await s.advance(runtime.config.window.endsAtMonoMs - testClock.now(), { waitForWorkers: false });
+  await s.advance(runtime.config.window.endsAtMonoMs - testClock.now() + 60000, { waitForWorkers: false });
   await guard(runtime.spawned[0].exited, 'native idle disposal');
   await runtime.opened[0].close();
   runtime.renew(nextWindow(runtime)); await guard(runtime.tick(), 'renewal during pending validation');
+  await guard(runtime.tick(),'regular slot retires the idle resident after validation');
   assert.equal(runtime.spawned.length, 2, 'spent_items_retire_idle_resident_during_pending_validation');
   assert.equal(pump.getStatus().error, null);
   assert.deepEqual([...runtime.spawned[0].resources], [1, 1, 0, 0]);
@@ -625,6 +643,7 @@ test('semantic parity blocked retirement holds the writer until confirmed dispos
 for (const [validationMs, quantumMs, remainder] of [[700, 500, 600], [500, 300, 350]])
 test(`semantic parity review R2 invalidated validation parks ${validationMs}/${quantumMs}/${remainder}`, async t => {
   const s = await setup(t), runtime = pumpRuntime(s);
+  runtime.config.window.endsAtMonoMs=testClock.now()+60000;
   runtime.config.firstCoverageValidation.maxMs = validationMs;
   runtime.config.quantum.maxMs = quantumMs; runtime.config.pollMs = 1;
   const pump = await validationPending(s, runtime); s.f.workspace.defer(() => pump.close());
@@ -640,6 +659,11 @@ test(`semantic parity review R2 invalidated validation parks ${validationMs}/${q
   const observed = await semanticHandle(s.coordinator).pumpCall('firstCoverage');
   assert.equal(observed.pending, false, 'invalidated_receipt_clears_pending');
   assert.equal(observed.complete, false, 'invalidated_coverage_still_requires_validation');
+  // Reach validation's next slot without repairing the invalid embedding
+  // receipt. Regular work retains its fair slots between validation batches.
+  const client=semanticHandle(s.coordinator),call=client.pumpCall;
+  client.pumpCall=(method,...args)=>{if(method==='embeddingAdmission'){runtime.controlCalls.push(method);return Promise.resolve({allowed:false});}return call(method,...args);};
+  for(let n=0;n<4;n++)await guard(runtime.tick(),'regular work before next validation cursor');
   await s.advance(runtime.config.window.endsAtMonoMs - testClock.now() - remainder);
   const before = { reserves: runtime.reservations.length, controls: runtime.controlCalls.length,
     opens: runtime.spawned.length, dispatches: dispatchCount(runtime), validations: validationDispatches, status: pump.getStatus() };
@@ -751,7 +775,7 @@ for(const code of ['timeout','ledger_unavailable','provider_error','budget_denie
   assert.equal(JSON.stringify(diagnostic).includes('private marker'),false);assert.equal(JSON.stringify(diagnostic).includes('synthetic_secret'),false);
   assert.ok(Object.isFrozen(diagnostic)&&Object.isFrozen(diagnostic.failureCounts));assert.equal(Object.hasOwn(terminal,'lastFailure'),false);
   assert.equal(causeOrdinals.has(diagnostic.lastFailure.ordinal),false,'cause_ordinals_are_process_unique');causeOrdinals.add(diagnostic.lastFailure.ordinal);
-  assert.deepEqual(Object.keys(diagnostic).sort(),['failureCounts','lastFailure','secondaryFailure','secondaryFailureCounts']);
+  assert.deepEqual(Object.keys(diagnostic).sort(),['cadenceMisses','failureCounts','lastFailure','observation','secondaryFailure','secondaryFailureCounts','worstGapMs']);
   assert.ok(Object.values(diagnostic.failureCounts).every(n=>Number.isSafeInteger(n)&&n>=0),'cause_counters_are_bounded');assert.ok(JSON.stringify(diagnostic).length<4096,'cause_snapshot_has_fixed_size');
   await pump.close();assert.deepEqual(maintenancePumpDiagnostic(pump.getStatus()),diagnostic,'repeated_cleanup_does_not_recount_causes');
 });
@@ -844,7 +868,7 @@ for(const code of ['storage_error','read_timeout'])test(`semantic round1 renewal
   host.moduleUrl=new URL('./fixtures/context-semantic-pump-failure-host.mjs',import.meta.url).href;
   host.configuration.failureCode=code;
   const client=semanticHandle(s.coordinator),call=client.pumpCall;let finishes=0;
-  client.pumpCall=async(method,...args)=>{const result=await call(method,...args);if(method==='pumpFinish'&&!Object.hasOwn(args[0],'usage')&&++finishes===3)await gate.hold();return result;};
+  client.pumpCall=async(method,...args)=>{const result=await call(method,...args);if(method==='pumpFinish'&&!Object.hasOwn(args[0],'usage')&&++finishes===2)await gate.hold();return result;};
   const pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close());
   const ticking=runtime.tick();await guard(gate.entered,'failed refresh before settlement');
   assert.equal(runtime.results.at(-1).result.error.code,code);const before=dispatchCount(runtime);
@@ -879,13 +903,14 @@ test('semantic round1 renewal evicts a confirmed predecessor across type policie
   const s=await setup(t,{isolated:true,targetTypes:[['memory'],['card']]}),runtime=pumpRuntime(s),p=runtime.config.projections[0];
   p.modes=['lexical'];runtime.config.projections.push({...p,types:['card']});
   const pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close());
+  for(let n=0;n<2;n++)await guard(runtime.tick(),'memory startup and regular slots');
   const closes=s.control[14];Atomics.store(s.control,13,1);const ticking=runtime.tick();
   await until(()=>s.control[14]>closes,'predecessor close');runtime.renew(runtime.config);
   Atomics.store(s.control,15,1);Atomics.notify(s.control,15);await ticking;
   assert.deepEqual([...runtime.spawned[0].resources],[1,1,0,0],'predecessor_disposal_is_confirmed');
   await guard(runtime.tick(),'startup after continuous renewal');
   assert.equal(pump.getStatus().error,null,'confirmed_predecessor_is_not_reused_after_renewal');
-  assert.ok(runtime.spawned.length>=3,'type_policy_startup_opens_replacements_after_eviction');
+  assert.equal(runtime.spawned.length,2,'startup_cursor_opens_replacement_after_confirmed_eviction');
 });
 
 test('semantic round1 early watchdog rearms against its absolute deadline',async t=>{
@@ -945,7 +970,7 @@ for(const kind of ['reply','watchdog'])test(`semantic round2 native accounting $
   const runtime=pumpRuntime(s),host=runtime.config.projections[0].options.host;
   host.moduleUrl=new URL('./fixtures/context-semantic-pump-failure-host.mjs',import.meta.url).href;host.configuration.failureCode='storage_error';
   const state=new Int32Array(host.configuration.state),client=semanticHandle(s.coordinator),call=client.pumpCall,gate=replyGate();let finishes=0;
-  client.pumpCall=async(method,...args)=>{if(method==='pumpFinish'&&!Object.hasOwn(args[0],'usage')&&++finishes===3){if(kind==='reply')Atomics.store(state,3,1);else await gate.hold();}return call(method,...args);};
+  client.pumpCall=async(method,...args)=>{if(method==='pumpFinish'&&!Object.hasOwn(args[0],'usage')&&++finishes===2){if(kind==='reply')Atomics.store(state,3,1);else await gate.hold();}return call(method,...args);};
   const pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close());const ticking=runtime.tick();
   try{
     if(kind==='watchdog'){await gate.entered;await s.advance(500,{waitForWorkers:false});runtime.fireWatchdog();}
@@ -995,14 +1020,15 @@ for(const settlement of ['close','release','watchdog'])test(`semantic round3 val
   const s=await setup(t,{isolated:true,coordinatorHost:new URL('./fixtures/context-semantic-pump-accounting-host.mjs',import.meta.url).href}),runtime=pumpRuntime(s);
   const pump=await validationPending(s,runtime);s.f.workspace.defer(()=>pump.close());
   const state=new Int32Array(runtime.config.projections[0].options.host.configuration.state),client=semanticHandle(s.coordinator),call=client.pumpCall;
-  let armed=true,entered;const accounting=new Promise(resolve=>entered=resolve);
+  let armed=true,entered,start;const accounting=new Promise(resolve=>entered=resolve);
   client.pumpCall=async(method,...args)=>{
+    if(method==='pumpReserve')start??=testClock.now();
     if(method==='pumpFinish')entered();
     const result=await call(method,...args);
     if(method==='pumpReserve'&&armed){armed=false;await testClock.advance(0.5,{waitForWorkers:false});}
     return result;
   };
-  const post=Worker.prototype.postMessage,start=testClock.now(),chargedUsd=pump.getStatus().usedUsd;let cutoff;
+  const post=Worker.prototype.postMessage,chargedUsd=pump.getStatus().usedUsd;let cutoff;
   Worker.prototype.postMessage=function(message,...args){
     if(message.kind==='call'&&message.method==='validateOwnerSemanticCoverage'){
       cutoff=Number(BigInt(message.operation.operationCutoffMonoNs))/1e6;Atomics.store(state,3,2);
@@ -1120,15 +1146,14 @@ test('semantic durable no-op refunds attempts and the rounded reserve-to-receipt
   const pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close());await runtime.tick();
   assert.equal(runtime.results[0].result.value.progress.transformed,0);
   assert.equal(pump.getStatus().usedItems,0,'noop_refunds_unused_items');
-  const expected=spans.reduce((a,b)=>a+b,0);
   const storedBefore=accountingState(s).windows[runtime.config.window.id];
   const pending=Object.values(storedBefore.quanta).find(q=>q.accounting.stage==='receipt');assert.ok(pending,'last_receipt_retains_full_durable_charge_until_next_admission');
   await runtime.tick();const stored=accountingState(s).windows[runtime.config.window.id];
   assert.equal(pump.getStatus().usedItems,0,'noop_refunds_unused_items');
   assert.equal(pump.getStatus().usedMs,spans.reduce((a,b)=>a+b,0),'time_includes_finish_reply_delivery_rounded_up');
-  assert.equal(stored.quanta[pending.id].accounting.usage.elapsedMs,spans[2],'receipt_refund_is_durable_at_next_admission');
+  assert.equal(stored.quanta[pending.id].accounting.usage.elapsedMs,spans[1],'receipt_refund_is_durable_at_next_admission');
   assert.equal(stored.usedItems,1,'only_last_unacknowledged_reservation_stays_durably_charged');
-  assert.equal(stored.usedMs,expected+500,'previous_rounded_spans_are_durable');
+  assert.equal(stored.usedMs,spans.slice(0,-1).reduce((a,b)=>a+b,0)+500,'previous_rounded_spans_are_durable');
 });
 
 for(const [mode,items] of [['lexical',3],['embeddings',2]])test(`semantic durable known ${mode} attempts stay charged`,async t=>{
@@ -1237,7 +1262,7 @@ test('semantic durable authoritative quota retires an idle resident (control)',a
   fill.accounting={...fill.accounting,floors:{items:4,ms:0},endsMonoNs:String(process.hrtime.bigint()+60000000000n)};
   await semanticHandle(s.coordinator).pumpCall('pumpReserve',fill);await runtime.tick();
   assert.equal((await guard(pump.completion,'quota completion')).state,'budget_exhausted');
-  await s.advance(runtime.config.window.endsAtMonoMs-testClock.now(),{waitForWorkers:false});
+  await s.advance(runtime.config.window.endsAtMonoMs-testClock.now()+60000,{waitForWorkers:false});
   assert.equal(await guard(runtime.spawned[0].exited,'idle predecessor disposal'),0);
   runtime.renew(nextWindow(runtime));await guard(runtime.tick(),'renewal after authoritative quota');
   assert.equal(pump.getStatus().error,null,'authoritative_exhaustion_retires_idle_resident');
@@ -1402,10 +1427,46 @@ for(const transition of ['recovery','finish-known','finish-unknown'])test(`seman
   }
 });
 
+test('semantic cadence real Workers interleave bounded startup and regular refreshes',async t=>{
+  const s=await setup(t,{isolated:true}),runtime=pumpRuntime(s),pump=runtime.renew(runtime.config);
+  s.f.workspace.defer(()=>pump.close());
+  const starts=[];
+  for(let n=0;n<7;n++){
+    const before=runtime.reservations.length;await runtime.step();
+    const added=runtime.reservations.slice(before);assert.equal(added.length,1,'one_native_reservation_per_turn');
+    starts.push(testClock.now());
+    if(n===0)assert.equal(runtime.results.length,0,'startup_turn_does_not_refresh');
+    if(n===1)assert.equal(runtime.results.length,1,'startup_yields_to_native_lexical_refresh');
+  }
+  for(let n=1;n<starts.length;n++)assert.ok(starts[n]-starts[n-1]>=500,'native_turn_start_spacing');
+  const d=maintenancePumpDiagnostic(pump.getStatus());assert.equal(d.cadenceMisses,0,'native_initial_duties_are_punctual');
+  assert.ok(d.observation.atMonoMs<=testClock.now());assert.equal(pump.getStatus().error,null);
+});
+
+test('semantic native missing observation timing retains its full reservation',async t=>{
+  const s=await setup(t,{isolated:true}),runtime=pumpRuntime(s),pump=runtime.renew(runtime.config);
+  s.f.workspace.defer(()=>pump.close());
+  await runtime.step();
+  const worker=runtime.spawned[0].worker,emit=worker.emit;
+  let stripped=0;
+  worker.emit=function(event,response,...rest){
+    if(event==='message'&&response?.result?.ok&&response.result.value?.progress&&response.observedAtMonoMs!==undefined){
+      response={...response};delete response.observedAtMonoMs;stripped++;
+    }
+    return Reflect.apply(emit,this,[event,response,...rest]);
+  };
+  await runtime.step();
+  const terminal=await guard(pump.completion,'missing observation completion');
+  assert.equal(stripped,1);assert.equal(terminal.error,'reader_failed');
+  assert.equal(terminal.usedItems,1,'native_invalid_observation_retains_full_items');
+  assert.equal(terminal.usedMs,500,'native_invalid_observation_retains_full_time');
+});
+
 // Last: the deliberately failed proof retains process-wide inode quarantine.
 test('semantic parity rejected retirement keeps reader_failed and quarantine', async t => {
   const s = await setup(t, { expectedCleanupFailure: true }), runtime = pumpRuntime(s), pump = runtime.renew(runtime.config);
   s.f.workspace.defer(() => pump.close().catch(() => {})); await guard(runtime.tick(), 'initial resident');
+  await guard(runtime.tick(), 'advance to regular retirement slot');
   await guard(s.advance(runtime.config.window.endsAtMonoMs - testClock.now() + 1), 'inactive boundary');
   Atomics.store(s.control, 13, 2); runtime.renew(nextWindow(runtime)); await guard(runtime.tick(), 'rejected retirement');
   assert.equal(pump.getStatus().error, 'reader_failed', 'rejected_retirement_is_reader_failed');

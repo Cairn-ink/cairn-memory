@@ -20,7 +20,8 @@ import { createExclusiveSqliteFile } from '../sqlite-journal-probe.mjs';
 import { provisionSemanticOwner,stateBytes,stateDigest } from '../context-semantic-ledger.mjs';
 import { createMaintenancePumpRuntime } from '../context-product-pump.mjs';
 import { supervisorOwner } from '../context-read-supervisor.mjs';
-import { semanticHandle } from '../context-semantic-coordinator.mjs';
+import { semanticHandle, TERMINATION_GRACE_MS } from '../context-semantic-coordinator.mjs';
+import { DISPOSAL_GRACE_MS } from '../context-product-reader.mjs';
 import { queryEmbeddingCutoff,tokenCost,usd,dollars } from '../context-semantic-input.mjs';
 import { canonicalJson,digest } from '../context-product-validation.mjs';
 import { credentialDigest, requestRecord, operationRecord, PRODUCT_PROFILE } from '../context-product-control.mjs';
@@ -325,16 +326,23 @@ test('P2e-19 query allowance denial is repeatable lexical success',async t=>{
   assert.equal(s.view[4],1);
 });
 
+function pumpClock() {
+  let serial=0;const timers=new Map();
+  return {timers,dependencies:{now:testClock.now,setTimer(fn,ms){const id=++serial;timers.set(id,{fn,at:testClock.now()+ms});return id;},clearTimer:id=>timers.delete(id)},async next(){
+    const [id,timer]=timers.entries().next().value;timers.delete(id);
+    await testClock.advance(Math.max(0,Math.ceil(timer.at-testClock.now())));await timer.fn();
+  }};
+}
+
 test('P2e-07/13 pump validates complete initial targets even with exhausted embedding item and USD budgets',async t=>{
   const s=await setup(t),m=await prepared(s,{latch:false});await m.h.close();
-  let now=0,next=0;const timers=new Map();
-  const renew=createMaintenancePumpRuntime({now:()=>now,setTimer:f=>{timers.set(++next,f);return next;},clearTimer:id=>timers.delete(id)});
+  const clock=pumpClock(),renew=createMaintenancePumpRuntime(clock.dependencies);
   const c={supervisor:s.supervisor,id:randomUUID(),semanticConfig:m.options.semanticConfig,semanticServiceCredential:s.token,firstCoverageValidation:{maxTargets:1,maxMs:500},
-    serviceCredential:m.credential,projections:[{options:m.options,types:['memory'],modes:['lexical','embeddings']}],window:{id:randomUUID(),endsAtMonoMs:60000,usedItems:2,usedMs:0,usedUsd:'0.50'},
+    serviceCredential:m.credential,projections:[{options:m.options,types:['memory'],modes:['lexical','embeddings']}],window:{id:randomUUID(),endsAtMonoMs:testClock.now()+60000,usedItems:2,usedMs:0,usedUsd:'0.50'},
     budgets:{maxItems:2,maxMs:10000,maxUsd:'0.50'},quantum:{maxItems:1,maxMs:500,maxUsd:'0'},pollMs:500,renewalMs:60000};
   assert.throws(()=>renew({...c,semanticServiceCredential:{narrow:true}}),{code:'authority_required'});
   const pump=renew(c);s.f.workspace.defer(()=>pump.close());const before=s.view[4];
-  for(let i=0;i<4&&timers.size;i++){const [id,fn]=timers.entries().next().value;timers.delete(id);now+=500;await fn();}
+  for(let i=0;i<4&&clock.timers.size;i++)await clock.next();
   assert.equal(pump.getStatus().error,null);const status=ok(await s.coordinator.getOwnerSemanticStatus({ownerId:ns.ownerId},s.token));
   assert.equal(status.refresh.phase,'steady');assert.equal(s.view[4],before);assert.equal(pump.getStatus().usedItems,2);assert.equal(pump.getStatus().usedUsd,'0.5');
 });
@@ -485,11 +493,10 @@ test('P2e-01/17 zero-call continuation, fetch, status, capabilities and lexical 
 });
 
 test('P2e-01/13 off-owner pump turns remain lexical and consume no provider/document allowance',async t=>{
-  const s=await setup(t),m=s.configure(true);let next=0,now=0;const timers=new Map();
-  const renew=createMaintenancePumpRuntime({now:()=>now,setTimer:fn=>{timers.set(++next,fn);return next;},clearTimer:id=>timers.delete(id)});
+  const s=await setup(t),m=s.configure(true),clock=pumpClock(),renew=createMaintenancePumpRuntime(clock.dependencies);
   const pump=renew({supervisor:s.supervisor,id:randomUUID(),semanticConfig:m.options.semanticConfig,semanticServiceCredential:s.token,firstCoverageValidation:{maxTargets:1,maxMs:500},serviceCredential:m.credential,
-    projections:[{options:m.options,types:['memory'],modes:['lexical','embeddings']}],window:{id:randomUUID(),endsAtMonoMs:60000,usedItems:0,usedMs:0,usedUsd:'0'},budgets:{maxItems:2,maxMs:10000,maxUsd:'0'},quantum:{maxItems:1,maxMs:500,maxUsd:'0'},pollMs:500,renewalMs:60000});
-  s.f.workspace.defer(()=>pump.close());for(let n=0;n<5&&timers.size;n++){const [id,fn]=timers.entries().next().value;timers.delete(id);now+=500;await fn();}
+    projections:[{options:m.options,types:['memory'],modes:['lexical','embeddings']}],window:{id:randomUUID(),endsAtMonoMs:testClock.now()+60000,usedItems:0,usedMs:0,usedUsd:'0'},budgets:{maxItems:2,maxMs:10000,maxUsd:'0'},quantum:{maxItems:1,maxMs:500,maxUsd:'0'},pollMs:500,renewalMs:60000});
+  s.f.workspace.defer(()=>pump.close());for(let n=0;n<5&&clock.timers.size;n++)await clock.next();
   assert.equal(pump.getStatus().error,null);assert.equal(s.view[4],0);const owner=ok(await s.coordinator.getOwnerSemanticStatus({ownerId:ns.ownerId},s.token));assert.equal(owner.owner.semantic,false);assert.equal(owner.refresh.itemsCharged,0);assert.equal(owner.refresh.usdCharged,'0');
 });
 
@@ -1151,4 +1158,117 @@ test('F close: real safety fallback survives a frozen operation clock',async t=>
     assert.equal(testClock.now(),before,'operation_clock_did_not_advance');
     assert.equal(s.supervisor.getCleanupStatus(record.id).state,'failed');
   } finally {releaseClose(s.control,2);await closeGuard(outcome,'frozen_clock_cleanup');retainCoordinatorFile(s);}
+});
+
+
+function captureCloseWorker(t) {
+  const post=Worker.prototype.postMessage;let worker;
+  const capture=t.mock.method(Worker.prototype,'postMessage',function(message,...args){
+    if(message.kind==='close')worker=this;
+    return Reflect.apply(post,this,[message,...args]);
+  });
+  return {get worker(){return worker;},restore(){capture.mock.restore();}};
+}
+function childCoordinatorOpen(s) {
+  // Exercise the public coordinator in an independent process, without any
+  // adapter imports or the parent's process-wide quarantine/handle maps.
+  const child=spawnSync(process.execPath,[new URL('./fixtures/context-semantic-open-child.mjs',import.meta.url).pathname],{
+    input:JSON.stringify({...s.options,supervisor:undefined,host:{moduleUrl:hostUrl,configuration:{...s.options.host.configuration,
+      closeControl:undefined,closeBlockPath:undefined,state:undefined}}}),encoding:'utf8',timeout:5000,
+  });
+  assert.equal(child.error,undefined,'child_coordinator_must_finish');
+  assert.equal(child.signal,null);assert.equal(child.status,0,child.stderr);
+  return JSON.parse(child.stdout);
+}
+async function quarantineRefusal(s,record) {
+  const records=supervisorOwner(s.supervisor).owner.records.size;
+  await assert.rejects(openContextSemanticCoordinator(s.options),{code:'reader_failed'});
+  assert.equal(s.control[7],0,'quarantine_never_calls_confirmDisposed');
+  assert.equal(supervisorOwner(s.supervisor).owner.records.size,records,'quarantine_registers_no_successor');
+  assert.equal(record.safety,true,'failed_proof_remains_quarantined');
+}
+
+test('coordinator termination bound: real SQLite native wait outlives close with frozen clock',async t=>{
+  const s=await closeSetup(t,{open:false,expectedCleanupFailure:true});
+  const blockPath=join(s.f.workspace.path,'close-block.sqlite');createExclusiveSqliteFile(blockPath);
+  const blocker=new DatabaseSync(blockPath);
+  const releaseBlocker=()=>{
+    if(!blocker.isOpen)return;
+    try{if(blocker.isTransaction)blocker.exec('ROLLBACK');}finally{blocker.close();}
+  };
+  s.f.workspace.defer(releaseBlocker);
+  blocker.exec('CREATE TABLE barrier(value);BEGIN IMMEDIATE');
+  s.options.host.configuration.closeBlockPath=blockPath;
+  s.coordinator=await openContextSemanticCoordinator(s.options);
+  const record=coordinatorRecord(s),capture=captureCloseWorker(t),before=testClock.now();
+  const realNow=()=>{const [seconds,nanos]=process.hrtime();return seconds*1000+nanos/1e6;};
+  const started=realNow(),outcome=s.coordinator.close().then(()=>null,error=>error),worker=capture.worker;
+  capture.restore();assert.ok(worker);
+  let exited=false;const exit=new Promise(resolve=>worker.once('exit',code=>{exited=true;resolve(code);}));
+  const terminate=t.mock.method(worker,'terminate');
+  try {
+    await closeGuard(rendezvous(s.control,18,outcome),'native_close_entry');
+    const error=await closeGuard(outcome,'close_must_settle_with_native_worker_alive',DISPOSAL_GRACE_MS+TERMINATION_GRACE_MS+500);
+    const elapsed=realNow()-started;
+    assert.equal(error?.code,'reader_failed');
+    assert.ok(elapsed<=DISPOSAL_GRACE_MS+TERMINATION_GRACE_MS+500,'close_delivery_within_bound');
+    assert.equal(testClock.now(),before,'operation_clock_stays_frozen');
+    assert.equal(terminate.mock.calls.length,1);assert.equal(exited,false,'native_worker_is_still_alive');
+    assert.notEqual(worker.threadId,-1);
+    assert.equal(s.supervisor.getCleanupStatus(record.id).state,'failed');
+    assert.equal(s.supervisor.getCleanupStatus(record.id).nativeDisposed,false);
+    await quarantineRefusal(s,record);
+    assert.deepEqual(childCoordinatorOpen(s),{code:'storage_busy'},'another_process_cannot_acquire_live_ownership');
+    blocker.exec('ROLLBACK');
+    await closeGuard(exit,'native_worker_exits_after_lock_release');
+    await quarantineRefusal(s,record);
+    assert.equal(s.supervisor.getCleanupStatus(record.id).state,'failed','late_exit_is_not_disposal_proof');
+    await assert.rejects(closeGuard(s.supervisor.close(),'supervisor_delivers_failed_proof'),{code:'reader_failed'});
+    t.diagnostic(JSON.stringify({closeMs:elapsed,terminationMaxMs:TERMINATION_GRACE_MS,workerAliveAtDelivery:true}));
+  } finally {
+    releaseBlocker();
+    await closeGuard(exit,'native_worker_cleanup');await closeGuard(outcome,'native_close_cleanup');retainCoordinatorFile(s);
+  }
+});
+
+test('coordinator termination bound: never-settling terminate uses operation timer and retains late failure',async t=>{
+  const s=await closeSetup(t,{expectedCleanupFailure:true}),record=coordinatorRecord(s),capture=captureCloseWorker(t);
+  s.control[0]=1;let settled=false,lateReject;
+  const outcome=s.coordinator.close().then(()=>{settled=true;return null;},error=>{settled=true;return error;}),worker=capture.worker;
+  capture.restore();assert.ok(worker);
+  const nativeTerminate=worker.terminate.bind(worker),terminate=t.mock.method(worker,'terminate',()=>new Promise((_,reject)=>{lateReject=reject;}));
+  const exit=new Promise(resolve=>worker.once('exit',resolve));
+  try {
+    await closeGuard(rendezvous(s.control,1,outcome),'hanging_host_close_entry');
+    await testClock.advance(DISPOSAL_GRACE_MS,{waitForWorkers:false});
+    assert.equal(terminate.mock.calls.length,1);assert.equal(settled,false);
+    await testClock.advance(TERMINATION_GRACE_MS-1,{waitForWorkers:false});assert.equal(settled,false,'termination_wait_has_not_expired');
+    await testClock.advance(1,{waitForWorkers:false});
+    assert.equal((await closeGuard(outcome,'termination_timer_must_deliver')).code,'reader_failed');
+    assert.notEqual(worker.threadId,-1);await quarantineRefusal(s,record);
+    // The promise may reject after the timer delivered. Its handler must stay
+    // attached, and late exit must not reclassify the failed proof.
+    lateReject(Error('synthetic late termination failure'));
+    await nativeTerminate();await closeGuard(exit,'simulated_termination_cleanup');
+    await quarantineRefusal(s,record);
+  } finally {
+    releaseClose(s.control,2);await nativeTerminate();lateReject?.(Error('synthetic termination cleanup'));
+    await closeGuard(outcome,'simulated_close_cleanup');retainCoordinatorFile(s);
+  }
+});
+
+test('coordinator forced-close quarantine after exit (existing-behavior control)',async t=>{
+  const s=await closeSetup(t,{expectedCleanupFailure:true}),record=coordinatorRecord(s),capture=captureCloseWorker(t);
+  s.control[0]=1;const outcome=s.coordinator.close().then(()=>null,error=>error),worker=capture.worker;capture.restore();
+  const exit=new Promise(resolve=>worker.once('exit',resolve));
+  try {
+    await closeGuard(rendezvous(s.control,1,outcome),'control_host_close_entry');
+    await testClock.advance(DISPOSAL_GRACE_MS,{waitForWorkers:false});
+    assert.equal((await closeGuard(outcome,'control_forced_close')).code,'reader_failed');
+    await closeGuard(exit,'control_worker_exit');
+    await quarantineRefusal(s,record);
+    const ownership=new DatabaseSync(s.options.host.configuration.ownershipPath);
+    try{ownership.exec('PRAGMA busy_timeout=0;BEGIN EXCLUSIVE;ROLLBACK');}finally{ownership.close();}
+    await quarantineRefusal(s,record);
+  } finally {releaseClose(s.control,2);await worker.terminate();await closeGuard(outcome,'control_cleanup');retainCoordinatorFile(s);}
 });

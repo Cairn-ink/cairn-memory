@@ -869,8 +869,12 @@ if renewal occurs during dispatch; neither renewal nor restart erases charges.
 Persist the full outstanding reservation before process replacement whenever
 settlement is uncertain. Counters never refund unknown work.
 
-The observation-cadence rules above remain lexical-only. An embedding-enabled
-pump (below) also skips window/renewal tails that cannot fit its configured
+A pump with `semanticConfig`, including `modes:['lexical']`, applies the same
+five-second canonical selection/intent observation duty to lexical refreshes. Its private
+`maintenancePumpDiagnostic` reuses `{cadenceMisses,worstGapMs,observation}`
+with the lexical shape above; `projection` indexes the expanded intent/mode
+lanes. Embedding, status and validation turns earn no observation credit.
+It skips window/renewal tails that cannot fit its configured
 quantum, without reserving or advancing round-robin position; validation uses
 its own configured time bound. Its
 resident cache includes constructor policy. Continuous renewal reuses
@@ -924,21 +928,37 @@ only tighten. Expiry never releases old unknown charges. Authoritative pump
 window exhaustion reports the existing `budget_exhausted` state with no error.
 An exhausted admission still binds that window until its deadline.
 An existing `budget_denied` error from a provider or policy remains unchanged.
-It still schedules a nominal sweep from its own ticks. Actual-observation
-cadence, spacing/pacing, miss accounting and startup/validation cursors remain
-separate parity work.
+Turn starts are separated by at least
+`S = max(pollMs, quantum.maxMs, firstCoverageValidation.maxMs)`. Capacity pacing
+spreads nominal full reservations over a minute, subject to lexical-deadline
+lookahead through every intervening work slot. Startup status uses a finite
+cursor interleaved with regular turns; validation gets one bounded batch per
+sweep, retaining its durable coordinator cursor and `firstCoverageValidation.maxMs`.
+Each overdue lexical duty counts one miss until a successful actual observation
+resets that duty. Lateness is nonterminal; scheduling recovers at normal spacing.
+A successful `rebuilding` turn advances the cursor and observation duty.
+Coordinator controls share the selected turn deadline; a reply cannot start a
+fresh quantum. Cold open remains inside the charged reserve-to-finish span.
 Canonical selection/intent observation duty belongs to lexical refreshes only;
 embedding, status and validation work use capacity without earning observation
 credit. Semantic coverage lag concerns recall. Unsuccessful turns and genuine
 semantic cutoffs remain terminal. The lexical cutoff exception stays disabled.
 Coordinator close uses the reader's existing 10,000-ms graceful-disposal bound.
 Pending coordinator calls settle as `store_closed`; after that bound the parent
-terminates a Worker whose provider or host close has not settled. A forced or
-unproven close rejects with `reader_failed` and retains the existing quarantine;
-only the unchanged four-bit disposal proof permits successful cleanup. This
-bounds the graceful wait, not a claim about termination scheduling or cadence.
-Actual-observation cadence, pacing, misses and startup/validation cursors remain
-separate parity work.
+terminates a Worker whose provider or host close has not settled and waits at
+most another 1,000 ms (`TERMINATION_GRACE_MS`) for termination. Coordinator close
+therefore waits at most 11,000 ms (10,000 ms grace + 1,000 ms termination), plus
+event-loop scheduling delay. The termination allowance covers the engine's
+980-ms maximum SQLite WAL busy wait with headroom; normal Worker termination
+is much faster. Native statements and host code can still outlive this allowance.
+A forced or unproven close rejects with `reader_failed` and retains the existing
+quarantine; only the unchanged four-bit disposal proof permits successful
+cleanup. This bounds delivery of close, not the lifetime of a thread stuck in
+native code.
+While that thread holds ownership, another process receives `storage_busy`.
+Same-process reopening receives `reader_failed` without invoking the host's
+`confirmDisposed` or acquiring ownership, including after the thread exits;
+quarantine lasts until process restart.
 
 A recognized canonical/dependency fence change during a batch rolls back that
 batch and returns successful `rebuilding` progress. Earlier committed batches
@@ -1231,13 +1251,46 @@ occurs at the next service admission. Steady limits apply to all subsequent
 work, counting the same day's earlier backfill exposure. UTC rollover cannot
 release unknown old-day charges, undo the one-way latch or reset lifetime spend.
 
-An embedding-enabled pump adds `semanticConfig`, the separate
+A semantic pump supplies `semanticConfig`, the separate
 `semanticServiceCredential`, `firstCoverageValidation:{maxTargets,maxMs}`,
 `projections[].modes:['lexical','embeddings']`, and `maxUsd` to budgets/quantum
-plus `usedUsd` to its window. The nominal full observation sweep, including
-startup status and validation turns, must fit five seconds. This nominal sweep
-is not the lexical pump's cadence guarantee (see the scope note above). Validation retains
-time capacity after paid item/USD exhaustion; lexical turns continue when
+plus `usedUsd` to its window. Arithmetic admission requires
+`(N+1+2T) × S ≤ 5000`, where `N` is the expanded regular intent/mode lane
+count, `T` is the initial target-descriptor count, and
+`S = max(pollMs, quantum.maxMs, firstCoverageValidation.maxMs)`. This guard is
+unchanged. The initial last lexical slot precedes validation; startup slots
+retire as they complete, leaving observation headroom for the full lexical
+quantum. A pump without `semanticConfig` instead requires `N*S + Q ≤ 5000`, with
+`S = max(pollMs,Q)` and `Q = quantum.maxMs`.
+
+For one selection with both intents and both modes, `N=4`, `T=1`: seven slots
+allow `S=714` ms (`7 × 714 = 4998`); the next integer, 715 ms, is refused
+(`7 × 715 = 5005`). An explicit admissible semantic pump configuration is:
+
+```js
+const pump = renewContextMaintenancePump({
+  supervisor, id, serviceCredential: projectionServiceCredential,
+  semanticConfig: { version: 'context-read-product-p2e-v1', coordinator },
+  semanticServiceCredential: ownerSemanticCredential,
+  projections: [{ options: maintainerOptions, types: ['memory'],
+    modes: ['lexical', 'embeddings'] }],
+  window: { id: windowId, endsAtMonoMs, usedItems: 0, usedMs: 0, usedUsd: '0' },
+  budgets: { maxItems: 128, maxMs: 10000, maxUsd: '0.50' },
+  quantum: { maxItems: 1, maxMs: 714, maxUsd: '0.01' },
+  pollMs: 100, renewalMs: 60000,
+  firstCoverageValidation: { maxTargets: 1, maxMs: 714 },
+});
+```
+
+The two 1,000-ms examples above are standalone operations, not settings for
+this pump. Arithmetic admission is not actual five-second cadence qualification:
+measure fresh lexical observation gaps under deployment load, including cold
+open, control transport, resident drain and delivery. A passing configuration
+alone supplies no timing evidence. Late successful observations record misses
+and continue; unsuccessful authority, storage and timeout results remain
+terminal and retain their full reservation.
+
+Validation retains time capacity after paid item/USD exhaustion; lexical turns continue when
 embedding turns are skipped for off/block/USD constraints. Window reservations
 are durable; another pump ID cannot recharge an unexpired window. Observe each
 completion notification and await pump/coordinator/supervisor disposal.
