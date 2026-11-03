@@ -444,6 +444,19 @@ performs no lexical build or inference and reports disabled semantic coverage.
 `semantic:true` keeps the validated lexical result with a disabled semantic
 channel; it cannot enable a provider. All these calls make zero provider calls.
 
+**Amendment v1: maintainer sidecar connection reuse.** A healthy writable
+maintainer connection also serves observation, comparison and preparation reads.
+Each read still uses an independent read transaction with `query_only` enabled;
+the final observation still acquires its fresh post-commit canonical and sidecar
+snapshots. Every reuse retains identity and companion checks, the stricter
+applicable read/write journal rules, and the existing writable journal-mode
+check. Writable preparation still rereads metadata and attestation. Integrity
+checks (`quick_check` and `foreign_key_check`) run on every fresh writable open.
+Any failed operation, unavailable observation or rollback discards the cached
+connection after the operation releases its transactions; subsequent writable
+use opens and checks again. Cutoff, termination and close dispose the resident's
+connections. Reuse does not retain a read snapshot between operations.
+
 A successful `rebuilding` or `partial` response is durable progress: schedule
 another explicit quantum with the same service binding and projection. Stop
 the initial prebuild loop only at `complete` for each intent. Time admission
