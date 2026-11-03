@@ -326,16 +326,23 @@ test('P2e-19 query allowance denial is repeatable lexical success',async t=>{
   assert.equal(s.view[4],1);
 });
 
+function pumpClock() {
+  let serial=0;const timers=new Map();
+  return {timers,dependencies:{now:testClock.now,setTimer(fn,ms){const id=++serial;timers.set(id,{fn,at:testClock.now()+ms});return id;},clearTimer:id=>timers.delete(id)},async next(){
+    const [id,timer]=timers.entries().next().value;timers.delete(id);
+    await testClock.advance(Math.max(0,Math.ceil(timer.at-testClock.now())));await timer.fn();
+  }};
+}
+
 test('P2e-07/13 pump validates complete initial targets even with exhausted embedding item and USD budgets',async t=>{
   const s=await setup(t),m=await prepared(s,{latch:false});await m.h.close();
-  let now=0,next=0;const timers=new Map();
-  const renew=createMaintenancePumpRuntime({now:()=>now,setTimer:f=>{timers.set(++next,f);return next;},clearTimer:id=>timers.delete(id)});
+  const clock=pumpClock(),renew=createMaintenancePumpRuntime(clock.dependencies);
   const c={supervisor:s.supervisor,id:randomUUID(),semanticConfig:m.options.semanticConfig,semanticServiceCredential:s.token,firstCoverageValidation:{maxTargets:1,maxMs:500},
-    serviceCredential:m.credential,projections:[{options:m.options,types:['memory'],modes:['lexical','embeddings']}],window:{id:randomUUID(),endsAtMonoMs:60000,usedItems:2,usedMs:0,usedUsd:'0.50'},
+    serviceCredential:m.credential,projections:[{options:m.options,types:['memory'],modes:['lexical','embeddings']}],window:{id:randomUUID(),endsAtMonoMs:testClock.now()+60000,usedItems:2,usedMs:0,usedUsd:'0.50'},
     budgets:{maxItems:2,maxMs:10000,maxUsd:'0.50'},quantum:{maxItems:1,maxMs:500,maxUsd:'0'},pollMs:500,renewalMs:60000};
   assert.throws(()=>renew({...c,semanticServiceCredential:{narrow:true}}),{code:'authority_required'});
   const pump=renew(c);s.f.workspace.defer(()=>pump.close());const before=s.view[4];
-  for(let i=0;i<4&&timers.size;i++){const [id,fn]=timers.entries().next().value;timers.delete(id);now+=500;await fn();}
+  for(let i=0;i<4&&clock.timers.size;i++)await clock.next();
   assert.equal(pump.getStatus().error,null);const status=ok(await s.coordinator.getOwnerSemanticStatus({ownerId:ns.ownerId},s.token));
   assert.equal(status.refresh.phase,'steady');assert.equal(s.view[4],before);assert.equal(pump.getStatus().usedItems,2);assert.equal(pump.getStatus().usedUsd,'0.5');
 });
@@ -486,11 +493,10 @@ test('P2e-01/17 zero-call continuation, fetch, status, capabilities and lexical 
 });
 
 test('P2e-01/13 off-owner pump turns remain lexical and consume no provider/document allowance',async t=>{
-  const s=await setup(t),m=s.configure(true);let next=0,now=0;const timers=new Map();
-  const renew=createMaintenancePumpRuntime({now:()=>now,setTimer:fn=>{timers.set(++next,fn);return next;},clearTimer:id=>timers.delete(id)});
+  const s=await setup(t),m=s.configure(true),clock=pumpClock(),renew=createMaintenancePumpRuntime(clock.dependencies);
   const pump=renew({supervisor:s.supervisor,id:randomUUID(),semanticConfig:m.options.semanticConfig,semanticServiceCredential:s.token,firstCoverageValidation:{maxTargets:1,maxMs:500},serviceCredential:m.credential,
-    projections:[{options:m.options,types:['memory'],modes:['lexical','embeddings']}],window:{id:randomUUID(),endsAtMonoMs:60000,usedItems:0,usedMs:0,usedUsd:'0'},budgets:{maxItems:2,maxMs:10000,maxUsd:'0'},quantum:{maxItems:1,maxMs:500,maxUsd:'0'},pollMs:500,renewalMs:60000});
-  s.f.workspace.defer(()=>pump.close());for(let n=0;n<5&&timers.size;n++){const [id,fn]=timers.entries().next().value;timers.delete(id);now+=500;await fn();}
+    projections:[{options:m.options,types:['memory'],modes:['lexical','embeddings']}],window:{id:randomUUID(),endsAtMonoMs:testClock.now()+60000,usedItems:0,usedMs:0,usedUsd:'0'},budgets:{maxItems:2,maxMs:10000,maxUsd:'0'},quantum:{maxItems:1,maxMs:500,maxUsd:'0'},pollMs:500,renewalMs:60000});
+  s.f.workspace.defer(()=>pump.close());for(let n=0;n<5&&clock.timers.size;n++)await clock.next();
   assert.equal(pump.getStatus().error,null);assert.equal(s.view[4],0);const owner=ok(await s.coordinator.getOwnerSemanticStatus({ownerId:ns.ownerId},s.token));assert.equal(owner.owner.semantic,false);assert.equal(owner.refresh.itemsCharged,0);assert.equal(owner.refresh.usdCharged,'0');
 });
 
