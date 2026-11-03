@@ -4,22 +4,16 @@ import { readFile } from 'node:fs/promises';
 import { registerHooks } from 'node:module';
 import path from 'node:path';
 import { mock } from 'node:test';
+import { coreDeadlineProvenanceLoadHook } from './reliability-smoke-deadline-mutation.mjs';
 
 const [planPath, mode = 'normal'] = process.argv.slice(2);
 assert.ok(planPath && ['normal', 'without-core-provenance'].includes(mode));
 assert.equal(process.env.OPENAI_API_KEY, undefined);
 
 let mutated = false;
-if (mode === 'without-core-provenance') registerHooks({ load(url, context, nextLoad) {
-  const loaded = nextLoad(url, context);
-  if (!url.endsWith('/core/model-call.mjs')) return loaded;
-  const source = String(loaded.source);
-  const original = 'coreDeadlineSignals.add(controller.signal);\n          controller.abort();\n          reject(new MemoryStoreError(\'model_timeout\'));';
-  assert.equal(source.split(original).length, 2, 'one real core timer provenance registration');
+if (mode === 'without-core-provenance') registerHooks(coreDeadlineProvenanceLoadHook(() => {
   mutated = true;
-  return { ...loaded, source: source.replace(original,
-    'controller.abort();\n          reject(new MemoryStoreError(\'model_timeout\'));') };
-} });
+}));
 
 const stream = () => { const chunks = []; return { write(value) { chunks.push(String(value)); return true; },
   text() { return chunks.join(''); } }; };
