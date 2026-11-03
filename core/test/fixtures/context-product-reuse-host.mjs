@@ -3,6 +3,7 @@ import { createContextReadHost as baseHost } from '../../testing/context-product
 
 export async function createContextReadHost(configuration) {
   const control=new Int32Array(configuration.reuseControl),prepare=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;
+  const writes=new WeakSet();
   DatabaseSync.prototype.prepare=function(sql) {
     const statement=Reflect.apply(prepare,this,[sql]);
     const index=sql==='PRAGMA quick_check'?0:sql==='PRAGMA foreign_key_check'?1:-1;
@@ -20,7 +21,12 @@ export async function createContextReadHost(configuration) {
       }
       if(fault)throw Object.assign(Error('synthetic maintenance failure'),{code:fault===2?'read_timeout':'storage_error'});
     }
-    return Reflect.apply(exec,this,[sql]);
+    const result=Reflect.apply(exec,this,[sql]);
+    if(sql==='BEGIN IMMEDIATE')writes.add(this);
+    if(sql==='COMMIT'&&writes.has(this)){Atomics.add(control,4,1);writes.delete(this);}
+    if(sql==='ROLLBACK')writes.delete(this);
+    return result;
   };
-  return baseHost(configuration);
+  const host=await baseHost(configuration);
+  return {...host,isCurrent(...args){const current=host.isCurrent(...args);Atomics.store(control,5,Atomics.load(control,4));return current;}};
 }

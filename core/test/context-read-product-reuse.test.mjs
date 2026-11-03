@@ -23,13 +23,16 @@ function child(role,path,mode) {
   const r=spawnSync(process.execPath,[new URL('./fixtures/context-product-wal-process.mjs',import.meta.url).pathname,role,path,mode],{env:{},encoding:'utf8',timeout:10000,maxBuffer:1024});
   assert.equal(r.status,0,r.stderr);assert.equal(r.error,undefined);
 }
-function setup(t,{mode='DELETE',policy=false,rendezvous=()=>{}}={}) {
+function setup(t,{mode='DELETE',policy=false,rendezvous=()=>{},openFacade=openContextProductFacade,createSidecar=productSidecar}={}) {
   const f=fixture(t);f.admit('healthy resident reuse');
-  const facade=openContextProductFacade(f.path,{}),p={readSet:[ns],types:['memory'],intent:'current',ownerCoverage:descriptor([ns])};
+  const facade=openFacade(f.path,{});
+  f.workspace.defer(()=>facade.close());
+  const p={readSet:[ns],types:['memory'],intent:'current',ownerCoverage:descriptor([ns])};
   const access=accessDigest({ownerId:ns.ownerId,namespaces:{readSet:[ns]}}),path=f.path+PRODUCT_SIDECAR_SUFFIX;
   const sqlite=policy?createProductSqlitePolicy({now:()=>0}):undefined;sqlite?.start(5000);
   const options={path:f.path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,writable:true,sidecarJournalMode:mode,sqlite,now:()=>0};
-  const builder=productSidecar(options);
+  const builder=createSidecar(options);
+  f.workspace.defer(()=>builder.close());
   try {let ready=false;for(let i=0;i<100&&!ready;i++){builder.refresh(p,access,budget);ready=builder.observe(p,access).dto.lexical.state==='ready';}assert.equal(ready,true);}
   finally {builder.close();}
   const checks={quick:0,foreign:0},handles=new Set(),prepare=DatabaseSync.prototype.prepare;
@@ -40,13 +43,37 @@ function setup(t,{mode='DELETE',policy=false,rendezvous=()=>{}}={}) {
     return new Proxy(stmt,{get(target,key){const value=Reflect.get(target,key,target);if(typeof value!=='function')return value;
       return (...args)=>{if(key==='get'){checks[kind]++;handles.add(db);}return Reflect.apply(value,target,args);};}});
   });
-  const storage=productSidecar({...options,rendezvous,memoryComparison});
-  t.after(()=>{storage.close();facade.close();});
+  const storage=createSidecar({...options,rendezvous,memoryComparison});
+  f.workspace.defer(()=>storage.close());
   return {f,facade,p,access,path,storage,checks,handles,
     refresh:()=>storage.refresh(p,access,budget),
     observe:()=>readTransaction(facade.port.db,()=>storage.observe(p,access)),
     step(){storage.refresh(p,access,budget);assert.equal(storage.prepareObservation(),null);return readTransaction(facade.port.db,()=>storage.observe(p,access));}};
 }
+
+for(const fault of ['setup','storage.close'])test(`reuse setup closes the facade independently after ${fault} failure`,async t=>{
+  const cleanups=[],context={mock:t.mock,after:fn=>cleanups.push(fn)},errors=[];
+  const cleanup=async()=>{while(cleanups.length)try{await cleanups.pop()();}catch(error){errors.push(error);}};
+  t.after(cleanup);
+  let facadeClosed=0,storageClosed=0,acquired=0;
+  const injected=Error('synthetic '+fault+' failure');
+  const options={
+    openFacade(...args){const facade=openContextProductFacade(...args);t.after(()=>facade.close());return {...facade,close(){facadeClosed++;facade.close();}};},
+    createSidecar(...args){
+      if(fault==='setup')throw injected;
+      const sidecar=productSidecar(...args);
+      if(++acquired===1)return sidecar;
+      return {...sidecar,close(){storageClosed++;sidecar.close();throw injected;}};
+    }
+  };
+  if(fault==='setup')assert.throws(()=>setup(context,options),error=>error===injected);
+  else setup(context,options);
+  await cleanup();
+  assert.equal(facadeClosed,1,'canonical facade cleanup survives setup and storage cleanup failures');
+  assert.equal(storageClosed,fault==='setup'?0:1);
+  assert.equal(errors.length,fault==='setup'?0:1);
+  if(errors.length)assert.ok(errors[0].errors.includes(injected),'storage cleanup failure remains visible');
+});
 
 for(const config of [{mode:'DELETE',policy:false},{mode:'DELETE',policy:true},{mode:'WAL',policy:true}])
 test(`healthy maintainer checks integrity once across quanta and reads (${config.mode}, policy ${config.policy})`,t=>{
@@ -136,7 +163,7 @@ test('passing control: writable reuse preserves the non-write header mode refusa
 
 for(const code of ['storage_error','read_timeout'])test(`native maintainer ${code} result forces a checked writable reopen`,async t=>{
   const f=fixture(t);f.admit('native connection failure');const c=configured(t,f.path,[ns],{service:true});
-  const control=new Int32Array(new SharedArrayBuffer(16));
+  const control=new Int32Array(new SharedArrayBuffer(32));
   c.options.host={moduleUrl:new URL('./fixtures/context-product-reuse-host.mjs',import.meta.url).href,configuration:{...c.options.host.configuration,reuseControl:control.buffer}};
   const h=await guard(c.open());t.after(()=>guard(h.close()));
   const input={readSet:[ns],types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:32,maxMs:5000}};
@@ -148,9 +175,29 @@ for(const code of ['storage_error','read_timeout'])test(`native maintainer ${cod
   assert.equal(control[0],quick+1,'worker result failure invalidates its sidecar connection');assert.equal(control[1],foreign+1);
 });
 
+test('passing base control: native final authority failure after committed sidecar work forces a checked writable reopen',async t=>{
+  const f=fixture(t);f.admit('native final authority failure');const c=configured(t,f.path,[ns],{service:true});
+  const control=new Int32Array(new SharedArrayBuffer(32));
+  c.options.host={moduleUrl:new URL('./fixtures/context-product-reuse-host.mjs',import.meta.url).href,configuration:{...c.options.host.configuration,reuseControl:control.buffer}};
+  const h=await guard(c.open());t.after(()=>guard(h.close()));
+  const input={readSet:[ns],types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:32,maxMs:5000}};
+  let ready=false;for(let i=0;i<100&&!ready;i++)ready=ok(await guard(h.refreshContextIndex(input,c.token))).status==='complete';assert.equal(ready,true);
+  f.admit('changed source committed before final authority validation');
+  const commits=control[4];
+  c.view[2]=c.view[1]+2;
+  assert.equal((await guard(h.refreshContextIndex(input,c.token))).error.code,'scope_changed');
+  assert.ok(control[4]>commits,'sidecar transactions committed successfully before the failure');
+  assert.equal(control[5],control[4],'final authority sample occurs after those commits');
+  const quick=control[0],foreign=control[1];
+  c.view[0]=1;c.view[2]=0;
+  assert.equal(ok(await guard(h.refreshContextIndex(input,c.token))).status,'complete');
+  assert.equal(control[0],quick+1,'Worker response discard forces quick_check after final authority failure');
+  assert.equal(control[1],foreign+1,'Worker response discard forces foreign_key_check after final authority failure');
+});
+
 test('passing control: a reader watchdog cutoff disposes the connection and its successor checks integrity',async t=>{
   const f=fixture(t);f.admit('native watchdog connection');const c=configured(t,f.path,[ns],{service:true});
-  const control=new Int32Array(new SharedArrayBuffer(16)),timers=new Set();let offset=0n;
+  const control=new Int32Array(new SharedArrayBuffer(32)),timers=new Set();let offset=0n;
   c.options.host={moduleUrl:new URL('./fixtures/context-product-reuse-host.mjs',import.meta.url).href,configuration:{...c.options.host.configuration,reuseControl:control.buffer}};
   const open=createProductReaderRuntime({maintenance:true,now:()=>process.hrtime.bigint()+offset,
     setTimer(fn,ms){const timer={fn,ms,unref(){}};timers.add(timer);return timer;},clearTimer:timer=>timers.delete(timer)});
