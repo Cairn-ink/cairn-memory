@@ -1405,6 +1405,11 @@ the existing v2 source receipt rows: the first 16 in `created_at,id` order,
 filtered through visible receipt metadata. A receipt outside that recorded-order
 window never supplies the date. Source-access denials and Card omissions apply
 unchanged; Cards do not receive dates.
+Items are emitted in date order, earliest first; undated items follow in
+relevance order. Date ties keep relevance order, and `rank` is relevance.
+Selection still visits items and sources in relevance order; aliases are
+computed in emitted order and the final metered text must fit the token budget.
+Old-layout stores without dates keep v2 item order.
 
 Dates are UTC instants truncated to the minute, ending in `Z`. No time-zone
 input or recorded-time fallback is supported. Null times or layouts without

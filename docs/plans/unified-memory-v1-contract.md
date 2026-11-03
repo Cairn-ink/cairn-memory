@@ -1838,6 +1838,16 @@ time is earlier. Unavailable sources and omitted Cards contribute nothing.
 The value uses UTC, explicit `Z`, and minute precision by truncation. There is
 no zone input and no `created_at`/recorded-time fallback.
 
+Items are emitted in date order, earliest first; undated items follow in
+relevance order. Date ties keep relevance order, and `rank` is relevance.
+Selection still visits items and sources in relevance order; aliases and their
+item/source positions are computed in emitted order. The final metered text
+must fit the token budget. Old-layout stores without dates keep v2 item order.
+Selection and its budget/item/deadline stops remain in relevance order. If
+recomputed aliases make that unchanged selection exceed the final token budget,
+the existing `context_item_too_large` gate refuses; it does not reselect or drop
+items or sources to accommodate emission order.
+
 Missing event-time columns and null times are equivalent: if none of the
 selected rows carries a time, omit `date`, while retaining the selected dated
 id. A shared pure helper computes the date during existing preparation

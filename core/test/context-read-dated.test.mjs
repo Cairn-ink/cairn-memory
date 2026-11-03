@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 import { chmodSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { assembleContext, meteredText, receiptEventDate } from '../context-read-assembly.mjs';
 import { ASSEMBLY_REPRESENTATIONS, ASSEMBLY_LIMITS, contextInput } from '../context-read-input.mjs';
 import { assemblyQuery, fixedPrepared, ns, ok } from '../testing/context-read-assembly-fixture.mjs';
@@ -84,13 +85,21 @@ function roleAssembly(f, r, refs, namespace = ns, intent = 'current') {
     representation: dated, counter, policy: { id: 'rank-first-whole-v1' }, budget: { maxTokens: 4000, maxItems: 24 }, deadlineAt: Infinity, snapshotOf: () => null });
 }
 const ref = (memory, namespace = ns) => ({ type: 'memory', namespace, memoryId: memory.id, revision: memory.revision });
+function expandedItems(metered) {
+  return metered.items.map(item => ({ ...item, sources: item.sources.map(source => {
+    const concrete = source.sameAs ? metered.items[source.sameAs.item].sources[source.sameAs.source] : source;
+    assert.equal(concrete.sameAs, undefined, 'aliases point directly to a concrete source');
+    return { index: source.index, role: concrete.role, excerpt: concrete.sameAsBody ? item.body : concrete.excerpt };
+  }) })).sort((a, b) => a.rank - b.rank);
+}
 function onlyDateDiff(v2, next, expected) {
   assert.equal(next.diagnostics.representation, dated);
   assert.equal(next.diagnostics.trace.counterCalls, v2.diagnostics.trace.counterCalls);
   assert.equal(next.snapshot, v2.snapshot, 'full fence and snapshot bytes stay identical');
   const stripped = structuredClone(next.metered);
   for (const item of stripped.items) delete item.date;
-  assert.equal(meteredText(stripped), meteredText(v2.metered));
+  assert.deepEqual(expandedItems(stripped), expandedItems(v2.metered));
+  if (!expected.size) assert.equal(meteredText(next.metered), meteredText(v2.metered), 'date-free layouts keep exact v2 bytes and order');
   for (const item of next.metered.items) {
     assert.equal(item.date, expected.get(item.ref.id));
     if (item.date) assert.deepEqual(Object.keys(item).slice(0, 4), ['ref', 'rank', 'date', 'body']);
@@ -123,11 +132,91 @@ test('frozen v2 projection ignores prepared dates; Card never gets a date; per-v
   const prepared = fixedPrepared().slice(0, 3), options = { prepared, counter, policy: { id: 'rank-first-whole-v1' },
     budget: { maxTokens: 4000, maxItems: 24 }, deadlineAt: Infinity, snapshotOf: () => 'fixed' };
   const baseline = assembleContext(options);
+  assert.equal(createHash('sha256').update(meteredText(baseline.metered)).digest('hex'),
+    '1295ace17029968104c85567c2b1d56297eb9337f2decfa94b616282d523f637', 'frozen pre-ordering v2 bytes');
   for (const item of prepared) item.date = '2023-05-22T05:54Z';
   assert.equal(meteredText(assembleContext(options).metered), meteredText(baseline.metered));
   onlyDateDiff(baseline, assembleContext({ ...options, representation: dated }), new Map(prepared.map(item => [item.ref.memoryId, item.date])));
   const card = { ...prepared[0], type: 'card', ref: { ...prepared[0].ref, memoryId: undefined, cardId: 'card', bodyRevision: 1 }, metadata: { state: 'confirmed', support: {}, origin: {} }, sourceAccess: 'unsupported' };
   assert.equal(assembleContext({ ...options, prepared: [card], representation: dated }).metered.items[0].date, undefined);
+});
+
+test('dated emission sorts dates stably, leaves undated memories/cards after, and preserves relevance selection and ranks', () => {
+  const dates = ['2024-01-01T00:00Z', null, '2022-01-01T00:00Z', '2022-01-01T00:00Z', null, '2021-01-01T00:00Z'];
+  const prepared = dates.map((date, index) => ({ ...structuredClone(fixedPrepared()[0]),
+    ref: { ...fixedPrepared()[0].ref, memoryId: 'ordered-' + index }, rank: index + 1,
+    text: 'Synthetic ordered body ' + index, date,
+    sources: [{ index: 7, role: 'user', excerpt: 'Shared synthetic receipt' }] }));
+  prepared[2].sources = [{ index: 4, role: 'user', excerpt: 'Unique synthetic receipt' },
+    { index: 9, role: 'user', excerpt: 'Shared synthetic receipt' }];
+  prepared[5].sources = [{ index: 3, role: 'user', excerpt: 'Earliest synthetic receipt' }];
+  prepared[4] = { ...prepared[4], type: 'card', date: '1970-01-01T00:00Z',
+    ref: { ...prepared[4].ref, memoryId: undefined, cardId: 'ordered-card', bodyRevision: 1 },
+    metadata: { state: 'confirmed', support: {}, origin: {} }, sourceAccess: 'unsupported', sources: [] };
+  for (const id of ['rank-first-whole-v1', 'rank-first-first-source-v1', 'coverage-first-v1']) {
+    for (const maxItems of [4, 6]) {
+      const options = { prepared, counter, policy: { id }, budget: { maxTokens: 4000, maxItems },
+        deadlineAt: Infinity, snapshotOf: included => included.map(item => item.rank) };
+      const relevance = assembleContext(options), result = assembleContext({ ...options, representation: dated });
+      const items = result.metered.items;
+      assert.deepEqual(items.map(item => item.rank), maxItems === 4 ? [3, 4, 1, 2] : [6, 3, 4, 1, 2, 5]);
+      assert.deepEqual(result.selected, relevance.selected, 'selection stays in relevance order, even when the earliest item is excluded');
+      assert.deepEqual(prepared.map(item => item.rank), [1, 2, 3, 4, 5, 6], 'emission does not mutate prepared relevance order');
+      assert.deepEqual(result.snapshot, relevance.snapshot);
+      const stripped = structuredClone(result.metered);
+      for (const item of stripped.items) delete item.date;
+      assert.deepEqual(expandedItems(stripped), expandedItems(relevance.metered), 'same bodies, sources, refs and relevance ranks');
+      assert.deepEqual(items.filter(item => !item.date).map(item => item.rank), maxItems === 4 ? [2] : [2, 5]);
+      if (id !== 'rank-first-first-source-v1') {
+        const aliasItem = items.find(item => item.rank === 1), targetIndex = maxItems === 4 ? 0 : 1;
+        assert.deepEqual(aliasItem.sources[0], { index: 7, sameAs: { item: targetIndex, source: 1 } });
+        assert.deepEqual(items[targetIndex].sources[1], { index: 9, role: 'user', excerpt: 'Shared synthetic receipt' });
+        assert.equal(result.diagnostics.items[items.indexOf(aliasItem)].sources[0].item, targetIndex);
+      }
+    }
+  }
+});
+
+test('dated budget uses the exact emitted envelope bytes, including reordered aliases', () => {
+  const prepared = fixedPrepared().slice(0, 3).map((item, index) => ({ ...item,
+    text: 'Synthetic budget body ' + index, date: `2023-01-0${3 - index}T00:00Z`,
+    sources: [{ index: 7 + index, role: 'user', excerpt: 'Shared synthetic budget receipt' }] }));
+  const counted = [], bytes = { id: 'synthetic-utf8-bytes', countTokens(text) { counted.push(text); return Buffer.byteLength(text); } };
+  const options = { prepared, representation: dated, counter: bytes, policy: { id: 'rank-first-whole-v1' },
+    budget: { maxTokens: 4000, maxItems: 3 }, deadlineAt: Infinity, snapshotOf: () => null };
+  const full = assembleContext(options), text = meteredText(full.metered), exact = Buffer.byteLength(text);
+  assert.deepEqual(full.metered.items.map(item => item.rank), [3, 2, 1]);
+  assert.equal(full.diagnostics.budget.used, exact);
+  assert.equal(counted.at(-1), text, 'final count measures actual emitted bytes');
+  assert.deepEqual(assembleContext({ ...options, budget: { maxTokens: exact, maxItems: 3 } }).metered, full.metered);
+  const smaller = assembleContext({ ...options, budget: { maxTokens: 600, maxItems: 3 } });
+  assert.ok(smaller.diagnostics.stops.budget);
+  assert.ok(smaller.diagnostics.budget.used <= 600);
+  assert.equal(smaller.diagnostics.budget.used, Buffer.byteLength(meteredText(smaller.metered)));
+});
+
+test('reordered alias growth keeps relevance selection and applies the existing final budget refusal', () => {
+  const prepared = fixedPrepared().slice(0, 2).map((item, index) => ({ ...item,
+    text: 'Synthetic boundary body ' + index, date: index ? '2023-01-01T00:00Z' : '2024-01-01T00:00Z' }));
+  const shared = { index: 0, role: 'user', excerpt: 'Shared synthetic boundary receipt' };
+  prepared[0].sources = [shared];
+  prepared[1].sources = [...Array.from({ length: 11 }, (_, index) => ({ index, role: 'user', excerpt: 'Unique receipt ' + index })),
+    { ...shared, index: 11 }];
+  const counted = [], bytes = { id: 'synthetic-utf8-bytes', countTokens(text) { counted.push(text); return Buffer.byteLength(text); } };
+  const options = { prepared, representation: dated, counter: bytes, policy: { id: 'rank-first-whole-v1' },
+    budget: { maxTokens: 4000, maxItems: 2 }, deadlineAt: Infinity, snapshotOf: () => null };
+  const full = assembleContext(options), v2 = assembleContext({ ...options, representation: 'representation-v2' });
+  // Reconstruct the previous dated representation independently from frozen v2.
+  const relevance = { ...v2.metered, items: v2.metered.items.map(({ ref, rank, ...rest }) =>
+    ({ ref, rank, date: prepared[rank - 1].date, ...rest })) };
+  const previousBytes = Buffer.byteLength(meteredText(relevance));
+  assert.equal(full.diagnostics.budget.used, previousBytes + 1, 'alias source position grows from 0 to 11');
+  assert.equal(full.metered.items[1].sources[0].sameAs.source, 11);
+  counted.length = 0;
+  assert.throws(() => assembleContext({ ...options, budget: { maxTokens: previousBytes, maxItems: 2 } }),
+    { code: 'context_item_too_large' });
+  assert.ok(counted.includes(meteredText(relevance)), 'selection accepted the exact previous relevance-order trial');
+  assert.equal(counted.at(-1), meteredText(full.metered), 'final gate refuses the unchanged selection instead of dropping a source');
 });
 
 for (const column of [false, true]) test(`all preparation paths: ${column ? 'bounded event dates' : 'old layout without column'}`, async t => {
@@ -212,6 +301,8 @@ for (const mutation of ['forget', 'correct', 'Raw-delete', 'erase']) for (const 
     assert.equal(db.prepare('PRAGMA user_version').get().user_version, 53);
     const memory = ok(core.admit({ namespace: ns, memory: { content: 'assembly surviving memory', kind: 'fact' },
       receipts: [{ ...receipt('surviving'), occurredAt: retainedTime }] })).memory;
+    const companion = ok(core.admit({ namespace: ns, memory: { content: 'assembly companion memory', kind: 'fact' },
+      receipts: [{ ...receipt('companion'), occurredAt: '2020-01-01T00:00:00.000Z' }] })).memory;
     const never = cloneStore(t, f);
     // The fixture holds public ref identity fixed: Raw attach/removal advances
     // the surviving Memory twice. This baseline has that same visible revision,
@@ -237,6 +328,7 @@ for (const mutation of ['forget', 'correct', 'Raw-delete', 'erase']) for (const 
     }
     await actualReaders.build();
     const before = ok(await actualReaders.facadeRead(request(ns, { representation: dated })));
+    assert.equal(before.metered.items[0].ref.id, target.id, 'sensitive receipt sorts first before removal');
     assert.equal(before.metered.items.find(item => item.ref.id === target.id).date, '1970-01-01T00:00Z');
     assert.ok(db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(target.id).n <= 16);
     if (mutation === 'forget') ok(core.forget({ namespace: ns, memoryId: target.id, expectedRevision: target.revision }));
@@ -259,14 +351,15 @@ for (const mutation of ['forget', 'correct', 'Raw-delete', 'erase']) for (const 
       const read = (r, input) => path === 'product' ? r.product.run('contextRead', input) : r[path](input);
       const input = request(ns, { representation: dated });
       const actual = ok(await read(actualReaders, input)), expected = ok(await read(neverReaders, input));
-      assert.equal(actual.metered.items.length, 1, path);
-      assert.equal(actual.metered.items[0].date, retainedTime ? '2023-05-22T05:54Z' : undefined);
+      assert.equal(actual.metered.items.length, 2, path);
+      assert.equal(actual.metered.items[0].ref.id, companion.id, 'surviving timeline reorders after receipt removal');
+      assert.equal(actual.metered.items[1].date, retainedTime ? '2023-05-22T05:54Z' : undefined);
       assert.equal(meteredText(actual.metered), meteredText(expected.metered), path + ' exact bytes including refs and date presence');
       assert.equal(actual.diagnostics.trace.counterCalls, expected.diagnostics.trace.counterCalls);
     }
     const surviving = db.prepare('SELECT id,revision FROM memories WHERE id=?').get(memory.id);
-    assert.equal(meteredText(roleAssembly(f, actualReaders, [ref(surviving)]).metered),
-      meteredText(roleAssembly(never, neverReaders, [ref(surviving)]).metered), 'role preparation exact bytes');
+    assert.equal(meteredText(roleAssembly(f, actualReaders, [ref(surviving), ref(companion)]).metered),
+      meteredText(roleAssembly(never, neverReaders, [ref(surviving), ref(companion)]).metered), 'role preparation exact bytes');
   });
 }
 

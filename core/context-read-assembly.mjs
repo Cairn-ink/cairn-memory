@@ -44,8 +44,12 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
     expired();
     return result;
   }
-  function payload(selection) {
+  function payload(selection, dateOrder = false) {
     const concrete = new Map(), included = prepared.filter(item => selection.has(item)), details = [];
+    if (dateOrder) included.sort((a, b) => {
+      const left = a.type === 'memory' && a.date, right = b.type === 'memory' && b.date;
+      return left && right ? (left < right ? -1 : left > right ? 1 : 0) : left ? -1 : right ? 1 : 0;
+    });
     const items = included.map((item, itemIndex) => {
       const chosen = selection.get(item), sourceDetails = [];
       const sources = chosen.sources.map(({ source, tokens }, sourceIndex) => {
@@ -114,6 +118,9 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
       if (stops.deadline) break;
     }
   }
+  // Keep all selection trials and stops in relevance order. Rebuild aliases on
+  // the emitted timeline, then apply the existing final exact-text budget gate.
+  if (representation === 'representation-v2-dated') accepted = payload(selected, true);
   const metered = deepFreeze(accepted.metered), used = count(meteredText(metered), true);
   if (used > budget.maxTokens) fail('context_item_too_large');
   const deliveredSources = metered.items.reduce((sum, item) => sum + item.sources.length, 0);

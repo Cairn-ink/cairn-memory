@@ -388,6 +388,11 @@ diagnostics report the selected id even when every date is absent.
 The dated representation inserts `date` immediately after `rank` on Memory
 items, as a sibling of `ref`, for example `"date":"2023-05-22T05:54Z"`.
 Refs, metadata and sources keep their v2 projection. Cards have no date.
+Items are emitted in date order, earliest first; undated items follow in
+relevance order. Date ties keep relevance order, and `rank` is relevance.
+Selection still visits items and sources in relevance order; aliases are
+computed in emitted order and the final metered text must fit the token budget.
+Old-layout stores without dates keep v2 item order.
 The value is the earliest non-null receipt event instant from exactly the
 rows already used to prepare v2 sources: `created_at,id` order, `LIMIT 16`,
 then the existing visible receipt-metadata filter. Receipts outside that window
