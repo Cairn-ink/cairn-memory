@@ -7,6 +7,14 @@ import { openMemoryCore } from '../index.mjs';
 import { openContextReadSidecar } from '../context-read-sidecar.mjs';
 import { MemoryStoreError } from '../validation.mjs';
 
+// The caller's isCurrent runs after the embedding call returns and may abort
+// the signal or close the store while still returning true.
+// - abort cases are regressions: without the post-guard signal re-check the
+//   batch commits a vector and continues.
+// - close cases are behaviour pins, not fail-before regressions: without the
+//   post-guard closed re-check, the later generation/checkFile path already
+//   refuses with store_closed. The re-check fixes that code before the
+//   invocation's epoch read instead of relying on the later path.
 for (const layout of [18,23,33,34,38,48]) for (const action of ['abort','close'])
 test(`refreshVectors post-guard ${action} v${layout}`, async t => {
   t.mock.method(performance, 'now', () => 0);
