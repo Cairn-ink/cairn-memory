@@ -743,9 +743,13 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
         vectors=await (budgetPort?invoke():assertContentPort({invoke}));
       } finally {
         // Authority callbacks finish before the invocation's sole epoch read.
-        try { guard();checkSignal(signal); } finally { if(!budgetPort||embedder.didInvoke())assertContentPort(); }
+        try {
+          checkSignal(signal); if (closed) fail('store_closed'); guard();
+          // Re-check after the guard: the caller's isCurrent may abort the signal or close the store.
+          checkSignal(signal); if (closed) fail('store_closed');
+        }
+        finally { if(!budgetPort||embedder.didInvoke())assertContentPort(); }
       }
-      if (closed) fail('store_closed');
       if (performance.now() - started >= maxMs) unavailable('timeout');
       const after = generation(p);
       if (!fresh(p, after) || after.sequence !== g.sequence || after.incarnation !== g.incarnation) unavailable('stale_index');

@@ -55,6 +55,62 @@ export function assertContentScopes(db, scopes, code = 'evidence_unavailable') {
 // boundary. Its identity survives nested facades without certifying caller data.
 const closedCaptureControl = Object.freeze({ok:true,value:Object.freeze({classification:Object.freeze({status:'failed'})})});
 
+// Closed delivery may preserve only this exact public failure envelope. In
+// particular, context-index diagnostics (details) are not content-free here.
+function contentFreeFailure(value) {
+  const data = (value, keys) => {
+    if (!value || typeof value !== 'object' || types.isProxy(value) ||
+        ![Object.prototype, null].includes(Object.getPrototypeOf(value))) return;
+    const fields = Object.getOwnPropertyDescriptors(value);
+    if (Reflect.ownKeys(fields).length !== keys.length || keys.some(key =>
+        !Object.hasOwn(fields, key) || !Object.hasOwn(fields[key], 'value'))) return;
+    return fields;
+  };
+  const fields = data(value, ['ok', 'error']);
+  if (fields?.ok.value !== false) return false;
+  const error = data(fields.error.value, ['code', 'retryable']);
+  return Boolean(error && typeof error.code.value === 'string' && contentFreeErrorCodes.has(error.code.value) &&
+    typeof error.retryable.value === 'boolean');
+}
+// Engine failure codes, never arbitrary caller text. Keep this list explicit:
+// MemoryStoreError's constructor alone does not constrain its argument.
+const contentFreeErrorCodes = new Set(`
+action_conflict asset_limit_reached asset_not_found asset_version_unavailable authority_required
+backfill_ceiling budget_denied budget_insufficient capacity capture_disabled
+capture_evidence_capacity capture_evidence_closed capture_order_conflict card_not_found
+card_state_conflict classification_failed conflict_limit context_budget_exceeded
+context_item_too_large conversation_deleted conversation_not_found correction_must_be_explicit
+cursor_stale database_not_found decision_review_required dependency_limit_reached discarded
+episode_failed episode_identity_unavailable episode_mode_required episode_not_found
+episode_sources_unavailable episode_step_conflict episode_timeout event_payload_conflict
+evidence_unavailable expired extraction_failed forgotten generation_conflict
+index_revision_conflict index_unavailable invalid_cursor invalid_identifier invalid_input
+invalid_limit invalid_memory invalid_model_output invalid_namespace invalid_path invalid_query
+invalid_read_set invalid_receipt invalid_ref invalid_revision invalid_snapshot invalid_text
+ledger_unavailable mapping_limit_reached mapping_not_found mapping_state_conflict
+memory_conflict memory_historical memory_not_awaiting memory_not_found memory_suppressed
+method_not_found method_version_unavailable missing_evidence moc_not_found moc_title_conflict
+model_cancelled model_not_configured model_timeout not_enabled omitted package_limit_reached
+price_unavailable provider_error provider_unavailable purge_pending qualification_conflict
+qualification_failed qualification_incomplete qualification_missing
+qualified_transition_required quota_reached rationale_failed rationale_limit
+raw_crypto_unavailable raw_lineage_unavailable raw_part_out_of_order raw_transaction_active
+raw_transaction_required read_cancelled read_in_progress read_timeout reader_failed
+recall_failed reconciliation_failed revision_conflict scope_changed slot_mismatch slot_not_found
+snapshot_stale source_budget_exceeded source_excluded source_not_found source_timeout
+source_unavailable stale_admission stale_episode stale_rebuild state_limit storage_busy
+storage_error store_closed supersession_limit timeout token_count_unavailable
+unsafe_database_file unsupported_database unsupported_media
+`.trim().split(/\s+/));
+function contentFreeError(error) {
+  if (!error || types.isProxy(error) || Object.getPrototypeOf(error) !== MemoryStoreError.prototype) return false;
+  const fields = Object.getOwnPropertyDescriptors(error);
+  return Reflect.ownKeys(fields).every(key => ['stack', 'message', 'name', 'code'].includes(key)) &&
+    ['message', 'name', 'code'].every(key => Object.hasOwn(fields[key] ?? {}, 'value')) &&
+    contentFreeErrorCodes.has(fields.code.value) && fields.message.value === fields.code.value &&
+    fields.name.value === 'MemoryStoreError';
+}
+
 const activeReadBoundaries = new AsyncLocalStorage();
 const callerPortReads = new AsyncLocalStorage();
 
@@ -78,7 +134,9 @@ export function contentSafetyFacade(api, { check, noOwner = [], failure, select 
           // reaching its ordinary snapshot. No protected result is delivered.
           if (scopes && !delivering) {
             delivering = true;
-            try { check(scopes,{delivery:true}); } catch (denial) { error = denial; }
+            try { check(scopes,{delivery:true}); } catch (denial) {
+              if (denial.code !== 'store_closed' || !contentFreeError(error)) error = denial;
+            }
           }
           if (failure) return failure(error,method);
           throw error;
@@ -95,6 +153,7 @@ export function contentSafetyFacade(api, { check, noOwner = [], failure, select 
             catch(error) {
               if(method==='capture'&&error.code==='store_closed'&&
                   (result===closedCaptureControl||isFailedCapture?.(result)))return closedCaptureControl;
+              if (error.code === 'store_closed' && contentFreeFailure(result)) return result;
               throw error;
             }
             validate?.(method,args,result,scopes); return result;
@@ -109,7 +168,10 @@ export function contentSafetyFacade(api, { check, noOwner = [], failure, select 
           // runtime snapshot cannot deliver content or dispatch another port
           // after failure; share that fence just as on nested read success.
           if (scopes && !delivering && !(nestedRead && method === 'sourceSnapshot')) {
-            delivering = true; check(scopes,{delivery:true});
+            delivering = true;
+            try { check(scopes,{delivery:true}); } catch (denial) {
+              if (denial.code !== 'store_closed' || !contentFreeError(error)) throw denial;
+            }
           }
           if (asynchronous) return Promise.reject(error);
           throw error;

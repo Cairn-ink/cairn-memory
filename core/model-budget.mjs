@@ -50,23 +50,24 @@ export function countTokens(model, text, afterReturn) {
   if (!internal) assertContentPort({before:true});
   let count;
   try {
-    // Counts must already be primitive integers: never retain a caller
-    // coercion or thenable across the boundary.
-    const invoke = () => {
-      const value = Reflect.apply(counter,model,[text]);
-      if (typeof value !== 'number') fail('token_count_unavailable');
-      return value;
-    };
-    count = internal ? invoke() : assertContentPort({invoke});
-  } catch { fail('token_count_unavailable'); }
-  finally {
-    if (!internal) {
-      // Synchronous authority work belongs before this invocation's sole E1
-      // read. No caller code remains between that read and the next dispatch.
-      try { if (afterReturn) assertContentPort({invoke:afterReturn}); }
-      finally { assertContentPort(); }
-    }
+    try {
+      // Counts must already be primitive integers: never retain a caller
+      // coercion or thenable across the boundary.
+      const invoke = () => {
+        const value = Reflect.apply(counter,model,[text]);
+        if (typeof value !== 'number') fail('token_count_unavailable');
+        return value;
+      };
+      count = internal ? invoke() : assertContentPort({invoke});
+    } catch { fail('token_count_unavailable'); }
+    // Main validates a failed count before the caller's authority recheck.
+    // A valid count still cannot reach another dispatch before authority/E1.
+    if (!Number.isSafeInteger(count) || count < 0) fail('token_count_unavailable');
+    if (!internal && afterReturn) assertContentPort({invoke:afterReturn});
+  } finally {
+    // Keep the invocation's sole E1 observation on every settlement, including
+    // invalid counts and authority refusals. No caller work follows this read.
+    if (!internal) assertContentPort();
   }
-  if (!Number.isSafeInteger(count) || count < 0) fail('token_count_unavailable');
   return count;
 }
