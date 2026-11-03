@@ -200,8 +200,8 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         return cleaned(()=>{acquire(createLock);guardDepth++;return work();},()=>{guardDepth=0;release();});
       } catch(error) {discardAfterGuard=true;throw error;}
     },()=>{
-      // Expected rollback bounds can be caught inside a quantum. Let that
-      // operation finish, then discard even when it returned honest progress.
+      // A caught bound may return honest progress without another write.
+      // Discard here too when no later writable step consumed the flag.
       if(discardAfterGuard)close();
     });
   }
@@ -227,6 +227,9 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   };
   function close() { discardAfterGuard=true;if (side?.isOpen) side.close(); side = null; metadata = null; sideFiles = null; discardAfterGuard=false; }
   function write(work, kind='setup', beforeCommit) {
+    // A caught verification rollback can continue within this refresh. Reopen
+    // and check integrity before its fallback or any other transaction writes.
+    if(discardAfterGuard)connection(true);
     sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});
     const beginning=attribution?.start('begin');
     try {attribution?.checkpoint('begin');side.exec('BEGIN IMMEDIATE');}catch(error){discardAfterGuard=true;attribution?.captureFailure(error);throw error;}finally{attribution?.end(beginning);}
@@ -684,6 +687,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       if(!found)break;
     }
     if(quantum.admit('gc'))quantum.measure(()=>{
+      if(discardAfterGuard)connection(true);
       try {side.exec('PRAGMA incremental_vacuum(32)');}
       catch(e) {discardAfterGuard=true;if(e.code!=='ERR_SQLITE_ERROR' || (e.errcode&255)!==5)throw e;}
       // Optional BUSY skips reclamation; attribution counts admitted attempts.
