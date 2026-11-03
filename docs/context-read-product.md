@@ -638,6 +638,16 @@ preserves observation deadlines and order, including renewal exactly at an
 authority/window boundary; renewal after an authority/quota gap starts a new
 observation interval.
 
+**Amendment v1: lexical maintenance window handoff.** For the lexical
+maintenance pump, a new window accepted within one quantum (`quantum.maxMs`)
+after every previous ledger's end also preserves observation deadlines, order
+and the resident. Authority expiry and settled spent quota still start a new
+interval, as does a longer window gap; the next reserved quantum drains and
+reopens the resident. A resident whose observation has been idle for 60,000 ms
+may already be disposed and also requires reopening. Same-window renewal and
+rejection of overlapping windows are unchanged. The embedding-enabled pump's
+renewal rule is unchanged.
+
 Late timer delivery or a successful observation beyond the five-second target
 records a cadence miss and continues maintenance while authority and quota last.
 The scheduler replans from actual observations, preserving round-robin order
@@ -983,7 +993,9 @@ same supervisor and explicit physical types. Both intents are included
 sequentially in round-robin order. Renewal with the same ID and selection
 returns the same owned pump and handles, with no overlapping dispatch. It
 extends supervision only, never the quota window or counters. A new window is
-accepted only after the previous one ends. Restarting a handle/pump within a
+accepted only at or after the previous one ends; the lexical handoff amendment
+above defines when that succession retains the observation interval and resident.
+Restarting a handle/pump within a
 window reuses process-owned store/owner/host-domain charges, even with a new pump ID; a different window ID cannot evade an
 unexpired window. The product persists cumulative charges before process
 replacement, maps new-process monotonic windows, and controls cross-process
