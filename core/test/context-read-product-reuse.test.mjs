@@ -1,3 +1,4 @@
+import '../testing/context-product-test-clock.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
@@ -183,24 +184,68 @@ for(const code of ['storage_error','read_timeout'])test(`native maintainer ${cod
   assert.equal(control[0],quick+1,'worker result failure invalidates its sidecar connection');assert.equal(control[1],foreign+1);
 });
 
-test('passing base control: native final authority failure after committed sidecar work forces a checked writable reopen',async t=>{
+for(const splitInitialization of [false,true])
+for(const failure of ['final authority','Worker exception'])test(`native ${failure} failure after committed sidecar work forces a checked writable reopen${splitInitialization?' (split initialization)':''}`,async t=>{
   const f=fixture(t);f.admit('native final authority failure');const c=configured(t,f.path,[ns],{service:true});
-  const control=new Int32Array(new SharedArrayBuffer(32));
-  c.options.host={moduleUrl:new URL('./fixtures/context-product-reuse-host.mjs',import.meta.url).href,configuration:{...c.options.host.configuration,reuseControl:control.buffer}};
+  const control=new Int32Array(new SharedArrayBuffer(44));
+  c.options.host={moduleUrl:new URL('./fixtures/context-product-reuse-host.mjs',import.meta.url).href,configuration:{...c.options.host.configuration,reuseControl:control.buffer,reuseSidePath:f.path+PRODUCT_SIDECAR_SUFFIX,reuseSplitInitialization:splitInitialization}};
   const h=await guard(c.open());t.after(()=>guard(h.close()));
   const input={readSet:[ns],types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:32,maxMs:5000}};
-  let ready=false;for(let i=0;i<100&&!ready;i++)ready=ok(await guard(h.refreshContextIndex(input,c.token))).status==='complete';assert.equal(ready,true);
+  const counts=[];
+  const refresh=async()=>{const before=control[10],response=await guard(h.refreshContextIndex(input,c.token));counts.push(control[10]-before);return response;};
+  const initialization=[];
+  for(let i=0;i<100&&initialization.at(-1)!=='complete';i++)initialization.push(ok(await refresh()).status);
+  assert.deepEqual(initialization,splitInitialization?['rebuilding','complete']:['complete'],'selection completes before failure instrumentation starts');
+  assert.deepEqual(counts,splitInitialization?[153,275]:[288],'production Worker SQL executions during initialization');
+  counts.length=0;Atomics.store(control,10,0);
+  assert.deepEqual([control[8],control[9]],[1,0],'initial writable admission is retained');
   f.admit('changed source committed before final authority validation');
   const commits=control[4];
-  c.view[2]=c.view[1]+2;
-  assert.equal((await guard(h.refreshContextIndex(input,c.token))).error.code,'scope_changed');
+  assert.deepEqual([control[0],control[1]],[1,1]);
+  if(failure==='final authority')c.view[2]=c.view[1]+2;
+  else {control[7]=commits;control[6]=1;}
+  const failed=await refresh();
+  assert.equal(failed.ok,false);
+  assert.equal(failed.error.code,failure==='final authority'?'scope_changed':'reader_failed');
+  assert.deepEqual([control[8],control[9]],[1,1],'Worker failure disposes the admitted writable handle');
+  if(failure==='Worker exception')assert.equal(control[6],3,'exception was thrown after index.run returned to the Worker');
   assert.ok(control[4]>commits,'sidecar transactions committed successfully before the failure');
   assert.equal(control[5],control[4],'final authority sample occurs after those commits');
   const quick=control[0],foreign=control[1];
+  assert.deepEqual([quick,foreign],[1,1],'successful sidecar work has not reopened before Worker disposal');
   c.view[0]=1;c.view[2]=0;
-  assert.equal(ok(await guard(h.refreshContextIndex(input,c.token))).status,'complete');
-  assert.equal(control[0],quick+1,'Worker response discard forces quick_check after final authority failure');
-  assert.equal(control[1],foreign+1,'Worker response discard forces foreign_key_check after final authority failure');
+  assert.equal(ok(await refresh()).status,'complete');
+  assert.equal(control[0],quick+1,'Worker failure discard forces quick_check after committed sidecar work');
+  assert.equal(control[1],foreign+1,'Worker failure discard forces foreign_key_check after committed sidecar work');
+  assert.deepEqual([control[8],control[9]],[2,1],'one fresh sidecar admission follows Worker disposal');
+  assert.deepEqual(counts,failure==='final authority'?[313,110]:[344,110],'production Worker SQL executions for failure and recovery');
+});
+
+for(const service of [false,true])test(`real Worker keeps a read-only handle across owner-suppression denials (maintainer ${service})`,async t=>{
+  const s=setup(t,{policy:true,suppression:true});
+  const c=configured(t,s.f.path,[ns],{service}),control=new Int32Array(new SharedArrayBuffer(44));
+  c.options.host={moduleUrl:new URL('./fixtures/context-product-reuse-host.mjs',import.meta.url).href,
+    configuration:{...c.options.host.configuration,reuseControl:control.buffer,reuseSidePath:s.path}};
+  const h=await guard(c.open());t.after(()=>guard(h.close()));
+  const input={readSet:[ns],types:['memory'],intent:'current',deadlineMs:5000};
+  const counts=[];let before=control[10];
+  assert.equal(ok(await guard(h.getContextIndexStatus(input,c.token))).lexical.state,'ready');
+  counts.push(control[10]-before);
+  assert.equal(control[8],1);assert.equal(control[9],0);
+  assert.equal(control[0],0,'status-only maintainer admitted no writable connection');
+  const db=new DatabaseSync(s.f.path);
+  try {transaction(db,()=>suppressOwnerInside(db,{ownerId:ns.ownerId,reason:'account_erasure',actionId:'synthetic-worker-denial'}));}
+  finally {db.close();}
+  for(let i=0;i<3;i++) {
+    before=control[10];
+    const response=await guard(service||i===2?h.getContextIndexStatus(input,c.token):h.findCandidates({...input,query:'healthy',limit:4},c.token));
+    counts.push(control[10]-before);
+    assert.equal(response.ok,false);assert.equal(response.error.code,'evidence_unavailable');
+    assert.equal(control[8],1,'denial must not repeat sidecar admission');
+    assert.equal(control[9],0,'denial must retain the read-only handle');
+  }
+  // Main's status, two denials and final status sequence, including exec statements.
+  assert.deepEqual(counts,service?[53,47,47,47]:[53,51,51,47],'production Worker SQL executions match main per call');
 });
 
 test('passing control: a reader watchdog cutoff disposes the connection and its successor checks integrity',async t=>{

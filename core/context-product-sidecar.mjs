@@ -1182,7 +1182,12 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         return [11,26].includes(e.errcode&255)?'corrupt':(e.errcode&255)===1?'incompatible':'storage_unavailable';
       throw e;
     }
-  },discard:close,
+  },discard() {
+    // Worker failures can occur after sidecar work has succeeded. Use that
+    // operation's captured mode, including an admitted upgrade, rather than
+    // the current handle; read-only storage failures already mark disposal.
+    if(guardWritable || discardAfterGuard)close();
+  },
     close() { closed=true;comparisonBase=null;const lock=lifecycle;lifecycle=null;cleaned(()=>close(),()=>lock?.close()); },
     // Explicit restore gate; callers must have already drained all clients.
     reset() {return guarded(()=>{
