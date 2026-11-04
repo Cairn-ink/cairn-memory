@@ -632,6 +632,6 @@ export async function runWorker(
   });
   // Publish only after capture work and its locks finish. A failed diagnostic
   // write cannot hold up dispatch of any remaining batches.
-  if (lastCapture) await recordLastCapture(binding.root, lastCapture.at, lastCapture.count, {now});
+  if (lastCapture) await recordLastCapture(binding.root, lastCapture.at, lastCapture.count);
   return result;
 }

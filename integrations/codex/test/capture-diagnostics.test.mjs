@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, readFile, chmod, stat, copyFile, utimes, unlink, writeFile } from 'node:fs/promises';
+import fs, { mkdir, readFile, chmod, stat, copyFile, utimes, unlink, readdir, symlink } from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -10,7 +11,7 @@ import { privateWrite, withWriteObserver } from '../../client/private-state.mjs'
 import { hostedTargetId } from '../../client/transport-hosted.mjs';
 import { createRuntimeGuard } from '../../client/runtime-usage.mjs';
 import { setPaused } from '../../client/control-state.mjs';
-import { captureStopNotice, readLastCapture, recordLastCapture, writeCredential } from '../installed-state.mjs';
+import { captureStopNotice, readLastCapture, recordLastCapture, recordQualificationAttempt, writeCredential } from '../installed-state.mjs';
 import { runInstalled, currentHost } from '../installed.mjs';
 import { binaryIdentity, qualifyBinary, finishQualification } from '../qualification.mjs';
 import { runWorker } from '../worker.mjs';
@@ -19,6 +20,7 @@ import { formatFixture } from './format-fixtures.mjs';
 
 const time = new Date(2026,10,4,17,42).getTime();
 const input = {hook_event_name:'SessionStart',session_id:'synthetic',cwd:'/synthetic',transcript_path:null};
+const claimName = 'capture-stop-notice-2026-11-04.claim';
 const changed = {status:'changed',version:'0.999.0'};
 async function fixture(t) {
   const ws = createTestWorkspace(t,{prefix:'cx-notice-'});
@@ -38,7 +40,7 @@ for (const status of ['changed','unavailable']) test(`R1 ${status} prints only a
   const f=await fixture(t), output=await f.notice({status,version:'0.999.0',reason:'SERVER_TOKEN_CANARY'});
   assert.deepEqual(JSON.parse(output),{systemMessage:'Cairn automatic memory is paused: Codex 0.999.0 is not supported yet. Check: npx @cairn-ink/memory status --client codex'});
   assert.ok(!output.includes('CANARY'));assert.ok(!output.includes(f.ws.path));assert.ok(!output.includes('\n'));
-  assert.equal((await stat(join(f.directory,'capture-stop-notice.json'))).mode&0o777,0o600);
+  assert.equal((await stat(join(f.directory,claimName))).mode&0o777,0o600);
 });
 for (const reason of ['missing','unreadable','malformed']) test(`R2 ${reason} credential is decided locally`,async t=>{
   const f=await fixture(t);
@@ -58,10 +60,35 @@ test('all reasons share one receipt per local day, reset at local midnight and i
   assert.ok(await f.notice({status:'qualified'},{},{now:()=>next}));
   assert.equal(await f.notice(changed,{}, {now:()=>next}),'');
 });
-test('concurrent starts cannot print twice',async t=>{
-  const f=await fixture(t);
-  const outputs=await Promise.all([f.notice(),f.notice(),f.notice(),f.notice()]);
-  assert.equal(outputs.filter(Boolean).length,1);
+function deferred() { let resolve; const promise = new Promise(r=>resolve=r); return {promise,resolve}; }
+function intercept(t, name, replacement) {
+  const original=fs[name];fs[name]=replacement(original);syncBuiltinESMExports();
+  t.after(()=>{fs[name]=original;syncBuiltinESMExports();});
+}
+test('two SessionStarts rendezvous before exclusive creates and exactly one claims',async t=>{
+  const f=await fixture(t), gate=deferred();let arrivals=0;
+  intercept(t,'open',original=>async(path,...args)=>{
+    if(path===join(f.directory,claimName) && args[0]==='wx') {
+      if(++arrivals===2) gate.resolve();
+      await gate.promise;
+    }
+    return original(path,...args);
+  });
+  const outputs=await Promise.all([f.notice(),f.notice()]);
+  assert.equal(arrivals,2);assert.equal(outputs.filter(Boolean).length,1);
+});
+test('a paused claim holder cannot duplicate a successor notice after a clock advance',async t=>{
+  const f=await fixture(t), reached=deferred(), resume=deferred();let first=true;
+  intercept(t,'open',original=>async(path,...args)=>{
+    const handle=await original(path,...args);
+    if(path===join(f.directory,claimName) && first) {
+      first=false;reached.resolve();await resume.promise;
+    }
+    return handle;
+  });
+  const a=f.notice();await reached.promise;
+  const b=await f.notice(changed,{}, {now:()=>time+60001});
+  resume.resolve();assert.equal([await a,b].filter(Boolean).length,1);
 });
 for (const scenario of ['healthy','local-pause','hosted-pause','disabled','subagent-id','subagent-type','cap','cancelled'])
   test(`quiet when ${scenario}`,async t=>{
@@ -78,18 +105,41 @@ for (const scenario of ['healthy','local-pause','hosted-pause','disabled','subag
       assert.equal((await guard.reserve()).ok,true);
     }
     assert.equal(await f.notice(qualification,extras,options),'');
-    await assert.rejects(readFile(join(f.directory,'capture-stop-notice.json')),{code:'ENOENT'});
+    await assert.rejects(readFile(join(f.directory,claimName)),{code:'ENOENT'});
   });
-for (const scenario of ['unreadable','malformed','unwritable','busy']) test(`quiet when notice state is ${scenario}`,async t=>{
-  const f=await fixture(t), path=join(f.directory,'capture-stop-notice.json');
-  if(scenario==='unreadable') {await privateWrite(path,'{}');await chmod(path,0o644);}
-  if(scenario==='malformed') await privateWrite(path,'{}');
-  if(scenario==='unwritable') await mkdir(path,{mode:0o700});
-  if(scenario==='busy') {
-    await privateWrite(path+'.lock','');
-    await utimes(path+'.lock',new Date(time),new Date(time));
+for (const scenario of ['foreign-file','symlink','directory','unwritable-directory'])
+  test(`existing claim ${scenario} suppresses notice without touching entry`,async t=>{
+    const f=await fixture(t), path=join(f.directory,claimName), target=join(f.ws.path,'target');
+    if(scenario==='symlink') {await privateWrite(target,'canary');await symlink(target,path);}
+    if(scenario==='directory') await mkdir(path,{mode:0o700});
+    if(scenario==='foreign-file') {await privateWrite(path,'foreign canary');await chmod(path,0o644);}
+    if(scenario==='unwritable-directory') await chmod(f.directory,0o500);
+    const before=await fs.lstat(scenario==='unwritable-directory'?f.directory:path);
+    assert.equal(await f.notice(),'');
+    const after=await fs.lstat(scenario==='unwritable-directory'?f.directory:path);
+    assert.equal(after.ino,before.ino);assert.equal(after.mode,before.mode);
+    if(scenario==='foreign-file') assert.equal(await readFile(path,'utf8'),'foreign canary');
+    if(scenario==='symlink') assert.equal(await readFile(target,'utf8'),'canary');
+    if(scenario==='unwritable-directory') await chmod(f.directory,0o700);
+  });
+test('claim pruning touches only strict matching names and at most 32 entries',async t=>{
+  const f=await fixture(t), matches=Array.from({length:40},(_,i)=>`capture-stop-notice-2025-01-${String(i).padStart(2,'0')}.claim`);
+  const keep=['capture-stop-notice-2025-1-01.claim','capture-stop-notice-2025-01-01.claim.extra','other.claim','capture-stop-notice.json.lock.owner-old'];
+  for(const name of [...matches,...keep]) await privateWrite(join(f.directory,name),'canary');
+  assert.ok(await f.notice());
+  const names=await readdir(f.directory);
+  assert.equal(matches.filter(name=>names.includes(name)).length,8);
+  for(const name of keep) assert.equal(await readFile(join(f.directory,name),'utf8'),'canary');
+});
+test('many simulated local days keep only one or two claims',async t=>{
+  const f=await fixture(t);
+  for(let day=0;day<70;day++) {
+    const at=new Date(2026,10,4+day,12).getTime();
+    assert.ok(await f.notice(changed,{}, {now:()=>at}));
+    assert.equal(await f.notice(changed,{}, {now:()=>at}),'');
+    const claims=(await readdir(f.directory)).filter(name=>/^capture-stop-notice-\d{4}-\d{2}-\d{2}\.claim$/u.test(name));
+    assert.ok(claims.length>=1 && claims.length<=2);
   }
-  assert.equal(await f.notice(),'');
 });
 for(const [env,zh] of [[{LANG:'zh_TW.UTF-8'},true],[{LC_MESSAGES:'zh_TW',LANG:'en'},true],
   [{LC_ALL:'en_US',LC_MESSAGES:'zh_TW',LANG:'zh'},false],[{LC_ALL:'',LC_MESSAGES:'',LANG:'zh'},true],
@@ -121,40 +171,75 @@ for(const version of ['0.163.0','0.164.0','0.165.0','0.166.0']) test(`SessionSta
   assert.throws(()=>validateNotice(schema,{systemMessage:3}));
   assert.throws(()=>validateNotice(schema,{systemMessage:'fixed',extra:true}));
 });
-test('pending first observation is quiet; active attempt stays quiet; finished or expired attempt reports',async t=>{
-  // Qualification scheduling uses Date.now too; keep both clocks in the same
-  // fixed domain so wall-clock time cannot expire the synthetic active marker.
+async function pendingFixture(t) {
   t.mock.method(Date,'now',()=>time);
   const f=await fixture(t);
   await copyFile(process.execPath,f.config.codex);await chmod(f.config.codex,0o700);
   const host={identity:await binaryIdentity(f.config.codex),binaryPath:f.config.codex,kind:'cli'};
+  const marker=join(f.directory,'qualification',host.identity+'.pending');
   let launches=0;
   const observe=()=>currentHost(f.path,{detect:async()=>host,launch:async()=>{launches++;},now:()=>time});
-  const first=await observe();assert.equal(first.pendingFinished,true);
-  assert.equal(await f.notice(first),'');assert.equal(launches,1);
-  await utimes(join(f.directory,'qualification',host.identity+'.pending'),new Date(time),new Date(time));
-  const second=await observe();assert.equal(second.pendingFinished,false);assert.equal(await f.notice(second),'');
-  await finishQualification(f.path,host);
-  const finished=await observe();assert.equal(finished.pendingFinished,true);
-  assert.ok(await f.notice(finished));assert.equal(launches,2);
-  // A newly observed binary also gets its own first-run grace period.
-  const g=await fixture(t);
-  const pending={status:'pending',host,pendingFinished:false};assert.equal(await g.notice(pending),'');
-  await writeFile(join(f.directory,'qualification',host.identity+'.pending'),'');
-  const old=new Date(time-120001);
-  await utimes(join(f.directory,'qualification',host.identity+'.pending'),old,old);
-  const expired=await observe();assert.equal(expired.pendingFinished,true);
-  assert.ok(await g.notice(expired));
+  return {...f,host,marker,observe,launches:()=>launches};
+}
+test('genuinely first pending attempt stays quiet, including active later SessionStarts',async t=>{
+  const f=await pendingFixture(t);
+  assert.equal(await f.notice(await f.observe()),'');assert.equal(f.launches(),1);
+  await utimes(f.marker,new Date(time),new Date(time));
+  assert.equal(await f.notice(await f.observe()),'');
+  assert.equal(await f.notice(await f.observe()),'');
 });
-test('failed background probe returns pending again and reports on the next SessionStart',async t=>{
-  const f=await fixture(t);
-  await copyFile(process.execPath,f.config.codex);await chmod(f.config.codex,0o700);
-  const host={identity:await binaryIdentity(f.config.codex),binaryPath:f.config.codex,kind:'cli'};
-  const observe=()=>currentHost(f.path,{detect:async()=>host,launch:async()=>{},now:()=>time});
-  assert.equal(await f.notice(await observe()),'');
-  assert.equal((await qualifyBinary(f.path,host,{collect:async()=>{throw Error('synthetic_failure');}})).status,'unavailable');
-  await finishQualification(f.path,host);
-  assert.ok(await f.notice(await observe()));
+test('earlier non-SessionStart probe finishes without verdict; active retry cannot hide it',async t=>{
+  const f=await pendingFixture(t);
+  await f.observe(); // A Stop/UserPromptSubmit launched the first probe.
+  // Exercise the actual qualify branch with a bound binary whose probe fails.
+  // The Node executable is not Codex and cannot return its format evidence.
+  const stream=new PassThrough();stream.end(JSON.stringify(f.host));
+  assert.equal(await runInstalled(f.path,'qualify',stream,{
+    signal:new AbortController().signal,noticeOptions:{now:()=>time}}),'');
+  const attempt=JSON.parse(await readFile(join(f.directory,'codex-qualification-attempt.json'),'utf8'));
+  assert.deepEqual(attempt,{version:1,identity:f.host.identity,finishedAt:time});
+  assert.equal((await stat(join(f.directory,'codex-qualification-attempt.json'))).mode&0o777,0o600);
+  const first=await f.notice(await f.observe());
+  await utimes(f.marker,new Date(time),new Date(time));
+  const second=await f.notice(await f.observe());
+  assert.equal([first,second].filter(Boolean).length,1);assert.ok(first);
+});
+for(const age of [599999,600000,600001]) test(`pending marker age ${age}ms without finished history`,async t=>{
+  const f=await pendingFixture(t);await f.observe();
+  await utimes(f.marker,new Date(time-age),new Date(time-age));
+  assert.equal(Boolean(await f.notice(await f.observe())),age>=600000);
+});
+for(const scenario of ['mode','symlink','foreign-owner','directory','malformed-marker','malformed-attempt','unsafe-attempt','symlink-attempt'])
+  test(`pending ${scenario} read suppresses even finished history`,async t=>{
+    const f=await pendingFixture(t);await f.observe();
+    await recordQualificationAttempt(f.path,f.host,{now:()=>time});
+    const attempt=join(f.directory,'codex-qualification-attempt.json');
+    if(scenario==='mode') await chmod(f.marker,0o644);
+    if(scenario==='symlink') {await unlink(f.marker);await symlink(attempt,f.marker);}
+    if(scenario==='directory') {await unlink(f.marker);await mkdir(f.marker,{mode:0o700});}
+    if(scenario==='foreign-owner') intercept(t,'lstat',original=>async(path,...args)=>{
+      const info=await original(path,...args);
+      if(path===f.marker) info.uid=process.getuid()+1;
+      return info;
+    });
+    if(scenario==='malformed-marker') await privateWrite(f.marker,'not empty');
+    if(scenario==='malformed-attempt') await privateWrite(attempt,'{');
+    if(scenario==='unsafe-attempt') await chmod(attempt,0o644);
+    if(scenario==='symlink-attempt') {await unlink(attempt);await symlink(f.marker,attempt);}
+    // Unsafe history must suppress even when marker age independently qualifies.
+    if(scenario.endsWith('attempt')) await utimes(f.marker,new Date(time-600001),new Date(time-600001));
+    assert.equal(await f.notice(await f.observe()),'');
+  });
+test('finished attempt for another identity does not end first-run grace',async t=>{
+  const f=await pendingFixture(t);await f.observe();
+  await recordQualificationAttempt(f.path,{identity:'b'.repeat(64)},{now:()=>time});
+  assert.equal(await f.notice(await f.observe()),'');
+});
+test('attempt write failure stays silent and does not change qualification cache',async t=>{
+  const f=await pendingFixture(t);await f.observe();
+  await mkdir(join(f.directory,'codex-qualification-attempt.json'),{mode:0o700});
+  await finishQualification(f.path,f.host);await recordQualificationAttempt(f.path,f.host,{now:()=>time});
+  assert.equal((await f.observe()).status,'pending');assert.equal(await f.notice(await f.observe()),'');
 });
 test('runInstalled routes unqualified SessionStart and credential rejection into notice, other hooks stay silent',async t=>{
   const f=await fixture(t);
@@ -171,7 +256,7 @@ test('runInstalled routes unqualified SessionStart and credential rejection into
   assert.equal(await invoke('SessionStart',{agent_id:'child'}),'');
   assert.equal(await invoke('Stop'),'');
   assert.ok(JSON.parse(await invoke('SessionStart')).systemMessage.includes('not supported yet'));
-  await unlink(join(f.directory,'capture-stop-notice.json'));
+  await unlink(join(f.directory,claimName));
   // Replace the changed cache with the current-policy qualified verdict.
   const qualified=await qualifyBinary(f.path,host,{cache:false,collect:async()=>({version:'0.166.0',evidence:await formatFixture('0.166.0'),binarySha256:'a'.repeat(64)})});
   await privateWrite(join(f.directory,'qualification',host.identity+'.json'),JSON.stringify(qualified));
@@ -223,11 +308,10 @@ test('not-signed-in template also follows the Traditional Chinese locale rule',a
 });
 test('a transient pending host that qualifies never gets a notice',async t=>{
   const f=await fixture(t), host={identity:'a'.repeat(64)};
-  assert.equal(await f.notice({status:'pending',host,pendingFinished:true}),'');
+  assert.equal(await f.notice({status:'pending',host,pendingNotice:false}),'');
   await writeCredential(f.path,f.config.endpoint,'synthetic');
   assert.equal(await f.notice({status:'qualified'}),'');
-  const state=JSON.parse(await readFile(join(f.directory,'capture-stop-notice.json'),'utf8'));
-  assert.equal(state.day,null);
+  await assert.rejects(readFile(join(f.directory,claimName)),{code:'ENOENT'});
 });
 test('installed entry emits exactly the SessionStart notice object and still exits zero',async t=>{
   const f=await fixture(t);
@@ -245,74 +329,67 @@ test('installed entry emits exactly the SessionStart notice object and still exi
     child.stdin.end(${JSON.stringify(JSON.stringify(input))});
     child.on('close',code=>{process.exitCode=code;});`;
   const child=spawn(f.config.codex,['--input-type=module','-e',code],{
-    env:{HOME:f.home,PATH:'/usr/bin:/bin',LANG:'en_US.UTF-8'},stdio:['ignore','pipe','pipe']});
+    env:{HOME:f.home,PATH:'/usr/bin:/bin',LANG:'en_US.UTF-8',TMPDIR:process.env.TMPDIR},stdio:['ignore','pipe','pipe']});
   let stdout='',stderr='';child.stdout.on('data',chunk=>stdout+=chunk);child.stderr.on('data',chunk=>stderr+=chunk);
   const exitCode=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',resolve);});
   assert.equal(exitCode,0);assert.equal(stderr,'');
   assert.equal(stdout,JSON.stringify({systemMessage:'Cairn automatic memory is paused: Codex 0.999.0 is not supported yet. Check: npx @cairn-ink/memory status --client codex'}));
 });
 
-for (const age of [60001,60000,59999,0]) test(`SessionStart notice lease age ${age}ms`,async t=>{
-  const f=await fixture(t), path=join(f.directory,'capture-stop-notice.json.lock');
-  await privateWrite(path,''); await utimes(path,new Date(time-age),new Date(time-age));
-  const before=await stat(path);
-  const output=await f.notice();
-  assert.equal(Boolean(output),age>=60000);
-  if(age<60000) assert.equal((await stat(path)).mtimeMs,before.mtimeMs);
+test('newer then older or equal capture publication preserves the newer record',async t=>{
+  const f=await fixture(t);
+  await recordLastCapture(f.root,time,2);
+  await recordLastCapture(f.root,time-1,1);
+  await recordLastCapture(f.root,time,3);
+  assert.deepEqual(await readLastCapture(f.root),{version:1,at:time,count:2});
 });
-test('concurrent SessionStarts recover a stale lease with exactly one notice',async t=>{
-  const f=await fixture(t), path=join(f.directory,'capture-stop-notice.json.lock');
-  await privateWrite(path,''); await utimes(path,new Date(time-60001),new Date(time-60001));
-  const outputs=await Promise.all([f.notice(),f.notice(),f.notice(),f.notice()]);
-  assert.equal(outputs.filter(Boolean).length,1);
-  assert.equal(await f.notice(),'');
+for(const invalid of ['{','{}',JSON.stringify({version:1,at:-1,count:1})])
+  test(`invalid existing capture record is replaced: ${invalid}`,async t=>{
+    const f=await fixture(t);await privateWrite(join(f.root,'codex-last-capture.json'),invalid);
+    await recordLastCapture(f.root,time,1);
+    assert.deepEqual(await readLastCapture(f.root),{version:1,at:time,count:1});
+  });
+test('symlinked capture diagnostic never changes its target',async t=>{
+  const f=await fixture(t), target=join(f.ws.path,'target');await privateWrite(target,'private canary');
+  await symlink(target,join(f.root,'codex-last-capture.json'));
+  await recordLastCapture(f.root,time,1);
+  assert.equal(await readLastCapture(f.root),null);assert.equal(await readFile(target,'utf8'),'private canary');
 });
-for (const age of [60001,60000,59999,0]) test(`acknowledged capture lease age ${age}ms`,async t=>{
-  const f=await workerFixture(t,{text:header()+item('capture text')});
-  // An old successful record must advance only after the new acknowledgement.
-  await recordLastCapture(f.root,time-120000,1,{now:()=>time-120000});
-  const path=join(f.root,'codex-last-capture.json.lock');
-  await privateWrite(path,''); await utimes(path,new Date(time-age),new Date(time-age));
-  const before=await stat(path);
-  const result=await runWorker(f.binding,{guard:f.guard,transport:f.transport,mode:'hosted',now:()=>time});
-  assert.ok(result.state.submittedUnits>0);
-  assert.equal((await readLastCapture(f.root)).at,age>=60000?time:time-120000);
-  if(age<60000) assert.equal((await stat(path)).mtimeMs,before.mtimeMs);
-});
-test('concurrent stale capture-lease recovery keeps the newest acknowledged time',async t=>{
-  const f=await fixture(t), path=join(f.root,'codex-last-capture.json.lock');
-  await privateWrite(path,''); await utimes(path,new Date(time-60001),new Date(time-60001));
-  await Promise.all([1,2,3,4].map(count=>recordLastCapture(f.root,time,count,{now:()=>time})));
+test('simultaneous compare/rename race is diagnostic only; next capture repairs it',async t=>{
+  const f=await fixture(t), reached=deferred(), resume=deferred();let first=true;
+  intercept(t,'rename',original=>async(from,to)=>{
+    if(to===join(f.root,'codex-last-capture.json') && first) {
+      first=false;reached.resolve();await resume.promise;
+    }
+    return original(from,to);
+  });
+  const a=recordLastCapture(f.root,time,1);await reached.promise;
+  await recordLastCapture(f.root,time+1,2);resume.resolve();await a;
+  // Accepted read/rename race: diagnostic can briefly show the earlier time.
   assert.equal((await readLastCapture(f.root)).at,time);
-  await recordLastCapture(f.root,time-1,1,{now:()=>time});
-  assert.equal((await readLastCapture(f.root)).at,time);
+  await recordLastCapture(f.root,time+2,3);
+  assert.equal((await readLastCapture(f.root)).at,time+2);
 });
-
-test('a killed stale-lock reaper expires without freezing future SessionStarts',async t=>{
-  const f=await fixture(t), path=join(f.directory,'capture-stop-notice.json.lock');
-  await privateWrite(path,''); await utimes(path,new Date(time-60001),new Date(time-60001));
-  const old=await stat(path);
-  const election=`${path}.reap-${old.dev}-${old.ino}-${old.mtimeMs}-${Math.floor(time/60000)}`;
-  await privateWrite(election,''); await utimes(election,new Date(time),new Date(time));
-  assert.equal(await f.notice(),'');
-  assert.ok(await f.notice(changed,{}, {now:()=>time+60000}));
-});
-test('diagnostic release preserves a successor lease',async t=>{
-  const f=await fixture(t), path=join(f.directory,'capture-stop-notice.json');
-  const successor='new owner';
-  const output=await withWriteObserver(async event=>{
-    if(event.path===path) await privateWrite(path+'.lock',successor);
-  },()=>f.notice());
-  assert.ok(output);
-  assert.equal(await readFile(path+'.lock','utf8'),successor);
-});
-
-test('stale notice recovery across adjacent clock intervals emits at most once',async t=>{
-  const f=await fixture(t), path=join(f.directory,'capture-stop-notice.json.lock');
-  await privateWrite(path,''); await utimes(path,new Date(time-120000),new Date(time-120000));
-  const boundary=Math.ceil(time/60000)*60000;
-  const outputs=await Promise.all([f.notice(changed,{}, {now:()=>boundary-1}),
-    f.notice(changed,{}, {now:()=>boundary+1})]);
-  assert.ok(outputs.filter(Boolean).length<=1);
-  if(!outputs.some(Boolean)) assert.ok(await f.notice(changed,{}, {now:()=>boundary+1}));
+test('crashes after exclusive claims consume the day and leave bounded residue',async t=>{
+  const f=await fixture(t), stateURL=new URL('../installed-state.mjs',import.meta.url).href;
+  for(let day=0;day<4;day++) {
+    const clock=new Date(2026,10,4+day,12).getTime();
+    const code=`import fs from 'node:fs/promises';import {syncBuiltinESMExports} from 'node:module';
+      const original=fs.open;fs.open=async(path,...args)=>{
+        const handle=await original(path,...args);if(path.endsWith('.claim'))process.exit(77);return handle;};
+      syncBuiltinESMExports();const {captureStopNotice}=await import(${JSON.stringify(stateURL)});
+      await captureStopNotice(${JSON.stringify(f.path)},${JSON.stringify(f.config)},${JSON.stringify(input)},
+        ${JSON.stringify(changed)},{now:()=>${clock},env:{LANG:'en'}});`;
+    const child=spawn(process.execPath,['--input-type=module','-e',code],{
+      env:{HOME:f.home,PATH:'/usr/bin:/bin',TMPDIR:process.env.TMPDIR},stdio:'ignore'});
+    const exit=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',resolve);});
+    assert.equal(exit,77);assert.equal(await f.notice(changed,{}, {now:()=>clock}),'');
+    // Successful next-day claim prunes the claim left by the actual crashed child.
+    assert.ok(await f.notice(changed,{}, {now:()=>new Date(2026,10,5+day,0).getTime()}));
+    const names=await readdir(f.directory);
+    assert.equal(names.filter(name=>name.endsWith('.claim')).length,1);
+    assert.equal(names.filter(name=>name.includes('.owner-') || name.includes('.reap-')).length,0);
+    // Let the next child claim its day too, by using a separate day each cycle.
+    await unlink(join(f.directory,names.find(name=>name.endsWith('.claim'))));
+  }
 });

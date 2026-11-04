@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveClient, clientProjectId } from '../client/pairing.mjs';
 import { automaticPolicy, automaticGuard } from '../client/automatic-policy.mjs';
@@ -13,8 +13,7 @@ import { detectRunningHost, cachedQualification, observeHost, qualifyBinary, val
   scheduleQualification, finishQualification, hasQualifiedCreator } from './qualification.mjs';
 import { readInstallation, readCredential, clientOptions, childEnvironment, promptRecallEnabled } from './installed-state.mjs';
 import { observeHostedPause, installedTransport, recallContext } from './hosted-lifecycle.mjs';
-import { checkedPath } from '../client/private-state.mjs';
-import { captureStopNotice } from './installed-state.mjs';
+import { captureStopNotice, pendingCaptureNotice, recordQualificationAttempt } from './installed-state.mjs';
 import { sessionSource } from './session-source.mjs';
 
 // No --version/schema subprocess on the hook path. Ancestor detection and
@@ -25,13 +24,9 @@ export async function currentHost(configPath,{detect=detectRunningHost,launch=la
   await observeHost(configPath,host);
   const verdict=await cachedQualification(configPath,host);
   if(verdict.status==='pending') {
-    // Inspect BEFORE scheduling: a retry can create a fresh marker immediately.
-    // Missing/expired means the previous attempt finished or gave up; the notice
-    // additionally requires a prior SessionStart observation of this identity.
-    let pending;
-    try { pending=await checkedPath(join(dirname(configPath),'qualification',host.identity+'.pending'),{missing:true}); }
-    catch { /* The notice's private state also fails silent on unsafe storage. */ }
-    verdict.pendingFinished=!pending || now()-pending.mtimeMs>=120000;
+    // Read diagnostic evidence before a retry replaces an expired marker.
+    // Finished history remains independent of who scheduled the first probe.
+    verdict.pendingNotice=await pendingCaptureNotice(configPath,host,{now});
     await scheduleQualification(configPath,host,launch);
   }
   return {...verdict,host};
@@ -79,7 +74,10 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
   if(event==='qualify') {
     const host=await readHookInput(stream,{deadlineMs:750});
     if(!validHost(host))return '';
-    try {await qualifyBinary(configPath,host);} finally {await finishQualification(configPath,host);}
+    try {await qualifyBinary(configPath,host);} finally {
+      await finishQualification(configPath,host);
+      await recordQualificationAttempt(configPath,host,{now:noticeOptions.now});
+    }
     return '';
   }
   // Detached workers re-check the host supplied by the trusted launcher. Hook

@@ -24,14 +24,14 @@
     "integrations/codex/entry.mjs": "afdbbf083ac454f76827695680436464729bb7b045ea7cf43c83bd727f142a9d",
     "integrations/codex/hook.mjs": "3298bd3147825eb76d97620f2c9bc978b506ae4a6b42509862081e970610a6a7",
     "integrations/codex/hosted-lifecycle.mjs": "8b4a8e7ea1cef5473147bfe2ea6af9548894c52f08e44a656e545fcb9fc8c496",
-    "integrations/codex/installed-state.mjs": "f909a250bef6e03ee5d443ed510552f8d461fe0d26232117d57658052feddbe5",
-    "integrations/codex/installed.mjs": "27ae263ed6199dbfd41b504ca2687bc325709df807af0f61021781a66aa677db",
+    "integrations/codex/installed-state.mjs": "9b622f7828d0bec643fe4485909493ab65fcf9bc188e08c2d4a4b1fc11ca11de",
+    "integrations/codex/installed.mjs": "f09606fcc97136948e049f8f6a89cd6702a4885e915ccd8fa3a9f2c6b119996c",
     "integrations/codex/parser.mjs": "41440a7a2e0bb4108bc9abcace2b3d51e8437fea7c6591c28b3d56c65b4243a5",
     "integrations/codex/qualification.mjs": "9c37710cfffa802fbc42286c6e9bf8c3bf8bdf3d4c34a0c163d672868714cdac",
     "integrations/codex/schema-evidence.mjs": "1313d5789bbf8aa4a61be3bd4c1269793dbc0df543938e2a23fded3a2d4d518b",
     "integrations/codex/session-source.mjs": "1341cc42eebf5a996be305f471393a717bfdd5eddd19fc3fd556fe8483fdfbc3",
     "integrations/codex/source.mjs": "6bf982b4227d6a7834c02faa74690340c72b269ccf1e9a1242358135de37b580",
     "integrations/codex/tripwire.mjs": "96f09081cb2d9416baef2c7a0774a76da178006ad038e8f560af943331232af6",
-    "integrations/codex/worker.mjs": "b800d3c6745fcfa2d9a61103183e42e751f8255fc611c90f44373764ca4bcc76"
+    "integrations/codex/worker.mjs": "2fd5987edcf0c047d0ad78145b7f2887e20643ce6eca723871b41598ca2e13e4"
   }
 }
