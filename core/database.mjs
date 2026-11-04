@@ -343,7 +343,7 @@ export function readTransaction(db, work, acquisition) {
   return value;
 }
 
-// Recall-only mode: keep transaction fences and statement counts, acquiring
+// Reviewed read-only mode: keep transaction fences and statement counts, acquiring
 // SHARED on the first SELECT. Writers must retain BEGIN IMMEDIATE.
 export function transaction(db, work, check, { deferred = false } = {}) {
   if (activeReads.has(db) || discardedConnections.has(db)) fail('storage_error');

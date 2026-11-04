@@ -168,6 +168,8 @@ const deferredReaders = [
     '? transaction(db, () => suppressionEpochInside(ns), undefined, { deferred: true }) : null; },'],
   ['core/moc-storage.mjs', 'assertEpoch', '    assertEpoch(ns, expected, suppressionEpoch)', '\n}',
     '}, undefined, { deferred: true }); } });'],
+  ['core/episode-reads.mjs', 'read', '  return function read(', '\n  };',
+    "}, undefined, { deferred: operation === 'listMemoriesByTime' });"],
   ...['listPage', 'getPage', 'recentReceipts', 'fetchPage', 'recallSnapshot'].map(name =>
     ['core/runtime.mjs', name, '  function ' + name + '(', '\n  }', '}, undefined, { deferred: true });']),
 ];
@@ -206,9 +208,9 @@ function assertDeferredAllowlist(sources) {
   return sites;
 }
 
-test('deferred transaction call-site allowlist covers exactly the eight recall readers', t => {
+test('deferred transaction call-site allowlist covers exactly the nine recall and time-range readers', t => {
   const sources = productionSources(), sites = assertDeferredAllowlist(sources);
-  assert.equal(sites.length, 8);
+  assert.equal(sites.length, 9);
   t.diagnostic(JSON.stringify({ productionModules: sources.size, deferredReaders: sites }));
 });
 
@@ -218,10 +220,10 @@ test('deferred transaction allowlist rejects an injected writer and an extra cal
 export function write(db) { return transaction(db, () => db.exec('DELETE FROM memories'), undefined, { deferred: true }); }`);
   assert.throws(() => assertDeferredAllowlist(sources), /unreviewed deferred transaction use: core\/unreviewed-writer.mjs/);
   sources.delete('core/unreviewed-writer.mjs');
-  sources.set('core/runtime.mjs', sources.get('core/runtime.mjs').replace(
-    "    if (reviewState === 'awaiting' && !decisionReview) fail('decision_review_required');",
-    "    if (reviewState === 'awaiting' && !decisionReview) fail('decision_review_required');\n    transaction(db, () => null, undefined, { deferred: true });"));
-  assert.throws(() => assertDeferredAllowlist(sources), /unreviewed deferred transaction use: core\/runtime.mjs/);
+  sources.set('core/episode-reads.mjs', sources.get('core/episode-reads.mjs').replace(
+    '  return function read(ns, operation, filter, cursor) {',
+    '  return function read(ns, operation, filter, cursor) {\n    transaction(db, () => null, undefined, { deferred: true });'));
+  assert.throws(() => assertDeferredAllowlist(sources), /unreviewed deferred transaction use: core\/episode-reads.mjs/);
 });
 
 test('recall and all seven helpers proceed under RESERVED without waiting for the busy timeout', async t => {
