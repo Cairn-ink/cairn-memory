@@ -452,10 +452,16 @@ snapshots. Every reuse retains identity and companion checks, the stricter
 applicable read/write journal rules, and the existing writable journal-mode
 check. Writable preparation still rereads metadata and attestation. Integrity
 checks (`quick_check` and `foreign_key_check`) run on every fresh writable open.
-Any failed operation, unavailable observation or rollback discards the cached
-connection after the operation releases its transactions; subsequent writable
-use opens and checks again. Cutoff, termination and close dispose the resident's
-connections. Reuse does not retain a read snapshot between operations.
+Any failed operation, unavailable observation or rollback on a writable connection
+discards the cached connection after the operation releases its transactions;
+subsequent writable use opens and checks again. Cutoff, termination and close
+dispose the resident's connections. Any failure on an operation started on a
+writable connection discards the cached connection; a read-only connection is
+discarded only for native SQLite primary codes IOERR, CORRUPT, FULL or NOTADB
+(including extended codes), or the
+`storage_unavailable` reason, and otherwise keeps its handle, falling back to
+discarding only for `storage_unavailable` when no native error code is present.
+Reuse does not retain a read snapshot between operations.
 
 A successful `rebuilding` or `partial` response is durable progress: schedule
 another explicit quantum with the same service binding and projection. Stop

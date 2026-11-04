@@ -10,6 +10,9 @@ import { openContextProductFacade } from '../context-read-facade.mjs';
 import { productSidecar, PRODUCT_SIDECAR_SUFFIX } from '../context-product-sidecar.mjs';
 import { createProductSqlitePolicy } from '../context-product-sqlite.mjs';
 import { accessDigest } from '../context-product-validation.mjs';
+import { suppressOwnerInside } from '../content-suppression-storage.mjs';
+import { installContentSafetyInside, contentSafetyInventory } from '../content-safety-migration.mjs';
+import { transaction } from '../database.mjs';
 import * as memoryComparison from '../context-product-comparison.mjs';
 import { createProductReaderRuntime } from '../context-product-reader.mjs';
 
@@ -23,8 +26,13 @@ function child(role,path,mode) {
   const r=spawnSync(process.execPath,[new URL('./fixtures/context-product-wal-process.mjs',import.meta.url).pathname,role,path,mode],{env:{},encoding:'utf8',timeout:10000,maxBuffer:1024});
   assert.equal(r.status,0,r.stderr);assert.equal(r.error,undefined);
 }
-function setup(t,{mode='DELETE',policy=false,rendezvous=()=>{},openFacade=openContextProductFacade,createSidecar=productSidecar}={}) {
+function setup(t,{mode='DELETE',policy=false,suppression=false,rendezvous=()=>{},openFacade=openContextProductFacade,createSidecar=productSidecar}={}) {
   const f=fixture(t);f.admit('healthy resident reuse');
+  if(suppression){
+    const db=new DatabaseSync(f.path);
+    try {transaction(db,()=>installContentSafetyInside(db,18,contentSafetyInventory(db)));}
+    finally {db.close();}
+  }
   const facade=openFacade(f.path,{});
   f.workspace.defer(()=>facade.close());
   const p={readSet:[ns],types:['memory'],intent:'current',ownerCoverage:descriptor([ns])};
@@ -226,4 +234,119 @@ test('passing control: explicit close requires full integrity checks in a fresh 
   const storage=productSidecar({path:s.f.path,db:s.facade.port.db,identity:s.facade.port.identity,features:s.facade.port.features,writable:true,now:()=>0});
   try {storage.refresh(s.p,s.access,budget);}finally {storage.close();}
   assert.equal(s.checks.quick,before.quick+1);assert.equal(s.checks.foreign,before.foreign+1);
+});
+
+// Reuse the native-prepare injection used by the read-only disposal audit;
+// policy mapping and real transaction cleanup remain in the exercised path.
+function injectedRead(t, error) {
+  const prepare=DatabaseSync.prototype.prepare;
+  let armed=false;
+  t.mock.method(DatabaseSync.prototype,'prepare',function(sql){
+    if(armed&&sql==='SELECT 1 AS failure_disposal_probe'){armed=false;throw error;}
+    return Reflect.apply(prepare,this,[sql]);
+  });
+  return storage=>{armed=true;return storage.vectors(db=>db.prepare('SELECT 1 AS failure_disposal_probe').get());};
+}
+const nativeFailure=errcode=>Object.assign(Error('synthetic native failure'),{code:'ERR_SQLITE_ERROR',...(errcode===undefined?{}:{errcode})});
+
+test('two denied read-only reads retain the same admitted handle',t=>{
+  const s=setup(t,{policy:true,suppression:true});let handle,admissions=0;
+  const prepare=DatabaseSync.prototype.prepare;
+  t.mock.method(DatabaseSync.prototype,'prepare',function(sql){if(sql==='PRAGMA user_version')admissions++;return Reflect.apply(prepare,this,[sql]);});
+  s.storage.vectors(db=>{handle=db;return null;});
+  const publication=s.observe().publication;
+  const canonical=new DatabaseSync(s.f.path);
+  try {
+    canonical.exec('BEGIN IMMEDIATE');
+    suppressOwnerInside(canonical,{ownerId:ns.ownerId,reason:'account_erasure',actionId:'synthetic-reuse-denial'});
+    canonical.exec('COMMIT');
+  } finally {if(canonical.isTransaction)canonical.exec('ROLLBACK');canonical.close();}
+  const before=admissions;
+  for(let i=0;i<2;i++){
+    assert.throws(()=>s.storage.lexical(s.p,publication,'healthy'),{code:'evidence_unavailable'});
+    assert.equal(handle.isOpen,true,'ordinary denial must retain the read-only handle');
+    s.storage.vectors(db=>{assert.equal(db,handle,'denied reads share the admitted handle');return null;});
+    assert.equal(admissions,before,'denial must not repeat opening identity checks');
+  }
+});
+
+const readOnlyFailures=[
+  ...[10,266,522,11,13,26,8,14].map(code=>({name:'native '+code,error:()=>nativeFailure(code),discard:true})),
+  {name:'storage_unavailable',error:()=>Object.assign(Error('synthetic storage refusal'),{code:'index_unavailable',reason:'storage_unavailable'}),discard:true},
+  ...[5,6].map(code=>({name:'native '+code,error:()=>nativeFailure(code),discard:false})),
+  ...['evidence_unavailable','read_timeout','memory_not_found'].map(code=>({name:code==='evidence_unavailable'?'suppression denial (evidence_unavailable)':code,error:()=>Object.assign(Error('synthetic denial'),{code}),discard:false})),
+  {name:'native without errcode',error:()=>nativeFailure(),discard:false},
+  {name:'wrapped without native code',error:()=>Object.assign(Error('synthetic wrapped failure'),{code:'storage_error',cause:nativeFailure(11)}),discard:false}
+];
+for(const row of readOnlyFailures)test(`read-only failure disposal: ${row.name} => ${row.discard?'discard':'keep'}`,t=>{
+  const s=setup(t,{policy:true});let handle;
+  s.storage.vectors(db=>{handle=db;return null;});
+  const inject=injectedRead(t,row.error());
+  assert.throws(()=>inject(s.storage));
+  assert.equal(handle.isOpen,!row.discard,'read-only disposal must follow the native primary code or storage reason');
+  if(handle.isOpen)assert.equal(handle.isTransaction,false,'failed read released its transaction');
+  s.storage.vectors(db=>{assert.equal(db===handle,!row.discard,'next read confirms disposal versus reuse');handle=db;return null;});
+  // observe() catches and maps native errors after read(); that status mapping
+  // must neither erase a disposal decision nor invent one from a mapped DTO.
+  const prepare=DatabaseSync.prototype.prepare;let armed=true;
+  t.mock.method(DatabaseSync.prototype,'prepare',function(sql){
+    if(armed&&sql==='SELECT * FROM product_metadata WHERE singleton=1'){armed=false;throw row.error();}
+    return Reflect.apply(prepare,this,[sql]);
+  });
+  try{s.observe();}catch(error){assert.ok(error.code);}
+  assert.equal(armed,false,'observation reached the injected native read');
+  assert.equal(handle.isOpen,!row.discard,'mapped observation follows the original failure, including missing-code fallback');
+});
+
+test('failure inside read on a reused writable handle forces both integrity checks from one to two',t=>{
+  const s=setup(t,{policy:true});s.step();let handle;
+  s.storage.vectors(db=>{handle=db;return null;});
+  assert.deepEqual(s.checks,{quick:1,foreign:1});
+  const inject=injectedRead(t,Object.assign(Error('synthetic content-safety denial'),{code:'evidence_unavailable'}));
+  assert.throws(()=>inject(s.storage),{code:'evidence_unavailable'});
+  assert.equal(handle.isOpen,false,'the same denial discards when the read started on a writable connection');
+  s.storage.reset();assert.deepEqual(s.checks,{quick:2,foreign:2});
+});
+
+for(const site of ['refresh','vectors','reset'])test(`failure after read-only upgrade at ${site} forces a checked writable reopen`,t=>{
+  let armed=false;
+  const error=Object.assign(Error('synthetic upgraded operation failure'),{code:'evidence_unavailable'});
+  const s=setup(t,{policy:true,rendezvous(point){if(armed&&site==='refresh'&&point==='opened'){armed=false;throw error;}}});
+  let old;s.storage.vectors(db=>{old=db;return null;});
+  assert.deepEqual(s.checks,{quick:0,foreign:0});
+  const prepare=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;
+  t.mock.method(DatabaseSync.prototype,'prepare',function(sql){
+    if(armed&&site==='vectors'&&sql==="SELECT 1 FROM sqlite_schema WHERE name='vector_publications' AND type='table'"){armed=false;throw error;}
+    return Reflect.apply(prepare,this,[sql]);
+  });
+  t.mock.method(DatabaseSync.prototype,'exec',function(sql){if(armed&&site==='reset'&&sql==='BEGIN IMMEDIATE'){armed=false;throw error;}return Reflect.apply(exec,this,[sql]);});
+  armed=true;
+  assert.throws(()=>site==='refresh'?s.refresh():site==='vectors'?s.storage.vectors(()=>null,true):s.storage.reset(),{code:'evidence_unavailable'});
+  assert.equal(armed,false,'fault occurs after writable admission');assert.equal(old.isOpen,false);
+  assert.deepEqual(s.checks,{quick:1,foreign:1});
+  s.storage.reset();assert.deepEqual(s.checks,{quick:2,foreign:2},'next write uses another fully checked handle');
+});
+
+test('persistently corrupt sidecar has one opening attempt per query and preserves main statuses',t=>{
+  const s=setup(t,{policy:true});s.storage.close();
+  // No sidecar connection is live; only this child opens a raw file handle.
+  const damage=spawnSync(process.execPath,['--input-type=module','-e',
+    "import {writeFileSync} from 'node:fs';writeFileSync(process.argv[1],Buffer.alloc(4096,120));",s.path],{env:{},encoding:'utf8',timeout:10000});
+  assert.equal(damage.status,0,damage.stderr);assert.equal(damage.error,undefined);
+  let opens=0;
+  const observer={invoke(kind,category,work){if(kind==='open')opens++;return work();},database:db=>db};
+  const sqlite=createProductSqlitePolicy({now:()=>0});sqlite.start(5000);
+  const storage=productSidecar({path:s.f.path,db:s.facade.port.db,identity:s.facade.port.identity,features:s.facade.port.features,sqlite,observer,now:()=>0});
+  t.after(()=>storage.close());
+  const statuses=[],attempts=[];
+  for(let i=0;i<4;i++){
+    const before=opens;
+    statuses.push(readTransaction(s.facade.port.db,()=>storage.observe(s.p,s.access)).dto.lexical.reason);
+    // The first invocation also opens the separate lifecycle-lock database.
+    attempts.push(opens-before-(i===0?1:0));
+    assert.ok(attempts[i]<=1,'no query retries a persistent corruption');
+  }
+  assert.ok(attempts.reduce((a,b)=>a+b,0)<=statuses.length);
+  assert.deepEqual(statuses,['corrupt','corrupt','corrupt','corrupt'],'same sequence was measured on main');
+  t.diagnostic(JSON.stringify({statuses,sidecarOpeningAttempts:attempts}));
 });
