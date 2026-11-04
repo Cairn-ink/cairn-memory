@@ -42,7 +42,8 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   // S2h-1 storage, S2h-2's boundary, suppression grant grammar and three transaction validators, the gated B3 comparator,
   // the verification commit batch and semantic accounting stay behind the SQLite Worker boundary. Keep the exact closure
   // pin and independently verify the installed edges.
-  assert.equal(expected.length, 120, 'private_maintenance_admission_closure_pin');
+  assert.equal(expected.length, 121, 'private_maintenance_admission_closure_pin');
+  assert.ok(expected.includes('core/context-maintenance-turn.mjs'));
   assert.ok(expected.includes('core/context-product-admission.mjs'));
   assert.ok(expected.includes('core/context-product-admission-policy.mjs'));
   assert.ok(expected.includes('core/context-semantic-accounting.mjs'), 'semantic_accounting_is_in_installed_worker_closure');
