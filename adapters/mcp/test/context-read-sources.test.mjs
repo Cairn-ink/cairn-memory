@@ -21,7 +21,24 @@ test('C06 pinned independent 94c1076f wire fixtures, controlled identity/clock/e
     new URL('../../../', import.meta.url).pathname, workspace.path, report], { stdio: ['ignore', stdout, stderr], timeout: 30000 }); }
   finally { closeSync(stdout); closeSync(stderr); }
   assert.equal(result.error, undefined); assert.equal(result.signal, null); assert.equal(result.status, 0, readFileSync(join(workspace.path, 'err'), 'utf8'));
-  assert.equal(readFileSync(report, 'utf8'), readFileSync(new URL('../../../core/test/fixtures/context-read/u5c2-legacy-wire.json', import.meta.url), 'utf8'));
+  const historical = readFileSync(new URL('../../../core/test/fixtures/context-read/u5c2-legacy-wire.json', import.meta.url), 'utf8');
+  const expected = JSON.parse(historical);
+  // Preserve the historical bytes; permit only PR 2's three reviewed additions.
+  const insertAfter = (object, key, addition) => Object.fromEntries(Object.entries(object)
+    .flatMap(entry => entry[0] === key ? [entry, ...Object.entries(addition)] : [entry]));
+  for (const key of ['capabilities', 'hostedCapabilities']) expected[key].value.assembly =
+    insertAfter(expected[key].value.assembly, 'representation', { representations: ['representation-v2', 'representation-v2-dated'] });
+  const schema = expected.contextHost.tools.tools[2].inputSchema;
+  schema.properties = insertAfter(schema.properties, 'policy', {
+    representation: { type: 'string', enum: ['representation-v2', 'representation-v2-dated'] },
+  });
+  const compare = actual => assert.equal(actual, JSON.stringify(expected, null, 2) + '\n');
+  const actual = readFileSync(report, 'utf8');
+  compare(actual);
+  // One unrelated byte must still fail the same comparison.
+  const mutated = actual.replace('94c1076f', '94c1076e');
+  assert.notEqual(mutated, actual);
+  assert.throws(() => compare(mutated), { code: 'ERR_ASSERTION' });
 });
 test('C06 source startup grammar, refusals and check-config side-effect freedom', async t => {
   for (const selected of ['relations-one-hop-v1', 'moc-v1', sources.join(','), [...sources].reverse().join(',')]) {

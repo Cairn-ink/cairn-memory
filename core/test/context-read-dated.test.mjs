@@ -23,7 +23,7 @@ import { writeContentSuppressionInside } from '../content-suppression-storage.mj
 import { rationaleModel } from '../testing/rationale-model.mjs';
 import { savedSource, cardHost } from '../testing/raw-source-fixtures.mjs';
 
-import { createContextCounter } from '../../adapters/openai/context-counter.mjs';
+import { optionalRoleCounter } from './role-fixture.mjs';
 import { validateSourceReceipt } from '../source-evidence.mjs';
 import { MemoryStoreError, fail } from '../validation.mjs';
 import { deepFreeze } from '../private-card-input.mjs';
@@ -332,8 +332,8 @@ function boundaryDefinitions(kind) {
   });
 }
 
-for (const kind of ['product', 'facade']) test(`${kind}: both reviewer byte-boundary fixtures pack the complete dated response`, async () => {
-  const real = await createContextCounter();
+for (const kind of ['product', 'facade']) test(`${kind}: both reviewer byte-boundary fixtures pack the complete dated response`, async t => {
+  const real = await optionalRoleCounter(t); if (!real) return;
   for (const fixture of ['spec', 'safety']) {
     const definitions = boundaryDefinitions(fixture), reader = enclosingReader(kind, definitions, real, { safety: fixture === 'safety' });
     const options = { maxTokens: fixture === 'spec' ? 4000 : 3000 };
