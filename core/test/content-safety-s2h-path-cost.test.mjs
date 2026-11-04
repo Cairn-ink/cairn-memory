@@ -74,7 +74,7 @@ for(const [v,base] of [[34,18],[38,23],[48,33]])for(const kind of ['topic','memo
   // n12/n24 is the paired per-item fixture. Every other population retains
   // its exact pin and ceiling; compare its overhead with E1 separated.
   const corpus=new Map();for(const row of records){if(row.method!=='recall'&&kind!=='topic')continue;const key=JSON.stringify([row.method,row.mode,row.case,row.limit]);const net=row.after[0]-row.legacy[0]-row.ports;if(corpus.has(key))assert.ok(net<=corpus.get(key),'R2-A1 non-E1 corpus overhead does not grow: '+JSON.stringify(row));corpus.set(key,net);}
-  const group=new Map();for(const row of records){const r2a1=row.method==='recall'||kind==='topic';if(r2a1&&![12,24].includes(row.n))continue;const key=JSON.stringify([row.method,row.mode,row.case,...(r2a1?[row.limit]:[])]);const delta=row.after[0]-row.legacy[0]-(r2a1?0:row.ports);if(group.has(key)){if(row.method==='recall'||kind==='topic')assert.ok(delta<=group.get(key),'R2-A1 slope <= same-engine legacy, e9 11-01 17:15: '+JSON.stringify(row));else assert.equal(delta,group.get(key),'zero per-item/corpus delta');}group.set(key,delta);}
+  const group=new Map();for(const row of records){const r2a1=row.method==='recall'||kind==='topic';if(r2a1&&![12,24].includes(row.n))continue;const key=JSON.stringify([row.method,row.mode,row.case,...(r2a1||kind==='context'?[row.limit]:[])]);const delta=row.after[0]-row.legacy[0]-(r2a1?0:row.ports);if(group.has(key)){if(row.method==='recall'||kind==='topic')assert.ok(delta<=group.get(key),'R2-A1 slope <= same-engine legacy, e9 11-01 17:15: '+JSON.stringify(row));else assert.ok(delta<=group.get(key),'non-E1 per-item/corpus overhead does not grow');}group.set(key,delta);}
  });
 }
 

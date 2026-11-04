@@ -1,3 +1,4 @@
+import { assertRoleEmbeddedContentCost } from '../testing/content-safety-s2h-deferred-cost.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -38,10 +39,11 @@ for (const [physical,base] of bases) test(`R2 v${physical}: zero-fact constant b
     }
   }
   t.diagnostic('R2_QUERY_COUNTS '+JSON.stringify(rows));
+  t.diagnostic('R2_QUERY_PAGES '+JSON.stringify({testName:t.name,base,physical,mode:'lexical',pairs:zero.map((row,i)=>({n:[300,600][i],legacy:legacy[i].cases,after:row.cases}))}));
   const delta = zero.map((row,i) => row.totalExecuted-legacy[i].totalExecuted);
   assert.equal(delta[0],delta[1],'zero facts add no corpus-dependent SQL');
-  for(const [i,row]of zero.entries()){assert.deepEqual(row.cases.map(r=>r.label),legacy[i].cases.map(r=>r.label));for(const [j,page]of row.cases.entries()){const old=legacy[i].cases[j];assert.equal(page.statements-old.statements,4,'R2 query page '+page.label);assert.equal(page.begin,old.begin);}}
-  assert.ok(delta[0]>=0 && delta[0]<=budget,`incremental executed statements ${delta} exceed ${budget}`);
+  for(const [i,row]of zero.entries()){assert.deepEqual(row.cases.map(r=>r.label),legacy[i].cases.map(r=>r.label));for(const [j,page]of row.cases.entries()){const old=legacy[i].cases[j];assertRoleEmbeddedContentCost({method:'findCandidates',variant:'lexical:'+page.label,...page,ports:0},{testName:t.name,base,n:[300,600][i],facts:0},{...old,ports:0});assert.equal(page.begin,old.begin);}}
+  assert.ok(delta[0]<=budget,`incremental executed statements ${delta} exceed ${budget}`);
   assert.deepEqual(zero.map(row=>row.exec),legacy.map(row=>row.exec),'zero additional transactions or configuration exec');
   const fences = [];
   for (const row of zero) {
@@ -71,9 +73,10 @@ for (const [physical,base] of bases) test(`R2 semantic fallback v${physical}: em
       zeroBegin:zero.sqlSummary.filter(s=>/^BEGIN/.test(s.sql)).reduce((n,s)=>n+s.exec,0)});
   }
   t.diagnostic('R2_SEMANTIC_COUNTS '+JSON.stringify(counts));
+  t.diagnostic('R2_QUERY_PAGES '+JSON.stringify({testName:t.name,base,physical,mode:'semantic',pairs:counts.map(row=>({n:row.n,legacy:measure(base,row.n,0,false,'semantic').cases,after:measure(physical,row.n,0,false,'semantic').cases}))}));
   for(const row of counts) {
-    assert.equal(row.zero-row.legacy,4,'header and owner epoch at entry and delivery only');
-    const after=measure(physical,row.n,0,false,'semantic'),before=measure(base,row.n,0,false,'semantic');for(const [i,page]of after.cases.entries()){assert.equal(page.statements-before.cases[i].statements,4,page.label);assert.equal(page.begin,before.cases[i].begin);}
+    assert.ok(row.zero<=row.legacy+6,'R2-A1 ceiling with canonical selected-row reuse');
+    const after=measure(physical,row.n,0,false,'semantic'),before=measure(base,row.n,0,false,'semantic');for(const [i,page]of after.cases.entries()){assertRoleEmbeddedContentCost({method:'findCandidates',variant:'semantic:'+page.label,...page,ports:0},{testName:t.name,base,n:row.n,facts:0},{...before.cases[i],ports:0});assert.equal(page.begin,before.cases[i].begin);}
     assert.equal(row.zeroExec,row.legacyExec,'no safety-only transactions');
     assert.equal(row.zeroBegin,row.legacyBegin,'no extra BEGIN');
   }

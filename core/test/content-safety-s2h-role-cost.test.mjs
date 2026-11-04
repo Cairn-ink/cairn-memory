@@ -1,5 +1,5 @@
 import { familyCostParity } from '../testing/receipt-event-time-gates.mjs';
-import { assertDeferredContentCost, assertDeferredContentCostInventory } from '../testing/content-safety-s2h-deferred-cost.mjs';
+import { assertRoleEmbeddedContentCost, assertRoleEmbeddedContentCostInventory } from '../testing/content-safety-s2h-deferred-cost.mjs';
 import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,8 +28,10 @@ for(const n of [0,1,12])test(`role R2: ${n} evidence items, private counters add
  }
  t.diagnostic('R3_ROLE_COUNTS '+JSON.stringify(records));
  if(assertCostGateCells(records))return;
- const [legacy,zero,five]=records;
- assert.equal(zero.ports,legacy.ports);assert.equal(zero.statements-legacy.statements-zero.ports,4,'entry and delivery header/epoch only');
+ const [legacy,zero,five]=records,observed=new Set();
+ assert.equal(zero.ports,legacy.ports);assertRoleEmbeddedContentCost(zero,{testName:t.name,base:33,n,facts:0},legacy,observed);
+ assertRoleEmbeddedContentCost(five,{testName:t.name,base:33,n,facts:5},legacy,observed);
+ assertRoleEmbeddedContentCostInventory(observed,t.name);
  assert.equal(zero.begin,legacy.begin);assert.equal(five.begin,legacy.begin);
  assert.equal(five.statements-zero.statements,2,'one bounded fact set; no per-counter transactions');
  const epochs=zero.trace.filter(r=>/FROM owner_suppression_epochs/.test(r.sql));
@@ -86,13 +88,14 @@ for(const n of [0,12,24])test(`role modes R2: ${n} items, now/refresh/compare/fi
  for(const current of [zero,five])for(const [i,row]of current.records.entries()){
   const old=legacy.records[i],fixed=row.statements-old.statements-row.ports;
   assert.equal(row.ports,old.ports);
-  if(current.facts===5&&n>0&&['now','refresh'].includes(row.variant)){
-   assertDeferredContentCost(row,{testName:t.name,base:33,n,facts:5},ratchets);continue;
+  if(n>0&&['now','refresh'].includes(row.variant)){
+   // Fail-before on a6ec0e0e for each of the four five-fact cells.
+   await t.test(`facts=${current.facts} ${row.variant}`,()=>assertRoleEmbeddedContentCost(row,{testName:t.name,base:33,n,facts:current.facts},old,ratchets));continue;
   }
   assert.equal(row.begin,old.begin,'no safety transaction: '+row.variant);
   assert.equal(fixed,(row.variant==='file-binary'?6:4)+(current.facts?2:0),'exact fixed role mode cost: '+row.variant);
  }
- assertDeferredContentCostInventory(ratchets,t.name);
+ assertRoleEmbeddedContentCostInventory(ratchets,t.name);
 });
 
 

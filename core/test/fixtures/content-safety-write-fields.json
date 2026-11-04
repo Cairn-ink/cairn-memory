@@ -297,10 +297,13 @@
   },
   "core/private-evidence-storage.mjs": {
     "key:cardId": 3,
-    "key:memoryId": 4,
-    "key:receiptId": 1,
+    "key:memoryId": 5,
+    "key:receiptId": 2,
     "key:triggerMemoryRefs": 1,
-    "literal:id": 1
+    "literal:event_id": 1,
+    "literal:id": 2,
+    "literal:memory_id": 1,
+    "literal:session_id": 1
   },
   "core/private-organization-input.mjs": {
     "key:cardId": 1,
@@ -390,6 +393,7 @@
   },
   "core/context-read-facade.mjs": {
     "key:actionId": 1,
+    "key:batchRefs": 5,
     "key:id": 2,
     "key:storeId": 6,
     "key:targetId": 1,
@@ -410,10 +414,12 @@
     "key:cardId": 2,
     "key:id": 8,
     "key:ids": 1,
-    "key:memoryId": 3,
+    "key:memoryId": 1,
     "key:storeId": 1,
     "literal:gid": 1,
-    "literal:id": 1,
+    "literal:id": 4,
+    "literal:owner_id": 1,
+    "literal:project_id": 1,
     "literal:uid": 1
   },
   "core/contract.mjs": {

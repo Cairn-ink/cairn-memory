@@ -1,4 +1,4 @@
-import { contentSuppressionReasonInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { contentSuppressionReasonInside, cachedContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety, memoryReadEligible, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { createHash, timingSafeEqual } from 'node:crypto';
@@ -41,8 +41,58 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       return JSON.parse(bytes.toString('utf8'));
     } catch { fail(code); }
   }
-  function memoryRow(ns, id) {
-    return db.prepare(`SELECT * FROM memories WHERE ${where} AND id=? AND deleted=0`).get(...boundary(ns), id);
+  function memoryRow(ns, id, memo) {
+    const key=JSON.stringify([boundary(ns),id]);
+    if(memo?.evidenceMemories?.has(key))return memo.evidenceMemories.get(key);
+    const layout = cachedContentLayout(db);
+    const ancestry = layout?.suppressionRevision && layout.rawLineage ? `,EXISTS(
+      SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id
+      LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id
+      AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry` : '';
+    return db.prepare(`SELECT *${ancestry} FROM memories WHERE ${where} AND id=? AND deleted=0`).get(...boundary(ns), id);
+  }
+  function memoryBatchInside(ns, refs, memo) {
+    if(!cachedContentLayout(db)?.suppressionRevision || !db.isTransaction)return;
+    const cache=memo.evidenceMemories??=new Map();
+    const ids=[...new Set(refs.filter(ref=>ref.type==='memory' &&
+      JSON.stringify(boundary(ref.namespace))===JSON.stringify(boundary(ns))).map(ref=>ref.memoryId))]
+      .filter(id=>!cache.has(JSON.stringify([boundary(ns),id])));
+    if(!ids.length)return;
+    const layout=cachedContentLayout(db);
+    const ancestry=layout.rawLineage ? `,EXISTS(
+      SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id
+      LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id
+      AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry,
+      (SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN (
+        'raw_conversations','raw_messages','raw_source_maps','raw_source_exclusions','raw_receipt_lineage',
+        'raw_session_fences','raw_deletion_actions','raw_receipt_origins','raw_job_sources','episode_identity',
+        'session_episodes','episode_messages','episode_sources','episode_memory_links','episode_keep_actions'))=15 AND
+      EXISTS(SELECT 1 FROM episode_identity WHERE singleton=1 AND length(secret)=64 AND secret NOT GLOB '*[^0-9a-f]*') AND
+      NOT EXISTS(SELECT 1 FROM receipts ar WHERE ar.memory_id=memories.id AND (
+        EXISTS(SELECT 1 FROM raw_receipt_lineage l WHERE l.receipt_id=ar.id) OR
+        EXISTS(SELECT 1 FROM raw_receipt_origins o WHERE o.receipt_id=ar.id AND o.kind!='independent') OR
+        EXISTS(SELECT 1 FROM episode_memory_links k WHERE k.memory_id=memories.id) OR
+        EXISTS(SELECT 1 FROM raw_conversations c WHERE c.owner_id=memories.owner_id AND c.scope=memories.scope AND c.project_id=memories.project_id AND c.client=ar.client) OR
+        EXISTS(SELECT 1 FROM session_episodes e WHERE e.owner_id=memories.owner_id AND e.scope=memories.scope AND e.project_id=memories.project_id AND e.client=ar.client) OR
+        EXISTS(SELECT 1 FROM raw_job_sources j WHERE j.owner_id=memories.owner_id AND j.scope=memories.scope AND j.project_id=memories.project_id AND j.source_client=ar.client) OR
+        EXISTS(SELECT 1 FROM raw_session_fences f WHERE f.owner_id=memories.owner_id AND f.scope=memories.scope AND f.project_id=memories.project_id AND f.client=ar.client)
+      )) AS empty_raw_ancestry` : '';
+    // The existing Memory SELECT now covers the bounded candidate batch and
+    // its original receipt page. Root absence is deliberately broader than a
+    // session-key match: any possible source/fence keeps the lineage fallback.
+    const rows=db.prepare(`SELECT memories.*${ancestry},
+      EXISTS(SELECT 1 FROM memory_qualifications q WHERE q.memory_id=memories.id) AS has_qualification,
+      (SELECT json_group_array(json_object('id',id,'memory_id',memory_id,'receipt_key',receipt_key,
+        'client',client,'session_id',session_id,'event_id',event_id,'role',role,'excerpt',excerpt,'created_at',created_at))
+        FROM (SELECT * FROM receipts WHERE memory_id=memories.id ORDER BY created_at,id LIMIT 17)) AS batch_receipts
+      FROM memories WHERE ${where} AND deleted=0 AND id IN (${ids.map(()=>'?').join(',')})`).all(...boundary(ns),...ids);
+    for(const id of ids)cache.set(JSON.stringify([boundary(ns),id]),undefined);
+    for(const row of rows)cache.set(JSON.stringify([boundary(ns),row.id]),row);
+  }
+  function selectedReceiptRef(ns,row,receipt) {
+    return {type:'receipt',namespace:ns,memoryId:row.id,memoryRevision:row.revision,receiptId:receipt.id,
+      contentIdentity:bind('retained-receipt-content-v1',[ns,row.id,row.revision,receipt.id,receipt.client,
+        receipt.session_id,receipt.event_id,receipt.role,receipt.excerpt]),completeness:'excerpt-only'};
   }
   function memoryMetadata(ns, row) {
     return { type: 'memory', ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision },
@@ -75,15 +125,28 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
         coverage: { status: 'complete', included: sources.length, omitted: 0 } },
         bindings: card.bindings, triggerMemoryRefs: card.triggerMemoryRefs };
     }
-    const row = memoryRow(ns, ref.memoryId);
-    if (!memoryEligible(ns, row, intent)) fail('evidence_unavailable');
+    const row = memoryRow(ns, ref.memoryId, options?.legacyEvidence?undefined:memo);
+    const safety = Boolean(!options?.legacyEvidence && row && cachedContentLayout(db)?.suppressionRevision &&
+      memo.evidenceMemories?.get(JSON.stringify([boundary(ns),row.id]))===row);
+    // The selected canonical row and receipts belong to this synchronous
+    // snapshot. One S1+fact decision below owns their combined validation.
+    if (safety ? !memoryReadEligible(row, intent) : !memoryEligible(ns, row, intent)) fail('evidence_unavailable');
+    if (safety && row.revision !== ref.revision) {
+      // Preserve the original unavailable-before-revision-conflict order.
+      if (!contentReadSafety(db,{identity,namespace:ns,intent,memo,selectedMemory:row,
+        ref:{...ref,revision:row.revision}}).allowed) fail('evidence_unavailable');
+    }
     if (row.revision !== ref.revision) fail('revision_conflict');
-    const allReceiptRows = db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 17').all(row.id);
-    const receiptRows = allReceiptRows.filter(receipt => receiptReadSafety(db, { namespace: ns, receipt, memo }).allowed);
-    if (!contentReadSafety(db, { identity, namespace: ns, ref, intent, memo, receipts: receiptRows.slice(0, 16) }).allowed) fail('evidence_unavailable');
+    const projected=safety;
+    const selectedReceipts=projected?JSON.parse(row.batch_receipts):undefined;
+    const allReceiptRows = selectedReceipts ?? db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 17').all(row.id);
+    const receiptRows = allReceiptRows.filter(receipt => receiptReadSafety(db, { namespace: ns, receipt, memo,
+      rawAncestryEmpty:projected && row.empty_raw_ancestry===1 && !contentSuppressionMayMatchInside(db,ns,{kind:'receipt',key:receipt.id}) }).allowed);
+    if(selectedReceipts)(memo.evidenceReceipts??=new Map()).set(JSON.stringify([boundary(ns),row.id]),selectedReceipts);
+    if (!contentReadSafety(db, { identity, namespace: ns, ref, intent, memo, ...(safety ? { selectedMemory: row, selectedReceipts } : {}), receipts: receiptRows.slice(0, 16) }).allowed) fail('evidence_unavailable');
     const sourceAccess = memoryReadEligible(row) ? 'available' : 'unavailable-for-noncurrent-memory';
-    const sources = sourceAccess === 'available' ? receiptRows.slice(0, 16).map(receipt => receiptRefInside(ns, row, receipt)) : [];
-    const projection = qualification.inspect(row);
+    const sources = sourceAccess === 'available' ? receiptRows.slice(0, 16).map(receipt => selectedReceipts?selectedReceiptRef(ns,row,receipt):receiptRefInside(ns, row, receipt)) : [];
+    const projection = projected && row.has_qualification===0 ? null : qualification.inspect(row);
     const assessed = projection && anchoredReadSafety(db, { namespace: ns, memoryId: row.id, anchors: projection.anchors, memo }).allowed ? projection : null;
     const qualified = assessed ? { ...assessed, sourceText: 'read-separately',
       anchors: assessed.anchors.map(({ text, ...anchor }) => anchor) } : null;
@@ -208,7 +271,11 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
   return Object.freeze({
     // Internal U5 read seam: authorization and the deferred transaction belong
     // to the caller. Reuses the exact current/history canonical predicate/DTO.
-    itemsInside(ns, refs, intent, readSet, options) { const memo = createContentReadMemo(db); return refs.map(ref => item(ns, ref, intent, readSet, options, memo)); },
+    itemsInside(ns, refs, intent, readSet, options) {
+      const memo = options?.safetyMemo ?? createContentReadMemo(db);
+      if(!options?.legacyEvidence)memoryBatchInside(ns,options?.batchRefs??refs,memo);
+      return refs.map(ref => item(ns, ref, intent, readSet, options, memo));
+    },
     call(method, ns, original, accessGeneration) {
     const input = evidenceInput(method, original, ns);
     if (method === 'selectEvidence') return select(ns, input, original, accessGeneration);

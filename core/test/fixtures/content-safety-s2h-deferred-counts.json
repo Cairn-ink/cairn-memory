@@ -10,303 +10,303 @@
   "nodeDifferences": {},
   "caps": {
     "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,12,false,\"refreshContextIndex\",\"refresh\",5]": [
-      407,
-      34,
+      387,
+      32,
       0
     ],
     "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,12,false,\"findCandidates\",\"hit\",5]": [
-      373,
-      20,
+      122,
+      17,
       0
     ],
     "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,12,false,\"contextRead\",\"hit\",5]": [
-      563,
-      23,
+      194,
+      20,
       50
     ],
     "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,12,false,\"findCandidates\",\"lexical-absent\",5]": [
-      135,
-      19,
+      115,
+      17,
       0
     ],
     "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,12,false,\"contextRead\",\"lexical-absent\",5]": [
-      156,
-      22,
+      136,
+      20,
       2
     ],
     "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,24,false,\"refreshContextIndex\",\"refresh\",5]": [
-      635,
-      46,
+      615,
+      44,
       0
     ],
     "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,24,false,\"findCandidates\",\"hit\",5]": [
-      493,
-      20,
+      122,
+      17,
       0
     ],
     "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,24,false,\"contextRead\",\"hit\",5]": [
-      803,
-      23,
+      194,
+      20,
       50
     ],
     "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,24,false,\"findCandidates\",\"lexical-absent\",5]": [
-      135,
-      19,
+      115,
+      17,
       0
     ],
     "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,24,false,\"contextRead\",\"lexical-absent\",5]": [
-      156,
-      22,
+      136,
+      20,
       2
     ],
     "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,12,true,\"refreshContextIndex\",\"refresh\",5]": [
-      774,
-      76,
+      635,
+      68,
       1
     ],
     "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,12,true,\"findCandidates\",\"hit\",5]": [
-      561,
-      48,
+      290,
+      43,
       1
     ],
     "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,12,true,\"contextRead\",\"hit\",5]": [
-      751,
-      51,
+      362,
+      46,
       51
     ],
     "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,12,true,\"findCandidates\",\"lexical-absent\",5]": [
-      135,
-      19,
+      115,
+      17,
       0
     ],
     "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,12,true,\"contextRead\",\"lexical-absent\",5]": [
-      156,
-      22,
+      136,
+      20,
       2
     ],
     "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,24,true,\"refreshContextIndex\",\"refresh\",5]": [
-      1182,
-      100,
+      959,
+      92,
       1
     ],
     "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,24,true,\"findCandidates\",\"hit\",5]": [
-      573,
-      48,
+      290,
+      43,
       1
     ],
     "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,24,true,\"contextRead\",\"hit\",5]": [
-      763,
-      51,
+      362,
+      46,
       51
     ],
     "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,24,true,\"findCandidates\",\"lexical-absent\",5]": [
-      135,
-      19,
+      115,
+      17,
       0
     ],
     "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,24,true,\"contextRead\",\"lexical-absent\",5]": [
-      156,
-      22,
+      136,
+      20,
       2
     ],
     "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,12,false,\"refreshContextIndex\",\"refresh\",5]": [
-      407,
-      34,
+      387,
+      32,
       0
     ],
     "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,12,false,\"findCandidates\",\"hit\",5]": [
-      373,
-      20,
+      122,
+      17,
       0
     ],
     "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,12,false,\"contextRead\",\"hit\",5]": [
-      563,
-      23,
+      194,
+      20,
       50
     ],
     "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,12,false,\"findCandidates\",\"lexical-absent\",5]": [
-      135,
-      19,
+      115,
+      17,
       0
     ],
     "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,12,false,\"contextRead\",\"lexical-absent\",5]": [
-      156,
-      22,
+      136,
+      20,
       2
     ],
     "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,24,false,\"refreshContextIndex\",\"refresh\",5]": [
-      635,
-      46,
+      615,
+      44,
       0
     ],
     "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,24,false,\"findCandidates\",\"hit\",5]": [
-      493,
-      20,
+      122,
+      17,
       0
     ],
     "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,24,false,\"contextRead\",\"hit\",5]": [
-      803,
-      23,
+      194,
+      20,
       50
     ],
     "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,24,false,\"findCandidates\",\"lexical-absent\",5]": [
-      135,
-      19,
+      115,
+      17,
       0
     ],
     "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,24,false,\"contextRead\",\"lexical-absent\",5]": [
-      156,
-      22,
+      136,
+      20,
       2
     ],
     "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,12,true,\"refreshContextIndex\",\"refresh\",5]": [
-      774,
-      76,
+      635,
+      68,
       1
     ],
     "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,12,true,\"findCandidates\",\"hit\",5]": [
-      561,
-      48,
+      290,
+      43,
       1
     ],
     "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,12,true,\"contextRead\",\"hit\",5]": [
-      751,
-      51,
+      362,
+      46,
       51
     ],
     "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,12,true,\"findCandidates\",\"lexical-absent\",5]": [
-      135,
-      19,
+      115,
+      17,
       0
     ],
     "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,12,true,\"contextRead\",\"lexical-absent\",5]": [
-      156,
-      22,
+      136,
+      20,
       2
     ],
     "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,24,true,\"refreshContextIndex\",\"refresh\",5]": [
-      1182,
-      100,
+      959,
+      92,
       1
     ],
     "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,24,true,\"findCandidates\",\"hit\",5]": [
-      573,
-      48,
+      290,
+      43,
       1
     ],
     "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,24,true,\"contextRead\",\"hit\",5]": [
-      763,
-      51,
+      362,
+      46,
       51
     ],
     "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,24,true,\"findCandidates\",\"lexical-absent\",5]": [
-      135,
-      19,
+      115,
+      17,
       0
     ],
     "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,24,true,\"contextRead\",\"lexical-absent\",5]": [
-      156,
-      22,
+      136,
+      20,
       2
     ],
     "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,12,false,\"refreshContextIndex\",\"refresh\",5]": [
-      407,
-      34,
+      387,
+      32,
       0
     ],
     "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,12,false,\"findCandidates\",\"hit\",5]": [
-      673,
-      20,
+      121,
+      17,
       0
     ],
     "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,12,false,\"contextRead\",\"hit\",5]": [
-      995,
-      23,
+      192,
+      20,
       50
     ],
     "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,12,false,\"findCandidates\",\"lexical-absent\",5]": [
-      135,
-      19,
+      115,
+      17,
       0
     ],
     "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,12,false,\"contextRead\",\"lexical-absent\",5]": [
-      156,
-      22,
+      136,
+      20,
       2
     ],
     "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,24,false,\"refreshContextIndex\",\"refresh\",5]": [
-      635,
-      46,
+      615,
+      44,
       0
     ],
     "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,24,false,\"findCandidates\",\"hit\",5]": [
-      961,
-      20,
+      121,
+      17,
       0
     ],
     "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,24,false,\"contextRead\",\"hit\",5]": [
-      1535,
-      23,
+      192,
+      20,
       50
     ],
     "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,24,false,\"findCandidates\",\"lexical-absent\",5]": [
-      135,
-      19,
+      115,
+      17,
       0
     ],
     "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,24,false,\"contextRead\",\"lexical-absent\",5]": [
-      156,
-      22,
+      136,
+      20,
       2
     ],
     "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,12,true,\"refreshContextIndex\",\"refresh\",5]": [
-      755,
-      73,
+      616,
+      65,
       1
     ],
     "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,12,true,\"findCandidates\",\"hit\",5]": [
-      702,
-      24,
+      140,
+      20,
       0
     ],
     "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,12,true,\"contextRead\",\"hit\",5]": [
-      1024,
-      27,
+      211,
+      23,
       50
     ],
     "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,12,true,\"findCandidates\",\"lexical-absent\",5]": [
-      135,
-      19,
+      115,
+      17,
       0
     ],
     "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,12,true,\"contextRead\",\"lexical-absent\",5]": [
-      156,
-      22,
+      136,
+      20,
       2
     ],
     "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,24,true,\"refreshContextIndex\",\"refresh\",5]": [
-      1163,
-      97,
+      940,
+      89,
       1
     ],
     "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,24,true,\"findCandidates\",\"hit\",5]": [
-      990,
-      24,
+      140,
+      20,
       0
     ],
     "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,24,true,\"contextRead\",\"hit\",5]": [
-      1564,
-      27,
+      211,
+      23,
       50
     ],
     "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,24,true,\"findCandidates\",\"lexical-absent\",5]": [
-      135,
-      19,
+      115,
+      17,
       0
     ],
     "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,24,true,\"contextRead\",\"lexical-absent\",5]": [
-      156,
-      22,
+      136,
+      20,
       2
     ],
     "[\"R2 temporal/admission/review v18 1 items\",18,1,null,\"getEpisode\",\"hit\",0]": [
@@ -520,23 +520,23 @@
       0
     ],
     "[\"role modes R2: 12 items, now/refresh/compare/file and empty namespace\",33,12,null,\"readRoleTaskContext\",\"now\",5]": [
-      897,
-      24,
+      356,
+      21,
       50
     ],
     "[\"role modes R2: 12 items, now/refresh/compare/file and empty namespace\",33,12,null,\"readRoleTaskContext\",\"refresh\",5]": [
-      897,
-      24,
+      356,
+      21,
       50
     ],
     "[\"role modes R2: 24 items, now/refresh/compare/file and empty namespace\",33,24,null,\"readRoleTaskContext\",\"now\",5]": [
-      1509,
-      24,
+      452,
+      21,
       98
     ],
     "[\"role modes R2: 24 items, now/refresh/compare/file and empty namespace\",33,24,null,\"readRoleTaskContext\",\"refresh\",5]": [
-      1509,
-      24,
+      452,
+      21,
       98
     ]
   },
@@ -1105,6 +1105,24 @@
       42,
       2,
       4
+    ]
+  },
+  "roleEmbeddedResolved": {
+    "cells": 64,
+    "measuredNodes": [
+      "22.16.0",
+      "24.22.1"
+    ],
+    "nodeDifferences": 0,
+    "legacyComparator": "same engine, fixture and method/variant",
+    "ceiling": "S <= L + 6 + E1",
+    "pairedSlope": "(S-E1)(24) - (S-E1)(12) <= L(24) - L(12), D1",
+    "begin": "safety <= legacy",
+    "originalCapsSha256": "2639aa85220ce7ac60c5007fe4131bcf9294d7b7e73555a307d7f943597d026e",
+    "measurementSha256": "1149fc2d8059890a7c03a80db8441ec6da2cd6afa9696fb110064c29b5140ae8",
+    "tests": [
+      "content-safety-s2h-context-cost.test.mjs",
+      "content-safety-s2h-role-cost.test.mjs"
     ]
   }
 }

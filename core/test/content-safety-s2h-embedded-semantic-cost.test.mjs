@@ -1,4 +1,5 @@
 import { familyCostParity } from '../testing/receipt-event-time-gates.mjs';
+import { assertRoleEmbeddedContentCost, assertRoleEmbeddedContentCostInventory } from '../testing/content-safety-s2h-deferred-cost.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
@@ -40,13 +41,14 @@ for(const base of [18,23,33])for(const n of [12,24])test(`enabled embedded seman
  }
  t.diagnostic('R3_ENABLED_COUNTS '+JSON.stringify(cells));
  if(assertCostGateCells(cells))return;
- const [legacy,zero,five]=cells;
+ const [legacy,zero,five]=cells,observed=new Set();
  for(const cell of [zero,five])for(const [i,row]of cell.records.entries()){
   const old=legacy.records[i];assert.equal(row.begin,old.begin,row.method+' '+row.variant);assert.equal(row.ports,old.ports);
-  assert.equal(row.statements-old.statements-row.ports,cell.facts?6:4,row.method+' '+row.variant+' fixed budget');
+  assertRoleEmbeddedContentCost(row,{testName:t.name,base,n,facts:cell.facts},old,observed);
   const epochs=row.trace.filter(r=>/^SELECT epoch_hi,epoch_lo FROM owner_suppression_epochs/.test(r.sql));
   assert.equal(epochs.length,row.ports+2,'entry/delivery plus one E1 per actual host counter or embedder invocation');assert.ok(epochs.slice(1,-1).every(r=>!r.transaction));
  }
+ assertRoleEmbeddedContentCostInventory(observed,t.name);
 });
 
 

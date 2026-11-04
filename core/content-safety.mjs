@@ -246,7 +246,7 @@ export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = fa
 }
 
 function canonicalContentReadSafety(db, { identity, namespace: ns, ref, method = 'retrieval', intent = 'current',
-  currentCardEligible, rawRows, expectedMemoryIdentity, receipts = [], memo, factObservation, selectedMemory }) {
+  currentCardEligible, rawRows, expectedMemoryIdentity, receipts = [], memo, factObservation, selectedMemory, selectedReceipts }) {
   db = memo?.db ?? db;
   if (!ref || !sameNamespace(ns, ref.namespace)) return denied('ineligible');
   const type = ref.type;
@@ -263,8 +263,11 @@ function canonicalContentReadSafety(db, { identity, namespace: ns, ref, method =
   if (ref.revision !== row.revision || type === 'card' && ref.bodyRevision !== row.body_revision)
     return denied(type === 'memory' ? memorySuppression(db, ns, row, ref.revision) ?? 'identity_mismatch' : 'identity_mismatch');
   if (type === 'memory' && expectedMemoryIdentity && memoryContentIdentity(row) !== expectedMemoryIdentity) return denied('identity_mismatch');
-  const receiptRows = receipts.length ? new Map(db.prepare(`SELECT * FROM receipts WHERE memory_id=?
-    AND id IN (${receipts.map(() => '?').join(',')})`).all(row.id, ...receipts.map(receipt => receipt.id)).map(receipt => [receipt.id, receipt])) : new Map();
+  // Only an existing canonical batch SELECT in this synchronous snapshot may
+  // supply receipt rows, just as selectedMemory supplies its parent row.
+  const receiptRows = receipts.length ? new Map((selectedMemory && memo && db.isTransaction && selectedReceipts ?
+    selectedReceipts.filter(receipt=>receipt.memory_id===row.id) : db.prepare(`SELECT * FROM receipts WHERE memory_id=?
+    AND id IN (${receipts.map(() => '?').join(',')})`).all(row.id, ...receipts.map(receipt => receipt.id))).map(receipt => [receipt.id, receipt])) : new Map();
   for (const receipt of receipts) {
     const current = receiptRows.get(receipt.id);
     if (!current) return denied('missing');

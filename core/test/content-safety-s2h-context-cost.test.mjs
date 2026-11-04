@@ -1,5 +1,5 @@
 import { familyCostParity } from '../testing/receipt-event-time-gates.mjs';
-import { assertDeferredContentCost, assertDeferredContentCostInventory } from '../testing/content-safety-s2h-deferred-cost.mjs';
+import { assertRoleEmbeddedContentCost, assertRoleEmbeddedContentCostInventory } from '../testing/content-safety-s2h-deferred-cost.mjs';
 import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -34,13 +34,15 @@ for(const base of [18,23,33])for(const n of [12,24])test(`R2 embedded lexical v$
  }
  t.diagnostic('R3_EMBEDDED_LEXICAL_COUNTS '+JSON.stringify(records));
  if(assertCostGateCells(records))return;
- const [legacy,zero,five]=records;
- for(const current of [zero,five])for(const [i,row]of current.records.entries()) {const old=legacy.records[i];assert.equal(row.ports,old.ports);assert.equal(row.begin,old.begin,row.method);assert.equal(row.statements-old.statements-row.ports,current.facts?6:4,row.method+' '+row.variant);}
+ const [legacy,zero,five]=records,observed=new Set();
+ for(const current of [zero,five])for(const [i,row]of current.records.entries()) {const old=legacy.records[i];assert.equal(row.ports,old.ports);assert.equal(row.begin,old.begin,row.method);assertRoleEmbeddedContentCost(row,{testName:t.name,base,n,facts:current.facts},old,observed);}
+ assertRoleEmbeddedContentCostInventory(observed,t.name);
 });
 
 const probe=fileURLToPath(new URL('../testing/content-safety-s2h-path-cost-probe.mjs',import.meta.url));
 for(const [v,base]of [[34,18],[38,23],[48,33]])test(`R2 product fetchCandidateEvidence v${v}: exact refs/snapshot/cell inventory`,t=>{
  if(unmigratedCostOnly)return;
+ const pairs=[];
  for(const n of [24,48])for(const limit of [1,12]){
   const records=[];
   for(const [physical,facts]of [[base,0],[v,0],[v,5]]) {
@@ -56,9 +58,12 @@ for(const [v,base]of [[34,18],[38,23],[48,33]])test(`R2 product fetchCandidateEv
  const [legacy,zero,five]=records;
   for(const current of [zero,five])for(const [i,row]of current.rows.entries()){
    const old=legacy.rows[i],begins=r=>r.sqlSummary.filter(s=>/^BEGIN/.test(s.sql)).reduce((n,s)=>n+s.exec,0);
-   assert.equal(row.totalExecuted-old.totalExecuted,current.facts?6:4);assert.equal(begins(row),begins(old));assert.equal(row.counterCalls,0);
+   pairs.push([{method:row.method,variant:row.label,statements:row.totalExecuted,begin:begins(row),ports:row.counterCalls},
+     {testName:t.name+' limit='+limit,base,n,facts:current.facts},
+     {statements:old.totalExecuted,begin:begins(old),ports:old.counterCalls}]);
   }
  }
+ for(const pair of pairs)assertRoleEmbeddedContentCost(...pair);
 });
 
 for(const [v,base]of [[34,18],[38,23],[48,33]])test(`R2 product lexical maintenance v${v}: real cold/repeat refresh at two corpus sizes`,t=>{
@@ -108,6 +113,11 @@ for(const base of [18,23,33])for(const semantic of [false,true])test(`embedded s
    for(const [method,variant,input]of tasks){const row=await measureContentRead(method,variant,()=>core[method](input,{}),()=>ports);
     if(facts&&method==='refreshContextIndex'){assert.equal(row.result.ok,false);assert.equal(row.result.error.code,'index_unavailable');assert.equal(row.result.error.details,undefined,'no population from a maintenance refusal');}
     else{assert.equal(row.result.ok,true,JSON.stringify(row.result));if(variant==='lexical-absent')assert.deepEqual(method==='contextRead'?row.result.value.metered.items:row.result.value.items,[]);}
+    if(base===33&&safety&&facts&&semantic&&variant==='hit') {
+      const channels=method==='contextRead'?row.result.value.diagnostics.candidates.channels:row.result.value.channels;
+      assert.equal(channels.semantic.state,'partial_coverage','preserve conservative Raw-capable same-scope readiness');
+      assert.equal(row.ports,method==='contextRead'?50:0,'no additional provider dispatch on v48');
+    }
     records.push({...row,result:undefined});
    }
    assertCostGateCases('embedded-same-scope',records);cells.push({base,n,semantic,safety,facts,records});
@@ -116,12 +126,12 @@ for(const base of [18,23,33])for(const semantic of [false,true])test(`embedded s
  }
  if(unmigratedCostOnly)return;
  const problems=[],ratchets=new Set();
- for(const cells of sizes){const [legacy,zero]=cells;for(const [i,row]of zero.records.entries()){
-  const old=legacy.records[i];if(row.begin!==old.begin||row.statements-old.statements-row.ports!==4)problems.push({n:cells[0].n,method:row.method,variant:row.variant,legacy:[old.statements,old.begin],zero:[row.statements,row.begin],ports:row.ports});
- }}
- for(const cells of sizes)for(const row of cells[2].records)
-  assertDeferredContentCost(row,{testName:t.name,base,n:cells[0].n,semantic,facts:5},ratchets);
- assertDeferredContentCostInventory(ratchets,t.name);
+ // Fail-before on a6ec0e0e: every five-fact cell exceeds its ceiling;
+ // each decision is a subtest so all 60 cells execute even on that baseline.
+ for(const cells of sizes)for(const current of cells.slice(1))for(const [i,row]of current.records.entries())
+  await t.test(`n${cells[0].n} facts=${current.facts} ${row.method}:${row.variant}`,()=>
+   assertRoleEmbeddedContentCost(row,{testName:t.name,base,n:cells[0].n,semantic,facts:current.facts},cells[0].records[i],ratchets));
+ assertRoleEmbeddedContentCostInventory(ratchets,t.name);
  for(const [i,small]of sizes[0][2].records.entries()){
   const large=sizes[1][2].records[i];
 

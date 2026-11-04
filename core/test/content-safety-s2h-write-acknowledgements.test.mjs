@@ -243,6 +243,10 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // occurrence, canonical identity or writer acknowledgement field.
   // The terminal writer and acknowledgement field guard are unchanged.
   // These changes retain the native guard's fail-closed walker.
+  // B2b: batchRefs lists and canonical Memory/receipt JSON fields are
+  // private read projections inside existing snapshots. The receipt source
+  // ref uses the existing typed source union and binding. No writer or
+  // acknowledgement field is added; the native fail-closed walker is unchanged.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};
