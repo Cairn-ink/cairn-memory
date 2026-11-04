@@ -1106,10 +1106,18 @@ The same residual applies if species lookup throws before handlers attach.
 [ECMAScript `then`](https://tc39.es/ecma262/2025/multipage/control-abstraction-objects.html#sec-promise.prototype.then)
 steps 3–5 perform species lookup before handler attachment;
 [`SpeciesConstructor`](https://tc39.es/ecma262/2025/multipage/abstract-operations.html#sec-speciesconstructor)
-steps 1 and 4 read constructor and species. `Promise.resolve` and `await` both
-use `PromiseResolve`, whose step 1.a reads a native Promise's constructor;
+steps 1 and 4 read constructor and species. `Promise.resolve` and
+[`await`](https://tc39.es/ecma262/2025/multipage/control-abstraction-objects.html#await)
+(step 2) both use
+[`PromiseResolve`](https://tc39.es/ecma262/2025/multipage/control-abstraction-objects.html#sec-promise-resolve),
+whose step 1.a reads a native Promise's constructor;
 combinators call the resolver and then invoke `then`. These provide no general
 way to attach a rejection handler without constructor or `then` lookups.
+Resolving a fresh wrapper with that value instead reads its `then` property
+([Promise Resolve Functions](https://tc39.es/ecma262/2025/multipage/control-abstraction-objects.html#sec-promise-resolve-functions),
+step 9); it does not bypass these lookups. A frozen
+Promise can also prevent replacing its constructor. `PerformPromiseThen` is
+an internal abstract operation, not an ordinary JavaScript API.
 
 Poison is held in the JavaScript realm that loaded the engine (the main thread
 or one Worker), like the reader supervisor's quarantine and the open-only
@@ -1123,6 +1131,9 @@ poison. There is no eviction, TTL, renewal or reset API. Restarting that realm,
 or the process, clears poison. A host that sees `turnPhase:'poisoned'` should
 restart the process. "Process memory" in the open-only package's Amendment v2
 means this same realm scope.
+A host must not hand an owner's sidecar to another realm while the first
+realm's claim or fences are still live. It may hand it over only after the
+original cleanup has completed, or by restarting.
 Cross-process exclusion remains host-owned; a grant does not replace its
 existing physical gate or change collision refusals.
 
