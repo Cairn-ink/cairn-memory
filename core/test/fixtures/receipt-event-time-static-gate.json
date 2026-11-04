@@ -42,6 +42,13 @@
     "sha256": "af44724a754e4f163bf83e7d2e79fed0672774672022a0be0b16d7a47de9aef7"
   },
   {
+    "file": "core/runtime.mjs",
+    "start": "    captureSnapshot(ns,",
+    "end": "    claimCapturedAdmission(",
+    "purpose": "ordinary capture validates times and drops them before replay hashing on old layouts",
+    "sha256": "a6c842913fba5e4d1b433d85f07b13c639a8b575f20fd389b40f84525743278d"
+  },
+  {
     "file": "core/context-product-schema.mjs",
     "start": "    if (JSON.stringify(actualColumns)",
     "end": "    const actualIndexes",

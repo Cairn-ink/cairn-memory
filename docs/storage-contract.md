@@ -561,10 +561,10 @@ event time, or when a pre-existing value is not a strict receipt time, the
 receipt time is null. Callers read the `receiptEventTime` capability, a boolean
 describing only the installed layout's column support.
 
-Episode `core.capture` uses each source message's existing `messages[].occurredAt`.
+Ordinary and episode `core.capture` use each source message's `messages[].occurredAt`.
 New optional input fields are `receipt.occurredAt` on `remember` and correction,
 or each receipt's `occurredAt` on contract `admit`, `supersede` and admission
-finish items. Null or absence means no time. Only the receipt derived from that
+finish items. Null or absence means no time for these receipt fields. Only the receipt derived from that
 message receives its asserted time; no session range, neighboring message or
 episode supplies a fallback. Raw-derived
 receipts always receive null, independently of Raw timestamps and capture order.
@@ -575,8 +575,9 @@ checks the upper bound of the store clock plus five minutes using the exact
 instant persisted as `created_at`. New receipt fields use strict validation and
 invalid values produce `invalid_input` on every layout. Episode capture retains
 its pre-existing shape validation and replay digest; accepted future values
-succeed with null receipt time. Ordinary capture still rejects `occurredAt` as
-an unknown field, including null, exactly as before.
+succeed with null receipt time. Ordinary capture accepts strict-valid message
+times on every layout and rejects all other supplied values, including null,
+with `invalid_input`. It checks the store clock before any claim or model call.
 Raw input validation retains its independent existing rules.
 
 The time travels beside the receipt identity, outside receipt hashing, Raw
@@ -586,7 +587,10 @@ a retained null stays null when a time arrives, and a retained time stays when
 an untimed duplicate arrives. The immutable column is deleted with its receipt
 by correction, forget or host erasure; it has no separate lifecycle.
 
-Capture digests retain their pre-existing bytes on every layout. Episode
+Untimed ordinary capture digests retain their pre-existing bytes. On event-time
+layouts, ordinary digests include per-message times only when any are present;
+on old layouts valid times are dropped before hashing or staging, so results,
+receipts, keys and database bytes match the untimed write on main. Episode
 capture already binds source times, including accepted future times, and a
 changed episode time under the same event ID produces `event_payload_conflict`.
 Admission claim is unchanged and carries no receipts:

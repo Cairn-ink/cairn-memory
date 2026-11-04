@@ -21,8 +21,8 @@ test('receipt event-time validation: exact UTC milliseconds, no lower bound and 
     assert.throws(() => receiptEventTime(value), { code: 'invalid_input' });
     assert.throws(() => captureSnapshot({ ...input, messages: [{ ...source, occurredAt: value }] }), { code: 'invalid_input' });
   }
-  // Ordinary capture has always rejected this unknown field, even null.
-  for (const occurredAt of [time, null, 'garbage'])
+  // Ordinary capture adds strict times; explicit null remains invalid.
+  for (const occurredAt of [null, undefined, 'garbage'])
     assert.throws(() => captureSnapshot({ ...input, messages: [{ ...source, occurredAt }] }), { code: 'invalid_input' });
 });
 
@@ -39,11 +39,26 @@ test('capture digest without times is byte-identical for every existing digest m
     }
 });
 
-test('ordinary capture preserves main rejection of receipt times in every digest mode', () => {
+test('ordinary capture includes per-message times only when present in every digest mode', () => {
   for (const causal of [false, true]) for (const qualification of [undefined, 'source-bound-v2'])
-    for (const policy of [undefined, 'indexed-windows-v1', 'indexed-evidence-v1'])
-      assert.throws(() => captureSnapshot({ ...input, ...(causal ? { causal: {streamId:'stream',sequence:1} } : {}),
-        messages: [{...source,occurredAt:time}] }, qualification, policy), {code:'invalid_input'});
+    for (const policy of [undefined, 'indexed-windows-v1', 'indexed-evidence-v1']) {
+      const request = { ...input, ...(causal ? { causal: {streamId:'stream',sequence:1} } : {}) };
+      const timed = { ...request, messages: [{...source,occurredAt:time}, {...source,id:'untimed'}] };
+      const untimed = { ...request, messages: timed.messages.map(({occurredAt,...message}) => message) };
+      const snapshot = captureSnapshot(timed, qualification, policy);
+      const tag = policy === 'indexed-evidence-v1' ? 'cairn.capture.indexed-evidence.v1' :
+        policy ? 'cairn.capture.indexed-windows.v1' : qualification ? 'cairn.capture.v3' : causal ? 'cairn.capture.v2' : 'cairn.capture.v1';
+      assert.equal(snapshot.payloadDigest, digest([tag, ['synthetic','personal',null], 'synthetic','capture','session',
+        [['message','user',source.content,time],['untimed','user',source.content,null]],
+        ...(causal ? [['stream',1]] : []), ...(qualification ? [qualification] : []),
+        ...(policy ? [policy,'nonoverlap-800-v1'] : [])]));
+      assert.equal(snapshot.messages[0].occurredAt, time);
+      assert.equal(snapshot.messages[1].occurredAt, undefined);
+      const plain = captureSnapshot(untimed, qualification, policy);
+      assert.notEqual(snapshot.payloadDigest, plain.payloadDigest);
+      assert.deepEqual(captureSnapshot(timed, qualification, policy, false), plain);
+      assert.notEqual(captureSnapshot({...timed,messages:[{...source,occurredAt:'1901-02-03T04:05:06.789Z'},timed.messages[1]]}, qualification, policy).payloadDigest, snapshot.payloadDigest);
+    }
 });
 
 test('legacy memory parser strips time into a side parameter; episode parsing retains its established rules', () => {

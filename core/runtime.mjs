@@ -1,3 +1,4 @@
+import { captureSnapshot } from './capture-input.mjs';
 import { registerContentWriteBoundary } from './content-write-context.mjs';
 import { contentScopeEpochGuard, assertContentOutput, contentReceiptCount, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
 import { receiptEventTimeEnabled, cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
@@ -874,6 +875,12 @@ export function createMemoryRuntime(input, internal) {
     claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },
     filterCaptureSources(ns, sources) { ready(); return transaction(db, () => rawLineage.filter(ns, sources)); },
     assertCaptureSources(ns, sources) { ready(); return transaction(db, () => rawLineage.assertReceipts(ns, sources)); },
+    captureSnapshot(ns, input, qualification, policy) {
+      ready();
+      // Old layouts validate new times, then omit them before hashing or staging.
+      return captureSnapshot(input, qualification, policy,
+        receiptEventTimeEnabled(cachedContentLayout(db)), new Date().toISOString());
+    },
     claimCapturedAdmission(ns, input, deadline, registration, sources) {
       ready(); return admissionStorage.claimAdmission(ns, input, undefined, undefined, deadline, registration, sources);
     },

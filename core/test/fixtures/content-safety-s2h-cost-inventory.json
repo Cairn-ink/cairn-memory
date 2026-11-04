@@ -893,6 +893,7 @@
       "assertEpoch",
       "beginInitialClassification",
       "bindQualifiedClaim",
+      "captureSnapshot",
       "claimAdmission",
       "claimCaptureEvidence",
       "claimCapturedAdmission",
@@ -2520,6 +2521,10 @@
     "captureRaw": {
       "kind": "write",
       "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "captureSnapshot": {
+      "kind": "capture-protocol",
+      "reason": "Normalizes caller-supplied ordinary capture times against the store clock and installed layout before hashing. Serves no retained content; the focused event-time capture and old-layout byte-identity tests cover this new input path."
     },
     "checkMethodReasonRefs": {
       "kind": "read",

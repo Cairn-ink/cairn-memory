@@ -70,7 +70,7 @@ async function run(base, variant, action) {
     resultHash:hash(JSON.stringify(result)),receiptHash:hash(JSON.stringify(receipts)),
     receiptTimes:receipts.map(row=>row.occurred_at??null),databaseHash:child.stdout};
 }
-const result = {base:'a6ec0e0e',clock:'2026-11-04T00:00:00.000Z',matrix:{},writes:{},newFields:{}};
+const result = {base:'a6ec0e0e',clock:'2026-11-04T00:00:00.000Z',matrix:{},writes:{},newFields:{},captures:{},timedCaptures:{}};
 for (const [variant,config] of Object.entries(variants)) {
   result.matrix[variant] = {};
   for (const [name,occurredAt] of Object.entries(values)) result.matrix[variant][name] = await run(18,config,core => core.capture({
@@ -79,6 +79,17 @@ for (const [variant,config] of Object.entries(variants)) {
     ...(variant==='episode'?{episodeContext:{clientLabel:'Synthetic',generation:'initial',origin:'ordinary'}}:{}),
     messages:[{id:'message',role:'user',content:memory.content,occurredAt}],
   }));
+}
+// Ordinary timed captures are a new use. Freeze main's untimed equivalent on
+// every old family, including the durable replay digest and complete DB bytes.
+for (const base of [18,23,33]) for (const [variant,config] of Object.entries(variants)) {
+  if (variant === 'episode') continue;
+  const capture = occurredAt => core => core.capture({namespace:ns,client:'synthetic',eventId:'event',sessionId:'session',
+    ...(variant === 'ordered' ? {causal:{streamId:'stream',sequence:1}} : {}),
+    messages:[{id:'message',role:'user',content:memory.content,...(occurredAt === undefined ? {} : {occurredAt})}]});
+  result.captures[base+':'+variant] = await run(base,config,capture());
+  // Main rejects these; candidate old layouts must match the untimed reference.
+  for (const name of ['valid','pre1970']) result.timedCaptures[base+':'+variant+':'+name] = await run(base,config,capture(values[name]));
 }
 // New fields are compared with main's corresponding untimed writes. Main's
 // exact unknown-field outcomes are recorded separately, without relaxing them.

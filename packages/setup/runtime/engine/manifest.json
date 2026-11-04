@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "643114bea51a5e0d592b858eb9eb1b7e6887f457a7035dfb42cac6475983aff4",
-  "bytes": 1106320,
+  "sha256": "4925ddc1b042f0dcaa14568100da14d842d36179094d187acca0fc30a95c5cfd",
+  "bytes": 1106641,
   "files": [
     "LICENSE",
     "README.md",
@@ -364,7 +364,7 @@
     "plugins/cairn-memory/lib/transcript.mjs"
   ],
   "sourceHashes": {
-    "core/content-write-context.mjs": "b693360e1e770c6e2b8c153f9865fbc6cdec4d897053361314184d9f0f06e831",
+    "core/content-write-context.mjs": "4ed7ed25ebfd6e2a4783cd4918aadd3a8d2d4b4a5b568a5385a042a6af420273",
     "core/content-write-changes.mjs": "876f6fa7bc67c69031ef8ccc645eab9b321713803b77f9203ac30ca783e88caa",
     "core/content-write-safety.mjs": "2bf3f6f858f139d48b6c1c4655c163f6c87c3d3b8214528c9f8fadb3b62bf1da",
     "core/admission-storage.mjs": "12b94a58492f5eaf37995e4e2c3ebc2a0ad1618f37ab24f665a879e9686209b7",
@@ -415,8 +415,8 @@
     "core/staged-evidence-storage.mjs": "fce0ae2a700a8447e2fb2cffa15870a0203bfbd6a3121287c779a146f8549b8d",
     "core/automatic-qualification.mjs": "3ed18350615d7215e499a07e2896dd3feeea6f6b80a0e0bb3491031ae087d192",
     "core/automatic-rationale.mjs": "a77e226392454e8e4caf5f23a04914a9d08f8299fcea76da9a79b47ed3cb4653",
-    "core/capture-input.mjs": "01a68882cde2d6d144448823b048dd39ad5a75b6ace1ee82617a3eddaadcf45d",
-    "core/capture.mjs": "28be0425a738afd3b50727c49456f7b535a64cac4ea02313e3100ec84e1bef5c",
+    "core/capture-input.mjs": "3e739435ac944c358906024ebcd7b589664b02a1542ec0f5c289e7ce291bb382",
+    "core/capture.mjs": "5ef2ed3ebfb33274accb582bc8bdf957895d95808cc2b117a1a082c725487c39",
     "core/source-windows.mjs": "18c445917963f2db7fde0f4e529f8764323658d10490113dee6cdd6ba15c4b39",
     "core/capture-deadline.mjs": "bfbe34a71708c1e7de3833b03cdee4dc2d4f6015bf0f9177c2dcbdbb5a7d7ca1",
     "core/claim-qualification-input.mjs": "19ca597b0648b92544b33542bbd35a190478ad03362ef970fe877e2cedfafbfc",
@@ -497,7 +497,7 @@
     "core/prompts/relate-rationale.md": "b00cc2511e7e01d6507f9d13abf6115b315cca8208866a5e15721b6bee212615",
     "core/prompts/relate-claim-focus.md": "17ba366ce9d34f9cef84ad4fea20ba86a9399ff9a34afcd7b4e900cefca332ec",
     "core/recall.mjs": "b4a815a8a462dfe8523580f9ae2bcd9c8ef7837d160dfee885beae4991192bb6",
-    "core/runtime.mjs": "f036758725f8796d9337b655ea8226fdaa03a9e1fbc468690b90a40b517ee091",
+    "core/runtime.mjs": "05ef102f7ace818acb1b59a40a1e3ee045a179e1eef015f470b13ebf456e1144",
     "core/supersession-storage.mjs": "b13c88bc377cdb9759481214ab3eefd07aec39d15139978e6c4f09871e41b20d",
     "core/validation.mjs": "305ced7b94efa69da65945c4d6bb45a174b91b1b0f9919ce7a8f765cfe55698d",
     "core/prompts/classify-placement.md": "0d0442e1132bb8b4440dbd5c652cee841f828ef1775b6a5289aad69b6babba8a",

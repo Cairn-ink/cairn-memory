@@ -186,7 +186,8 @@ Times are optional: values the pre-existing contract accepts are never rejected.
 On layouts without receipt event time, or when a pre-existing value is not a
 strict receipt time, the receipt time is null; callers read the `receiptEventTime`
 capability. New receipt fields retain strict `invalid_input` validation on every
-layout. Ordinary capture retains its unknown-field rejection; episode capture
+layout. Ordinary capture accepts strict-valid message times (explicit null is
+invalid), dropping them before replay hashing on old layouts. Episode capture
 retains its existing shape validation, accepted future times and replay digest.
 
 A binary opens a family store only when every attested feature and revision is
@@ -201,7 +202,8 @@ openers share this bounded metadata check, including ordinary readers on bases
 a schema-cookie change forces full attestation again.
 
 The attested bit is held privately, never as a layout property. Only receipt
-writes, the product receipts-column check and capabilities obtain it
+writes, ordinary capture time normalization, the product receipts-column check
+and capabilities obtain it
 through `receiptEventTimeEnabled(layout)`. The static gate closes that accessor's
 import graph across production `.mjs`, `.js` and `.cjs` modules and local edges,
 rejecting namespace/dynamic imports, aliases and re-exports of the accessor.
