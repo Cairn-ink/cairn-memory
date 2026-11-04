@@ -135,6 +135,29 @@ for(const cause of ['abort','deadline'])test(`grant settled before ${cause} but 
   assert.equal(s.turns.snapshot().declinedTurns[reason],1);
 });
 
+for(const cause of ['abort','deadline'])test(`grant returned during ${cause} notification remains owned until explicit decline`,async()=>{
+  const p=pending(),calls=[],s=setup(()=>({enter({signal}){
+    signal.addEventListener('abort',()=>p.resolve('admitted'),{once:true});return p.promise;
+  },release:(...args)=>calls.push(args)}));
+  const result=s.wait();
+  if(cause==='abort'){s.set(999);s.abort.abort();}else await s.deadline();
+  const r=await result;
+  assert.equal(r.status,'admitted');assert.deepEqual(calls,[]);assert.equal(s.turns.snapshot().deferredTurns,0);
+  s.turns.release(r.ticket,'declined',cause==='abort'?'generation_changed':'renewal_expired');
+  assert.deepEqual(calls,[['declined',cause==='abort'?'generation_changed':'renewal_expired']]);
+});
+
+for(const cause of ['abort','deadline'])test(`grant settled after ${cause} notification in the same turn remains owned`,async()=>{
+  const p=pending(),calls=[],s=setup(()=>({enter:()=>p.promise,release:(...args)=>calls.push(args)}));
+  const result=s.wait();
+  if(cause==='abort'){s.set(999);s.abort.abort();}
+  else {s.set(1000);for(const {f} of [...s.timers.values()])f();}
+  p.resolve('admitted');const r=await result;
+  assert.equal(r.status,'admitted');assert.deepEqual(calls,[]);assert.equal(s.turns.snapshot().deferredTurns,0);
+  s.turns.release(r.ticket,'declined',cause==='abort'?'generation_changed':'renewal_expired');
+  assert.deepEqual(calls,[['declined',cause==='abort'?'generation_changed':'renewal_expired']]);
+});
+
 for(const property of ['constructor','species'])for(const state of ['rejected','fulfilled','handled'])
 test(`native entry Promise with throwing ${property}: ${state} leaves only the host rejection unhandled`,()=>{
   const child=promiseChild({property,state});

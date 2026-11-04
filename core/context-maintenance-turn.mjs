@@ -138,13 +138,18 @@ export function createMaintenanceTurnController(capture,{now,setTimer,clearTimer
       if(status==='failed')complete({status,error:'authority_required'});
       else complete({status,...(granted?{ticket}:{})});
     }
+    function withdraw(status){
+      // Let a native Promise reaction queued in this turn observe a raced
+      // grant before withdrawal becomes final, including after abort returns.
+      queueMicrotask(()=>queueMicrotask(()=>finish(status)));
+    }
     function cancel(){
       // Aborting a queued ticket tombstones it. If entry was already observed,
       // ownership stays with the pump; abort is never a granted-turn release.
-      cancelCause='cancelled';controller.abort();queueMicrotask(()=>finish('cancelled'));
+      cancelCause='cancelled';controller.abort();withdraw('cancelled');
     }
     signal.addEventListener('abort',cancel,{once:true});
-    timer=setTimer(()=>{cancelCause='defer';controller.abort();queueMicrotask(()=>finish('defer'));},Math.max(0,Math.ceil(untilMonoMs-now())));
+    timer=setTimer(()=>{cancelCause='defer';controller.abort();withdraw('defer');},Math.max(0,Math.ceil(untilMonoMs-now())));
     if(!unchanged(capture)){finish('failed');return result;}
     if(signal.aborted){cancel();return result;}
     if(now()>=untilMonoMs){controller.abort();finish('defer');return result;}
@@ -155,13 +160,13 @@ export function createMaintenanceTurnController(capture,{now,setTimer,clearTimer
       // Only a completed withdrawal (the done guard above) makes it late.
       if(value==='admitted'){finish('admitted');return;}
       if(now()>=untilMonoMs){controller.abort();finish('defer');return;}
-      if(value!=='admitted'&&cancelCause){finish(cancelCause);return;}
-      finish(value==='admitted'||value==='defer'?value:'failed');
+      if(cancelCause){finish(cancelCause);return;}
+      finish(value==='defer'?'defer':'failed');
     }
     try{
       const value=Reflect.apply(methods.enter,receiver,[Object.freeze({signal:controller.signal,untilMonoMs})]);
       // Captured then bypasses a hostile then getter, but not constructor or
-      // species. If either throws, catch below without retrying adoption or
+      // species. If either lookup throws, catch below without retrying adoption or
       // inspecting value again: no derived Promise was created by then, and
       // the host's original rejection may remain unhandled. Await/resolve and
       // combinators still require constructor or then lookups.

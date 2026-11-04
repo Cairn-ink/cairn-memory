@@ -157,16 +157,19 @@ test(`grant recheck declines ${cause} before reserving or dispatching`,async t=>
 });
 
 for(const cause of ['deadline','close','supervisor','renewal'])
-test(`grant racing ${cause} at the deadline is locally declined without withdrawal or deferral`,async t=>{
+for(const cutoff of (cause==='deadline'?[true]:[true,false]))
+for(const grantFirst of (cause==='deadline'?[true]:[true,false]))
+test(`grant racing ${cause} ${cutoff?'at':'before'} the deadline, resolved ${grantFirst?'before':'after'} cancellation, is locally declined without withdrawal or deferral`,async t=>{
   const s=model(t,{renewalMs:5000,endsAtMonoMs:5000}),queued=deferred();s.entry=()=>queued.promise;
   const p=s.create(),pending=s.fire();await flush();const ticket=s.tickets[0];let closing;
-  s.set(ticket.until-1);queued.resolve('admitted');
+  s.set(ticket.until-1);if(grantFirst)queued.resolve('admitted');
   // Deliver the abort/cutoff before the already-queued native Promise reaction.
-  s.set(ticket.until+1);
+  s.set(cutoff?ticket.until+1:ticket.until-1);
   if(cause==='close')closing=p.close();
   else if(cause==='supervisor')closing=s.supervisor.close();
   else if(cause==='renewal')s.renew(s.config);
   else await s.due(s.now());
+  if(!grantFirst)queued.resolve('admitted');
   await pending;await closing;
   const reason=cause==='deadline'?'renewal_expired':cause==='renewal'?'generation_changed':'stopped';
   assert.deepEqual(ticket.releases,[['declined',reason]]);
@@ -249,6 +252,15 @@ test('a release throw cannot be bypassed by omitting the port on a successor pum
   const count=s.events.filter(e=>e.kind==='open').length,next=s.create({id:randomUUID(),preQuantum:undefined});await s.next();
   assert.equal(next.getStatus().error,'reader_failed');assert.equal(s.diagnostic().turnPhase,'poisoned');
   assert.equal(s.events.filter(e=>e.kind==='open').length,count);assert.equal(s.tickets.length,1);
+});
+
+test('realm poison survives reopening and accepted renewal with the same pump ID',async t=>{
+  const s=model(t),p=s.create();s.release=()=>{throw Error('release failed');};
+  await s.next();await p.close();const count=s.tickets.length;
+  const next=s.create();assert.notEqual(next,p);assert.equal(s.renew(s.config),next);
+  await s.next();
+  assert.equal(next.getStatus().error,'reader_failed');assert.equal(s.diagnostic().turnPhase,'poisoned');
+  assert.equal(s.tickets.length,count,'renewal cannot allocate a successor ticket for the poisoned claim');
 });
 
 for(const mode of ['factory-throw','ticket','enter-throw','reject','thenable','outcome','port-change','release-throw'])
