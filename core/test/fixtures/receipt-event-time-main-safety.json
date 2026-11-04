@@ -1,0 +1,915 @@
+{
+  "base": "a6ec0e0e",
+  "clock": "2026-11-04T00:00:00.000Z",
+  "matrix": {
+    "ordinary": {
+      "valid": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "noMilliseconds": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "offset": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "dateOnly": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "garbage": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "number": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "future": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "pre1970": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "empty": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "null": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      }
+    },
+    "qualified": {
+      "valid": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "noMilliseconds": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "offset": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "dateOnly": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "garbage": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "number": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "future": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "pre1970": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "empty": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "null": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      }
+    },
+    "indexed": {
+      "valid": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "noMilliseconds": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "offset": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "dateOnly": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "garbage": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "number": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "future": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "pre1970": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "empty": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "null": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      }
+    },
+    "staged": {
+      "valid": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "noMilliseconds": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "offset": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "dateOnly": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "garbage": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "number": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "future": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "pre1970": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "empty": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "null": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      }
+    },
+    "indexedEvidence": {
+      "valid": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "noMilliseconds": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "offset": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "dateOnly": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "garbage": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "number": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "future": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "pre1970": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "empty": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "null": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      }
+    },
+    "ordered": {
+      "valid": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "noMilliseconds": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "offset": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "dateOnly": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "garbage": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "number": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "future": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "pre1970": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "empty": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "null": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      }
+    },
+    "episode": {
+      "valid": {
+        "ok": true,
+        "resultHash": "7c49ce2e90371f777a35a96ec37f984b9f7a4326342a64c8dc8b519f806b0950",
+        "receiptHash": "7e3ea6440a927cd1b586e89b9cf48f5cc3b5c2d1553d7eb8f254eecb33ee8670",
+        "receiptTimes": [
+          null
+        ],
+        "databaseHash": "e968e67bc7b648da88222dbdfaf49be1f5baa50b15da7d9c9865fc844205f8f0"
+      },
+      "noMilliseconds": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "offset": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "dateOnly": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "garbage": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "number": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "future": {
+        "ok": true,
+        "resultHash": "7c49ce2e90371f777a35a96ec37f984b9f7a4326342a64c8dc8b519f806b0950",
+        "receiptHash": "7e3ea6440a927cd1b586e89b9cf48f5cc3b5c2d1553d7eb8f254eecb33ee8670",
+        "receiptTimes": [
+          null
+        ],
+        "databaseHash": "6c9592b1ad8b20512d3e1f6984c9850bb92e9fd390d9462730a530e590e77ab3"
+      },
+      "pre1970": {
+        "ok": true,
+        "resultHash": "7c49ce2e90371f777a35a96ec37f984b9f7a4326342a64c8dc8b519f806b0950",
+        "receiptHash": "7e3ea6440a927cd1b586e89b9cf48f5cc3b5c2d1553d7eb8f254eecb33ee8670",
+        "receiptTimes": [
+          null
+        ],
+        "databaseHash": "632e6ea679e9f69a1d0194c76dce9267a20a46b5d35ec76d0531e604b32851c1"
+      },
+      "empty": {
+        "ok": false,
+        "code": "invalid_input",
+        "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+        "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "receiptTimes": [],
+        "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+      },
+      "null": {
+        "ok": true,
+        "resultHash": "7c49ce2e90371f777a35a96ec37f984b9f7a4326342a64c8dc8b519f806b0950",
+        "receiptHash": "7e3ea6440a927cd1b586e89b9cf48f5cc3b5c2d1553d7eb8f254eecb33ee8670",
+        "receiptTimes": [
+          null
+        ],
+        "databaseHash": "5bb1e42a518f63979374b2894ae560bfbe58f0a7cc86d32ff4d1269abe4f2c3c"
+      }
+    }
+  },
+  "writes": {
+    "18:remember": {
+      "ok": true,
+      "resultHash": "8b09891ddb09e32de4c41d59d586a7135814fb60acdb565cabd7713ebc1e7185",
+      "receiptHash": "53ba30a0b609094e1ee5b2c968e751714bc7abc51c154db4a40f44bad442e1a4",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "a336c06d1fd7058c14f17268661828e000edc36c6017f6b48a5aa0bda78ec883"
+    },
+    "18:legacyCorrect": {
+      "ok": true,
+      "resultHash": "cd01c19c8e2e768299f688f9f147c214e2a56c4f01b88ce1b04aa87e6dae0460",
+      "receiptHash": "c18e169d455f086e29c7dc233f4c3ff68add51127df25eda9b5a244fd567e787",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "ca7657cc3438867330d645034eaac31559dff7b0c040c7bac2f9f4578f35d7cf"
+    },
+    "18:admit": {
+      "ok": true,
+      "resultHash": "aa9e5599034b0bd276eaf76e49c0f7926c6b4100c57faaf062bfc4c4d9780768",
+      "receiptHash": "53ba30a0b609094e1ee5b2c968e751714bc7abc51c154db4a40f44bad442e1a4",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "a336c06d1fd7058c14f17268661828e000edc36c6017f6b48a5aa0bda78ec883"
+    },
+    "18:correct": {
+      "ok": true,
+      "resultHash": "6bbee16968f5d46613ed35b2e95530e33164d170e6f19b34f4b7688aee41db5e",
+      "receiptHash": "c18e169d455f086e29c7dc233f4c3ff68add51127df25eda9b5a244fd567e787",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "ca7657cc3438867330d645034eaac31559dff7b0c040c7bac2f9f4578f35d7cf"
+    },
+    "18:supersede": {
+      "ok": true,
+      "resultHash": "d69f13ce76aa0ca760d8cde767cebc812afc3f4bb4698696158895afa6042c8e",
+      "receiptHash": "3babff9e46c21e8ce95972e65b612883781d4596e11ea6b22027a95aabd05944",
+      "receiptTimes": [
+        null,
+        null
+      ],
+      "databaseHash": "4076c2ba5148ded0a26ad1ea9f132339edb60602a596f2954ff4d69e20bdc6d7"
+    },
+    "18:finish": {
+      "ok": true,
+      "resultHash": "563f8eb0d79d951d2e3e8a836f0d966d6a7cf56e06b8de605dc13ef0d41b8bb6",
+      "receiptHash": "8a55abf3478163b657d9e57fc31fe4d240cac2519a364193d413a9ddbf1ff981",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "8da5403d6b8c689f6e1fc1b47e572f48a56fe0deac2271187871c2438774c521"
+    },
+    "23:remember": {
+      "ok": true,
+      "resultHash": "8b09891ddb09e32de4c41d59d586a7135814fb60acdb565cabd7713ebc1e7185",
+      "receiptHash": "53ba30a0b609094e1ee5b2c968e751714bc7abc51c154db4a40f44bad442e1a4",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "00755c728b4caf6284338d071a82ba5c147ed3bed54a92219abe6e1d6ab5ccc7"
+    },
+    "23:legacyCorrect": {
+      "ok": true,
+      "resultHash": "cd01c19c8e2e768299f688f9f147c214e2a56c4f01b88ce1b04aa87e6dae0460",
+      "receiptHash": "c18e169d455f086e29c7dc233f4c3ff68add51127df25eda9b5a244fd567e787",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "b5e57877886885753c467fbbf972dd351f3caf07f223e2f14904ca26df813a34"
+    },
+    "23:admit": {
+      "ok": true,
+      "resultHash": "aa9e5599034b0bd276eaf76e49c0f7926c6b4100c57faaf062bfc4c4d9780768",
+      "receiptHash": "53ba30a0b609094e1ee5b2c968e751714bc7abc51c154db4a40f44bad442e1a4",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "00755c728b4caf6284338d071a82ba5c147ed3bed54a92219abe6e1d6ab5ccc7"
+    },
+    "23:correct": {
+      "ok": true,
+      "resultHash": "6bbee16968f5d46613ed35b2e95530e33164d170e6f19b34f4b7688aee41db5e",
+      "receiptHash": "c18e169d455f086e29c7dc233f4c3ff68add51127df25eda9b5a244fd567e787",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "b5e57877886885753c467fbbf972dd351f3caf07f223e2f14904ca26df813a34"
+    },
+    "23:supersede": {
+      "ok": true,
+      "resultHash": "d69f13ce76aa0ca760d8cde767cebc812afc3f4bb4698696158895afa6042c8e",
+      "receiptHash": "3babff9e46c21e8ce95972e65b612883781d4596e11ea6b22027a95aabd05944",
+      "receiptTimes": [
+        null,
+        null
+      ],
+      "databaseHash": "59504a946a0e3290c9b4baa18b34a29d95b0aafb23904bbf684711843a8c54a8"
+    },
+    "23:finish": {
+      "ok": true,
+      "resultHash": "563f8eb0d79d951d2e3e8a836f0d966d6a7cf56e06b8de605dc13ef0d41b8bb6",
+      "receiptHash": "8a55abf3478163b657d9e57fc31fe4d240cac2519a364193d413a9ddbf1ff981",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "0d1d5b48c5cea5aa27ac6069da8693f9ab08e29fe04663680092a9fd8cd35d83"
+    },
+    "33:remember": {
+      "ok": true,
+      "resultHash": "8b09891ddb09e32de4c41d59d586a7135814fb60acdb565cabd7713ebc1e7185",
+      "receiptHash": "53ba30a0b609094e1ee5b2c968e751714bc7abc51c154db4a40f44bad442e1a4",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "bab98fbab4ef2a9062c72b597c69a3b4ce127eb9029c6c233d3a20320c869e47"
+    },
+    "33:legacyCorrect": {
+      "ok": true,
+      "resultHash": "cd01c19c8e2e768299f688f9f147c214e2a56c4f01b88ce1b04aa87e6dae0460",
+      "receiptHash": "c18e169d455f086e29c7dc233f4c3ff68add51127df25eda9b5a244fd567e787",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "06bfef6b3bc4ac41f293db36a110b55c36a0c7593b5aaa1c67a4c59fa0890bcd"
+    },
+    "33:admit": {
+      "ok": true,
+      "resultHash": "aa9e5599034b0bd276eaf76e49c0f7926c6b4100c57faaf062bfc4c4d9780768",
+      "receiptHash": "53ba30a0b609094e1ee5b2c968e751714bc7abc51c154db4a40f44bad442e1a4",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "bab98fbab4ef2a9062c72b597c69a3b4ce127eb9029c6c233d3a20320c869e47"
+    },
+    "33:correct": {
+      "ok": true,
+      "resultHash": "6bbee16968f5d46613ed35b2e95530e33164d170e6f19b34f4b7688aee41db5e",
+      "receiptHash": "c18e169d455f086e29c7dc233f4c3ff68add51127df25eda9b5a244fd567e787",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "06bfef6b3bc4ac41f293db36a110b55c36a0c7593b5aaa1c67a4c59fa0890bcd"
+    },
+    "33:supersede": {
+      "ok": true,
+      "resultHash": "d69f13ce76aa0ca760d8cde767cebc812afc3f4bb4698696158895afa6042c8e",
+      "receiptHash": "3babff9e46c21e8ce95972e65b612883781d4596e11ea6b22027a95aabd05944",
+      "receiptTimes": [
+        null,
+        null
+      ],
+      "databaseHash": "7a208db78c962405b5ff13b98101148bf8b3109fafd95201951823d36d5427f4"
+    },
+    "33:finish": {
+      "ok": true,
+      "resultHash": "563f8eb0d79d951d2e3e8a836f0d966d6a7cf56e06b8de605dc13ef0d41b8bb6",
+      "receiptHash": "8a55abf3478163b657d9e57fc31fe4d240cac2519a364193d413a9ddbf1ff981",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "325514ff2b0bcc3cc42c78a5c5a951a102f78a239a1da0c3290ae51964d1947a"
+    }
+  },
+  "newFields": {
+    "18:remember": {
+      "ok": false,
+      "code": "invalid_input",
+      "resultHash": "c7ececa8047cc53b96132b29a3ac2c14c5a97d89039b617b18bf09aeb96673d9",
+      "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "receiptTimes": [],
+      "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+    },
+    "18:legacyCorrect": {
+      "ok": false,
+      "code": "invalid_input",
+      "resultHash": "c7ececa8047cc53b96132b29a3ac2c14c5a97d89039b617b18bf09aeb96673d9",
+      "receiptHash": "53ba30a0b609094e1ee5b2c968e751714bc7abc51c154db4a40f44bad442e1a4",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "a336c06d1fd7058c14f17268661828e000edc36c6017f6b48a5aa0bda78ec883"
+    },
+    "18:admit": {
+      "ok": false,
+      "code": "invalid_input",
+      "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+      "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "receiptTimes": [],
+      "databaseHash": "6f1c39266f2ed4d823c58550ea08c47c7112f0916ded307ff94f625a6d80c088"
+    },
+    "18:correct": {
+      "ok": false,
+      "code": "invalid_input",
+      "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+      "receiptHash": "53ba30a0b609094e1ee5b2c968e751714bc7abc51c154db4a40f44bad442e1a4",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "a336c06d1fd7058c14f17268661828e000edc36c6017f6b48a5aa0bda78ec883"
+    },
+    "18:supersede": {
+      "ok": false,
+      "code": "invalid_input",
+      "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+      "receiptHash": "53ba30a0b609094e1ee5b2c968e751714bc7abc51c154db4a40f44bad442e1a4",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "a336c06d1fd7058c14f17268661828e000edc36c6017f6b48a5aa0bda78ec883"
+    },
+    "18:finish": {
+      "ok": false,
+      "code": "invalid_input",
+      "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+      "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "receiptTimes": [],
+      "databaseHash": "987a9930650970727e1c1d242546c8387cfb431df185558e1a88065d76892fa6"
+    },
+    "23:remember": {
+      "ok": false,
+      "code": "invalid_input",
+      "resultHash": "c7ececa8047cc53b96132b29a3ac2c14c5a97d89039b617b18bf09aeb96673d9",
+      "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "receiptTimes": [],
+      "databaseHash": "d57847e74e6ee45a8c45fff82334927514ff8d14cafa6d4f631a62179d7e1b6a"
+    },
+    "23:legacyCorrect": {
+      "ok": false,
+      "code": "invalid_input",
+      "resultHash": "c7ececa8047cc53b96132b29a3ac2c14c5a97d89039b617b18bf09aeb96673d9",
+      "receiptHash": "53ba30a0b609094e1ee5b2c968e751714bc7abc51c154db4a40f44bad442e1a4",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "00755c728b4caf6284338d071a82ba5c147ed3bed54a92219abe6e1d6ab5ccc7"
+    },
+    "23:admit": {
+      "ok": false,
+      "code": "invalid_input",
+      "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+      "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "receiptTimes": [],
+      "databaseHash": "d57847e74e6ee45a8c45fff82334927514ff8d14cafa6d4f631a62179d7e1b6a"
+    },
+    "23:correct": {
+      "ok": false,
+      "code": "invalid_input",
+      "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+      "receiptHash": "53ba30a0b609094e1ee5b2c968e751714bc7abc51c154db4a40f44bad442e1a4",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "00755c728b4caf6284338d071a82ba5c147ed3bed54a92219abe6e1d6ab5ccc7"
+    },
+    "23:supersede": {
+      "ok": false,
+      "code": "invalid_input",
+      "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+      "receiptHash": "53ba30a0b609094e1ee5b2c968e751714bc7abc51c154db4a40f44bad442e1a4",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "00755c728b4caf6284338d071a82ba5c147ed3bed54a92219abe6e1d6ab5ccc7"
+    },
+    "23:finish": {
+      "ok": false,
+      "code": "invalid_input",
+      "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+      "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "receiptTimes": [],
+      "databaseHash": "2df6558a4372a1907f50f0360159e7694eeb1ca8d42899c32cfb40c1952c1994"
+    },
+    "33:remember": {
+      "ok": false,
+      "code": "invalid_input",
+      "resultHash": "c7ececa8047cc53b96132b29a3ac2c14c5a97d89039b617b18bf09aeb96673d9",
+      "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "receiptTimes": [],
+      "databaseHash": "051da8541cb66374e4abecdc72d89cde92ca69ba2b54f7f2aa5c1d4ee65302ad"
+    },
+    "33:legacyCorrect": {
+      "ok": false,
+      "code": "invalid_input",
+      "resultHash": "c7ececa8047cc53b96132b29a3ac2c14c5a97d89039b617b18bf09aeb96673d9",
+      "receiptHash": "53ba30a0b609094e1ee5b2c968e751714bc7abc51c154db4a40f44bad442e1a4",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "bab98fbab4ef2a9062c72b597c69a3b4ce127eb9029c6c233d3a20320c869e47"
+    },
+    "33:admit": {
+      "ok": false,
+      "code": "invalid_input",
+      "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+      "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "receiptTimes": [],
+      "databaseHash": "051da8541cb66374e4abecdc72d89cde92ca69ba2b54f7f2aa5c1d4ee65302ad"
+    },
+    "33:correct": {
+      "ok": false,
+      "code": "invalid_input",
+      "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+      "receiptHash": "53ba30a0b609094e1ee5b2c968e751714bc7abc51c154db4a40f44bad442e1a4",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "bab98fbab4ef2a9062c72b597c69a3b4ce127eb9029c6c233d3a20320c869e47"
+    },
+    "33:supersede": {
+      "ok": false,
+      "code": "invalid_input",
+      "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+      "receiptHash": "53ba30a0b609094e1ee5b2c968e751714bc7abc51c154db4a40f44bad442e1a4",
+      "receiptTimes": [
+        null
+      ],
+      "databaseHash": "bab98fbab4ef2a9062c72b597c69a3b4ce127eb9029c6c233d3a20320c869e47"
+    },
+    "33:finish": {
+      "ok": false,
+      "code": "invalid_input",
+      "resultHash": "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
+      "receiptHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "receiptTimes": [],
+      "databaseHash": "1bffa20676222852292c8f2abf0b004c10ffc2a22cd2a6331ebc79d8acb722ee"
+    }
+  }
+}

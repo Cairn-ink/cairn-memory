@@ -141,7 +141,7 @@ export function createMemoryRuntime(input, internal) {
   function attach(id, receipt, now, inserted = [], origin = 'independent', occurredAt = null) {
     occurredAt = receiptEventTime(occurredAt, now);
     const eventTime = receiptEventTimeEnabled(cachedContentLayout(db));
-    if (occurredAt !== null && !eventTime) fail('unsupported_database');
+    if (!eventTime) occurredAt = null;
     const key = receiptKey(receipt);
     // Read retained dedup first: BEFORE INSERT guards must also stop REPLACE.
     const retained = db.prepare('SELECT * FROM receipts WHERE memory_id=? AND receipt_key=?').get(id, key);
@@ -247,9 +247,14 @@ export function createMemoryRuntime(input, internal) {
   }
 
   function validateReceiptTimes(value, now) {
-    for (const time of value.receiptTimes ?? []) {
-      if (receiptEventTime(time, now) !== null && !receiptEventTimeEnabled(cachedContentLayout(db))) fail('unsupported_database');
-    }
+    value.receiptTimes = (value.receiptTimes ?? []).map(time => {
+      try { return receiptEventTime(time, now); }
+      catch (error) {
+        // Episode capture already applied its pre-existing input contract.
+        if (value.optionalReceiptTimes) return null;
+        throw error;
+      }
+    });
   }
 
   // Caller owns the transaction, including admission-claim completion when used

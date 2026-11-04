@@ -68,13 +68,14 @@ test('runtime.admit validates +5 minute boundary against the exact created_at cl
 });
 
 for (const base of [18, 23, 33]) for (const safety of [false, true])
-  test(`old-layout v${base} safety=${safety}: timed write typed refusal; untimed write unchanged`, async t => {
+  test(`old-layout v${base} safety=${safety}: timed write drops time; untimed write unchanged`, async t => {
     const f = safetyFixture(t, base); if (safety) await f.migrate();
     const core = openMemoryCore({ path: f.path }), db = f.connect(); t.after(() => { core.close(); db.close(); });
     ok(admit(core)); const before = db.prepare('SELECT * FROM receipts').all();
     assert.equal(Object.hasOwn(before[0], 'occurred_at'), false);
-    error(admit(core, time), 'unsupported_database');
-    error(admit(core, time, { memory: { content: content + ' new', kind: 'fact' } }), 'unsupported_database');
+    assert.equal(ok(admit(core, time)).deduplicated, true);
+    assert.equal(ok(admit(core, time, { memory: { content: content + ' new', kind: 'fact' } })).deduplicated, false);
+    db.prepare('DELETE FROM memories WHERE content=?').run(content + ' new');
     assert.deepEqual(db.prepare('SELECT * FROM receipts').all(), before);
     assert.equal(ok(admit(core, null)).deduplicated, true);
   });
@@ -201,4 +202,28 @@ test('finish validates future times even on suppressed items using the persisted
   const next = {...key,eventId:'suppressed-finish'}, nextToken = ok(core.claimAdmission({...next,leaseMs:125000})).token;
   error(core.finishAdmission({...next,token:nextToken,items:[item('2026-01-01T00:05:00.001Z')]}),'invalid_input');
   assert.equal(db.prepare('SELECT count(*) n FROM receipts').get().n,0);
+});
+
+for (const base of [18,23,33]) for (const layout of ['old','safety','event'])
+test(`new receipt fields retain strict validation at every entry: ${base}/${layout}`, async t => {
+  const f = layout === 'event' ? await eventTimeFixture(t,base) : safetyFixture(t,base);
+  if (layout === 'safety') await f.migrate();
+  const core = openMemoryCore({path:f.path}), store = openMemoryStore({path:f.path}), db = f.connect();
+  const scope = store.scope({ownerId:ns.ownerId,projectId:ns.projectId});
+  t.after(() => {core.close();store.close();db.close();});
+  const first = ok(admit(core)).memory;
+  const legacy = scope.remember({content:'Synthetic legacy strict source',receipt:receipt('legacy-strict')});
+  const key = {namespace:ns,client:'synthetic',eventId:'strict-finish',payloadDigest:'c'.repeat(64)};
+  const token = ok(core.claimAdmission({...key,leaseMs:125000})).token;
+  const before = db.prepare('SELECT * FROM receipts ORDER BY id').all();
+  for (const occurredAt of ['garbage','2001-02-03T04:05:06Z',7,'2099-01-01T00:00:00.000Z']) {
+    const r = {...receipt('strict'),occurredAt};
+    assert.throws(() => scope.remember({content:'Synthetic invalid remember',receipt:r}),{code:'invalid_input'});
+    assert.throws(() => scope.correct(legacy.id,{content:'Synthetic invalid correction',receipt:r},legacy.revision),{code:'invalid_input'});
+    error(core.admit({namespace:ns,memory:{content:'Synthetic invalid admit',kind:'fact'},receipts:[r]}),'invalid_input');
+    error(core.correct({namespace:ns,memoryId:first.id,expectedRevision:first.revision,content:'Synthetic invalid correction',kind:'fact',receipt:r}),'invalid_input');
+    error(core.supersede({namespace:ns,memoryId:first.id,expectedRevision:first.revision,replacement:{content:'Synthetic invalid replacement',kind:'fact'},receipts:[r]}),'invalid_input');
+    error(core.finishAdmission({...key,token,items:[{content:'Synthetic invalid finish',kind:'fact',confidence:.8,receipts:[r]}]}),'invalid_input');
+    assert.deepEqual(db.prepare('SELECT * FROM receipts ORDER BY id').all(),before);
+  }
 });

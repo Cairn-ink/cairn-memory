@@ -182,6 +182,13 @@ installed features, retained safety facts, owner epochs and all existing control
 values are preserved. Ordinary open never upgrades. Versions 34/38/48 retain
 their original schema and meaning.
 
+Times are optional: values the pre-existing contract accepts are never rejected.
+On layouts without receipt event time, or when a pre-existing value is not a
+strict receipt time, the receipt time is null; callers read the `receiptEventTime`
+capability. New receipt fields retain strict `invalid_input` validation on every
+layout. Ordinary capture retains its unknown-field rejection; episode capture
+retains its existing shape validation, accepted future times and replay digest.
+
 A binary opens a family store only when every attested feature and revision is
 in its supported set and the exact DDL matches that tuple. This binary supports
 `receipt_event_time` 0 or 1, suppression revision 1 and card lineage revision 0;
@@ -194,7 +201,7 @@ openers share this bounded metadata check, including ordinary readers on bases
 a schema-cookie change forces full attestation again.
 
 The attested bit is held privately, never as a layout property. Only receipt
-writes/validation, the product receipts-column check and capabilities obtain it
+writes, the product receipts-column check and capabilities obtain it
 through `receiptEventTimeEnabled(layout)`. The static gate closes that accessor's
 import graph across production `.mjs`, `.js` and `.cjs` modules and local edges,
 rejecting namespace/dynamic imports, aliases and re-exports of the accessor.

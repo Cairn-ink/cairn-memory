@@ -579,7 +579,7 @@ export function createMemoryCore(input, internal) {
       const conflictHints = contractConflictHints(item.conflictHints);
       if (Object.hasOwn(item, 'qualification')) qualificationSources(item.content, item.receipts);
       const qualification = Object.hasOwn(item, 'qualification') ? qualificationInput(item.qualification, receipts) : undefined;
-      return { ...memory, origin: 'agent-inferred', confidence: item.confidence, receipts, receiptTimes: item.receipts.map(receipt => receiptEventTime(receipt.occurredAt)), conflictHints, qualification,
+      return { ...memory, origin: 'agent-inferred', confidence: item.confidence, receipts, receiptTimes: item.receipts.map(receipt => receiptEventTime(receipt.occurredAt)), ...(episode ? { optionalReceiptTimes: true } : {}), conflictHints, qualification,
         ...(episode && Object.hasOwn(item, 'procedural') ? { procedural: item.procedural } : {}) };
     });
   }
@@ -1034,8 +1034,7 @@ export function createMemoryCore(input, internal) {
       object(input, ['messages']);
       const episode = Boolean(sessionEpisodes);
       const messages = denseArray(input.messages, 1, 240).map((message) => {
-        object(message, ['id', 'role', 'content', 'occurredAt']);
-        receiptEventTime(message.occurredAt);
+        object(message, ['id', 'role', 'content', ...(episode ? ['occurredAt'] : [])]);
         return { id: message.id, role: message.role, content: message.content };
       });
       // Only message text enters an extraction request; identity is a placeholder.

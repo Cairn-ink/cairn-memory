@@ -555,23 +555,28 @@ The pair tables are not an append-only audit trail.
 The [layout §3 addendum](plans/context-read-b3s-safety-layout.md) records D-33's
 mapping and direct offline migration paths. Receipts on these layouts carry
 optional immutable `occurred_at TEXT NULL`; existing receipts migrate as null.
-There is no automatic upgrade or time backfill. A non-null time on an older
-layout is refused with `unsupported_database`; untimed writes retain their
-existing behavior. Context-read capabilities expose `receiptEventTime`, a
-boolean describing only the installed layout's column support.
+There is no automatic upgrade or time backfill. Times are optional: values the
+pre-existing contract accepts are never rejected. On layouts without receipt
+event time, or when a pre-existing value is not a strict receipt time, the
+receipt time is null. Callers read the `receiptEventTime` capability, a boolean
+describing only the installed layout's column support.
 
-Optional input fields are `messages[].occurredAt` on `core.capture`, and
-`receipt.occurredAt` on `remember` and correction, or each receipt's `occurredAt`
-on contract `admit`, `supersede` and admission finish items. Engine episode
-capture uses each source message's existing `occurredAt`. Null or absence means
-no time. Only the receipt derived from that message receives its asserted time;
-no session range, neighboring message or episode supplies a fallback. Raw-derived
+Episode `core.capture` uses each source message's existing `messages[].occurredAt`.
+New optional input fields are `receipt.occurredAt` on `remember` and correction,
+or each receipt's `occurredAt` on contract `admit`, `supersede` and admission
+finish items. Null or absence means no time. Only the receipt derived from that
+message receives its asserted time; no session range, neighboring message or
+episode supplies a fallback. Raw-derived
 receipts always receive null, independently of Raw timestamps and capture order.
 
 One receipt validation helper requires exact millisecond UTC ISO strings with
 an exact round trip and no lower bound. Input parsing checks shape; admission
 checks the upper bound of the store clock plus five minutes using the exact
-instant persisted as `created_at`. Invalid times produce `invalid_input`.
+instant persisted as `created_at`. New receipt fields use strict validation and
+invalid values produce `invalid_input` on every layout. Episode capture retains
+its pre-existing shape validation and replay digest; accepted future values
+succeed with null receipt time. Ordinary capture still rejects `occurredAt` as
+an unknown field, including null, exactly as before.
 Raw input validation retains its independent existing rules.
 
 The time travels beside the receipt identity, outside receipt hashing, Raw
@@ -581,10 +586,10 @@ a retained null stays null when a time arrives, and a retained time stays when
 an untimed duplicate arrives. The immutable column is deleted with its receipt
 by correction, forget or host erasure; it has no separate lifecycle.
 
-Capture's digest appends a per-message time slot only if at least one message
-carries a non-null time, using null slots for untimed messages. Untimed digests
-remain byte-identical, while a changed time under the same event ID is refused
-as `event_payload_conflict`. Admission claim is unchanged and carries no receipts:
+Capture digests retain their pre-existing bytes on every layout. Episode
+capture already binds source times, including accepted future times, and a
+changed episode time under the same event ID produces `event_payload_conflict`.
+Admission claim is unchanged and carries no receipts:
 its `payloadDigest` is opaque to the engine, and the caller's digest binds the
 payload, exactly as for excerpts. Finish strips each receipt's optional time
 into the side parameter before hashing. There is no claim/finish time comparison;

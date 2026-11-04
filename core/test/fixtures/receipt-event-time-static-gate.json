@@ -32,14 +32,14 @@
     "start": "  function attach(",
     "end": "  // Selection already owns",
     "purpose": "receipts insert and retained duplicate validation",
-    "sha256": "8714b533b5a9a7751c390313a56435d2482c9443428f74baacdd1e4b7be4111c"
+    "sha256": "007da181795bc401bcf51993132ba058ae5f0d79871a5fdf44588cfad7678aee"
   },
   {
     "file": "core/runtime.mjs",
     "start": "  function validateReceiptTimes(",
     "end": "  // Caller owns the transaction",
-    "purpose": "receipt write preflight refuses unsupported timestamps",
-    "sha256": "0f808f9840d8f4eb7668e159df09ed9775579de451ac62040bd1ba91ddb1b358"
+    "purpose": "strict new receipt times; pre-existing episode times fall back to null at the persisted clock",
+    "sha256": "af44724a754e4f163bf83e7d2e79fed0672774672022a0be0b16d7a47de9aef7"
   },
   {
     "file": "core/context-product-schema.mjs",

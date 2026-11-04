@@ -21,9 +21,9 @@ test('receipt event-time validation: exact UTC milliseconds, no lower bound and 
     assert.throws(() => receiptEventTime(value), { code: 'invalid_input' });
     assert.throws(() => captureSnapshot({ ...input, messages: [{ ...source, occurredAt: value }] }), { code: 'invalid_input' });
   }
-  // Snapshot parsing has no clock; future validation belongs to admission.
-  assert.equal(captureSnapshot({ ...input, messages: [{ ...source, occurredAt: '2099-01-01T00:00:00.000Z' }] })
-    .messages[0].occurredAt, '2099-01-01T00:00:00.000Z');
+  // Ordinary capture has always rejected this unknown field, even null.
+  for (const occurredAt of [time, null, 'garbage'])
+    assert.throws(() => captureSnapshot({ ...input, messages: [{ ...source, occurredAt }] }), { code: 'invalid_input' });
 });
 
 test('capture digest without times is byte-identical for every existing digest mode', () => {
@@ -35,19 +35,15 @@ test('capture digest without times is byte-identical for every existing digest m
       const expected = digest([tag, ['synthetic', 'personal', null], 'synthetic', 'capture', 'session',
         [['message', 'user', source.content]], ...(causal ? [['stream', 1]] : []),
         ...(qualification ? [qualification] : []), ...(policy ? [policy, 'nonoverlap-800-v1'] : [])]);
-      for (const occurredAt of [undefined, null]) assert.equal(captureSnapshot({ ...request,
-        messages: [{ ...source, occurredAt }] }, qualification, policy).payloadDigest, expected);
+      assert.equal(captureSnapshot(request, qualification, policy).payloadDigest, expected);
     }
 });
 
-test('capture digest adds one per-message slot only when some message has a time', () => {
-  const messages = [{ ...source, occurredAt: time }, { ...source, id: 'untimed' }];
-  const snapshot = captureSnapshot({ ...input, messages });
-  assert.equal(snapshot.payloadDigest, digest(['cairn.capture.v1', ['synthetic', 'personal', null],
-    'synthetic', 'capture', 'session', [['message', 'user', source.content, time], ['untimed', 'user', source.content, null]]]));
-  assert.notEqual(snapshot.payloadDigest, captureSnapshot(input).payloadDigest);
-  assert.notEqual(snapshot.payloadDigest, captureSnapshot({ ...input,
-    messages: [{ ...messages[0], occurredAt: '2001-02-03T04:05:06.790Z' }, messages[1]] }).payloadDigest);
+test('ordinary capture preserves main rejection of receipt times in every digest mode', () => {
+  for (const causal of [false, true]) for (const qualification of [undefined, 'source-bound-v2'])
+    for (const policy of [undefined, 'indexed-windows-v1', 'indexed-evidence-v1'])
+      assert.throws(() => captureSnapshot({ ...input, ...(causal ? { causal: {streamId:'stream',sequence:1} } : {}),
+        messages: [{...source,occurredAt:time}] }, qualification, policy), {code:'invalid_input'});
 });
 
 test('legacy memory parser strips time into a side parameter; episode parsing retains its established rules', () => {

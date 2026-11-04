@@ -52,9 +52,10 @@ for (const base of [18,23,33]) test(`family ${base}: attested 0 and 1 select exa
   const core = openMemoryCore({ path: f.path, contextRead: { version: 'context-read-v1', authority: trusted.authority } }); t.after(() => core.close());
   assert.equal(ok(core.getContextReadCapabilities()).receiptEventTime, false);
   ok(core.admit({ namespace: ns, memory: { content: 'Synthetic family without event time', kind: 'fact' }, receipts: [receipt('plain')] }));
-  const dated = core.admit({ namespace: ns, memory: { content: 'Synthetic refused dated receipt', kind: 'fact' },
+  const dated = core.admit({ namespace: ns, memory: { content: 'Synthetic dropped dated receipt', kind: 'fact' },
     receipts: [{ ...receipt('dated'), occurredAt: '2001-02-03T04:05:06.789Z' }] });
-  assert.equal(dated.ok, false); assert.equal(dated.error.code, 'unsupported_database');
+  ok(dated);
+  assert.equal(Object.hasOwn(db.prepare("SELECT * FROM receipts WHERE event_id='dated'").get(), 'occurred_at'), false);
 });
 
 for (const base of [18,23,33]) for (const damage of ['missing-flag','unsupported-flag','unknown-feature','unsupported-revision','flag-ddl-mismatch'])
