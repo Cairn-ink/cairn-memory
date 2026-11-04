@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
+import { mutationControls } from './receipt-event-time-dump-controls.mjs';
 
 const fixture = mode => JSON.parse(readFileSync(new URL('./receipt-event-time-main' +
   (mode === 'old' ? '' : '-' + mode) + '.json', import.meta.url)));
@@ -13,7 +14,8 @@ export function compatibilityCase(t, mode) {
     fileURLToPath(new URL('../../../', import.meta.url)), f.path, report, mode], { encoding: 'utf8', timeout: 180000 });
   assert.equal(child.error, undefined); assert.equal(child.signal, null); assert.equal(child.status, 0, child.stderr);
   const actual = JSON.parse(readFileSync(report)), expected = fixture(mode), main = fixture(mode === 'event' ? 'safety' : mode);
-  assert.equal(actual.hash, 'canonical-logical-v1');
+  assert.equal(actual.hash, 'canonical-logical-rowid-v2');
+  assert.equal(actual.hash, expected.hash);
   assert.deepEqual(Object.keys(actual.matrix).sort(), Object.keys(expected.matrix).sort());
   assert.equal(Object.keys(actual.matrix).length, 210, 'three layouts × seven capture modes × ten values');
   for (const [key, outcome] of Object.entries(main.matrix)) {
@@ -39,4 +41,5 @@ export function compatibilityCase(t, mode) {
   }
   assert.deepEqual(actual.writes, expected.writes, 'untimed main result, complete receipts and database');
   t.diagnostic('321 complete comparisons: 210 capture values, 72 receipt-field values, 36 untimed controls, 3 episode replay conflicts');
+  mutationControls(t, f.path, actual.equivalents['18:ordinary'], mode);
 }

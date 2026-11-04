@@ -86,7 +86,8 @@ async function run(base, variant, action, expectedTime = null) {
   const receipts = db.prepare('SELECT * FROM receipts ORDER BY receipt_key,memory_id').all();
   db.close();
   // Read only in a child with mode=ro&immutable=1. Hash sqlite_master SQL and
-  // every table's complete rows in primary-key order (all columns break ties).
+  // every table's rowids and complete rows in rowid order; WITHOUT ROWID
+  // tables use primary-key order (all columns break ties).
   // Whole-file hashing first normalized ONLY bytes 92–99, per SQLite's stamps:
   // https://www.sqlite.org/fileformat.html#write_library_version_number_and_version_valid_for_number
   // Header normalization passed the three-Node physical-byte check. Event
@@ -99,7 +100,7 @@ async function run(base, variant, action, expectedTime = null) {
     resultHash: hash(JSON.stringify(result)), receiptHash: hash(JSON.stringify(receipts)),
     receiptTimes: receipts.map(row => row.occurred_at ?? null), databaseHash: child.stdout.trim() };
 }
-const result = { base: 'a6ec0e0e', clock: '2026-11-04T00:00:00.000Z', hash: 'canonical-logical-v1',
+const result = { base: 'a6ec0e0e', clock: '2026-11-04T00:00:00.000Z', hash: 'canonical-logical-rowid-v2',
   matrix: {}, equivalents: {}, newFields: {}, writes: {}, replays: {} };
 function capture(variant, occurredAt) {
   return { namespace: ns, client: 'synthetic', eventId: 'event', sessionId: 'session',
