@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "7c09d4abcc4b9a0e701dee04ebfbe51028ebdda109ff44dcd22457ea713f09a8",
-  "bytes": 1153643,
+  "sha256": "108b72c795b5d8532d71a2eda591add6a20916dffb5f4033c10cbcc1a03d47e1",
+  "bytes": 1153726,
   "files": [
     "LICENSE",
     "README.md",
@@ -685,7 +685,7 @@
     "core/context-product-quantum.mjs": "b43d2c3386e4a9704831b6aa6667378a3148593bc09ff5848914ef3c706d2659",
     "core/context-product-sqlite.mjs": "03d69f0bdb2e5e8acd1b6e08e566d3333bfbc9e22fdfac97514aa8023618c207",
     "core/content-safety.mjs": "3a805429d860d6f5451fea07373f03eaa4e705d24c00056f97e895c2c4dc8c93",
-    "core/context-product-index.mjs": "bb388cd38c0ddb6aa109016eb96f7def3964b4878858c6e5534a82a7bc69e67a",
+    "core/context-product-index.mjs": "ff02aaa3de8ec1f4688c0bb4a9e4de0c7e5f9492af99b406757b8073060e457f",
     "core/context-product-pump.mjs": "bdbaa022b5a05491c3873234ef2613ce7b1820a8155efc9984cc6f0980a4b305",
     "core/context-maintenance-turn.mjs": "07ebf9004ef73fe4a896074cd8df80a148054fea8ba4f4fe8531829d760c029b",
     "docs/plans/context-read-p2b-impl.md": "aa8aa4820502d8b4002ae33ef8b734658a683ed0edd527ef3d183ddb39e9f737",
@@ -701,7 +701,7 @@
     "core/context-semantic-input.mjs": "638d1adeff5be6aa882ddaaebe97fc523be5133b71eb114cf837a340862879bc",
     "core/context-semantic-accounting.mjs": "96a47a11ecc6078ea8590cd921d43c43e07208af9fa08e84cb6d437600fc2d3a",
     "core/context-semantic-ledger.mjs": "af74fbdf8530b864fbc33bf3011a2828e291687bc0a14609b83cc4c7219c6413",
-    "core/context-semantic-maintenance.mjs": "fd26a19e92610f4f17f612c2facdd7acac1fbf0fd0e10912fa8712c6aa33d1d2",
+    "core/context-semantic-maintenance.mjs": "7ef00406eae99632c7b02b7b7503bf3a0a18ba8f5ed5ec566c0757384759d79f",
     "core/context-semantic-pump.mjs": "7b5dea010ebeb6f4e45aae9057864f1b766b16238e00e7c2157fbaf1c0f6abe4",
     "core/context-semantic-worker.mjs": "ef2961fcb0114b9d9062084d57babea2adfad4d0753619c500728ca657da5fa5",
     "core/context-vector-validation.mjs": "6c41a7eb081eeb61ce09c82cfd27682454e9cdcbdd54e538435d5796b29f0d6e",

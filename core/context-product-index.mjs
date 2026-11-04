@@ -444,7 +444,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         try {
           await quantum.measureAsync(async()=>{
             let suppressionEpoch;
-            const texts=read(()=>{suppressionEpoch=contentSuppressionRequestFenceInside(db,p.readSet[0].ownerId);return rows.map(r=>{const item=evidence.itemsInside(r.ref.namespace,[r.ref],p.intent,p.readSet)[0];return item.type==='memory'?item.content:item.title+'\n'+item.body;});});
+            const texts=read(()=>{const layout=cachedContentLayout(db);if(!layout)fail('evidence_unavailable');suppressionEpoch=layout.suppressionRevision?contentSuppressionRequestFenceInside(db,p.readSet[0].ownerId):undefined;return rows.map(r=>{const item=evidence.itemsInside(r.ref.namespace,[r.ref],p.intent,p.readSet)[0];return item.type==='memory'?item.content:item.title+'\n'+item.body;});});
             while(texts.length>1&&Buffer.byteLength(JSON.stringify(texts))>240000){texts.pop();rows.pop();}
             const result=await semantic.call('embed',{texts,kind:'refresh',expected:snapshot.policy,projection:{readSet:p.readSet,types:p.types,intent:p.intent,suppressionEpoch,accessDigest:observed.publication.accessDigest,lexicalValidationDigest:digest(observed.publication)},maxUsd:dollars(usd(p.budget.maxUsd)-spent)},providerCutoff);
             attempts+=rows.length;spent+=usd(result.chargedUsd);
