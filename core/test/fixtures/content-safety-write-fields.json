@@ -1364,6 +1364,7 @@
     "key:storeId": 4,
     "literal:cardId": 2,
     "literal:comparison_base_invalid": 1,
+    "literal:id": 1,
     "literal:memoryId": 2,
     "literal:term_id": 1,
     "literal:validation_invalid": 6
@@ -1389,8 +1390,8 @@
   "core/context-product-index.mjs": {
     "key:catalogId": 1,
     "key:id": 4,
-    "key:ownerId": 1,
-    "key:storeId": 3,
+    "key:ownerId": 2,
+    "key:storeId": 4,
     "literal:hybrid": 1,
     "literal:validation_invalid": 5
   },
@@ -1447,12 +1448,16 @@
     "literal:id": 1
   },
   "core/context-semantic-worker.mjs": {
+    "key:accountingDomainId": 1,
     "key:authorityId": 2,
     "key:bindingId": 1,
     "key:credentialBindingId": 1,
     "key:id": 7,
+    "key:ledgerId": 1,
     "key:windowId": 3,
-    "literal:ownerId": 1,
+    "literal:accountingDomainId": 1,
+    "literal:ledgerId": 1,
+    "literal:ownerId": 2,
     "literal:validation_invalid": 1
   },
   "core/context-vector-validation.mjs": {
@@ -1536,5 +1541,8 @@
     "key:projectId": 2,
     "key:store_id": 1,
     "key:target_id": 1
+  },
+  "core/context-semantic-client.mjs": {
+    "key:operationId": 1
   }
 }

@@ -1,7 +1,7 @@
 import { admissionRequired } from './context-product-admission.mjs';
 import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
-import { contentSuppressionRequestInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, withContentSuppressionReadInside, withContentSuppressionRequest, inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { contentSuppressionMayMatchInside, cachedContentSuppressionRequestInside, contentSuppressionRequestInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, withContentSuppressionReadInside, withContentSuppressionRequest, inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { performance } from 'node:perf_hooks';
 import { randomUUID, createHash } from 'node:crypto';
 import { productSidecar } from './context-product-sidecar.mjs';
@@ -31,7 +31,7 @@ const trace = semantic => ({requested:semantic?'hybrid':'lexical',effective:'lex
 export function openProductIndex({ path, facade, authorize, ownerCoverage, observer, sqlite, sidecarJournalMode, maintenance, counter, semantic, operation, now = () => performance.now(), storageOptions = {}, attribution }) {
   const { db:canonicalDatabase,read:canonicalRead,evidence,bind,encode,identity,features,canonicalFence } = facade.port;
   const db=canonicalDatabase;
-  const read=attribution ? work=>canonicalRead(work,attribution) : canonicalRead;
+  const read=attribution ? work=>canonicalRead(()=>inContentSuppressionRequestInside(db,work),attribution) : canonicalRead;
   const storage = productSidecar({path,db,identity,features,observer,sqlite,sidecarJournalMode,writable:maintenance,now,attribution,...storageOptions}), rankings=new Map();
   const vectors=semantic?productVectors({storage,facade}):null;
   const types=facade.capabilities.types;
@@ -101,6 +101,13 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       end--;
     } while(end>position);
     fail('context_item_too_large');
+  }
+  function bindSemanticFence(p) {
+    const layout=cachedContentLayout(db);if(!layout)fail('evidence_unavailable');
+    if(!layout.suppressionRevision){semantic.bindContentFence?.();return;}
+    p.suppressionEpoch=contentSuppressionRequestFenceInside(db,p.readSet[0].ownerId);
+    semantic.bindContentFence?.({ownerId:p.readSet[0].ownerId,canonicalPath:path,storeId:identity.storeId,
+      readSet:p.readSet,suppressionEpoch:p.suppressionEpoch});
   }
   function candidates(p,access,prepareOnly=false) {
     const observed=read(()=>storage.observe(p,access.accessGenerations));
@@ -173,9 +180,20 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     };
     return prepareOnly?{complete,result}:final(p,access,c.observed.publication,complete,'snapshot_stale');
   }
+  function metadataRead(p) {
+    if(!cachedContentLayout(db)?.suppressionRevision)return db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();
+    const row=db.prepare(`SELECT m.store_id,f.owner_id IS NOT NULL suppression_present,
+      coalesce(f.epoch_hi,0) epoch_hi,coalesce(f.epoch_lo,0) epoch_lo FROM store_metadata m
+      LEFT JOIN owner_suppression_epochs f ON f.owner_id=? WHERE m.singleton=1`).get(p.readSet[0].ownerId);
+    p.metadataSuppression={present:row.suppression_present,epoch:`${row.epoch_hi}:${row.epoch_lo}`};
+    const request=cachedContentSuppressionRequestInside(db,p.readSet[0].ownerId);
+    if(!request||request.epoch!==p.metadataSuppression.epoch)contentSuppressionRequestInside(db,p.readSet,{refresh:true});
+    return row;
+  }
   function statusDelivery(p,dto,publication) {
-    if(!cachedContentLayout(db)?.suppressionRevision||!db.prepare('SELECT 1 FROM owner_suppression_epochs WHERE owner_id=?').get(p.readSet[0].ownerId))return dto;
-    contentSuppressionRequestInside(db,p.readSet,{refresh:true});
+    if(!cachedContentLayout(db)?.suppressionRevision)return dto;
+    if(!p.metadataSuppression)metadataRead(p);
+    if(!p.metadataSuppression.present)return dto;
     withContentSuppressionReadInside(db,p.readSet,()=>assertContentScopes(db,p.readSet));
     const safe=storage.visibleCounts(p,publication);dto.lexical.progress=null;
     for(const type of p.types){
@@ -186,8 +204,9 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     return dto;
   }
   function maintenanceDelivery(p,value,publication) {
-    if(!cachedContentLayout(db)?.suppressionRevision||!db.prepare('SELECT 1 FROM owner_suppression_epochs WHERE owner_id=?').get(p.readSet[0].ownerId))return value;
-    contentSuppressionRequestInside(db,p.readSet,{refresh:true});
+    if(!cachedContentLayout(db)?.suppressionRevision)return value;
+    if(!p.metadataSuppression)metadataRead(p);
+    if(!p.metadataSuppression.present)return value;
     withContentSuppressionReadInside(db,p.readSet,()=>assertContentScopes(db,p.readSet));
     const safe=storage.visibleCounts(p,publication);
     for(const type of p.types){
@@ -214,7 +233,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       if(method==='getContextIndexStatus') {
         const knownFailure=storage.prepareObservation();access.check(); return read(()=>{
           attribution?.step();
-          try {db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.acquired();}
+          try {metadataRead(p);}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.acquired();}
           const observed=storage.observe(p,access.accessGenerations,{knownFailure}), counts=storage.visibleCounts(p,observed.publication);
           if(counts){observed.dto.lexical.progress=null;for(const type of p.types)Object.assign(observed.dto.coverage.byType[type],counts.byType[type]);}
           return success(statusDelivery(p,observed.dto,observed.publication));
@@ -243,7 +262,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
           // No host callback or await; only successful comparisons transport it.
           if(observation)observation.at=Number(process.hrtime.bigint())/1e6;
           attribution?.step();
-          try {db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.acquired();}
+          try {metadataRead(p);}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.acquired();}
           const observed=storage.observe(p,access.accessGenerations,{knownFailure}),ready=observed.dto.lexical.state==='ready';
           const preparation=attribution?.start('serialize');
           try {
@@ -321,10 +340,10 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       const p={...input,ownerCoverage,deadlineAt:Math.min(parentCutoff,now()+remaining())};
       if(method==='getContextIndexStatus') {
         const snapshot=await semantic.snapshot(),knownFailure=storage.prepareObservation();access.check();
-        return read(()=>{db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();return success(scopedStatus(p,storage.observe(p,access.accessGenerations,{knownFailure}),snapshot));});
+        return read(()=>{metadataRead(p);return success(scopedStatus(p,storage.observe(p,access.accessGenerations,{knownFailure}),snapshot));});
       }
       if(method==='refreshContextIndex')return await embeddingRefresh(p,access,cutoff,observation);
-      const c=candidates(p,access,true);
+      const c=candidates(p,access,true);bindSemanticFence(p);
       const preflightStart=performance.now(),snapshot=await semantic.snapshot();
       if(!c.items) {
         const reason=semanticReason(snapshot,false),state=channelFor(reason);
@@ -348,10 +367,10 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         else {
           diagnostic.queryEmbeddingBudgetMs=Number(sub-t)/1e6;const started=performance.now();
           try {
-            const result=await semantic.call('embed',{texts:[p.query],kind:'query',expected:snapshot.policy,projection:{readSet:p.readSet,types:p.types,intent:p.intent,accessDigest:c.observed.publication.accessDigest,lexicalValidationDigest:digest(c.observed.publication),vectorValidationDigest:digest(preflight.record)}},sub);
+            const result=await semantic.call('embed',{texts:[p.query],kind:'query',expected:snapshot.policy,projection:{readSet:p.readSet,types:p.types,intent:p.intent,suppressionEpoch:c.suppressionEpoch,accessDigest:c.observed.publication.accessDigest,lexicalValidationDigest:digest(c.observed.publication),vectorValidationDigest:digest(preflight.record)}},sub);
             diagnostic.queryEmbeddingAttempts=1;
             ranked=vectors.rank(preflight,result.vectors[0]);p.vectorPublication=preflight.record.publicationId;p.semanticSnapshot=snapshot;
-          }catch(error){attribution?.captureFailure(error);reason=['not_enabled','purge_pending','backfill_ceiling','ledger_unavailable','price_unavailable','timeout','provider_error','rate_limited','budget_denied','dimension_mismatch','provider_unavailable'].includes(error.code)?error.code:'provider_error';diagnostic.queryEmbeddingAttempts=error.attempts??0;}
+          }catch(error){if(error.safetyFence)throw error;attribution?.captureFailure(error);reason=['not_enabled','purge_pending','backfill_ceiling','ledger_unavailable','price_unavailable','timeout','provider_error','rate_limited','budget_denied','dimension_mismatch','provider_unavailable'].includes(error.code)?error.code:'provider_error';diagnostic.queryEmbeddingAttempts=error.attempts??0;}
           diagnostic.queryEmbeddingMs=diagnostic.queryEmbeddingAttempts?performance.now()-started:0;detail.timings.embeddingMs=diagnostic.queryEmbeddingMs;
         }
       }
@@ -369,14 +388,14 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       // The request's zero owner epoch proves every retained candidate has no
       // fact to match. Delivery still independently fences facts added during
       // semantic callbacks; a safety layout alone is not a populated fact set.
-      if(c.suppressionEpoch && c.suppressionEpoch !== '0:0' && ranked.length) ranked=read(()=>ranked.filter(candidate=>{
+      if(c.suppressionEpoch && c.suppressionEpoch !== '0:0' && ranked.some(candidate=>contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId}))) ranked=read(()=>ranked.filter(candidate=>{
         try{evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);return true;}
         catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
       }));
       const fusionStarted=performance.now(),lexical=c.lexical,fused=fuseCandidates(lexical.rows,ranked,{preset:'rrf-k10',limit:24,semanticState:channel,coverageComplete:preflight?.status==='complete'});
       detail.timings.fusionMs=performance.now()-fusionStarted;
       c.items=fused.rows.map((row,i)=>({ref:row.ref,rank:i+1,fusionScore:row.fusionScore,channels:row.channels}));
-      if(c.suppressionEpoch && c.suppressionEpoch !== '0:0' && c.items.length)c.items=read(()=>c.items.filter(candidate=>{
+      if(c.suppressionEpoch && c.suppressionEpoch !== '0:0' && c.items.some(candidate=>contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId})))c.items=read(()=>c.items.filter(candidate=>{
         try{evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);return true;}
         catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
       }));
@@ -431,7 +450,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     const localProviderCutoff=process.hrtime.bigint()+BigInt(Math.max(0,Math.floor((quantum.cutoff-now()-quantum.reserve)*1e6)));
     const parentProviderCutoff=cutoff-BigInt(Math.ceil(quantum.reserve*1e6));
     const providerCutoff=localProviderCutoff<parentProviderCutoff?localProviderCutoff:parentProviderCutoff;
-    const observed=read(()=>storage.observe(p,access.accessGenerations)),snapshot=await semantic.snapshot();
+    const observed=read(()=>storage.observe(p,access.accessGenerations));bindSemanticFence(p);const snapshot=await semantic.snapshot();
     const ready=observed.dto.lexical.state==='ready';let reason=semanticReason(snapshot,ready),attempts=0,embedded=0,spent=0n;
     const physical=read(()=>canonicalProductIdentity(path,db));
     if(ready&&!reason) {
@@ -455,6 +474,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
             try{vectors.put(p,observed.publication,snapshot,rows,result.vectors);}finally{release();}embedded+=rows.length;
           },'embedding-item');
         }catch(error) {
+          if(error.safetyFence)throw error;
           if(error.code==='budget_denied'&&!error.attempts&&rows.length>1){maximum=Math.max(1,Math.floor(rows.length/2));continue;}
           attempts+=(error.attempts??0)?rows.length:0;reason=error.code;break;
         }
@@ -471,7 +491,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     }
     const finalSnapshot=await semantic.snapshot(),knownFailure=storage.prepareObservation();access.check();
     return read(()=>{
-      db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();
+      metadataRead(p);
       const current=storage.observe(p,access.accessGenerations,{knownFailure}),dto=scopedStatus(p,current,finalSnapshot),covered=coverage(dto),isReady=dto.lexical.state==='ready',complete=dto.semantic.state==='ready';
       covered.stops.budget=attempts>=p.budget.maxItems||reason==='budget_denied';
       return success(maintenanceDelivery(p,{status:isReady?complete?'complete':'partial':'rebuilding',progress:{lexical:dto.lexical.progress,transformed:0,embeddingAttempts:attempts,embedded},coverage:covered,channels:{lexical:channels(isReady).lexical,semantic:{state:complete?'ready':channelFor(isReady?reason??dto.semantic.reason:dto.semantic.reason),causes:complete?[]:[channelFor(isReady?reason??dto.semantic.reason:dto.semantic.reason)]}}},current.publication));

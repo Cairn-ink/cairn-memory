@@ -244,8 +244,9 @@ for(const service of [false,true])test(`real Worker keeps a read-only handle acr
     assert.equal(control[8],1,'denial must not repeat sidecar admission');
     assert.equal(control[9],0,'denial must retain the read-only handle');
   }
-  // Main's status, two denials and final status sequence, including exec statements.
-  assert.deepEqual(counts,service?[53,47,47,47]:[53,51,51,47],'production Worker SQL executions match main per call');
+  // B1 downward ratchet: the folded status and owner-suppression checks retain
+  // the admitted handle without repeating eligibility queries after denial.
+  assert.deepEqual(counts,service?[52,40,40,40]:[52,36,36,40],'production Worker SQL executions retain the folded denial counts');
 });
 
 test('passing control: a reader watchdog cutoff disposes the connection and its successor checks integrity',async t=>{

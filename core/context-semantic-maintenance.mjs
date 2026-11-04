@@ -1,5 +1,5 @@
-import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentSuppressionFenceInside } from './content-suppression-storage.mjs';
+import { cachedContentLayout } from './content-safety-schema.mjs';
 import { createHmac } from 'node:crypto';
 import { openContextProductFacade } from './context-read-facade.mjs';
 import { productSidecar, canonicalProductIdentity, productFile, PRODUCT_SIDECAR_SUFFIX } from './context-product-sidecar.mjs';
@@ -166,17 +166,36 @@ export function semanticMaintenance({c,sqlite,identity,secretState}) {
     v.facade.port.read(()=>{
       const layout=cachedContentLayout(v.facade.port.db);
       if(!layout)fail('evidence_unavailable');
-      if(input.kind==='refresh' && layout.suppressionRevision) {
-        const epoch=contentSuppressionFenceInside(v.facade.port.db,state.ownerId);
-        if(epoch!==null && p.suppressionEpoch!==epoch || epoch===null && p.suppressionEpoch!=null)fail('evidence_unavailable');
-      }else if(input.kind==='refresh'&&p.suppressionEpoch!=null)fail('evidence_unavailable');
+      if(layout.suppressionRevision ? typeof p.suppressionEpoch!=='string' : p.suppressionEpoch!=null)fail('evidence_unavailable');
+      // canonicalProductFences compares the captured epoch in the existing
+      // namespace fence SELECT, for both query and refresh transmissions.
       const observed=v.storage.observe({...p,ownerCoverage:coverage(p.readSet)},p.accessDigest);
-      if(observed.dto.lexical.state!=='ready'||digest(observed.publication)!==p.lexicalValidationDigest)fail('index_unavailable');
+      if(observed.dto.lexical.state!=='ready') {
+        // A missing sidecar can return before its namespace fence query. Keep
+        // the original refresh failure-path check and its denial precedence;
+        // ready observations already compare the epoch in their existing SQL.
+        if(input.kind==='refresh'&&layout.suppressionRevision&&contentSuppressionFenceInside(v.facade.port.db,state.ownerId)!==p.suppressionEpoch)fail('evidence_unavailable');
+        fail('index_unavailable');
+      }
+      if(digest(observed.publication)!==p.lexicalValidationDigest)fail('index_unavailable');
       if(input.kind==='query') {
         const vector=v.vectors.observe(p,observed.publication,{identity:identity(),policy:state.policy});
         if(vector.status!=='complete'||digest(vector.record)!==p.vectorValidationDigest)fail('index_unavailable');
       }
     });
   }
-  return {targets,validate,catalog,purge,transmission,close(){for(const v of views.values()){v.storage.close();v.facade.close();}views.clear();}};
+  function portGuard(message,metadata) {
+    if(!message.contentFence)return undefined;
+    const f=message.contentFence,v=open(metadata.path),db=v.facade.port.db,layout=cachedContentLayout(db);
+    if(!layout||!layout.suppressionRevision||f.operationId!==message.operation.operationId||f.ownerId!==metadata.ownerId||
+      f.storeId!==v.facade.port.identity.storeId||f.canonicalPath!==metadata.path||!same(f.readSet,metadata.readSet)||typeof f.suppressionEpoch!=='string'||!/^\d+:\d+$/.test(f.suppressionEpoch)||
+      message.method==='embed'&&message.input?.projection?.suppressionEpoch!==f.suppressionEpoch)fail('evidence_unavailable');
+    return ({before=false}={})=>{
+      if(before)return;
+      if(db.isOpen===false||db.isTransaction)fail('evidence_unavailable');
+      const row=db.prepare('SELECT epoch_hi,epoch_lo FROM owner_suppression_epochs WHERE owner_id=?').get(f.ownerId);
+      if((row?`${row.epoch_hi}:${row.epoch_lo}`:'0:0')!==f.suppressionEpoch)fail('evidence_unavailable');
+    };
+  }
+  return {targets,validate,catalog,purge,transmission,portGuard,close(){for(const v of views.values()){v.storage.close();v.facade.close();}views.clear();}};
 }

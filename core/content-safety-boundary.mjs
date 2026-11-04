@@ -211,6 +211,8 @@ export function contentSafetyFacade(api, { check, noOwner = [], failure, select 
 // Preserve the entry fence through awaits; do not dispatch retained text again
 // after any fact advanced. Legacy stores acquire no additional SQL statements.
 const contentPorts = new AsyncLocalStorage();
+// Internal Worker bridge: no facade entry, storage access or validation re-entry.
+export const withContentPortBoundary = (guard, work) => guard ? contentPorts.run(guard,work) : work();
 export const hasContentPortBoundary = () => Boolean(contentPorts.getStore());
 // Only an attested legacy facade may use its original model freshness order.
 // A standalone helper call has no such proof and keeps the pre-counter check.
