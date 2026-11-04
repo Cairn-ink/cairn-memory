@@ -10,7 +10,16 @@ import { parse } from '../../tools/testing/vendor/acorn/acorn.mjs';
 
 // Acorn is vendored for this test-only audit; no installed package, regex lexer,
 // or Node private API determines which executable expressions we can see.
-const exceptions = JSON.parse(readFileSync(new URL('../test/fixtures/receipt-event-time-loaders.json', import.meta.url), 'utf8'));
+const frozenExceptions = JSON.parse(readFileSync(new URL('../test/fixtures/receipt-event-time-loaders.json', import.meta.url), 'utf8'));
+// Preserve PR 1's frozen fixture. Main 8cdb5e49 adds Worker failure disposal
+// after index.run and in its catch; neither hunk changes a loader or feature
+// consumer. Pin the complete merged source, retaining the original pin too.
+const exceptions = frozenExceptions.map(entry => {
+  if (entry.file !== 'core/context-product-worker.mjs') return entry;
+  assert.equal(entry.sha256, '073071759a46698824ffd029a5fe48fbd737513c5c6936ba826b5d413be32bbe',
+    'frozen pre-rebase Worker loader pin');
+  return { ...entry, sha256: '9979ea34f26df9d4f905cbed4cb87f8b0e005df0b7e7cecfac56f9c3139126b0' };
+});
 export const moduleLoadingExceptions = exceptions;
 const cache = new Map();
 const hash = source => createHash('sha256').update(source).digest('hex');
