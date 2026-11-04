@@ -156,6 +156,26 @@ test(`grant recheck declines ${cause} before reserving or dispatching`,async t=>
   assert.equal(maintenancePumpDiagnostic(p.getStatus()).declinedTurns[cause],1);assert.equal(p.getStatus().error,null);
 });
 
+for(const cause of ['deadline','close','supervisor','renewal'])
+test(`grant racing ${cause} at the deadline is locally declined without withdrawal or deferral`,async t=>{
+  const s=model(t,{renewalMs:5000,endsAtMonoMs:5000}),queued=deferred();s.entry=()=>queued.promise;
+  const p=s.create(),pending=s.fire();await flush();const ticket=s.tickets[0];let closing;
+  s.set(ticket.until-1);queued.resolve('admitted');
+  // Deliver the abort/cutoff before the already-queued native Promise reaction.
+  s.set(ticket.until+1);
+  if(cause==='close')closing=p.close();
+  else if(cause==='supervisor')closing=s.supervisor.close();
+  else if(cause==='renewal')s.renew(s.config);
+  else await s.due(s.now());
+  await pending;await closing;
+  const reason=cause==='deadline'?'renewal_expired':cause==='renewal'?'generation_changed':'stopped';
+  assert.deepEqual(ticket.releases,[['declined',reason]]);
+  assert.equal(s.diagnostic().declinedTurns[reason],1);assert.equal(s.diagnostic().deferredTurns,0);
+  assert.equal(s.events.some(e=>e.kind==='open'||e.kind==='admission'||e.kind==='work'),false);
+  assert.equal(p.getStatus().usedItems,0);assert.equal(p.getStatus().usedMs,0);
+  assert.equal(s.diagnostic().lastFailure,null);assert.equal(s.diagnostic().observation,null);
+});
+
 test('prompt window handoff cancels queued work and preserves the admitted resident',async t=>{
   const s=model(t),p=s.create();await s.next();await s.next();await s.next();
   const queued=deferred();s.entry=()=>queued.promise;s.set(58000);const pending=s.fire();await flush();

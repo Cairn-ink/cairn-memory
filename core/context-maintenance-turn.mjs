@@ -7,7 +7,7 @@ const captures=new WeakMap(),promiseConstructor=Promise,promisePrototype=Promise
   promiseSpecies=Object.getOwnPropertyDescriptor(Promise,Symbol.species).get;
 const reasons=['stopped','renewal_expired','generation_changed','budget_exhausted','spacing','lane_changed','admission_held'];
 // Independent of admission-domain retirement and capacity epochs. There is
-// deliberately no deletion/reset API: only a process restart clears poison.
+// deliberately no deletion/reset API: restarting this realm clears poison.
 const poisonKey=Symbol.for('context-read/maintenance-turn-poison/v1');
 const poisonState=()=>globalThis[poisonKey]??={ports:new WeakSet(),locations:new Set(),physical:new Set()};
 function ignoreFactoryRejection(value){
@@ -151,12 +151,20 @@ export function createMaintenanceTurnController(capture,{now,setTimer,clearTimer
     function outcome(value){
       if(done)return;
       if(!unchanged(capture)){finish('failed');return;}
+      // A raced grant owns the permit until the pump's post-grant recheck.
+      // Only a completed withdrawal (the done guard above) makes it late.
+      if(value==='admitted'){finish('admitted');return;}
       if(now()>=untilMonoMs){controller.abort();finish('defer');return;}
       if(value!=='admitted'&&cancelCause){finish(cancelCause);return;}
       finish(value==='admitted'||value==='defer'?value:'failed');
     }
     try{
       const value=Reflect.apply(methods.enter,receiver,[Object.freeze({signal:controller.signal,untilMonoMs})]);
+      // Captured then bypasses a hostile then getter, but not constructor or
+      // species. If either throws, catch below without retrying adoption or
+      // inspecting value again: no derived Promise was created by then, and
+      // the host's original rejection may remain unhandled. Await/resolve and
+      // combinators still require constructor or then lookups.
       if(types.isPromise(value))Reflect.apply(then,value,[outcome,()=>finish(cancelCause??'failed')]);
       else outcome(value); // No Promise.resolve: non-native thenables stay inert.
     }catch{finish(cancelCause??'failed');}

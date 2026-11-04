@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { captureMaintenanceTurnPort, maintenanceTurnRequest, createMaintenanceTurnController, maintenanceTurnPoisoned } from '../context-maintenance-turn.mjs';
 
 const flush=async()=>{for(let i=0;i<12;i++)await Promise.resolve();};
@@ -121,13 +122,58 @@ for(const cause of ['abort','deadline'])test(`cooperative broker rejection on ${
   assert.deepEqual(await result,{status:cause==='abort'?'cancelled':'defer'});assert.deepEqual(calls,[['withdrawn']]);
 });
 
-test('grant observed in the abort race remains owned until explicit decline',async()=>{
+for(const cause of ['abort','deadline'])test(`grant settled before ${cause} but observed afterward remains owned until explicit decline`,async()=>{
   const p=pending(),calls=[],s=setup(()=>({enter:()=>p.promise,release:(...args)=>calls.push(args)}));
-  const result=s.wait();p.resolve('admitted');s.abort.abort();const r=await result;
+  const result=s.wait();s.set(999);p.resolve('admitted');
+  s.set(1000);if(cause==='abort')s.abort.abort();else for(const {f} of [...s.timers.values()])f();
+  const r=await result;
   assert.equal(r.status,'admitted');assert.deepEqual(calls,[]);
-  s.turns.release(r.ticket,'declined','generation_changed');assert.deepEqual(calls,[['declined','generation_changed']]);
-  assert.equal(s.turns.snapshot().declinedTurns.generation_changed,1);
+  assert.equal(s.turns.snapshot().deferredTurns,0);assert.equal(s.turns.snapshot().turnPhase,'running');
+  assert.equal(s.timers.size,0);assert.equal(s.turns.snapshot().turnWaitMs,1000);
+  const reason=cause==='abort'?'generation_changed':'renewal_expired';
+  s.turns.release(r.ticket,'declined',reason);assert.deepEqual(calls,[['declined',reason]]);
+  assert.equal(s.turns.snapshot().declinedTurns[reason],1);
 });
+
+for(const property of ['constructor','species'])for(const state of ['rejected','fulfilled','handled'])
+test(`native entry Promise with throwing ${property}: ${state} leaves only the host rejection unhandled`,()=>{
+  const child=promiseChild({property,state});
+  assert.equal(child.signal,null);assert.equal(child.error,undefined);
+  assert.deepEqual(JSON.parse(child.stdout),{result:{status:'failed',error:'authority_required'},calls:[['withdrawn']],touched:1,thenTouched:0});
+  assert.equal(child.status,state==='rejected'?1:0,child.stderr);
+  if(state==='rejected'){
+    assert.equal((child.stderr.match(/Error: host-entry-rejection/g)??[]).length,1);
+    assert.doesNotMatch(child.stderr,/Error: accessor-failure/);
+  }else assert.equal(child.stderr,'','no engine-created rejection escapes when the host Promise cannot reject unhandled');
+});
+
+test('captured native then contains rejection without invoking a throwing then getter',()=>{
+  const child=promiseChild({property:'then',state:'rejected'});
+  assert.equal(child.signal,null);assert.equal(child.error,undefined);assert.equal(child.status,0,child.stderr);assert.equal(child.stderr,'');
+  assert.deepEqual(JSON.parse(child.stdout),{result:{status:'failed',error:'authority_required'},calls:[['withdrawn']],touched:0,thenTouched:0});
+});
+
+function promiseChild(config){
+  const moduleUrl=new URL('../context-maintenance-turn.mjs',import.meta.url).href;
+  return spawnSync(process.execPath,['--input-type=module','-e',`
+    import { captureMaintenanceTurnPort, createMaintenanceTurnController } from ${JSON.stringify(moduleUrl)};
+    const {property,state}=${JSON.stringify(config)},calls=[];let touched=0,thenTouched=0;
+    const value=state==='fulfilled'?Promise.resolve('admitted'):Promise.reject(new Error('host-entry-rejection'));
+    // The host can handle its own rejection before making observation impossible.
+    if(state==='handled')value.catch(()=>{});
+    const trap=()=>{touched++;throw new Error('accessor-failure');};
+    Object.defineProperty(value,'then',{get(){thenTouched++;throw new Error('then-accessor-failure');}});
+    if(property==='constructor')Object.defineProperty(value,'constructor',{get:trap});
+    if(property==='species')Object.defineProperty(value,'constructor',{value:Object.defineProperty({},Symbol.species,{get:trap})});
+    Object.freeze(value);
+    const port={version:1,maxWaitMs:1000,createTurn:()=>({enter:()=>value,release:(...args)=>calls.push(args)})};
+    const turns=createMaintenanceTurnController(captureMaintenanceTurnPort(port),{now:()=>0,setTimer:()=>1,clearTimer(){}});
+    const result=await turns.wait(${JSON.stringify(request())},{signal:new AbortController().signal,identity:{key:'native-entry'},untilMonoMs:1000});
+    console.log(JSON.stringify({result,calls,touched,thenTouched}));
+    // An event-loop checkpoint lets default Node rejection handling determine exit.
+    await new Promise(resolve=>setImmediate(resolve));
+  `],{encoding:'utf8'});
+}
 
 test('deadline aborts host signal, counts defer, includes pending wait and removes timer',async()=>{
   const p=pending(),calls=[];let signal;
