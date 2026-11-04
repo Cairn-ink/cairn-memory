@@ -613,7 +613,11 @@ test(`Fix A3 ${recovered?'recovered':'unvisited'} lanes retain cadence at ${boun
     s.renew({...s.c,...(boundary==='window'?{window:{...s.c.window,id:'next',endsAtMonoMs:endpoint+60000}}:{})});
     check(p.getStatus());
     if(boundary==='window')check(await completion);
-    await s.next();check(p.getStatus());
+    await s.next();
+    // A prompt lexical window succession keeps the old baselines. Its next
+    // tick accounts the delivery gap under the newly renewed authority too.
+    if(boundary==='window')expected.worstGapMs+=recovered?100:1;
+    check(p.getStatus());
     assert.equal(p.getStatus().state,'active');
   }
   check(p.getStatus());await p.close();

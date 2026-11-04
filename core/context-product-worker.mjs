@@ -189,6 +189,7 @@ parentPort.on('message', async message => {
       response = await index.run(message.method, boundedData(message.input), message.credential,
         performance.now() + Number(mono(operation.operationCutoffMonoNs)-process.hrtime.bigint())/1e6, observation);
     }
+    if(!response.ok)try{index?.discard();}catch(error){nativeFailure(error,false,true);}
     if(attribution) {
       const preparationStarted=Number(process.hrtime.bigint())/1e6;
       within(operation);sealNative(frame);
@@ -204,6 +205,8 @@ parentPort.on('message', async message => {
       result(operation,response,observation.at===undefined?{}:{observedAtMonoMs:observation.at,
         maintenancePhases:{...observation,at:undefined,dispatchMs:receivedAt-Number(mono(operation.enteredMonoNs))/1e6,finishedAtMonoMs:Number(process.hrtime.bigint())/1e6}});
     }
-  } catch (error) {attribution?.captureFailure(error);attribution?.selectFailure(error);sealNative(frame); result(operation, nativeFailure(error)); }
+  } catch (error) {attribution?.captureFailure(error);attribution?.selectFailure(error);
+    try{index?.discard();}catch(cleanupError){nativeFailure(cleanupError,false,true);}
+    sealNative(frame); result(operation, nativeFailure(error)); }
   finally { active = false; if (closing) await exitWhenIdle(); }
 });

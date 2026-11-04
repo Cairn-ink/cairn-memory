@@ -5,7 +5,8 @@ export async function createContextReadHost(configuration){
   DatabaseSync.prototype.exec=function(sql){
     if(sql==='BEGIN IMMEDIATE')writers.add(this);
     if(sql==='COMMIT'&&writers.has(this)&&Atomics.compareExchange(state,0,0,1)===0){
-      const db=this,record=()=>Atomics.add(state,db.isTransaction?1:2,1);
+      // A failed connection may already be disposed before error inspection.
+      const db=this,record=()=>Atomics.add(state,db.isOpen&&db.isTransaction?1:2,1);
       throw new Proxy(new TypeError('private transaction failure'),{
         getPrototypeOf(target){record();return Reflect.getPrototypeOf(target);},
         getOwnPropertyDescriptor(target,key){record();return Reflect.getOwnPropertyDescriptor(target,key);},

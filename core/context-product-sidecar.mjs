@@ -166,7 +166,11 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   const sidePath = path + PRODUCT_SIDECAR_SUFFIX;
   const compare=memoryComparison?memoryComparison.createMemoryComparator():null;
   let comparisonBase=null;
-  let sideFormat, side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0;
+  let sideFormat, side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0, discardAfterGuard=false, guardWritable=false;
+  function failed(error, wasWritable) {
+    if(wasWritable || error.reason==='storage_unavailable' ||
+        error.code==='ERR_SQLITE_ERROR' && Number.isInteger(error.errcode) && [10,11,13,26].includes(error.errcode&255))discardAfterGuard=true;
+  }
   const lockPath=sidePath+'.lifecycle-lock.sqlite';
   const stamp=()=>{const s=sqliteFileStat(sidePath);return [s.dev,s.ino,s.size,s.mtimeNs,s.ctimeNs].join(':');};
   function acquire(createLock=false) {
@@ -190,12 +194,21 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   function guarded(work,createLock=false) {
     if (closed) fail('store_closed');
     if(guardDepth)return work();
-    if(!createLock && !productFile(sidePath,true)){
-      // Linearize absence here; do not open a concurrently published cache
-      // without first taking its lifecycle lock.
-      observedMissing=true;try{return work();}finally{observedMissing=false;}
-    }
-    return cleaned(()=>{acquire(createLock);guardDepth++;return work();},()=>{guardDepth=0;release();});
+    guardWritable=!!(side && sideWritable);
+    return cleaned(()=>{
+      try {
+        if(!createLock && !productFile(sidePath,true)){
+          // Linearize absence here; do not open a concurrently published cache
+          // without first taking its lifecycle lock.
+          observedMissing=true;try{return work();}finally{observedMissing=false;}
+        }
+        return cleaned(()=>{acquire(createLock);guardDepth++;return work();},()=>{guardDepth=0;release();});
+      } catch(error) {failed(error,guardWritable);throw error;}
+    },()=>{
+      // A caught bound may return honest progress without another write.
+      // Discard here too when no later writable step consumed the flag.
+      if(discardAfterGuard)close();
+    });
   }
   function publish(replacement,init) {
     const work=()=>createExclusiveSqliteFile(sidePath,replacement,init,sqlite && observer ? {observe:observer.creation} : {});
@@ -207,28 +220,33 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     if(!same(openedIdentity,productFile(sidePath,true)))unavailable('storage_unavailable');
   }
   function read(work) {
+    const wasWritable=sideWritable===true;
     try { sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});return readTransaction(side,()=>{
       side.prepare('PRAGMA schema_version').get();
       verifyOpened();rendezvous('snapshot');return work();
-    }); } catch(e) {attribution?.captureFailure(e); if(e.reason==='storage_unavailable')try{close();}catch{}throw e; }
+    }); } catch(e) {failed(e,wasWritable);attribution?.captureFailure(e); if(e.reason==='storage_unavailable')try{close();}catch{}throw e; }
   }
   const openNative = (write = false) => {
     try { return observer ? observer.invoke('open','connection', () => new DatabaseSync(sidePath, { readOnly: !write }))
       : new DatabaseSync(sidePath, { readOnly: !write }); }
     catch (error) {attribution?.captureFailure(error); if(sqlite)sqlite.openingFailure(error);throw error; }
   };
-  function close() { if (side?.isOpen) side.close(); side = null; metadata = null; sideFiles = null; }
+  function close() { discardAfterGuard=true;if (side?.isOpen) side.close(); side = null; metadata = null; sideFiles = null; discardAfterGuard=false; }
   function write(work, kind='setup', beforeCommit) {
+    // A caught verification rollback can continue within this refresh. Reopen
+    // and check integrity before its fallback or any other transaction writes.
+    if(discardAfterGuard)connection(true);
+    const wasWritable=sideWritable===true;
     sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});
     const beginning=attribution?.start('begin');
-    try {attribution?.checkpoint('begin');side.exec('BEGIN IMMEDIATE');}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.end(beginning);}
+    try {attribution?.checkpoint('begin');side.exec('BEGIN IMMEDIATE');}catch(error){failed(error,wasWritable);attribution?.captureFailure(error);throw error;}finally{attribution?.end(beginning);}
     try {
       verifyOpened();const result=work();rendezvous('batch');beforeCommit?.();
       const committing=attribution?.start('commit');
       try {attribution?.checkpoint('commit');attribution?.add(kind+'CommitAttempts',1);side.exec('COMMIT');attribution?.add(kind+'Commits',1);}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.end(committing);}
       return result;
     }
-    catch (e) {attribution?.captureFailure(e);
+    catch (e) {failed(e,wasWritable);attribution?.captureFailure(e);
       if(side.isTransaction) {attribution?.add(kind+'Rollbacks',1);
         if(verificationBatching&&kind==='verification'){try {side.exec('ROLLBACK');}catch(rollbackError) {
           if(e!==verificationBound&&e!==fenceChanged)attribution?.captureSecondaryFailure?.(rollbackError);
@@ -242,16 +260,28 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   }
   function connection(create = false) {
     if (closed) fail('store_closed');
+    // Capture the mode before admission can replace or upgrade the handle.
+    guardWritable=!!(side && sideWritable);
+    if(discardAfterGuard || side && !side.isOpen)close();
     if(observedMissing && !create)return false;
     const physical = productFile(sidePath, true), wantsWrite=writable&&create;
     if (!physical && !create) return false;
-    if (side && physical && same(physical, openedIdentity) && sideWritable===wantsWrite) {
+    if (side && physical && same(physical, openedIdentity) &&
+        (sideWritable===wantsWrite || writable&&sideWritable&&!wantsWrite)) {
       if(sqlite){
         try {
           sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});
-          if(wantsWrite && sideMode!==sidecarJournalMode)unavailable('storage_unavailable');
+          if((wantsWrite||sideWritable) && sideMode!==sidecarJournalMode)unavailable('storage_unavailable');
         } catch(error) {attribution?.captureFailure(error);try{close();}catch{}throw error;}
-      } else auxiliaries(sidePath, wantsWrite, openedIdentity, observer);
+      } else {
+        auxiliaries(sidePath, wantsWrite, openedIdentity, observer);
+        if(sideWritable&&!wantsWrite) {
+          // This request used to open a read-only connection. Preserve its
+          // header refusal as well as the stricter non-write companion rule.
+          const mode=probeRollbackJournal(sidePath,observer ? {observe:observer.journalProbe} : {});
+          if(mode.code===14 || mode.mode && mode.mode!=='delete')unavailable('incompatible');
+        }
+      }
       if (create) read(() => {
         sideFormat=side.prepare('PRAGMA user_version').get().user_version;
         metadata=side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
@@ -259,6 +289,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         attest(side);
         if (metadata.profile!==PRODUCT_PROFILE) unavailable('incompatible');
       });
+      guardWritable=sideWritable;
       return true;
     }
     close();
@@ -300,6 +331,8 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       });
     } catch(error) {attribution?.captureFailure(error);try{if(candidate?.isOpen)candidate.close();}catch{}throw error;}
     side=candidate;sideWritable=wantsWrite;sideFiles=files;openedIdentity=admittedIdentity;metadata=admittedMetadata;
+    // Subsequent work starts on this admitted mode, including upgrade callers.
+    guardWritable=wantsWrite;
     return true;
   }
   const initialization=()=>({autoVacuum:'INCREMENTAL',...(sqlite ? {journalMode:sidecarJournalMode} : {}),sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=${PRODUCT_SIDECAR_FORMAT}; ${ddl} ${VECTOR_DDL}`,
@@ -336,7 +369,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
           { eligible: ready ? counts.byType[t].eligible : null, indexed: ready ? counts.byType[t].indexed : null, embedded:null }])),
         namespaces: p.ownerCoverage } };
   }
-  function invalid(p, reason) { return { dto: status(p,'unavailable',
+  function invalid(p, reason) { if(guardWritable)discardAfterGuard=true;return { dto: status(p,'unavailable',
     ['wrong_store','incompatible','corrupt','validation_missing','validation_invalid','storage_unavailable'].includes(reason) ? reason : 'storage_unavailable'), publication:null }; }
   // Caller supplies the canonical transaction. Pointer, generation and record
   // are read under one independent sidecar transaction, with no deep scans.
@@ -389,7 +422,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         if(byteSafe && checkpoint && !checkpoint.mismatch)return incomplete();
         return { dto:status(p,mismatch ? 'stale' : 'ready',mismatch,progressOf(g),r.counts), publication:r,byteSafe };
       });
-    } catch (e) {attribution?.captureFailure(e);
+    } catch (e) {failed(e,guardWritable);attribution?.captureFailure(e);
       if (e instanceof SyntaxError) return invalid(p,'validation_invalid');
       if (e.code === 'index_unavailable') return invalid(p,e.reason);
       if (e.code === 'ERR_SQLITE_ERROR' && [11,26].includes(e.errcode & 255)) return invalid(p,'corrupt');
@@ -666,8 +699,10 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       if(!found)break;
     }
     if(quantum.admit('gc'))quantum.measure(()=>{
+      if(discardAfterGuard)connection(true);
+      const wasWritable=sideWritable===true;
       try {side.exec('PRAGMA incremental_vacuum(32)');}
-      catch(e) {if(e.code!=='ERR_SQLITE_ERROR' || (e.errcode&255)!==5)throw e;}
+      catch(e) {failed(e,wasWritable);if(e.code!=='ERR_SQLITE_ERROR' || (e.errcode&255)!==5)throw e;}
       // Optional BUSY skips reclamation; attribution counts admitted attempts.
     },'gc','vacuum');
   }
@@ -936,7 +971,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
               side.exec('RELEASE verification_chunk');
             } catch(error) {
               if(error!==verificationBound)throw error;
-              side.exec('ROLLBACK TO verification_chunk; RELEASE verification_chunk');
+              discardAfterGuard=true;side.exec('ROLLBACK TO verification_chunk; RELEASE verification_chunk');
               tentative.verify=previous;tentative.phase=phase;
               fallback=chunks===0;attribution?.resetFailure();break;
             }
@@ -1132,8 +1167,8 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       if(!compare)return null;
       const started=now();p=projection(p);
       quantum??=maintenanceQuantum({now,cutoff:Math.min(p.deadlineAt??Infinity,started+budget.maxMs),maxMs:budget.maxMs,attribution});
-      return guarded(()=>{let failed=false;try{connection(false);}catch{comparisonBase=null;failed=true;}
-        return compareInputs(p,access,budget,quantum,failed);
+      return guarded(()=>{let baseUnavailable=false;try{connection(false);}catch(error){failed(error,guardWritable);comparisonBase=null;baseUnavailable=true;}
+        return compareInputs(p,access,budget,quantum,baseUnavailable);
       });
     },
     lexical:(p,...args)=>{p=projection(p);return guarded(()=>lexical(p,...args));},
@@ -1147,7 +1182,13 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         return [11,26].includes(e.errcode&255)?'corrupt':(e.errcode&255)===1?'incompatible':'storage_unavailable';
       throw e;
     }
-  },close() { closed=true;comparisonBase=null;const lock=lifecycle;lifecycle=null;cleaned(()=>close(),()=>lock?.close()); },
+  },discard() {
+    // Worker failures can occur after sidecar work has succeeded. Use that
+    // operation's captured mode, including an admitted upgrade, rather than
+    // the current handle; read-only storage failures already mark disposal.
+    if(guardWritable || discardAfterGuard)close();
+  },
+    close() { closed=true;comparisonBase=null;const lock=lifecycle;lifecycle=null;cleaned(()=>close(),()=>lock?.close()); },
     // Explicit restore gate; callers must have already drained all clients.
     reset() {return guarded(()=>{
       if (!writable) fail('invalid_input');

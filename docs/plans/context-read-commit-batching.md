@@ -262,6 +262,7 @@ Required implementation acceptance, not tests performed for this documentation:
   grace/forced disposal, lost samples, failure causes, refunds and nonterminal misses.
   Include tail spending despite rejected work admission, reserve cap/reset, prefix commit/rollback, and backoff across calls/resident replacement.
   Keep the cutoff exception disabled in normal cells; test its existing seam only.
+- Before enabling the internal verification-batching gate in production, settle whether partial batches need an in-transaction `quick_check` after a denied chunk's savepoint rollback and before earlier chunks' checkpoint `save()` and COMMIT, because this path keeps the same connection until operation disposal while integrity checks run on fresh writable opens.
 
 ## Quiet-window protocol
 

@@ -50,7 +50,7 @@ test('K1 Worker opening latches storage_busy before failed disposal',async t=>{
   assert.equal(diagnostic.failureCounts.engine,1);assert.equal(diagnostic.secondaryFailure.cause,'cleanup');assert.equal(diagnostic.secondaryFailureCounts.cleanup,1);
 });
 
-test('K3 transaction failure inspection runs only after rollback',async t=>{
+test('passing control: transaction failure inspection runs only after rollback',async t=>{
   const f=fixture(t);f.admit('synthetic transaction evidence',personal);
   const service=configured(t,f.path,[personal],{service:true,supervisor:createSupervisorRegistry().supervisor()}),state=new Int32Array(new SharedArrayBuffer(12));
   const options={...service.options,host:{...service.options.host,moduleUrl:new URL('../testing/context-product-failure-transaction-host.mjs',import.meta.url).href,
