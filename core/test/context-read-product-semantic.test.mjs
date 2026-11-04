@@ -12,7 +12,7 @@ import { installCardCurrentDependencies } from '../card-current-schema.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash,createHmac,randomUUID } from 'node:crypto';
 import { copyFileSync,linkSync,unlinkSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawn,spawnSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
 import { join } from 'node:path';
 import { fixture,ns,ok } from '../testing/context-read-fixture.mjs';
@@ -1191,13 +1191,60 @@ async function quarantineRefusal(s,record) {
 test('coordinator termination bound: real SQLite native wait outlives close with frozen clock',async t=>{
   const s=await closeSetup(t,{open:false,expectedCleanupFailure:true});
   const blockPath=join(s.f.workspace.path,'close-block.sqlite');createExclusiveSqliteFile(blockPath);
-  const blocker=new DatabaseSync(blockPath);
-  const releaseBlocker=()=>{
-    if(!blocker.isOpen)return;
-    try{if(blocker.isTransaction)blocker.exec('ROLLBACK');}finally{blocker.close();}
-  };
+  const blocker=spawn(process.execPath,['--input-type=module','-e',`
+    import {DatabaseSync} from 'node:sqlite';
+    const db=new DatabaseSync(process.argv[1]);
+    try {
+      db.exec('CREATE TABLE barrier(value);BEGIN IMMEDIATE');
+      console.log('locked');
+      process.stdin.setEncoding('utf8');let input='';
+      for await(const chunk of process.stdin) {
+        input+=chunk;
+        if(input.includes('\\n')) {
+          if(input.trim()!=='release')throw Error('invalid_barrier_command');
+          break;
+        }
+      }
+    } finally {if(db.isTransaction)db.exec('ROLLBACK');db.close();}
+  `,blockPath],{stdio:['pipe','pipe','pipe']});
+  let stderr='',stdout='',exitedBlocker=false,releasingBlocker,blockerError;
+  blocker.stderr.setEncoding('utf8').on('data',chunk=>{stderr+=chunk;});
+  // An early child exit can race the release write; its exit status is checked below.
+  blocker.stdin.on('error',()=>{});
+  const blockerExit=new Promise(resolve=>{
+    blocker.once('error',error=>resolve({error}));
+    blocker.once('exit',(code,signal)=>{exitedBlocker=true;resolve({code,signal});});
+  });
+  const locked=new Promise((resolve,reject)=>{
+    const fail=error=>{blockerError??=error;reject(error);};
+    blocker.once('error',fail);
+    blocker.stdout.on('error',fail);blocker.stderr.on('error',fail);
+    blocker.once('exit',code=>reject(Error(`barrier_exit_before_locked:${code}:${stderr}`)));
+    blocker.stdout.setEncoding('utf8').on('data',chunk=>{
+      stdout+=chunk;if(stdout.split('\n').includes('locked'))resolve();
+    });
+  });
+  const releaseBlocker=()=>releasingBlocker??=(async()=>{
+    try {
+      if(!exitedBlocker)blocker.stdin.end('release\n');
+      const result=await closeGuard(blockerExit,'barrier_child_release');
+      if(blockerError)throw blockerError;
+      assert.equal(result.error,undefined);assert.equal(result.signal,null);assert.equal(result.code,0,stderr);
+    } finally {
+      if(!exitedBlocker)blocker.kill('SIGKILL');
+      try{await closeGuard(blockerExit,'barrier_child_reap');}
+      catch(error){
+        if(!exitedBlocker)blocker.kill('SIGKILL');
+        await closeGuard(blockerExit,'barrier_child_reap',1000);
+        throw error;
+      } finally {
+        // Keep ownership and exit observation if both reap waits time out.
+        if(exitedBlocker){blocker.stdin.destroy();blocker.stdout.destroy();blocker.stderr.destroy();blocker.unref();}
+      }
+    }
+  })();
   s.f.workspace.defer(releaseBlocker);
-  blocker.exec('CREATE TABLE barrier(value);BEGIN IMMEDIATE');
+  await closeGuard(locked,'barrier_child_locked');
   s.options.host.configuration.closeBlockPath=blockPath;
   s.coordinator=await openContextSemanticCoordinator(s.options);
   const record=coordinatorRecord(s),capture=captureCloseWorker(t),before=testClock.now();
@@ -1219,15 +1266,15 @@ test('coordinator termination bound: real SQLite native wait outlives close with
     assert.equal(s.supervisor.getCleanupStatus(record.id).nativeDisposed,false);
     await quarantineRefusal(s,record);
     assert.deepEqual(childCoordinatorOpen(s),{code:'storage_busy'},'another_process_cannot_acquire_live_ownership');
-    blocker.exec('ROLLBACK');
+    await releaseBlocker();
     await closeGuard(exit,'native_worker_exits_after_lock_release');
     await quarantineRefusal(s,record);
     assert.equal(s.supervisor.getCleanupStatus(record.id).state,'failed','late_exit_is_not_disposal_proof');
     await assert.rejects(closeGuard(s.supervisor.close(),'supervisor_delivers_failed_proof'),{code:'reader_failed'});
     t.diagnostic(JSON.stringify({closeMs:elapsed,terminationMaxMs:TERMINATION_GRACE_MS,workerAliveAtDelivery:true}));
   } finally {
-    releaseBlocker();
-    await closeGuard(exit,'native_worker_cleanup');await closeGuard(outcome,'native_close_cleanup');retainCoordinatorFile(s);
+    try{await releaseBlocker();}
+    finally{await closeGuard(exit,'native_worker_cleanup');await closeGuard(outcome,'native_close_cleanup');retainCoordinatorFile(s);}
   }
 });
 
