@@ -343,11 +343,13 @@ export function readTransaction(db, work, acquisition) {
   return value;
 }
 
-export function transaction(db, work, check) {
+// Recall-only mode: keep transaction fences and statement counts, acquiring
+// SHARED on the first SELECT. Writers must retain BEGIN IMMEDIATE.
+export function transaction(db, work, check, { deferred = false } = {}) {
   if (activeReads.has(db) || discardedConnections.has(db)) fail('storage_error');
   check?.();
   const execute = () => {
-    db.exec("BEGIN IMMEDIATE");
+    db.exec(deferred ? "BEGIN" : "BEGIN IMMEDIATE");
     let contentWrite;
     try {
       const result = inContentSuppressionRequestInside(db, () => {

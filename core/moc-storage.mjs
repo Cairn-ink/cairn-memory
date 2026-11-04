@@ -380,6 +380,9 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
 
   function queryCandidateRows(ns, { score, memoryLabel, sourceReceiptLimit = 0,
     sourceCandidatePolicy = null }) {
+    // The opt-in scan can outlive a writer's busy timeout in DELETE mode.
+    // Serialize it behind RESERVED exactly as before; ordinary recall reads
+    // remain deferred so they can proceed alongside an uncommitted writer.
     return transaction(db, () => {
       if (![0, SOURCE_QUERY_RECEIPT_LIMIT].includes(sourceReceiptLimit)) fail('invalid_input');
       const keyset = sourceCandidatePolicy === BOUNDED_KEYSET_SOURCE_CANDIDATES.version;
@@ -520,7 +523,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
             label: sourceLabel ?? memoryLabel(memory.content) } };
       });
       return { rows, epoch: currentEpoch, scanExhausted, suppressionEpoch: suppressionEpochInside(ns) };
-    });
+    }, undefined, { deferred: sourceCandidatePolicy !== BOUNDED_KEYSET_SOURCE_CANDIDATES.version });
   }
 
   function mapRows(ns, { purpose, parentRef, limit, offset, expectedEpoch, expectedSuppressionEpoch, memoryLabel = label,
@@ -746,9 +749,9 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       return { id: row.id, revision: row.revision, level: `L${row.level}`, title: visibleTitle(row) };
     },
     suppressionFence(ns) { return cachedContentLayout(db)?.suppressionRevision
-      ? transaction(db, () => suppressionEpochInside(ns)) : null; },
+      ? transaction(db, () => suppressionEpochInside(ns), undefined, { deferred: true }) : null; },
     assertEpoch(ns, expected, suppressionEpoch) { return transaction(db, () => {
       assertEpochValue(ns, expected);
       if (suppressionEpoch !== undefined && suppressionEpoch !== suppressionEpochInside(ns)) fail('cursor_stale');
-    }); } });
+    }, undefined, { deferred: true }); } });
 }

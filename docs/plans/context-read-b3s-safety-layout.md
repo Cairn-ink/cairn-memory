@@ -1185,6 +1185,14 @@ unmigrated fixture records main's SHA and measurement date. Second, deferred
 gates remain executable ratchets at their round 3 measured values; none is
 skipped or marked todo. Lower current measurements do not tighten those caps.
 
+Recall locking: production hotfix `cb2dd907` uses `readTransaction()` with
+the `query_only` belt. Main uses deferred `transaction()` for exactly the eight
+recall read helpers, retaining its suppression-request and installed-safety
+fences with zero statement delta. Both acquire SHARED at the first SELECT;
+only the query-only belt differs. The bounded-keyset candidate path retains
+plain `transaction()` and `BEGIN IMMEDIATE` so an existing capture writer can
+COMMIT before the maximal scan.
+
 **Known limitation:** On migrated stores, reads by owners with facts cost more
 than R2 until S2h-3. This only affects local users who chose `safety migrate`,
 and it is a cost issue, not a correctness issue.
