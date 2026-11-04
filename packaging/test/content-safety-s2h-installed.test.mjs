@@ -39,18 +39,25 @@ export async function resolve(specifier,context,next) {
   copySqliteFixture(f.path,f.backupPath);
   const cli = join(installed,'adapters/mcp/cli.mjs');
   const migrated = JSON.parse(run([cli,'safety','migrate','--db',f.path,'--backup',f.backupPath,'--store-id',f.storeId,'--base','33','--quiescent']));
-  assert.equal(migrated.value.physical,48);
+  assert.equal(migrated.ok,true);
+  assert.equal(migrated.value.physical,53);
   copyFileSync(join(root,'core/testing/context-product-index-host.mjs'),join(installed,'host.mjs'));
-  const driver = `const api=await import(${JSON.stringify(pathToFileURL(join(installed,'core/index.mjs')).href)});
+  const driver = `import assert from 'node:assert/strict';
+const api=await import(${JSON.stringify(pathToFileURL(join(installed,'core/index.mjs')).href)});
 const {credentialDigest,PRODUCT_PROFILE}=await import(${JSON.stringify(pathToFileURL(join(installed,'core/context-product-control.mjs')).href)});
 const {randomUUID}=await import('node:crypto');
 const {inspectExistingStorePin}=await import(${JSON.stringify(pathToFileURL(join(installed,'core/existing-store.mjs')).href)});
 const {openDatabase}=await import(${JSON.stringify(pathToFileURL(join(installed,'core/database.mjs')).href)});
 const created=openDatabase(${JSON.stringify(join(f.workspace.path,'created.sqlite'))},{contentSafety:'s2h-v1',currentDependencies:true});
-const createdId=created.prepare('SELECT store_id FROM store_metadata').get().store_id,createdDomain=created.prepare('SELECT suppression_domain FROM content_safety_control').get().suppression_domain;created.close();
-const pin=await inspectExistingStorePin(${JSON.stringify(join(f.workspace.path,'created.sqlite'))},createdId);
-if(pin.physical!==48)throw Error('wrong_pin');
-const core=api.openMemoryCore({path:${JSON.stringify(join(f.workspace.path,'created.sqlite'))},existingStore:pin}),supervisor=api.createContextReadSupervisor();let reader;
+const createdId=created.prepare('SELECT store_id FROM store_metadata').get().store_id;created.close();
+const results=[];
+// Fresh opt-in creation retains layout 48; only explicit migration installs event time.
+for(const [path,storeId,physical,receiptEventTime] of [
+ [${JSON.stringify(join(f.workspace.path,'created.sqlite'))},createdId,48,false],
+ [${JSON.stringify(f.path)},${JSON.stringify(f.storeId)},53,true]]) {
+const pin=await inspectExistingStorePin(path,storeId);
+assert.deepEqual(pin,{version:'content-safety-existing-v1',storeId,physical,base:33,suppressionRevision:1,cardLineageRevision:0});
+const core=api.openMemoryCore({path,existingStore:pin}),supervisor=api.createContextReadSupervisor();let reader;
 try {const namespace={ownerId:'synthetic-installed-safety',scope:'personal',projectId:null};
  const admitted=core.admit({namespace,memory:{content:'Synthetic installed safety content',kind:'fact'},receipts:[{client:'synthetic',sessionId:'s',eventId:'e',role:'user',excerpt:'Synthetic installed evidence'}]});
  if(!admitted.ok)throw Error(JSON.stringify(admitted));
@@ -58,21 +65,26 @@ try {const namespace={ownerId:'synthetic-installed-safety',scope:'personal',proj
  const ids={requestId:randomUUID(),handleId:randomUUID(),credentialBindingId:randomUUID(),credentialExpiresUtcMs:null};
  const ownerCoverage={policy:'recent-projects-v1',selectionRevision:'synthetic-installed',requestedNamespaces:1,selectedNamespaces:1,omittedNamespaces:0};
  const binding={kind:'request',...ids,credentialDigest:credentialDigest(credential),ownerId:namespace.ownerId,namespaces:{readSet,ownerCoverage},issuedAt:0};
- reader=await api.openContextProductReader({path:${JSON.stringify(join(f.workspace.path,'created.sqlite'))},supervisor,version:'context-read-v1',profile:PRODUCT_PROFILE,readSet,ownerCoverage,
+ reader=await api.openContextProductReader({path,supervisor,version:'context-read-v1',profile:PRODUCT_PROFILE,readSet,ownerCoverage,
   requestControl:{...ids,requestMaxMs:5000},host:{moduleUrl:${JSON.stringify(pathToFileURL(join(installed,'host.mjs')).href)},configuration:{requestBinding:binding,state,requestReservation:new SharedArrayBuffer(4)}}});
  const capabilities=await reader.getContextReadCapabilities();if(!capabilities.ok||capabilities.value.execution!=='worker')throw Error('missing_installed_worker');
+ assert.equal(capabilities.value.receiptEventTime,receiptEventTime);
  const input={readSet,refs:[{type:'memory',namespace,memoryId:memory.id,revision:memory.revision}],intent:'current'};
  const evidence=await reader.fetchCandidateEvidence(input,credential);
  if(!evidence.ok||evidence.value.items[0]?.content!=='Synthetic installed safety content')throw Error('missing_installed_evidence');
+ const canonical=core.get({namespace,memoryId:memory.id});
+ assert.equal(canonical.ok,true);assert.equal(canonical.value.memory.content,'Synthetic installed safety content');
  const forgotten=core.forget({namespace,memoryId:memory.id,expectedRevision:memory.revision});
  if(!forgotten.ok)throw Error(JSON.stringify(forgotten));
  if(JSON.stringify(core.get({namespace,memoryId:memory.id})).includes('Synthetic installed safety content'))throw Error('suppressed_read');
  if(JSON.stringify(await reader.fetchCandidateEvidence(input,credential)).includes('Synthetic installed safety content'))throw Error('suppressed_installed_worker_read');
- const db=openDatabase(${JSON.stringify(join(f.workspace.path,'created.sqlite'))});
+ const db=openDatabase(path);
  try {const facts=db.prepare('SELECT kind,reason FROM content_suppressions ORDER BY kind').all();
  if(JSON.stringify(facts)!==JSON.stringify([{kind:'memory',reason:'user_forget'},{kind:'receipt',reason:'user_forget'}]))throw Error('missing_installed_facts');}finally{db.close();}
- console.log(JSON.stringify({pin:pin.version,forgotten:true,worker:true}));}finally{await reader?.close();await supervisor.close();core.close();}`;
-  const output = JSON.parse(run(['--input-type=module','-e',driver])); assert.equal(output.forgotten,true); assert.equal(output.worker,true);
+ results.push({physical:pin.physical,receiptEventTime,forgotten:true,worker:true});}finally{await reader?.close();await supervisor.close();core.close();}
+}console.log(JSON.stringify(results));`;
+  const output = JSON.parse(run(['--input-type=module','-e',driver]));
+  assert.deepEqual(output,[{physical:48,receiptEventTime:false,forgotten:true,worker:true},{physical:53,receiptEventTime:true,forgotten:true,worker:true}]);
   const loaded = new Set(readFileSync(trace,'utf8').trim().split('\n').map(value => JSON.parse(value)));
   const runtime = ['adapters/mcp/safety-migrate-command.mjs','core/content-safety-layout.mjs','core/content-safety-schema.mjs','core/content-suppression-storage.mjs','core/content-safety-migration.mjs'];
   for (const path of runtime) assert.ok(loaded.has(pathToFileURL(join(installed,path)).href),path);
