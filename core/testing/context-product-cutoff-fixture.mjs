@@ -1,3 +1,4 @@
+import { refreshMaintenance } from '../context-product-admission.mjs';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
@@ -9,7 +10,7 @@ import { credentialDigest, PRODUCT_PROFILE } from '../context-product-control.mj
 export const flush = async () => { for (let i=0;i<30;i++) await Promise.resolve(); };
 let identity=100;
 export function setup(t,{enabled=true,stalls=1,domains=1,termination,resources,openStall=false,usage=0,paths,refusal,late=false,entryDelayMs=0}={}) {
-  let now=0,serial=0,attempt=0,stalled=false;
+  let now=0,serial=0,attempt=0,stalled=false,admission=false;
   const timers=new Map(),calls=[],opens=[],closes=[],pumps=[],workers=[];
   const supervisor=createContextReadSupervisor(),token={opaque:randomUUID()},identities=new Map();
   const clock=()=>BigInt(Math.floor(now*1e6));
@@ -32,6 +33,7 @@ export function setup(t,{enabled=true,stalls=1,domains=1,termination,resources,o
         }else if(message.method==='close'){
           closes.push(data);Promise.resolve(termination?.()??0).then(()=>worker.emit('exit',0),error=>worker.emit('error',error));
         }
+        else if(message.method==='admitMaintenance'){admission=true;queueMicrotask(()=>worker.emit('message',{operation:message.operation,result:{ok:true,value:null},maintenanceAdmission:'admitted'}));}
         else {
           calls.push(message);stalled=typeof stalls==='function'?stalls(++attempt):attempt++<stalls;
           if(resources)resources(new Int32Array(data.resources));
@@ -42,15 +44,15 @@ export function setup(t,{enabled=true,stalls=1,domains=1,termination,resources,o
     queueMicrotask(()=>worker.emit('message',{kind:'identity',operation:data.operation,fileIdentity:'100:'+physical}));
     return worker;
   }});
-  const renew=pump.createMaintenancePumpRuntime({now:()=>now,setTimer,clearTimer,open:async (...args)=>{const h=await open(...args);return entryDelayMs?{...h,refreshContextIndex(...call){now+=entryDelayMs;return h.refreshContextIndex(...call);}}:h;},...(enabled?{cutoffQualified:()=>true}:{})});
+  const renew=pump.createMaintenancePumpRuntime({now:()=>now,setTimer,clearTimer,open,work:(h,...args)=>{now+=entryDelayMs;return refreshMaintenance(h,...args);},...(enabled?{cutoffQualified:()=>true}:{})});
   let config={supervisor,id:randomUUID(),window:{id:'window',endsAtMonoMs:60000,usedItems:0,usedMs:0},
-    budgets:{maxItems:100,maxMs:50000},quantum:{maxItems:1,maxMs:100},pollMs:1000,renewalMs:60000,
+    budgets:{maxItems:100,maxMs:50000},quantum:{maxItems:1,maxMs:100},pollMs:domains>1?700:1000,renewalMs:60000,
     serviceCredential:token,projections};
   const create=patch=>{config={...config,...patch};const p=renew(config);if(!pumps.includes(p))pumps.push(p);return p;};
   function fire(){const [id,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at||a[0].serial-b[0].serial)[0]??[];
     assert.ok(timer,'scheduled timer exists');timers.delete(id);now=Math.max(now,timer.at);return timer.fn();}
   async function due(time){now=time;while([...timers.values()].some(v=>v.at<=now)){fire();await flush();}}
-  async function begin(){const operation=fire();await flush();return {operation};}
+  async function begin(){admission=false;let operation=fire();await flush();if(admission){await operation;operation=fire();await flush();}return {operation};}
   async function step(){const {operation}=await begin();if(stalled||openStall)await due(now+100);await operation;await flush();}
   t.after(async()=>{for(const p of pumps)await p.close().catch(()=>{});await supervisor.close().catch(()=>{});});
   return {create,renew,open,config,supervisor,timers,calls,opens,closes,begin,step,due,fire,now:()=>now,set:n=>{now=n;},

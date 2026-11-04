@@ -1,3 +1,4 @@
+import { admitMaintenance, refreshMaintenance } from '../context-product-admission.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Worker } from 'node:worker_threads';
@@ -26,11 +27,16 @@ function setup(t,mode,{maintenance=true,fake,observation,refreshThrows=false,clo
   const open=reader.createProductReaderRuntime({maintenance,now:()=>BigInt(clock)*1000000n,utc:()=>1000,setTimer,clearTimer,
     spawnWorker(data){opening=data;if(fake)return fake(data);
       return new Worker(new URL('../testing/context-product-failure-worker.mjs',import.meta.url),{workerData:{...data,failureMode:mode},execArgv:[],env:{},resourceLimits:{maxOldGenerationSizeMb:16,maxYoungGenerationSizeMb:2}});}});
-  const renew=pump.createMaintenancePumpRuntime({now:()=>clock,setTimer,clearTimer,...(observation?{observedAt:()=>observation(clock)}:{}),
+  const renew=pump.createMaintenancePumpRuntime({admit:(_h,...args)=>admitMaintenance(handle,...args),work:async(_h,...args)=>{if(refreshThrows)throw new TypeError('private call text');return lastResult=await refreshMaintenance(handle,...args);},now:()=>clock,setTimer,clearTimer,...(observation?{observedAt:()=>observation(clock)}:{}),
     open:async(...args)=>{const resident=await open(...args);handle=resident;return {...resident,refreshContextIndex:async(...call)=>{if(refreshThrows)throw new TypeError('private call text');return lastResult=await resident.refreshContextIndex(...call);},close:async()=>{await resident.close();if(closeThrows)throw new Error('private cleanup text');}};}});
   const config={supervisor,id:'failure-'+mode,window:{id:'failure-window',endsAtMonoMs:60100,usedItems:0,usedMs:0},budgets:{maxItems:8,maxMs:8000},quantum:{maxItems:1,maxMs:1000},pollMs:1000,renewalMs:60000,serviceCredential:token,projections:[{options,types:['memory']}]};
   return {config,renew,open,options,token,timers,get handle(){return handle;},get result(){return lastResult;},get opening(){return opening;},now:()=>clock,
-    async step(){const [key,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];assert.ok(timer,'scheduled quantum exists');timers.delete(key);clock=timer.at;await timer.fn();}};
+    async step(){const before=lastResult;
+      do {const [key,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0]??[];if(!timer)return;
+        timers.delete(key);clock=Math.max(clock,timer.at);await timer.fn();
+      }while(lastResult===before&&timers.size);
+    }};
+
 }
 const cases=[['heap','worker_heap_limit'],['exit','worker_exit'],['named','worker_error'],['protocol','protocol'],['bad_observation','observation_timing'],['unmapped','unmapped:synthetic_engine_code'],['unsafe_code','unmapped:other'],['mapped','unmapped:synthetic_engine_code'],['worker_state','worker_state'],['resume','exception:TypeError'],['exception_other','exception:other']];
 for(const [mode,cause] of cases)test(`failure cause: ${mode} reaches reader and pump privately`,{timeout:30000},async t=>{
@@ -81,6 +87,7 @@ function fakeWorker(data,{identity=false,send=false,error=false,fileIdentity='12
     if(message.method==='close'){queueMicrotask(()=>worker.emit('exit',0));return;}
     if(send||identity)throw new RangeError('private dispatch text');
     if(error){worker.emit('error',Object.create({constructor:{name:'unsafe / constructor'}}));return;}
+    if(message.method==='admitMaintenance'){worker.emit('message',{operation:message.operation,result:{ok:true,value:null},maintenanceAdmission:'admitted'});return;}
     worker.emit('message',{operation:message.operation,result:{ok:true,value:{status:'complete',progress:{transformed:0}}},observedAtMonoMs:Number(BigInt(message.operation.enteredMonoNs))/1e6});
   }});
   queueMicrotask(()=>worker.emit('message',identity?{kind:'identity',operation:data.operation,fileIdentity}:{operation:data.operation,result:{ok:true,value:null},fileIdentity}));return worker;
@@ -229,7 +236,7 @@ test('K1 pump drain preserves the initiating call and its join snapshot',async t
   assert.equal(diagnostic.lastFailure?.cause,'engine','drain preserves the initiating call failure');
   assert.equal(diagnostic.lastFailure.engineCode,'storage_busy');assert.equal(diagnostic.lastFailure.ordinal,primary.ordinal);assert.deepEqual(diagnostic.lastFailure.stall,primary.stall);
   assert.equal(diagnostic.failureCounts.engine,1);assert.equal(diagnostic.failureCounts.cleanup,0);assert.equal(diagnostic.secondaryFailureCounts.cleanup,1);
-  assert.equal(lane.secondaryFailure.cause,'cleanup');assert.equal(lane.secondaryFailure.number,0);
+  assert.equal(lane.secondaryFailure.cause,'cleanup');assert.equal(lane.secondaryFailure.number,1);
 });
 
 

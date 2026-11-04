@@ -26,6 +26,8 @@ test('passing control: gated native verification cutoff stays terminal with the 
   f.workspace.defer(async()=>{Atomics.store(control,2,1);Atomics.notify(control,2);await p.close().catch(()=>{});await service.supervisor.close();});
   const abort=new AbortController();
   try {await Promise.race([(async()=>{
+    const [admissionId,admissionTimer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];timers.delete(admissionId);
+    await testClock.advance(admissionTimer.at-testClock.now());await admissionTimer.fn();
     const [id,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];timers.delete(id);
     if(timer.at>testClock.now())await testClock.advance(Math.ceil(timer.at-testClock.now()));
     const operation=Promise.resolve(timer.fn());
