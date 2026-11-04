@@ -10,7 +10,7 @@ test('K1 cutoff disposal failure preserves its initiator through proof propagati
   assert.equal(diagnostic.lastFailure.cause,'engine','cutoff remains the primary failure');
   assert.equal(diagnostic.lastFailure.engineCode,'read_timeout');
   assert.equal(record?.cause,'cleanup','disposal propagation records the physical close failure once');
-  assert.equal(diagnostic.lastFailure.ordinal,s.calls[0].maintenanceOrdinal);assert.equal(record.stage,'close');assert.equal(record.number,0);
+  assert.equal(diagnostic.lastFailure.ordinal,s.calls[0].maintenanceOrdinal);assert.equal(record.stage,'close');assert.equal(record.number,1);
   assert.equal(diagnostic.secondaryFailureCounts.engine,0,'reader cutoff propagation is not a secondary failure');
   assert.equal(diagnostic.secondaryFailureCounts.disposal_proof,0,'close rejection is not counted again as a proof failure');
   assert.equal(maintenancePumpPhaseDiagnostic(final).projections[0].secondaryFailureCounts.cleanup,1);

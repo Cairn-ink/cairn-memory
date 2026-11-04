@@ -342,6 +342,8 @@
   "core/content-suppression-evidence.mjs",
   "core/content-suppression-reader.mjs",
   "core/content-safety-boundary.mjs",
+  "core/context-product-admission.mjs",
+  "core/context-product-admission-policy.mjs",
   "core/context-product-attribution.mjs",
   "core/content-safety-classifier.mjs",
   "core/content-safety-files-child.mjs",

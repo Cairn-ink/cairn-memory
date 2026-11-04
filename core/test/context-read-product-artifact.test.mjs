@@ -42,7 +42,9 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   // S2h-1 storage, S2h-2's boundary, suppression grant grammar and three transaction validators, the gated B3 comparator,
   // the verification commit batch and semantic accounting stay behind the SQLite Worker boundary. Keep the exact closure
   // pin and independently verify the installed edges.
-  assert.equal(expected.length, 118, 'private_semantic_accounting_closure_pin');
+  assert.equal(expected.length, 120, 'private_maintenance_admission_closure_pin');
+  assert.ok(expected.includes('core/context-product-admission.mjs'));
+  assert.ok(expected.includes('core/context-product-admission-policy.mjs'));
   assert.ok(expected.includes('core/context-semantic-accounting.mjs'), 'semantic_accounting_is_in_installed_worker_closure');
   assert.ok(expected.includes('core/context-product-comparison.mjs'));
   assert.ok(expected.includes('core/context-product-verification-batch.mjs'));
@@ -84,7 +86,7 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   assert.ok(installed.includes('core/context-product-sqlite.mjs')); // P2d Worker dependency.
 
   const staticFiles = closure(artifact, ['core/context-product-reader.mjs', 'core/context-read-supervisor.mjs'], false);
-  assert.equal(staticFiles.length, 31, 'suppression grant grammar preserves the SQLite-free parent and engine-only pool');
+  assert.equal(staticFiles.length, 32, 'private admission bridge preserves the SQLite-free parent and engine-only pool');
   t.diagnostic(`runtime/Worker closure cross-check: source=${expected.length}, installed=${installed.length}; static SQLite-free closure=${staticFiles.length}`);
   // Bootstrap code is supplied by the host, copied into the installed tree;
   // it imports no source-checkout module and has no network/provider dependency.

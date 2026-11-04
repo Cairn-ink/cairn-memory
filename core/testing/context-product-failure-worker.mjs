@@ -7,6 +7,7 @@ const checkpoints=new Set();
 parentPort.postMessage({operation:workerData.operation,result:{ok:true,value:null},fileIdentity:'12:34'});
 parentPort.on('message',message=>{
   if(message.method==='close'){parentPort.close();return;}
+  if(message.method==='admitMaintenance'){parentPort.postMessage({operation:message.operation,result:{ok:true,value:null},maintenanceAdmission:'admitted'});return;}
   entered=BigInt(message.operation.enteredMonoNs);meter?.reset(message.maintenanceOrdinal);
   meter?.measure('item',()=>{},true);
   const send=(result,detail)=>parentPort.postMessage({operation:message.operation,result,
