@@ -123,10 +123,15 @@ This is an internal
 JavaScript contract, **not an extension to the v0.1 HTTP schema**; adapters must
 map fields and enforce their own protocol.
 
-Inputs reject unknown fields. Text is normalized (NFKC), redacted, whitespace
-collapsed, and validated. Content is at most 4,000 UTF-16 units; source input is
-at most 20,000 units and stored excerpts are bounded to 800 without splitting
+Inputs reject unknown fields. Each content/excerpt field is normalized (NFKC),
+secret-redacted, whitespace-collapsed and trimmed before measuring UTF-16 code
+units. Content is rejected above 4,000 units; raw input to either field is
+rejected above 20,000 units and stored excerpts are truncated to 800 without splitting
 code points. Redaction runs before excerpt truncation and is best-effort.
+Use the exported `normalizedTextLength` or `normalizeBoundedText` to prepare
+segments, measuring each field separately; concatenated lengths are not additive.
+See [bounded text lengths](capture.md#bounded-text-lengths). Legacy `search`
+instead caps the raw query at 4,000 units before NFKC tokenization.
 Identifiers are opaque caller-provided strings, not text to redact: never use
 credentials, raw paths, or private prose as owner/project/client/session/event
 IDs. They are stored locally as supplied.

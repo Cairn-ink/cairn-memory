@@ -1,0 +1,50 @@
+import { journalFailure } from './journal-failures.mjs';
+import { open, rename } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { fileChild } from './actors.mjs';
+export const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+export function immutable(value) {
+  for(const child of Object.values(value))if(child&&typeof child==='object')immutable(child);
+  return Object.freeze(value);
+}
+export async function createReportSink(path,header) {
+  const headerText=JSON.stringify(header),headerHash=digest(header);
+  const registration=await open(path+'.header.json','wx',0o400);
+  try{await registration.writeFile(headerText+'\n');await registration.sync();}finally{await registration.close();}
+  const journal=await open(path+'.records.jsonl','ax',0o600),partial=await open(path+'.partial','wx',0o600);
+  fileChild('failure-journal-init',path,JSON.stringify({type:'header',headerHash}));
+  await journal.writeFile(JSON.stringify({type:'header',headerHash,failureJournal:true})+'\n');await journal.sync();
+  await partial.writeFile(JSON.stringify({type:'registration',headerHash,header})+'\n');await partial.sync();
+  let sequence=0,finished=false,delegated=false;
+  return {
+    async sessionOpen(cell){await partial.writeFile(JSON.stringify({type:'session-open',cell})+'\n');await partial.sync();},
+    async sessionClosed(cell){await partial.writeFile(JSON.stringify({type:'session-cleanup-complete',cell})+'\n');await partial.sync();},
+    async failure(cell,series,record){fileChild('failure-journal-append',path,JSON.stringify({type:'record',cell,series,record,...(journalFailure(series,record)?{failure:true}:{})}));},
+    async delegate(){if(delegated)throw Error('journal_delegated');delegated=true;return {path,sequence};},
+    async reclaim(next){if(!Number.isSafeInteger(next))next=fileChild('journal-sequence',path).value.sequence;if(next<sequence)throw Error('journal_sequence');sequence=next;delegated=false;},
+    async record(cell,series,record){if(delegated)throw Error('journal_delegated');await journal.writeFile(JSON.stringify({type:'record',sequence:++sequence,cell,series,record,...(journalFailure(series,record)?{failure:true}:{})})+'\n');await journal.sync();},
+    async cell(cell,decision,summary={}){await partial.writeFile(JSON.stringify({type:'cell',cell,decision,summary})+'\n');await partial.sync();},
+    async finish(status,extra={}){if(delegated)throw Error('journal_delegated');if(finished)return;finished=true;
+      try{await partial.writeFile(JSON.stringify({type:'final',status,records:sequence,headerHash,...extra})+'\n');await partial.sync();}
+      finally{await journal.close();await partial.close();}await rename(path+'.partial',path);},
+    async interrupt(){if(finished)return;finished=true;await journal.close();await partial.close();},
+  };
+}
+
+// Only the session child opens this harness-owned numeric journal. Parent and
+// child never write concurrently; the lease carries its next sequence number.
+export async function appendSessionRecords({path,sequence,rehearsal=false}) {
+  const filter=rehearsal?(await import('./rehearsal-checks.mjs')).functionalEvidence:value=>value;
+  const journal=await open(path+'.records.jsonl','a',0o600);
+  let writing=Promise.resolve();
+  return {get sequence(){return sequence;},record(cell,series,record){
+    const line=JSON.stringify({type:'record',sequence:++sequence,cell,series,record:filter(record),...(journalFailure(series,record)?{failure:true}:{})})+'\n';
+    return writing=writing.then(async()=>{await journal.writeFile(line);await journal.sync();});
+  },async close(){try{await writing;}finally{await journal.close();}}};
+}
+
+// Real report sinks have an independent failure journal. In-memory test sinks
+// implement record directly and never own a child lease or database descriptor.
+export async function persistFailure(sink,cell,series,record) {
+  return (sink.failure??sink.record).call(sink,cell,series,record);
+}

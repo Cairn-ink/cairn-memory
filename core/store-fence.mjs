@@ -1,3 +1,5 @@
+import { validateContextProductLayout } from './context-product-schema.mjs';
+import { attestContentSafety } from './content-safety-schema.mjs';
 // Host-selected rollback-journal review fence. This module must stay SQLite-free
 // at link time: the CLI validates file identity before importing host SQLite.
 import {lstatSync} from 'node:fs';
@@ -59,6 +61,8 @@ export function pinStoreFile(path,expected) {
 export function storeIdentity(db) {
   let result;
   try{
+    const layout=attestContentSafety(db);
+    if(layout.suppressionRevision)validateContextProductLayout(db,layout);
     result={applicationId:db.prepare('PRAGMA application_id').get().application_id,
       userVersion:db.prepare('PRAGMA user_version').get().user_version,
       storeId:db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id};

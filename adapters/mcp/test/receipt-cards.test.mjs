@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import test from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
+import { STORAGE_BUSY_TIMEOUT_MS } from '../../../core/database.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { ok, call, host, review } from './card-support.mjs';
 
@@ -37,8 +39,10 @@ test('H02/H04 receipt-backed stdio drafts, local review, restart, correction and
       expectedRevision: memory.revision, content: 'Synthetic review is Friday.' })).memory;
     assert.equal(ok(await call(local.client, 'inspect_private_card', { cardId: cancelled.id })).card, null);
     const unsupported = ok(await call(local.client, 'inspect_private_card', { cardId: draft.id })).card;
-    assert.notEqual(unsupported.support.status, 'eligible');
-    assert.equal(unsupported.body, input.body);
+    assert.equal(unsupported, null);
+    const db = new DatabaseSync(path, { readOnly: true, timeout: STORAGE_BUSY_TIMEOUT_MS });
+    try { assert.equal(db.prepare('SELECT body FROM private_cards WHERE id=?').get(draft.id).body, input.body); }
+    finally { db.close(); }
     ok(await call(local.client, 'forget_memory', { memoryId: memory.id, expectedRevision: corrected.revision }));
     assert.equal((await call(local.client, 'read_private_card_source', { source })).ok, false);
     const effects = ok(await call(local.client, 'list_private_card_effects'));

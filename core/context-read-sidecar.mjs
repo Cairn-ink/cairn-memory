@@ -1,13 +1,19 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { assertContentPort, inertContentPortValue, hasContentPortBoundary } from './content-safety-boundary.mjs';
+import { isBudgetEmbeddingPort } from './context-read-budget.mjs';
+import { withContentSuppressionReadInside, contentSuppressionReasonInside, inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { contentSuppressionFenceInside, contentSuppressionRequestFenceInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { bindContentSafetyConnection, checkInstalledContentSafety, cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
+import { contentReadSafety, memoryReadEligible } from './content-safety.mjs';
 import { createCardCurrentStorage, cardDependencyFence } from './card-current-storage.mjs';
 import { lstatSync, unlinkSync } from 'node:fs';
-import { probeRollbackJournal, createExclusiveSqliteFile } from './sqlite-journal-probe.mjs';
-import { isAbsolute } from 'node:path';
+import { probeRollbackJournal, createExclusiveSqliteFile, protectedDeleteJournal, sameJournal } from './sqlite-journal-probe.mjs';
+import { isAbsolute, dirname } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { performance } from 'node:perf_hooks';
 import { readTransaction, isConnectionDiscarded } from './database.mjs';
-import { createCardReceiptSources } from './card-receipt-sources.mjs';
-import { createCardRawSources } from './card-raw-sources.mjs';
-import { cardNamespace, keyed, sourceRef } from './private-card-input.mjs';
+import { cardNamespace } from './private-card-input.mjs';
 import { cardApplicabilityInside } from './private-evidence-schema.mjs';
 import { fail } from './validation.mjs';
 import { rankScores, scoreBM25 } from './context-read-bm25.mjs';
@@ -16,6 +22,14 @@ import { cosine, encodeVector, loadVector, semanticCapacity, validateEmbedder } 
 
 export const SIDECAR_FORMAT = 1;
 const APPLICATION_ID = 0x43525831;
+// Keep AsyncResource private: exposing a bound callback's .asyncResource
+// would let a caller execute arbitrary work in the engine's request context.
+function engineGuard(work) {
+  const bound = AsyncLocalStorage.bind(work);
+  return function beforeDispatch(...args) { return Reflect.apply(bound,undefined,args); };
+}
+const throwIfAborted=AbortSignal.prototype.throwIfAborted;
+const checkSignal=signal=>{if(signal)assertContentPort({invoke:()=>{try{Reflect.apply(throwIfAborted,signal,[]);}catch(error){if(!hasContentPortBoundary())throw error;fail('timeout');}}});};
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -26,8 +40,7 @@ function stat(path) {
     unavailable('unsafe_file');
   }
 }
-function protectedFile(path, required = true) {
-  const value = stat(path);
+function protectedFile(path, required = true, value = stat(path)) {
   if (!value && !required) return null;
   if (!value || !value.isFile() || value.isSymbolicLink() || process.platform !== 'win32' && (value.mode & 0o777) !== 0o600)
     unavailable('unsafe_file');
@@ -46,10 +59,83 @@ function walHeader(path, observer) {
   return result.code === 14 || result.mode !== 'delete';
 }
 
+// A recovery refusal does not distinguish DELETE from WAL. Read the fixed
+// header in a child with no SQLite connection, so its raw descriptor close
+// cannot release this process's SQLite locks.
+export function contextReadDeleteJournal(path, observer, validated) {
+  try {
+    const before = lstatSync(path, { bigint: true }), directory = lstatSync(dirname(path), { bigint: true });
+    const fields = ['dev','ino','mode','uid','gid','nlink'];
+    const matches = (actual, expected) => fields.every(key =>
+      (typeof expected[key] === 'bigint' || Number.isSafeInteger(expected[key])) && actual[key] === BigInt(expected[key]));
+    const baseline = validated ?? { main: before, directory };
+    // Retain the caller's protection/identity proof rather than resetting it.
+    if (!matches(before, baseline.main) || !matches(directory, baseline.directory) ||
+        baseline.expectedIdentity && (String(before.dev) !== baseline.expectedIdentity.device ||
+          String(before.ino) !== baseline.expectedIdentity.inode)) return false;
+    const timeout = Math.min(5000, Math.floor(observer?.journalRemainingMs?.() ?? 5000));
+    if (!(timeout >= 1)) fail('read_timeout');
+    const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      import { openSync, readSync, closeSync, fstatSync, constants } from 'node:fs';
+      let fd;
+      try {
+        fd = openSync(process.argv[1], constants.O_RDONLY | constants.O_NOFOLLOW);
+        const opened = fstatSync(fd, { bigint: true });
+        const header = Buffer.alloc(20), length = readSync(fd, header, 0, 20, 0);
+        process.stdout.write(JSON.stringify({ device: String(opened.dev), inode: String(opened.ino),
+          mode: length === 20 && header.subarray(0,16).equals(Buffer.from('SQLite format 3\\0')) &&
+          header[18] === 1 && header[19] === 1 ? 'delete' : 'other' }));
+      } finally { if (fd !== undefined) closeSync(fd); }
+    `, path], { encoding: 'utf8', env: {}, timeout, maxBuffer: 1024 });
+    if (child.error?.code === 'ETIMEDOUT') fail('read_timeout');
+    if (child.error || child.status !== 0) return false;
+    const opened = JSON.parse(child.stdout);
+    const after = lstatSync(path, { bigint: true }), currentDirectory = lstatSync(dirname(path), { bigint: true });
+    // A writer may commit while the child starts. Content timestamps can
+    // change; replacement or protection changes must retain the refusal.
+    return opened.mode === 'delete' && opened.device === String(before.dev) && opened.inode === String(before.ino) &&
+      matches(after, baseline.main) && matches(currentDirectory, baseline.directory);
+  } catch (error) { if (error?.code === 'read_timeout') throw error; return false; }
+}
+
 function auxiliaries(path, readOnly, observer) {
+  let journal;
+  const companions = {};
   for (const suffix of ['-wal', '-shm', '-journal']) {
     const entry = protectedFile(path + suffix, false);
+    companions[suffix] = entry;
+    if (entry && readOnly && suffix === '-journal') { journal = entry; continue; }
     if (entry && (readOnly || suffix !== '-journal')) unavailable('auxiliary_file');
+  }
+  if (journal) {
+    // Refuse the operation; only a protected DELETE journal is contention.
+    // The isolated header check cannot recover or admit a read through it.
+    let main, directory;
+    try { main = protectedFile(path); directory = stat(dirname(path)); } catch { unavailable('auxiliary_file'); }
+    const proof = { main, directory, journal };
+    if (!protectedDeleteJournal({ ...proof, wal: companions['-wal'], shm: companions['-shm'] })) unavailable('auxiliary_file');
+    if (!contextReadDeleteJournal(path, observer, { main, directory })) unavailable('auxiliary_file');
+    const current = stat(path + '-journal');
+    // Preserve protection failures from the same post-child metadata sample.
+    if (current) protectedFile(path + '-journal', false, current);
+    if (current && !sameJournal(current, journal)) {
+      let checked;
+      try { checked = { main: stat(path), directory: stat(dirname(path)), journal: current,
+        wal: stat(path + '-wal'), shm: stat(path + '-shm') }; } catch { unavailable('auxiliary_file'); }
+      if (!protectedDeleteJournal(checked, proof)) unavailable('auxiliary_file');
+      // Sample the journal first so the remaining proof also covers this window.
+      // Disappearance is busy only while the remaining protection proof holds.
+      try {
+        const finalJournal = stat(path + '-journal');
+        const final = { journal: finalJournal ?? current, main: stat(path), directory: stat(dirname(path)),
+          wal: stat(path + '-wal'), shm: stat(path + '-shm') };
+        if (!protectedDeleteJournal(final, proof) || finalJournal && !sameJournal(finalJournal, current))
+          unavailable('auxiliary_file');
+      } catch { unavailable('auxiliary_file'); }
+      fail('storage_busy');
+    }
+    for (const suffix of ['-wal','-shm']) if (protectedFile(path + suffix, false)) unavailable('auxiliary_file');
+    fail('storage_busy');
   }
   // A checkpointed WAL database can have no auxiliary files. Inspect its
   // mode through isolated SQLite before a host connection can create WAL/SHM.
@@ -150,7 +236,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
   const canonicalRead = work => {
     if (isConnectionDiscarded(canonical)) fail('store_closed');
     if (readOnly) auxiliaries(path, true);
-    return readTransaction(canonical, work);
+    return readTransaction(canonical, () => inContentSuppressionRequestInside(canonical, () => { checkInstalledContentSafety(canonical); return work(); }));
   };
   const identity = canonicalRead(() => {
     const row = canonical.prepare('SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1').get();
@@ -260,13 +346,24 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     open();
   }
 
-  function fence(p) {
+  function fence(p, validate) {
     return canonicalRead(() => {
       const store = canonical.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id;
       if (store !== identity.storeId) unavailable('wrong_store');
       if (p.types.includes('card') && !features.cards) fail('invalid_input');
-      return p.readSet.map(ns => ({ memory: canonical.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch ?? 1,
-        ...(p.types.includes('card') ? { card: canonical.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1, ...cardDependencyFence(canonical, ns, p.readSet) } : {}) }));
+      const values=p.readSet.map(ns => {
+        const proof=cachedContentSuppressionRequestInside(canonical,ns.ownerId);
+        let memory;
+        if(proof?.layout.suppressionRevision){
+          const row=canonical.prepare(`SELECT n.epoch,coalesce(f.epoch_hi,0) epoch_hi,coalesce(f.epoch_lo,0) epoch_lo
+            FROM (SELECT 1) anchor LEFT JOIN namespace_epochs n ON n.owner_id=? AND n.scope=? AND n.project_id=?
+            LEFT JOIN owner_suppression_epochs f ON f.owner_id=?`).get(...boundary(ns),ns.ownerId);
+          if(`${row.epoch_hi}:${row.epoch_lo}`!==proof.epoch)fail('evidence_unavailable');
+          memory=row.epoch??1;
+        }else memory=canonical.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch??1;
+        return {memory,...(p.types.includes('card') ? { card: canonical.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1, ...cardDependencyFence(canonical, ns, p.readSet) } : {})};
+      });
+      validate?.();return values;
     });
   }
   const generation = p => sideRead(() => side.prepare('SELECT * FROM generations WHERE id=?').get(p.id));
@@ -275,13 +372,13 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     if (!current || current.sequence !== g.sequence || current.checkpoint !== g.checkpoint ||
         current.fence !== g.fence || current.access !== g.access || current.incarnation !== g.incarnation) unavailable('stale_index');
   }
-  function fresh(p, g) {
-    return g && g.published === 1 && g.access === p.access && g.fence === JSON.stringify(fence(p));
+  function fresh(p, g, validate) {
+    return g && g.published === 1 && g.access === p.access && g.fence === JSON.stringify(fence(p,validate));
   }
 
   function supportDatabase(metrics) {
     // Source support bytes/lookups are charged separately from candidate text.
-    return { prepare(sql) {
+    return bindContentSafetyConnection({ get isTransaction() { return canonical.isTransaction; }, prepare(sql) {
       const statement = canonical.prepare(sql);
       const charge = row => {
         for (const value of Object.values(row ?? {})) {
@@ -291,7 +388,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       };
       return { get(...args) { metrics.supportLookups++; const row = statement.get(...args); charge(row); return row; },
         all(...args) { metrics.supportLookups++; const rows = statement.all(...args); rows.forEach(charge); return rows; } };
-    } };
+    } }, canonical);
   }
   function cardEligible(ns, row, intent, metrics, readSet) {
     return contextCardEligible(supportDatabase(metrics), identity, features, ns, row, intent, { readSet });
@@ -320,7 +417,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       metrics.canonicalRows += rows.length;
     }
     const result = rows.map(row => {
-      const eligible = type === 'memory' ? !row.deleted && (p.intent === 'history' || row.currentness === 'current' && row.review_state !== 'awaiting') :
+      const eligible = type === 'memory' ? memoryReadEligible(row, p.intent) :
         cardEligible(ns, row, p.intent, metrics, p.readSet);
       const tuple = { id: row.id, revision: row.revision, body_revision: row.body_revision, eligible: Number(eligible) };
       metrics.projectionBytes += Buffer.byteLength(JSON.stringify(tuple));
@@ -330,8 +427,14 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     return result;
   }
   function textFor(stream, id, metrics) {
-    const row = canonical.prepare(stream.type === 'memory' ? `SELECT content AS text FROM memories WHERE ${where} AND id=?` :
+    const layout = cachedContentLayout(canonical);
+    const ancestry = stream.type === 'memory' && layout?.suppressionRevision && layout.rawLineage ? `,EXISTS(
+      SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id
+      LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id
+      AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry` : '';
+    const row = canonical.prepare(stream.type === 'memory' ? `SELECT content AS text${ancestry} FROM memories WHERE ${where} AND id=?` :
       `SELECT title||char(10)||body AS text FROM private_cards WHERE ${where} AND id=?`).get(...boundary(stream.ns), id);
+    if (row?.invalid_raw_ancestry) unavailable('stale_index');
     if (typeof row?.text !== 'string' || row.text.length > 2_000_000) fail('context_item_too_large');
     metrics.textRows++; metrics.textUnits += row.text.length; metrics.textBytes += Buffer.byteLength(row.text);
     return row.text;
@@ -481,17 +584,58 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       coverage: ready ? sideRead(() => ({ ...side.prepare("SELECT n,total_length FROM statistics WHERE generation=? AND term=''").get(p.id) })) : { n: null, total_length: null } };
   }
 
-  function published(p) {
+  function published(p, validate) {
     const g = generation(p);
-    if (!fresh(p, g)) unavailable('rebuilding');
+    if (!fresh(p, g, validate)) unavailable('rebuilding');
     return g;
+  }
+  function candidateAllowed(item, intent, readSet) {
+    return item.type === 'card' ? contextCardEligible(canonical,identity,features,item.namespace,
+      {id:item.cardId,revision:item.revision,body_revision:item.bodyRevision},intent,{readSet}) :
+      contentReadSafety(canonical,{identity,namespace:item.namespace,ref:item,intent}).allowed;
+  }
+  function safetyEpoch(p) {
+    if (!(cachedContentLayout(canonical) ?? installedContentLayout(canonical)).suppressionRevision) return undefined;
+    if (cachedContentSuppressionRequestInside(canonical)) return contentSuppressionRequestFenceInside(canonical,p.readSet[0].ownerId);
+    return canonicalRead(() => contentSuppressionFenceInside(canonical,p.readSet[0].ownerId));
+  }
+  function emptyRequestFacts(p) {
+    const state=cachedContentSuppressionRequestInside(canonical,p.readSet[0].ownerId);
+    return state?.facts?.length===0 && p.readSet.every(ns=>state.readSet.some(selected=>
+      selected.scope==='owner' || selected.scope===ns.scope && (selected.projectId??'')===(ns.projectId??'')));
+  }
+  function visibleDocuments(p, deadlineAt = performance.now()+1000, deliver = value=>value) {
+    const epoch = safetyEpoch(p);
+    if (epoch === undefined || epoch === '0:0' || emptyRequestFacts(p)) return deliver(null);
+    const work=()=>canonicalRead(()=>withContentSuppressionReadInside(canonical,p.readSet,memo=>{
+      if (memo.facts?.length === 0) return deliver(null);
+      const totals=side.prepare("SELECT n,total_length FROM statistics WHERE generation=? AND term=''").get(p.id),ids=new Set();
+      let totalLength=totals.total_length;
+      const unknown=!memo.facts||memo.layout.rawLineage||p.types.includes('card')||memo.facts.some(f=>!['memory','owner','namespace','receipt'].includes(f.kind));
+      if(memo.facts)for(const fact of memo.facts){
+        if(performance.now()>=deadlineAt)unavailable('timeout');
+        if(['owner','namespace'].includes(fact.kind))unavailable('stale_index');
+        if(fact.kind!=='memory')continue;
+        const stream=p.streams.findIndex(s=>s.type==='memory'&&s.ns.scope===fact.scope&&(s.ns.projectId??'')===fact.project_id);
+        if(stream<0)continue;
+        const row=side.prepare('SELECT revision,body_revision,eligible,token_length FROM documents WHERE generation=? AND stream=? AND id=?').get(p.id,stream,fact.stable_key);
+        const key=JSON.stringify([stream,fact.stable_key]);
+        if(!row?.eligible||ids.has(key))continue;
+        if(contentSuppressionReasonInside(canonical,p.streams[stream].ns,{kind:'memory',key:fact.stable_key,revision:row.revision,
+          version:JSON.stringify(['memory-revision-v1',row.revision])})){ids.add(key);totalLength-=row.token_length;}
+      }
+      const count=unknown?null:totals.n-ids.size;
+      return deliver({ids:[...ids],unknown,byType:Object.fromEntries(p.types.map(type=>[type,{eligible:count,indexed:count}])),totalLength,n:count});
+    }));
+    return side.isTransaction?work():sideRead(work);
   }
   function lexicalPage(input, query, limit = 24, { deadlineAt = Infinity } = {}) {
     if (typeof query !== 'string' || !query.trim() || query.length > 4000 || query.includes('\0') || !query.isWellFormed() ||
         !Number.isSafeInteger(limit) || limit < 1 || limit > 24) fail('invalid_input');
-    const p = projection(input), g = published(p), terms = [...new Set(tokenizeT1(query))];
-    const result = sideRead(() => {
-      const totals = side.prepare("SELECT n,total_length FROM statistics WHERE generation=? AND term=''").get(p.id), df = new Map(), docs = new Map();
+    const p = projection(input), g = published(p), terms = [...new Set(tokenizeT1(query))], suppressionEpoch=safetyEpoch(p);
+    const result = sideRead(() => visibleDocuments(p,deadlineAt,visible => {
+      const allowed=visible&&new Set(visible.ids);
+      const totals = visible?{n:visible.n,total_length:visible.totalLength}:side.prepare("SELECT n,total_length FROM statistics WHERE generation=? AND term=''").get(p.id), df = new Map(), docs = new Map();
       for (const term of terms) {
         if (performance.now() >= deadlineAt) unavailable('timeout');
         const frequency = side.prepare('SELECT df FROM statistics WHERE generation=? AND term=?').get(p.id, term)?.df;
@@ -506,6 +650,8 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
             ORDER BY p.stream,p.id LIMIT ?`).all(p.id, term, afterStream, afterId, batchSize);
           for (const row of rows) {
             const key = JSON.stringify([row.stream, row.id]);
+            if(allowed&&allowed.has(key))continue;
+            if(visible?.unknown&&!candidateAllowed(ref(p.streams[row.stream],row),p.intent,p.readSet))continue;
             if (!docs.has(key)) docs.set(key, { ...row, frequencies: new Map() });
             docs.get(key).frequencies.set(term, row.frequency);
           }
@@ -513,11 +659,16 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
           afterStream = rows.at(-1).stream; afterId = rows.at(-1).id;
         }
       }
+      if(visible)for(const term of terms)df.set(term,[...docs.values()].filter(row=>row.frequencies.has(term)).length);
+      if(visible?.unknown){totals.n=docs.size;totals.total_length=[...docs.values()].reduce((n,r)=>n+r.token_length,0);}
       const ranked = rankScores([...docs.values()].map(row => ({ ref: ref(p.streams[row.stream], row),
         score: scoreBM25(terms, { frequencies: row.frequencies, length: row.token_length }, { N: totals.n, totalLength: totals.total_length, df }) }))).slice(0, limit);
       if (performance.now() >= deadlineAt) unavailable('timeout');
       return { rows: ranked, matched: docs.size };
-    });
+    }));
+    if(suppressionEpoch!==safetyEpoch(p))unavailable('stale_index');
+    if(result.rows.length && suppressionEpoch!==undefined && suppressionEpoch!=='0:0' && !emptyRequestFacts(p))result.rows = canonicalRead(() =>
+      result.rows.filter(({ref:item})=>candidateAllowed(item,p.intent,p.readSet)));
     const current = generation(p);
     if (!fresh(p, current) || current.sequence !== g.sequence || current.incarnation !== g.incarnation) unavailable('stale_index');
     return result;
@@ -534,6 +685,10 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     const maximum = input.budget?.maxItems, maxMs = input.budget?.maxMs;
     if (!Number.isInteger(maximum) || maximum < 1 || maximum > 1024 || !Number.isInteger(maxMs) || maxMs < 1 || maxMs > 5000) fail('invalid_input');
     if (maxBatchDocuments !== undefined && maxBatchDocuments !== 1) fail('invalid_input');
+    const safetyLayout = Boolean((cachedContentLayout(canonical) ?? installedContentLayout(canonical)).suppressionRevision);
+    // The budget port already fences namespace and owner epochs before each
+    // dispatch. Its scoped-empty proof needs no per-document fact recheck.
+    const checkCandidates = safetyLayout && !(isBudgetEmbeddingPort(embedder) && emptyRequestFacts(p));
     const started = performance.now(); let attempted = 0, embedded = 0;
     while (attempted < maximum && performance.now() - started < maxMs) {
       guard();
@@ -549,17 +704,52 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       // between them; the transport batch has its own combined bound below.
       const texts = rows.map(row => {
         if (performance.now() - started >= maxMs) unavailable('timeout');
-        return canonicalRead(() => textFor(p.streams[row.stream], row.id, m));
+        if (!checkCandidates) return canonicalRead(() => textFor(p.streams[row.stream], row.id, m));
+        return canonicalRead(() => {
+          const stream = p.streams[row.stream];
+          const current = metadata(stream, row.id, 1, p, m, true)[0];
+          if (!current?.eligible || current.revision !== row.revision || current.body_revision !== row.body_revision) unavailable('stale_index');
+          // Card metadata already crossed its sole entry in this snapshot.
+          if (stream.type === 'memory' && !candidateAllowed({type:'memory',namespace:stream.ns,
+            memoryId:row.id,revision:row.revision},p.intent,p.readSet)) unavailable('stale_index');
+          return textFor(stream, row.id, m);
+        });
       });
       if (texts.reduce((sum, text) => sum + text.length, 0) > 2_000_000) fail('context_item_too_large');
-      signal?.throwIfAborted();
+      checkSignal(signal);
       guard();
       const before = generation(p);
       if (!fresh(p, before) || before.sequence !== g.sequence || before.incarnation !== g.incarnation) unavailable('stale_index');
-      const vectors = await port.embed(texts, { signal });
-      signal?.throwIfAborted();
-      if (closed) fail('store_closed');
-      guard();
+      const dispatch = !checkCandidates ? () => {} : engineGuard(() => canonicalRead(() => {
+        for (const row of rows) {
+          const stream = p.streams[row.stream];
+          if (stream.type === 'card' ? !cardEligible(stream.ns,row,p.intent,m,p.readSet) :
+              !candidateAllowed({type:'memory',namespace:stream.ns,memoryId:row.id,revision:row.revision},p.intent,p.readSet)) unavailable('stale_index');
+        }
+      }));
+      dispatch();
+      let vectors;
+      const budgetPort=isBudgetEmbeddingPort(embedder);
+      assertContentPort({before:true});
+      try {
+        const invoke=async()=>{try{return inertContentPortValue(await port.embed(texts, { signal, beforeDispatch: dispatch }), 'invalid_input', { rejectProxies: true });}
+          catch(error){
+            if(budgetPort||!hasContentPortBoundary())throw error;
+            let frame;try{frame=inertContentPortValue({code:error?.code,name:error?.name,status:error?.status,reason:error?.reason},'invalid_input');}catch{fail('invalid_input');}
+            const safe=Object.assign(new Error('provider_error'),{code:typeof frame.code==='string'?frame.code:'provider_error'});
+            for(const key of ['name','reason'])if(typeof frame[key]==='string')safe[key]=frame[key];
+            if(typeof frame.status==='number')safe.status=frame.status;throw safe;
+          }};
+        vectors=await (budgetPort?invoke():assertContentPort({invoke}));
+      } finally {
+        // Authority callbacks finish before the invocation's sole epoch read.
+        try {
+          checkSignal(signal); if (closed) fail('store_closed'); guard();
+          // Re-check after the guard: the caller's isCurrent may abort the signal or close the store.
+          checkSignal(signal); if (closed) fail('store_closed');
+        }
+        finally { if(!budgetPort||embedder.didInvoke())assertContentPort(); }
+      }
       if (performance.now() - started >= maxMs) unavailable('timeout');
       const after = generation(p);
       if (!fresh(p, after) || after.sequence !== g.sequence || after.incarnation !== g.incarnation) unavailable('stale_index');
@@ -588,25 +778,30 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     const ready = Boolean(g && g.published === 1 && g.fence === current && g.access === p.access);
     const byType = Object.fromEntries(p.types.map(type => [type, { eligible: null, indexed: null }]));
     if (ready) {
-      const counts = sideRead(() => side.prepare(`SELECT stream,count(*) AS n FROM documents
+      const visible=visibleDocuments(p);
+      const counts = visible?[]:sideRead(() => side.prepare(`SELECT stream,count(*) AS n FROM documents
         WHERE generation=? AND eligible=1 GROUP BY stream`).all(p.id));
-      for (const type of p.types) byType[type] = { eligible: 0, indexed: 0 };
+      for (const type of p.types) byType[type] = visible?visible.byType[type]:{ eligible: 0, indexed: 0 };
       for (const row of counts) {
         const value = byType[p.streams[row.stream].type]; value.eligible += row.n; value.indexed += row.n;
       }
     }
     return { ready, fence: current, sequence: g?.sequence ?? null, checkpoint: g?.checkpoint ?? null, incarnation: g?.incarnation ?? null,
+      ...(safetyEpoch(p)===undefined?{}:{suppressionEpoch:safetyEpoch(p)}),
       buildState: ready ? g.reason === 'reconcile' ? 'ready' : 'rebuilt' : 'rebuilding', reason: g?.reason ?? rebuildReason ?? null, byType,
       progress: g ? { phase: g.phase, checkpoint: g.checkpoint, sequence: g.sequence, baseSequence: g.base_sequence } : null };
   }
-  function assertState(input, expected, { checkpoint = true } = {}) {
-    const p = projection(input), g = published(p);
+  function assertState(input, expected, { checkpoint = true, validate } = {}) {
+    const p = projection(input), g = published(p,validate);
+    if(expected.suppressionEpoch!==undefined&&expected.suppressionEpoch!==safetyEpoch(p))unavailable('stale_index');
     if (g.sequence !== expected.sequence || checkpoint && g.checkpoint !== expected.checkpoint ||
         g.fence !== expected.fence || g.incarnation !== expected.incarnation) unavailable('stale_index');
   }
   function semanticPreflight(input, embedder, { deadlineAt = Infinity } = {}) {
     const port = validateEmbedder(embedder), p = projection(input), g = published(p);
-    const count = sideRead(() => side.prepare("SELECT n FROM statistics WHERE generation=? AND term=''").get(p.id).n);
+    const visible=visibleDocuments(p,deadlineAt), allowed=visible&&new Set(visible.ids);
+    if(visible?.unknown)return {state:'partial_coverage',eligible:null,embedded:null,scanned:0,byType:null};
+    const count = visible?visible.n:sideRead(() => side.prepare("SELECT n FROM statistics WHERE generation=? AND term=''").get(p.id).n);
     const byType = Object.fromEntries(p.types.map(type => [type, { embedded: 0, scanned: 0 }]));
     if (!semanticCapacity(count, port).eligible) return { state: 'partial_coverage', eligible: count, embedded: null, scanned: 0, byType: null };
     let embedded = 0, afterStream = -1, afterId = '', released = false; const vectors = [];
@@ -622,6 +817,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
         WHERE d.generation=? AND d.eligible=1 AND (d.stream,d.id)>(?,?) ORDER BY d.stream,d.id LIMIT ?`)
         .all(port.id, port.revision, port.dimensions, port.normalization, p.id, afterStream, afterId, batchSize));
       for (const row of rows) {
+        if(allowed&&allowed.has(JSON.stringify([row.document_stream,row.document_id])))continue;
         if (row.embedder_id === null) continue;
         const stream = p.streams[row.document_stream];
         if (row.store_id !== identity.storeId || row.revision !== row.current_revision || row.body_revision !== row.current_body ||
@@ -666,34 +862,14 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
 // history predicate. Only organization title-source checks omit applicability,
 // matching private-organization-storage titleInside; support remains required.
 export function contextCardEligible(sourceDb, identity, features, ns, row, intent = 'current', { requireApplicability = true, rawRows, readSet = [ns] } = {}) {
-  if (row.state !== 'confirmed') return false;
-  const raw = createCardRawSources(sourceDb, identity);
-  // Canonical history requires confirmed state, even if support is gone.
-  if (intent === 'history') return true;
-  const dependency = createCardCurrentStorage({ db: sourceDb, identity }).compare(ns, row, readSet);
-  if (dependency && dependency.status !== 'current') return false;
-  if (requireApplicability && (!features.reviews || cardApplicabilityInside(sourceDb, row).applicability !== 'current')) return false;
-  const binding = (purpose, value) => keyed(identity.cursorSecret, purpose, [identity.storeId, value]);
-  const receiptSources = createCardReceiptSources(sourceDb, binding);
-  const values = [...sourceDb.prepare('SELECT source_ref,position FROM card_bindings WHERE card_id=?').all(row.id),
-    ...(features.receipts ? sourceDb.prepare('SELECT source_ref,position FROM card_memory_bindings WHERE card_id=?').all(row.id) : []), ...raw.refs(row.id)]
-    .sort((a, b) => a.position - b.position).map(value => JSON.parse(value.source_ref));
-  return values.length > 0 && values.every(value => {
-    try {
-      sourceRef(value, ns, true);
-      if (value.type === 'raw') raw.resolve(ns, value, rawRows === undefined ? undefined : raw.budget(64000, rawRows));
-      else if (value.type === 'receipt') receiptSources.resolve(ns, value);
-      else {
-        const note = sourceDb.prepare(`SELECT id,revision,state,text FROM card_notes WHERE ${where} AND id=?`).get(...boundary(ns), value.sourceId);
-        if (!note || note.state !== 'available' || note.revision !== value.revision ||
-            binding('submitted-note-content-v1', [ns, note.id, note.revision, note.text]) !== value.contentIdentity) fail('source_unavailable');
-      }
-      return true;
-    } catch (error) {
-      if (['source_unavailable', 'source_excluded', 'raw_crypto_unavailable'].includes(error.code)) return false;
-      throw error;
-    }
-  });
+  return contentReadSafety(sourceDb, { identity, namespace: ns, intent,
+    ref: { type: 'card', namespace: ns, cardId: row.id, revision: row.revision, bodyRevision: row.body_revision || null },
+    rawRows,
+    currentCardEligible: () => {
+      const dependency = createCardCurrentStorage({ db: sourceDb, identity }).compare(ns, row, readSet);
+      return (!dependency || dependency.status === 'current') && (!requireApplicability ||
+        features.reviews && cardApplicabilityInside(sourceDb, row).applicability === 'current');
+    } }).allowed;
 }
 
 // U5c-2: call only inside the facade's deferred authoritative transaction.

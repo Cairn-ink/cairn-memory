@@ -1,3 +1,6 @@
+import { contentWriteMethodClass } from './content-write-context.mjs';
+import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
+import { contentSafetyFacade } from './content-safety-boundary.mjs';
 import { roleProfileOptions } from './role-profile-input.mjs';
 import { createRoleProfileFacade } from './role-profile-facade.mjs';
 import { assetOptions } from './asset-input.mjs';
@@ -23,7 +26,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { createMemoryRuntime } from "./runtime.mjs";
 import { createCaptureDeadline } from './capture-deadline.mjs';
 import { uniqueIds, memoryGuards, placementProposal } from './placement-input.mjs';
-import { countTokens } from './model-budget.mjs';
+import { countTokens, modelPortValue } from './model-budget.mjs';
 import { isSourceContext } from './source-evidence.mjs';
 import { classify } from './classification.mjs';
 import { memoryRefs, fetchMemories } from './fetch.mjs';
@@ -48,7 +51,7 @@ import {
 // only their own option; all other legal options reach the retained validator.
 const CORE_OPTIONS = Object.freeze(['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy',
   'captureRationale','captureEvidence','captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes',
-  'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence']);
+  'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence','contentSafety']);
 const OPEN_OPTIONS = Object.freeze([...CORE_OPTIONS, 'rawConversations']);
 
 const keepAdmissionKey = Symbol('keepAdmissionKey');
@@ -266,7 +269,9 @@ export function createMemoryCore(input, internal) {
   if (sessionEpisodes && (captureQualification !== 'source-bound-v2' || captureEvidence !== 'staged-v1')) throw new MemoryStoreError('invalid_input');
   const model = input.model;
   if (model?.onDiagnostic !== undefined && typeof model.onDiagnostic !== 'function') throw new MemoryStoreError('invalid_input');
+  if (input.contentSafety !== undefined && input.contentSafety !== 's2h-v1') fail('invalid_input');
   const runtime = (internal?.createRuntime ?? createMemoryRuntime)({ path: input.path,
+    ...(input.contentSafety !== undefined ? { contentSafety: input.contentSafety } : {}),
     ...(input.existingStore ? { existingStore: input.existingStore } : {}),
     ...(input.storeFence ? { storeFence: input.storeFence } : {}),
     ...(methodPackages ? { methodPackages } : {}),
@@ -287,7 +292,7 @@ export function createMemoryCore(input, internal) {
     return `${body}.${signature}`;
   }
 
-  function decodeCursor(cursor, binding) {
+  function decodeCursor(cursor, binding, suppressionEpoch = false) {
     if (typeof cursor !== "string" || cursor.length > 8_192) {
       throw new MemoryStoreError("invalid_cursor");
     }
@@ -309,13 +314,14 @@ export function createMemoryCore(input, internal) {
     } catch {
       throw new MemoryStoreError("invalid_cursor");
     }
-    const allowedKeys = [...Object.keys(binding), "e", "a"];
+    const allowedKeys = [...Object.keys(binding), "e", "a", ...(suppressionEpoch ? ["h"] : [])];
     if (!payload || typeof payload !== "object" || Array.isArray(payload) ||
         Object.keys(payload).length !== allowedKeys.length ||
         Object.keys(payload).some((key) => !allowedKeys.includes(key)) ||
         Object.keys(binding).some((key) => payload[key] !== binding[key])) {
       throw new MemoryStoreError("invalid_cursor");
     }
+    if (suppressionEpoch && typeof payload.h !== "string") throw new MemoryStoreError("invalid_cursor");
     if (!Number.isSafeInteger(payload.e) || payload.e < 1 || !payload.a ||
         typeof payload.a !== "object" || Array.isArray(payload.a)) {
       throw new MemoryStoreError("invalid_cursor");
@@ -389,13 +395,12 @@ export function createMemoryCore(input, internal) {
       if (input.receiptCursor !== undefined) cursor = decodeCursor(input.receiptCursor, binding);
       const page = runtime.getPage(ns, memoryId, count, cursor?.a, cursor?.e, input.includeQualification === true, input.includeAwaiting === true);
       const receipts = page.receipts.slice(0, count);
-      const exhausted = page.receipts.length <= count;
-      const last = receipts.at(-1);
+      const exhausted = page.receiptComplete;
       return { memory: page.memory, receipts, ...(page.procedural ? { procedural: page.procedural } : {}), placements: page.placements, conflicts: page.conflicts,
         ...(input.includeQualification === true ? { qualification: page.qualification } : {}),
         ...(page.supersession ? { supersession: page.supersession } : {}),
         nextReceiptCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch,
-          a: { createdAt: last.createdAt, id: last.id } }), exhausted };
+          a: { row: page.receiptScan } }), exhausted };
     });
   }
 
@@ -721,7 +726,9 @@ export function createMemoryCore(input, internal) {
         parentRef = { mocId: contractId(input.parentRef.mocId), revision: contractRevision(input.parentRef.revision) };
       }
       // Require a counter before accessing content, even for an empty map.
-      countTokens(model, '');
+      const safetyLayout = runtime.suppressionFence(ns, true);
+      if(safetyLayout&&typeof modelPortValue(model,'countTokens','token_count_unavailable')!=='function')throw new MemoryStoreError('token_count_unavailable');
+      if (!safetyLayout) countTokens(model, '');
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'map',
         p: parentRef ? JSON.stringify(parentRef) : '', f: purpose, l: count, b: budget };
       if (catalogOnly) binding.o = 'classification_catalog';
@@ -735,7 +742,7 @@ export function createMemoryCore(input, internal) {
         physicalPage: BOUNDED_KEYSET_SOURCE_CANDIDATES.page,
         top: BOUNDED_KEYSET_SOURCE_CANDIDATES.top,
       });
-      const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
+      const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding, safetyLayout);
       if (cursor && (!Number.isSafeInteger(cursor.a.offset) || cursor.a.offset < 0 ||
           Object.keys(cursor.a).length !== 1)) throw new MemoryStoreError('invalid_cursor');
       const offset = cursor?.a.offset ?? 0;
@@ -749,13 +756,22 @@ export function createMemoryCore(input, internal) {
             ...(navigation.sourceCandidatePolicy ? { sourceCandidatePolicy: navigation.sourceCandidatePolicy } : {}) });
           navigation.pages.set(key, snapshot);
         }
+        if (safetyLayout && cursor && cursor.h !== snapshot.suppressionEpoch) throw new MemoryStoreError('invalid_cursor');
         if (cursor && cursor.e !== snapshot.epoch) throw new MemoryStoreError('cursor_stale');
-        runtime.assertEpoch(ns, snapshot.epoch);
+        runtime.assertEpoch(ns, snapshot.epoch, snapshot.suppressionEpoch);
         if (offset > snapshot.rows.length) throw new MemoryStoreError('invalid_cursor');
         page = { ...snapshot, rows: snapshot.rows.slice(offset, offset + count + 1) };
       } else {
-        page = runtime.mapRows(ns, { purpose, parentRef, limit: count, offset, expectedEpoch: cursor?.e,
+        page = runtime.mapRows(ns, { purpose, parentRef, limit: count, offset, expectedEpoch: cursor?.e, expectedSuppressionEpoch: safetyLayout ? cursor?.h : undefined,
           catalogOnly });
+      }
+      if (safetyLayout) {
+        if (cursor && cursor.h !== page.suppressionEpoch) throw new MemoryStoreError('invalid_cursor');
+        binding.h = page.suppressionEpoch;
+        // The existing page transaction captures the request proof before any
+        // caller port. The availability check above is inert; caller code runs
+        // only after that transaction closes, with its normal E1 observation.
+        countTokens(model, '');
       }
       const capacity = Math.min(count, page.rows.length);
       for (let take = capacity; take >= 0; take--) {
@@ -769,7 +785,7 @@ export function createMemoryCore(input, internal) {
           indexRevision: page.epoch,
           invalidRefs: selected.filter((row) => row.invalidRef).map((row) => row.invalidRef) };
         if (countTokens(model, JSON.stringify(success(value))) <= budget) {
-          runtime.assertEpoch(ns, page.epoch);
+          runtime.assertEpoch(ns, page.epoch, page.suppressionEpoch);
           return value;
         }
       }
@@ -850,10 +866,12 @@ export function createMemoryCore(input, internal) {
       const validateFresh = (candidates = []) => runtime.recallSnapshot(candidates.map((candidate) => ({
         namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
         revision: candidate.revision,
+        receiptLimit: candidate.receiptCap ?? candidate.item?.receipts?.length ?? 0,
+        ...(candidate.receiptCap ? { receiptOrder: 'recent' } : {}),
       })), [], namespaces.flatMap((namespace) => {
         const page = navigation.pages.get(namespaceBinding(namespace));
-        return page ? [{ namespace, indexRevision: page.epoch }] : [];
-      }));
+        return page ? [{ namespace, indexRevision: page.epoch, suppressionEpoch: page.suppressionEpoch }] : [];
+      }), includeQualification);
       return success(await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
         limit: count, map: (request) => mapPage(request, navigation), fetch, includeQualification, contextMode, selectionMode,
         validateFresh,
@@ -864,7 +882,8 @@ export function createMemoryCore(input, internal) {
           ...(candidate.receiptCap ? { receiptOrder: 'recent' } : {}),
           ...(isSourceContext(contextMode) ? { sourceEvidence: candidate.item } : {}),
         })), selected, namespaces.map((namespace) => ({ namespace,
-          indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch })), includeQualification, contextMode),
+          indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch,
+          suppressionEpoch: navigation.pages.get(namespaceBinding(namespace)).suppressionEpoch })), includeQualification, contextMode),
       }));
     } catch (error) { return failure(error); }
   }
@@ -977,7 +996,7 @@ export function createMemoryCore(input, internal) {
               const ref = item.type === 'unfiled' ? item.ref : { memoryId: item.ref.childId, revision: item.ref.childRevision };
               if (!seen.has(ref.memoryId)) { seen.add(ref.memoryId); found.push(ref); }
             }
-            runtime.assertEpoch(ns, page.epoch);
+            runtime.assertEpoch(ns, page.epoch, page.suppressionEpoch);
             return { refs: found.slice(0, 6), scanExhausted: page.scanExhausted, candidatesTruncated: found.length > 6 };
           }),
           classifyPlacement: value => classifyPlacementValidated(value, deadline), applyPlacement,
@@ -987,6 +1006,13 @@ export function createMemoryCore(input, internal) {
               return invoke(() => {
                 const items = admissionItems(extracted.map(({ sourceIndices, ...item }) => item));
                 return { items, discovery: runtime.discoverOrdered(ns, snapshot, order, items) };
+              });
+            },
+            assertPrepared(snapshot, order, prepared) {
+              return invoke(() => {
+                if (runtime.suppressionFence(ns) === null) return;
+                const current = runtime.discoverOrdered(ns, snapshot, order, prepared.items);
+                if (JSON.stringify(current) !== JSON.stringify(prepared.discovery)) fail('revision_conflict');
               });
             },
             finish: (snapshot, token, order, prepared, judged) =>
@@ -1082,7 +1108,10 @@ export function createMemoryCore(input, internal) {
         undefined, { catalogOnly: true });
       if (!mapped.ok) return mapped;
       if (mapped.value.indexRevision !== index) throw new MemoryStoreError('index_revision_conflict');
-      const validateFresh = () => runtime.classificationSnapshot(ns, ids, guards, index);
+      const validateFresh = () => {
+        const current = runtime.classificationSnapshot(ns, ids, guards, index);
+        if (current.suppressionEpoch !== snapshot.suppressionEpoch) fail('revision_conflict');
+      };
       deadline?.check();
       const value = await classify({ model, snapshot, map: mapped.value, validateFresh, deadline });
       deadline?.check();
@@ -1178,7 +1207,9 @@ export function createMemoryCore(input, internal) {
   }
 
   internal?.attachCapture?.((input, registration) => capture(input, undefined, registration));
-  return Object.freeze({
+  const contentReads = new Set(['get','list','map','fetch','recall','sourceSnapshot','getEpisode','listEpisodes','listMemoriesByTime',
+    'sessionStartContext','getRationale','inspectAdmission','inspectCaptureEvidence','listReviewTransitions','listReviewConflicts']);
+  return contentSafetyFacade({
     ...createMethodPackageFacade(runtime.methodPackages, methodPackages, runtime.ready,assets),
     ...createAssetFacade(runtime.assets, assets, runtime.ready),
     ...createRoleProfileFacade(runtime.roleProfiles, roleProfiles, { path: input.path, readOnly: Boolean(input.existingStore), context: internal?.roleContext, assets }),
@@ -1196,7 +1227,16 @@ export function createMemoryCore(input, internal) {
       runtime.close();
       return success(null);
     },
-  });
+  }, { check: runtime.assertContentScope, portGuard: runtime.contentPortGuard, failure, asyncMethods: ['capture'],
+    requestScope: (work, method) => contentWriteMethodClass(method) === 'read' ? withContentSuppressionRequest(work) : work(),
+    isFailedCapture(result) {
+      // Admission committed before the paused classifier. After close only its
+      // failed-classification completion is deliverable; no retained identities,
+      // receipts, counts or content survive this projection.
+      return result?.ok===true&&result.value?.classification?.status==='failed';
+    },
+    validate: (method,args,result,scopes) => { if(contentReads.has(method)&&result?.ok)runtime.assertContentOutput(result.value,scopes); }, noOwner: ['close',
+    'getPrivateCardCapabilities','getAssetCapabilities','getMethodPackageCapabilities'] });
   } catch (error) {
     try { runtime.close(); } catch { /* Preserve the construction failure. */ }
     throw error;

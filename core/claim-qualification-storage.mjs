@@ -1,3 +1,5 @@
+import { cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
+import { contentReadSafety } from './content-safety.mjs';
 import { createHash } from 'node:crypto';
 import { qualificationInput, qualificationSources } from './claim-qualification-input.mjs';
 import { fail } from './validation.mjs';
@@ -41,7 +43,14 @@ export function createQualificationStorage({ db, receiptKey, assertStoredReceipt
     } catch { fail('storage_error'); }
   }
 
-  function inspect(memory) { return inspectStored(memory)?.qualification ?? null; }
+  function inspect(memory) {
+    const stored = inspectStored(memory);
+    if (!stored) return null;
+    const namespace = { ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id || null };
+    if ((cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision && !contentReadSafety(db, { namespace, intent: 'history', ref: { type: 'memory', namespace,
+      memoryId: memory.id, revision: memory.revision }, receipts: stored.receipts }).allowed) fail('revision_conflict');
+    return stored.qualification;
+  }
 
   function bind(memory, input, receipts, deduplicated, content, qualifiedDuplicates) {
     const matching = deduplicated && qualifiedDuplicates === 'append-matching-evidence-v1';

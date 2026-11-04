@@ -1,3 +1,6 @@
+import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { contentReadSafety, createContentReadMemo } from './content-safety.mjs';
+import { attestContentSafety, checkInstalledContentSafety, cachedContentLayout } from './content-safety-schema.mjs';
 import { unsupportedTopicStorage } from './topic-reader-sqlite.mjs';
 import { lstatSync } from 'node:fs';
 import { openReadDatabase } from './read-database.mjs';
@@ -15,7 +18,7 @@ const configuration = db => ({ version: db.prepare('PRAGMA user_version').get().
 /** The native handle is lazy; all opening queries run after the caller installs
  * its work meter. The full schema walk resumes from acknowledged traversal data. */
 export function createTopicSession(path, topicPolicy) {
-  let connection, schema, opening, overview, members, dirty = false;
+  let connection, schema, opening, overview, members, readMemo, requestNamespace, dirty = false;
   function dispose() {
     connection?.db.close(); connection = opening = overview = members = undefined; dirty = false;
   }
@@ -24,6 +27,7 @@ export function createTopicSession(path, topicPolicy) {
     fail('cursor_stale');
   }
   function prepare({ charge, request }) {
+    requestNamespace = request.namespace;
     if (connection) {
       try { connection.assertFile(); } catch (error) {
         if (!['cursor_stale', 'database_not_found', 'unsafe_database_file'].includes(error.code)) throw error;
@@ -42,6 +46,7 @@ export function createTopicSession(path, topicPolicy) {
     try {
       charge(1);
       schema = configuration(opened.db);
+      const layout = attestContentSafety(opened.db, schema.version);
       const encoding = opened.db.prepare('PRAGMA encoding').get().encoding;
       if (schema.applicationId !== APPLICATION_ID || !READ_SCHEMA_VERSIONS.includes(schema.version) || encoding !== 'UTF-8') fail('unsupported_database');
       charge(1);
@@ -53,7 +58,12 @@ export function createTopicSession(path, topicPolicy) {
       for (const [table, keys] of [['mocs', ['id']], ['index_mocs', ['generation','id']]]) assertPointPlan(opened.db, table, keys);
       opening = createTopicOpening(opened.db, schema.version);
       overview = createTopicOverviewStorage(opened.db, { exactComparisons: true });
-      const raw = createTopicMembersStorage(opened.db);
+      const raw = createTopicMembersStorage(opened.db, { rawAncestry: Boolean(layout.suppressionRevision && layout.rawLineage), memoryReadable: layout.suppressionRevision
+        ? (namespace, row) => {
+          readMemo.decisions?.clear();
+          return contentReadSafety(opened.db, { namespace, selectedMemory: row, memo: readMemo, ref: { type: 'memory', namespace, memoryId: row.id, revision: row.revision } }).allowed;
+        }
+        : () => true });
       members = { ...raw, create: () => ({ ...raw.create(), initialization: opening.create() }),
         cost: state => state.initialization.done ? 1 : opening.cost(state.initialization),
         step(state, ...args) {
@@ -68,22 +78,36 @@ export function createTopicSession(path, topicPolicy) {
     }
   }
   function transaction(work) {
-    connection.db.exec('BEGIN');
-    try { const value = work(); connection.db.exec('COMMIT'); return value; }
-    catch (error) { connection.db.exec('ROLLBACK'); throw error; }
+    if (!cachedContentLayout(connection.db)?.suppressionRevision) {
+      connection.db.exec('BEGIN');
+      try { const value = work(); connection.db.exec('COMMIT'); return value; }
+      catch (error) { connection.db.exec('ROLLBACK'); throw error; }
+    }
+    return withContentSuppressionRequest(() => {
+      connection.db.exec('BEGIN');
+      try { const value = inContentSuppressionRequestInside(connection.db,work,requestNamespace ? [requestNamespace] : undefined); connection.db.exec('COMMIT'); return value; }
+      catch (error) { connection.db.exec('ROLLBACK'); throw error; }
+    });
   }
   const snapshot = namespace => {
     try { connection.assertFile(); } catch { changed(); }
     // Check inside the charged transaction, before prepared snapshot statements
     // can be invalidated by DROP/ALTER and throw an untyped native error.
     if (!same(configuration(connection.db), schema)) changed();
+    checkInstalledContentSafety(connection.db);
+    readMemo = createContentReadMemo(connection.db); readMemo.retainOutputDecisions = false;
     return overview.snapshot(namespace);
   };
   const originBinding = (namespace, captured) => {
     const stat = lstatSync(path);
     return { namespace, captured, file: [stat.dev, stat.ino], schema, configuration: 'topic-snapshot-v1/topic-members-v1' };
   };
-  return { prepare, transaction, snapshot, originBinding, dispose,
+  const assertDelivery = namespace => {
+    if (!cachedContentLayout(connection.db)?.suppressionRevision) return;
+    try { assertContentSuppressionRequestInside(connection.db,[namespace]); }
+    catch(error) { if(error.code==='evidence_unavailable')fail('cursor_stale');throw error; }
+  };
+  return { prepare, transaction, snapshot, originBinding, dispose, assertDelivery,
     storage: { create: () => members.create(), target: (...args) => members.target(...args),
       cost: state => members.cost(state), step: (...args) => members.step(...args) },
     accept: state => opening.accept(state?.initialization),

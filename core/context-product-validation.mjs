@@ -1,14 +1,16 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { boundedData, PRODUCT_PROFILE } from './context-product-control.mjs';
-import { namespaceKey } from './context-read-input.mjs';
+import { contextReadSet } from './context-read-input.mjs';
+import { CONTENT_SAFETY_POLICY_REVISION } from './content-safety.mjs';
 import { fail } from './validation.mjs';
 
 export const canonicalJson = value => JSON.stringify(boundedData(value, 262144));
 export const digest = value => createHash('sha256').update(canonicalJson(value)).digest('base64url');
 export const accessDigest = binding => digest({ profile: PRODUCT_PROFILE, ownerId: binding.ownerId,
-  readSet: [...binding.namespaces.readSet].sort((a,b)=>Buffer.compare(Buffer.from(namespaceKey(a)),Buffer.from(namespaceKey(b)))), ownerGeneration: binding.ownerGeneration ?? null });
-export const projectionDigest = input => digest({ profile: PRODUCT_PROFILE, readSet: input.readSet,
-  types: ['memory', 'card'].filter(type => input.types.includes(type)), intent: input.intent });
+  readSet: contextReadSet(binding.namespaces.readSet, PRODUCT_PROFILE), ownerGeneration: binding.ownerGeneration ?? null });
+export const projectionDigest = input => digest({ profile: PRODUCT_PROFILE, readSet: contextReadSet(input.readSet, PRODUCT_PROFILE),
+  types: ['memory', 'card'].filter(type => input.types.includes(type)), intent: input.intent,
+  ...(input.types.includes('card') ? { contentSafetyPolicy: CONTENT_SAFETY_POLICY_REVISION } : {}) });
 const sign = (secret, purpose, value) => createHmac('sha256', secret)
   .update(PRODUCT_PROFILE + '/' + purpose + '\n' + canonicalJson(value)).digest('base64url');
 export function signedRecord(secret, purpose, value) {
@@ -21,7 +23,7 @@ const hash = v => typeof v === 'string' && /^[A-Za-z0-9_-]{43}$/.test(v);
 const file = v => v && /^(0|[1-9][0-9]*)$/.test(v.device) && /^(0|[1-9][0-9]*)$/.test(v.inode) && integer(v.schemaVersion);
 export const validProgress = p => keys(p, 'phase,checkpoint,sequence,baseSequence') &&
   ['phase','checkpoint','baseSequence'].every(k => integer(p[k])) && integer(p.sequence, 1) && p.baseSequence <= p.sequence;
-export function verifiedRecord(secret, purpose, text) {
+export function verifiedRecord(secret, purpose, text, attribution) {
   const maximum = purpose === 'validation' ? 16384 : 4096;
   try {
     if (typeof text !== 'string' || Buffer.byteLength(text) > maximum) fail('invalid_input');
@@ -37,7 +39,7 @@ export function verifiedRecord(secret, purpose, text) {
           (value.kind === 'delta') !== (value.progress.baseSequence > 0)) fail('invalid_input');
     } else {
       if (!keys(value, 'version,profile,format,storeId,canonical,sidecar,projectionDigest,accessDigest,canonicalFenceDigest,dependencyFenceDigest,tokenizer,representation,generation,publicationId,manifestDigest,counts,mac') ||
-          value.version !== 'context-index-validation-v1' || value.format !== 1 || !opaque(value.publicationId) || !hash(value.manifestDigest) ||
+          value.version !== 'context-index-validation-v1' || value.format !== 3 || !opaque(value.publicationId) || !hash(value.manifestDigest) ||
           !keys(value.canonical,'device,inode,applicationId,userVersion,schemaVersion') || !file(value.canonical) ||
           !integer(value.canonical.applicationId) || !integer(value.canonical.userVersion) ||
           !keys(value.sidecar,'device,inode,incarnation,schemaVersion') || !file(value.sidecar) || !opaque(value.sidecar.incarnation) ||
@@ -49,5 +51,9 @@ export function verifiedRecord(secret, purpose, text) {
           Object.values(value.counts.byType).some(c => !keys(c,'eligible,indexed') || !integer(c.eligible) || c.eligible !== c.indexed)) fail('invalid_input');
     }
     return value;
-  } catch { throw Object.assign(Error('index_unavailable'), { code: 'index_unavailable', reason: 'validation_invalid' }); }
+  } catch(error) {
+    attribution?.captureFailure(error);
+    const mapped=Object.assign(Error('index_unavailable'), { code: 'index_unavailable', reason: 'validation_invalid' });
+    throw attribution?attribution.mapFailure(error,mapped):mapped;
+  }
 }

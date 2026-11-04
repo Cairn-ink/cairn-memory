@@ -1,4 +1,5 @@
-import { countTokens } from './model-budget.mjs';
+import { hasContentPortBoundary } from './content-safety-boundary.mjs';
+import { countTokens, modelPortValue } from './model-budget.mjs';
 import { isSourceContext } from './source-evidence.mjs';
 import { fail, object, identifier, revision, denseArray } from './validation.mjs';
 
@@ -14,7 +15,10 @@ export function memoryRefs(input) {
 
 export function fetchMemories({ runtime, model, ns, refs, view = 'current', budget, cursor, binding, encodeCursor,
   includeQualification = false, contextMode }) {
-  countTokens(model, '');
+  const protectedRead = hasContentPortBoundary();
+  if (protectedRead) {
+    if(typeof modelPortValue(model,'countTokens','token_count_unavailable')!=='function')fail('token_count_unavailable');
+  } else countTokens(model, '');
   if (cursor && (Object.keys(cursor.a).length !== 2 ||
       !Number.isSafeInteger(cursor.a.index) || cursor.a.index < 0 || cursor.a.index >= refs.length ||
       !Number.isSafeInteger(cursor.a.offset) || cursor.a.offset < 0)) fail('invalid_cursor');
@@ -22,6 +26,7 @@ export function fetchMemories({ runtime, model, ns, refs, view = 'current', budg
   const offset = cursor?.a.offset ?? 0;
   if (isSourceContext(contextMode) && offset !== 0) fail('invalid_cursor');
   const page = runtime.fetchPage(ns, refs[index], offset, cursor?.e, view, includeQualification, contextMode);
+  if (protectedRead) countTokens(model, '');
   if (isSourceContext(contextMode)) {
     const exhausted = index === refs.length - 1;
     const value = { items: page.source ? [page.source] : [],
@@ -31,7 +36,7 @@ export function fetchMemories({ runtime, model, ns, refs, view = 'current', budg
     if (countTokens(model, JSON.stringify({ ok: true, value })) > budget) fail('context_item_too_large');
     // Token counting is caller code. Revalidate the complete source projection
     // after its final callback, even if storage was changed without an epoch bump.
-    const authoritative = runtime.fetchPage(ns, refs[index], 0, page.epoch, view, false, contextMode);
+    const authoritative = runtime.fetchPage(ns, refs[index], 0, page.epoch, view, false, contextMode, page);
     if (JSON.stringify(authoritative) !== JSON.stringify(page)) fail('revision_conflict');
     return value;
   }
@@ -39,9 +44,10 @@ export function fetchMemories({ runtime, model, ns, refs, view = 'current', budg
   const capacity = Math.min(100, available);
   for (let take = capacity; take >= 0; take--) {
     if (available && !take) fail('context_item_too_large');
-    const finishedRef = !page.memory || offset + take >= page.memory.receiptCount;
+    const after = take ? page.receiptOffsets?.[take - 1] ?? offset + take : page.receiptEnd ?? offset;
+    const finishedRef = !page.memory || after >= page.memory.receiptCount;
     const exhausted = finishedRef && index === refs.length - 1;
-    const next = finishedRef ? { index: index + 1, offset: 0 } : { index, offset: offset + take };
+    const next = finishedRef ? { index: index + 1, offset: 0 } : { index, offset: after };
     const value = {
       items: page.memory ? [{ memory: page.memory, receipts: page.receipts.slice(0, take),
         receiptCount: page.memory.receiptCount,
@@ -53,6 +59,8 @@ export function fetchMemories({ runtime, model, ns, refs, view = 'current', budg
     };
     if (countTokens(model, JSON.stringify({ ok: true, value })) <= budget) {
       runtime.assertEpoch(ns, page.epoch);
+      const authoritative = runtime.fetchPage(ns, refs[index], offset, page.epoch, view, includeQualification, contextMode, page);
+      if (JSON.stringify(authoritative) !== JSON.stringify(page)) fail('revision_conflict');
       return value;
     }
   }

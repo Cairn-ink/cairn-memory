@@ -1,3 +1,6 @@
+import { resolveContentLayout, contentSafetyPin } from './content-safety-layout.mjs';
+import { attestContentSafety } from './content-safety-schema.mjs';
+import { validateContextProductLayout } from './context-product-schema.mjs';
 import { validateCardCurrentDependencies, assertNoCardCurrentDependencies } from './card-current-schema.mjs';
 import { validateRoleProfiles, assertNoRoleProfiles } from './role-profile-schema.mjs';
 import { validateAssets, assertNoAssets } from './asset-schema.mjs';
@@ -10,7 +13,13 @@ import { validateLocalAuthorityMetadata } from './local-authority-schema.mjs';
 import { fail, identifier } from './validation.mjs';
 
 export function existingStoreOption(value) {
-  const input = ownData(value, ['version', 'storeId']);
+  const input = ownData(value, ['version', 'storeId', 'physical', 'base', 'suppressionRevision', 'cardLineageRevision']);
+  if (input.version === 'content-safety-existing-v1') {
+    const layout = resolveContentLayout(input.physical);
+    if (Object.keys(input).length !== 6 || !layout.suppressionRevision || input.base !== layout.base || input.suppressionRevision !== 1 || input.cardLineageRevision !== 0) fail('invalid_input');
+    identifier(input.storeId);
+    return Object.freeze({ ...input });
+  }
   if (Object.keys(input).length !== 2 || !['schema29-existing-v1','schema30-existing-v1','schema31-existing-v1','schema32-existing-v1','schema33-existing-v1'].includes(input.version)) fail('invalid_input');
   try { identifier(input.storeId); } catch { fail('invalid_input'); }
   return Object.freeze({ version: input.version, storeId: input.storeId });
@@ -82,8 +91,17 @@ function indexShape(db, name, columns) {
     row.name === columns[index] && row.desc === 0 && row.coll === 'BINARY');
 }
 
-export function validateExistingStore(db, option) {
-  const version = db.prepare('PRAGMA user_version').get().user_version;
+export function validateExistingStore(db, option, layout = attestContentSafety(db)) {
+  if (db.prepare('PRAGMA user_version').get().user_version !== layout.physical) fail('unsupported_database');
+  const version = layout.base;
+  if (layout.suppressionRevision) {
+    if (option.version !== undefined && (option.version !== 'content-safety-existing-v1' || option.physical !== layout.physical || option.base !== layout.base || option.suppressionRevision !== 1 || option.cardLineageRevision !== 0)) fail('unsupported_database');
+    validateContextProductLayout(db, layout);
+    if (db.prepare('PRAGMA application_id').get().application_id !== 0x43414952 ||
+        db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id !== option.storeId) fail('unsupported_database');
+    return;
+  }
+  if (option.version === 'content-safety-existing-v1') fail('unsupported_database');
   if (db.prepare('PRAGMA application_id').get().application_id !== 0x43414952 ||
       ![29,30,31,32,33].includes(version) || option.version === 'schema30-existing-v1' && version < 30 ||
       option.version === 'schema31-existing-v1' && version !== 31 ||
@@ -117,4 +135,23 @@ export function validateExistingStore(db, option) {
   if (identities.length !== 1 || identities[0].singleton !== 1 || identities[0].store_id !== option.storeId ||
       !/^[0-9a-f]{64}$/.test(identities[0].cursor_secret) || episodes.length !== 1 || episodes[0].singleton !== 1 ||
       !/^[0-9a-f]{64}$/.test(episodes[0].secret)) fail('unsupported_database');
+}
+
+/** Installed clients negotiate a fresh exact pin, then the writer re-attests it.
+ * Never choose a legacy pin as fallback after safety validation fails. */
+export async function inspectExistingStorePin(path, storeId, minimumBase = 29) {
+  const location = existingStorePath(path);
+  const { DatabaseSync } = await import('node:sqlite');
+  const db = new DatabaseSync(path, { readOnly: true });
+  try {
+    db.exec('PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; BEGIN');
+    const layout = attestContentSafety(db);
+    if (layout.base < minimumBase || db.prepare('PRAGMA application_id').get().application_id !== 0x43414952 ||
+        db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id !== storeId) fail('unsupported_database');
+    validateContextProductLayout(db, layout);
+    location.check();
+    const pin = contentSafetyPin(layout, storeId);
+    db.exec('COMMIT');
+    return pin;
+  } finally { db.close(); }
 }

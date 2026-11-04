@@ -1,3 +1,4 @@
+import { safetyMigrateCommand } from './safety-migrate-command.mjs';
 import { cardCurrentHostConfiguration } from './card-current-configuration.mjs';
 import { pathToFileURL } from 'node:url';
 import { assetCommand } from './asset-command.mjs';
@@ -5,6 +6,7 @@ import { methodCommand } from './method-package-command.mjs';
 import { MethodStdioServerTransport } from './method-package-transport.mjs';
 import { modelCommand } from './model-command.mjs';
 import { contextCommand } from './context-read-command.mjs';
+import { safetyCommand } from './safety-command.mjs';
 // U5c-2 source startup wiring (SQLite-free).
 import { CONTEXT_SOURCE_FLAG, contextSourcesConfiguration, contextSourcesPreset } from './context-read-sources-configuration.mjs';
 import { CONTEXT_FLAGS, contextHostConfiguration } from './context-read-configuration.mjs';
@@ -34,6 +36,7 @@ Usage:
   cairn-memory --db ABS --owner ID [--project ID] --assets local-v1
   cairn-memory methods import|adopt|disable [method command arguments; see docs/method-packages-local.md]
   cairn-memory --db PATH --owner ID [--project ID] --method-packages local-v1 [--method-read-personal]
+  cairn-memory safety preflight --db ABS
   cairn-memory --help
   cairn-memory [--check-config] --retained-raw-profile ABS
   cairn-memory review-card --retained-raw-profile ABS --card ID --revision N [--applicability current|historical|conflict|unknown]
@@ -51,12 +54,18 @@ Usage:
   cairn-memory review-card --db PATH --owner ID [--project ID] --card ID --revision N [--applicability current|historical|conflict|unknown]
   cairn-memory --db PATH --owner ID [--project ID] --session-episodes-access episode-v1
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2 --capture-evidence staged-v1 --session-episodes episode-v1 [--session-episodes-draft-batches 8]
+  cairn-memory safety migrate --db ABS --backup ABS --store-id ID --base 18|23|33 --quiescent
+
+For safety migration, --quiescent confirms closed admissions, stopped writers,
+drained readers and closed old handles. Supply a verified offline backup.
+A failed migration keeps admissions closed; backups are not serving restores.
 
 Keep the database outside node_modules; its parent directory must exist.
 Reuse the exact database, owner and project across sessions.
 Normal startup waits for an MCP client on stdin; stdout is protocol-only.
 Tools: remember_memory, recall_memory, inspect_memory, correct_memory, forget_memory.
 --retained-raw-profile selects one existing private schema29 store and exact namespace.
+Attested safety v48 stores use an exact safety capability pin.
 It is exclusive, Linux/WSL + Node>=22.16, and keyless: it never inspects a model key.
 It keeps the 22 private Card tools and adds list_raw_conversations,
 read_raw_conversation and resolve_source_references. Raw capture stays off.
@@ -282,6 +291,7 @@ export function parseConfiguration(args) {
 
 export async function start(args = process.argv.slice(2), env = process.env) {
   if (args.length === 1 && args[0] === '--help') { console.log(help); return; }
+  if(args[0]==='safety')return args[1]==='migrate'?safetyMigrateCommand(args.slice(1)):safetyCommand(args.slice(1));
   if(args[0]==='assets')return assetCommand(args.slice(1));
   if(args[0]==='methods')return methodCommand(args.slice(1));
   if(args[0]==='model')return modelCommand(args.slice(1));

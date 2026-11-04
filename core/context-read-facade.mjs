@@ -1,3 +1,7 @@
+import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade, assertContentPort, contentAuthorityPort } from './content-safety-boundary.mjs';
+import { cachedContentLayout } from './content-safety-schema.mjs';
+import { resolveContentLayout } from './content-safety-layout.mjs';
 import { sampleLocalStatus } from './context-read-local-status.mjs';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { isAbsolute, resolve } from 'node:path';
@@ -94,8 +98,9 @@ function createContextFacade(path, options, { readOnly }) {
   try {
     if (path !== ':memory:') database = openReadDatabase(path, { contextRead: true,
       nativeObserver: options.product?.observer,
+      productSqlite: options.product?.sqlite,
       validateProduct: options.product ? validateContextProductLayout : undefined,
-      preflight: () => { if (readOnly) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path, options.product?.observer); } });
+      preflight: () => { if (readOnly && !options.product?.sqlite) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path, options.product?.observer); } });
     return initializeContextFacade(path, options, { readOnly, database });
   } catch (error) {
     try { if (database?.db.isOpen) database.db.close(); } catch { /* Preserve the initialization refusal. */ }
@@ -103,23 +108,30 @@ function createContextFacade(path, options, { readOnly }) {
   }
 }
 function initializeContextFacade(path, options, { readOnly, database }) {
+  if(options.authority)options={...options,authority:contentAuthorityPort(options.authority)};
   let closed = false;
   let retainedSourceBytes = 0;
   const rankings = new Map(), controllers = new Set(), indexes = new Map(), dispatch = contextBudget(options);
   const memoryOnly = path === ':memory:';
-  const guardAuxiliaries = () => { if (readOnly) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path, options.product?.observer); };
+  const guardTimeouts = new WeakSet();
+  const guardAuxiliaries = () => {
+    try { if (readOnly && !options.product?.sqlite) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path, options.product?.observer); }
+    catch (error) { if (options.product && error?.code === 'read_timeout') guardTimeouts.add(error); throw error; }
+  };
+  const facadeFailure = error => guardTimeouts.has(error)
+    ? { ok: false, error: { code: 'read_timeout', retryable: false } } : failure(error);
   const db = database?.db;
   function ready() {
     if (closed || db && (!db.isOpen || isConnectionDiscarded(db))) fail('store_closed');
     if (database) { database.assertFile(); guardAuxiliaries(); }
   }
-  const read = work => { ready(); return readTransaction(db, work); };
+  const read = (work, acquisition) => { ready(); return acquisition ? acquisition.transaction(db, work, readTransaction) : readTransaction(db, () => inContentSuppressionRequestInside(db,work)); };
   const info = memoryOnly ? { storeId: null, cursorSecret: null, cards: false, raw: false } : read(() => {
     const row = db.prepare('SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1').get();
     if (!row) fail('unsupported_database');
     const has = table => Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table));
     return { storeId: row.store_id, cursorSecret: row.cursor_secret,
-      cards: (!options.product || db.prepare('PRAGMA user_version').get().user_version >= 23) && has('private_cards') && has('card_memory_bindings') && has('card_applicability_reviews'), raw: has('card_raw_bindings'),
+      cards: (!options.product || resolveContentLayout(db.prepare('PRAGMA user_version').get().user_version).base >= 23) && has('private_cards') && has('card_memory_bindings') && has('card_applicability_reviews'), raw: has('card_raw_bindings'),
       ...(options.sources ? { organization: ['card_mocs', 'card_moc_epochs', 'card_moc_title_sources', 'card_moc_refs', 'card_moc_edges'].every(has),
         reviews: has('card_applicability_reviews'), receipts: has('card_memory_bindings') } : {}) };
   });
@@ -208,10 +220,20 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     } };
   }
   function canonicalFence(readSet, types) {
-    return readSet.map(ns => ({ memory: db.prepare(`SELECT epoch FROM namespace_epochs WHERE owner_id=? AND scope=? AND project_id=?`)
-      .get(ns.ownerId, ns.scope, ns.projectId ?? '')?.epoch ?? 1,
-    ...(types.includes('card') ? { card: db.prepare(`SELECT generation FROM card_epochs WHERE owner_id=? AND scope=? AND project_id=?`)
-      .get(ns.ownerId, ns.scope, ns.projectId ?? '')?.generation ?? 1 } : {}) }));
+    return readSet.map(ns=>{
+      const proof=cachedContentSuppressionRequestInside(db,ns.ownerId);
+      let memory;
+      if(proof?.layout.suppressionRevision){
+        const row=db.prepare(`SELECT n.epoch,coalesce(f.epoch_hi,0) epoch_hi,coalesce(f.epoch_lo,0) epoch_lo
+          FROM (SELECT 1) anchor LEFT JOIN namespace_epochs n ON n.owner_id=? AND n.scope=? AND n.project_id=?
+          LEFT JOIN owner_suppression_epochs f ON f.owner_id=?`).get(ns.ownerId,ns.scope,ns.projectId??'',ns.ownerId);
+        if(`${row.epoch_hi}:${row.epoch_lo}`!==proof.epoch)fail('evidence_unavailable');
+        memory=row.epoch??1;
+      }else memory=db.prepare('SELECT epoch FROM namespace_epochs WHERE owner_id=? AND scope=? AND project_id=?')
+        .get(ns.ownerId,ns.scope,ns.projectId??'')?.epoch??1;
+      return {memory,...(types.includes('card')?{card:db.prepare('SELECT generation FROM card_epochs WHERE owner_id=? AND scope=? AND project_id=?')
+        .get(ns.ownerId,ns.scope,ns.projectId??'')?.generation??1}:{})};
+    });
   }
   function unknownCoverage(input) {
     return { status: 'unavailable', byType: Object.fromEntries((input?.types ?? supportedTypes).map(type =>
@@ -279,12 +301,14 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     } catch (error) { if (error instanceof SourceStop) fail(code); throw error; }
   }
   function deliverPage(input, ranking, position, limit) {
-    if (!options.sources) return page(ranking, position, limit);
     return read(() => {
+      const result = page(ranking, position, limit);
+      for (const candidate of result.items) evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet);
+      if (!options.sources) return result;
       assertSourcesInside(input, ranking.sourceState, 'cursor_stale');
       const budget = sourceBudget(Infinity);
       for (const path of ranking.sourceState.witnesses) witnessInside(input, path, 'cursor_stale', budget);
-      return page(ranking, position, limit);
+      return result;
     });
   }
   const rankingConfiguration = (trace, sourceState, items) => bind('ranking-config', [configuration, trace.requested, trace.effective,
@@ -395,8 +419,10 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             storage.assertState(projection, current); };
           time = performance.now();
           try {
-            const vectors = await dispatch(options.embedder, [input.query], { signal: controller.signal, deadlineAt, guard });
-            guard();
+            let vectors,invoked=false;
+            assertContentPort({before:true});
+            try { vectors = await dispatch(options.embedder, [input.query], { signal: controller.signal, deadlineAt, guard,onInvoke:()=>{invoked=true;} }); }
+            finally { try { guard(); } finally { if(invoked)assertContentPort(); } }
             if (!Array.isArray(vectors) || vectors.length !== 1) throw Object.assign(new Error(), { code: 'provider_error' });
             const query = validateVector(vectors[0], options.embedder);
             const scoring = storage.semanticPreflight(projection, options.embedder, { deadlineAt });
@@ -410,7 +436,6 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       }
       access.check();
       if (sourceState) read(() => assertSourcesInside(input, sourceState, internal ? 'snapshot_stale' : 'cursor_stale'));
-      storage.assertState(projection, current);
       time = performance.now();
       const fused = fuseCandidates(lexical.rows, semantic, { preset: options.preset,
         semanticState: diagnostics.channels.semantic.state, coverageComplete: preflight?.state === 'ready', ...(options.sources ? { moc } : {}) });
@@ -419,6 +444,18 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       diagnostics.coverage.stops = { deadline: diagnostics.channels.semantic.causes.includes('timeout'),
         budget: diagnostics.channels.semantic.causes.includes('budget_denied') };
       let candidateItems = fused.rows.map((row, i) => ({ ref: row.ref, rank: i + 1, fusionScore: row.fusionScore, channels: row.channels }));
+      const proof=cachedContentSuppressionRequestInside(db,input.readSet[0].ownerId);
+      const noFacts=proof?.facts?.length===0&&input.readSet.every(ns=>proof.readSet.some(selected=>
+        selected.scope==='owner'||selected.scope===ns.scope&&(selected.projectId??'')===(ns.projectId??'')));
+      // The existing freshness transaction already proves canonical ancestry.
+      // Only a possibly matching fact needs the additional evidence predicate,
+      // and it runs inside that transaction rather than opening another one.
+      storage.assertState(projection,current,{validate:()=>{
+        if(cachedContentLayout(db)?.suppressionRevision&&!noFacts&&candidateItems.length)candidateItems=candidateItems.filter(candidate=>{
+          try {evidence.itemsInside(candidate.ref.namespace,[candidate.ref],input.intent,input.readSet);return true;}
+          catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
+        });
+      }});
       if (sourceState) {
         access.check();
         read(() => {
@@ -472,7 +509,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         return failure(new MemoryStoreError('index_unavailable'), diagnostics);
       }
       return failure(error, diagnostics && ['invalid_input', 'index_unavailable'].includes(error.code) ? diagnostics : undefined);
-    } finally { lease?.release(); if (controller) { controller.abort(); controllers.delete(controller); } }
+    } finally { lease?.release(); if (controller) { assertContentPort({invoke:()=>controller.abort()}); controllers.delete(controller); } }
   }
   async function findCandidates(original, token) {
     try {
@@ -516,11 +553,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         const remainingItems = input.budget.maxItems - maintenance.metrics.transformed, remainingMs = Math.floor(deadlineAt - performance.now());
         try {
           if (remainingItems > 0 && remainingMs > 0) vectorProgress = await storage.refreshVectors({ ...projection,
-            budget: { maxItems: remainingItems, maxMs: remainingMs } }, { ...options.embedder,
-            embed: texts => {
-              return dispatch(options.embedder, texts, { signal: controller.signal, deadlineAt,
-                guard: () => { access.check(); storage.assertState(projection, current, { checkpoint: false }); } });
-            } }, { signal: controller.signal, maxBatchDocuments: options.policy.maxBatchDocuments,
+            budget: { maxItems: remainingItems, maxMs: remainingMs } }, dispatch.port(options.embedder,{signal:controller.signal,deadlineAt,
+            guard:()=>{access.check();storage.assertState(projection,current,{checkpoint:false});}}), { signal: controller.signal, maxBatchDocuments: options.policy.maxBatchDocuments,
             isCurrent: () => { access.check(); return true; },
             onProgress: progress => { vectorProgress = progress; } });
           access.check();
@@ -546,7 +580,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       if (diagnostics) diagnostics.coverage.maintenance.reason ??= maintenanceReasons.get(error.reason) ?? null;
       return failure(error, ['scope_changed', 'authority_required', 'store_closed'].includes(error.code) ? undefined : diagnostics);
     }
-    finally { lease?.release(); if (controller) { controller.abort(); controllers.delete(controller); } }
+    finally { lease?.release(); if (controller) { assertContentPort({invoke:()=>controller.abort()}); controllers.delete(controller); } }
   }
 
   const identity = { storeId: info.storeId, cursorSecret: info.cursorSecret };
@@ -608,7 +642,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           }
           const { type, ref, state, origin } = item;
           const sources = type === 'memory' && item.provenance.sourceAccess === 'available' ?
-            db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId)
+            db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id))
               .map((row, index) => {
                 const { role, excerpt } = validateSourceReceipt(ref.memoryId, row, source =>
                   createHash('sha256').update(JSON.stringify(source)).digest('hex'));
@@ -679,7 +713,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   function fetchCandidateEvidence(original, token, productPayload) {
     try {
       ready();
-      const { payload, input } = contextInput('fetchCandidateEvidence', original, supportedTypes), access = authorize('fetchCandidateEvidence', input, options.product ? productPayload ?? payload : payload, token);
+      const { payload, input } = contextInput('fetchCandidateEvidence', original, supportedTypes, undefined, options.product ? 'context-read-product-v1.1' : undefined), access = authorize('fetchCandidateEvidence', input, options.product ? productPayload ?? payload : payload, token);
       if (memoryOnly) fail('index_unavailable');
       const scope = bind('snapshot-scope', input.readSet);
       let intent = input.intent, refs = input.refs, previous;
@@ -719,11 +753,13 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         if (bytes(success(result)) > input.responseByteLimit) fail('context_item_too_large');
         return success(result);
       });
-    } catch (error) { return failure(error); }
+    } catch (error) {
+      return facadeFailure(error);
+    }
   }
   return { fileIdentity: database?.fileIdentity, productCapabilities: { types: supportedTypes },
     ...(options.product ? { productPort: { db, read, ready, evidence, bind, encode, decode, identity, features: info, canonicalFence } } : {}),
-    methods: { getContextReadCapabilities() {
+    methods: contentSafetyFacade({ getContextReadCapabilities() {
     return success(structuredClone({ version: CONTEXT_VERSION, methods: [...CONTEXT_METHODS], types: [...supportedTypes], intents: ['current', 'history'],
       channels: { lexical: { enabled: true }, semantic: { configured: Boolean(options.embedder), budgetConfigured: Boolean(dispatch) } },
       ...configuration, limits: { ...CONTEXT_LIMITS, ...(options.sources ? { horizon: 32, sources: SOURCE_LIMITS } : {}) }, maintenance: !readOnly && !memoryOnly,
@@ -731,9 +767,30 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         counter: options.counter ? { id: options.counter.id } : null, limits: { ...ASSEMBLY_LIMITS, ...(options.sources ? { candidates: 32, counterCalls: 1634 } : {}) } },
       unsupported: ['role-profiles', ...(!options.sources?.includes('relations-one-hop-v1') ? ['relations'] : []),
         ...(!options.sources?.includes('moc-v1') ? ['moc'] : []), 'raw-search', 'partial-semantic-search'] }));
-  }, findCandidates, refreshContextIndex, fetchCandidateEvidence, contextRead }, close() {
+  }, findCandidates, refreshContextIndex, fetchCandidateEvidence, contextRead }, { check: (scopes,{delivery}) => { ready();
+        if (!delivery && scopes.length && cachedContentLayout(db)?.suppressionRevision && hasContentSuppressionRequestInside(db) && !db.isTransaction) {
+          contentSuppressionRequestInside(db,scopes,{defer:true}); return;
+        }
+        if (delivery) assertContentSuppressionRequestInside(db,scopes);
+        assertContentScopes(db, scopes);
+      },
+      requestScope: withContentSuppressionRequest, portGuard: scopes => options.product ? undefined : contentScopeEpochGuard(db,scopes),
+      validate(method,_args,_result,scopes) {
+        if(readOnly||method!=='refreshContextIndex'||!cachedContentLayout(db)?.suppressionRevision)return;
+        // Physical maintenance usage stays internal when a scoped fact exists.
+        // Work has completed; its public acknowledgement carries no population.
+        const state = scopes.length && cachedContentSuppressionRequestInside(db,scopes[0].ownerId);
+        if (state?.facts && scopes.every(ns=>state.owner===ns.ownerId && state.readSet.some(selected=>
+          selected.scope===ns.scope && (selected.projectId??'')===(ns.projectId??'')))) {
+          if (state.facts.some(f=>scopes.some(ns=>['personal','project'].includes(ns.scope) &&
+            f.scope===ns.scope && f.project_id===(ns.projectId??'')))) fail('index_unavailable');
+          return;
+        }
+        read(()=>{for(const ns of scopes)if(['personal','project'].includes(ns.scope)&&db.prepare(`SELECT 1 FROM content_suppressions INDEXED BY content_suppression_target
+          WHERE (owner_id,scope,project_id)=(?,?,?) LIMIT 1`).get(ns.ownerId,ns.scope,ns.projectId??''))fail('index_unavailable');});
+      }, noOwner: ['getContextReadCapabilities'], failure: facadeFailure }), close() {
     if (closed) return;
-    closed = true; for (const controller of controllers) controller.abort();
+    closed = true; for (const controller of controllers) assertContentPort({invoke:()=>controller.abort()});
     rankings.clear(); retainedSourceBytes = 0; for (const entry of indexes.values()) entry.storage.close(); indexes.clear(); if (db?.isOpen) db.close();
   } };
 }

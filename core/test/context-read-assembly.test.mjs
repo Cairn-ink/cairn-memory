@@ -487,7 +487,11 @@ test('A10 read-only and managed-existing assembly creates no transient files or 
     const journal = f.path + '.context-read-v1.sqlite-journal';
     writeFileSync(journal, 'synthetic auxiliary', { mode: 0o600 });
     try {
-      const refused = await observeDatabaseFiles(f, async () => { denied(processRead(mode, mode + '-auxiliary'), 'index_unavailable'); });
+      const refused = await observeDatabaseFiles(f, async () => {
+        const result = processRead(mode, mode + '-auxiliary');
+        denied(result, 'storage_busy');
+        assert.deepEqual(result.error, { code: 'storage_busy' }, 'the opener error envelope carries only code');
+      });
       assert.deepEqual(refused.events, []);
     } finally { unlinkSync(journal); }
   }

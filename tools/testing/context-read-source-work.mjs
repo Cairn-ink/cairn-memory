@@ -61,7 +61,7 @@ export function instrumentSourceWork(db, { readSet } = {}) {
     const ledger = frame.ownerForeign ? counts.private : frame.ownerPublic || frame.empty || frame.public || !frame.foreign ? counts : counts.private;
     ledger.lookups++; ledger.lookupsByTable[frame.table] = (ledger.lookupsByTable[frame.table] ?? 0) + 1;
   }
-  return { counts, database: { prepare(sql) {
+  return { counts, database: { get isTransaction() { return db.isTransaction; }, prepare(sql) {
     const meteredSql = instrument(sql), statement = prepare(meteredSql), table = sql.match(/\bFROM\s+([a-z_]+)/i)[1];
     function plan(args) {
       if (plans.has(sql)) return;

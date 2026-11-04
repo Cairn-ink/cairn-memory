@@ -1,0 +1,1 @@
+{"name":"context-read-qualification-counter","private":true,"version":"0.0.0","dependencies":{"tiktoken":"1.0.22","js-tiktoken":"1.0.21"}}

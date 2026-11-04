@@ -1,3 +1,5 @@
+import { createCardCurrentStorage } from '../card-current-storage.mjs';
+import { readTransaction } from '../database.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { unlinkSync } from 'node:fs';
@@ -109,10 +111,12 @@ test('C22 authored bodies survive required source deletion; undeclared history r
  const f=fixture(t),ref=f.card(),historical=f.card({declare:false,applicability:'historical',body:'Historical finance v1 fact'}),old=detail(f,ref);
  f.change();assert.equal(detail(f,historical).support.currentDependency,undefined);const retainedHistory=ok(f.call('fetchEvidence',{namespace:ns,refs:[historical],intent:'history'})).items[0];assert.equal(retainedHistory.body,'Historical finance v1 fact');assert.equal(retainedHistory.qualification.applicability,'historical');denied(f.call('fetchEvidence',{namespace:ns,refs:[historical],intent:'current'}),'evidence_unavailable');
  ok(f.call('deleteSourceNote',{namespace:ns,sourceId:old.bindings[0].source.sourceId,expectedRevision:1,actionId:'delete-source'}));
- const retained=detail(f,ref);assert.equal(retained.body,old.body);assert.equal(retained.support.status,'unavailable');
- const latest={...ref,revision:retained.revision};assert.equal(ok(f.call('fetchEvidence',{namespace:ns,refs:[latest],intent:'history'})).items[0].body,old.body);
+ assert.equal(detail(f,ref),null);const retained=f.db.prepare('SELECT * FROM private_cards WHERE id=?').get(ref.cardId);assert.equal(retained.body,old.body);
+ const latest={...ref,revision:retained.revision};denied(f.call('fetchEvidence',{namespace:ns,refs:[latest],intent:'history'}),'evidence_unavailable');
  denied(f.call('fetchEvidence',{namespace:ns,refs:[latest],intent:'current'}),'evidence_unavailable');
- ok(f.call('deleteMethodVersion',{ref:f.v1.version,expectedRevision:1,actionId:'delete-version'}));assert.ok(detail(f,ref).support.currentDependency.reasons.includes('version_deleted'));
+ ok(f.call('deleteMethodVersion',{ref:f.v1.version,expectedRevision:1,actionId:'delete-version'}));
+ const identity=f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get();
+ assert.ok(readTransaction(f.db,()=>createCardCurrentStorage({db:f.db,identity}).compare(ns,retained)).reasons.includes('version_deleted'));
  assert.equal(f.db.prepare('SELECT count(*) n FROM method_files WHERE version_id=?').get(f.v1.version.versionId).n,0);
 });
 

@@ -33,8 +33,13 @@ manual storage seam. Unknown keys and explicit `qualification:null` are invalid.
 
 All shown qualification and slot keys are required. Subject, property and value
 are null (unknown) or 1–160 UTF-16 units; scope and applies are null or 1–120.
-These labels must already equal the existing normalization/redaction result:
+Units are UTF-16 code units after per-field NFKC, secret redaction, whitespace
+collapse and trim. These labels must already equal that result:
 noncanonical or secret-bearing labels are rejected, not silently rewritten.
+The exported `normalizedTextLength` and `normalizeBoundedText` measure that
+bounded-text path, but label validation also requires canonical equality, raw
+length bounds and well-formed Unicode. Segmenters must measure each field;
+concatenated lengths are not additive. See [bounded text lengths](capture.md#bounded-text-lengths).
 This describes manual S1 admission and v1. The separate v2 candidate compiler
 first applies bounded NFKC label normalization, then this same strict validator;
 see [capture](capture.md#opt-in-automatic-source-qualification).

@@ -1,3 +1,4 @@
+import { contentSafetyFacade } from './content-safety-boundary.mjs';
 import { createMemoryRuntime } from './runtime.mjs';
 import { createRawCaptureStorage } from './raw-capture-storage.mjs';
 import { isStorageBusy } from './database.mjs';
@@ -25,7 +26,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
       attachRaw: db => (storage = createRawCaptureStorage({ db, profile, ...rawOptions, sources })) })),
     attachCapture: operation => { capture = operation; },
   });
-  return Object.freeze({ ...core,
+  return contentSafetyFacade({ ...core,
     async captureRaw(request) {
       try {
         runtime.ready();
@@ -62,5 +63,9 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
       deleteConversation: input => invoke(() => runtime.deleteConversation(input)),
       listRawEffects: input => invoke(() => runtime.listRawEffects(input)),
     } : {}),
-  });
+  }, { check: runtime.assertContentScope, portGuard: runtime.contentPortGuard, failure,
+    validate: (method,args,result,scopes) => {
+      if (['getConversation','listRawConversations','getRawUsage','listRawEffects','previewDeleteConversation'].includes(method) && result?.ok) runtime.assertContentOutput(result.value,scopes);
+    }, asyncMethods: ['capture','captureRaw','getConversation'], noOwner: ['close',
+    'getPrivateCardCapabilities','getAssetCapabilities','getMethodPackageCapabilities','getContextReadCapabilities'] });
 }

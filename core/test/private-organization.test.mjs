@@ -105,7 +105,7 @@ test('M02 guarded placement is atomic, bounded, replayable and preserves Card co
   assert.equal(f.db.prepare('SELECT count(*) n FROM card_mocs').get().n, count);
 });
 
-test('M03 changed source hides derived titles and Card membership while history remains inspectable', t => {
+test('M03 changed source hides derived titles, Card membership and unsafe history', t => {
   const f = fixture(t), ref = card(f), placed = ok(f.call('applyCardPlacement', place(f, ref)));
   const beforeIndex = placed.indexRevision;
   const detail = ok(f.call('getCard', { namespace: ns, cardId: ref.cardId })).card;
@@ -116,8 +116,9 @@ test('M03 changed source hides derived titles and Card membership while history 
   assert.equal(page.items.filter(item => item.type === 'topic').every(item => item.topic.title === null), true);
   assert.equal(page.items.some(item => item.type === 'ref' && item.ref.childType === 'card'), false);
   const history = ok(f.call('selectEvidence', { namespace: ns, query: 'tea', types: ['card'], intent: 'history' }));
-  assert.equal(history.items.length, 1);
-  assert.equal(ok(f.call('fetchEvidence', { namespace: ns, refs: [history.items[0].ref], intent: 'history' })).items[0].body, detail.body);
+  assert.equal(history.items.length, 0);
+  const row = f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(ref.cardId);
+  error(f.call('fetchEvidence', { namespace: ns, refs: [{ ...ref, revision: row.revision }], intent: 'history' }), 'evidence_unavailable');
   assert.equal(f.db.prepare('SELECT count(*) n FROM card_moc_title_sources').get().n, 2);
 });
 
@@ -351,7 +352,8 @@ test('M07 refresh strictly guards title/refs/CAS/scope/collision and rolls back 
   assert.equal(ok(f.call('mapEvidence', map())).items.find(item => item.type === 'topic' && item.topic.id === l1.mocId).topic.title, 'Reviewed recovery');
   const source = ok(f.call('getCard', { namespace: ns, cardId: fresh.cardId })).card.bindings[0].source;
   ok(f.call('deleteSourceNote', { namespace: ns, actionId: 'unavailable-refresh', sourceId: source.sourceId, expectedRevision: 1 }));
-  const unavailable = ok(f.call('getCard', { namespace: ns, cardId: fresh.cardId })).card;
+  assert.equal(ok(f.call('getCard', { namespace: ns, cardId: fresh.cardId })).card, null);
+  const unavailable = f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(fresh.cardId);
   error(f.call('refreshCardTopic', refreshInput(f, { ...fresh, revision: unavailable.revision }, refreshed.topicRef,
     'refresh-unavailable', 'Unavailable label')), 'evidence_unavailable');
 });
@@ -385,5 +387,6 @@ test('M07 maximum five title sources remain exact required bindings without sile
   assert.deepEqual(label.titleSources.map(ref => ref.cardId).sort(), refs.map(ref => ref.cardId).sort());
   editCard(f, refs.at(-1), 'change-fifth');
   label = ok(f.call('mapEvidence', map())).items.find(item => item.type === 'topic' && item.topic.id === l1.mocId).topic;
-  assert.equal(label.title, null); assert.equal(label.titleSources.length, 5);
+  // Stale refs are withheld; a null title still forbids prefix recovery.
+  assert.equal(label.title, null); assert.equal(label.titleSources.length, 4);
 });

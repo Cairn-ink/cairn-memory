@@ -7,10 +7,46 @@ Run `npm run demo:capture` on Node >=22.16 for an offline synthetic example.
 Input is `{ namespace, client, eventId, sessionId, messages, causal? }`. The trusted
 host supplies the exact namespace; each message is `{ id, role, content }`, with
 role `user` or `assistant`. IDs are nonempty opaque identifiers up to 200 units.
-Supply 1–24 uniquely identified messages, each at most 4,000 normalized UTF-16
-units, totaling at most 20,000. Invalid input is rejected before claiming work.
+Supply 1–24 uniquely identified messages, each at most 4,000 UTF-16 code units
+after NFKC, secret redaction, whitespace collapse and trim, totaling at most
+20,000 of those units across the independently normalized fields. Each raw
+message must first be a string of at most 20,000 UTF-16 code units.
+Invalid input is rejected before claiming work.
 Redaction and normalization precede hashing and model calls. The digest binds
 namespace, event/session/client and ordered message IDs, roles and full content.
+
+### Bounded text lengths
+
+`core/index.mjs` exports `normalizeBoundedText(value)` (the validated normalized
+string) and `normalizedTextLength(value)` (its JavaScript `.length`). Both use
+the same path as the engine's `boundedText`: reject non-strings and raw strings
+over 20,000 UTF-16 code units, apply NFKC, redact secrets, collapse each whitespace
+run to one ASCII space, then trim. Empty results, exactly `[REDACTED]`, and results
+containing NUL throw `MemoryStoreError` with code `invalid_text`.
+For otherwise valid text, a non-truncating `boundedText(value, max)` accepts
+exactly when `normalizedTextLength(value) <= max`. Public operations can impose
+additional constraints or map this error to `invalid_input`.
+
+Segmenters should measure each proposed field before submitting it, split
+oversized fields at code-point boundaries, and measure the resulting fields
+again. For example, 3,999 raw units containing one `…` can become 4,001 units.
+NFKC is applied per field: concatenating segments is not length-additive
+(adjacent Hangul Jamo can compose), and trimming/redaction can also change lengths.
+Do not infer the concatenated length from a sum of segment lengths.
+
+```js
+import { normalizedTextLength, normalizeBoundedText } from './core/index.mjs';
+
+const units = normalizedTextLength(segment); // throws for invalid text
+if (units <= 4000) messages.push({ id, role, content: segment });
+const canonical = normalizeBoundedText(segment); // optional canonical text
+```
+
+These helpers describe only the `boundedText` path. Raw transcript fields,
+redaction-only Card/note/method/asset fields, and fields requiring already
+canonical labels retain their own validation rules.
+
+### Extraction and receipts
 
 The injected model must provide `extract({system,input,maxOutputTokens,signal})`,
 `countTokens` and context capacity, using the same bounded-call contract as
@@ -22,12 +58,15 @@ and normalized content, never trusted identity fields. Output is exactly:
   sourceIndices: [0] }] }
 ```
 
-Zero to five items are allowed; content is at most 600 units. Each item selects
+Zero to five items are allowed; each content field is at most 600 UTF-16 code
+units after the same NFKC, secret redaction, whitespace collapse and trim.
+Each item selects
 one to four unique valid message indices. Kinds are fact, preference, decision,
 instruction or context; confidence is finite from zero to one. Unknown fields,
 including invented receipts, namespace or conflict hints, reject the whole batch.
 Core constructs receipt identity and excerpts from the trusted messages; excerpts
-are redacted and truncated to 800 units without splitting Unicode code points.
+use that same normalization before truncation to 800 UTF-16 code units without
+splitting Unicode code points.
 Indices establish provenance binding, not proof that a model's claim is true.
 
 The model budget is at most 6,000 input and 1,024 output tokens, a 1,024-token

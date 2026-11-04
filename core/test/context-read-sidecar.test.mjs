@@ -217,10 +217,11 @@ test('R08/R09 projected Card eligibility equals canonical predicate: notes, rece
   const writer = openMemoryCore({ path: f.path }); f.workspace.defer(() => writer.close());
   ok(writer.correct({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision,
     content: 'synthetic corrected receipt', kind: 'fact', receipt: receipt('correct-receipt') }));
-  check(); assert.equal(index.lexical(current, 'apple').length, 0); assert.equal(index.lexical(history, 'apple').length, 3);
-  detail = ok(f.call('getCard', { namespace: ns, cardId: noteCard.id })).card;
+  check(); assert.equal(index.lexical(current, 'apple').length, 0); assert.equal(index.lexical(history, 'apple').length, 1);
+  assert.equal(ok(f.call('getCard', { namespace: ns, cardId: noteCard.id })).card, null);
+  detail = f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(noteCard.id);
   ok(f.call('deleteKnowledgeCard', { namespace: ns, cardId: noteCard.id, expectedRevision: detail.revision, actionId: 'delete-card' }));
-  check(); assert.equal(index.lexical(history, 'apple').length, 2);
+  check(); assert.equal(index.lexical(history, 'apple').length, 1);
 });
 
 test('R08/R09 Raw support exclusion and conversation deletion match canonical eligibility', async t => {
@@ -237,7 +238,7 @@ test('R08/R09 Raw support exclusion and conversation deletion match canonical el
   const memory = f.db.prepare('SELECT id,revision FROM memories WHERE deleted=0').get();
   ok(off.forget({ namespace: rawNs, memoryId: memory.id, expectedRevision: memory.revision }));
   drain(index, input); assert.equal(index.lexical(input, 'synthetic').length, 0);
-  const history = { ...input, intent: 'history' }; drain(index, history); assert.equal(index.lexical(history, 'synthetic').length, 1);
+  const history = { ...input, intent: 'history' }; drain(index, history); assert.equal(index.lexical(history, 'synthetic').length, 0);
   const revision = f.db.prepare('SELECT revision FROM raw_conversations WHERE id=?').get(source.conversationId).revision;
   ok(f.core.deleteConversation({ namespace: rawNs, conversationId: source.conversationId, expectedRevision: revision, actionId: 'delete-conversation' }));
   drain(index, input); drain(index, history); assert.equal(index.lexical(input, 'synthetic').length, 0);
@@ -355,7 +356,7 @@ test('R12 read-only missing/stale/hot/auxiliary/unsafe sidecars create no files,
     for (const path of [f.path, f.path + '.context-read-v1.sqlite']) {
       writeFileSync(path + suffix, Buffer.alloc(1024, 1), { mode: 0o600 });
       const files = readdirSync(f.workspace.path).sort();
-      unavailable(() => f.index({ readOnly: true }));
+      assert.throws(() => f.index({ readOnly: true }), { code: suffix === '-journal' ? 'storage_busy' : 'index_unavailable' });
       assert.deepEqual(readdirSync(f.workspace.path).sort(), files); unlinkSync(path + suffix);
     }
   }

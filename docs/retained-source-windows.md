@@ -15,6 +15,11 @@ canonicalization. The existing per-message 4,000-unit and batch 20,000-unit
 limits remain; at most 64 derived windows are accepted. Segmentation is
 deterministic and independent of the question or model output. Transient
 normalized offsets are not raw transcript offsets and are not stored.
+The message/window bounds measure UTF-16 code units after per-field NFKC,
+secret redaction, whitespace collapse and trim. Segmenters can use the exported
+`normalizedTextLength` and `normalizeBoundedText` for proposed message fields;
+concatenated lengths are not additive. See [bounded text lengths](capture.md#bounded-text-lengths).
+Exact window validation additionally requires the canonical fixed point above.
 
 The extractor receives only `{inputMode:'indexed-windows-v1',messages}` with
 global index, original message-group index, claimed role and canonical window

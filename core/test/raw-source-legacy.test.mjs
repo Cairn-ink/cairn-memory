@@ -29,7 +29,8 @@ for (const client of ['claude-code','codex']) {
         JOIN episode_sources s ON s.id=j.value WHERE a.episode_id=?`).get(f.consumer).n,0);
       assert.equal(f.db.prepare('SELECT count(*) n FROM episode_keep_actions WHERE episode_id=?').get(f.consumer).n,1);
       const before = ok(core.get({ namespace: ns,memoryId: f.memoryId }));
-      assert.equal(before.memory.state,'active'); assert.equal(before.receipts[0].client,opposite(client));
+      assert.equal(before.memory.state,'active'); assert.deepEqual(before.receipts,[]);
+      assert.equal(f.db.prepare('SELECT client FROM receipts WHERE memory_id=?').get(f.memoryId).client,opposite(client));
       assert.equal(targetCount(),0);
       const rawSnapshot = () => ['raw_conversations','raw_messages','raw_parts','raw_events','raw_source_maps',
         'raw_source_exclusions','raw_owner_usage','card_raw_bindings'].map(name => [name,
@@ -91,7 +92,8 @@ for (const client of ['claude-code','codex']) {
       content: 'Synthetic independently corrected interpretation.',kind: 'fact',
       receipt: { client: 'manual',sessionId: 'explicit',eventId: 'correct',role: 'user',excerpt: 'Independent explicit correction.' } }));
     const exclusions = f.db.prepare('SELECT count(*) n FROM raw_source_exclusions WHERE conversation_id=?').get(captured.raw.conversationId).n;
-    const support = ok(call('getCard',{ namespace: ns,cardId: draft.id })).card.support.status;
-    assert.deepEqual({ exclusions,support },{ exclusions: 1,support: 'unavailable' });
+    assert.equal(ok(call('getCard',{ namespace: ns,cardId: draft.id })).card,null);
+    assert.equal(exclusions,1);
+    assert.equal(f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(draft.id).body,'Synthetic independently authored body.');
   });
 }

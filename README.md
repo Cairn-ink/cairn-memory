@@ -28,6 +28,12 @@
   <a href="docs/privacy.md">Privacy</a>
 </p>
 
+**Cairn Memory** is Cairn.ink's open-source AI memory toolkit for Claude Code
+and Codex, with local MCP tools or cloud automatic memory. Visit
+[Cairn.ink](https://cairn.ink), install
+[@cairn-ink/memory on npm](https://www.npmjs.com/package/@cairn-ink/memory), or
+view the [Cairn Memory GitHub repository](https://github.com/Cairn-ink/cairn-memory).
+
 Starting a new AI session often means repeating your preferences and project
 decisions. Cairn provides memory tools to save that context between sessions,
 inspect the submitted text behind each memory, and update it when things change.
@@ -127,9 +133,9 @@ or cloud automatic memory with cairn.ink sign-in; choose directly with
 `setup --local` or `setup --cloud`. Fresh non-interactive runs need `--local`
 or `--cloud`; local mode has no automatic capture or recall in 0.6.3.
 
-This checkout contains installer **0.6.3**, including Codex 0.164.0–0.166.0
-format requalification. Run it with `node packages/setup/bin/memory.mjs setup`.
-The plugin is 0.3.3; npm publication is a separate release step.
+Installer **0.6.3**, with Codex 0.164.0–0.166.0 format requalification, was
+published on 2026-11-03, so `npx @cairn-ink/memory setup` uses it; a checkout
+can also run `node packages/setup/bin/memory.mjs setup`. The plugin is 0.3.3.
 Requires Node ≥22.16 and at least one CLI on PATH. Cloud setup asks about new tools,
 updates connected tools, and uses one browser sign-in when connecting both.
 The default server is cairn.ink. Conflicting servers or memory IDs present a
@@ -250,9 +256,8 @@ Run the published installer from your terminal:
 npx @cairn-ink/memory setup
 ```
 
-This checkout contains installer **0.6.3** (plugin **0.3.3**).
-Run it with `node packages/setup/bin/memory.mjs setup`; npm publication is a
-separate release step.
+Installer **0.6.3** (plugin **0.3.3**) is published, so these flows run through
+npx. To run this checkout instead, use `node packages/setup/bin/memory.mjs setup`.
 
 Without `--client`, setup finds both tools and asks only about new connections.
 It updates connected tools. Close both tools and wait for background work before

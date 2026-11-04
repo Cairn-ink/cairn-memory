@@ -3,10 +3,15 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { openMemoryCore } from '../index.mjs';
 import { readTransaction } from '../database.mjs';
+import { attestContentSafety, bindContentSafetyConnection } from '../content-safety-schema.mjs';
 import { rankMoc } from '../context-read-moc.mjs';
 import { expandRelations, relationIncidentQuery, sourceScopeQuery, sourceReader, sourceBudget, createSourceContext } from '../context-read-relations.mjs';
 import { instrumentSourceWork } from '../../tools/testing/context-read-source-work.mjs';
+import { sourceFixture, savedSource, ns as rawNs } from '../testing/raw-source-fixtures.mjs';
 import { sourcesFixture, ns, ok, memoryRef } from '../testing/context-read-sources-fixture.mjs';
+
+// Point-only work adapters receive the fixture's explicitly verified legacy capability.
+const legacySuppressionRevision = db => { assert.ok(db.prepare('PRAGMA user_version').get().user_version <= 33); return 0; };
 
 function memoryFixture(t) {
   let db, edges = [];
@@ -26,7 +31,7 @@ function memoryFixture(t) {
   } };
 }
 function expand(f, database = f.db) {
-  return readTransaction(f.db, () => expandRelations(database, {}, {}, { readSet: [ns], types: ['memory'], intent: 'current' }, [{ ref: memoryRef(f.seed) }], Infinity));
+  return readTransaction(f.db, () => expandRelations(database, {}, { suppressionRevision: legacySuppressionRevision(f.db) }, { readSet: [ns], types: ['memory'], intent: 'current' }, [{ ref: memoryRef(f.seed) }], Infinity));
 }
 test('C04/C10 EQP: every incident family/direction is an indexed seek without namespace scans or temp sorts, with/without ANALYZE', t => {
   const f = sourcesFixture(t, { cards: true }); const seed = memoryRef(f.admit('needle'));
@@ -100,7 +105,7 @@ test('C05/C10 stale projection records are visited and charged before exact revi
   const db = new DatabaseSync(f.path); t.after(() => db.close());
   db.exec('UPDATE index_memory_refs SET memory_revision=memory_revision+1');
   const meter = instrumentSourceWork(db, { readSet: [ns] });
-  const result = readTransaction(db, () => rankMoc(meter.database, {}, {}, { readSet: [ns], types: ['memory'], intent: 'current', query: 'needle' }, Infinity));
+  const result = readTransaction(db, () => rankMoc(meter.database, {}, { suppressionRevision: legacySuppressionRevision(db) }, { readSet: [ns], types: ['memory'], intent: 'current', query: 'needle' }, Infinity));
   assert.equal(result.diagnostic.complete, true); assert.equal(result.diagnostic.topicsMatched, 1);
   assert.equal(result.diagnostic.membersRanked, 0); assert.equal(meter.counts.byTable.index_memory_refs, 1);
   assert.equal(result.diagnostic.records, meter.counts.visits); assert.equal(result.diagnostic.lookups, meter.counts.lookups);
@@ -139,7 +144,7 @@ test('C08/C10 every public/foreign scope lookup forces its existing ID PK, inclu
       const sql = sourceScopeQuery(type, { topic }), detail = db.prepare('EXPLAIN QUERY PLAN ' + sql).all(id).map(r => r.detail).join('\n');
       assert.match(detail, /SEARCH .* USING INDEX sqlite_autoindex_.*_1 \(id=\?\)/); assert.doesNotMatch(detail, /SCAN|TEMP B-TREE|private_card_scope|card_mocs_2/);
       const before = structuredClone(meter.counts), budget = sourceBudget(Infinity);
-      const reader = sourceReader(meter.database, {}, {}, { readSet: [ns], types: ['memory', 'card'] }, budget);
+      const reader = sourceReader(meter.database, {}, { suppressionRevision: legacySuppressionRevision(db) }, { readSet: [ns], types: ['memory', 'card'] }, budget);
       const result = readTransaction(db, () => reader.metadata(ns, type, id, { topic }));
       const publicVisits = meter.counts.visits - before.visits, privateVisits = meter.counts.private.visits - before.private.visits;
       assert.equal(publicVisits + privateVisits, scope === 'missing' ? 0 : 1, 'PK reads at most one row, never the 10,000-row namespace');
@@ -167,7 +172,7 @@ test('C08/C10 MOC and relation readers share request metadata without duplicate 
   const meter = instrumentSourceWork(f.db, { readSet: [ns] }), budgets = [sourceBudget(Infinity), sourceBudget(Infinity), sourceBudget(Infinity)];
   readTransaction(f.db, () => {
     for (let i = 0; i < budgets.length; i++) {
-      const reader = sourceReader(meter.database, {}, {}, { readSet: [ns], types: ['memory'] }, budgets[i], i < 2 ? context : createSourceContext());
+      const reader = sourceReader(meter.database, {}, { suppressionRevision: legacySuppressionRevision(f.db) }, { readSet: [ns], types: ['memory'] }, budgets[i], i < 2 ? context : createSourceContext());
       assert.equal(reader.endpoint(memoryRef(memory)).row.revision, memory.revision);
     }
   });
@@ -187,7 +192,7 @@ test('C04/C10 mismatched receipt ownership uses one ID seek, charges every physi
   });
   for (let i = 0; i < ids.length; i++) {
     const meter = instrumentSourceWork(f.db, { readSet: [ns] }), budget = sourceBudget(Infinity);
-    const reader = sourceReader(meter.database, {}, {}, { readSet: [ns], types: ['memory'] }, budget);
+    const reader = sourceReader(meter.database, {}, { suppressionRevision: legacySuppressionRevision(f.db) }, { readSet: [ns], types: ['memory'] }, budget);
     readTransaction(f.db, () => {
       reader.endpoint(memoryRef(local)); const before = structuredClone(meter.counts), charged = budget.stats().work;
       assert.equal(reader.receipt(local.id, ids[i], 'invalid-digest', ns), false);
@@ -197,4 +202,33 @@ test('C04/C10 mismatched receipt ownership uses one ID seek, charges every physi
     });
   }
   assert.deepEqual(payloads, [null, null]);
+});
+
+test('S1 Raw receipt Card reads through the work oracle and mirrors native transaction state', async t => {
+  const f = sourceFixture(t, { model: { extract: () => ({ items: [{ content: 'Synthetic Raw-backed interpretation',
+    kind: 'fact', confidence: .8, sourceIndices: [0] }] }) } });
+  await savedSource(f, 'Synthetic intact Raw receipt source.');
+  const memory = f.db.prepare('SELECT id,revision FROM memories').get();
+  const draft = ok(f.call('createCardDraft', { namespace: rawNs, actionId: 'source-work-draft', drafting: 'authored', input: {
+    title: 'Synthetic source work Card', body: 'Synthetic authored source work body', sourcePolicy: 'retained-receipts-v1',
+    memoryRefs: [{ type: 'memory', namespace: rawNs, memoryId: memory.id, revision: memory.revision }] } }));
+  const card = ok(f.call('confirmCardDraft', { namespace: rawNs, cardId: draft.id, expectedRevision: draft.revision,
+    actionId: 'source-work-confirm', applicability: 'current' }));
+  const ref = { type: 'card', namespace: rawNs, cardId: card.id, revision: card.revision, bodyRevision: card.bodyRevision };
+  const identity = f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get();
+  f.db.exec('ANALYZE');
+  attestContentSafety(f.db);
+  const meter = instrumentSourceWork(f.db, { readSet: [rawNs] }), outside = meter.database.isTransaction;
+  bindContentSafetyConnection(meter.database, f.db);
+  const row = readTransaction(f.db, () => {
+    const reader = sourceReader(meter.database, identity, { cards: true, receipts: true, reviews: true },
+      { readSet: [rawNs], types: ['card'], intent: 'current' }, sourceBudget(Infinity));
+    const result = reader.endpoint(ref);
+    assert.equal(result.reason, undefined); assert.equal(result.row.id, card.id);
+    assert.equal(meter.database.isTransaction, f.db.isTransaction); assert.equal(meter.database.isTransaction, true);
+    return result.row;
+  });
+  assert.equal(row.id, card.id); assert.ok(meter.counts.visits > 0);
+  assert.equal(outside, false); assert.equal(meter.database.isTransaction, f.db.isTransaction);
+  assert.equal(meter.database.isTransaction, false);
 });

@@ -90,6 +90,11 @@ canonicalizes that bounded excerpt again. That second pass can trim whitespace
 exposed at the 800-UTF-16-unit boundary. The comparison derives that one exact
 stored form with the same two bounded operations; it does not accept a prefix,
 substring, whitespace-insensitive match, or alternate normalization.
+The 800-unit bound measures UTF-16 code units after per-field NFKC, secret
+redaction, whitespace collapse and trim, with code-point-safe truncation.
+Segmenters can use the exported `normalizedTextLength` and `normalizeBoundedText`
+per field; concatenated lengths are not additive. See
+[bounded text lengths](capture.md#bounded-text-lengths).
 Selected answer evidence consists of whole memory receipt items; packing can
 omit a whole item for context fit, never an individual receipt. Retrieval and
 packing counts, omissions, retrieved and packed opaque session IDs, and

@@ -178,8 +178,8 @@ test('B1-05 bare Raw supports an authorized authored Card; public deletion inval
   const deletion = { namespace:ns,conversationId:saved.raw.conversationId,expectedRevision:view.conversation.revision,actionId:'delete' };
   ok(f.core.deleteConversation(deletion));
   f.reopen(raw({ mode:'off' }));
-  const retained = ok(host.call(f.core,'getCard',{ namespace:ns,cardId:confirmed.id })).card;
-  assert.equal(retained.body,'Synthetic authored body.'); assert.equal(retained.support.status,'unavailable');
+  assert.equal(ok(host.call(f.core,'getCard',{ namespace:ns,cardId:confirmed.id })).card,null);
+  assert.equal(f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(confirmed.id).body,'Synthetic authored body.');
   denied(await host.call(f.core,'getSource',{ namespace:ns,source:sources[0] }),'source_unavailable');
   denied(await f.core.captureRaw(rawRequest(splitRaw('Synthetic late resurrection.')[0],{ eventId:'late' })),'conversation_deleted');
 });

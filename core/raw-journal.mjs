@@ -1,6 +1,11 @@
-import { createHmac, randomUUID } from 'node:crypto';
-import { transaction } from './database.mjs';
-import { fail, identifier, object } from './validation.mjs';
+import { assertContentPort, inertContentPortValue } from './content-safety-boundary.mjs';
+import { inContentSuppressionRequestInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { cachedContentLayout } from './content-safety-schema.mjs';
+import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
+import { allocateContentKey } from './content-suppression-storage.mjs';
+import { createHmac } from 'node:crypto';
+import { transaction, isStorageBusy } from './database.mjs';
+import { fail, identifier, object, MemoryStoreError } from './validation.mjs';
 import { rawBoundary, rawClient, rawContext, rawNamespace, rawPolicy, rawRegistration, rawSealed, RAW_CLIENTS } from './raw-input.mjs';
 import { createRawReads } from './raw-reads.mjs';
 import { createRawConversationList } from './raw-conversation-list.mjs';
@@ -71,7 +76,14 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     const current = local?.check(localAuthority,input.namespace,input.client);
     // This callback is host-owned, synchronous, model-free authority; wire data
     // has no policy fields. The same authority is checked at preparation/commit.
-    const result = rawPolicy(readPolicy(freeze({ namespace: { ...input.namespace, projectId: input.namespace.projectId || null }, client: input.client })));
+    const result = assertContentPort({invoke:()=>{
+      try{return rawPolicy(inertContentPortValue(readPolicy(freeze({namespace:{...input.namespace,projectId:input.namespace.projectId||null},client:input.client})),'invalid_input'));}
+      catch(error){
+        let code='storage_error';
+        try{if(isStorageBusy(error))code='storage_busy';else{const candidate=error instanceof MemoryStoreError?error.code:undefined;if(typeof candidate==='string')code=candidate;}}catch{}
+        throw new MemoryStoreError(code);
+      }
+    }});
     // The trusted synchronous policy can still change durable settings. A
     // revoked snapshot must not reach even the first sealing callback.
     local?.check(localAuthority,input.namespace,input.client);
@@ -105,10 +117,20 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
         (end < message.part.totalUnits && bytes >= message.part.totalBytes)) fail('event_payload_conflict');
     return { previous, priorPart: null };
   }
+  function assertRegistrationSources(input, conversationId) {
+    if(!cachedContentLayout(db)?.suppressionRevision)return;
+    for(const message of input.messages){
+      const start=message.part.start,end=start+message.content.length;
+      if(contentSuppressionReasonInside(db,input.namespace,{kind:'raw',key:conversationId,messageId:message.id,start,end,
+        version:JSON.stringify(['raw-span-v1',message.id,start,end,'exact',[message.part.index]])}))fail('evidence_unavailable');
+    }
+  }
   function replay(input, eventDigest) {
     const prior = event(input);
     if (prior && prior.digest !== eventDigest) fail('event_payload_conflict');
-    return prior ? JSON.parse(prior.result) : null;
+    const result=prior?JSON.parse(prior.result):null;
+    if(result)assertRegistrationSources(input,result.conversationId);
+    return result;
   }
 
   async function prepareRegistration(request) {
@@ -120,7 +142,8 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     const eventDigest = digest(['raw-event-v1',session,input]);
     const authority = policy(input), fence = durableFence(ns,input.client,session);
     const duplicate = replay(input,eventDigest), row = conversation(ns,input.client,session);
-    const id = row?.id ?? randomUUID(), revision = row?.revision ?? null;
+    if(row)assertRegistrationSources(input,row.id);
+    const id = row?.id ?? allocateContentKey(db, ns, 'raw'), revision = row?.revision ?? null;
     const token = Object.freeze({});
     if (duplicate) {
       prepared.set(token,{ input,session,eventDigest,authority,fence,id,revision,duplicate });
@@ -163,7 +186,16 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
       // An earlier asynchronous seal can change authority before this dispatch.
       local?.check(localAuthority,input.namespace,input.client);
       try {
-        const result = rawSealed(await seal({ ownerId: ns.ownerId,context,text: message.content }));
+        let result;
+        try {
+          result = await assertContentPort({invoke:async()=>{
+            const value = await seal({ ownerId: ns.ownerId,context,text: message.content });
+            object(value,['format','keyVersion','sealed']);
+            // Read host properties once. rawSealed copies the bytes while any
+            // typed-array hooks still belong to the caller invocation.
+            return rawSealed({format:value.format,keyVersion:value.keyVersion,sealed:value.sealed});
+          }});
+        } finally { assertContentPort(); }
         if (result.format === 'local-plain-v1' && !result.sealed.equals(Buffer.from(message.content))) fail('raw_crypto_unavailable');
         sealedParts.set(message.id,result);
       } catch { fail('raw_crypto_unavailable'); }
@@ -180,6 +212,7 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     if (duplicate) return duplicate;
     if (JSON.stringify(currentPolicy) !== JSON.stringify(authority) || JSON.stringify(currentFence) !== JSON.stringify(fence)) fail('revision_conflict');
     const current = conversation(ns,input.client,session);
+    if(current)assertRegistrationSources(input,current.id);
     if ((current?.revision ?? null) !== revision || (current && current.id !== id)) fail('revision_conflict');
     const now = clock();
     if (!current) db.prepare(`INSERT INTO raw_conversations(id,owner_id,scope,project_id,client,session_key,revision,first_received_at,last_received_at)
@@ -270,6 +303,18 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
   }
   function usageSnapshot({ ownerId }) {
     identifier(ownerId);
+    const proof = cachedContentSuppressionRequestInside(db,ownerId);
+    const rawFactsAbsent = proof?.facts && proof.readSet.some(ns=>ns.scope==='owner') && !proof.facts.some(f=>f.kind==='raw');
+    if(cachedContentLayout(db)?.suppressionRevision && !rawFactsAbsent) {
+      const rows=db.prepare(`SELECT c.id,c.scope,c.project_id,f.message_key,f.span_start,f.span_end FROM raw_conversations c
+        JOIN content_suppressions f ON f.owner_id=c.owner_id AND f.scope=c.scope AND f.project_id=c.project_id
+        AND f.kind='raw' AND f.stable_key=c.id AND f.incarnation=c.id WHERE c.owner_id=? AND
+        (f.match_mode!='span' OR EXISTS(SELECT 1 FROM raw_parts p WHERE p.conversation_id=c.id AND p.message_id=f.message_key
+        AND p.saved=1 AND p.start<f.span_end AND p.end>f.span_start)) LIMIT 129`).all(ownerId);
+      if(rows.length>128)fail('source_unavailable');
+      for(const target of rows)if(contentSuppressionReasonInside(db,{ownerId,scope:target.scope,projectId:target.project_id},
+        {kind:'raw',key:target.id,messageId:target.message_key,start:target.span_start,end:target.span_end}))fail('source_unavailable');
+    }
     const row = usageRow(ownerId), savedBytes = row?.saved_bytes ?? 0, reservedBytes = row?.reserved_bytes ?? 0;
     const cap = row?.cap_bytes ?? capBytes, remainingBytes = Math.max(0,cap-savedBytes-reservedBytes);
     const clients = RAW_CLIENTS.map(client => {
@@ -286,7 +331,7 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     object(input,['ownerId']);
     if (db.isTransaction) return usageSnapshot(input);
     db.exec('BEGIN');
-    try { const result = usageSnapshot(input); db.exec('COMMIT'); return result; }
+    try { const result = inContentSuppressionRequestInside(db,()=>usageSnapshot(input)); db.exec('COMMIT'); return result; }
     catch (error) { db.exec('ROLLBACK'); throw error; }
   }
   const getConversation = createRawReads({ db,identity,epoch,open,digest,partDigest });

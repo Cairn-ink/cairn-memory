@@ -118,8 +118,9 @@ Use public success responses to supply every ID, revision and source ref:
 
 Eligible support plus explicit exact-revision applicability review is needed
 for current evidence. Deleting a source through a separately authorized host
-cancels bound drafts; a confirmed authored body remains inspectable with support
-unavailable. Logical deletion does not erase WAL/free pages/backups.
+cancels bound drafts; a confirmed Card is withheld from inspection and current
+and history reads while its authored body remains in canonical storage. Logical
+deletion does not erase WAL/free pages/backups.
 
 The retained host fixes Raw mode off, changes no quota/consent, reads no API key,
 creates no provider and revokes Card/source grants on close. Explicit remember/
@@ -252,11 +253,12 @@ not guarantee erasure from SQLite free pages, journals or backups.
 ## Restart, change and forget
 
 Restart MCP with the same database, namespace and opt-in, then inspect the Card.
-Its confirmed state and independent authored current body persist. Changing or
+Its confirmed state and independent authored current body persist. Correcting or
 forgetting an underlying Memory canonically invalidates interpretation support:
-dependent drafts become content-free cancelled tombstones; a confirmed authored
-body remains inspectable with unsupported/needs-review support. An old body must
-not be described as current evidence just because it is still private and
+dependent drafts become content-free cancelled tombstones; a confirmed Card is
+withheld from inspection and current and history reads while its authored body
+remains in canonical storage. An old body must not be described as current
+evidence just because it is still private and
 confirmed. Source inspection cannot recover forgotten receipt text. Effects
 notify consumers; consumers must revalidate canonical state and must not treat
 an effect or old confirmation as new permission.

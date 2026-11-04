@@ -1,4 +1,4 @@
-import { fail } from './validation.mjs';
+import { fail, MemoryStoreError } from './validation.mjs';
 import { SQLITE_STAGES, SQLITE_STATEMENTS } from './topic-reader-sqlite.mjs';
 
 export const NATIVE_PROTOCOL = 'context-native-v1';
@@ -65,7 +65,7 @@ export function drainNative(frame, terminated) {
 }
 function statementLabel(sql) {
   if (/query_only|trusted_schema|busy_timeout/i.test(sql)) return 'reader_configuration';
-  for (const name of ['application_id', 'user_version', 'schema_version', 'encoding']) if (new RegExp('^PRAGMA\\s+' + name + '\\b', 'i').test(sql)) return name;
+  for (const name of ['journal_mode', 'application_id', 'user_version', 'schema_version', 'encoding']) if (new RegExp('^PRAGMA\\s+' + name + '\\b', 'i').test(sql)) return name;
   if (/^\s*(BEGIN|COMMIT|ROLLBACK)\b/i.test(sql)) return 'transaction';
   if (/sqlite_master|pragma_|EXPLAIN/i.test(sql)) return 'schema_metadata';
   if (/namespace_epochs|store_metadata/i.test(sql)) return 'snapshot_metadata';
@@ -77,6 +77,54 @@ export function nativeObserver(initialFrame) {
   return {
     select(next) { frame = next; },
     invoke,
+    creation(work) {
+      const v=frame ? view(frame) : null;
+      // Reserve before synchronous child dispatch, as for the observed probe.
+      // A killed Worker cannot erase an unreturned child's native coverage.
+      if(v)increment(v,5);
+      let received=false;
+      try {
+        const result=work(), opened=new Set();
+        let pending, count=0;
+        let valid=result?.complete===true && Array.isArray(result.events);
+        for(const event of Array.isArray(result?.events)?result.events:[]) {
+          if(event.begin){
+            const b=event.begin;
+            if(pending || b.sequence!==count+1 || !['lifecycle','initialize','incumbent'].includes(b.database) ||
+              !NATIVE_STAGES.includes(b.stage) || !NATIVE_STATEMENTS.includes(b.statement) ||
+              (b.stage==='open' ? opened.has(b.database) : !opened.has(b.database)))valid=false;
+            pending=b;
+          } else if(event.outcome && pending){
+            const b=pending,o=event.outcome;
+            if(['sequence','database','stage','statement'].some(k=>o[k]!==b[k]) || typeof o.ok!=='boolean' ||
+              !o.ok && (!Number.isInteger(o.extendedCode) || o.extendedCode<0))valid=false;
+            if(!NATIVE_STAGES.includes(b.stage) || !NATIVE_STATEMENTS.includes(b.statement)){pending=undefined;continue;}
+            const error=o.ok?null:Object.assign(Error('sqlite_file_creation_failed'),{code:'ERR_SQLITE_ERROR',errcode:o.extendedCode});
+            try{invoke(b.stage,b.statement,()=>{if(error)throw error;});}catch{/* Replay records handled failures as well as the terminal one. */}
+            if(b.stage==='open' && o.ok)opened.add(b.database);
+            if(b.stage==='close')opened.delete(b.database);
+            count++;pending=undefined;
+          } else valid=false;
+        }
+        valid &&= !pending && opened.size===0 && count>0 && result.calls===count && Boolean(result.value);
+        if(v && pending){increment(v,0);increment(v,5);}
+        if(v && !valid)Atomics.store(v,6,1);
+        received=true;
+        // Only the acknowledged terminal result controls public mapping. Earlier
+        // failures may have been handled (for example, a corrupt repair incumbent).
+        // Keep them in telemetry even when the transcript is incomplete.
+        const value=result?.value;
+        if(value?.error)throw Object.assign(Error('sqlite_file_creation_failed'),{
+          code:Number.isInteger(value.errcode)?'ERR_SQLITE_ERROR':value.error,
+          ...(Number.isInteger(value.errcode)?{errcode:value.errcode}:{}),published:value.published,
+        });
+        if(!valid)throw Object.assign(new MemoryStoreError('index_unavailable'),{reason:'storage_unavailable'});
+        return value;
+      } finally {
+        if(v && !received)Atomics.store(v,6,1);
+        if(v)Atomics.sub(v,5,1);
+      }
+    },
     journalProbe(work) {
       const v = frame ? view(frame) : null;
       // The child cannot share this buffer. Reserve coverage before dispatch;
@@ -123,7 +171,7 @@ export function nativeObserver(initialFrame) {
         const policySignal = valid && result.value.stage === 'query' &&
           [8, 11, 14, 26].includes(firstFailure?.errcode & 255);
         if (firstFailure && !policySignal) throw firstFailure;
-        if (!valid) fail('index_unavailable');
+        if (!valid) throw Object.assign(new MemoryStoreError('index_unavailable'),{reason:'storage_unavailable'});
         return result.value;
       } finally {
         if (v && !received) Atomics.store(v, 6, 1);

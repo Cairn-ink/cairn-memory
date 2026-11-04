@@ -1,3 +1,4 @@
+import { contentReadSafety } from './content-safety.mjs';
 import { exceedsRelationLimit } from "./relation-limits.mjs";
 import { fail } from "./validation.mjs";
 
@@ -76,7 +77,8 @@ export function createConflictStorage({ db, activeRow, rawRow = activeRow, advan
       const left = activeRow(ns, row.left_memory_id);
       const right = activeRow(ns, row.right_memory_id);
       if (!left || !right || left.revision !== row.left_revision ||
-          right.revision !== row.right_revision) return [];
+          right.revision !== row.right_revision || [left,right].some(memory => !contentReadSafety(db, { namespace: ns,
+            ref: { type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision } }).allowed)) return [];
       const other = left.id === memoryId ? right : left;
       return [{ memoryId: other.id, revision: other.revision,
         relation: row.relation, source: row.source }];

@@ -14,6 +14,16 @@
     "directory": "packages/setup"
   },
   "homepage": "https://cairn.ink",
-  "publishConfig": { "access": "public" },
-  "keywords": ["memory", "ai-memory", "agent-memory", "mcp", "model-context-protocol", "claude-code", "codex", "cairn", "cairn-ink"]
+  "keywords": [
+    "memory",
+    "ai-memory",
+    "agent-memory",
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "codex",
+    "cairn",
+    "cairn-ink"
+  ],
+  "publishConfig": { "access": "public" }
 }

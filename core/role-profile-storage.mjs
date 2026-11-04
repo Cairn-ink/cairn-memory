@@ -1,3 +1,5 @@
+import { cachedContentLayout } from './content-safety-schema.mjs';
+import { assertContentOutput } from './content-safety-boundary.mjs';
 import { releaseRef as parseReleaseRef } from './role-profile-input.mjs';
 import { randomUUID } from 'node:crypto';
 import { transaction } from './database.mjs';
@@ -45,7 +47,8 @@ export function createRoleProfileStorage({db,identity,ready,methods}) {
   }
   function mutate(method,ns,input,binding,fields,changeReason,attribution) {
     ready();return transaction(db,()=>{
-      const replay=ledger.replay(ns,input.actionId,method,binding);if(replay!==undefined)return replay;
+      if(cachedContentLayout(db)?.suppressionRevision&&db.prepare('SELECT 1 FROM owner_suppression_epochs WHERE owner_id=?').get(ns.ownerId)&&!/^(delete|cancel|disable)/.test(method))assertContentOutput(db,identity,input,[ns],{factsOnly:true});
+        const replay=ledger.replay(ns,input.actionId,method,binding,input);if(replay!==undefined)return replay;
       const old=registry(ns,input.roleKey),p=row(ns,input.roleKey),timestamp=new Date().toISOString();
       if(old.revision!==input.expectedRegistryRevision || canonicalJSON(old.currentRelease)!==canonicalJSON(input.expectedCurrentRelease))fail('revision_conflict');
       const profile=p?ref(ns,p):{type:'role-profile',namespace:ns,profileId:randomUUID(),roleKey:input.roleKey};
@@ -95,5 +98,5 @@ export function createRoleProfileStorage({db,identity,ready,methods}) {
       ledger.record(ns,input.actionId,method,binding,profile.profileId,result,timestamp);return result;
     });
   }
-  return Object.freeze({db,identity,ready,methods,bind,registry,resolve,release,releaseRow,reason,mutate});
+  return Object.freeze({db,identity,ready,methods,assertContentOutput(value,scopes){if(!cachedContentLayout(db)?.suppressionRevision)return;return assertContentOutput(db,identity,value,scopes);},bind,registry,resolve,release,releaseRow,reason,mutate});
 }

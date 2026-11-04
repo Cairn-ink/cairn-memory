@@ -1,3 +1,6 @@
+import { contentSuppressionRequestInside, hasContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { cachedContentLayout } from './content-safety-schema.mjs';
+import { assertContentOutput, assertContentScopes } from './content-safety-boundary.mjs';
 import { randomUUID } from 'node:crypto';
 import { transaction, readTransaction } from './database.mjs';
 import { createBinaryIdentity, binaryNamespace } from './asset-identity.mjs';
@@ -176,7 +179,7 @@ export function createAssetStorage({db,identity,ready}) {
         assetRevision:asset.revision,versionRevision:row.revision})};
   }
   const derivatives=createAssetDerivativeStorage({db,mac,target,assetRow,effect,epoch,encode,page});
-  return {prepare(method,ns,input) {
+  return {assertContentOutput(value, scopes) { if(!cachedContentLayout(db)?.suppressionRevision)return; return assertContentOutput(db,identity,value,scopes); },assertContentScope: (scopes,{delivery=false}={}) => { ready(); if(!cachedContentLayout(db)?.suppressionRevision)return; if(!delivery && scopes.length && hasContentSuppressionRequestInside(db) && !db.isTransaction) { contentSuppressionRequestInside(db,scopes,{defer:true}); return; } assertContentScopes(db,scopes); },prepare(method,ns,input) {
     const prepared=prepare(method,ns,input);
     if(method==='createAssetDerivative')prepared.derivative=derivatives.prepare(ns,input);
     if(method==='verifyAssetBytes') {
@@ -190,7 +193,8 @@ export function createAssetStorage({db,identity,ready}) {
     ready();
     if(readOnly)return readTransaction(db,()=>read(method,ns,input,prepared,accessGeneration));
     return transaction(db,()=>{
-      const replay=ledger.replay(ns,input.actionId,method,prepared.payloadBinding);
+      if(cachedContentLayout(db)?.suppressionRevision&&db.prepare('SELECT 1 FROM owner_suppression_epochs WHERE owner_id=?').get(ns.ownerId)&&!/^(delete|cancel|disable)/.test(method))assertContentOutput(db,identity,input,[ns],{factsOnly:true});
+        const replay=ledger.replay(ns,input.actionId,method,prepared.payloadBinding,input);
       if(replay!==undefined)return replay;
       const result=method==='importAssetVersion'?importVersion(ns,input,prepared):method==='createAssetDerivative'?derivatives.create(ns,input,prepared.derivative):
         method==='deleteAssetDerivative'?derivatives.remove(ns,input):remove(method,ns,input);

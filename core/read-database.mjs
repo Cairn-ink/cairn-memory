@@ -1,3 +1,4 @@
+import { bindContentSafetyConnection, attestContentSafety, installedContentLayout } from './content-safety-schema.mjs';
 import { assertNoCardCurrentDependencies } from './card-current-schema.mjs';
 import { assertNoRoleProfiles } from './role-profile-schema.mjs';
 import { assertNoAssets } from './asset-schema.mjs';
@@ -23,42 +24,59 @@ function identity(path) {
 export function contextProductFileIdentity(path) {
   const stat = identity(path); return `${stat.dev}:${stat.ino}`;
 }
-export function openReadDatabase(path, { contextRead = false, topicMembers = false, deferTopicValidation = false, topicPolicy, nativeObserver, preflight, validateProduct } = {}) {
+export function openReadDatabase(path, { contextRead = false, topicMembers = false, deferTopicValidation = false, topicPolicy, nativeObserver, preflight, validateProduct, productSqlite } = {}) {
   const initial = identity(path);
   nativeObserver?.identity?.(`${initial.dev}:${initial.ino}`);
+  nativeObserver?.openDiagnostic?.mark('canonicalIdentity');
   preflight?.();
+  nativeObserver?.openDiagnostic?.mark('canonicalPreflight');
+  const productFiles = productSqlite?.files(path);
   let native;
   try { native = nativeObserver ? nativeObserver.invoke('open', 'connection', () => new DatabaseSync(path, { readOnly: true })) : new DatabaseSync(path, { readOnly: true }); }
-  catch (error) { throw recordSqliteFailure(error, 'open', 'connection'); }
+  catch (error) {
+    recordSqliteFailure(error, 'open', 'connection');
+    if (productSqlite) productSqlite.openingFailure(error);
+    throw error;
+  }
   let db = native;
+  nativeObserver?.openDiagnostic?.mark('canonicalNative');
   try {
-    if (nativeObserver) db = nativeObserver.database(native);
-    try { (nativeObserver ? db : native).exec(`PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=${contextRead && !nativeObserver ? 5000 : 0};`); }
+    if (productSqlite) {
+      db = productSqlite.open(native, path).db;
+      productFiles({ afterProbe: true });
+    }
+    else if (nativeObserver) db = nativeObserver.database(native);
+    try { (nativeObserver || productSqlite ? db : native).exec(productSqlite ? 'PRAGMA query_only=ON; PRAGMA trusted_schema=OFF;' : `PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=${contextRead && !nativeObserver ? 5000 : 0};`); }
     catch (error) { throw recordSqliteFailure(error, 'configure', 'reader_configuration'); }
     let wal = false;
     if (topicPolicy) {
       wal = topicJournalMode(native, path, topicPolicy, { deferQueryErrors: true }) === 'WAL';
     }
     if (!nativeObserver && topicPolicy) db = topicPolicy.database(native, wal);
+    bindContentSafetyConnection(db, native);
     const current = identity(path);
     if (initial.dev !== current.dev || initial.ino !== current.ino) fail('unsafe_database_file');
+    nativeObserver?.openDiagnostic?.mark('canonicalConfigured');
     const validate = () => {
-    validateProduct?.(db);
+    const layout = attestContentSafety(db);
+    const version = layout.base;
+    validateProduct?.(db, layout);
+    nativeObserver?.openDiagnostic?.mark('productLayout');
     if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID ||
         !(contextRead ? CONTEXT_READ_SCHEMA_VERSIONS : READ_SCHEMA_VERSIONS).includes(db.prepare('PRAGMA user_version').get().user_version)) fail('unsupported_database');
     // Member reads validate only consumed Memory metadata and seek paths below;
     // full-store attestation can read unrelated Card/Raw bodies and is unbounded.
-    if (!topicMembers && db.prepare('PRAGMA user_version').get().user_version < 33) assertNoCardCurrentDependencies(db);
-    if (!topicMembers && db.prepare('PRAGMA user_version').get().user_version < 32) assertNoRoleProfiles(db);
-    if (!topicMembers && db.prepare('PRAGMA user_version').get().user_version < 31) assertNoAssets(db);
+    if (!topicMembers && version < 33) assertNoCardCurrentDependencies(db);
+    if (!topicMembers && version < 32) assertNoRoleProfiles(db);
+    if (!topicMembers && version < 31) assertNoAssets(db);
     // Product attestation above is metadata-only; full-store content checks
     // belong to legacy openers, never to unauthenticated product bootstrap.
-    if (!validateProduct && !topicMembers && db.prepare('PRAGMA user_version').get().user_version >= 30) validateExistingStore(db, {
-      storeId: db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id });
+    if (!validateProduct && !topicMembers && version >= 30) validateExistingStore(db, {
+      storeId: db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id }, layout);
     if (topicMembers) {
       // Attest version boundaries from schema metadata, never private data rows.
       // A v18 file relabelled as current is not a current physical layout.
-      const version = db.prepare('PRAGMA user_version').get().user_version;
+      const version = layout.base;
       const present = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?");
       for (const [first, table] of [[20, 'private_cards'], [20, 'card_notes'],
         [21, 'card_memory_bindings'], [22, 'card_applicability_reviews'], [23, 'card_mocs'],
@@ -96,13 +114,17 @@ export function openReadDatabase(path, { contextRead = false, topicMembers = fal
     const metadataKey = db.prepare("SELECT name,type,pk FROM pragma_table_info('store_metadata') WHERE pk!=0").all();
     if (metadataKey.length !== 1 || metadataKey[0].name !== 'singleton' ||
         metadataKey[0].type !== 'INTEGER' || metadataKey[0].pk !== 1) fail('unsupported_database');
+    // Ordinary opens have no enclosing snapshot. Fence all metadata checks
+    // against a capability or schema change after the initial attestation.
+    if (installedContentLayout(db) !== layout) fail('unsupported_database');
     };
     if (!(topicMembers && deferTopicValidation)) {
       if (contextRead) readTransaction(db, validate); else validate();
     }
+    nativeObserver?.openDiagnostic?.mark('canonicalValidated');
     return { db, fileIdentity: `${initial.dev}:${initial.ino}`, assertFile() {
       const stat = identity(path);
       if (stat.dev !== initial.dev || stat.ino !== initial.ino) fail('cursor_stale');
     } };
-  } catch (error) { db.close(); throw error; }
+  } catch (error) { if(!productSqlite || db.isOpen)db.close(); throw error; }
 }

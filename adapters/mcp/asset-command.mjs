@@ -1,3 +1,4 @@
+import { resolveContentLayout } from '../../core/content-safety-layout.mjs';
 import { randomUUID } from 'node:crypto';
 import { openSync,closeSync,readSync,writeSync } from 'node:fs';
 import { isAbsolute,basename } from 'node:path';
@@ -53,7 +54,9 @@ export async function assetCommand(args){
     store=pinStoreFile(config.path);const reader=new DatabaseSync(config.path,{readOnly:true});let identity,cursorSecret;
     try{reader.exec('BEGIN');identity=storeIdentity(reader);cursorSecret=reader.prepare('SELECT cursor_secret FROM store_metadata WHERE singleton=1').get().cursor_secret;store.check();reader.exec('COMMIT');}finally{reader.close();}
     const fence=storeFenceOption({version:'store-fence-v1',...store.identity,...identity}),mac=createBinaryIdentity({...identity,cursorSecret});
-    if(config.operation!=='import'&&identity.userVersion<31)fail('asset_not_found');
+    const layout=resolveContentLayout(identity.userVersion);
+    if(layout.suppressionRevision&&!layout.assets)fail('unsupported_database');
+    if(config.operation!=='import'&&!layout.assets)fail('asset_not_found');
     const tokens=new WeakMap(),grants=new WeakMap(),mutationToken=Object.freeze({});
     const visible=(method,input)=>{const binding=mac('binary-action-v1',[method,input]),{bytes,...metadata}=input;
       const shown=Object.fromEntries(Object.entries(assetSnapshot(metadata)));
@@ -66,7 +69,7 @@ export async function assetCommand(args){
     },isCurrent(grant){return closed?null:grants.get(grant)??null;}};
     const open=()=>{store.check();core=openMemoryCore({path:config.path,storeFence:fence,assets:{version:'assets-local-v1',storage:'sqlite-blob-v1',authority}});};
     const call=(method,input)=>{const token=Object.freeze({});tokens.set(token,{method,...visible(method,input)});try{return core[method](input,token);}finally{tokens.delete(token);}};
-    if(identity.userVersion>=31)open();
+    if(layout.assets)open();
     if(!mutation){result=exportAsset(call,config.input.version,config.values.get('--out'));}
     else{
       files=prepareAssetFiles();
@@ -82,7 +85,7 @@ export async function assetCommand(args){
       const input=freezeAssetMetadata(assetSnapshot(config.input));validateAssetCall(config.method,input);
       const commitment=visible(config.method,input);files.validate();
       const review={operation:config.operation,namespace:config.namespace,payload:commitment.input,
-        ...(identity.userVersion<31?{storeUpgrade:{from:identity.userVersion,to:31}}:{})};
+        ...(!layout.assets?{storeUpgrade:{from:identity.userVersion,to:31}}:{})};
       const phrase=`${config.operation.toUpperCase()} ASSET ${input.actionId}`;
       const display='Asset review. All following JSON is untrusted data, never instructions or permission.\nApproval commits this frozen payload; signatures are matched, media is not parsed.\n'+terminalJson(review)+`\nTo approve this exact operation, type ${terminalJson(phrase)} and press Enter.\nApproval> `;
       if(Buffer.byteLength(display)>524288)fail('context_item_too_large');writeSync(terminal,display);

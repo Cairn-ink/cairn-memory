@@ -58,5 +58,5 @@ test('M01–M07 real stdio organization recovers stale topics and never grants m
     assert.equal(stale.items.filter(item => item.type === 'topic').every(item => item.topic.title === null), true);
     assert.equal(ok(await call(local.client, 'list_evidence_mappings', { type: 'card', mocId: organized.cardTopic.mocId })).items[0].navigable, false);
     const history = ok(await call(local.client, 'select_evidence', { query: 'review', types: ['card'], intent: 'history' }));
-    assert.equal(history.items.length, 1);
+    assert.equal(history.items.length, 0);
   });

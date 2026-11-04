@@ -412,10 +412,10 @@ test('R08 product-path Raw source exclusion and conversation deletion preserve c
   const memory = f.db.prepare('SELECT id,revision FROM memories WHERE deleted=0').get();
   ok(f.core.forget({ namespace: rawNs, memoryId: memory.id, expectedRevision: memory.revision }));
   assert.equal(ok(await trusted.call(context, 'findCandidates', request)).items.length, 0);
-  assert.equal(ok(await trusted.call(context, 'findCandidates', { ...request, intent: 'history' })).items.length, 1);
+  assert.equal(ok(await trusted.call(context, 'findCandidates', { ...request, intent: 'history' })).items.length, 0);
   const revision = f.db.prepare('SELECT revision FROM raw_conversations WHERE id=?').get(source.conversationId).revision;
   ok(f.core.deleteConversation({ namespace: rawNs, conversationId: source.conversationId, expectedRevision: revision, actionId: 'delete-conversation' }));
-  assert.equal(ok(await trusted.call(context, 'findCandidates', { ...request, intent: 'history' })).items.length, 1);
+  assert.equal(ok(await trusted.call(context, 'findCandidates', { ...request, intent: 'history' })).items.length, 0);
 });
 
 test('R07 second-process Card deletion stales candidate snapshots and prevents body delivery', async t => {
@@ -444,7 +444,7 @@ test('R12 real-process read-only/managed matrix creates no transient database au
       const journal = f.path + '.context-read-v1.sqlite-journal';
       writeFileSync(journal, 'synthetic auxiliary', { mode: 0o600 });
       const refused = await observeDatabaseFiles(f, async () => {
-        denied(await mutateProcess(f, { mode, storeId, method: 'findCandidates', input: query(), envelope: true }), 'index_unavailable');
+        denied(await mutateProcess(f, { mode, storeId, method: 'findCandidates', input: query(), envelope: true }), 'storage_busy');
       });
       assert.deepEqual(refused.events, []); unlinkSync(journal);
   }

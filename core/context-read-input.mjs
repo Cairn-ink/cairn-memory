@@ -89,8 +89,25 @@ export function contextSnapshot(value, depth = 0, budget = { nodes: 8192, units:
   return result;
 }
 export const namespaceKey = ns => JSON.stringify([ns.ownerId, ns.scope, ns.projectId]);
-export function contextReadSet(value) {
+export function contextReadSet(value, profile) {
   try {
+    if (profile === 'context-read-product-v1.1') {
+      // Inspect descriptors before reading namespaces, including nonenumerable
+      // and symbol fields. Legacy validation deliberately retains its grammar.
+      if (types.isProxy(value) || !Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) fail('invalid_read_set');
+      denseArray(value, 1, 32);
+      const descriptors = Object.getOwnPropertyDescriptors(value);
+      if (Reflect.ownKeys(descriptors).length !== value.length + 1) fail('invalid_read_set');
+      const selected = Array.from({ length: value.length }, (_, i) => {
+        if (!Object.hasOwn(descriptors[i], 'value')) fail('invalid_read_set');
+        return cardNamespace(ownData(descriptors[i].value, ['ownerId', 'scope', 'projectId']));
+      });
+      if (new Set(selected.map(namespaceKey)).size !== selected.length ||
+          selected.some(ns => ns.ownerId !== selected[0].ownerId) ||
+          selected.filter(ns => ns.scope === 'personal').length > 1 ||
+          selected.filter(ns => ns.scope === 'project').length > 31) fail('invalid_read_set');
+      return selected.sort((a, b) => Buffer.compare(Buffer.from(namespaceKey(a)), Buffer.from(namespaceKey(b))));
+    }
     const result = denseArray(value, 1, 2).map(cardNamespace);
     if (result.length === 2 && (result[0].ownerId !== result[1].ownerId || result[0].scope === result[1].scope)) fail('invalid_read_set');
     return result.sort((a, b) => Buffer.compare(Buffer.from(namespaceKey(a)), Buffer.from(namespaceKey(b))));
@@ -111,13 +128,23 @@ export function contextRefs(values, readSet, supportedTypes) {
   if (new Set(refs.map(ref => JSON.stringify([namespaceKey(ref.namespace), ref.type, ref.memoryId ?? ref.cardId]))).size !== refs.length) fail('invalid_input');
   return refs;
 }
-export function contextInput(method, value, supportedTypes, enabledSources) {
+export function contextInput(method, value, supportedTypes, enabledSources, profile) {
+  // Selected-list errors precede storage and the general payload grammar on
+  // the product path. Do not invoke an accessor merely to validate its value.
+  if (profile === 'context-read-product-v1.1') {
+    try {
+      if (types.isProxy(value)) fail('invalid_read_set');
+      const descriptor = Object.getOwnPropertyDescriptor(value, 'readSet');
+      if (!descriptor || !Object.hasOwn(descriptor, 'value')) fail('invalid_read_set');
+      contextReadSet(descriptor.value, profile);
+    } catch { fail('invalid_read_set'); }
+  }
   const payload = deepFreeze(contextSnapshot(value));
   const selected = ownData(payload, method === 'findCandidates' ?
     ['readSet', 'query', 'types', 'intent', 'semantic', 'limit', 'deadlineMs', 'cursor', ...(enabledSources ? ['sources'] : [])] : method === 'contextRead' ?
       ['readSet', 'query', 'types', 'intent', 'semantic', 'budget', 'policy', 'deadlineMs', ...(enabledSources ? ['sources'] : [])] : method === 'refreshContextIndex' ?
       ['readSet', 'types', 'intent', 'budget'] : ['readSet', 'refs', 'intent', 'snapshot', 'responseByteLimit', 'fences']);
-  const result = { readSet: contextReadSet(selected.readSet) };
+  const result = { readSet: contextReadSet(selected.readSet, profile) };
   if (method === 'fetchCandidateEvidence') {
     if (Object.hasOwn(selected, 'fences') && Object.hasOwn(selected, 'snapshot')) fail('invalid_input');
     result.responseByteLimit = integer(selected.responseByteLimit, 65536, 65536);

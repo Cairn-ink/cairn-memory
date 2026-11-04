@@ -30,15 +30,15 @@ async function source(f,client,line) {
   return { view,anchor,ref:(await f.resolveSources(client,[anchor]))[0] };
 }
 async function inspectCard(client,id) { return ok(await call(client,'inspect_private_card',{ cardId:id })).card; }
-async function assertUnsupported(client,confirmed,pending) {
+async function assertUnsupported(f,client,confirmed,pending) {
   assert.equal(await inspectCard(client,pending.id),null);
-  const card = await inspectCard(client,confirmed.id); assert.equal(card.state,'confirmed');
-  assert.equal(card.body,'Synthetic independently authored lifecycle body.'); assert.equal(card.support.status,'unavailable');
-  assert.notEqual(card.support.applicability,'current');
+  assert.equal(await inspectCard(client,confirmed.id),null);
+  const card = f.probe().cards.find(row=>row.id === confirmed.id); assert.equal(card.state,'confirmed');
+  assert.equal(card.body,'Synthetic independently authored lifecycle body.');
   const current = ok(await call(client,'select_evidence',{ query:'lifecycle',types:['card'],intent:'current' }));
   assert.equal(current.items.some(row=>row.ref.cardId === confirmed.id),false);
   const history = ok(await call(client,'select_evidence',{ query:'lifecycle',types:['card'],intent:'history' }));
-  assert.equal(history.items.some(row=>row.ref.cardId === confirmed.id),true);
+  assert.equal(history.items.some(row=>row.ref.cardId === confirmed.id),false);
   return card;
 }
 
@@ -83,7 +83,7 @@ for (const client of ['claude-code','codex']) {
     const pending = await f.noWork(()=>f.draft(local.client,[evidence.ref]));
     await f.noWork(async()=>{
       const corrected = ok(await call(local.client,'correct_memory',{ memoryId:memory.memory.id,expectedRevision:memory.memory.revision,content:'Synthetic corrected lifecycle interpretation.' })).memory;
-      await assertUnsupported(local.client,confirmed,pending);
+      await assertUnsupported(f,local.client,confirmed,pending);
       unavailable(await call(local.client,'read_private_card_source',{ source:evidence.ref }));
       unavailable(await call(local.client,'create_private_card_draft',{ actionId:randomUUID(),title:'Excluded lifecycle draft',body:'Must not be retained.',sources:[evidence.ref] }));
       const fresh = await f.read(local.client,line.conversation_id); assert.equal(joined(fresh),original+control);
@@ -92,7 +92,7 @@ for (const client of ['claude-code','codex']) {
       assert.equal(ok(await call(local.client,'read_private_card_source',{ source:stillAvailable[0] })).parts[0].text,control);
       ok(await call(local.client,'forget_memory',{ memoryId:memory.memory.id,expectedRevision:corrected.revision }));
       assert.equal(f.probe().memories.length,0); await local.close(); local = await f.mcp();
-      await assertUnsupported(local.client,confirmed,pending);
+      await assertUnsupported(f,local.client,confirmed,pending);
       const cold = await f.read(local.client,line.conversation_id);
       unavailable(await call(local.client,'resolve_source_references',{ anchors:[f.anchor(cold,line.message_id)] }));
       assert.equal(ok(await call(local.client,'read_private_card_source',{ source:controlEvidence.ref })).parts[0].text,control);
@@ -112,7 +112,7 @@ for (const client of ['claude-code','codex']) {
       assert.equal(ok(await call(local.client,'read_private_card_source',{ source:refs[0] })).parts[0].text,later);
       unavailable(await call(local.client,'resolve_source_references',{ anchors:[f.anchor(view,line.message_id)] }));
       unavailable(await call(local.client,'create_private_card_draft',{ actionId:randomUUID(),title:'Excluded cold lifecycle draft',body:'Must not be retained.',sources:[evidence.ref] }));
-      await assertUnsupported(local.client,confirmed,pending);
+      await assertUnsupported(f,local.client,confirmed,pending);
       const before = f.durable(); assert.equal(f.host(rearm).reason,'replayed'); assert.equal(f.host(f.selected('run')).status,'ready');
       assert.deepEqual(f.durable(),before); assert.deepEqual(f.probe(),state); assert.equal(state.lineage.length,0);
       const cancelled = state.cards.find(row=>row.id === pending.id); assert.equal(cancelled.state,'cancelled'); assert.equal(cancelled.body,null); assert.equal(cancelled.title,null);
@@ -136,7 +136,7 @@ for (const client of ['claude-code','codex']) {
       const current = await inspectCard(local.client,confirmed.id); assert.equal(current.support.applicability,'current'); assert.equal(current.bindings.length,2);
       const pending = await f.draft(local.client,[a.ref,b.ref]);
       const deletion = { conversationId:firstLine.conversation_id,expectedRevision:a.view.conversation.revision,actionId:randomUUID() };
-      const deleted = f.probe('delete',deletion); await assertUnsupported(local.client,confirmed,pending);
+      const deleted = f.probe('delete',deletion); await assertUnsupported(f,local.client,confirmed,pending);
       unavailable(await call(local.client,'read_private_card_source',{ source:a.ref }));
       assert.equal(ok(await call(local.client,'read_private_card_source',{ source:b.ref })).parts[0].text,secondText);
       await local.close(); local = await f.mcp(); const after = f.probe();
@@ -144,7 +144,7 @@ for (const client of ['claude-code','codex']) {
       assert.equal(after.memories[0].receipts[0].excerpt,secondText); assert.equal(after.lineage.length,1); assert.equal(after.lineage[0].conversation_id,secondLine.conversation_id);
       assert.equal(after.conversations.some(row=>row.id === firstLine.conversation_id),false); assert.equal(after.parts.some(row=>row.text === firstText),false);
       assert.equal(after.parts.map(row=>row.text).join(''),secondText); assert.equal(after.notes.length,0);
-      await assertUnsupported(local.client,confirmed,pending);
+      await assertUnsupported(f,local.client,confirmed,pending);
       unavailable(await call(local.client,'read_private_card_source',{ source:a.ref }));
       assert.equal(ok(await call(local.client,'read_private_card_source',{ source:b.ref })).parts[0].text,secondText);
       assert.deepEqual(f.probe('delete',deletion),deleted); assert.deepEqual(f.probe(),after);

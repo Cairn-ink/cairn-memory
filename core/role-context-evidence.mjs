@@ -6,6 +6,7 @@ import { createPrivateCardStorage } from './private-card-storage.mjs';
 import { createPrivateEvidenceStorage } from './private-evidence-storage.mjs';
 import { createCardReceiptSources } from './card-receipt-sources.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
+import { engineProjectionCounter } from './model-budget.mjs';
 import { assembleContext } from './context-read-assembly.mjs';
 import { keyed } from './private-card-input.mjs';
 import { fail } from './validation.mjs';
@@ -21,7 +22,7 @@ export function roleEvidence(storage,config) {
   function item(ref,readSet,rank,intent='current') {
     const canonical=evidence.itemsInside(ref.namespace,[ref],intent,readSet)[0],{type,state,origin}=canonical;
     const sources=type==='memory'&&canonical.provenance.sourceAccess==='available'?
-      db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).map((row,index)=>{
+      db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).filter(row=>canonical.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)).map((row,index)=>{
         const {role,excerpt}=validateSourceReceipt(ref.memoryId,row,source=>createHash('sha256').update(JSON.stringify(source)).digest('hex'));
         return {index,role,excerpt,ref:canonical.provenance.sources[index]};
       }):[];
@@ -45,7 +46,7 @@ export function roleEvidence(storage,config) {
   }
   function assembled(items,tokenCounts=new Map()) {
     const prepared=items.map(item=>({...item,sourcesComplete:item.canonicalSourcesComplete&&item.sources.length===item.canonicalSourceCount}));
-    return assembleContext({prepared,counter:{id:'internal-projection',countTokens:text=>tokenCounts.get(text)??0},policy:{id:'rank-first-whole-v1'},
+    return assembleContext({prepared,counter:engineProjectionCounter(tokenCounts),policy:{id:'rank-first-whole-v1'},
       budget:{maxTokens:Number.MAX_SAFE_INTEGER,maxItems:24},deadlineAt:Infinity,snapshotOf:()=>null});
   }
   return {item,search,project:items=>assembled(items).metered.items,details:(items,tokens)=>assembled(items,tokens).diagnostics.items};

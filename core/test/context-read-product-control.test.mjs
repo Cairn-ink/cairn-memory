@@ -34,14 +34,23 @@ function harness({ expiry = null, openAt = 0, stall = false, terminationFails = 
     clearTimer(timer) { timers.delete(timer); },
     spawnWorker(data) {
       order.push('spawn');
-      const worker = new EventEmitter(), gate = deferred(), messages = [];
+      const worker = new EventEmitter(), gate = deferred(), messages = []; let active = false;
       Object.assign(worker, { data, messages, gate, ref() {}, unref() {},
         postMessage(message) {
+          const prior = messages.at(-1)?.operation ?? data.operation;
           messages.push(message);
-          if (message.method === 'close') { sealNative(data.frame); worker.emit('exit', 0); }
+          if (message.method === 'close') {
+            // Close waits for outstanding work or expiry, just like forced termination. Keep
+            // these fault cases' intentionally incomplete native telemetry.
+            if (active || time >= BigInt(prior.operationCutoffMonoNs)) void gate.promise.then(() => {
+              if (terminationFails) worker.emit('error', Error('synthetic close failure'));
+              else worker.emit('exit', 0);
+            });
+            else { sealNative(data.frame); worker.emit('exit', 0); }
+          } else active = true;
         },
         terminate() { return gate.promise.then(() => { if (terminationFails) throw Error('synthetic'); return 1; }); },
-        reply(result, operation = messages.at(-1)?.operation ?? data.operation) { worker.emit('message', { operation, result, fileIdentity: '1:2' }); },
+        reply(result, operation = messages.at(-1)?.operation ?? data.operation) { active = false; worker.emit('message', { operation, result, fileIdentity: '1:2' }); },
       });
       actors.push(worker);
       if (!stall) queueMicrotask(() => { time = BigInt(openAt) * 1000000n; worker.reply({ ok: true, value: null }); });
@@ -118,10 +127,15 @@ test('P2-28 earlier expiry times out stalled bootstrap before cleanup, quarantin
   const other = setup(null);
   const options = { ...h.options, supervisor: h.registry.supervisor(), requestControl: other.control,
     host: { ...h.options.host, configuration: { requestBinding: other.binding, requestReservation: other.requestReservation } } };
-  await assert.rejects(h.open(options), { code: 'read_in_progress' });
+  let settled=false;const held=h.open(options).then(value=>{settled=true;return value;},error=>{settled=true;return error;});
   const draining = h.supervisor.drain(failure.cleanupId);
   assert.strictEqual(draining, h.supervisor.drain(failure.cleanupId));
-  h.actors[0].gate.resolve(); const status = await draining;
+  try {
+    await flush();assert.equal(settled,false,'pending_cleanup_waits_until_caller_deadline');
+    h.set(5100);for(const timer of [...h.timers])if(timer.ms===5000)timer.fn();
+    assert.equal((await held).code,'read_in_progress');
+  } finally { h.actors[0].gate.resolve(); }
+  const status = await draining;
   assert.equal(status.state, 'complete'); assert.equal(status.telemetry, 'incomplete');
   h.supervisor.ackCleanup(failure.cleanupId);
   assert.throws(() => h.supervisor.getCleanupStatus(failure.cleanupId), { code: 'invalid_input' });
@@ -551,7 +565,7 @@ for (const opening of [true, false]) test(`P2-03 close during abort registration
       : reader.fetchCandidateEvidence(input, h.credential, { signal: controller.signal });
   } finally { Object.defineProperty(prototype, hook, original); }
   if (opening) await assert.rejects(pending, { code: 'store_closed' });
-  else { denied(await pending, 'store_closed'); assert.equal(h.actors[0].messages.length, 0); h.actors[0].gate.resolve(); }
+  else { denied(await pending, 'store_closed'); assert.deepEqual(h.actors[0].messages.map(m=>m.method), ['close'], 'supervisor_close_sends_only_cleanup_before_dispatch'); h.actors[0].gate.resolve(); }
   assert.ok(closing); await closing; await reader?.close();
   assert.equal(h.actors.length, opening ? 0 : 1); assert.equal(h.registry.counters().live, 0);
   assert.equal(getEventListeners(controller.signal, 'abort').length, 0);

@@ -12,7 +12,7 @@ import { spawnSync } from 'node:child_process';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const allow = JSON.parse(readFileSync(new URL('./fixtures/no-raw-db-fd-allowlist.json', import.meta.url)));
 const apis = new Set(['open', 'openSync', 'readFile', 'readFileSync', 'writeFile', 'writeFileSync',
-  'appendFile', 'appendFileSync', 'createReadStream', 'createWriteStream', 'FileHandle']);
+  'appendFile', 'appendFileSync', 'copyFile', 'copyFileSync', 'createReadStream', 'createWriteStream', 'FileHandle']);
 const decode = value => value.replace(/\\(?:u\{([\da-f]+)\}|u([\da-f]{4})|x([\da-f]{2})|([\s\S]))/gi,
   (_, point, unicode, hex, escaped) => point || unicode || hex ? String.fromCodePoint(parseInt(point ?? unicode ?? hex, 16)) : escaped);
 function tokenize(source, offset = 0) {
@@ -135,10 +135,20 @@ function violations(path, source) {
 function audit(base, paths) {
   return paths.flatMap(path => violations(relative(base, path).replaceAll('\\', '/'), readFileSync(path, 'utf8')));
 }
+function evaluationPaths() {
+  return [...files(join(root, 'evaluation/context-read-p2e')),
+    ...files(join(root, 'evaluation/context-read-qualification')),
+    ...readdirSync(join(root, 'tools/testing')).filter(name => /^p2e-.*\.mjs$/.test(name) && !name.endsWith('.test.mjs')).map(name => join(root, 'tools/testing', name))];
+}
 test('runtime raw filesystem access has an exact, justified allowlist', () => {
   const paths = ['core', 'adapters', 'packages/setup/lib', 'integrations', 'plugins']
     .flatMap(path => files(join(root, path)));
+  paths.push(...evaluationPaths());
   paths.push(join(root, 'evaluation/live/diagnostics.mjs')); // Shipped archive diagnostic utility.
+  paths.push(join(root, 'tools/testing/measure-context-read-product.mjs'),
+    join(root, 'tools/testing/summarize-context-read-product.mjs'));
+  paths.push(...readdirSync(join(root, 'tools/testing/fixtures/context-product'))
+    .filter(name => name.endsWith('.mjs')).map(name => join(root, 'tools/testing/fixtures/context-product', name)));
   assert.deepEqual(audit(root, paths), []);
   for (const path of new Set(allow.map(entry => entry.path))) {
     assert.deepEqual(sites(readFileSync(join(root, path), 'utf8')).map(site => site.source).sort(),

@@ -347,6 +347,12 @@ level.
 
 ## Limitations disclosed with every result
 
+The receipt prefix below measures UTF-16 code units after per-field NFKC,
+secret redaction, whitespace collapse and trim, with code-point-safe truncation.
+Segmenters can use the exported `normalizedTextLength` and `normalizeBoundedText`
+per field; concatenated lengths are not additive. See
+[bounded text lengths](capture.md#bounded-text-lengths).
+
 Cairn evidence is bounded to the 800-unit receipt prefix of each capture chunk
 (`truncation.json` counts what was cut); paired blocking drops cases whose full
 history exceeds the policy window; the two evidence-bearing arms use different

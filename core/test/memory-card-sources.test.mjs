@@ -130,9 +130,10 @@ test('L04/L05/L06 feature-off correction invalidates once, preserves authored bo
   assert.equal(invalidations.length, 2);
   assert.deepEqual([...new Set(invalidations.map(effect => effect.action_id))], [`memory-revision-${memory.id}-2`]);
   assert.equal(f.inspect(draft.id), null); assert.equal(f.inspect(note.id).state, 'draft');
-  const retained = f.inspect(confirmed.id);
-  assert.equal(retained.revision, 3); assert.equal(retained.body, original.input.body); assert.equal(retained.support.status, 'unavailable');
-  assert.deepEqual(retained.bindings[0].source, oldSource);
+  assert.equal(f.inspect(confirmed.id), null);
+  const retained = f.db.prepare('SELECT * FROM private_cards WHERE id=?').get(confirmed.id);
+  assert.equal(retained.revision, 3); assert.equal(retained.body, original.input.body);
+  assert.deepEqual(JSON.parse(f.db.prepare('SELECT source_ref FROM card_memory_bindings WHERE card_id=?').get(confirmed.id).source_ref), oldSource);
   assert.equal(ok(f.call('getCard', { namespace: elsewhere.namespace ?? { ...ns, scope: 'project', projectId: 'other' }, cardId: other.id })).card.state, 'draft');
   error(f.call('confirmCardDraft', { namespace: ns, cardId: draft.id, expectedRevision: 1, actionId: 'late' }), 'revision_conflict');
   assert.deepEqual(ok(f.call('createCardDraft', original)), draft);
@@ -140,7 +141,7 @@ test('L04/L05/L06 feature-off correction invalidates once, preserves authored bo
   error(f.call('getSource', { namespace: ns, source: oldSource }), 'source_unavailable');
   const edit = { namespace: ns, cardId: retained.id, expectedRevision: retained.revision, actionId: 'edit-unsupported',
     title: 'Retained authored title', body: retained.body, applicability: 'unknown', bindings: [oldSource] };
-  const edited = ok(f.call('editKnowledgeCard', edit)); assert.equal(f.inspect(edited.id).support.status, 'unavailable');
+  const edited = ok(f.call('editKnowledgeCard', edit)); assert.equal(f.inspect(edited.id), null);
   const fresh = ok(f.call('createCardDraft', draftInput([corrected], 'resolve-fresh')));
   const freshRefs = f.inspect(fresh.id).bindings.map(b => b.source);
   ok(f.call('editKnowledgeCard', { ...edit, expectedRevision: edited.revision, actionId: 'review-rebind', bindings: freshRefs }));
@@ -148,7 +149,7 @@ test('L04/L05/L06 feature-off correction invalidates once, preserves authored bo
   ok(f.call('cancelCardDraft', { namespace: ns, cardId: fresh.id, expectedRevision: 1, actionId: 'cancel-fresh' }));
   assert.equal(f.db.prepare('SELECT count(*) n FROM card_memory_bindings WHERE card_id=?').get(fresh.id).n, 0);
   ok(off.forget({ namespace: ns, memoryId: corrected.id, expectedRevision: corrected.revision }));
-  assert.equal(f.inspect(confirmed.id).support.status, 'unavailable');
+  assert.equal(f.inspect(confirmed.id), null);
   const metadata = JSON.stringify(f.db.prepare('SELECT * FROM card_memory_bindings').all()) +
     JSON.stringify(ok(f.call('listCardEffects', { namespace: ns, limit: 50 })));
   assert.ok(!metadata.includes('Revised exact source.')); assert.ok(!metadata.includes(memory.content ?? 'Memory interpretation one.'));

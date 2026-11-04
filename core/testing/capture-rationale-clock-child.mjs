@@ -13,11 +13,11 @@ if (mutation) registerHooks({ load(url, context, nextLoad) {
   const loaded = nextLoad(url, context);
   if (!url.endsWith('/core/database.mjs')) return loaded;
   const source = String(loaded.source);
-  const target = '    const result = work();\n    check?.();\n    db.exec("COMMIT");';
+  const target = '      check?.();\n      db.exec("COMMIT");';
   assert.equal(source.split(target).length, 2, 'one transaction post-work check');
   mutatedModules++;
   return { ...loaded, source: source.replace(target,
-    '    const result = work();\n    db.exec("COMMIT");') };
+    '      db.exec("COMMIT");') };
 } });
 
 const realNow = process.hrtime.bigint;

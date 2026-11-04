@@ -1,3 +1,5 @@
+import { cachedContentLayout } from './content-safety-schema.mjs';
+import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { createTopicSqlitePolicy, unsupportedTopicStorage } from './topic-reader-sqlite.mjs';
 import { parentPort, workerData } from 'node:worker_threads';
 import { createTopicTokens } from './topic-snapshot.mjs';
@@ -13,7 +15,7 @@ import { fail } from './validation.mjs';
 
 const topicPolicy = createTopicSqlitePolicy({ diagnostics: workerData.diagnostics });
 let connection, storage, traversal;
-let tokens, topicSession, memberReader;
+let tokens, topicSession, memberReader, requestNamespace;
 function prepareTopicReaders() {
   if (memberReader) return;
   const nextTokens = createTopicTokens(), nextSession = createTopicSession(workerData.path, topicPolicy);
@@ -34,9 +36,16 @@ function snapshot(request, expected) {
   return current;
 }
 function transaction(work) {
-  connection.db.exec('BEGIN');
-  try { const value = work(); connection.db.exec('COMMIT'); return value; }
-  catch (error) { connection.db.exec('ROLLBACK'); throw error; }
+  if (!cachedContentLayout(connection.db)?.suppressionRevision) {
+    connection.db.exec('BEGIN');
+    try { const value = work(); connection.db.exec('COMMIT'); return value; }
+    catch (error) { connection.db.exec('ROLLBACK'); throw error; }
+  }
+  return withContentSuppressionRequest(()=>{
+    connection.db.exec('BEGIN');
+    try { const value = inContentSuppressionRequestInside(connection.db,work,[requestNamespace]); connection.db.exec('COMMIT'); return value; }
+    catch (error) { connection.db.exec('ROLLBACK'); throw error; }
+  });
 }
 async function readLegacy(request) {
   if (!connection) {
@@ -182,9 +191,18 @@ parentPort.on('message', async message => {
   const { deadlineAt, ...request } = message;
   topicPolicy.start(deadlineAt);
   try {
-    if (request.method === 'members' || request.snapshotVersion) prepareTopicReaders();
-    if (request.method === 'members') parentPort.postMessage(await memberReader.read(request.request, deadlineAt));
-    else parentPort.postMessage(await (request.snapshotVersion ? readOptin(request) : readLegacy(request)));
+    await withContentSuppressionRequest(async()=>{
+      requestNamespace=request.method==='members'?request.request.namespace:request.namespace;
+      if (request.method === 'members' || request.snapshotVersion) prepareTopicReaders();
+      const result = request.method === 'members' ? await memberReader.read(request.request, deadlineAt)
+        : await (request.snapshotVersion ? readOptin(request) : readLegacy(request));
+      // Worker yields are engine work, never E1 ports. One request proof spans
+      // their snapshots; a single independent delivery fence follows all work.
+      if (request.method === 'members' || request.snapshotVersion) topicSession.assertDelivery(requestNamespace);
+      else if (cachedContentLayout(connection.db)?.suppressionRevision) try { assertContentSuppressionRequestInside(connection.db,[requestNamespace]); }
+      catch(error) { if(error.code==='evidence_unavailable')fail('cursor_stale');throw error; }
+      parentPort.postMessage(result);
+    },{fresh:true});
   }
   catch (error) {
     if (request.method !== 'members') traversal = undefined;

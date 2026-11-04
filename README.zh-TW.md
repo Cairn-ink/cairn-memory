@@ -17,6 +17,12 @@
   <a href="https://cairn.ink"><img alt="Cairn.ink 託管服務" src="https://img.shields.io/badge/hosted-cairn.ink-5b5147"></a>
 </p>
 
+**Cairn Memory** 是 Cairn.ink 的開源 AI 記憶工具，Claude Code 和 Codex
+可以透過本機 MCP 工具使用，也可以連接雲端自動記憶。你可以前往
+[Cairn.ink](https://cairn.ink)、安裝
+[@cairn-ink/memory npm 套件](https://www.npmjs.com/package/@cairn-ink/memory)，
+或查看 [Cairn Memory GitHub 原始碼](https://github.com/Cairn-ink/cairn-memory)。
+
 你是不是常跟 AI 重複說：「報告要簡短」「這個專案已經改方向了」？
 Cairn 提供工具，讓你把這些偏好或決定存成記憶，下次可以查看；事情改變時，
 也能修改或移出使用中的記憶。
@@ -93,8 +99,8 @@ Cairn 提供工具，讓你把這些偏好或決定存成記憶，下次可以�
 npx @cairn-ink/memory setup
 ```
 
-這份原始碼已更新到 Installer **0.6.3**，修正 Codex 0.164.0–0.166.0 的格式資格，
-可用 `node packages/setup/bin/memory.mjs setup` 執行，npm 發布另行處理。第一次互動安裝會問要用本機
+Installer **0.6.3** 已於 2026-11-03 發布，修正 Codex 0.164.0–0.166.0 的格式資格，
+可直接用上方指令；第一次互動安裝會問要用本機
 MCP 工具，或登入 cairn.ink 使用雲端自動記憶，也可用 `setup --local`／
 `setup --cloud` 直接選擇，首次非互動執行時需指定 `--local`／`--cloud`；
 本機模式目前不會自動保存或回想。

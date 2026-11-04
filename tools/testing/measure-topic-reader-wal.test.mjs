@@ -118,3 +118,17 @@ test('latencyTail reports nearest-rank p99, max and threshold counts', async () 
   assert.deepEqual([tail.over150Ms, tail.over500Ms, tail.over1000Ms], [3, 2, 1]);
   assert.deepEqual(latencyTail([]), { n: 0, p99Ms: null, maxMs: null, over150Ms: 0, over500Ms: 0, over1000Ms: 0 });
 });
+
+test('shared public-write lifecycle preserves native failure and always fresh-closes; retained control keeps its handle', async () => {
+  const { measureWriterLifecycle } = await import('./measure-topic-reader-wal.mjs');
+  const events=[],native=Object.assign(Error('synthetic'),{code:'ERR_SQLITE_ERROR',errcode:5});
+  let time=0;const handle={};
+  const fresh=await measureWriterLifecycle({lifecycle:'fresh',clock:()=>++time,
+    open(){events.push('open');return handle;},write(h){assert.equal(h,handle);events.push('write');throw native;},
+    close(h){assert.equal(h,handle);events.push('close');}});
+  assert.deepEqual(events,['open','write','close']);assert.equal(fresh.error,native);assert.equal(fresh.core,undefined);
+  assert.equal(fresh.call.closeStartedAt,4);assert.equal(fresh.call.writeStartedAt,2);assert.equal(fresh.call.writeFinishedAt,3);
+  const retained=await measureWriterLifecycle({core:handle,lifecycle:'retained',clock:()=>++time,
+    open(){assert.fail('unexpected reopen');},write(){return {ok:true};},inspect(){events.push('inspect');},close(){assert.fail('per-write retained close');}});
+  assert.equal(retained.core,handle);assert.equal(retained.error,undefined);assert.equal(retained.call.closeStartedAt,undefined);
+});

@@ -456,7 +456,7 @@ test('Fix2 missing publication certificate preserves authenticated bounded rebui
     const r=ok(await h.refreshContextIndex({...refresh,budget:{maxItems:1,maxMs:5000}},s.token));
     const d=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX);
     const work=d.prepare('SELECT g.id,g.checkpoint FROM work w JOIN generations g ON g.id=w.generation').get();
-    assert.equal(d.prepare('SELECT count(*) AS n FROM generations').get().n,2);
+    assert.equal(d.prepare('SELECT count(*) AS n FROM generations').get().n,r.status==='complete'?1:2);
     d.close();
     if(r.status==='complete'){complete=true;break;}
     assert.ok(work.checkpoint>last);last=work.checkpoint;

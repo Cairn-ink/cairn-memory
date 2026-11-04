@@ -6,6 +6,12 @@ exact stored receipt from a later canonical source window. It does not alter the
 default LongMemEval ingestion, public comparison, official scorer, live runner,
 paid guard or installed interface.
 
+The engine's message (4,000) and receipt-window (800) bounds measure UTF-16 code
+units after NFKC, secret redaction, whitespace collapse and trim per message.
+Segmenters can use the exported `normalizedTextLength` and `normalizeBoundedText`
+for this path; concatenated lengths are not additive. Exact receipt windows also
+require canonical equality. See [bounded text lengths](capture.md#bounded-text-lengths).
+
 The entrypoints are `planIndexedWindowLongMemEvalCase` and
 `ingestIndexedWindowLongMemEvalCase` in `evaluation/longmemeval/ingestion.mjs`,
 and `runIndexedWindowPublicComparison` in

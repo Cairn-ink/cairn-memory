@@ -1,7 +1,8 @@
-import { boundedData, coverage } from './context-product-control.mjs';
+import { boundedData, coverage, PRODUCT_PROFILE } from './context-product-control.mjs';
 import { contextReadSet } from './context-read-input.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { fail } from './validation.mjs';
+import { suppressionGrant } from './content-suppression-input.mjs';
 const writerKey = Symbol.for('context-read-product-v1.1/maintenance-writers');
 export function claimMaintenanceWriter(identity, readSet) {
   const writers = globalThis[writerKey] ??= new Set();
@@ -24,7 +25,16 @@ export function serviceIssuance(value, readSet, ownerCoverage) {
       b.credentialExpiresUtcMs !== null && (!Number.isSafeInteger(b.credentialExpiresUtcMs) || b.credentialExpiresUtcMs<0) ||
       b.ownerGeneration !== undefined && (!Number.isSafeInteger(b.ownerGeneration) || b.ownerGeneration<1)) fail('invalid_input');
   const ns = ownData(b.namespaces,['readSet','ownerCoverage']);
-  if (b.ownerId !== readSet[0].ownerId || JSON.stringify(contextReadSet(ns.readSet)) !== JSON.stringify(readSet) ||
+  if (b.ownerId !== readSet[0].ownerId || JSON.stringify(contextReadSet(ns.readSet, PRODUCT_PROFILE)) !== JSON.stringify(readSet) ||
       JSON.stringify(boundedData(coverage(ns.ownerCoverage,readSet))) !== JSON.stringify(boundedData(ownerCoverage))) fail('authority_required');
   return b;
+}
+
+// D-15: separately issued reconciliation authority; ordinary service issuance
+// remains closed and never acquires owner-wide or erasure permission implicitly.
+export function suppressionServiceIssuance(value, suppression) {
+  const input = boundedData(value);
+  const readSet = contextReadSet(input.namespaces?.readSet, PRODUCT_PROFILE);
+  const service = serviceIssuance(input, readSet, coverage(input.namespaces?.ownerCoverage, readSet));
+  return boundedData({ ...service, suppression: suppressionGrant(suppression, service) });
 }

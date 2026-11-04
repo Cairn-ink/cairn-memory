@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { openContextProductReader, openContextIndexMaintainer, createContextReadSupervisor } from '../index.mjs';
 import { credentialDigest, PRODUCT_PROFILE } from '../context-product-control.mjs';
@@ -78,12 +79,14 @@ test('context read-only canonical and sidecar probes preserve other host writer 
   for (const path of [f.path, f.path + '.context-read-v1.sqlite']) {
     const db = new DatabaseSync(path); db.exec('PRAGMA busy_timeout=5000; BEGIN IMMEDIATE');
     // An actual write is required; a RESERVED lock alone creates no journal.
-    db.exec(path === f.path ? 'UPDATE store_metadata SET store_id=store_id' : 'UPDATE generations SET phase=phase');
+    db.exec(path === f.path ? 'UPDATE store_metadata SET store_id=store_id' :
+      'PRAGMA user_version='+db.prepare('PRAGMA user_version').get().user_version);
     try {
+      assert.equal(existsSync(path+'-journal'),true,'writer creates a journal: '+(path===f.path?'canonical':'sidecar'));
       locked(path);
       // A live rollback journal is a refusal. Probe again after deleting no data
       // by using the read-only preflight on the *other* file first.
-      try { assertContextReadReadOnlyAuxiliaries(f.path); } catch (error) { assert.equal(error.code, 'index_unavailable'); }
+      assert.throws(() => assertContextReadReadOnlyAuxiliaries(f.path), { code: 'storage_busy' });
       if (path !== f.path) {
         const other = openContextReadSidecar({ path: f.path, db: f.db }); other.close();
       }
@@ -139,7 +142,7 @@ test('DELETE: product open, capabilities, fetch and Worker exit preserve host wr
     // Once an actual write creates a journal, ready() must refuse safely too.
     f.db.exec('UPDATE store_metadata SET store_id=store_id WHERE singleton=1');
     assert.deepEqual(await reader.fetchCandidateEvidence(input, credential),
-      { ok: false, error: { code: 'index_unavailable', retryable: false } });
+      { ok: false, error: { code: 'storage_busy', retryable: true } });
     locked(f.path);
     await reader.close(); locked(f.path);
     f.db.exec('COMMIT');

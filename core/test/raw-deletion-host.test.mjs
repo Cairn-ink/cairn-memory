@@ -86,11 +86,13 @@ for (const client of ['claude-code', 'codex']) {
     assert.equal(ok(f.core.deleteConversation(input)).retainedMemories, 1);
     assert.equal(ok(f.core.get({ namespace: ns, memoryId: memory.id })).receipts.length, 1);
     assert.equal(ok(call('getCard', { namespace: ns, cardId: draft.id })).card, null);
-    const retained = ok(call('getCard', { namespace: ns, cardId: confirmed.id })).card;
+    assert.equal(ok(call('getCard', { namespace: ns, cardId: confirmed.id })).card, null);
+    const retained = f.db.prepare('SELECT body,state FROM private_cards WHERE id=?').get(confirmed.id);
     assert.equal(retained.body, 'Confirmed independently authored body.'); assert.equal(retained.state, 'confirmed');
-    assert.equal(retained.support.status, 'unavailable'); assert.deepEqual(retained.bindings.map(binding => binding.source), refs);
+    assert.deepEqual(f.db.prepare('SELECT source_ref FROM card_memory_bindings WHERE card_id=? ORDER BY position').all(confirmed.id).map(row => JSON.parse(row.source_ref)), refs);
     for (const ref of refs) error(call('getSource', { namespace: ns, source: ref }), 'source_unavailable');
-    f.reopen(); assert.equal(ok(call('getCard', { namespace: ns, cardId: confirmed.id })).card.body, retained.body);
+    f.reopen(); assert.equal(ok(call('getCard', { namespace: ns, cardId: confirmed.id })).card, null);
+    assert.equal(f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(confirmed.id).body, retained.body);
   });
 
   test(`P3b-10 ${client}: finite outbox has immutable pagination and exact scoped cursors`, async t => {

@@ -103,9 +103,9 @@ label. Refile changed Card memberships explicitly; this does not reactivate a
 mapping or change Card applicability.
 
 Restart with the same configuration, correct/forget the underlying Memory, and
-inspect again: dependent drafts cancel, current reads exclude unsupported Cards,
-and qualified history may retain the independent authored body without forgotten
-source text. See [tool payloads and terminal review](private-card-terminal-review.md),
+inspect again: dependent drafts cancel, and the confirmed Card is withheld from
+inspection and both current and history reads while its authored body remains
+in canonical storage. See [tool payloads and terminal review](private-card-terminal-review.md),
 [common read bounds](private-evidence-local.md),
 [typed organization](private-organization-local.md) and
 [core Card lifecycle](private-cards-local.md).

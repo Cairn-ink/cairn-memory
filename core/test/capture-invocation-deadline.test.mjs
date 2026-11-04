@@ -211,7 +211,7 @@ test('D2/D3 output serialization crossing expiry rejects before admission', asyn
 
 test('D3 ordinary final admission checks after actual receipt INSERT and rolls back all writes', async t => {
   const { core, db } = fixture(t, { captureDeadlineMs: 600 });
-  const delayed = delayAfterSql('INSERT OR IGNORE INTO receipts', 900);
+  const delayed = delayAfterSql('INSERT INTO receipts', 900);
   try {
     const result = await core.capture(input('admission-precommit'));
     assert.equal(delayed.reached(), 1, 'receipt mutation occurred inside the guarded transaction');

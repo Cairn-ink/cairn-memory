@@ -5,13 +5,34 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const CHECKOUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const DEPENDENCIES = Object.freeze([
-  'core/model-call.mjs',
-  'core/model-budget.mjs',
-  'core/model-diagnostics.mjs',
-  'core/validation.mjs',
-  'plugins/cairn-memory/lib/redact.mjs',
+// BEGIN generated model-call static import closure.
+export const installedCoreDeadlineFiles = Object.freeze([
+  "core/asset-identity.mjs",
+  "core/card-current-input.mjs",
+  "core/card-raw-sources.mjs",
+  "core/content-safety-boundary.mjs",
+  "core/content-safety-layout.mjs",
+  "core/content-safety-schema.mjs",
+  "core/content-safety.mjs",
+  "core/content-suppression-storage.mjs",
+  "core/content-write-context.mjs",
+  "core/method-package-input.mjs",
+  "core/model-budget.mjs",
+  "core/model-call.mjs",
+  "core/model-diagnostics.mjs",
+  "core/placement-input.mjs",
+  "core/private-card-input.mjs",
+  "core/private-evidence-input.mjs",
+  "core/private-organization-input.mjs",
+  "core/raw-lineage-storage.mjs",
+  "core/raw-source-input.mjs",
+  "core/raw-source-roots.mjs",
+  "core/task-receipt.mjs",
+  "core/validation.mjs",
+  "plugins/cairn-memory/lib/redact.mjs"
 ]);
+// END generated model-call static import closure.
+const DEPENDENCIES = installedCoreDeadlineFiles;
 const predicates = new WeakMap();
 const fail = () => { throw new Error('installed_core_deadline_invalid'); };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');

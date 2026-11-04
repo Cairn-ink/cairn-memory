@@ -1,3 +1,4 @@
+import { writeContentSuppressionInside } from './content-suppression-storage.mjs';
 import { createHmac, randomUUID } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { rawNamespace, rawBoundary } from './raw-input.mjs';
@@ -116,14 +117,17 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
   }
   function cascadeInside(ns, row, source, actionId) {
     const root = rootOf(row), plan = planInside(ns, root);
-    if (source.type === 'conversation') rawCards.collect(ns,[{ conversationId: row.id }]);
+    if (source.type === 'conversation') {
+      writeContentSuppressionInside(db, { namespace: ns, kind: 'raw', key: row.id, reason: 'purge', actionId });
+      rawCards.collect(ns,[{ conversationId: row.id }]);
+    }
     db.prepare('INSERT OR IGNORE INTO raw_session_fences VALUES(?,?,?,?,?)').run(...rawBoundary(ns), root.client, root.sessionKey);
     closeJobs(ns, plan.jobs);
     db.prepare(`DELETE FROM raw_job_sources WHERE ${where} AND source_client=? AND session_key=?`)
       .run(...rawBoundary(ns), root.client, root.sessionKey);
     for (const memory of plan.memories) {
-      if (memory.forget) forgetMutation(ns, memory.id);
-      else removeReceipts(ns, memory.id, memory.receiptIds);
+      if (memory.forget) forgetMutation(ns, memory.id, undefined, 'forgotten', 'purge');
+      else removeReceipts(ns, memory.id, memory.receiptIds, { reason: 'purge', actionId });
     }
     for (const id of plan.episodeIds) episodes.invalidateSources(ns, id);
     const origins = db.prepare(`SELECT id FROM session_episodes WHERE ${where} AND client=? AND session_key=? AND deleted=0`)

@@ -1,3 +1,5 @@
+import { cachedContentLayout } from './content-safety-schema.mjs';
+import { contentReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { cardDependencyFence } from './card-current-storage.mjs';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { keyed } from './private-card-input.mjs';
@@ -21,6 +23,9 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
   const advanceIndex = ns => db.prepare(`INSERT INTO card_moc_epochs VALUES(?,?,?,2)
     ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET revision=revision+1`).run(...boundary(ns));
   const topic = (ns, id) => db.prepare(`SELECT * FROM card_mocs WHERE ${where} AND id=?`).get(...boundary(ns), id);
+  const safeCard = (ns, card, ref) => Boolean(card && contentReadSafety(db, { identity, namespace: ns,
+    ref: ref ?? { type: 'card', namespace: ns, cardId: card.id, revision: card.revision, bodyRevision: card.bodyRevision },
+    currentCardEligible: () => sourceEligible(card) }).allowed);
   const cardRef = (ns, card) => ({ type: 'card', namespace: ns, cardId: card.id, revision: card.revision, bodyRevision: card.bodyRevision });
   function encode(value) {
     const body = Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -41,19 +46,20 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
   }
   function currentCard(ns, ref) {
     const card = cardDetailInside(ns, ref.cardId);
-    if (!sourceEligible(card)) fail('evidence_unavailable');
+    if (!safeCard(ns, card)) fail('evidence_unavailable');
     if (!sameRef(card, ref)) fail('revision_conflict');
     return card;
   }
   function titleInside(ns, row) {
     const sources = db.prepare('SELECT * FROM card_moc_title_sources WHERE moc_id=? ORDER BY card_id LIMIT 6').all(row.id);
-    const valid = sources.length > 0 && sources.length <= 5 && sources.every(source => {
-      const card = cardDetailInside(ns, source.card_id);
-      return sourceEligible(card) && sameRef(card, { revision: source.card_revision, bodyRevision: source.body_revision });
-    });
-    return { title: valid ? row.title : null, titleSources: sources.slice(0, 5).map(source => ({ type: 'card', namespace: ns,
+    const cards = new Map(sources.map(source => [source.card_id, cardDetailInside(ns, source.card_id)]));
+    const safe = sources.filter(source => safeCard(ns, cards.get(source.card_id), { type: 'card', namespace: ns,
+      cardId: source.card_id, revision: source.card_revision, bodyRevision: source.body_revision }));
+    const valid = sources.length > 0 && sources.length <= 5 && safe.length === sources.length;
+    return { title: valid ? row.title : null, titleSources: safe.slice(0, 5).map(source => ({ type: 'card', namespace: ns,
       cardId: source.card_id, revision: source.card_revision, bodyRevision: source.body_revision })) };
   }
+
   function cardTopicInside(ns, ref, allowUnavailable = false) {
     const row = topic(ns, ref.mocId);
     if (!row) fail('moc_not_found');
@@ -217,16 +223,22 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
     // Physical rows are paged before canonical validation, so stale records also
     // consume work. Every candidate kind has a stable key and no copied body.
     const rows = db.prepare(`SELECT * FROM (
-      SELECT 'topic' kind,id a,'' b FROM card_mocs WHERE ${where}
-      UNION ALL SELECT 'edge',e.parent_id,e.child_id FROM card_moc_edges e JOIN card_mocs t ON t.id=e.parent_id WHERE t.owner_id=? AND t.scope=? AND t.project_id=?
-      UNION ALL SELECT 'member',r.moc_id,r.card_id FROM card_moc_refs r JOIN card_mocs t ON t.id=r.moc_id WHERE t.owner_id=? AND t.scope=? AND t.project_id=?
-      UNION ALL SELECT 'unfiled',id,'' FROM private_cards WHERE ${where} AND state='confirmed'
+      SELECT 'topic' kind,id a,'' b,NULL card_revision,NULL body_revision FROM card_mocs WHERE ${where}
+      UNION ALL SELECT 'edge',e.parent_id,e.child_id,NULL,NULL FROM card_moc_edges e JOIN card_mocs t ON t.id=e.parent_id WHERE t.owner_id=? AND t.scope=? AND t.project_id=?
+      UNION ALL SELECT 'member',r.moc_id,r.card_id,r.card_revision,r.body_revision FROM card_moc_refs r JOIN card_mocs t ON t.id=r.moc_id WHERE t.owner_id=? AND t.scope=? AND t.project_id=?
+      UNION ALL SELECT 'unfiled',id,'',revision,body_revision FROM private_cards WHERE ${where} AND state='confirmed'
     ) ORDER BY CASE kind WHEN 'topic' THEN 0 WHEN 'edge' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,a,b
       LIMIT 257 OFFSET ?`).all(...marks, ...marks, ...marks, ...marks, offset);
     const result = [];
     let scanned = 0;
     for (const row of rows.slice(0, 256)) {
       if (result.filter(value => value.item).length >= input.limit + 1) break;
+      const safetyMemo=createContentReadMemo(db);
+      if (cachedContentLayout(db)?.suppressionRevision && ['member','unfiled'].includes(row.kind)) {
+        const id=row.kind==='member'?row.b:row.a;
+        if(!contentReadSafety(db,{identity,namespace:ns,method:'getCard',memo:safetyMemo,
+          ref:{type:'card',namespace:ns,cardId:id,revision:row.card_revision,bodyRevision:row.body_revision}}).allowed)fail('evidence_unavailable');
+      }
       scanned++;
       if (row.kind === 'topic') {
         const current = topic(ns, row.a);
@@ -241,8 +253,8 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
         result.push({ item: { type: 'ref', ref: { parentId: p.id, parentRevision: p.revision,
           childType: 'topic', childId: child.id, childRevision: child.revision, relation: 'contains' } }, consumed: scanned });
       } else {
-        const card = cardDetailInside(ns, row.kind === 'member' ? row.b : row.a);
-        if (!sourceEligible(card)) continue;
+        const card = cardDetailInside(ns, row.kind === 'member' ? row.b : row.a,undefined,{safetyMemo});
+        if (!safeCard(ns, card)) continue;
         if (row.kind === 'unfiled') {
           if (parent || db.prepare('SELECT 1 FROM card_moc_refs WHERE card_id=? AND card_revision=? AND body_revision=? LIMIT 1').get(card.id, card.revision, card.bodyRevision)) continue;
           result.push({ item: { type: 'unfiled', ref: cardRef(ns, card) }, consumed: scanned });

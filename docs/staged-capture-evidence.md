@@ -57,6 +57,11 @@ not the original byte stream or a complete transcript archive. The separate
 redacted conversations when enabled; staging remains a temporary bounded view.
 The full capture digest still binds the original canonical submission. Identifiers are opaque
 and must not contain credentials or private prose; they are not text-redacted.
+Each source prefix is measured in UTF-16 code units after per-message NFKC,
+secret redaction, whitespace collapse and trim, then truncated at code-point
+boundaries. Segmenters can use the exported `normalizedTextLength` and
+`normalizeBoundedText` per field; concatenated lengths are not additive. See
+[bounded text lengths](capture.md#bounded-text-lengths).
 
 Each serialized payload is at most128KiB. Each exact namespace allows at most64
 payloads and1MiB of payload bytes. Overflow rejects atomically before model work;

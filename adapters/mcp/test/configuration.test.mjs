@@ -1,3 +1,5 @@
+import * as publicEntry from '../server.mjs';
+import { productOpenPhaseDiagnostic } from '../../../core/context-product-reader.mjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readdirSync, writeFileSync, readFileSync } from 'node:fs';
@@ -7,6 +9,11 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { parseConfiguration } from '../cli.mjs';
 import { createCairnServer } from '../server.mjs';
+
+test('C2 MCP public entry does not export the private open timing accessor', () => {
+  assert.equal(Object.hasOwn(publicEntry, 'productOpenPhaseDiagnostic'), false, 'C2 no public timing export');
+  assert.equal(Object.values(publicEntry).includes(productOpenPhaseDiagnostic), false, 'C2 no aliased timing export');
+});
 
 const cli = fileURLToPath(new URL('../cli.mjs', import.meta.url));
 function run(args, key = '') {

@@ -1,3 +1,4 @@
+import { contentAuthorityPort } from './content-safety-boundary.mjs';
 import { isDeepStrictEqual, types } from 'node:util';
 import { boundedData, credentialDigest } from './context-product-control.mjs';
 import { deepFreeze } from './private-card-input.mjs';
@@ -16,12 +17,15 @@ function observePromise(value) {
 // derives one method grant, not one independent grant per namespace.
 export function requestAuthority(host, binding, control) {
   if (!host || ['authorize', 'isCurrent'].some(k => typeof host[k] !== 'function' || types.isAsyncFunction(host[k]))) fail('authority_required');
+  // The separate S2c pull protocol retains its existing authority contract.
+  if(!binding.suppression)host=contentAuthorityPort(host,boundedData);
   return function enter(method, payload, credential) {
     if (credential === undefined || credential === null) fail('authority_required');
     boundedData(credential, 16384);
     if (credentialDigest(credential) !== binding.credentialDigest) fail('authority_required');
     const request = deepFreeze({ method, input: payload, ownerId: binding.ownerId, namespaces: binding.namespaces,
-      requestControl: control, credentialBindingId: binding.credentialBindingId });
+      requestControl: control, credentialBindingId: binding.credentialBindingId,
+      ...(binding.suppression ? { suppression: binding.suppression } : {}) });
     let grant;
     try {
       grant = host.authorize(request, credential);
