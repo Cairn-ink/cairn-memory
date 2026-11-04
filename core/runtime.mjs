@@ -1,6 +1,6 @@
 import { registerContentWriteBoundary } from './content-write-context.mjs';
 import { contentScopeEpochGuard, assertContentOutput, contentReceiptCount, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
-import { cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
+import { cachedContentLayout, installedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
 import { writeContentSuppressionInside, suppressReceiptsInside, requireSuppressionTransaction, allocateContentKey, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, hasContentSuppressionRequestInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { roleProfileOptions } from './role-profile-input.mjs';
@@ -15,7 +15,7 @@ import { createEpisodeReads } from './episode-reads.mjs';
 import { createEpisodeStorage, episodeOptions } from './episode-storage.mjs';
 import { createProceduralStorage } from './procedural-storage.mjs';
 import { createHash } from "node:crypto";
-import { openDatabase, transaction, readTransaction, isConnectionDiscarded } from "./database.mjs";
+import { openDatabase, transaction, readTransaction, isConnectionDiscarded, isStorageBusy } from "./database.mjs";
 import { createMocStorage } from "./moc-storage.mjs";
 import { createAdmissionStorage } from "./admission-storage.mjs";
 import { createClassificationJournalStorage } from './classification-journal-storage.mjs';
@@ -756,7 +756,26 @@ export function createMemoryRuntime(input, internal) {
     if (delivery) assertContentSuppressionRequestInside(db, scopes);
     assertContentScopes(db, scopes, 'memory_not_found');
   };
+  function captureSourceRead(work) {
+    const layout = cachedContentLayout(db);
+    if (!layout) fail('unsupported_database');
+    // Legacy source checks retain their exact direct-call cost and semantics.
+    // Safety checks need a coherent suppression snapshot, never a writer lock.
+    if (!layout.suppressionRevision) return work();
+    try { return readTransaction(db, () => {
+      // Retain transaction()'s installed-safety fence locally. The parallel
+      // recall hotfix adds an opt-in shared helper; the second merge should
+      // consolidate this call there without fencing other readTransaction users.
+      checkInstalledContentSafety(db);
+      return work();
+    }); }
+    catch (error) {
+      if (isStorageBusy(error)) fail('storage_busy');
+      throw error;
+    }
+  }
   for(const boundary of [assertContentScope,ready,cardStorage,methodStorage,assetStorage,roleStorage])registerContentWriteBoundary(boundary,db);
+  function createRuntimeFacade() {
   return contentSafetyFacade({
     assertContentScope,
     contentPortGuard(scopes) { ready(); return contentScopeEpochGuard(db,scopes); },
@@ -855,8 +874,8 @@ export function createMemoryRuntime(input, internal) {
     rebuildIndex(ns, input) { ready(); return indexStorage.rebuildIndex(ns, input); },
     inspectAdmission(ns, input) { ready(); return admissionStorage.inspectAdmission(ns, input); },
     claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },
-    filterCaptureSources(ns, sources) { ready(); return transaction(db, () => rawLineage.filter(ns, sources)); },
-    assertCaptureSources(ns, sources) { ready(); return transaction(db, () => rawLineage.assertReceipts(ns, sources)); },
+    filterCaptureSources(ns, sources) { ready(); return captureSourceRead(() => rawLineage.filter(ns, sources)); },
+    assertCaptureSources(ns, sources) { ready(); return captureSourceRead(() => rawLineage.assertReceipts(ns, sources)); },
     claimCapturedAdmission(ns, input, deadline, registration, sources) {
       ready(); return admissionStorage.claimAdmission(ns, input, undefined, undefined, deadline, registration, sources);
     },
@@ -900,6 +919,20 @@ export function createMemoryRuntime(input, internal) {
     epoch(ns) { ready(); return epoch(ns); },
     close() { if (!closed) { if (db.isOpen) db.close(); closed = true; } },
   }, { check: assertContentScope, noOwner: ['ready','close','assertContentScope','assertContentOutput','contentPortGuard'] });
+  }
+  const runtime = createRuntimeFacade();
+  // Include the facade's entry/delivery attestation in these two error
+  // boundaries, without changing any other runtime method's error handling.
+  const captureSourceBoundary = method => (...args) => {
+    try { return runtime[method](...args); }
+    catch (error) {
+      if (cachedContentLayout(db)?.suppressionRevision && isStorageBusy(error)) fail('storage_busy');
+      throw error;
+    }
+  };
+  return Object.freeze({ ...runtime,
+    filterCaptureSources: captureSourceBoundary('filterCaptureSources'),
+    assertCaptureSources: captureSourceBoundary('assertCaptureSources') });
   } catch (error) {
     try { db.close(); } catch { /* Preserve the construction failure. */ }
     throw error;
