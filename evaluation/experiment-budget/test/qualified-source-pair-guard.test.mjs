@@ -8,12 +8,13 @@ import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { installedImportClosure } from '../../../packaging/test/fixtures/installed-import-closure.mjs';
 
 import { createOpenAIModel } from '../../../adapters/openai/index.mjs';
 import { createQualificationTextCatalog } from '../../../core/qualification-text-catalog.mjs';
 import { qualificationPoolWire } from '../../../adapters/openai/test/qualification-pool-wire.mjs';
 import { createExperimentBudget, reopenExperimentBudget } from '../index.mjs';
-import { installedCoreDeadlinePredicateFor,
+import { installedCoreDeadlineFiles, installedCoreDeadlinePredicateFor,
   loadQualifiedSourcePairInstalledCoreDeadline } from '../installed-core-deadline.mjs';
 import { authorizeBenchmarkExtension, authorizeBenchmarkRequestAllowance,
   authorizeBenchmarkBudgetExtension, authorizeQualifiedSourcePairCapability,
@@ -35,9 +36,35 @@ const request = (body) => ({ method: 'POST', redirect: 'error',
   headers: { Authorization: 'Bearer synthetic', 'Content-Type': 'application/json' },
   body: JSON.stringify(body) });
 
-const installedDeadlineFiles = ['core/model-call.mjs', 'core/model-budget.mjs',
-  'core/model-diagnostics.mjs', 'core/validation.mjs',
-  'plugins/cairn-memory/lib/redact.mjs'];
+const installedDeadlineFiles = installedCoreDeadlineFiles;
+test('installed deadline pins exactly the parsed static model-call import closure', () => {
+  const root = fileURLToPath(new URL('../../../', import.meta.url));
+  assert.deepEqual(installedDeadlineFiles,
+    installedImportClosure(root, ['core/model-call.mjs']).required);
+  // V8 parses only static module dependencies here, without linking or running
+  // any module. This independent oracle also catches literal-graph drift.
+  const parsed = spawnSync(process.execPath, ['--experimental-vm-modules',
+    '--input-type=module', '-e', `
+      import { readFileSync } from 'node:fs';
+      import { resolve, dirname, relative } from 'node:path';
+      import { SourceTextModule } from 'node:vm';
+      const root = process.argv[1], seen = new Set(), queue = ['core/model-call.mjs'];
+      while (queue.length) {
+        const name = queue.pop(); if (seen.has(name)) continue; seen.add(name);
+        const module = new SourceTextModule(readFileSync(resolve(root, name), 'utf8'));
+        for (const specifier of module.dependencySpecifiers) {
+          if (specifier.startsWith('node:')) continue;
+          if (!specifier.startsWith('.')) throw Error('unexpected package dependency');
+          const next = relative(root, resolve(root, dirname(name), specifier));
+          if (next.startsWith('../')) throw Error('closure escapes checkout');
+          queue.push(next);
+        }
+      }
+      process.stdout.write(JSON.stringify([...seen].sort()));
+    `, root], { encoding: 'utf8', env: { NODE_NO_WARNINGS: '1' } });
+  assert.equal(parsed.status, 0, parsed.stderr);
+  assert.deepEqual(installedDeadlineFiles, JSON.parse(parsed.stdout));
+});
 function copiedInstalledDeadlinePackage(t) {
   const parent = mkdtempSync(join(tmpdir(), 'cairn-installed-deadline-'));
   t.after(() => rmSync(parent, { recursive: true, force: true }));
@@ -49,6 +76,15 @@ function copiedInstalledDeadlinePackage(t) {
   }
   return packageRoot;
 }
+
+for (const name of installedDeadlineFiles) test(`installed deadline verifies bytes before import: ${name}`, async t => {
+  const packageRoot = copiedInstalledDeadlinePackage(t), filename = join(packageRoot, name);
+  writeFileSync(filename, readFileSync(filename, 'utf8')
+    + '\nglobalThis.__syntheticUnverifiedDeadlineDependency = true;\n');
+  await assert.rejects(loadQualifiedSourcePairInstalledCoreDeadline({ packageRoot }),
+    { message: 'installed_core_deadline_invalid' });
+  assert.equal(globalThis.__syntheticUnverifiedDeadlineDependency, undefined);
+});
 
 async function genuineDeadlineSignal(moduleUrl) {
   const module = await import(moduleUrl);

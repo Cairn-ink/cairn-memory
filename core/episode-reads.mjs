@@ -1,3 +1,6 @@
+import { cachedContentLayout } from './content-safety-schema.mjs';
+import { contentReadSafety } from './content-safety.mjs';
+import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { transaction } from './database.mjs';
 import { episodeClient, episodeMetadata, instant } from './episode-storage.mjs';
 import { fail, object, denseArray, identifier } from './validation.mjs';
@@ -78,19 +81,24 @@ export function memoryMetadata(row, decisionReview = false) {
     state: row.currentness === 'current' ? 'active' : 'historical', filingStatus: row.filing_status,
     createdAt: row.created_at, updatedAt: row.updated_at };
 }
-export function createEpisodeReads({ db, epoch, decisionReview }) {
+export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRead }) {
   return function read(ns, operation, filter, cursor) {
     return transaction(db, () => {
       const current = epoch(ns);
       if (cursor && cursor.e !== current) fail('cursor_stale');
       const query = rangeQuery(ns,operation,filter,cursor?.a);
       const rows = db.prepare(query.sql).all(...query.params);
+      if (contentSuppressionReasonInside(db, ns)) fail('revision_conflict');
       return { epoch: current, rows: rows.map(row => {
         if (operation === 'listEpisodes') {
+          assertEpisodeRead?.(ns, row);
           const item = episodeMetadata(ns,row);
           return { item, key: { time: filter.timeBasis === 'event' ? item.eventEnd : item.firstReceivedAt, id: row.id } };
         }
         const receipt = filter.timeBasis === 'receipt';
+        if (cachedContentLayout(db)?.suppressionRevision && (!contentReadSafety(db, { namespace: ns, intent: 'history',
+          ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed ||
+          receipt && contentSuppressionReasonInside(db, ns, { kind: 'receipt', key: row.receipt_id }))) fail('revision_conflict');
         return { item: { memory: memoryMetadata(row, decisionReview), ...(receipt ? { receipt: {
           id: row.receipt_id, createdAt: row.receipt_time, client: row.receipt_client } } : {}) },
           key: receipt ? { time: row.receipt_time, id: row.receipt_id, memoryId: row.id } : { time: row.updated_at, id: row.id } };

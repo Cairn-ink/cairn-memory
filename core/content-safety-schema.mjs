@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { resolveContentLayout } from './content-safety-layout.mjs';
 import { fail } from './validation.mjs';
 
@@ -195,6 +196,15 @@ export function bindContentSafetyConnection(adapter, db) {
 export const contentSafetyBudgetError = error =>
   ['source_budget_exceeded','read_budget_exceeded','budget_exceeded','read_timeout'].includes(error?.code) ||
   ['deadline','work_limit','state_limit'].includes(error?.reason);
+const servingLayout = new AsyncLocalStorage();
+export function withContentSafetyLayoutInside(db, work, proof) {
+  if(!db.isTransaction)fail('storage_error');
+  // A request proof is reused only inside engine-owned synchronous work. The
+  // public delivery fence still reattests the header independently.
+  cachedContentLayout(db);
+  const layout=proof ?? installedContentLayout(db);
+  return servingLayout.run({native:contentSafetyConnection(db),layout},()=>work(layout));
+}
 const layouts = new WeakMap();
 const refused = new WeakSet();
 const controlFields = ['singleton','base_layout','suppression_revision','card_lineage_revision','migration_state',
@@ -257,6 +267,8 @@ export function cachedContentLayout(db) {
 }
 export function installedContentLayout(db) {
   if (refused.has(contentSafetyConnection(db))) fail('unsupported_database');
+  const serving=servingLayout.getStore();
+  if(serving?.native===contentSafetyConnection(db))return serving.layout;
   const cached = layouts.get(contentSafetyConnection(db));
   if (!cached) return attestContentSafety(db);
   let header;

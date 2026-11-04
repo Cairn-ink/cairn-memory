@@ -1,3 +1,5 @@
+import { cachedContentLayout } from './content-safety-schema.mjs';
+import { contentReadSafety } from './content-safety.mjs';
 import { createHash } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { createRawJournal } from './raw-journal.mjs';
@@ -161,6 +163,10 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
         reconciliation = JSON.parse(ordered.reconciliation);
       }
       const memoryIds = JSON.parse(admission.memory_ids), suppressedCount = admission.suppressed_count;
+      if(cachedContentLayout(db)?.suppressionRevision)for(const memoryId of memoryIds){
+        const row=db.prepare('SELECT revision FROM memories WHERE id=?').get(memoryId);
+        if(!row||!contentReadSafety(db,{namespace:input.namespace,ref:{type:'memory',namespace:input.namespace,memoryId,revision:row.revision},intent:'history'}).allowed)fail('memory_suppressed');
+      }
       const episode = profile.sessionEpisodes && db.prepare(`SELECT episode_id FROM episode_events WHERE ${where}`).get(...key(input));
       return { duplicate: true, memoryIds, suppressedCount,
         ...(reconciliation ? { reconciliation } : {}),

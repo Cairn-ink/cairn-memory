@@ -1,3 +1,5 @@
+import { contentReadSafety } from './content-safety.mjs';
+import { contentSuppressionFenceInside } from './content-suppression-storage.mjs';
 import { transaction } from './database.mjs';
 import { fail } from './validation.mjs';
 
@@ -78,12 +80,19 @@ export function createOrderedCaptureStorage({ db, admissionStorage, epoch, activ
         AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT 13`).all(...boundary(ns));
       if (rows.length > 12) return { candidates: [], reason: 'candidate_limit' };
       const fingerprints = new Set(items.map(item => item.fingerprint));
-      const candidates = rows.filter(row => !fingerprints.has(row.fingerprint))
+      const candidates = rows.filter(row => !fingerprints.has(row.fingerprint) && contentReadSafety(db, { namespace: ns,
+        ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed)
         .map(row => ({ row, receipts: receipts(row.id) }));
+      // The five-row lookahead preserves the four-receipt fallback before any
+      // predicate can materialize an unbounded receipt set or parameter list.
+
       if (candidates.some(({ row, receipts: sources }) => !eligible(ns, s, row, sources))) {
         return { candidates, reason: 'unordered_sources' };
       }
-      return { candidates, reason: null };
+      const safe = candidates.filter(({ row, receipts: sources }) => contentReadSafety(db, { namespace: ns,
+        ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision },
+        receipts: sources.map(source => db.prepare('SELECT * FROM receipts WHERE id=?').get(source.id)) }).allowed);
+      return { candidates: safe, reason: null, suppressionEpoch: contentSuppressionFenceInside(db, ns.ownerId) };
     });
   }
   function finish(ns, s, token, order, snapshot, items, decisions, reason, deadline) {

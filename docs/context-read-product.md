@@ -1208,15 +1208,17 @@ Unpublished work and partial coverage retain their existing planning and
 publication behaviour. Forget, correction and a new lexical publication change
 the lexical validation digest; representation is part of that digest, while
 embedder identity and owner purge epoch changes invalidate reuse directly.
-On this base, product reads do not yet enforce suppression at read time.
-Publication reuse removes an accidental overlap degradation that the base had.
-Only sequential reads are equivalent to the base, including returning suppressed
-content. A semantic query that overlaps a suppression and a no-op refresh may now
-serve a suppressed target that only semantic retrieval finds, where the base
-happened to degrade. Two known-gap `todo` tests reproduce this overlap and assert
-that the target is not served; they become must-pass when the fence lands.
-The suppression guarantee comes from the safety layer's read-time epoch fence
-when it lands and does not depend on publication rotation.
+On safety layouts v34, v38 and v48, S2h-2 product reads enforce suppression at
+read time through the owner-epoch fence. Sequential and overlapping reads exclude
+the suppressed target independently of vector publication rotation or reuse.
+The required `overlapping suppression excludes the semantic-only target from
+${method}` and `sequential suppression excludes the semantic-only
+target from ${method}` tests cover `findCandidates` and
+`contextRead` on cells 34 and 38. On unmigrated layouts v18, v23 and v33,
+behaviour is unchanged from main `6d8ced65`: there is no suppression epoch or
+read-time suppression fence. Canonical forget, correction and deletion checks
+still apply; publication reuse does not add a suppression guarantee to those
+layouts.
 
 Public status and refresh DTOs expose lexical progress, not vector publication
 IDs or vector generation checkpoints. Private vector pointers and validation
@@ -1325,3 +1327,32 @@ The host owns consent and privacy integration: **hosted embeddings need owner ap
 tests authorize no transmission or rollout. E.9 registration, real hosted
 quality/latency evidence, deployment gates and the owner's enablement decision
 remain separate from implementation.
+
+## Suppression-aware progress (S2h-2, contract v1, 2026-10-31)
+
+On safety layouts v34, v38 and v48, when the selected owner has a nonzero
+suppression epoch, refresh returns `null` for each of
+`progress.lexical`, `progress.transformed`, `progress.embeddingAttempts` and
+`progress.embedded`; `coverage.stops.budget` and
+`coverage.maintenance.progress` are also `null`. For every requested type,
+`coverage.byType[type].embedded` and `embeddedFraction` are `null`. Status
+returns `lexical.progress:null` and
+`coverage.byType[type].embedded:null` (including semantic coverage's embedded
+count when present). These rules apply even when the projection is `ready`,
+refresh is `complete`, no hidden item matches the query, or the fact's cleanup
+has completed. An owner epoch is retained after cleanup; it is not evidence
+that physical cleanup finished or that a particular item remains hidden.
+
+`eligible` and `indexed` count only visible items, after the serving predicate;
+they never include suppressed items. If a bounded visibility proof cannot
+establish a count, that count is `null`. Other existing reasons for unknown
+counts and progress still apply. Owners with no suppression epoch keep the
+ordinary progress contract; legacy layouts have no suppression epoch. These
+rules describe permitted result DTOs; an erased owner or namespace still
+refuses the request.
+
+Null usage prevents hidden-population disclosure. The existing maintenance pump
+cannot refund an unknown `progress.transformed`: it keeps the full item and time
+reservation for that quantum, including an idle quantum. This contract changes
+neither the pump nor its inputs. Reservation/refund policy is pending the
+separate performance-track decision.

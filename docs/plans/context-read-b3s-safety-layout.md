@@ -1042,3 +1042,184 @@ This addendum scopes the guarantees above. It changes no storage, writer or pull
 - **Basis:** this matches the existing trust boundary. Same-database DML is trusted only through the coordinated maintenance writer, and arbitrary same-user edits and undetected bit rot are not certified (`docs/plans/context-read-product.md:419`). Cooperative locks do not attest against malicious same-user filesystem or SQL edits (`docs/limitations.md:209`).
 - **Consequence for §5.3:** batch and list contiguity checks detect gaps inside the interval they verify. They do not re-verify facts at or before the caller's authenticated checkpoint, which the caller already received and must retain. No schema-cookie binding is added: a legitimate external `ANALYZE` or `PRAGMA optimize` would otherwise brick a store permanently.
 - Observed corruption, such as malformed rows, broken intervals or failed attestation, still always refuses.
+
+## Revision 3.4 addendum (2026-10-31)
+
+### R2 exception E1: awaited caller-port boundaries
+
+Decision: e9, 2026-10-31. This is the sole exception to R2's zero
+per-item statement rule. The original R2 text remains unchanged. E1 applies
+only when the engine invokes a caller-supplied port: Raw `openRaw` for each
+retained part, and the token counter during assembly. A future caller port
+must follow the same boundary. Engine-internal awaits receive no exception.
+
+A request reads its layout/header and owner epoch once in a transaction the
+path already opens. A path without a transaction uses autocommit SELECTs.
+The bounded owner fact set and completed decisions belong only to that request.
+Selection and output validation share the decision for each bound identity;
+output validation opens no transaction. The fixed zero-fact budget remains
+at most six executed statements and zero additional BEGINs, including any
+independent delivery header and owner-epoch fence.
+
+After each caller-port invocation returns, the engine reads exactly one owner
+epoch before inspecting the return value or making another port call. This
+observation is an autocommit SELECT, with no header read, fact query,
+`assertContentScopes`, BEGIN or COMMIT. It must never run in a read transaction
+held across the callback. A changed epoch refuses the request before protected
+text can be delivered or another payload sent to a port. WAL must observe the
+callback's committed epoch; DELETE must allow that commit to complete.
+Synchronous token counters use the same return boundary. Pinning the already
+captured request epoch before dispatch adds no port calls or per-call SQL.
+
+The exact statement gates are:
+
+- Raw with *n* opened parts: legacy baseline + fixed budget (at most six) + *n*.
+- Lexical context assembly: legacy baseline + fixed budget (at most six) +
+  the existing assembly algorithm's exact counter-call count.
+- Each boundary observation adds zero BEGINs. Safety adds no counter calls.
+  Existing pre-open Raw transactions remain in the legacy baseline and close
+  before caller code; the E1 observation never opens or reuses one.
+
+Account erasure, a single-Memory forget and correction all insert suppression
+facts. The `safety_suppression_advance` trigger advances the owner's epoch on
+every insertion. Regressions commit each mutation inside crypto and counter
+callbacks in both DELETE and WAL mode, and require refusal before another
+port call and absence of protected text. Owners with facts keep the canonical
+S1 decision followed by the shared fact matcher; an empty owner proof never
+bypasses canonical ancestry checks.
+
+## Revision 3.5 addendum: R2-A1 and S2h-3 deferrals (2026-11-01)
+
+Decision: **e9, 2026-11-01 17:15**. This append-only addendum supersedes
+R2(a)'s requirement for the **same constant at both sizes** and its historical
+comparator. The original R2 text and the E1 addendum remain unchanged.
+
+For non-deferred R2(a) zero-fact cells, let L(n) be executed statements in the legacy cell
+measured with the **same engine, probe and fixture**, S(n) the safety cell, and
+E1(n) the actual caller-port invocations. R2-A1 requires:
+
+- S(n) ≤ L(n) + 6 + E1(n).
+- The per-item slope must not exceed the legacy slope. At the paired
+  n12/n24 item fixtures with the same variant and limit,
+  S(24) − S(12) ≤ L(24) − L(12). A lower slope is allowed.
+  All other measured population/corpus cells retain the ceiling and BEGIN
+  bounds; their overhead after the existing E1 allowance must not grow.
+- Safety BEGIN must not exceed the same-engine legacy BEGIN.
+- The comparator is always that same-engine legacy cell, never historical
+  numbers. Exact safety-cell count pins remain regression checks.
+
+The S2h-3 deferral has two conditions. First, every gated method/variant on
+unmigrated v18, v23 and v33 must add **no statements, BEGIN or host-port
+invocations** over main `a546ee43`; lower values are allowed. The permanent
+unmigrated fixture records main's SHA and measurement date. Second, deferred
+gates remain executable ratchets at their round 3 measured values; none is
+skipped or marked todo. Lower current measurements do not tighten those caps.
+
+**Known limitation:** On migrated stores, reads by owners with facts cost more
+than R2 until S2h-3. This only affects local users who chose `safety migrate`,
+and it is a cost issue, not a correctness issue.
+
+The following caps are executed statements/BEGIN; E1 invocation caps and every
+method/variant/cell/n are also pinned in
+`core/test/fixtures/content-safety-s2h-deferred-counts.json` (106 ratchets,
+source: round 3's `native-zero-five-table.csv`). Node 22.16.0 and 24.15.0 agree
+on every cap; no cross-engine maximum adjustment was needed.
+Each assertion names `deferred → S2h-3, e9 11-01 17:15`.
+
+| Episode path | v34/v38 zero / five facts | v48 zero / five facts |
+| --- | --- | --- |
+| getEpisode, n1/n12 hit | 20/1 / 22/1 | 24/1 / 26/1 |
+| listEpisodes, n1 hit | 11/1 / 13/1 | 15/1 / 17/1 |
+| listEpisodes, n12 hit/cursor | 14/1 / 16/1 | 22/1 / 24/1 |
+| listEpisodes, n1/n12 absent | 8/1 / 10/1 | 8/1 / 10/1 |
+
+| Same-namespace five-fact Role, v48 | Cap | E1 cap |
+| --- | --- | --- |
+| now/refresh, n12 | 897/24 | 50 |
+| now/refresh, n24 | 1509/24 | 98 |
+
+The Role five-fact additions are 87/147 statements above the corresponding
+zero-fact cells, and three BEGIN above legacy. The absolute caps above come
+from the tables. Total additions over legacy also include the fixed and E1 costs.
+
+| Same-namespace five-fact embedded cell | Semantic | n | refreshContextIndex | findCandidates hit | contextRead hit |
+| --- | --- | --- | --- | --- | --- |
+| v34/v38 | off | 12 | 407/34 | 373/20 | 563/23 |
+| v34/v38 | off | 24 | 635/46 | 493/20 | 803/23 |
+| v34/v38 | on | 12 | 774/76 | 561/48 | 751/51 |
+| v34/v38 | on | 24 | 1182/100 | 573/48 | 763/51 |
+| v48 | off | 12 | 407/34 | 673/20 | 995/23 |
+| v48 | off | 24 | 635/46 | 961/20 | 1535/23 |
+| v48 | on | 12 | 755/73 | 702/24 | 1024/27 |
+| v48 | on | 24 | 1163/97 | 990/24 | 1564/27 |
+
+Embedded lexical-absent caps remain 135/19 for findCandidates and 156/22 for
+contextRead at both sizes and all three cells, with E1 caps 0 and 2. Maintenance
+privacy refusals and correctly empty no-hit results remain required; a cost
+ratchet cannot turn a refusal into success or relax a content check.
+
+The inventory has exactly three **deferred** product enabled-semantic variants:
+refreshContextIndex, findCandidates and contextRead. These are coverage
+deferrals, not exemptions or measured runtime zeroes. Each entry records this
+decision and its S2h-3 scope item. The hosted semantic worker/ledger E1 and inert
+return work, the product query suppressionEpoch projection, and those three
+product enabled-semantic variants belong to S2h-3. No additional name or variant
+may enter the deferred category without a new decision. Stale and unmapped
+inventory entries still fail.
+
+Denial, zero tolerance, inert-port, E1 and R1 acceptance remain unchanged.
+
+## Revision 3.6 addendum: R2-A1 ratchet baseline (2026-11-01)
+
+Decision: **e9, 2026-11-01 23:35**. The deferred caps are the round 3 measured
+values: fix3b's 106 caps tied to the CSV hash recorded in
+`core/test/fixtures/content-safety-s2h-deferred-counts.json`. The decision
+shorthand "+87/+147" was relative to the zero-fact safety cell. Relative to
+legacy, Role five-fact n12/n24 is +141/+249, including 50/98 E1 calls.
+getEpisode ≤ 20 is the v34 value; v48 getEpisode is 24.
+
+After the round 4 fixes, every deferred cell is remeasured. A lower measurement
+regenerates its cap downward; a measurement above its round 3 cap requires e9
+before merge and must not raise that cap. The caps are the measured values.
+This supersedes revision 3.5's instruction to retain a higher round 3 cap when
+current measurements are lower. After merge, lowering a cap needs no approval;
+raising one needs e9. The S2h-3 target remains the R2-A1 formula.
+
+
+## Revision 3.7 addendum: model ports at protected read boundaries (2026-11-02)
+
+Decision: **e9, 2026-11-02 03:10**. The fix4b acceptance regressions are part
+of the current P1 correction round. Revisions 3.5 and 3.6 remain unchanged.
+The unmigrated comparison fixture is remeasured against merged main
+`a69cc9795f97596b3e1c9829d65545b3cdf3dbd7` on 2026-11-02; the comparison
+rule and downward-only deferred caps are unchanged.
+
+Model-port lookup refuses Proxy objects anywhere in the lookup's prototype
+chain, and refuses accessor properties, only while `hasContentPortBoundary()`
+is active for a protected content read on an S2h layout with a suppression
+revision. This applies to token-counter preflight and invocation, provider
+methods, context-window metadata and diagnostic observers. No caller lookup
+hook may run between an E1 observation and the next protected dispatch.
+
+Every unmigrated v18/v23/v33 layout, and work outside protected content reads
+on any layout, retains main's property lookup and call semantics, including
+Proxy/accessor behavior, repeated lookups and callback receivers. The existing
+qualification-fit capability contract is unchanged.
+
+**Known limitation:** On a migrated store (v34/v38/v48), a Proxy or accessor
+model port is refused inside protected content reads. Applications using these
+ports must provide ordinary data methods for those reads. Non-protected work
+on the same migrated store retains main's behavior.
+
+`sourceSnapshot` validates the injected counter with empty text before reading
+any source, outside a database transaction. Its caller-return epoch observation
+uses the existing E1 allowance. Typed-array embedding returns are copied into
+fresh engine-created instances of the same built-in type using intrinsic type,
+length and element operations; caller constructors, iterators and getters do
+not participate. Zero tolerance, E1 and the R2-A1 bounds remain unchanged.
+
+A failed nested runtime `sourceSnapshot` shares its enclosing contract delivery
+fence, as nested read success already does. The contract immediately returns
+the failure envelope; no content or subsequent caller port can follow the
+failed snapshot. Normal caller-return E1 observations remain unchanged, and
+the final delivery fence remains in place.

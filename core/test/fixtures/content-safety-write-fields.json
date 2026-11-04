@@ -1,0 +1,1519 @@
+{
+  "core/content-write-context.mjs": {
+    "literal:conversationId": 1,
+    "literal:id": 3
+  },
+  "core/content-write-safety.mjs": {
+    "key:eventId": 1,
+    "key:memoryId": 1,
+    "key:messageId": 6,
+    "key:ownerId": 2,
+    "key:projectId": 6,
+    "key:sessionId": 1,
+    "key:sourceId": 1,
+    "literal:card_id": 2,
+    "literal:card_moc_id": 1,
+    "literal:cardId": 1,
+    "literal:child_id": 1,
+    "literal:childId": 2,
+    "literal:conversationId": 1,
+    "literal:entity_id": 1,
+    "literal:entityId": 2,
+    "literal:from_id": 1,
+    "literal:fromId": 1,
+    "literal:id": 3,
+    "literal:keep_source_ids": 1,
+    "literal:leftMemoryId": 1,
+    "literal:memory_id": 2,
+    "literal:memory_ids": 2,
+    "literal:memory_moc_id": 1,
+    "literal:memoryId": 1,
+    "literal:moc_id": 1,
+    "literal:mocId": 1,
+    "literal:ownerId": 1,
+    "literal:parent_id": 1,
+    "literal:parentId": 1,
+    "literal:parentIds": 1,
+    "literal:parentL2Ids": 1,
+    "literal:predecessor_id": 1,
+    "literal:predecessorId": 1,
+    "literal:previous_receipt_ids": 1,
+    "literal:previousId": 1,
+    "literal:previousMemoryId": 1,
+    "literal:receipt_ids": 1,
+    "literal:replacementId": 1,
+    "literal:replacementMemoryId": 1,
+    "literal:rightMemoryId": 1,
+    "literal:source_id": 2,
+    "literal:sourceId": 1,
+    "literal:target_id": 1,
+    "literal:targetId": 3,
+    "literal:to_id": 1,
+    "literal:toId": 1
+  },
+  "core/admission-storage.mjs": {
+    "key:insertedReceiptIds": 1,
+    "key:memoryId": 3,
+    "key:ownerId": 1,
+    "key:projectId": 1
+  },
+  "core/local-authority-input.mjs": {
+    "key:expectedStoreId": 1,
+    "key:storeId": 1,
+    "key:targetId": 2,
+    "literal:eventId": 1,
+    "literal:expectedStoreId": 1,
+    "literal:id": 1,
+    "literal:ownerId": 1,
+    "literal:projectId": 1,
+    "literal:sessionId": 1,
+    "literal:storeId": 1,
+    "literal:streamId": 1,
+    "literal:targetId": 2
+  },
+  "core/local-authority-schema.mjs": {
+    "literal:local_store_id": 1,
+    "literal:local_target_id": 1,
+    "literal:owner_id": 1,
+    "literal:project_id": 1,
+    "literal:target_id": 1
+  },
+  "core/local-authority-storage.mjs": {
+    "key:ownerId": 2,
+    "key:targetId": 1
+  },
+  "core/local-authority-guard.mjs": {
+    "literal:local_store_id": 1,
+    "literal:local_target_id": 1
+  },
+  "core/confirmation-storage.mjs": {
+    "key:confirmationReceiptId": 1,
+    "key:id": 1,
+    "key:memoryId": 4,
+    "key:targetId": 1
+  },
+  "core/episode-storage.mjs": {
+    "key:episode_id": 3,
+    "key:episodeId": 7,
+    "key:event_id": 1,
+    "key:eventId": 19,
+    "key:id": 9,
+    "key:keepActionId": 1,
+    "key:memory_id": 1,
+    "key:memoryId": 2,
+    "key:message_id": 1,
+    "key:messageId": 1,
+    "key:messageIds": 1,
+    "key:origin_episode_id": 1,
+    "key:originEpisodeId": 1,
+    "key:ownerId": 3,
+    "key:projectId": 2,
+    "key:receiptIds": 1,
+    "key:sessionId": 5,
+    "key:sourceId": 1,
+    "key:sourceIds": 3,
+    "key:stepId": 1,
+    "key:targetEventId": 1,
+    "literal:eventId": 4,
+    "literal:id": 1,
+    "literal:messageId": 1,
+    "literal:sessionId": 1,
+    "literal:sourceId": 2,
+    "literal:stepId": 1
+  },
+  "core/episode-reads.mjs": {
+    "key:id": 9,
+    "key:memoryId": 2,
+    "literal:id": 2,
+    "literal:memoryId": 1
+  },
+  "core/session-context.mjs": {
+    "key:episodeId": 1,
+    "key:id": 2,
+    "key:memoryId": 1,
+    "key:projectId": 1
+  },
+  "core/episode-input.mjs": {
+    "key:id": 1,
+    "literal:eventId": 1,
+    "literal:id": 1,
+    "literal:sessionId": 1
+  },
+  "core/episode-capture.mjs": {
+    "key:classificationEventId": 1,
+    "key:episodeId": 3,
+    "key:eventId": 7,
+    "key:id": 14,
+    "key:memoryIds": 2,
+    "key:messageId": 1,
+    "key:sessionId": 5,
+    "key:sourceId": 1,
+    "key:stepId": 1,
+    "key:stepRef": 1,
+    "literal:stepRef": 1
+  },
+  "core/procedural-storage.mjs": {
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "key:receiptId": 1,
+    "literal:receiptId": 1
+  },
+  "core/asset-facade.mjs": {
+    "key:actionId": 1,
+    "key:targetId": 1
+  },
+  "core/asset-input.mjs": {
+    "key:assetId": 3,
+    "key:derivativeId": 1,
+    "key:versionId": 2,
+    "literal:actionId": 5,
+    "literal:assetId": 3,
+    "literal:derivativeId": 1,
+    "literal:versionId": 2
+  },
+  "core/asset-storage.mjs": {
+    "key:actionId": 1,
+    "key:assetId": 3,
+    "key:effectId": 1,
+    "key:id": 3,
+    "key:versionId": 2
+  },
+  "core/asset-derivative-storage.mjs": {
+    "key:asset_id": 2,
+    "key:assetId": 2,
+    "key:derivativeId": 1,
+    "key:id": 2,
+    "key:version_id": 1,
+    "key:versionId": 2
+  },
+  "core/method-attachment-storage.mjs": {
+    "literal:binary_object_id": 1,
+    "literal:version_id": 1
+  },
+  "core/method-package-facade.mjs": {
+    "key:actionId": 2,
+    "key:targetId": 1,
+    "literal:checkMethodReasonRefs": 1
+  },
+  "core/method-binding-storage.mjs": {
+    "key:actionId": 1,
+    "key:eventId": 1,
+    "key:ownerId": 1,
+    "key:packageId": 3,
+    "key:projectId": 1,
+    "key:reasonRefs": 1,
+    "key:roleId": 2,
+    "key:versionId": 2
+  },
+  "core/method-package-input.mjs": {
+    "key:checkMethodReasonRefs": 1,
+    "key:packageId": 2,
+    "key:reasonRefs": 1,
+    "key:roleId": 1,
+    "key:versionId": 1,
+    "literal:actionId": 5,
+    "literal:checkMethodReasonRefs": 2,
+    "literal:ownerId": 1,
+    "literal:packageId": 2,
+    "literal:projectId": 1,
+    "literal:reasonRefs": 5,
+    "literal:roleId": 5,
+    "literal:versionId": 1
+  },
+  "core/method-package-schema.mjs": {
+    "literal:action_id": 1,
+    "literal:effect_id": 1,
+    "literal:event_id": 1,
+    "literal:id": 5,
+    "literal:owner_id": 9,
+    "literal:package_id": 11,
+    "literal:project_id": 8,
+    "literal:to_id": 1,
+    "literal:version_id": 4
+  },
+  "core/method-package-storage.mjs": {
+    "key:actionId": 1,
+    "key:effectId": 1,
+    "key:id": 3,
+    "key:packageId": 2,
+    "key:reasonRefs": 2,
+    "key:versionId": 1,
+    "literal:checkMethodReasonRefs": 1
+  },
+  "core/private-card-input.mjs": {
+    "key:memoryId": 2,
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "key:receiptId": 1,
+    "key:sourceId": 1,
+    "literal:actionId": 8,
+    "literal:cardId": 8,
+    "literal:memoryId": 2,
+    "literal:memoryRefs": 3,
+    "literal:operationActionId": 1,
+    "literal:ownerId": 1,
+    "literal:projectId": 1,
+    "literal:receiptId": 1,
+    "literal:sourceId": 2
+  },
+  "core/private-card-storage.mjs": {
+    "key:actionId": 3,
+    "key:affectedIds": 1,
+    "key:cardId": 1,
+    "key:effectId": 1,
+    "key:id": 6,
+    "key:leaseId": 1,
+    "key:memoryId": 1,
+    "key:memoryRef": 1,
+    "key:ownerId": 3,
+    "key:projectId": 2,
+    "key:receiptId": 1,
+    "key:sourceId": 1,
+    "key:targetId": 1,
+    "key:triggerMemoryRefs": 1,
+    "literal:memory_id": 1,
+    "literal:source_id": 1
+  },
+  "core/private-card-facade.mjs": {
+    "key:actionId": 1,
+    "key:targetId": 1,
+    "literal:actionId": 1,
+    "literal:targetId": 1
+  },
+  "core/card-receipt-sources.mjs": {
+    "key:memoryId": 1,
+    "key:receiptId": 1
+  },
+  "core/private-evidence-input.mjs": {
+    "key:cardId": 1,
+    "key:memoryId": 2,
+    "literal:cardId": 1,
+    "literal:memoryId": 1,
+    "literal:ownerId": 2,
+    "literal:projectId": 2
+  },
+  "core/private-evidence-storage.mjs": {
+    "key:cardId": 3,
+    "key:memoryId": 4,
+    "key:receiptId": 1,
+    "key:triggerMemoryRefs": 1,
+    "literal:id": 1
+  },
+  "core/private-organization-input.mjs": {
+    "key:cardId": 1,
+    "key:mappingId": 1,
+    "key:memoryId": 1,
+    "key:mocId": 2,
+    "key:parentRef": 1,
+    "key:topicRef": 1,
+    "literal:actionId": 4,
+    "literal:cardId": 1,
+    "literal:mappingId": 1,
+    "literal:mocId": 2,
+    "literal:parentIds": 1,
+    "literal:parentRef": 1,
+    "literal:topicRef": 1
+  },
+  "core/private-organization-storage.mjs": {
+    "key:cardId": 5,
+    "key:cardRefs": 2,
+    "key:childId": 2,
+    "key:createdMocRefs": 1,
+    "key:id": 8,
+    "key:invalidRefs": 1,
+    "key:mocId": 6,
+    "key:parentId": 2,
+    "key:parentRef": 1,
+    "key:topicRef": 1,
+    "literal:card_moc_id": 2,
+    "literal:memory_moc_id": 2
+  },
+  "core/staged-evidence-storage.mjs": {
+    "key:eventId": 3,
+    "literal:id": 1
+  },
+  "core/automatic-rationale.mjs": {
+    "key:memoryId": 3
+  },
+  "core/capture-input.mjs": {
+    "key:eventId": 1,
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "key:sessionId": 1,
+    "key:streamId": 1,
+    "literal:id": 1,
+    "literal:streamId": 1
+  },
+  "core/capture.mjs": {
+    "key:eventId": 2,
+    "key:memoryId": 4,
+    "key:memoryIds": 1,
+    "key:sessionId": 1
+  },
+  "core/source-windows.mjs": {
+    "key:id": 1
+  },
+  "core/claim-qualification-input.mjs": {
+    "literal:eventId": 1,
+    "literal:sessionId": 1
+  },
+  "core/claim-qualification-storage.mjs": {
+    "key:eventId": 1,
+    "key:memoryId": 1,
+    "key:ownerId": 2,
+    "key:projectId": 2,
+    "key:receiptId": 2,
+    "key:sessionId": 1
+  },
+  "core/classification-journal-storage.mjs": {
+    "key:memoryId": 1
+  },
+  "core/classification.mjs": {
+    "key:memoryId": 1
+  },
+  "core/conflict-storage.mjs": {
+    "key:memoryId": 7,
+    "key:targetId": 3
+  },
+  "core/context-read-assembly.mjs": {
+    "key:id": 3
+  },
+  "core/context-read-budget.mjs": {
+    "key:id": 1
+  },
+  "core/context-read-embedder.mjs": {
+    "key:id": 2,
+    "literal:id": 1
+  },
+  "core/context-read-facade.mjs": {
+    "key:actionId": 1,
+    "key:id": 2,
+    "key:storeId": 6,
+    "key:targetId": 1,
+    "literal:cardId": 1,
+    "literal:hybrid": 3,
+    "literal:memoryId": 1
+  },
+  "core/context-read-fusion.mjs": {
+    "literal:hybrid": 1
+  },
+  "core/context-read-input.mjs": {
+    "key:id": 2,
+    "literal:id": 3,
+    "literal:ownerId": 1,
+    "literal:projectId": 1
+  },
+  "core/context-read-sidecar.mjs": {
+    "key:cardId": 2,
+    "key:id": 8,
+    "key:ids": 1,
+    "key:memoryId": 3,
+    "key:storeId": 1,
+    "literal:gid": 1,
+    "literal:id": 1,
+    "literal:uid": 1
+  },
+  "core/contract.mjs": {
+    "key:actionId": 1,
+    "key:childId": 1,
+    "key:eventId": 6,
+    "key:id": 5,
+    "key:invalidRefs": 2,
+    "key:keepActionId": 1,
+    "key:memoryId": 13,
+    "key:mocId": 1,
+    "key:ownerId": 2,
+    "key:parentId": 1,
+    "key:predecessorId": 1,
+    "key:projectId": 3,
+    "key:replacementId": 1,
+    "key:sessionId": 2,
+    "key:slotId": 1,
+    "key:targetId": 2,
+    "literal:actionId": 3,
+    "literal:childId": 1,
+    "literal:episodeId": 6,
+    "literal:eventId": 11,
+    "literal:id": 4,
+    "literal:memoryId": 10,
+    "literal:memoryIds": 1,
+    "literal:mocId": 1,
+    "literal:ownerId": 2,
+    "literal:parentId": 1,
+    "literal:parentRef": 1,
+    "literal:projectId": 2,
+    "literal:sessionId": 4,
+    "literal:slotId": 1,
+    "literal:stepId": 1
+  },
+  "core/database.mjs": {
+    "key:storeId": 1
+  },
+  "core/existing-store.mjs": {
+    "key:storeId": 1,
+    "literal:action_id": 1,
+    "literal:binding_id": 1,
+    "literal:card_id": 3,
+    "literal:conversation_id": 7,
+    "literal:eligible_message_ids": 1,
+    "literal:event_id": 2,
+    "literal:first_event_id": 1,
+    "literal:first_message_ids": 1,
+    "literal:id": 1,
+    "literal:local_store_id": 1,
+    "literal:local_target_id": 1,
+    "literal:message_id": 6,
+    "literal:owner_id": 3,
+    "literal:project_id": 3,
+    "literal:store_id": 1,
+    "literal:storeId": 1
+  },
+  "core/store-fence.mjs": {
+    "key:applicationId": 1,
+    "key:storeId": 1,
+    "literal:applicationId": 2,
+    "literal:storeId": 2
+  },
+  "core/sqlite-journal-probe.mjs": {
+    "literal:application_id": 1,
+    "literal:gid": 1,
+    "literal:uid": 3
+  },
+  "core/isolated-file-read-child.mjs": {
+    "key:invalid": 1
+  },
+  "core/raw-lineage-storage.mjs": {
+    "key:actionId": 1,
+    "key:conversationId": 1,
+    "key:eventId": 5,
+    "key:messageId": 3,
+    "key:sessionId": 5
+  },
+  "core/raw-source-input.mjs": {
+    "key:conversationId": 2,
+    "key:messageId": 2,
+    "literal:conversationId": 2,
+    "literal:messageId": 2,
+    "literal:ownerId": 2,
+    "literal:projectId": 2
+  },
+  "core/card-raw-sources.mjs": {
+    "key:card_id": 1,
+    "key:conversationId": 1,
+    "key:messageId": 1
+  },
+  "core/raw-deletion-storage.mjs": {
+    "key:actionId": 1,
+    "key:conversationId": 3,
+    "key:effectId": 1,
+    "key:episodeIds": 1,
+    "key:id": 4,
+    "key:projectId": 1,
+    "key:receiptIds": 1,
+    "literal:actionId": 1,
+    "literal:conversationId": 1
+  },
+  "core/raw-source-roots.mjs": {
+    "key:episodeId": 1,
+    "key:eventId": 1,
+    "key:sessionId": 1
+  },
+  "core/raw-input.mjs": {
+    "key:eventId": 1,
+    "key:messageId": 1,
+    "key:ownerId": 1,
+    "key:projectId": 3,
+    "key:sessionId": 1,
+    "literal:eventId": 1,
+    "literal:id": 1,
+    "literal:ownerId": 1,
+    "literal:projectId": 1,
+    "literal:sessionId": 1
+  },
+  "core/raw-capture-storage.mjs": {
+    "key:eventId": 2,
+    "key:id": 2,
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "key:sessionId": 2,
+    "key:streamId": 1,
+    "literal:eventId": 1,
+    "literal:sessionId": 2,
+    "literal:streamId": 1
+  },
+  "core/raw-journal.mjs": {
+    "key:conversationId": 1,
+    "key:eventId": 1,
+    "key:messageId": 4,
+    "key:ownerId": 3,
+    "key:projectId": 2,
+    "key:sessionId": 1,
+    "literal:ownerId": 2
+  },
+  "core/raw-reads.mjs": {
+    "key:id": 3,
+    "key:messageId": 1,
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "literal:conversation_id": 1,
+    "literal:conversationId": 1,
+    "literal:event_id": 1,
+    "literal:id": 1,
+    "literal:message_id": 1
+  },
+  "core/raw-conversation-list.mjs": {
+    "key:id": 1
+  },
+  "core/raw-source-map.mjs": {
+    "key:id": 1,
+    "key:messageId": 1
+  },
+  "core/raw-source-reader.mjs": {
+    "key:id": 1,
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "key:storeId": 1
+  },
+  "core/raw-control-storage.mjs": {
+    "key:projectId": 1
+  },
+  "core/fetch.mjs": {
+    "key:invalidRefs": 2,
+    "key:memoryId": 1,
+    "literal:memoryId": 1
+  },
+  "core/index-schema.mjs": {
+    "key:valid": 5,
+    "literal:child_id": 3,
+    "literal:id": 4,
+    "literal:memory_id": 5,
+    "literal:moc_id": 6,
+    "literal:parent_id": 4
+  },
+  "core/index-storage.mjs": {
+    "key:child_id": 1,
+    "key:childId": 1,
+    "key:id": 1,
+    "key:parent_id": 1,
+    "key:parentId": 1,
+    "literal:child_id": 2,
+    "literal:id": 4,
+    "literal:memory_id": 4,
+    "literal:moc_id": 4,
+    "literal:parent_id": 2
+  },
+  "core/read-database.mjs": {
+    "key:storeId": 1,
+    "literal:child_id": 2,
+    "literal:id": 7,
+    "literal:memory_id": 5,
+    "literal:moc_id": 5,
+    "literal:owner_id": 4,
+    "literal:parent_id": 2,
+    "literal:project_id": 4
+  },
+  "core/topic-overview-input.mjs": {
+    "key:ownerId": 2,
+    "key:projectId": 1,
+    "literal:ownerId": 2,
+    "literal:projectId": 2
+  },
+  "core/topic-overview-storage.mjs": {
+    "key:id": 2,
+    "key:memberRefs": 2,
+    "key:memoryId": 2,
+    "key:parentIds": 2,
+    "key:storeId": 1,
+    "key:titleValid": 1
+  },
+  "core/moc-storage.mjs": {
+    "key:child_id": 1,
+    "key:childId": 3,
+    "key:id": 5,
+    "key:invalidRef": 1,
+    "key:memory_id": 1,
+    "key:memoryId": 3,
+    "key:moc_id": 1,
+    "key:mocId": 1,
+    "key:ownerId": 1,
+    "key:parent_id": 1,
+    "key:parentId": 3,
+    "key:parentIds": 1,
+    "key:projectId": 1,
+    "key:sourceIds": 2,
+    "literal:invalid": 7
+  },
+  "core/model-budget.mjs": {
+    "key:id": 1
+  },
+  "core/model-call.mjs": {
+    "literal:adapter_output_invalid": 1
+  },
+  "core/model-diagnostics.mjs": {
+    "literal:adapter_output_invalid": 1,
+    "literal:request_invalid": 1
+  },
+  "core/ordered-capture-storage.mjs": {
+    "key:memoryId": 2
+  },
+  "core/placement-input.mjs": {
+    "key:memoryId": 2,
+    "key:parentIds": 1,
+    "key:parentL2Ids": 1,
+    "literal:memoryId": 2,
+    "literal:parentIds": 1,
+    "literal:parentL2Ids": 1
+  },
+  "core/qualified-transition-storage.mjs": {
+    "key:id": 2,
+    "key:slotId": 1
+  },
+  "core/rationale-storage.mjs": {
+    "key:memoryId": 2
+  },
+  "core/source-basis.mjs": {
+    "key:memoryId": 1,
+    "key:receiptId": 1
+  },
+  "core/recall.mjs": {
+    "key:memoryId": 4,
+    "literal:memoryId": 1
+  },
+  "core/runtime.mjs": {
+    "key:actionId": 3,
+    "key:eventId": 5,
+    "key:id": 5,
+    "key:invalidRef": 1,
+    "key:memoryId": 16,
+    "key:ownerId": 9,
+    "key:projectId": 11,
+    "key:receiptId": 1,
+    "key:receiptIds": 1,
+    "key:sessionId": 4
+  },
+  "core/supersession-storage.mjs": {
+    "key:id": 3,
+    "key:memoryId": 1,
+    "key:receiptIds": 1
+  },
+  "core/validation.mjs": {
+    "key:eventId": 1,
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "key:sessionId": 1,
+    "literal:eventId": 1,
+    "literal:ownerId": 1,
+    "literal:projectId": 1,
+    "literal:sessionId": 1
+  },
+  "core/source-evidence.mjs": {
+    "key:eventId": 1,
+    "key:id": 2,
+    "key:sessionId": 1,
+    "literal:eventId": 1,
+    "literal:sessionId": 1
+  },
+  "adapters/mcp/cli.mjs": {
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "key:sessionId": 1
+  },
+  "adapters/mcp/asset-command.mjs": {
+    "key:actionId": 2,
+    "key:assetId": 1,
+    "key:ownerId": 1,
+    "key:projectId": 1
+  },
+  "adapters/mcp/asset-tools.mjs": {
+    "key:assetId": 3,
+    "key:derivativeId": 1,
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "key:versionId": 2
+  },
+  "adapters/mcp/context-read-access.mjs": {
+    "key:ownerId": 1,
+    "key:projectId": 1
+  },
+  "adapters/mcp/context-read-configuration.mjs": {
+    "key:ownerId": 1,
+    "key:projectId": 1
+  },
+  "adapters/mcp/context-read-tools.mjs": {
+    "key:cardId": 2,
+    "key:id": 2,
+    "key:memoryId": 2,
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "literal:id": 2
+  },
+  "adapters/mcp/method-package-command.mjs": {
+    "key:actionId": 4,
+    "key:packageId": 1,
+    "key:projectId": 2,
+    "key:reasonRefs": 1,
+    "key:roleId": 2,
+    "literal:checkMethodReasonRefs": 2
+  },
+  "adapters/mcp/method-package-files.mjs": {
+    "key:mnt_id": 2
+  },
+  "adapters/mcp/method-package-tools.mjs": {
+    "key:ownerId": 1,
+    "key:packageId": 2,
+    "key:projectId": 1,
+    "key:roleId": 5,
+    "key:versionId": 1
+  },
+  "adapters/mcp/method-package-access.mjs": {
+    "key:ownerId": 1,
+    "key:projectId": 1
+  },
+  "adapters/mcp/server.mjs": {
+    "key:actionId": 7,
+    "key:batchId": 4,
+    "key:cardId": 5,
+    "key:conversationId": 3,
+    "key:episodeId": 3,
+    "key:eventId": 5,
+    "key:id": 2,
+    "key:memoryId": 9,
+    "key:memoryIds": 1,
+    "key:memoryRefs": 2,
+    "key:messageId": 2,
+    "key:mocId": 2,
+    "key:operationActionId": 1,
+    "key:ownerId": 1,
+    "key:parentIds": 1,
+    "key:parentL2Ids": 1,
+    "key:parentRef": 1,
+    "key:projectId": 1,
+    "key:receiptId": 2,
+    "key:sessionId": 3,
+    "key:sourceId": 2,
+    "key:stepId": 1,
+    "literal:ownerId": 1,
+    "literal:projectId": 1,
+    "literal:sessionId": 3
+  },
+  "adapters/mcp/review-card.mjs": {
+    "key:actionId": 1,
+    "key:cardId": 3,
+    "key:invalid": 1,
+    "key:ownerId": 2,
+    "key:projectId": 2,
+    "key:roleId": 2
+  },
+  "adapters/mcp/retained-raw-profile.mjs": {
+    "literal:ownerId": 1,
+    "literal:projectId": 1,
+    "literal:storeId": 1
+  },
+  "adapters/mcp/retained-raw.mjs": {
+    "key:captureSessionId": 1,
+    "key:cardId": 2,
+    "key:sessionId": 1
+  },
+  "adapters/local/capture.mjs": {
+    "key:eventId": 1,
+    "key:id": 1,
+    "key:sessionId": 1
+  },
+  "adapters/local/configuration.mjs": {
+    "key:projectId": 1,
+    "key:storeId": 1,
+    "literal:project_id": 1
+  },
+  "adapters/openai/classification-wire.mjs": {
+    "key:id": 2,
+    "key:memoryId": 1,
+    "key:parentIds": 1,
+    "key:parentL2Ids": 1
+  },
+  "adapters/openai/context-counter.mjs": {
+    "key:id": 1
+  },
+  "adapters/openai/embedding.mjs": {
+    "key:id": 1
+  },
+  "adapters/openai/index.mjs": {
+    "literal:request_invalid": 3
+  },
+  "adapters/openai/schemas.mjs": {
+    "key:memoryId": 5,
+    "key:parentIds": 2,
+    "key:parentL2Ids": 2,
+    "key:stepRef": 1,
+    "literal:childId": 1,
+    "literal:id": 1,
+    "literal:maxRefs": 1,
+    "literal:memoryId": 1,
+    "literal:parentId": 1
+  },
+  "integrations/client/control-state.mjs": {
+    "key:valid": 4,
+    "literal:invalid": 7,
+    "literal:valid": 4
+  },
+  "integrations/client/file-lock.mjs": {
+    "key:pid": 2
+  },
+  "integrations/client/hosted-contract.mjs": {
+    "key:project_id": 1,
+    "literal:session_id": 1,
+    "literal:uuid": 1
+  },
+  "integrations/client/hosted-schemas.mjs": {
+    "literal:$id": 7,
+    "literal:candidateId": 2,
+    "literal:collectionId": 2,
+    "literal:episodeId": 2,
+    "literal:event_id": 2,
+    "literal:eventId": 2,
+    "literal:id": 14,
+    "literal:ownerId": 4,
+    "literal:project_id": 3,
+    "literal:projectId": 6,
+    "literal:receiptId": 2,
+    "literal:recordId": 2,
+    "literal:session_id": 3,
+    "literal:sessionId": 2,
+    "literal:sourceId": 2,
+    "literal:uuid": 1
+  },
+  "integrations/client/pairing.mjs": {
+    "key:id": 3,
+    "literal:binding_history_invalid": 8,
+    "literal:invalid": 16,
+    "literal:valid": 23
+  },
+  "integrations/client/raw/bounds.mjs": {
+    "literal:raw_source_invalid": 2
+  },
+  "integrations/client/raw/local-worker.mjs": {
+    "key:wireSessionId": 1,
+    "literal:config_invalid": 2,
+    "literal:state_invalid": 3,
+    "literal:store_invalid": 1
+  },
+  "integrations/client/raw/local-worker-input.mjs": {
+    "key:sessionId": 1,
+    "literal:config_invalid": 1,
+    "literal:key_invalid": 1,
+    "literal:sessionId": 3,
+    "literal:state_invalid": 2
+  },
+  "integrations/client/raw/local-worker-progress.mjs": {
+    "key:messageId": 1,
+    "key:projectId": 4,
+    "key:sessionId": 1,
+    "literal:state_invalid": 3
+  },
+  "integrations/client/raw/local-worker-source.mjs": {
+    "key:sessionId": 2,
+    "key:wireSessionId": 1
+  },
+  "integrations/client/raw/local-worker-state.mjs": {
+    "key:wireSessionId": 1,
+    "literal:eventId": 1,
+    "literal:key_invalid": 4,
+    "literal:state_invalid": 15,
+    "literal:wireSessionId": 4
+  },
+  "integrations/client/raw/local-host.mjs": {
+    "literal:config_invalid": 1,
+    "literal:preparation_invalid": 3,
+    "literal:profile_invalid": 1,
+    "literal:store_invalid": 1
+  },
+  "integrations/client/raw/local-setup-input.mjs": {
+    "key:projectId": 1,
+    "literal:store_invalid": 1
+  },
+  "integrations/client/raw/local-setup.mjs": {
+    "key:expectedStoreId": 1,
+    "key:ownerId": 1,
+    "key:targetId": 3,
+    "literal:store_invalid": 3,
+    "literal:storeId": 2,
+    "literal:targetId": 2
+  },
+  "integrations/client/raw/local-setup-init.mjs": {
+    "literal:store_invalid": 3
+  },
+  "integrations/client/raw/local-hook.mjs": {
+    "key:sessionId": 1,
+    "literal:agent_id": 1,
+    "literal:id": 2,
+    "literal:session_id": 2,
+    "literal:turn_id": 1
+  },
+  "integrations/client/raw/local-host-profile.mjs": {
+    "key:sessionId": 1,
+    "literal:config_invalid": 1,
+    "literal:profile_invalid": 9,
+    "literal:sessionId": 1
+  },
+  "integrations/client/raw/local-host-permission.mjs": {
+    "key:eventId": 2,
+    "key:id": 2,
+    "key:messageId": 1,
+    "key:projectId": 2,
+    "key:sessionId": 2,
+    "key:storeId": 1,
+    "literal:store_invalid": 5
+  },
+  "integrations/client/raw/local-host-preparation.mjs": {
+    "literal:preparation_invalid": 9
+  },
+  "integrations/client/raw/local-host-rearm.mjs": {
+    "key:actionId": 1,
+    "key:messageId": 1,
+    "key:projectId": 3,
+    "key:sessionId": 2,
+    "key:wireSessionId": 1,
+    "literal:config_invalid": 1,
+    "literal:key_invalid": 1,
+    "literal:preparation_invalid": 3,
+    "literal:profile_invalid": 1,
+    "literal:rearm_invalid": 20,
+    "literal:state_invalid": 1,
+    "literal:store_invalid": 1
+  },
+  "integrations/client/raw/local-rearm-state.mjs": {
+    "key:projectId": 1,
+    "literal:actionId": 2,
+    "literal:config_invalid": 1,
+    "literal:key_invalid": 1,
+    "literal:preparation_invalid": 1,
+    "literal:profile_invalid": 1,
+    "literal:rearm_invalid": 8,
+    "literal:sessionId": 1,
+    "literal:state_invalid": 1,
+    "literal:store_invalid": 1,
+    "literal:wireSessionId": 2
+  },
+  "integrations/client/raw/local-host-cli.mjs": {
+    "key:actionId": 1,
+    "key:sessionId": 2
+  },
+  "integrations/client/raw/claude.mjs": {
+    "literal:uuid": 1
+  },
+  "integrations/client/raw/codex.mjs": {
+    "literal:client_id": 2,
+    "literal:id": 1,
+    "literal:thread_id": 1,
+    "literal:turn_id": 1
+  },
+  "integrations/client/raw/message.mjs": {
+    "key:sessionId": 2,
+    "key:uuid": 1,
+    "key:wireSessionId": 1,
+    "literal:raw_source_invalid": 1,
+    "literal:sessionId": 2,
+    "literal:uuid": 2,
+    "literal:wireSessionId": 1
+  },
+  "integrations/client/raw/planner.mjs": {
+    "key:event_id": 1,
+    "key:id": 1,
+    "key:messageId": 1,
+    "key:project_id": 1,
+    "key:projectId": 1,
+    "key:session_id": 1,
+    "key:sessionId": 1,
+    "key:wireSessionId": 1,
+    "literal:eventId": 1,
+    "literal:messageId": 1,
+    "literal:projectId": 3,
+    "literal:sessionId": 1,
+    "literal:wireSessionId": 1
+  },
+  "integrations/client/raw/protocol.mjs": {
+    "literal:conversationId": 1,
+    "literal:event_id": 1,
+    "literal:id": 1,
+    "literal:messageId": 1,
+    "literal:project_id": 2,
+    "literal:session_id": 1
+  },
+  "integrations/client/common-profile.mjs": {
+    "key:event_id": 1,
+    "key:project_id": 1,
+    "key:session_id": 1
+  },
+  "integrations/codex/parser.mjs": {
+    "key:id": 1,
+    "literal:client_id": 1,
+    "literal:id": 2,
+    "literal:thread_id": 1,
+    "literal:turn_id": 1
+  },
+  "plugins/cairn-memory/lib/transcript.mjs": {
+    "key:uuid": 1
+  },
+  "integrations/client/runtime-usage.mjs": {
+    "key:pid": 1,
+    "key:valid": 1,
+    "literal:id": 1,
+    "literal:invalid_reservation_id": 1,
+    "literal:pid": 1,
+    "literal:usage_state_invalid": 9,
+    "literal:valid": 1
+  },
+  "integrations/client/state-lock.mjs": {
+    "key:pid": 1
+  },
+  "core/role-context-evidence.mjs": {
+    "key:id": 1
+  },
+  "core/role-context-facade.mjs": {
+    "key:actionId": 1,
+    "key:actorId": 1,
+    "key:agentId": 1,
+    "key:id": 4,
+    "key:packageId": 2,
+    "key:profileId": 1,
+    "key:releaseId": 2,
+    "key:roleId": 1,
+    "key:targetId": 1,
+    "key:versionId": 1,
+    "literal:cardId": 1,
+    "literal:memoryId": 1
+  },
+  "core/role-context-input.mjs": {
+    "key:releaseRef": 2
+  },
+  "core/role-profile-facade.mjs": {
+    "key:actionId": 2,
+    "key:releaseId": 1,
+    "key:targetId": 2
+  },
+  "core/role-profile-input.mjs": {
+    "key:profileId": 1,
+    "key:reasonRefs": 1,
+    "key:releaseId": 1,
+    "literal:actionId": 1,
+    "literal:actorId": 2,
+    "literal:agentId": 2,
+    "literal:profileId": 1,
+    "literal:reasonRefs": 1,
+    "literal:releaseId": 1
+  },
+  "core/role-profile-schema.mjs": {
+    "key:ownerId": 1,
+    "key:profileId": 1,
+    "key:projectId": 1,
+    "key:reasonRefs": 1,
+    "literal:from_id": 1,
+    "literal:id": 1,
+    "literal:owner_id": 2,
+    "literal:profile_id": 1,
+    "literal:project_id": 2,
+    "literal:rowid": 4,
+    "literal:to_id": 1
+  },
+  "core/role-profile-storage.mjs": {
+    "key:actorId": 2,
+    "key:agentId": 2,
+    "key:profileId": 2,
+    "key:reasonRefs": 1,
+    "key:releaseId": 1
+  },
+  "adapters/mcp/role-profile-access.mjs": {
+    "key:releaseId": 1
+  },
+  "adapters/mcp/role-profile-configuration.mjs": {
+    "key:actorId": 1,
+    "key:agentId": 1
+  },
+  "adapters/mcp/role-profile-tools.mjs": {
+    "key:actionId": 1,
+    "key:cardId": 1,
+    "key:conversationId": 1,
+    "key:memoryId": 2,
+    "key:messageId": 1,
+    "key:ownerId": 1,
+    "key:packageId": 2,
+    "key:profileId": 1,
+    "key:projectId": 1,
+    "key:reasonRefs": 1,
+    "key:receiptId": 1,
+    "key:releaseId": 1,
+    "key:sourceId": 1,
+    "key:versionId": 1
+  },
+  "core/context-read-relations.mjs": {
+    "key:id": 1,
+    "key:incident_rowid": 1,
+    "key:memory_id": 1,
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "literal:card_id": 2,
+    "literal:cardId": 1,
+    "literal:event_id": 1,
+    "literal:from_id": 1,
+    "literal:id": 1,
+    "literal:incident_rowid": 1,
+    "literal:left_memory_id": 1,
+    "literal:memory_id": 1,
+    "literal:memoryId": 1,
+    "literal:owner_id": 1,
+    "literal:project_id": 1,
+    "literal:receipt_id": 1,
+    "literal:right_memory_id": 2,
+    "literal:rowid": 4,
+    "literal:session_id": 1,
+    "literal:to_id": 2
+  },
+  "core/context-read-moc.mjs": {
+    "key:id": 4,
+    "literal:card_id": 4,
+    "literal:cardId": 1,
+    "literal:child_id": 1,
+    "literal:id": 2,
+    "literal:memory_id": 6,
+    "literal:memoryId": 1,
+    "literal:moc_id": 2,
+    "literal:parent_id": 1
+  },
+  "core/card-current-input.mjs": {
+    "literal:actionId": 1,
+    "literal:cardId": 1
+  },
+  "core/card-current-schema.mjs": {
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "literal:ownerId": 1,
+    "literal:packageId": 2,
+    "literal:projectId": 1,
+    "literal:roleId": 1,
+    "literal:versionId": 1
+  },
+  "core/card-current-storage.mjs": {
+    "key:id": 1
+  },
+  "core/card-current-facade.mjs": {
+    "key:actionId": 1,
+    "key:targetId": 1
+  },
+  "adapters/mcp/card-current-tools.mjs": {
+    "key:actionId": 1,
+    "key:cardId": 1,
+    "key:ownerId": 1,
+    "key:packageId": 1,
+    "key:projectId": 1,
+    "key:roleId": 1
+  },
+  "core/topic-members-input.mjs": {
+    "key:mocId": 1,
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "literal:mocId": 1,
+    "literal:ownerId": 1,
+    "literal:projectId": 2
+  },
+  "core/topic-members-reader.mjs": {
+    "key:id": 1,
+    "key:projectId": 2
+  },
+  "core/topic-members-storage.mjs": {
+    "key:id": 1,
+    "key:mocId": 2
+  },
+  "core/topic-members-opening.mjs": {
+    "key:rowid": 1,
+    "literal:child_id": 2,
+    "literal:id": 7,
+    "literal:memory_id": 5,
+    "literal:moc_id": 5,
+    "literal:owner_id": 1,
+    "literal:parent_id": 2,
+    "literal:project_id": 1
+  },
+  "core/topic-members-session.mjs": {
+    "key:applicationId": 1,
+    "key:memoryId": 1,
+    "literal:id": 3,
+    "literal:owner_id": 2,
+    "literal:project_id": 2
+  },
+  "adapters/local-embedder/bundle.mjs": {
+    "key:inferencePid": 1,
+    "key:supervisorPid": 1,
+    "literal:id": 2,
+    "literal:pid": 1
+  },
+  "adapters/local-embedder/child.mjs": {
+    "key:id": 2,
+    "literal:id": 1
+  },
+  "adapters/local-embedder/common.mjs": {
+    "key:id": 1,
+    "literal:model_pack_manifest_invalid": 1
+  },
+  "adapters/local-embedder/install.mjs": {
+    "literal:model_pack_manifest_invalid": 6
+  },
+  "adapters/local-embedder/pack.mjs": {
+    "literal:model_pack_manifest_invalid": 2,
+    "literal:packId": 1
+  },
+  "adapters/local-embedder/supervisor.mjs": {
+    "key:pid": 1
+  },
+  "core/context-read-local-status.mjs": {
+    "literal:model_pack_manifest_invalid": 1
+  },
+  "core/topic-reader-sqlite.mjs": {
+    "literal:application_id": 2
+  },
+  "core/context-product-authority.mjs": {
+    "key:credentialBindingId": 1,
+    "key:ownerId": 1
+  },
+  "core/context-product-control.mjs": {
+    "key:clockDomainId": 2,
+    "key:credentialBindingId": 2,
+    "key:handleId": 2,
+    "key:operationId": 1,
+    "key:requestId": 2,
+    "literal:clockDomainId": 4,
+    "literal:credentialBindingId": 8,
+    "literal:handleId": 8,
+    "literal:operationId": 1,
+    "literal:ownerId": 1,
+    "literal:requestId": 8
+  },
+  "core/context-product-reader.mjs": {
+    "key:bindingId": 1,
+    "key:credentialBindingId": 1,
+    "key:handleId": 1,
+    "key:ownerId": 1,
+    "key:requestId": 1,
+    "literal:credentialBindingId": 1,
+    "literal:handleId": 1,
+    "literal:requestId": 1
+  },
+  "core/context-product-schema.mjs": {
+    "literal:action_id": 4,
+    "literal:asset_id": 3,
+    "literal:asset_version_id": 2,
+    "literal:binary_object_id": 3,
+    "literal:binding_id": 2,
+    "literal:card_id": 15,
+    "literal:conversation_id": 17,
+    "literal:effect_id": 2,
+    "literal:entity_id": 1,
+    "literal:event_id": 5,
+    "literal:first_event_id": 1,
+    "literal:id": 36,
+    "literal:memory_id": 11,
+    "literal:message_id": 15,
+    "literal:method_version_id": 3,
+    "literal:object_id": 4,
+    "literal:owner_id": 44,
+    "literal:package_id": 11,
+    "literal:project_id": 42,
+    "literal:receipt_id": 10,
+    "literal:session_id": 1,
+    "literal:source_id": 3,
+    "literal:store_id": 2,
+    "literal:target_id": 1,
+    "literal:to_id": 2,
+    "literal:version_id": 12
+  },
+  "core/context-product-telemetry.mjs": {
+    "key:operationId": 2,
+    "literal:application_id": 1
+  },
+  "core/context-read-supervisor.mjs": {
+    "key:id": 2,
+    "literal:cleanupId": 2
+  },
+  "core/context-product-validation.mjs": {
+    "key:ownerId": 1,
+    "literal:validation_invalid": 1
+  },
+  "core/context-product-service.mjs": {
+    "literal:credentialBindingId": 2,
+    "literal:ownerId": 1,
+    "literal:serviceId": 2
+  },
+  "core/context-product-sidecar.mjs": {
+    "key:applicationId": 2,
+    "key:base_id": 1,
+    "key:id": 9,
+    "key:storeId": 4,
+    "literal:cardId": 2,
+    "literal:comparison_base_invalid": 1,
+    "literal:memoryId": 2,
+    "literal:term_id": 1,
+    "literal:validation_invalid": 6
+  },
+  "core/context-product-verification-batch.mjs": {
+    "literal:term_id": 1
+  },
+  "core/context-product-comparison.mjs": {
+    "key:comparisonId": 1,
+    "key:memoryId": 1,
+    "key:storeId": 2,
+    "literal:conversation_id": 1,
+    "literal:id": 1,
+    "literal:message_id": 1
+  },
+  "core/content-safety.mjs": {
+    "key:eventId": 1,
+    "key:messageId": 2,
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "key:sessionId": 1
+  },
+  "core/context-product-index.mjs": {
+    "key:catalogId": 1,
+    "key:id": 4,
+    "key:ownerId": 1,
+    "key:storeId": 3,
+    "literal:hybrid": 1,
+    "literal:validation_invalid": 5
+  },
+  "core/context-product-pump.mjs": {
+    "key:id": 1,
+    "key:windowId": 1,
+    "literal:id": 3
+  },
+  "core/context-product-selection.mjs": {
+    "literal:ownerId": 1,
+    "literal:projectId": 1
+  },
+  "adapters/openai/product-embedding.mjs": {
+    "key:id": 1
+  },
+  "core/context-product-vectors.mjs": {
+    "key:id": 5,
+    "key:memoryId": 1,
+    "key:projectId": 1,
+    "key:publicationId": 2,
+    "key:storeId": 1,
+    "literal:cardId": 1,
+    "literal:invalid": 8,
+    "literal:memoryId": 1,
+    "literal:validation_invalid": 1
+  },
+  "core/context-semantic-coordinator.mjs": {
+    "key:cleanupId": 2,
+    "key:credentialBindingId": 2,
+    "key:handleId": 2,
+    "key:ownerId": 2,
+    "key:requestId": 2
+  },
+  "core/context-semantic-gates.mjs": {
+    "key:id": 3
+  },
+  "core/context-semantic-input.mjs": {
+    "literal:ownerId": 1
+  },
+  "core/context-semantic-maintenance.mjs": {
+    "key:ownerId": 2,
+    "key:storeId": 3
+  },
+  "core/context-semantic-pump.mjs": {
+    "key:bindingId": 1,
+    "key:id": 3,
+    "key:ownerId": 1,
+    "key:windowId": 2,
+    "literal:id": 1
+  },
+  "core/context-semantic-worker.mjs": {
+    "key:authorityId": 2,
+    "key:bindingId": 1,
+    "key:credentialBindingId": 1,
+    "key:id": 7,
+    "key:windowId": 3,
+    "literal:ownerId": 1,
+    "literal:validation_invalid": 1
+  },
+  "core/context-vector-validation.mjs": {
+    "key:lexicalPublicationId": 1,
+    "key:publicationId": 2,
+    "literal:storeId": 1,
+    "literal:validation_invalid": 1
+  },
+  "adapters/mcp/safety-migrate-command.mjs": {
+    "key:storeId": 1
+  },
+  "core/content-safety-migration.mjs": {
+    "key:actionId": 2,
+    "key:messageId": 1,
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "key:storeId": 1
+  },
+  "core/content-safety-schema.mjs": {
+    "key:applicationId": 1,
+    "literal:migration_id": 1
+  },
+  "core/content-suppression-storage.mjs": {
+    "key:messageId": 1,
+    "key:projectId": 1,
+    "literal:action_id": 1,
+    "literal:owner_id": 1,
+    "literal:project_id": 1
+  },
+  "core/content-suppression-input.mjs": {
+    "key:owner_id": 1,
+    "key:ownerId": 1,
+    "key:project_id": 1,
+    "key:projectId": 1,
+    "key:storeId": 1,
+    "literal:memoryId": 2,
+    "literal:messageId": 2,
+    "literal:ownerId": 2,
+    "literal:projectId": 2,
+    "literal:storeId": 4
+  },
+  "core/content-suppression-evidence.mjs": {
+    "key:conversationId": 1,
+    "key:eventId": 1,
+    "key:messageId": 1,
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "key:sessionId": 1
+  },
+  "core/content-suppression-reader.mjs": {
+    "key:credentialBindingId": 1,
+    "key:id": 3,
+    "key:requestId": 1,
+    "key:storeId": 1,
+    "literal:id": 1
+  },
+  "core/content-safety-boundary.mjs": {
+    "key:memoryId": 1,
+    "key:messageId": 2,
+    "key:projectId": 2,
+    "literal:cardId": 1,
+    "literal:conversationId": 1,
+    "literal:memoryId": 1,
+    "literal:receiptId": 1,
+    "literal:receiptIds": 1
+  },
+  "core/context-product-attribution.mjs": {
+    "literal:validation_invalid": 1
+  },
+  "core/content-safety-classifier.mjs": {
+    "literal:ownerId": 1,
+    "literal:projectId": 1,
+    "literal:storeId": 1
+  },
+  "core/content-safety-observations.mjs": {
+    "key:conversationId": 1,
+    "key:messageId": 3,
+    "key:owner_id": 1,
+    "key:ownerId": 2,
+    "key:project_id": 1,
+    "key:projectId": 2,
+    "key:store_id": 1,
+    "key:target_id": 1
+  }
+}

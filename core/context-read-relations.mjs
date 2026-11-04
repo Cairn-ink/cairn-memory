@@ -1,3 +1,6 @@
+import { bindContentSafetyConnection, cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
+import { contentReadSafety, createContentReadMemo } from './content-safety.mjs';
+import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { compareCanonical, canonicalKey } from './context-read-bm25.mjs';
@@ -81,7 +84,7 @@ export function relationDiagnostic(reason) {
  * residual eligibility/revision predicates. Validate returned metadata in JS so
  * rejected/stale rows and every repeated lookup are still fully charged. */
 export function chargedSourceDatabase(db, budget) {
-  return { get isTransaction() { return db.isTransaction; }, prepare(sql) {
+  return bindContentSafetyConnection({ get isTransaction() { return db.isTransaction; }, prepare(sql) {
     const statement = db.prepare(sql);
     return { get(...args) {
       budget.ensure(2); budget.charge('lookups');
@@ -104,21 +107,30 @@ export function chargedSourceDatabase(db, budget) {
         return rows;
       } finally { iterator.return?.(); budget.release(bytes); }
     } };
-  } };
+  } }, db);
 }
 // Cache metadata only, never prose or foreign identities. One classification
 // read supplies namespace, revision and eligibility metadata. Bounded LRU hits
 // avoid duplicate scope/eligibility reads; every actual miss is still charged.
 export const createSourceContext = () => ({ metadata: new Map(), bytes: 0 });
-export function sourceScopeQuery(type, { topic = false } = {}) {
+export function sourceScopeQuery(type, { topic = false, rawAncestry = false } = {}) {
   const table = topic ? type === 'memory' ? 'mocs' : 'card_mocs' : type === 'memory' ? 'memories' : 'private_cards';
   const columns = topic ? 'id,owner_id,scope,project_id,revision,level' : type === 'memory' ?
     'id,owner_id,scope,project_id,revision,deleted,currentness,review_state' : 'id,owner_id,scope,project_id,revision,body_revision,state';
-  return `SELECT ${columns} FROM ${table} INDEXED BY sqlite_autoindex_${table}_1 WHERE id=?`;
+  const ancestry = rawAncestry && !topic && type === 'memory' ? `,EXISTS(
+    SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id
+    LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id
+    AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry` : '';
+  return `SELECT ${columns}${ancestry} FROM ${table} INDEXED BY sqlite_autoindex_${table}_1 WHERE id=?`;
 }
 const sourceContexts = new WeakMap();
 export function sourceReader(db, identity, features, input, budget, sharedContext) {
   const charged = chargedSourceDatabase(db, budget);
+  // Trusted feature handoff for point-only adapters; normal serving handles
+  // reuse their opener's attestation. This never reads canonical population.
+  const suppressionRevision = features.suppressionRevision ?? (cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision;
+  const readMemo = suppressionRevision ? createContentReadMemo(charged) : undefined;
+  const rawAncestry = Boolean(suppressionRevision && cachedContentLayout(db)?.rawLineage);
   if (!sourceContexts.has(budget)) {
     budget.hold(1024 * 1024, { required: true });
     sourceContexts.set(budget, { privateBudget: sourcePrivateBudget(budget.check), cache: sharedContext ?? createSourceContext() });
@@ -148,7 +160,7 @@ export function sourceReader(db, identity, features, input, budget, sharedContex
       const value = cache.metadata.get(key); cache.metadata.delete(key); cache.metadata.set(key, value); row = value.row;
     } else {
       if (!required) { budget.ensure(2); privateBudget.ensure(2); }
-      row = db.prepare(sourceScopeQuery(type, { topic })).get(id);
+      row = db.prepare(sourceScopeQuery(type, { topic, rawAncestry })).get(id);
       const foreign = Boolean(row && !allowed(rowNamespace(row)));
       account(row, foreign);
       if (row && !foreign) remember(rowNamespace(row), type, row, { topic });
@@ -187,6 +199,7 @@ export function sourceReader(db, identity, features, input, budget, sharedContex
     if (row.deleted || ['cancelled', 'deleted'].includes(row.state)) return { reason: 'unavailable' };
     if (row.revision !== ref.revision || ref.type === 'card' && row.body_revision !== ref.bodyRevision) return { reason: 'revision' };
     if (ref.type === 'memory') {
+      if (suppressionRevision && !contentReadSafety(charged, { identity, namespace: ns, ref, memo: readMemo, selectedMemory: row }).allowed) return { reason: 'unavailable' };
       if (row.currentness !== 'current' || row.review_state === 'awaiting') return { reason: 'ineligible' };
       if (projection) {
         const state = projectionState(ns);
@@ -209,7 +222,14 @@ export function sourceReader(db, identity, features, input, budget, sharedContex
     return refs.map(ref => endpoint(ref, options));
   }
   function receipt(memoryId, receiptId, expected, ns = input.readSet[0]) {
-    if (!metadata(ns, 'memory', memoryId).scoped) return false;
+    const memory = metadata(ns, 'memory', memoryId);
+    // The classified Memory projection covers every stored receipt's Raw
+    // namespace ancestry in this snapshot. Reuse that same proof for the
+    // receipt fact check; any Raw fact still takes the full ancestry UNION.
+    // The exact receipt-to-Memory and digest checks below remain mandatory.
+    if (!memory.scoped || suppressionRevision && contentSuppressionReasonInside(charged, ns, {
+      kind: 'receipt', key: receiptId, ancestryChecked: rawAncestry && memory.row.invalid_raw_ancestry === 0,
+    })) return false;
     budget.ensure(4); privateBudget.ensure(4);
     // ID is UNIQUE. Never hide a mismatched receipt behind a memory_id WHERE
     // residual: visit/classify it once, but expose its prose only for the

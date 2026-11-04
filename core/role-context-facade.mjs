@@ -1,3 +1,4 @@
+import { assertContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
@@ -174,7 +175,12 @@ export function createRoleContextReader(storage,options,config) {
         return {...base,items,unavailable};
       });
       if(searchGenerations&&!same(searchGenerations,prepared.observation.generations))fail('snapshot_stale');
-      if(prepared.metered.file?.kind==='binary')access.authorize(methodPackageRef(input.package).namespace,true,config.assets.authority);
+      if(prepared.metered.file?.kind==='binary'){
+        access.authorize(methodPackageRef(input.package).namespace,true,config.assets.authority);
+        // This one authority sample precedes the first counter. Charge its
+        // header/epoch fence to the fixed request budget (six total), not E1.
+        assertContentSuppressionRequestInside(db,input.readSet);
+      }
       const issuing=['now','refresh'].includes(input.mode),selected=[],historyRows=[],comparisonUnits=[],allHistory=prepared.metered.history?.rows??[];
       let calls=0,oversized=0,budgetStop=false;const tokenCounts=new Map();
       function build(items,rows,units=comparisonUnits) {
@@ -198,7 +204,7 @@ export function createRoleContextReader(storage,options,config) {
         metered.receipt=issuing?encodeTaskReceipt(identity,p,true):saved?input.receipt:null;
         return metered;
       }
-      const count=metered=>{calls++;return countTokens(counter,wire(metered));};
+      const count=metered=>{calls++;return countTokens(counter,wire(metered),access.check);};
       function diagnostics(metered,items,used) {
         return {version:'context-read-v1',representation:'representation-v2',policy:{id:'rank-first-whole-v1'},counter:{id:counter?.id},
           items:evidence.details(items,tokenCounts),budget:{...input.budget,used},candidates,
@@ -209,16 +215,16 @@ export function createRoleContextReader(storage,options,config) {
       }
       const bounds=(metered,tokens,items=selected)=>roleTaskByteCounts(metered,diagnostics(metered,items,tokens));
       const fits=(metered,tokens,items=selected)=>{const b=bounds(metered,tokens,items);return tokens<=input.budget.maxTokens&&b.receipt<=32768&&b.core<=65536&&b.transport<=262144;};
-      let metered=build(selected,historyRows),used=count(metered);access.check();
+      let metered=build(selected,historyRows),used=count(metered);
       if(!fits(metered,used))return {ok:false,error:{code:'budget_insufficient',retryable:false,details:{partial:true,maxTokens:input.budget.maxTokens,requiredTokens:used,requiredBytes:bounds(metered,used)}}};
       function visit(items,rows,text,minItems=[],minRows=[],minUnits=[]) {
         if(performance.now()>=deadlineAt)return false;
-        calls++;tokenCounts.set(text,countTokens(counter,text));access.check();
+        calls++;tokenCounts.set(text,countTokens(counter,text,access.check));
         if(performance.now()>=deadlineAt)return false;
-        const trial=build(items,rows),tokens=count(trial);access.check();
+        const trial=build(items,rows),tokens=count(trial);
         if(performance.now()>=deadlineAt)return false;
         if(fits(trial,tokens,items)){metered=trial;used=tokens;return true;}budgetStop=true;
-        const minimum=build(minItems,minRows,minUnits),minimumTokens=count(minimum);access.check();if(!fits(minimum,minimumTokens,minItems))oversized++;return false;
+        const minimum=build(minItems,minRows,minUnits),minimumTokens=count(minimum);if(!fits(minimum,minimumTokens,minItems))oversized++;return false;
       }
       for(const release of allHistory) {
         if(visit(selected,[...historyRows,release],canonicalJSON(release),[],[release]))historyRows.push(release);else break;
@@ -234,7 +240,7 @@ export function createRoleContextReader(storage,options,config) {
         selected.push(body);
         for(const source of item.sources) {const next={...body,sources:[...body.sources,source]};if(visit([...selected.slice(0,-1),next],historyRows,source.excerpt,[{...body,sources:[source]}])){body.sources.push(source);}}
       }
-      used=count(metered);access.check();
+      used=count(metered);
       if(!fits(metered,used))fail('context_item_too_large');
       // All serialization, counters, attribution and host callbacks finish here.
       const finalDiagnostics=diagnostics(metered,selected,used);

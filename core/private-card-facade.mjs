@@ -1,3 +1,4 @@
+import { contentSafetyFacade, contentAuthorityPort } from './content-safety-boundary.mjs';
 import { CARD_CURRENT_VERSION, CARD_CURRENT_METHODS } from './card-current-input.mjs';
 import { authorizeCardCurrentDependencies } from './card-current-facade.mjs';
 import { isStorageBusy } from './database.mjs';
@@ -24,6 +25,7 @@ export function privateFailure(error) {
 
 export function createPrivateCardFacade(storage, options, ready, rawReader) {
   if (!options) return {};
+  options={...options,authority:contentAuthorityPort(options.authority)};
   const result = {};
   const methods = [...CARD_METHODS, ...(options.currentDependencies ? CARD_CURRENT_METHODS : []), ...(rawReader ? ['resolveSourceReferences'] : [])];
   for (const method of methods) {
@@ -91,5 +93,5 @@ export function createPrivateCardFacade(storage, options, ready, rawReader) {
     ...(options.currentDependencies ? { currentDependencies: { version: CARD_CURRENT_VERSION, methods: [...CARD_CURRENT_METHODS], maxPackages: 16, maxVectorBytes: 32768, actionClass: 'explicit-user' } } : {}),
     raw: Boolean(rawReader), modelAssisted: false, publication: false,
   } });
-  return result;
+  return contentSafetyFacade(result, { writeBoundary:storage, check: (scopes,phase) => storage.assertContentScope(scopes,phase), failure: privateFailure, validate: (method,args,result,scopes) => { if(CARD_READS.has(method)&&result?.ok)storage.assertContentOutput(result.value,scopes); }, noOwner: ['getPrivateCardCapabilities'] });
 }

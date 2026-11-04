@@ -1,3 +1,7 @@
+import { contentSuppressionRequestInside, hasContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { contentReadSafety, sourceReadSafety } from './content-safety.mjs';
+import { cachedContentLayout } from './content-safety-schema.mjs';
+import { assertContentOutput, assertContentScopes } from './content-safety-boundary.mjs';
 import { resolveContentLayout } from './content-safety-layout.mjs';
 import { createCardCurrentStorage } from './card-current-storage.mjs';
 import { randomUUID } from 'node:crypto';
@@ -82,6 +86,12 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
   function reasonAvailable(ns, ref) {
     try {
       if (!sameNamespace(ref.namespace, ns)) return false;
+      if (cachedContentLayout(db)?.suppressionRevision) {
+        const safety = ['memory','card'].includes(ref.type)
+          ? contentReadSafety(db,{identity,namespace:ns,ref,intent:'history',method:ref.type==='card'?'getCard':'retrieval'})
+          : sourceReadSafety(db,{identity,namespace:ns,ref});
+        if (!safety.allowed) return false;
+      }
       if (ref.type === 'memory') {
         const row = db.prepare(`SELECT revision FROM memories WHERE ${where} AND id=? AND deleted=0
           AND currentness='current' AND review_state!='awaiting'`).get(...boundary(ns), ref.memoryId);
@@ -317,6 +327,8 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
         packageRevision:found.pkg.revision,versionRevision:found.row.revision})};
   }
   return Object.freeze({
+    assertContentOutput(value, scopes) { if(!cachedContentLayout(db)?.suppressionRevision)return; return assertContentOutput(db,identity,value,scopes); },
+    assertContentScope: (scopes,{delivery=false}={}) => { ready(); if(!cachedContentLayout(db)?.suppressionRevision)return; if(!delivery && scopes.length && hasContentSuppressionRequestInside(db) && !db.isTransaction) { contentSuppressionRequestInside(db,scopes,{defer:true}); return; } assertContentScopes(db,scopes); },
     // Internal synchronous seam: caller owns the one shared read transaction.
     roleRead: Object.freeze({ stateFor: bindings.stateFor, decode: bindings.decode, adoption: bindings.adoption,
       packageRow, targetMetadata, targetLifecycle, verifyFile, reasonAvailable, currentRoleRelatedAvailable,
@@ -328,7 +340,8 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
       ready();
       if (isRead) return readTransaction(db, () => read(method,ns,input,accessGeneration,access,binaryAccessGeneration));
       return transaction(db, () => {
-        const replay = ledger.replay(ns,input.actionId,method,payloadBinding);
+        if(cachedContentLayout(db)?.suppressionRevision&&db.prepare('SELECT 1 FROM owner_suppression_epochs WHERE owner_id=?').get(ns.ownerId)&&!/^(delete|cancel|disable)/.test(method))assertContentOutput(db,identity,input,[ns],{factsOnly:true});
+        const replay = ledger.replay(ns,input.actionId,method,payloadBinding,input);
         if (replay !== undefined) return replay;
         const result = method === 'importMethodVersion' ? importVersion(ns,input,prepared) : ['adoptMethodVersion','disableMethodBinding'].includes(method) ? bindings.transition(method,ns,input) : remove(method,ns,input);
         if (size(result) > 65536) fail('context_item_too_large');

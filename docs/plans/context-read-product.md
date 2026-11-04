@@ -2693,3 +2693,28 @@ The owner also names **“the 364 + 364 two-segment partition”** as superseded
 **Authoring validation.** Frozen-prefix `cmp` against `f56390ef` checks all **459,357 bytes** (exit **0**). Strict JSON parsing checks **all four fenced JSON blocks**, including this appendix, frozen V4-A, R2.2 fixture and R2.5 production object, rejecting duplicate keys (exit **0**). Verbatim checks compare every supersession quotation to its attributed frozen, earlier-draft or owner-instruction source (exit **0**). Independent arithmetic checks cross-check profile event rates/quantiles, seeded target/batch counts, minima, session durations, both component sums, reservation margins and option estimates (exit **0**). `git diff --check` exits **0**. The requested case-insensitive private-name/local-path scan finds **zero matches in the appended bytes** (exit **0**); frozen-prefix occurrences are unchanged and are not copied into this delta. Changed-file inventories from `git diff --name-only` plus untracked enumeration and an independent tracked-tree/blob comparison plus filesystem untracked enumeration agree at **one file**, this plan (cross-check exit **0**). Final standalone inspection/authoring helpers exit **0**. One initial combined read command returned 0 despite an unmatched shell-glob search error; its corrected standalone directory search exited 0, and the failed search was not used as verification evidence. No build, typecheck, test suite, network, commit, code mutation or unattended process was run; these authoring checks do not qualify the harness or workload. Owner-decision validation additionally cross-checks the selected numeric definition/observation budgets, one-full-segment encoding, native-role rejection/production-flag rules, retained cell-244 capture and unchanged six-hour bounds (exit **0**). The new platform/reservation supersession rows are checked verbatim against their attributed frozen or earlier-draft sources; the 364 + 364 phrase is attributed to the owner instruction. The first owner-decision quotation-helper invocation exited **1** because of its table-column parser error; after correcting the helper, the full quotation/source check exited **0**. The owner scheduling stop is resolved; this draft is ready for non-author audit and the separate reviewed harness implementation.
 
 **Audit round 1 authoring validation.** Both non-author audit reports were read in full (exit **0** each). The accepted R3.1–R3.5 text, workload/session recipe and arithmetic are byte-identical to `67e9c552`; only R3.6, R3.7 and the revision-3 changelog/validation are revised. Frozen-prefix `cmp`, strict JSON parsing, all attributed verbatim quotations, the eight-line cadence census, independent arithmetic and full ordered-cell-key comparisons, `git diff --check`, private-name/local-path scan and two independently derived changed-file inventories each exit **0**; the inventories agree at **one file**. Identity collection/unavailable/anchor-equality and profile-selected eligibility/rejection requirements are validated as protocol handoff text/encoding, not claimed runtime tests; their harness implementation remains a separate reviewed change. All accepted totals, target minima, selected budgets/margins and the production capture envelope remain unchanged. No code, commit, network, measurement or unattended task is part of this audit fix.
+
+## Addendum S2h-2 v1 — suppression-aware public accounting (2026-10-31)
+
+This addendum supersedes the nonnull progress requirements for `building`,
+`ready` and `catching_up` in the lexical-state table above **only when the
+selected owner has a nonzero suppression epoch** on v34, v38 or v48. It also
+supersedes known maintenance-usage and embedded-count expectations under that
+condition. The original table is retained as the ordinary-owner contract.
+This follows [the safety layout, §5](context-read-b3s-safety-layout.md#5-s2h-hosted-pull-entry-and-identity-handoff).
+
+Refresh sets `progress.{lexical,transformed,embeddingAttempts,embedded}`,
+`coverage.stops.budget`, `coverage.maintenance.progress`, and each requested
+type's `coverage.byType[type].{embedded,embeddedFraction}` to `null`.
+Status sets `lexical.progress` and each requested type's embedded count to
+`null`, including semantic coverage when present. These nulls apply to ready
+and complete results and persist after fact cleanup. They prevent revealing
+the hidden population. `eligible` and `indexed` count only visible items; a
+count without a complete bounded visibility proof is `null`. These rules
+describe permitted DTOs; owner or namespace erasure still refuses the request.
+
+With `progress.transformed:null`, the unchanged pump's known-usage refund
+branch is not taken (`core/context-product-pump.mjs:402–406`).
+The pump retains the full quantum item and time reservation, including idle quanta.
+No pump code or refresh input changes are part of this addendum; a separate
+performance-track follow-up owns any accounting-policy change.

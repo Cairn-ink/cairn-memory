@@ -120,6 +120,8 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
       return failureDetail={kind:'exception',errorName:maintenanceErrorName(error),step:failureStep,...(indexFailure?{reason:indexFailure.reason}:{})};
     },
     get stepKind(){return Number(current&15n);},
+    // Read-only: true once selectFailure() has chosen this operation's failure, until reset()/resetFailure().
+    get failureSelected(){return failureSelected;},
     snapshot:()=>Object.fromEntries(attributionFields.map((name,i)=>[name,fields[i]])),
     add(name,n){const slot=slots[name];fields[slot]=add(fields[slot],n);},
     get elapsed(){return elapsed;},

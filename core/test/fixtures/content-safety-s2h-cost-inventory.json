@@ -1,0 +1,3356 @@
+{
+  "version": "s2h2-r3-discovery-v1",
+  "surfaces": {
+    "exports": [
+      "CARD_CURRENT_METHODS",
+      "CARD_CURRENT_VERSION",
+      "CONTEXT_SOURCES",
+      "MemoryStoreError",
+      "SOURCE_LIMITS",
+      "createContextReadSupervisor",
+      "createContextReaderPool",
+      "normalizeBoundedText",
+      "normalizedTextLength",
+      "openContentSuppressionReader",
+      "openContextIndexMaintainer",
+      "openContextProductReader",
+      "openContextReader",
+      "openContextSemanticCoordinator",
+      "openMemoryCore",
+      "openMemoryReader",
+      "openMemoryStore",
+      "renewContextMaintenancePump",
+      "roleProfileRef",
+      "roleProfileReleaseRef",
+      "roleTaskMeteredText",
+      "roleTaskToolResponse",
+      "selectContextProductNamespaces"
+    ],
+    "pull": [
+      "close",
+      "isSuppressed",
+      "listSuppressionsSince"
+    ],
+    "semantic": [
+      "close",
+      "getOwnerSemanticStatus",
+      "purgeOwnerVectors",
+      "setOwnerSemantic",
+      "validateOwnerSemanticCoverage"
+    ],
+    "pump": [
+      "close",
+      "getStatus"
+    ],
+    "plainCore": [
+      "abandonAdmission",
+      "admit",
+      "adoptMethodVersion",
+      "applyCardPlacement",
+      "applyPlacement",
+      "bindQualifiedClaim",
+      "cancelCardDraft",
+      "capture",
+      "checkMethodReasonRefs",
+      "claimAdmission",
+      "classifyPlacement",
+      "close",
+      "closeEpisodeNextStep",
+      "compareMethodVersions",
+      "confirm",
+      "confirmCardDraft",
+      "correct",
+      "correctEpisode",
+      "createAssetDerivative",
+      "createCardDraft",
+      "declareCardCurrentDependencies",
+      "deleteAsset",
+      "deleteAssetDerivative",
+      "deleteAssetVersion",
+      "deleteKnowledgeCard",
+      "deleteMethodPackage",
+      "deleteMethodVersion",
+      "deleteRoleProfileRelease",
+      "deleteSourceNote",
+      "disableMethodBinding",
+      "disableRoleProfile",
+      "discardCaptureEvidence",
+      "editCardDraft",
+      "editKnowledgeCard",
+      "endEpisodeSession",
+      "fetch",
+      "fetchEvidence",
+      "finishAdmission",
+      "forget",
+      "forgetEpisode",
+      "get",
+      "getAssetCapabilities",
+      "getAssetUsage",
+      "getAssetVersion",
+      "getCaptureControl",
+      "getCard",
+      "getEpisode",
+      "getMethodPackageCapabilities",
+      "getMethodPackageUsage",
+      "getMethodVersion",
+      "getPrivateCardCapabilities",
+      "getPrivateCardUsage",
+      "getRationale",
+      "getSource",
+      "importAssetVersion",
+      "importMethodVersion",
+      "inspectAdmission",
+      "inspectCaptureEvidence",
+      "inspectCardOperation",
+      "keepEpisode",
+      "linkMocs",
+      "list",
+      "listAssetDerivatives",
+      "listAssetEffects",
+      "listAssetVersions",
+      "listAssets",
+      "listCardEffects",
+      "listCards",
+      "listEpisodes",
+      "listEvidenceMappings",
+      "listMemoriesByTime",
+      "listMethodBindingEvents",
+      "listMethodEffects",
+      "listMethodManifest",
+      "listMethodPackages",
+      "listMethodVersions",
+      "listReviewConflicts",
+      "listReviewTransitions",
+      "map",
+      "mapEvidence",
+      "planCaptureBatches",
+      "proposeEvidenceMapping",
+      "publishRoleProfileRelease",
+      "readAssetBytes",
+      "readAssetDerivative",
+      "readMethodAttachmentBytes",
+      "readMethodFile",
+      "readRoleTaskContext",
+      "rebuildIndex",
+      "recall",
+      "refreshCardTopic",
+      "reject",
+      "releaseEpisodeCorrection",
+      "resolveMethod",
+      "resolveMethodsForRole",
+      "revalidateCardCurrentDependencies",
+      "revalidateEvidence",
+      "reviewDecisionBasis",
+      "reviewEvidenceMapping",
+      "reviewRationale",
+      "selectEvidence",
+      "sessionStartContext",
+      "setCapturePaused",
+      "setProceduralMemory",
+      "setProjectCapture",
+      "sourceSnapshot",
+      "submitSourceNote",
+      "supersede",
+      "transitionQualified",
+      "transitionQualifiedSet",
+      "verifyAssetBytes"
+    ],
+    "contextCore": [
+      "abandonAdmission",
+      "admit",
+      "adoptMethodVersion",
+      "applyCardPlacement",
+      "applyPlacement",
+      "bindQualifiedClaim",
+      "cancelCardDraft",
+      "capture",
+      "checkMethodReasonRefs",
+      "claimAdmission",
+      "classifyPlacement",
+      "close",
+      "closeEpisodeNextStep",
+      "compareMethodVersions",
+      "confirm",
+      "confirmCardDraft",
+      "contextRead",
+      "correct",
+      "correctEpisode",
+      "createAssetDerivative",
+      "createCardDraft",
+      "declareCardCurrentDependencies",
+      "deleteAsset",
+      "deleteAssetDerivative",
+      "deleteAssetVersion",
+      "deleteKnowledgeCard",
+      "deleteMethodPackage",
+      "deleteMethodVersion",
+      "deleteRoleProfileRelease",
+      "deleteSourceNote",
+      "disableMethodBinding",
+      "disableRoleProfile",
+      "discardCaptureEvidence",
+      "editCardDraft",
+      "editKnowledgeCard",
+      "endEpisodeSession",
+      "fetch",
+      "fetchCandidateEvidence",
+      "fetchEvidence",
+      "findCandidates",
+      "finishAdmission",
+      "forget",
+      "forgetEpisode",
+      "get",
+      "getAssetCapabilities",
+      "getAssetUsage",
+      "getAssetVersion",
+      "getCaptureControl",
+      "getCard",
+      "getContextReadCapabilities",
+      "getEpisode",
+      "getMethodPackageCapabilities",
+      "getMethodPackageUsage",
+      "getMethodVersion",
+      "getPrivateCardCapabilities",
+      "getPrivateCardUsage",
+      "getRationale",
+      "getSource",
+      "importAssetVersion",
+      "importMethodVersion",
+      "inspectAdmission",
+      "inspectCaptureEvidence",
+      "inspectCardOperation",
+      "keepEpisode",
+      "linkMocs",
+      "list",
+      "listAssetDerivatives",
+      "listAssetEffects",
+      "listAssetVersions",
+      "listAssets",
+      "listCardEffects",
+      "listCards",
+      "listEpisodes",
+      "listEvidenceMappings",
+      "listMemoriesByTime",
+      "listMethodBindingEvents",
+      "listMethodEffects",
+      "listMethodManifest",
+      "listMethodPackages",
+      "listMethodVersions",
+      "listReviewConflicts",
+      "listReviewTransitions",
+      "map",
+      "mapEvidence",
+      "planCaptureBatches",
+      "proposeEvidenceMapping",
+      "publishRoleProfileRelease",
+      "readAssetBytes",
+      "readAssetDerivative",
+      "readMethodAttachmentBytes",
+      "readMethodFile",
+      "readRoleTaskContext",
+      "rebuildIndex",
+      "recall",
+      "refreshCardTopic",
+      "refreshContextIndex",
+      "reject",
+      "releaseEpisodeCorrection",
+      "resolveMethod",
+      "resolveMethodsForRole",
+      "revalidateCardCurrentDependencies",
+      "revalidateEvidence",
+      "reviewDecisionBasis",
+      "reviewEvidenceMapping",
+      "reviewRationale",
+      "selectEvidence",
+      "sessionStartContext",
+      "setCapturePaused",
+      "setProceduralMemory",
+      "setProjectCapture",
+      "sourceSnapshot",
+      "submitSourceNote",
+      "supersede",
+      "transitionQualified",
+      "transitionQualifiedSet",
+      "verifyAssetBytes"
+    ],
+    "contextRawCore": [
+      "abandonAdmission",
+      "admit",
+      "adoptMethodVersion",
+      "applyCardPlacement",
+      "applyPlacement",
+      "bindQualifiedClaim",
+      "cancelCardDraft",
+      "capture",
+      "captureRaw",
+      "checkMethodReasonRefs",
+      "claimAdmission",
+      "classifyPlacement",
+      "close",
+      "closeEpisodeNextStep",
+      "compareMethodVersions",
+      "confirm",
+      "confirmCardDraft",
+      "contextRead",
+      "correct",
+      "correctEpisode",
+      "createAssetDerivative",
+      "createCardDraft",
+      "declareCardCurrentDependencies",
+      "deleteAsset",
+      "deleteAssetDerivative",
+      "deleteAssetVersion",
+      "deleteConversation",
+      "deleteKnowledgeCard",
+      "deleteMethodPackage",
+      "deleteMethodVersion",
+      "deleteRoleProfileRelease",
+      "deleteSourceNote",
+      "disableMethodBinding",
+      "disableRoleProfile",
+      "discardCaptureEvidence",
+      "editCardDraft",
+      "editKnowledgeCard",
+      "endEpisodeSession",
+      "fenceSession",
+      "fetch",
+      "fetchCandidateEvidence",
+      "fetchEvidence",
+      "findCandidates",
+      "finishAdmission",
+      "forget",
+      "forgetEpisode",
+      "get",
+      "getAssetCapabilities",
+      "getAssetUsage",
+      "getAssetVersion",
+      "getCaptureControl",
+      "getCard",
+      "getContextReadCapabilities",
+      "getConversation",
+      "getEpisode",
+      "getLocalCaptureControl",
+      "getMethodPackageCapabilities",
+      "getMethodPackageUsage",
+      "getMethodVersion",
+      "getPrivateCardCapabilities",
+      "getPrivateCardUsage",
+      "getRationale",
+      "getRawCaptureControl",
+      "getRawUsage",
+      "getSource",
+      "importAssetVersion",
+      "importMethodVersion",
+      "inspectAdmission",
+      "inspectCaptureEvidence",
+      "inspectCardOperation",
+      "keepEpisode",
+      "linkMocs",
+      "list",
+      "listAssetDerivatives",
+      "listAssetEffects",
+      "listAssetVersions",
+      "listAssets",
+      "listCardEffects",
+      "listCards",
+      "listEpisodes",
+      "listEvidenceMappings",
+      "listMemoriesByTime",
+      "listMethodBindingEvents",
+      "listMethodEffects",
+      "listMethodManifest",
+      "listMethodPackages",
+      "listMethodVersions",
+      "listRawConversations",
+      "listRawEffects",
+      "listReviewConflicts",
+      "listReviewTransitions",
+      "map",
+      "mapEvidence",
+      "planCaptureBatches",
+      "previewDeleteConversation",
+      "proposeEvidenceMapping",
+      "publishRoleProfileRelease",
+      "readAssetBytes",
+      "readAssetDerivative",
+      "readMethodAttachmentBytes",
+      "readMethodFile",
+      "readRoleTaskContext",
+      "rebuildIndex",
+      "recall",
+      "refreshCardTopic",
+      "refreshContextIndex",
+      "reject",
+      "releaseEpisodeCorrection",
+      "resolveMethod",
+      "resolveMethodsForRole",
+      "resolveSourceReferences",
+      "revalidateCardCurrentDependencies",
+      "revalidateEvidence",
+      "reviewDecisionBasis",
+      "reviewEvidenceMapping",
+      "reviewRationale",
+      "selectEvidence",
+      "sessionStartContext",
+      "setCapturePaused",
+      "setLocalCaptureControl",
+      "setProceduralMemory",
+      "setProjectCapture",
+      "setRawCaptureControl",
+      "sourceSnapshot",
+      "submitSourceNote",
+      "supersede",
+      "transitionQualified",
+      "transitionQualifiedSet",
+      "verifyAssetBytes"
+    ],
+    "minimalCore": [
+      "abandonAdmission",
+      "admit",
+      "applyPlacement",
+      "bindQualifiedClaim",
+      "capture",
+      "claimAdmission",
+      "classifyPlacement",
+      "close",
+      "closeEpisodeNextStep",
+      "confirm",
+      "correct",
+      "correctEpisode",
+      "discardCaptureEvidence",
+      "endEpisodeSession",
+      "fetch",
+      "finishAdmission",
+      "forget",
+      "forgetEpisode",
+      "get",
+      "getCaptureControl",
+      "getEpisode",
+      "getRationale",
+      "inspectAdmission",
+      "inspectCaptureEvidence",
+      "keepEpisode",
+      "linkMocs",
+      "list",
+      "listEpisodes",
+      "listMemoriesByTime",
+      "listReviewConflicts",
+      "listReviewTransitions",
+      "map",
+      "planCaptureBatches",
+      "rebuildIndex",
+      "recall",
+      "reject",
+      "releaseEpisodeCorrection",
+      "reviewDecisionBasis",
+      "reviewRationale",
+      "sessionStartContext",
+      "setCapturePaused",
+      "setProceduralMemory",
+      "setProjectCapture",
+      "sourceSnapshot",
+      "supersede",
+      "transitionQualified",
+      "transitionQualifiedSet"
+    ],
+    "minimalRawCore": [
+      "abandonAdmission",
+      "admit",
+      "applyPlacement",
+      "bindQualifiedClaim",
+      "capture",
+      "captureRaw",
+      "claimAdmission",
+      "classifyPlacement",
+      "close",
+      "closeEpisodeNextStep",
+      "confirm",
+      "correct",
+      "correctEpisode",
+      "deleteConversation",
+      "discardCaptureEvidence",
+      "endEpisodeSession",
+      "fenceSession",
+      "fetch",
+      "finishAdmission",
+      "forget",
+      "forgetEpisode",
+      "get",
+      "getCaptureControl",
+      "getConversation",
+      "getEpisode",
+      "getLocalCaptureControl",
+      "getRationale",
+      "getRawCaptureControl",
+      "getRawUsage",
+      "inspectAdmission",
+      "inspectCaptureEvidence",
+      "keepEpisode",
+      "linkMocs",
+      "list",
+      "listEpisodes",
+      "listMemoriesByTime",
+      "listRawConversations",
+      "listRawEffects",
+      "listReviewConflicts",
+      "listReviewTransitions",
+      "map",
+      "planCaptureBatches",
+      "previewDeleteConversation",
+      "rebuildIndex",
+      "recall",
+      "reject",
+      "releaseEpisodeCorrection",
+      "reviewDecisionBasis",
+      "reviewRationale",
+      "sessionStartContext",
+      "setCapturePaused",
+      "setLocalCaptureControl",
+      "setProceduralMemory",
+      "setProjectCapture",
+      "setRawCaptureControl",
+      "sourceSnapshot",
+      "supersede",
+      "transitionQualified",
+      "transitionQualifiedSet"
+    ],
+    "minimalContextCore": [
+      "abandonAdmission",
+      "admit",
+      "applyPlacement",
+      "bindQualifiedClaim",
+      "capture",
+      "claimAdmission",
+      "classifyPlacement",
+      "close",
+      "closeEpisodeNextStep",
+      "confirm",
+      "contextRead",
+      "correct",
+      "correctEpisode",
+      "discardCaptureEvidence",
+      "endEpisodeSession",
+      "fetch",
+      "fetchCandidateEvidence",
+      "findCandidates",
+      "finishAdmission",
+      "forget",
+      "forgetEpisode",
+      "get",
+      "getCaptureControl",
+      "getContextReadCapabilities",
+      "getEpisode",
+      "getRationale",
+      "inspectAdmission",
+      "inspectCaptureEvidence",
+      "keepEpisode",
+      "linkMocs",
+      "list",
+      "listEpisodes",
+      "listMemoriesByTime",
+      "listReviewConflicts",
+      "listReviewTransitions",
+      "map",
+      "planCaptureBatches",
+      "rebuildIndex",
+      "recall",
+      "refreshContextIndex",
+      "reject",
+      "releaseEpisodeCorrection",
+      "reviewDecisionBasis",
+      "reviewRationale",
+      "sessionStartContext",
+      "setCapturePaused",
+      "setProceduralMemory",
+      "setProjectCapture",
+      "sourceSnapshot",
+      "supersede",
+      "transitionQualified",
+      "transitionQualifiedSet"
+    ],
+    "minimalContextRawCore": [
+      "abandonAdmission",
+      "admit",
+      "applyPlacement",
+      "bindQualifiedClaim",
+      "capture",
+      "captureRaw",
+      "claimAdmission",
+      "classifyPlacement",
+      "close",
+      "closeEpisodeNextStep",
+      "confirm",
+      "contextRead",
+      "correct",
+      "correctEpisode",
+      "deleteConversation",
+      "discardCaptureEvidence",
+      "endEpisodeSession",
+      "fenceSession",
+      "fetch",
+      "fetchCandidateEvidence",
+      "findCandidates",
+      "finishAdmission",
+      "forget",
+      "forgetEpisode",
+      "get",
+      "getCaptureControl",
+      "getContextReadCapabilities",
+      "getConversation",
+      "getEpisode",
+      "getLocalCaptureControl",
+      "getRationale",
+      "getRawCaptureControl",
+      "getRawUsage",
+      "inspectAdmission",
+      "inspectCaptureEvidence",
+      "keepEpisode",
+      "linkMocs",
+      "list",
+      "listEpisodes",
+      "listMemoriesByTime",
+      "listRawConversations",
+      "listRawEffects",
+      "listReviewConflicts",
+      "listReviewTransitions",
+      "map",
+      "planCaptureBatches",
+      "previewDeleteConversation",
+      "rebuildIndex",
+      "recall",
+      "refreshContextIndex",
+      "reject",
+      "releaseEpisodeCorrection",
+      "reviewDecisionBasis",
+      "reviewRationale",
+      "sessionStartContext",
+      "setCapturePaused",
+      "setLocalCaptureControl",
+      "setProceduralMemory",
+      "setProjectCapture",
+      "setRawCaptureControl",
+      "sourceSnapshot",
+      "supersede",
+      "transitionQualified",
+      "transitionQualifiedSet"
+    ],
+    "core": [
+      "abandonAdmission",
+      "admit",
+      "adoptMethodVersion",
+      "applyCardPlacement",
+      "applyPlacement",
+      "bindQualifiedClaim",
+      "cancelCardDraft",
+      "capture",
+      "captureRaw",
+      "checkMethodReasonRefs",
+      "claimAdmission",
+      "classifyPlacement",
+      "close",
+      "closeEpisodeNextStep",
+      "compareMethodVersions",
+      "confirm",
+      "confirmCardDraft",
+      "correct",
+      "correctEpisode",
+      "createAssetDerivative",
+      "createCardDraft",
+      "declareCardCurrentDependencies",
+      "deleteAsset",
+      "deleteAssetDerivative",
+      "deleteAssetVersion",
+      "deleteConversation",
+      "deleteKnowledgeCard",
+      "deleteMethodPackage",
+      "deleteMethodVersion",
+      "deleteRoleProfileRelease",
+      "deleteSourceNote",
+      "disableMethodBinding",
+      "disableRoleProfile",
+      "discardCaptureEvidence",
+      "editCardDraft",
+      "editKnowledgeCard",
+      "endEpisodeSession",
+      "fenceSession",
+      "fetch",
+      "fetchEvidence",
+      "finishAdmission",
+      "forget",
+      "forgetEpisode",
+      "get",
+      "getAssetCapabilities",
+      "getAssetUsage",
+      "getAssetVersion",
+      "getCaptureControl",
+      "getCard",
+      "getConversation",
+      "getEpisode",
+      "getLocalCaptureControl",
+      "getMethodPackageCapabilities",
+      "getMethodPackageUsage",
+      "getMethodVersion",
+      "getPrivateCardCapabilities",
+      "getPrivateCardUsage",
+      "getRationale",
+      "getRawCaptureControl",
+      "getRawUsage",
+      "getSource",
+      "importAssetVersion",
+      "importMethodVersion",
+      "inspectAdmission",
+      "inspectCaptureEvidence",
+      "inspectCardOperation",
+      "keepEpisode",
+      "linkMocs",
+      "list",
+      "listAssetDerivatives",
+      "listAssetEffects",
+      "listAssetVersions",
+      "listAssets",
+      "listCardEffects",
+      "listCards",
+      "listEpisodes",
+      "listEvidenceMappings",
+      "listMemoriesByTime",
+      "listMethodBindingEvents",
+      "listMethodEffects",
+      "listMethodManifest",
+      "listMethodPackages",
+      "listMethodVersions",
+      "listRawConversations",
+      "listRawEffects",
+      "listReviewConflicts",
+      "listReviewTransitions",
+      "map",
+      "mapEvidence",
+      "planCaptureBatches",
+      "previewDeleteConversation",
+      "proposeEvidenceMapping",
+      "publishRoleProfileRelease",
+      "readAssetBytes",
+      "readAssetDerivative",
+      "readMethodAttachmentBytes",
+      "readMethodFile",
+      "readRoleTaskContext",
+      "rebuildIndex",
+      "recall",
+      "refreshCardTopic",
+      "reject",
+      "releaseEpisodeCorrection",
+      "resolveMethod",
+      "resolveMethodsForRole",
+      "resolveSourceReferences",
+      "revalidateCardCurrentDependencies",
+      "revalidateEvidence",
+      "reviewDecisionBasis",
+      "reviewEvidenceMapping",
+      "reviewRationale",
+      "selectEvidence",
+      "sessionStartContext",
+      "setCapturePaused",
+      "setLocalCaptureControl",
+      "setProceduralMemory",
+      "setProjectCapture",
+      "setRawCaptureControl",
+      "sourceSnapshot",
+      "submitSourceNote",
+      "supersede",
+      "transitionQualified",
+      "transitionQualifiedSet",
+      "verifyAssetBytes"
+    ],
+    "legacy": [
+      "close",
+      "scope"
+    ],
+    "supervisor": [
+      "ackCleanup",
+      "close",
+      "drain",
+      "getCleanupStatus"
+    ],
+    "pool": [
+      "close"
+    ],
+    "scope": [
+      "correct",
+      "forget",
+      "get",
+      "list",
+      "remember",
+      "search"
+    ],
+    "context": [
+      "close",
+      "contextRead",
+      "fetchCandidateEvidence",
+      "findCandidates",
+      "getContextReadCapabilities",
+      "refreshContextIndex"
+    ],
+    "topic": [
+      "close",
+      "readTopicMembers",
+      "readTopicOverview"
+    ],
+    "product": [
+      "close",
+      "contextRead",
+      "fetchCandidateEvidence",
+      "findCandidates",
+      "getContextIndexStatus",
+      "getContextReadCapabilities"
+    ],
+    "maintainer": [
+      "close",
+      "getContextIndexStatus",
+      "getContextReadCapabilities",
+      "refreshContextIndex"
+    ],
+    "cards": [
+      "applyCardPlacement",
+      "cancelCardDraft",
+      "confirmCardDraft",
+      "createCardDraft",
+      "declareCardCurrentDependencies",
+      "deleteKnowledgeCard",
+      "deleteSourceNote",
+      "editCardDraft",
+      "editKnowledgeCard",
+      "fetchEvidence",
+      "getCard",
+      "getPrivateCardCapabilities",
+      "getPrivateCardUsage",
+      "getSource",
+      "inspectCardOperation",
+      "listCardEffects",
+      "listCards",
+      "listEvidenceMappings",
+      "mapEvidence",
+      "proposeEvidenceMapping",
+      "refreshCardTopic",
+      "revalidateCardCurrentDependencies",
+      "revalidateEvidence",
+      "reviewEvidenceMapping",
+      "selectEvidence",
+      "submitSourceNote"
+    ],
+    "methods": [
+      "adoptMethodVersion",
+      "checkMethodReasonRefs",
+      "compareMethodVersions",
+      "deleteMethodPackage",
+      "deleteMethodVersion",
+      "disableMethodBinding",
+      "getMethodPackageCapabilities",
+      "getMethodPackageUsage",
+      "getMethodVersion",
+      "importMethodVersion",
+      "listMethodBindingEvents",
+      "listMethodEffects",
+      "listMethodManifest",
+      "listMethodPackages",
+      "listMethodVersions",
+      "readMethodAttachmentBytes",
+      "readMethodFile",
+      "resolveMethod",
+      "resolveMethodsForRole"
+    ],
+    "assets": [
+      "createAssetDerivative",
+      "deleteAsset",
+      "deleteAssetDerivative",
+      "deleteAssetVersion",
+      "getAssetCapabilities",
+      "getAssetUsage",
+      "getAssetVersion",
+      "importAssetVersion",
+      "listAssetDerivatives",
+      "listAssetEffects",
+      "listAssetVersions",
+      "listAssets",
+      "readAssetBytes",
+      "readAssetDerivative",
+      "verifyAssetBytes"
+    ],
+    "roles": [
+      "deleteRoleProfileRelease",
+      "disableRoleProfile",
+      "publishRoleProfileRelease",
+      "readRoleTaskContext"
+    ],
+    "runtime": [
+      "abandonAdmission",
+      "admit",
+      "applyInitialPlacement",
+      "applyPlacement",
+      "assertCaptureEvidence",
+      "assertCaptureSources",
+      "assertContentOutput",
+      "assertContentScope",
+      "assertEpisodeKeep",
+      "assertEpoch",
+      "beginInitialClassification",
+      "bindQualifiedClaim",
+      "claimAdmission",
+      "claimCaptureEvidence",
+      "claimCapturedAdmission",
+      "claimEpisodeDraft",
+      "claimEpisodeWriter",
+      "claimOrdered",
+      "classificationSnapshot",
+      "close",
+      "closeEpisodeNextStep",
+      "commitEpisodeDraft",
+      "commitRationale",
+      "contentPortGuard",
+      "correct",
+      "correctEpisode",
+      "deleteConversation",
+      "discardCaptureEvidence",
+      "discoverOrdered",
+      "episodeCaptureState",
+      "episodeDraftOutcome",
+      "episodeDraftSnapshot",
+      "episodeRange",
+      "episodeSessionKey",
+      "epoch",
+      "failEpisodeDraft",
+      "failEpisodeKeep",
+      "failInitialClassification",
+      "fetchPage",
+      "filterCaptureSources",
+      "finishAdmission",
+      "finishCapturedAdmission",
+      "finishOrdered",
+      "forget",
+      "forgetEpisode",
+      "getCaptureControl",
+      "getEpisode",
+      "getPage",
+      "getRationale",
+      "inspectAdmission",
+      "inspectCaptureEvidence",
+      "isAwaiting",
+      "legacyGet",
+      "legacyList",
+      "legacySearch",
+      "linkMocs",
+      "listPage",
+      "listRawEffects",
+      "listReviewConflicts",
+      "listReviewTransitions",
+      "mapRows",
+      "pendingEpisodeSession",
+      "prepareEpisodeKeep",
+      "previewDeleteConversation",
+      "queryCandidateRows",
+      "rationaleSnapshot",
+      "ready",
+      "rebuildIndex",
+      "recallSnapshot",
+      "recentReceipts",
+      "releaseEpisodeCorrection",
+      "releaseEpisodeWriter",
+      "reserveEpisodeBatch",
+      "resolveReview",
+      "sessionContextSnapshot",
+      "setCapturePaused",
+      "setEpisodePolicy",
+      "setProceduralMemory",
+      "setProjectCapture",
+      "settleEpisodeAttempt",
+      "sourceSnapshot",
+      "startEpisodeAttempt",
+      "supersede",
+      "suppressionFence",
+      "transitionQualified",
+      "transitionQualifiedSet",
+      "validateEpisodeBatch"
+    ]
+  },
+  "reads": {
+    "checkMethodReasonRefs": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "compareMethodVersions": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "contextRead": {
+      "gates": [
+        {
+          "gate": "path-cost",
+          "variants": [
+            "product lexical",
+            "product semantic fallback"
+          ]
+        },
+        {
+          "gate": "context-cost",
+          "variants": [
+            "embedded lexical",
+            "v18/v34",
+            "v23/v38",
+            "v33/v48",
+            "12/24 documents",
+            "zero/five facts",
+            "cursor/ref/snapshot where supported"
+          ]
+        },
+        {
+          "gate": "embedded-semantic-cost",
+          "variants": [
+            "embedded semantic enabled"
+          ]
+        },
+        {
+          "gate": "context-cost",
+          "variants": [
+            "same-namespace five unrelated facts",
+            "embedded lexical/semantic enabled",
+            "12/24 documents",
+            "real maintenance privacy refusal and no-hit"
+          ]
+        },
+        {
+          "gate": "embedded-local-guard-cost",
+          "variants": [
+            "embedded semantic on; local singleton; host invokes engine beforeDispatch; 2/4 documents; cursor and no-hit; zero/five facts"
+          ]
+        },
+        {
+          "gate": "option-cost",
+          "variants": [
+            "embedded sources:moc-v1, zero facts n12/n24"
+          ]
+        },
+        {
+          "gate": "fix5-relations-cost",
+          "variants": [
+            "embedded sources:relations-one-hop-v1, zero facts n12/n24, one and four actual expansions; all three layout pairs"
+          ]
+        }
+      ],
+      "missing": [],
+      "deferred": [
+        {
+          "category": "deferred",
+          "variant": "product enabled semantic",
+          "decisionReference": "e9, 2026-11-01 17:15",
+          "scopeItem": "S2h-3: product query suppressionEpoch projection and enabled semantic assembly cost gate"
+        }
+      ]
+    },
+    "fetch": {
+      "gates": [
+        {
+          "gate": "path-cost",
+          "variants": [
+            "core",
+            "zero/five facts",
+            "hit/absent",
+            "three layouts"
+          ]
+        },
+        {
+          "gate": "cursor-cost",
+          "variants": [
+            "v18/v34",
+            "v23/v38",
+            "v33/v48",
+            "cursor page",
+            "24/48 items",
+            "zero/five facts"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "fetchCandidateEvidence": {
+      "gates": [
+        {
+          "gate": "context-cost",
+          "variants": [
+            "embedded lexical",
+            "v18/v34",
+            "v23/v38",
+            "v33/v48",
+            "12/24 documents",
+            "zero/five facts",
+            "cursor/ref/snapshot where supported",
+            "product refs/snapshot"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "fetchEvidence": {
+      "gates": [
+        {
+          "gate": "card-cost",
+          "variants": [
+            "v23/v38",
+            "v33/v48",
+            "1/4 items",
+            "zero/five facts",
+            "hit/empty selection where supported"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "findCandidates": {
+      "gates": [
+        {
+          "gate": "query-cost",
+          "variants": [
+            "product lexical",
+            "product semantic fallback"
+          ]
+        },
+        {
+          "gate": "context-cost",
+          "variants": [
+            "embedded lexical",
+            "v18/v34",
+            "v23/v38",
+            "v33/v48",
+            "12/24 documents",
+            "zero/five facts",
+            "cursor/ref/snapshot where supported"
+          ]
+        },
+        {
+          "gate": "embedded-semantic-cost",
+          "variants": [
+            "embedded semantic enabled"
+          ]
+        },
+        {
+          "gate": "context-cost",
+          "variants": [
+            "same-namespace five unrelated facts",
+            "embedded lexical/semantic enabled",
+            "12/24 documents",
+            "real maintenance privacy refusal and no-hit"
+          ]
+        },
+        {
+          "gate": "embedded-local-guard-cost",
+          "variants": [
+            "embedded semantic on; local singleton; host invokes engine beforeDispatch; 2/4 documents; cursor and no-hit; zero/five facts"
+          ]
+        },
+        {
+          "gate": "option-cost",
+          "variants": [
+            "embedded sources:moc-v1, zero facts n12/n24"
+          ]
+        },
+        {
+          "gate": "fix5-relations-cost",
+          "variants": [
+            "embedded sources:relations-one-hop-v1, zero facts n12/n24, one and four actual expansions; all three layout pairs"
+          ]
+        }
+      ],
+      "missing": [],
+      "deferred": [
+        {
+          "category": "deferred",
+          "variant": "product enabled semantic",
+          "decisionReference": "e9, 2026-11-01 17:15",
+          "scopeItem": "S2h-3: product query suppressionEpoch projection and enabled semantic candidate cost gate"
+        }
+      ]
+    },
+    "get": {
+      "gates": [
+        {
+          "gate": "path-cost",
+          "variants": [
+            "core",
+            "zero/five facts",
+            "hit/absent",
+            "three layouts"
+          ]
+        },
+        {
+          "gate": "path-cost",
+          "variants": [
+            "legacy scope",
+            "zero/five facts",
+            "hit/absent",
+            "three layouts"
+          ]
+        },
+        {
+          "gate": "cursor-cost",
+          "variants": [
+            "v18/v34",
+            "v23/v38",
+            "v33/v48",
+            "cursor page",
+            "24/48 items",
+            "zero/five facts"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "getAssetUsage": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "getAssetVersion": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "getCaptureControl": {
+      "gates": [],
+      "missing": [],
+      "exemption": "Configuration only: episode-storage getControl returns generation, paused and enabled; no retained content or population is served."
+    },
+    "getCard": {
+      "gates": [
+        {
+          "gate": "path-cost",
+          "variants": [
+            "core",
+            "two layouts"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "getContextIndexStatus": {
+      "gates": [
+        {
+          "gate": "path-cost",
+          "variants": [
+            "product lexical",
+            "product semantic fallback"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "getConversation": {
+      "gates": [
+        {
+          "gate": "port-cost",
+          "variants": [
+            "Raw",
+            "one/four parts"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "getEpisode": {
+      "gates": [
+        {
+          "gate": "metadata-cost",
+          "variants": [
+            "three layouts",
+            "1/12 items",
+            "zero/five facts",
+            "hit/empty where supported",
+            "temporal cursor"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "getLocalCaptureControl": {
+      "gates": [],
+      "missing": [],
+      "exemption": "Configuration only: local-authority-storage value returns consent/configuration bindings and revisions; no retained content or population is served."
+    },
+    "getMethodPackageUsage": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "getMethodVersion": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "getPrivateCardUsage": {
+      "gates": [
+        {
+          "gate": "card-cost",
+          "variants": [
+            "v23/v38",
+            "v33/v48",
+            "1/4 items",
+            "zero/five facts",
+            "hit/empty selection where supported"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "getRationale": {
+      "gates": [
+        {
+          "gate": "metadata-cost",
+          "variants": [
+            "three layouts",
+            "1/12 items",
+            "zero/five facts",
+            "hit/empty where supported",
+            "temporal cursor"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "getRawCaptureControl": {
+      "gates": [],
+      "missing": [],
+      "exemption": "Configuration only: raw-journal getRawCaptureControl returns client, enabled and revision; no retained content or population is served."
+    },
+    "getRawUsage": {
+      "gates": [
+        {
+          "gate": "raw-metadata-cost",
+          "variants": [
+            "v33/v48",
+            "1/12 conversations",
+            "zero/five facts",
+            "hit/empty pages",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "getSource": {
+      "gates": [
+        {
+          "gate": "port-cost",
+          "variants": [
+            "Raw",
+            "one/four parts"
+          ]
+        },
+        {
+          "gate": "card-cost",
+          "variants": [
+            "v23/v38",
+            "v33/v48",
+            "1/4 items",
+            "zero/five facts",
+            "receipt/note/cursor"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "inspectAdmission": {
+      "gates": [
+        {
+          "gate": "metadata-cost",
+          "variants": [
+            "three layouts",
+            "1/12 items",
+            "zero/five facts",
+            "hit/empty where supported",
+            "temporal cursor"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "inspectCaptureEvidence": {
+      "gates": [
+        {
+          "gate": "metadata-cost",
+          "variants": [
+            "three layouts",
+            "1/12 items",
+            "zero/five facts",
+            "hit/empty where supported",
+            "temporal cursor"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "inspectCardOperation": {
+      "gates": [
+        {
+          "gate": "card-cost",
+          "variants": [
+            "v23/v38",
+            "v33/v48",
+            "1/4 items",
+            "zero/five facts",
+            "hit/empty selection where supported"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "isSuppressed": {
+      "gates": [],
+      "exemption": "Pull reconciliation protocol has no legacy retained-read comparator; existing bounded row/statement tests remain mandatory.",
+      "missing": []
+    },
+    "list": {
+      "gates": [
+        {
+          "gate": "path-cost",
+          "variants": [
+            "core",
+            "zero/five facts",
+            "hit/absent",
+            "three layouts"
+          ]
+        },
+        {
+          "gate": "path-cost",
+          "variants": [
+            "legacy scope",
+            "zero/five facts",
+            "hit/absent",
+            "three layouts"
+          ]
+        },
+        {
+          "gate": "cursor-cost",
+          "variants": [
+            "v18/v34",
+            "v23/v38",
+            "v33/v48",
+            "cursor page",
+            "24/48 items",
+            "zero/five facts"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listAssetDerivatives": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listAssetEffects": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listAssetVersions": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listAssets": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listCardEffects": {
+      "gates": [
+        {
+          "gate": "card-cost",
+          "variants": [
+            "v23/v38",
+            "v33/v48",
+            "1/4 items",
+            "zero/five facts",
+            "hit/empty selection where supported"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listCards": {
+      "gates": [
+        {
+          "gate": "path-cost",
+          "variants": [
+            "core",
+            "two layouts"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listEpisodes": {
+      "gates": [
+        {
+          "gate": "metadata-cost",
+          "variants": [
+            "three layouts",
+            "1/12 items",
+            "zero/five facts",
+            "hit/empty where supported",
+            "temporal cursor"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listEvidenceMappings": {
+      "gates": [
+        {
+          "gate": "card-cost",
+          "variants": [
+            "v23/v38",
+            "v33/v48",
+            "1/4 items",
+            "zero/five facts",
+            "hit/empty selection where supported"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listMemoriesByTime": {
+      "gates": [
+        {
+          "gate": "metadata-cost",
+          "variants": [
+            "three layouts",
+            "1/12 items",
+            "zero/five facts",
+            "hit/empty where supported",
+            "temporal cursor"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listMethodBindingEvents": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listMethodEffects": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listMethodManifest": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listMethodPackages": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listMethodVersions": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listRawConversations": {
+      "gates": [
+        {
+          "gate": "raw-metadata-cost",
+          "variants": [
+            "v33/v48",
+            "1/12 conversations",
+            "zero/five facts",
+            "hit/empty pages",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listRawEffects": {
+      "gates": [
+        {
+          "gate": "raw-metadata-cost",
+          "variants": [
+            "v33/v48",
+            "1/12 conversations",
+            "zero/five facts",
+            "hit/empty pages",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listReviewConflicts": {
+      "gates": [
+        {
+          "gate": "metadata-cost",
+          "variants": [
+            "three layouts",
+            "1/12 items",
+            "zero/five facts",
+            "hit/empty where supported",
+            "temporal cursor"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listReviewTransitions": {
+      "gates": [
+        {
+          "gate": "metadata-cost",
+          "variants": [
+            "three layouts",
+            "1/12 items",
+            "zero/five facts",
+            "hit/empty where supported",
+            "temporal cursor"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "listSuppressionsSince": {
+      "gates": [],
+      "exemption": "Pull reconciliation protocol has no legacy retained-read comparator; existing paging/statement tests remain mandatory.",
+      "missing": []
+    },
+    "map": {
+      "gates": [
+        {
+          "gate": "path-cost",
+          "variants": [
+            "core",
+            "zero/five facts",
+            "hit/absent",
+            "three layouts"
+          ]
+        },
+        {
+          "gate": "cursor-cost",
+          "variants": [
+            "v18/v34",
+            "v23/v38",
+            "v33/v48",
+            "cursor page",
+            "24/48 items",
+            "zero/five facts"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "mapEvidence": {
+      "gates": [
+        {
+          "gate": "card-cost",
+          "variants": [
+            "v23/v38",
+            "v33/v48",
+            "1/4 items",
+            "zero/five facts",
+            "hit/empty selection where supported"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "previewDeleteConversation": {
+      "gates": [
+        {
+          "gate": "raw-metadata-cost",
+          "variants": [
+            "v33/v48",
+            "1/12 conversations",
+            "zero/five facts",
+            "hit/empty pages",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "readAssetBytes": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "readAssetDerivative": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "readMethodAttachmentBytes": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "readMethodFile": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "readRoleTaskContext": {
+      "gates": [
+        {
+          "gate": "role-cost",
+          "variants": [
+            "then",
+            "0/1/12 items",
+            "v33/v48"
+          ]
+        },
+        {
+          "gate": "role-cost",
+          "variants": [
+            "v34/v38: existing unsupported Role configuration at 0/1/12 evidence items (database.mjs:399\u2013400); no retained-read comparator"
+          ]
+        },
+        {
+          "gate": "role-cost",
+          "variants": [
+            "now/refresh/compare/file-text/file-text-range/file-binary",
+            "empty namespace",
+            "0/12/24 evidence items",
+            "v33/v48"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "readTopicMembers": {
+      "gates": [
+        {
+          "gate": "path-cost",
+          "variants": [
+            "storage traversal only"
+          ]
+        },
+        {
+          "gate": "topic-public-cost",
+          "variants": [
+            "three layouts",
+            "legacy/optin/member sessions",
+            "all cursor pages",
+            "12/24 items",
+            "zero/five facts",
+            "hit/absent"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "readTopicOverview": {
+      "gates": [
+        {
+          "gate": "path-cost",
+          "variants": [
+            "storage traversal only"
+          ]
+        },
+        {
+          "gate": "topic-public-cost",
+          "variants": [
+            "three layouts",
+            "legacy/optin/member sessions",
+            "all cursor pages",
+            "12/24 items",
+            "zero/five facts",
+            "hit/absent"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "recall": {
+      "gates": [
+        {
+          "gate": "path-cost",
+          "variants": [
+            "core",
+            "zero/five facts",
+            "hit/absent",
+            "three layouts"
+          ]
+        },
+        {
+          "gate": "option-cost",
+          "variants": [
+            "source-evidence zero facts n12/n24",
+            "rationale-evidence zero facts n12/n24"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "refreshContextIndex": {
+      "gates": [
+        {
+          "gate": "context-cost",
+          "variants": [
+            "embedded lexical",
+            "v18/v34",
+            "v23/v38",
+            "v33/v48",
+            "12/24 documents",
+            "zero/five facts",
+            "cursor/ref/snapshot where supported",
+            "product lexical cold/repeat"
+          ]
+        },
+        {
+          "gate": "embedded-semantic-cost",
+          "variants": [
+            "embedded semantic enabled"
+          ]
+        },
+        {
+          "gate": "context-cost",
+          "variants": [
+            "same-namespace five unrelated facts",
+            "embedded lexical/semantic enabled",
+            "12/24 documents",
+            "real maintenance privacy refusal and no-hit"
+          ]
+        },
+        {
+          "gate": "embedded-local-guard-cost",
+          "variants": [
+            "embedded semantic on; local singleton; host invokes engine beforeDispatch; 2/4 documents; cursor and no-hit; zero/five facts"
+          ]
+        }
+      ],
+      "missing": [],
+      "deferred": [
+        {
+          "category": "deferred",
+          "variant": "product enabled semantic",
+          "decisionReference": "e9, 2026-11-01 17:15",
+          "scopeItem": "S2h-3: hosted semantic worker E1/inert returns and enabled product refresh cost gate"
+        }
+      ]
+    },
+    "resolveMethod": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "resolveMethodsForRole": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "resolveSourceReferences": {
+      "gates": [
+        {
+          "gate": "port-cost",
+          "variants": [
+            "Raw",
+            "one/four parts"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "revalidateEvidence": {
+      "gates": [
+        {
+          "gate": "card-cost",
+          "variants": [
+            "v23/v38",
+            "v33/v48",
+            "1/4 items",
+            "zero/five facts",
+            "hit/empty selection where supported"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "reviewDecisionBasis": {
+      "gates": [
+        {
+          "gate": "metadata-cost",
+          "variants": [
+            "three layouts",
+            "1/12 items",
+            "zero/five facts",
+            "hit/empty where supported",
+            "temporal cursor"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "search": {
+      "gates": [
+        {
+          "gate": "path-cost",
+          "variants": [
+            "legacy scope",
+            "zero/five facts",
+            "hit/absent",
+            "three layouts"
+          ]
+        },
+        {
+          "gate": "cursor-cost",
+          "variants": [
+            "v18/v34",
+            "v23/v38",
+            "v33/v48",
+            "legacy scoped search",
+            "24/48 items",
+            "zero/five facts"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "selectEvidence": {
+      "gates": [
+        {
+          "gate": "card-cost",
+          "variants": [
+            "v23/v38",
+            "v33/v48",
+            "1/4 items",
+            "zero/five facts",
+            "hit/empty selection where supported"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "sessionStartContext": {
+      "gates": [
+        {
+          "gate": "path-cost",
+          "variants": [
+            "core",
+            "zero/five facts",
+            "hit/absent",
+            "three layouts"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "sourceSnapshot": {
+      "gates": [
+        {
+          "gate": "path-cost",
+          "variants": [
+            "core",
+            "zero/five facts",
+            "hit/absent",
+            "three layouts"
+          ]
+        }
+      ],
+      "missing": []
+    },
+    "verifyAssetBytes": {
+      "gates": [
+        {
+          "gate": "catalog-cost",
+          "variants": [
+            "v33/v48",
+            "hit/absent",
+            "cursor where available"
+          ]
+        }
+      ],
+      "missing": []
+    }
+  },
+  "caseSets": {
+    "catalog": [
+      "getMethodVersion:hit",
+      "listMethodManifest:hit",
+      "listMethodManifest:cursor",
+      "readMethodFile:hit",
+      "readMethodFile:cursor",
+      "readMethodAttachmentBytes:hit",
+      "readMethodAttachmentBytes:cursor",
+      "listMethodPackages:hit",
+      "listMethodPackages:cursor",
+      "listMethodVersions:hit",
+      "listMethodVersions:cursor",
+      "compareMethodVersions:hit",
+      "listMethodEffects:hit",
+      "getMethodPackageUsage:hit",
+      "resolveMethod:hit",
+      "resolveMethodsForRole:hit",
+      "resolveMethodsForRole:cursor",
+      "listMethodBindingEvents:hit",
+      "listMethodBindingEvents:cursor",
+      "checkMethodReasonRefs:hit",
+      "listAssets:hit",
+      "listAssets:cursor",
+      "listAssetVersions:hit",
+      "listAssetVersions:cursor",
+      "getAssetVersion:hit",
+      "readAssetBytes:hit",
+      "readAssetBytes:cursor",
+      "verifyAssetBytes:hit",
+      "getAssetUsage:hit",
+      "listAssetEffects:hit",
+      "listAssetDerivatives:hit",
+      "listAssetDerivatives:cursor",
+      "readAssetDerivative:hit",
+      "readAssetDerivative:cursor",
+      "getMethodVersion:missing-ref",
+      "listMethodManifest:missing-ref",
+      "readMethodFile:missing-ref",
+      "readMethodAttachmentBytes:missing-ref",
+      "listMethodPackages:no-hit",
+      "listMethodVersions:missing-ref",
+      "compareMethodVersions:missing-ref",
+      "listMethodEffects:no-hit",
+      "getMethodPackageUsage:no-hit",
+      "resolveMethod:missing-ref",
+      "resolveMethodsForRole:no-hit",
+      "listMethodBindingEvents:no-hit",
+      "checkMethodReasonRefs:no-hit",
+      "listAssets:no-hit",
+      "listAssetVersions:missing-ref",
+      "getAssetVersion:missing-ref",
+      "readAssetBytes:missing-ref",
+      "verifyAssetBytes:missing-ref",
+      "getAssetUsage:no-hit",
+      "listAssetEffects:no-hit",
+      "listAssetDerivatives:missing-ref",
+      "readAssetDerivative:missing-ref"
+    ],
+    "cursor": [
+      "get:cursor",
+      "list:cursor",
+      "map:cursor",
+      "fetch:cursor",
+      "get:legacy-scope",
+      "list:legacy-scope",
+      "search:legacy-scope"
+    ],
+    "card-1": [
+      "getPrivateCardUsage:hit",
+      "inspectCardOperation:hit",
+      "listCardEffects:hit",
+      "mapEvidence:card",
+      "mapEvidence:memory",
+      "fetchEvidence:hit",
+      "selectEvidence:hit",
+      "selectEvidence:absent",
+      "revalidateEvidence:hit",
+      "listEvidenceMappings:hit",
+      "listEvidenceMappings:empty-mappings",
+      "getSource:receipt",
+      "getSource:submitted-note",
+      "getSource:submitted-note-cursor"
+    ],
+    "card-4": [
+      "getPrivateCardUsage:hit",
+      "inspectCardOperation:hit",
+      "listCardEffects:hit",
+      "mapEvidence:card",
+      "mapEvidence:memory",
+      "fetchEvidence:hit",
+      "selectEvidence:hit",
+      "selectEvidence:absent",
+      "revalidateEvidence:hit",
+      "listEvidenceMappings:hit",
+      "listEvidenceMappings:cursor",
+      "listEvidenceMappings:empty-mappings",
+      "getSource:receipt",
+      "getSource:submitted-note",
+      "getSource:submitted-note-cursor"
+    ],
+    "raw-metadata-1": [
+      "getRawUsage:hit",
+      "getRawUsage:absent",
+      "listRawConversations:hit",
+      "listRawConversations:absent",
+      "previewDeleteConversation:hit",
+      "listRawEffects:empty-effects"
+    ],
+    "raw-metadata-12": [
+      "getRawUsage:hit",
+      "getRawUsage:absent",
+      "listRawConversations:hit",
+      "listRawConversations:absent",
+      "previewDeleteConversation:hit",
+      "listRawEffects:empty-effects",
+      "listRawConversations:cursor"
+    ],
+    "metadata-1": [
+      "getEpisode:hit",
+      "listEpisodes:hit",
+      "listMemoriesByTime:hit",
+      "listEpisodes:absent",
+      "listMemoriesByTime:absent",
+      "inspectAdmission:hit",
+      "inspectAdmission:absent",
+      "inspectCaptureEvidence:hit",
+      "inspectCaptureEvidence:absent",
+      "getRationale:hit",
+      "listReviewConflicts:empty",
+      "listReviewTransitions:empty",
+      "reviewDecisionBasis:empty-proposal",
+      "epoch:runtime"
+    ],
+    "metadata-12": [
+      "getEpisode:hit",
+      "listEpisodes:hit",
+      "listEpisodes:cursor",
+      "listMemoriesByTime:hit",
+      "listMemoriesByTime:cursor",
+      "listEpisodes:absent",
+      "listMemoriesByTime:absent",
+      "inspectAdmission:hit",
+      "inspectAdmission:absent",
+      "inspectCaptureEvidence:hit",
+      "inspectCaptureEvidence:absent",
+      "getRationale:hit",
+      "listReviewConflicts:empty",
+      "listReviewTransitions:empty",
+      "reviewDecisionBasis:empty-proposal",
+      "epoch:runtime"
+    ],
+    "embedded-lexical": [
+      "refreshContextIndex:lexical",
+      "findCandidates:lexical",
+      "findCandidates:cursor",
+      "findCandidates:absent",
+      "contextRead:lexical",
+      "contextRead:absent",
+      "fetchCandidateEvidence:refs",
+      "fetchCandidateEvidence:snapshot"
+    ],
+    "product-evidence": [
+      "fetchCandidateEvidence:current-first",
+      "fetchCandidateEvidence:current-repeat",
+      "fetchCandidateEvidence:current-snapshot",
+      "fetchCandidateEvidence:history-first",
+      "fetchCandidateEvidence:history-repeat",
+      "fetchCandidateEvidence:history-snapshot"
+    ],
+    "product-maintenance": [
+      "refreshContextIndex:current-first",
+      "refreshContextIndex:current-repeat",
+      "refreshContextIndex:history-first",
+      "refreshContextIndex:history-repeat"
+    ],
+    "topic-public-hit": [
+      "readTopicOverview:legacy",
+      "readTopicOverview:legacy-cursor",
+      "readTopicOverview:optin",
+      "readTopicOverview:optin-cursor",
+      "readTopicMembers:members",
+      "readTopicMembers:members-cursor"
+    ],
+    "topic-public-absent": [
+      "readTopicOverview:legacy",
+      "readTopicOverview:optin",
+      "readTopicMembers:members"
+    ],
+    "role-0": [
+      "readRoleTaskContext:then-0"
+    ],
+    "role-1": [
+      "readRoleTaskContext:then-1"
+    ],
+    "role-12": [
+      "readRoleTaskContext:then-12"
+    ],
+    "embedded-semantic": [
+      "refreshContextIndex:cold",
+      "refreshContextIndex:repeat",
+      "findCandidates:hit",
+      "findCandidates:cursor",
+      "contextRead:hit",
+      "findCandidates:absent",
+      "contextRead:absent"
+    ],
+    "role-modes": [
+      "readRoleTaskContext:now",
+      "readRoleTaskContext:refresh",
+      "readRoleTaskContext:compare",
+      "readRoleTaskContext:file-text",
+      "readRoleTaskContext:file-text-range",
+      "readRoleTaskContext:file-binary",
+      "readRoleTaskContext:absent"
+    ],
+    "embedded-same-scope": [
+      "refreshContextIndex:refresh",
+      "findCandidates:hit",
+      "contextRead:hit",
+      "findCandidates:lexical-absent",
+      "contextRead:lexical-absent"
+    ],
+    "raw-ports": [
+      "getConversation:1/33/0",
+      "getConversation:1/48/0",
+      "getConversation:1/48/5",
+      "getConversation:4/33/0",
+      "getConversation:4/48/0",
+      "getConversation:4/48/5",
+      "resolveSourceReferences:1/33/0",
+      "resolveSourceReferences:1/48/0",
+      "resolveSourceReferences:1/48/5",
+      "resolveSourceReferences:4/33/0",
+      "resolveSourceReferences:4/48/0",
+      "resolveSourceReferences:4/48/5",
+      "getSource:1/33/0",
+      "getSource:1/48/0",
+      "getSource:1/48/5",
+      "getSource:4/33/0",
+      "getSource:4/48/0",
+      "getSource:4/48/5"
+    ],
+    "runtime-reads": [
+      "recentReceipts:runtime",
+      "recentReceipts:empty-count",
+      "recentReceipts:missing-ref"
+    ],
+    "embedded-moc": [
+      "findCandidates:moc-v1",
+      "contextRead:moc-v1"
+    ],
+    "recall-source-evidence": [
+      "recall:source-evidence"
+    ],
+    "recall-rationale-evidence": [
+      "recall:rationale-evidence"
+    ]
+  },
+  "surfaceClassifications": {
+    "CARD_CURRENT_METHODS": {
+      "kind": "exempt",
+      "reason": "Static capability/version constant or error constructor; no retained content or population."
+    },
+    "CARD_CURRENT_VERSION": {
+      "kind": "exempt",
+      "reason": "Static capability/version constant or error constructor; no retained content or population."
+    },
+    "CONTEXT_SOURCES": {
+      "kind": "exempt",
+      "reason": "Static capability/version constant or error constructor; no retained content or population."
+    },
+    "MemoryStoreError": {
+      "kind": "exempt",
+      "reason": "Static capability/version constant or error constructor; no retained content or population."
+    },
+    "SOURCE_LIMITS": {
+      "kind": "exempt",
+      "reason": "Static capability/version constant or error constructor; no retained content or population."
+    },
+    "abandonAdmission": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "ackCleanup": {
+      "kind": "exempt",
+      "reason": "Existing S2c cleanup bookkeeping protocol; no retained Memory/Card/Raw content or legacy retained-read comparator. Its accounting tests remain unchanged."
+    },
+    "admit": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "adoptMethodVersion": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "applyCardPlacement": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "applyInitialPlacement": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "applyPlacement": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "assertCaptureEvidence": {
+      "kind": "capture-protocol",
+      "reason": "Internal capture/episode validation or classification snapshot, used by the enclosing write protocol. No separate retained-read comparator; keep the focused capture, Episode, and content-safety denial tests. Standards review r2 lines 103\u2013107 explicitly identifies this group."
+    },
+    "assertCaptureSources": {
+      "kind": "capture-protocol",
+      "reason": "Internal capture/episode validation or classification snapshot, used by the enclosing write protocol. No separate retained-read comparator; keep the focused capture, Episode, and content-safety denial tests. Standards review r2 lines 103\u2013107 explicitly identifies this group."
+    },
+    "assertContentOutput": {
+      "kind": "parent-gate",
+      "parents": [
+        "get"
+      ],
+      "reason": "Runtime forwarding or validation executed by the named retained-read gate; reviewed against the direct runtime call sites in core/contract.mjs and core/runtime.mjs."
+    },
+    "assertContentScope": {
+      "kind": "parent-gate",
+      "parents": [
+        "get"
+      ],
+      "reason": "Runtime forwarding or validation executed by the named retained-read gate; reviewed against the direct runtime call sites in core/contract.mjs and core/runtime.mjs."
+    },
+    "assertEpisodeKeep": {
+      "kind": "capture-protocol",
+      "reason": "Internal capture/episode validation or classification snapshot, used by the enclosing write protocol. No separate retained-read comparator; keep the focused capture, Episode, and content-safety denial tests. Standards review r2 lines 103\u2013107 explicitly identifies this group."
+    },
+    "assertEpoch": {
+      "kind": "parent-gate",
+      "parents": [
+        "get",
+        "recall"
+      ],
+      "reason": "Runtime forwarding or validation executed by the named retained-read gate; reviewed against the direct runtime call sites in core/contract.mjs and core/runtime.mjs."
+    },
+    "beginInitialClassification": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "bindQualifiedClaim": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "cancelCardDraft": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "capture": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "captureRaw": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "checkMethodReasonRefs": {
+      "kind": "read",
+      "entry": "checkMethodReasonRefs"
+    },
+    "claimAdmission": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "claimCaptureEvidence": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "claimCapturedAdmission": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "claimEpisodeDraft": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "claimEpisodeWriter": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "claimOrdered": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "classificationSnapshot": {
+      "kind": "capture-protocol",
+      "reason": "Internal capture/episode validation or classification snapshot, used by the enclosing write protocol. No separate retained-read comparator; keep the focused capture, Episode, and content-safety denial tests. Standards review r2 lines 103\u2013107 explicitly identifies this group."
+    },
+    "classifyPlacement": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "close": {
+      "kind": "exempt",
+      "reason": "Lifecycle/readiness handle or namespace-scope factory; serves no retained content."
+    },
+    "closeEpisodeNextStep": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "commitEpisodeDraft": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "commitRationale": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "compareMethodVersions": {
+      "kind": "read",
+      "entry": "compareMethodVersions"
+    },
+    "confirm": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "confirmCardDraft": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "contentPortGuard": {
+      "kind": "parent-gate",
+      "parents": [
+        "map",
+        "fetch"
+      ],
+      "reason": "Runtime forwarding or validation executed by the named retained-read gate; reviewed against the direct runtime call sites in core/contract.mjs and core/runtime.mjs."
+    },
+    "contextRead": {
+      "kind": "read",
+      "entry": "contextRead"
+    },
+    "correct": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "correctEpisode": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "createAssetDerivative": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "createCardDraft": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "createContextReadSupervisor": {
+      "kind": "exempt",
+      "reason": "Lifecycle constructor, lease renewal, or draining handle; no retained-content delivery."
+    },
+    "createContextReaderPool": {
+      "kind": "exempt",
+      "reason": "Lifecycle constructor, lease renewal, or draining handle; no retained-content delivery."
+    },
+    "declareCardCurrentDependencies": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "deleteAsset": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "deleteAssetDerivative": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "deleteAssetVersion": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "deleteConversation": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "deleteKnowledgeCard": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "deleteMethodPackage": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "deleteMethodVersion": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "deleteRoleProfileRelease": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "deleteSourceNote": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "disableMethodBinding": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "disableRoleProfile": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "discardCaptureEvidence": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "discoverOrdered": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "drain": {
+      "kind": "exempt",
+      "reason": "Lifecycle constructor, lease renewal, or draining handle; no retained-content delivery."
+    },
+    "editCardDraft": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "editKnowledgeCard": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "endEpisodeSession": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "episodeCaptureState": {
+      "kind": "capture-protocol",
+      "reason": "Internal capture/episode validation or classification snapshot, used by the enclosing write protocol. No separate retained-read comparator; keep the focused capture, Episode, and content-safety denial tests. Standards review r2 lines 103\u2013107 explicitly identifies this group."
+    },
+    "episodeDraftOutcome": {
+      "kind": "capture-protocol",
+      "reason": "Internal capture/episode validation or classification snapshot, used by the enclosing write protocol. No separate retained-read comparator; keep the focused capture, Episode, and content-safety denial tests. Standards review r2 lines 103\u2013107 explicitly identifies this group."
+    },
+    "episodeDraftSnapshot": {
+      "kind": "capture-protocol",
+      "reason": "Internal capture/episode validation or classification snapshot, used by the enclosing write protocol. No separate retained-read comparator; keep the focused capture, Episode, and content-safety denial tests. Standards review r2 lines 103\u2013107 explicitly identifies this group."
+    },
+    "episodeRange": {
+      "kind": "parent-gate",
+      "parents": [
+        "listEpisodes",
+        "listMemoriesByTime"
+      ],
+      "reason": "Runtime forwarding or validation executed by the named retained-read gate; reviewed against the direct runtime call sites in core/contract.mjs and core/runtime.mjs."
+    },
+    "episodeSessionKey": {
+      "kind": "capture-protocol",
+      "reason": "Internal capture/episode validation or classification snapshot, used by the enclosing write protocol. No separate retained-read comparator; keep the focused capture, Episode, and content-safety denial tests. Standards review r2 lines 103\u2013107 explicitly identifies this group."
+    },
+    "epoch": {
+      "kind": "direct-runtime-gate",
+      "gate": "metadata-cost",
+      "reason": "Direct public runtime epoch(ns) executes its own method in the metadata gate; no parent forwarding claim."
+    },
+    "failEpisodeDraft": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "failEpisodeKeep": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "failInitialClassification": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "fenceSession": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "fetch": {
+      "kind": "read",
+      "entry": "fetch"
+    },
+    "fetchCandidateEvidence": {
+      "kind": "read",
+      "entry": "fetchCandidateEvidence"
+    },
+    "fetchEvidence": {
+      "kind": "read",
+      "entry": "fetchEvidence"
+    },
+    "fetchPage": {
+      "kind": "parent-gate",
+      "parents": [
+        "fetch"
+      ],
+      "reason": "Runtime forwarding or validation executed by the named retained-read gate; reviewed against the direct runtime call sites in core/contract.mjs and core/runtime.mjs."
+    },
+    "filterCaptureSources": {
+      "kind": "capture-protocol",
+      "reason": "Internal capture/episode validation or classification snapshot, used by the enclosing write protocol. No separate retained-read comparator; keep the focused capture, Episode, and content-safety denial tests. Standards review r2 lines 103\u2013107 explicitly identifies this group."
+    },
+    "findCandidates": {
+      "kind": "read",
+      "entry": "findCandidates"
+    },
+    "finishAdmission": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "finishCapturedAdmission": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "finishOrdered": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "forget": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "forgetEpisode": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "get": {
+      "kind": "read",
+      "entry": "get"
+    },
+    "getAssetCapabilities": {
+      "kind": "exempt",
+      "reason": "Static capability/configuration descriptor; serves no retained content or population."
+    },
+    "getAssetUsage": {
+      "kind": "read",
+      "entry": "getAssetUsage"
+    },
+    "getAssetVersion": {
+      "kind": "read",
+      "entry": "getAssetVersion"
+    },
+    "getCaptureControl": {
+      "kind": "read",
+      "entry": "getCaptureControl"
+    },
+    "getCard": {
+      "kind": "read",
+      "entry": "getCard"
+    },
+    "getCleanupStatus": {
+      "kind": "exempt",
+      "reason": "Existing S2c cleanup bookkeeping protocol; no retained Memory/Card/Raw content or legacy retained-read comparator. Its accounting tests remain unchanged."
+    },
+    "getContextIndexStatus": {
+      "kind": "read",
+      "entry": "getContextIndexStatus"
+    },
+    "getContextReadCapabilities": {
+      "kind": "exempt",
+      "reason": "Static capability/configuration descriptor; serves no retained content or population."
+    },
+    "getConversation": {
+      "kind": "read",
+      "entry": "getConversation"
+    },
+    "getEpisode": {
+      "kind": "read",
+      "entry": "getEpisode"
+    },
+    "getLocalCaptureControl": {
+      "kind": "read",
+      "entry": "getLocalCaptureControl"
+    },
+    "getMethodPackageCapabilities": {
+      "kind": "exempt",
+      "reason": "Static capability/configuration descriptor; serves no retained content or population."
+    },
+    "getMethodPackageUsage": {
+      "kind": "read",
+      "entry": "getMethodPackageUsage"
+    },
+    "getMethodVersion": {
+      "kind": "read",
+      "entry": "getMethodVersion"
+    },
+    "getOwnerSemanticStatus": {
+      "kind": "exempt",
+      "reason": "Semantic consent, accounting, coverage control, or pump quota status; serves no retained Memory/Card/Raw text."
+    },
+    "getPage": {
+      "kind": "parent-gate",
+      "parents": [
+        "get"
+      ],
+      "reason": "Runtime forwarding or validation executed by the named retained-read gate; reviewed against the direct runtime call sites in core/contract.mjs and core/runtime.mjs."
+    },
+    "getPrivateCardCapabilities": {
+      "kind": "exempt",
+      "reason": "Static capability/configuration descriptor; serves no retained content or population."
+    },
+    "getPrivateCardUsage": {
+      "kind": "read",
+      "entry": "getPrivateCardUsage"
+    },
+    "getRationale": {
+      "kind": "read",
+      "entry": "getRationale"
+    },
+    "getRawCaptureControl": {
+      "kind": "read",
+      "entry": "getRawCaptureControl"
+    },
+    "getRawUsage": {
+      "kind": "read",
+      "entry": "getRawUsage"
+    },
+    "getSource": {
+      "kind": "read",
+      "entry": "getSource"
+    },
+    "getStatus": {
+      "kind": "exempt",
+      "reason": "Semantic consent, accounting, coverage control, or pump quota status; serves no retained Memory/Card/Raw text."
+    },
+    "importAssetVersion": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "importMethodVersion": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "inspectAdmission": {
+      "kind": "read",
+      "entry": "inspectAdmission"
+    },
+    "inspectCaptureEvidence": {
+      "kind": "read",
+      "entry": "inspectCaptureEvidence"
+    },
+    "inspectCardOperation": {
+      "kind": "read",
+      "entry": "inspectCardOperation"
+    },
+    "isAwaiting": {
+      "kind": "capture-protocol",
+      "reason": "Internal capture/episode validation or classification snapshot, used by the enclosing write protocol. No separate retained-read comparator; keep the focused capture, Episode, and content-safety denial tests. Standards review r2 lines 103\u2013107 explicitly identifies this group."
+    },
+    "isSuppressed": {
+      "kind": "read",
+      "entry": "isSuppressed"
+    },
+    "keepEpisode": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "legacyGet": {
+      "kind": "parent-gate",
+      "parents": [
+        "get"
+      ],
+      "reason": "Runtime forwarding or validation executed by the named retained-read gate; reviewed against the direct runtime call sites in core/contract.mjs and core/runtime.mjs."
+    },
+    "legacyList": {
+      "kind": "parent-gate",
+      "parents": [
+        "list"
+      ],
+      "reason": "Runtime forwarding or validation executed by the named retained-read gate; reviewed against the direct runtime call sites in core/contract.mjs and core/runtime.mjs."
+    },
+    "legacySearch": {
+      "kind": "parent-gate",
+      "parents": [
+        "search"
+      ],
+      "reason": "Runtime forwarding or validation executed by the named retained-read gate; reviewed against the direct runtime call sites in core/contract.mjs and core/runtime.mjs."
+    },
+    "linkMocs": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "list": {
+      "kind": "read",
+      "entry": "list"
+    },
+    "listAssetDerivatives": {
+      "kind": "read",
+      "entry": "listAssetDerivatives"
+    },
+    "listAssetEffects": {
+      "kind": "read",
+      "entry": "listAssetEffects"
+    },
+    "listAssetVersions": {
+      "kind": "read",
+      "entry": "listAssetVersions"
+    },
+    "listAssets": {
+      "kind": "read",
+      "entry": "listAssets"
+    },
+    "listCardEffects": {
+      "kind": "read",
+      "entry": "listCardEffects"
+    },
+    "listCards": {
+      "kind": "read",
+      "entry": "listCards"
+    },
+    "listEpisodes": {
+      "kind": "read",
+      "entry": "listEpisodes"
+    },
+    "listEvidenceMappings": {
+      "kind": "read",
+      "entry": "listEvidenceMappings"
+    },
+    "listMemoriesByTime": {
+      "kind": "read",
+      "entry": "listMemoriesByTime"
+    },
+    "listMethodBindingEvents": {
+      "kind": "read",
+      "entry": "listMethodBindingEvents"
+    },
+    "listMethodEffects": {
+      "kind": "read",
+      "entry": "listMethodEffects"
+    },
+    "listMethodManifest": {
+      "kind": "read",
+      "entry": "listMethodManifest"
+    },
+    "listMethodPackages": {
+      "kind": "read",
+      "entry": "listMethodPackages"
+    },
+    "listMethodVersions": {
+      "kind": "read",
+      "entry": "listMethodVersions"
+    },
+    "listPage": {
+      "kind": "parent-gate",
+      "parents": [
+        "list"
+      ],
+      "reason": "Runtime forwarding or validation executed by the named retained-read gate; reviewed against the direct runtime call sites in core/contract.mjs and core/runtime.mjs."
+    },
+    "listRawConversations": {
+      "kind": "read",
+      "entry": "listRawConversations"
+    },
+    "listRawEffects": {
+      "kind": "read",
+      "entry": "listRawEffects"
+    },
+    "listReviewConflicts": {
+      "kind": "read",
+      "entry": "listReviewConflicts"
+    },
+    "listReviewTransitions": {
+      "kind": "read",
+      "entry": "listReviewTransitions"
+    },
+    "listSuppressionsSince": {
+      "kind": "read",
+      "entry": "listSuppressionsSince"
+    },
+    "map": {
+      "kind": "read",
+      "entry": "map"
+    },
+    "mapEvidence": {
+      "kind": "read",
+      "entry": "mapEvidence"
+    },
+    "mapRows": {
+      "kind": "parent-gate",
+      "parents": [
+        "map"
+      ],
+      "reason": "Runtime forwarding or validation executed by the named retained-read gate; reviewed against the direct runtime call sites in core/contract.mjs and core/runtime.mjs."
+    },
+    "normalizeBoundedText": {
+      "kind": "exempt",
+      "reason": "Pure text, reference, wire, or namespace utility over supplied data; no retained store read."
+    },
+    "normalizedTextLength": {
+      "kind": "exempt",
+      "reason": "Pure text, reference, wire, or namespace utility over supplied data; no retained store read."
+    },
+    "openContentSuppressionReader": {
+      "kind": "exempt",
+      "reason": "Lifecycle constructor, lease renewal, or draining handle; no retained-content delivery."
+    },
+    "openContextIndexMaintainer": {
+      "kind": "exempt",
+      "reason": "Lifecycle constructor, lease renewal, or draining handle; no retained-content delivery."
+    },
+    "openContextProductReader": {
+      "kind": "exempt",
+      "reason": "Lifecycle constructor, lease renewal, or draining handle; no retained-content delivery."
+    },
+    "openContextReader": {
+      "kind": "exempt",
+      "reason": "Lifecycle constructor, lease renewal, or draining handle; no retained-content delivery."
+    },
+    "openContextSemanticCoordinator": {
+      "kind": "exempt",
+      "reason": "Lifecycle constructor, lease renewal, or draining handle; no retained-content delivery."
+    },
+    "openMemoryCore": {
+      "kind": "exempt",
+      "reason": "Lifecycle constructor, lease renewal, or draining handle; no retained-content delivery."
+    },
+    "openMemoryReader": {
+      "kind": "exempt",
+      "reason": "Lifecycle constructor, lease renewal, or draining handle; no retained-content delivery."
+    },
+    "openMemoryStore": {
+      "kind": "exempt",
+      "reason": "Lifecycle constructor, lease renewal, or draining handle; no retained-content delivery."
+    },
+    "pendingEpisodeSession": {
+      "kind": "capture-protocol",
+      "reason": "Internal capture/episode validation or classification snapshot, used by the enclosing write protocol. No separate retained-read comparator; keep the focused capture, Episode, and content-safety denial tests. Standards review r2 lines 103\u2013107 explicitly identifies this group."
+    },
+    "planCaptureBatches": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "prepareEpisodeKeep": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "previewDeleteConversation": {
+      "kind": "read",
+      "entry": "previewDeleteConversation"
+    },
+    "proposeEvidenceMapping": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "publishRoleProfileRelease": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "purgeOwnerVectors": {
+      "kind": "exempt",
+      "reason": "Semantic consent, accounting, coverage control, or pump quota status; serves no retained Memory/Card/Raw text."
+    },
+    "queryCandidateRows": {
+      "kind": "parent-gate",
+      "parents": [
+        "recall"
+      ],
+      "reason": "Runtime forwarding or validation executed by the named retained-read gate; reviewed against the direct runtime call sites in core/contract.mjs and core/runtime.mjs."
+    },
+    "rationaleSnapshot": {
+      "kind": "parent-gate",
+      "parents": [
+        "reviewDecisionBasis"
+      ],
+      "reason": "Runtime forwarding or validation executed by the named retained-read gate; reviewed against the direct runtime call sites in core/contract.mjs and core/runtime.mjs."
+    },
+    "readAssetBytes": {
+      "kind": "read",
+      "entry": "readAssetBytes"
+    },
+    "readAssetDerivative": {
+      "kind": "read",
+      "entry": "readAssetDerivative"
+    },
+    "readMethodAttachmentBytes": {
+      "kind": "read",
+      "entry": "readMethodAttachmentBytes"
+    },
+    "readMethodFile": {
+      "kind": "read",
+      "entry": "readMethodFile"
+    },
+    "readRoleTaskContext": {
+      "kind": "read",
+      "entry": "readRoleTaskContext"
+    },
+    "readTopicMembers": {
+      "kind": "read",
+      "entry": "readTopicMembers"
+    },
+    "readTopicOverview": {
+      "kind": "read",
+      "entry": "readTopicOverview"
+    },
+    "ready": {
+      "kind": "exempt",
+      "reason": "Lifecycle/readiness handle or namespace-scope factory; serves no retained content."
+    },
+    "rebuildIndex": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "recall": {
+      "kind": "read",
+      "entry": "recall"
+    },
+    "recallSnapshot": {
+      "kind": "parent-gate",
+      "parents": [
+        "recall"
+      ],
+      "reason": "Runtime forwarding or validation executed by the named retained-read gate; reviewed against the direct runtime call sites in core/contract.mjs and core/runtime.mjs."
+    },
+    "recentReceipts": {
+      "kind": "direct-runtime-gate",
+      "gate": "runtime-cost",
+      "caseGroup": "runtime-reads",
+      "reason": "Recall packing with a constant counter does not execute this optional capped-receipt path. Direct legacy/zero/five runtime gates execute it at one and twelve receipts, including an empty limit and explicit missing-ref refusal."
+    },
+    "refreshCardTopic": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "refreshContextIndex": {
+      "kind": "read",
+      "entry": "refreshContextIndex"
+    },
+    "reject": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "releaseEpisodeCorrection": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "releaseEpisodeWriter": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "remember": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "renewContextMaintenancePump": {
+      "kind": "exempt",
+      "reason": "Lifecycle constructor, lease renewal, or draining handle; no retained-content delivery."
+    },
+    "reserveEpisodeBatch": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "resolveMethod": {
+      "kind": "read",
+      "entry": "resolveMethod"
+    },
+    "resolveMethodsForRole": {
+      "kind": "read",
+      "entry": "resolveMethodsForRole"
+    },
+    "resolveReview": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "resolveSourceReferences": {
+      "kind": "read",
+      "entry": "resolveSourceReferences"
+    },
+    "revalidateCardCurrentDependencies": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "revalidateEvidence": {
+      "kind": "read",
+      "entry": "revalidateEvidence"
+    },
+    "reviewDecisionBasis": {
+      "kind": "read",
+      "entry": "reviewDecisionBasis"
+    },
+    "reviewEvidenceMapping": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "reviewRationale": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "roleProfileRef": {
+      "kind": "exempt",
+      "reason": "Pure text, reference, wire, or namespace utility over supplied data; no retained store read."
+    },
+    "roleProfileReleaseRef": {
+      "kind": "exempt",
+      "reason": "Pure text, reference, wire, or namespace utility over supplied data; no retained store read."
+    },
+    "roleTaskMeteredText": {
+      "kind": "exempt",
+      "reason": "Pure text, reference, wire, or namespace utility over supplied data; no retained store read."
+    },
+    "roleTaskToolResponse": {
+      "kind": "exempt",
+      "reason": "Pure text, reference, wire, or namespace utility over supplied data; no retained store read."
+    },
+    "scope": {
+      "kind": "exempt",
+      "reason": "Lifecycle/readiness handle or namespace-scope factory; serves no retained content."
+    },
+    "search": {
+      "kind": "read",
+      "entry": "search"
+    },
+    "selectContextProductNamespaces": {
+      "kind": "exempt",
+      "reason": "Pure text, reference, wire, or namespace utility over supplied data; no retained store read."
+    },
+    "selectEvidence": {
+      "kind": "read",
+      "entry": "selectEvidence"
+    },
+    "sessionContextSnapshot": {
+      "kind": "parent-gate",
+      "parents": [
+        "sessionStartContext"
+      ],
+      "reason": "Runtime forwarding or validation executed by the named retained-read gate; reviewed against the direct runtime call sites in core/contract.mjs and core/runtime.mjs."
+    },
+    "sessionStartContext": {
+      "kind": "read",
+      "entry": "sessionStartContext"
+    },
+    "setCapturePaused": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "setEpisodePolicy": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "setLocalCaptureControl": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "setOwnerSemantic": {
+      "kind": "exempt",
+      "reason": "Semantic consent, accounting, coverage control, or pump quota status; serves no retained Memory/Card/Raw text."
+    },
+    "setProceduralMemory": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "setProjectCapture": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "setRawCaptureControl": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "settleEpisodeAttempt": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "sourceSnapshot": {
+      "kind": "read",
+      "entry": "sourceSnapshot"
+    },
+    "startEpisodeAttempt": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "submitSourceNote": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "supersede": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "suppressionFence": {
+      "kind": "parent-gate",
+      "parents": [
+        "map",
+        "fetch",
+        "sourceSnapshot"
+      ],
+      "reason": "Runtime forwarding or validation executed by the named retained-read gate; reviewed against the direct runtime call sites in core/contract.mjs and core/runtime.mjs."
+    },
+    "transitionQualified": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "transitionQualifiedSet": {
+      "kind": "write",
+      "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "validateEpisodeBatch": {
+      "kind": "capture-protocol",
+      "reason": "Internal capture/episode validation or classification snapshot, used by the enclosing write protocol. No separate retained-read comparator; keep the focused capture, Episode, and content-safety denial tests. Standards review r2 lines 103\u2013107 explicitly identifies this group."
+    },
+    "validateOwnerSemanticCoverage": {
+      "kind": "exempt",
+      "reason": "Semantic consent, accounting, coverage control, or pump quota status; serves no retained Memory/Card/Raw text."
+    },
+    "verifyAssetBytes": {
+      "kind": "read",
+      "entry": "verifyAssetBytes"
+    }
+  },
+  "unmigratedGate": {
+    "gate": "unmigrated-cost",
+    "fixture": "content-safety-s2h-unmigrated-counts.json",
+    "main": "26f9e467",
+    "measured": "2026-11-03"
+  }
+}

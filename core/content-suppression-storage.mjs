@@ -1,5 +1,6 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
-import { bindContentSafetyConnection, contentSafetyBudgetError, installedContentLayout } from './content-safety-schema.mjs';
+import { bindContentSafetyConnection, cachedContentLayout, contentSafetyConnection, contentSafetyBudgetError, installedContentLayout, withContentSafetyLayoutInside } from './content-safety-schema.mjs';
 import { fail, identifier } from './validation.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
@@ -73,21 +74,166 @@ export function suppressReceiptsInside(db, ns, memoryId, options, ids) {
     { namespace: ns, kind: 'receipt', key: row.id, ...options });
 }
 
-// Internal observation fence: every fact insert advances the monotone hi:lo
-// binding, independently of canonical tombstones and namespace epochs. Cleanup
-// retains the fact and does not advance it. Legacy cells return null.
+// Internal traversal fence: facts can advance without any canonical tombstone
+// or namespace epoch. Cached content must retain and compare this binding.
+// Canonical monotone hi:lo fence: every fact insert advances it. Cleanup does
+// not advance it, because every cleanup state denies. Legacy cells return null.
 export function contentSuppressionFenceInside(db, ownerId) {
   if (!installedContentLayout(db).suppressionRevision) return null;
   const row = db.prepare('SELECT epoch_hi,epoch_lo FROM owner_suppression_epochs WHERE owner_id=?').get(ownerId);
   return row ? `${row.epoch_hi}:${row.epoch_lo}` : '0:0';
 }
 
+// Mutation acknowledgement validation observes canonical post-state while
+// considering only facts that preceded this operation. Normal serving and B3
+// observations use the unbounded enumerator unchanged.
+const factCeilings = new AsyncLocalStorage();
+export function withContentSuppressionCeilingsInside(db, ceilings, work, terminalAncestors) {
+  return factCeilings.run({native:contentSafetyConnection(db),ceilings,terminalAncestors},work);
+}
+function aboveFactCeiling(db, ns, fact) {
+  const context=factCeilings.getStore();
+  return context?.native===contentSafetyConnection(db) && context.ceilings.has(ns.ownerId) &&
+    (suppressionEpoch(fact)>context.ceilings.get(ns.ownerId)||context.terminalAncestors?.has(fact.fact_id));
+}
+const requestFacts = new AsyncLocalStorage();
+const requestAccount = new AsyncLocalStorage();
+const readMemoFacts = new WeakMap();
+const servingWrites = new AsyncLocalStorage();
+export const withoutContentSuppressionReadCacheInside = (db, work) => servingWrites.run(contentSafetyConnection(db), work);
+export function registerContentSuppressionReadMemoInside(reader) {
+  readMemoFacts.set(reader, new Map());
+  return reader;
+}
+function servingFacts(db, ns) {
+  // A host callback can enter a writer while its read request is still alive.
+  // Post-state acknowledgements must see the pre-write epoch's complete facts,
+  // never that outer request's provisional (possibly empty) read set.
+  if (factCeilings.getStore()?.native === contentSafetyConnection(db) || servingWrites.getStore() === contentSafetyConnection(db)) return undefined;
+  const snapshot = requestFacts.getStore(), native = contentSafetyConnection(db);
+  const request = snapshot?.native === native && snapshot.owner === ns.ownerId ? snapshot : cachedContentSuppressionRequestInside(db, ns.ownerId);
+  if (request) return request;
+  if (hasContentSuppressionRequestInside(db)) return contentSuppressionRequestInside(db, [ns]);
+  const owners = readMemoFacts.get(db);
+  if (!owners) return undefined;
+  if (!owners.has(ns.ownerId)) owners.set(ns.ownerId, contentSuppressionRequestInside(db, [ns]));
+  return owners.get(ns.ownerId);
+}
+
+export const withContentSuppressionRequest = (work, { fresh = false } = {}) => requestAccount.getStore() && !fresh
+  ? work() : requestAccount.run({ selected: new Map(), facts: new Map(), reads: new Map() }, work);
+
+// A serving request may span canonical snapshots. Its denial set is provisional
+// until the independent delivery fence agrees. No state survives the request.
+export const hasContentSuppressionRequestInside = db => Boolean(requestAccount.getStore()) &&
+  (!db || servingWrites.getStore() !== contentSafetyConnection(db));
+export const cachedContentSuppressionRequestInside = (db, owner) => {
+  if (servingWrites.getStore() === contentSafetyConnection(db)) return undefined;
+  const owners = requestAccount.getStore()?.reads.get(contentSafetyConnection(db));
+  return owner === undefined ? owners?.values().next().value : owners?.get(owner);
+};
+const coversNamespace = (state, ns) => state.owner === ns.ownerId && (state.epoch === '0:0' || state.readSet.some(selected =>
+  selected.scope === 'owner' || JSON.stringify(boundary(selected)) === JSON.stringify(boundary(ns))));
+export function contentSuppressionRequestInside(db, readSet, { refresh = false, defer = false } = {}) {
+  const native = contentSafetyConnection(db), account = requestAccount.getStore(), owner = readSet[0].ownerId;
+  if (defer && account) {
+    const selected = account.selected.get(native) ?? [];
+    account.selected.set(native, [...new Map([...selected, ...readSet].map(ns => [JSON.stringify(boundary(ns)), ns])).values()]);
+    return;
+  }
+  let owners = account?.reads.get(native);
+  const primary = owners?.get(owner);
+  if (primary && !refresh && readSet.every(ns => coversNamespace(primary, ns))) return primary;
+  const layout = !refresh && owners?.size ? owners.values().next().value.layout : installedContentLayout(db);
+  let epoch = primary && !refresh ? primary.epoch : '0:0';
+  if (layout.suppressionRevision && (!primary || refresh)) {
+    const row = db.prepare('SELECT epoch_hi,epoch_lo FROM owner_suppression_epochs WHERE owner_id=?').get(owner);
+    if (row) epoch = `${row.epoch_hi}:${row.epoch_lo}`;
+  }
+  let ownerSets = account?.facts.get(native);
+  if (!ownerSets) { ownerSets = new Map(); account?.facts.set(native, ownerSets); }
+  const scopes = readSet.map(ns => JSON.stringify(boundary(ns))).sort();
+  const key = JSON.stringify([owner, epoch, scopes]);
+  let facts = ownerSets.get(key);
+  if (!ownerSets.has(key)) {
+    facts = [];
+    if (layout.suppressionRevision && epoch !== '0:0') {
+      if (readSet.some(ns => ns.scope === 'owner')) {
+        facts = db.prepare(`SELECT * FROM content_suppressions INDEXED BY content_suppression_window
+          WHERE owner_id=? ORDER BY epoch_hi,epoch_lo LIMIT 4097`).all(owner);
+      } else {
+        facts = db.prepare(`SELECT * FROM content_suppressions INDEXED BY content_suppression_target
+          WHERE (owner_id,scope,project_id,kind,stable_key,incarnation)=(?,'owner','','owner','','') LIMIT 4097`).all(owner);
+        for (const ns of readSet) {
+          if (facts.length > 4096) break;
+          facts.push(...db.prepare(`SELECT * FROM content_suppressions INDEXED BY content_suppression_target
+            WHERE (owner_id,scope,project_id)=(?,?,?) LIMIT ?`).all(...boundary(ns),4097-facts.length));
+        }
+      }
+      if (facts.length > 4096) facts = null;
+    }
+    ownerSets.set(key, facts);
+  }
+  const state = { native, owner, epoch, readSet, layout, facts };
+  readMemoFacts.get(db)?.set(owner, state);
+  if (!owners) { owners = new Map(); account?.reads.set(native, owners); }
+  // New scoped views retain the original delivery epoch. Only metadata-only
+  // delivery builders may explicitly refresh after their final authority sample.
+  if (!primary || refresh) owners.set(owner, state);
+  if (!account?.selected.has(native)) account?.selected.set(native, readSet);
+  return state;
+}
+export function contentSuppressionRequestFenceInside(db, owner) {
+  const state = cachedContentSuppressionRequestInside(db, owner);
+  return state?.owner === owner ? state.layout.suppressionRevision ? state.epoch : null
+    : contentSuppressionFenceInside(db, owner);
+}
+export function assertContentSuppressionRequestInside(db, readSet) {
+  const states = [...new Set(readSet.map(ns => ns.ownerId))].map(owner => cachedContentSuppressionRequestInside(db, owner)).filter(Boolean);
+  if (!states.length) return;
+  // A fresh header and owner epochs after host callbacks fence every retained decision.
+  const layout = installedContentLayout(db);
+  for (const state of states) {
+    if (layout !== state.layout) fail('evidence_unavailable');
+    if (!layout.suppressionRevision) continue;
+    const row = db.prepare('SELECT epoch_hi,epoch_lo FROM owner_suppression_epochs WHERE owner_id=?').get(state.owner);
+    if ((row ? `${row.epoch_hi}:${row.epoch_lo}` : '0:0') !== state.epoch) fail('evidence_unavailable');
+  }
+}
+export function inContentSuppressionRequestInside(db, work, fallbackReadSet) {
+  const native = contentSafetyConnection(db), account = requestAccount.getStore();
+  if (requestFacts.getStore()?.native === native) return work();
+  const readSet = account?.selected.get(native) ?? fallbackReadSet;
+  return readSet ? withContentSuppressionReadInside(db, readSet, () => work()) : work();
+}
+// One bounded owner set per request and epoch; a larger set uses indexed seeks.
+export function withContentSuppressionReadInside(db, readSet, work) {
+  const state = cachedContentSuppressionRequestInside(db, readSet[0].ownerId);
+  if (state) {
+    const view=contentSuppressionRequestInside(db,readSet),invoke=()=>requestFacts.run(view,()=>work(view));
+    return db.isTransaction ? withContentSafetyLayoutInside(db,invoke,view.layout) : invoke();
+  }
+  return withContentSafetyLayoutInside(db, () => {
+    const snapshot = contentSuppressionRequestInside(db, readSet);
+    return requestFacts.run(snapshot, () => work(snapshot));
+  });
+}
+// This is only a negative fact-set proof. Canonical S1 validation still runs for
+// every delivered decision, including Raw lineage on Raw-capable stores.
+export function contentSuppressionMayMatchInside(db, ns, target) {
+  const state = servingFacts(db, ns);
+  if (!state || state.native !== contentSafetyConnection(db) || !coversNamespace(state, ns) || !state.facts) return true;
+  return state.facts.some(f => f.owner_id === ns.ownerId && (f.scope === 'owner' ||
+    f.scope === ns.scope && f.project_id === (ns.projectId ?? '') &&
+    (target.kind === 'card' || f.kind === 'namespace' || f.kind === target.kind && f.stable_key === target.key ||
+      state.layout.rawLineage && ['memory','receipt'].includes(target.kind) && f.kind === 'raw')));
+}
 const ineligibleFact = Object.freeze({ reason: 'ineligible' });
 const factColumns = 'fact_id,match_mode,source_version,reason,message_key,span_start,span_end,epoch_hi,epoch_lo';
 const noAncestor = ',0 AS ancestry,NULL AS ancestor_owner,NULL AS ancestor_scope,NULL AS ancestor_project,NULL AS message_id,NULL AS start,NULL AS end';
 
-// Matching for the internal B3 observation. A missing bound version or uncertain
-// ancestry makes the observation incomplete; S2h-1 serving reads remain on S1.
+// One matching rule for the serving predicate and the B3 observation. A missing
+// bound version or uncertain ancestry is a denial, never a negative observation.
 function factMatch(fact, { kind, revision, version, messageId, start, end }) {
   if (['owner','namespace','incarnation'].includes(fact.match_mode)) return true;
   if (fact.match_mode === 'version') {
@@ -108,9 +254,28 @@ function factMatch(fact, { kind, revision, version, messageId, start, end }) {
   }
   return false;
 }
+// Mutation validation uses the same mode matcher for same-transaction audit exemptions.
+export function contentSuppressionTargetMatches(fact, ns, target) {
+  return fact.owner_id===ns.ownerId && (fact.scope==='owner'||fact.scope===ns.scope&&fact.project_id===(ns.projectId??'')) &&
+    (['owner','namespace'].includes(fact.match_mode)||fact.kind===target.kind&&fact.stable_key===target.key) && factMatch(fact,target)===true;
+}
 function* matchingContentSuppressionsInside(db, ns, target, layout, ordered = false) {
   if (!layout.suppressionRevision) return;
   const { kind, key } = target;
+  const memo=ordered ? null : servingFacts(db, ns);
+  // B3 always enumerates canonical ancestry. Serving can prove an empty fact
+  // intersection only after its S1 decision has checked canonical lineage.
+  if (!ordered && memo?.native === contentSafetyConnection(db) && memo.owner === ns.ownerId &&
+      memo.facts?.length === 0 && coversNamespace(memo, ns) && (!layout.rawLineage || !['memory','receipt'].includes(kind) || target.ancestryChecked)) return;
+  if (!ordered && (!layout.rawLineage || target.ancestryChecked) && !contentSuppressionMayMatchInside(db, ns, target)) return;
+  if(memo?.native===contentSafetyConnection(db) && memo.owner===ns.ownerId && memo.readSet.some(n=>JSON.stringify(boundary(n))===JSON.stringify(boundary(ns))) && memo.facts &&
+      !(layout.rawLineage && ['memory','receipt'].includes(kind) && (!target.ancestryChecked || memo.facts.some(f=>f.kind==='raw')))) {
+    const facts=memo.facts.filter(f=>f.scope==='owner'||f.scope===ns.scope&&f.project_id===(ns.projectId??'')&&
+      (f.kind==='namespace'||f.kind===kind&&f.stable_key===(key??'')&&f.incarnation===(key??'')))
+      .sort((a,b)=>a.epoch_hi-b.epoch_hi||a.epoch_lo-b.epoch_lo);
+    for(const fact of facts){if(!ordered&&aboveFactCeiling(db,ns,fact))continue;const match=factMatch(fact,target);if(match==='ineligible')yield ineligibleFact;else if(match)yield fact;}
+    return;
+  }
   // Three indexed direct ranges, plus the same receipt -> Raw ancestry that the
   // predicate has always followed. SQL orders duplicates together, so a digest
   // needs no retained fact set, temporary table or additional handle.
@@ -138,12 +303,21 @@ function* matchingContentSuppressionsInside(db, ns, target, layout, ordered = fa
     if (fact.ancestry && (fact.ancestor_owner !== ns.ownerId || fact.ancestor_scope !== ns.scope || fact.ancestor_project !== (ns.projectId ?? ''))) {
       yield ineligibleFact; continue;
     }
-    if (fact.fact_id === null) continue;
+    if (fact.fact_id === null || !ordered && aboveFactCeiling(db,ns,fact)) continue;
     const match = factMatch(fact, fact.ancestry ? { kind:'raw',messageId:fact.message_id,start:fact.start,end:fact.end } : target);
     if (match === 'ineligible') yield ineligibleFact;
     else if (match) yield fact;
   }
 }
+export function contentSuppressionReasonInside(db, ns, target = {}) {
+  if (!(cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision) return null;
+  const state = servingFacts(db, ns);
+  const layout = state?.native === contentSafetyConnection(db) ? state.layout : cachedContentLayout(db) ?? installedContentLayout(db);
+  if (!layout.suppressionRevision) return null;
+  for (const fact of matchingContentSuppressionsInside(db,ns,target,state?.native === contentSafetyConnection(db) ? layout : installedContentLayout(db))) return fact.reason;
+  return null;
+}
+
 /** Internal, synchronous and snapshot-local. The caller owns the transaction.
  * Memo reuse is limited to S1's prepared reader; observations are never cached
  * across mutable ancestry or fact writes. No database handle or durable state is

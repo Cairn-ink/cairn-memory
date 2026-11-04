@@ -1,4 +1,5 @@
-import { countTokens } from './model-budget.mjs';
+import { hasContentPortBoundary } from './content-safety-boundary.mjs';
+import { countTokens, modelPortValue } from './model-budget.mjs';
 import { isSourceContext } from './source-evidence.mjs';
 import { fail, object, identifier, revision, denseArray } from './validation.mjs';
 
@@ -14,7 +15,10 @@ export function memoryRefs(input) {
 
 export function fetchMemories({ runtime, model, ns, refs, view = 'current', budget, cursor, binding, encodeCursor,
   includeQualification = false, contextMode }) {
-  countTokens(model, '');
+  const protectedRead = hasContentPortBoundary();
+  if (protectedRead) {
+    if(typeof modelPortValue(model,'countTokens','token_count_unavailable')!=='function')fail('token_count_unavailable');
+  } else countTokens(model, '');
   if (cursor && (Object.keys(cursor.a).length !== 2 ||
       !Number.isSafeInteger(cursor.a.index) || cursor.a.index < 0 || cursor.a.index >= refs.length ||
       !Number.isSafeInteger(cursor.a.offset) || cursor.a.offset < 0)) fail('invalid_cursor');
@@ -22,6 +26,7 @@ export function fetchMemories({ runtime, model, ns, refs, view = 'current', budg
   const offset = cursor?.a.offset ?? 0;
   if (isSourceContext(contextMode) && offset !== 0) fail('invalid_cursor');
   const page = runtime.fetchPage(ns, refs[index], offset, cursor?.e, view, includeQualification, contextMode);
+  if (protectedRead) countTokens(model, '');
   if (isSourceContext(contextMode)) {
     const exhausted = index === refs.length - 1;
     const value = { items: page.source ? [page.source] : [],

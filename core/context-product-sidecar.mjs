@@ -1,4 +1,6 @@
-import { memoryReadEligible } from './content-safety.mjs';
+import { withContentSuppressionReadInside, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
+import { bindContentSafetyConnection, cachedContentLayout } from './content-safety-schema.mjs';
+import { contentReadSafety, memoryReadEligible } from './content-safety.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { types } from 'node:util';
 import { randomUUID } from 'node:crypto';
@@ -434,9 +436,9 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       for(const row of rows)if(rebound.get(...boundary(s.ns),row.id)?.bytes!==row.id_bytes)unavailable('corrupt');
     }
     // Count and meter support independently of transformation attempts.
-    const support = { get isTransaction() { return canonical.isTransaction; }, prepare(sql) { const stmt = canonical.prepare(sql); return Object.fromEntries(['get','all'].map(method => [method,(...args) => {
+    const support = bindContentSafetyConnection({ get isTransaction() { return canonical.isTransaction; }, prepare(sql) { const stmt = canonical.prepare(sql); return Object.fromEntries(['get','all'].map(method => [method,(...args) => {
       m.supportLookups++; const r = stmt[method](...args); m.supportBytes += Buffer.byteLength(JSON.stringify(r ?? null)); return r;
-    }])); } };
+    }])); } }, canonical);
     return rows.map(row => ({ id:row.id,id_bytes:row.id_bytes,revision:row.revision,body_revision:row.body_revision,
       eligible:Number(s.type === 'memory' ? memoryReadEligible(row, p.intent)
         : contextCardEligible(support,identity,features,s.ns,row,p.intent,{ readSet:p.readSet })) }));
@@ -987,10 +989,83 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     collect(quantum,p.readSet[0].ownerId);
     return m;
   }
+  function suppressionRequest(p,publication,work) {
+    if(!publication || !cachedContentLayout(canonical)?.suppressionRevision ||
+      contentSuppressionRequestFenceInside(canonical,p.readSet[0].ownerId)==='0:0')return work(null);
+    const inspect=()=>withContentSuppressionReadInside(canonical,p.readSet,memo=>{
+      if (memo.facts?.length === 0) return work(null);
+      const ss=streams(p),generation=storageKey(publication.generation.id),denied=new Set();
+      const counts={...publication.counts,byType:Object.fromEntries(p.types.map(type=>[type,{...publication.counts.byType[type]}]))};
+      let unknown=!memo.facts || memo.layout.rawLineage || p.types.includes('card') || memo.facts.some(f=>!['memory','owner','namespace','receipt'].includes(f.kind));
+      if(memo.facts)for(const fact of memo.facts){
+        if(['owner','namespace'].includes(fact.kind))fail('evidence_unavailable');
+        if(fact.kind!=='memory')continue;
+        const stream=ss.findIndex(s=>s.type==='memory'&&s.ns.scope===fact.scope&&(s.ns.projectId??'')===fact.project_id);
+        if(stream<0)continue;
+        const row=side.prepare('SELECT doc,revision,body_revision,eligible,token_length FROM documents WHERE generation=? AND stream=? AND id=?')
+          .get(generation,stream,fact.stable_key);
+        if(!row?.eligible||denied.has(row.doc))continue;
+        if(contentSuppressionReasonInside(canonical,ss[stream].ns,{kind:'memory',key:fact.stable_key,revision:row.revision,
+          version:JSON.stringify(['memory-revision-v1',row.revision])})){
+          denied.add(row.doc);counts.byType.memory.eligible--;counts.byType.memory.indexed--;counts.totalTokenLength-=row.token_length;
+        }
+      }
+      if(unknown)for(const type of p.types)counts.byType[type]={eligible:null,indexed:null};
+      return work({denied,counts,unknown,checkEach:!memo.facts || p.types.includes('card') || memo.facts.some(f=>f.kind==='raw'),filtered:unknown||denied.size>0});
+    });
+    return canonical.isTransaction?inspect():readTransaction(canonical,inspect);
+  }
+  function visibleCounts(p,publication) {
+    if(!publication||!cachedContentLayout(canonical)?.suppressionRevision||
+      contentSuppressionRequestFenceInside(canonical,p.readSet[0].ownerId)==='0:0')return null;
+    return read(()=>suppressionRequest(p,publication,visible=>visible?.counts??null));
+  }
+  function candidateAllowed(ref, p) {
+    return ref.type === 'card' ? contextCardEligible(canonical,identity,features,ref.namespace,
+      {id:ref.cardId,revision:ref.revision,body_revision:ref.bodyRevision},p.intent,{readSet:p.readSet}) :
+      contentReadSafety(canonical,{identity,namespace:ref.namespace,ref,intent:p.intent}).allowed;
+  }
+  function lexicalSuppressed(p,publication,query,limit,visible) {
+    const terms=[...new Set(tokenizeT1(query))],generation=storageKey(publication.generation.id),ss=streams(p),documents=[];
+    const placeholders=terms.map(()=>'?').join(','),checked=new WeakSet();
+    for(const term of terms){
+      let after=0;
+      while(true){
+        if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
+        const rows=side.prepare(`SELECT p.doc FROM postings p INDEXED BY product_term
+          WHERE p.generation=? AND p.term=(SELECT term_id FROM statistics WHERE generation=? AND term=?) AND p.doc>? ORDER BY p.doc LIMIT 128`)
+          .all(generation,generation,term,after);
+        for(const row of rows){
+          if(visible.denied.has(row.doc))continue;
+          const frequencies=new Map(side.prepare(`SELECT s.term,p.frequency FROM statistics s INDEXED BY sqlite_autoindex_statistics_2 CROSS JOIN postings p
+            ON p.generation=s.generation AND p.term=s.term_id AND p.doc=?
+            WHERE s.generation=? AND s.term IN (${placeholders})`).all(row.doc,generation,...terms).map(r=>[r.term,r.frequency]));
+          if(terms.find(t=>frequencies.has(t))!==term)continue;
+          const document=side.prepare('SELECT stream,id,revision,body_revision,token_length,eligible FROM documents WHERE generation=? AND doc=?').get(generation,row.doc);
+          if(!document?.eligible)continue;
+          const stream=ss[document.stream],ref={type:stream.type,namespace:stream.ns,[stream.type==='memory'?'memoryId':'cardId']:document.id,
+            revision:document.revision,...(stream.type==='card'?{bodyRevision:document.body_revision}:{})};
+          if(visible.checkEach&&contentSuppressionMayMatchInside(canonical,stream.ns,{kind:stream.type,key:document.id})) {
+            if(!candidateAllowed(ref,p))continue;
+            checked.add(ref);
+          }
+          documents.push({ref,frequencies,length:document.token_length});
+        }
+        if(rows.length<128)break;after=rows.at(-1).doc;
+      }
+    }
+    const df=new Map(terms.map(term=>[term,documents.filter(d=>d.frequencies.has(term)).length]));
+    const N=visible.unknown?documents.length:Object.values(visible.counts.byType).reduce((n,c)=>n+c.eligible,0);
+    const totalLength=visible.unknown?documents.reduce((n,d)=>n+d.length,0):visible.counts.totalTokenLength;
+    const ranked=rankScores(documents.map(d=>({ref:d.ref,score:scoreBM25(terms,d,{N,totalLength,df})}))).slice(0,limit);
+    const rows=ranked.filter(({ref})=>checked.has(ref)||candidateAllowed(ref,p));
+    return {rows,matched:documents.length,counts:visible.counts,filtered:visible.filtered};
+  }
   function lexical(p, publication, query, limit=24) {
     if (!publication || !connection()) unavailable('missing');
     rendezvous('lexical');
-    return read(() => {
+    return read(() => suppressionRequest(p,publication,visible => {
+      if (visible) return lexicalSuppressed(p,publication,query,limit,visible);
       const terms=[...new Set(tokenizeT1(query))], total=publication.counts, df=new Map(), ranked=[];
       if(!terms.length)return {rows:[],matched:0};
       const placeholders=terms.map(()=>'?').join(','),generation=storageKey(publication.generation.id),ss=streams(p);
@@ -1025,10 +1100,11 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         }
       }
       return {rows:ranked,matched};
-    });
+    }));
   }
 
   return {
+    visibleCounts,
     vectorFence(p,lexical) {
       return recordBindings(lexical,target(projection(p),lexical.accessDigest))===null&&
         side.prepare('SELECT publication FROM publications WHERE projection=?').get(lexical.projectionDigest)?.publication===lexical.publicationId;

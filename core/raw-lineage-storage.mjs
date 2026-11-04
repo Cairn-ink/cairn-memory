@@ -1,5 +1,6 @@
-import { writeContentSuppressionInside } from './content-suppression-storage.mjs';
-import { createHmac } from 'node:crypto';
+import { cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
+import { writeContentSuppressionInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
+import { createHash, createHmac } from 'node:crypto';
 import { fail } from './validation.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { createRawCardInvalidation } from './card-raw-sources.mjs';
@@ -46,16 +47,37 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
     for (const anchor of values) if (db.prepare(`SELECT 1 FROM raw_source_exclusions WHERE conversation_id=? AND message_id=?
       AND start<? AND end>?`).get(anchor.conversationId, anchor.messageId, anchor.end, anchor.start)) fail('source_excluded');
   }
-  function assertReceipts(ns, receipts, readExisting = false) {
+  function assertReceipts(ns, receipts, readExisting = false, rawTargets) {
+    if (!readExisting && (cachedContentLayout(db)??installedContentLayout(db)).suppressionRevision) {
+      if (contentSuppressionReasonInside(db, ns)) fail('source_excluded');
+      for (const receipt of receipts) {
+        const rows = db.prepare(`SELECT r.*,m.revision AS memory_revision,m.deleted AS memory_deleted FROM receipts r JOIN memories m ON m.id=r.memory_id
+          WHERE m.owner_id=? AND m.scope=? AND m.project_id=? AND r.client=? AND r.session_id=? AND r.event_id=? AND r.role=? AND r.excerpt=?`)
+          .all(...boundary(ns), receipt.client, receipt.sessionId, receipt.eventId, receipt.role, receipt.excerpt);
+        for (const row of rows) {
+          // Preserve the old history decision's canonical identity checks here,
+          // without calling back into a read entry from lineage validation.
+          const source = { client: row.client, sessionId: row.session_id, eventId: row.event_id, role: row.role, excerpt: row.excerpt };
+          if (row.memory_deleted || createHash('sha256').update(JSON.stringify(source)).digest('hex') !== row.receipt_key ||
+              contentSuppressionReasonInside(db, ns, { kind: 'memory', key: row.memory_id,
+                revision: row.memory_revision, version: JSON.stringify(['memory-revision-v1', row.memory_revision]) }) ||
+              contentSuppressionReasonInside(db, ns, { kind: 'receipt', key: row.id })) fail('source_excluded');
+        }
+      }
+    }
     if (!enabled()) return;
     for (const receipt of receipts) {
       roots.assertSession(ns, receipt.client, receipt.sessionId, readExisting);
-      assertAnchors(anchors(ns, receipt));
+      const values = anchors(ns, receipt);
+      for (const anchor of values) if (!readExisting && contentSuppressionReasonInside(db, ns, { kind: 'raw', key: anchor.conversationId,
+        messageId: anchor.messageId, start: anchor.start, end: anchor.end })) fail('source_excluded');
+      assertAnchors(values);
+      rawTargets?.push(...values);
     }
   }
   // Canonical readers and qualified automatic dedup inspect original anchor rows.
   // The admission transaction owns all reads; no Raw body is opened or rewritten.
-  function assertStoredReceipts(ns, receipts, { readExisting = false } = {}) {
+  function assertStoredReceipts(ns, receipts, { readExisting = false, rawTargets } = {}) {
     if (!db.isTransaction) fail('raw_transaction_required');
     const required = ['raw_conversations','raw_messages','raw_source_maps','raw_receipt_lineage',
       'raw_receipt_origins','raw_source_exclusions','raw_deletion_actions','raw_session_fences',
@@ -100,7 +122,7 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
           !db.prepare(`SELECT 1 FROM episode_memory_links l JOIN json_each(l.receipt_ids) r
             WHERE l.memory_id=? AND r.value=? LIMIT 1`).get(receipt.memory_id, receipt.id)) {
         assertReceipts(ns, [{ client: receipt.client, sessionId: receipt.session_id,
-          eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt }], true);
+          eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt }], true, rawTargets);
         continue;
       }
       if (authority.unknown || authority.legacyKeep && authority.roots.length !== 1) fail('raw_lineage_unavailable');
@@ -114,8 +136,11 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
           if (!episode) fail('raw_lineage_unavailable');
           if (episode.deleted) fail('conversation_deleted');
         }
-        if (!stored.length) assertAnchors(anchors(ns, { client: root.client, sessionId: root.sessionKey,
-          eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt }));
+        if (!stored.length) {
+          const values = anchors(ns, { client: root.client, sessionId: root.sessionKey,
+            eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt });
+          assertAnchors(values); rawTargets?.push(...values);
+        }
       }
     }
   }
@@ -173,7 +198,6 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
     });
   }
   function filter(ns, receipts) {
-    if (!enabled()) return receipts.map((_, index) => index);
     return receipts.flatMap((receipt, index) => {
       try { assertReceipts(ns, [receipt]); return [index]; }
       catch (error) { if (error.code === 'source_excluded') return []; throw error; }
