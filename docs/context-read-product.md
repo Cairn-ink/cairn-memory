@@ -675,8 +675,15 @@ identity: each cache miss consumes one admission slot before that lane's work.
 Compatible intents share a resident. One selection has `N=2,C=1`; two independent
 residents have `N=4,C=2`; two incompatible constructor identities replacing one
 writer can require `C=3` in a rotated sweep. Do not assume `C=1` globally.
-With one resident and `pollMs=25`, Q=1,000 and 1,250 are accepted; 1,251,
-1,500 and 1,600 refuse `invalid_input`. Production's Q=1,000 remains accepted.
+The host registers one pump per owner with one projection (`types:["memory"]`).
+That one selection expands to current and history lanes sharing one resident:
+`N=2,C=1`. With `pollMs=25`, one selection per pump at Q=1,000 remains accepted:
+`(2+1)*1000+1000=4000`, leaving a 1,000 ms margin. For one selection,
+Q≤1,250 is accepted; Q=1,251, 1,500 and 1,600 refuse `invalid_input`.
+Several selections in one pump are refused at Q=1,000. For example, two
+independent residents (`N=4,C=2`) with `pollMs=25` accept only Q≤714:
+Q=714 is accepted and Q=715 or 1,000 is refused. The full newly refused class is
+`N*S+Q<=5000 && (N+C)*S+Q>5000`.
 This supersedes the preceding same-turn opening-headroom description.
 
 Deadline lookahead includes actual non-observing admission slots and preserves
