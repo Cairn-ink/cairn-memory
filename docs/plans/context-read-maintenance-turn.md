@@ -96,10 +96,11 @@ The engine requests a turn for **every** quantum, as follows.
    - On abort, a queued request is withdrawn with `release("withdrawn")`. Cancellation adds **no** failure record of its own. The state that triggered it is preserved: close and stop still stop the pump, and expiry, exhaustion or an existing error keep their existing outcome. After a renewal handoff or the wait deadline, the pump continues.
    - If a grant races the abort, the engine **owns** the granted permit and releases it under §5. Abort never auto-releases a granted permit.
    - Late results never dispatch work.
+   - **Withdrawal is final.** After `release("withdrawn")` the host must never grant that ticket. If a late `"admitted"` arrives for a withdrawn ticket anyway, the engine ignores it and calls nothing again.
 4. **`"defer"`.**
    - No quantum, charge, refund, failure (`read_timeout` / `read_cancelled`), cursor or startup-progress change, dispatch ordinal, observation, or acknowledgement of earlier pending usage.
    - The engine calls `release("withdrawn")` and retries at normal spacing through a separate retry-not-before time, so an overdue lookahead cannot spin with zero delay (semantic `:185–202`).
-   - Public status stays `active` with `error:null`.
+   - A deferral by itself never changes public status: the pump stays `active` with `error:null`. The exception is a close, stop, expiry, exhaustion or existing error that happens at the same time; it keeps its own outcome (§3.3).
 5. **`"admitted"`: the post-grant recheck.** The engine synchronously rechecks the pump-local conditions:
    - stop or error;
    - the admission generation (a renewal since the request);
@@ -119,8 +120,9 @@ The engine requests a turn for **every** quantum, as follows.
 
 | Event | Result |
 |---|---|
-| `createTurn` throws, returns a malformed ticket, or the port's shape changed | No validated ticket exists, so there is nothing to release. **Terminal `authority_required`** for that pump. P2a is unchanged; the host reopens on its next tick. A caller-supplied error's code, name or text is never inspected or propagated. |
+| Before any ticket is validated: `createTurn` throws or returns a malformed ticket, or the port's shape is found changed when the engine is about to call `createTurn` | No validated ticket exists, so there is nothing to release. **Terminal `authority_required`** for that pump. P2a is unchanged; the host reopens on its next tick. A caller-supplied error's code, name or text is never inspected or propagated. |
 | `enter` throws or rejects, or returns anything other than the two strings or a native Promise of one (a non-native thenable is malformed and is never awaited) | **Terminal `authority_required`** for that pump. The ticket exists and an exception cannot prove that the broker holds no permit for it. No engine work started, so the engine calls the captured `release("withdrawn")` exactly once, as soon as `enter` has thrown, rejected or returned. If that `release` throws, the row below applies, and its `reader_failed` takes precedence. |
+| The port's shape is found changed while a validated ticket exists | **Terminal `authority_required`** for that pump. The existing ticket is still finalized through the exactly-once release ledger, using the captured `release`. It gets `release("withdrawn")` if no engine work started, or §5's rule if its turn was granted and ran. |
 | `release()` throws (on any path) | The broker's state is uncertain. The engine records the attempt **before** invoking `release`, so it never calls it twice. The claim is **poisoned**: terminal `reader_failed`, no further turns for that pump, no successor admitted by this engine instance. The host must provide an atomic, no-throw `release`. |
 | Disposal for a granted turn is unproven or failed (§5) | **No release.** The claim stays poisoned across pump IDs, with no TTL. The existing safety quarantine applies. Only a process restart clears it. The engine's private status shows phase `poisoned`, so the host can alert and restart. |
 
