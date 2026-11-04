@@ -1,3 +1,4 @@
+import { familyCostParity } from '../testing/receipt-event-time-gates.mjs';
 import { assertDeferredContentCost, assertDeferredContentCostInventory } from '../testing/content-safety-s2h-deferred-cost.mjs';
 import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
@@ -68,4 +69,17 @@ for(const base of [18,23,33])for(const n of [1,12])test(`R2 temporal/admission/r
  }}
  assertDeferredContentCostInventory(ratchets,t.name);
  assert.deepEqual(problems,[],'non-deferred temporal R2 costs');
+});
+
+
+test('R2 product family gate B: metadata smallest case, exact zero/five-fact parity', async t => {
+  await familyCostParity(t, 33, async (f, db, facts) => {
+
+  const core = openMemoryCore({ path: f.path }); t.after(() => core.close());
+  const completed = { namespace: ns, client: 'synthetic', eventId: 'completed', payloadDigest: 'a'.repeat(64) };
+  const claim = ok(core.claimAdmission({ ...completed, leaseMs: 125000 }));
+  ok(core.finishAdmission({ ...completed, token: claim.token, items: [{ content: 'Synthetic completed admission', kind: 'fact', confidence: .8, receipts: [receipt('completed')] }] }));
+  return { method: 'inspectAdmission', variant: 'hit', call: () => core.inspectAdmission({ namespace: ns, client: 'synthetic', eventId: 'completed' }),
+    check(result) { assert.equal(result.ok, true, JSON.stringify(result)); assert.equal(result.value.status, 'completed'); assert.equal(result.value.members.length, 1); } };
+  });
 });

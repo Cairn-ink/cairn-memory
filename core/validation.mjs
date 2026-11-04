@@ -71,6 +71,15 @@ export function namespace(input) {
   };
 }
 
+/** Optional receipt instant; admission supplies the exact persisted clock. */
+export function receiptEventTime(value, now) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string' || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value) ||
+      !Number.isFinite(Date.parse(value)) || new Date(value).toISOString() !== value ||
+      now !== undefined && Date.parse(value) > Date.parse(now) + 300_000) fail('invalid_input');
+  return value;
+}
+
 export function memoryInput(input) {
   object(input, ["content", "kind", "origin", "confidence", "receipt"]);
   const kind = input.kind ?? "fact";
@@ -83,7 +92,7 @@ export function memoryInput(input) {
     fail("invalid_memory");
   }
   const content = boundedText(input.content, 4_000);
-  object(input.receipt, ["client", "sessionId", "eventId", "role", "excerpt"]);
+  object(input.receipt, ["client", "sessionId", "eventId", "role", "excerpt", "occurredAt"]);
   const receipt = {
     client: identifier(input.receipt.client),
     sessionId: identifier(input.receipt.sessionId),
@@ -92,7 +101,7 @@ export function memoryInput(input) {
     excerpt: boundedText(input.receipt.excerpt, 800, true),
   };
   if (!["user", "assistant"].includes(receipt.role)) fail("invalid_receipt");
-  return { content, kind, origin, confidence, receipt, fingerprint: fingerprint(content) };
+  return { content, kind, origin, confidence, receipt, receiptTimes: [receiptEventTime(input.receipt.occurredAt)], fingerprint: fingerprint(content) };
 }
 
 export function revision(value) {

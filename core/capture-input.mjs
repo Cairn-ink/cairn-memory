@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
-import { boundedText, denseArray, fail, identifier, object, revision } from './validation.mjs';
+import { boundedText, denseArray, fail, identifier, object, receiptEventTime, revision } from './validation.mjs';
 
 const kinds = ['fact', 'preference', 'decision', 'instruction', 'context'];
 
 /** Copy trusted identity and normalize every message before claiming or calling a model. */
-export function captureSnapshot(input, captureQualification, captureSourcePolicy) {
+export function captureSnapshot(input, captureQualification, captureSourcePolicy, retainTimes = true, now) {
   try {
     const namespace = { ownerId: input.namespace.ownerId, scope: input.namespace.scope,
       projectId: input.namespace.projectId };
@@ -17,7 +17,7 @@ export function captureSnapshot(input, captureQualification, captureSourcePolicy
       causal = { streamId: identifier(input.causal.streamId), sequence: revision(input.causal.sequence) };
     }
     const messages = denseArray(input.messages, 1, 24).map((message) => {
-      object(message, ['id', 'role', 'content']);
+      object(message, ['id', 'role', 'content', 'occurredAt']);
       const id = identifier(message.id);
       const role = message.role;
       if (!['user', 'assistant'].includes(role)) fail('invalid_input');
@@ -25,12 +25,16 @@ export function captureSnapshot(input, captureQualification, captureSourcePolicy
           (typeof message.content !== 'string' || !message.content.isWellFormed())) {
         fail('invalid_input');
       }
-      return { id, role, content: boundedText(message.content, 4000) };
+      // Null and absence both mean no asserted receipt time.
+      const occurredAt = receiptEventTime(message.occurredAt, now);
+      return { id, role, content: boundedText(message.content, 4000),
+        ...(retainTimes && occurredAt !== null ? { occurredAt } : {}) };
     });
     if (new Set(messages.map((message) => message.id)).size !== messages.length ||
         messages.reduce((sum, message) => sum + message.content.length, 0) > 20000) {
       fail('invalid_input');
     }
+    // Receipt times are attributes: retain main's identity on every layout.
     const payloadDigest = createHash('sha256').update(JSON.stringify([
       captureSourcePolicy === 'indexed-evidence-v1' ? 'cairn.capture.indexed-evidence.v1' :
         captureSourcePolicy ? 'cairn.capture.indexed-windows.v1' :
@@ -54,7 +58,8 @@ export function retainedSourceView(snapshot) {
     const messages = snapshot.messages.map((message, index) => {
       const content = boundedText(boundedText(message.content, 800, true), 800, true);
       if (content !== message.content) truncatedMessageIndices.push(index);
-      return Object.freeze({ ...message, content });
+      const { occurredAt, ...source } = message;
+      return Object.freeze({ ...source, content });
     });
     return Object.freeze({ messages: Object.freeze(messages),
       retainedSourceWindow: Object.freeze({ maxUnitsPerMessage: 800,

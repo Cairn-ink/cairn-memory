@@ -1,4 +1,4 @@
-import { boundedText, denseArray, fail, object } from './validation.mjs';
+import { boundedText, denseArray, fail, object, receiptEventTime } from './validation.mjs';
 
 const FIELDS = ['subject', 'property', 'scope', 'applies', 'value', 'attribution', 'commitment'];
 const ATTRIBUTIONS = ['direct', 'reported', 'quoted', 'proposed', 'unknown'];
@@ -21,8 +21,10 @@ function label(value, maximum) {
 export function qualificationSources(content, receipts) {
   if (typeof content !== 'string' || !content.isWellFormed()) fail('invalid_input');
   for (const receipt of denseArray(receipts, 1, 4)) {
-    object(receipt, ['client', 'sessionId', 'eventId', 'role', 'excerpt']);
-    if (Object.values(receipt).some(value => typeof value !== 'string' || !value.isWellFormed())) fail('invalid_input');
+    object(receipt, ['client', 'sessionId', 'eventId', 'role', 'excerpt', 'occurredAt']);
+    receiptEventTime(receipt.occurredAt);
+    const { occurredAt, ...identity } = receipt;
+    if (Object.values(identity).some(value => typeof value !== 'string' || !value.isWellFormed())) fail('invalid_input');
   }
 }
 
@@ -58,7 +60,8 @@ export function qualificationInput(input, receipts) {
     if (new Set(fields).size !== fields.length || fields.some(field => !FIELDS.includes(field))) fail('invalid_input');
     const ordered = FIELDS.filter(field => fields.includes(field));
     // Identical receipts at different input positions still denote one source.
-    const key = JSON.stringify([receipts[receiptIndex], start, end, ordered]);
+    const { occurredAt, ...identity } = receipts[receiptIndex];
+    const key = JSON.stringify([identity, start, end, ordered]);
     if (seen.has(key)) fail('invalid_input');
     seen.add(key);
     ordered.forEach(field => covered.add(field));

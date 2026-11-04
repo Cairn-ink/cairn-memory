@@ -548,3 +548,56 @@ advances it. New hints before a keyset cursor appear on a fresh listing.
 Fresh conflict evidence replaces a non-pending pair's outcome. Supersession
 holds re-arm only dropped rows; pending, unresolved and applied proof is retained.
 The pair tables are not an append-only audit trail.
+
+
+## Receipt event time v1 (physical 51/52/53, 2026-11-03)
+
+The [layout §3 addendum](plans/context-read-b3s-safety-layout.md) records D-33's
+mapping and direct offline migration paths. Receipts on these layouts carry
+optional immutable `occurred_at TEXT NULL`; existing receipts migrate as null.
+There is no automatic upgrade or time backfill. Times are optional: values the
+pre-existing contract accepts are never rejected. On layouts without receipt
+event time, or when a pre-existing value is not a strict receipt time, the
+receipt time is null. Callers read the `receiptEventTime` capability, a boolean
+describing only the installed layout's column support.
+
+Ordinary and episode `core.capture` use each source message's `messages[].occurredAt`.
+New optional input fields are `receipt.occurredAt` on `remember` and correction,
+or each receipt's `occurredAt` on contract `admit`, `supersede` and admission
+finish items. Null or absence means no asserted time on every entry point.
+Only the receipt derived from that message receives its asserted time; no session range, neighboring message or
+episode supplies a fallback. Raw-derived
+receipts always receive null, independently of Raw timestamps and capture order.
+
+One receipt validation helper requires exact millisecond UTC ISO strings with
+an exact round trip and no lower bound. Input parsing checks shape; admission
+checks the upper bound of the store clock plus five minutes using the exact
+instant persisted as `created_at`. New receipt fields use strict validation and
+invalid values produce `invalid_input` on every layout. Episode capture retains
+its pre-existing shape validation and replay digest; accepted future values
+succeed with null receipt time. Ordinary capture accepts strict-valid message
+times on every layout and rejects other non-null supplied values with
+`invalid_input`. It checks the store clock before any claim or model call.
+Raw input validation retains its independent existing rules.
+
+The time travels beside the receipt identity, outside receipt hashing, Raw
+lineage attachment and source-root updates. Identity key bytes remain unchanged.
+For duplicate receipts, two different non-null times produce `storage_error`;
+a retained null stays null when a time arrives, and a retained time stays when
+an untimed duplicate arrives. The immutable column is deleted with its receipt
+by correction, forget or host erasure; it has no separate lifecycle.
+
+Ordinary capture digests always retain main's untimed identity bytes on every
+layout. Times are attributes: an identical replay or a replay differing only in
+times returns the stored result, leaving the first receipt times unchanged. On
+old layouts valid times are dropped before staging, so results, receipts, keys
+and database bytes match the untimed write on main. Episode
+capture already binds source times, including accepted future times, and a
+changed episode time under the same event ID produces `event_payload_conflict`.
+Admission claim is unchanged and carries no receipts:
+its `payloadDigest` is opaque to the engine, and the caller's digest binds the
+payload, exactly as for excerpts. Finish strips each receipt's optional time
+into the side parameter before hashing. There is no claim/finish time comparison;
+a finish retry with a changed retained non-null time uses the duplicate rule
+and fails with `storage_error`. Read results and diagnostics expose no receipt
+event times in this version.

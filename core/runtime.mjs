@@ -1,6 +1,7 @@
+import { captureSnapshot } from './capture-input.mjs';
 import { registerContentWriteBoundary } from './content-write-context.mjs';
 import { contentScopeEpochGuard, assertContentOutput, contentReceiptCount, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
-import { cachedContentLayout, installedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
+import { receiptEventTimeEnabled, cachedContentLayout, installedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
 import { writeContentSuppressionInside, suppressReceiptsInside, requireSuppressionTransaction, allocateContentKey, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, hasContentSuppressionRequestInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { roleProfileOptions } from './role-profile-input.mjs';
@@ -28,7 +29,7 @@ import { createQualificationStorage } from './claim-qualification-storage.mjs';
 import { sourceEvidence, isSourceContext } from './source-evidence.mjs';
 import { createQualifiedTransitionStorage } from './qualified-transition-storage.mjs';
 import { createRationaleStorage } from './rationale-storage.mjs';
-import { fail, object } from "./validation.mjs";
+import { fail, object, receiptEventTime } from "./validation.mjs";
 import { privateCardOptions } from './private-card-input.mjs';
 import { createPrivateCardStorage } from './private-card-storage.mjs';
 import { createRawCardInvalidation } from './card-raw-sources.mjs';
@@ -138,18 +139,22 @@ export function createMemoryRuntime(input, internal) {
 
   const receiptKey = receipt => createHash("sha256").update(JSON.stringify(receipt)).digest("hex");
 
-  function attach(id, receipt, now, inserted = [], origin = 'independent') {
+  function attach(id, receipt, now, inserted = [], origin = 'independent', occurredAt = null) {
+    occurredAt = receiptEventTime(occurredAt, now);
+    const eventTime = receiptEventTimeEnabled(cachedContentLayout(db));
+    if (!eventTime) occurredAt = null;
     const key = receiptKey(receipt);
     // Read retained dedup first: BEFORE INSERT guards must also stop REPLACE.
     const retained = db.prepare('SELECT * FROM receipts WHERE memory_id=? AND receipt_key=?').get(id, key);
     if (retained && (retained.client !== receipt.client || retained.session_id !== receipt.sessionId ||
-        retained.event_id !== receipt.eventId || retained.role !== receipt.role || retained.excerpt !== receipt.excerpt)) fail('storage_error');
+        retained.event_id !== receipt.eventId || retained.role !== receipt.role || retained.excerpt !== receipt.excerpt ||
+        retained.occurred_at != null && occurredAt !== null && retained.occurred_at !== occurredAt)) fail('storage_error');
     const parent = db.prepare('SELECT owner_id,scope,project_id FROM memories WHERE id=?').get(id);
     const receiptId = retained?.id ?? allocateContentKey(db, { ownerId: parent.owner_id, scope: parent.scope, projectId: parent.project_id }, 'receipt');
     const changes = retained ? 0 : db.prepare(`INSERT INTO receipts
-      (id, memory_id, receipt_key, client, session_id, event_id, role, excerpt, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(receiptId, id, key, receipt.client,
-      receipt.sessionId, receipt.eventId, receipt.role, receipt.excerpt, now).changes;
+      (id, memory_id, receipt_key, client, session_id, event_id, role, excerpt, created_at${eventTime ? ", occurred_at" : ""})
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?${eventTime ? ", ?" : ""})`).run(receiptId, id, key, receipt.client,
+      receipt.sessionId, receipt.eventId, receipt.role, receipt.excerpt, now, ...(eventTime ? [occurredAt] : [])).changes;
     if (changes) inserted.push(receiptId);
     let provenanceChanged = false;
     if (rawLineage.enabled()) {
@@ -229,10 +234,12 @@ export function createMemoryRuntime(input, internal) {
   function admit(ns, value, projection = {}) {
     ready();
     return transaction(db, () => {
+      const now = new Date().toISOString();
+      validateReceiptTimes(value, now);
       rawLineage.assertReceipts(ns, value.receipts);
       assertNotSuppressed(ns, value.fingerprint);
       conflictStorage.validateTargets(ns, value.conflictHints);
-      const result = admitMutation(ns, value, projection);
+      const result = admitMutation(ns, value, projection, now);
       if (value.procedural !== undefined) proceduralStorage.write(result.memory, value.procedural, 'explicit', value.receipts);
       const changed = conflictStorage.insertBatch(ns,
         [{ memoryId: result.memory.id, hints: value.conflictHints }], "explicit-hint");
@@ -240,22 +247,33 @@ export function createMemoryRuntime(input, internal) {
     });
   }
 
+  function validateReceiptTimes(value, now) {
+    value.receiptTimes = (value.receiptTimes ?? []).map(time => {
+      try { return receiptEventTime(time, now); }
+      catch (error) {
+        // Episode capture already applied its pre-existing input contract.
+        if (value.optionalReceiptTimes) return null;
+        throw error;
+      }
+    });
+  }
+
   // Caller owns the transaction, including admission-claim completion when used
   // in a batch. Explicit and inferred writes share all mutation/invalidation rules.
-  function admitMutation(ns, value, projection = {}) {
+  function admitMutation(ns, value, projection = {}, now = new Date().toISOString()) {
+    validateReceiptTimes(value, now);
     rawLineage.assertReceipts(ns, value.receipts);
     assertNotSuppressed(ns, value.fingerprint);
     const receiptOrigin = !projection.automatic && value.origin === 'explicit' ? 'independent' : 'unknown';
     const insertedReceiptIds = [];
     const existing = db.prepare(`SELECT * FROM memories WHERE ${where}
       AND fingerprint = ? AND deleted = 0`).get(...boundary(ns), value.fingerprint);
-    const now = new Date().toISOString();
     if (existing) {
       // Same content-free refusal as the forgotten-fingerprint path above.
       if(!contentReadSafety(db,{namespace:ns,ref:{type:'memory',namespace:ns,memoryId:existing.id,revision:existing.revision},intent:'history'}).allowed)fail('memory_suppressed');
       if (value.qualification !== undefined && value.content !== existing.content) fail('qualification_conflict');
       let changed = false;
-      for (const receipt of value.receipts) changed = Boolean(attach(existing.id, receipt, now, insertedReceiptIds, receiptOrigin)) || changed;
+      for (const [index, receipt] of value.receipts.entries()) changed = Boolean(attach(existing.id, receipt, now, insertedReceiptIds, receiptOrigin, value.receiptTimes?.[index])) || changed;
       qualificationStorage.bind(existing, value.qualification, value.receipts, true, value.content,
         projection.captureQualifiedDuplicates);
       const explicit = value.origin === "explicit";
@@ -290,7 +308,7 @@ export function createMemoryRuntime(input, internal) {
       (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, ?)`).run(id, ...boundary(ns),
       value.fingerprint, value.content, value.kind, value.origin, value.confidence, now, now,
       decisionReview && projection.automatic && value.origin === 'agent-inferred' && value.kind === 'decision' ? 'awaiting' : 'none');
-    for (const receipt of value.receipts) attach(id, receipt, now, insertedReceiptIds, receiptOrigin);
+    for (const [index, receipt] of value.receipts.entries()) attach(id, receipt, now, insertedReceiptIds, receiptOrigin, value.receiptTimes?.[index]);
     const memory = memoryWriteSafety(ns,activeRow(ns, id));
     qualificationStorage.bind(memory, value.qualification, value.receipts, false, value.content);
     return { memory, ...(projection.legacy ? { legacyMemory: legacyDto(memory) } : {}), deduplicated: false,
@@ -329,7 +347,7 @@ export function createMemoryRuntime(input, internal) {
         origin = 'explicit', confidence = 1, revision = revision + 1, updated_at = ?
         WHERE id = ?`).run(value.content, value.fingerprint, value.kind, now, id);
       db.prepare("DELETE FROM receipts WHERE memory_id = ?").run(id);
-      for (const receipt of value.receipts) attach(id, receipt, now);
+      for (const [index, receipt] of value.receipts.entries()) attach(id, receipt, now, [], 'independent', value.receiptTimes?.[index]);
       const memory = activeRow(ns, id);
       return { memory,
         ...(projection.legacy ? { legacyMemory: legacyDto(memory) } : {}),
@@ -731,7 +749,7 @@ export function createMemoryRuntime(input, internal) {
   stagedEvidence.setEpisodes(episodes);
   deletion = createRawDeletionStorage({ db, roots: sourceRoots, episodes, forgetMutation, removeReceipts, advanceEpoch });
   const admissionStorage = createAdmissionStorage({
-    db, admitMutation, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
+    db, admitMutation, validateReceiptTimes, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
     classificationJournal, episodes, proceduralStorage, assertSources: rawLineage.assertReceipts, sourceRoots, memoryAncestry, privacyMemoryDenied,
   });
   const orderedStorage = createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
@@ -876,6 +894,12 @@ export function createMemoryRuntime(input, internal) {
     claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },
     filterCaptureSources(ns, sources) { ready(); return captureSourceRead(() => rawLineage.filter(ns, sources)); },
     assertCaptureSources(ns, sources) { ready(); return captureSourceRead(() => rawLineage.assertReceipts(ns, sources)); },
+    captureSnapshot(ns, input, qualification, policy) {
+      ready();
+      // Old layouts validate new times, then omit them before hashing or staging.
+      return captureSnapshot(input, qualification, policy,
+        receiptEventTimeEnabled(cachedContentLayout(db)), new Date().toISOString());
+    },
     claimCapturedAdmission(ns, input, deadline, registration, sources) {
       ready(); return admissionStorage.claimAdmission(ns, input, undefined, undefined, deadline, registration, sources);
     },

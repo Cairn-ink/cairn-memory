@@ -44,7 +44,7 @@ import { qualificationInput, qualificationSources } from './claim-qualification-
 import { proposeRationale } from './rationale.mjs';
 import { reviewSourceBasis } from './source-basis.mjs';
 import {
-  boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray, fail,
+  boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray, fail, receiptEventTime,
 } from "./validation.mjs";
 
 // One constructor grammar for the base and its opt-in wrappers. Wrappers remove
@@ -94,9 +94,10 @@ function contractReadSet(input) {
 }
 
 function contractReceipt(input) {
-  object(input, ["client", "sessionId", "eventId", "role", "excerpt"]);
+  object(input, ["client", "sessionId", "eventId", "role", "excerpt", "occurredAt"]);
   if (!["user", "assistant"].includes(input.role)) throw new MemoryStoreError("invalid_input");
   try {
+    receiptEventTime(input.occurredAt);
     return {
       client: identifier(input.client),
       sessionId: identifier(input.sessionId),
@@ -346,7 +347,7 @@ export function createMemoryCore(input, internal) {
       const conflictHints = contractConflictHints(input.conflictHints);
       if (Object.hasOwn(input, 'qualification')) qualificationSources(input.memory.content, input.receipts);
       const qualification = Object.hasOwn(input, 'qualification') ? qualificationInput(input.qualification, receipts) : undefined;
-      const result = runtime.admit(ns, { ...memory, receipts, conflictHints, qualification, ...(Object.hasOwn(input, "procedural") ? { procedural: input.procedural } : {}) });
+      const result = runtime.admit(ns, { ...memory, receipts, receiptTimes: input.receipts.map(receipt => receiptEventTime(receipt.occurredAt)), conflictHints, qualification, ...(Object.hasOwn(input, "procedural") ? { procedural: input.procedural } : {}) });
       return { memory: { id: result.memory.id, revision: result.memory.revision },
         deduplicated: result.deduplicated, indexRevision: result.indexRevision,
         ...(result.reviewEffects ? { reviewEffects: result.reviewEffects } : {}) };
@@ -413,7 +414,7 @@ export function createMemoryCore(input, internal) {
       const expectedRevision = contractRevision(input.expectedRevision);
       const memory = contractMemory({ content: input.content, kind: input.kind });
       const receipt = contractReceipt(input.receipt);
-      const result = runtime.correct(ns, memoryId, { ...memory, receipts: [receipt] },
+      const result = runtime.correct(ns, memoryId, { ...memory, receipts: [receipt], receiptTimes: [receiptEventTime(input.receipt.occurredAt)] },
         expectedRevision, { detail: true });
       return { memory: result.detail, indexRevision: result.indexRevision };
     });
@@ -488,7 +489,7 @@ export function createMemoryCore(input, internal) {
       const expectedRevision = contractRevision(input.expectedRevision);
       const replacement = contractMemory(input.replacement);
       const receipts = denseArray(input.receipts, 1, 4).map(contractReceipt);
-      return runtime.supersede(ns, id, { ...replacement, receipts }, expectedRevision);
+      return runtime.supersede(ns, id, { ...replacement, receipts, receiptTimes: input.receipts.map(receipt => receiptEventTime(receipt.occurredAt)) }, expectedRevision);
     });
   }
 
@@ -578,7 +579,7 @@ export function createMemoryCore(input, internal) {
       const conflictHints = contractConflictHints(item.conflictHints);
       if (Object.hasOwn(item, 'qualification')) qualificationSources(item.content, item.receipts);
       const qualification = Object.hasOwn(item, 'qualification') ? qualificationInput(item.qualification, receipts) : undefined;
-      return { ...memory, origin: 'agent-inferred', confidence: item.confidence, receipts, conflictHints, qualification,
+      return { ...memory, origin: 'agent-inferred', confidence: item.confidence, receipts, receiptTimes: item.receipts.map(receipt => receiptEventTime(receipt.occurredAt)), ...(episode ? { optionalReceiptTimes: true } : {}), conflictHints, qualification,
         ...(episode && Object.hasOwn(item, 'procedural') ? { procedural: item.procedural } : {}) };
     });
   }
@@ -1004,7 +1005,9 @@ export function createMemoryCore(input, internal) {
             claim: (snapshot, sources) => invoke(() => runtime.claimOrdered(ns, snapshot, deadline, rawRegistration, sources)),
             prepare(snapshot, order, extracted) {
               return invoke(() => {
-                const items = admissionItems(extracted.map(({ sourceIndices, ...item }) => item));
+                const items = admissionItems(extracted.map(({ sourceIndices, receiptTimes, ...item }) =>
+                  receiptTimes ? { ...item, receipts: item.receipts.map((receipt, index) =>
+                    ({ ...receipt, occurredAt: receiptTimes[index] })) } : item));
                 return { items, discovery: runtime.discoverOrdered(ns, snapshot, order, items) };
               });
             },

@@ -30,7 +30,7 @@ export const CONTENT_TERMINAL_ACK_FIELDS = Object.freeze({
 // runtime method context, while index maintenance remains trusted.
 const nonwrites = new Set(`CARD_CURRENT_METHODS CARD_CURRENT_VERSION CONTEXT_SOURCES MemoryStoreError SOURCE_LIMITS ackCleanup
 assertCaptureEvidence assertCaptureSources assertContentOutput assertContentScope assertEpisodeKeep
-assertEpoch checkMethodReasonRefs classificationSnapshot close compareMethodVersions completion
+assertEpoch captureSnapshot checkMethodReasonRefs classificationSnapshot close compareMethodVersions completion
 contentPortGuard contextRead createContextReadSupervisor drain episodeCaptureState
 episodeDraftOutcome episodeDraftSnapshot episodeRange episodeSessionKey epoch fetch
 fetchCandidateEvidence fetchEvidence fetchPage filterCaptureSources findCandidates get

@@ -633,6 +633,10 @@
       "operation": "write",
       "terminalField": null
     },
+    "captureSnapshot": {
+      "kind": "gated",
+      "operation": "read"
+    },
     "claimAdmission": {
       "kind": "gated",
       "operation": "write",

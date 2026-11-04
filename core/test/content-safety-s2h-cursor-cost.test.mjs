@@ -1,3 +1,4 @@
+import { familyCostParity } from '../testing/receipt-event-time-gates.mjs';
 import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -39,4 +40,16 @@ for(const base of [18,23,33])for(const n of [24,48])test(`R2 cursor pages v${bas
   assert.equal(row.ports,old.ports);assert.equal(row.begin,old.begin);
   assert.equal(row.statements-old.statements-row.ports,4+(current.facts?2:0),row.method+' '+row.variant+' fixed statement formula');
  }
+});
+
+
+test('R2 product family gate B: cursor smallest case, exact zero/five-fact parity', async t => {
+  await familyCostParity(t, 33, async (f, db, facts) => {
+
+  const core = openMemoryCore({ path: f.path }); t.after(() => core.close());
+  for (let i = 0; i < 24; i++) ok(core.admit({ namespace: ns, memory: { content: 'Synthetic cursor memory ' + i, kind: 'fact' }, receipts: [receipt('cursor-' + i)] }));
+  let first;
+  return { method: 'list', variant: 'cursor', beforeMeasure() { first = ok(core.list({ namespace: ns, limit: 12 })); assert.equal(typeof first.nextCursor, 'string'); }, call: () => core.list({ namespace: ns, limit: 12, cursor: first.nextCursor }),
+    check(result) { assert.equal(result.ok, true, JSON.stringify(result)); assert.equal(result.value.memories.length, 12); } };
+  });
 });

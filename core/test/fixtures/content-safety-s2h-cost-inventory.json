@@ -893,6 +893,7 @@
       "assertEpoch",
       "beginInitialClassification",
       "bindQualifiedClaim",
+      "captureSnapshot",
       "claimAdmission",
       "claimCaptureEvidence",
       "claimCapturedAdmission",
@@ -2396,6 +2397,26 @@
     ],
     "recall-rationale-evidence": [
       "recall:rationale-evidence"
+    ],
+    "receipt-event-time-raw-ports": [
+      "getConversation:1/33/0",
+      "getConversation:1/53/0",
+      "getConversation:1/53/5",
+      "getConversation:4/33/0",
+      "getConversation:4/53/0",
+      "getConversation:4/53/5",
+      "resolveSourceReferences:1/33/0",
+      "resolveSourceReferences:1/53/0",
+      "resolveSourceReferences:1/53/5",
+      "resolveSourceReferences:4/33/0",
+      "resolveSourceReferences:4/53/0",
+      "resolveSourceReferences:4/53/5",
+      "getSource:1/33/0",
+      "getSource:1/53/0",
+      "getSource:1/53/5",
+      "getSource:4/33/0",
+      "getSource:4/53/0",
+      "getSource:4/53/5"
     ]
   },
   "surfaceClassifications": {
@@ -2500,6 +2521,10 @@
     "captureRaw": {
       "kind": "write",
       "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "captureSnapshot": {
+      "kind": "capture-protocol",
+      "reason": "Normalizes caller-supplied ordinary capture times against the store clock and installed layout before hashing. Serves no retained content; the focused event-time capture and old-layout byte-identity tests cover this new input path."
     },
     "checkMethodReasonRefs": {
       "kind": "read",
@@ -3352,5 +3377,107 @@
     "fixture": "content-safety-s2h-unmigrated-counts.json",
     "main": "26f9e467",
     "measured": "2026-11-03"
+  },
+  "receiptEventTime": {
+    "cells": {
+      "51": 18,
+      "52": 23,
+      "53": 33
+    },
+    "pathGate": "receipt-event-time-cost.test.mjs",
+    "portGate": "receipt-event-time-port-cost.test.mjs",
+    "inertGate": "receipt-event-time-inert-ports.test.mjs",
+    "paths": {
+      "memory": {
+        "bases": [
+          18,
+          23,
+          33
+        ],
+        "sizes": [
+          12,
+          24
+        ]
+      },
+      "topic": {
+        "bases": [
+          18,
+          23,
+          33
+        ],
+        "sizes": [
+          12,
+          24
+        ]
+      },
+      "card": {
+        "bases": [
+          23,
+          33
+        ],
+        "sizes": [
+          1,
+          4
+        ]
+      },
+      "raw": {
+        "bases": [
+          33
+        ],
+        "sizes": [
+          1
+        ]
+      },
+      "query": {
+        "bases": [
+          18,
+          23,
+          33
+        ],
+        "sizes": [
+          24
+        ]
+      },
+      "context": {
+        "bases": [
+          18,
+          23,
+          33
+        ],
+        "sizes": [
+          24
+        ]
+      },
+      "status": {
+        "bases": [
+          18,
+          23,
+          33
+        ],
+        "sizes": [
+          24
+        ]
+      },
+      "evidence": {
+        "bases": [
+          18,
+          23,
+          33
+        ],
+        "sizes": [
+          24
+        ]
+      },
+      "maintenance": {
+        "bases": [
+          18,
+          23,
+          33
+        ],
+        "sizes": [
+          24
+        ]
+      }
+    }
   }
 }

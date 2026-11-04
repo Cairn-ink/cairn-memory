@@ -113,9 +113,12 @@ function keepRequest(model, request, deadline) {
 
 /** Public-envelope operations own all transactions; no model work runs inside them. */
 export async function captureMessages({ model, input, operations, captureQualification,
-  captureSourcePolicy, captureRationale, captureEvidence, deadline, episodeRun }) {
+  captureSourcePolicy, captureRationale, captureEvidence, deadline, episodeRun, rawRegistration, runtime, ns }) {
   deadline?.check();
-  const snapshot = episodeRun?.snapshot ?? captureSnapshot(input, captureQualification, captureSourcePolicy);
+  let snapshot = episodeRun?.snapshot ?? captureSnapshot(input, captureQualification, captureSourcePolicy);
+  if (!episodeRun && snapshot.messages.some(message => message.occurredAt !== undefined)) {
+    snapshot = runtime.captureSnapshot(ns, snapshot, captureQualification, captureSourcePolicy);
+  }
   deadline?.check();
   let request = extractionRequest(snapshot, { captureQualification, captureSourcePolicy, episode: Boolean(episodeRun) });
   let { catalog, retained, sourceMessages } = request;
@@ -183,6 +186,12 @@ export async function captureMessages({ model, input, operations, captureQualifi
         () => { assertSources(); if (captureEvidence) unwrap(operations.assertCaptureEvidence(owned)); }, Boolean(episodeRun),
         qualificationReport)
       : await qualifyExtractedItems(model, items, deadline, qualificationReport, assertSources);
+    // Join only each receipt's own trusted message; session clocks and Raw never enter here.
+    for (const item of items) {
+      const times = item.receipts.map(receipt => rawRegistration ? null :
+        snapshot.messages.find(message => message.id === receipt.eventId)?.occurredAt ?? null);
+      if (times.some(time => time !== null)) item.receiptTimes = times;
+    }
     deadline?.check();
     if (snapshot.causal) {
       const prepared = unwrap(operations.ordered.prepare(snapshot, claim.order, items));
@@ -192,7 +201,9 @@ export async function captureMessages({ model, input, operations, captureQualifi
         : await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery, deadline, validateFresh: () => { assertSources(); unwrap(operations.ordered.assertPrepared(snapshot, claim.order, prepared)); }, sourceView });
       deadline?.check();
       finished = unwrap(operations.ordered.finish(snapshot, claim.token, claim.order, prepared, judged));
-    } else finished = unwrap(operations.finishAdmission({ ...owned, items }));
+    } else finished = unwrap(operations.finishAdmission({ ...owned, items: items.map(({ receiptTimes, ...item }) =>
+      receiptTimes ? { ...item, receipts: item.receipts.map((receipt, index) =>
+        ({ ...receipt, occurredAt: receiptTimes[index] })) } : item) }));
   } catch (error) {
     // A failed or stale cleanup cannot replace the original error or release a successor's claim.
     try { operations.abandonAdmission(owned, Boolean(episodeRun &&

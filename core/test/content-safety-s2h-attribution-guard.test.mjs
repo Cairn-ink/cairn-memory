@@ -148,4 +148,59 @@ if (!isMainThread) {
           }
         } finally { Atomics.store(control, 0, 0); if (control[5]) unlinkSync(f.path + suffix); await h.close(); }
       });
+  const { eventTimeSafetyFixture } = await import('../testing/receipt-event-time-fixture.mjs');
+  const { familyGate } = await import('../testing/receipt-event-time-gates.mjs');
+  const completeFamilyAttribution = familyGate('G', 8);
+  for (const suffix of ['-wal', '-journal']) for (const method of methods)
+    test(`family gate G: attribution guard v53 ${suffix} ${method}`, async t => {
+      const base = 33;
+      const f = eventTimeSafetyFixture(t, base); await f.migrate();
+      const core = openMemoryCore({ path: f.path });
+      try { ok(core.admit({ namespace: ns, memory: { content: 'synthetic guard needle', kind: 'fact' }, receipts: [receipt('guard')] })); }
+      finally { core.close(); }
+      const db = f.connect();
+      try { assert.equal(db.prepare('PRAGMA user_version').get().user_version,
+        53, 'actual physical layout'); }
+      finally { db.close(); }
+      const maintenance = ['getContextIndexStatus', 'refreshContextIndex'].includes(method);
+      const c = configured(t, f.path, [ns], { service: maintenance });
+      const control = new Int32Array(new SharedArrayBuffer(32)), detail = new SharedArrayBuffer(1024);
+      let wireDetail;
+      const open = createProductReaderRuntime({ maintenance, spawnWorker: data => {
+        const worker = new Worker(new URL(import.meta.url), { workerData: { ...data,
+          guardControl: control.buffer, guardDetail: detail, guardSuffix: suffix }, env: {}, execArgv: [] });
+        worker.on('message', message => { if (message.result?.ok === false) wireDetail = message.maintenanceFailure; });
+        return worker;
+      } });
+      const h = await open(c.options); t.after(() => h.close());
+      const input = { readSet: [ns], types: ['memory'], intent: 'current', deadlineMs: 5000,
+        ...(method === 'findCandidates' || method === 'contextRead' ? { query: 'needle' } : {}),
+        ...(method === 'contextRead' ? { budget: { maxItems: 8, maxTokens: 2000 } } : {}) };
+      const payload = method === 'refreshContextIndex'
+        ? { readSet: [ns], types: ['memory'], intent: 'current', mode: 'lexical', budget: { maxItems: 8, maxMs: 5000 } } : input;
+      Atomics.store(control, 0, 1);
+      try {
+        const result = await h[method](payload, c.token);
+        assert.deepEqual(result, { ok: false, error: { code: 'index_unavailable', retryable: false } }, 'public refusal is unchanged');
+        assert.deepEqual([control[1], control[2], control[3], control[5]], [3, 1, 2, 1],
+          'entry passes, companion appears once, body and delivery independently refuse');
+        // Main context-read-product-classification.test.mjs journal controls
+        // pin auxiliary_file/unsafe_file. Main attribution.failure() and
+        // context-product-worker.result() produce this exact private detail.
+        const reason = suffix === '-journal' ? 'unsafe_file' : 'auxiliary_file';
+        const expected = { kind: 'engine', engineCode: 'index_unavailable', reason, step: 0 };
+        const retained = JSON.parse(new TextDecoder().decode(new Uint8Array(detail, 0, control[6])));
+        t.diagnostic('ATTRIBUTION_GUARD ' + JSON.stringify({ selections: control[4], retained, expected }));
+        assert.deepEqual(retained, expected, 'retain main\'s exact first root-cause detail');
+        assert.equal(control[4], 1, 'exactly one real selectFailure invocation, independent of the getter');
+        if (maintenance) {
+          assert.deepEqual(wireDetail, expected, 'actual Worker response carries the retained private detail');
+          const record = maintenanceFailureDiagnostic(result);
+          assert.deepEqual({ cause: record?.cause, engineCode: record?.engineCode, reason: record?.reason, step: record?.step },
+            { cause: 'engine', engineCode: 'index_unavailable', reason, step: 0 }, 'parent receives main\'s private classification');
+        }
+      } finally { Atomics.store(control, 0, 0); if (control[5]) unlinkSync(f.path + suffix); await h.close(); }
+
+      completeFamilyAttribution(`${suffix}/${method}`);
+    });
 }

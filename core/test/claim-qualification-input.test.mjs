@@ -79,6 +79,16 @@ test('duplicate anchors use receipt identity and ignore field ordering', () => {
   assert.doesNotThrow(() => qualificationInput(value, [receipt, { ...receipt, eventId: 'another' }]));
 });
 
+test('receipt time is optional source metadata and never distinguishes qualification anchors', () => {
+  const timed = { ...receipt, occurredAt: '2001-02-03T04:05:06.789Z' };
+  for (const occurredAt of [undefined, null, timed.occurredAt])
+    assert.deepEqual(qualificationInput(input(), [{ ...receipt, occurredAt }]), input());
+  const value = input();
+  value.anchors.push({ ...value.anchors[0], receiptIndex: 1 });
+  rejected(value, [receipt, timed]);
+  rejected(input(), [{ ...receipt, occurredAt: '2001-02-03T04:05:06Z' }]);
+});
+
 test('UTF-16 anchor offsets preserve full surrogate pairs and reject malformed source strings', () => {
   const value = input(); value.anchors[0] = { ...value.anchors[0], start: 1, end: 3, text: '😀' };
   const sources = [{ ...receipt, excerpt: 'A😀B' }];

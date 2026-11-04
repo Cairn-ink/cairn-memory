@@ -160,6 +160,76 @@ are parameters; execution imports `node:sqlite` inside functions, as at
 `integrations/client/raw/local-setup.mjs:61`. No `createRequire` hiding. Schema
 comparison uses `new db.constructor(':memory:')` (`core/card-current-schema.mjs:65`).
 
+### §3 revision 3.8 addendum: receipt event time (D-33, 2026-11-03)
+
+D-33 uses three per-base family integers: 51→18, 52→23 and 53→33.
+The integer selects the base family; it does not encode installed feature
+combinations. Features and revisions are attested in `content_safety_control`.
+The family format adds `receipt_event_time INTEGER NOT NULL CHECK
+(receipt_event_time IN (0,1))` to the existing revision tuple. The migration
+sets it to 1 and adds nullable `receipts.occurred_at TEXT` and an identity
+trigger that also freezes that column. The control guard freezes the flag.
+
+| Family integer | Base layout | Suppression revision | Card lineage revision at migration | receipt_event_time at migration |
+| --- | --- | --- | --- | --- |
+| 51 | 18 | 1 | 0 | 1 |
+| 52 | 23 | 1 | 0 | 1 |
+| 53 | 33 | 1 | 0 | 1 |
+
+Explicit, offline `safety migrate --quiescent` migrates directly from 18 or 34
+to 51, 23 or 38 to 52, and 33 or 48 to 53. Existing receipts receive null;
+installed features, retained safety facts, owner epochs and all existing control
+values are preserved. Ordinary open never upgrades. Versions 34/38/48 retain
+their original schema and meaning.
+
+Times are optional: values the pre-existing contract accepts are never rejected.
+On layouts without receipt event time, or when a pre-existing value is not a
+strict receipt time, the receipt time is null; callers read the `receiptEventTime`
+capability. New receipt fields retain strict `invalid_input` validation on every
+layout. Ordinary capture accepts strict-valid message times as attributes and
+retains main's untimed replay identity on every layout. The shared absence rule
+is in the [storage contract](../storage-contract.md#receipt-event-time-v1-physical-515253-2026-11-03).
+Episode capture retains its existing shape validation, accepted future times
+and replay digest.
+
+A binary opens a family store only when every attested feature and revision is
+in its supported set and the exact DDL matches that tuple. This binary supports
+`receipt_event_time` 0 or 1, suppression revision 1 and card lineage revision 0;
+unknown columns, feature values or revisions refuse with `unsupported_database`.
+The feature flag is read from the control row, never inferred from numeric order.
+Safety attestation also checks, in its existing final header statement, that
+`receipts.occurred_at` exists exactly when the flag is 1. All safety-attested
+openers share this bounded metadata check, including ordinary readers on bases
+18/23 and lazy topic preparation. Cached reads retain their existing header check;
+a schema-cookie change forces full attestation again.
+
+The attested bit is held privately, never as a layout property. Only receipt
+writes, ordinary capture time normalization, the product receipts-column check
+and capabilities obtain it
+through `receiptEventTimeEnabled(layout)`. The static gate closes that accessor's
+import graph across production `.mjs`, `.js` and `.cjs` modules and local edges,
+rejecting namespace/dynamic imports, aliases and re-exports of the accessor.
+Reviewed sink regions and metadata authorities remain byte-pinned, so layout
+copies, computed property reads and destructuring cannot reveal the private bit.
+Old binaries reject 51–53 through their finite version lists (or exact DDL
+attestation for a pre-attested-family PR 1 binary).
+
+e9 decision (2026-11-03 06:1x): stop the bypass rounds; `37374c54` passes.
+The gate covers an honest engineer who accidentally reads the event-time feature
+flag in another S2h path. Deliberately obtaining it by reflection or constructed
+access is out of scope and is caught in code review, the same as for any other
+module-private state.
+
+Every other S2h path is identical on 48 and 53: 5b's seam review found exact cost
+equality over 9 path kinds. The accessor reads module-private state held in a
+`WeakSet`, and only the three approved consumers import it by name. Before PR 1
+merges, S2h-2's own gates will also run on the shipped cells 51/52/53, using a
+subset chosen by 5b.
+
+S2c will set `card_lineage_revision=1` on families 52/53 with matching DDL,
+instead of assigning new combination cells. There is no base-18 lineage feature.
+49/50 remain reserved and rejected, as do 35–37 and 39–47.
+
 ## 4. S2h storage, guards and transactional writers
 
 SQL is normative. All new tables are STRICT/WITHOUT ROWID; no rowid REPLACE route.

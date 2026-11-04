@@ -5,6 +5,17 @@ import { openMemoryCore } from '../../../core/contract.mjs';
 import { call, episodeHost, fails, invalid, namespace, ok, range, seed, workspace } from './fixtures/episode-server.mjs';
 
 const reads = ['list_session_episodes', 'list_memories_by_time', 'inspect_session_episode', 'read_session_start_context'];
+test('episode seed accepts occurredAt on an old layout and stores no receipt time', async t => {
+  const f = workspace(t);
+  const result = await seed(f.path, {count:1});
+  assert.equal(result.ids.length,1);
+  const db = new DatabaseSync(f.path); t.after(() => db.close());
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version,18);
+  const receipts = db.prepare('SELECT * FROM receipts').all();
+  assert.ok(receipts.length > 0);
+  assert.ok(receipts.every(row => !Object.hasOwn(row,'occurred_at')));
+});
+
 test('episode discovery uses strict schemas, read-only closed-world hints and untrusted framing', async t => {
   const f = workspace(t); const h = await episodeHost(t, f.path, { home: f.home });
   const tools = (await h.client.listTools()).tools;

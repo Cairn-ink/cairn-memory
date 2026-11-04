@@ -1,3 +1,4 @@
+import { familyCostParity } from '../testing/receipt-event-time-gates.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { openCostMemoryCore as openMemoryCore } from '../testing/content-safety-cost-hosts.mjs';
@@ -35,4 +36,16 @@ for(const base of [18,23,33])for(const n of [1,12])test(`R2 direct runtime recen
   if(!cell.facts)assert.ok(addition>=0&&addition<=6,JSON.stringify({base,n,variant:row.variant,addition}));
   if(fixed.has(key))assert.equal(addition,fixed.get(key),'zero per-receipt safety statements');else fixed.set(key,addition);
  }
+});
+
+
+test('R2 product family gate B: runtime smallest case, exact zero/five-fact parity', async t => {
+  await familyCostParity(t, 33, async (f, db, facts) => {
+
+  const core = openMemoryCore({ path: f.path }), runtime = createMemoryRuntime({ path: f.path });
+  t.after(() => { runtime.close(); core.close(); });
+  const memory = ok(core.admit({ namespace: ns, memory: { content: 'Synthetic recent receipt Memory', kind: 'fact' }, receipts: [receipt('runtime-recent')] })).memory;
+  return { method: 'recentReceipts', variant: 'runtime', call: () => ({ ok: true, value: runtime.recentReceipts(ns, { memoryId: memory.id, revision: memory.revision }, 1) }),
+    check(result) { assert.equal(result.ok, true); assert.equal(result.value.length, 1); } };
+  });
 });

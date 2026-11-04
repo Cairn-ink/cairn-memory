@@ -1,3 +1,5 @@
+import { eventTimeSafetyFixture } from '../testing/receipt-event-time-fixture.mjs';
+import { familyGate, assertFamilyCostCell } from '../testing/receipt-event-time-gates.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { openMemoryCore } from '../index.mjs';
@@ -236,4 +238,39 @@ for (const stage of ['before','during-open']) test(`S2h owner erasure ${stage} R
   assert.doesNotMatch(JSON.stringify(result), /Synthetic Raw owner secret|account_erasure/);
   assert.equal(result.ok,false);
   assert.ok(['memory_not_found','evidence_unavailable'].includes(result.error.code));
+});
+
+
+const completeFamilyWriters = familyGate('F', 3);
+for (const mutation of ['forget', 'correct', 'reject'])
+test(`family gate F: v52 ${mutation} refuses failed suppression writes without acknowledgement`, async t => {
+  const base = 23;
+  const f = eventTimeSafetyFixture(t, base); await f.migrate();
+  const core = openMemoryCore({ path: f.path, decisionReview: 'required-v1' }), db = f.connect(); t.after(() => { core.close(); db.close(); });
+  const memory = ok(core.admit({ namespace: ns, memory: { content: 'Synthetic '+mutation+' content', kind: 'fact' },
+    receipts: [{ ...receipt(mutation), occurredAt: '2026-11-03T00:00:00.000Z' }] })).memory;
+  assert.equal(db.prepare('SELECT occurred_at FROM receipts WHERE memory_id=?').get(memory.id).occurred_at, '2026-11-03T00:00:00.000Z');
+  if (mutation === 'reject') db.prepare("UPDATE memories SET review_state='awaiting' WHERE id=?").run(memory.id);
+  const oldReceipts = db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(memory.id).map(row => row.id);
+  const input = { namespace: ns, memoryId: memory.id, expectedRevision: memory.revision };
+  const invoke = () => mutation === 'correct' ? core.correct({ ...input, content: 'Synthetic corrected content', kind: 'fact', receipt: receipt('corrected') })
+    : mutation === 'reject' ? core.reject({ ...input, actionId: 'reject' }) : core.forget(input);
+  inject(db, true); const before = contentSafetyInventory(db);
+  assert.equal(invoke().ok, false); assert.equal(contentSafetyInventory(db), before); inject(db, false);
+  ok(invoke()); assertCanonicalFacts(db); const rows = inspect(db);
+  assert.deepEqual(rows.map(row => [row.kind,row.stable_key]).sort(), [['memory',memory.id], ...oldReceipts.map(id => ['receipt',id])].sort());
+  const reason = mutation === 'forget' ? 'user_forget' : mutation === 'correct' ? 'correction_supersession' : 'purge';
+  assert.ok(rows.every((row, i) => row.reason === reason && row.epoch_hi === 0 && row.epoch_lo === i + 1));
+  if (mutation === 'correct') {
+    assert.equal(rows[0].match_mode, 'revision-through');
+    assert.deepEqual(JSON.parse(rows[0].source_version), ['memory-revision-through-v1', memory.revision]);
+    const identity = db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get();
+    assert.equal(transaction(db, () => memorySuppressionObservationInside(db, ns, { memoryId: memory.id, revision: memory.revision })).reason, reason);
+    // S1 rejects a stale revision before the fact stage. B3 above pins the
+    // causal reason; serving must still refuse the old content.
+    assert.equal(contentReadSafety(db, { identity, namespace: ns, intent: 'history', ref: { type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision } }).allowed, false);
+    assert.equal(contentReadSafety(db, { identity, namespace: ns, ref: { type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision + 1 } }).allowed, true);
+  }
+  assertFamilyCostCell(db, 52, rows.length);
+  completeFamilyWriters(mutation);
 });

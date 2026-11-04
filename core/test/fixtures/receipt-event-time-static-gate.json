@@ -1,0 +1,79 @@
+[
+  {
+    "file": "core/content-safety-layout.mjs",
+    "start": null,
+    "end": null,
+    "purpose": "finite family mapping; no feature inferred from the integer",
+    "sha256": "a4319af04125ed6a26961bac9dba6ae10ae3f65bc60af39e47d74d071076eff9"
+  },
+  {
+    "file": "core/content-safety-schema.mjs",
+    "start": null,
+    "end": null,
+    "purpose": "control tuple, exact DDL and cached attestation",
+    "sha256": "57af537be7b5e0ce29cc7d025dd7123bba0d6cdb8c2f08b871c0ba3cf5ef2fb0"
+  },
+  {
+    "file": "core/content-safety-migration.mjs",
+    "start": null,
+    "end": null,
+    "purpose": "offline migration selects and installs the attested tuple",
+    "sha256": "71e8b4f47507ad47a6ef6a065dc1938c23dd74c2f0222724de32d7d77732495b"
+  },
+  {
+    "file": "core/validation.mjs",
+    "start": null,
+    "end": null,
+    "purpose": "input timestamp normalizer; no attested layout access",
+    "sha256": "305ced7b94efa69da65945c4d6bb45a174b91b1b0f9919ce7a8f765cfe55698d"
+  },
+  {
+    "file": "core/runtime.mjs",
+    "start": "  function attach(",
+    "end": "  // Selection already owns",
+    "purpose": "receipts insert and retained duplicate validation",
+    "sha256": "007da181795bc401bcf51993132ba058ae5f0d79871a5fdf44588cfad7678aee"
+  },
+  {
+    "file": "core/runtime.mjs",
+    "start": "  function validateReceiptTimes(",
+    "end": "  // Caller owns the transaction",
+    "purpose": "strict new receipt times; pre-existing episode times fall back to null at the persisted clock",
+    "sha256": "af44724a754e4f163bf83e7d2e79fed0672774672022a0be0b16d7a47de9aef7"
+  },
+  {
+    "file": "core/runtime.mjs",
+    "start": "    captureSnapshot(ns,",
+    "end": "    claimCapturedAdmission(",
+    "purpose": "ordinary capture validates times and drops them before replay hashing on old layouts",
+    "sha256": "a6c842913fba5e4d1b433d85f07b13c639a8b575f20fd389b40f84525743278d"
+  },
+  {
+    "file": "core/context-product-schema.mjs",
+    "start": "    if (JSON.stringify(actualColumns)",
+    "end": "    const actualIndexes",
+    "purpose": "receipts column check only",
+    "sha256": "47b8e67b5c6898185ecacb43fb49424543e20d8bb8531e4ca1a3b671d3867baa"
+  },
+  {
+    "file": "core/context-read-facade.mjs",
+    "start": "  return { fileIdentity: database?.fileIdentity, productCapabilities:",
+    "end": "\n",
+    "purpose": "internal product capabilities projection",
+    "sha256": "b5c9203a8da45442678fb4c38c78d5e0650bab3d3b1f93a5bb40b2511f8f71c7"
+  },
+  {
+    "file": "core/context-read-facade.mjs",
+    "start": "    return success(structuredClone({ version: CONTEXT_VERSION",
+    "end": "  }, findCandidates",
+    "purpose": "public embedded capabilities projection",
+    "sha256": "0d1bc20694fbcf782a09be8a63cbdeafeed1dbb3b972666825a314a19d5ce031"
+  },
+  {
+    "file": "core/context-product-worker.mjs",
+    "start": "function capabilities() {",
+    "end": "\ntry {",
+    "purpose": "public Worker capabilities projection",
+    "sha256": "0c2a07b5f20bc4eea4f945ab029170111297d77b0c4c7e00081c42d3a45d5c7d"
+  }
+]
