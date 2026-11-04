@@ -90,6 +90,38 @@ test('a paused claim holder cannot duplicate a successor notice after a clock ad
   const b=await f.notice(changed,{}, {now:()=>time+60001});
   resume.resolve();assert.equal([await a,b].filter(Boolean).length,1);
 });
+test('midnight interleaving preserves the newer day claim while an older pruner resumes',async t=>{
+  const f=await fixture(t), reached=deferred(), resume=deferred();let first=true;
+  const before=new Date(2026,10,4,23,59,59,950).getTime();
+  const after=new Date(2026,10,5,0,0,0,50).getTime();
+  const newer=join(f.directory,'capture-stop-notice-2026-11-05.claim');
+  // Pruning now precedes claiming, so pause A at its pre-claim pruning step.
+  intercept(t,'readdir',original=>async(path,...args)=>{
+    if(path===f.directory && first) {first=false;reached.resolve();await resume.promise;}
+    return original(path,...args);
+  });
+  const a=f.notice(changed,{}, {now:()=>before});await reached.promise;
+  let b;
+  try { b=await f.notice(changed,{}, {now:()=>after});assert.ok(b); }
+  finally { resume.resolve(); }
+  assert.ok(await a);
+  const winner=await fs.lstat(newer);
+  const c=await f.notice(changed,{}, {now:()=>after+100});
+  assert.equal([b,c].filter(Boolean).length,1);assert.equal(c,'');
+  assert.equal((await fs.lstat(newer)).ino,winner.ino);
+});
+test('date revisits retain seven prior days; a larger reversal may notify again',async t=>{
+  const f=await fixture(t);
+  const at=day=>new Date(2026,10,day,12).getTime();
+  assert.ok(await f.notice());
+  assert.ok(await f.notice(changed,{}, {now:()=>at(5)}));
+  assert.equal(await f.notice(),'');
+  assert.ok(await f.notice(changed,{}, {now:()=>at(11)}));
+  assert.equal(await f.notice(),'','exactly seven days back remains claimed');
+  assert.ok(await f.notice(changed,{}, {now:()=>at(12)}));
+  await assert.rejects(readFile(join(f.directory,claimName)),{code:'ENOENT'});
+  assert.ok(await f.notice(),'eight days back may notify after its claim was pruned');
+});
 for (const scenario of ['healthy','local-pause','hosted-pause','disabled','subagent-id','subagent-type','cap','cancelled'])
   test(`quiet when ${scenario}`,async t=>{
     const f=await fixture(t); let qualification=changed, extras={}, options={};
@@ -131,14 +163,39 @@ test('claim pruning touches only strict matching names and at most 32 entries',a
   assert.equal(matches.filter(name=>names.includes(name)).length,8);
   for(const name of keep) assert.equal(await readFile(join(f.directory,name),'utf8'),'canary');
 });
-test('many simulated local days keep only one or two claims',async t=>{
+for(const operation of ['readdir','unlink'])
+  test(`claim pruning ignores ${operation} errors and bounds unlink attempts`,async t=>{
+    const f=await fixture(t);let attempts=0;
+    for(let day=1;day<=40;day++)
+      await privateWrite(join(f.directory,`capture-stop-notice-2025-01-${String(day).padStart(2,'0')}.claim`),'canary');
+    intercept(t,operation,original=>async(path,...args)=>{
+      if(operation==='readdir' ? path===f.directory : path.startsWith(join(f.directory,'capture-stop-notice-'))) {
+        attempts++;throw Object.assign(new Error('injected pruning error'),{code:'EACCES'});
+      }
+      return original(path,...args);
+    });
+    assert.ok(await f.notice());assert.equal(attempts,operation==='unlink'?32:1);
+  });
+test('pruning on an already-claimed day preserves its seven-day window and future dates',async t=>{
+  const f=await fixture(t), stale='capture-stop-notice-2026-10-27.claim';
+  const keep=['capture-stop-notice-2026-10-28.claim','capture-stop-notice-2026-11-03.claim',
+    claimName,'capture-stop-notice-2026-11-05.claim','capture-stop-notice-2027-01-01.claim',
+    'capture-stop-notice-2026-1-01.claim','capture-stop-notice-2026-10-27.claim.extra','other.claim'];
+  for(const name of [stale,...keep]) await privateWrite(join(f.directory,name),'canary');
+  assert.equal(await f.notice(),'');
+  await assert.rejects(readFile(join(f.directory,stale)),{code:'ENOENT'});
+  for(const name of keep) assert.equal(await readFile(join(f.directory,name),'utf8'),'canary');
+  assert.ok(await f.notice(changed,{}, {now:()=>new Date(2027,0,9,12).getTime()}));
+  await assert.rejects(readFile(join(f.directory,'capture-stop-notice-2027-01-01.claim')),{code:'ENOENT'});
+});
+test('many simulated local days keep exactly the last eight local dates',async t=>{
   const f=await fixture(t);
   for(let day=0;day<70;day++) {
     const at=new Date(2026,10,4+day,12).getTime();
     assert.ok(await f.notice(changed,{}, {now:()=>at}));
     assert.equal(await f.notice(changed,{}, {now:()=>at}),'');
     const claims=(await readdir(f.directory)).filter(name=>/^capture-stop-notice-\d{4}-\d{2}-\d{2}\.claim$/u.test(name));
-    assert.ok(claims.length>=1 && claims.length<=2);
+    assert.equal(claims.length,Math.min(day+1,8));
   }
 });
 for(const [env,zh] of [[{LANG:'zh_TW.UTF-8'},true],[{LC_MESSAGES:'zh_TW',LANG:'en'},true],
@@ -370,9 +427,9 @@ test('simultaneous compare/rename race is diagnostic only; next capture repairs 
   await recordLastCapture(f.root,time+2,3);
   assert.equal((await readLastCapture(f.root)).at,time+2);
 });
-test('crashes after exclusive claims consume the day and leave bounded residue',async t=>{
+test('consecutive crash-only days consume each day and retain at most eight claims',async t=>{
   const f=await fixture(t), stateURL=new URL('../installed-state.mjs',import.meta.url).href;
-  for(let day=0;day<4;day++) {
+  for(let day=0;day<24;day++) {
     const clock=new Date(2026,10,4+day,12).getTime();
     const code=`import fs from 'node:fs/promises';import {syncBuiltinESMExports} from 'node:module';
       const original=fs.open;fs.open=async(path,...args)=>{
@@ -383,13 +440,17 @@ test('crashes after exclusive claims consume the day and leave bounded residue',
     const child=spawn(process.execPath,['--input-type=module','-e',code],{
       env:{HOME:f.home,PATH:'/usr/bin:/bin',TMPDIR:process.env.TMPDIR},stdio:'ignore'});
     const exit=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',resolve);});
-    assert.equal(exit,77);assert.equal(await f.notice(changed,{}, {now:()=>clock}),'');
-    // Successful next-day claim prunes the claim left by the actual crashed child.
-    assert.ok(await f.notice(changed,{}, {now:()=>new Date(2026,10,5+day,0).getTime()}));
+    assert.equal(exit,77);
+    // No fixture deletion or successful next-day claim between crash cycles.
     const names=await readdir(f.directory);
-    assert.equal(names.filter(name=>name.endsWith('.claim')).length,1);
+    const claims=names.filter(name=>/^capture-stop-notice-\d{4}-\d{2}-\d{2}\.claim$/u.test(name));
+    const expected=Array.from({length:Math.min(day+1,8)},(_,offset)=>{
+      const date=new Date(2026,10,4+day-offset,12);
+      return `capture-stop-notice-${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}.claim`;
+    });
+    assert.deepEqual(claims.sort(),expected.sort());assert.ok(claims.length<=8);
     assert.equal(names.filter(name=>name.includes('.owner-') || name.includes('.reap-')).length,0);
-    // Let the next child claim its day too, by using a separate day each cycle.
-    await unlink(join(f.directory,names.find(name=>name.endsWith('.claim'))));
+    assert.equal(await f.notice(changed,{}, {now:()=>clock}),'');
+    assert.deepEqual((await readdir(f.directory)).filter(name=>name.endsWith('.claim')).sort(),expected);
   }
 });

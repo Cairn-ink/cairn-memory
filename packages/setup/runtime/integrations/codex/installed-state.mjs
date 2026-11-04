@@ -94,16 +94,22 @@ export async function pendingCaptureNotice(configPath, host, {now = Date.now} = 
     return attempt?.identity === host.identity || Boolean(info && now()-info.mtimeMs >= 600000);
   } catch { return false; }
 }
-const claimPattern = /^capture-stop-notice-\d{4}-\d{2}-\d{2}\.claim$/u;
+const claimPattern = /^capture-stop-notice-(\d{4}-\d{2}-\d{2})\.claim$/u;
 async function pruneNoticeClaims(directory, today) {
   try {
+    // Retain seven prior local dates: a reversal of up to seven days cannot
+    // repeat a claimed notice. A larger reversal may notify again after pruning.
+    const cutoff = new Date(`${today}T00:00:00Z`);
+    cutoff.setUTCDate(cutoff.getUTCDate()-7);
+    const oldest = cutoff.toISOString().slice(0,10);
     let removed = 0;
     for (const name of await readdir(directory)) {
-      if (name === today || !claimPattern.test(name)) continue;
+      const match = claimPattern.exec(name);
+      if (!match || match[1] >= oldest) continue;
       if (removed++ >= 32) break;
       await unlink(join(directory,name)).catch(()=>{});
     }
-  } catch { /* Pruning is bounded best effort, after the exclusive claim. */ }
+  } catch { /* Pruning is bounded best effort, including already-claimed days. */ }
 }
 export async function captureStopNotice(configPath, config, input, qualification,
   { now = Date.now, env = process.env, signal } = {}) {
@@ -142,11 +148,11 @@ export async function captureStopNotice(configPath, config, input, qualification
       : (zh ? 'Cairn 自動記憶沒有在記：還沒登入。修正：npx @cairn-ink/memory setup'
       : 'Cairn automatic memory is off: not signed in. Fix: npx @cairn-ink/memory setup');
     if (signal?.aborted) return '';
+    await pruneNoticeClaims(dirname(configPath),day);
     // wx never follows or replaces an existing entry. A crash here may consume
     // this day's notice silently; at-most-once is the intended guarantee.
     const claim = await open(join(dirname(configPath),name), 'wx', 0o600);
     await claim.close();
-    await pruneNoticeClaims(dirname(configPath),name);
     return signal?.aborted ? '' : JSON.stringify({systemMessage:text});
   } catch { return ''; }
 }
