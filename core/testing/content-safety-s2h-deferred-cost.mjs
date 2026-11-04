@@ -1,3 +1,4 @@
+import { costFamilyPhysical } from './content-safety-cost-families.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const fixture=JSON.parse(readFileSync(new URL('../test/fixtures/content-safety-s2h-deferred-counts.json',import.meta.url),'utf8'));
@@ -16,13 +17,17 @@ export function assertDeferredContentCostInventory(observed,testName) {
  const expected=Object.keys(fixture.caps).filter(key=>JSON.parse(key)[0]===testName).sort();
  assert.deepEqual([...observed].sort(),expected,decision+': exact current method/variant/cell/n ratchets for '+testName);
 }
+export function assertEpisodeContentCostInventory(observed,testName) {
+ assertIntegratedCostInventory(observed,testName);
+}
 
-// Episode cells have graduated from the deferred set. Keep the compatibility
-// helper above unchanged for Role/context until their separate package lands.
+// Resolved Episode and Role/embedded cells retain their original downward pins.
+// Integration additionally pins the family and actual physical cell together.
 export function assertEpisodeContentCost(row, legacy, dimensions, observed) {
  const key=JSON.stringify([dimensions.testName,dimensions.base,dimensions.n,null,row.method,row.variant,dimensions.facts]);
  const cap=fixture.caps[key];
- assert.ok(!observed.has(key));observed.add(key);
+ assertIntegratedCostPin(row,legacy,dimensions,observed);
+ if(dimensions.family==='event-time')return;
  assert.ok(row.statements<=legacy.statements+6+row.ports,'Episode R2-A1 ceiling: '+key);
  assert.ok(row.begin<=legacy.begin,'Episode R2-A1 BEGIN: '+key);
  assert.ok(cap,'Episode exact pin: '+key);
@@ -31,21 +36,20 @@ export function assertEpisodeContentCost(row, legacy, dimensions, observed) {
  assert.equal(row.ports,cap[2],'Episode exact E1: '+key);
 }
 
-// Role and embedded cells are resolved by S2h-3. Episode's original executable
-// ratchets above stay independent until its projection package is integrated.
+// D1 pairs are independent for each family and physical cell.
 const roleEmbeddedPairs=new Map();
 export function assertRoleEmbeddedContentCost(row,dimensions,legacy,observed) {
  const {testName,base,n,semantic=null,facts}=dimensions;
  const key=JSON.stringify([testName,base,n,semantic,row.method,row.variant,facts]);
  const cap=fixture.caps[key]??roleEmbeddedCountPins.evidence?.[key];
- if(observed){assert.ok(!observed.has(key),'resolved cell measured once: '+key);observed.add(key);}
- assert.ok(cap,'resolved R2-A1 exact pin: '+key);
+ assertIntegratedCostPin(row,legacy,dimensions,observed);
+ if(dimensions.family!=='event-time')assert.ok(cap,'resolved R2-A1 exact pin: '+key);
  assert.ok(row.statements<=legacy.statements+6+row.ports,'R2-A1 ceiling: '+key);
  assert.ok(row.begin<=legacy.begin,'R2-A1 BEGIN: '+key);
  assert.ok(row.ports<=legacy.ports,'no added caller dispatch: '+key);
- assert.deepEqual([row.statements,row.begin,row.ports],cap,'resolved downward exact pin: '+key);
+ if(dimensions.family!=='event-time')assert.deepEqual([row.statements,row.begin,row.ports],cap,'resolved downward exact pin: '+key);
  if(![12,24].includes(n))return;
- const pairKey=JSON.stringify([testName.replace(/\b(?:12|24)\b/g,'paired'),base,semantic,row.method,row.variant,facts]);
+ const pairKey=JSON.stringify([dimensions.family??'safety',costFamilyPhysical(base,dimensions.family),testName.replace(/\bn?(?:12|24)\b/g,'paired'),base,semantic,row.method,row.variant,facts]);
  let pair=roleEmbeddedPairs.get(pairKey);if(!pair){pair=new Map();roleEmbeddedPairs.set(pairKey,pair);}
  pair.set(n,{row,legacy});
  if(pair.size===2){
@@ -56,6 +60,36 @@ export function assertRoleEmbeddedContentCost(row,dimensions,legacy,observed) {
 }
 
 export function assertRoleEmbeddedContentCostInventory(observed,testName) {
- const keys=[...Object.keys(fixture.caps),...Object.keys(roleEmbeddedCountPins.evidence??{})].filter(key=>JSON.parse(key)[0]===testName).sort();
- assert.deepEqual([...observed].sort(),keys,'resolved R2-A1 exact cell inventory: '+testName);
+ assertIntegratedCostInventory(observed,testName);
+}
+
+const integratedPairs = new Map();
+export function assertIntegratedCostPin(row,legacy,dimensions,observed) {
+ const {family='safety',testName,base,n,semantic=null,facts}=dimensions;
+ const physical=costFamilyPhysical(base,family);
+ const key=JSON.stringify([family,physical,testName,base,n,semantic,row.method,row.variant,facts]);
+ const counts=[row.statements,row.begin,row.ports], baseline=[legacy.statements,legacy.begin,legacy.ports];
+ const pin=fixture.integratedPins?.[key];
+ if(process.env.CAIRN_S2H_CELL_REPORT)console.log(JSON.stringify({tag:'S2H_INTEGRATED_CELL',key,node:process.version,counts,legacy:baseline}));
+ if(observed){assert.ok(!observed.has(key),'family/physical cell measured once: '+key);observed.add(key);}
+ assert.ok(row.statements<=legacy.statements+6+row.ports,'integrated R2-A1 ceiling: '+key);
+ assert.ok(row.begin<=legacy.begin,'integrated R2-A1 BEGIN: '+key);
+ assert.ok(row.ports<=legacy.ports,'integrated no added E1 dispatch: '+key);
+ // Every other population also keeps its exact measured pin and ceiling.
+ const pairKey=JSON.stringify([family,physical,testName.replace(/\bn?(?:12|24)\b/g,'paired'),semantic,row.method,row.variant,facts]);
+ if([12,24].includes(n)) {
+  let pair=integratedPairs.get(pairKey);if(!pair){pair=new Map();integratedPairs.set(pairKey,pair);}
+  pair.set(n,{row,legacy});
+  if(pair.size===2){const small=pair.get(12),large=pair.get(24);
+   assert.ok((large.row.statements-large.row.ports)-(small.row.statements-small.row.ports)<=
+    large.legacy.statements-small.legacy.statements,'integrated net paired slope (D1): '+pairKey);
+  }
+ }
+ assert.deepEqual({counts,legacy:baseline},pin,'integrated exact family/physical pin: '+key);
+ return key;
+}
+export function assertIntegratedCostInventory(observed,testName) {
+ const keys=Object.keys(fixture.integratedPins??{}).filter(key=>JSON.parse(key)[2]===testName).sort();
+ assert.ok(keys.length,'populated exact family/physical inventory: '+testName);
+ assert.deepEqual([...observed].sort(),keys,'exact completed family/physical inventory: '+testName);
 }

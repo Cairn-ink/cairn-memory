@@ -32,6 +32,7 @@ function assertNoPhysicalCellBranches(sources) {
     ['adapters/local-embedder/install.mjs:[0, 48].includes(header[156])', 1],
     ['core/topic-overview-storage.mjs:48 + parent.id.length * 2', 1],
     ['core/context-read-fusion.mjs:unionMaximum: 48', 1],
+    ['core/episode-reads.mjs:headers.length > 51', 1],
   ]);
   const seen = new Map();
   const cell = node => node?.type === 'Literal' && cells.has(Number(node.value));
@@ -77,6 +78,13 @@ test('family gate A: physical cell branches fail on an injected copy and pass on
   }
   assert.equal(rejected, 5, 'exact mutation-control count');
   t.diagnostic(`family gate A: 1 real tree, ${rejected} rejected injected copies, ${scanned} production modules`);
+});
+
+test('static gate: the Episode lookahead bound does not exempt a physical branch in that module', () => {
+  const sources = featureSources();
+  sources.set('core/episode-reads.mjs', sources.get('core/episode-reads.mjs') +
+    '\nif (layout.physical === 51) chooseOtherS2hPath();');
+  assert.throws(() => assertNoPhysicalCellBranches(sources), /physical cell branch outside/);
 });
 
 // A closed, sink-oriented gate: metadata defines/attests the tuple; serving

@@ -40,7 +40,7 @@ test('R2 product family gate B: topic-public smallest case, exact zero/five-fact
       const child = spawnSync(process.execPath, [probe, String(physical), '12', String(facts), 'match'], { encoding: 'utf8', timeout: 120000, maxBuffer: 16*1024*1024 });
       assert.equal(child.error, undefined); assert.equal(child.signal, null); assert.equal(child.status, 0, child.stderr + child.stdout.slice(-5000));
       const rows = child.stdout.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line))
-        .filter(row => row.method === 'readTopicOverview' && row.variant === 'optin');
+        .filter(row => row.tag !== 'R3_NATIVE_CELL' && row.method === 'readTopicOverview' && row.variant === 'optin');
       assert.equal(rows.length, 1, 'one representative public topic case');
       const row = rows[0]; assert.equal(row.node, process.version); assert.equal(row.physical, physical); assert.equal(Number(row.factCount), facts);
       return { ...row, result: { ok: true } };

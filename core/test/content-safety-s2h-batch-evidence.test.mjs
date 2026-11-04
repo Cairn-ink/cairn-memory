@@ -1,5 +1,7 @@
+import { assertCostGateCell } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { afterEach } from 'node:test';
+import { costGateFamilies, costFamilyLabel, costFamilyFixture, costMatrixGate } from '../testing/receipt-event-time-gates.mjs';
 import { openMemoryCore } from '../index.mjs';
 import { createCardReceiptSources } from '../card-receipt-sources.mjs';
 import { keyed } from '../private-card-input.mjs';
@@ -25,11 +27,15 @@ function setup(t,f,patch={}) {
   return {db,core,memories,refs};
 }
 
+const completeBatch=costMatrixGate('S2h-3 batch evidence regressions',costGateFamilies().length*19);
+afterEach(t=>completeBatch(t.name));
+for(const family of costGateFamilies()) {
 // Fail-before on a6ec0e0e: every item used three Memory SELECTs per
 // snapshot, in addition to receipt-source binding reads. The canonical batch
 // now supplies each item's single S1+receipt decision.
-for(const base of [18,23,33])for(const intent of ['current','history'])test(`batch evidence selected-row S1 v${base} ${intent}`,async t=>{
-  const f=safetyFixture(t,base);await f.migrate();const {db,core,refs}=setup(t,f);facts(db);
+for(const base of [18,23,33])for(const intent of ['current','history'])test(`batch evidence selected-row S1 v${base} ${intent}${costFamilyLabel(family,base)}`,async t=>{
+  const f=costFamilyFixture(t,base,family);await f.migrate();const {db,core,refs}=setup(t,f);facts(db);
+  assertCostGateCell(db,base,true,5,ns.ownerId,{family,testName:t.name,n:3});
   const row=await measureContentRead('fetchCandidateEvidence','selected-row',()=>core.fetchCandidateEvidence({readSet:[ns],intent,refs},{}));
   assert.equal(row.result.ok,true,JSON.stringify(row.result));assert.equal(row.result.value.items.length,3);
   // Control on a6ec0e0e: selected-row source refs keep the exact existing
@@ -53,8 +59,8 @@ for(const base of [18,23,33])for(const intent of ['current','history'])test(`bat
 // Fail-before cost regression with correctness controls: two reasons for one
 // key must subtract one document. Receipt facts do not suppress Memory text;
 // they still filter that receipt from the final canonical evidence decision.
-for(const base of [18,23,33])test(`batch visible documents v${base}: duplicate reasons and mixed receipt facts`,async t=>{
-  const f=safetyFixture(t,base);await f.migrate();const {db,core,memories,refs}=setup(t,f);
+for(const base of [18,23,33])test(`batch visible documents v${base}: duplicate reasons and mixed receipt facts${costFamilyLabel(family,base)}`,async t=>{
+  const f=costFamilyFixture(t,base,family);await f.migrate();const {db,core,memories,refs}=setup(t,f);
   ok(await core.refreshContextIndex({...projection,budget:{maxItems:1024,maxMs:5000}},{}));
   facts(db);
   const target=memories[0],receiptId=db.prepare('SELECT id FROM receipts WHERE memory_id=?').get(memories[1].id).id;
@@ -62,6 +68,7 @@ for(const base of [18,23,33])test(`batch visible documents v${base}: duplicate r
     for(const reason of ['purge','privacy_erase'])writeContentSuppressionInside(db,{namespace:ns,kind:'memory',key:target.id,reason,actionId:reason});
     writeContentSuppressionInside(db,{namespace:ns,kind:'receipt',key:receiptId,reason:'purge',actionId:'receipt'});
   });
+  assertCostGateCell(db,base,true,8,ns.ownerId,{family,testName:t.name,n:3});
   const row=await measureContentRead('findCandidates','duplicate-keys',()=>core.findCandidates(query,{}));
   assert.equal(row.result.ok,true,JSON.stringify(row.result));
   assert.deepEqual(new Set(row.result.value.items.map(item=>item.ref.memoryId)),new Set(memories.slice(1).map(m=>m.id)));
@@ -82,8 +89,8 @@ for(const base of [18,23,33])test(`batch visible documents v${base}: duplicate r
 
 // Controls on a6ec0e0e: a negative direct target proof cannot waive invalid
 // canonical Raw ancestry, nor a possible Raw fact's conservative path.
-for(const kind of ['foreign ancestry','Raw fact'])test(`batch applicability control: ${kind}`,async t=>{
-  const f=safetyFixture(t,33);await f.migrate();const {db,core,memories,refs}=setup(t,f);
+for(const kind of ['foreign ancestry','Raw fact'])test(`batch applicability control: ${kind}${costFamilyLabel(family,33)}`,async t=>{
+  const f=costFamilyFixture(t,33,family);await f.migrate();const {db,core,memories,refs}=setup(t,f);
   ok(await core.refreshContextIndex({...projection,budget:{maxItems:1024,maxMs:5000}},{}));
   facts(db);
   transaction(db,()=>{
@@ -107,9 +114,10 @@ for(const kind of ['foreign ancestry','Raw fact'])test(`batch applicability cont
 
 // Control on a6ec0e0e: explicit unknown origin is not an independence proof,
 // even when all currently visible source-session intersections are empty.
-test('batch applicability control: unknown receipt origin retains full lineage',async t=>{
-  const f=safetyFixture(t,33);await f.migrate();const {db,core,refs}=setup(t,f);facts(db);
+test(`batch applicability control: unknown receipt origin retains full lineage${costFamilyLabel(family,33)}`,async t=>{
+  const f=costFamilyFixture(t,33,family);await f.migrate();const {db,core,refs}=setup(t,f);facts(db);
   transaction(db,()=>db.prepare("UPDATE raw_receipt_origins SET kind='unknown' WHERE receipt_id IN (SELECT id FROM receipts WHERE memory_id=?)").run(refs[0].memoryId));
+  assertCostGateCell(db,33,true,5,ns.ownerId,{family,testName:t.name,n:3});
   const row=await measureContentRead('fetchCandidateEvidence','unknown-origin',()=>core.fetchCandidateEvidence({readSet:[ns],intent:'current',refs:[refs[0]]},{}));
   assert.equal(row.result.ok,true,JSON.stringify(row.result));
   assert.ok(row.sql.some(([sql,count])=>count>0 && /FROM raw_receipt_lineage l LEFT JOIN raw_conversations/.test(sql)),
@@ -118,8 +126,8 @@ test('batch applicability control: unknown receipt origin retains full lineage',
 
 // Controls on a6ec0e0e: 4096 is complete; 4097 is an indexed fallback, never a
 // truncated negative proof. The unrelated payload remains canonically checked.
-test('batch applicability control: exact 4096/4097 boundary',async t=>{
-  const f=safetyFixture(t);await f.migrate();const {db,refs}=setup(t,f);facts(db,4096);
+test(`batch applicability control: exact 4096/4097 boundary${costFamilyLabel(family,33)}`,async t=>{
+  const f=costFamilyFixture(t,33,family);await f.migrate();const {db,refs}=setup(t,f);facts(db,4096);
   const inspect=expected=>withContentSuppressionRequest(()=>readTransaction(db,()=>withContentSuppressionReadInside(db,[ns],state=>{
     assert.equal(state.facts===null,expected===4097);
     if(state.facts)assert.equal(state.facts.length,4096);
@@ -131,8 +139,8 @@ test('batch applicability control: exact 4096/4097 boundary',async t=>{
 
 // Controls on a6ec0e0e: the reduced candidate work must leave the actual
 // caller-return fence intact. A committed fact stops the very next payload.
-for(const mutation of ['forget','correct','account erasure'])test(`batch counter control: ${mutation}`,async t=>{
-  const f=safetyFixture(t,33);await f.migrate();let armed=false,fired=false,next=0;
+for(const mutation of ['forget','correct','account erasure'])test(`batch counter control: ${mutation}${costFamilyLabel(family,33)}`,async t=>{
+  const f=costFamilyFixture(t,33,family);await f.migrate();let armed=false,fired=false,next=0;
   const fixture=setup(t,f,{counter:{id:'synthetic-batch-counter',countTokens(){
     if(fired)next++;
     if(armed&&!fired){
@@ -153,8 +161,8 @@ for(const mutation of ['forget','correct','account erasure'])test(`batch counter
 
 // Controls on a6ec0e0e: materialization/thenable assimilation happens within
 // the caller boundary, before its one outer E1. No return hook survives it.
-for(const shape of ['getter','Proxy','thenable'])test(`batch embed return control: ${shape}`,async t=>{
-  const f=safetyFixture(t);await f.migrate();let armed=false,fired=false,after=0,hooks=0,fixture;
+for(const shape of ['getter','Proxy','thenable'])test(`batch embed return control: ${shape}${costFamilyLabel(family,33)}`,async t=>{
+  const f=costFamilyFixture(t,33,family);await f.migrate();let armed=false,fired=false,after=0,hooks=0,fixture;
   const erase=()=>{if(fired)return;transaction(fixture.db,()=>suppressOwnerInside(fixture.db,{ownerId:ns.ownerId,reason:'account_erasure',actionId:'return'}));fired=true;};
   fixture=setup(t,f,{embedder:{id:'synthetic-batch-'+shape,revision:'1',dimensions:2,normalization:'l2',embed(texts){
     if(fired)after++;
@@ -170,3 +178,5 @@ for(const shape of ['getter','Proxy','thenable'])test(`batch embed return contro
   assert.equal(fired,true);assert.equal(after,0);assert.equal(hooks,shape==='Proxy'?1:0,'only caller-boundary thenable assimilation may touch the Proxy');assert.equal(result.ok,false);
   assert.doesNotMatch(JSON.stringify(result),/Synthetic batch evidence/);
 });
+
+}

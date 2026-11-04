@@ -1,3 +1,4 @@
+import { costFamilyPhysical } from './content-safety-cost-families.mjs';
 import assert from 'node:assert/strict';
 import { contentWriteMethodClass } from '../content-write-context.mjs';
 import { readFileSync } from 'node:fs';
@@ -44,9 +45,9 @@ export function assertCostGateCell(db,base,safety,facts,ownerId,dimensions={}) {
  assert.equal(typeof dimensions.testName,'string','measurement has an explicit gate identity');
  assert.ok(dimensions.testName.length);
  const cell=db.prepare('PRAGMA user_version').get().user_version;
- assert.equal(cell,safety?({18:34,23:38,33:48}[base]):base,'actual native cell, not the requested label');
+ assert.equal(cell,safety?costFamilyPhysical(base,dimensions.family):base,'actual native cell, not the requested label');
  if(safety)assert.equal(db.prepare('SELECT count(*) n FROM content_suppressions WHERE owner_id=?').get(ownerId).n,facts,'actual owner fact population');
- measuredCell={...dimensions,base,cell,safety,facts,ownerId};
+ measuredCell={family:dimensions.family??'safety',...dimensions,base,cell,safety,facts,ownerId};
  return cell;
 }
 export function assertCostGateCells(cells) {

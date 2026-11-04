@@ -1,5 +1,6 @@
-import { familyCostParity } from '../testing/receipt-event-time-gates.mjs';
-import { assertEpisodeContentCost, assertDeferredContentCostInventory } from '../testing/content-safety-s2h-deferred-cost.mjs';
+import { costGateFamilies, costFamilyLabel, costFamilyFixture, costFamilyPhysical } from '../testing/receipt-event-time-gates.mjs';
+import { costMatrixGate as familyGate, familyCostParity } from '../testing/receipt-event-time-gates.mjs';
+import { assertEpisodeContentCost, assertEpisodeContentCostInventory } from '../testing/content-safety-s2h-deferred-cost.mjs';
 import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,11 +12,12 @@ import { measureContentRead } from '../testing/content-safety-cost-meter.mjs';
 import { transaction } from '../database.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 import { batch } from '../testing/episode-helpers.mjs';
+const completeMetadata=familyGate('S2h-3 metadata matrices',costGateFamilies().length*6);
 const fixedByCase=new Map(),episodeByCase=new Map();
-for(const base of [18,23,33])for(const n of [1,12])test(`R2 temporal/admission/review v${base} ${n} items`,async t=>{
+for(const family of costGateFamilies())for(const base of [18,23,33])for(const n of [1,12])test(`R2 temporal/admission/review v${base} ${n} items${costFamilyLabel(family, base)}`,async t=>{
  const records=[];
  for(const [safety,facts]of costGatePopulations()) {
-  const f=safetyFixture(t,base);if(safety)await f.migrate();const db=f.connect();let counters=0,providers=0;
+  const f=costFamilyFixture(t,base,family);if(safety)await f.migrate();const db=f.connect();let counters=0,providers=0;
   const model={contextWindow:8192,countTokens(){counters++;return 1;},extract:()=>({malformed:true}),reviewBasis(){providers++;return {units:[],links:[]};}};
   const core=openMemoryCore({path:f.path,model,decisionReview:'required-v1',captureEvidence:'staged-v1',captureQualification:'source-bound-v2',sessionEpisodes:{mode:'episode-v1'}}),runtime=createMemoryRuntime({path:f.path,sessionEpisodes:{mode:'episode-v1'}});
   t.after(()=>{runtime.close();core.close();db.close();});const memories=[];let episodeId;
@@ -36,7 +38,7 @@ for(const base of [18,23,33])for(const n of [1,12])test(`R2 temporal/admission/r
   const failed=await stagedCore.capture({namespace:ns,client:'synthetic',sessionId:'staged',eventId:'staged',messages:[{id:'message',role:'user',content:'Synthetic staged evidence'}]});
   assert.equal(failed.ok,false);assert.equal(failed.error.code,'invalid_model_output');
   if(facts)transaction(db,()=>{for(let i=0;i<facts;i++)writeContentSuppressionInside(db,{namespace:ns,kind:'memory',key:'unrelated-'+i,reason:'purge',actionId:'fact-'+i});});
-  assertCostGateCell(db,base,safety,facts,ns.ownerId,{testName:t.name,n});
+  assertCostGateCell(db,base,safety,facts,ns.ownerId,{family,testName:t.name,n});
   const other={...ns,scope:'project',projectId:'absent'},range={since:new Date(Date.now()-86400000).toISOString(),until:new Date(Date.now()+86400000).toISOString(),limit:1};
   const cases=[['getEpisode',{namespace:ns,episodeId},'hit'],['listEpisodes',{namespace:ns,...range,timeBasis:'receipt'},'hit'],['listMemoriesByTime',{namespace:ns,...range,timeBasis:'revision'},'hit'],
    ['listEpisodes',{namespace:other,...range,timeBasis:'receipt'},'absent'],['listMemoriesByTime',{namespace:other,...range,timeBasis:'revision'},'absent'],
@@ -60,21 +62,22 @@ for(const base of [18,23,33])for(const n of [1,12])test(`R2 temporal/admission/r
  for(const current of [zero,five]){assert.deepEqual(current.records.map(r=>[r.method,r.variant]),legacy.records.map(r=>[r.method,r.variant]));for(const [i,row]of current.records.entries()){
   const old=legacy.records[i];assert.equal(row.ports,old.ports);
   if(['getEpisode','listEpisodes'].includes(row.method)){
-   const dimensions={testName:t.name,base,n,facts:current.facts};
+   const dimensions={family,testName:t.name,base,n,facts:current.facts};
    await t.test(`Episode formula ${row.method}:${row.variant} facts=${current.facts}`,()=>{
     assertEpisodeContentCost(row,old,dimensions,ratchets);
-    const key=JSON.stringify([base,current.facts,row.method,row.variant]),small=episodeByCase.get(key);
+    const key=JSON.stringify([family,base,current.facts,row.method,row.variant]),small=episodeByCase.get(key);
     if(small)assert.ok(row.statements-small[0].statements<=old.statements-small[1].statements,'Episode population slope '+key);
     episodeByCase.set(key,[row,old]);
    });continue;
   }
   assert.equal(row.begin,old.begin,row.method);
-  const fixed=row.statements-old.statements-row.ports,key=JSON.stringify([base,current.facts,row.method,row.variant]);
+  const fixed=row.statements-old.statements-row.ports,key=JSON.stringify([family,base,current.facts,row.method,row.variant]);
   if(!current.facts&&!(fixed>=0&&fixed<=6))problems.push({base,n,method:row.method,variant:row.variant,facts:current.facts,fixed});
   if(fixedByCase.has(key)){if(fixed!==fixedByCase.get(key))problems.push({base,n,method:row.method,variant:row.variant,facts:current.facts,fixed,previous:fixedByCase.get(key)});}else fixedByCase.set(key,fixed);
  }}
- assertDeferredContentCostInventory(ratchets,t.name);
+ assertEpisodeContentCostInventory(ratchets,t.name);
  assert.deepEqual(problems,[],'non-deferred temporal R2 costs');
+ completeMetadata(t.name);
 });
 
 

@@ -1,3 +1,6 @@
+import { costMatrixGate as familyGate } from '../testing/receipt-event-time-gates.mjs';
+import { costGateFamilies, costFamilyLabel, costFamilyFixture } from '../testing/receipt-event-time-gates.mjs';
+import { assertIntegratedCostPin } from '../testing/content-safety-s2h-deferred-cost.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
@@ -17,8 +20,8 @@ const counts=JSON.parse(readFileSync(new URL('./fixtures/content-safety-s2h-defe
 // writer acknowledgement field; the shared acknowledgement guard is unchanged.
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const range={since:'2026-01-01T00:00:00.000Z',until:'2026-12-31T00:00:00.000Z',timeBasis:'receipt',limit:1};
-async function setup(t,base=33,safety=true) {
- const f=safetyFixture(t,base);if(safety)await f.migrate();const db=f.connect();let ports=0;
+async function setup(t,base=33,safety=true,family='safety') {
+ const f=costFamilyFixture(t,base,family);if(safety)await f.migrate();const db=f.connect();let ports=0;
  const core=openMemoryCore({path:f.path,model:{contextWindow:8192,countTokens(){ports++;return 1;}}}),runtime=createMemoryRuntime({path:f.path,sessionEpisodes:{mode:'episode-v1'}});
  t.after(()=>{runtime.close();core.close();db.close();});return {...f,db,core,runtime,ports:()=>ports};
 }
@@ -33,16 +36,18 @@ function publish(f,name='one',client='synthetic') {
  f.db.prepare('UPDATE session_episodes SET first_received_at=?,last_received_at=? WHERE id=?').run('2026-06-01T00:00:00.000Z','2026-06-01T00:00:00.000Z',r.episodeId);
  return r.episodeId;
 }
+const completeProjection=familyGate('S2h-3 Episode projection matrices',costGateFamilies().length*6);
+const completeNontrivial=familyGate('S2h-3 Episode nontrivial matrices',costGateFamilies().length*2);
 const paired=new Map();
-for(const base of [18,23,33])for(const n of [12,24])test(`Episode projection cost v${base} n${n}`,async t=>{
+for(const family of costGateFamilies())for(const base of [18,23,33])for(const n of [12,24])test(`Episode projection cost v${base} n${n}${costFamilyLabel(family,base)}`,async t=>{
  const records=[];
  for(const [safety,facts]of [[false,0],[true,0],[true,5]]) {
-  const f=await setup(t,base,safety);let id;for(let i=0;i<n;i++){
+  const f=await setup(t,base,safety,family);let id;for(let i=0;i<n;i++){
    ok(f.core.admit({namespace:ns,memory:{content:'Synthetic projection Memory '+i,kind:'fact'},receipts:[receipt('projection-'+i)]}));
    id=publish(f,'cost-'+i);
   }
   if(facts)transaction(f.db,()=>{for(let i=0;i<facts;i++)writeContentSuppressionInside(f.db,{namespace:ns,kind:'memory',key:'unrelated-'+i,reason:'purge',actionId:'fact-'+i});});
-  assertCostGateCell(f.db,base,safety,facts,ns.ownerId,{testName:t.name,n});
+  assertCostGateCell(f.db,base,safety,facts,ns.ownerId,{family,testName:t.name,n});
   const rows=[];
   for(const [method,input,variant]of [['getEpisode',{namespace:ns,episodeId:id},'hit'],['listEpisodes',{namespace:ns,...range},'hit'],['listEpisodes',{namespace:{...ns,projectId:'absent'},...range},'absent'],['sessionStartContext',{namespace:ns,groups:{nextSteps:true,procedural:false}},'nextSteps']]) {
    const row=await measureContentRead(method,variant,()=>f.core[method](input),f.ports);assert.equal(row.result.ok,true,JSON.stringify(row.result));rows.push(row);
@@ -53,7 +58,7 @@ for(const base of [18,23,33])for(const n of [12,24])test(`Episode projection cos
  }
  const legacy=records[0];
  for(const current of records.slice(1))for(const [i,row]of current.rows.entries()) {
-  const old=legacy.rows[i],key=JSON.stringify([base,current.facts,row.method,row.variant]);
+  const old=legacy.rows[i],key=JSON.stringify([family,base,current.facts,row.method,row.variant]);
   const smaller=paired.get(key);
   if(n===12)paired.set(key,[row,old]);
   await t.test(`${row.method}:${row.variant} facts=${current.facts}`,()=>{
@@ -63,13 +68,15 @@ for(const base of [18,23,33])for(const n of [12,24])test(`Episode projection cos
    assert.ok(row.statements<=old.statements+6+row.ports,'R2-A1 ceiling '+key+' S='+row.statements+' L='+old.statements+' E1='+row.ports);
    assert.ok(row.begin<=old.begin,'R2-A1 BEGIN '+key);
    const pin=counts.episodeProjection?.[JSON.stringify([base,n,current.facts,row.method,row.variant])];
-   assert.deepEqual([row.statements,row.begin,row.ports],pin,'downward exact Episode projection pin '+key);
+   if(family==='safety')assert.deepEqual([row.statements,row.begin,row.ports],pin,'downward exact Episode projection pin '+key);
+   assertIntegratedCostPin(row,old,{family,base,n,facts:current.facts,testName:t.name});
   });
   if(n===24)await t.test(`${row.method}:${row.variant} facts=${current.facts} paired slope`,()=>{const [small,baseline]=smaller;assert.ok((row.statements-row.ports)-(small.statements-small.ports)<=old.statements-baseline.statements,'paired slope net of E1 '+key);});
  }
  // New immutable-main fixture; the existing unmigrated inventory stays intact.
  assert.match(counts.episodeLegacy?.mainSha,/^26f9e467[0-9a-f]{32}$/);
  for(const row of legacy.rows){const pin=counts.episodeLegacy.caps[JSON.stringify([base,n,row.method,row.variant])];assert.deepEqual([row.statements,row.begin,row.hostInvocations],pin,'new legacy main pin');}
+ completeProjection(t.name);
 });
 
 function calls(f,id) {
@@ -163,10 +170,10 @@ test('Episode projection control: deleted matching Memory parent',async t=>{awai
  f.db.prepare('UPDATE memories SET deleted=1,content=NULL WHERE id=?').run(m.id);
 });});
 const rawPairs=new Map();
-for(const n of [12,24])test(`Episode nontrivial source cost v33 n${n}`,async t=>{
+for(const family of costGateFamilies())for(const n of [12,24])test(`Episode nontrivial source cost v33 n${n}${costFamilyLabel(family,33)}`,async t=>{
  const records=[];
  for(const [safety,facts]of [[false,0],[true,0],[true,5]]) {
-  const f=await setup(t,33,safety);let id;
+  const f=await setup(t,33,safety,family);let id;
   for(let i=0;i<n;i++){
    id=publish(f,'nontrivial-'+i,'codex');
    const s=f.db.prepare('SELECT s.*,e.client,e.session_key FROM episode_sources s JOIN session_episodes e ON e.id=s.origin_episode_id WHERE s.episode_id=?').get(id);
@@ -179,7 +186,7 @@ for(const n of [12,24])test(`Episode nontrivial source cost v33 n${n}`,async t=>
    f.db.prepare("INSERT OR IGNORE INTO raw_receipt_lineage VALUES(?,?,?,?,?,'exact')").run(rid,r.conversation,r.s.message_id,0,4);
   }
   if(facts)transaction(f.db,()=>{for(let i=0;i<facts;i++)writeContentSuppressionInside(f.db,{namespace:ns,kind:'memory',key:'unrelated-'+i,reason:'purge',actionId:'fact-'+i});});
-  assertCostGateCell(f.db,33,safety,facts,ns.ownerId,{testName:t.name,n});
+  assertCostGateCell(f.db,33,safety,facts,ns.ownerId,{family,testName:t.name,n});
   const rows=[];
   for(const [method,input,variant]of [['getEpisode',{namespace:ns,episodeId:id},'hit'],['listEpisodes',{namespace:ns,...range},'hit'],['sessionStartContext',{namespace:ns,groups:{nextSteps:true,procedural:false}},'nextSteps']]){
    const row=await measureContentRead(method,variant,()=>f.core[method](input),f.ports);assert.equal(row.result.ok,true,JSON.stringify(row.result));rows.push(row);
@@ -189,15 +196,17 @@ for(const n of [12,24])test(`Episode nontrivial source cost v33 n${n}`,async t=>
  }
  for(const row of records[0].rows)assert.deepEqual([row.statements,row.begin,row.hostInvocations],counts.episodeLegacy.nontrivial[JSON.stringify([n,row.method])],'nontrivial legacy main pin');
  for(const current of records.slice(1))for(const [i,row]of current.rows.entries()){
-  const old=records[0].rows[i],key=JSON.stringify([current.facts,row.method]);
+  const old=records[0].rows[i],key=JSON.stringify([family,current.facts,row.method]);
   const small=rawPairs.get(key);if(n===12)rawPairs.set(key,[row,old]);
   await t.test(`${row.method} facts=${current.facts}`,()=>{
    assert.ok(row.statements<=old.statements+6+row.ports,'nontrivial R2-A1 ceiling '+key);
    assert.ok(row.begin<=old.begin,'nontrivial BEGIN '+key);assert.equal(row.ports,old.ports);
-   assert.deepEqual([row.statements,row.begin,row.ports],counts.episodeNontrivial?.[JSON.stringify([n,current.facts,row.method])],'nontrivial downward exact pin');
+   if(family==='safety')assert.deepEqual([row.statements,row.begin,row.ports],counts.episodeNontrivial?.[JSON.stringify([n,current.facts,row.method])],'nontrivial downward exact pin');
+   assertIntegratedCostPin(row,old,{family,base:33,n,facts:current.facts,testName:t.name});
   });
   if(n===24)await t.test(`${row.method} facts=${current.facts} paired slope`,()=>assert.ok(row.statements-row.ports-(small[0].statements-small[0].ports)<=old.statements-small[1].statements,'nontrivial paired slope net of E1'));
  }
+ completeNontrivial(t.name);
 });
 // Control: list's lookahead row is validated even though it is not delivered.
 test('Episode projection control: denied source on list lookahead',async t=>{

@@ -1,4 +1,5 @@
-import { familyCostParity } from '../testing/receipt-event-time-gates.mjs';
+import { costGateFamilies, costFamilyLabel, costFamilyFixture, costFamilyPhysical } from '../testing/receipt-event-time-gates.mjs';
+import { costMatrixGate as familyGate, familyCostParity } from '../testing/receipt-event-time-gates.mjs';
 import { assertRoleEmbeddedContentCost, assertRoleEmbeddedContentCostInventory } from '../testing/content-safety-s2h-deferred-cost.mjs';
 import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
@@ -10,15 +11,17 @@ import { safetyFixture, ns, ok, receipt } from '../testing/content-safety-s2h-fi
 import { measureContentRead } from '../testing/content-safety-cost-meter.mjs';
 import { transaction } from '../database.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
+const completeNative=familyGate('S2h-3 embedded native matrices',costGateFamilies().length*12);
+const completeProduct=familyGate('S2h-3 embedded product matrices',costGateFamilies().length*6);
 const authority={authorize(request){const {input,...binding}=request;return {...binding,accessGeneration:1};},isCurrent:g=>g};
-for(const base of [18,23,33])for(const n of [12,24])test(`R2 embedded lexical v${base} ${n} documents: real refresh, query, assembly, evidence and cursor`,async t=>{
+for(const family of costGateFamilies())for(const base of [18,23,33])for(const n of [12,24])test(`R2 embedded lexical v${base} ${n} documents: real refresh, query, assembly, evidence and cursor${costFamilyLabel(family, base)}`,async t=>{
  const records=[];
  for(const [safety,facts]of costGatePopulations()) {
-  const f=safetyFixture(t,base);if(safety)await f.migrate();const db=f.connect();let calls=0;
+  const f=costFamilyFixture(t,base,family);if(safety)await f.migrate();const db=f.connect();let calls=0;
   const core=openMemoryCore({path:f.path,contextRead:{version:'context-read-v1',authority,counter:{id:'synthetic',countTokens(){calls++;return 1;}}}});t.after(()=>{core.close();db.close();});
   const refs=Array.from({length:n},(_,i)=>{const memory=ok(core.admit({namespace:ns,memory:{content:'Synthetic lexical evidence '+i,kind:'fact'},receipts:[receipt('lexical-'+i)]})).memory;return {type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision};});
   if(facts)transaction(db,()=>{for(let i=0;i<facts;i++)writeContentSuppressionInside(db,{namespace:{...ns,scope:'project',projectId:'unrelated'},kind:'memory',key:'unrelated-'+i,reason:'purge',actionId:'fact-'+i});});
-  assertCostGateCell(db,base,safety,facts,ns.ownerId,{testName:t.name,n});
+  assertCostGateCell(db,base,safety,facts,ns.ownerId,{family,testName:t.name,n});
   const p={readSet:[ns],types:['memory'],intent:'current'},cases=[['refreshContextIndex',{...p,budget:{maxItems:1024,maxMs:5000}},'lexical'],['findCandidates',{...p,query:'Synthetic lexical',limit:1,deadlineMs:5000},'lexical'],
    ['findCandidates',{...p,query:'absentterm',limit:1,deadlineMs:5000},'absent'],['contextRead',{...p,query:'Synthetic lexical',budget:{maxTokens:4000,maxItems:12},deadlineMs:5000},'lexical'],
    ['contextRead',{...p,query:'absentterm',budget:{maxTokens:4000,maxItems:12},deadlineMs:5000},'absent'],['fetchCandidateEvidence',{readSet:[ns],intent:'current',refs:refs.slice(0,12)},'refs']];
@@ -35,12 +38,14 @@ for(const base of [18,23,33])for(const n of [12,24])test(`R2 embedded lexical v$
  t.diagnostic('R3_EMBEDDED_LEXICAL_COUNTS '+JSON.stringify(records));
  if(assertCostGateCells(records))return;
  const [legacy,zero,five]=records,observed=new Set();
- for(const current of [zero,five])for(const [i,row]of current.records.entries()) {const old=legacy.records[i];assert.equal(row.ports,old.ports);assert.equal(row.begin,old.begin,row.method);assertRoleEmbeddedContentCost(row,{testName:t.name,base,n,facts:current.facts},old,observed);}
+ for(const current of [zero,five])for(const [i,row]of current.records.entries()) {const old=legacy.records[i];assert.equal(row.ports,old.ports);assert.equal(row.begin,old.begin,row.method);assertRoleEmbeddedContentCost(row,{family,testName:t.name,base,n,facts:current.facts},old,observed);}
  assertRoleEmbeddedContentCostInventory(observed,t.name);
+ completeNative(t.name);
 });
 
 const probe=fileURLToPath(new URL('../testing/content-safety-s2h-path-cost-probe.mjs',import.meta.url));
-for(const [v,base]of [[34,18],[38,23],[48,33]])test(`R2 product fetchCandidateEvidence v${v}: exact refs/snapshot/cell inventory`,t=>{
+for(const family of costGateFamilies())for(const base of [18,23,33])test(`R2 product fetchCandidateEvidence v${costFamilyPhysical(base,family)}: exact refs/snapshot/cell inventory${costFamilyLabel(family,base)}`,t=>{
+ const v=costFamilyPhysical(base,family);
  if(unmigratedCostOnly)return;
  const pairs=[];
  for(const n of [24,48])for(const limit of [1,12]){
@@ -59,14 +64,18 @@ for(const [v,base]of [[34,18],[38,23],[48,33]])test(`R2 product fetchCandidateEv
   for(const current of [zero,five])for(const [i,row]of current.rows.entries()){
    const old=legacy.rows[i],begins=r=>r.sqlSummary.filter(s=>/^BEGIN/.test(s.sql)).reduce((n,s)=>n+s.exec,0);
    pairs.push([{method:row.method,variant:row.label,statements:row.totalExecuted,begin:begins(row),ports:row.counterCalls},
-     {testName:t.name+' limit='+limit,base,n,facts:current.facts},
+     {family,testName:t.name+' limit='+limit,base,n,facts:current.facts},
      {statements:old.totalExecuted,begin:begins(old),ports:old.counterCalls}]);
   }
  }
- for(const pair of pairs)assertRoleEmbeddedContentCost(...pair);
+ const observedByName=new Map();
+ for(const pair of pairs){const name=pair[1].testName;let observed=observedByName.get(name);if(!observed){observed=new Set();observedByName.set(name,observed);}assertRoleEmbeddedContentCost(...pair,observed);}
+ for(const [name,observed]of observedByName)assertRoleEmbeddedContentCostInventory(observed,name);
+ completeProduct(t.name);
 });
 
-for(const [v,base]of [[34,18],[38,23],[48,33]])test(`R2 product lexical maintenance v${v}: real cold/repeat refresh at two corpus sizes`,t=>{
+for(const family of costGateFamilies())for(const base of [18,23,33])test(`R2 product lexical maintenance v${costFamilyPhysical(base,family)}: real cold/repeat refresh at two corpus sizes${costFamilyLabel(family,base)}`,t=>{
+ const v=costFamilyPhysical(base,family);
  if(unmigratedCostOnly)return;
  const fixed=new Map(),fiveDelta=new Map();
  for(const n of [12,24]){
@@ -88,22 +97,23 @@ for(const [v,base]of [[34,18],[38,23],[48,33]])test(`R2 product lexical maintena
    if(fiveDelta.has(row.variant))assert.equal(factDelta,fiveDelta.get(row.variant),'five unrelated facts add no document-dependent SQL');else fiveDelta.set(row.variant,factDelta);
   }
  }
+ completeProduct(t.name);
 });
 
 // Keep same-namespace unrelated facts separate from the scoped-empty proof.
 // A maintenance refusal is an established privacy result, not a successful
 // empty read; subsequent retained reads still exercise the completed index.
-for(const base of [18,23,33])for(const semantic of [false,true])test(`embedded same-namespace facts v${base} semantic=${semantic}: five-fact slope and no-hit`,async t=>{
+for(const family of costGateFamilies())for(const base of [18,23,33])for(const semantic of [false,true])test(`embedded same-namespace facts v${base} semantic=${semantic}: five-fact slope and no-hit${costFamilyLabel(family, base)}`,async t=>{
  const sizes=[];
  for(const n of [12,24]){
   const cells=[];
   for(const [safety,facts]of costGatePopulations()){
-   const f=safetyFixture(t,base);if(safety)await f.migrate();const db=f.connect();let ports=0;
+   const f=costFamilyFixture(t,base,family);if(safety)await f.migrate();const db=f.connect();let ports=0;
    const core=openMemoryCore({path:f.path,contextRead:{version:'context-read-v1',authority,counter:{id:'same-scope-counter',countTokens(){ports++;return 1;}},
     ...(semantic?{embedder:{id:'same-scope-fake',revision:'1',dimensions:2,normalization:'l2',embed(texts){ports++;return texts.map(()=>[1,0]);}},policy:{family:'local',maxRequests:10000,maxUsd:1,maxConcurrent:1,estimateUsd:()=>0}}:{})}});t.after(()=>{core.close();db.close();});
    for(let i=0;i<n;i++)ok(core.admit({namespace:ns,memory:{content:'Synthetic same-scope evidence '+i,kind:'fact'},receipts:[receipt('same-scope-'+i)]}));
    if(facts)transaction(db,()=>{for(let i=0;i<facts;i++)writeContentSuppressionInside(db,{namespace:ns,kind:'memory',key:'unrelated-'+i,reason:'purge',actionId:'fact-'+i});});
-   assertCostGateCell(db,base,safety,facts,ns.ownerId,{testName:t.name,n,semantic});
+   assertCostGateCell(db,base,safety,facts,ns.ownerId,{family,testName:t.name,n,semantic});
    const p={readSet:[ns],types:['memory'],intent:'current'},tasks=[['refreshContextIndex','refresh',{...p,budget:{maxItems:1024,maxMs:5000}}],
     ['findCandidates','hit',{...p,query:'Synthetic same-scope',semantic,limit:12,deadlineMs:5000}],
     ['contextRead','hit',{...p,query:'Synthetic same-scope',semantic,budget:{maxTokens:4000,maxItems:12},deadlineMs:5000}],
@@ -130,7 +140,7 @@ for(const base of [18,23,33])for(const semantic of [false,true])test(`embedded s
  // each decision is a subtest so all 60 cells execute even on that baseline.
  for(const cells of sizes)for(const current of cells.slice(1))for(const [i,row]of current.records.entries())
   await t.test(`n${cells[0].n} facts=${current.facts} ${row.method}:${row.variant}`,()=>
-   assertRoleEmbeddedContentCost(row,{testName:t.name,base,n:cells[0].n,semantic,facts:current.facts},cells[0].records[i],ratchets));
+   assertRoleEmbeddedContentCost(row,{family,testName:t.name,base,n:cells[0].n,semantic,facts:current.facts},cells[0].records[i],ratchets));
  assertRoleEmbeddedContentCostInventory(ratchets,t.name);
  for(const [i,small]of sizes[0][2].records.entries()){
   const large=sizes[1][2].records[i];
@@ -138,6 +148,7 @@ for(const base of [18,23,33])for(const semantic of [false,true])test(`embedded s
   if(small.variant==='lexical-absent'&&(small.statements!==large.statements||small.begin!==large.begin))problems.push({method:small.method,variant:small.variant,noHitSmall:[small.statements,small.begin],noHitLarge:[large.statements,large.begin]});
  }
  assert.deepEqual(problems,[],'non-deferred zero-fact and no-hit costs');
+ completeNative(t.name);
 });
 
 
