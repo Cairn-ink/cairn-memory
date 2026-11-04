@@ -1095,12 +1095,34 @@ release attempt is recorded before invocation. A release throw takes terminal
 `reader_failed` precedence and poisons the claim; no second attempt occurs.
 Failed or unproven required disposal withholds release and poisons the claim.
 
-Poison is independent process memory keyed by the port object and the physical
-sidecar identity used by open-only admission, retaining location identity for
-missing files and physical aliases as they become known. Admission-domain
+Native Promise entry uses the captured `Promise.prototype.then`, bypassing a
+throwing `then` accessor. Constructor or species lookup can still throw; the
+engine fails with `authority_required` and one withdrawal, without further
+accessor calls on the returned value or another adoption attempt. No rejecting
+wrapper is created. A host whose `enter` returns a rejected Promise with a
+throwing `constructor` leaves its own rejection unhandled, which the engine
+cannot observe; default Node rejection handling can terminate the process.
+The same residual applies if species lookup throws before handlers attach.
+[ECMAScript `then`](https://tc39.es/ecma262/2025/multipage/control-abstraction-objects.html#sec-promise.prototype.then)
+steps 3–5 perform species lookup before handler attachment;
+[`SpeciesConstructor`](https://tc39.es/ecma262/2025/multipage/abstract-operations.html#sec-speciesconstructor)
+steps 1 and 4 read constructor and species. `Promise.resolve` and `await` both
+use `PromiseResolve`, whose step 1.a reads a native Promise's constructor;
+combinators call the resolver and then invoke `then`. These provide no general
+way to attach a rejection handler without constructor or `then` lookups.
+
+Poison is held in the JavaScript realm that loaded the engine (the main thread
+or one Worker), like the reader supervisor's quarantine and the open-only
+admission state. It is keyed by the port object and the physical sidecar
+identity used by open-only admission, retaining location identity for missing
+files and physical aliases as they become known. A host must keep all lexical
+pumps for one sidecar in one realm; each pump uses the port of the realm that
+calls its renewal, as specified in the turn contract. Admission-domain
 retirement, quota/capacity changes, new windows and new pump IDs cannot clear
-it. There is no eviction, TTL, renewal or reset API: only process restart clears
-poison. The private phase is `poisoned`, allowing the host to alert and restart.
+poison. There is no eviction, TTL, renewal or reset API. Restarting that realm,
+or the process, clears poison. A host that sees `turnPhase:'poisoned'` should
+restart the process. "Process memory" in the open-only package's Amendment v2
+means this same realm scope.
 Cross-process exclusion remains host-owned; a grant does not replace its
 existing physical gate or change collision refusals.
 
