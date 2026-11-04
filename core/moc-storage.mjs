@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { transaction } from "./database.mjs";
+import { transaction, readTransaction } from "./database.mjs";
 import { fail } from "./validation.mjs";
 import { QUERY_SCAN_LIMIT, SOURCE_QUERY_RECEIPT_LIMIT,
   BOUNDED_KEYSET_SOURCE_CANDIDATES } from './query-candidates.mjs';
@@ -362,7 +362,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
 
   function queryCandidateRows(ns, { score, memoryLabel, sourceReceiptLimit = 0,
     sourceCandidatePolicy = null }) {
-    return transaction(db, () => {
+    return readTransaction(db, () => {
       if (![0, SOURCE_QUERY_RECEIPT_LIMIT].includes(sourceReceiptLimit)) fail('invalid_input');
       const keyset = sourceCandidatePolicy === BOUNDED_KEYSET_SOURCE_CANDIDATES.version;
       if (sourceCandidatePolicy !== null && (!keyset || sourceReceiptLimit !== SOURCE_QUERY_RECEIPT_LIMIT)) {
@@ -481,7 +481,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
             label: sourceLabel ?? memoryLabel(memory.content) } };
       });
       return { rows, epoch: currentEpoch, scanExhausted };
-    });
+    }, undefined, { installedSafety: true });
   }
 
   function mapRows(ns, { purpose, parentRef, limit, offset, expectedEpoch, memoryLabel = label,
@@ -682,5 +682,5 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       if (row.revision !== ref.revision) fail('revision_conflict');
       return { id: row.id, revision: row.revision, level: `L${row.level}`, title: visibleTitle(row) };
     },
-    assertEpoch(ns, expected) { return transaction(db, () => assertEpochValue(ns, expected)); } });
+    assertEpoch(ns, expected) { return readTransaction(db, () => assertEpochValue(ns, expected), undefined, { installedSafety: true }); } });
 }

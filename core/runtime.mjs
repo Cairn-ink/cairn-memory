@@ -12,7 +12,7 @@ import { createEpisodeReads } from './episode-reads.mjs';
 import { createEpisodeStorage, episodeOptions } from './episode-storage.mjs';
 import { createProceduralStorage } from './procedural-storage.mjs';
 import { createHash } from "node:crypto";
-import { openDatabase, transaction, isConnectionDiscarded } from "./database.mjs";
+import { openDatabase, transaction, readTransaction, isConnectionDiscarded } from "./database.mjs";
 import { createMocStorage } from "./moc-storage.mjs";
 import { createAdmissionStorage } from "./admission-storage.mjs";
 import { createClassificationJournalStorage } from './classification-journal-storage.mjs';
@@ -421,7 +421,7 @@ export function createMemoryRuntime(input, internal) {
   function listPage(ns, statuses, count, anchor, expectedEpoch, states = ['active', 'historical'], reviewState) {
     ready();
     if (reviewState === 'awaiting' && !decisionReview) fail('decision_review_required');
-    return transaction(db, () => {
+    return readTransaction(db, () => {
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && currentEpoch !== expectedEpoch) fail("cursor_stale");
       let sql = `SELECT memories.*, (SELECT count(*) FROM receipts
@@ -441,12 +441,12 @@ export function createMemoryRuntime(input, internal) {
       sql += " ORDER BY updated_at DESC, id ASC LIMIT ?";
       params.push(count + 1);
       return { rows: db.prepare(sql).all(...params).map(metadataDto), epoch: currentEpoch };
-    });
+    }, undefined, { installedSafety: true });
   }
 
   function getPage(ns, id, count, anchor, expectedEpoch, includeQualification = false, includeAwaiting = false) {
     ready();
-    return transaction(db, () => {
+    return readTransaction(db, () => {
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && currentEpoch !== expectedEpoch) fail("cursor_stale");
       const memory = db.prepare(`SELECT memories.*, (SELECT count(*) FROM receipts
@@ -477,7 +477,7 @@ export function createMemoryRuntime(input, internal) {
         ...(includeQualification ? { qualification: safeQualification(ns, memory) } : {}),
         ...(memory.currentness === 'historical'
           ? { supersession: supersessionStorage.inspect(ns, id) } : {}), epoch: currentEpoch };
-    });
+    }, undefined, { installedSafety: true });
   }
 
   function safeQualification(ns, row) {
@@ -511,11 +511,11 @@ export function createMemoryRuntime(input, internal) {
   // Read before ranking only; the final recall snapshot rereads the same list.
   function recentReceipts(ns, ref, count) {
     ready();
-    return transaction(db, () => {
+    return readTransaction(db, () => {
       const row = currentRow(ns, ref.memoryId);
       if (!row || row.revision !== ref.revision) fail('revision_conflict');
       return receiptRecent(ns, row, count);
-    });
+    }, undefined, { installedSafety: true });
   }
 
   function readSourceEvidence(row, complete = true) {
@@ -540,7 +540,7 @@ export function createMemoryRuntime(input, internal) {
   const fetchPageIdentities = new WeakMap();
   function fetchPage(ns, ref, offset, expectedEpoch, view = 'current', includeQualification = false, contextMode, expectedPage) {
     ready();
-    return transaction(db, () => {
+    return readTransaction(db, () => {
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && currentEpoch !== expectedEpoch) fail('cursor_stale');
       const candidate = view === 'historical' ? activeRow(ns, ref.memoryId) : currentRow(ns, ref.memoryId);
@@ -557,7 +557,7 @@ export function createMemoryRuntime(input, internal) {
       return { memory, receipts, receiptOffsets: positions.offsets, receiptEnd: positions.end, epoch: currentEpoch,
         ...(includeQualification ? { qualification: safeQualification(ns, row) } : {}),
         ...(view === 'historical' ? { supersession: supersessionStorage.inspect(ns, row.id) } : {}) };
-    });
+    }, undefined, { installedSafety: true });
   }
 
   function readUsageEvidence(ns, row, mode) {
@@ -606,7 +606,7 @@ export function createMemoryRuntime(input, internal) {
 
   function recallSnapshot(candidates, selected, namespaces = [], includeQualification = false, contextMode) {
     ready();
-    return transaction(db, () => {
+    return readTransaction(db, () => {
       // This transaction is the return linearization point across the read set.
       const rows = candidates.map(({ namespace, memoryId, revision }) => {
         const row = currentRow(namespace, memoryId);
@@ -635,7 +635,7 @@ export function createMemoryRuntime(input, internal) {
           ...(capped ? { receiptsOmitted: memory.receiptCount - receipts.length } : {}),
           ...(includeQualification ? { qualification: qualifications[index] } : {}) };
       });
-    });
+    }, undefined, { installedSafety: true });
   }
 
   const conflictStorage = createConflictStorage({ db, activeRow: currentRow, rawRow: activeRow, advanceEpoch,
