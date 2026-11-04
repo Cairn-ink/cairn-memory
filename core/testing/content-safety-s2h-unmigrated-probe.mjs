@@ -50,7 +50,9 @@ function assertProbeCases(job,rows) {
 export function collectUnmigratedCosts(jobs,outcomes) {
  const records=[],seen=new Set();
  const add=(key,row)=>{assert.ok(!seen.has(key),'duplicate unmigrated cell: '+key);seen.add(key);const counts=costTriple(row);assert.ok(counts.every(Number.isSafeInteger),'all three costs are measured: '+key);assert.ok(counts[2]>=(row.ports??row.portCalls??row.opened??row.counterCalls??0),'all E1 ports are included in the host census: '+key);records.push({key,counts});};
- const output=child(['--test','--test-concurrency=1','--test-reporter=tap','--test-name-pattern=^(?!R2 product )',...nativeCostFiles],{CAIRN_S2H_UNMIGRATED_ONLY:'1',CAIRN_S2H_CELL_REPORT:'1'});
+ // Only legacy native cases contribute to this census. Explicitly skip the
+ // product/family cases before their measurements can reuse a legacy cell tag.
+ const output=child(['--test','--test-concurrency=1','--test-reporter=tap','--test-skip-pattern=^R2 product ',...nativeCostFiles],{CAIRN_S2H_UNMIGRATED_ONLY:'1',CAIRN_S2H_CELL_REPORT:'1'});
  for(const line of output.split('\n'))if(line.startsWith('# {"tag":"R3_NATIVE_CELL"')){
   const row=JSON.parse(line.slice(2));assert.equal(row.node,process.version);assert.equal(row.safety,false);assert.equal(row.facts,0);add(nativeCostKey(row),row);
  }

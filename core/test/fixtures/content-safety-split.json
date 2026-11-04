@@ -922,12 +922,13 @@
     },
     {
       "file": "core/content-safety-migration.mjs",
-      "sha256": "811d7ad5b0d33c13332961206bc440763949904f5cb6c36210662fd50e2cae2b"
+      "sha256": "71e8b4f47507ad47a6ef6a065dc1938c23dd74c2f0222724de32d7d77732495b",
+      "reason": "PR 1 adds the offline receipt-event-time migration and transaction-owned installer; the legacy S2h installer and insertion graph remain closed."
     },
     {
       "file": "core/content-safety-schema.mjs",
-      "sha256": "6c99506158d5dee895e0da50ab0444e6bf55ef7300720e0d87a2c20be9dd01e6",
-      "reason": "Round 3 reuses the request layout only inside synchronous engine transactions; the independent delivery header/epoch fence and both B3 helper bodies are unchanged."
+      "sha256": "57af537be7b5e0ce29cc7d025dd7123bba0d6cdb8c2f08b871c0ba3cf5ef2fb0",
+      "reason": "PR 1 attests the receipt-event-time control bit, column and identity trigger, caches its proof privately, and preserves the legacy S2h tuple checks."
     }
   ],
   "writers": [
@@ -936,8 +937,8 @@
       "file": "core/runtime.mjs",
       "start": "  function correct(",
       "end": "  function forgetMutation(",
-      "sha256": "129aebec8ff19ebf595e094f5295fd7fe845325bb6044a866593ad1ebff29225",
-      "reason": "S2h-2 validates canonical post-state acknowledgements and references around the existing terminal fact writer."
+      "sha256": "92e113f7eabbdad87f5bcaa7ed8384226c6c31e7620c932fa4b89587318d000d",
+      "reason": "PR 1 passes each corrected receipt its matching optional receipt time; canonical post-state acknowledgement and terminal fact guards remain in this exact region."
     },
     {
       "id": "forget",
@@ -1169,11 +1170,13 @@
         "contentSafetyConnection",
         "contentSafetyDDL",
         "installedContentLayout",
+        "receiptEventTimeEnabled",
         "verifyContentSafetyDDL",
         "withContentSafetyLayoutInside"
       ],
       "additions": {
-        "withContentSafetyLayoutInside": "Reuses one attested layout within a synchronous canonical snapshot."
+        "withContentSafetyLayoutInside": "Reuses one attested layout within a synchronous canonical snapshot.",
+        "receiptEventTimeEnabled": "Feature accessor for privately attested receipt-event-time metadata, not a content safety gate. The separate static gate permits only runtime, context-product-schema and context-read-facade consumers."
       }
     },
     "core/content-suppression-evidence.mjs": {
