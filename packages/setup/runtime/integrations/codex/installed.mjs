@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveClient, clientProjectId } from '../client/pairing.mjs';
 import { automaticPolicy, automaticGuard } from '../client/automatic-policy.mjs';
@@ -13,16 +13,27 @@ import { detectRunningHost, cachedQualification, observeHost, qualifyBinary, val
   scheduleQualification, finishQualification, hasQualifiedCreator } from './qualification.mjs';
 import { readInstallation, readCredential, clientOptions, childEnvironment, promptRecallEnabled } from './installed-state.mjs';
 import { observeHostedPause, installedTransport, recallContext } from './hosted-lifecycle.mjs';
+import { checkedPath } from '../client/private-state.mjs';
+import { captureStopNotice } from './installed-state.mjs';
 import { sessionSource } from './session-source.mjs';
 
 // No --version/schema subprocess on the hook path. Ancestor detection and
 // identity-keyed cache reads are the only host work before capture/recall.
-export async function currentHost(configPath,{detect=detectRunningHost,launch=launchQualification}={}) {
+export async function currentHost(configPath,{detect=detectRunningHost,launch=launchQualification,now=Date.now}={}) {
   const host=await detect();
   if(!host)return {status:'pending'};
   await observeHost(configPath,host);
   const verdict=await cachedQualification(configPath,host);
-  if(verdict.status==='pending')await scheduleQualification(configPath,host,launch);
+  if(verdict.status==='pending') {
+    // Inspect BEFORE scheduling: a retry can create a fresh marker immediately.
+    // Missing/expired means the previous attempt finished or gave up; the notice
+    // additionally requires a prior SessionStart observation of this identity.
+    let pending;
+    try { pending=await checkedPath(join(dirname(configPath),'qualification',host.identity+'.pending'),{missing:true}); }
+    catch { /* The notice's private state also fails silent on unsafe storage. */ }
+    verdict.pendingFinished=!pending || now()-pending.mtimeMs>=120000;
+    await scheduleQualification(configPath,host,launch);
+  }
   return {...verdict,host};
 }
 function launchQualification(configPath,host) {
@@ -62,7 +73,7 @@ function launchWorker(configPath, config, content) {
 }
 
 export async function runInstalled(configPath, event, stream, { signal, launch = launchWorker,
-  detectHost = detectRunningHost } = {}) {
+  detectHost = detectRunningHost, noticeOptions = {} } = {}) {
   const config = await readInstallation(configPath);
   if (!config.enabled || signal.aborted) return '';
   if(event==='qualify') {
@@ -81,8 +92,19 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
     qualification={...await cachedQualification(configPath,host),host};
     delete input.host;
   } else qualification=await currentHost(configPath,{detect:detectHost});
-  if(qualification.status!=='qualified' || signal.aborted)return '';
+  if(qualification.status!=='qualified' || signal.aborted) {
+    if (event !== 'SessionStart' || signal.aborted) return '';
+    input=await readHookInput(stream,{deadlineMs:300});
+    if (validateHook(input).event !== event) return '';
+    return captureStopNotice(configPath,config,input,qualification,{...noticeOptions,signal});
+  }
   input??=await readHookInput(stream,{deadlineMs:300});
+  let sessionToken;
+  if (event === 'SessionStart') {
+    if (validateHook(input).event !== event || input.agent_id != null || input.agent_type != null) return '';
+    try { sessionToken = await readCredential(configPath, config.endpoint); }
+    catch { return captureStopNotice(configPath,config,input,qualification,{...noticeOptions,signal}); }
+  }
   const qualifyCreator = version => hasQualifiedCreator(configPath,version,{signal});
   const session = await sessionSource(event === 'worker' ? input?.path : input?.transcript_path,
     event === 'worker' ? input?.sessionId : input?.session_id,
@@ -126,7 +148,7 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
     return recallContext(input, config, token, projectId, signal, async () => await promptRecallEnabled(configPath) && Boolean(await boundBinary(qualification.host)));
   }
   if (event === 'SessionStart') {
-    const token = await readCredential(configPath, config.endpoint);
+    const token = sessionToken;
     const remote = await observeHostedPause(config, token, signal);
     if (remote.paused || signal.aborted) return '';
     if (hook.path) await establishPauseBoundary({ root: config.root,targetId,projectId,

@@ -1,4 +1,5 @@
 // Installed entry: every automatic path exits 0, with only vetted context JSON.
+// SessionStart diagnostics use fixed systemMessage templates, never memory/server text.
 // Dynamic import also contains missing/corrupt runtime failures without stderr.
 import { write } from 'node:fs';
 const [path, event] = process.argv.slice(2);

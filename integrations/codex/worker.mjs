@@ -1,3 +1,4 @@
+import { recordLastCapture } from "./installed-state.mjs";
 import { randomBytes } from "node:crypto";
 import { transcriptDigest } from "./digest.mjs";
 import { checkedPath } from "../client/private-state.mjs";
@@ -422,7 +423,8 @@ export async function runWorker(
   )
     throw new Error("invalid_worker_deadline");
   const started = now();
-  return prepared(binding, options, async ({ s, save, batches, records, bytes, stat, digest }) => {
+  let lastCapture;
+  const result = await prepared(binding, options, async ({ s, save, batches, records, bytes, stat, digest }) => {
     if (s.quotaRefusal && !s.quotaRefusal.latched) {
       try {
         const latch = await guard.refuse({ resetAt: s.quotaRefusal.resetAt });
@@ -606,11 +608,14 @@ export async function runWorker(
         }
       }
       s.quotaRefusal = null;
+      const submittedBefore = s.submittedUnits;
       account(s, records, b.start, b.end);
       s.pending.next++;
       s.status = b.body ? "pending" : "excluded";
       s.notBefore = 0;
       await save();
+      if (mode === "hosted" && s.submittedUnits > submittedBefore)
+        lastCapture = { at: now(), count: s.submittedUnits - submittedBefore };
     }
     s.discard = s.pending.discard;
     s.discardReason = s.pending.discardReason;
@@ -625,4 +630,8 @@ export async function runWorker(
     await save();
     return { status: s.status, state: s };
   });
+  // Publish only after capture work and its locks finish. A failed diagnostic
+  // write cannot hold up dispatch of any remaining batches.
+  if (lastCapture) await recordLastCapture(binding.root, lastCapture.at, lastCapture.count, {now});
+  return result;
 }

@@ -97,13 +97,13 @@ test('E03 packed installer inventory: npm JSON, files rules/disk, and tar agree'
     diskFiles(join(setup, 'runtime')).map(name => 'runtime/' + name));
 });
 
-test('Q10 0.6.3 and frozen 0.6.2 inventories agree by tar and npm, including the embedded engine', t => {
+test('Q10 0.6.4 and frozen 0.6.3 inventories agree by tar and npm, including the embedded engine', t => {
   const directory = workspace(t), baseline = join(directory, 'baseline'); mkdirSync(baseline);
-  const paths = command('git', ['ls-tree', '-r', '--name-only', '34182d51', '--', 'packages/setup'], { cwd: repo }).trim().split('\n');
+  const paths = command('git', ['ls-tree', '-r', '--name-only', '5c39dc26', '--', 'packages/setup'], { cwd: repo }).trim().split('\n');
   for (const path of paths) {
     const target = join(baseline, path.replace(/^packages\/setup\//u, ''));
     mkdirSync(dirname(target), { recursive: true });
-    const result = run('git', ['show', '34182d51:' + path], { cwd: repo, encoding: null });
+    const result = run('git', ['show', '5c39dc26:' + path], { cwd: repo, encoding: null });
     assert.equal(result.status, 0); writeFileSync(target, result.stdout);
   }
   const userconfig = join(directory, 'empty.npmrc'); writeFileSync(userconfig, '', { mode: 0o600 });
@@ -112,13 +112,27 @@ test('Q10 0.6.3 and frozen 0.6.2 inventories agree by tar and npm, including the
   const pack = cwd => JSON.parse(command('npm', ['pack', '--offline', '--ignore-scripts', '--json',
     '--pack-destination', directory], { cwd, env }))[0];
   const previous = pack(baseline), current = pack(setup);
-  assert.equal(previous.version, '0.6.2'); assert.equal(current.version, '0.6.3');
+  assert.equal(previous.version, '0.6.3'); assert.equal(current.version, '0.6.4');
   for (const result of [previous, current]) {
     countMatch(t, 'Q10 installer tar vs npm pack manifest ' + result.version,
       tarFiles(join(directory, result.filename)), result.files.map(file => file.path));
     assert.ok(result.files.every(file => !/(?:^|\/)(?:test|fixtures)(?:\/|$)/u.test(file.path)));
   }
-  countMatch(t, 'Q10 outer inventory 0.6.2 vs 0.6.3', previous.files.map(file => file.path), current.files.map(file => file.path));
+  countMatch(t, 'Q10 outer inventory 0.6.3 vs 0.6.4', previous.files.map(file => file.path), current.files.map(file => file.path));
+  const inventory = result => result.files.map(file => file.path);
+  const added = inventory(current).filter(path => !inventory(previous).includes(path));
+  const removed = inventory(previous).filter(path => !inventory(current).includes(path));
+  t.diagnostic('Q10 intentional outer additions: '+JSON.stringify(added)+'; removals: '+JSON.stringify(removed));
+  assert.deepEqual(added, []); assert.deepEqual(removed, []);
+  const unpacked = [];
+  for (const [label, result] of [['old-installer',previous],['new-installer',current]]) {
+    const directoryPath = join(directory,label); mkdirSync(directoryPath);
+    command('tar',['-xzf',join(directory,result.filename),'-C',directoryPath]);
+    unpacked.push(join(directoryPath,'package','runtime','engine'));
+  }
+  for (const name of ['manifest.json', `${manifest.package.name}-${manifest.package.version}.tgz`])
+    assert.deepEqual(readFileSync(join(unpacked[0],name)),readFileSync(join(unpacked[1],name)),
+      'packed embedded engine bytes unchanged: '+name);
   const engines = [];
   for (const [label, source] of [['previous', join(baseline, 'runtime/engine', `${manifest.package.name}-${manifest.package.version}.tgz`)], ['current', archive]]) {
     const extract = join(directory, label); mkdirSync(extract);
@@ -131,7 +145,7 @@ test('Q10 0.6.3 and frozen 0.6.2 inventories agree by tar and npm, including the
     assert.equal(json(join(extract, 'package/package.json')).version, '0.0.0-preview.1');
     engines.push(tar);
   }
-  countMatch(t, 'Q10 embedded engine inventory 0.6.2 vs 0.6.3', ...engines);
+  countMatch(t, 'Q10 embedded engine inventory 0.6.3 vs 0.6.4', ...engines);
 });
 
 // Source-checkout case: prepack imports the repository's packaging builder.

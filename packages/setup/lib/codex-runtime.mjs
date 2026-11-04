@@ -18,7 +18,7 @@ import { validateUsage } from '../runtime/integrations/client/runtime-usage.mjs'
 import { conforms } from '../runtime/integrations/client/hosted-contract.mjs';
 import { stateLock } from '../runtime/integrations/client/state-lock.mjs';
 import { hostedPauseStatus } from '../runtime/integrations/client/hosted-pause.mjs';
-import { readInstallation, validateInstallation, readCredential, writeCredential, clientOptions,
+import { readLastCapture, readInstallation, validateInstallation, readCredential, writeCredential, clientOptions,
   promptRecallEnabled, writePromptRecall } from '../runtime/integrations/codex/installed-state.mjs';
 import { observedHosts, qualifyBinary, refreshObservedHost, qualificationStatus, cachedQualification } from '../runtime/integrations/codex/qualification.mjs';
 
@@ -293,7 +293,12 @@ export async function installedStatus({home,hostVersion,write,t,snapshot,cliHost
     const recallOn = await promptRecallEnabled(path) && anyQualified;
     write(t('codex_prompt_recall_status', { state: t(recallOn ? (formatQualified ? 'on' : 'recall_per_host') : 'off') }));
     if (recallOn) write(t('prompt_recall_off_hint'));
-    if(config.captureExec===true)write(t('codex_exec_enabled'));
+    if(config.captureExec===true)write('  '+t('codex_exec_enabled'));
+    const lastCapture = await readLastCapture(config.root);
+    const localCaptureDate = lastCapture ? new Date(lastCapture.at) : null;
+    const pad = value => String(value).padStart(2,'0');
+    const captureDate = localCaptureDate ? `${localCaptureDate.getFullYear()}-${pad(localCaptureDate.getMonth()+1)}-${pad(localCaptureDate.getDate())} ${pad(localCaptureDate.getHours())}:${pad(localCaptureDate.getMinutes())}` : null;
+    write(t(captureDate ? 'codex_last_capture' : 'codex_last_capture_none', {date:captureDate}));
     write(t('codex_hooks_trust'));
     const hostedBytes = await privateRead(join(config.root,'hosted-pause',target+'.json'),{missing:true});
     const hosted = hostedBytes===undefined ? null : JSON.parse(hostedBytes);
