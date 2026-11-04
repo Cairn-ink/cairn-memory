@@ -37,7 +37,11 @@ for (const base of [18,23,33]) for (const [variant, options] of Object.entries(v
   assert.doesNotMatch(JSON.stringify(result), /occurred_at|occurredAt|1901-02-03|2001-02-03/);
   for (const request of observed) assert.doesNotMatch(JSON.stringify(request), /occurred_at|occurredAt|1901-02-03|2001-02-03/);
   assert.equal(ok(await core.capture(value)).duplicate, true);
-  error(await core.capture({ ...value, messages: [{ ...value.messages[0], occurredAt: later }, ...value.messages.slice(1)] }), 'event_payload_conflict');
+  const replay = await core.capture({ ...value, messages: [{ ...value.messages[0], occurredAt: later }, ...value.messages.slice(1)] });
+  if (variant === 'episode') error(replay, 'event_payload_conflict');
+  else assert.equal(ok(replay).duplicate, true);
+  assert.deepEqual(db.prepare('SELECT event_id,occurred_at FROM receipts ORDER BY event_id').all().map(r => [r.event_id,r.occurred_at]),
+    [['later',later],['timed',time],['untimed',null]]);
 });
 
 for (const variant of ['ordinary','episode']) test(`one extracted Memory can attach several independently timed and untimed receipts: ${variant}`, async t => {

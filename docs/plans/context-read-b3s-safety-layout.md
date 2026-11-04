@@ -186,9 +186,11 @@ Times are optional: values the pre-existing contract accepts are never rejected.
 On layouts without receipt event time, or when a pre-existing value is not a
 strict receipt time, the receipt time is null; callers read the `receiptEventTime`
 capability. New receipt fields retain strict `invalid_input` validation on every
-layout. Ordinary capture accepts strict-valid message times (explicit null is
-invalid), dropping them before replay hashing on old layouts. Episode capture
-retains its existing shape validation, accepted future times and replay digest.
+layout. Ordinary capture accepts strict-valid message times as attributes and
+retains main's untimed replay identity on every layout. The shared absence rule
+is in the [storage contract](../storage-contract.md#receipt-event-time-v1-physical-515253-2026-11-03).
+Episode capture retains its existing shape validation, accepted future times
+and replay digest.
 
 A binary opens a family store only when every attested feature and revision is
 in its supported set and the exact DDL matches that tuple. This binary supports

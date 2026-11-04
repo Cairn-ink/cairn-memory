@@ -25,8 +25,7 @@ export function captureSnapshot(input, captureQualification, captureSourcePolicy
           (typeof message.content !== 'string' || !message.content.isWellFormed())) {
         fail('invalid_input');
       }
-      // Absence is optional; an explicitly supplied non-instant (including null) is invalid.
-      if (Object.hasOwn(message, 'occurredAt') && message.occurredAt == null) fail('invalid_input');
+      // Null and absence both mean no asserted receipt time.
       const occurredAt = receiptEventTime(message.occurredAt, now);
       return { id, role, content: boundedText(message.content, 4000),
         ...(retainTimes && occurredAt !== null ? { occurredAt } : {}) };
@@ -35,14 +34,13 @@ export function captureSnapshot(input, captureQualification, captureSourcePolicy
         messages.reduce((sum, message) => sum + message.content.length, 0) > 20000) {
       fail('invalid_input');
     }
-    const timed = messages.some(message => message.occurredAt !== undefined);
+    // Receipt times are attributes: retain main's identity on every layout.
     const payloadDigest = createHash('sha256').update(JSON.stringify([
       captureSourcePolicy === 'indexed-evidence-v1' ? 'cairn.capture.indexed-evidence.v1' :
         captureSourcePolicy ? 'cairn.capture.indexed-windows.v1' :
         captureQualification ? 'cairn.capture.v3' : causal ? 'cairn.capture.v2' : 'cairn.capture.v1',
       [namespace.ownerId, namespace.scope, namespace.projectId],
-      client, eventId, sessionId, messages.map(({ id, role, content, occurredAt }) =>
-        [id, role, content, ...(timed ? [occurredAt ?? null] : [])]),
+      client, eventId, sessionId, messages.map(({ id, role, content }) => [id, role, content]),
       ...(causal ? [[causal.streamId, causal.sequence]] : []),
       ...(captureQualification ? [captureQualification] : []),
       ...(captureSourcePolicy ? [captureSourcePolicy, 'nonoverlap-800-v1'] : []),
