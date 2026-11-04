@@ -533,6 +533,76 @@ test(`known replacement identity preserves a second in-flight owner after the fi
   } finally {releases.forEach(release=>release());await Promise.all(pending);await Promise.all(pumps.map(p=>p.close().catch(()=>{})));}
 }));
 
+test('shared admission turns: repeated acquisitions survive merges, failure settlement and unmatched releases',async()=>isolatedAdmissionDomains(all=>{
+  const a=admissionIdentity(),b=admissionIdentity(),c=admissionIdentity();
+  const shared=policy.maintenanceAdmissionDomain(a,500);shared.busy=true;shared.busy=true;
+  const other=policy.maintenanceAdmissionDomain(b,500);
+  const idle=policy.maintenanceAdmissionDomain(c,500);
+  const merged=policy.maintenanceAdmissionDomain({...b,key:a.key},500);
+  policy.maintenanceAdmissionDomain({...b,key:c.key},500);
+  assert.equal(shared.domain,merged.domain);assert.equal(idle.domain,merged.domain);
+  assert.equal(merged.domain.busyCount,2);
+  idle.busy=false;assert.equal(merged.domain.busyCount,2,'an unacquired cell cannot release another cell');
+  shared.busy=false;assert.equal(merged.domain.busyCount,1);
+  for(let n=0;n<1100;n++)policy.maintenanceAdmissionDomain(admissionIdentity(),500);
+  assert.equal(policy.maintenanceAdmissionDomain(b,500),merged);
+  policy.failMaintenanceAdmission(shared,0,true);
+  assert.equal(merged.domain.busyCount,1,'charging failure does not release a turn');
+  other.busy=true;assert.equal(merged.domain.busyCount,2);
+  shared.busy=false;assert.equal(merged.domain.busyCount,1);assert.equal(merged.busy,true);
+  shared.busy=false;assert.equal(merged.domain.busyCount,1,'excess releases cannot consume another cell');
+  other.busy=false;assert.equal(merged.domain.busyCount,0);assert.equal(merged.busy,false);
+  other.busy=false;assert.equal(merged.domain.busyCount,0);assertAdmissionIndexes(all());
+}));
+
+for(const mode of ['replacement','recovery'])for(const confirmed of [true,false])
+test(`shared admission turns: ${mode} retains retry charge and quarantine, proof=${confirmed}`,async t=>isolatedAdmissionDomains(async all=>{
+  const first=model(t,{q:500,openMs:100,admitMs:20}),second=model(t,{q:500,openMs:100,admitMs:401,failProof:!confirmed});
+  const pathY=first.config.projections[0].options.path,pathX=second.config.projections[0].options.path;
+  const snapshot=(options,inode)=>policy.maintenanceAdmissionIdentity(options,path=>({dev:1n,ino:path.endsWith('/.')?9n:BigInt(inode),birthtimeNs:1n,size:4096n}));
+  const common=snapshot(first.config.projections[0].options,100);
+  if(mode==='recovery')second.config.projections.push({...second.config.projections[0],options:{...second.config.projections[0].options,path:pathY}});
+  const models=[first,second],releases=[],arrivals=[],pending=[],pumps=[];
+  for(const [i,s] of models.entries()){
+   if(mode==='recovery')s.deps.cutoffQualified=()=>true;
+   let reads=0;
+   s.deps.admissionIdentity=opts=>snapshot(opts,opts.path===pathY?100:mode==='replacement'&&++reads>=3?100:200);
+   const admit=s.deps.admit;
+   arrivals[i]=new Promise(entered=>{s.deps.admit=async(...args)=>{
+    entered();await new Promise(resolve=>{releases[i]=resolve;});return admit(...args);
+   };});
+   pumps.push(createMaintenancePumpRuntime(s.deps)(s.config));
+  }
+  const shared=policy.maintenanceAdmissionDomain(common,500);
+  const recovery=globalThis[Symbol.for('context-read-product-v1.1/pumps')].recoveryDomains;
+  const domainX=JSON.stringify([pathX,second.config.projections[0].options.readSet[0].ownerId,second.config.projections[0].options.host.moduleUrl]);
+  if(mode==='recovery')recovery.get(domainX).cooldownUntil=19000;
+  try {
+   pending[0]=first.next();await arrivals[0];
+   pending[1]=second.next();await arrivals[1];
+   assert.equal(policy.maintenanceAdmissionDomain(common,500),shared);
+   const acquired=shared.domain.busyCount;
+   releases[0]();await pending[0];
+   const remaining=shared.domain.busyCount;
+   let refused=0;const fillers=[];
+   for(let n=0;n<1100;n++)try{const added=policy.maintenanceAdmissionDomain(admissionIdentity(),500);if(!confirmed){added.busy=true;fillers.push(added);}}catch(e){assert.equal(e.code,'read_in_progress');refused++;}
+   const indexedBefore=all().locations.get(common.key);
+   releases[1]();await pending[1];
+   if(!confirmed)fillers[0].busy=false;
+   const indexed=policy.maintenanceAdmissionDomain(common,500);
+   for(const filler of fillers)filler.busy=false;
+   assert.equal(indexed.attempts,1,'outstanding admission retry charge must remain indexed');
+   assert.equal(indexed.quarantined,!confirmed,'failed disposal quarantine must remain reachable');
+   assert.equal(indexed,shared,'outstanding admission must stay indexed until every owner releases');
+   assert.equal(acquired,2);assert.equal(remaining,1);
+   assert.equal(indexedBefore,shared.domain,'cap pressure cannot retire an outstanding turn');
+   assert.equal(shared.domain.busyCount,0);assert.equal(shared.busy,false);
+   assert.equal(refused>0,!confirmed,'only protected saturation refuses insertion');assertAdmissionIndexes(all());
+  } finally {
+   releases.forEach(fn=>fn?.());await Promise.allSettled(pending);await Promise.allSettled(pumps.map(p=>p.close()));
+  }
+}));
+
 test('replacement admission charges disposal, open, admission, delivery and settlement once',async t=>{
   const s=model(t,{q:500,openMs:30,admitMs:20,deliveryMs:3,settleMs:7,disposeMs:5});
   s.config.projections.push({...s.config.projections[0],options:{...s.config.projections[0].options,diagnostics:true}});

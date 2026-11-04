@@ -54,15 +54,17 @@ function bindIdentity(identity,state) {
 function capacity(domain,maxMs) {
   if(domain.capacities.has(maxMs))return domain.capacities.get(maxMs);
   const all=domains();while(all.capacityCount>=1024)if(!retireCleanDomain(domain))fail('read_in_progress');
-  const profile={attempts:0,until:0,held:false},state={maxMs};let ownsBusy=false;
+  const profile={attempts:0,until:0,held:false},state={maxMs};let busyTurns=0;
   Object.defineProperties(state,{domain:{get:()=>current(domain)},profile:{get:()=>current(profile)}});
   // Quota-independent physical ownership is shared across capacities. Retry
   // counters are separate: another owner's Q cannot recharge a known-bad Q.
   for(const name of ['attempts','until','held'])Object.defineProperty(state,name,{get(){return state.profile[name];},set(value){state.profile[name]=value;}});
-  // Merging two in-flight domains must retain both owners until each releases.
+  // Each true/false pair belongs to a pump turn, even when turns share this
+  // cell. Keep local counts so an unmatched release cannot consume ownership
+  // acquired through another cell after a merge.
   Object.defineProperty(state,'busy',{get(){return state.domain.busy;},set(value){
-    if(ownsBusy===!!value)return;ownsBusy=!!value;
-    const domain=state.domain;domain.busyCount+=ownsBusy?1:-1;domain.busy=domain.busyCount>0;
+    if(value)busyTurns++;else if(busyTurns>0)busyTurns--;else return;
+    const domain=state.domain;domain.busyCount+=value?1:-1;domain.busy=domain.busyCount>0;
   }});
   for(const name of ['pending','quarantined'])Object.defineProperty(state,name,{get(){return state.domain[name];},set(value){state.domain[name]=value;}});
   domain.capacities.set(maxMs,state);all.capacityCount++;return state;
@@ -101,7 +103,9 @@ export function retainMaintenanceAdmission(identity,maxMs,state) {
   bindIdentity(identity,domain);domain.epoch=identity.cache;
 }
 export function failMaintenanceAdmission(state,now,confirmed) {
-  state.pending=false;state.busy=false;state.attempts=Math.min(3,state.attempts+1);
+  // Failure settlement still belongs to the acquiring turn. Only the pump's
+  // final release ends ownership, after retention and charging have finished.
+  state.pending=false;state.attempts=Math.min(3,state.attempts+1);
   state.domain.maxAttempts=Math.max(state.domain.maxAttempts,state.attempts);
   if(!confirmed){state.quarantined=true;state.held=true;return;}
   // Initial attempt, then at most two automatic retries, after 5 s and 30 s.
