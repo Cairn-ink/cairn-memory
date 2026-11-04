@@ -57,7 +57,7 @@ const closedCaptureControl = Object.freeze({ok:true,value:Object.freeze({classif
 
 // Closed delivery may preserve only this exact public failure envelope. In
 // particular, context-index diagnostics (details) are not content-free here.
-function contentFreeFailure(value) {
+function rebuildContentFreeFailure(value) {
   const data = (value, keys) => {
     if (!value || typeof value !== 'object' || types.isProxy(value) ||
         ![Object.prototype, null].includes(Object.getPrototypeOf(value))) return;
@@ -67,10 +67,11 @@ function contentFreeFailure(value) {
     return fields;
   };
   const fields = data(value, ['ok', 'error']);
-  if (fields?.ok.value !== false) return false;
+  if (fields?.ok.value !== false) return;
   const error = data(fields.error.value, ['code', 'retryable']);
-  return Boolean(error && typeof error.code.value === 'string' && contentFreeErrorCodes.has(error.code.value) &&
-    typeof error.retryable.value === 'boolean');
+  if (!error || typeof error.code.value !== 'string' || !contentFreeErrorCodes.has(error.code.value) ||
+      typeof error.retryable.value !== 'boolean') return;
+  return { ok: false, error: { code: error.code.value, retryable: error.retryable.value } };
 }
 // Engine failure codes, never arbitrary caller text. Keep this list explicit:
 // MemoryStoreError's constructor alone does not constrain its argument.
@@ -102,13 +103,21 @@ source_unavailable stale_admission stale_episode stale_rebuild state_limit stora
 storage_error store_closed supersession_limit timeout token_count_unavailable
 unsafe_database_file unsupported_database unsupported_media
 `.trim().split(/\s+/));
-function contentFreeError(error) {
-  if (!error || types.isProxy(error) || Object.getPrototypeOf(error) !== MemoryStoreError.prototype) return false;
-  const fields = Object.getOwnPropertyDescriptors(error);
-  return Reflect.ownKeys(fields).every(key => ['stack', 'message', 'name', 'code'].includes(key)) &&
-    ['message', 'name', 'code'].every(key => Object.hasOwn(fields[key] ?? {}, 'value')) &&
-    contentFreeErrorCodes.has(fields.code.value) && fields.message.value === fields.code.value &&
-    fields.name.value === 'MemoryStoreError';
+// Native stack accessors are shared across Error instances. Inspect their
+// identity without reading stack: even the native setter can retain caller text.
+const nativeErrorStack = Object.getOwnPropertyDescriptor(new MemoryStoreError('store_closed'), 'stack');
+function rebuildContentFreeError(error) {
+  if (!error || types.isProxy(error) || Object.getPrototypeOf(error) !== MemoryStoreError.prototype) return;
+  const fields = Object.getOwnPropertyDescriptors(error), stack = fields.stack;
+  if (!Reflect.ownKeys(fields).every(key => ['stack', 'message', 'name', 'code'].includes(key)) ||
+      !['message', 'name', 'code'].every(key => Object.hasOwn(fields[key] ?? {}, 'value')) ||
+      !contentFreeErrorCodes.has(fields.code.value) || fields.message.value !== fields.code.value ||
+      fields.name.value !== 'MemoryStoreError') return;
+  if (stack && (Object.hasOwn(stack, 'value') || stack.enumerable ||
+      typeof stack.get !== 'function' || typeof stack.set !== 'function' ||
+      stack.get !== nativeErrorStack?.get || stack.set !== nativeErrorStack?.set)) return;
+  // No caller object, prototype or stack survives closed delivery.
+  return new MemoryStoreError(fields.code.value);
 }
 
 const activeReadBoundaries = new AsyncLocalStorage();
@@ -135,7 +144,7 @@ export function contentSafetyFacade(api, { check, noOwner = [], failure, select 
           if (scopes && !delivering) {
             delivering = true;
             try { check(scopes,{delivery:true}); } catch (denial) {
-              if (denial.code !== 'store_closed' || !contentFreeError(error)) error = denial;
+              error = (denial.code === 'store_closed' && rebuildContentFreeError(error)) || denial;
             }
           }
           if (failure) return failure(error,method);
@@ -153,7 +162,8 @@ export function contentSafetyFacade(api, { check, noOwner = [], failure, select 
             catch(error) {
               if(method==='capture'&&error.code==='store_closed'&&
                   (result===closedCaptureControl||isFailedCapture?.(result)))return closedCaptureControl;
-              if (error.code === 'store_closed' && contentFreeFailure(result)) return result;
+              const rebuilt = error.code === 'store_closed' && rebuildContentFreeFailure(result);
+              if (rebuilt) return rebuilt;
               throw error;
             }
             validate?.(method,args,result,scopes); return result;
@@ -170,7 +180,9 @@ export function contentSafetyFacade(api, { check, noOwner = [], failure, select 
           if (scopes && !delivering && !(nestedRead && method === 'sourceSnapshot')) {
             delivering = true;
             try { check(scopes,{delivery:true}); } catch (denial) {
-              if (denial.code !== 'store_closed' || !contentFreeError(error)) throw denial;
+              const rebuilt = denial.code === 'store_closed' && rebuildContentFreeError(error);
+              if (!rebuilt) throw denial;
+              error = rebuilt;
             }
           }
           if (asynchronous) return Promise.reject(error);
