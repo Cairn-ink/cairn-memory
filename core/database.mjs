@@ -298,7 +298,9 @@ function materializedRead(value, seen = new Set()) {
     materializedRead(descriptor.value, seen);
   }
 }
-export function readTransaction(db, work, acquisition) {
+// Readers migrated from transaction retain its installed-safety fence. Existing
+// maintenance readers keep their own attestation/incomplete-result policy.
+export function readTransaction(db, work, acquisition, { installedSafety = false } = {}) {
   if (discardedConnections.has(db) || !db.isOpen) fail('store_closed');
   if (activeReads.has(db) || db.isTransaction || typeof work !== 'function' ||
       types.isAsyncFunction(work) || types.isGeneratorFunction(work)) fail('storage_error');
@@ -310,6 +312,7 @@ export function readTransaction(db, work, acquisition) {
     attempted = true;
     db.exec('BEGIN');
     began = true;
+    if (installedSafety) checkInstalledContentSafety(db);
     // Private maintenance hook; request readers leave it unset.
     acquisition?.readReady();
     value = work();
