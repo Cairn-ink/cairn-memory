@@ -14,6 +14,21 @@ import { configured } from '../testing/context-product-owner-fixture.mjs';
 const protocol=await import('../context-product-admission.mjs').catch(()=>({}));
 const policy=await import('../context-product-admission-policy.mjs').catch(()=>({}));
 
+async function isolatedAdmissionDomains(run){
+  const key=Symbol.for('context-read-product/admission-domains'),previous=globalThis[key];
+  delete globalThis[key];
+  try {await run(()=>globalThis[key]);}
+  finally {if(previous===undefined)delete globalThis[key];else globalThis[key]=previous;}
+}
+const admissionIdentity=()=>{const key=randomUUID();return {key,physical:key,cache:'unchanged'};};
+function assertAdmissionIndexes(all){
+  const located=new Set(all.locations.values()),physical=new Set(all.physical.values());
+  assert.ok([...physical].every(domain=>located.has(domain)),'physical aliases have a location');
+  assert.equal(all.capacityCount,[...located].reduce((n,domain)=>n+domain.capacities.size,0));
+  assert.ok(all.locations.size<=1024);assert.ok(all.capacityCount<=1024);
+  for(const domain of located)for(const state of domain.capacities.values())assert.equal(state.domain,domain);
+}
+
 function model(t,{q=1000,poll=25,openMs=330,admitMs=120,workMs=10,deliveryMs=0,settleMs=0,disposeMs=0,failProof=false}={}){
   let time=0,serial=0,observation,settlementPending=false,heldAdmission;
   const timers=new Map(),events=[],receipts=new WeakMap(),handles=[],domain=randomUUID();
@@ -176,7 +191,7 @@ test('real quantum cycle model: split admission breaks the 330 + 120 + work + 14
 
 for(const [q,accepted] of [[1000,true],[1250,true],[1251,false],[1500,false],[1600,false]])
 test(`cold cadence matrix C=1 Q=${q} ${accepted?'accepted':'refused'}`,async t=>{
-  const s=model(t,{q,openMs:0,admitMs:0,workMs:0});
+  const s=model(t,{q,poll:25,openMs:0,admitMs:0,workMs:0});
   if(!accepted){assert.throws(()=>s.renew(s.config),{code:'invalid_input'});assert.equal(s.events.length,0);return;}
   const p=s.renew(s.config);t.after(()=>p.close());for(let n=0;n<8;n++)await s.next();
   assert.equal(maintenancePumpDiagnostic(p.getStatus()).cadenceMisses,0);
@@ -350,6 +365,174 @@ test('a newly created cache cannot lose the pending physical admission hold',()=
   assert.equal(alias.quarantined,true,'another owner/path/capacity cannot evade unproven disposal');assert.equal(policy.maintenanceAdmissionStatus(alias).attempts,1);
 });
 
+test('known replacement identity reconciles quarantine and retry profiles before rebinding',async()=>isolatedAdmissionDomains(all=>{
+  const a=admissionIdentity(),b=admissionIdentity(),quarantined=policy.maintenanceAdmissionDomain(a,1000);
+  policy.failMaintenanceAdmission(quarantined,100,false);
+  const clean=policy.maintenanceAdmissionDomain(b,1000),replacement={...b,key:a.key};
+  const merged=policy.maintenanceAdmissionDomain(replacement,1000);
+  assert.equal(merged,clean);assert.equal(merged.quarantined,true);assert.equal(merged.held,true);
+  assert.equal(merged.attempts,1);assert.equal(merged.until,quarantined.until);
+  assert.equal(policy.maintenanceAdmissionStatus(merged).state,'quarantined');
+  assert.equal(quarantined.domain,merged.domain);assert.equal(quarantined.profile,merged.profile);
+  policy.failMaintenanceAdmission(quarantined,200,true);
+  assert.equal(merged.attempts,2,'an outstanding reference still charges the merged profile');
+  assert.equal(policy.maintenanceAdmissionDomain(a,1000),merged,'old physical alias is reconciled');
+  assertAdmissionIndexes(all());
+}));
+
+test('known replacement identity reconciles held, busy, pending and maximum backoff across capacities',async()=>isolatedAdmissionDomains(all=>{
+  const a=admissionIdentity(),b=admissionIdentity(),left=policy.maintenanceAdmissionDomain(a,1000);
+  for(let n=0;n<3;n++)policy.failMaintenanceAdmission(left,1000,true);
+  const other=policy.maintenanceAdmissionDomain(a,1250);other.busy=true;other.pending=true;
+  const right=policy.maintenanceAdmissionDomain(b,1000);policy.failMaintenanceAdmission(right,0,true);
+  const merged=policy.maintenanceAdmissionDomain({...b,key:a.key},1000);
+  assert.equal(merged.attempts,3);assert.equal(merged.until,left.until);assert.equal(merged.held,true);
+  assert.equal(merged.busy,true);assert.equal(merged.pending,true);assert.equal(other.domain,merged.domain);
+  assert.equal(policy.maintenanceAdmissionDomain(b,1250),other);
+  assertAdmissionIndexes(all());
+}));
+
+test('retaining admission also reconciles a replacement location domain',async()=>isolatedAdmissionDomains(all=>{
+  const a=admissionIdentity(),b=admissionIdentity(),left=policy.maintenanceAdmissionDomain(a,1000);
+  policy.failMaintenanceAdmission(left,0,false);
+  const right=policy.maintenanceAdmissionDomain(b,1000);right.busy=true;
+  policy.retainMaintenanceAdmission({...b,key:a.key},1000,right);
+  assert.equal(right.quarantined,true);assert.equal(right.attempts,1);assert.equal(right.busy,true);
+  assert.equal(left.domain,right.domain);assertAdmissionIndexes(all());
+}));
+
+test('known replacement identity keeps outstanding references current through repeated merges',async()=>isolatedAdmissionDomains(all=>{
+  const a=admissionIdentity(),b=admissionIdentity(),c=admissionIdentity();
+  const original=policy.maintenanceAdmissionDomain(a,1000);original.busy=true;
+  policy.maintenanceAdmissionDomain(b,1000);policy.maintenanceAdmissionDomain(c,1000);
+  policy.maintenanceAdmissionDomain({...b,key:a.key},1000);
+  const latest=policy.maintenanceAdmissionDomain({...c,key:a.key},1000);
+  assert.equal(original.domain,latest.domain);assert.equal(original.profile,latest.profile);
+  assert.equal(latest.busy,true);
+  policy.retainMaintenanceAdmission({...c,key:a.key},1000,original);
+  policy.failMaintenanceAdmission(original,100,false);
+  assert.equal(latest.quarantined,true);assert.equal(latest.attempts,1);
+  assert.equal(policy.maintenanceAdmissionDomain(c,1250).quarantined,true);
+  assertAdmissionIndexes(all());
+}));
+
+test('clean historical admission domains retire under location pressure with every alias and capacity',async()=>isolatedAdmissionDomains(all=>{
+  const first=admissionIdentity(),second=admissionIdentity();
+  const original=policy.maintenanceAdmissionDomain(first,1000);
+  policy.maintenanceAdmissionDomain(first,1250);policy.maintenanceAdmissionDomain(second,1000);
+  const merged=policy.maintenanceAdmissionDomain({...second,key:first.key},1000),retired=merged.domain;
+  assert.equal(original.domain,retired);assert.equal(all().physical.size,2);
+  // Fill locations without filling capacities: two aliases share each capacity.
+  while(all().locations.size<1024){
+    const identity=admissionIdentity();policy.maintenanceAdmissionDomain(identity,1000);
+    policy.maintenanceAdmissionDomain({...identity,key:randomUUID()},1000);
+  }
+  assert.equal(all().locations.get(first.key),retired,'clean history stays indexed until pressure');
+  policy.maintenanceAdmissionDomain(admissionIdentity(),1000);
+  assert.equal(all().locations.has(first.key),false);assert.equal(all().locations.has(second.key),false);
+  assert.equal(all().physical.has(first.physical),false);assert.equal(all().physical.has(second.physical),false);
+  assert.equal(retired.capacities.size,0);assertAdmissionIndexes(all());
+  for(let n=0;n<1100;n++)policy.maintenanceAdmissionDomain(admissionIdentity(),1000);
+  assertAdmissionIndexes(all());
+}));
+
+test('clean historical admission domains retire under capacity pressure without leaking numeric cells',async()=>isolatedAdmissionDomains(all=>{
+  const first=admissionIdentity(),retired=policy.maintenanceAdmissionDomain(first,1000).domain;
+  policy.maintenanceAdmissionDomain(first,1250);
+  while(all().capacityCount<1024){
+    const identity=admissionIdentity();policy.maintenanceAdmissionDomain(identity,1000);policy.maintenanceAdmissionDomain(identity,1250);
+  }
+  assert.equal(all().locations.size,512);
+  const identity=admissionIdentity(),fresh=policy.maintenanceAdmissionDomain(identity,1000);
+  assert.equal(all().capacityCount,1023);assert.equal(retired.capacities.size,0);
+  assert.equal(all().locations.has(first.key),false);assert.equal(all().physical.has(first.physical),false);
+  assert.equal(all().locations.get(identity.key),fresh.domain,'the insertion domain stays indexed');
+  assertAdmissionIndexes(all());
+}));
+
+for(const protectedState of ['held','quarantined','busy','pending','attempts','until'])
+test(`admission pressure preserves domains with ${protectedState} on another capacity`,async()=>isolatedAdmissionDomains(all=>{
+  const identity=admissionIdentity(),first=policy.maintenanceAdmissionDomain(identity,1000);
+  const other=policy.maintenanceAdmissionDomain(identity,1250),value=['attempts','until'].includes(protectedState)?1:true;other[protectedState]=value;
+  while(all().capacityCount<1024)policy.maintenanceAdmissionDomain(admissionIdentity(),1000).busy=true;
+  for(let n=0;n<3;n++)assert.throws(()=>policy.maintenanceAdmissionDomain(admissionIdentity(),1000),{code:'read_in_progress'});
+  assert.equal(policy.maintenanceAdmissionDomain(identity,1000),first);
+  assert.equal(other[protectedState],value);assertAdmissionIndexes(all());
+}));
+
+test('location pressure refuses new aliases when every domain has outstanding ownership',async()=>isolatedAdmissionDomains(all=>{
+  while(!all()||all().locations.size<1024){
+    const identity=admissionIdentity();policy.maintenanceAdmissionDomain(identity,1000).busy=true;
+    policy.maintenanceAdmissionDomain({...identity,key:randomUUID()},1000);
+  }
+  assert.equal(all().capacityCount,512);
+  assert.throws(()=>policy.maintenanceAdmissionDomain(admissionIdentity(),1000),{code:'read_in_progress'});
+  assert.equal(all().locations.size,1024);assertAdmissionIndexes(all());
+}));
+
+for(const [admitMs,confirmed,label] of [[120,true,'settled identity'],[701,true,'retry charge'],[701,false,'quarantine']])
+test(`in-flight admission survives cap pressure and retains ${label}`,async t=>isolatedAdmissionDomains(async all=>{
+  const identity=admissionIdentity();let release,entered;
+  const waiting=new Promise(resolve=>{entered=resolve;}),s=model(t,{admitMs,failProof:!confirmed});
+  s.deps.admissionIdentity=()=>identity;
+  const admit=s.deps.admit;s.deps.admit=async(...args)=>{entered();await new Promise(resolve=>{release=resolve;});return admit(...args);};
+  const p=createMaintenancePumpRuntime(s.deps)(s.config),pending=s.next();await waiting;
+  const state=policy.maintenanceAdmissionDomain(identity,1000);assert.equal(state.busy,true);
+  try {
+    for(let n=0;n<2;n++){
+      const replacement=admissionIdentity();policy.maintenanceAdmissionDomain(replacement,1000);
+      identity.physical=replacement.physical;policy.maintenanceAdmissionDomain(identity,1000);
+    }
+    for(let n=0;n<1100;n++)policy.maintenanceAdmissionDomain(admissionIdentity(),1000);
+    assert.equal(policy.maintenanceAdmissionDomain(identity,1000).profile,state.profile,'live admission cannot be orphaned after merges');
+    release();await pending;
+    const indexed=policy.maintenanceAdmissionDomain(identity,1000);
+    assert.equal(indexed.domain,state.domain);assert.equal(indexed.profile,state.profile);
+    assert.equal(state.attempts,admitMs===120?0:1);assert.equal(state.quarantined,!confirmed);
+    assert.equal(state.until,admitMs!==120&&confirmed?s.now()+5000:0);assertAdmissionIndexes(all());
+  } finally {release();await pending;await p.close().catch(()=>{});}
+}));
+
+test('work cutoff after clean retirement does not charge an orphan admission state',async t=>isolatedAdmissionDomains(async all=>{
+  const identity=admissionIdentity(),s=model(t,{workMs:1001});s.deps.admissionIdentity=()=>identity;
+  let release,entered;const waiting=new Promise(resolve=>{entered=resolve;}),work=s.deps.work;
+  s.deps.work=async(...args)=>{entered();await new Promise(resolve=>{release=resolve;});return work(...args);};
+  const p=createMaintenancePumpRuntime(s.deps)(s.config);await s.next();
+  const old=policy.maintenanceAdmissionDomain(identity,1000),pending=s.next();await waiting;
+  try {
+    for(let n=0;n<1100;n++)policy.maintenanceAdmissionDomain(admissionIdentity(),1000);
+    assert.equal(old.domain.capacities.size,0,'a work turn does not pin clean admission knowledge');
+    release();await pending;await p.completion;
+    assert.equal(maintenancePumpDiagnostic(p.getStatus()).lastFailure.cause,'engine');
+    assert.equal(old.attempts,0);assert.equal(old.quarantined,false);
+    const fresh=policy.maintenanceAdmissionDomain(identity,1000);
+    assert.notEqual(fresh,old);assert.equal(fresh.attempts,0);assertAdmissionIndexes(all());
+  } finally {release();await pending;await p.close();}
+}));
+
+for(const confirmed of [true,false])
+test(`known replacement identity preserves a second in-flight owner after the first settles, proof=${confirmed}`,async t=>isolatedAdmissionDomains(async all=>{
+  const a=admissionIdentity(),b=admissionIdentity(),first=model(t),second=model(t,{admitMs:701,failProof:!confirmed});
+  const releases=[],waiting=[first,second].map((s,i)=>new Promise(entered=>{
+    s.deps.admissionIdentity=()=>i===0?a:b;const admit=s.deps.admit;
+    s.deps.admit=async(...args)=>{entered();await new Promise(resolve=>{releases[i]=resolve;});return admit(...args);};
+  }));
+  const pumps=[first,second].map(s=>createMaintenancePumpRuntime(s.deps)(s.config));
+  const pending=[first.next(),second.next()];await Promise.all(waiting);
+  const original=policy.maintenanceAdmissionDomain(a,1000),latest=policy.maintenanceAdmissionDomain(b,1000);
+  try {
+    a.physical=b.physical;policy.maintenanceAdmissionDomain(a,1000);
+    assert.equal(original.domain,latest.domain);assert.equal(original.profile,latest.profile);
+    releases[0]();await pending[0];
+    assert.equal(latest.busy,true,'the other turn still owns admission after the first releases');
+    for(let n=0;n<1100;n++)policy.maintenanceAdmissionDomain(admissionIdentity(),1000);
+    assert.equal(policy.maintenanceAdmissionDomain(b,1000),latest);
+    releases[1]();await pending[1];
+    assert.equal(latest.busy,false);assert.equal(latest.attempts,1);assert.equal(latest.quarantined,!confirmed);
+    assert.equal(policy.maintenanceAdmissionDomain(a,1000),latest);assertAdmissionIndexes(all());
+  } finally {releases.forEach(release=>release());await Promise.all(pending);await Promise.all(pumps.map(p=>p.close().catch(()=>{})));}
+}));
+
 test('replacement admission charges disposal, open, admission, delivery and settlement once',async t=>{
   const s=model(t,{q:500,openMs:30,admitMs:20,deliveryMs:3,settleMs:7,disposeMs:5});
   s.config.projections.push({...s.config.projections[0],options:{...s.config.projections[0].options,diagnostics:true}});
@@ -373,8 +556,8 @@ test('concurrent pump IDs serialize fresh admission before reserving another qua
   } finally {release();await pending;await first.close();await second.close();}
 });
 
-for(const [q,accepted] of [[700,true],[715,false]])test(`multiple-resident cadence matrix C=2 Q=${q}`,async t=>{
-  const s=model(t,{q,openMs:0,admitMs:0,workMs:0}),first=s.config.projections[0];
+for(const [q,accepted] of [[1000,false],[700,true],[714,true],[715,false]])test(`multiple-resident cadence matrix C=2 Q=${q}`,async t=>{
+  const s=model(t,{q,poll:25,openMs:0,admitMs:0,workMs:0}),first=s.config.projections[0];
   s.config.projections.push({...first,options:{...first.options,path:first.options.path+'-second'}});
   if(!accepted){assert.throws(()=>s.renew(s.config),{code:'invalid_input'});return;}
   const p=s.renew(s.config);t.after(()=>p.close());for(let n=0;n<12;n++)await s.next();

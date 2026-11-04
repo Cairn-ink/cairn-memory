@@ -7,6 +7,13 @@ import { fail } from './validation.mjs';
 // domain to admit another one. The cap bounds both keys and numeric cells.
 const key=Symbol.for('context-read-product/admission-domains');
 const domains=()=>globalThis[key]??={locations:new Map(),physical:new Map(),capacityCount:0};
+// Outstanding turns can retain a state across several identity merges. Forward
+// both ownership and retry profiles; old references must reach the current cell.
+function current(value) {
+  let root=value;while(root.mergedInto)root=root.mergedInto;
+  while(value.mergedInto){const next=value.mergedInto;value.mergedInto=root;value=next;}
+  return root;
+}
 const file=(path,stat)=>{try {const s=stat(path),id=[s.dev,s.ino,s.birthtimeNs].join(':');return {id,stamp:[id,s.size].join(':')};}catch(e){if(e.code==='ENOENT')return null;fail('reader_failed');}};
 export function maintenanceAdmissionIdentity(options,stat=sqliteFileStat) {
   const path=resolve(options.path)+PRODUCT_SIDECAR_SUFFIX,cache=file(path,stat),directory=file(dirname(path)+'/.',stat);
@@ -17,9 +24,27 @@ export function maintenanceAdmissionIdentity(options,stat=sqliteFileStat) {
   // is first created. The inode alias joins different paths to the same sidecar.
   return {key:directory?JSON.stringify([directory.id,basename(path)]):path,physical:cache?.id,cache:cache?.stamp??'missing'};
 }
+function retireCleanDomain(protectedDomain) {
+  const all=domains();
+  // Pump admission turns set busy synchronously before their first await and
+  // release it after retention/settlement or a synchronous failure charge.
+  // Other pump lookups only read state.
+  // Exclude the domain whose binding/capacity insertion is still in progress.
+  for(const domain of new Set(all.locations.values())){
+    if(domain===protectedDomain||domain.busy||domain.pending||domain.quarantined||
+      [...domain.capacities.values()].some(state=>state.held||state.attempts!==0||state.until!==0))continue;
+    // No await: remove every alias and numeric cell before another lookup.
+    for(const map of [all.locations,all.physical])for(const [key,value] of map)if(value===domain)map.delete(key);
+    all.capacityCount-=domain.capacities.size;domain.capacities.clear();return true;
+  }
+  return false;
+}
 function bindIdentity(identity,state) {
   const {locations,physical}=domains();
-  if(!locations.has(identity.key)&&locations.size>=1024)fail('read_in_progress');
+  // A known physical cache can replace another domain at this location.
+  // Reconcile both indexes before rebinding, including post-admission retention.
+  for(const existing of [locations.get(identity.key),physical.get(identity.physical)])if(existing&&existing!==state)mergeDomain(state,existing);
+  if(!locations.has(identity.key))while(locations.size>=1024)if(!retireCleanDomain(state))fail('read_in_progress');
   locations.set(identity.key,state);
   if(identity.physical!==undefined){
     if(state.physical!==identity.physical&&physical.get(state.physical)===state)physical.delete(state.physical);
@@ -28,30 +53,38 @@ function bindIdentity(identity,state) {
 }
 function capacity(domain,maxMs) {
   if(domain.capacities.has(maxMs))return domain.capacities.get(maxMs);
-  const all=domains();if(all.capacityCount>=1024)fail('read_in_progress');
-  const state={domain,maxMs,profile:{attempts:0,until:0,held:false}};
+  const all=domains();while(all.capacityCount>=1024)if(!retireCleanDomain(domain))fail('read_in_progress');
+  const profile={attempts:0,until:0,held:false},state={maxMs};let ownsBusy=false;
+  Object.defineProperties(state,{domain:{get:()=>current(domain)},profile:{get:()=>current(profile)}});
   // Quota-independent physical ownership is shared across capacities. Retry
   // counters are separate: another owner's Q cannot recharge a known-bad Q.
   for(const name of ['attempts','until','held'])Object.defineProperty(state,name,{get(){return state.profile[name];},set(value){state.profile[name]=value;}});
-  for(const name of ['busy','pending','quarantined'])Object.defineProperty(state,name,{get(){return state.domain[name];},set(value){state.domain[name]=value;}});
+  // Merging two in-flight domains must retain both owners until each releases.
+  Object.defineProperty(state,'busy',{get(){return state.domain.busy;},set(value){
+    if(ownsBusy===!!value)return;ownsBusy=!!value;
+    const domain=state.domain;domain.busyCount+=ownsBusy?1:-1;domain.busy=domain.busyCount>0;
+  }});
+  for(const name of ['pending','quarantined'])Object.defineProperty(state,name,{get(){return state.domain[name];},set(value){state.domain[name]=value;}});
   domain.capacities.set(maxMs,state);all.capacityCount++;return state;
 }
 function mergeDomain(target,source) {
+  target=current(target);source=current(source);if(target===source)return;
   const all=domains();
   target.busy ||= source.busy;target.pending ||= source.pending;target.quarantined ||= source.quarantined;
+  target.busyCount+=source.busyCount;source.busyCount=0;
   target.maxAttempts=Math.max(target.maxAttempts,source.maxAttempts);
   for(const [q,state] of source.capacities){
-    state.domain=target;const existing=target.capacities.get(q);
-    if(existing){existing.attempts=Math.max(existing.attempts,state.attempts);existing.until=Math.max(existing.until,state.until);existing.held ||= state.held;state.profile=existing.profile;all.capacityCount--;}
+    const existing=target.capacities.get(q);
+    if(existing){existing.attempts=Math.max(existing.attempts,state.attempts);existing.until=Math.max(existing.until,state.until);existing.held ||= state.held;state.profile.mergedInto=existing.profile;all.capacityCount--;}
     else target.capacities.set(q,state);
   }
-  source.capacities.clear();
+  source.capacities.clear();source.mergedInto=target;
   for(const map of [all.locations,all.physical])for(const [key,value] of map)if(value===source)map.set(key,target);
 }
 export function maintenanceAdmissionDomain(identity,maxMs) {
   const {locations,physical}=domains(),epoch=identity.cache;
   let domain=physical.get(identity.physical)??locations.get(identity.key);
-  if(!domain)domain={epoch,capacities:new Map(),maxAttempts:0,quarantined:false,pending:false,busy:false};
+  if(!domain)domain={epoch,capacities:new Map(),maxAttempts:0,quarantined:false,pending:false,busy:false,busyCount:0};
   bindIdentity(identity,domain);
   // A failed proof cannot be cleared by capacity or cache changes. A pending
   // attempt also survives the creation of its first cache file.
@@ -63,8 +96,7 @@ export function maintenanceAdmissionDomain(identity,maxMs) {
 }
 export function retainMaintenanceAdmission(identity,maxMs,state) {
   if(state.maxMs!==maxMs)fail('reader_failed');
-  const domain=state.domain,existing=domains().physical.get(identity.physical);
-  if(existing&&existing!==domain)mergeDomain(domain,existing);
+  const domain=state.domain;
   // The failed attempt's own creation/repair is not a new capacity epoch.
   bindIdentity(identity,domain);domain.epoch=identity.cache;
 }
