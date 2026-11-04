@@ -97,7 +97,7 @@
     "key:episodeId": 7,
     "key:event_id": 1,
     "key:eventId": 19,
-    "key:id": 9,
+    "key:id": 10,
     "key:keepActionId": 1,
     "key:memory_id": 1,
     "key:memoryId": 2,
@@ -106,7 +106,9 @@
     "key:messageIds": 1,
     "key:origin_episode_id": 1,
     "key:originEpisodeId": 1,
+    "key:owner_id": 1,
     "key:ownerId": 3,
+    "key:project_id": 1,
     "key:projectId": 2,
     "key:receiptIds": 1,
     "key:sessionId": 5,
@@ -124,7 +126,8 @@
   "core/episode-reads.mjs": {
     "key:id": 9,
     "key:memoryId": 2,
-    "literal:id": 2,
+    "literal:episodeId": 1,
+    "literal:id": 3,
     "literal:memoryId": 1
   },
   "core/session-context.mjs": {
@@ -485,9 +488,16 @@
   "core/raw-lineage-storage.mjs": {
     "key:actionId": 1,
     "key:conversationId": 1,
-    "key:eventId": 5,
-    "key:messageId": 3,
-    "key:sessionId": 5
+    "key:eventId": 7,
+    "key:id": 1,
+    "key:messageId": 7,
+    "key:sessionId": 7,
+    "literal:conversation_id": 2,
+    "literal:id": 5,
+    "literal:memory_id": 2,
+    "literal:message_id": 3,
+    "literal:owner_id": 3,
+    "literal:project_id": 3
   },
   "core/raw-source-input.mjs": {
     "key:conversationId": 2,

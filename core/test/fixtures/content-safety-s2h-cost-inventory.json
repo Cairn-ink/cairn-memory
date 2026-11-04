@@ -1298,6 +1298,16 @@
             "hit/empty where supported",
             "temporal cursor"
           ]
+        },
+        {
+          "gate": "episode-projection",
+          "variants": [
+            "Episode whole source proof",
+            "12/24 items",
+            "zero/five facts",
+            "three layouts",
+            "Raw exact/hashed roots and matching receipt parents"
+          ]
         }
       ],
       "missing": []
@@ -1578,6 +1588,16 @@
             "zero/five facts",
             "hit/empty where supported",
             "temporal cursor"
+          ]
+        },
+        {
+          "gate": "episode-projection",
+          "variants": [
+            "Episode whole source proof",
+            "12/24 items",
+            "zero/five facts",
+            "three layouts",
+            "Raw exact/hashed roots and matching receipt parents"
           ]
         }
       ],
@@ -2108,6 +2128,16 @@
             "hit/absent",
             "three layouts"
           ]
+        },
+        {
+          "gate": "episode-projection",
+          "variants": [
+            "Episode whole source proof",
+            "12/24 items",
+            "zero/five facts",
+            "three layouts",
+            "Raw exact/hashed roots and matching receipt parents"
+          ]
         }
       ],
       "missing": []
@@ -2417,6 +2447,18 @@
       "getSource:4/33/0",
       "getSource:4/53/0",
       "getSource:4/53/5"
+    ],
+    "episode-projection": [
+      "getEpisode:hit",
+      "listEpisodes:hit",
+      "listEpisodes:cursor",
+      "listEpisodes:absent",
+      "sessionStartContext:nextSteps"
+    ],
+    "episode-nontrivial": [
+      "getEpisode:hit",
+      "listEpisodes:hit",
+      "sessionStartContext:nextSteps"
     ]
   },
   "surfaceClassifications": {

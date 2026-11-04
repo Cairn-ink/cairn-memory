@@ -1,5 +1,5 @@
 {
-  "revision": "R2-A1 / 3.5",
+  "revision": "R2-A1 Episode formula and downward exact pins; Role/context deferred unchanged",
   "decision": "e9, 2026-11-01 17:15",
   "source": "fixb_s2h2/fix3/artifacts/native-zero-five-table.csv",
   "sourceSha256": "d651818229f0c26d78907ccd488a79e2fb18d2918a4dee6d6cec21dafcf98f5e",
@@ -310,22 +310,22 @@
       2
     ],
     "[\"R2 temporal/admission/review v18 1 items\",18,1,null,\"getEpisode\",\"hit\",0]": [
-      20,
+      17,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v18 1 items\",18,1,null,\"getEpisode\",\"hit\",5]": [
-      22,
+      19,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v18 1 items\",18,1,null,\"listEpisodes\",\"hit\",0]": [
-      11,
+      8,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v18 1 items\",18,1,null,\"listEpisodes\",\"hit\",5]": [
-      13,
+      10,
       1,
       0
     ],
@@ -340,32 +340,32 @@
       0
     ],
     "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"getEpisode\",\"hit\",0]": [
-      20,
+      17,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"getEpisode\",\"hit\",5]": [
-      22,
+      19,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"listEpisodes\",\"hit\",0]": [
-      14,
+      8,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"listEpisodes\",\"hit\",5]": [
-      16,
+      10,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"listEpisodes\",\"cursor\",0]": [
-      14,
+      8,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"listEpisodes\",\"cursor\",5]": [
-      16,
+      10,
       1,
       0
     ],
@@ -380,22 +380,22 @@
       0
     ],
     "[\"R2 temporal/admission/review v23 1 items\",23,1,null,\"getEpisode\",\"hit\",0]": [
-      20,
+      17,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v23 1 items\",23,1,null,\"getEpisode\",\"hit\",5]": [
-      22,
+      19,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v23 1 items\",23,1,null,\"listEpisodes\",\"hit\",0]": [
-      11,
+      8,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v23 1 items\",23,1,null,\"listEpisodes\",\"hit\",5]": [
-      13,
+      10,
       1,
       0
     ],
@@ -410,32 +410,32 @@
       0
     ],
     "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"getEpisode\",\"hit\",0]": [
-      20,
+      17,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"getEpisode\",\"hit\",5]": [
-      22,
+      19,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"listEpisodes\",\"hit\",0]": [
-      14,
+      8,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"listEpisodes\",\"hit\",5]": [
-      16,
+      10,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"listEpisodes\",\"cursor\",0]": [
-      14,
+      8,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"listEpisodes\",\"cursor\",5]": [
-      16,
+      10,
       1,
       0
     ],
@@ -450,22 +450,22 @@
       0
     ],
     "[\"R2 temporal/admission/review v33 1 items\",33,1,null,\"getEpisode\",\"hit\",0]": [
-      24,
+      17,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v33 1 items\",33,1,null,\"getEpisode\",\"hit\",5]": [
-      26,
+      19,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v33 1 items\",33,1,null,\"listEpisodes\",\"hit\",0]": [
-      15,
+      8,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v33 1 items\",33,1,null,\"listEpisodes\",\"hit\",5]": [
-      17,
+      10,
       1,
       0
     ],
@@ -480,32 +480,32 @@
       0
     ],
     "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"getEpisode\",\"hit\",0]": [
-      24,
+      17,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"getEpisode\",\"hit\",5]": [
-      26,
+      19,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"listEpisodes\",\"hit\",0]": [
-      22,
+      8,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"listEpisodes\",\"hit\",5]": [
-      24,
+      10,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"listEpisodes\",\"cursor\",0]": [
-      22,
+      8,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"listEpisodes\",\"cursor\",5]": [
-      24,
+      10,
       1,
       0
     ],
@@ -538,6 +538,573 @@
       1509,
       24,
       98
+    ]
+  },
+  "episodeProvenance": {
+    "engineBase": "d08885a3",
+    "failBeforeBase": "a6ec0e0e",
+    "measuredDate": "2026-11-04",
+    "nodes": [
+      "24.22.1",
+      "22.16.0",
+      "24.15.0"
+    ],
+    "test": "content-safety-s2h-metadata-cost.test.mjs and content-safety-s2h-episode-projection.test.mjs",
+    "measuredCellsSha256": "4118ce39e4e61fb5c6572d4cbf1a5ae69e70cd5927ac9a065cf7e278ef54c8f9"
+  },
+  "episodeProjection": {
+    "[18,12,0,\"getEpisode\",\"hit\"]": [
+      17,
+      1,
+      0
+    ],
+    "[18,12,0,\"listEpisodes\",\"hit\"]": [
+      8,
+      1,
+      0
+    ],
+    "[18,12,0,\"listEpisodes\",\"cursor\"]": [
+      8,
+      1,
+      0
+    ],
+    "[18,12,0,\"listEpisodes\",\"absent\"]": [
+      8,
+      1,
+      0
+    ],
+    "[18,12,0,\"sessionStartContext\",\"nextSteps\"]": [
+      40,
+      2,
+      4
+    ],
+    "[18,12,5,\"getEpisode\",\"hit\"]": [
+      19,
+      1,
+      0
+    ],
+    "[18,12,5,\"listEpisodes\",\"hit\"]": [
+      10,
+      1,
+      0
+    ],
+    "[18,12,5,\"listEpisodes\",\"cursor\"]": [
+      10,
+      1,
+      0
+    ],
+    "[18,12,5,\"listEpisodes\",\"absent\"]": [
+      10,
+      1,
+      0
+    ],
+    "[18,12,5,\"sessionStartContext\",\"nextSteps\"]": [
+      42,
+      2,
+      4
+    ],
+    "[18,24,0,\"getEpisode\",\"hit\"]": [
+      17,
+      1,
+      0
+    ],
+    "[18,24,0,\"listEpisodes\",\"hit\"]": [
+      8,
+      1,
+      0
+    ],
+    "[18,24,0,\"listEpisodes\",\"cursor\"]": [
+      8,
+      1,
+      0
+    ],
+    "[18,24,0,\"listEpisodes\",\"absent\"]": [
+      8,
+      1,
+      0
+    ],
+    "[18,24,0,\"sessionStartContext\",\"nextSteps\"]": [
+      40,
+      2,
+      4
+    ],
+    "[18,24,5,\"getEpisode\",\"hit\"]": [
+      19,
+      1,
+      0
+    ],
+    "[18,24,5,\"listEpisodes\",\"hit\"]": [
+      10,
+      1,
+      0
+    ],
+    "[18,24,5,\"listEpisodes\",\"cursor\"]": [
+      10,
+      1,
+      0
+    ],
+    "[18,24,5,\"listEpisodes\",\"absent\"]": [
+      10,
+      1,
+      0
+    ],
+    "[18,24,5,\"sessionStartContext\",\"nextSteps\"]": [
+      42,
+      2,
+      4
+    ],
+    "[23,12,0,\"getEpisode\",\"hit\"]": [
+      17,
+      1,
+      0
+    ],
+    "[23,12,0,\"listEpisodes\",\"hit\"]": [
+      8,
+      1,
+      0
+    ],
+    "[23,12,0,\"listEpisodes\",\"cursor\"]": [
+      8,
+      1,
+      0
+    ],
+    "[23,12,0,\"listEpisodes\",\"absent\"]": [
+      8,
+      1,
+      0
+    ],
+    "[23,12,0,\"sessionStartContext\",\"nextSteps\"]": [
+      40,
+      2,
+      4
+    ],
+    "[23,12,5,\"getEpisode\",\"hit\"]": [
+      19,
+      1,
+      0
+    ],
+    "[23,12,5,\"listEpisodes\",\"hit\"]": [
+      10,
+      1,
+      0
+    ],
+    "[23,12,5,\"listEpisodes\",\"cursor\"]": [
+      10,
+      1,
+      0
+    ],
+    "[23,12,5,\"listEpisodes\",\"absent\"]": [
+      10,
+      1,
+      0
+    ],
+    "[23,12,5,\"sessionStartContext\",\"nextSteps\"]": [
+      42,
+      2,
+      4
+    ],
+    "[23,24,0,\"getEpisode\",\"hit\"]": [
+      17,
+      1,
+      0
+    ],
+    "[23,24,0,\"listEpisodes\",\"hit\"]": [
+      8,
+      1,
+      0
+    ],
+    "[23,24,0,\"listEpisodes\",\"cursor\"]": [
+      8,
+      1,
+      0
+    ],
+    "[23,24,0,\"listEpisodes\",\"absent\"]": [
+      8,
+      1,
+      0
+    ],
+    "[23,24,0,\"sessionStartContext\",\"nextSteps\"]": [
+      40,
+      2,
+      4
+    ],
+    "[23,24,5,\"getEpisode\",\"hit\"]": [
+      19,
+      1,
+      0
+    ],
+    "[23,24,5,\"listEpisodes\",\"hit\"]": [
+      10,
+      1,
+      0
+    ],
+    "[23,24,5,\"listEpisodes\",\"cursor\"]": [
+      10,
+      1,
+      0
+    ],
+    "[23,24,5,\"listEpisodes\",\"absent\"]": [
+      10,
+      1,
+      0
+    ],
+    "[23,24,5,\"sessionStartContext\",\"nextSteps\"]": [
+      42,
+      2,
+      4
+    ],
+    "[33,12,0,\"getEpisode\",\"hit\"]": [
+      17,
+      1,
+      0
+    ],
+    "[33,12,0,\"listEpisodes\",\"hit\"]": [
+      8,
+      1,
+      0
+    ],
+    "[33,12,0,\"listEpisodes\",\"cursor\"]": [
+      8,
+      1,
+      0
+    ],
+    "[33,12,0,\"listEpisodes\",\"absent\"]": [
+      8,
+      1,
+      0
+    ],
+    "[33,12,0,\"sessionStartContext\",\"nextSteps\"]": [
+      40,
+      2,
+      4
+    ],
+    "[33,12,5,\"getEpisode\",\"hit\"]": [
+      19,
+      1,
+      0
+    ],
+    "[33,12,5,\"listEpisodes\",\"hit\"]": [
+      10,
+      1,
+      0
+    ],
+    "[33,12,5,\"listEpisodes\",\"cursor\"]": [
+      10,
+      1,
+      0
+    ],
+    "[33,12,5,\"listEpisodes\",\"absent\"]": [
+      10,
+      1,
+      0
+    ],
+    "[33,12,5,\"sessionStartContext\",\"nextSteps\"]": [
+      42,
+      2,
+      4
+    ],
+    "[33,24,0,\"getEpisode\",\"hit\"]": [
+      17,
+      1,
+      0
+    ],
+    "[33,24,0,\"listEpisodes\",\"hit\"]": [
+      8,
+      1,
+      0
+    ],
+    "[33,24,0,\"listEpisodes\",\"cursor\"]": [
+      8,
+      1,
+      0
+    ],
+    "[33,24,0,\"listEpisodes\",\"absent\"]": [
+      8,
+      1,
+      0
+    ],
+    "[33,24,0,\"sessionStartContext\",\"nextSteps\"]": [
+      40,
+      2,
+      4
+    ],
+    "[33,24,5,\"getEpisode\",\"hit\"]": [
+      19,
+      1,
+      0
+    ],
+    "[33,24,5,\"listEpisodes\",\"hit\"]": [
+      10,
+      1,
+      0
+    ],
+    "[33,24,5,\"listEpisodes\",\"cursor\"]": [
+      10,
+      1,
+      0
+    ],
+    "[33,24,5,\"listEpisodes\",\"absent\"]": [
+      10,
+      1,
+      0
+    ],
+    "[33,24,5,\"sessionStartContext\",\"nextSteps\"]": [
+      42,
+      2,
+      4
+    ]
+  },
+  "episodeLegacy": {
+    "mainSha": "26f9e467992c40b75fa99b1485fa563923638322",
+    "measuredNodes": [
+      "24.22.1",
+      "22.16.0"
+    ],
+    "caps": {
+      "[18,12,\"getEpisode\",\"hit\"]": [
+        13,
+        1,
+        0
+      ],
+      "[18,12,\"listEpisodes\",\"hit\"]": [
+        4,
+        1,
+        0
+      ],
+      "[18,12,\"listEpisodes\",\"cursor\"]": [
+        4,
+        1,
+        0
+      ],
+      "[18,12,\"listEpisodes\",\"absent\"]": [
+        4,
+        1,
+        0
+      ],
+      "[18,12,\"sessionStartContext\",\"nextSteps\"]": [
+        32,
+        2,
+        4
+      ],
+      "[18,24,\"getEpisode\",\"hit\"]": [
+        13,
+        1,
+        0
+      ],
+      "[18,24,\"listEpisodes\",\"hit\"]": [
+        4,
+        1,
+        0
+      ],
+      "[18,24,\"listEpisodes\",\"cursor\"]": [
+        4,
+        1,
+        0
+      ],
+      "[18,24,\"listEpisodes\",\"absent\"]": [
+        4,
+        1,
+        0
+      ],
+      "[18,24,\"sessionStartContext\",\"nextSteps\"]": [
+        32,
+        2,
+        4
+      ],
+      "[23,12,\"getEpisode\",\"hit\"]": [
+        13,
+        1,
+        0
+      ],
+      "[23,12,\"listEpisodes\",\"hit\"]": [
+        4,
+        1,
+        0
+      ],
+      "[23,12,\"listEpisodes\",\"cursor\"]": [
+        4,
+        1,
+        0
+      ],
+      "[23,12,\"listEpisodes\",\"absent\"]": [
+        4,
+        1,
+        0
+      ],
+      "[23,12,\"sessionStartContext\",\"nextSteps\"]": [
+        32,
+        2,
+        4
+      ],
+      "[23,24,\"getEpisode\",\"hit\"]": [
+        13,
+        1,
+        0
+      ],
+      "[23,24,\"listEpisodes\",\"hit\"]": [
+        4,
+        1,
+        0
+      ],
+      "[23,24,\"listEpisodes\",\"cursor\"]": [
+        4,
+        1,
+        0
+      ],
+      "[23,24,\"listEpisodes\",\"absent\"]": [
+        4,
+        1,
+        0
+      ],
+      "[23,24,\"sessionStartContext\",\"nextSteps\"]": [
+        32,
+        2,
+        4
+      ],
+      "[33,12,\"getEpisode\",\"hit\"]": [
+        13,
+        1,
+        0
+      ],
+      "[33,12,\"listEpisodes\",\"hit\"]": [
+        4,
+        1,
+        0
+      ],
+      "[33,12,\"listEpisodes\",\"cursor\"]": [
+        4,
+        1,
+        0
+      ],
+      "[33,12,\"listEpisodes\",\"absent\"]": [
+        4,
+        1,
+        0
+      ],
+      "[33,12,\"sessionStartContext\",\"nextSteps\"]": [
+        32,
+        2,
+        4
+      ],
+      "[33,24,\"getEpisode\",\"hit\"]": [
+        13,
+        1,
+        0
+      ],
+      "[33,24,\"listEpisodes\",\"hit\"]": [
+        4,
+        1,
+        0
+      ],
+      "[33,24,\"listEpisodes\",\"cursor\"]": [
+        4,
+        1,
+        0
+      ],
+      "[33,24,\"listEpisodes\",\"absent\"]": [
+        4,
+        1,
+        0
+      ],
+      "[33,24,\"sessionStartContext\",\"nextSteps\"]": [
+        32,
+        2,
+        4
+      ]
+    },
+    "nontrivial": {
+      "[12,\"getEpisode\"]": [
+        13,
+        1,
+        0
+      ],
+      "[12,\"listEpisodes\"]": [
+        4,
+        1,
+        0
+      ],
+      "[12,\"sessionStartContext\"]": [
+        32,
+        2,
+        4
+      ],
+      "[24,\"getEpisode\"]": [
+        13,
+        1,
+        0
+      ],
+      "[24,\"listEpisodes\"]": [
+        4,
+        1,
+        0
+      ],
+      "[24,\"sessionStartContext\"]": [
+        32,
+        2,
+        4
+      ]
+    }
+  },
+  "episodeNontrivial": {
+    "[12,0,\"getEpisode\"]": [
+      17,
+      1,
+      0
+    ],
+    "[12,0,\"listEpisodes\"]": [
+      8,
+      1,
+      0
+    ],
+    "[12,0,\"sessionStartContext\"]": [
+      40,
+      2,
+      4
+    ],
+    "[12,5,\"getEpisode\"]": [
+      19,
+      1,
+      0
+    ],
+    "[12,5,\"listEpisodes\"]": [
+      10,
+      1,
+      0
+    ],
+    "[12,5,\"sessionStartContext\"]": [
+      42,
+      2,
+      4
+    ],
+    "[24,0,\"getEpisode\"]": [
+      17,
+      1,
+      0
+    ],
+    "[24,0,\"listEpisodes\"]": [
+      8,
+      1,
+      0
+    ],
+    "[24,0,\"sessionStartContext\"]": [
+      40,
+      2,
+      4
+    ],
+    "[24,5,\"getEpisode\"]": [
+      19,
+      1,
+      0
+    ],
+    "[24,5,\"listEpisodes\"]": [
+      10,
+      1,
+      0
+    ],
+    "[24,5,\"sessionStartContext\"]": [
+      42,
+      2,
+      4
     ]
   }
 }

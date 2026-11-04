@@ -12,7 +12,7 @@ import { methodPackageOptions } from './method-package-input.mjs';
 import { createMethodPackageStorage } from './method-package-storage.mjs';
 import { decisionReviewOption, createConfirmationStorage, createHeldReviewResolver, dropHeldWork, recordHeldRetirement } from './confirmation-storage.mjs';
 import { createSessionContextStorage } from './session-context.mjs';
-import { createEpisodeReads } from './episode-reads.mjs';
+import { createEpisodeReadProjection, createEpisodeReads } from './episode-reads.mjs';
 import { createEpisodeStorage, episodeOptions } from './episode-storage.mjs';
 import { createProceduralStorage } from './procedural-storage.mjs';
 import { createHash } from "node:crypto";
@@ -728,9 +728,23 @@ export function createMemoryRuntime(input, internal) {
   const stagedEvidence = createStagedEvidenceStorage({ db });
   let rawCapture;
   rawCapture = internal?.attachRaw?.(db);
-  function assertEpisodeRead(ns, row) {
+  const episodeProjection = createEpisodeReadProjection({ db, epoch });
+  function assertEpisodeRead(ns, row, budget = { remaining: 4096, bytesRemaining: 4*1024*1024 }) {
     if (!(cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision) return;
     if (contentSuppressionReasonInside(db, ns)) fail('episode_not_found');
+    const proof = cachedContentSuppressionRequestInside(db, ns.ownerId);
+    if (row.episode_read_overflow) fail('episode_sources_unavailable');
+    if (row.episode_read_proof !== undefined) {
+      budget.bytesRemaining -= Buffer.byteLength(row.episode_read_proof, 'utf8');
+      if (budget.bytesRemaining < 0) fail('episode_sources_unavailable');
+      const evidence = JSON.parse(row.episode_read_proof);
+      const fallback = !proof?.facts || row.episode_read_incomplete;
+      const indexedDenials = fallback ? rawLineage.completeEpisodeProof(ns, evidence, budget, row.episode_read_incomplete) : undefined;
+      rawLineage.assertEpisodeProof(ns, evidence, proof?.facts ?? [], budget, indexedDenials);
+      if (!fallback) return;
+    }
+    // Outside the bounded fact/index-input population, finish with the existing
+    // indexed validator. A complete projected hardening check still ran above.
     const sources = db.prepare(`SELECT s.*,e.client AS origin_client,e.session_key AS origin_session,
       e.owner_id,e.scope,e.project_id,e.deleted FROM episode_sources s
       LEFT JOIN session_episodes e ON e.id=s.origin_episode_id WHERE s.episode_id=?`).all(row.id);
@@ -739,12 +753,12 @@ export function createMemoryRuntime(input, internal) {
     rawLineage.assertReceipts(ns, sources.map(source => ({ client: source.origin_client, sessionId: source.origin_session,
       eventId: source.message_id, role: source.role, excerpt: source.text })));
   }
-  const episodeReads = createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRead });
+  const episodeReads = createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRead, episodeProjection });
   const proceduralStorage = createProceduralStorage({ db, activeRow:(ns,id)=>memoryWriteSafety(ns,visibleRow(ns,id)), advanceEpoch, epoch });
-  const sessionContextStorage = createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage, decisionReview, assertEpisodeRead });
+  const sessionContextStorage = createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage, decisionReview, assertEpisodeRead, episodeProjection });
   let episodes;
   episodes = createEpisodeStorage({ db, options: sessionEpisodes, stagedEvidence, advanceEpoch, epoch,
-    forgetMutation, rawCapture, sourceAuthority: rawLineage, sourceRoots, assertEpisodeRead,
+    forgetMutation, rawCapture, sourceAuthority: rawLineage, sourceRoots, assertEpisodeRead, episodeProjection,
     deleteEpisode: (ns, input) => sourceRoots.enabled() ? deletion.forgetEpisode(ns, input) : undefined });
   stagedEvidence.setEpisodes(episodes);
   deletion = createRawDeletionStorage({ db, roots: sourceRoots, episodes, forgetMutation, removeReceipts, advanceEpoch });

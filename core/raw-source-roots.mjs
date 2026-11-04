@@ -6,6 +6,12 @@ const boundary = ns => [ns.ownerId, ns.scope, ns.projectId || ''];
 const receiptValue = row => ({ client: row.client, sessionId: row.session_id,
   eventId: row.event_id, role: row.role, excerpt: row.excerpt });
 
+// One exact/hashed alias rule for both SQL readers and projected Episode proof.
+export function rawSessionKeys(ns, client, value, secret) {
+  return [value, 's1:' + createHmac('sha256', Buffer.from(secret, 'hex'))
+    .update(JSON.stringify(['episode-v1', ...boundary(ns), client, value])).digest('hex')];
+}
+
 /** Source-session authority shared by deletion, admission and option-off writers. */
 export function createRawSourceRoots(db, { readMemo } = {}) {
   let available;
@@ -14,9 +20,8 @@ export function createRawSourceRoots(db, { readMemo } = {}) {
   const hasJobs = () => jobs === true || (jobs = Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_job_sources'").get()));
   const enabled = () => available === true || (available = Boolean(db.prepare(
     "SELECT 1 FROM sqlite_master WHERE name='raw_deletion_actions'").get()));
-  const hashSession = (ns, client, value) => 's1:' + createHmac('sha256', Buffer.from(
-    db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get().secret, 'hex'))
-    .update(JSON.stringify(['episode-v1', ...boundary(ns), client, value])).digest('hex');
+  const hashSession = (ns, client, value) => rawSessionKeys(ns, client, value,
+    db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get().secret)[1];
   const keys = (ns, client, value) => [value, hashSession(ns, client, value)];
   function assertSession(ns, client, value, readExisting = false) {
     if (readExisting ? !hasFences() : !enabled()) return;

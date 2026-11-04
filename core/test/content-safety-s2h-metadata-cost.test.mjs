@@ -1,5 +1,5 @@
 import { familyCostParity } from '../testing/receipt-event-time-gates.mjs';
-import { assertDeferredContentCost, assertDeferredContentCostInventory } from '../testing/content-safety-s2h-deferred-cost.mjs';
+import { assertEpisodeContentCost, assertDeferredContentCostInventory } from '../testing/content-safety-s2h-deferred-cost.mjs';
 import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,7 +11,7 @@ import { measureContentRead } from '../testing/content-safety-cost-meter.mjs';
 import { transaction } from '../database.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 import { batch } from '../testing/episode-helpers.mjs';
-const fixedByCase=new Map();
+const fixedByCase=new Map(),episodeByCase=new Map();
 for(const base of [18,23,33])for(const n of [1,12])test(`R2 temporal/admission/review v${base} ${n} items`,async t=>{
  const records=[];
  for(const [safety,facts]of costGatePopulations()) {
@@ -60,7 +60,13 @@ for(const base of [18,23,33])for(const n of [1,12])test(`R2 temporal/admission/r
  for(const current of [zero,five]){assert.deepEqual(current.records.map(r=>[r.method,r.variant]),legacy.records.map(r=>[r.method,r.variant]));for(const [i,row]of current.records.entries()){
   const old=legacy.records[i];assert.equal(row.ports,old.ports);
   if(['getEpisode','listEpisodes'].includes(row.method)){
-   assertDeferredContentCost(row,{testName:t.name,base,n,facts:current.facts},ratchets);continue;
+   const dimensions={testName:t.name,base,n,facts:current.facts};
+   await t.test(`Episode formula ${row.method}:${row.variant} facts=${current.facts}`,()=>{
+    assertEpisodeContentCost(row,old,dimensions,ratchets);
+    const key=JSON.stringify([base,current.facts,row.method,row.variant]),small=episodeByCase.get(key);
+    if(small)assert.ok(row.statements-small[0].statements<=old.statements-small[1].statements,'Episode population slope '+key);
+    episodeByCase.set(key,[row,old]);
+   });continue;
   }
   assert.equal(row.begin,old.begin,row.method);
   const fixed=row.statements-old.statements-row.ports,key=JSON.stringify([base,current.facts,row.method,row.variant]);

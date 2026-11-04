@@ -15,3 +15,17 @@ export function assertDeferredContentCostInventory(observed,testName) {
  const expected=Object.keys(fixture.caps).filter(key=>JSON.parse(key)[0]===testName).sort();
  assert.deepEqual([...observed].sort(),expected,decision+': exact current method/variant/cell/n ratchets for '+testName);
 }
+
+// Episode cells have graduated from the deferred set. Keep the compatibility
+// helper above unchanged for Role/context until their separate package lands.
+export function assertEpisodeContentCost(row, legacy, dimensions, observed) {
+ const key=JSON.stringify([dimensions.testName,dimensions.base,dimensions.n,null,row.method,row.variant,dimensions.facts]);
+ const cap=fixture.caps[key];
+ assert.ok(!observed.has(key));observed.add(key);
+ assert.ok(row.statements<=legacy.statements+6+row.ports,'Episode R2-A1 ceiling: '+key);
+ assert.ok(row.begin<=legacy.begin,'Episode R2-A1 BEGIN: '+key);
+ assert.ok(cap,'Episode exact pin: '+key);
+ assert.equal(row.statements,cap[0],'Episode exact statements: '+key);
+ assert.equal(row.begin,cap[1],'Episode exact BEGIN: '+key);
+ assert.equal(row.ports,cap[2],'Episode exact E1: '+key);
+}
