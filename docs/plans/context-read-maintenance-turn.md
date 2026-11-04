@@ -9,7 +9,7 @@ Status: **agreed plan**, 2026-11-04. The parties are:
 
 This plan document is the shared contract. Each pump's implementation PR adds its own normative, append-only addendum to `docs/context-read-product.md` and cites this document. Nothing here is implemented yet.
 
-[code] marks a statement about the current source; its line references are approximate and will move. [proposed] marks contract behaviour to be built.
+[code] marks a statement about the current source. Line references were taken at `700b6008` (the head of #541 at writing) or main `c23ed4be`; they are approximate and will move. [proposed] marks contract behaviour to be built.
 
 ## 1. Purpose and scope
 
@@ -52,6 +52,7 @@ preQuantum: {
 - `contentAuthorityPort` itself refuses async results, so a new asynchronous adapter is needed. `inertContentPortValue` materialises accessors instead of refusing them, so it is **not** used here.
 - The port's object identity is kept across renewal. The host passes the **same** port object on every renewal of a pump. A different port object on an existing pump refuses that renewal with the closed code `invalid_input`, before any state change, so a host bug fails loudly at renewal rather than mid-window.
 - An invalid port refuses activation with `invalid_input`. It never falls back to "no port".
+- **Each ticket** returned by `createTurn` is validated the same way, before anything on it is invoked. It must be a plain, non-Proxy object whose own data properties `enter` and `release` are functions, with no accessors. Both methods are captured, with their receiver, **before** `enter` is called. A malformed ticket is a port failure under §4. The engine invokes nothing on a malformed ticket, because it has no validated `release` to call.
 
 **Per realm:**
 - Each pump uses the port of the realm that calls its renewal function. For example, a host may run its lexical pumps in a scheduler Worker and its semantic pump on the main thread.
@@ -92,7 +93,7 @@ The engine requests a turn for **every** quantum, as follows.
    - At that deadline the engine treats the turn as `"defer"`.
 3. **Cancellation.**
    - The engine's `signal` aborts on close, supervisor stop, accepted renewal (same or new window), authority or window cutoff, and the wait deadline. A rejected renewal does not cancel.
-   - On abort, a queued request is withdrawn with `release("withdrawn")`, and the pump stays alive with no failure record.
+   - On abort, a queued request is withdrawn with `release("withdrawn")`. Cancellation adds **no** failure record of its own. The state that triggered it is preserved: close and stop still stop the pump, and expiry, exhaustion or an existing error keep their existing outcome. After a renewal handoff or the wait deadline, the pump continues.
    - If a grant races the abort, the engine **owns** the granted permit and releases it under §5. Abort never auto-releases a granted permit.
    - Late results never dispatch work.
 4. **`"defer"`.**
@@ -118,26 +119,28 @@ The engine requests a turn for **every** quantum, as follows.
 
 | Event | Result |
 |---|---|
-| `createTurn` or `enter` throws or rejects; `enter` returns anything other than the two strings or a native Promise of one (a non-native thenable is malformed and is never awaited); the port's shape changed | No permit can exist. **Terminal `authority_required`** for that pump. P2a is unchanged; the host reopens on its next tick. A caller-supplied error's code, name or text is never inspected or propagated. |
-| `release()` throws | The broker's state is uncertain. The engine records the attempt **before** invoking `release`, so it never calls it twice. The claim is **poisoned**: terminal `reader_failed`, no further turns for that pump, no successor admitted by this engine instance. The host must provide an atomic, no-throw `release`. |
+| `createTurn` throws, returns a malformed ticket, or the port's shape changed | No validated ticket exists, so there is nothing to release. **Terminal `authority_required`** for that pump. P2a is unchanged; the host reopens on its next tick. A caller-supplied error's code, name or text is never inspected or propagated. |
+| `enter` throws or rejects, or returns anything other than the two strings or a native Promise of one (a non-native thenable is malformed and is never awaited) | **Terminal `authority_required`** for that pump. The ticket exists and an exception cannot prove that the broker holds no permit for it. No engine work started, so the engine calls the captured `release("withdrawn")` exactly once, as soon as `enter` has thrown, rejected or returned. If that `release` throws, the row below applies, and its `reader_failed` takes precedence. |
+| `release()` throws (on any path) | The broker's state is uncertain. The engine records the attempt **before** invoking `release`, so it never calls it twice. The claim is **poisoned**: terminal `reader_failed`, no further turns for that pump, no successor admitted by this engine instance. The host must provide an atomic, no-throw `release`. |
 | Disposal for a granted turn is unproven or failed (§5) | **No release.** The claim stays poisoned across pump IDs, with no TTL. The existing safety quarantine applies. Only a process restart clears it. The engine's private status shows phase `poisoned`, so the host can alert and restart. |
 
 [code] The pump site is content-free. No protected content read is active (projection reads run in separate Workers, `core/context-product-reader.mjs:111–116`), so the port adds **no** E1 owner-epoch read. If a later change moved admission inside a protected read, E1 would apply (`core/content-safety-boundary.mjs:337–350`).
 
 ## 5. Release obligation
 
-`release` is called **exactly once** per created turn.
+`release` is called **exactly once** per validated ticket (§2), with the single exception of a withheld, poisoned claim. A malformed ticket gets no call (§4).
 
 | Path | When the engine calls `release` |
 |---|---|
 | Queued, then aborted or past its deadline, or a `"defer"` | Immediately: `release("withdrawn")`. |
 | Granted, then declined by the recheck | Immediately: `release("declined", reason)`. No work, reservation or disposal happened. Any earlier quarantine stays. |
-| Granted; success (lexical work, lexical open-only admission, semantic status, lexical or validation work) | `release("settled")` after settlement **and** the joins below. |
+| Granted; any successful turn: lexical work, the lexical open-only admission, and semantic status, lexical, embeddings or validation, including an embeddings refresh that succeeds after a caught provider timeout and a control-only turn whose controls ran but whose work was skipped | `release("settled")` after settlement **and** the joins below. For the semantic pump, that means its finalizer. |
 | Granted; `!result.ok`, a thrown failure, timeout, cutoff, stop, close, renewal handoff, generation loss, or resident replacement | `release("settled")` only after conservative settlement and every **required** disposal is proven. For replacement, that means the predecessor drain plus the new open and admission, never halfway through. |
-| Granted; unproven or failed disposal, forced termination, or an elapsed proof deadline | **Withhold** (§4: poisoned). |
+| Granted; unproven or failed disposal, forced termination, or an elapsed proof deadline | **Withhold** (§4: poisoned). This takes precedence over every row above: if disposal for a granted turn is not proven, `release` is never called, whatever the turn's result. |
 
 **Settlement for the lexical pump:**
-- [code] after the observation, original-ledger settlement and bookkeeping, or after the zero-work settlement of an open-only admission;
+- [code] for ordinary work, after the observation, original-ledger settlement and bookkeeping;
+- [proposed, depends on the lexical open-only amendment] for an open-only admission turn, after its zero-work settlement. Neither `c23ed4be` nor `700b6008` has a separate admission turn: both still open and refresh in the same turn;
 - after the joined shutdown disposal on failure.
 
 **Settlement for the semantic pump.** [code] No per-operation settlement join exists today:
@@ -176,14 +179,15 @@ A decline never relabels a real failure. Timeouts, provider errors, authority fa
 ## 7. Arithmetic and observation duty
 
 [code] The per-pump capacity bounds are unchanged by the turn:
-- **Lexical:** warm `N·S + Q ≤ 5000`, with `S = max(pollMs, Q)` and `N = 2·selections`, at `core/context-product-pump.mjs:82–85`. Open-only's cold bound is `(N+C)·S + Q ≤ 5000`, from the open-only amendment.
+- **Lexical:** warm `N·S + Q ≤ 5000`, with `S = max(pollMs, Q)` and `N = 2·selections`, at `core/context-product-pump.mjs:82–85`. The cold bound `(N+C)·S + Q ≤ 5000`, where C is the number of fresh resident admissions that can precede a complete sweep, is **proposed** by the lexical open-only amendment and is not in the code yet.
 - **Semantic:** `(N + 1 + 2T)·S ≤ 5000`, with `S = max(pollMs, q.maxMs, first.maxMs)`, at `core/context-semantic-pump.mjs:46–49,63`; `docs/context-read-product.md:1285–1299`. The semantic pump has **no** separate open-only turn: opening stays inside its status or work turn (`:246–283`). The lexical open-only amendment excludes `semanticConfig`.
-- With one pump per owner (one selection, two intents), the lexical values are N=2 and C=1. At Q=1000 that gives warm 3000 and cold 4000, the same as today.
+- **Semantic** terms: N is the expanded regular intent/mode lanes, and T is the initial target descriptors.
+- With one lexical pump per owner (one selection, two intents), N=2 and, once open-only lands, C=1. At Q=S=1000 that gives warm 3000 and cold 4000.
 
 **Waiting is not in these bounds:**
 - Broker waits sit outside every quantum, ledger elapsed time, histogram and stall marker.
-- A pump meets its 5,000 ms observation duty only if `Σ broker waits + (N+C)·S + Q ≤ 5000`. For one pump per owner at Q=1000, that leaves about **1,000 ms of broker wait per sweep**.
-- A per-core broker serves one quantum at a time, and each owner needs about 2–3 lexical quanta per sweep plus its semantic turns. So **more than two owners on one core cannot all meet the 5 s duty at Q=1000**.
+- **Worst case, every turn using its full allowance:** a lexical pump is guaranteed its 5,000 ms observation duty only if `Σ broker waits + (N+C)·S + Q ≤ 5000`. For one lexical pump per owner at Q=S=1000, that leaves about **1,000 ms of broker wait per sweep**.
+- A per-core broker grants one quantum at a time, and each owner needs 2–3 lexical turns per sweep plus its semantic turns. So under full-allowance occupancy, **more than two owners on one core cannot all be guaranteed the 5 s duty at Q=1000**. Turns that finish well inside their allowance can fit more owners. This bounds the worst case; it is not an absolute owner limit.
 - This is a capacity fact, not a contract violation. The ≤30 s commit→ready freshness target is a separate measurement.
 
 **How misses are recorded:**
@@ -210,11 +214,11 @@ There is no growing history. Diagnostic consumers that do not know a field treat
 Neither pump removes these. A multi-owner deployment check should watch them.
 
 - **Canonical safety hold:** [code] keyed by the canonical domain (`core/context-read-supervisor.mjs:47–63`). While owner A's disposal proof is pending, owner B's open or call waits up to its cutoff, and a failed proof gives `reader_failed` (`core/test/context-read-registry-hold.test.mjs:152–164`).
-- **Canonical DELETE-mode locks:** maintainer read snapshots delay other writers' commits, under a 5,000 ms busy timeout (`core/database.mjs:40,435`). A hot canonical journal gives `storage_busy`.
+- **Canonical DELETE-mode locks:** maintainer read snapshots delay other writers' commits. Ordinary canonical writers default to a 5,000 ms busy timeout (`core/database.mjs:40,435`), while maintainer DELETE waits stay zero. A hot canonical journal gives `storage_busy`.
 - **Shared resources:** the semantic ledger and provider budget, supervisor capacity (256 live records), the reader Worker pool, CPU and I/O.
 - **Poisoned claims:** one blocks every owner of that core until restart (§4).
   - The broker is per core and shared by both families, so a poisoned **semantic** claim also stops **lexical** maintenance for every owner on that core. An example is a turn still unsettled at close whose coordinator close then fails its disposal proof (§5).
-  - Today, a failed semantic coordinator close (`close_failed`) turns semantic off only for that one owner. With the broker, the blast radius grows to the whole core.
+  - [code] In the engine, a failed disposal proof is `reader_failed` plus the existing quarantine. How a host reacts to a failed close is host policy. Whatever a host does today for one owner, a poisoned claim on the shared broker blocks the whole core.
   - This is a deliberate availability trade for safety. The host should log each poisoned claim once (family and phase) and document an operator restart.
 
 ## 10. Checklist against the product requirements
