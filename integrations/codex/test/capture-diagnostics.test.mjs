@@ -22,6 +22,8 @@ const time = new Date(2026,10,4,17,42).getTime();
 const input = {hook_event_name:'SessionStart',session_id:'synthetic',cwd:'/synthetic',transcript_path:null};
 const claimName = 'capture-stop-notice-2026-11-04.claim';
 const changed = {status:'changed',version:'0.999.0'};
+// Qualification scheduling and worker guards must share the injected clock.
+test.beforeEach(t=>{t.mock.method(Date,'now',()=>time);});
 async function fixture(t) {
   const ws = createTestWorkspace(t,{prefix:'cx-notice-'});
   const home = join(ws.path,'home'), root = join(ws.path,'root'), directory = join(home,'cairn');
@@ -229,13 +231,16 @@ for(const version of ['0.163.0','0.164.0','0.165.0','0.166.0']) test(`SessionSta
   assert.throws(()=>validateNotice(schema,{systemMessage:'fixed',extra:true}));
 });
 async function pendingFixture(t) {
-  t.mock.method(Date,'now',()=>time);
   const f=await fixture(t);
   await copyFile(process.execPath,f.config.codex);await chmod(f.config.codex,0o700);
   const host={identity:await binaryIdentity(f.config.codex),binaryPath:f.config.codex,kind:'cli'};
   const marker=join(f.directory,'qualification',host.identity+'.pending');
   let launches=0;
-  const observe=()=>currentHost(f.path,{detect:async()=>host,launch:async()=>{launches++;},now:()=>time});
+  const observe=()=>currentHost(f.path,{detect:async()=>host,launch:async()=>{
+    launches++;
+    // Exclusive creation uses the real filesystem clock, including on retries.
+    await utimes(marker,new Date(time),new Date(time));
+  },now:()=>time});
   return {...f,host,marker,observe,launches:()=>launches};
 }
 test('genuinely first pending attempt stays quiet, including active later SessionStarts',async t=>{
@@ -279,7 +284,10 @@ for(const scenario of ['mode','symlink','foreign-owner','directory','malformed-m
       if(path===f.marker) info.uid=process.getuid()+1;
       return info;
     });
-    if(scenario==='malformed-marker') await privateWrite(f.marker,'not empty');
+    if(scenario==='malformed-marker') {
+      await privateWrite(f.marker,'not empty');
+      await utimes(f.marker,new Date(time),new Date(time));
+    }
     if(scenario==='malformed-attempt') await privateWrite(attempt,'{');
     if(scenario==='unsafe-attempt') await chmod(attempt,0o644);
     if(scenario==='symlink-attempt') {await unlink(attempt);await symlink(f.marker,attempt);}
@@ -386,7 +394,8 @@ test('installed entry emits exactly the SessionStart notice object and still exi
     child.stdin.end(${JSON.stringify(JSON.stringify(input))});
     child.on('close',code=>{process.exitCode=code;});`;
   const child=spawn(f.config.codex,['--input-type=module','-e',code],{
-    env:{HOME:f.home,PATH:'/usr/bin:/bin',LANG:'en_US.UTF-8',TMPDIR:process.env.TMPDIR},stdio:['ignore','pipe','pipe']});
+    env:{HOME:f.home,PATH:'/usr/bin:/bin',LANG:'en_US.UTF-8',TMPDIR:process.env.TMPDIR,
+      ...(process.env.TZ!==undefined?{TZ:process.env.TZ}:{})},stdio:['ignore','pipe','pipe']});
   let stdout='',stderr='';child.stdout.on('data',chunk=>stdout+=chunk);child.stderr.on('data',chunk=>stderr+=chunk);
   const exitCode=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',resolve);});
   assert.equal(exitCode,0);assert.equal(stderr,'');
@@ -438,7 +447,8 @@ test('consecutive crash-only days consume each day and retain at most eight clai
       await captureStopNotice(${JSON.stringify(f.path)},${JSON.stringify(f.config)},${JSON.stringify(input)},
         ${JSON.stringify(changed)},{now:()=>${clock},env:{LANG:'en'}});`;
     const child=spawn(process.execPath,['--input-type=module','-e',code],{
-      env:{HOME:f.home,PATH:'/usr/bin:/bin',TMPDIR:process.env.TMPDIR},stdio:'ignore'});
+      env:{HOME:f.home,PATH:'/usr/bin:/bin',TMPDIR:process.env.TMPDIR,
+        ...(process.env.TZ!==undefined?{TZ:process.env.TZ}:{})},stdio:'ignore'});
     const exit=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',resolve);});
     assert.equal(exit,77);
     // No fixture deletion or successful next-day claim between crash cycles.
