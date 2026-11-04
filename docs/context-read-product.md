@@ -444,6 +444,25 @@ performs no lexical build or inference and reports disabled semantic coverage.
 `semantic:true` keeps the validated lexical result with a disabled semantic
 channel; it cannot enable a provider. All these calls make zero provider calls.
 
+**Amendment v1: maintainer sidecar connection reuse.** A healthy writable
+maintainer connection also serves observation, comparison and preparation reads.
+Each read still uses an independent read transaction with `query_only` enabled;
+the final observation still acquires its fresh post-commit canonical and sidecar
+snapshots. Every reuse retains identity and companion checks, the stricter
+applicable read/write journal rules, and the existing writable journal-mode
+check. Writable preparation still rereads metadata and attestation. Integrity
+checks (`quick_check` and `foreign_key_check`) run on every fresh writable open.
+Any failed operation, unavailable observation or rollback on a writable connection
+discards the cached connection after the operation releases its transactions;
+subsequent writable use opens and checks again. Cutoff, termination and close
+dispose the resident's connections. Any failure on an operation started on a
+writable connection discards the cached connection; a read-only connection is
+discarded only for native SQLite primary codes IOERR, CORRUPT, FULL or NOTADB
+(including extended codes), or the
+`storage_unavailable` reason, and otherwise keeps its handle, falling back to
+discarding only for `storage_unavailable` when no native error code is present.
+Reuse does not retain a read snapshot between operations.
+
 A successful `rebuilding` or `partial` response is durable progress: schedule
 another explicit quantum with the same service binding and projection. Stop
 the initial prebuild loop only at `complete` for each intent. Time admission
@@ -637,6 +656,16 @@ The first sweep is due within five seconds of activation. Continuous renewal
 preserves observation deadlines and order, including renewal exactly at an
 authority/window boundary; renewal after an authority/quota gap starts a new
 observation interval.
+
+**Amendment v1: lexical maintenance window handoff.** For the lexical
+maintenance pump, a new window accepted within one quantum (`quantum.maxMs`)
+after every previous ledger's end also preserves observation deadlines, order
+and the resident. Authority expiry and settled spent quota still start a new
+interval, as does a longer window gap; the next reserved quantum drains and
+reopens the resident. A resident whose observation has been idle for 60,000 ms
+may already be disposed and also requires reopening. Same-window renewal and
+rejection of overlapping windows are unchanged. The embedding-enabled pump's
+renewal rule is unchanged.
 
 Late timer delivery or a successful observation beyond the five-second target
 records a cadence miss and continues maintenance while authority and quota last.
@@ -983,7 +1012,9 @@ same supervisor and explicit physical types. Both intents are included
 sequentially in round-robin order. Renewal with the same ID and selection
 returns the same owned pump and handles, with no overlapping dispatch. It
 extends supervision only, never the quota window or counters. A new window is
-accepted only after the previous one ends. Restarting a handle/pump within a
+accepted only at or after the previous one ends; the lexical handoff amendment
+above defines when that succession retains the observation interval and resident.
+Restarting a handle/pump within a
 window reuses process-owned store/owner/host-domain charges, even with a new pump ID; a different window ID cannot evade an
 unexpired window. The product persists cumulative charges before process
 replacement, maps new-process monotonic windows, and controls cross-process

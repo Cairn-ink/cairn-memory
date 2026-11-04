@@ -427,10 +427,13 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     const api=Object.freeze({getStatus:observation,get completion(){return completion;},close:stop});
     const entry={api,supervisor:c.supervisor,fingerprint,...(recoveryEnabled?{cutoffDomains:domains}:{}),renew(next,w,b,g){
       if(stopped)fail('store_closed');
-      // Renewal exactly at expiry is a continuous handoff. Only an elapsed
-      // authority/window gap or settled spent quota resets observation duty;
-      // an in-flight reservation alone is not exhausted actual usage.
-      const inactive=now()>renewedUntil||[...ledgers.values()].some(l=>now()>l.endsAt||
+      // Lexical window succession tolerates at most one quantum of delivery
+      // delay. Observation timestamps precede reader idle arming: after 60 s
+      // without one, its independent disposal may already have fired. Keep
+      // that conservative cutoff even when authority was renewed meanwhile.
+      // An in-flight reservation alone is not exhausted actual usage.
+      const inactive=now()>renewedUntil||[...ledgers.values()].some(l=>(w.id===window.id ? now()>l.endsAt :
+        now()-l.endsAt>quantum.maxMs||observations.some(time=>now()-time>=60000))||
         (!running&&(l.items>=l.maxItems||l.ms>=l.maxMs)));
       if(next.pollMs!==c.pollMs||JSON.stringify(next.quantum)!==JSON.stringify(c.quantum))fail('invalid_input');
       // Account against the old authority and ledgers before any replacement
