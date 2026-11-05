@@ -19,7 +19,7 @@ import { privateCardOptions } from './private-card-input.mjs';
 import { createPrivateCardFacade } from './private-card-facade.mjs';
 import { contextInput, assembleSessionContext } from './session-context.mjs';
 import { rangeInput, rangeOrder, validateRangeAnchor, rangePage, envelopeText } from './episode-reads.mjs';
-import { isStorageBusy } from './database.mjs';
+import { isStorageBusy, busyTimeoutOption } from './database.mjs';
 import { ADMISSION_LEASE_MS } from './episode-schema.mjs';
 import { episodeOptions, episodeClient } from './episode-storage.mjs';
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -51,7 +51,7 @@ import {
 // only their own option; all other legal options reach the retained validator.
 const CORE_OPTIONS = Object.freeze(['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy',
   'captureRationale','captureEvidence','captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes',
-  'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence','contentSafety']);
+  'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence','contentSafety','busyTimeoutMs']);
 const OPEN_OPTIONS = Object.freeze([...CORE_OPTIONS, 'rawConversations']);
 
 const keepAdmissionKey = Symbol('keepAdmissionKey');
@@ -190,6 +190,7 @@ export function openMemoryCore(input) { return openWithRoleContext(input); }
 function openWithRoleContext(input, roleContext) {
   const buildCore = (value, internal) => createMemoryCore(value, { ...internal, roleContext });
   if (input && typeof input === 'object' && types.isProxy(input)) throw new MemoryStoreError('invalid_input');
+  busyTimeoutOption(input);
   // Strip only this opt-in before applying the retained constructor validation.
   if (input && typeof input === 'object' && 'contextRead' in input) {
     const { contextRead, ...base } = ownData(input, [...OPEN_OPTIONS, 'contextRead']);
@@ -225,6 +226,7 @@ function openWithRoleContext(input, roleContext) {
 export function createMemoryCore(input, internal) {
   const captureQualifiedDuplicates = qualifiedDuplicatesOption(input);
   object(input, CORE_OPTIONS);
+  const busyTimeoutMs = busyTimeoutOption(input);
   const privateCards = privateCardOptions(input.privateCards);
   const methodPackages = methodPackageOptions(input.methodPackages);
   if (privateCards?.currentDependencies && !methodPackages) fail('invalid_input');
@@ -272,6 +274,7 @@ export function createMemoryCore(input, internal) {
   if (model?.onDiagnostic !== undefined && typeof model.onDiagnostic !== 'function') throw new MemoryStoreError('invalid_input');
   if (input.contentSafety !== undefined && input.contentSafety !== 's2h-v1') fail('invalid_input');
   const runtime = (internal?.createRuntime ?? createMemoryRuntime)({ path: input.path,
+    ...(busyTimeoutMs !== undefined ? { busyTimeoutMs } : {}),
     ...(input.contentSafety !== undefined ? { contentSafety: input.contentSafety } : {}),
     ...(input.existingStore ? { existingStore: input.existingStore } : {}),
     ...(input.storeFence ? { storeFence: input.storeFence } : {}),

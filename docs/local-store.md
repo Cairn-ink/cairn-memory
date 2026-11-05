@@ -291,3 +291,48 @@ bound predecessor fingerprints and receipt IDs for held work, and the
 `review_hidden_episodes` view, and updates index eligibility/readers. See the
 [contract appendix](plans/confirmation-state.md) for replay, episode visibility,
 and the direct-statement provenance limitation.
+
+## Host option: open-time busy timeout (v1)
+
+A host opening a core per request can lower SQLite's synchronous lock wait:
+
+```js
+const core = openMemoryCore({ path, busyTimeoutMs: 250 });
+```
+
+`busyTimeoutMs` must be an own data property containing an integer from **0 to
+5000**, inclusive. Accessors, inherited values, explicit `undefined` and other
+values fail with `invalid_input` before filesystem or database effects. Omitting
+it preserves the existing statements, call order and timeouts: 5000 ms for the
+canonical writer and the core's context reader. Zero requests immediate failure
+on lock contention. The effective writer timeout is
+`min(STORAGE_BUSY_TIMEOUT_MS, busyTimeoutMs)`; any already shorter canonical
+reader timeout stays shorter. The option is also accepted by `openMemoryStore`
+and the standalone `openContextReader`.
+
+The setting belongs to connections opened for this core, including the
+[`existingStore`](raw-local-journal.md#existing-store-discovery-and-retained-mcp)
+and [`storeFence`](method-packages-local.md) writer branches, the `contextRead`
+canonical read-only connection and its managed-existing preflight connection. Role-context
+reads share the canonical writer and inherit its setting. It applies to later
+statements, including map, list and get; those methods have no per-call form.
+
+Context index sidecars retain their existing 5000 ms setting. Topic-reader
+workers, context maintenance/semantic workers, their sidecars and semantic
+ledgers keep their separate policies; those interfaces are opened independently,
+not implicitly by `openMemoryCore`. Isolated journal probes use lockless reads
+and retain their existing policy. Private in-memory schema-reference databases
+keep their zero wait; they cannot contend with another process. The capture
+deadline remains unchanged.
+This option bounds native lock waiting, not query execution time, sidecar waits
+or the total duration of a request.
+
+Expiry follows the existing SQLite BUSY handling: method facades return
+`storage_busy`, retryable as today. This option adds no engine retry. Opening
+retains its existing thrown SQLite BUSY form. The host decides whether and when
+to retry.
+The timeout also covers the ordinary opener's `BEGIN IMMEDIATE` transaction.
+On older layouts that transaction can migrate or install storage features, so
+a short timeout can make such an open fail fast with SQLite BUSY (classified as
+`storage_busy`). That is expected: retry later, or open once with the default
+timeout.

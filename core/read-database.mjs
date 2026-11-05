@@ -5,7 +5,7 @@ import { assertNoAssets } from './asset-schema.mjs';
 import { validateExistingStore } from './existing-store.mjs';
 import { lstatSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { APPLICATION_ID, READ_SCHEMA_VERSIONS, CONTEXT_READ_SCHEMA_VERSIONS, readTransaction } from './database.mjs';
+import { APPLICATION_ID, READ_SCHEMA_VERSIONS, CONTEXT_READ_SCHEMA_VERSIONS, readTransaction, busyTimeoutOption, STORAGE_BUSY_TIMEOUT_MS } from './database.mjs';
 import { topicJournalMode, recordSqliteFailure } from './topic-reader-sqlite.mjs';
 import { fail } from './validation.mjs';
 
@@ -24,7 +24,11 @@ function identity(path) {
 export function contextProductFileIdentity(path) {
   const stat = identity(path); return `${stat.dev}:${stat.ino}`;
 }
-export function openReadDatabase(path, { contextRead = false, topicMembers = false, deferTopicValidation = false, topicPolicy, nativeObserver, preflight, validateProduct, productSqlite } = {}) {
+export function openReadDatabase(path, options = {}) {
+  const busyTimeoutMs = busyTimeoutOption(options);
+  const { contextRead = false, topicMembers = false, deferTopicValidation = false, topicPolicy, nativeObserver, preflight, validateProduct, productSqlite } = options;
+  const timeout = Math.min(contextRead && !nativeObserver && !productSqlite ? STORAGE_BUSY_TIMEOUT_MS : 0, busyTimeoutMs ?? STORAGE_BUSY_TIMEOUT_MS);
+  const nativeOptions = busyTimeoutMs === undefined ? { readOnly: true } : { readOnly: true, timeout };
   const initial = identity(path);
   nativeObserver?.identity?.(`${initial.dev}:${initial.ino}`);
   nativeObserver?.openDiagnostic?.mark('canonicalIdentity');
@@ -32,7 +36,7 @@ export function openReadDatabase(path, { contextRead = false, topicMembers = fal
   nativeObserver?.openDiagnostic?.mark('canonicalPreflight');
   const productFiles = productSqlite?.files(path);
   let native;
-  try { native = nativeObserver ? nativeObserver.invoke('open', 'connection', () => new DatabaseSync(path, { readOnly: true })) : new DatabaseSync(path, { readOnly: true }); }
+  try { native = nativeObserver ? nativeObserver.invoke('open', 'connection', () => new DatabaseSync(path, nativeOptions)) : new DatabaseSync(path, nativeOptions); }
   catch (error) {
     recordSqliteFailure(error, 'open', 'connection');
     if (productSqlite) productSqlite.openingFailure(error);
@@ -46,7 +50,7 @@ export function openReadDatabase(path, { contextRead = false, topicMembers = fal
       productFiles({ afterProbe: true });
     }
     else if (nativeObserver) db = nativeObserver.database(native);
-    try { (nativeObserver || productSqlite ? db : native).exec(productSqlite ? 'PRAGMA query_only=ON; PRAGMA trusted_schema=OFF;' : `PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=${contextRead && !nativeObserver ? 5000 : 0};`); }
+    try { (nativeObserver || productSqlite ? db : native).exec(productSqlite ? 'PRAGMA query_only=ON; PRAGMA trusted_schema=OFF;' : `PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=${timeout};`); }
     catch (error) { throw recordSqliteFailure(error, 'configure', 'reader_configuration'); }
     let wal = false;
     if (topicPolicy) {
