@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "51f36d198229e7f5c0339ac0801a4628a4e8d3473fc9b4c099ea25b0c995e538",
-  "bytes": 1138691,
+  "sha256": "a2457a0cdc2e59aa320defbebaa9472ac01b22b19b9ebe2e6611e62c5de5a508",
+  "bytes": 1138764,
   "files": [
     "LICENSE",
     "README.md",
@@ -441,7 +441,7 @@
     "core/context-read-tokenize.mjs": "0afed3c529f50cd22f449328e637ad1d0f4e5dc5e08aed7dce3c15a257cccd5a",
     "core/context-reader.mjs": "170e534d567e82a5e1249c278e25efcbd367aaef8cfabe3dde6b99a91055f879",
     "core/contract.mjs": "88c6a019f674f82fa49b0f8eabdeb70273f3f8dbb62db7d699937f43c87b6c8a",
-    "core/database.mjs": "46041fbc28a815203bbb4689db004c8455c6efa9b2d6623f7a6c82565a08e17f",
+    "core/database.mjs": "c84056083392f36f188e04cccdd78c4b6f44be9be432df68e2457a76e16a7c9d",
     "core/existing-store.mjs": "73b7c31573af24f811d509177f8815455cb01db4458d0644133c911594e457b4",
     "core/store-fence.mjs": "bff95b9f5f4b4e9eebb4b11e5392a854c8838b91c0a2c56ba50e745ba39b6a4f",
     "core/sqlite-journal-probe.mjs": "64d0fd9c5b68decaeb8ade5420d72ef7370ed8a6b2296ef1276f25f17d5f285f",
@@ -471,7 +471,7 @@
     "core/index-storage.mjs": "1d84092cccb3c0d8abd7ce630a383718c036c117abc13c662aad8cd98e480dea",
     "core/index.mjs": "b9d668c7537cbd6dab5187b148e6ce3aef6ec61fef2172ac7a7952bfc5d976f8",
     "core/memory-reader.mjs": "382fb75c51df312842a1cd29dcdb4c18654042ba10d2a7d3ee3bc700a6a7624f",
-    "core/read-database.mjs": "8d8e5ce4d33d664e46b1d2095795e1ca3424a780fc7d731ca6837b44764f0ad9",
+    "core/read-database.mjs": "b008703e6f32cf4576bdb1e3aaaeca4508b855e26313c57328eaa664fb801d31",
     "core/topic-overview-input.mjs": "7c20bfe7e2e8d6c50f19a7610c046408d9ffd0faff0dd5e12b3188789a149ab2",
     "core/topic-overview-storage.mjs": "aa988ca542b10921776e2e7f5a559fef50097c22bde56afb02d26f6217fd945c",
     "core/topic-overview-worker.mjs": "50b1d365525cdc40c4bd3d74cf5fff41a3e3c9d4bf2fc7eb98d3b6cd51f5e0c3",
