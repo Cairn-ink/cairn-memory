@@ -144,3 +144,15 @@ the retained synthetic database path for inspection; no account or model needed.
 [S2c](fetch-recall.md) now adds bounded fetch/recall orchestration. MCP and
 real-model organization/retrieval evaluation remain separate milestones.
 Mock outcomes are not those quality results.
+
+## Map paging amendment v1 (2026-11-05)
+
+`core.map` finds its page size by an exact-count binary search. It first counts
+the full-capacity page separately, because its cursor and completion flags can
+differ from those of smaller prefixes. If that page does not fit, it searches
+the remaining nonempty prefixes using the entire serialized success envelope.
+
+With a counter that is monotone over those prefixes, the result is the same as
+the largest fitting prefix. Otherwise it is a prefix that fits, possibly a
+smaller one. The returned page is always exactly counted, including its cursor,
+completion flags, index revision and invalid references.

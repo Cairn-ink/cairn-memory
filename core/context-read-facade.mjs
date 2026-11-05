@@ -8,7 +8,7 @@ import { isAbsolute, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { validateContextProductLayout } from './context-product-schema.mjs';
 import { openReadDatabase } from './read-database.mjs';
-import { readTransaction, isConnectionDiscarded, isStorageBusy } from './database.mjs';
+import { readTransaction, isConnectionDiscarded, isStorageBusy, busyTimeoutOption } from './database.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { deepFreeze } from './private-card-input.mjs';
 import { verifyPrivateGrant } from './private-card-facade.mjs';
@@ -63,24 +63,28 @@ function metadata(port) {
 }
 
 export function openContextCore(baseOptions, contextRead, openBase) {
+  const busyTimeoutMs = busyTimeoutOption(baseOptions);
+  const busyOptions = busyTimeoutMs === undefined ? {} : { busyTimeoutMs };
   const options = contextOptions(contextRead), readOnly = Boolean(baseOptions.existingStore);
   // Managed-existing construction uses the retained managed opener, with its
   // journal refusal performed before that opener can touch either database.
   if (readOnly) {
-    const probe = openReadDatabase(baseOptions.path, { contextRead: true,
+    const probe = openReadDatabase(baseOptions.path, { contextRead: true, ...busyOptions,
       preflight: () => assertContextReadReadOnlyAuxiliaries(baseOptions.path) });
     probe.db.close();
   }
   const base = openBase(baseOptions);
   try {
-    const context = createContextFacade(baseOptions.path === ':memory:' ? ':memory:' : resolve(baseOptions.path), options, { readOnly });
+    const context = createContextFacade(baseOptions.path === ':memory:' ? ':memory:' : resolve(baseOptions.path), options, { readOnly, ...busyOptions });
     return Object.freeze({ ...base, ...context.methods, close() { context.close(); return base.close(); } });
   } catch (error) { try { base.close(); } catch { /* Preserve the initialization refusal. */ } throw error; }
 }
 export function openContextReader(value) {
-  const input = ownData(value, ['path', 'contextRead']);
+  const input = ownData(value, ['path', 'contextRead', 'busyTimeoutMs']);
+  const busyTimeoutMs = busyTimeoutOption(input);
+  const busyOptions = busyTimeoutMs === undefined ? {} : { busyTimeoutMs };
   if (typeof input.path !== 'string' || !isAbsolute(input.path) || input.path.includes('\0')) fail('invalid_path');
-  const options = contextOptions(input.contextRead), context = createContextFacade(input.path, options, { readOnly: true });
+  const options = contextOptions(input.contextRead), context = createContextFacade(input.path, options, { readOnly: true, ...busyOptions });
   return Object.freeze({ ...context.methods, close() { context.close(); return success(null); } });
 }
 
@@ -93,10 +97,10 @@ export function openContextProductFacade(path, product) {
     capabilities: context.productCapabilities, fileIdentity: context.fileIdentity, port: context.productPort };
 }
 
-function createContextFacade(path, options, { readOnly }) {
+function createContextFacade(path, options, { readOnly, ...busyOptions }) {
   let database;
   try {
-    if (path !== ':memory:') database = openReadDatabase(path, { contextRead: true,
+    if (path !== ':memory:') database = openReadDatabase(path, { contextRead: true, ...busyOptions,
       nativeObserver: options.product?.observer,
       productSqlite: options.product?.sqlite,
       validateProduct: options.product ? validateContextProductLayout : undefined,

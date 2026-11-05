@@ -194,7 +194,7 @@ export function createCandidate(directory) {
     ['read-database.mjs', [
       ["import { assertNoCardCurrentDependencies }", "import { performance } from 'node:perf_hooks';\nimport { measurementDatabase } from './measurement-database.mjs';\nimport { assertNoCardCurrentDependencies }"],
       ['if (!nativeObserver && topicPolicy) db = topicPolicy.database(native, wal);', 'native = measurementDatabase(native, performance);\n    if (!nativeObserver) db = topicPolicy ? topicPolicy.database(native, wal) : native;'],
-      [' PRAGMA busy_timeout=${contextRead && !nativeObserver ? 5000 : 0};', ''],
+      [' PRAGMA busy_timeout=${timeout};', ''],
     ]],
   ];
   const hashes = [];

@@ -122,7 +122,7 @@ const create = `
   import { openSync, closeSync, fstatSync, fsyncSync, linkSync, unlinkSync, readdirSync } from 'node:fs';
   import { lstatSync, renameSync, mkdirSync, rmdirSync } from 'node:fs';
   import { dirname, basename, join } from 'node:path';
-  import { randomUUID } from 'node:crypto';
+  import { randomUUID, createHash } from 'node:crypto';
   const target = process.argv[1], directory = dirname(target);
   const prefix = '.' + basename(target) + '.cairn-create-';
   let fd, dir, temporary, lifecycle, published = false;
@@ -195,6 +195,17 @@ const create = `
               damaged=!metadata || metadata.store_id!==init.storeId || metadata.profile!==init.profile;
             }
             if(!damaged)damaged=incumbent.prepare('PRAGMA quick_check').get().quick_check!=='ok' || Boolean(incumbent.prepare('PRAGMA foreign_key_check').get());
+            if(!damaged && init.expectedStamp && /^[a-f0-9]{64}$/.test(init.foreignBindingDigest ?? '')) {
+              // Admission authenticated these exact stored certificates and
+              // proved a foreign physical binding. Recheck its complete basis
+              // under lifecycle exclusion; never accept a bare repair flag.
+              const basis=createHash('sha256');
+              for(const [purpose,sql] of [
+                ['validation','SELECT substr(record,1,16385) AS record FROM validation_records ORDER BY publication'],
+                ['progress','SELECT substr(record,1,4097) AS record FROM progress_records ORDER BY generation']
+              ])for(const {record:text} of incumbent.prepare(sql).all())basis.update(purpose+'\\0'+text+'\\0');
+              damaged=basis.digest('hex')===init.foreignBindingDigest;
+            }
           } catch(error) {
             if(error.code!=='ERR_SQLITE_ERROR' || ![1,11,14,26].includes(error.errcode&255))throw error;
             damaged=true;
