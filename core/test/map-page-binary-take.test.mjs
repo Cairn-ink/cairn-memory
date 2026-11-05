@@ -9,7 +9,6 @@ import { openMemoryCore } from '../contract.mjs';
 import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import { measureContentRead } from '../testing/content-safety-cost-meter.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
-import { countOpenAITokens } from '../../adapters/openai/index.mjs';
 
 const namespace = { ownerId: 'map-binary-test', scope: 'personal', projectId: null };
 const limits = [1, 2, 3, 7, 50, 100];
@@ -107,9 +106,16 @@ async function fixture(t, { safety = false, count = 103, mix = 'uniform', topics
   };
 }
 
+// Deterministic BPE-style approximation: word and whitespace runs use fixed
+// four-code-unit chunks, while each punctuation character costs one token.
+// Keep the mandatory matrix independent of optional adapter dependencies.
+function countChunkTokens(text) {
+  return (text.match(/[\p{L}\p{N}_]+|\s+|[^\p{L}\p{N}_\s]/gu) ?? [])
+    .reduce((total, run) => total + Math.ceil(run.length / 4), 0);
+}
 const counters = [
   ['length', text => Math.ceil(text.length / 16)],
-  ['o200k', countOpenAITokens],
+  ['chunks', countChunkTokens],
 ];
 const comparable = result => result.ok ? JSON.stringify(result) : result.error.code;
 
@@ -155,8 +161,32 @@ test('differential: exact whole envelopes match the descending scan on monotone 
       }
     }
   }
-  t.diagnostic(`MAP_DIFFERENTIAL comparisons=${comparisons} counters=length,o200k safety=off,on mixes=5 purposes=2 limits=6 offsets=7`);
+  t.diagnostic(`MAP_DIFFERENTIAL comparisons=${comparisons} counters=length,chunks safety=off,on mixes=5 purposes=2 limits=6 offsets=7`);
   t.diagnostic('MAP_PROBE_MAXIMA ' + JSON.stringify(maximum));
+});
+
+test('optional o200k tokenizer: exact envelopes match the descending scan', async t => {
+  const { createContextCounter } = await import('../../adapters/openai/context-counter.mjs');
+  let counter;
+  try { counter = await createContextCounter(); }
+  catch (error) {
+    if (error.code !== 'context_tokenizer_unavailable') throw error;
+    t.skip('o200k_base tokenizer is not installed; mandatory differential uses the self-contained chunk counter');
+    return;
+  }
+  let comparisons = 0;
+  for (const safety of [false, true]) {
+    const f = await fixture(t, { safety, count: 7 });
+    for (const limit of limits) for (const tokenBudget of [1, 80, 200, 500, 1000, 4000]) {
+      const input = { namespace, limit, tokenBudget };
+      f.setCounter(counter.countTokens);
+      const expected = f.scan.map(input);
+      f.setCounter(counter.countTokens);
+      assert.equal(comparable(f.core.map(input)), comparable(expected));
+      comparisons++;
+    }
+  }
+  t.diagnostic(`MAP_OPTIONAL_O200K_DIFFERENTIAL comparisons=${comparisons}`);
 });
 
 test('probe bound: every capacity 1..100, every monotone fitting threshold, and one-probe fast path', async t => {
