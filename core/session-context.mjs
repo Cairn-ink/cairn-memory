@@ -112,7 +112,7 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
       }
       if (expected && JSON.stringify(result) !== JSON.stringify(expected)) fail('revision_conflict');
       return result;
-    });
+    }, undefined, { deferred: true });
   };
 }
 

@@ -83,8 +83,7 @@ export function memoryMetadata(row, decisionReview = false) {
 }
 export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRead }) {
   return function read(ns, operation, filter, cursor) {
-    // Episode pages materialize the recursive hidden-episode set before LIMIT.
-    // Keep that potentially long scan IMMEDIATE; indexed memory pages can defer.
+    // Reviewed read-only pages can share a snapshot with a RESERVED writer.
     return transaction(db, () => {
       const current = epoch(ns);
       if (cursor && cursor.e !== current) fail('cursor_stale');
@@ -105,7 +104,7 @@ export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRea
           id: row.receipt_id, createdAt: row.receipt_time, client: row.receipt_client } } : {}) },
           key: receipt ? { time: row.receipt_time, id: row.receipt_id, memoryId: row.id } : { time: row.updated_at, id: row.id } };
       }) };
-    }, undefined, { deferred: operation === 'listMemoriesByTime' });
+    }, undefined, { deferred: true });
   };
 }
 export function rangePage(page, filter, binding, encodeCursor, operation) {

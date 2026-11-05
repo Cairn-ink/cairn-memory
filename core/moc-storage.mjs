@@ -355,7 +355,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         return memoryDto(memory, true);
       });
       return { memories, indexRevision: expectedIndex, suppressionEpoch: suppressionEpochInside(ns) };
-    });
+    }, undefined, { deferred: true });
   }
 
   function placementRefs(ns, memoryId) {
