@@ -42,6 +42,14 @@ work. Recall continues to use memories and episodes. Website workspace records
 keep their existing collection/limits. MCP chat histories, URLs and meeting notes
 are outside this capture contract; ChatGPT export import is RL-8.
 
+> **Superseded in part by an owner decision (2026-11-05):** full Raw text is to be
+> searchable. Reads use Memory as the entry point and Raw for deeper evidence: a
+> Memory hit may bring its Raw passages, and Raw hits may cover what Memories miss.
+> Forget, suppression and deletion rules apply to Raw search without exception.
+> The replacement contract (indexing, limits, encryption, migration) is pending
+> design review. Until it lands, no Raw search is implemented and current
+> behavior is unchanged.
+
 RL-1 code waits for RL-0, G1 (production backups running and a staging restore)
 and G2 (completed H6 cutover). RL-2/RL-3 follow RL-1. RL-4 additionally waits for
 RL-1–RL-3 and H6-T's pinned-core adoption. Launch waits for RL-5's H6-E inventory,
@@ -366,6 +374,14 @@ Reservations are shown separately, so an incomplete upload cannot hide capacity.
 Local setup status and hosted 設定 › 方案 consume this read. Core counts bytes;
 plan selection/billing belongs to the host. Missing owner usage returns zeros and
 the configured cap; the read itself creates no row. No raw search is added.
+
+> **Superseded in part by an owner decision (2026-11-05):** full Raw text is to be
+> searchable. Reads use Memory as the entry point and Raw for deeper evidence: a
+> Memory hit may bring its Raw passages, and Raw hits may cover what Memories miss.
+> Forget, suppression and deletion rules apply to Raw search without exception.
+> The replacement contract (indexing, limits, encryption, migration) is pending
+> design review. Until it lands, no Raw search is implemented and current
+> behavior is unchanged.
 
 ## Per-tool control and notice (D8/D9)
 
