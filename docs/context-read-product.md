@@ -1824,3 +1824,7 @@ again with independently authorized maintenance and complete both intents before
 exposing search. This costs a full lexical rebuild plus re-embedding of vectors:
 time and, with a hosted embedding service, embedding spend. Never unlink a live
 sidecar or its companions.
+
+Replacement waits until no other connection for that store is open in the
+process; each refusal counts as a no-progress admission cycle until those
+handles close. The lifecycle lock excludes other processes’ active operations.
