@@ -9,6 +9,7 @@ import { openMemoryStore, openContextReader } from '../index.mjs';
 import { createMemoryRuntime } from '../runtime.mjs';
 import { openDatabase, isStorageBusy } from '../database.mjs';
 import { openReadDatabase } from '../read-database.mjs';
+import { openContextCore } from '../context-read-facade.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { host as roleHost } from './role-fixture.mjs';
 
@@ -254,5 +255,72 @@ test('no per-call busyTimeoutMs on map, list or get', t => {
   for (const [method, input] of [['map', { namespace }], ['list', { namespace }], ['get', { namespace, memoryId: 'synthetic' }]]) {
     assert.deepEqual(f.core[method]({ ...input, busyTimeoutMs: 0 }),
       { ok: false, error: { code: 'invalid_input', retryable: false } });
+  }
+});
+
+test('Proxy inputs without the option retain each opener\'s existing acceptance rule', t => {
+  const f = fixture(t); f.core.close();
+  const openers = [
+    ['openMemoryCore', { path: ':memory:' }, openMemoryCore, 'invalid_input'],
+    ['createMemoryCore', { path: ':memory:' }, createMemoryCore, 'invalid_input'],
+    ['createMemoryRuntime', { path: ':memory:' }, createMemoryRuntime],
+    ['openMemoryStore', { path: ':memory:' }, openMemoryStore],
+    ['openContextReader', { path: f.path, contextRead }, openContextReader, 'invalid_input'],
+    ['openContextCore', { path: ':memory:' }, input => openContextCore(input, contextRead, () => ({ close() {} }))],
+    ['openContextCore with core validation', { path: ':memory:' }, input => openContextCore(input, contextRead, openMemoryCore), 'invalid_input'],
+    ['openDatabase', {}, input => openDatabase(':memory:', input)],
+    ['openReadDatabase', { contextRead: true }, input => openReadDatabase(f.path, input)],
+    ['context composition', { path: ':memory:', contextRead }, openMemoryCore, 'invalid_input'],
+    ['raw composition', { path: ':memory:', rawConversations: rawConversations() }, openMemoryCore, 'invalid_input'],
+  ];
+  const h = roleHost();
+  openers.push(['role-context composition', { path: ':memory:', contextRead: h.context,
+    roleProfiles: h.options, methodPackages: h.methods, assets: h.assets }, openMemoryCore, 'invalid_input']);
+  for (const [name, fields, open, code] of openers) {
+    const input = new Proxy(fields, {});
+    if (code) assert.throws(() => open(input), { code }, name);
+    else {
+      const value = open(input);
+      (value.db ?? value).close();
+    }
+    // A supplied option cannot be attested as an own data property on a Proxy.
+    for (const busyTimeoutMs of [250, undefined, -1, 5001]) {
+      assert.throws(() => open(new Proxy({ ...fields, busyTimeoutMs }, {})), { code: 'invalid_input' }, name);
+    }
+    let accessed = 0;
+    const accessor = Object.defineProperty({ ...fields }, 'busyTimeoutMs', {
+      get() { accessed++; throw Error('timeout getter must not run'); },
+    });
+    assert.throws(() => open(new Proxy(accessor, {})), { code: 'invalid_input' }, name);
+    const inherited = Object.assign(Object.create({ busyTimeoutMs: 250 }), fields);
+    assert.throws(() => open(new Proxy(inherited, {})), { code: 'invalid_input' }, name);
+    assert.equal(accessed, 0, name);
+  }
+});
+
+test('reader branches whose native default is zero never raise it', t => {
+  const f = fixture(t); f.core.close();
+  for (const busyTimeoutMs of [undefined, 0, 250, 5000]) {
+    let atOpen;
+    const productSqlite = {
+      files() { return () => {}; },
+      open(native) {
+        atOpen = native.prepare('PRAGMA busy_timeout').get().timeout;
+        return { db: native };
+      },
+      openingFailure(error) { throw error; },
+    };
+    const nativeObserver = {
+      invoke(_phase, _operation, open) { return open(); },
+      database(native) { return native; },
+    };
+    for (const branch of [{ productSqlite }, { nativeObserver }, {}]) {
+      const read = openReadDatabase(f.path, { contextRead: Boolean(branch.productSqlite || branch.nativeObserver),
+        ...branch, ...(busyTimeoutMs === undefined ? {} : { busyTimeoutMs }) });
+      try {
+        if (branch.productSqlite) assert.equal(atOpen, 0, 'before branch-specific configuration');
+        assert.equal(read.db.prepare('PRAGMA busy_timeout').get().timeout, 0);
+      } finally { read.db.close(); }
+    }
   }
 });

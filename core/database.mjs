@@ -377,12 +377,14 @@ export function transaction(db, work, check, { deferred = false } = {}) {
 // Presence is significant: explicit undefined and accessors are invalid.
 export function busyTimeoutOption(input) {
   if (!input || typeof input !== 'object') return undefined;
-  if (types.isProxy(input)) fail('invalid_input');
   const descriptor = Object.getOwnPropertyDescriptor(input, 'busyTimeoutMs');
   if (!descriptor) {
     if ('busyTimeoutMs' in input) fail('invalid_input');
     return undefined;
   }
+  // Retained openers may accept Proxies. Only the supplied opt-in requires
+  // an own data property that can be attested without a Proxy.
+  if (types.isProxy(input)) fail('invalid_input');
   if (!Object.hasOwn(descriptor, 'value') || !Number.isInteger(descriptor.value) ||
       descriptor.value < 0 || descriptor.value > STORAGE_BUSY_TIMEOUT_MS) fail('invalid_input');
   return descriptor.value;

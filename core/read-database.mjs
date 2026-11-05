@@ -27,7 +27,7 @@ export function contextProductFileIdentity(path) {
 export function openReadDatabase(path, options = {}) {
   const busyTimeoutMs = busyTimeoutOption(options);
   const { contextRead = false, topicMembers = false, deferTopicValidation = false, topicPolicy, nativeObserver, preflight, validateProduct, productSqlite } = options;
-  const timeout = Math.min(contextRead && !nativeObserver ? STORAGE_BUSY_TIMEOUT_MS : 0, busyTimeoutMs ?? STORAGE_BUSY_TIMEOUT_MS);
+  const timeout = Math.min(contextRead && !nativeObserver && !productSqlite ? STORAGE_BUSY_TIMEOUT_MS : 0, busyTimeoutMs ?? STORAGE_BUSY_TIMEOUT_MS);
   const nativeOptions = busyTimeoutMs === undefined ? { readOnly: true } : { readOnly: true, timeout };
   const initial = identity(path);
   nativeObserver?.identity?.(`${initial.dev}:${initial.ino}`);
