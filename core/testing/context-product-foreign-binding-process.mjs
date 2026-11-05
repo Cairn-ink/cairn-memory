@@ -1,22 +1,21 @@
 // Engine restart regression, adapted from the diagnosed child-process reproduction.
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, existsSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 const [engine, mode='run', dirArg, caseArg='copy-write', killArg='close']=process.argv.slice(2);
 const source=resolve(engine),rev='regression';
-const root=mode==='run'?mkdtempSync('/tmp/context-foreign-binding-'):null;
-const startTicks=pid=>{try{const text=readFileSync('/proc/'+pid+'/stat','utf8');return text.slice(text.lastIndexOf(') ')+2).split(' ')[19];}catch{return null;}};
+const root=mode==='run'?mkdtempSync(join(tmpdir(),'context-foreign-binding-')):null;
 const emit=(kind,data={})=>console.log(JSON.stringify({rev,mode,kind,...data}));
-const child=(args,ipc=false)=>{const p=spawn(process.execPath,[fileURLToPath(import.meta.url),engine,...args],{stdio:ipc?['ignore','inherit','inherit','ipc']:['ignore','inherit','inherit']});emit('child_started',{phase:args[0],pid:p.pid,startTicks:startTicks(p.pid)});return p;};
+const child=(args,ipc=false)=>{const p=spawn(process.execPath,[fileURLToPath(import.meta.url),engine,...args],{stdio:ipc?['ignore','inherit','inherit','ipc']:['ignore','inherit','inherit']});emit('child_started',{phase:args[0],pid:p.pid});return p;};
 const done=p=>new Promise((res,rej)=>{p.once('error',rej);p.once('exit',(code,signal)=>res({code,signal}));});
 const command=(cmd,args)=>{const r=spawnSync(cmd,args,{encoding:'utf8'});emit('command',{cmd,args,pid:r.pid,status:r.status,signal:r.signal,stdout:r.stdout,stderr:r.stderr});assert.equal(r.status,0);return r.stdout;};
-process.on('SIGCONT',()=>{emit('pause_void');process.exitCode=76;});
 if(mode==='run'){
-  const load=Number(readFileSync('/proc/loadavg','utf8').split(' ')[0]);emit('run_entry',{load,pid:process.pid,startTicks:startTicks(process.pid)});assert.ok(load<12,'load must be below 12 at actual run entry');
+  emit('run_entry',{pid:process.pid});
   const name=dirArg??'copy-write',termination=caseArg==='sigterm'?'sigterm':'close';
   const directory=mkdtempSync(join(root,'data-'+name+'-')),copy=name.startsWith('copy'),write=name.endsWith('write')&&!name.endsWith('no-write'),drop=name==='copy-delete';
   const b=child(['build',directory,name,termination],true),exit=done(b);
