@@ -11,29 +11,39 @@ const [engine, mode='run', dirArg, caseArg='copy-write', killArg='close']=proces
 const source=resolve(engine),rev='regression';
 const root=mode==='run'?mkdtempSync(join(tmpdir(),'context-foreign-binding-')):null;
 const emit=(kind,data={})=>console.log(JSON.stringify({rev,mode,kind,...data}));
-const child=(args,ipc=false)=>{const p=spawn(process.execPath,[fileURLToPath(import.meta.url),engine,...args],{stdio:ipc?['ignore','inherit','inherit','ipc']:['ignore','inherit','inherit']});emit('child_started',{phase:args[0],pid:p.pid});return p;};
+const children=new Set();
+const child=(args,ipc=false)=>{const p=spawn(process.execPath,[fileURLToPath(import.meta.url),engine,...args],{stdio:ipc?['ignore','inherit','inherit','ipc']:['ignore','inherit','inherit']});children.add(p);emit('child_started',{phase:args[0],pid:p.pid});return p;};
 const done=p=>new Promise((res,rej)=>{p.once('error',rej);p.once('exit',(code,signal)=>res({code,signal}));});
 const command=(cmd,args)=>{const r=spawnSync(cmd,args,{encoding:'utf8'});emit('command',{cmd,args,pid:r.pid,status:r.status,signal:r.signal,stdout:r.stdout,stderr:r.stderr});assert.equal(r.status,0);return r.stdout;};
 if(mode==='run'){
-  emit('run_entry',{pid:process.pid});
-  const name=dirArg??'copy-write',termination=caseArg==='sigterm'?'sigterm':'close';
-  const directory=mkdtempSync(join(root,'data-'+name+'-')),copy=name.startsWith('copy'),write=name.endsWith('write')&&!name.endsWith('no-write'),drop=name==='copy-delete';
-  const b=child(['build',directory,name,termination],true),exit=done(b);
-  await Promise.race([new Promise(resolve=>b.once('message',resolve)),exit.then(x=>{throw Error('builder early exit '+JSON.stringify(x));})]);
-  if(termination==='sigterm')b.kill('SIGTERM');else b.send('close');
-  const built=await exit;emit('builder_exit',built);assert.deepEqual(built,termination==='sigterm'?{code:null,signal:'SIGTERM'}:{code:0,signal:null});
-  if(write||drop){const p=child(['write',directory]);const r=await done(p);emit('writer_exit',r);assert.equal(r.code,0);}
-  let target=directory;
-  if(copy){target=join(directory,'copied');mkdirSync(target,{mode:0o700});command('cp',[join(directory,'core.sqlite'),join(directory,'core.sqlite.context-read-product-v1.1.sqlite'),target]);}
-  if(drop)command('rm',['--',join(target,'core.sqlite.context-read-product-v1.1.sqlite')]);
-  command('stat',['-c','%n %d:%i',join(directory,'core.sqlite'),join(directory,'core.sqlite.context-read-product-v1.1.sqlite'),join(target,'core.sqlite')]);
-  let finalRows,pumpExit;
-  for(const phase of ['inspect','pump','inspect']){const p=child([phase,target,name],true);p.on('message',m=>{if(m.rows)finalRows=m.rows;});const r=await done(p);emit('child_exit',{phase,...r});if(phase==='pump')pumpExit=r.code;else assert.equal(r.code,0);}
-  assert.equal(pumpExit,0);
-  const expectedDocuments=write||drop?3:2;
-  assert.deepEqual(finalRows,[{intent:'current',documents:expectedDocuments},{intent:'history',documents:expectedDocuments}]);
-  emit('asserted',{outcome:'converged',finalRows});
-  emit('finished',{case:name,termination,directory,target,expected:write||drop?3:2});
+  try{
+    emit('run_entry',{pid:process.pid});
+    const name=dirArg??'copy-write',termination=caseArg==='sigterm'?'sigterm':'close';
+    const directory=mkdtempSync(join(root,'data-'+name+'-')),copy=name.startsWith('copy'),write=name.endsWith('write')&&!name.endsWith('no-write'),drop=name==='copy-delete';
+    const b=child(['build',directory,name,termination],true),exit=done(b);
+    await Promise.race([new Promise(resolve=>b.once('message',resolve)),exit.then(x=>{throw Error('builder early exit '+JSON.stringify(x));})]);
+    if(termination==='sigterm')b.kill('SIGTERM');else b.send('close');
+    const built=await exit;emit('builder_exit',built);assert.deepEqual(built,termination==='sigterm'?{code:null,signal:'SIGTERM'}:{code:0,signal:null});
+    if(write||drop){const p=child(['write',directory]);const r=await done(p);emit('writer_exit',r);assert.equal(r.code,0);}
+    let target=directory;
+    if(copy){target=join(directory,'copied');mkdirSync(target,{mode:0o700});command('cp',[join(directory,'core.sqlite'),join(directory,'core.sqlite.context-read-product-v1.1.sqlite'),target]);}
+    if(drop)command('rm',['--',join(target,'core.sqlite.context-read-product-v1.1.sqlite')]);
+    command('stat',['-c','%n %d:%i',join(directory,'core.sqlite'),join(directory,'core.sqlite.context-read-product-v1.1.sqlite'),join(target,'core.sqlite')]);
+    let finalRows,pumpExit;
+    for(const phase of ['inspect','pump','inspect']){const p=child([phase,target,name],true);p.on('message',m=>{if(m.rows)finalRows=m.rows;});const r=await done(p);emit('child_exit',{phase,...r});if(phase==='pump')pumpExit=r.code;else assert.equal(r.code,0);}
+    assert.equal(pumpExit,0);
+    const expectedDocuments=write||drop?3:2;
+    assert.deepEqual(finalRows,[{intent:'current',documents:expectedDocuments},{intent:'history',documents:expectedDocuments}]);
+    emit('asserted',{outcome:'converged',finalRows});
+    emit('finished',{case:name,termination,directory,target,expected:write||drop?3:2});
+  }finally{
+    // A failed assertion can leave a builder waiting for its close message.
+    await Promise.all([...children].map(async p=>{
+      if(!p.pid||p.exitCode!==null||p.signalCode!==null)return;
+      const exit=done(p);p.kill('SIGTERM');await exit;
+    }));
+    command('rm',['-rf','--',root]);
+  }
 }else{
   const api=await import(pathToFileURL(join(source,'core/index.mjs'))),pumpApi=await import(pathToFileURL(join(source,'core/context-product-pump.mjs')));
   const protocol=await import(pathToFileURL(join(source,'core/context-product-admission.mjs'))).catch(()=>({}));
