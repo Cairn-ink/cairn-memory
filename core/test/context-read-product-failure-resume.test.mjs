@@ -1,3 +1,4 @@
+import { admitMaintenance, refreshMaintenance } from '../context-product-admission.mjs';
 import { testClock } from '../testing/context-product-test-clock.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,11 +23,11 @@ test('failure cause: native signed checkpoint resume preserves its public mappin
   const timers=new Map();let handle,result;
   const setTimer=(fn,ms)=>{const id={unref(){}};timers.set(id,{fn,at:testClock.now()+ms});return id;},clearTimer=id=>timers.delete(id);
   const open=reader.createProductReaderRuntime({maintenance:true,setTimer,clearTimer});
-  const renew=createMaintenancePumpRuntime({now:testClock.now,setTimer,clearTimer,open:async(...args)=>{handle=await open(...args);return {...handle,refreshContextIndex:async(...call)=>result=await handle.refreshContextIndex(...call)};}});
+  const renew=createMaintenancePumpRuntime({admit:(_h,...args)=>admitMaintenance(handle,...args),work:async(_h,...args)=>result=await refreshMaintenance(handle,...args),now:testClock.now,setTimer,clearTimer,open:async(...args)=>{handle=await open(...args);return {...handle,refreshContextIndex:async(...call)=>result=await handle.refreshContextIndex(...call)};}});
   const pump=renew({supervisor:service.supervisor,id:'resume-failure',window:{id:'resume-window',endsAtMonoMs:Math.floor(testClock.now())+60000,usedItems:0,usedMs:0},
     budgets:{maxItems:8,maxMs:8000},quantum:{maxItems:1,maxMs:1000},pollMs:1000,renewalMs:60000,serviceCredential:service.token,projections:[{options,types:['memory']}]});
   t.after(()=>pump.close().catch(()=>{}));
-  const [key,timer]=[...timers][0];timers.delete(key);await testClock.advance(timer.at-testClock.now());await timer.fn();
+  for(let n=0;n<2;n++){const [key,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];timers.delete(key);await testClock.advance(timer.at-testClock.now());await timer.fn();}
   const final=await pump.completion;
   assert.equal(Atomics.load(control,1),1,'real signed checkpoint resume query reached');
   assert.equal(JSON.stringify(result),'{"ok":false,"error":{"code":"storage_error","retryable":false}}','native resume public bytes equal the base');

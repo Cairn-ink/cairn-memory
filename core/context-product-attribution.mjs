@@ -1,5 +1,5 @@
 // Private, fixed numeric maintenance telemetry. Never supplies admission proof.
-export const maintenanceKinds = Object.freeze(['idle','scan','item','verify','publication','gc','vacuum','begin','commit','save','canonical-read','serialize']);
+export const maintenanceKinds = Object.freeze(['idle','scan','item','verify','publication','gc','vacuum','begin','commit','save','canonical-read','serialize','admission']);
 export const comparisonWorkFields = Object.freeze(['comparisonAttempts','comparisonComplete','comparisonEqual','comparisonDifferent','comparisonIncomplete','comparisonRows','comparisonBytes']);
 export const maintenanceWorkFields = Object.freeze(['transformed','canonicalRows','metadataBytes','textRows','textBytes','supportLookups','supportBytes','verifiedRows','reused','replaced','removed','copied','tokenized','retargets','verificationRestarts','verificationKept',...comparisonWorkFields]);
 // B4 has not activated consumption. No public option or environment enables it.
@@ -159,7 +159,7 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
 }
 
 // Private failure metadata is separate from the numeric phase/stall contract.
-export const maintenanceFailureKinds=Object.freeze(['none','worker_heap_limit','worker_exit','worker_error','protocol','unmapped','exception','observation_timing','engine','spawn','dispatch','call_error','identity','worker_state','cleanup','disposal_proof']);
+export const maintenanceFailureKinds=Object.freeze(['none','worker_heap_limit','worker_exit','worker_error','protocol','unmapped','exception','observation_timing','engine','spawn','dispatch','call_error','identity','worker_state','cleanup','disposal_proof','open_exceeds_quantum']);
 const failureCode=/^[a-z][a-z0-9_]{0,47}$/,failureName=/^[A-Za-z][A-Za-z0-9_]{0,47}$/;
 export const maintenanceFailureCode=value=>typeof value==='string'&&failureCode.test(value)?value:'other';
 const indexReasons=Object.freeze(['storage_unavailable','auxiliary_file','unsafe_file','incompatible','wrong_store','missing','corrupt','validation_missing','validation_invalid',
@@ -189,7 +189,7 @@ export function maintenanceFailureRecord(kind,{engineCode,errorName,exitCode,ord
     ...(kind==='worker_error'||kind==='spawn'||kind==='dispatch'||kind==='call_error'?{errorName:typeof errorName==='string'&&failureName.test(errorName)?errorName:'other'}:{}),
     ...(kind==='worker_exit'&&Number.isSafeInteger(exitCode)?{exitCode}:{}),
     ...(Number.isSafeInteger(ordinal)&&ordinal>0?{ordinal}:{}),
-    ...(['open','refresh','call','idle','close','observation','disposal'].includes(stage)?{stage}:{}),...(stall?{stall}:{})});
+    ...(['open','refresh','call','idle','close','observation','disposal','admission'].includes(stage)?{stage}:{}),...(stall?{stall}:{})});
 }
 export const maintenanceFailureKind=record=>record.cause.startsWith('unmapped:')?'unmapped':record.cause.startsWith('exception:')?'exception':record.cause;
 export function readMaintenanceFailure(value){

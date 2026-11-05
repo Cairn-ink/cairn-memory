@@ -117,10 +117,10 @@ test('cutoff recovery: open cutoff and missing ordinal stay terminal',async t=>{
 });
 
 test('cutoff recovery: new window resets allowance but retains pending cooldown',async t=>{
-  const s=setup(t,{stalls:Infinity}),p=s.create({window:{id:'short',endsAtMonoMs:1500,usedItems:0,usedMs:0}});await s.step();
+  const s=setup(t,{stalls:Infinity}),p=s.create({window:{id:'short',endsAtMonoMs:2500,usedItems:0,usedMs:0}});await s.step();
   assert.equal(p.getStatus().state,'active','short_window_cutoff_recovers');
-  const until=s.diagnostic(p).cooldownUntil,oldCompletion=p.completion;s.set(1500);
-  s.create({window:{id:'next',endsAtMonoMs:61500,usedItems:0,usedMs:0}});
+  const until=s.diagnostic(p).cooldownUntil,oldCompletion=p.completion;s.set(2500);
+  s.create({window:{id:'next',endsAtMonoMs:62500,usedItems:0,usedMs:0}});
   const old=await oldCompletion;assert.equal(old.usedItems,1);assert.equal(old.usedMs,100,'old_window_keeps_its_unknown_charge');
   const {operation}=await s.begin(),admitted=s.now();await s.due(admitted+100);await operation;
   assert.ok(admitted>=until,'window_handoff_carries_unexpired_cooldown');
@@ -178,10 +178,10 @@ test('cutoff recovery: late proof cannot win a delayed confirmation timer',async
 });
 
 test('cutoff recovery: cooldown never shortens minimum admission spacing',async t=>{
-  const s=setup(t),p=s.create({pollMs:2400}),{operation}=await s.begin(),admitted=s.now();
+  const s=setup(t),p=s.create({pollMs:1600}),{operation}=await s.begin(),admitted=s.now();
   await s.due(admitted+100);await operation;
   assert.equal(p.getStatus().state,'active','spacing_case_recovers_before_successor');
-  await s.step();assert.ok(s.now()-admitted>=2400,'cooldown_preserves_minimum_admission_spacing');
+  await s.step();assert.ok(s.now()-admitted>=1600,'cooldown_preserves_minimum_admission_spacing');
 });
 
 
@@ -190,7 +190,7 @@ test('cutoff recovery: unrelated admission cannot retire another domain cooldown
   const options={pollMs:100,budgets:{maxItems:10000,maxMs:60000}};
   const first=s.create({...options,projections:[a],window:{id:'old',endsAtMonoMs:1500,usedItems:0,usedMs:0}});
   await s.step();const until=s.diagnostic(first).cooldownUntil;await first.close();
-  assert.equal(until,2100);assert.equal((await first.completion).usedMs,100);
+  assert.equal(until,2200);assert.equal((await first.completion).usedMs,100);
   s.set(1500);const nextWindow={id:'next',endsAtMonoMs:61500,usedItems:0,usedMs:0};
   const other=s.create({id:randomUUID(),projections:[b],window:nextWindow});await other.close();
   s.create({id:randomUUID(),projections:[a]});const {operation}=await s.begin();await operation;
@@ -201,7 +201,7 @@ test('cutoff recovery: pending disposal publishes cooldown across pump and windo
   let release;const termination=new Promise(resolve=>{release=resolve;});
   const s=setup(t,{termination:()=>termination});s.set(900);
   const first=s.create({pollMs:100,budgets:{maxItems:10000,maxMs:60000},window:{id:'old',endsAtMonoMs:1500,usedItems:0,usedMs:0}});
-  const {operation}=await s.begin();await s.due(1100);s.set(1500);
+  const {operation}=await s.begin();await s.due(1200);s.set(1500);
   const next=s.create({id:randomUUID(),window:{id:'next',endsAtMonoMs:61500,usedItems:0,usedMs:0}});
   s.set(1600);release(1);await operation;await flush();
   const until=s.diagnostic(first).cooldownUntil;assert.equal(until,2600);
@@ -214,8 +214,8 @@ test('cutoff recovery: pending disposal publishes cooldown across pump and windo
 
 test('cutoff recovery: branded parent deadline precedes reader entry cutoff',async t=>{
   const s=setup(t,{entryDelayMs:2}),p=s.create(),{operation}=await s.begin();
-  assert.equal(Number(BigInt(s.calls[0].operation.operationCutoffMonoNs))/1e6,1102);
-  await s.due(1100);const atDeadline=p.getStatus();await s.due(1102);await operation;
+  assert.equal(Number(BigInt(s.calls[0].operation.operationCutoffMonoNs))/1e6,2102);
+  await s.due(2100);const atDeadline=p.getStatus();await s.due(2102);await operation;
   assert.equal(atDeadline.state,'active','earlier_branded_parent_cutoff_recovers');
   assert.equal(s.diagnostic(p).outcome,1);assert.equal(p.getStatus().usedMs,100);
 });
@@ -223,10 +223,10 @@ test('cutoff recovery: branded parent deadline precedes reader entry cutoff',asy
 
 test('cutoff recovery: domain ownership survives retirement before watchdog registration',async t=>{
   const s=setup(t,{domains:2}),[a,b]=s.config.projections;s.set(900);
-  const first=s.create({pollMs:100,budgets:{maxItems:10000,maxMs:60000},projections:[a],window:{id:'old',endsAtMonoMs:1100,usedItems:0,usedMs:0}});
-  const {operation}=await s.begin();s.set(1100);
-  const other=s.create({id:randomUUID(),projections:[b],window:{id:'next',endsAtMonoMs:61100,usedItems:0,usedMs:0}});await other.close();
-  await s.due(1100);await operation;
+  const first=s.create({pollMs:100,budgets:{maxItems:10000,maxMs:60000},projections:[a],window:{id:'old',endsAtMonoMs:1200,usedItems:0,usedMs:0}});
+  const {operation}=await s.begin();s.set(1200);
+  const other=s.create({id:randomUUID(),projections:[b],window:{id:'next',endsAtMonoMs:61200,usedItems:0,usedMs:0}});await other.close();
+  await s.due(1200);await operation;
   assert.equal(s.diagnostic(first).outcome,1,'watchdog_can_confirm_disposal_after_ledger_retirement');
   const until=s.diagnostic(first).cooldownUntil;assert.equal(first.getStatus().usedMs,100);await first.close();
   s.create({id:randomUUID(),projections:[a]});const resumed=await s.begin();await resumed.operation;

@@ -1,3 +1,4 @@
+import { admitMaintenance, refreshMaintenance, attachMaintenanceAdmissionReceipt } from '../context-product-admission.mjs';
 import { testClock } from '../testing/context-product-test-clock.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,19 +15,19 @@ async function guard(promise) {
   try {return await Promise.race([promise,realDelay(15000,undefined,{signal:abort.signal}).then(()=>{throw Error('handoff hang guard');})]);}
   finally {abort.abort();}
 }
-function setup(t,{native=false,duration=6000,renewalMs=60000}={}) {
+function setup(t,{native=false,duration=7000,renewalMs=60000}={}) {
   const f=fixture(t);f.admit('resident handoff');
   const service=configured(t,f.path,[ns],{service:true});
   const token={...service.token,leaseFence:{generation:1,owner:'synthetic-service'}};
   service.binding.credentialDigest=credentialDigest(token);
   let time=0,serial=0;const timers=new Map(),opened=[],closed=[],calls=[];
   const now=()=>native?testClock.now():time,start=now();
-  const renew=createMaintenancePumpRuntime({now,setTimer:(fn,ms)=>{const id=++serial;timers.set(id,{fn,at:now()+ms});return id;},clearTimer:id=>timers.delete(id),
+  const renew=createMaintenancePumpRuntime({admit:async(h,...args)=>{if(native)return admitMaintenance(h.native,...args);const r={ok:true,value:null};attachMaintenanceAdmissionReceipt(r,'admitted');return r;},work:(h,...args)=>h.refreshContextIndex(...args),now,setTimer:(fn,ms)=>{const id=++serial;timers.set(id,{fn,at:now()+ms});return id;},clearTimer:id=>timers.delete(id),
     ...(native?{}:{observedAt:()=>now()}),
     open:async (...args)=>{
       const handle=native?await guard(openContextIndexMaintainer(...args)):{async close(){},async refreshContextIndex(){return {ok:true,value:{status:'complete',progress:{transformed:0}}};}};
       opened.push(handle);
-      return {async close(){closed.push(handle);await handle.close();},async refreshContextIndex(...call){calls.push({handle,call});return guard(handle.refreshContextIndex(...call));}};
+      return {native:handle,async close(){closed.push(handle);await handle.close();},async refreshContextIndex(...call){calls.push({handle,call});return guard(native?refreshMaintenance(handle,...call):handle.refreshContextIndex(...call));}};
     }});
   const config={supervisor:service.supervisor,id:randomUUID(),window:{id:'first',endsAtMonoMs:start+duration,usedItems:0,usedMs:0},
     budgets:{maxItems:2048,maxMs:60000},quantum:{maxItems:32,maxMs:1000},pollMs:25,renewalMs,serviceCredential:token,
@@ -39,7 +40,7 @@ function setup(t,{native=false,duration=6000,renewalMs=60000}={}) {
 
 for(const gap of [0,1,1000])test(`${gap===0?'passing control: ':''}lexical handoff within one quantum (${gap} ms) keeps resident and cadence`,async t=>{
   const s=setup(t),p=s.renew(s.config);t.after(()=>guard(p.close()));
-  for(let i=0;i<5;i++)await s.next();
+  for(let i=0;i<6;i++)await s.next();
   const first=p.completion,before=maintenancePumpDiagnostic(p.getStatus());
   await s.advance(s.config.window.endsAtMonoMs+gap);
   assert.equal(s.renew(s.successor(gap)),p);
@@ -51,20 +52,20 @@ for(const gap of [0,1,1000])test(`${gap===0?'passing control: ':''}lexical hando
   assert.equal(s.closed.length,0,'handoff must not drain');
   assert.equal(s.calls.at(-1).handle,s.opened[0]);
   const diagnostic=maintenancePumpDiagnostic(p.getStatus());
-  assert.equal(diagnostic.observation.gapMs,s.now()-4000,'history observation baseline survives');
+  assert.equal(diagnostic.observation.gapMs,s.now()-5000,'history observation baseline survives');
   assert.equal(s.calls.at(-1).call[0].intent,'history','round-robin order survives');
   assert.equal(p.getStatus().error,null,'next refresh succeeds');
   assert.equal(maintenancePumpPhaseDiagnostic(p.getStatus()).projections.reduce((n,l)=>n+l.opens,0),1);
 });
 
 for(const cause of ['long window gap','expired renewal','spent quota'])test(`passing control: lexical handoff reopens after ${cause}`,async t=>{
-  const s=setup(t,{renewalMs:cause==='expired renewal'?6000:60000}),p=s.renew(s.config);t.after(()=>guard(p.close()));
+  const s=setup(t,{renewalMs:cause==='expired renewal'?7000:60000}),p=s.renew(s.config);t.after(()=>guard(p.close()));
   await s.next();
   if(cause==='spent quota')s.renew({...s.config,window:{...s.config.window,usedItems:2048}});
   const gap=cause==='long window gap'?1001:1;
   await s.advance(s.config.window.endsAtMonoMs+gap);s.renew(s.successor(gap));await s.next();
   assert.equal(s.opened.length,2);assert.equal(s.closed.length,1);assert.equal(p.getStatus().error,null);
-  assert.equal(maintenancePumpDiagnostic(p.getStatus()).observation.gapMs,0,'new interval baseline');
+  assert.equal(maintenancePumpDiagnostic(p.getStatus()).observation,null,'new admission is no observation');
 });
 
 test('passing control: same-window renewal retains cadence and rejects an overlapping successor',async t=>{
@@ -72,7 +73,7 @@ test('passing control: same-window renewal retains cadence and rejects an overla
   assert.throws(()=>s.renew(s.successor()),{code:'invalid_input'});
   const first=p.completion;assert.equal(s.renew(s.config),p);assert.equal(p.completion,first);await s.next();
   assert.equal(s.opened.length,1);assert.equal(s.closed.length,0);
-  assert.equal(maintenancePumpDiagnostic(p.getStatus()).observation.gapMs,2000);
+  assert.equal(maintenancePumpDiagnostic(p.getStatus()).observation.gapMs,3000);
 });
 
 test('passing control: expired authority still reopens on a same-window renewal',async t=>{
@@ -85,7 +86,7 @@ test('passing control: expired authority still reopens on a same-window renewal'
 test('lexical handoff records the old cadence miss before succession and retains it',async t=>{
   const s=setup(t,{duration:10000}),p=s.renew(s.config);t.after(()=>guard(p.close()));await s.next();
   await s.advance(10500);s.renew(s.successor());
-  const before=maintenancePumpDiagnostic(p.getStatus());assert.equal(before.cadenceMisses,2);assert.equal(before.worstGapMs,10000);
+  const before=maintenancePumpDiagnostic(p.getStatus());assert.equal(before.cadenceMisses,2);assert.equal(before.worstGapMs,10500);
   await s.next();const after=maintenancePumpDiagnostic(p.getStatus());
   assert.equal(after.observation.cadenceMiss,true,'missed flag survives the handoff');
   assert.equal(after.observation.gapMs,10500);assert.equal(s.opened.length,1);

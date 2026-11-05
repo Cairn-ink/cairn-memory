@@ -1,3 +1,4 @@
+import { admitMaintenance, refreshMaintenance } from '../context-product-admission.mjs';
 import { testClock } from '../testing/context-product-test-clock.mjs';
 import test,{after} from 'node:test';
 import assert from 'node:assert/strict';
@@ -49,13 +50,14 @@ function setup(t,{stage='open',mode='normal',request=false,tail,parentGap=false,
   const readerTimers=new Set();
   const productOpen=createProductReaderRuntime({maintenance:!request,spawnWorker,setTimer(fn,ms){const id=setTimeout(()=>{readerTimers.delete(id);fn();},ms);readerTimers.add(id);return id;},clearTimer(id){readerTimers.delete(id);clearTimeout(id);}});
   const open=(...args)=>productOpen(...args).then(handle=>{handles.push(handle);return handle;},error=>{openingErrors.push(error);throw error;}),timers=new Map();let serial=0;
-  const pumpOpen=parentGap?async(...args)=>{const h=await open(...args);return {...h,refreshContextIndex(...call){void testClock.advance(2,{waitForWorkers:false});return h.refreshContextIndex(...call).then(result=>{if(injected)acceptedBetweenDeadlines=result.ok;return result;});}};}:open;
-  const renew=createMaintenancePumpRuntime({open:pumpOpen,...(qualified?{cutoffQualified:()=>true}:{}),now:testClock.now,setTimer:(fn,ms)=>{const id=++serial;timers.set(id,{fn,at:testClock.now()+ms});return id;},clearTimer:id=>timers.delete(id)});
+  const pumpOpen=parentGap?async(...args)=>{const h=await open(...args);return {...h,native:h,refreshContextIndex(...call){void testClock.advance(2,{waitForWorkers:false});return refreshMaintenance(h,...call).then(result=>{if(injected)acceptedBetweenDeadlines=result.ok;return result;});}};}:open;
+  const renew=createMaintenancePumpRuntime({admit:(h,...args)=>admitMaintenance(h.native??h,...args),work:(h,...args)=>h.native?h.refreshContextIndex(...args):refreshMaintenance(h,...args),open:pumpOpen,...(qualified?{cutoffQualified:()=>true}:{}),now:testClock.now,setTimer:(fn,ms)=>{const id=++serial;timers.set(id,{fn,at:testClock.now()+ms});return id;},clearTimer:id=>timers.delete(id)});
   const options={...s.options,host:{moduleUrl:hostUrl,configuration:{...s.options.host.configuration,disposalState,disposalMode:mode,bootstrapGate:stage==='bootstrap',callGate}}};
   const config={supervisor:s.supervisor,id:randomUUID(),window:{id:randomUUID(),endsAtMonoMs:testClock.now()+(tail==='window'?1056:60000),usedItems:0,usedMs:0},
     budgets:{maxItems:10000,maxMs:60000},quantum:{maxItems:1,maxMs:1000},pollMs:1000,renewalMs:tail==='renewal'?1056:60000,serviceCredential:s.token,projections:[{options,types:['memory']}]};
+  let admissionPassed=false;
   async function tick(){const [id,v]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];timers.delete(id);
-    await testClock.advance(Math.max(0,Math.ceil(v.at-testClock.now())),{waitForWorkers:false});const pending=v.fn();await flush();return {pending};}
+    await testClock.advance(Math.max(0,Math.ceil(v.at-testClock.now())),{waitForWorkers:false});const pending=v.fn();await flush();if(stage==='refresh'&&!admissionPassed){admissionPassed=true;await pending;return tick();}return {pending};}
   async function retries(failed,{closedOwner=false}={}){
     const before=spawned;
     for(const supervisor of closedOwner?[createContextReadSupervisor(),createContextReadSupervisor()]:[s.supervisor,createContextReadSupervisor()]){
@@ -266,7 +268,7 @@ nativeTest('failure/disposal force: opening timeout keeps its primary and counts
   await testClock.advance(1,{waitForWorkers:false});await turn.pending;const final=await p.completion;
   assert.equal(x.forced,1,'forced disposal retains the bounded grace');assert.equal(final.error,'reader_failed','failed opening disposal public precedence equals the base');
   const r=readerDiagnostic.maintenanceReaderFailureDiagnostic(x.openingErrors[0]),d=pumpDiagnostic.maintenancePumpDiagnostic(final);
-  assert.equal(r.lastFailure.engineCode,'read_timeout');assert.equal(d.lastFailure.engineCode,'read_timeout');
+  assert.equal(r.lastFailure.engineCode,'read_timeout');assert.equal(d.lastFailure.cause,'open_exceeds_quantum');
   assert.equal(r.secondaryFailureCounts.cleanup,1,'forced opening disposal records one reader cleanup secondary');
   assert.equal(r.secondaryFailure.cause,'cleanup');assert.equal(r.secondaryFailure.stage,'close');
   await x.retries(true);
@@ -279,7 +281,7 @@ nativeTest('failure/disposal opening rejection: public reader_failed keeps the p
   const x=setup(t,{mode:'reject'}),p=x.renew(x.config);x.pumps.push(p);const turn=await x.tick();await turn.pending;const final=await p.completion;
   assert.equal(final.error,'reader_failed','rejected opening disposal keeps public reader_failed');
   const r=readerDiagnostic.maintenanceReaderFailureDiagnostic(x.openingErrors[0]),d=pumpDiagnostic.maintenancePumpDiagnostic(final);
-  assert.equal(r.lastFailure.engineCode,'read_timeout');assert.equal(d.lastFailure.engineCode,'read_timeout');
+  assert.equal(r.lastFailure.engineCode,'read_timeout');assert.equal(d.lastFailure.cause,'open_exceeds_quantum');
   assert.equal(r.secondaryFailureCounts.exception,1,'rejected_close_records_exception_once');
   assert.equal(x.closeFrames[0].maintenanceFailure.kind,'exception');assert.equal(x.closeFrames[0].maintenanceFailure.errorName,'Error');
   assert.equal(r.secondaryFailure.stage,'close');
@@ -298,7 +300,7 @@ nativeTest('failure/disposal error then exit: timeout remains primary and exit i
   await turn.pending;const final=await p.completion;
   assert.equal(final.error,'reader_failed');
   const r=readerDiagnostic.maintenanceReaderFailureDiagnostic(x.openingErrors[0]),d=pumpDiagnostic.maintenancePumpDiagnostic(final);
-  assert.equal(r.lastFailure.engineCode,'read_timeout');assert.equal(d.lastFailure.engineCode,'read_timeout');
+  assert.equal(r.lastFailure.engineCode,'read_timeout');assert.equal(d.lastFailure.cause,'open_exceeds_quantum');
   assert.equal(r.secondaryFailureCounts.worker_exit,1,'disposal error then exit retains one reader exit secondary');
   assert.equal(d.secondaryFailureCounts.worker_exit,1,'disposal error then exit retains one pump exit secondary');
   assert.equal(r.secondaryFailureCounts.worker_error,1);assert.equal(r.secondaryFailureCounts.cleanup,1);

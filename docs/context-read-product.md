@@ -463,6 +463,29 @@ discarded only for native SQLite primary codes IOERR, CORRUPT, FULL or NOTADB
 discarding only for `storage_unavailable` when no native error code is present.
 Reuse does not retain a read snapshot between operations.
 
+
+**Amendment v2: lexical maintenance admission quanta (2026-11).** This
+amendment applies only to the pump without `semanticConfig`. When a selected
+resident or its writable sidecar connection needs fresh admission, one fully
+reserved turn performs any required disposal, resident opening and an explicitly
+authorized writable sidecar admission, including identity, companions, journal,
+metadata, attestation, `quick_check` and `foreign_key_check`. A private dispatch
+uses the existing service refresh authority; public refresh with `maxItems:0`
+is not an admission protocol. The turn performs no refresh, corpus scan,
+transformation, verification, publication or reclamation. Construction of a
+standalone maintainer remains lazy, and its public refresh behavior is unchanged.
+Admission certifies nothing and supplies no epoch observation. It releases its
+transactions and lifecycle snapshot before returning, retaining the native handle.
+
+A later fully reserved work turn reauthenticates the current grant and refreshes
+on that admitted connection. The selected lane remains pending until work
+actually dispatches; an admission-required yield retains the same lane too.
+Identity, companion, journal, metadata and attestation checks on reuse remain
+required. Lost, discarded, repaired or upgraded connections require an admission
+turn before fresh writable opening: ordinary pump work yields before a hidden
+writable admission, including a fallback after a caught writable failure.
+The existing failure-mode disposal rule above is unchanged.
+
 A successful `rebuilding` or `partial` response is durable progress: schedule
 another explicit quantum with the same service binding and projection. Stop
 the initial prebuild loop only at `complete` for each intent. Time admission
@@ -642,6 +665,35 @@ for disposal, opening, Worker dispatch and the actual epoch observation.
 A nominal five-second admission sweep alone cannot guarantee five-second reads.
 Freeze these settings before qualification.
 
+
+**Amendment v2: cold admission and observation duty.** The warm bound remains
+`N*S+Q<=5000`, where `Q=quantum.maxMs`. Cold admission additionally requires
+`(N+C)*S+Q<=5000`. `C` is the maximum number of fresh resident admissions in
+any rotation of a complete observation sweep, starting with an empty resident
+cache. Simulate the existing writer cache by physical selection and constructor
+identity: each cache miss consumes one admission slot before that lane's work.
+Compatible intents share a resident. One selection has `N=2,C=1`; two independent
+residents have `N=4,C=2`; two incompatible constructor identities replacing one
+writer can require `C=3` in a rotated sweep. Do not assume `C=1` globally.
+The host registers one pump per owner with one projection (`types:["memory"]`).
+That one selection expands to current and history lanes sharing one resident:
+`N=2,C=1`. With `pollMs=25`, one selection per pump at Q=1,000 remains accepted:
+`(2+1)*1000+1000=4000`, leaving a 1,000 ms margin. For one selection,
+Q≤1,250 is accepted; Q=1,251, 1,500 and 1,600 refuse `invalid_input`.
+Several selections in one pump are refused at Q=1,000. For example, two
+independent residents (`N=4,C=2`) with `pollMs=25` accept only Q≤714:
+Q=714 is accepted and Q=715 or 1,000 is refused. The full newly refused class is
+`N*S+Q<=5000 && (N+C)*S+Q>5000`.
+This supersedes the preceding same-turn opening-headroom description.
+
+Deadline lookahead includes actual non-observing admission slots and preserves
+minimum start spacing. Admission completion runs cadence accounting, retaining
+observation timestamps and missed flags. It never resets duty or clears a miss.
+Continuous window handoff retains admitted handles and deadlines. An opening
+failure earns no observation; actual missed duties remain visible. The extra
+slot commonly delays first work by one spacing interval, with no commit-to-ready
+latency guarantee at window or authority boundaries.
+
 Dispatches are paced using the configured minute allowance and full quantum
 sizes, with `S` as the minimum admission spacing. Each projection's next read
 is due no later than 5,000 ms after its last actual epoch observation. The
@@ -753,6 +805,19 @@ A counter sampled concurrently with a transition can include the next admitted
 unit. Marker timestamps have microsecond resolution. Request readers allocate
 no marker and send no additional transport.
 
+
+**Amendment v2: private admission diagnostics.** Lane phase counters append
+`admission`; `open` measures resident opening and `refreshCall` measures work
+turns. First/latest quantum samples include `turn:'admission'|'work'`, their
+own quantum number and dispatch/opening ordinals. Admission turns record no
+`refreshCall` or `epochObservation` sample. The stall vocabulary appends
+`admission=12`, and the closed failure vocabulary appends
+`open_exceeds_quantum`; existing numeric values remain unchanged. Admission
+is distinct from incremental work and COMMIT; failure stages also admit
+`admission`. Older private consumers may
+treat unknown kinds as unavailable. Dispatch, RPC, delivery and settlement
+intervals overlap and must not be added as an elapsed breakdown.
+
 Maintenance failures also have private latest-value diagnostics. Log
 `maintenanceFailureDiagnostic(resultOrOpeningError)` and
 `maintenanceReaderFailureDiagnostic(handleOrOpeningError)`, plus
@@ -849,6 +914,39 @@ pump completion `read_timeout`, permitting ordinary authorized reopening after d
 instead of the `reader_failed` caused by failed disposal, including failed opening
 drains that returned no handle. Request calls retain their existing error DTO and terminal handle semantics. No public shapes or exports change.
 
+
+**Amendment v2: bounded admission failure.** An opening or writable admission
+that cannot settle inside its original reserved cutoff is classified privately
+as `open_exceeds_quantum`, with no observation or refund. The attempt terminates
+with the existing `read_timeout` mapping and drains under the disposal bound
+and proof rules above. Failed proof takes `reader_failed` precedence and retains
+quarantine. No replacement is admitted before confirmed disposal. This grants
+no work-cutoff recovery authority; the qualified-patch gate remains empty.
+
+After confirmed disposal, ordinary authorized renewal may attempt admission
+again, subject to a process-memory gate per physical sidecar and capacity/cache
+epoch: an initial attempt has at most two automatic retries, waiting 5,000 ms
+and then 30,000 ms after confirmed disposal. Exhaustion holds admission until
+Q, the physical cache identity or its file length changes; row updates alone
+do not recharge the allowance. Physical identity includes file birth identity
+so recycled inodes do not inherit a removed cache’s hold. Owner, selection, pump ID, renewal and window
+replacement cannot recharge it. Unproven disposal cannot be cleared by a
+capacity change. Fresh admissions serialize per physical sidecar through settled completion.
+State has fixed cells with 1,024-location and 1,024-capacity-record caps; held or quarantined
+entries are never evicted to make room. Distinct Q values keep separate retry
+counters while sharing physical admission ownership and quarantine; inspecting
+another capacity never recharges a previously held capacity. No sidecar DDL, format 3, `user_version`
+or other on-disk state changes. Existing sidecars continue to open unchanged.
+
+`maintenancePumpDiagnostic(status).admission` exposes a bounded per-lane private
+snapshot with `{cause:'open_exceeds_quantum',attempts,state,retryAtMonoMs}`;
+`state` is `disposing`, `backoff`, `held` or `quarantined`, and a lane with no
+failure has null. Thus a held owner is visible to product logging and monitoring
+without a new public code or DTO field. The gate survives pump replacement in
+the same process. Process replacement loses this memory; a host must preserve
+its conservative admission hold with its own ledger rather than recharge retries
+through process restarts.
+
 A genuine quantum cutoff reports `failed` with `read_timeout`, stops scheduling
 and drains. Missing or invalid internal observation timing reports
 `reader_failed`; authority, storage, corruption and lifecycle failures also
@@ -897,6 +995,20 @@ reservation. Host-supplied cumulative usage remains a conservative floor, even
 if renewal occurs during dispatch; neither renewal nor restart erases charges.
 Persist the full outstanding reservation before process replacement whenever
 settlement is uncertain. Counters never refund unknown work.
+
+
+**Amendment v2: zero-work settlement.** Lexical admission reserves the full
+ordinary item/time quantum before any drain or open; insufficient quota or a
+short authority/window tail cannot authorize a partial turn. Its private
+zero-work receipt expects no observation and is not a refresh result. Only a
+fully settled successful admission refunds all reserved items and unused
+milliseconds to the original ledger, preserving old and renewed host floors.
+Charge `ceil(disposal+open+admission+delivery+pump settlement)` milliseconds
+from the common start/cutoff, never by summing overlapping diagnostic intervals.
+Failure, interruption or uncertain settlement retains the full reservation.
+The admission RPC receives only the remaining original cutoff; the following
+work turn reserves its own full quantum. No fresh Q starts inside an admission
+turn. The semantic-pump contract below is outside this lexical amendment.
 
 A pump with `semanticConfig`, including `modes:['lexical']`, applies the same
 five-second canonical selection/intent observation duty to lexical refreshes. Its private
@@ -1292,7 +1404,8 @@ count, `T` is the initial target-descriptor count, and
 unchanged. The initial last lexical slot precedes validation; startup slots
 retire as they complete, leaving observation headroom for the full lexical
 quantum. A pump without `semanticConfig` instead requires `N*S + Q ≤ 5000`, with
-`S = max(pollMs,Q)` and `Q = quantum.maxMs`.
+`S = max(pollMs,Q)` and `Q = quantum.maxMs`; Amendment v2 additionally
+requires `(N+C)*S+Q<=5000` for its non-observing cold admission slots.
 
 For one selection with both intents and both modes, `N=4`, `T=1`: seven slots
 allow `S=714` ms (`7 × 714 = 4998`); the next integer, 715 ms, is refused

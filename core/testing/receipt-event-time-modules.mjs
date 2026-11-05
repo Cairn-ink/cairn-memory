@@ -14,11 +14,14 @@ const frozenExceptions = JSON.parse(readFileSync(new URL('../test/fixtures/recei
 // Preserve PR 1's frozen fixture. Main 8cdb5e49 adds Worker failure disposal
 // after index.run and in its catch; neither hunk changes a loader or feature
 // consumer. Pin the complete merged source, retaining the original pin too.
+// This package's three hunks extend the maintenance method allowlist and
+// deadline handling and pass a private admission diagnostic through. They
+// change no loader or feature consumer.
 const exceptions = frozenExceptions.map(entry => {
   if (entry.file !== 'core/context-product-worker.mjs') return entry;
   assert.equal(entry.sha256, '073071759a46698824ffd029a5fe48fbd737513c5c6936ba826b5d413be32bbe',
     'frozen pre-rebase Worker loader pin');
-  return { ...entry, sha256: '9979ea34f26df9d4f905cbed4cb87f8b0e005df0b7e7cecfac56f9c3139126b0' };
+  return { ...entry, sha256: '14844bf1e4c8a61a1812451f27cc92c6aed37216306e780408e5dfa5db8afdc1' };
 });
 export const moduleLoadingExceptions = exceptions;
 const cache = new Map();
