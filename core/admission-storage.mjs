@@ -1,5 +1,5 @@
 import { ADMISSION_LEASE_MS } from './episode-schema.mjs';
-import { captureSourceBusy, isPreDispatchToken, preDispatchToken } from './capture-source-safety.mjs';
+import { captureSourceBusy, isPreDispatchToken, postDispatchToken, preDispatchToken } from './capture-source-safety.mjs';
 import { inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety } from './content-safety.mjs';
@@ -164,7 +164,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
       const leaseExpiresAt = now + ADMISSION_LEASE_MS;
       const closed = guard('finishGuard', ns, input, { ...row, lease_expires_at: leaseExpiresAt }, now);
       if (closed) fail(closed);
-      const token = randomUUID();
+      const token = postDispatchToken(input.token);
       db.prepare(`UPDATE admission_claims SET token=?,lease_expires_at=? WHERE ${where}`)
         .run(token, leaseExpiresAt, ...key(ns, input));
       return { token };

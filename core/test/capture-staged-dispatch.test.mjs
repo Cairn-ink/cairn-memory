@@ -189,6 +189,85 @@ if (process.argv[2] === 'crash-child') {
       assert.deepEqual(await core.capture(submitted),{ok:false,error:{code:'capture_evidence_closed',retryable:false}});
       assert.equal(calls,1);
     });
+    test(`control: dispatch token ownership v${layout} ${journal}`,async t=>{
+      const {f,writer}=await fixture(t,layout,journal);let calls=0,checked=false;
+      const core=createMemoryCore({...config(f.path),model:port(()=>calls++)},{createRuntime(value){
+        const runtime=createMemoryRuntime(value);
+        return {...runtime,assertCaptureEvidence(...args){
+          if(!checked&&Object.getOwnPropertySymbols(args[1]).length) {
+            checked=true;const [namespace,input]=args;
+            const before=writer.prepare('SELECT * FROM admission_claims').get();
+            assert.match(input.token,/^source-check:/);
+            assert.equal(before.token,input.token);
+            for(const changed of [{token:input.token.slice(0,-1)+(input.token.endsWith('0')?'1':'0')},{payloadDigest:input.payloadDigest+'0'}]) {
+              assert.throws(()=>runtime.assertCaptureEvidence(namespace,{...input,...changed}),{code:'stale_admission'});
+              assert.deepEqual(writer.prepare('SELECT * FROM admission_claims').get(),before);
+            }
+            const dispatched=runtime.assertCaptureEvidence(...args);
+            assert.equal(dispatched.token,input.token.slice('source-check:'.length),'restore the claim UUID without another draw');
+            assert.equal(writer.prepare('SELECT token FROM admission_claims').get().token,dispatched.token);
+            return dispatched;
+          }
+          return runtime.assertCaptureEvidence(...args);
+        }};
+      }});t.after(()=>core.close());
+      assertAdmitted(writer,await core.capture(submitted),()=>calls);assert.equal(checked,true);
+    });
+    test(`control: stale pre-dispatch holder cannot dispatch or abandon v${layout} ${journal}`,async t=>{
+      const {f,writer}=await fixture(t,layout,journal);let calls=0,checked=false;
+      const core=createMemoryCore({...config(f.path),model:port(()=>calls++)},{createRuntime(value){
+        const runtime=createMemoryRuntime(value);
+        return {...runtime,assertCaptureEvidence(...args){
+          if(!checked&&Object.getOwnPropertySymbols(args[1]).length) {
+            checked=true;const [namespace,input]=args;
+            const dispatched=runtime.assertCaptureEvidence(...args);
+            const after=writer.prepare('SELECT * FROM admission_claims').get();
+            const evidence=writer.prepare('SELECT * FROM staged_capture_evidence').get();
+            assert.equal(after.token,input.token.slice('source-check:'.length));
+            assert.throws(()=>runtime.assertCaptureEvidence(...args),{code:'stale_admission'});
+            for(const retryable of [false,true]) {
+              assert.deepEqual(runtime.abandonAdmission(namespace,{...input,retryable}),{abandoned:false});
+            }
+            assert.deepEqual(writer.prepare('SELECT * FROM admission_claims').get(),after);
+            assert.deepEqual(writer.prepare('SELECT * FROM staged_capture_evidence').get(),evidence);
+            return dispatched;
+          }
+          return runtime.assertCaptureEvidence(...args);
+        }};
+      }});t.after(()=>core.close());
+      assertAdmitted(writer,await core.capture(submitted),()=>calls);assert.equal(checked,true);
+    });
+    for(const recovery of ['lease-expiry','abandonment']) test(`control: old owner cannot take over ${recovery} v${layout} ${journal}`,async t=>{
+      const {f,writer}=await fixture(t,layout,journal);let calls=0,checked=false,claimArgs,successor;
+      const core=createMemoryCore({...config(f.path),model:port(()=>calls++)},{createRuntime(value){
+        const runtime=createMemoryRuntime(value);
+        return {...runtime,claimCaptureEvidence(...args){claimArgs=args;return runtime.claimCaptureEvidence(...args);},
+          assertCaptureEvidence(...args){
+            if(!checked&&Object.getOwnPropertySymbols(args[1]).length) {
+              checked=true;const [namespace,input]=args;
+              assert.match(input.token,/^source-check:/);
+              if(recovery==='lease-expiry')writer.exec('UPDATE admission_claims SET lease_expires_at=0');
+              else assert.deepEqual(runtime.abandonAdmission(namespace,{...input,retryable:true}),{abandoned:true});
+              successor=runtime.claimCaptureEvidence(namespace,claimArgs[1],undefined,undefined,claimArgs[4]);
+              assert.match(successor.token,/^source-check:/);
+              assert.notEqual(successor.token,input.token,'reclaim draws a new UUID');
+              assert.notEqual(successor.token.slice('source-check:'.length),input.token.slice('source-check:'.length));
+              const before=writer.prepare('SELECT * FROM admission_claims').get();
+              assert.equal(before.token,successor.token);
+              assert.throws(()=>runtime.assertCaptureEvidence(...args),{code:'stale_admission'});
+              for(const token of [input.token,input.token.slice('source-check:'.length)]) {
+                for(const retryable of [false,true])assert.deepEqual(runtime.abandonAdmission(namespace,{...input,token,retryable}),{abandoned:false});
+              }
+              assert.deepEqual(writer.prepare('SELECT * FROM admission_claims').get(),before);
+            }
+            return runtime.assertCaptureEvidence(...args);
+          }};
+      }});t.after(()=>core.close());
+      assert.deepEqual(await core.capture(submitted),{ok:false,error:{code:'stale_admission',retryable:false}});
+      assert.equal(checked,true);assert.equal(calls,0);
+      assert.equal(writer.prepare('SELECT token FROM admission_claims').get().token,successor.token,'old-owner cleanup preserves successor');
+      assertAdmitted(writer,await core.capture(submitted),()=>calls);
+    });
     test(`control: concurrent pre-dispatch owners extract once v${layout} ${journal}`,async t=>{
       const {f,writer}=await fixture(t,layout,journal);let calls=0;
       const a=createMemoryCore({...config(f.path),model:port(()=>calls++)});

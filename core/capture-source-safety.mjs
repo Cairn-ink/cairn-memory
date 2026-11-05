@@ -13,6 +13,7 @@ export const isCaptureSourceBusy = error => sourceBusy.has(error);
 // Private durable phase in an existing opaque token, not a new claim state.
 // Old/unmarked tokens always retain conservative dispatch uncertainty.
 export const preDispatchToken = token => `source-check:${token}`;
+export const postDispatchToken = token => token.slice('source-check:'.length);
 export const isPreDispatchToken = token => typeof token === 'string' &&
   /^source-check:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(token);
 

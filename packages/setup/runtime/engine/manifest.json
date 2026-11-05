@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "14778e2863f7d87b65c0bce4facf722eccf215aaef547307f746a5f2777244e5",
-  "bytes": 1160457,
+  "sha256": "cc3991a74838e288860521ff9b013c4b15623d7aa58ed5bb8450aab945f42500",
+  "bytes": 1160477,
   "files": [
     "LICENSE",
     "README.md",
@@ -372,7 +372,7 @@
     "core/content-write-context.mjs": "4ed7ed25ebfd6e2a4783cd4918aadd3a8d2d4b4a5b568a5385a042a6af420273",
     "core/content-write-changes.mjs": "876f6fa7bc67c69031ef8ccc645eab9b321713803b77f9203ac30ca783e88caa",
     "core/content-write-safety.mjs": "2bf3f6f858f139d48b6c1c4655c163f6c87c3d3b8214528c9f8fadb3b62bf1da",
-    "core/admission-storage.mjs": "98fd7f6e69eb5e050a4a7e5b9038e7f0b958fade35f77a17a2d09c597b3b555f",
+    "core/admission-storage.mjs": "d3deb28680351aa826c938e426b9216c4b1a88acb1dd64a85cb7363579a184ad",
     "core/local-authority-input.mjs": "bfce603a1081956e8d4dd790d09e8e394c0b06b20cca987980217d2e4d85a988",
     "core/local-authority-schema.mjs": "ab0a8f7fe89ce3dd50c8c920e65e78c6da57ba33b3335d89d3e223a606940c9c",
     "core/local-authority-storage.mjs": "5a6881627a3f39732af94e6c4c53b3e4e52f82ff7d8d0d2de074b3caae99e6c0",
@@ -421,7 +421,7 @@
     "core/automatic-qualification.mjs": "3ed18350615d7215e499a07e2896dd3feeea6f6b80a0e0bb3491031ae087d192",
     "core/automatic-rationale.mjs": "a77e226392454e8e4caf5f23a04914a9d08f8299fcea76da9a79b47ed3cb4653",
     "core/capture-input.mjs": "f39976d5497c05dc235bdc18d790a5dd2d705244b5090c01cc9bca89c294aa8d",
-    "core/capture-source-safety.mjs": "65ee15fc052ac8ee51d5cd2a9f496877b34fed74d5704da0331f6e0fdeabfb3f",
+    "core/capture-source-safety.mjs": "0231fb212ab609715c85f3b61bbc83d1b4e7b6a77707627bda124e881a9fc7d8",
     "core/capture.mjs": "ce5f45b4ff0901d26bbab23cf5347861635bd47ea2b085bc16451c219c5b6897",
     "core/source-windows.mjs": "18c445917963f2db7fde0f4e529f8764323658d10490113dee6cdd6ba15c4b39",
     "core/capture-deadline.mjs": "bfbe34a71708c1e7de3833b03cdee4dc2d4f6015bf0f9177c2dcbdbb5a7d7ca1",
