@@ -22,6 +22,20 @@ const memoryFacts=['zero','forgotten','receipt','correction','owner','namespace'
 const precisions=['exact','whole-message'];
 // Isolate eligibility without a suppression or Raw-origin refusal masking it.
 const eligibilities=['current','superseded','awaiting','deleted'];
+// [ancestry start,end, fact start,end]; all offsets are UTF-16 boundaries in
+// the same captured message/incarnation. Keep the captured-span cases intact.
+const spanBoundaries={
+ 'one-unit-identical':[0,1,0,1],
+ 'adjacent-left':[2,5,0,2],
+ 'adjacent-right':[2,5,5,7],
+ 'overlap-left':[2,5,0,3],
+ 'overlap-right':[2,5,4,7],
+ 'fact-contained':[2,7,4,5],
+ 'ancestry-contained':[4,5,2,7],
+ 'multi-unit-identical':[2,5,2,5],
+ 'disjoint-left':[3,6,0,2],
+ 'disjoint-right':[2,5,6,8],
+};
 // Fixture order, subset order and duplicate positions are deterministic. UUIDs
 // are supplied by public writers; no generated decision is sampled or skipped.
 function random(seed){return ()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/2**32;};}
@@ -33,12 +47,13 @@ for(const family of costGateFamilies())for(const base of [18,23,33])test(`Memory
  t.after(()=>{raw?.close();core.close();db.close();});
  let fixtures=0,cases=0,candidates=0,allowedCount=0,deniedCount=0,actualAllowedCount=0;
  const mismatches=[],equivalenceMismatches=[];
+ const boundaryCoverage={};
  let measuring=false,statementCount=0,sqlReported=false;const prepare=db.prepare;
  db.prepare=function(sql){if(measuring){statementCount++;if(!sqlReported&&sql.startsWith('WITH candidates')){t.diagnostic('BATCH_SQL '+JSON.stringify({base,sql}));sqlReported=true;}}return prepare.call(this,sql);};
  const exec=db.exec;db.exec=function(sql){assert.equal(measuring,false,'batch never executes transaction control');return exec.call(this,sql);};
  const ancestryValues=base===33?ancestries:['none'],stateValues=base===33?states:['live'],precisionValues=base===33?precisions:['exact'];
  for(const seed of seeds){const rng=random(seed);
-  for(const ancestry of ancestryValues)for(const state of stateValues)for(const precision of precisionValues)for(const fact of memoryFacts)for(const eligibility of fact==='zero'&&ancestry==='none'&&state==='live'&&precision==='exact'?eligibilities:['current']){
+  for(const ancestry of ancestryValues)for(const state of stateValues)for(const precision of precisionValues)for(const fact of memoryFacts)for(const eligibility of fact==='zero'&&ancestry==='none'&&state==='live'&&precision==='exact'?eligibilities:['current'])for(const spanBoundary of ancestry==='in-scope'&&state==='overlap'&&fact==='zero'?['captured',...Object.keys(spanBoundaries)]:['captured']){
    const serial=fixtures++,a={...ns,ownerId:'synthetic-batch-'+base+'-'+serial,projectId:'selected'},b={...a,projectId:'second'},foreign={...a,ownerId:a.ownerId+'-foreign',projectId:'foreign'};
    const admit=(namespace,label)=>ok(core.admit({namespace,memory:{content:'Synthetic '+label+' '+serial,kind:'fact'},receipts:[receipt('batch-'+serial+'-'+label)]})).memory;
    const m=admit(a,'subject'),neighbor=admit(a,'neighbor'),second=admit(b,'second'),other=admit(foreign,'foreign');
@@ -76,6 +91,7 @@ for(const family of costGateFamilies())for(const base of [18,23,33])test(`Memory
     // foreign/mixed ancestry which canonical S1 must nevertheless refuse.
     const source=db.prepare('SELECT * FROM raw_receipt_lineage WHERE conversation_id=? LIMIT 1').get(captured.raw.conversationId);
     assert.ok(source,'public Raw capture creates lineage');
+    if(spanBoundary!=='captured')assert.ok(Math.max(...spanBoundaries[spanBoundary])<=source.end,'boundary intervals fit the captured UTF-16 source');
     // Delete authentic sources before installing impossible ancestry. A
     // deleted source has no live header: the deliberately dangling edge tests
     // S1's missing-origin refusal. Only this fixture connection disables FKs,
@@ -87,14 +103,14 @@ for(const family of costGateFamilies())for(const base of [18,23,33])test(`Memory
     }
     try{transaction(db,()=>{
      const rid=db.prepare('SELECT id FROM receipts WHERE memory_id=?').get(m.id)?.id;
-     if(rid)db.prepare('INSERT INTO raw_receipt_lineage VALUES(?,?,?,?,?,?)').run(rid,source.conversation_id,source.message_id,source.start,source.end,precision);
+     if(rid)db.prepare('INSERT INTO raw_receipt_lineage VALUES(?,?,?,?,?,?)').run(rid,source.conversation_id,source.message_id,spanBoundaries[spanBoundary]?.[0]??source.start,spanBoundaries[spanBoundary]?.[1]??source.end,precision);
      if(rid&&ancestry==='mixed'){
       const foreignRoot='synthetic-mixed-'+serial;
       db.prepare('INSERT INTO raw_conversations VALUES(?,?,?,?,?,?,1,?,?)').run(foreignRoot,foreign.ownerId,foreign.scope,foreign.projectId,'codex','mixed-'+serial,'time','time');
       db.prepare('INSERT INTO raw_receipt_lineage VALUES(?,?,?,?,?,?)').run(rid,foreignRoot,source.message_id,0,1,precision);
      }
      if(['conversation','overlap','disjoint','whole-message'].includes(state))writeContentSuppressionInside(db,{namespace:sourceNS,kind:'raw',key:source.conversation_id,
-      ...(state==='conversation'?{}:{matchMode:'span',messageId:source.message_id,start:state==='disjoint'?source.end+1:0,end:state==='disjoint'?source.end+2:state==='whole-message'?10000:1}),reason:'privacy_erase',actionId:'raw-'+serial});
+      ...(state==='conversation'?{}:{matchMode:'span',messageId:source.message_id,start:spanBoundaries[spanBoundary]?.[2]??(state==='disjoint'?source.end+1:0),end:spanBoundaries[spanBoundary]?.[3]??(state==='disjoint'?source.end+2:state==='whole-message'?10000:1)}),reason:'privacy_erase',actionId:'raw-'+serial});
     });}finally{if(state==='forgotten')db.exec('PRAGMA foreign_keys=ON');}
    }
    if(!['zero','forgotten','correction'].includes(fact))transaction(db,()=>writeContentSuppressionInside(db,{namespace:fact==='owner'?{ownerId:a.ownerId,scope:'owner',projectId:''}:a,
@@ -105,12 +121,15 @@ for(const family of costGateFamilies())for(const base of [18,23,33])test(`Memory
    // terms in nontrivial orders, then validate the entire retained order.
    if(fact==='correction')refs.push({...ref(m,a),revision:db.prepare('SELECT revision FROM memories WHERE id=?').get(m.id).revision});
    const variants=new Map(refs.map((r,i)=>[r,['target','neighbour','second','foreign','wrong-revision','missing','correction'][i]]));
-   const shuffled=[...refs];for(let i=shuffled.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];}
+   // Extra boundary fixtures must not advance the legacy permutation stream.
+   const shuffleRng=spanBoundary==='captured'?rng:random(seed+Object.keys(spanBoundaries).indexOf(spanBoundary));
+   const shuffled=[...refs];for(let i=shuffled.length-1;i>0;i--){const j=Math.floor(shuffleRng()*(i+1));[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];}
    shuffled.push(shuffled[0],shuffled[1]);
    for(const readSet of [[a],[a,b],[a,b,foreign]])for(const intent of ['current','history']){
+    if(spanBoundary!=='captured'){const key=spanBoundary+'/'+intent;boundaryCoverage[key]=(boundaryCoverage[key]??0)+1;}
     const p={readSet,intent},identity={};
     withContentSuppressionRequest(()=>readTransaction(db,()=>withContentSuppressionReadInside(db,readSet,()=>{
-     const expected=shuffled.map(r=>expectedCandidateDecision({ancestry,state,precision,fact,eligibility,variant:variants.get(r),intent}));
+     const expected=shuffled.map(r=>expectedCandidateDecision({ancestry,state,precision,fact,eligibility,spanBoundary,variant:variants.get(r),intent}));
      // Old-path equivalence is a distinct control, never the safety expectation.
      const oldPath=shuffled.map(r=>candidateAllowedReference(db,identity,r,p));
      for(const indices of [[],[0],shuffled.map((_,i)=>i),expected.flatMap((yes,i)=>yes?[i]:[]),expected.flatMap((yes,i)=>yes?[]:[i]),Array.from({length:24},(_,i)=>i%shuffled.length)]){
@@ -119,7 +138,7 @@ for(const family of costGateFamilies())for(const base of [18,23,33])test(`Memory
       const actual=sidecar.memoryCandidatesAllowedInside(db,input,p,identity);
       measuring=false;
       assert.equal(statementCount,input.length?1:0,'one statement for every nonempty batch, including 24 candidates');
-      const label=JSON.stringify({base,seed,ancestry,state,precision,fact,eligibility,readSet:readSet.length,intent,case:cases});
+      const label=JSON.stringify({base,seed,ancestry,state,precision,fact,eligibility,spanBoundary,readSet:readSet.length,intent,case:cases});
       if(JSON.stringify(actual)!==JSON.stringify(reference)) {
        const mismatch={label,actual,reference};mismatches.push(mismatch);
        t.diagnostic('INDEPENDENT_MISMATCH '+JSON.stringify(mismatch));
@@ -134,6 +153,7 @@ for(const family of costGateFamilies())for(const base of [18,23,33])test(`Memory
    }
   }
  }
+ t.diagnostic('SPAN_BOUNDARY_COVERAGE '+JSON.stringify({family,base,physical:costFamilyPhysical(base,family),counts:boundaryCoverage}));
  t.diagnostic('BATCH_DIFFERENTIAL '+JSON.stringify({node:process.version,family,base,physical:costFamilyPhysical(base,family),seeds,fixtures,cases,candidates,allowed:allowedCount,denied:deniedCount,actualAllowed:actualAllowedCount,actualDenied:candidates-actualAllowedCount,oracle:'fixture-labels',mismatchCases:mismatches.length,equivalenceMismatchCases:equivalenceMismatches.length}));
  assert.ok(cases&&allowedCount&&deniedCount);
  await t.test('independent expected-by-construction safety decisions',()=>assert.equal(mismatches.length,0,JSON.stringify({count:mismatches.length,first:mismatches.slice(0,3)})));
@@ -143,6 +163,8 @@ for(const family of costGateFamilies())for(const base of [18,23,33])test(`Memory
 // Traverse literal static imports/re-exports. Every non-builtin dependency is
 // rejected: an indirect production decision import is just as unsafe as a direct
 // one. Reject runtime imports/loaders too, so an uninspectable edge fails closed.
+// Scope: catches accidental static/dynamic production decision imports; it does
+// not defend against deliberately obfuscated code-loading capabilities.
 const oracleURL=new URL('../testing/content-safety-s2h-candidate-oracle.mjs',import.meta.url);
 function oracleImportGraph(root, overrides=new Map()) {
  const visited=new Set(),edges=[];
