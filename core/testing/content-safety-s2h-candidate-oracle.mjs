@@ -1,5 +1,5 @@
 // Expected by construction, for the synthetic Memory fixtures in the batch test.
-// No production imports, stored-row matcher, serving memo or eligibility helper.
+// No production dependencies, stored-row matcher, serving memo or eligibility helper.
 // Spec paths below are relative to docs/plans/; line numbers name frozen rules.
 // b3s-safety-layout.md:339-342: applicable facts deny in the canonical snapshot,
 // including pending or failed cleanup; the remaining citations define matches.
@@ -10,17 +10,22 @@ const choices = {
   fact: ['zero','forgotten','receipt','correction','owner','namespace','disjoint','version'],
   variant: ['target','neighbour','second','foreign','wrong-revision','missing','correction'],
   intent: ['current','history'],
+  eligibility: ['current','superseded','awaiting','deleted'],
 };
 export function expectedCandidateDecision(labels) {
   for (const [key, values] of Object.entries(choices)) {
     if (!values.includes(labels[key])) throw new Error('Unspecified oracle dimension: '+key+'='+labels[key]);
   }
-  const {ancestry,state,fact,variant} = labels;
+  const {ancestry,state,fact,variant,eligibility,intent} = labels;
   // incremental-catchup.md:237-245: existence and exact revision on both intents.
   if (variant === 'missing' || variant === 'wrong-revision') return false;
-  // All admitted fixture bodies are current and non-awaiting. No read-set ACL
-  // is inferred here: each candidate supplies its own namespace to S1. Selection
-  // authorization belongs to the caller (incremental-catchup.md:237,264-272).
+  // incremental-catchup.md:237-258: existence/deletion applies to both intents;
+  // supersession alone excludes current, retaining intact history (:251-258).
+  // context-read-product.md:2086: awaiting excludes current, permits history.
+  // Eligibility labels describe the subject only; other admitted refs stay current.
+  if (['target','correction'].includes(variant) && (eligibility === 'deleted' ||
+      intent === 'current' && ['superseded','awaiting'].includes(eligibility))) return false;
+  // Caller authorization is separate from candidate namespace (:237,264-272).
   // b3s-safety-layout.md:415-417: every identity within an owner/namespace fact.
   if (fact === 'owner' && variant !== 'foreign') return false;
   if (fact === 'namespace' && ['target','neighbour','correction'].includes(variant)) return false;

@@ -2,6 +2,7 @@ import { costFamilyFixture, costFamilyPhysical, costGateFamilies } from '../test
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as sidecar from '../context-product-sidecar.mjs';
+import { memoryReadEligible } from '../content-safety.mjs';
 import { expectedCandidateDecision } from '../testing/content-safety-s2h-candidate-oracle.mjs';
 import { candidateAllowedReference } from '../testing/content-safety-s2h-candidate-equivalence.mjs';
 import { readFileSync } from 'node:fs';
@@ -19,6 +20,8 @@ const ancestries=['none','in-scope','foreign-owner','foreign-namespace','mixed']
 const states=['live','forgotten','conversation','overlap','disjoint','whole-message'];
 const memoryFacts=['zero','forgotten','receipt','correction','owner','namespace','disjoint','version'];
 const precisions=['exact','whole-message'];
+// Isolate eligibility without a suppression or Raw-origin refusal masking it.
+const eligibilities=['current','superseded','awaiting','deleted'];
 // Fixture order, subset order and duplicate positions are deterministic. UUIDs
 // are supplied by public writers; no generated decision is sampled or skipped.
 function random(seed){return ()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/2**32;};}
@@ -35,7 +38,7 @@ for(const family of costGateFamilies())for(const base of [18,23,33])test(`Memory
  const exec=db.exec;db.exec=function(sql){assert.equal(measuring,false,'batch never executes transaction control');return exec.call(this,sql);};
  const ancestryValues=base===33?ancestries:['none'],stateValues=base===33?states:['live'],precisionValues=base===33?precisions:['exact'];
  for(const seed of seeds){const rng=random(seed);
-  for(const ancestry of ancestryValues)for(const state of stateValues)for(const precision of precisionValues)for(const fact of memoryFacts){
+  for(const ancestry of ancestryValues)for(const state of stateValues)for(const precision of precisionValues)for(const fact of memoryFacts)for(const eligibility of fact==='zero'&&ancestry==='none'&&state==='live'&&precision==='exact'?eligibilities:['current']){
    const serial=fixtures++,a={...ns,ownerId:'synthetic-batch-'+base+'-'+serial,projectId:'selected'},b={...a,projectId:'second'},foreign={...a,ownerId:a.ownerId+'-foreign',projectId:'foreign'};
    const admit=(namespace,label)=>ok(core.admit({namespace,memory:{content:'Synthetic '+label+' '+serial,kind:'fact'},receipts:[receipt('batch-'+serial+'-'+label)]})).memory;
    const m=admit(a,'subject'),neighbor=admit(a,'neighbor'),second=admit(b,'second'),other=admit(foreign,'foreign');
@@ -44,6 +47,25 @@ for(const family of costGateFamilies())for(const base of [18,23,33])test(`Memory
    // Perform public Memory mutations before injecting unsafe ancestry.
    if(fact==='forgotten')ok(core.forget({namespace:a,memoryId:m.id,expectedRevision:m.revision}));
    else if(fact==='correction')ok(core.correct({namespace:a,memoryId:m.id,expectedRevision:m.revision,content:'Synthetic corrected '+serial,kind:'fact',receipt:receipt('correct-'+serial)}));
+   // Eligibility is independent of suppression. Supersession uses the public
+   // writer and binds its latest revision, so stale-ref refusal cannot mask it.
+   if(eligibility==='superseded'){
+    ok(core.supersede({namespace:a,memoryId:m.id,expectedRevision:m.revision,replacement:{content:'Synthetic successor '+serial,kind:'fact'},receipts:[receipt('successor-'+serial)]}));
+    const row=db.prepare('SELECT revision,currentness FROM memories WHERE id=?').get(m.id);
+    assert.equal(row.currentness,'historical');m.revision=row.revision;
+   }else if(eligibility==='awaiting'){
+    // Isolate the review-state rule without adding a suppression fact.
+    db.prepare("UPDATE memories SET review_state='awaiting' WHERE id=?").run(m.id);
+   }else if(eligibility==='deleted'){
+    // Isolate deletion from public forget's additional suppression/revision rules.
+    db.prepare('UPDATE memories SET deleted=1,content=NULL WHERE id=?').run(m.id);
+   }
+   if(fact==='zero'){
+   const canonical=db.prepare('SELECT revision,deleted,currentness,review_state FROM memories WHERE id=?').get(m.id);
+   assert.equal(canonical.revision,m.revision,'eligibility fixture binds latest canonical revision');
+   assert.equal(Boolean(canonical.deleted),eligibility==='deleted');
+   assert.equal(canonical.review_state==='awaiting',eligibility==='awaiting');
+   }
    let captured;
    if(ancestry!=='none'){
     const sourceNS=ancestry==='foreign-owner'?foreign:ancestry==='foreign-namespace'?b:a;
@@ -88,7 +110,7 @@ for(const family of costGateFamilies())for(const base of [18,23,33])test(`Memory
    for(const readSet of [[a],[a,b],[a,b,foreign]])for(const intent of ['current','history']){
     const p={readSet,intent},identity={};
     withContentSuppressionRequest(()=>readTransaction(db,()=>withContentSuppressionReadInside(db,readSet,()=>{
-     const expected=shuffled.map(r=>expectedCandidateDecision({ancestry,state,precision,fact,variant:variants.get(r),intent}));
+     const expected=shuffled.map(r=>expectedCandidateDecision({ancestry,state,precision,fact,eligibility,variant:variants.get(r),intent}));
      // Old-path equivalence is a distinct control, never the safety expectation.
      const oldPath=shuffled.map(r=>candidateAllowedReference(db,identity,r,p));
      for(const indices of [[],[0],shuffled.map((_,i)=>i),expected.flatMap((yes,i)=>yes?[i]:[]),expected.flatMap((yes,i)=>yes?[]:[i]),Array.from({length:24},(_,i)=>i%shuffled.length)]){
@@ -97,7 +119,7 @@ for(const family of costGateFamilies())for(const base of [18,23,33])test(`Memory
       const actual=sidecar.memoryCandidatesAllowedInside(db,input,p,identity);
       measuring=false;
       assert.equal(statementCount,input.length?1:0,'one statement for every nonempty batch, including 24 candidates');
-      const label=JSON.stringify({base,seed,ancestry,state,precision,fact,readSet:readSet.length,intent,case:cases});
+      const label=JSON.stringify({base,seed,ancestry,state,precision,fact,eligibility,readSet:readSet.length,intent,case:cases});
       if(JSON.stringify(actual)!==JSON.stringify(reference)) {
        const mismatch={label,actual,reference};mismatches.push(mismatch);
        t.diagnostic('INDEPENDENT_MISMATCH '+JSON.stringify(mismatch));
@@ -128,8 +150,11 @@ function oracleImportGraph(root, overrides=new Map()) {
   if(visited.has(url.href))return;
   visited.add(url.href);
   const source=overrides.get(url.href)??readFileSync(url,'utf8');
-  assert.doesNotMatch(source,/\b(?:import\s*\(|require\s*\(|createRequire|eval\s*\(|Function\s*\()/,'oracle cannot load hidden dependencies');
-  // V8 parses all static import forms, including multiline imports and re-exports.
+  assert.doesNotMatch(source,/\b(?:import|require|createRequire|eval|Function|getBuiltinModule|process|globalThis)\b/,'oracle cannot load hidden dependencies');
+  // Deliberately reject these words even in comments/strings: this pure oracle
+ // needs no loader or ambient runtime capability. Static re-exports remain
+ // covered by V8, including escaped specifiers.
+ // V8 parses all static import forms, including multiline imports and re-exports.
   // The parser child imports no SQLite and evaluates none of the supplied code.
   const parsed=spawnSync(process.execPath,['--experimental-vm-modules','--input-type=module','-e',
    "import {SourceTextModule} from 'node:vm';import {readFileSync} from 'node:fs';process.stdout.write(JSON.stringify(new SourceTextModule(readFileSync(0,'utf8')).dependencySpecifiers));"],
@@ -153,6 +178,21 @@ test('independent oracle static import graph excludes all production decision co
  // Exercise the same traversal against a regression to the original wrapper.
  assert.throws(()=>oracleImportGraph(oracleURL,new Map([[oracleURL.href,
   "import { contentReadSafety } from '../content-safety.mjs';\nexport const expectedCandidateDecision=contentReadSafety;\n"]])));
+ for(const [label,source] of Object.entries({
+  'commented dynamic':"await import/* x */('../content-safety.mjs');",
+  'line-comment dynamic':"await import //x\n('../content-safety.mjs');",
+  'newline dynamic':"await import\n('../content-safety.mjs');",
+  'string-built specifier':"await import('../content-'+'safety.mjs');",
+  eval:"eval('1');",Function:"new Function('return 1');",
+  createRequire:"createRequire('synthetic');",
+  getBuiltinModule:"process.getBuiltinModule('module');",
+  require:"require('synthetic');",globalThis:"globalThis['synthetic'];",
+  'comment token':"// import\nexport const safe=true;",
+  'string token':"export const safe='require';",
+ })){
+  assert.throws(()=>oracleImportGraph(oracleURL,new Map([[oracleURL.href,source]])),undefined,label);
+  t.diagnostic('ORACLE_GUARD_REJECTED '+label);
+ }
  // An indirect wrapper is also rejected, rather than checking root text only.
  const wrapper=new URL('./synthetic-oracle-wrapper.mjs',oracleURL);
  assert.throws(()=>oracleImportGraph(oracleURL,new Map([
@@ -192,7 +232,7 @@ for(const family of costGateFamilies())for(const ancestry of ['foreign-scope','n
  const ref={type:'memory',namespace:ns,memoryId:m.id,revision:m.revision};
  for(const intent of ['current','history'])withContentSuppressionRequest(()=>readTransaction(db,()=>withContentSuppressionReadInside(db,[ns],()=>{
   const p={readSet:[ns],intent};
-  const expected=expectedCandidateDecision({ancestry,state:'live',precision:'exact',fact:'zero',variant:'target',intent});
+  const expected=expectedCandidateDecision({ancestry,state:'live',precision:'exact',fact:'zero',eligibility:'current',variant:'target',intent});
   const old=candidateAllowedReference(db,{},ref,p);
   const actual=sidecar.memoryCandidatesAllowedInside(db,[ref],p,{});
   assert.deepEqual(actual,[expected],'independent unresolved/foreign-origin rule');
@@ -225,4 +265,18 @@ test('equivalence control: intended conservative numeric helper and missing/type
   assert.deepEqual(refs.map(r=>candidateAllowedReference(db,{},r,p)),[false,false,false]);
  })));
  t.diagnostic('CONSERVATIVE_CONTROL '+JSON.stringify({numericDifferences:2,missingOrTypeMisses:3}));
+});
+
+// Contract checks isolate each helper conjunct, which the batch and canonical S1
+// share. Generated decisions above independently cover their real-store effects.
+test('Memory eligibility conjuncts follow the intent-specific spec',()=>{
+ const current={deleted:0,currentness:'current',review_state:'none'};
+ for(const intent of ['current','history'])for(const [eligibility,row] of [
+  ['current',current],['missing',null],['deleted',{...current,deleted:1}],
+  ['superseded',{...current,currentness:'historical'}],['awaiting',{...current,review_state:'awaiting'}],
+ ]){
+  // incremental-catchup.md:237-258; context-read-product.md:2086.
+  const expected=eligibility==='current'||intent==='history'&&['superseded','awaiting'].includes(eligibility);
+  assert.equal(memoryReadEligible(row,intent),expected,eligibility+' '+intent);
+ }
 });
