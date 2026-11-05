@@ -73,7 +73,7 @@ for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])
  }finally{ledger.close();}
  assert.equal(JSON.parse(s.authority.prepare('SELECT anchor FROM anchors WHERE owner=?').get(ns.ownerId).anchor).pending,null,'exact prepared anchor is reconciled (CAS-return refusals are regressions; other cases are controls)');
  await reader.close();await h.close();await s.coordinator.close();await s.supervisor.close();
- // All fixture handles are closed; expire the finished requests' 5000 ms reservations.
+ // The reader, client, coordinator and supervisor are closed; expire the finished requests' 5000 ms reservations.
  await testClock.advance(5001,{waitForWorkers:false});
  if(layout.family==='event-time')complete(t.name);
 });
@@ -107,7 +107,7 @@ for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])
  assert.equal(Atomics.load(state,8),1,'control: exactly one actual awaited load');
  assert.equal(Atomics.load(state,12),1,'exactly one total worker epoch SELECT for that load');
  client.close();await s.coordinator.close();await s.supervisor.close();
- // All fixture handles are closed; expire the finished requests' 5000 ms reservations.
+ // The reader, client, coordinator and supervisor are closed; expire the finished requests' 5000 ms reservations.
  await testClock.advance(5001,{waitForWorkers:false});
  if(layout.family==='event-time')complete(t.name);
 });
@@ -139,7 +139,7 @@ for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])
  const ledger=new DatabaseSync(s.ledgerPath);
  try{assert.ok(Object.values(JSON.parse(ledger.prepare('SELECT state FROM semantic_owners WHERE owner_id=?').get(ns.ownerId).state).reservations).every(r=>!['reserved','may_transmit'].includes(r.status)),'control: no untransmitted reservation remains outstanding');}finally{ledger.close();}
  await reader.close();await h.close();await s.coordinator.close();await s.supervisor.close();
- // All fixture handles are closed; expire the finished requests' 5000 ms reservations.
+ // The reader, client, coordinator and supervisor are closed; expire the finished requests' 5000 ms reservations.
  await testClock.advance(5001,{waitForWorkers:false});
  if(layout.family==='event-time')complete(t.name);
 });
