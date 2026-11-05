@@ -1776,8 +1776,6 @@ the receipt event-time column omit the key and still report the dated id.
 Selection adds no SQL, fence input or counter visit; the 16-receipt bound is
 unchanged. Storage migration is separate. See contract §15.9 for the lifecycle
 safety guarantee and the existing window limitation above 16 receipts.
-
-
 ## Lexical admission and physical binding (amendment v2.2, 2026-11-05)
 
 Private lexical admission authenticates the stored publication and progress
@@ -1810,3 +1808,19 @@ terminal failure, `maintenancePumpDiagnostic(status).admission[lane]` exposes
 that same cause, lane and current count. Existing private disposal and admission
 retry state remains present when applicable. The public status shape, options
 and error vocabulary remain unchanged.
+
+The `admission_no_progress` terminal state is held in process memory per canonical
+store location and lane. A new pump for that store and lane in the same process
+fails at its first dispatch with the same public `state:'failed'`,
+`error:'reader_failed'` and private cause `admission_no_progress`; replacing or
+discarding the sidecar in the running process does not clear it. Hosts must treat
+this as terminal and must not reopen it in-process. To recover, restart the
+process. If the failure recurs after a restart, stop every process holding the
+store, close admissions, stop clients and maintenance, await all supervisor
+drains, and use the host's explicit cache discard procedure to delete the
+quiescent product sidecar together with its `-journal`, `-wal` and `-shm`
+companions. Keep canonical storage and the lifecycle lock intact, then start
+again with independently authorized maintenance and complete both intents before
+exposing search. This costs a full lexical rebuild plus re-embedding of vectors:
+time and, with a hosted embedding service, embedding spend. Never unlink a live
+sidecar or its companions.
