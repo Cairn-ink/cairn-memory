@@ -676,6 +676,11 @@ preQuantum: {
 }
 ```
 
+**Amendment v3: optional wait budget.** Omitting `maxWaitMs` uses 2,000 ms.
+When present, it must be a data property containing an integer from 1 through
+5,000; an accessor or an explicit `undefined` refuses `invalid_input`. Presence
+uses the same descriptor-chain capture as the other port fields.
+
 Validation captures data descriptors and method receivers without invoking
 accessors or Proxy traps. Invalid activation refuses `invalid_input`; adding,
 removing or replacing the port object on an existing pump refuses renewal with
@@ -697,6 +702,17 @@ A failed check releases `declined` with one closed reason: `stopped`,
 `renewal_expired`, `generation_changed`, `budget_exhausted`, `spacing`,
 `lane_changed` or `admission_held`. Dynamic authorization and currentness,
 ledger binding, price, budgets, purge and enablement checks stay inside the turn.
+
+**Amendment v3: wait-expiry decline.** This package extends the turn contract's
+§6 closed lexical decline reasons with `wait_expired`: the broker granted after
+the engine's wait deadline. A grant racing that deadline remains owned and is
+released with `release('declined', 'wait_expired')`, starting nothing. Existing
+pump-state checks run first and retain their reasons. The decline adds no
+deferral or failure, leaves public status `active` with `error:null`, and retries
+through the existing retry-not-before time at normal spacing. Decline reasons
+stay informational for the host. A broker may keep an owner's position (for
+example its ring slot) across `wait_expired`, so a late owner retries without
+losing its place.
 
 The host chooses all quotas, renewal and selection metadata; the engine
 supplies no assumed production budgets. `id` and window ID are nonempty strings
@@ -755,6 +771,10 @@ completion pending; real stop, expiry or exhaustion keeps its existing outcome.
 A separate retry-not-before clock preserves normal pacing without overdue
 zero-delay spin. The selected lane remains pending.
 
+While waiting, the turn holds only its pump's lifetime supervisor live record
+(and any already-resident maintainer), with no lock, transaction, reservation
+or new open, so a longer wait delays only that owner's own turn.
+
 Cadence is checked before admission, after waiting/deferral/cancellation,
 before accepted renewal replaces duty, and at settlement. Waiting earns no
 observation, clears no missed flag, resets no duty and extends no authority or
@@ -769,6 +789,19 @@ broker waits add to the cold bound: `sum(waits)+(N+C)*S+Q<=5000`. One selection
 at Q=S=1000 has N=2 and C=1, leaving 1000 ms of conservative wait headroom per
 sweep. Deployment scheduling and disposal capacity require separate
 qualification; waiting can cause honest cadence misses without pump failure.
+
+At the 2,000-ms default, one lexical sweep's worst case is
+`Σ waits + (N+C)·S + Q` against the 5,000-ms duty. With one pump per owner,
+two lanes and one resident, N=2, C=1 and Q=S=1,000: two full warm waits give
+`4,000+2,000+1,000=7,000 ms`; three full cold waits give
+`6,000+3,000+1,000=10,000 ms`. Thus even one owner has no worst-case duty
+guarantee if every wait consumes the default. For owners sharing one core under
+a one-quantum-at-a-time broker, three owners can each wait 2,000 ms behind two
+full 1,000-ms turns; their six warm lexical work turns alone take 6,000 ms,
+so at three owners the 5,000-ms duty is knowingly missed under full occupancy.
+Cold admission adds three more turns (9,000 ms total); even two cold owners
+need six turns (6,000 ms). These are capacity facts, not contract violations
+(§7); shorter waits and turns can support more owners.
 
 Dispatches are paced using the configured minute allowance and full quantum
 sizes, with `S` as the minimum admission spacing. Each projection's next read
@@ -945,6 +978,16 @@ adds saturating `deferredTurns`, `turnWaitMs` (including a pending wait),
 The existing public status/completion DTO and cadence-miss meaning are unchanged.
 Waiting stays outside quantum histograms, ledger elapsed time and stall markers.
 Consumers may treat unfamiliar diagnostic fields as unavailable.
+
+**Amendment v3: wait-expiry diagnostics.** `declinedTurns` also includes the
+fixed `wait_expired` cell. Saturating `admittedTurns` counts granted turns that
+pass the local recheck and start, including open-only admissions; declined
+grants do not increment it. The stall signature is
+`declinedTurns.wait_expired` rising while admitted turns stay flat. A lexical
+lane's gap over 5,000 ms still increments `missedObservations` and the existing
+`cadenceMisses` once until a real observation. Repeated expired grants never
+call the injected `observedAt`, so the host's freshness signal goes stale while
+public status stays `active` with `error:null`.
 
 Maintenance failures also have private latest-value diagnostics. Log
 `maintenanceFailureDiagnostic(resultOrOpeningError)` and
