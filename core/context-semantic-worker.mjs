@@ -20,6 +20,9 @@ import { pumpFloors, pumpExpiry, pumpUsage } from './context-semantic-accounting
 const ownerId=c.binding.ownerId,resources=new Int32Array(c.resources),owned=[],active=new Set(),clients=new Set(),operations=new Map();
 const sqlContext=new AsyncLocalStorage();sqlContext.enterWith({until:-Infinity});
 const sqlite=createProductSqlitePolicy({state:()=>sqlContext.getStore()});let host,ledger,port,providerModel,policy,maintenance,closed=false,queue=Promise.resolve(),pendingSeal,lastState;
+// Failed protected accounting is retried before the next admission checks capacity.
+// Retain engine-owned accounting data and its private fence, never a provider payload.
+const pendingSettlements=new Map();
 // The request owns a latched refusal. Settlement retains only accounting
 // capabilities and cannot re-enable content dispatch on this operation.
 const contentRequest=new AsyncLocalStorage(),promiseThen=Promise.prototype.then,fenceFailures=new WeakSet();
@@ -42,16 +45,18 @@ async function callerPort(target,name,args,code,capturedMethod,onRefusedReturn) 
   if(request.state.refusal&&!request.accounting)throw request.state.refusal;
   const method=capturedMethod??modelPortValue(target,name,code);
   if(typeof method!=='function')fail(code);
-  let result,fenceError;
+  let result,fenceError,callError;
   try {
     result=await assertContentPort({invoke:async()=>{
       try {return {value:inertContentPortValue(await Reflect.apply(method,target,args),code,{rejectProxies:true})};}
       catch(error){return {error:callerError(error,code)};}
     }});
-  } finally {try{request.guard({accounting:request.accounting});}catch(error){fenceError=error;}}
+  } catch(error){callError=error;}
+  finally {try{request.guard({accounting:request.accounting});}catch(error){fenceError=error;}}
   // Accounting may retain primitive provider failure flags after the epoch
   // observation, while the refused value itself never reaches another port.
   if(fenceError){onRefusedReturn?.(result);throw fenceError;}
+  if(callError)throw callError;
   if(result.error)throw result.error;
   return result.value;
 }
@@ -82,6 +87,18 @@ let queued=0;
 const serial=work=>{if(queued>=128)fail('read_in_progress');queued++;const result=queue.then(work).finally(()=>queued--);queue=result.catch(()=>{});return result;};
 const failure=error=>productFailure(error?.code==='ERR_SQLITE_ERROR'?[5,6].includes(error.errcode&255)?'storage_busy':'storage_error':error?.code);
 async function admission() {
+  const request=contentRequest.getStore();
+  if(pendingSettlements.size&&!request) {
+    // A later control admission has no content fence of its own. Continue
+    // the retained accounting boundary, including its one E1 per callback.
+    const {fence}=pendingSettlements.values().next().value;
+    return withContentPortBoundary(fence.guard,()=>contentRequest.run(fence,admission));
+  }
+  if(pendingSettlements.size&&request&&!request.accounting) {
+    const result=await accountingWork(admission);
+    if(request.state.refusal)throw request.state.refusal;
+    return result;
+  }
   if(pendingSeal) {
     const recovery=pendingSeal;
     const row=ledger.read(ownerId),prepared=recovery.prepared;
@@ -109,7 +126,13 @@ async function admission() {
     }
     pendingSeal=null;
   }
-  const result=await ledger.authenticate(ownerId);lastState=result.state;return result;
+  let result=await ledger.authenticate(ownerId);
+  for(const [key,settlement] of pendingSettlements) {
+    if(['reserved','may_transmit'].includes(result.state.reservations[key]?.status))
+      result=await mutate(result,s=>settleReservation(s,settlement));
+    pendingSettlements.delete(key);
+  }
+  lastState=result.state;return result;
 }
 const change=(fn,guard)=>serial(async()=>{guard?.();const result=await mutate(await admission(),n=>{guard?.();fn(n);},undefined,guard);lastState=result.state;gate.publish(lastState);return result;});
 const current=()=>serial(admission);
@@ -184,6 +207,14 @@ function globalPolicy(rows,next,id) {
   }
   if(requests>policy.maxRequests||money>usd(numericUsd(policy.maxUsd))||concurrent>policy.maxConcurrent)fail('budget_denied');
 }
+function settleReservation(s,{reservationId,id,invoked,usage,protocolFailure}) {
+  const r=s.reservations[reservationId];if(!r||!['reserved','may_transmit'].includes(r.status))return;
+  r.status=!invoked?'released':usage===undefined?'unknown':'settled';r.usage=usage===undefined?'unknown':'validated';
+  if(usage!==undefined)r.cost=String(tokenCost(usage,r.price.rate));
+  if(protocolFailure)s.identities[id]={blocked:true};
+  const e=refreshExposure(s,r.day);
+  if(!s.firstCoverageComplete&&e.lifetimeCharged+e.lifetimeReserved>=usd(c.refreshCaps.backfill.maxUsdTotal))s.blocked=true;
+}
 async function embed(input,op,metadata) {
   const {texts,kind,expected,maxUsd,window}=input;
   const request=contentRequest.getStore();
@@ -251,19 +282,20 @@ async function embed(input,op,metadata) {
     if(result.error?.code==='provider_unavailable')providerUnavailable=true;
     if(result.error?.usageBoundExceeded===true)protocolFailure=true;
     if(protocolFailure)usage=undefined;
+    const settlement={reservationId,id,invoked,usage,protocolFailure,
+      ...(request?{fence:{guard:request.guard,state:request.state,accounting:true}}:{})};
+    let settlementError;
     try {
       await accountingWork(()=>serial(async()=>{
-        const a=await admission();await mutate(a,s=>{
-          const r=s.reservations[reservationId];if(!r||!['reserved','may_transmit'].includes(r.status))return;
-          r.status=!invoked?'released':usage===undefined?'unknown':'settled';r.usage=usage===undefined?'unknown':'validated';
-          if(usage!==undefined)r.cost=String(tokenCost(usage,r.price.rate));
-          if(protocolFailure)s.identities[id]={blocked:true};
-          const e=refreshExposure(s,r.day);
-          if(!s.firstCoverageComplete&&e.lifetimeCharged+e.lifetimeReserved>=usd(c.refreshCaps.backfill.maxUsdTotal))s.blocked=true;
-        });
+        const a=await admission();await mutate(a,s=>settleReservation(s,settlement));
       }));
-    } finally {Atomics.add(resources,3,1);active.delete(settled);controllers.delete(controller);operations.get(op.operationId)?.controllers.delete(controller);controller.abort();}
-    if(contentRequest.getStore()?.state.refusal)throw contentRequest.getStore().state.refusal;
+    } catch(error){
+      settlementError=error;if(request)pendingSettlements.set(reservationId,settlement);
+      if(request?.state.refusal)request.state.refusal.cause=error;
+    }
+    finally {Atomics.add(resources,3,1);active.delete(settled);controllers.delete(controller);operations.get(op.operationId)?.controllers.delete(controller);controller.abort();}
+    if(request?.state.refusal)throw request.state.refusal;
+    if(settlementError)throw settlementError;
     if(result.error){if(admissionError)throw admissionError;if(['not_enabled','purge_pending','backfill_ceiling','price_unavailable','budget_denied','provider_error','rate_limited','dimension_mismatch','timeout','provider_unavailable','index_unavailable','read_timeout'].includes(result.error.code))throw result.error;fail('provider_error');}
     if(!transmitted||protocolFailure||!Array.isArray(result.value)||result.value.length!==texts.length)fail('provider_error');
     return result.value.map(v=>validateVector(v,port));
@@ -495,14 +527,15 @@ parentPort.on('message',async message=>{
     p.on('message',m=>sqlContext.run({until:-Infinity},async()=>{
       sqlite.start(Number(mono(m.operation.operationCutoffMonoNs))/1e6);
       const op={controllers:new Set(),attempts:0,attemptState:m.attemptState};operations.set(m.operation.operationId,op);attached.add(op);
+      const state={refusal:null};
       try{
         let guard;try{guard=maintenance.portGuard(m,message.metadata);}catch{throw fenceRefusal();}
-        const state={refusal:null};
         const observe=guard?phase=>{try{guard(phase);}catch(error){state.refusal??=fenceRefusal();if(!phase?.accounting)throw state.refusal;}}:undefined;
         const value=await withContentPortBoundary(observe,()=>observe?contentRequest.run({guard:observe,state,accounting:false},()=>internalCall(m,message.metadata)):internalCall(m,message.metadata));
+        if(state.refusal)throw state.refusal;
         if(value?.vectors?.length>32){const parts=Math.ceil(value.vectors.length/32);for(let part=0;part<parts;part++)p.postMessage({id:m.id,ok:true,part,parts,value:{...value,vectors:value.vectors.slice(part*32,(part+1)*32)}});}
         else p.postMessage({id:m.id,ok:true,value});}
-      catch(error){p.postMessage({id:m.id,ok:false,attempts:op.attempts,...(fenceFailures.has(error)?{safetyFence:true}:{}),code:fenceFailures.has(error)?'evidence_unavailable':['not_enabled','purge_pending','backfill_ceiling','price_unavailable','budget_denied','provider_error','rate_limited','dimension_mismatch','timeout','provider_unavailable'].includes(error.code)?error.code:['context_item_too_large','invalid_vector'].includes(error.code)?'provider_error':error.code==='read_timeout'?'timeout':'ledger_unavailable'});}
+      catch(error){error=state.refusal??error;p.postMessage({id:m.id,ok:false,attempts:op.attempts,...(fenceFailures.has(error)?{safetyFence:true}:{}),code:fenceFailures.has(error)?'evidence_unavailable':['not_enabled','purge_pending','backfill_ceiling','price_unavailable','budget_denied','provider_error','rate_limited','dimension_mismatch','timeout','provider_unavailable'].includes(error.code)?error.code:['context_item_too_large','invalid_vector'].includes(error.code)?'provider_error':error.code==='read_timeout'?'timeout':'ledger_unavailable'});}
       finally{operations.delete(m.operation.operationId);attached.delete(op);}
     }));return;
   }

@@ -7,7 +7,7 @@ export function semanticClient(port,configuration,operation) {
   const pending=new Map();let closed=false,contentFence;
   port.on('message',message=>{
     const p=pending.get(message.id);if(!p)return;
-    if(process.hrtime.bigint()>=p.cutoff){pending.delete(message.id);clearTimeout(p.timer);p.reject(Object.assign(Error('timeout'),{code:'timeout',attempts:Atomics.load(p.attempts,0)}));return;}
+    if(process.hrtime.bigint()>=p.cutoff&&!message.safetyFence){pending.delete(message.id);clearTimeout(p.timer);p.reject(Object.assign(Error('timeout'),{code:'timeout',attempts:Atomics.load(p.attempts,0)}));return;}
     if(message.parts!==undefined) {
       if(message.parts<1||message.parts>2||!Number.isInteger(message.part)||message.part<0||message.part>=message.parts||p.parts?.[message.part]){pending.delete(message.id);clearTimeout(p.timer);p.reject(Object.assign(Error('provider_error'),{code:'provider_error',attempts:Atomics.load(p.attempts,0)}));return;}
       p.parts??=[];p.parts[message.part]=message.value.vectors;
