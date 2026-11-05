@@ -1484,6 +1484,7 @@
     "key:messageId": 1,
     "key:projectId": 1,
     "literal:action_id": 1,
+    "literal:message_id": 1,
     "literal:owner_id": 1,
     "literal:project_id": 1
   },

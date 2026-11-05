@@ -84,3 +84,11 @@ export function assertContentCostDeferrals(candidate=inventory) {
  readFileSync(new URL('../test/content-safety-s2h-'+gate+'.test.mjs',import.meta.url));
  return [];
 }
+
+// Additive Raw population discovery: these are native cells of the existing
+// product gate, with the same public capture setup on each comparator side.
+export function assertRawProductCostPopulations(candidate=inventory) {
+ assert.deepEqual(candidate.rawProductPopulations,{bases:[33],lineage:['foreign','in-scope','both'],facts:[0,5],sizes:[12,24],intents:['current','history'],caseGroup:'product-semantic-raw',cursorCaseGroup:'product-semantic-cursor'});
+ assert.deepEqual(candidate.caseSets['product-semantic-raw'],candidate.caseSets['product-semantic-native']);
+}
+assertRawProductCostPopulations();

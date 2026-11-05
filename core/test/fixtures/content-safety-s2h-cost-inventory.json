@@ -2467,6 +2467,14 @@
     ],
     "product-semantic-cursor": [
       "findCandidates:hit-cursor"
+    ],
+    "product-semantic-raw": [
+      "refreshContextIndex:enabled-cold",
+      "refreshContextIndex:enabled-repeat",
+      "findCandidates:hit",
+      "contextRead:hit",
+      "findCandidates:semantic-only",
+      "contextRead:semantic-only"
     ]
   },
   "surfaceClassifications": {
@@ -3529,5 +3537,29 @@
         ]
       }
     }
+  },
+  "rawProductPopulations": {
+    "bases": [
+      33
+    ],
+    "lineage": [
+      "foreign",
+      "in-scope",
+      "both"
+    ],
+    "facts": [
+      0,
+      5
+    ],
+    "sizes": [
+      12,
+      24
+    ],
+    "intents": [
+      "current",
+      "history"
+    ],
+    "caseGroup": "product-semantic-raw",
+    "cursorCaseGroup": "product-semantic-cursor"
   }
 }

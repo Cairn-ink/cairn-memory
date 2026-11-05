@@ -917,8 +917,8 @@
   "implementations": [
     {
       "file": "core/content-suppression-storage.mjs",
-      "sha256": "3b45e29926945c9134c79d6769ef58324e229ad0ccc9049b8dd80cad12441320",
-      "reason": "Round 3 reuses the request layout only inside synchronous engine transactions; the independent delivery header/epoch fence and both B3 helper bodies are unchanged."
+      "sha256": "9b809fa37126188bb6f45a50ab0045f41803ba771c31a59c3f2b58e7b36b22a3",
+      "reason": "Memory candidate batches share snapshot-local canonical and fact rows; writer functions and their pinned regions are byte-identical."
     },
     {
       "file": "core/content-safety-migration.mjs",
@@ -1254,6 +1254,7 @@
         "withContentSuppressionCeilingsInside",
         "withContentSuppressionReadInside",
         "withContentSuppressionRequest",
+        "withMemoryCandidateBatchInside",
         "withoutContentSuppressionReadCacheInside",
         "writeContentSuppressionInside"
       ],
@@ -1271,7 +1272,8 @@
         "withContentSuppressionCeilingsInside": "Restricts write validation to facts preceding the current operation.",
         "withContentSuppressionReadInside": "Selects the scoped fact view for a synchronous canonical read.",
         "withContentSuppressionRequest": "Bounds all serving fact caches to a single request lifecycle.",
-        "withoutContentSuppressionReadCacheInside": "Isolates nested writers from provisional serving request caches."
+        "withoutContentSuppressionReadCacheInside": "Isolates nested writers from provisional serving request caches.",
+        "withMemoryCandidateBatchInside": "Shares SQL rows only within one synchronous Memory candidate batch; canonical S1 and suppression decisions remain independent."
       }
     },
     "core/content-write-changes.mjs": {

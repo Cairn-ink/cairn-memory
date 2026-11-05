@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "54b779c9c869ba5d5599fac80222cf8e8880eec2607e4554cebf3f0cc71bdeb5",
-  "bytes": 1158534,
+  "sha256": "099c54c25098bbe4f627435bfe66b2dd3af7e7dc95ebf01ca8094341c0d97cda",
+  "bytes": 1159793,
   "files": [
     "LICENSE",
     "README.md",
@@ -679,7 +679,7 @@
     "core/context-product-validation.mjs": "1e4433bbc9978c89e5ea46d640038c190e002f16f960eef463ddd406e8b96a88",
     "core/context-product-manifest.mjs": "0c4f17c610ee79ad843180f85870d55e51bb0416d7819b85c1b68c31dd11c954",
     "core/context-product-service.mjs": "a2d4e7c50fe26ccaec06764352418d890fd3d23eda9aa0c69e65d36d06073a6d",
-    "core/context-product-sidecar.mjs": "f9cef0ef07c32adbf6cb964502e938964a66c78063fbaab018cfbc09b26f9697",
+    "core/context-product-sidecar.mjs": "eee84288f0c48b76be5d46e04f21a1fac3ee1832c926ecb9010d6c19749cb32d",
     "core/context-product-verification-batch.mjs": "2e2098ae41023f6a5b220f5b1eb75e227403c6701e94e90b2f7bb40e3ede9ba0",
     "core/context-product-comparison.mjs": "ec340185793d622b8e48445c378bfd40fe9c5f1606e49bd589db1d6bf162cd46",
     "core/context-product-quantum.mjs": "b43d2c3386e4a9704831b6aa6667378a3148593bc09ff5848914ef3c706d2659",
@@ -710,7 +710,7 @@
     "core/content-safety-layout.mjs": "a4319af04125ed6a26961bac9dba6ae10ae3f65bc60af39e47d74d071076eff9",
     "core/content-safety-migration.mjs": "71e8b4f47507ad47a6ef6a065dc1938c23dd74c2f0222724de32d7d77732495b",
     "core/content-safety-schema.mjs": "57af537be7b5e0ce29cc7d025dd7123bba0d6cdb8c2f08b871c0ba3cf5ef2fb0",
-    "core/content-suppression-storage.mjs": "3b45e29926945c9134c79d6769ef58324e229ad0ccc9049b8dd80cad12441320",
+    "core/content-suppression-storage.mjs": "9b809fa37126188bb6f45a50ab0045f41803ba771c31a59c3f2b58e7b36b22a3",
     "core/content-suppression-input.mjs": "d22fe3b5ca43a0ce44d5e019fe4da9e09b456834281480b1ce1b23ec0b0d29cd",
     "core/content-suppression-evidence.mjs": "fbf3adae9b81b76eda37561fe4c6cec32552ad007c23286e59c16f11eef2c7bd",
     "core/content-suppression-reader.mjs": "f9b82adf63cb1eef66df74118c09065352e464683427e67e29847561704e3fa6",

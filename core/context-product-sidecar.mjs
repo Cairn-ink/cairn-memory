@@ -1,5 +1,5 @@
 import { admissionRequired, PRODUCT_SIDECAR_SUFFIX } from './context-product-admission.mjs';
-import { cachedContentSuppressionRequestInside, contentSuppressionRequestInside, withContentSuppressionReadInside, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
+import { cachedContentSuppressionRequestInside, contentSuppressionRequestInside, withMemoryCandidateBatchInside, withContentSuppressionReadInside, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { bindContentSafetyConnection, cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety, memoryReadEligible } from './content-safety.mjs';
 import { DatabaseSync } from 'node:sqlite';
@@ -22,6 +22,14 @@ import { fail } from './validation.mjs';
 import { VECTOR_DDL } from './context-product-vectors.mjs';
 import { verificationBatch, verificationMeter, verificationBound } from './context-product-verification-batch.mjs';
 import { comparisonWorkFields } from './context-product-attribution.mjs';
+
+// Internal Memory-only equivalent of candidateAllowed. Cards retain their
+// conservative per-candidate path. No handle, transaction or epoch is acquired.
+export function memoryCandidatesAllowedInside(db, refs, p, identity) {
+  return withMemoryCandidateBatchInside(db,refs,rows=>rows.map((row,i)=>
+    Boolean(row.id && row.revision === refs[i].revision && memoryReadEligible(row,p.intent) &&
+      contentReadSafety(db,{identity,namespace:refs[i].namespace,ref:refs[i],intent:p.intent,selectedMemory:row}).allowed)));
+}
 
 export const PRODUCT_SIDECAR_FORMAT = 3;
 export { PRODUCT_SIDECAR_SUFFIX };
@@ -1120,10 +1128,9 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     if(proof)return proof.visible?.counts??null;
     return read(()=>suppressionRequest(p,publication,visible=>visible?.counts??null));
   }
-  function candidateAllowed(ref, p) {
-    return ref.type === 'card' ? contextCardEligible(canonical,identity,features,ref.namespace,
-      {id:ref.cardId,revision:ref.revision,body_revision:ref.bodyRevision},p.intent,{readSet:p.readSet}) :
-      contentReadSafety(canonical,{identity,namespace:ref.namespace,ref,intent:p.intent}).allowed;
+  function cardCandidateAllowed(ref, p) {
+    return contextCardEligible(canonical,identity,features,ref.namespace,
+      {id:ref.cardId,revision:ref.revision,body_revision:ref.bodyRevision},p.intent,{readSet:p.readSet});
   }
   function lexicalSuppressed(p,publication,query,limit,visible) {
     const terms=[...new Set(tokenizeT1(query))],generation=storageKey(publication.generation.id),ss=streams(p),documents=[];
@@ -1145,8 +1152,8 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
           if(!document?.eligible)continue;
           const stream=ss[document.stream],ref={type:stream.type,namespace:stream.ns,[stream.type==='memory'?'memoryId':'cardId']:document.id,
             revision:document.revision,...(stream.type==='card'?{bodyRevision:document.body_revision}:{})};
-          if(visible.checkEach&&contentSuppressionMayMatchInside(canonical,stream.ns,{kind:stream.type,key:document.id})) {
-            if(!candidateAllowed(ref,p))continue;
+          if(stream.type==='card'&&visible.checkEach&&contentSuppressionMayMatchInside(canonical,stream.ns,{kind:'card',key:document.id})){
+            if(!cardCandidateAllowed(ref,p))continue;
             checked.add(ref);
           }
           documents.push({ref,frequencies,length:document.token_length});
@@ -1154,11 +1161,23 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         if(rows.length<128)break;after=rows.at(-1).doc;
       }
     }
+    if(visible.checkEach){
+      const memory=documents.filter(({ref})=>ref.type==='memory'&&contentSuppressionMayMatchInside(canonical,ref.namespace,{kind:'memory',key:ref.memoryId}));
+      const allowed=memoryCandidatesAllowedInside(canonical,memory.map(d=>d.ref),p,identity);
+      const decisions=new Map(memory.map((d,i)=>[d.ref,allowed[i]]));
+      for(const {ref}of memory)if(decisions.get(ref))checked.add(ref);
+      for(let i=documents.length-1;i>=0;i--)if(decisions.get(documents[i].ref)===false)documents.splice(i,1);
+    }
     const df=new Map(terms.map(term=>[term,documents.filter(d=>d.frequencies.has(term)).length]));
     const N=visible.unknown?documents.length:Object.values(visible.counts.byType).reduce((n,c)=>n+c.eligible,0);
     const totalLength=visible.unknown?documents.reduce((n,d)=>n+d.length,0):visible.counts.totalTokenLength;
     const ranked=rankScores(documents.map(d=>({ref:d.ref,score:scoreBM25(terms,d,{N,totalLength,df})}))).slice(0,limit);
-    const rows=ranked.filter(({ref})=>checked.has(ref)||visible.canonicalRequired===false&&!contentSuppressionMayMatchInside(canonical,ref.namespace,{kind:ref.type,key:ref.memoryId??ref.cardId})||candidateAllowed(ref,p));
+    const pending=ranked.filter(({ref})=>!checked.has(ref)&&!(visible.canonicalRequired===false&&!contentSuppressionMayMatchInside(canonical,ref.namespace,{kind:ref.type,key:ref.memoryId??ref.cardId})));
+    const memory=pending.filter(({ref})=>ref.type==='memory');
+    const allowed=memoryCandidatesAllowedInside(canonical,memory.map(d=>d.ref),p,identity);
+    const decisions=new Map(memory.map((d,i)=>[d.ref,allowed[i]]));
+    for(const {ref}of pending)if(ref.type==='card')decisions.set(ref,cardCandidateAllowed(ref,p));
+    const rows=ranked.filter(({ref})=>decisions.get(ref)!==false);
     return {rows,matched:documents.length,counts:visible.counts,filtered:visible.filtered};
   }
   function lexical(p, publication, query, limit=24) {
