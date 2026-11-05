@@ -987,7 +987,7 @@
       "file": "core/database.mjs",
       "start": "export function openDatabase(",
       "end": null,
-      "sha256": "82e4e838d95e9687781b1f7ec2fe91476bd8dce8d7d22497f9960c923b36e194"
+      "sha256": "6d48893fb40b6a01adb4a5ffc122222ad042b91ef0c28f15345c8ebc8429bb9a"
     }
   ],
   "imports": [
