@@ -27,6 +27,13 @@ const pendingSettlements=new Map();
 // capabilities and cannot re-enable content dispatch on this operation.
 const contentRequest=new AsyncLocalStorage(),promiseThen=Promise.prototype.then,fenceFailures=new WeakSet();
 function fenceRefusal(){const error=Object.assign(Error('evidence_unavailable'),{code:'evidence_unavailable'});fenceFailures.add(error);return error;}
+function latchRefusal(state) {
+  state.refusal??=fenceRefusal();
+  // Publish synchronously, before accounting can await or a reply can queue.
+  // Word 0 remains the provider-attempt count; word 1 is terminal refusal.
+  if(state.attempts?.length>1)Atomics.store(state.attempts,1,1);
+  return state.refusal;
+}
 const anchorFields=['ownerId','accountingDomainId','ledgerId','ledgerEpoch','bindingRevision','sequence','stateDigest','pending'];
 function accountingAnchor(a) {
   return Object.fromEntries(anchorFields.map(key=>[key,key==='pending'&&a[key]!==null?
@@ -223,7 +230,7 @@ async function embed(input,op,metadata) {
   const bound=inputBound(texts),id=digest(identityMetadata()),cost=tokenCost(bound,c.priceTable.usdPerMillionInputTokens[c.provider.model]),reservationId=randomUUID();
   const controller=new AbortController();operations.get(op.operationId)?.controllers.add(controller);
   controllers.add(controller);
-  let transmitted=false,invoked=false,usage,protocolFailure=false;
+  let transmitted=false,invoked=false,usage,protocolFailure=false,reservationAttempted=false;
   const cutoff=Math.min(Number(mono(op.operationCutoffMonoNs))/1e6,Number(process.hrtime.bigint())/1e6+c.provider.requestTimeoutMs);
   const deadlineAt=performance.now()+cutoff-Number(process.hrtime.bigint())/1e6;
   let admissionError;
@@ -244,6 +251,9 @@ async function embed(input,op,metadata) {
     }
     within(op);
     const globalRows=await ledger.authenticateAll();
+    // Once the reserving mutation is attempted, a failed acknowledgement can
+    // leave its outcome uncertain. Failures before this point cannot reserve.
+    reservationAttempted=true;
     let r=await mutate(admitted,n=>{
       n.dayHighWater=Math.max(n.dayHighWater,day);n.prices[p.authorityId]=p;
       n.reservations[reservationId]={id:reservationId,kind,items:kind==='refresh'?texts.length:0,day,phase,identity:id,price:{...p,rate:c.priceTable.usdPerMillionInputTokens[c.provider.model]},tokensBound:bound,cost:String(cost),status:'reserved',usage:'unknown',epoch:expected.purgeEpoch,incarnation:op.operationId};
@@ -257,7 +267,7 @@ async function embed(input,op,metadata) {
     const s=ledger.read(ownerId).state;checkState(s,expected);price(s);
     gate.check(expected);
     try{maintenance.transmission(input,metadata,s);}catch(error){
-      if(request&&error.code==='evidence_unavailable'){request.state.refusal??=fenceRefusal();throw request.state.refusal;}
+      if(request&&error.code==='evidence_unavailable'){throw latchRefusal(request.state);}
       throw error;
     }
     if(metadata.cancellation&&Atomics.load(new Int32Array(metadata.cancellation),0)!==0)fail('timeout');
@@ -290,7 +300,7 @@ async function embed(input,op,metadata) {
         const a=await admission();await mutate(a,s=>settleReservation(s,settlement));
       }));
     } catch(error){
-      settlementError=error;if(request)pendingSettlements.set(reservationId,settlement);
+      settlementError=error;if(request&&reservationAttempted)pendingSettlements.set(reservationId,settlement);
       if(request?.state.refusal)request.state.refusal.cause=error;
     }
     finally {Atomics.add(resources,3,1);active.delete(settled);controllers.delete(controller);operations.get(op.operationId)?.controllers.delete(controller);controller.abort();}
@@ -527,10 +537,10 @@ parentPort.on('message',async message=>{
     p.on('message',m=>sqlContext.run({until:-Infinity},async()=>{
       sqlite.start(Number(mono(m.operation.operationCutoffMonoNs))/1e6);
       const op={controllers:new Set(),attempts:0,attemptState:m.attemptState};operations.set(m.operation.operationId,op);attached.add(op);
-      const state={refusal:null};
+      const state={refusal:null,attempts:m.attemptState?new Int32Array(m.attemptState):null};
       try{
-        let guard;try{guard=maintenance.portGuard(m,message.metadata);}catch{throw fenceRefusal();}
-        const observe=guard?phase=>{try{guard(phase);}catch(error){state.refusal??=fenceRefusal();if(!phase?.accounting)throw state.refusal;}}:undefined;
+        let guard;try{guard=maintenance.portGuard(m,message.metadata);}catch{throw latchRefusal(state);}
+        const observe=guard?phase=>{try{guard(phase);}catch(error){latchRefusal(state);if(!phase?.accounting)throw state.refusal;}}:undefined;
         const value=await withContentPortBoundary(observe,()=>observe?contentRequest.run({guard:observe,state,accounting:false},()=>internalCall(m,message.metadata)):internalCall(m,message.metadata));
         if(state.refusal)throw state.refusal;
         if(value?.vectors?.length>32){const parts=Math.ceil(value.vectors.length/32);for(let part=0;part<parts;part++)p.postMessage({id:m.id,ok:true,part,parts,value:{...value,vectors:value.vectors.slice(part*32,(part+1)*32)}});}

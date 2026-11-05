@@ -58,6 +58,9 @@ function installPortScenario(value,c) {
    for(const [name,mode]of [['load',1],['compareAndSwap',2],['listOwners',6],['confirmDisposed',7]]) {
      const fn=authority[name];if(typeof fn!=='function')continue;
      authority[name]=async function(...args){
+       // Additive outage modes: 2 keeps accounting down; 3 holds the selected
+       // settlement return so a different Worker's client timer can run first.
+       if(name==='load'&&Atomics.load(state,11)===2&&Atomics.load(state,0)>=40){returned();throw Object.assign(Error('synthetic persistent accounting failure'),{code:'index_unavailable'});}
        if(refused()) {
          const valid=name==='load'?args.length===1&&typeof args[0]==='string':name==='listOwners'?
            Object.keys(args[0]).sort().join(',')==='accountingDomainId,ledgerId':args.every(a=>Object.keys(a).sort().join(',')===[...fields].sort().join(',')&&
@@ -72,9 +75,14 @@ function installPortScenario(value,c) {
        const stage=fault>=42&&fault<=48?(fault===48?0:Math.floor((fault-42)/2)):-1;
        const selectedFault=combined||afterReturn&&(stage===0&&name==='load'||stage===1&&name==='compareAndSwap'&&args[1].pending!==null||stage===2&&name==='compareAndSwap'&&args[0].pending!==null&&args[1].pending===null);
        const inject=selectedFault&&Atomics.compareExchange(state,10,0,1)===0;
+       if(inject&&Atomics.load(state,11)===3){while(Atomics.load(state,11)===3)await Atomics.waitAsync(state,11,3).value;}
        if(inject&& (combined||fault===48||fault%2===1)){returned();throw Object.assign(Error('synthetic accounting unavailable'),{code:'index_unavailable'});}
        callerSQL++;let result;try{result=await Reflect.apply(fn,authority,args);}finally{callerSQL--;}
        const selected=Atomics.load(state,0),ordinal=name==='compareAndSwap'&&armed()?Atomics.add(state,13,1)+1:0;
+       // Mode 49 loses the reserving seal acknowledgement after durable commit,
+       // then keeps settlement unavailable until the test explicitly recovers.
+       if(name==='compareAndSwap'&&selected===49&&ordinal===2){Atomics.store(state,10,1);Atomics.store(state,11,2);returned();throw Object.assign(Error('synthetic lost reserve acknowledgement'),{code:'index_unavailable'});}
+       if(name==='listOwners'&&selected===50)await suspend(50);
        if(name==='compareAndSwap'&&selected===23&&ordinal===1)await suspend(23);
        if(name==='compareAndSwap'&&([16,17,18].includes(selected)&&ordinal===selected-14||selected===19&&args[0].pending&&args[1].sequence===args[0].sequence))await suspend(selected);
        if(!(name==='load'&&selected===9))await suspend(name==='load'&&selected===8?8:name==='listOwners'&&selected===10?10:mode);

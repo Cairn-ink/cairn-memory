@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "f816291e35daa1ff8ca49bb60370bb3d852d21e9470e018165c814198b93974f",
-  "bytes": 1158162,
+  "sha256": "54b779c9c869ba5d5599fac80222cf8e8880eec2607e4554cebf3f0cc71bdeb5",
+  "bytes": 1158534,
   "files": [
     "LICENSE",
     "README.md",
@@ -694,7 +694,7 @@
     "docs/plans/context-read-p2c-impl.md": "d7006b149b5d5119a5f9660d65d9bcdbc7854aa4606050baa39349e5f357fd79",
     "adapters/openai/product-embedding.mjs": "d5f8164d80a1ede95469140c070e38e46e69ab7c66a5460120ca40161515eba6",
     "core/context-product-vectors.mjs": "047b569183c9c5ff051355c34c7b2ed7c3070bb8b38b3b8633c68b9cf615e91b",
-    "core/context-semantic-client.mjs": "eed2f1a18c294b13571f3319a81e1fc54f7ecc74587a089ffaac607c18353a84",
+    "core/context-semantic-client.mjs": "bcef9701ea7571907dc150d8175974123c3d7e4d2446b544db715f14b9336b5d",
     "core/context-semantic-coordinator.mjs": "fe91d88bf212042b213ba406e8451c69f90785125108fa1a9f4297e3893be716",
     "core/context-semantic-gate.mjs": "d1d137618579ef6cec5325d4122161ebb705da619984b345fc17cf34fda08287",
     "core/context-semantic-gates.mjs": "ba4f2e192b67b644272e92105e8774f3210c607bc8fac35b1e44ee4fb0818043",
@@ -703,7 +703,7 @@
     "core/context-semantic-ledger.mjs": "bdcb674b5248bbaf459c0f0db96411436eaa4636bd4f3b2423c382d30e56228b",
     "core/context-semantic-maintenance.mjs": "f5ec9abf9157ee616ec7b524c9779c85dd021163829fc38d3df135ad5d250f65",
     "core/context-semantic-pump.mjs": "7b5dea010ebeb6f4e45aae9057864f1b766b16238e00e7c2157fbaf1c0f6abe4",
-    "core/context-semantic-worker.mjs": "c744bef7321f6a475cfb5b2f9db027bc3fd660fed13391079efd68494b5a0cd4",
+    "core/context-semantic-worker.mjs": "88fde8f37cedb4c84ba6d7610f1beff290e5020752c0900d8ca019157015e803",
     "core/context-vector-validation.mjs": "6c41a7eb081eeb61ce09c82cfd27682454e9cdcbdd54e538435d5796b29f0d6e",
     "docs/plans/context-read-p2e-impl.md": "daf884b2995458d7d0d61832bbd163e51066cfc4e00f66e3f01c144eaeb89028",
     "adapters/mcp/safety-migrate-command.mjs": "e63ed654f3c052f3bc026faeee5b7d0868786feaf94bb93c2fccc311d793a38f",
