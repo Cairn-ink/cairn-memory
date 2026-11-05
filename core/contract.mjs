@@ -778,8 +778,7 @@ export function createMemoryCore(input, internal) {
         countTokens(model, '');
       }
       const capacity = Math.min(count, page.rows.length);
-      for (let take = capacity; take >= 0; take--) {
-        if (take === 0 && page.rows.length > 0) throw new MemoryStoreError('context_item_too_large');
+      const probe = (take) => {
         const selected = page.rows.slice(0, take);
         const pageEnded = take === page.rows.length;
         const exhausted = pageEnded && page.scanExhausted !== false;
@@ -788,10 +787,29 @@ export function createMemoryCore(input, internal) {
           exhausted, truncatedBy: exhausted ? null : take < capacity ? 'token_budget' : 'page_limit',
           indexRevision: page.epoch,
           invalidRefs: selected.filter((row) => row.invalidRef).map((row) => row.invalidRef) };
-        if (countTokens(model, JSON.stringify(success(value))) <= budget) {
-          runtime.assertEpoch(ns, page.epoch, page.suppressionEpoch);
-          return value;
+        return countTokens(model, JSON.stringify(success(value))) <= budget ? value : null;
+      };
+      // The full page can lose its cursor/change flags, so probe it separately.
+      // Only [1, capacity - 1] has the uniform token-budget envelope shape.
+      let fitted = probe(capacity);
+      if (!fitted) {
+        let low = 1;
+        let high = capacity - 1;
+        while (low <= high) {
+          const take = low + Math.floor((high - low) / 2);
+          const value = probe(take);
+          if (value) {
+            fitted = value;
+            low = take + 1;
+          } else {
+            high = take - 1;
+          }
         }
+      }
+      if (fitted) {
+        // Return the very object whose whole success envelope was counted.
+        runtime.assertEpoch(ns, page.epoch, page.suppressionEpoch);
+        return fitted;
       }
       throw new MemoryStoreError('context_item_too_large');
     });
