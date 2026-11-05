@@ -20,6 +20,14 @@ Roles are not a forced pipeline: Raw may support Memory, directly support a
 Card, or be located through a Memory for optional Card drafting. Normal capture
 continues to create Memories; it does not automatically create Cards.
 
+> **Superseded in part by an owner decision (2026-11-05):** capture may create
+> Cards. At write time the engine decides whether content becomes a Memory or a
+> Card and stores it; the engine requires no human confirmation before a Card is
+> stored or read. Confirmation and publication, if a product wants them, belong
+> to the host. Card source lineage and invalidation are unchanged. The
+> replacement contract text is pending design review. Until it lands, current
+> behavior is unchanged.
+
 ## 1. Existing baseline and reuse
 
 | Existing contract / source | Reuse and boundary |
@@ -164,6 +172,14 @@ chat does not implement this port. A host without a verifiable integration may
 create an authorized private draft but confirmation fails `approval_required`;
 never claim universal client approval support. Installed acceptance must exercise
 this actual adapter path, including unavailable/stale approval.
+
+> **Superseded in part by an owner decision (2026-11-05):** capture may create
+> Cards. At write time the engine decides whether content becomes a Memory or a
+> Card and stores it; the engine requires no human confirmation before a Card is
+> stored or read. Confirmation and publication, if a product wants them, belong
+> to the host. Card source lineage and invalidation are unchanged. The
+> replacement contract text is pending design review. Until it lands, current
+> behavior is unchanged.
 
 Common aliases: `N=namespace`, `A=actionId`, `R=expectedRevision`,
 `G=authority`, `B=budgets` (§7). Every mutation requires A; existing methods keep
@@ -474,6 +490,14 @@ stale; it never exposes old purged bodies or forgotten sources. `why` selects
 decision candidates then expands only guarded rationale/source bindings. Existing
 current-only rationale that cannot explain a historical version is unavailable,
 not fabricated. Source anchors arise only from selected canonical records.
+
+> **Superseded in part by an owner decision (2026-11-05):** full Raw text is to be
+> searchable. Reads use Memory as the entry point and Raw for deeper evidence: a
+> Memory hit may bring its Raw passages, and Raw hits may cover what Memories miss.
+> Forget, suppression and deletion rules apply to Raw search without exception.
+> The replacement contract (indexing, limits, encryption, migration) is pending
+> design review. Until it lands, no Raw search is implemented and current
+> behavior is unchanged.
 
 `B = {candidateLimit,itemLimit,sourceByteLimit,responseByteLimit,maxPages,
 maxMappedTopics,maxEdges,deadlineMs,scanRowLimit,scanBodyUnitLimit}`; omitted

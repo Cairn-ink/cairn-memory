@@ -155,7 +155,7 @@ for (const seam of ['admit', 'work']) {
 test('identity failure appends to the private vocabulary without changing stall kinds', () => {
   assert.deepEqual(maintenanceFailureKinds, ['none', 'worker_heap_limit', 'worker_exit', 'worker_error', 'protocol', 'unmapped', 'exception',
     'observation_timing', 'engine', 'spawn', 'dispatch', 'call_error', 'identity', 'worker_state', 'cleanup', 'disposal_proof',
-    'open_exceeds_quantum', 'maintainer_identity_unrecognized']);
+    'open_exceeds_quantum', 'maintainer_identity_unrecognized', 'admission_no_progress']);
   assert.deepEqual(maintenanceKinds, ['idle', 'scan', 'item', 'verify', 'publication', 'gc', 'vacuum', 'begin', 'commit', 'save',
     'canonical-read', 'serialize', 'admission']);
 });
