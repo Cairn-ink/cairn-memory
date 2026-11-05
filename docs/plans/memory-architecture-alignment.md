@@ -43,6 +43,14 @@ It authorizes no raw search or read-triggered model work: recall continues to
 use Memories and episodes. Existing capture allowlists, notice, retention,
 namespace, deletion and production gates remain authoritative.
 
+> **Superseded in part by an owner decision (2026-11-05):** full Raw text is to be
+> searchable. Reads use Memory as the entry point and Raw for deeper evidence: a
+> Memory hit may bring its Raw passages, and Raw hits may cover what Memories miss.
+> Forget, suppression and deletion rules apply to Raw search without exception.
+> The replacement contract (indexing, limits, encryption, migration) is pending
+> design review. Until it lands, no Raw search is implemented and current
+> behavior is unchanged.
+
 The retained evaluation checkpoint is **STOP the closed readable-source presentation probe**.
 Its required-conclusion gain was zero, without a baseline agreed-incorrect
 opportunity. No effective successor is selected. Existing failures and all closed
@@ -96,6 +104,14 @@ Authored content may remain under its own lifecycle, but stale evidence must be
 blocked in engine evidence reads, not merely marked in the UI. Exact deletion,
 attachment and surviving-support effects need the technical owner review below.
 
+> **Superseded in part by an owner decision (2026-11-05):** capture may create
+> Cards. At write time the engine decides whether content becomes a Memory or a
+> Card and stores it; the engine requires no human confirmation before a Card is
+> stored or read. Confirmation and publication, if a product wants them, belong
+> to the host. Card source lineage and invalidation are unchanged. The
+> replacement contract text is pending design review. Until it lands, current
+> behavior is unchanged.
+
 ## Retrieval: two responsibilities, not two fixed model calls
 
 The agreed target separates finding possible evidence from checking what that
@@ -145,6 +161,14 @@ source anchors; it does not authorize arbitrary Raw full-text search. A response
 is a revalidated snapshot for its authorized scope, not perpetual permission;
 consumers must not reuse it after relevant scope/source/version changes as if
 still current. Receipts have no independent revision to invent.
+
+> **Superseded in part by an owner decision (2026-11-05):** full Raw text is to be
+> searchable. Reads use Memory as the entry point and Raw for deeper evidence: a
+> Memory hit may bring its Raw passages, and Raw hits may cover what Memories miss.
+> Forget, suppression and deletion rules apply to Raw search without exception.
+> The replacement contract (indexing, limits, encryption, migration) is pending
+> design review. Until it lands, no Raw search is implemented and current
+> behavior is unchanged.
 
 One engine/common retrieval contract does not require one physical merged MOC
 tree. The latest product request is two typed Memory/Card indexes with explicit,
@@ -198,6 +222,12 @@ by itself approve a schema, a paid maintenance job or a V1 release commitment.
 | E7: Raw navigation | Paged retained-source navigation under existing RL-0 policies and gates; expose unknown times, scope and partial coverage. No Raw full-text search expansion. |
 | E8: both-valid conflict dismissal | A trusted human decision binds to the exact pair of versions and scope; changed evidence requires renewed review. It does not establish universal truth. A model-supplied human-confirmed label is not authority, and existing qualification transition guards remain. |
 | E9: shared evidence | A common typed bounded read over the authorized set, including source anchors, with final scope/version/source checks. No arbitrary Raw search or invented receipt revision; consumers use a fresh snapshot rather than permanent authorization. |
+
+> **Superseded in part by an owner decision (2026-11-05):** the E7 and E9 rows'
+> exclusion of Raw full-text search no longer holds; full Raw text is to be
+> searchable under the same scope, forget, suppression and deletion rules. The
+> replacement contract is pending design review. Until it lands, current
+> behavior is unchanged.
 
 ## Acceptance sequence
 

@@ -242,7 +242,13 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       }
       if(admitting) {
         if(!maintenance||p.mode!=='lexical')fail('authority_required');
-        const perform=()=>storage.admit();
+        const perform=()=>{
+          if(now()>=p.deadlineAt)fail('read_timeout');
+          storage.admit(p.deadlineAt);
+          if(now()>=p.deadlineAt)fail('read_timeout');
+          access.check();
+          if(now()>=p.deadlineAt)fail('read_timeout');
+        };
         if(attribution)attribution.measure('admission',perform);else perform();
         return access.envelope(()=>{if(observation)observation.admission='admitted';return success(null);});
       }
@@ -300,7 +306,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         return result;
       });
     } catch(e) {
-      if(pumpWork&&e===admissionRequired) {
+      if((pumpWork||admitting)&&e===admissionRequired) {
         return access.envelope(()=>{if(observation)observation.admission='required';return success(null);});
       }
       attribution?.captureFailure(e);attribution?.selectFailure(e);
