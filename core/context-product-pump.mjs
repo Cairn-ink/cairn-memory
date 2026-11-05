@@ -342,12 +342,14 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           if(gate.held||gate.quarantined||needsAdmission(index)&&(gate.pending||gate.busy||gate.until>now()))reason='admission_held';
         }
         if(turns.isPoisoned(currentIdentity)){reason??='stopped';error='reader_failed';}
+        if(!reason&&result.waitExpired){reason='wait_expired';retryNotBefore=now()+interval();}
         if(reason){
           const released=turns.release(result.ticket,'declined',reason);
           if(released==='poisoned')error='reader_failed';else if(released==='authority_required')error='authority_required';
           if(error){void stop();return;}
           if(exhausted()||now()>=renewedUntil)report(observation());schedule();return;
         }
+        turns.started(result.ticket);
         return tick(result.ticket,index);
       })();
       task.then(finishAdmission,()=>{

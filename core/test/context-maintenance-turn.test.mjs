@@ -101,7 +101,7 @@ test('withdrawal cannot be followed by settlement or another wait on an unsettle
 });
 
 test('release arguments stay closed and each decline reason has a fixed counter',async()=>{
-  for(const reason of ['stopped','renewal_expired','generation_changed','budget_exhausted','spacing','lane_changed','admission_held']){
+  for(const reason of ['stopped','renewal_expired','generation_changed','budget_exhausted','spacing','lane_changed','admission_held','wait_expired']){
     const calls=[],s=setup(()=>({enter:()=> 'admitted',release:(...args)=>calls.push(args)})),r=await s.wait();
     assert.throws(()=>s.turns.release(r.ticket,'settled',{}),{code:'invalid_input'});
     assert.throws(()=>s.turns.release(r.ticket,'declined','other'),{code:'invalid_input'});assert.deepEqual(calls,[]);
@@ -128,6 +128,7 @@ for(const cause of ['abort','deadline'])test(`grant settled before ${cause} but 
   s.set(1000);if(cause==='abort')s.abort.abort();else for(const {f} of [...s.timers.values()])f();
   const r=await result;
   assert.equal(r.status,'admitted');assert.deepEqual(calls,[]);
+  assert.equal(r.waitExpired,cause==='deadline'||s.clock.now()>=1000);
   assert.equal(s.turns.snapshot().deferredTurns,0);assert.equal(s.turns.snapshot().turnPhase,'running');
   assert.equal(s.timers.size,0);assert.equal(s.turns.snapshot().turnWaitMs,1000);
   const reason=cause==='abort'?'generation_changed':'renewal_expired';
@@ -142,7 +143,8 @@ for(const cause of ['abort','deadline'])test(`grant returned during ${cause} not
   const result=s.wait();
   if(cause==='abort'){s.set(999);s.abort.abort();}else await s.deadline();
   const r=await result;
-  assert.equal(r.status,'admitted');assert.deepEqual(calls,[]);assert.equal(s.turns.snapshot().deferredTurns,0);
+  assert.equal(r.status,'admitted');assert.deepEqual(calls,[]);
+  assert.equal(r.waitExpired,cause==='deadline'||s.clock.now()>=1000);assert.equal(s.turns.snapshot().deferredTurns,0);
   s.turns.release(r.ticket,'declined',cause==='abort'?'generation_changed':'renewal_expired');
   assert.deepEqual(calls,[['declined',cause==='abort'?'generation_changed':'renewal_expired']]);
 });
@@ -153,7 +155,8 @@ for(const cause of ['abort','deadline'])test(`grant settled after ${cause} notif
   if(cause==='abort'){s.set(999);s.abort.abort();}
   else {s.set(1000);for(const {f} of [...s.timers.values()])f();}
   p.resolve('admitted');const r=await result;
-  assert.equal(r.status,'admitted');assert.deepEqual(calls,[]);assert.equal(s.turns.snapshot().deferredTurns,0);
+  assert.equal(r.status,'admitted');assert.deepEqual(calls,[]);
+  assert.equal(r.waitExpired,cause==='deadline'||s.clock.now()>=1000);assert.equal(s.turns.snapshot().deferredTurns,0);
   s.turns.release(r.ticket,'declined',cause==='abort'?'generation_changed':'renewal_expired');
   assert.deepEqual(calls,[['declined',cause==='abort'?'generation_changed':'renewal_expired']]);
 });

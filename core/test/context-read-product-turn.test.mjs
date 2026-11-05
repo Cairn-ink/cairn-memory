@@ -25,7 +25,7 @@ function model(t,{q=1000,maxWaitMs=5000,renewalMs=60000,endsAtMonoMs=60000,port=
     credentialDigest:credentialDigest(credential),ownerId:readSet[0].ownerId,namespaces:{readSet,ownerCoverage},issuedAt:0};
   const options={supervisor,path:'/synthetic-turn-'+randomUUID()+'.sqlite',readSet,ownerCoverage,
     host:{moduleUrl:'file:///synthetic-turn-host.mjs',configuration:{serviceBinding}}};
-  const s={events,tickets,timers,identity,supervisor,now:()=>time,set:n=>{time=n;},spend:n=>{time+=n;},
+  const s={events,tickets,timers,identity,supervisor,observedCalls:0,timerCount:()=>serial,now:()=>time,set:n=>{time=n;},spend:n=>{time+=n;},
     entry:()=> 'admitted',open:async()=>{},admit:async()=>{},work:async()=>{},dispose:async()=>{},release:()=>{},factory:null};
   const preQuantum={version:1,maxWaitMs,createTurn(request){
     if(s.factory)return s.factory(request);
@@ -37,7 +37,7 @@ function model(t,{q=1000,maxWaitMs=5000,renewalMs=60000,endsAtMonoMs=60000,port=
     window:{id:'first',endsAtMonoMs,usedItems:0,usedMs:0},budgets:{maxItems:2048,maxMs:60000},
     quantum:{maxItems:32,maxMs:q},pollMs:25,renewalMs,projections:[{options,types:['memory']}],...(port?{preQuantum}:{})};
   const deps={now:()=>time,setTimer:(fn,ms)=>{const id=++serial;timers.set(id,{fn,at:time+ms,ms});return id;},clearTimer:id=>timers.delete(id),
-    admissionIdentity:()=>({...identity}),receiptOf:r=>r?.receipt,observedAt:()=>observed,
+    admissionIdentity:()=>({...identity}),receiptOf:r=>r?.receipt,observedAt:()=>{s.observedCalls++;return observed;},
     open:async input=>{events.push({kind:'open',at:time,input});await s.open(input);return {async close(){events.push({kind:'dispose',at:time});await s.dispose();events.push({kind:'disposed',at:time});}};},
     admit:async(h,input)=>{events.push({kind:'admission',at:time,input});const result=await s.admit(input);return result??{ok:true,value:null,receipt:'admitted'};},
     work:async(h,input)=>{events.push({kind:'work',at:time,input});const result=await s.work(input);observed=time;return result??{ok:true,value:{progress:{transformed:1}}};}};
@@ -76,6 +76,7 @@ test('turn request: separate admission/work tickets, pending lane, fresh allowan
     assert.deepEqual(Object.keys(ticket.request).sort(),['family','intent','kind','lane','maxMs','phase','pumpId','version','windowId']);
     assert.equal(ticket.request.maxMs,1000);assert.equal(ticket.request.family,'lexical');assert.equal(ticket.request.kind,'lexical');}
   assert.equal(s.events.filter(e=>e.kind==='open').length,1);assert.equal(s.diagnostic().turnPhase,'idle');
+  assert.equal(s.diagnostic().admittedTurns,3,'one admission and two started work turns');
   assert.deepEqual(Object.keys(p.getStatus()).sort(),['error','id','maxItems','maxMs','state','usedItems','usedMs','windowId']);
 });
 
@@ -154,6 +155,74 @@ test(`grant recheck declines ${cause} before reserving or dispatching`,async t=>
   await pending;await closing;
   assert.deepEqual(s.tickets[0].releases,[['declined',cause]]);assert.equal(s.events.some(e=>e.kind==='open'),false);
   assert.equal(maintenancePumpDiagnostic(p.getStatus()).declinedTurns[cause],1);assert.equal(p.getStatus().error,null);
+});
+
+for(const phase of ['admission','work'])for(const grantFirst of [true,false])
+test(`short wait expiry declines ${phase}, grant settled ${grantFirst?'before':'after'} deadline abort`,async t=>{
+  const s=model(t,{maxWaitMs:1000}),p=s.create();if(phase==='work')await s.next();
+  const before=p.getStatus(),phases=s.phases(),observation=s.diagnostic().observation,prior=s.events.length;
+  const ordinal=maintenanceControlState(maintenanceDispatchControl()).ordinal;
+  const queued=deferred();s.entry=()=>queued.promise;const pending=s.fire();await flush();const ticket=s.tickets.at(-1);
+  assert.equal(ticket.request.phase,phase);
+  s.set(ticket.until-1);if(grantFirst)queued.resolve('admitted');
+  s.set(ticket.until+1);
+  for(const [id,timer] of [...s.timers])if(timer.at<=s.now()){s.timers.delete(id);timer.fn();}
+  if(!grantFirst)queued.resolve('admitted');
+  await pending;
+  assert.equal(ticket.signal.aborted,true);assert.deepEqual(ticket.releases,[['declined','wait_expired']]);
+  assert.deepEqual(s.events.slice(prior).map(e=>e.kind),['request','release']);
+  assert.deepEqual(p.getStatus(),before);assert.equal(p.getStatus().state,'active');assert.equal(p.getStatus().error,null);
+  assert.deepEqual(s.phases(),phases);assert.deepEqual(s.diagnostic().observation,observation);
+  assert.equal(s.diagnostic().lastFailure,null);assert.equal(s.diagnostic().deferredTurns,0);
+  assert.equal(s.diagnostic().declinedTurns.wait_expired,1);
+  assert.equal(maintenanceControlState(maintenanceDispatchControl()).ordinal,ordinal+1,'no dispatch ordinal consumed');
+  assert.equal(s.timers.size,1,'only the normal retry timer remains');
+  assert.equal([...s.timers.values()][0].at,s.now()+1000);
+  const count=s.tickets.length;await s.due(s.now()+999);assert.equal(s.tickets.length,count,'no early retry');
+  s.entry=()=> 'admitted';await s.next();assert.deepEqual(s.tickets.at(-1).releases,[['settled']]);
+  assert.equal(s.tickets.at(-1).request.phase,phase);assert.equal(s.tickets.at(-1).request.lane,ticket.request.lane);
+});
+
+test('an always-late broker exposes missed duty and rising declines without started turns or a timer spin',async t=>{
+  const s=model(t,{maxWaitMs:1000});
+  s.entry=ticket=>{
+    const queued=deferred();
+    ticket.signal.addEventListener('abort',()=>queued.resolve('admitted'),{once:true});
+    return queued.promise;
+  };
+  const p=s.create(),initial=s.diagnostic();let fired=0;
+  // Advance each timer at its scheduled fake time, including deadline aborts.
+  while(Math.min(...[...s.timers.values()].map(timer=>timer.at))<=6500){
+    assert.ok(++fired<=12,'bounded timer callbacks over the duty interval');
+    s.fire();await flush();
+  }
+  s.set(6500);const diagnostic=s.diagnostic();
+  assert.equal(p.getStatus().state,'active');assert.equal(p.getStatus().error,null);
+  assert.ok(diagnostic.missedObservations>=1);assert.ok(diagnostic.cadenceMisses>=1);
+  assert.ok(diagnostic.declinedTurns.wait_expired>initial.declinedTurns.wait_expired);
+  assert.equal(diagnostic.admittedTurns,initial.admittedTurns);assert.equal(diagnostic.admittedTurns,0);
+  assert.equal(diagnostic.deferredTurns,0);assert.equal(diagnostic.lastFailure,null);
+  assert.equal(s.observedCalls,0,'host freshness is never refreshed');
+  assert.deepEqual(s.events.filter(e=>['open','admission','work'].includes(e.kind)),[]);
+  assert.equal(p.getStatus().usedItems,0);assert.equal(p.getStatus().usedMs,0);
+  assert.equal(s.phases().reduce((n,lane)=>n+lane.quanta,0),0);
+  assert.ok(s.tickets.length>=2&&s.tickets.length<=4,'bounded requested turns');
+  assert.ok(s.timerCount()<=13,'bounded timer creation');assert.equal(s.timers.size,1);
+  for(const ticket of s.tickets)assert.deepEqual(ticket.releases,[['declined','wait_expired']]);
+});
+
+test('a real window expiry wins over a coincident wait deadline abort',async t=>{
+  const s=model(t,{maxWaitMs:1000,endsAtMonoMs:3000}),queued=deferred();s.entry=()=>queued.promise;
+  const p=s.create(),pending=s.fire();await flush();const ticket=s.tickets[0];
+  // Deliver the wait timer at the actual window horizon before the grant reaction.
+  s.set(s.config.window.endsAtMonoMs);queued.resolve('admitted');
+  for(const [id,timer] of [...s.timers])if(timer.at<=s.now()){s.timers.delete(id);timer.fn();}
+  await pending;
+  assert.equal(ticket.signal.aborted,true);assert.deepEqual(ticket.releases,[['declined','renewal_expired']]);
+  assert.equal(s.diagnostic().declinedTurns.renewal_expired,1);assert.equal(s.diagnostic().declinedTurns.wait_expired,0);
+  assert.equal(s.diagnostic().deferredTurns,0);assert.equal(s.diagnostic().lastFailure,null);
+  assert.equal(s.events.some(e=>['open','admission','work'].includes(e.kind)),false);
+  assert.equal(p.getStatus().usedItems,0);assert.equal(p.getStatus().usedMs,0);assert.equal(p.getStatus().error,null);
 });
 
 for(const cause of ['deadline','close','supervisor','renewal'])

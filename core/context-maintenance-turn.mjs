@@ -5,7 +5,7 @@ import { add } from './context-product-attribution.mjs';
 
 const captures=new WeakMap(),promiseConstructor=Promise,promisePrototype=Promise.prototype,then=Promise.prototype.then,
   promiseSpecies=Object.getOwnPropertyDescriptor(Promise,Symbol.species).get;
-const reasons=['stopped','renewal_expired','generation_changed','budget_exhausted','spacing','lane_changed','admission_held'];
+const reasons=['stopped','renewal_expired','generation_changed','budget_exhausted','spacing','lane_changed','admission_held','wait_expired'];
 // Independent of admission-domain retirement and capacity epochs. There is
 // deliberately no deletion/reset API: restarting this realm clears poison.
 const poisonKey=Symbol.for('context-read/maintenance-turn-poison/v1');
@@ -75,7 +75,7 @@ export function maintenanceTurnRequest(input){
 // join; a grant is retained until that pump explicitly settles or poisons it.
 export function createMaintenanceTurnController(capture,{now,setTimer,clearTimer}){
   if(!captures.has(capture))fail('invalid_input');
-  let phase='idle',active,waitMs=0,deferrals=0,misses=0;
+  let phase='idle',active,waitMs=0,deferrals=0,misses=0,admitted=0;
   const declined=Object.fromEntries(reasons.map(reason=>[reason,0]));
   const tickets=new WeakMap();
   function poisoned(identity){
@@ -136,7 +136,7 @@ export function createMaintenanceTurnController(capture,{now,setTimer,clearTimer
         if(released==='authority_required'){complete({status:'failed',error:'authority_required'});return;}
       }
       if(status==='failed')complete({status,error:'authority_required'});
-      else complete({status,...(granted?{ticket}:{})});
+      else complete({status,...(granted?{ticket,waitExpired:cancelCause==='defer'||now()>=untilMonoMs}:{})});
     }
     function withdraw(status){
       // Let a native Promise reaction queued in this turn observe a raced
@@ -177,9 +177,13 @@ export function createMaintenanceTurnController(capture,{now,setTimer,clearTimer
   }
   return Object.freeze({wait,release,poison,bindIdentity,isPoisoned:poisoned,
     settling(ticket){const state=tickets.get(ticket);if(!state)fail('invalid_input');if(!state.attempted&&!state.poisoned)phase='settling';},
+    started(ticket){
+      const state=tickets.get(ticket);if(!state)fail('invalid_input');
+      if(!state.attempted&&!state.poisoned&&!state.started){state.started=true;admitted=add(admitted,1);}
+    },
     portUnchanged:()=>unchanged(capture),
     missedObservation(){misses=add(misses,1);},
-    snapshot(admissionHold){return Object.freeze({deferredTurns:deferrals,turnWaitMs:add(waitMs,active?Math.max(0,now()-active.start):0),
+    snapshot(admissionHold){return Object.freeze({deferredTurns:deferrals,admittedTurns:admitted,turnWaitMs:add(waitMs,active?Math.max(0,now()-active.start):0),
       declinedTurns:Object.freeze({...declined}),turnPhase:phase,missedObservations:misses,
       ...(admissionHold===undefined?{}:{admissionHold:Object.freeze({...admissionHold})})});}
   });
