@@ -7,7 +7,7 @@ import { createPrivateEvidenceStorage } from './private-evidence-storage.mjs';
 import { createCardReceiptSources } from './card-receipt-sources.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { engineProjectionCounter } from './model-budget.mjs';
-import { assembleContext } from './context-read-assembly.mjs';
+import { assembleContext, receiptEventDate } from './context-read-assembly.mjs';
 import { keyed } from './private-card-input.mjs';
 import { fail } from './validation.mjs';
 
@@ -21,14 +21,16 @@ export function roleEvidence(storage,config) {
   const fence=item=>createHmac('sha256',identity.cursorSecret).update(JSON.stringify(['context-read-v1','snapshot-item',identity.storeId,item])).digest('base64url');
   function item(ref,readSet,rank,intent='current') {
     const canonical=evidence.itemsInside(ref.namespace,[ref],intent,readSet)[0],{type,state,origin}=canonical;
-    const sources=type==='memory'&&canonical.provenance.sourceAccess==='available'?
-      db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).filter(row=>canonical.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)).map((row,index)=>{
-        const {role,excerpt}=validateSourceReceipt(ref.memoryId,row,source=>createHash('sha256').update(JSON.stringify(source)).digest('hex'));
-        return {index,role,excerpt,ref:canonical.provenance.sources[index]};
-      }):[];
+    const sourceRows=type==='memory'&&canonical.provenance.sourceAccess==='available'?
+      db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).filter(row=>canonical.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)):[];
+    const date=receiptEventDate(sourceRows);
+    const sources=sourceRows.map((row,index)=>{
+      const {role,excerpt}=validateSourceReceipt(ref.memoryId,row,source=>createHash('sha256').update(JSON.stringify(source)).digest('hex'));
+      return {index,role,excerpt,ref:canonical.provenance.sources[index]};
+    });
     return {type,ref,ns:readSet.findIndex(ns=>JSON.stringify(ns)===JSON.stringify(ref.namespace)),rank,
       metadata:type==='memory'?{state,reviewState:canonical.reviewState,filing:canonical.filing,kind:canonical.kind,origin,confidence:canonical.confidence}:{state,support:canonical.support,origin},
-      text:type==='memory'?canonical.content:canonical.title+'\n'+canonical.body,sources,
+      text:type==='memory'?canonical.content:canonical.title+'\n'+canonical.body,date,sources,
       sourceAccess:type==='memory'?canonical.provenance.sourceAccess:'unsupported',canonicalSourceCount:sources.length,
       canonicalSourcesComplete:type==='memory'&&canonical.provenance.coverage.status==='complete',fence:fence(canonical)};
   }

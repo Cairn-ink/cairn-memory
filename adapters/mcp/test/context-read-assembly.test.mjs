@@ -14,9 +14,9 @@ import { contextToolResponse, ContextStdioServerTransport, CONTEXT_TRANSPORT_BYT
 import { createContextCounter } from '../../openai/context-counter.mjs';
 import { countOpenAITokens } from '../../openai/index.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
-import { meteredText, ASSEMBLY_FRAMING } from '../../../core/context-read-assembly.mjs';
-import { ASSEMBLY_POLICIES, ASSEMBLY_LIMITS, ASSEMBLY_DEFAULTS } from '../../../core/context-read-input.mjs';
-import { assemblyFixture, assemblyQuery, sample } from '../../../core/testing/context-read-assembly-fixture.mjs';
+import { meteredText, ASSEMBLY_FRAMING, assembleContext } from '../../../core/context-read-assembly.mjs';
+import { ASSEMBLY_POLICIES, ASSEMBLY_LIMITS, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_DEFAULTS } from '../../../core/context-read-input.mjs';
+import { assemblyFixture, assemblyQuery, sample, fixedPrepared } from '../../../core/testing/context-read-assembly-fixture.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { contextHost, contextNamespace as ns, contextProviderArgs } from './context-support.mjs';
 
@@ -82,8 +82,35 @@ test('A11 strict assembly grammar, authority refusals, advertised policies and f
     ...['authority', 'namespace', 'readSet', 'context', 'configuration', 'provider', 'counter', 'budget', 'cursor', 'limit', 'unknown'].map(key => ({ [key]: {} }))]) {
     assert.equal(tool.schema.safeParse({ ...query, ...patch }).success, false, JSON.stringify(patch));
   }
+  for (const representation of ASSEMBLY_REPRESENTATIONS) {
+    ok(await tool.action(tool.schema.parse({ ...query, representation })));
+    assert.equal(calls.at(-1).representation, representation);
+  }
+  assert.equal(tool.schema.safeParse({ ...query, representation: 'unknown' }).success, false);
   assert.equal(access.call(core, 'refreshContextIndex', {}).error.code, 'authority_required');
   access.revoke(); assert.equal((await tool.action(query)).error.code, 'authority_required');
+});
+
+test('dated Memory ref copied from text parses under a strict citation schema and the fetch tool', async () => {
+  const prepared = fixedPrepared().slice(0, 1); prepared[0].date = '2023-05-22T05:54Z';
+  const result = assembleContext({ prepared, representation: 'representation-v2-dated',
+    counter: { id: 'fake-all-fit', countTokens: () => 1 }, policy: { id: 'rank-first-whole-v1' },
+    budget: { maxTokens: 4000, maxItems: 12 }, deadlineAt: Infinity, snapshotOf: () => null });
+  const item = JSON.parse(meteredText(result.metered)).value.items[0];
+  assert.equal(item.date, '2023-05-22T05:54Z');
+  const schema = z.strictObject({ ns: z.number().int().nonnegative(), type: z.literal('memory'),
+    id: z.string(), rev: z.number().int().positive(), f: z.string().regex(/^[A-Za-z0-9_-]{8}$/) });
+  assert.deepEqual(schema.parse(item.ref), item.ref);
+  assert.equal(schema.safeParse({ ...item.ref, date: item.date }).success, false);
+  const tools = new Map(), access = createContextReadAccess(prepared[0].ref.namespace);
+  let supplied;
+  registerContextReadTools((name, description, schema, action) => tools.set(name, { schema, action }), {
+    fetchCandidateEvidence(input) { supplied = input; return { ok: true, value: null }; },
+  }, access);
+  const fetch = tools.get('fetch_memory_candidate_evidence');
+  ok(await fetch.action(fetch.schema.parse({ intent: 'current', refs: [item.ref] })));
+  assert.deepEqual(supplied.refs, [prepared[0].ref]);
+  assert.deepEqual(supplied.fences, [item.ref.f]);
 });
 
 test('A11 actual MCP text equals core meteredText; diagnostics stay only in client metadata; capabilities and sanitization', async t => {
@@ -93,14 +120,14 @@ test('A11 actual MCP text equals core meteredText; diagnostics stay only in clie
   const memory = admit(core), secret = 'sk-' + 'S'.repeat(32), sanitized = admit(core, 'assembly secret ' + secret);
   const caps = ok(core.getContextReadCapabilities());
   assert.ok(caps.methods.includes('contextRead')); assert.ok(!caps.unsupported.includes('assembly'));
-  assert.deepEqual(caps.assembly, { representation: 'representation-v2', defaults: ASSEMBLY_DEFAULTS, policies: [...ASSEMBLY_POLICIES],
+  assert.deepEqual(caps.assembly, { representation: 'representation-v2', representations: [...ASSEMBLY_REPRESENTATIONS], defaults: ASSEMBLY_DEFAULTS, policies: [...ASSEMBLY_POLICIES],
     defaultPolicy: 'rank-first-whole-v1', counter: { id: 'tiktoken-o200k_base' }, limits: { ...ASSEMBLY_LIMITS } });
   let envelope, supplied;
   const wrapped = { ...core, async contextRead(input, token) { supplied = input; envelope = await core.contextRead(input, token); return envelope; } };
   const client = await connect(workspace, buildCairnServer({ path, binding: ns, core: wrapped, context: access }));
   const tool = (await client.listTools()).tools.find(tool => tool.name === 'read_memory_context');
   assert.equal(tool.annotations.readOnlyHint, true); assert.equal(tool.annotations.openWorldHint, true);
-  assert.deepEqual(Object.keys(tool.inputSchema.properties), ['query', 'types', 'intent', 'semantic', 'maxTokens', 'maxItems', 'policy', 'deadlineMs']);
+  assert.deepEqual(Object.keys(tool.inputSchema.properties), ['query', 'types', 'intent', 'semantic', 'maxTokens', 'maxItems', 'policy', 'representation', 'deadlineMs']);
   for (const id of ASSEMBLY_POLICIES) {
     const response = await client.callTool({ name: tool.name, arguments: { ...query, maxTokens: 4000, maxItems: 2, policy: { id } } });
     const value = ok(envelope);

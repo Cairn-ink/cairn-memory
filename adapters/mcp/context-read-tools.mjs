@@ -1,7 +1,7 @@
 import * as z from 'zod/v4';
 import { identifier } from '../../core/validation.mjs';
 import { ownData } from '../../core/local-authority-input.mjs';
-import { ASSEMBLY_POLICIES, ASSEMBLY_DEFAULTS } from '../../core/context-read-input.mjs';
+import { ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_DEFAULTS } from '../../core/context-read-input.mjs';
 
 export const CONTEXT_TOOL_NAMES = Object.freeze(['find_memory_candidates', 'fetch_memory_candidate_evidence', 'read_memory_context']);
 export function registerContextReadTools(tool, core, access) {
@@ -76,7 +76,8 @@ export function registerContextReadTools(tool, core, access) {
     z.strictObject({ query: z.string().min(1).max(4000), types: z.array(z.enum(['memory', 'card'])).min(1).max(2).refine(types => new Set(types).size === types.length),
       intent: z.enum(['current', 'history']), semantic: z.boolean().optional(),
       maxTokens: z.number().int().min(64).max(4000).optional(), maxItems: z.number().int().min(1).max(24).optional(),
-      policy: z.strictObject({ id: z.enum(ASSEMBLY_POLICIES) }).optional(), deadlineMs: z.number().int().min(1).max(5000).optional() }),
+      policy: z.strictObject({ id: z.enum(ASSEMBLY_POLICIES) }).optional(),
+      representation: z.enum(ASSEMBLY_REPRESENTATIONS).optional(), deadlineMs: z.number().int().min(1).max(5000).optional() }),
     ({ maxTokens, maxItems, ...input }) => access.call(core, 'contextRead', { ...input,
       budget: { ...(maxTokens !== undefined ? { maxTokens } : {}), ...(maxItems !== undefined ? { maxItems } : {}) }, readSet: access.readSet }), true);
 }
