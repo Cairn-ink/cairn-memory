@@ -75,7 +75,7 @@ export function maintenanceTurnRequest(input){
 // join; a grant is retained until that pump explicitly settles or poisons it.
 export function createMaintenanceTurnController(capture,{now,setTimer,clearTimer}){
   if(!captures.has(capture))fail('invalid_input');
-  let phase='idle',active,waitMs=0,deferred=0,misses=0;
+  let phase='idle',active,waitMs=0,deferrals=0,misses=0;
   const declined=Object.fromEntries(reasons.map(reason=>[reason,0]));
   const tickets=new WeakMap();
   function poisoned(identity){
@@ -129,7 +129,7 @@ export function createMaintenanceTurnController(capture,{now,setTimer,clearTimer
     function finish(status){
       if(done)return;done=true;finishWait();
       if(status==='admitted'){granted=true;phase='running';}
-      else if(status==='defer')deferred=add(deferred,1);
+      else if(status==='defer')deferrals=add(deferrals,1);
       if(status!=='admitted'){
         const released=release(ticket,'withdrawn');
         if(released==='poisoned'){complete({status:'failed',error:'reader_failed'});return;}
@@ -179,7 +179,7 @@ export function createMaintenanceTurnController(capture,{now,setTimer,clearTimer
     settling(ticket){const state=tickets.get(ticket);if(!state)fail('invalid_input');if(!state.attempted&&!state.poisoned)phase='settling';},
     portUnchanged:()=>unchanged(capture),
     missedObservation(){misses=add(misses,1);},
-    snapshot(admissionHold){return Object.freeze({deferredTurns:deferred,turnWaitMs:add(waitMs,active?Math.max(0,now()-active.start):0),
+    snapshot(admissionHold){return Object.freeze({deferredTurns:deferrals,turnWaitMs:add(waitMs,active?Math.max(0,now()-active.start):0),
       declinedTurns:Object.freeze({...declined}),turnPhase:phase,missedObservations:misses,
       ...(admissionHold===undefined?{}:{admissionHold:Object.freeze({...admissionHold})})});}
   });
