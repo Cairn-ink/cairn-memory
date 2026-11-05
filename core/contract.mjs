@@ -1,3 +1,4 @@
+import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
 import { contentWriteMethodClass } from './content-write-context.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { contentSafetyFacade } from './content-safety-boundary.mjs';
@@ -778,8 +779,7 @@ export function createMemoryCore(input, internal) {
         countTokens(model, '');
       }
       const capacity = Math.min(count, page.rows.length);
-      for (let take = capacity; take >= 0; take--) {
-        if (take === 0 && page.rows.length > 0) throw new MemoryStoreError('context_item_too_large');
+      const probe = (take) => {
         const selected = page.rows.slice(0, take);
         const pageEnded = take === page.rows.length;
         const exhausted = pageEnded && page.scanExhausted !== false;
@@ -788,10 +788,29 @@ export function createMemoryCore(input, internal) {
           exhausted, truncatedBy: exhausted ? null : take < capacity ? 'token_budget' : 'page_limit',
           indexRevision: page.epoch,
           invalidRefs: selected.filter((row) => row.invalidRef).map((row) => row.invalidRef) };
-        if (countTokens(model, JSON.stringify(success(value))) <= budget) {
-          runtime.assertEpoch(ns, page.epoch, page.suppressionEpoch);
-          return value;
+        return countTokens(model, JSON.stringify(success(value))) <= budget ? value : null;
+      };
+      // The full page can lose its cursor/change flags, so probe it separately.
+      // Only [1, capacity - 1] has the uniform token-budget envelope shape.
+      let fitted = probe(capacity);
+      if (!fitted) {
+        let low = 1;
+        let high = capacity - 1;
+        while (low <= high) {
+          const take = low + Math.floor((high - low) / 2);
+          const value = probe(take);
+          if (value) {
+            fitted = value;
+            low = take + 1;
+          } else {
+            high = take - 1;
+          }
         }
+      }
+      if (fitted) {
+        // Return the very object whose whole success envelope was counted.
+        runtime.assertEpoch(ns, page.epoch, page.suppressionEpoch);
+        return fitted;
       }
       throw new MemoryStoreError('context_item_too_large');
     });
@@ -973,12 +992,18 @@ export function createMemoryCore(input, internal) {
         deadline, input: { ...input, namespace },
         operations: { filterCaptureSources: sources => runtime.filterCaptureSources(ns, sources),
           assertCaptureSources: sources => runtime.assertCaptureSources(ns, sources),
+          // Preserve private pre-dispatch busy provenance across this internal
+          // operation, including the runtime facade's entry/delivery checks.
+          beginCaptureDispatch: value => {
+            try { return runtime.assertCaptureEvidence(ns, { ...value, [captureDispatch]: true }, deadline); }
+            catch (error) { if (isStorageBusy(error)) throw captureSourceBusy(); throw error; }
+          },
           claimAdmission: (value, sources) => invoke(() => runtime.claimCapturedAdmission(ns, {
           ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS,
         }, deadline, rawRegistration, sources)),
           finishAdmission: value => finishAdmissionValidated(captureKey(value), true, deadline,
             keepInput || sessionEpisodes ? undefined : captureQualifiedDuplicates),
-          abandonAdmission: (value, retryable) => sessionEpisodes && retryable
+          abandonAdmission: (value, retryable) => retryable
             ? invoke(() => runtime.abandonAdmission(ns, { ...admissionKey(captureKey(value)),
               token: contractId(value.token), retryable: true }))
             : abandonAdmission(captureKey(value)), get, map, isAwaiting: id => runtime.isAwaiting(ns, id),

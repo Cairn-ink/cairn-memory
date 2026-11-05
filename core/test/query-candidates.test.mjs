@@ -655,7 +655,8 @@ test('candidate pages obey token packing as well as the 100 item ceiling', async
     return 1;
   };
   const result = ok(await recall(f.core));
-  assert.deepEqual(packed, [7, 7]);
+  // Binary search counts an intermediate fitting prefix before the final fit.
+  assert.deepEqual(packed, [6, 7, 6, 7]);
   assert.deepEqual(f.model.calls.map((call) => call.input.maps[0].items.length), [7, 7]);
   assert.equal(result.coverage, 'budget_exhausted');
 });

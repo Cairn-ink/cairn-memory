@@ -1,4 +1,4 @@
-import { assertContentCostDiscovery, assertContentCostDeferrals } from '../testing/content-safety-s2h-cost-inventory.mjs';
+import { assertContentCostDiscovery, assertContentCostDeferrals, assertRawProductCostPopulations } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -182,15 +182,38 @@ test('R3 cost inventory refuses any declared but ungated retained-read variant',
  const inventory=JSON.parse(readFileSync(new URL('./fixtures/content-safety-s2h-cost-inventory.json',import.meta.url),'utf8'));
  const missing=Object.entries(inventory.reads).flatMap(([method,entry])=>entry.missing.map(variant=>({method,variant})));
  assert.deepEqual(missing,[],'unmapped retained-read variants remain blockers');
- assert.equal(assertContentCostDeferrals(inventory).length,3);
- for(const field of ['decisionReference','scopeItem']){
-  const changed=structuredClone(inventory);delete changed.reads.contextRead.deferred[0][field];
-  assert.throws(()=>assertContentCostDeferrals(changed),/deferred → S2h-3, e9 11-01 17:15/,field);
+ assert.equal(assertContentCostDeferrals(inventory).length,0,'native coverage replaces the three product deferrals');
+ for(const method of ['refreshContextIndex','findCandidates','contextRead'])for(const mutation of ['delete','rename','unknown']){
+  const changed=structuredClone(inventory),entry=changed.reads[method],gate=entry.gates.find(e=>e.gate==='product-semantic-cost');
+  if(mutation==='delete')entry.gates.splice(entry.gates.indexOf(gate),1);
+  if(mutation==='rename')gate.gate='renamed';
+  if(mutation==='unknown')gate.variants.push('unknown native variant');
+  assert.throws(()=>assertContentCostDeferrals(changed),/native product semantic/);
  }
- const changed=structuredClone(inventory);changed.reads.contextRead.deferred[0].variant='unmapped semantic variant';
- assert.throws(()=>assertContentCostDeferrals(changed),/undeclared variant/);
+ for(const group of ['product-semantic-native','product-semantic-cursor'])for(const index of inventory.caseSets[group].keys())for(const mutation of ['delete','rename']){
+  const changed=structuredClone(inventory),cases=changed.caseSets[group];
+  if(mutation==='delete')cases.splice(index,1);else cases[index]+='-renamed';
+  assert.throws(()=>assertContentCostDeferrals(changed),/exact native product semantic (?:cursor )?case set/);
+ }
+ const deferred=structuredClone(inventory);deferred.reads.contextRead.deferred=[{category:'deferred',variant:'product enabled semantic'}];
+ assert.throws(()=>assertContentCostDeferrals(deferred),/executed minimal native count smoke case/);
+ deferred.reads.contextRead.deferred[0].nativeSmoke={gate:'product-semantic-cost',case:'contextRead:hit'};
+ assert.throws(()=>assertContentCostDeferrals(deferred),/non-empty coverage deferral/);
  const unmapped=structuredClone(inventory);unmapped.reads.get.missing.push('unknown read variant');
  assert.throws(()=>assertContentCostDeferrals(unmapped),/unmapped retained-read variant/);
- const stale=structuredClone(inventory);stale.reads.contextRead.deferred=[];
- assert.throws(()=>assertContentCostDeferrals(stale),/exact non-stale deferral set/);
+});
+
+
+test('Raw product discovery requires both safety families and every cursor population',()=>{
+ const inventory=JSON.parse(readFileSync(new URL('./fixtures/content-safety-s2h-cost-inventory.json',import.meta.url),'utf8'));
+ assertRawProductCostPopulations(inventory);
+ for(const field of ['families','physicalCells','lineage','facts','sizes','intents']){
+  const missing=structuredClone(inventory);missing.rawProductPopulations[field].pop();
+  assert.throws(()=>assertRawProductCostPopulations(missing),'missing Raw dimension: '+field);
+ }
+ for(const group of ['product-semantic-raw','product-semantic-cursor']){
+  const missing=structuredClone(inventory);missing.caseSets[group].pop();
+  if(group==='product-semantic-raw')assert.throws(()=>assertRawProductCostPopulations(missing));
+  else assert.throws(()=>assertContentCostDeferrals(missing));
+ }
 });

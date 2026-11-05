@@ -75,5 +75,19 @@
     "end": "\ntry {",
     "purpose": "public Worker capabilities projection",
     "sha256": "0c2a07b5f20bc4eea4f945ab029170111297d77b0c4c7e00081c42d3a45d5c7d"
+  },
+  {
+    "file": "core/context-read-facade.mjs",
+    "start": "  // context-read facade: memo receipt projection",
+    "end": "  async function contextRead(",
+    "purpose": "context-read facade: memo receipt projection",
+    "sha256": "51c2f03a40bbaa048e39c9574d79b36dbe9d1a30b4198847a00ab7946362d106"
+  },
+  {
+    "file": "core/private-evidence-storage.mjs",
+    "start": "export function createPrivateEvidenceStorage(",
+    "end": "  function selectedReceiptRef(",
+    "purpose": "private evidence storage: memo receipt projection sink",
+    "sha256": "d2e3aa32b375c0f5cc5a1116e16924d01314a08a0bbe8b3ebd1f160173c71ada"
   }
 ]

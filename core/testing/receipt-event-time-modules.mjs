@@ -16,12 +16,20 @@ const frozenExceptions = JSON.parse(readFileSync(new URL('../test/fixtures/recei
 // consumer. Pin the complete merged source, retaining the original pin too.
 // This package's three hunks extend the maintenance method allowlist and
 // deadline handling and pass a private admission diagnostic through. They
-// change no loader or feature consumer.
+// change no loader or feature consumer. The private sidecar-handle registry
+// adds an identity-ack field and passes it to storage; loaders stay unchanged.
 const exceptions = frozenExceptions.map(entry => {
+  // B1's reviewed refusal/accounting changes preserve this same host loader.
+  // Keep the frozen PR 1 pin, then bind the complete integrated Worker bytes.
+  if (entry.file === 'core/context-semantic-worker.mjs') {
+    assert.equal(entry.sha256, 'ef2961fcb0114b9d9062084d57babea2adfad4d0753619c500728ca657da5fa5',
+      'frozen semantic Worker loader pin');
+    return { ...entry, line: 482, sha256: '88fde8f37cedb4c84ba6d7610f1beff290e5020752c0900d8ca019157015e803' };
+  }
   if (entry.file !== 'core/context-product-worker.mjs') return entry;
   assert.equal(entry.sha256, '073071759a46698824ffd029a5fe48fbd737513c5c6936ba826b5d413be32bbe',
     'frozen pre-rebase Worker loader pin');
-  return { ...entry, sha256: '14844bf1e4c8a61a1812451f27cc92c6aed37216306e780408e5dfa5db8afdc1' };
+  return { ...entry, line: 114, sha256: '60ea8d89dd1ba3e8f4f70bcb713bab61345f27c482f4cbf3b8f76540d289c54b' };
 });
 export const moduleLoadingExceptions = exceptions;
 const cache = new Map();

@@ -1,5 +1,6 @@
 // Reached only through the supervised semantic service's lazy import boundary.
 import { DatabaseSync } from 'node:sqlite';
+import { modelPortValue } from './model-budget.mjs';
 import { createHash } from 'node:crypto';
 import { createExclusiveSqliteFile, sqliteFileStat } from './sqlite-journal-probe.mjs';
 import { createProductSqlitePolicy } from './context-product-sqlite.mjs';
@@ -50,8 +51,9 @@ function anchor(value) {
   if (a.pending !== null) { const p = exact(a.pending,'sequence,stateDigest'); integer(p.sequence,1); hash(p.stateDigest); if(p.sequence!==a.sequence+1)unavailable(); }
   return a;
 }
-export function openSemanticLedger({path,identity,authority,policy,observer}) {
+export function openSemanticLedger({path,identity,authority,portCall,isFenceFailure,protectedRequest,policy,observer}) {
   if (!authority || typeof authority.load !== 'function' || typeof authority.compareAndSwap !== 'function' || typeof authority.listOwners !== 'function') fail('invalid_input');
+  const call=(name,args)=>portCall?portCall(authority,name,args):Reflect.apply(authority[name],authority,args);
   const sqlite = policy ?? createProductSqlitePolicy({observer});
   const files = sqlite.files(path), physical = sqliteFileStat(path);
   const native = observer ? observer.invoke('open','connection',()=>new DatabaseSync(path)) : new DatabaseSync(path);
@@ -78,15 +80,15 @@ export function openSemanticLedger({path,identity,authority,policy,observer}) {
     sequence:row.sequence,stateDigest:row.state_digest,pending:null});
   async function authenticate(ownerId,{recoverPrepared=false}={}) {
     let a;
-    try {a=anchor(await authority.load(ownerId));} catch {unavailable();}
+    try {a=anchor(await call('load',[ownerId]));} catch(error) {if(isFenceFailure?.(error))throw error;unavailable();}
     const row=read(ownerId), e=expected(ownerId,row);
     if (a.pending!==null) {
       // Recovery is an explicit host disposal decision, never inferred from a
       // PID, a timed-out operation or a replaced service handle.
-      if (!recoverPrepared || typeof authority.confirmDisposed!=='function' || await authority.confirmDisposed(a)!==true) unavailable();
+      if (!recoverPrepared || typeof (protectedRequest?.()===true?modelPortValue(authority,'confirmDisposed','ledger_unavailable'):authority.confirmDisposed)!=='function' || await call('confirmDisposed',[a])!==true) unavailable();
       const previous={...a,pending:null}, prepared={...previous,sequence:a.pending.sequence,stateDigest:a.pending.stateDigest};
       if (!same(e,previous) && !same(e,prepared)) unavailable();
-      if (await authority.compareAndSwap(a,e)!==true) unavailable(); a=e;
+      if (await call('compareAndSwap',[a,e])!==true) unavailable(); a=e;
     }
     if (!same(a,e)) unavailable();
     return {anchor:a,...row};
@@ -96,7 +98,7 @@ export function openSemanticLedger({path,identity,authority,policy,observer}) {
     // ledger row can exist. Discovering it from this file would bless a
     // same-inode snapshot that silently drops another owner's exposure.
     let owners;
-    try {owners=await authority.listOwners({...identity});} catch {unavailable();}
+    try {owners=await call('listOwners',[{...identity}]);} catch(error) {if(isFenceFailure?.(error))throw error;unavailable();}
     if(!Array.isArray(owners)||!owners.length||owners.some(id=>typeof id!=='string'||!id.length)||new Set(owners).size!==owners.length)unavailable();
     owners=[...owners].sort((a,b)=>Buffer.compare(Buffer.from(a),Buffer.from(b)));
     const rows=[];
@@ -109,13 +111,19 @@ export function openSemanticLedger({path,identity,authority,policy,observer}) {
     if(!same(owners.map(r=>r.owner_id),rows.map(r=>r.state.ownerId)))unavailable();
     for(const row of rows){const current=read(row.state.ownerId);if(current.sequence!==row.sequence||current.state_digest!==row.state_digest)unavailable();}
   }
-  async function prepare(current,nextState) {
+  async function prepare(current,nextState,onPrepare) {
     if(!Number.isSafeInteger(current.anchor.sequence+1))unavailable();
     nextState.sequence=current.anchor.sequence+1;
     const nextDigest=stateDigest(nextState), a=current.anchor;
     const prepared={...a,pending:{sequence:a.sequence+1,stateDigest:nextDigest}};
-    if (await authority.compareAndSwap(a,prepared)!==true) unavailable();
-    return {prepared,nextState,nextDigest,previous:a};
+    const preparation={prepared,nextState,nextDigest,previous:a};
+    // A durable CAS may succeed and then fail its caller-return epoch fence.
+    // Protected reads register uncertainty before the await. Other work keeps
+    // its original post-await recovery bookkeeping and host-call order.
+    const early=protectedRequest?.()===true;
+    if(early)onPrepare?.(preparation);
+    if (await call('compareAndSwap',[a,prepared])!==true) unavailable();
+    return preparation;
   }
   function commit(preparation,check=()=>{}) {
     const {prepared,nextState,nextDigest,previous}=preparation;
@@ -133,16 +141,18 @@ export function openSemanticLedger({path,identity,authority,policy,observer}) {
   }
   async function mutate(current,change,check,beforeCommit,onPrepare) {
     const next=stateRecords(structuredClone(current.state)); change(next);
-    const preparation=await prepare(current,next);onPrepare?.(preparation);let sealed;
+    const early=protectedRequest?.()===true;
+    const preparation=await prepare(current,next,early?onPrepare:undefined);
+    if(!early)onPrepare?.(preparation);let sealed;
     try {beforeCommit?.();sealed=commit(preparation,check);}catch(error) {
       // Failed native admission never acquired permission to send. Cancel only
       // an exact still-uncommitted preparation; ambiguous states stay pinned.
       const row=read(current.state.ownerId);
       if(row.sequence===current.sequence&&row.state_digest===current.state_digest)
-        await authority.compareAndSwap(preparation.prepared,preparation.previous);
+        await call('compareAndSwap',[preparation.prepared,preparation.previous]);
       throw error;
     }
-    if(await authority.compareAndSwap(preparation.prepared,sealed)!==true)unavailable();
+    if(await call('compareAndSwap',[preparation.prepared,sealed])!==true)unavailable();
     return {anchor:sealed,sequence:sealed.sequence,state_digest:sealed.stateDigest,state:next};
   }
   return {read,authenticate,authenticateAll,checkAll,prepare,commit,mutate,close:()=>db.close(),db};

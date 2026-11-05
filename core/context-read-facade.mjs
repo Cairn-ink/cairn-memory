@@ -1,6 +1,7 @@
-import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade, assertContentPort, contentAuthorityPort } from './content-safety-boundary.mjs';
 import { receiptEventTimeEnabled, cachedContentLayout } from './content-safety-schema.mjs';
+import { createContentReadMemo } from './content-safety.mjs';
 import { resolveContentLayout } from './content-safety-layout.mjs';
 import { sampleLocalStatus } from './context-read-local-status.mjs';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -307,7 +308,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   function deliverPage(input, ranking, position, limit) {
     return read(() => {
       const result = page(ranking, position, limit);
-      for (const candidate of result.items) evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet);
+      const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
+      for (const candidate of result.items) evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet,
+        safetyMemo?{safetyMemo,batchRefs:result.items.map(candidate=>candidate.ref)}:options.sources?{legacyEvidence:true}:undefined);
       if (!options.sources) return result;
       assertSourcesInside(input, ranking.sourceState, 'cursor_stale');
       const budget = sourceBudget(Infinity);
@@ -451,14 +454,18 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       const proof=cachedContentSuppressionRequestInside(db,input.readSet[0].ownerId);
       const noFacts=proof?.facts?.length===0&&input.readSet.every(ns=>proof.readSet.some(selected=>
         selected.scope==='owner'||selected.scope===ns.scope&&(selected.projectId??'')===(ns.projectId??'')));
-      // The existing freshness transaction already proves canonical ancestry.
-      // Only a possibly matching fact needs the additional evidence predicate,
+      // Final delivered evidence retains its canonical ancestry decision.
+      // Only a possibly matching fact needs this additional evidence predicate,
       // and it runs inside that transaction rather than opening another one.
       storage.assertState(projection,current,{validate:()=>{
-        if(cachedContentLayout(db)?.suppressionRevision&&!noFacts&&candidateItems.length)candidateItems=candidateItems.filter(candidate=>{
-          try {evidence.itemsInside(candidate.ref.namespace,[candidate.ref],input.intent,input.readSet);return true;}
-          catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
-        });
+        if(cachedContentLayout(db)?.suppressionRevision&&!noFacts&&candidateItems.length){
+          const safetyMemo=createContentReadMemo(db);
+          candidateItems=candidateItems.filter(candidate=>{
+            if(!contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId}))return true;
+            try {evidence.itemsInside(candidate.ref.namespace,[candidate.ref],input.intent,input.readSet,{safetyMemo,batchRefs:candidateItems.map(candidate=>candidate.ref)});return true;}
+            catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
+          });
+        }
       }});
       if (sourceState) {
         access.check();
@@ -591,8 +598,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   const cards = info.cards ? createPrivateCardStorage({ db, identity, ready, rawSources: info.raw }) : null;
   const receipt = memoryOnly ? null : createCardReceiptSources(db, (purpose, value) =>
     createHmac('sha256', info.cursorSecret).update(JSON.stringify([purpose, [info.storeId, value]])).digest('base64url'));
+  // context-read facade: memo receipt projection
   const evidence = memoryOnly ? null : createPrivateEvidenceStorage({ db, identity,
+    memoReceiptEventTime: receiptEventTimeEnabled(cachedContentLayout(db)),
     cardDetailInside: (ns, id, readSet, options) => cards.cardDetailInside(ns, id, readSet, options), receiptRefInside: (ns, memory, row) => receipt.refInside(ns, memory, row) });
+  // context-read facade: end memo receipt projection
   async function contextRead(original, token) {
     let candidates;
     try {
@@ -622,6 +632,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           return { generations: [], items: [], unavailable: candidates.items.length };
         }
         const generations = canonicalFence(input.readSet, input.types), items = [];
+        const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
         if (searched.sourceState) assertSourcesInside(input, searched.sourceState, 'snapshot_stale');
         let unavailable = 0;
         const witnessBudget = searched.sourceState ? sourceBudget(dependencyAware ? deadlineAt : Infinity) : null;
@@ -637,7 +648,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
               catch (error) { if (error.code === 'evidence_unavailable') { unavailable++; continue; } throw error; }
             }
             if (dependencyAware && performance.now() >= deadlineAt) { deadline = true; unavailable++; continue; }
-            item = evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet, { deadlineAt: dependencyAware ? deadlineAt : Infinity })[0];
+            item = evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet, { deadlineAt: dependencyAware ? deadlineAt : Infinity, legacyEvidence:Boolean(options.sources), ...(safetyMemo?{safetyMemo,batchRefs:candidates.items.map(candidate=>candidate.ref)}:{}) })[0];
             if (dependencyAware && performance.now() >= deadlineAt) { deadline = true; unavailable++; continue; }
           }
           catch (error) {
@@ -646,7 +657,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           }
           const { type, ref, state, origin } = item;
           const sourceRows = type === 'memory' && item.provenance.sourceAccess === 'available' ?
-            db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)) : [];
+            (safetyMemo?.evidenceReceipts?.get(JSON.stringify([[ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId??''],ref.memoryId]))?.slice(0,16) ??
+              db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId)).filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)) : [];
           const date = receiptEventDate(sourceRows);
           const sources = sourceRows.map((row, index) => {
             const { role, excerpt } = validateSourceReceipt(ref.memoryId, row, source =>
@@ -710,9 +722,10 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             witnessInside(input, path, 'snapshot_stale', witnessBudget);
         }
         if (delivered.length && !same(canonicalFence(input.readSet, [...new Set(delivered.map(item => item.type))]), generationsFor(delivered))) fail('snapshot_stale');
+        const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
         for (const item of delivered) {
           let current;
-          try { current = evidence.itemsInside(item.ref.namespace, [item.ref], input.intent, input.readSet)[0]; }
+          try { current = evidence.itemsInside(item.ref.namespace, [item.ref], input.intent, input.readSet,safetyMemo?{safetyMemo,batchRefs:delivered.map(item=>item.ref)}:options.sources?{legacyEvidence:true}:undefined)[0]; }
           catch (error) {
             if (['evidence_unavailable', 'revision_conflict'].includes(error.code)) fail('snapshot_stale');
             throw error;
@@ -750,7 +763,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       function fetchInside() {
         const generations = canonicalFence(input.readSet, types);
         if (previous && (!same(previous.generations, generations) || !same(previous.access, access.accessGenerations))) fail('snapshot_stale');
-        const items = refs.map(ref => evidence.itemsInside(ref.namespace, [ref], intent, input.readSet)[0]);
+        const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
+        const items = refs.map(ref => evidence.itemsInside(ref.namespace, [ref], intent, input.readSet,safetyMemo?{safetyMemo,batchRefs:refs}:options.sources?{legacyEvidence:true}:undefined)[0]);
         const fences = items.map(item => bind('snapshot-item', item));
         if (input.fences?.some((prefix, i) => prefix !== null && !fences[i].startsWith(prefix))) fail('snapshot_stale');
         if (previous && !same(previous.fences, fences)) fail('snapshot_stale');

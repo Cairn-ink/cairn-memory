@@ -4,6 +4,7 @@ import { contentSuppressionReasonInside } from './content-suppression-storage.mj
 import { transaction } from './database.mjs';
 import { countTokens } from './model-budget.mjs';
 import { envelopeText, memoryMetadata } from './episode-reads.mjs';
+import { episodeReadRow } from './episode-storage.mjs';
 import { sourceDigest, sourceSpan } from './procedural-storage.mjs';
 import { fail, object } from './validation.mjs';
 
@@ -47,7 +48,7 @@ export function contextQuery(ns, group, { rawAncestry = false } = {}) {
     ORDER BY m.updated_at DESC,m.id ASC LIMIT ?`;
   return { sql, params };
 }
-export function createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage, decisionReview, assertEpisodeRead }) {
+export function createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage, decisionReview, assertEpisodeRead, episodeProjection }) {
   function step(row) {
     const record = JSON.parse(row.record), nextStep = record.nextStep;
     const sources = [];
@@ -86,7 +87,8 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
   }
   return function snapshot(ns, groups, expected) {
     return transaction(db, () => {
-      const current = epoch(ns);
+      const projected = groups.nextSteps ? episodeProjection(ns, contextQuery(ns, 'nextSteps'), expected?.indexRevision) : { epoch: epoch(ns) };
+      const current = projected.epoch;
       if (expected && expected.indexRevision !== current) fail('index_revision_conflict');
       if (groups.procedural || groups.background) indexStorage.assertAvailable(ns);
       const result = { indexRevision: current, groups: {} };
@@ -96,10 +98,13 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
           continue;
         }
         const layout = cachedContentLayout(db), safety = Boolean(layout?.suppressionRevision);
-        const query = contextQuery(ns, group, { rawAncestry: safety && layout.rawLineage }), rows = db.prepare(query.sql).all(...query.params)
+        const query = group === 'nextSteps' ? projected.query : contextQuery(ns, group, { rawAncestry: safety && layout.rawLineage }), rows = db.prepare(query.sql).all(...query.params)
           .filter(row => !safety || (group === 'nextSteps' ? !contentSuppressionReasonInside(db, ns) : contentReadSafety(db, { namespace: ns, selectedMemory: row,
             ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed));
-        if (group === 'nextSteps') for (const row of rows) assertEpisodeRead?.(ns, row);
+        if (group === 'nextSteps') for (let i=0; i<rows.length; i++) {
+          assertEpisodeRead?.(ns, rows[i], projected.budget);
+          rows[i] = episodeReadRow(rows[i]);
+        }
         const identities = rows.map(row => ({ id: row.id, revision: row.revision }));
         if (expected && JSON.stringify(identities) !== JSON.stringify(expected.groups[group].identities)) fail('revision_conflict');
         let items;

@@ -1,3 +1,4 @@
+import { costGateFamilies, costFamilyPhysical } from '../testing/receipt-event-time-gates.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -27,7 +28,7 @@ function measure(kind,v,n,facts=0,absent=false,mode='lexical',limit=12) {
  const result=rows.map(r=>({...r,statements:r.totalExecuted??r.total??r.count,begin:r.begin??r.begins??r.sqlSummary?.filter(s=>/^BEGIN/.test(s.sql)).reduce((n,s)=>n+s.exec,0)}));
  assert.ok(result.length);for(const row of result)assert.equal(row.node,process.version);cache.set(key,result);return result;
 }
-for(const [v,base] of [[34,18],[38,23],[48,33]])for(const kind of ['topic','memory','context','status',...(v===34?[]:['card']),...(v===48?['raw']:[])]) {
+for(const family of costGateFamilies())for(const base of [18,23,33])for(const v of [costFamilyPhysical(base,family)])for(const kind of ['topic','memory','context','status',...(base===18?[]:['card']),...(base===33?['raw']:[])]) {
  test(`R2 all paths v${v} ${kind}: exact counts and BEGIN, constant zero-fact overhead`,async t=>{
   await new Promise(setImmediate);
   const sizes=kind==='topic'?[12,24,300,600]:kind==='memory'?[6,12,24,300]:kind==='card'?[1,4]:kind==='raw'?[1]:kind==='status'?[24]:[24,300,600];
@@ -56,14 +57,16 @@ for(const [v,base] of [[34,18],[38,23],[48,33]])for(const kind of ['topic','memo
      assert.equal(observations[0].transaction,true,'the proof is inside the existing read transaction');
      assert.ok(observations.slice(1,ports+1).every(s=>s.transaction===false),'post-counter observations use fresh autocommit snapshots');
     }
-    records.push({v,base,kind,n,mode,limit,method:row.kind??(kind==='raw'?row.limit:['context','status'].includes(kind)?row.method+':'+row.label:row.method),case:row.case,...(kind==='memory'&&row.method==='recall'?{legacyHeaders:old.safety.filter(s=>/SELECT schema_version AS cookie/.test(s.q)).reduce((n,s)=>n+s.c,0)}:{}),legacy:[old.statements,old.begin],after:[row.statements,row.begin],ports});
+    records.push({family,v,base,kind,n,mode,limit,method:row.kind??(kind==='raw'?row.limit:['context','status'].includes(kind)?row.method+':'+row.label:row.method),case:row.case,...(kind==='memory'&&row.method==='recall'?{legacyHeaders:old.safety.filter(s=>/SELECT schema_version AS cookie/.test(s.q)).reduce((n,s)=>n+s.c,0)}:{}),legacy:[old.statements,old.begin],after:[row.statements,row.begin],ports});
    }
   }
   t.diagnostic('R2_PATH_COUNTS '+JSON.stringify(records));
   for(const row of records){
-   const key=JSON.stringify([row.kind,row.v,row.n,row.mode,row.limit,row.method??null]);
+   const oldKey=JSON.stringify([row.kind,row.v,row.n,row.mode,row.limit,row.method??null]);
+   const key=JSON.stringify([family,row.v,row.kind,row.n,row.mode,row.limit,row.method??null]);
    observedFrozenKeys.add(key);
-   assert.deepEqual([row.legacy,row.after,row.ports],frozen.zero[key],'exact statement, BEGIN and port counts: '+key);
+   assert.deepEqual([row.legacy,row.after,row.ports],frozen.byFamily?.[key],'exact family/physical statement, BEGIN and port counts: '+key);
+   if(family==='safety')assert.deepEqual([row.legacy,row.after,row.ports],frozen.zero[oldKey],'original downward exact pin: '+oldKey);
    const delta=row.after[0]-row.legacy[0]-row.ports;assert.ok(row.after[0]<=row.legacy[0]+6+row.ports,'R2-A1 same-engine ceiling, e9 11-01 17:15: '+JSON.stringify(row));
    if(row.legacyHeaders!==undefined)assert.equal(delta+row.legacyHeaders,4,'recall replaces legacy repeated header reads with four fixed proof/fence statements');
    if(row.method==='recall'||kind==='topic')assert.ok(row.after[1]<=row.legacy[1],'R2-A1 BEGIN <= same-engine legacy: '+JSON.stringify(row));
@@ -74,11 +77,13 @@ for(const [v,base] of [[34,18],[38,23],[48,33]])for(const kind of ['topic','memo
   // n12/n24 is the paired per-item fixture. Every other population retains
   // its exact pin and ceiling; compare its overhead with E1 separated.
   const corpus=new Map();for(const row of records){if(row.method!=='recall'&&kind!=='topic')continue;const key=JSON.stringify([row.method,row.mode,row.case,row.limit]);const net=row.after[0]-row.legacy[0]-row.ports;if(corpus.has(key))assert.ok(net<=corpus.get(key),'R2-A1 non-E1 corpus overhead does not grow: '+JSON.stringify(row));corpus.set(key,net);}
-  const group=new Map();for(const row of records){const r2a1=row.method==='recall'||kind==='topic';if(r2a1&&![12,24].includes(row.n))continue;const key=JSON.stringify([row.method,row.mode,row.case,...(r2a1?[row.limit]:[])]);const delta=row.after[0]-row.legacy[0]-(r2a1?0:row.ports);if(group.has(key)){if(row.method==='recall'||kind==='topic')assert.ok(delta<=group.get(key),'R2-A1 slope <= same-engine legacy, e9 11-01 17:15: '+JSON.stringify(row));else assert.equal(delta,group.get(key),'zero per-item/corpus delta');}group.set(key,delta);}
+  const group=new Map();for(const row of records){const r2a1=row.method==='recall'||kind==='topic';if(r2a1&&![12,24].includes(row.n))continue;const key=JSON.stringify([row.method,row.mode,row.case,...(r2a1||kind==='context'?[row.limit]:[])]);const delta=row.after[0]-row.legacy[0]-(r2a1?0:row.ports);if(group.has(key)){if(row.method==='recall'||kind==='topic')assert.ok(delta<=group.get(key),'R2-A1 slope <= same-engine legacy, e9 11-01 17:15: '+JSON.stringify(row));else assert.ok(delta<=group.get(key),'non-E1 per-item/corpus overhead does not grow');}group.set(key,delta);}
  });
 }
 
-for(const v of [34,38,48])for(const kind of ['topic','memory','context',...(v===34?[]:['card']),...(v===48?['raw']:[]),'status'])
+// Extend the changed zero-fact exact/slope gates above to both families.
+// The existing five-fact product probes retain their original population.
+for(const base of [18,23,33])for(const v of [costFamilyPhysical(base,'safety')])for(const kind of ['topic','memory','context',...(base===18?[]:['card']),...(base===33?['raw']:[]),'status'])
 test(`R2 all paths v${v} ${kind}: five-fact slope and corpus-independent no-hit`,async t=>{
  await new Promise(setImmediate);
  const sizes=kind==='card'?[1,4]:kind==='memory'?[12,24]:kind==='raw'?[1,4]:[300,600];
@@ -106,5 +111,5 @@ test(`R2 all paths v${v} ${kind}: five-fact slope and corpus-independent no-hit`
 });
 
 test('R2 path inventory has exactly the complete frozen method/case/cell key set',()=>{
- assert.deepEqual([...observedFrozenKeys].sort(),Object.keys(frozen.zero).sort(),'no omitted version, method, case or stale frozen record');
+ assert.deepEqual([...observedFrozenKeys].sort(),Object.keys(frozen.byFamily??{}).sort(),'no omitted version, method, case or stale frozen record');
 });

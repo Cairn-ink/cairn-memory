@@ -27,12 +27,15 @@ import { optionalRoleCounter } from './role-fixture.mjs';
 import { validateSourceReceipt } from '../source-evidence.mjs';
 import { MemoryStoreError, fail } from '../validation.mjs';
 import { deepFreeze } from '../private-card-input.mjs';
+import { createContentReadMemo } from '../content-safety.mjs';
 
+const fixtureBase = Number(process.env.CAIRN_DATED_TEST_BASE ?? 18);
+assert.ok([18, 23, 33].includes(fixtureBase), 'known dated fixture base');
 const dated = 'representation-v2-dated';
 const counter = { id: 'synthetic-all-fit', countTokens: () => 1 };
 const request = (namespace = ns, patch = {}) => assemblyQuery({ readSet: [namespace], budget: { maxTokens: 4000, maxItems: 24 }, ...patch });
 
-async function datedFixture(t, { eventTime = true, base = 18 } = {}) {
+async function datedFixture(t, { eventTime = true, base = fixtureBase } = {}) {
   const f = safetyFixture(t, base);
   if (eventTime) await migrateEventTime(f);
   const core = openMemoryCore({ path: f.path }), db = f.connect();
@@ -280,6 +283,7 @@ function enclosingReader(kind, definitions, port, { unavailable = 0, localStatus
     canonicalFence: () => [{ memory: 1 }], cardDependencyFence: () => ({}),
     db: { prepare(sql) { assert.match(sql, /^SELECT \* FROM receipts/); return { all: id => rows.get(id) }; } },
     evidence: { itemsInside: (_ns, refs) => refs.map(ref => { const item = canonical.get(ref.memoryId); if (!item) fail('evidence_unavailable'); return item; }) },
+    cachedContentLayout: () => safety ? { suppressionRevision: 1 } : null, createContentReadMemo,
     namespaceKey, receiptEventDate, validateSourceReceipt, createHash, bind, encode, ASSEMBLY_LIMITS, CONTEXT_LIMITS,
     success: value => ({ ok: true, value }), failure: error => ({ ok: false, error: { code: error.code } }), MemoryStoreError, fail, deepFreeze,
     same: (a, b) => JSON.stringify(a) === JSON.stringify(b), bytes: size,
@@ -297,7 +301,7 @@ function enclosingReader(kind, definitions, port, { unavailable = 0, localStatus
   const file = kind === 'product' ? '../context-product-index.mjs' : '../context-read-facade.mjs';
   const source = readFileSync(new URL(file, import.meta.url), 'utf8');
   const start = kind === 'product' ? '  function assemble(' : '  async function contextRead(';
-  const end = kind === 'product' ? '  function statusDelivery(' : '  function fetchCandidateEvidence(';
+  const end = kind === 'product' ? '  function metadataRead(' : '  function fetchCandidateEvidence(';
   const implementation = source.slice(source.indexOf(start), source.indexOf(end));
   assert.ok(implementation.includes('context_item_too_large'), 'exercise the enclosing defensive byte gate');
   const read = new Function(...Object.keys(dependencies), 'return (' + implementation + ');')(...Object.values(dependencies));
@@ -614,7 +618,7 @@ test('correction drops the old receipt time and never falls back to the replacem
 });
 
 test('a suppressed receipt still in the physical window cannot contribute a date on any preparation path', async t => {
-  const f = safetyFixture(t, 18); await migrateEventTime(f);
+  const f = safetyFixture(t, fixtureBase); await migrateEventTime(f);
   const db = f.connect(), core = openMemoryCore({ path: f.path }); t.after(() => { core.close(); db.close(); });
   const store = { ...f, db, core }, r = readers(t, store);
   const memory = ok(core.admit({ namespace: ns, memory: { content: 'assembly filtered receipts', kind: 'fact' },

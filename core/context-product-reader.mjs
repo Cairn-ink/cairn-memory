@@ -1,3 +1,4 @@
+import { reserveSidecarHandle } from './context-product-handles.mjs';
 import { bindMaintenanceAdmission, attachMaintenanceAdmissionReceipt } from './context-product-admission.mjs';
 import { setTimeout as safetyDelay } from 'node:timers/promises';
 import { hrtime } from 'node:process';
@@ -188,6 +189,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     if (!maintenance && (!types.isSharedArrayBuffer(reservation) || Reflect.apply(sharedLength, reservation, []) !== 4 ||
         Atomics.compareExchange(new Int32Array(reservation), 0, 0, 1) !== 0)) fail('authority_required');
     const resource = registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, request: maintenance ? undefined : request, frame, resources }, true);
+    let sidecarHandle;
     let closed = false, terminal, idle, closePromise, ready = false, releaseWriter, writerReleased = false, cutoffCapability, forcedCleanup = false, disposalWorkerError = false;
     const epoch = 1;
     // Timeout delivery remains prompt; disposal owns a separate bounded grace.
@@ -238,6 +240,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       registry.cleanup(resource, terminal);
       termination.then(() => {
         releaseSemanticWriter();
+        sidecarHandle?.release();
         registry.finish(resource); if (resource.state === 'complete') releaseWriter?.();
         const slot = lifecycle.pending;
         if (slot?.record && slot.record !== resource) registry.finish(slot.record);
@@ -340,7 +343,8 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
             const release = claimMaintenanceWriter(message.fileIdentity,readSet);
             releaseWriter = () => { release(); writerReleased = true; };
           }
-          instance.postMessage({ kind: 'identity-ack', operation: slot.operation });
+          sidecarHandle=reserveSidecarHandle(message.fileIdentity);
+          instance.postMessage({ kind: 'identity-ack', operation: slot.operation, sidecarHandles: {buffer:sidecarHandle.buffer,slot:sidecarHandle.slot} });
         } catch (error) { shutdown(error.code ?? 'reader_failed',undefined,{kind:'identity'}); }
         return;
       }
@@ -371,7 +375,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       if (maintenance && !slot.open) {
         if(result.ok&&['admitMaintenance','refreshMaintenance'].includes(slot.method)) {
           const receipt=message.maintenanceAdmission;
-          if(slot.method==='admitMaintenance'&&receipt!=='admitted'||receipt!==undefined&&!['admitted','required'].includes(receipt)||receipt==='admitted'&&slot.method!=='admitMaintenance'||receipt&&(message.observedAtMonoMs!==undefined||result.value!==null)||receipt==='required'&&slot.method!=='refreshMaintenance') {shutdown('reader_failed',undefined,{kind:'protocol',protocolKind:'result_shape'});return;}
+          if(slot.method==='admitMaintenance'&&!['admitted','required'].includes(receipt)||receipt!==undefined&&!['admitted','required'].includes(receipt)||receipt==='admitted'&&slot.method!=='admitMaintenance'||receipt&&(message.observedAtMonoMs!==undefined||result.value!==null)) {shutdown('reader_failed',undefined,{kind:'protocol',protocolKind:'result_shape'});return;}
           if(receipt)attachMaintenanceAdmissionReceipt(result,receipt);
         }
         if(result.ok && message.observedAtMonoMs !== undefined) {

@@ -14,7 +14,7 @@ if (!envelope) {
   state[0] = 1000000000n;
   state[1] = BigInt(Date.UTC(2030, 0, 1));
 }
-const scheduled = new Map(), workers = new Set();
+const scheduled = new Map(), workers = new Set(), workerEntries = new Map();
 let source = () => Number(Atomics.load(state, 0)) / 1e6;
 const now = () => source();
 const delayMs = envelope?.delayMs ?? Number(process.env.CAIRN_TEST_SCHEDULING_DELAY_MS ?? 0);
@@ -70,6 +70,18 @@ export const testClock = {
   // It is an injected stall, never an elapsed-time assertion or a timing gate.
   stall() { if (delayMs) Atomics.wait(stallState, 0, 0, delayMs); },
   // Preserve sub-millisecond deadline orderings in the shared nanosecond domain.
+  // Schedule only request Workers. A semantic Worker may still be awaiting a
+  // caller port; no cross-Worker timer/reply ordering is implied in production.
+  async advanceRequestFirst(ms) {
+    Atomics.add(state, 0, BigInt(Math.round(ms * 1e6)));
+    flush();
+    const selected = [...workerEntries].filter(([, entry]) => entry.endsWith('/context-product-worker.mjs'));
+    if (!selected.length) throw Error('no request Worker to schedule');
+    await Promise.all(selected.map(([port]) => new Promise(resolve => {
+      port.once('message', resolve);
+      port.postMessage('tick');
+    })));
+  },
   async advance(ms, { waitForWorkers = true } = {}) {
     Atomics.add(state, 0, BigInt(Math.round(ms * 1e6)));
     flush();
@@ -89,8 +101,9 @@ threads.Worker = class extends NativeWorker {
       state: state.buffer, port: port2, delayMs,
     } }, transferList: [...(options.transferList ?? []), port2] });
     workers.add(port1);
+    workerEntries.set(port1, String(entry));
     port1.unref();
-    this.once('exit', () => { workers.delete(port1); port1.close(); });
+    this.once('exit', () => { workers.delete(port1); workerEntries.delete(port1); port1.close(); });
   }
 };
 if (envelope) {

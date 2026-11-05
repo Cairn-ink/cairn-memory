@@ -1,3 +1,6 @@
+import { costMatrixGate as familyGate } from '../testing/receipt-event-time-gates.mjs';
+import { costGateFamilies, costFamilyPhysical } from '../testing/receipt-event-time-gates.mjs';
+import { assertRoleEmbeddedContentCost, assertRoleEmbeddedContentCostInventory } from '../testing/content-safety-s2h-deferred-cost.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -7,7 +10,8 @@ const probe = fileURLToPath(new URL('../testing/content-safety-s2h-cost-probe.mj
 // Counts include configuration and transaction exec, not prepare() calls.
 // Zero-fact budget: entry header + owner epoch, delivery header + owner epoch.
 const budget = 4;
-const bases = new Map([[34,18],[38,23],[48,33]]);
+const bases = costGateFamilies().flatMap(family => [18,23,33].map(base => [costFamilyPhysical(base,family),base,family]));
+const completeQuery=familyGate('S2h-3 query matrices',costGateFamilies().length*6);
 const cache = new Map();
 function measure(physical, n, facts = 0, absent = false, mode = 'lexical') {
   const key = JSON.stringify([physical,n,facts,absent,mode]);
@@ -27,8 +31,8 @@ function measure(physical, n, facts = 0, absent = false, mode = 'lexical') {
   cache.set(key,row); return row;
 }
 
-for (const [physical,base] of bases) test(`R2 v${physical}: zero-fact constant budget, five-fact slope and corpus-independent no-hit`, t => {
-  const rows = [];
+for (const [physical,base,family] of bases) test(`R2 v${physical}: zero-fact constant budget, five-fact slope and corpus-independent no-hit`, t => {
+  const rows = [],observed=new Set();
   const zero = [], legacy = [], five = [], absent = [];
   for (const n of [300,600]) {
     for (const [target,facts,noHit,label] of [[base,0,false,'base'],[physical,0,false,'zero'],[physical,5,false,'five'],[physical,5,true,'no-hit']]) {
@@ -38,10 +42,11 @@ for (const [physical,base] of bases) test(`R2 v${physical}: zero-fact constant b
     }
   }
   t.diagnostic('R2_QUERY_COUNTS '+JSON.stringify(rows));
+  t.diagnostic('R2_QUERY_PAGES '+JSON.stringify({family,testName:t.name,base,physical,mode:'lexical',pairs:zero.map((row,i)=>({n:[300,600][i],legacy:legacy[i].cases,after:row.cases}))}));
   const delta = zero.map((row,i) => row.totalExecuted-legacy[i].totalExecuted);
   assert.equal(delta[0],delta[1],'zero facts add no corpus-dependent SQL');
-  for(const [i,row]of zero.entries()){assert.deepEqual(row.cases.map(r=>r.label),legacy[i].cases.map(r=>r.label));for(const [j,page]of row.cases.entries()){const old=legacy[i].cases[j];assert.equal(page.statements-old.statements,4,'R2 query page '+page.label);assert.equal(page.begin,old.begin);}}
-  assert.ok(delta[0]>=0 && delta[0]<=budget,`incremental executed statements ${delta} exceed ${budget}`);
+  for(const [i,row]of zero.entries()){assert.deepEqual(row.cases.map(r=>r.label),legacy[i].cases.map(r=>r.label));for(const [j,page]of row.cases.entries()){const old=legacy[i].cases[j];assertRoleEmbeddedContentCost({method:'findCandidates',variant:'lexical:'+page.label,...page,ports:0},{family,testName:t.name,base,n:[300,600][i],facts:0},{...old,ports:0},observed);assert.equal(page.begin,old.begin);}}
+  assert.ok(delta[0]<=budget,`incremental executed statements ${delta} exceed ${budget}`);
   assert.deepEqual(zero.map(row=>row.exec),legacy.map(row=>row.exec),'zero additional transactions or configuration exec');
   const fences = [];
   for (const row of zero) {
@@ -59,10 +64,11 @@ for (const [physical,base] of bases) test(`R2 v${physical}: zero-fact constant b
   assert.ok(Math.abs(slope(five)-slope(zero))<=0.05,'five facts preserve the candidate statement slope');
   assert.equal(absent[0].totalExecuted,absent[1].totalExecuted,'no-hit query never walks the corpus');
   if (base === 18) assert.deepEqual(legacy.map(row=>row.totalExecuted),[782,1384],'preserve main S1 query baseline');
+  assertRoleEmbeddedContentCostInventory(observed,t.name);completeQuery(t.name);
 });
 
-for (const [physical,base] of bases) test(`R2 semantic fallback v${physical}: empty-owner proof prevents retained-candidate revalidation`, t => {
-  const counts=[];
+for (const [physical,base,family] of bases) test(`R2 semantic fallback v${physical}: empty-owner proof prevents retained-candidate revalidation`, t => {
+  const counts=[],observed=new Set();
   for (const n of [12,24,300,600]) {
     const legacy=measure(base,n,0,false,'semantic'),zero=measure(physical,n,0,false,'semantic');
     counts.push({node:process.version,physical,base,n,legacy:legacy.totalExecuted,zero:zero.totalExecuted,
@@ -71,9 +77,10 @@ for (const [physical,base] of bases) test(`R2 semantic fallback v${physical}: em
       zeroBegin:zero.sqlSummary.filter(s=>/^BEGIN/.test(s.sql)).reduce((n,s)=>n+s.exec,0)});
   }
   t.diagnostic('R2_SEMANTIC_COUNTS '+JSON.stringify(counts));
+  t.diagnostic('R2_QUERY_PAGES '+JSON.stringify({family,testName:t.name,base,physical,mode:'semantic',pairs:counts.map(row=>({n:row.n,legacy:measure(base,row.n,0,false,'semantic').cases,after:measure(physical,row.n,0,false,'semantic').cases}))}));
   for(const row of counts) {
-    assert.equal(row.zero-row.legacy,4,'header and owner epoch at entry and delivery only');
-    const after=measure(physical,row.n,0,false,'semantic'),before=measure(base,row.n,0,false,'semantic');for(const [i,page]of after.cases.entries()){assert.equal(page.statements-before.cases[i].statements,4,page.label);assert.equal(page.begin,before.cases[i].begin);}
+    assert.ok(row.zero<=row.legacy+6,'R2-A1 ceiling with canonical selected-row reuse');
+    const after=measure(physical,row.n,0,false,'semantic'),before=measure(base,row.n,0,false,'semantic');for(const [i,page]of after.cases.entries()){assertRoleEmbeddedContentCost({method:'findCandidates',variant:'semantic:'+page.label,...page,ports:0},{family,testName:t.name,base,n:row.n,facts:0},{...before.cases[i],ports:0},observed);assert.equal(page.begin,before.cases[i].begin);}
     assert.equal(row.zeroExec,row.legacyExec,'no safety-only transactions');
     assert.equal(row.zeroBegin,row.legacyBegin,'no extra BEGIN');
   }
@@ -92,4 +99,5 @@ for (const [physical,base] of bases) test(`R2 semantic fallback v${physical}: em
   assert.equal(erased.ok,false);assert.equal(erased.error,'evidence_unavailable');
   const advanced=measure(physical,12,0,false,'semantic-late-fact');
   assert.equal(advanced.ok,false);assert.equal(advanced.error,'evidence_unavailable');
+  assertRoleEmbeddedContentCostInventory(observed,t.name);completeQuery(t.name);
 });

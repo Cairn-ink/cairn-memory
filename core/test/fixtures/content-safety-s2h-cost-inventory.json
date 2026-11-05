@@ -1051,17 +1051,16 @@
           "variants": [
             "embedded sources:relations-one-hop-v1, zero facts n12/n24, one and four actual expansions; all three layout pairs"
           ]
+        },
+        {
+          "gate": "product-semantic-cost",
+          "variants": [
+            "product enabled semantic"
+          ],
+          "caseGroup": "product-semantic-native"
         }
       ],
-      "missing": [],
-      "deferred": [
-        {
-          "category": "deferred",
-          "variant": "product enabled semantic",
-          "decisionReference": "e9, 2026-11-01 17:15",
-          "scopeItem": "S2h-3: product query suppressionEpoch projection and enabled semantic assembly cost gate"
-        }
-      ]
+      "missing": []
     },
     "fetch": {
       "gates": [
@@ -1174,17 +1173,16 @@
           "variants": [
             "embedded sources:relations-one-hop-v1, zero facts n12/n24, one and four actual expansions; all three layout pairs"
           ]
+        },
+        {
+          "gate": "product-semantic-cost",
+          "variants": [
+            "product enabled semantic"
+          ],
+          "caseGroup": "product-semantic-native"
         }
       ],
-      "missing": [],
-      "deferred": [
-        {
-          "category": "deferred",
-          "variant": "product enabled semantic",
-          "decisionReference": "e9, 2026-11-01 17:15",
-          "scopeItem": "S2h-3: product query suppressionEpoch projection and enabled semantic candidate cost gate"
-        }
-      ]
+      "missing": []
     },
     "get": {
       "gates": [
@@ -1297,6 +1295,16 @@
             "zero/five facts",
             "hit/empty where supported",
             "temporal cursor"
+          ]
+        },
+        {
+          "gate": "episode-projection",
+          "variants": [
+            "Episode whole source proof",
+            "12/24 items",
+            "zero/five facts",
+            "three layouts",
+            "Raw exact/hashed roots and matching receipt parents"
           ]
         }
       ],
@@ -1578,6 +1586,16 @@
             "zero/five facts",
             "hit/empty where supported",
             "temporal cursor"
+          ]
+        },
+        {
+          "gate": "episode-projection",
+          "variants": [
+            "Episode whole source proof",
+            "12/24 items",
+            "zero/five facts",
+            "three layouts",
+            "Raw exact/hashed roots and matching receipt parents"
           ]
         }
       ],
@@ -1978,17 +1996,16 @@
           "variants": [
             "embedded semantic on; local singleton; host invokes engine beforeDispatch; 2/4 documents; cursor and no-hit; zero/five facts"
           ]
+        },
+        {
+          "gate": "product-semantic-cost",
+          "variants": [
+            "product enabled semantic"
+          ],
+          "caseGroup": "product-semantic-native"
         }
       ],
-      "missing": [],
-      "deferred": [
-        {
-          "category": "deferred",
-          "variant": "product enabled semantic",
-          "decisionReference": "e9, 2026-11-01 17:15",
-          "scopeItem": "S2h-3: hosted semantic worker E1/inert returns and enabled product refresh cost gate"
-        }
-      ]
+      "missing": []
     },
     "resolveMethod": {
       "gates": [
@@ -2107,6 +2124,16 @@
             "zero/five facts",
             "hit/absent",
             "three layouts"
+          ]
+        },
+        {
+          "gate": "episode-projection",
+          "variants": [
+            "Episode whole source proof",
+            "12/24 items",
+            "zero/five facts",
+            "three layouts",
+            "Raw exact/hashed roots and matching receipt parents"
           ]
         }
       ],
@@ -2417,6 +2444,37 @@
       "getSource:4/33/0",
       "getSource:4/53/0",
       "getSource:4/53/5"
+    ],
+    "episode-projection": [
+      "getEpisode:hit",
+      "listEpisodes:hit",
+      "listEpisodes:cursor",
+      "listEpisodes:absent",
+      "sessionStartContext:nextSteps"
+    ],
+    "episode-nontrivial": [
+      "getEpisode:hit",
+      "listEpisodes:hit",
+      "sessionStartContext:nextSteps"
+    ],
+    "product-semantic-native": [
+      "refreshContextIndex:enabled-cold",
+      "refreshContextIndex:enabled-repeat",
+      "findCandidates:hit",
+      "contextRead:hit",
+      "findCandidates:semantic-only",
+      "contextRead:semantic-only"
+    ],
+    "product-semantic-cursor": [
+      "findCandidates:hit-cursor"
+    ],
+    "product-semantic-raw": [
+      "refreshContextIndex:enabled-cold",
+      "refreshContextIndex:enabled-repeat",
+      "findCandidates:hit",
+      "contextRead:hit",
+      "findCandidates:semantic-only",
+      "contextRead:semantic-only"
     ]
   },
   "surfaceClassifications": {
@@ -3479,5 +3537,37 @@
         ]
       }
     }
+  },
+  "rawProductPopulations": {
+    "bases": [
+      33
+    ],
+    "lineage": [
+      "foreign",
+      "in-scope",
+      "both"
+    ],
+    "facts": [
+      0,
+      5
+    ],
+    "sizes": [
+      12,
+      24
+    ],
+    "intents": [
+      "current",
+      "history"
+    ],
+    "caseGroup": "product-semantic-raw",
+    "cursorCaseGroup": "product-semantic-cursor",
+    "families": [
+      "safety",
+      "event-time"
+    ],
+    "physicalCells": [
+      48,
+      53
+    ]
   }
 }
