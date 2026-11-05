@@ -84,9 +84,12 @@ for (const schema of [18, 29]) test(`physical schema${schema} fixture supports p
   const copiedGraph = installedImportClosure(dirname(dirname(fileURLToPath(candidate.readerUrl))), entries);
   assert.deepEqual(copiedGraph.required, [...originalGraph.required, 'core/measurement-database.mjs'].sort());
   const originalSource = readFileSync(new URL('../../core/read-database.mjs', import.meta.url), 'utf8');
-  assert.match(originalSource, /busy_timeout=\$\{contextRead && !nativeObserver \? 5000 : 0\}/);
+  assert.match(originalSource, /const timeout = Math\.min\(contextRead && !nativeObserver \? STORAGE_BUSY_TIMEOUT_MS : 0, busyTimeoutMs \?\? STORAGE_BUSY_TIMEOUT_MS\);/);
+  assert.match(originalSource, /PRAGMA busy_timeout=\$\{timeout\};/);
+  assert.equal((await import('../../core/database.mjs')).STORAGE_BUSY_TIMEOUT_MS, 5000);
   const candidateSource = readFileSync(join(workspace.path, 'candidate/core/read-database.mjs'), 'utf8');
   assert.doesNotMatch(candidateSource, /PRAGMA busy_timeout=/);
+  assert.match(candidateSource, /const nativeOptions = busyTimeoutMs === undefined \? \{ readOnly: true \} : \{ readOnly: true, timeout \};/);
   const journalAt = candidateSource.indexOf('wal = topicJournalMode(');
   const measurementAt = candidateSource.indexOf('native = measurementDatabase(native, performance);');
   const policyAt = candidateSource.indexOf('if (!nativeObserver) db = topicPolicy ? topicPolicy.database(native, wal) : native;');
