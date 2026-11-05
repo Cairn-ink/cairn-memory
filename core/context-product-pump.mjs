@@ -1,4 +1,4 @@
-import { admitMaintenance, refreshMaintenance, maintenanceAdmissionReceipt } from './context-product-admission.mjs';
+import { admitMaintenance, refreshMaintenance, maintenanceAdmissionReceipt, isNativeMaintenanceMaintainer } from './context-product-admission.mjs';
 import { maintenanceAdmissionIdentity, maintenanceAdmissionDomain, retainMaintenanceAdmission, failMaintenanceAdmission, maintenanceAdmissionStatus, maintenanceAdmissionSlots, maintenanceAdmissionFits } from './context-product-admission-policy.mjs';
 import { maintenanceFailureCounts, maintenanceFailureRecord, maintenanceFailureKind, maintenanceErrorName } from './context-product-attribution.mjs';
 import { attributionFields, maintenanceWorkFields, maintenanceKinds, add, maintenanceDispatchControl, maintenanceControlState } from './context-product-attribution.mjs';
@@ -48,7 +48,8 @@ export const maintenancePumpDiagnostic=observation=>pumpDiagnostics.get(observat
 // across process restarts before reopening admission (see the product guide).
 export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigint())/1e6,setTimer=setTimeout,clearTimer=clearTimeout,
   open=openContextIndexMaintainer,admit=admitMaintenance,work=refreshMaintenance,receiptOf=maintenanceAdmissionReceipt,admissionIdentity=maintenanceAdmissionIdentity,observedAt=maintenanceObservation,phasesOf=maintenancePhaseDiagnostic,stallOf=maintenanceStallDiagnostic,cutoffQualified=maintenanceCutoffQualified}={}) {
-  // Test-only dependency seam on this internal factory; public renewal never reaches it.
+  // Supported host seams and test-only dependencies are documented in
+  // docs/context-read-product.md, Amendment v2.1; public renewal adds no options.
   const recoveryEnabled=cutoffQualified();
   return function renewContextMaintenancePump(original) {
     if(ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential','semanticConfig','semanticServiceCredential','firstCoverageValidation']).semanticConfig!==undefined)return semanticPump(original,{now,setTimer,clearTimer,open,snapshot:(value,diagnostic)=>pumpDiagnostics.set(value,diagnostic)});
@@ -382,6 +383,11 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             const opening=now();openingOrdinal=ordinal;
             try{h=await open({...p.options,deadlineMs:openingMs},activeControl);openedHere=true;lane.opens=add(lane.opens,1);handles.set(key,h);handleLanes.set(key,index);writers.set(writer,key);}
             finally{recordPhase(lane.phases.open,now()-opening);}
+            // Either default dispatch needs native identity. Hosts wrapping the
+            // handle must bridge both calls; terminal stop owns its disposal.
+            if((admit===admitMaintenance||work===refreshMaintenance)&&!isNativeMaintenanceMaintainer(h)){
+              recordFailure(h,'maintainer_identity_unrecognized',{stage:'open'});error='invalid_input';return;
+            }
           }
           activeHandle=h;activeStage=admissionTurn?'admission':'refresh';
           if(stopped||error)return;
