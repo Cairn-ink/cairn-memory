@@ -287,7 +287,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         return result;
       });
     } catch(e) {
-      if(pumpWork&&e===admissionRequired) {
+      if((pumpWork||admitting)&&e===admissionRequired) {
         return access.envelope(()=>{if(observation)observation.admission='required';return success(null);});
       }
       attribution?.captureFailure(e);attribution?.selectFailure(e);

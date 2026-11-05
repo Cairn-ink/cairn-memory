@@ -1,3 +1,4 @@
+import { reserveSidecarHandle, sidecarHandleGuard } from './context-product-handles.mjs';
 import { admissionRequired, PRODUCT_SIDECAR_SUFFIX } from './context-product-admission.mjs';
 import { withContentSuppressionReadInside, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { bindContentSafetyConnection, cachedContentLayout } from './content-safety-schema.mjs';
@@ -160,11 +161,13 @@ export function canonicalProductIdentity(path, db) {
 // Construction acquires no sidecar. Only a separately authorized operation
 // invokes observe/refresh, including when the file is missing or malformed.
 export function productSidecar({ path, db: canonicalDatabase, identity, features, observer, sqlite, sidecarJournalMode = 'DELETE', writable = false,
-  now = () => performance.now(), rendezvous = () => {}, attribution, memoryComparison = null, comparisonOptions = {}, verificationBatching = false, verificationBatchState = verificationBatching ? new SharedArrayBuffer(8) : null }) {
+  sidecarHandles, now = () => performance.now(), rendezvous = () => {}, attribution, memoryComparison = null, comparisonOptions = {}, verificationBatching = false, verificationBatchState = verificationBatching ? new SharedArrayBuffer(8) : null }) {
   const canonical=canonicalDatabase;
   const canonicalRead=work=>attribution ? attribution.transaction(canonicalDatabase,work,readTransaction) : readTransaction(canonicalDatabase,work);
   features={...features,reviews:features.cards,receipts:features.cards};
   const sidePath = path + PRODUCT_SIDECAR_SUFFIX;
+  let localHandle,handles=sidecarHandles&&sidecarHandleGuard(sidecarHandles);
+  const handleRegistry=()=>handles??=sidecarHandleGuard(localHandle=reserveSidecarHandle(Object.values(productFile(path)).join(':')));
   const compare=memoryComparison?memoryComparison.createMemoryComparator():null;
   let comparisonBase=null, reuseOnlyWork=false;
   let sideFormat, side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0, discardAfterGuard=false, guardWritable=false;
@@ -232,7 +235,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       : new DatabaseSync(sidePath, { readOnly: !write }); }
     catch (error) {attribution?.captureFailure(error); if(sqlite)sqlite.openingFailure(error);throw error; }
   };
-  function close() { discardAfterGuard=true;if (side?.isOpen) side.close(); side = null; metadata = null; sideFiles = null; discardAfterGuard=false; }
+  function close() { discardAfterGuard=true;if (side?.isOpen) side.close(); handles?.closed(); side = null; metadata = null; sideFiles = null; discardAfterGuard=false; }
   function write(work, kind='setup', beforeCommit) {
     // A caught verification rollback can continue within this refresh. Reopen
     // and check integrity before its fallback or any other transaction writes.
@@ -314,11 +317,13 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     }
     const admittedIdentity=productFile(sidePath), files=sqlite?.files(sidePath);
     checkAdmission?.();
-    let candidate=openNative(wantsWrite), admittedMetadata;
+    handleRegistry().opening();
+    let candidate, admittedMetadata;
     sideMode=undefined;sideFormat=undefined;
     try {
+      candidate=openNative(wantsWrite);
       if(sqlite){
-        const native=candidate;candidate=null; // open() disposes a refused native handle.
+        const native=candidate; // Retain disposal evidence if policy admission refuses.
         const opened=sqlite.open(native,sidePath);candidate=opened.db;sideMode=opened.mode;
         files({afterProbe:true});
         if(wantsWrite && sideMode!==sidecarJournalMode)unavailable('storage_unavailable');
@@ -338,7 +343,8 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         if(wantsWrite && (candidate.prepare('PRAGMA quick_check').get().quick_check!=='ok' || candidate.prepare('PRAGMA foreign_key_check').get()))unavailable('corrupt');
       });
       checkAdmission?.();
-    } catch(error) {attribution?.captureFailure(error);try{if(candidate?.isOpen)candidate.close();}catch{}throw error;}
+    } catch(error) {attribution?.captureFailure(error);try{if(candidate?.isOpen)candidate.close();}catch{}
+      if(candidate?.isOpen)side=candidate;else handles.closed();throw error;}
     side=candidate;sideWritable=wantsWrite;sideFiles=files;openedIdentity=admittedIdentity;metadata=admittedMetadata;
     // Subsequent work starts on this admitted mode, including upgrade callers.
     guardWritable=wantsWrite;
@@ -378,7 +384,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
           { eligible: ready ? counts.byType[t].eligible : null, indexed: ready ? counts.byType[t].indexed : null, embedded:null }])),
         namespaces: p.ownerCoverage } };
   }
-  function invalid(p, reason) { if(guardWritable)discardAfterGuard=true;return { dto: status(p,'unavailable',
+  function invalid(p, reason) { if(guardWritable || reason==='validation_invalid' || reason==='foreign_binding')discardAfterGuard=true;return { dto: status(p,'unavailable',
     ['wrong_store','incompatible','corrupt','validation_missing','validation_invalid','storage_unavailable'].includes(reason) ? reason : 'storage_unavailable'), publication:null }; }
   // Caller supplies the canonical transaction. Pointer, generation and record
   // are read under one independent sidecar transaction, with no deep scans.
@@ -826,7 +832,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       if(!repairIdentity || !same(old,repairIdentity))unavailable('storage_unavailable');
       try {
         release();
-        cleaned(()=>{checkAdmission();return publish(old.device+':'+old.inode,{...initialization(),expectedStamp:repairStamp,...(foreignBindingDigest?{foreignBindingDigest}:{})});},()=>acquire());
+        cleaned(()=>handleRegistry().replace(()=>{checkAdmission();return publish(old.device+':'+old.inode,{...initialization(),expectedStamp:repairStamp,...(foreignBindingDigest?{foreignBindingDigest}:{})});},()=>{throw admissionRequired;}),()=>acquire());
       } catch(e) {attribution?.captureFailure(e);
         if(['ESTALE','EEXIST','EBUSY'].includes(e.code))unavailable('storage_unavailable');
         throw e;
@@ -1249,7 +1255,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     // the current handle; read-only storage failures already mark disposal.
     if(guardWritable || discardAfterGuard)close();
   },
-    close() { closed=true;comparisonBase=null;const lock=lifecycle;lifecycle=null;cleaned(()=>close(),()=>lock?.close()); },
+    close() { closed=true;comparisonBase=null;const lock=lifecycle;lifecycle=null;cleaned(()=>close(),()=>cleaned(()=>lock?.close(),()=>{if(!side?.isOpen){handles?.closed();localHandle?.release();}})); },
     // Explicit restore gate; callers must have already drained all clients.
     reset() {return guarded(()=>{
       if (!writable) fail('invalid_input');

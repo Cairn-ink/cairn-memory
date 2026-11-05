@@ -517,8 +517,8 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             if(admissionTimedOut||now()-lastTick>maxMs||result?.error?.code==='read_timeout'){exceedAdmission(result);return;}
             if(!result?.ok){recordFailure(result,'engine',{engineCode:result?.error?.code});error=result?.error?.code??'reader_failed';return;}
             // This private receipt is deliberately independent of observation.
-            if(receiptOf(result)!=='admitted'){recordFailure(result,'protocol',{protocolKind:'result_shape'});error='reader_failed';return;}
-            admittedHandles.add(h);admissionSucceeded=true;return;
+            if(!['admitted','required'].includes(receiptOf(result))){recordFailure(result,'protocol',{protocolKind:'result_shape'});error='reader_failed';return;}
+            if(receiptOf(result)==='admitted'){admittedHandles.add(h);admissionSucceeded=true;return;}
           }
           if(receiptOf(result)==='required'){
             // Yield the lane fairly; admission is no observing progress.
