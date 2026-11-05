@@ -22,17 +22,17 @@ assert.equal(sources.length,48);
 const episodeSources=Array.from({length:1552},(_,i)=>({client:input.client,sessionId:input.sessionId,eventId:'episode-source-'+i,role:'user',excerpt:'e'}));
 const childCode=String.raw`
 import {DatabaseSync} from 'node:sqlite';
-import {writeFileSync} from 'node:fs';
+import {renameSync,writeFileSync} from 'node:fs';
 const [path,marker,id]=process.argv.slice(1),db=new DatabaseSync(path);
 db.exec('PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; BEGIN IMMEDIATE');
 db.prepare("UPDATE memories SET updated_at='2026-11-05T00:00:00.000Z' WHERE id=?").run(id);
 process.send('ready');
 process.on('message',cmd=>{if(cmd==='go'){
- writeFileSync(marker+'.start','{}');const start=performance.now();let result;
+ writeFileSync(marker+'.start.tmp','{}');renameSync(marker+'.start.tmp',marker+'.start');const start=performance.now();let result;
  try{db.exec('COMMIT');result={ok:true};}catch(e){result={ok:false,code:e.code,errcode:e.errcode};if(db.isTransaction)db.exec('ROLLBACK');}
  const commitMs=performance.now()-start;
  const persisted=db.prepare('SELECT updated_at FROM memories WHERE id=?').get(id)?.updated_at==='2026-11-05T00:00:00.000Z';
- writeFileSync(marker+'.done',JSON.stringify({result,commitMs,persisted}));process.send('done');
+ writeFileSync(marker+'.done.tmp',JSON.stringify({result,commitMs,persisted}));renameSync(marker+'.done.tmp',marker+'.done');process.send('done');
  }else if(cmd==='close'){if(db.isTransaction)db.exec('ROLLBACK');db.close();process.disconnect();}});
 `;
 const pause=ms=>Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,ms);
