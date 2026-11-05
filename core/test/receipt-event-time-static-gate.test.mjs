@@ -131,12 +131,12 @@ function assertFeatureConsumers(sources) {
     // Only the three exact named imports may introduce this accessor binding.
     source = source.replace(/import\s*\{[^{}]*\}\s*from\s*(['"])[^'"]*\/content-safety-schema\.mjs\1\s*;/g,
       declaration => declaration.replace(/\breceiptEventTimeEnabled\b/g, 'approvedFeatureImport'));
-    assert.doesNotMatch(source, /\breceiptEventTimeEnabled\b|\breceiptEventTime\b|\breceipt_event_time\b|\battestedFeatures\b/,
+    assert.doesNotMatch(source, /\breceiptEventTimeEnabled\b|\breceiptEventTime\b|\breceipt_event_time\b|\battestedFeatures\b|\bmemoReceiptEventTime\b|\bmemoReceiptProjection\b/,
       'unreviewed attested feature consumer: ' + file);
   }
 }
 
-test('static gate: only receipt writes/validation, receipts columns and capabilities consume the attested flag', t => {
+test('static gate: only receipt writes/validation, receipts columns, capabilities and dated memo projection consume the attested flag', t => {
   const sources = featureSources();
   assertFeatureConsumers(sources);
   t.diagnostic(`scanned ${sources.size} production modules; ${reviewed.length} pinned metadata/validator/consumer regions`);
@@ -232,7 +232,7 @@ test('static gate rejects restoring a public flag on the layout authority', () =
 test('static gate pins the exact unresolved-loader allowlist and its reviewed source', () => {
   assert.deepEqual(moduleLoadingExceptions.map(({ file, line, expression }) => ({ file, line, expression })), [
     { file: 'core/context-product-worker.mjs', line: 113, expression: 'import(workerData.host.moduleUrl)' },
-    { file: 'core/context-semantic-worker.mjs', line: 379, expression: 'import(c.host.moduleUrl)' },
+    { file: 'core/context-semantic-worker.mjs', line: 482, expression: 'import(c.host.moduleUrl)' },
     { file: 'adapters/local-embedder/runtime.mjs', line: 53, expression: "import(pathToFileURL(join(pack.packPath, 'runtime/node_modules/@huggingface/transformers/dist/transformers.node.mjs')).href)" },
     { file: 'integrations/codex/qualification.mjs', line: 83, expression: "createRequire(launcher).resolve(packageName+'/package.json')" },
     { file: 'core/context-product-telemetry.mjs', line: 195, expression: 'Reflect.construct(object.constructor, args)' },
@@ -323,3 +323,26 @@ test('static gate rejects unresolved loading while closing over production depen
   writeFileSync(join(workspace.path, 'delegated/loader.cjs'), "const path = './hidden.js'; require(path);");
   assert.throws(() => featureSources(workspace.path), /unreviewed module loading.*delegated\/loader.cjs/);
 });
+
+// A boolean has no import edge. Pin both its introduction and its complete
+// storage sink, and reject escaped uses outside those reviewed regions.
+for (const file of ['core/context-read-facade.mjs', 'core/private-evidence-storage.mjs']) {
+  for (const code of [
+    'chooseOtherS2hPath(memoReceiptEventTime);',
+    'const alias = memoReceiptEventTime; chooseOtherS2hPath(alias);',
+    'chooseOtherS2hPath(memoReceiptProjection);',
+  ]) test(`static gate rejects escaped memo flag/projection in ${file}: ${code}`, () => {
+    const sources = featureSources();
+    sources.set(file, sources.get(file) + '\n' + code);
+    assert.throws(() => assertFeatureConsumers(sources), /unreviewed attested feature consumer/);
+  });
+  test(`static gate rejects an extra aliased memo flag use inside ${file}`, () => {
+    const sources = featureSources(), source = sources.get(file);
+    const marker = file.includes('facade')
+      ? '  // context-read facade: end memo receipt projection'
+      : '    const memoReceiptProjection = memoReceiptEventTime';
+    assert.ok(source.includes(marker));
+    sources.set(file, source.replace(marker, 'const alias = memoReceiptEventTime; chooseOtherS2hPath(alias);\n' + marker));
+    assert.throws(() => assertFeatureConsumers(sources), /review feature consumer/);
+  });
+}

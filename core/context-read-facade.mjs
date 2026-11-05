@@ -594,8 +594,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   const cards = info.cards ? createPrivateCardStorage({ db, identity, ready, rawSources: info.raw }) : null;
   const receipt = memoryOnly ? null : createCardReceiptSources(db, (purpose, value) =>
     createHmac('sha256', info.cursorSecret).update(JSON.stringify([purpose, [info.storeId, value]])).digest('base64url'));
+  // context-read facade: memo receipt projection
   const evidence = memoryOnly ? null : createPrivateEvidenceStorage({ db, identity,
+    memoReceiptEventTime: receiptEventTimeEnabled(cachedContentLayout(db)),
     cardDetailInside: (ns, id, readSet, options) => cards.cardDetailInside(ns, id, readSet, options), receiptRefInside: (ns, memory, row) => receipt.refInside(ns, memory, row) });
+  // context-read facade: end memo receipt projection
   async function contextRead(original, token) {
     let candidates;
     try {

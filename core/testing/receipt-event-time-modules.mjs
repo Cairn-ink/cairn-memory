@@ -18,6 +18,13 @@ const frozenExceptions = JSON.parse(readFileSync(new URL('../test/fixtures/recei
 // deadline handling and pass a private admission diagnostic through. They
 // change no loader or feature consumer.
 const exceptions = frozenExceptions.map(entry => {
+  // B1's reviewed refusal/accounting changes preserve this same host loader.
+  // Keep the frozen PR 1 pin, then bind the complete integrated Worker bytes.
+  if (entry.file === 'core/context-semantic-worker.mjs') {
+    assert.equal(entry.sha256, 'ef2961fcb0114b9d9062084d57babea2adfad4d0753619c500728ca657da5fa5',
+      'frozen semantic Worker loader pin');
+    return { ...entry, line: 482, sha256: '88fde8f37cedb4c84ba6d7610f1beff290e5020752c0900d8ca019157015e803' };
+  }
   if (entry.file !== 'core/context-product-worker.mjs') return entry;
   assert.equal(entry.sha256, '073071759a46698824ffd029a5fe48fbd737513c5c6936ba826b5d413be32bbe',
     'frozen pre-rebase Worker loader pin');

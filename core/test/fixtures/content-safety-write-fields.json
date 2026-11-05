@@ -300,10 +300,10 @@
     "key:memoryId": 5,
     "key:receiptId": 2,
     "key:triggerMemoryRefs": 1,
-    "literal:event_id": 1,
-    "literal:id": 2,
-    "literal:memory_id": 1,
-    "literal:session_id": 1
+    "literal:event_id": 2,
+    "literal:id": 3,
+    "literal:memory_id": 2,
+    "literal:session_id": 2
   },
   "core/private-organization-input.mjs": {
     "key:cardId": 1,

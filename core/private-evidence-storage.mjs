@@ -16,7 +16,7 @@ const attribution = { status: 'unassessed', commitment: 'unknown' };
 
 /** All methods run synchronously inside the caller's shared SQLite transaction.
  * The only callbacks are internal canonical readers, never host/model ports. */
-export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, receiptRefInside }) {
+export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, receiptRefInside, memoReceiptEventTime = false }) {
   const bind = (purpose, value) => keyed(identity.cursorSecret, purpose, [identity.storeId, value]);
   const qualification = createQualificationStorage({ db, receiptKey: receipt =>
     createHash('sha256').update(JSON.stringify(receipt)).digest('hex') });
@@ -80,10 +80,15 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     // The existing Memory SELECT now covers the bounded candidate batch and
     // its original receipt page. Root absence is deliberately broader than a
     // session-key match: any possible source/fence keeps the lineage fallback.
+    // Two fixed projections; the facade fixes this boolean for its open lifetime.
+    const memoReceiptProjection = memoReceiptEventTime
+      ? `json_object('id',id,'memory_id',memory_id,'receipt_key',receipt_key,
+        'client',client,'session_id',session_id,'event_id',event_id,'role',role,'excerpt',excerpt,'created_at',created_at,'occurred_at',occurred_at)`
+      : `json_object('id',id,'memory_id',memory_id,'receipt_key',receipt_key,
+        'client',client,'session_id',session_id,'event_id',event_id,'role',role,'excerpt',excerpt,'created_at',created_at)`;
     const rows=db.prepare(`SELECT memories.*${ancestry},
       EXISTS(SELECT 1 FROM memory_qualifications q WHERE q.memory_id=memories.id) AS has_qualification,
-      (SELECT json_group_array(json_object('id',id,'memory_id',memory_id,'receipt_key',receipt_key,
-        'client',client,'session_id',session_id,'event_id',event_id,'role',role,'excerpt',excerpt,'created_at',created_at))
+      (SELECT json_group_array(${memoReceiptProjection})
         FROM (SELECT * FROM receipts WHERE memory_id=memories.id ORDER BY created_at,id LIMIT 17)) AS batch_receipts
       FROM memories WHERE ${where} AND deleted=0 AND id IN (${ids.map(()=>'?').join(',')})`).all(...boundary(ns),...ids);
     for(const id of ids)cache.set(JSON.stringify([boundary(ns),id]),undefined);

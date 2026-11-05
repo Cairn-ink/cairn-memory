@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "099c54c25098bbe4f627435bfe66b2dd3af7e7dc95ebf01ca8094341c0d97cda",
-  "bytes": 1159793,
+  "sha256": "cbbe4b53fbde03600c92000d36a0dc5c4327e7a537aeb09fd43f810450df54c4",
+  "bytes": 1159973,
   "files": [
     "LICENSE",
     "README.md",
@@ -412,7 +412,7 @@
     "core/card-receipt-sources.mjs": "0b2901d464504b7fb2715c84bb0c11796f70efdff25042c08bc0122af8a77542",
     "core/private-evidence-input.mjs": "07e3569de2ecdfc27aeb4183b1ef98d7c5b402f9dd8c2a4e2e61555af68a1c72",
     "core/private-evidence-schema.mjs": "b3929d42f296fce535b7691e3ed946e1828d74224f58db4cb17c1e940746ca6c",
-    "core/private-evidence-storage.mjs": "f3e113267675a5b4f5d2518fde1ad2972501c117fd092ba9223419d91e43021e",
+    "core/private-evidence-storage.mjs": "57a1b7e34bcd59339c9057364412621f4c9372f4168b185bfdf45d6c372daf5f",
     "core/private-organization-input.mjs": "0850ebf916a064bced8966e1510d2476d32a52ac3c2bfd8aa6fb4fc6687ead84",
     "core/private-organization-schema.mjs": "384df00afd9fff4e652a0ef65bd88df36b64c87eac745d7902e5eaa174e916f7",
     "core/private-organization-storage.mjs": "3552deceba088893afd05b09b3c2fe7f2e6e80c3c13c9ea722602e63a235db0f",
@@ -436,7 +436,7 @@
     "core/context-read-bm25.mjs": "a8174fe0b187063048e386d871caba1c55b65d4d28ea5e408b2abb7eb34ee6e4",
     "core/context-read-budget.mjs": "dcb2313736df4b74a6ed6f8e783034386d1a2dada80c5d3e267154eef1fa6fb0",
     "core/context-read-embedder.mjs": "3ab122cddc5ffd536a91f77e35f202818acbf059dfb18751acf5e376a431d1ba",
-    "core/context-read-facade.mjs": "9a3f5b567997bd8f761f732d7e2c77d6e9736d97a9a6979b45a1443615a33b70",
+    "core/context-read-facade.mjs": "cdc525d4b091f826b199b1f6a417b286108c1bd2ac87f55239afa009bed67ad9",
     "core/context-read-fusion.mjs": "e7e571c0037a9dd8fcd7435886ec32b42a469bcdd6c0bce4ef4691df1ba67344",
     "core/context-read-input.mjs": "4973905aa4042fd6426ee407fd0e6fc1a9ca11f88f8d9bec6fba0d6e4301db84",
     "core/context-read-sidecar.mjs": "eecedc720c7a86869b217684dd469145649442cdfc1d500707e1745f0af9abed",

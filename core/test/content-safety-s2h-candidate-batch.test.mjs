@@ -27,7 +27,7 @@ const eligibilities=['current','superseded','awaiting','deleted'];
 function random(seed){return ()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/2**32;};}
 for(const family of costGateFamilies())for(const base of [18,23,33])test(`Memory independent safety gate and old-path equivalence control ${family} v${base}`,async t=>{
  const f=costFamilyFixture(t,base,family);await f.migrate();
- const db=f.connect();assert.equal(db.prepare('PRAGMA user_version').get().user_version,costFamilyPhysical(base,family),'actual differential physical layout');const core=openMemoryCore({path:f.path});
+ const db=f.connect();assert.equal(db.prepare('PRAGMA user_version').get().user_version,costFamilyPhysical(base,family),'actual differential physical layout');t.diagnostic('BATCH_PHYSICAL_CELL '+JSON.stringify({family,base,physical:costFamilyPhysical(base,family)}));const core=openMemoryCore({path:f.path});
  const raw=base===33?openRawCaptureCore({path:f.path,model:{contextWindow:8192,countTokens:()=>1,extract:()=>({items:[{content:'Synthetic captured interpretation',kind:'fact',confidence:.8,sourceIndices:[0]}]})}},
   {mode:'raw-v1',deletion:true,port:localPlainPort(),readPolicy:()=>({generation:'synthetic',reason:null})}):null;
  t.after(()=>{raw?.close();core.close();db.close();});
@@ -134,7 +134,7 @@ for(const family of costGateFamilies())for(const base of [18,23,33])test(`Memory
    }
   }
  }
- t.diagnostic('BATCH_DIFFERENTIAL '+JSON.stringify({node:process.version,family,base,seeds,fixtures,cases,candidates,allowed:allowedCount,denied:deniedCount,actualAllowed:actualAllowedCount,actualDenied:candidates-actualAllowedCount,oracle:'fixture-labels',mismatchCases:mismatches.length,equivalenceMismatchCases:equivalenceMismatches.length}));
+ t.diagnostic('BATCH_DIFFERENTIAL '+JSON.stringify({node:process.version,family,base,physical:costFamilyPhysical(base,family),seeds,fixtures,cases,candidates,allowed:allowedCount,denied:deniedCount,actualAllowed:actualAllowedCount,actualDenied:candidates-actualAllowedCount,oracle:'fixture-labels',mismatchCases:mismatches.length,equivalenceMismatchCases:equivalenceMismatches.length}));
  assert.ok(cases&&allowedCount&&deniedCount);
  await t.test('independent expected-by-construction safety decisions',()=>assert.equal(mismatches.length,0,JSON.stringify({count:mismatches.length,first:mismatches.slice(0,3)})));
  await t.test('equivalence control: old per-candidate predicate versus batch',()=>assert.equal(equivalenceMismatches.length,0,JSON.stringify({count:equivalenceMismatches.length,first:equivalenceMismatches.slice(0,3)})));
