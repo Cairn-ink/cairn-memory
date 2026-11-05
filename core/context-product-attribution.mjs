@@ -159,7 +159,7 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
 }
 
 // Private failure metadata is separate from the numeric phase/stall contract.
-export const maintenanceFailureKinds=Object.freeze(['none','worker_heap_limit','worker_exit','worker_error','protocol','unmapped','exception','observation_timing','engine','spawn','dispatch','call_error','identity','worker_state','cleanup','disposal_proof','open_exceeds_quantum','maintainer_identity_unrecognized']);
+export const maintenanceFailureKinds=Object.freeze(['none','worker_heap_limit','worker_exit','worker_error','protocol','unmapped','exception','observation_timing','engine','spawn','dispatch','call_error','identity','worker_state','cleanup','disposal_proof','open_exceeds_quantum','maintainer_identity_unrecognized','admission_no_progress']);
 const failureCode=/^[a-z][a-z0-9_]{0,47}$/,failureName=/^[A-Za-z][A-Za-z0-9_]{0,47}$/;
 export const maintenanceFailureCode=value=>typeof value==='string'&&failureCode.test(value)?value:'other';
 const indexReasons=Object.freeze(['storage_unavailable','auxiliary_file','unsafe_file','incompatible','wrong_store','missing','corrupt','validation_missing','validation_invalid',
@@ -178,7 +178,7 @@ export const maintenanceFailureCounts=()=>Object.fromEntries(maintenanceFailureK
 export function maintenanceErrorName(error){
   try {const constructor=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(error),'constructor')?.value,name=constructor&&Object.getOwnPropertyDescriptor(constructor,'name')?.value;return typeof name==='string'&&failureName.test(name)?name:'other';}catch{return 'other';}
 }
-export function maintenanceFailureRecord(kind,{engineCode,errorName,exitCode,ordinal,stage,stall,step,reason,protocolKind:protocol}={}) {
+export function maintenanceFailureRecord(kind,{engineCode,errorName,exitCode,ordinal,stage,stall,step,reason,count,protocolKind:protocol}={}) {
   if(!maintenanceFailureKinds.includes(kind)||kind==='none')kind='call_error';
   const code=maintenanceFailureCode(engineCode);
   return Object.freeze({cause:kind==='unmapped'?'unmapped:'+code:kind==='exception'?'exception:'+(typeof errorName==='string'&&failureName.test(errorName)?errorName:'other'):kind,
@@ -188,6 +188,7 @@ export function maintenanceFailureRecord(kind,{engineCode,errorName,exitCode,ord
     ...(kind==='protocol'?{protocolKind:protocolKinds.includes(protocol)?protocol:'other'}:{}),
     ...(kind==='worker_error'||kind==='spawn'||kind==='dispatch'||kind==='call_error'?{errorName:typeof errorName==='string'&&failureName.test(errorName)?errorName:'other'}:{}),
     ...(kind==='worker_exit'&&Number.isSafeInteger(exitCode)?{exitCode}:{}),
+    ...(kind==='admission_no_progress'&&Number.isSafeInteger(count)&&count>=1&&count<=3?{count}:{}),
     ...(Number.isSafeInteger(ordinal)&&ordinal>0?{ordinal}:{}),
     ...(['open','refresh','call','idle','close','observation','disposal','admission'].includes(stage)?{stage}:{}),...(stall?{stall}:{})});
 }

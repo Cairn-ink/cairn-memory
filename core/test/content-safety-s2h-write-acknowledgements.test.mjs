@@ -247,6 +247,9 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // of a pump and its budget window, carried in the maintenance-turn request
   // to the host's pre-quantum port. Neither is a canonical content identity or
   // a writer acknowledgement field.
+  // Foreign-binding repair: the read-only disposal check adds one
+  // validation_invalid failure-reason string in context-product-sidecar (6 -> 7).
+  // It is not a canonical content identity or a writer acknowledgement field.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};

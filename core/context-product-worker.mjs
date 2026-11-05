@@ -15,6 +15,7 @@ const workerFirst = validOpenDiagnosticBuffer(workerData.openPhases) ? process.h
 const phase = openDiagnosticClock(workerData.openPhases);
 phase?.mark('workerFirst', workerFirst);
 const { request, operation: opening, binding } = workerData;
+let sidecarHandles;
 let facade, index, host, active = false, disposing, currentControl = request;
 let semantic,currentOperation=opening,booting=true,closing=false,rejectPermission,exiting;
 const owned = [], resources = new Int32Array(workerData.resources);
@@ -102,7 +103,7 @@ try {
   const permission = new Promise((resolve, reject) => { rejectPermission = reject; parentPort.once('message', message => {
     try {
       if (message.kind !== 'identity-ack'){if(!closing)noteFailure('protocol');fail('reader_failed');}
-      verifyRecords(request, message.operation, request, opening); resolve();
+      verifyRecords(request, message.operation, request, opening); sidecarHandles=message.sidecarHandles; resolve();
     } catch (error) { reject(error); }
   }); });
   phase?.mark('identitySent');
@@ -131,7 +132,7 @@ try {
   let comparison=null;
   if(workerData.memoryComparison===true){comparison=await import('./context-product-comparison.mjs');within(opening);}
   index = openProductIndex({path:workerData.path,facade,authorize,ownerCoverage:workerData.ownerCoverage,observer,sqlite,sidecarJournalMode:workerData.sidecarJournalMode,maintenance:workerData.maintenance,counter:host.counter,semantic,operation:()=>currentOperation,attribution,
-    storageOptions:{memoryComparison:comparison,verificationBatching:workerData.verificationBatching===true,verificationBatchState:workerData.verificationBatchState}});
+    storageOptions:{sidecarHandles,memoryComparison:comparison,verificationBatching:workerData.verificationBatching===true,verificationBatchState:workerData.verificationBatchState}});
   phase?.mark('indexOpened');
   within(opening);
   // The opening telemetry remains unsealed until connection disposal.
