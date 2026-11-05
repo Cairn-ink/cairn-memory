@@ -1,3 +1,4 @@
+import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
 import { contentWriteMethodClass } from './content-write-context.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { contentSafetyFacade } from './content-safety-boundary.mjs';
@@ -991,12 +992,18 @@ export function createMemoryCore(input, internal) {
         deadline, input: { ...input, namespace },
         operations: { filterCaptureSources: sources => runtime.filterCaptureSources(ns, sources),
           assertCaptureSources: sources => runtime.assertCaptureSources(ns, sources),
+          // Preserve private pre-dispatch busy provenance across this internal
+          // operation, including the runtime facade's entry/delivery checks.
+          beginCaptureDispatch: value => {
+            try { return runtime.assertCaptureEvidence(ns, { ...value, [captureDispatch]: true }, deadline); }
+            catch (error) { if (isStorageBusy(error)) throw captureSourceBusy(); throw error; }
+          },
           claimAdmission: (value, sources) => invoke(() => runtime.claimCapturedAdmission(ns, {
           ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS,
         }, deadline, rawRegistration, sources)),
           finishAdmission: value => finishAdmissionValidated(captureKey(value), true, deadline,
             keepInput || sessionEpisodes ? undefined : captureQualifiedDuplicates),
-          abandonAdmission: (value, retryable) => sessionEpisodes && retryable
+          abandonAdmission: (value, retryable) => retryable
             ? invoke(() => runtime.abandonAdmission(ns, { ...admissionKey(captureKey(value)),
               token: contractId(value.token), retryable: true }))
             : abandonAdmission(captureKey(value)), get, map, isAwaiting: id => runtime.isAwaiting(ns, id),

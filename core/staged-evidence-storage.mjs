@@ -1,5 +1,7 @@
+import { isPreDispatchToken } from './capture-source-safety.mjs';
 import { STAGED_PAYLOAD_MAX_BYTES } from './episode-schema.mjs';
 import { transaction } from './database.mjs';
+import { cachedContentLayout } from './content-safety-schema.mjs';
 import { boundedText, denseArray, fail, identifier, object } from './validation.mjs';
 
 const where = 'owner_id = ? AND scope = ? AND project_id = ?';
@@ -36,6 +38,7 @@ function serializeView(view, episode = false) {
 /** Methods without a transaction wrapper are called under the admission/mutation lock. */
 export function createStagedEvidenceStorage({ db }) {
   let episodes;
+  const retryReservations = new WeakSet();
   const hasRawCapture = Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_capture_events'").get());
   const rawBypass = (ns, input) => hasRawCapture && db.prepare(`SELECT 1 FROM raw_capture_events
     WHERE ${eventWhere} AND staging='not-staged'`).get(...key(ns, input));
@@ -76,6 +79,15 @@ export function createStagedEvidenceStorage({ db }) {
     if (row.state === 'admitted' || row.state === 'released') return null;
     if (row.state !== 'pending') return 'capture_evidence_closed';
     if (row.event_mode === 'episode-v1' && ['reserved','pending'].includes(admission?.state)) return null;
+    // A pre-dispatch token proves no provider could have run: dispatch must
+    // first replace it under the same writer lock. Reclaim even a live lease;
+    // a displaced owner cannot pass the token-guarded dispatch write. Payload
+    // expiry/discard above still win; unmarked expired attempts stay closed.
+    if (cachedContentLayout(db)?.suppressionRevision && ((admission?.state === 'reserved' && admission.token === null && admission.lease_expires_at === null) ||
+         (admission?.state === 'pending' && isPreDispatchToken(admission.token)))) {
+      retryReservations.add(admission);
+      return null;
+    }
     if (admission.lease_expires_at <= now) {
       db.prepare(`UPDATE staged_capture_evidence SET state = 'failed' WHERE ${eventWhere}`)
         .run(...key(ns, input));
@@ -183,6 +195,7 @@ export function createStagedEvidenceStorage({ db }) {
     return false;
   }
 
-  return { setEpisodes(value) { episodes = value; }, episodeCapacity, releaseCompleted, serializeView, touch, admissionTime, claimGuard, finishGuard, capacityGuard, insert, mark,
+  return { isRetryReservation: row => retryReservations.has(row),
+    setEpisodes(value) { episodes = value; }, episodeCapacity, releaseCompleted, serializeView, touch, admissionTime, claimGuard, finishGuard, capacityGuard, insert, mark,
     purgeNamespace, inspect, discard };
 }

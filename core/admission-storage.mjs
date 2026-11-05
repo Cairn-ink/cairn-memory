@@ -1,3 +1,5 @@
+import { ADMISSION_LEASE_MS } from './episode-schema.mjs';
+import { captureSourceBusy, isPreDispatchToken, postDispatchToken, preDispatchToken } from './capture-source-safety.mjs';
 import { inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety } from './content-safety.mjs';
@@ -114,11 +116,18 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
       }
       if (row) sourceRoots?.bindJob(ns, input, sources);
       const prepared = hooks?.prepare(row);
-      if (row && row.lease_expires_at > now) return { processing: true };
+      if (row && row.lease_expires_at > now && !stagedEvidence.isRetryReservation?.(row)) return { processing: true };
       const registered = episodes.event(ns, input);
-      const capacity = !registered && serialized && stagedEvidence.capacityGuard(ns, serialized);
+      // The guard has proved an existing pending safety payload in this same
+      // writer transaction. Reuse its capacity and original retention clock.
+      const reuseStaged = Boolean(cachedContentLayout(db)?.suppressionRevision && stagedEvidence.isRetryReservation?.(row));
+      const capacity = !reuseStaged && !registered && serialized && stagedEvidence.capacityGuard(ns, serialized);
       if (capacity && !registration) return { closed: capacity };
-      const token = randomUUID();
+      const id = randomUUID();
+      // Preserve the phase on automatic retries even with staging now off.
+      // Public manual claims supply no sources and keep their ordinary token.
+      const token = (serialized || (reuseStaged && sources)) &&
+        !registered && cachedContentLayout(db)?.suppressionRevision ? preDispatchToken(id) : id;
       if (row) {
         db.prepare(`UPDATE ${table(input)} SET state = 'pending', token = ?, lease_expires_at = ? WHERE ${predicate(input)}`)
           .run(token, now + input.leaseMs, ...values(ns, input));
@@ -130,13 +139,39 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
       }
       const episodePolicy = registered ? episodes.admissionStarted(ns, input) : undefined;
       if (!row) sourceRoots?.bindJob(ns, input, sources);
-      if (serialized && !registered && !capacity) stagedEvidence.insert(ns, input, serialized, now);
+      if (!reuseStaged && serialized && !registered && !capacity) stagedEvidence.insert(ns, input, serialized, now);
       if (serialized && !registered) registration?.setStaging(capacity ? 'not-staged' : 'staged');
       return { token, ...prepared, ...(registered ? { episodePolicy } : {}) };
     }, deadline?.check);
     if (result.closed) fail(result.closed);
     registration?.accept();
     return result;
+  }
+
+  // Only safety staged claims carry this private phase. The committed token
+  // replacement is the dispatch fence: a crash afterwards is conservatively
+  // treated as possibly dispatched, even if the provider was never entered.
+  function beginCaptureDispatch(ns, input, deadline) {
+    if (!isPreDispatchToken(input.token)) return { token: input.token };
+    try { return transaction(db, () => {
+      const now = time(ns, input);
+      const row = read(ns, input);
+      if (row?.state !== 'pending' || row.payload_digest !== input.payloadDigest ||
+        row.token !== input.token) fail('stale_admission');
+      // This exact token still owns a proved pre-dispatch attempt. Its old
+      // lease may expire during source validation without closing evidence.
+      // Validate the proposed paid lease, then persist both fields atomically.
+      const leaseExpiresAt = now + ADMISSION_LEASE_MS;
+      const closed = guard('finishGuard', ns, input, { ...row, lease_expires_at: leaseExpiresAt }, now);
+      if (closed) fail(closed);
+      const token = postDispatchToken(input.token);
+      db.prepare(`UPDATE admission_claims SET token=?,lease_expires_at=? WHERE ${where}`)
+        .run(token, leaseExpiresAt, ...key(ns, input));
+      return { token };
+    }, deadline?.check); } catch (error) {
+      if (isStorageBusy(error)) throw captureSourceBusy();
+      throw error;
+    }
   }
 
   function finishAdmission(ns, input, hooks, deadline) {
@@ -195,8 +230,8 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
     return result;
   }
 
-  // A locked cleanup remains owned in-process; after restart its admission lease
-  // bounds recovery. Never turn a retryable local lock into a terminal payload fence.
+  // Retain cleanup for the older protocols. Safety staged pre-dispatch tokens
+  // also recover durably without this in-process map or a successful cleanup.
   const retryCleanup = new Map();
   const cleanupKey = (ns, input) => JSON.stringify(values(ns, input));
   function abandonAdmission(ns, input) {
@@ -233,5 +268,5 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
     return null;
   }
 
-  return { claimAdmission, finishAdmission, abandonAdmission, assertCaptureEvidence, inspectAdmission };
+  return { claimAdmission, beginCaptureDispatch, finishAdmission, abandonAdmission, assertCaptureEvidence, inspectAdmission };
 }

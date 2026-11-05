@@ -242,7 +242,16 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // failureSelected is private read-only state and adds no identity-shaped
   // occurrence, canonical identity or writer acknowledgement field.
   // The terminal writer and acknowledgement field guard are unchanged.
+  // B1 control: the semantic read fence adds private owner/store/operation bindings;
+  // its accounting callback allowlist names owner/domain/ledger identities.
+  // The sidecar document id is projected only into a request-local read proof.
+  // These nine occurrences are read/IPC/accounting metadata, not writer ack
+  // fields; the terminal writer and structural acknowledgement guard are unchanged.
   // These changes retain the native guard's fail-closed walker.
+  // B2b: batchRefs lists and canonical Memory/receipt JSON fields are
+  // private read projections inside existing snapshots. The receipt source
+  // ref uses the existing typed source union and binding. No writer or
+  // acknowledgement field is added; the native fail-closed walker is unchanged.
   // Maintenance turn seam: pumpId and windowId are opaque scheduler identifiers
   // of a pump and its budget window, carried in the maintenance-turn request
   // to the host's pre-quantum port. Neither is a canonical content identity or

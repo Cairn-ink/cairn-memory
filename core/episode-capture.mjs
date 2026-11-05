@@ -2,6 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { isStorageBusy, STORAGE_BUSY_TIMEOUT_MS } from './database.mjs';
+import { isCaptureSourceBusy } from './capture-source-safety.mjs';
 import { episodeSnapshot } from './episode-input.mjs';
 import { captureMessages, checkExtractionFits, extractionRequest } from './capture.mjs';
 import { callModel } from './model-call.mjs';
@@ -140,7 +141,7 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
       type: output.type.value, classificationTarget: snapshot.targetEventId };
   } catch (error) {
     const code = ['capacity', 'expired', 'missing_evidence', 'generation_conflict']
-      .includes(error.code) ? error.code : errorCode(error);
+      .includes(error.code) ? error.code : isCaptureSourceBusy(error) ? 'storage_busy' : errorCode(error);
     retryable = code === 'storage_busy' && !started;
     const outcome = started && code === 'storage_busy' ? 'episode_failed' : code;
     let pendingFailure = false, reportedCode = outcome;

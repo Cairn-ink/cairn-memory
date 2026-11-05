@@ -242,7 +242,7 @@ test(`capture source busy boundary v${layout} ${method} ${phase} sqlite${errcode
     return Reflect.apply(exec, this, [sql]);
   });
   const prepareMock = t.mock.method(DatabaseSync.prototype, 'prepare', function(sql) {
-    if (this === f.runtimeDb && !injected && ((phase === 'source' && sql.includes('SELECT r.*,m.revision AS memory_revision')) ||
+    if (this === f.runtimeDb && !injected && ((phase === 'source' && sql.includes('FROM memories INDEXED BY namespace_memories')) ||
         (phase === 'delivery' && committed && sql.includes('schema_version AS cookie')))) hit();
     return Reflect.apply(prepare, this, [sql]);
   });
@@ -296,7 +296,7 @@ test(`capture source snapshot delivery fences concurrent forget v${layout} ${met
   const memory = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic source fact.', kind: 'fact' }, receipts: [evidence] })).memory;
   const prepare = DatabaseSync.prototype.prepare; let writes = 0;
   const mock = t.mock.method(DatabaseSync.prototype, 'prepare', function(sql) {
-    if (this === f.runtimeDb && !writes && sql.includes('SELECT r.*,m.revision AS memory_revision')) {
+    if (this === f.runtimeDb && !writes && sql.includes('FROM memories INDEXED BY namespace_memories')) {
       writes++;
       assert.equal(this.isTransaction, true);
       ok(f.core.forget({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision }));
@@ -332,7 +332,7 @@ test(`control: capture source installed safety refusal inside snapshot v${layout
   });
   const prepareMock = t.mock.method(db, 'prepare', sql => {
     if (db.isTransaction && sql.includes('schema_version AS cookie')) snapshotMetadata++;
-    if (sql.includes('SELECT r.*,m.revision AS memory_revision')) sourceReads++;
+    if (sql.includes('FROM memories INDEXED BY namespace_memories')) sourceReads++;
     return prepare(sql);
   });
   try { assert.throws(() => f.runtime[method](ns, [evidence]), { code: original }); }

@@ -214,6 +214,14 @@ copies, computed property reads and destructuring cannot reveal the private bit.
 Old binaries reject 51–53 through their finite version lists (or exact DDL
 attestation for a pre-attested-family PR 1 binary).
 
+Addendum v1 (2026-11-05): the context-read facade also consumes the attested
+bit for the dated memo receipt projection. It passes a plain boolean, not the
+accessor, into private evidence storage, which selects between two fixed SQL
+projection literals over the same bounded receipt rows. The byte-pinned regions
+are "context-read facade: memo receipt projection" and "private evidence
+storage: memo receipt projection sink". The projection variant is fixed per
+facade open; a store cannot change layout without schema-cookie re-attestation.
+
 e9 decision (2026-11-03 06:1x): stop the bypass rounds; `37374c54` passes.
 The gate covers an honest engineer who accidentally reads the event-time feature
 flag in another S2h path. Deliberately obtaining it by reflection or constructed

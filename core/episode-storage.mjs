@@ -1,3 +1,4 @@
+import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety } from './content-safety.mjs';
 import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHmac, randomUUID } from 'node:crypto';
@@ -45,6 +46,15 @@ const blank = label => ({ clientLabel: label, eventStart: null, eventEnd: null, 
   anchors: {}, modelMetadata: null, semanticSupport: 'unassessed', editor: {},
   processing: { state: 'pending', missing: 0, expired: 0, omitted: 0, errorCode: null } });
 
+// A closed storage-row projection keeps every internal proof/key/secret out of
+// metadata and Session output construction, including future proof additions.
+export function episodeReadRow(row) {
+  return { id: row.id, revision: row.revision, owner_id: row.owner_id, scope: row.scope, project_id: row.project_id,
+    session_key: row.session_key, client: row.client, first_received_at: row.first_received_at,
+    last_received_at: row.last_received_at, updated_at: row.updated_at, record: row.record,
+    observed: row.observed, attempted: row.attempted, covered: row.covered };
+}
+
 export function episodeMetadata(ns, row) {
   const record = JSON.parse(row.record);
   // Closure guards and their proof stay in storage, outside public read fields.
@@ -58,7 +68,7 @@ export function episodeMetadata(ns, row) {
 }
 
 /** All write seams are model-free. SE-2 owns scheduling and provider calls. */
-export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch, epoch, forgetMutation, rawCapture, sourceAuthority, sourceRoots, deleteEpisode, assertEpisodeRead }) {
+export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch, epoch, forgetMutation, rawCapture, sourceAuthority, sourceRoots, deleteEpisode, assertEpisodeRead, episodeProjection }) {
   const rawControls = createRawControlStorage(db);
   // Cleanup-only callers need only exec; defer the optional schema probe until
   // a real episode publication attempt, preserving that legacy failure seam.
@@ -1021,10 +1031,20 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     return transaction(db, () => {
       if (contentSuppressionReasonInside(db, ns)) fail('episode_not_found');
       stagedEvidence.touch(ns);
-      const currentEpoch = epoch(ns);
+      const safety = Boolean(cachedContentLayout(db)?.suppressionRevision);
+      let projected;
+      if (safety) {
+        const expectedEpochs = Object.values(pages).flatMap(page => page.epoch === undefined ? [] : [page.epoch]);
+        const expected = new Set(expectedEpochs).size > 1 ? -1 : expectedEpochs[0];
+        projected = episodeProjection(ns, { sql: `SELECT * FROM session_episodes WHERE ${where} AND id=? AND deleted=0`,
+          params: [...boundary(ns), input.episodeId] }, expected);
+      } else projected = { epoch: epoch(ns) };
+      const currentEpoch = projected.epoch;
       for (const page of Object.values(pages)) if (page.epoch !== undefined && page.epoch !== currentEpoch) fail('cursor_stale');
-      const row = live(ns, input.episodeId);
-      assertEpisodeRead?.(ns, row);
+      let row = safety ? db.prepare(projected.query.sql).get(...projected.query.params) : live(ns, input.episodeId);
+      if (!row || row.deleted) fail('episode_not_found');
+      assertEpisodeRead?.(ns, row, projected.budget);
+      row = episodeReadRow(row);
       if (db.prepare('SELECT 1 FROM review_hidden_episodes WHERE id=?').get(row.id)) fail('episode_not_found');
       const sources = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? AND id>? ORDER BY id LIMIT ?')
         .all(row.id, pages.source.after ?? '', pages.source.limit+1).map(source => ({ id: source.id, digest: source.digest,

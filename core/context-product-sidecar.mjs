@@ -1,6 +1,6 @@
 import { reserveSidecarHandle, sidecarHandleGuard } from './context-product-handles.mjs';
 import { admissionRequired, PRODUCT_SIDECAR_SUFFIX } from './context-product-admission.mjs';
-import { withContentSuppressionReadInside, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
+import { cachedContentSuppressionRequestInside, contentSuppressionRequestInside, withMemoryCandidateBatchInside, withContentSuppressionReadInside, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { bindContentSafetyConnection, cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety, memoryReadEligible } from './content-safety.mjs';
 import { DatabaseSync } from 'node:sqlite';
@@ -23,6 +23,14 @@ import { fail } from './validation.mjs';
 import { VECTOR_DDL } from './context-product-vectors.mjs';
 import { verificationBatch, verificationMeter, verificationBound } from './context-product-verification-batch.mjs';
 import { comparisonWorkFields } from './context-product-attribution.mjs';
+
+// Internal Memory-only equivalent of candidateAllowed. Cards retain their
+// conservative per-candidate path. No handle, transaction or epoch is acquired.
+export function memoryCandidatesAllowedInside(db, refs, p, identity) {
+  return withMemoryCandidateBatchInside(db,refs,rows=>rows.map((row,i)=>
+    Boolean(row.id && row.revision === refs[i].revision && memoryReadEligible(row,p.intent) &&
+      contentReadSafety(db,{identity,namespace:refs[i].namespace,ref:refs[i],intent:p.intent,selectedMemory:row}).allowed)));
+}
 
 export const PRODUCT_SIDECAR_FORMAT = 3;
 export { PRODUCT_SIDECAR_SUFFIX };
@@ -146,7 +154,22 @@ function streams(p) {
 export function canonicalProductFences(db, p) {
   const canonical = [], dependency = [];
   for (const ns of p.readSet) {
-    canonical.push({ memory: db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch ?? 1,
+    let memory;
+    const layout=cachedContentLayout(db);
+    if(layout?.suppressionRevision){
+      const row=db.prepare(`SELECT n.epoch,coalesce(f.epoch_hi,0) epoch_hi,coalesce(f.epoch_lo,0) epoch_lo,
+        f.owner_id IS NOT NULL suppression_present${layout.rawLineage?',EXISTS(SELECT 1 FROM raw_receipt_lineage LIMIT 1) AS raw_lineage_present':''} FROM (SELECT 1) anchor
+        LEFT JOIN namespace_epochs n ON n.owner_id=? AND n.scope=? AND n.project_id=?
+        LEFT JOIN owner_suppression_epochs f ON f.owner_id=?`).get(...boundary(ns),ns.ownerId);
+      // An empty Raw-lineage table proves that unrelated Memory facts do not
+      // need an extra ancestry pass. Otherwise retain canonical S1 filtering.
+      // This is request data, never part of a signed publication or DTO.
+      p.rawLineagePresent=layout.rawLineage?Boolean(row.raw_lineage_present):false;
+      const epoch=`${row.epoch_hi}:${row.epoch_lo}`;
+      if(p.suppressionEpoch!==undefined&&p.suppressionEpoch!==epoch)fail('evidence_unavailable');
+      memory=row.epoch??1;
+    }else memory=db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch??1;
+    canonical.push({ memory,
       ...(p.types.includes('card') ? { card: db.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1 } : {}) });
     dependency.push(p.types.includes('card') ? cardDependencyFence(db, ns, p.readSet) : {});
   }
@@ -422,7 +445,21 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         };
         if (!pointer) return checkpoint ? checkpoint.mismatch ? { dto:status(p,'stale',checkpoint.mismatch),publication:null } : incomplete() : { dto:status(p,'absent','missing'),publication:null };
         const g = side.prepare('SELECT * FROM generations WHERE id=?').get(pointer.generation);
-        const text = side.prepare('SELECT record FROM validation_records WHERE publication=?').get(pointer.publication)?.record;
+        // Fold the bounded visible-count proof into the record query already
+        // executed in this observation's sidecar snapshot. It is request data,
+        // never part of a signed lexical/vector publication.
+        const memo=suppressionMemo(p),keys=memo?.facts?.filter(f=>f.kind==='memory').flatMap(f=>{
+          const stream=streams(p).findIndex(s=>s.type==='memory'&&s.ns.scope===f.scope&&(s.ns.projectId??'')===f.project_id);
+          return stream<0?[]:[[stream,f.stable_key]];
+        });
+        const record=keys?.length?side.prepare(`SELECT record,(SELECT json_group_array(json_object(
+          'stream',d.stream,'id',d.id,'doc',d.doc,'revision',d.revision,'body_revision',d.body_revision,
+          'eligible',d.eligible,'token_length',d.token_length)) FROM json_each(?) k CROSS JOIN documents d
+          WHERE d.generation=? AND d.stream=json_extract(k.value,'$[0]')
+            AND d.id=json_extract(k.value,'$[1]')) AS suppression_documents
+          FROM validation_records WHERE publication=?`).get(JSON.stringify(keys),g?.storage_id??-1,pointer.publication):
+          side.prepare('SELECT record FROM validation_records WHERE publication=?').get(pointer.publication);
+        const text=record?.record;
         if (!g || !text) return invalid(p,'validation_missing');
         const r = verifiedRecord(identity.cursorSecret,'validation',text,attribution);
         const expectedTypes = ['memory','card'].filter(type => p.types.includes(type));
@@ -435,6 +472,11 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         const byteSafe=JSON.parse(g.verify).byteSafe===1;
         // A legacy publication stays available while its replacement is private.
         if(byteSafe && checkpoint && !checkpoint.mismatch)return incomplete();
+        if(memo) {
+          const documents=new Map(JSON.parse(record?.suppression_documents??'[]').map(d=>[JSON.stringify([d.stream,d.id]),d]));
+          let proofs=suppressionProofs.get(memo);if(!proofs){proofs=new WeakMap();suppressionProofs.set(memo,proofs);}
+          proofs.set(r,{visible:suppressionView(p,r,memo,(stream,key)=>documents.get(JSON.stringify([stream,key])))});
+        }
         return { dto:status(p,mismatch ? 'stale' : 'ready',mismatch,progressOf(g),r.counts), publication:r,byteSafe };
       });
     } catch (e) {failed(e,guardWritable);attribution?.captureFailure(e);
@@ -1088,41 +1130,56 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     collect(quantum,p.readSet[0].ownerId);
     return m;
   }
+  const suppressionProofs=new WeakMap();
+  function suppressionMemo(p) {
+    if(!cachedContentLayout(canonical)?.suppressionRevision||!cachedContentSuppressionRequestInside(canonical,p.readSet[0].ownerId))return null;
+    return contentSuppressionRequestInside(canonical,p.readSet);
+  }
+  function suppressionView(p,publication,memo,document) {
+    if(memo.epoch==='0:0'||memo.facts?.length===0)return null;
+    const ss=streams(p),denied=new Set();
+    const counts={...publication.counts,byType:Object.fromEntries(p.types.map(type=>[type,{...publication.counts.byType[type]}]))};
+    let unknown=!memo.facts || memo.layout.rawLineage || p.types.includes('card') || memo.facts.some(f=>!['memory','owner','namespace','receipt'].includes(f.kind));
+    if(memo.facts)for(const fact of memo.facts){
+      if(['owner','namespace'].includes(fact.kind))fail('evidence_unavailable');
+      if(fact.kind!=='memory')continue;
+      const stream=ss.findIndex(s=>s.type==='memory'&&s.ns.scope===fact.scope&&(s.ns.projectId??'')===fact.project_id);
+      if(stream<0)continue;
+      const row=document(stream,fact.stable_key);
+      if(!row?.eligible||denied.has(row.doc))continue;
+      if(contentSuppressionReasonInside(canonical,ss[stream].ns,{kind:'memory',key:fact.stable_key,revision:row.revision,
+        version:JSON.stringify(['memory-revision-v1',row.revision])})){
+        denied.add(row.doc);counts.byType.memory.eligible--;counts.byType.memory.indexed--;counts.totalTokenLength-=row.token_length;
+      }
+    }
+    if(unknown)for(const type of p.types)counts.byType[type]={eligible:null,indexed:null};
+    return {denied,counts,unknown,canonicalRequired:p.rawLineagePresent!==false,checkEach:!memo.facts || p.types.includes('card') || memo.facts.some(f=>f.kind==='raw'),filtered:unknown||denied.size>0};
+  }
   function suppressionRequest(p,publication,work) {
     if(!publication || !cachedContentLayout(canonical)?.suppressionRevision ||
       contentSuppressionRequestFenceInside(canonical,p.readSet[0].ownerId)==='0:0')return work(null);
+    const memo=suppressionMemo(p),proof=memo&&suppressionProofs.get(memo)?.get(publication);
+    if(memo?.facts?.length===0)return work(null);
+    if(proof)return work(proof.visible);
     const inspect=()=>withContentSuppressionReadInside(canonical,p.readSet,memo=>{
-      if (memo.facts?.length === 0) return work(null);
-      const ss=streams(p),generation=storageKey(publication.generation.id),denied=new Set();
-      const counts={...publication.counts,byType:Object.fromEntries(p.types.map(type=>[type,{...publication.counts.byType[type]}]))};
-      let unknown=!memo.facts || memo.layout.rawLineage || p.types.includes('card') || memo.facts.some(f=>!['memory','owner','namespace','receipt'].includes(f.kind));
-      if(memo.facts)for(const fact of memo.facts){
-        if(['owner','namespace'].includes(fact.kind))fail('evidence_unavailable');
-        if(fact.kind!=='memory')continue;
-        const stream=ss.findIndex(s=>s.type==='memory'&&s.ns.scope===fact.scope&&(s.ns.projectId??'')===fact.project_id);
-        if(stream<0)continue;
-        const row=side.prepare('SELECT doc,revision,body_revision,eligible,token_length FROM documents WHERE generation=? AND stream=? AND id=?')
-          .get(generation,stream,fact.stable_key);
-        if(!row?.eligible||denied.has(row.doc))continue;
-        if(contentSuppressionReasonInside(canonical,ss[stream].ns,{kind:'memory',key:fact.stable_key,revision:row.revision,
-          version:JSON.stringify(['memory-revision-v1',row.revision])})){
-          denied.add(row.doc);counts.byType.memory.eligible--;counts.byType.memory.indexed--;counts.totalTokenLength-=row.token_length;
-        }
-      }
-      if(unknown)for(const type of p.types)counts.byType[type]={eligible:null,indexed:null};
-      return work({denied,counts,unknown,checkEach:!memo.facts || p.types.includes('card') || memo.facts.some(f=>f.kind==='raw'),filtered:unknown||denied.size>0});
+      if(memo.facts?.length===0)return work(null);
+      const generation=storageKey(publication.generation.id);
+      return work(suppressionView(p,publication,memo,(stream,key)=>side.prepare(
+        'SELECT doc,revision,body_revision,eligible,token_length FROM documents WHERE generation=? AND stream=? AND id=?').get(generation,stream,key)));
     });
     return canonical.isTransaction?inspect():readTransaction(canonical,inspect);
   }
   function visibleCounts(p,publication) {
     if(!publication||!cachedContentLayout(canonical)?.suppressionRevision||
       contentSuppressionRequestFenceInside(canonical,p.readSet[0].ownerId)==='0:0')return null;
+    const memo=suppressionMemo(p),proof=memo&&suppressionProofs.get(memo)?.get(publication);
+    if(memo?.facts?.length===0)return null;
+    if(proof)return proof.visible?.counts??null;
     return read(()=>suppressionRequest(p,publication,visible=>visible?.counts??null));
   }
-  function candidateAllowed(ref, p) {
-    return ref.type === 'card' ? contextCardEligible(canonical,identity,features,ref.namespace,
-      {id:ref.cardId,revision:ref.revision,body_revision:ref.bodyRevision},p.intent,{readSet:p.readSet}) :
-      contentReadSafety(canonical,{identity,namespace:ref.namespace,ref,intent:p.intent}).allowed;
+  function cardCandidateAllowed(ref, p) {
+    return contextCardEligible(canonical,identity,features,ref.namespace,
+      {id:ref.cardId,revision:ref.revision,body_revision:ref.bodyRevision},p.intent,{readSet:p.readSet});
   }
   function lexicalSuppressed(p,publication,query,limit,visible) {
     const terms=[...new Set(tokenizeT1(query))],generation=storageKey(publication.generation.id),ss=streams(p),documents=[];
@@ -1144,8 +1201,8 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
           if(!document?.eligible)continue;
           const stream=ss[document.stream],ref={type:stream.type,namespace:stream.ns,[stream.type==='memory'?'memoryId':'cardId']:document.id,
             revision:document.revision,...(stream.type==='card'?{bodyRevision:document.body_revision}:{})};
-          if(visible.checkEach&&contentSuppressionMayMatchInside(canonical,stream.ns,{kind:stream.type,key:document.id})) {
-            if(!candidateAllowed(ref,p))continue;
+          if(stream.type==='card'&&visible.checkEach&&contentSuppressionMayMatchInside(canonical,stream.ns,{kind:'card',key:document.id})){
+            if(!cardCandidateAllowed(ref,p))continue;
             checked.add(ref);
           }
           documents.push({ref,frequencies,length:document.token_length});
@@ -1153,11 +1210,23 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         if(rows.length<128)break;after=rows.at(-1).doc;
       }
     }
+    if(visible.checkEach){
+      const memory=documents.filter(({ref})=>ref.type==='memory'&&contentSuppressionMayMatchInside(canonical,ref.namespace,{kind:'memory',key:ref.memoryId}));
+      const allowed=memoryCandidatesAllowedInside(canonical,memory.map(d=>d.ref),p,identity);
+      const decisions=new Map(memory.map((d,i)=>[d.ref,allowed[i]]));
+      for(const {ref}of memory)if(decisions.get(ref))checked.add(ref);
+      for(let i=documents.length-1;i>=0;i--)if(decisions.get(documents[i].ref)===false)documents.splice(i,1);
+    }
     const df=new Map(terms.map(term=>[term,documents.filter(d=>d.frequencies.has(term)).length]));
     const N=visible.unknown?documents.length:Object.values(visible.counts.byType).reduce((n,c)=>n+c.eligible,0);
     const totalLength=visible.unknown?documents.reduce((n,d)=>n+d.length,0):visible.counts.totalTokenLength;
     const ranked=rankScores(documents.map(d=>({ref:d.ref,score:scoreBM25(terms,d,{N,totalLength,df})}))).slice(0,limit);
-    const rows=ranked.filter(({ref})=>checked.has(ref)||candidateAllowed(ref,p));
+    const pending=ranked.filter(({ref})=>!checked.has(ref)&&!(visible.canonicalRequired===false&&!contentSuppressionMayMatchInside(canonical,ref.namespace,{kind:ref.type,key:ref.memoryId??ref.cardId})));
+    const memory=pending.filter(({ref})=>ref.type==='memory');
+    const allowed=memoryCandidatesAllowedInside(canonical,memory.map(d=>d.ref),p,identity);
+    const decisions=new Map(memory.map((d,i)=>[d.ref,allowed[i]]));
+    for(const {ref}of pending)if(ref.type==='card')decisions.set(ref,cardCandidateAllowed(ref,p));
+    const rows=ranked.filter(({ref})=>decisions.get(ref)!==false);
     return {rows,matched:documents.length,counts:visible.counts,filtered:visible.filtered};
   }
   function lexical(p, publication, query, limit=24) {
