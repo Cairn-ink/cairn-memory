@@ -69,6 +69,16 @@ test('turn ordering: wait beyond Q has no reservation, ordinal, sample, watchdog
   assert.equal(p.getStatus().usedItems,0);assert.equal(p.getStatus().usedMs,0);assert.equal(s.diagnostic().turnPhase,'idle');
 });
 
+test('an absent maxWaitMs gives the lexical wait a 2000 ms deadline',async t=>{
+  const s=model(t),queued=deferred();delete s.preQuantum.maxWaitMs;s.entry=()=>queued.promise;
+  const p=s.create(),pending=s.fire();await flush();const ticket=s.tickets[0];
+  assert.equal(ticket.until-s.now(),2000);
+  await s.due(ticket.until);await pending;
+  assert.deepEqual(ticket.releases,[['withdrawn']]);assert.equal(s.diagnostic().deferredTurns,1);
+  assert.equal(p.getStatus().state,'active');assert.equal(p.getStatus().error,null);
+  assert.equal(s.events.some(e=>['open','admission','work'].includes(e.kind)),false);
+});
+
 test('turn request: separate admission/work tickets, pending lane, fresh allowance and no healthy idle ownership',async t=>{
   const s=model(t),p=s.create();await s.next();await s.next();await s.next();
   assert.deepEqual(s.tickets.map(t=>[t.request.phase,t.request.lane,t.request.intent]),[['admission',0,'current'],['work',0,'current'],['work',1,'history']]);

@@ -29,6 +29,27 @@ test('port validation refuses accessors and proxies without executing them',()=>
     assert.throws(()=>captureMaintenanceTurnPort({version:1,maxWaitMs:1000,createTurn(){},...patch}),{code:'invalid_input'});
 });
 
+test('maxWaitMs defaults only when absent and validates present data without invoking accessors',async()=>{
+  const createTurn=()=>({enter:()=> 'admitted',release(){}});
+  assert.equal(captureMaintenanceTurnPort({version:1,createTurn}).maxWaitMs,2000);
+  for(const maxWaitMs of [1,5000]){
+    assert.equal(captureMaintenanceTurnPort({version:1,maxWaitMs,createTurn}).maxWaitMs,maxWaitMs);
+    assert.equal(captureMaintenanceTurnPort(Object.create({version:1,maxWaitMs,createTurn})).maxWaitMs,maxWaitMs);
+  }
+  for(const maxWaitMs of [0,5001,1.5,undefined])
+    assert.throws(()=>captureMaintenanceTurnPort({version:1,maxWaitMs,createTurn}),{code:'invalid_input'});
+  let calls=0;
+  const accessor={version:1,createTurn,get maxWaitMs(){calls++;return 2000;}};
+  for(const port of [accessor,Object.create(accessor)])
+    assert.throws(()=>captureMaintenanceTurnPort(port),{code:'invalid_input'});
+  assert.equal(calls,0);
+  // Absence is part of the captured descriptor shape, even at the default value.
+  const s=setup(),port={version:1,createTurn},turns=createMaintenanceTurnController(captureMaintenanceTurnPort(port),s.clock);
+  port.maxWaitMs=2000;
+  assert.deepEqual(await turns.wait(request(),{identity:s.identity,signal:s.abort.signal,untilMonoMs:2000}),
+    {status:'failed',error:'authority_required'});
+});
+
 test('descriptor-chain capture preserves the port receiver and frozen primitive request',async()=>{
   const proto={version:1,maxWaitMs:1000,createTurn(r){assert.equal(this,port);assert.equal(Object.isFrozen(r),true);return {enter:()=> 'admitted',release(){}};}};
   const port=Object.create(proto),s=setup(),controller=createMaintenanceTurnController(captureMaintenanceTurnPort(port),s.clock);

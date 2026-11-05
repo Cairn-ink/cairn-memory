@@ -44,7 +44,8 @@ function fields(port){
         found={owner:value,...descriptor};break;
       }
     }
-    if(!found)fail('invalid_input');result.push(found);
+    if(!found){if(name!=='maxWaitMs')fail('invalid_input');found={value:2000};}
+    result.push(found);
   }
   const [version,maxWaitMs,createTurn]=result.map(d=>d.value);
   if(version!==1||!Number.isInteger(maxWaitMs)||maxWaitMs<1||maxWaitMs>5000||typeof createTurn!=='function'||types.isProxy(createTurn))fail('invalid_input');
