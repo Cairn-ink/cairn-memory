@@ -1350,7 +1350,7 @@
     "literal:comparison_base_invalid": 1,
     "literal:memoryId": 2,
     "literal:term_id": 1,
-    "literal:validation_invalid": 6
+    "literal:validation_invalid": 7
   },
   "core/context-product-verification-batch.mjs": {
     "literal:term_id": 1
