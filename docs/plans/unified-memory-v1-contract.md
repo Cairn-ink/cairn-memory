@@ -1816,6 +1816,59 @@ from the confirmatory comparison by identity, and the decision of results
 answer quality of compact refs; any budget number; the P-top-s1 policy as a
 default.
 
+### 15.9 Addendum v1: opt-in receipt event dates (2026-11-03)
+
+`contextRead` accepts the optional top-level field
+`representation: 'representation-v2-dated'`. Omission or explicit
+`'representation-v2'` keeps the frozen v2 text, refs, fences and counter schedule.
+Unknown values refuse `invalid_input`. This choice changes assembled text only;
+the sidecar/index representation remains `candidate-text-v1`.
+Capabilities retain `assembly.representation: 'representation-v2'` as the default
+and advertise both choices in `assembly.representations`. Assembly diagnostics
+report the selected id, including when no dates can be rendered.
+
+The dated representation adds `"date":"2023-05-22T05:54Z"` immediately after
+`rank` on a Memory item. It is a sibling of `ref`; the strict compact ref and
+all other v2 fields remain unchanged. Cards have no date. The value is the
+minimum non-null receipt event instant among exactly the authorized receipt
+rows already used to prepare v2 sources: recorded order (`created_at,id`),
+`LIMIT 16`, then the existing visible receipt-metadata filter. Thus a later
+recorded receipt outside that window cannot affect the date, even if its event
+time is earlier. Unavailable sources and omitted Cards contribute nothing.
+The value uses UTC, explicit `Z`, and minute precision by truncation. There is
+no zone input and no `created_at`/recorded-time fallback.
+
+Items are emitted in date order, earliest first; undated items follow in
+relevance order. Date ties keep relevance order, and `rank` is relevance.
+Selection still visits items and sources in relevance order; aliases and their
+item/source positions are computed in emitted order. The final metered text
+must fit the token budget. Old-layout stores without dates keep v2 item order.
+Every dated trial must fit both `maxTokens` in emitted date order and the
+65,536-byte complete-response packing budget. Each enclosing reader supplies
+the response-size check, including its snapshot and candidate diagnostics;
+volatile diagnostic scalars reserve a proven upper bound. Trials over either
+budget are omitted and set `stops.budget`, so near-limit reads may select
+different sources or items than v2. Byte-only rejection adds no counter call.
+The final token and complete-response gates remain defensive. Date keys and
+alias-position growth cannot by themselves cause a final byte-limit refusal
+when the minimal response fits the reader's bound; a minimal response that
+cannot fit may still refuse `context_item_too_large`. V2 keeps its existing
+bytes, counter schedule and outer-gate refusal behavior.
+
+Missing event-time columns and null times are equivalent: if none of the
+selected rows carries a time, omit `date`, while retaining the selected dated
+id. A shared pure helper computes the date during existing preparation
+transactions on facade, product-index and role-evidence paths. Serialization
+performs no reads; no SQL, fence input or counter visit is added. The public
+role/task input and its default v2 projection are unchanged.
+
+For memories with at most 16 receipts, lifecycle safety compares the metered
+bytes after forget, correction, Raw deletion or erasure with a never-written
+store, including date presence. The existing receipt-window limitation above
+16 rows remains; this addendum changes neither source selection nor that bound.
+The event-time storage layout and immutable receipt-time enforcement belong to
+the separate storage change; this read addendum performs no migration.
+
 ## 16. Amendment: contention gates under rollback-journal mode (v0.7.2, primary, 2026-10-24)
 
 The U4a-1 review asked for an **unpaced** writer scenario, so that the overlap

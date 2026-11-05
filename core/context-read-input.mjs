@@ -15,6 +15,7 @@ export function contextSources(value, enabled = CONTEXT_SOURCES, allowEmpty = fa
 }
 export const CONTEXT_VERSION = 'context-read-v1';
 export const CONTEXT_METHODS = Object.freeze(['findCandidates', 'refreshContextIndex', 'fetchCandidateEvidence', 'contextRead']);
+export const ASSEMBLY_REPRESENTATIONS = Object.freeze(['representation-v2', 'representation-v2-dated']);
 export const ASSEMBLY_POLICIES = Object.freeze(['rank-first-whole-v1', 'coverage-first-v1', 'rank-first-first-source-v1']);
 export const ASSEMBLY_DEFAULTS = deepFreeze({ metadata: {
   memory: { state: 'active', reviewState: 'none', filing: { status: 'unfiled' }, kind: 'fact', origin: 'explicit', confidence: 1 },
@@ -142,7 +143,7 @@ export function contextInput(method, value, supportedTypes, enabledSources, prof
   const payload = deepFreeze(contextSnapshot(value));
   const selected = ownData(payload, method === 'findCandidates' ?
     ['readSet', 'query', 'types', 'intent', 'semantic', 'limit', 'deadlineMs', 'cursor', ...(enabledSources ? ['sources'] : [])] : method === 'contextRead' ?
-      ['readSet', 'query', 'types', 'intent', 'semantic', 'budget', 'policy', 'deadlineMs', ...(enabledSources ? ['sources'] : [])] : method === 'refreshContextIndex' ?
+      ['readSet', 'query', 'types', 'intent', 'semantic', 'budget', 'policy', 'representation', 'deadlineMs', ...(enabledSources ? ['sources'] : [])] : method === 'refreshContextIndex' ?
       ['readSet', 'types', 'intent', 'budget'] : ['readSet', 'refs', 'intent', 'snapshot', 'responseByteLimit', 'fences']);
   const result = { readSet: contextReadSet(selected.readSet, profile) };
   if (method === 'fetchCandidateEvidence') {
@@ -180,6 +181,8 @@ export function contextInput(method, value, supportedTypes, enabledSources, prof
         const policy = selected.policy === undefined ? { id: DEFAULT_ASSEMBLY_POLICY } : ownData(selected.policy, ['id']);
         if (!ASSEMBLY_POLICIES.includes(policy.id)) fail('invalid_input');
         result.policy = { id: policy.id };
+        result.representation = selected.representation === undefined ? ASSEMBLY_REPRESENTATIONS[0] : selected.representation;
+        if (!ASSEMBLY_REPRESENTATIONS.includes(result.representation)) fail('invalid_input');
       } else result.limit = integer(selected.limit, 12, 24);
       if (Object.hasOwn(selected, 'cursor')) {
         if (typeof selected.cursor !== 'string' || selected.cursor.length > 8192) fail('invalid_cursor');

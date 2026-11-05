@@ -247,6 +247,10 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // private read projections inside existing snapshots. The receipt source
   // ref uses the existing typed source union and binding. No writer or
   // acknowledgement field is added; the native fail-closed walker is unchanged.
+  // Maintenance turn seam: pumpId and windowId are opaque scheduler identifiers
+  // of a pump and its budget window, carried in the maintenance-turn request
+  // to the host's pre-quantum port. Neither is a canonical content identity or
+  // a writer acknowledgement field.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};

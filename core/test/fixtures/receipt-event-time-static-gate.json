@@ -67,7 +67,7 @@
     "start": "    return success(structuredClone({ version: CONTEXT_VERSION",
     "end": "  }, findCandidates",
     "purpose": "public embedded capabilities projection",
-    "sha256": "0d1bc20694fbcf782a09be8a63cbdeafeed1dbb3b972666825a314a19d5ce031"
+    "sha256": "1ccfb7a773edf3e1822ba913d4effe9f595b89bf82d01e0d1639b53d31562741"
   },
   {
     "file": "core/context-product-worker.mjs",

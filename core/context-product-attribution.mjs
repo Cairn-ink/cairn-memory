@@ -159,7 +159,7 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
 }
 
 // Private failure metadata is separate from the numeric phase/stall contract.
-export const maintenanceFailureKinds=Object.freeze(['none','worker_heap_limit','worker_exit','worker_error','protocol','unmapped','exception','observation_timing','engine','spawn','dispatch','call_error','identity','worker_state','cleanup','disposal_proof','open_exceeds_quantum']);
+export const maintenanceFailureKinds=Object.freeze(['none','worker_heap_limit','worker_exit','worker_error','protocol','unmapped','exception','observation_timing','engine','spawn','dispatch','call_error','identity','worker_state','cleanup','disposal_proof','open_exceeds_quantum','maintainer_identity_unrecognized']);
 const failureCode=/^[a-z][a-z0-9_]{0,47}$/,failureName=/^[A-Za-z][A-Za-z0-9_]{0,47}$/;
 export const maintenanceFailureCode=value=>typeof value==='string'&&failureCode.test(value)?value:'other';
 const indexReasons=Object.freeze(['storage_unavailable','auxiliary_file','unsafe_file','incompatible','wrong_store','missing','corrupt','validation_missing','validation_invalid',
