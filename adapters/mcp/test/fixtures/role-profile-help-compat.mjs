@@ -24,3 +24,23 @@ export function removeReviewedRoleHelpAdditions(help) {
   }
   return lines.join('\n');
 }
+
+// PR 2 adds this optional knob only to the two context-enabled tools lists.
+// Preserve the historical oracle: remove exactly its approved schema, then
+// let the caller compare every remaining serialized byte with the frozen pin.
+export function removeReviewedDatedContextOption(probe) {
+  for (const mode of ['context', 'combined']) {
+    const original = probe[mode].tools, listed = JSON.parse(original);
+    assert.equal(JSON.stringify(listed), original, 'tools serialization changed');
+    const matches = listed.tools.filter(tool => tool.name === 'read_memory_context');
+    assert.equal(matches.length, 1, 'one context assembly tool per reviewed mode');
+    const schema = matches[0].inputSchema;
+    assert.equal(JSON.stringify(schema.properties.representation),
+      '{"type":"string","enum":["representation-v2","representation-v2-dated"]}',
+      'reviewed dated representation option changed');
+    assert.ok(!schema.required.includes('representation'), 'representation stays optional');
+    delete schema.properties.representation;
+    probe[mode].tools = JSON.stringify(listed);
+  }
+  return probe;
+}
