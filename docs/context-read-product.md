@@ -486,6 +486,16 @@ turn before fresh writable opening: ordinary pump work yields before a hidden
 writable admission, including a fallback after a caught writable failure.
 The existing failure-mode disposal rule above is unchanged.
 
+**Amendment v3: lexical pre-quantum turns (turn contract v1, 2026-11).**
+This amendment implements the lexical portions of the
+[maintenance turn contract](plans/context-read-maintenance-turn.md), only for
+`renewContextMaintenancePump` without `semanticConfig`. The semantic pump is
+not yet covered. An optional host scheduling ticket precedes each open-only
+admission turn and each later work turn. The broker wait is outside the charged
+quantum, reservation, watchdog, resident drain/open and writable admission.
+Healthy resident idleness holds no ticket. Standalone maintainers and the
+existing dynamic authority and storage checks retain their behavior.
+
 A successful `rebuilding` or `partial` response is durable progress: schedule
 another explicit quantum with the same service binding and projection. Stop
 the initial prebuild loop only at `complete` for each intent. Time admission
@@ -650,6 +660,60 @@ const terminalObservation = await pump.completion;
 await pump.close();
 ```
 
+**Amendment v3: lexical admission port.** Supply the optional top-level
+`preQuantum` port, separate from `host.configuration`:
+
+```js
+preQuantum: {
+  version: 1,
+  maxWaitMs: 1000, // integer 1..5000, independent of the quantum
+  createTurn(request) {
+    return {
+      enter({signal, untilMonoMs}) { /* "admitted" | "defer", or native Promise */ },
+      release(outcome, reason) { /* synchronous, idempotent, no throw */ }
+    };
+  }
+}
+```
+
+**Amendment v3: optional wait budget.** Omitting `maxWaitMs` uses 2,000 ms.
+When present, it must be a data property containing an integer from 1 through
+5,000; an accessor or an explicit `undefined` refuses `invalid_input`. Presence
+uses the same descriptor-chain capture as the other port fields.
+
+Validation captures data descriptors and method receivers without invoking
+accessors or Proxy traps. Invalid activation refuses `invalid_input`; adding,
+removing or replacing the port object on an existing pump refuses renewal with
+`invalid_input` before any state change. Every renewal uses the same object.
+Each ticket must be a plain non-Proxy object with own data-function `enter`
+and `release` properties; both are captured before entry. A non-native thenable
+is never awaited. A frozen request contains only primitive `version:1`,
+`pumpId`, `windowId`, integer projection `lane`, `family:'lexical'`,
+`kind:'lexical'`, `phase:'admission'|'work'`, lane `intent` and `maxMs:Q`.
+It carries no owner identity, credential, path, query or error payload.
+
+After pure eligibility and lane selection, the engine latches a pending request
+and waits before stamping the quantum start or advancing the lane. The wait
+ends at `min(now+maxWaitMs, min(windowEnd,renewedUntil)-Q)`. On a grant, it
+synchronously rechecks stop/error, admission generation, full authority/window
+horizon, quota and floors, minimum spacing, lane and resident epoch, and the
+sidecar's open-only hold/quarantine. All amounts come from current state.
+A failed check releases `declined` with one closed reason: `stopped`,
+`renewal_expired`, `generation_changed`, `budget_exhausted`, `spacing`,
+`lane_changed` or `admission_held`. Dynamic authorization and currentness,
+ledger binding, price, budgets, purge and enablement checks stay inside the turn.
+
+**Amendment v3: wait-expiry decline.** This package extends the turn contract's
+§6 closed lexical decline reasons with `wait_expired`: the broker granted after
+the engine's wait deadline. A grant racing that deadline remains owned and is
+released with `release('declined', 'wait_expired')`, starting nothing. Existing
+pump-state checks run first and retain their reasons. The decline adds no
+deferral or failure, leaves public status `active` with `error:null`, and retries
+through the existing retry-not-before time at normal spacing. Decline reasons
+stay informational for the host. A broker may keep an owner's position (for
+example its ring slot) across `wait_expired`, so a late owner retries without
+losing its place.
+
 The host chooses all quotas, renewal and selection metadata; the engine
 supplies no assumed production budgets. `id` and window ID are nonempty strings
 of at most 200 units. `endsAtMonoMs` is a safe integer in the process hrtime
@@ -693,6 +757,51 @@ Continuous window handoff retains admitted handles and deadlines. An opening
 failure earns no observation; actual missed duties remain visible. The extra
 slot commonly delays first work by one spacing interval, with no commit-to-ready
 latency guarantee at window or authority boundaries.
+
+**Amendment v3: waiting, cadence and handoff.** Close, supervisor stop,
+accepted same-window renewal or window handoff, authority/window cutoff and the
+wait deadline abort the queued ticket. Rejected renewal does not cancel it.
+A queued cancellation or `defer` releases `withdrawn` exactly once, with no
+quantum, reservation, charge/refund, failure, ordinal, sample, observation,
+cursor advance or pending-usage acknowledgement. Withdrawal is final; a late
+grant is ignored without another callback. A grant already observed in the
+abort race remains owned until declined or settled. Late results dispatch
+nothing. Deferral alone keeps public status `active` with `error:null` and
+completion pending; real stop, expiry or exhaustion keeps its existing outcome.
+A separate retry-not-before clock preserves normal pacing without overdue
+zero-delay spin. The selected lane remains pending.
+
+While waiting, the turn holds only its pump's lifetime supervisor live record
+(and any already-resident maintainer), with no lock, transaction, reservation
+or new open, so a longer wait delays only that owner's own turn.
+
+Cadence is checked before admission, after waiting/deferral/cancellation,
+before accepted renewal replaces duty, and at settlement. Waiting earns no
+observation, clears no missed flag, resets no duty and extends no authority or
+window. Each real overdue observation interval counts once. Prompt window
+succession retains the resident; cancelling its old queued request forces no
+reopen. An inactive succession increments the resident epoch, but predecessor
+drain and successor open wait for the next granted turn. Renewal does not abort
+executing work merely to cancel a queue wait.
+
+Warm and cold admission arithmetic remains unchanged. For observation duty,
+broker waits add to the cold bound: `sum(waits)+(N+C)*S+Q<=5000`. One selection
+at Q=S=1000 has N=2 and C=1, leaving 1000 ms of conservative wait headroom per
+sweep. Deployment scheduling and disposal capacity require separate
+qualification; waiting can cause honest cadence misses without pump failure.
+
+At the 2,000-ms default, one lexical sweep's worst case is
+`Σ waits + (N+C)·S + Q` against the 5,000-ms duty. With one pump per owner,
+two lanes and one resident, N=2, C=1 and Q=S=1,000: two full warm waits give
+`4,000+2,000+1,000=7,000 ms`; three full cold waits give
+`6,000+3,000+1,000=10,000 ms`. Thus even one owner has no worst-case duty
+guarantee if every wait consumes the default. For owners sharing one core under
+a one-quantum-at-a-time broker, three owners can each wait 2,000 ms behind two
+full 1,000-ms turns; their six warm lexical work turns alone take 6,000 ms,
+so at three owners the 5,000-ms duty is knowingly missed under full occupancy.
+Cold admission adds three more turns (9,000 ms total); even two cold owners
+need six turns (6,000 ms). These are capacity facts, not contract violations
+(§7); shorter waits and turns can support more owners.
 
 Dispatches are paced using the configured minute allowance and full quantum
 sizes, with `S` as the minimum admission spacing. Each projection's next read
@@ -861,6 +970,25 @@ rules, with no admission retry, hold or backoff, and no subsequent open or
 observation. Only the existing opening reservation is charged. No public code,
 state or option is added.
 
+**Amendment v3: private turn diagnostics.** The lexical private diagnostic
+adds saturating `deferredTurns`, `turnWaitMs` (including a pending wait),
+`declinedTurns` keyed by the seven closed reasons, `turnPhase` (`idle`,
+`waiting`, `running`, `settling`, `poisoned`), `missedObservations` and
+`admissionHold:{held,attempts}`. These have fixed cells and no growing history.
+The existing public status/completion DTO and cadence-miss meaning are unchanged.
+Waiting stays outside quantum histograms, ledger elapsed time and stall markers.
+Consumers may treat unfamiliar diagnostic fields as unavailable.
+
+**Amendment v3: wait-expiry diagnostics.** `declinedTurns` also includes the
+fixed `wait_expired` cell. Saturating `admittedTurns` counts granted turns that
+pass the local recheck and start, including open-only admissions; declined
+grants do not increment it. The stall signature is
+`declinedTurns.wait_expired` rising while admitted turns stay flat. A lexical
+lane's gap over 5,000 ms still increments `missedObservations` and the existing
+`cadenceMisses` once until a real observation. Repeated expired grants never
+call the injected `observedAt`, so the host's freshness signal goes stale while
+public status stays `active` with `error:null`.
+
 Maintenance failures also have private latest-value diagnostics. Log
 `maintenanceFailureDiagnostic(resultOrOpeningError)` and
 `maintenanceReaderFailureDiagnostic(handleOrOpeningError)`, plus
@@ -990,6 +1118,68 @@ the same process. Process replacement loses this memory; a host must preserve
 its conservative admission hold with its own ledger rather than recharge retries
 through process restarts.
 
+**Amendment v3: settlement, release and poison.** A granted ticket is held
+through observation, original-ledger settlement and bookkeeping, or through the
+open-only zero-work settlement. Failure/timeout/stop joins shutdown disposal
+before `release('settled')`. Replacement holds the same grant across predecessor
+drain, successor open and writable admission. Late opens and opening-error
+cleanup IDs remain owned through their disposal join. A cutoff response,
+termination request or proof deadline is not proof. The production lexical
+recovery gate remains disabled; internal qualified test paths use this same
+release barrier. A healthy cached resident need not be disposed after success.
+
+A factory throw, malformed ticket or changed port shape is terminal
+`authority_required`; no malformed ticket is invoked or released. Entry throw,
+rejection or malformed outcome is also terminal `authority_required` and calls
+the captured `release('withdrawn')` once. A changed port with a validated ticket
+still uses its captured release after the applicable settlement/disposal join.
+Caller error codes, names and text are never inspected or propagated. Each
+release attempt is recorded before invocation. A release throw takes terminal
+`reader_failed` precedence and poisons the claim; no second attempt occurs.
+Failed or unproven required disposal withholds release and poisons the claim.
+
+Native Promise entry uses the captured `Promise.prototype.then`, bypassing a
+throwing `then` accessor. Constructor or species lookup can still throw; the
+engine fails with `authority_required` and one withdrawal, without further
+accessor calls on the returned value or another adoption attempt. No rejecting
+wrapper is created. A host whose `enter` returns a rejected Promise with a
+throwing `constructor` leaves its own rejection unhandled, which the engine
+cannot observe; default Node rejection handling can terminate the process.
+The same residual applies if species lookup throws before handlers attach.
+[ECMAScript `then`](https://tc39.es/ecma262/2025/multipage/control-abstraction-objects.html#sec-promise.prototype.then)
+steps 3–5 perform species lookup before handler attachment;
+[`SpeciesConstructor`](https://tc39.es/ecma262/2025/multipage/abstract-operations.html#sec-speciesconstructor)
+steps 1 and 4 read constructor and species. `Promise.resolve` and
+[`await`](https://tc39.es/ecma262/2025/multipage/control-abstraction-objects.html#await)
+(step 2) both use
+[`PromiseResolve`](https://tc39.es/ecma262/2025/multipage/control-abstraction-objects.html#sec-promise-resolve),
+whose step 1.a reads a native Promise's constructor;
+combinators call the resolver and then invoke `then`. These provide no general
+way to attach a rejection handler without constructor or `then` lookups.
+Resolving a fresh wrapper with that value instead reads its `then` property
+([Promise Resolve Functions](https://tc39.es/ecma262/2025/multipage/control-abstraction-objects.html#sec-promise-resolve-functions),
+step 9); it does not bypass these lookups. A frozen
+Promise can also prevent replacing its constructor. `PerformPromiseThen` is
+an internal abstract operation, not an ordinary JavaScript API.
+
+Poison is held in the JavaScript realm that loaded the engine (the main thread
+or one Worker), like the reader supervisor's quarantine and the open-only
+admission state. It is keyed by the port object and the physical sidecar
+identity used by open-only admission, retaining location identity for missing
+files and physical aliases as they become known. A host must keep all lexical
+pumps for one sidecar in one realm; each pump uses the port of the realm that
+calls its renewal, as specified in the turn contract. Admission-domain
+retirement, quota/capacity changes, new windows and new pump IDs cannot clear
+poison. There is no eviction, TTL, renewal or reset API. Restarting that realm,
+or the process, clears poison. A host that sees `turnPhase:'poisoned'` should
+restart the process. "Process memory" in the open-only package's Amendment v2
+means this same realm scope.
+A host must not hand an owner's sidecar to another realm while the first
+realm's claim or fences are still live. It may hand it over only after the
+original cleanup has completed, or by restarting.
+Cross-process exclusion remains host-owned; a grant does not replace its
+existing physical gate or change collision refusals.
+
 A genuine quantum cutoff reports `failed` with `read_timeout`, stops scheduling
 and drains. Missing or invalid internal observation timing reports
 `reader_failed`; authority, storage, corruption and lifecycle failures also
@@ -1052,6 +1242,15 @@ Failure, interruption or uncertain settlement retains the full reservation.
 The admission RPC receives only the remaining original cutoff; the following
 work turn reserves its own full quantum. No fresh Q starts inside an admission
 turn. The semantic-pump contract below is outside this lexical amendment.
+
+**Amendment v3: lexical charging boundary.** Broker waiting, withdrawal,
+deferral and post-grant decline consume no quantum allowance or quota. A grant
+that passes the recheck starts a fresh full Q and the existing full reservation
+before drain/open. Open-only and work turns each get their own ticket and
+quantum. Zero-work settlement, original-window refunds, renewed cumulative
+floors and conservative full charges for uncertain work remain as above. No
+quantum policy, reserve arithmetic or disposal rule changes. This amendment
+makes no semantic-pump turn or settlement guarantee.
 
 A pump with `semanticConfig`, including `modes:['lexical']`, applies the same
 five-second canonical selection/intent observation duty to lexical refreshes. Its private
