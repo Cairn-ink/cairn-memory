@@ -13,16 +13,22 @@ import { detectRunningHost, cachedQualification, observeHost, qualifyBinary, val
   scheduleQualification, finishQualification, hasQualifiedCreator } from './qualification.mjs';
 import { readInstallation, readCredential, clientOptions, childEnvironment, promptRecallEnabled } from './installed-state.mjs';
 import { observeHostedPause, installedTransport, recallContext } from './hosted-lifecycle.mjs';
+import { captureStopNotice, pendingCaptureNotice, recordQualificationAttempt } from './installed-state.mjs';
 import { sessionSource } from './session-source.mjs';
 
 // No --version/schema subprocess on the hook path. Ancestor detection and
 // identity-keyed cache reads are the only host work before capture/recall.
-export async function currentHost(configPath,{detect=detectRunningHost,launch=launchQualification}={}) {
+export async function currentHost(configPath,{detect=detectRunningHost,launch=launchQualification,now=Date.now}={}) {
   const host=await detect();
   if(!host)return {status:'pending'};
   await observeHost(configPath,host);
   const verdict=await cachedQualification(configPath,host);
-  if(verdict.status==='pending')await scheduleQualification(configPath,host,launch);
+  if(verdict.status==='pending') {
+    // Read diagnostic evidence before a retry replaces an expired marker.
+    // Finished history remains independent of who scheduled the first probe.
+    verdict.pendingNotice=await pendingCaptureNotice(configPath,host,{now});
+    await scheduleQualification(configPath,host,launch);
+  }
   return {...verdict,host};
 }
 function launchQualification(configPath,host) {
@@ -62,13 +68,16 @@ function launchWorker(configPath, config, content) {
 }
 
 export async function runInstalled(configPath, event, stream, { signal, launch = launchWorker,
-  detectHost = detectRunningHost } = {}) {
+  detectHost = detectRunningHost, noticeOptions = {} } = {}) {
   const config = await readInstallation(configPath);
   if (!config.enabled || signal.aborted) return '';
   if(event==='qualify') {
     const host=await readHookInput(stream,{deadlineMs:750});
     if(!validHost(host))return '';
-    try {await qualifyBinary(configPath,host);} finally {await finishQualification(configPath,host);}
+    try {await qualifyBinary(configPath,host);} finally {
+      await finishQualification(configPath,host);
+      await recordQualificationAttempt(configPath,host,{now:noticeOptions.now});
+    }
     return '';
   }
   // Detached workers re-check the host supplied by the trusted launcher. Hook
@@ -81,8 +90,19 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
     qualification={...await cachedQualification(configPath,host),host};
     delete input.host;
   } else qualification=await currentHost(configPath,{detect:detectHost});
-  if(qualification.status!=='qualified' || signal.aborted)return '';
+  if(qualification.status!=='qualified' || signal.aborted) {
+    if (event !== 'SessionStart' || signal.aborted) return '';
+    input=await readHookInput(stream,{deadlineMs:300});
+    if (validateHook(input).event !== event) return '';
+    return captureStopNotice(configPath,config,input,qualification,{...noticeOptions,signal});
+  }
   input??=await readHookInput(stream,{deadlineMs:300});
+  let sessionToken;
+  if (event === 'SessionStart') {
+    if (validateHook(input).event !== event || input.agent_id != null || input.agent_type != null) return '';
+    try { sessionToken = await readCredential(configPath, config.endpoint); }
+    catch { return captureStopNotice(configPath,config,input,qualification,{...noticeOptions,signal}); }
+  }
   const qualifyCreator = version => hasQualifiedCreator(configPath,version,{signal});
   const session = await sessionSource(event === 'worker' ? input?.path : input?.transcript_path,
     event === 'worker' ? input?.sessionId : input?.session_id,
@@ -126,7 +146,7 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
     return recallContext(input, config, token, projectId, signal, async () => await promptRecallEnabled(configPath) && Boolean(await boundBinary(qualification.host)));
   }
   if (event === 'SessionStart') {
-    const token = await readCredential(configPath, config.endpoint);
+    const token = sessionToken;
     const remote = await observeHostedPause(config, token, signal);
     if (remote.paused || signal.aborted) return '';
     if (hook.path) await establishPauseBoundary({ root: config.root,targetId,projectId,

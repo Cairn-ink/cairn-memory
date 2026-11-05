@@ -8,7 +8,8 @@ policy. Publication is a separate release step. See [setup, qualification and ga
 `entry.mjs` owns exit-0/no-log automatic failures and process deadlines:
 750 ms for Stop/PreCompact, 2 s for context events, 62.5 s for a detached worker.
 It dynamically imports the runtime so missing/corrupt modules also fail quietly.
-Only vetted context JSON or capture `{}` may reach stdout. The bounded output
+Only vetted context JSON (including a fixed SessionStart `systemMessage`
+when automatic memory has stopped) or capture `{}` may reach stdout. The bounded output
 write has its own 50 ms flush deadline; worker stdout/stderr are discarded.
 
 `installed.mjs` reads owner-private installation/credential state, checks the

@@ -16,6 +16,19 @@ EOF boundaries, pending batches and permanent format latches keep their
 behaviour. Existing cloud-mode Codex users must rerun setup to install the
 updated runtime.
 
+Installer **0.6.4 is prepared and unpublished**. It keeps the 0.6.3 engine
+bundle unchanged. Its hosted Codex SessionStart notice reports a format pause
+or missing sign-in, at most once per local calendar day; intentional pauses
+and the daily cap stay quiet. `status --client codex` adds the last recorded
+service-acknowledged capture in local time, or says none is recorded yet.
+After publication, rerun setup to install these runtime diagnostics.
+
+安裝器 **0.6.4 已備妥，尚未發布**，沿用 0.6.3 的引擎套件。
+Codex 開始對話時，若格式尚未支援或登入遺失，每個本機日最多提醒一次；
+自行暫停或達到每日上限時不提醒。`status --client codex` 會顯示上次有紀錄、
+服務已確認的成功保存時間（本機時間），沒有紀錄就如實顯示。發布後需重跑
+setup 才會安裝這些診斷功能。
+
 ## Setup / 安裝
 
 ```sh

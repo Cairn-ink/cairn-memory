@@ -21,17 +21,17 @@
     "integrations/codex/context.mjs": "e3bb925f6f3d5ad81414ace302bf7f6cc16d235a785a0c68e39703809f992a1a",
     "integrations/codex/cursor.mjs": "d7f19621809e89c1b0a1420c08a358f19f4c1471e3cbeadf8b2789cd672c3e8b",
     "integrations/codex/digest.mjs": "eeb6b23e608344e42bc2ef3c862fbc3cf09af2c1034293205623f7a8abe37f4e",
-    "integrations/codex/entry.mjs": "558a2f9f5cbed3c4e08146626708ba5ab4374e6938fa9c2e1cdc935d50580952",
+    "integrations/codex/entry.mjs": "afdbbf083ac454f76827695680436464729bb7b045ea7cf43c83bd727f142a9d",
     "integrations/codex/hook.mjs": "3298bd3147825eb76d97620f2c9bc978b506ae4a6b42509862081e970610a6a7",
     "integrations/codex/hosted-lifecycle.mjs": "8b4a8e7ea1cef5473147bfe2ea6af9548894c52f08e44a656e545fcb9fc8c496",
-    "integrations/codex/installed-state.mjs": "7ebceb25f266b9aa635d1fd8a588504da33cbfc4c01144ce5b4b9c10f2864932",
-    "integrations/codex/installed.mjs": "778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea",
+    "integrations/codex/installed-state.mjs": "620772f57add5cce3a7201d707086e8020ffe0ee4870d93863b209db48250c20",
+    "integrations/codex/installed.mjs": "f09606fcc97136948e049f8f6a89cd6702a4885e915ccd8fa3a9f2c6b119996c",
     "integrations/codex/parser.mjs": "41440a7a2e0bb4108bc9abcace2b3d51e8437fea7c6591c28b3d56c65b4243a5",
     "integrations/codex/qualification.mjs": "9c37710cfffa802fbc42286c6e9bf8c3bf8bdf3d4c34a0c163d672868714cdac",
     "integrations/codex/schema-evidence.mjs": "1313d5789bbf8aa4a61be3bd4c1269793dbc0df543938e2a23fded3a2d4d518b",
     "integrations/codex/session-source.mjs": "1341cc42eebf5a996be305f471393a717bfdd5eddd19fc3fd556fe8483fdfbc3",
     "integrations/codex/source.mjs": "6bf982b4227d6a7834c02faa74690340c72b269ccf1e9a1242358135de37b580",
     "integrations/codex/tripwire.mjs": "96f09081cb2d9416baef2c7a0774a76da178006ad038e8f560af943331232af6",
-    "integrations/codex/worker.mjs": "0fbb1295e596769035eca5e974efa4f355774a6c37d70f3442a3e78c4aa7264d"
+    "integrations/codex/worker.mjs": "2fd5987edcf0c047d0ad78145b7f2887e20643ce6eca723871b41598ca2e13e4"
   }
 }

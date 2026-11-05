@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.4 — Unreleased: Codex capture stop notice
+
+- Hosted Codex SessionStart shows a short notice when format qualification
+  stays paused or the saved sign-in is missing or unreadable, at most once per
+  local calendar day. Intentional pauses and the daily cap stay quiet.
+- Codex status shows the last locally recorded, service-acknowledged capture,
+  or honestly says none is recorded yet. Exec status now aligns with its siblings.
+- 0.6.4 ships the 0.6.3 engine bundle unchanged (built from `be2bc543` with the
+  three Codex format modules of 0.6.3). Engine changes merged to main after
+  that are not in 0.6.4. Capture and recall behaviour remains unchanged.
+- Prepared and unpublished; existing hosted Codex users will need to rerun
+  setup after publication to install the notice and capture diagnostics.
+
 ## Unreleased — semantic provider key channel
 
 - Admit only `CAIRN_CONTEXT_SEMANTIC_OPENAI_API_KEY`, when non-empty, to the
