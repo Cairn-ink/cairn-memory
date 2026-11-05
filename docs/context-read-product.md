@@ -1776,3 +1776,37 @@ the receipt event-time column omit the key and still report the dated id.
 Selection adds no SQL, fence input or counter visit; the 16-receipt bound is
 unchanged. Storage migration is separate. See contract §15.9 for the lifecycle
 safety guarantee and the existing window limitation above 16 receipts.
+
+
+## Lexical admission and physical binding (amendment v2.2, 2026-11-05)
+
+Private lexical admission authenticates the stored publication and progress
+certificates against the current physical identities of the canonical store
+and sidecar. A copied or relocated cache with foreign bindings is replaced
+through the existing lifecycle-checked replacement protocol. Admission reopens
+the fresh, empty cache and completes its integrity checks before returning
+`admitted`. Copied publications are never rebound or re-signed. Admission earns
+no observation; later ordinary work turns rebuild the corpus and reuse an
+admitted writable connection. All authority, companion, journal, lifecycle-lock
+and original-cutoff checks still apply. A repair that cannot complete safely
+within that cutoff fails explicitly. Unproven disposal remains quarantined
+and cannot authorize a replacement.
+
+Replacement drops all derived state in the shared sidecar, including vectors.
+Re-embedding takes time and, with a hosted embedding service, incurs embedding
+spend. Canonical content is retained.
+
+The lexical pump counts admission-to-`required` cycles without an accepted
+observing work turn, separately for each lane in the physical admission domain.
+This process-memory count survives renewals, quota windows, capacity changes
+and new pump IDs. Successful admission alone does not reset it; an accepted
+observation for that lane does. After a `required` yield the cursor advances
+fairly so other lanes continue receiving turns.
+
+At three cycles the pump settles with public `state:'failed'` and
+`error:'reader_failed'`. Its private failure cause is `admission_no_progress`,
+with the zero-based `lane` and cycle `count` (three at failure). Before the
+terminal failure, `maintenancePumpDiagnostic(status).admission[lane]` exposes
+that same cause, lane and current count. Existing private disposal and admission
+retry state remains present when applicable. The public status shape, options
+and error vocabulary remain unchanged.
