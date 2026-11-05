@@ -46,7 +46,7 @@ nativeTest(`cutoff native ${mode} ${phase} ${point} COMMIT: atomic SQL oracle an
   const open=(...args)=>{if(pause){pause=false;Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,2000);}return reader(...args);};
   const renew=createMaintenancePumpRuntime({now,setTimer,clearTimer,open,cutoffQualified:()=>true});
   const p=renew({supervisor:service.supervisor,id:'native-cutoff',window:{id:'window',endsAtMonoMs:Math.floor(now())+60000,usedItems:0,usedMs:0},
-    budgets:{maxItems:10000,maxMs:60000},quantum:{maxItems:1024,maxMs:1500},pollMs:1000,renewalMs:60000,
+    budgets:{maxItems:10000,maxMs:60000},quantum:{maxItems:1024,maxMs:1000},pollMs:1000,renewalMs:60000,
     serviceCredential:service.token,projections:[{options,types:['memory']}]});
   f.workspace.defer(async()=>{Atomics.store(control,2,1);Atomics.notify(control,2);
     await p.close().catch(()=>{});await service.supervisor.close();});

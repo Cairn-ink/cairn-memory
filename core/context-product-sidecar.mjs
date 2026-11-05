@@ -1,3 +1,4 @@
+import { admissionRequired, PRODUCT_SIDECAR_SUFFIX } from './context-product-admission.mjs';
 import { withContentSuppressionReadInside, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { bindContentSafetyConnection, cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety, memoryReadEligible } from './content-safety.mjs';
@@ -23,7 +24,7 @@ import { verificationBatch, verificationMeter, verificationBound } from './conte
 import { comparisonWorkFields } from './context-product-attribution.mjs';
 
 export const PRODUCT_SIDECAR_FORMAT = 3;
-export const PRODUCT_SIDECAR_SUFFIX = '.context-read-product-v1.1.sqlite';
+export { PRODUCT_SIDECAR_SUFFIX };
 const APPLICATION_ID = 0x43525032;
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
@@ -165,7 +166,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   features={...features,reviews:features.cards,receipts:features.cards};
   const sidePath = path + PRODUCT_SIDECAR_SUFFIX;
   const compare=memoryComparison?memoryComparison.createMemoryComparator():null;
-  let comparisonBase=null;
+  let comparisonBase=null, reuseOnlyWork=false;
   let sideFormat, side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0, discardAfterGuard=false, guardWritable=false;
   function failed(error, wasWritable) {
     if(wasWritable || error.reason==='storage_unavailable' ||
@@ -292,6 +293,9 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       guardWritable=sideWritable;
       return true;
     }
+    // Pump work may reuse a validated handle, but must yield before any fresh
+    // native admission (including a fallback after a caught writable failure).
+    if(wantsWrite && reuseOnlyWork)throw admissionRequired;
     close();
     if(!sqlite)auxiliaries(sidePath, wantsWrite, openedIdentity, observer);
     if (!physical) {
@@ -761,15 +765,12 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     }
     return m;
   }
-  function refresh(p,access,budget,quantum) {
-    if (!writable) fail('invalid_input');
-    const m = { transformed:0,canonicalRows:0,metadataBytes:0,textRows:0,textBytes:0,supportLookups:0,supportBytes:0,verifiedRows:0,
-      reused:0,replaced:0,removed:0,copied:0,tokenized:0,retargets:0,verificationRestarts:0,verificationKept:0 };
+  function admit() {
     // Retain the identity whose validation failed. A different selection may
     // repair the cache before this maintainer reaches its own repair branch.
     const repairIdentity=productFile(sidePath,true),repairStamp=repairIdentity && stamp();
     try { connection(true); }
-    catch(e) {attribution?.captureFailure(e);
+    catch(e) {if(e===admissionRequired)throw e;attribution?.captureFailure(e);
       if (!['wrong_store','incompatible','corrupt'].includes(e.reason) && !(e.code==='ERR_SQLITE_ERROR' && [1,11,26].includes(e.errcode&255))) throw e;
       const oldFormat = sideFormat > 0 && sideFormat !== PRODUCT_SIDECAR_FORMAT; close();
       if (oldFormat) unavailable(e.reason==='wrong_store'?'wrong_store':'incompatible');
@@ -790,6 +791,20 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       }
       connection(true);
     }
+  }
+  function refresh(p,access,budget,quantum) {
+    if (!writable) fail('invalid_input');
+    const m = { transformed:0,canonicalRows:0,metadataBytes:0,textRows:0,textBytes:0,supportLookups:0,supportBytes:0,verifiedRows:0,
+      reused:0,replaced:0,removed:0,copied:0,tokenized:0,retargets:0,verificationRestarts:0,verificationKept:0 };
+    if(reuseOnlyWork) {
+      try {connection(true);}catch(error) {
+        if(error===admissionRequired)throw error;
+        if(['wrong_store','incompatible','corrupt'].includes(error.reason)||error.code==='ERR_SQLITE_ERROR'&&[1,11,26].includes(error.errcode&255)){
+          close();throw admissionRequired;
+        }
+        throw error;
+      }
+    }else admit();
     rendezvous('opened');
     if(compare)Object.assign(m,compareInputs(p,access,budget,quantum));
     // The merge's byte comparator and both indexed TEXT cursors must have
@@ -1156,12 +1171,15 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       try {return guarded(()=>observe(p,...args));}
       catch(e) {attribution?.captureFailure(e);if(e.code==='index_unavailable')return invalid(p,e.reason);throw e;}
     },
-    refresh:(p,access,budget)=>{
+    admit:()=>{if(!writable)fail('invalid_input');return guarded(()=>admit(),true);},
+    refresh:(p,access,budget,reuseOnly=false)=>{
       const started=now();p=projection(p);
       const cutoff=Math.min(p.deadlineAt ?? Infinity,started+budget.maxMs);
       const quantum=maintenanceQuantum({now,cutoff,maxMs:budget.maxMs,attribution});
       if(verificationBatching)quantum.batchStart=started;
-      return guarded(()=>refresh(p,access,budget,quantum),true);
+      reuseOnlyWork=reuseOnly;
+      try {return guarded(()=>refresh(p,access,budget,quantum),true);}
+      finally {reuseOnlyWork=false;}
     },
     compare:(p,access,budget,quantum)=>{
       if(!compare)return null;

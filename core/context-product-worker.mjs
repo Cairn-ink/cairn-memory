@@ -158,7 +158,7 @@ parentPort.on('message', async message => {
     const callRequest = workerData.maintenance ? message.request : request;
     if (workerData.maintenance && (callRequest.clockDomainId !== request.clockDomainId || callRequest.credentialBindingId !== binding.credentialBindingId || callRequest.credentialExpiresUtcMs !== binding.credentialExpiresUtcMs)) fail('authority_required');
     verifyRecords(message.request, operation, callRequest, operationRecord(callRequest, mono(operation.enteredMonoNs),
-      deadline(message.method === 'refreshContextIndex' ? message.input?.budget?.maxMs : message.input?.deadlineMs), opening.workerEpoch, operation.operationId));
+      deadline(['refreshContextIndex','refreshMaintenance','admitMaintenance'].includes(message.method) ? message.input?.budget?.maxMs : message.input?.deadlineMs), opening.workerEpoch, operation.operationId));
     if (operation.workerEpoch !== opening.workerEpoch) fail('authority_required');
     currentControl = callRequest;
     currentOperation=operation;
@@ -185,7 +185,8 @@ parentPort.on('message', async message => {
       response = facade.fetchCandidateEvidence(fetchInput, message.credential, payload);
       phase?.mark('readFinished');
     } else {
-      if (workerData.maintenance && !['getContextIndexStatus','refreshContextIndex'].includes(message.method)) fail('authority_required');
+      if(['admitMaintenance','refreshMaintenance'].includes(message.method)&&!workerData.maintenance)fail('authority_required');
+      if (workerData.maintenance && !['getContextIndexStatus','refreshContextIndex','admitMaintenance','refreshMaintenance'].includes(message.method)) fail('authority_required');
       response = await index.run(message.method, boundedData(message.input), message.credential,
         performance.now() + Number(mono(operation.operationCutoffMonoNs)-process.hrtime.bigint())/1e6, observation);
     }
@@ -193,8 +194,8 @@ parentPort.on('message', async message => {
     if(attribution) {
       const preparationStarted=Number(process.hrtime.bigint())/1e6;
       within(operation);sealNative(frame);
-      const {at,comparison,...detail}=observation,metrics=attribution.snapshot();
-      attribution.serialize(()=>result(operation,response,{...(at===undefined?{}:{observedAtMonoMs:at}),
+      const {at,comparison,admission,...detail}=observation,metrics=attribution.snapshot();
+      attribution.serialize(()=>result(operation,response,{...(admission?{maintenanceAdmission:admission}:{}),...(at===undefined?{}:{observedAtMonoMs:at}),
         ...(comparison?{comparison:response.ok?comparison:{status:'incomplete',cause:'operation_failed',rows:comparison.rows,bytes:comparison.bytes}}:{}),
         maintenancePhases:{...detail,...metrics,...(message.maintenanceOrdinal===null?{}:{ordinal:message.maintenanceOrdinal}),
           dispatchMs:receivedAt-Number(mono(operation.enteredMonoNs))/1e6,

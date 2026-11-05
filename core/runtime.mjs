@@ -512,7 +512,7 @@ export function createMemoryRuntime(input, internal) {
       const rows = db.prepare(sql).all(...params);
       if (rows.some(privacyMemoryDenied)) fail('revision_conflict');
       return { rows: rows.map(metadataDto), epoch: currentEpoch };
-    });
+    }, undefined, { deferred: true });
   }
 
   function getPage(ns, id, count, anchor, expectedEpoch, includeQualification = false, includeAwaiting = false) {
@@ -548,7 +548,7 @@ export function createMemoryRuntime(input, internal) {
         ...(includeQualification ? { qualification: safeQualification(ns, memory) } : {}),
         ...(memory.currentness === 'historical'
           ? { supersession: supersessionStorage.inspect(ns, id) } : {}), epoch: currentEpoch };
-    });
+    }, undefined, { deferred: true });
   }
 
   function safeQualification(ns, row) {
@@ -586,7 +586,7 @@ export function createMemoryRuntime(input, internal) {
       const row = currentRow(ns, ref.memoryId);
       if (!row || row.revision !== ref.revision) fail('revision_conflict');
       return receiptRecent(ns, row, count);
-    });
+    }, undefined, { deferred: true });
   }
 
   function readSourceEvidence(row, complete = true) {
@@ -628,7 +628,7 @@ export function createMemoryRuntime(input, internal) {
       return { memory, receipts, receiptOffsets: positions.offsets, receiptEnd: positions.end, epoch: currentEpoch,
         ...(includeQualification ? { qualification: safeQualification(ns, row) } : {}),
         ...(view === 'historical' ? { supersession: supersessionStorage.inspect(ns, row.id) } : {}) };
-    });
+    }, undefined, { deferred: true });
   }
 
   function readUsageEvidence(ns, row, mode) {
@@ -706,7 +706,7 @@ export function createMemoryRuntime(input, internal) {
           ...(capped ? { receiptsOmitted: memory.receiptCount - receipts.length } : {}),
           ...(includeQualification ? { qualification: qualifications[index] } : {}) };
       });
-    });
+    }, undefined, { deferred: true });
   }
 
   const conflictStorage = createConflictStorage({ db, activeRow: currentRow, rawRow: activeRow, advanceEpoch,

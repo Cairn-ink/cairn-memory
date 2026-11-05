@@ -1,3 +1,5 @@
+import '../testing/context-product-test-clock.mjs';
+import { admitMaintenance, refreshMaintenance, maintenanceAdmissionReceipt, attachMaintenanceAdmissionReceipt } from '../context-product-admission.mjs';
 import { createMaintenanceAttribution } from '../context-product-attribution.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -47,15 +49,16 @@ function staged(f) {
   })); } finally { d.close(); }
 }
 function scheduler(open) {
-  let now = 0, serial = 0;
+  let now = 0, serial = 0, workTurns=0;
   const timers = new Map();
-  const renew = createMaintenancePumpRuntime({ now: () => now, observedAt: () => now, open,
+  const renew = createMaintenancePumpRuntime({ admit:async(h,...args)=>{if(h.native)return admitMaintenance(h.native,...args);const r={ok:true,value:null};attachMaintenanceAdmissionReceipt(r,'admitted');return r;},work:async(h,...args)=>{const result=await h.refreshContextIndex(...args);if(maintenanceAdmissionReceipt(result)!=='required')workTurns++;return result;},now: () => now, observedAt: () => now, open,
     setTimer: (f, ms) => { const id = ++serial; timers.set(id, { f, at: now + ms }); return id; },
     clearTimer: id => timers.delete(id) });
   return { renew, timers, setTime: value => { now = value; }, async next() {
-    assert.ok(timers.size, 'a scheduled quantum must exist');
-    const [id, timer] = [...timers].sort((a, b) => a[1].at - b[1].at)[0];
-    timers.delete(id); now = timer.at; await timer.f();
+    const before=workTurns;
+    do {assert.ok(timers.size,'a scheduled quantum must exist');const [id,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];
+      timers.delete(id);now=Math.max(now,timer.at);await timer.f();
+    }while(workTurns===before&&timers.size);
   } };
 }
 function pumpConfig(service) {
@@ -122,8 +125,8 @@ test('Fix A: actual product Worker fence race returns rebuilding and the pump co
   const results = []; let first = true;
   const clock = scheduler(async options => {
     const h = first ? handle : await open(options); first = false;
-    return { close: () => h.close(), async refreshContextIndex(...args) {
-      const result = await h.refreshContextIndex(...args); results.push({ result, intent: args[0].intent }); return result;
+    return { native:h, close: () => h.close(), async refreshContextIndex(...args) {
+      const result = await refreshMaintenance(h,...args); if(!maintenanceAdmissionReceipt(result))results.push({ result, intent: args[0].intent }); return result;
     } };
   }), pump = clock.renew({ ...pumpConfig(service), renewalMs: 60000 });
   t.after(() => pump.close()); await clock.next();
@@ -186,8 +189,8 @@ test('Fix A: native no-op usage is reconciled and paced maintenance catches same
   let calls = 0; const completed = new Set();
   const clock = scheduler(async options => {
     const h = await openContextIndexMaintainer(options);
-    return { close: () => h.close(), async refreshContextIndex(...args) {
-      calls++; const result = await h.refreshContextIndex(...args), value = ok(result);
+    return { native:h, close: () => h.close(), async refreshContextIndex(...args) {
+      calls++; const result = await refreshMaintenance(h,...args), value = ok(result);
       if (calls <= 8) assert.equal(value.status, 'complete');
       else if (value.status === 'complete') completed.add(args[0].intent);
       return result;

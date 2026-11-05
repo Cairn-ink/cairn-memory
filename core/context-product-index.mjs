@@ -1,3 +1,4 @@
+import { admissionRequired } from './context-product-admission.mjs';
 import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentSuppressionRequestInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, withContentSuppressionReadInside, withContentSuppressionRequest, inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
@@ -195,6 +196,8 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
   }
   function run(method,original,credential,cutoff=Infinity,observation) {
     if(semantic&&(method==='getContextIndexStatus'||method==='refreshContextIndex'&&original.mode==='embeddings'||['findCandidates','contextRead'].includes(method)&&original.semantic===true&&original.cursor===undefined))return runSemantic(method,original,credential,cutoff,observation);
+    const admitting=method==='admitMaintenance',pumpWork=method==='refreshMaintenance';
+    if(admitting||pumpWork)method='refreshContextIndex';
     let access;
     try {
       facade.port.ready();
@@ -211,8 +214,14 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
 
         });
       }
+      if(admitting) {
+        if(!maintenance||p.mode!=='lexical')fail('authority_required');
+        const perform=()=>storage.admit();
+        if(attribution)attribution.measure('admission',perform);else perform();
+        return access.envelope(()=>{if(observation)observation.admission='admitted';return success(null);});
+      }
       if(method==='refreshContextIndex') {
-        const m=p.mode==='lexical'?storage.refresh(p,access.accessGenerations,p.budget):{transformed:0,...storage.compare(p,access.accessGenerations,p.budget)};
+        const m=p.mode==='lexical'?storage.refresh(p,access.accessGenerations,p.budget,pumpWork):{transformed:0,...storage.compare(p,access.accessGenerations,p.budget)};
         if(observation&&m.comparison)observation.comparison=m.comparison;
         if(observation)for(const name of maintenanceWorkFields){
           if(Number.isSafeInteger(m[name])&&m[name]>=0)observation[name]=m[name];
@@ -264,7 +273,11 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         for(const candidate of result.value.items)evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);
         return result;
       });
-    } catch(e) {attribution?.captureFailure(e);attribution?.selectFailure(e);
+    } catch(e) {
+      if(pumpWork&&e===admissionRequired) {
+        return access.envelope(()=>{if(observation)observation.admission='required';return success(null);});
+      }
+      attribution?.captureFailure(e);attribution?.selectFailure(e);
       const code=e.code==='ERR_SQLITE_ERROR'?[5,6].includes(e.errcode&255)?'storage_busy':'storage_error':e.code??'storage_error';
       return failure(code);
     }

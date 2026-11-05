@@ -1,3 +1,4 @@
+import { bindMaintenanceAdmission, attachMaintenanceAdmissionReceipt } from './context-product-admission.mjs';
 import { setTimeout as safetyDelay } from 'node:timers/promises';
 import { hrtime } from 'node:process';
 import { maintenanceFailureCounts, maintenanceFailureRecord, maintenanceFailureKind, readMaintenanceFailure, maintenanceErrorName } from './context-product-attribution.mjs';
@@ -368,6 +369,11 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       if (signalCancelled(slot.signal)) result = productFailure('read_cancelled');
       if (slot.open && !result.ok) { shutdown(result.error.code,undefined,readMaintenanceFailure(message.maintenanceFailure)??failureFor(result.error.code));workerSecondary(message,'open'); return; }
       if (maintenance && !slot.open) {
+        if(result.ok&&['admitMaintenance','refreshMaintenance'].includes(slot.method)) {
+          const receipt=message.maintenanceAdmission;
+          if(slot.method==='admitMaintenance'&&receipt!=='admitted'||receipt!==undefined&&!['admitted','required'].includes(receipt)||receipt==='admitted'&&slot.method!=='admitMaintenance'||receipt&&(message.observedAtMonoMs!==undefined||result.value!==null)||receipt==='required'&&slot.method!=='refreshMaintenance') {shutdown('reader_failed',undefined,{kind:'protocol',protocolKind:'result_shape'});return;}
+          if(receipt)attachMaintenanceAdmissionReceipt(result,receipt);
+        }
         if(result.ok && message.observedAtMonoMs !== undefined) {
           const at = message.observedAtMonoMs;
           if (!Number.isFinite(at) || at < Number(mono(slot.operation.enteredMonoNs)) / 1e6 || at > Number(now()) / 1e6) {
@@ -442,7 +448,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
           input = boundedData(payload); token = method === 'getContextReadCapabilities'&&!semantic ? null : boundedData(credential, 16384);
           if ((method !== 'getContextReadCapabilities'||semantic) && credentialDigest(token) !== issuedBinding.credentialDigest) fail('authority_required');
           if (JSON.stringify(selected) !== JSON.stringify(readSet)) fail('invalid_read_set');
-          duration = deadline(method === 'refreshContextIndex' ? input.budget?.maxMs : input.deadlineMs);
+          duration = deadline(['refreshContextIndex','refreshMaintenance','admitMaintenance'].includes(method) ? input.budget?.maxMs : input.deadlineMs);
         } else duration = openDeadline;
       } catch (error) {
         if (opening) shutdown(error.code ?? 'reader_failed');
@@ -466,7 +472,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       };
       return new Promise(resolve => {
         const slot = { resolve, operation, record, signal, open: opening, method, detach, ordinal, control }; lifecycle.pending = slot;
-        if (maintenance && !semantic && method === 'refreshContextIndex') {
+        if (maintenance && !semantic && method === 'refreshMaintenance') {
           cutoffCapability = slot.cutoff = bindMaintenanceCutoff(control, ordinal, operation, resource, record, lifecycle, () => {
             if (lifecycle.pending !== slot || Number(now()) / 1e6 < slot.cutoff.cutoffAt) return false;
             shutdown('read_timeout', slot.cutoff); return slot.cutoff.attested;
@@ -591,6 +597,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       ...(maintenance ? { refreshContextIndex: (input, credential, control) => call('refreshContextIndex', input, credential, control) } : {}),
       close() { return dispose('store_closed'); },
     });
+    if(maintenance&&!semantic)bindMaintenanceAdmission(handle,call);
     disposals.set(handle.close, dispose);
     const holdDiagnostic = registryHolds.get(opened); if (holdDiagnostic) registryHolds.set(handle, holdDiagnostic);
     if (phaseBuffer) openPhases.set(handle, phaseBuffer);
