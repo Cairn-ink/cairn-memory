@@ -1,4 +1,4 @@
-import { assertContentCostDiscovery, assertContentCostDeferrals } from '../testing/content-safety-s2h-cost-inventory.mjs';
+import { assertContentCostDiscovery, assertContentCostDeferrals, assertRawProductCostPopulations } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -201,4 +201,19 @@ test('R3 cost inventory refuses any declared but ungated retained-read variant',
  assert.throws(()=>assertContentCostDeferrals(deferred),/non-empty coverage deferral/);
  const unmapped=structuredClone(inventory);unmapped.reads.get.missing.push('unknown read variant');
  assert.throws(()=>assertContentCostDeferrals(unmapped),/unmapped retained-read variant/);
+});
+
+
+test('Raw product discovery requires both safety families and every cursor population',()=>{
+ const inventory=JSON.parse(readFileSync(new URL('./fixtures/content-safety-s2h-cost-inventory.json',import.meta.url),'utf8'));
+ assertRawProductCostPopulations(inventory);
+ for(const field of ['families','physicalCells','lineage','facts','sizes','intents']){
+  const missing=structuredClone(inventory);missing.rawProductPopulations[field].pop();
+  assert.throws(()=>assertRawProductCostPopulations(missing),'missing Raw dimension: '+field);
+ }
+ for(const group of ['product-semantic-raw','product-semantic-cursor']){
+  const missing=structuredClone(inventory);missing.caseSets[group].pop();
+  if(group==='product-semantic-raw')assert.throws(()=>assertRawProductCostPopulations(missing));
+  else assert.throws(()=>assertContentCostDeferrals(missing));
+ }
 });

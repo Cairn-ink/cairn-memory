@@ -3560,6 +3560,14 @@
       "history"
     ],
     "caseGroup": "product-semantic-raw",
-    "cursorCaseGroup": "product-semantic-cursor"
+    "cursorCaseGroup": "product-semantic-cursor",
+    "families": [
+      "safety",
+      "event-time"
+    ],
+    "physicalCells": [
+      48,
+      53
+    ]
   }
 }

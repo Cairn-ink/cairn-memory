@@ -1,7 +1,7 @@
-// Count gates share one deterministic clock across the native Workers.
 import './context-product-test-clock.mjs';
+import { costFamilyFixture, costFamilyPhysical } from './content-safety-cost-families.mjs';
+// Count gates share one deterministic clock across the native Workers.
 import { assertCostGateCases } from './content-safety-s2h-cost-inventory.mjs';
-import { safetyFixture } from './content-safety-s2h-fixture.mjs';
 import { transaction } from '../database.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 import assert from 'node:assert/strict';
@@ -20,12 +20,12 @@ import { openMemoryCore,openContextSemanticCoordinator,openContextIndexMaintaine
 const hostUrl=new URL('./content-safety-s2h-semantic-host.mjs',import.meta.url).href;
 const selection={provider:'openai',model:'text-embedding-3-small',dimensions:1536,normalization:'l2',requestTimeoutMs:3000,maxBatchDocuments:64};
 const coverage={policy:'recent-projects-v1',selectionRevision:'synthetic',requestedNamespaces:1,selectedNamespaces:1,omittedNamespaces:0};
-export async function setupProductSemantic(t,{localRuntime=false,open=true,expectedCleanupFailure=false,host={},safety=false,caps:capPatch,corpus,readSet=[ns],version=18,canonicalMode='DELETE',sidecarMode='DELETE',coordinatorHost=hostUrl,rawLineage='none'}={}) {
+export async function setupProductSemantic(t,{localRuntime=false,open=true,expectedCleanupFailure=false,host={},safety=false,caps:capPatch,corpus,readSet=[ns],version=18,family='safety',canonicalMode='DELETE',sidecarMode='DELETE',coordinatorHost=hostUrl,rawLineage='none'}={}) {
   // Each fixture is an independent process-policy universe. Never reset while
   // a coordinator is live; same-test duplicate-file probes share the binding.
   if(!globalThis[Symbol.for('context-read-product-p2e-v1/coordinators')]?.size)
     globalThis[Symbol.for('context-read-product-p2e-v1/physical-policy')]?.clear();
-  const f=safetyFixture(t,version),types=['memory'];
+  const f=costFamilyFixture(t,version,family),types=['memory'];
   const writer=openMemoryCore({path:f.path});
   for(let i=0;i<(['in-scope','both'].includes(rawLineage)?0:corpus);i++)ok(writer.admit({namespace:ns,memory:{content:'semantic probecommon synthetic evidence '+String(i).padStart(4,'0'),kind:'fact'},receipts:[{client:'synthetic',sessionId:'probe',eventId:String(i),role:'user',excerpt:'synthetic receipt '+i}]}));
   writer.close();
@@ -53,6 +53,8 @@ export async function setupProductSemantic(t,{localRuntime=false,open=true,expec
     }finally{check.close();}
   }
   if(safety)await f.migrate();
+  const physical=new DatabaseSync(f.path);
+  try{assert.equal(physical.prepare('PRAGMA user_version').get().user_version,safety?costFamilyPhysical(version,family):version,'actual native semantic layout');}finally{physical.close();}
   if(canonicalMode==='WAL'){const db=new DatabaseSync(f.path);try{db.exec('PRAGMA journal_mode=WAL');}finally{db.close();}}
   const supervisor=createContextReadSupervisor();f.workspace.defer(()=>supervisor.close().catch(error=>{if(!expectedCleanupFailure)throw error;assert.equal(error.code,'reader_failed');}));
   const state=new SharedArrayBuffer(64),view=new Int32Array(state);view[0]=1;
@@ -86,12 +88,12 @@ export { ns, ok };
 
 // Native product and semantic Workers share atomic meters; host-owned anchor
 // SQL is measured separately from engine SQL. Setup is outside each cell.
-export async function productSemanticCells(t,{base,n,safety=false,facts=0,group='scoped-empty',intent='current',coldOnly=false,rawLineage='none'}={}) {
+export async function productSemanticCells(t,{base,n,safety=false,facts=0,group='scoped-empty',intent='current',coldOnly=false,family='safety',rawLineage='none'}={}) {
   const semanticMeter=new SharedArrayBuffer(64),meter=new Int32Array(semanticMeter),records=[];
-  const s=await setupProductSemantic(t,{version:base,safety,corpus:group==='empty'?0:n,host:{semanticMeter,counterDivisor:1000},rawLineage});
+  const s=await setupProductSemantic(t,{version:base,family,safety,corpus:group==='empty'?0:n,host:{semanticMeter,counterDivisor:1000},rawLineage});
   const physical=new DatabaseSync(s.f.path);
   try {
-    assert.equal(physical.prepare('PRAGMA user_version').get().user_version,safety?({18:34,23:38,33:48}[base]):base);
+    assert.equal(physical.prepare('PRAGMA user_version').get().user_version,safety?costFamilyPhysical(base,family):base);
     if(facts)transaction(physical,()=>{for(let i=0;i<facts;i++)writeContentSuppressionInside(physical,{
       namespace:group==='same-namespace'?ns:{...ns,scope:'project',projectId:'unrelated'},kind:'memory',key:'unrelated-'+i,reason:'purge',actionId:'fact-'+i});});
     if(safety)assert.equal(physical.prepare('SELECT count(*) n FROM content_suppressions WHERE owner_id=?').get(ns.ownerId).n,facts,'control: actual owner fact population');
@@ -105,7 +107,7 @@ export async function productSemanticCells(t,{base,n,safety=false,facts=0,group=
   async function measure(method,variant,call){
     for(let i=0;i<meter.length;i++)Atomics.store(meter,i,0);Atomics.store(meter,0,1);
     let result;try{result=await call();}finally{Atomics.store(meter,0,0);}
-    const v=Array.from(meter),row={node:process.version,base,cell:safety?({18:34,23:38,33:48}[base]):base,safety,facts,n,corpus:group==='empty'?0:n,limit:12,semantic:true,group,intent,method,variant,
+    const v=Array.from(meter),row={node:process.version,family,base,cell:safety?costFamilyPhysical(base,family):base,safety,facts,n,corpus:group==='empty'?0:n,limit:12,semantic:true,group,intent,method,variant,
       statements:v[1],begin:v[2],hostSQL:v[3],hostBEGIN:v[4],e1:v[5]+v[6]+v[7],counterCalls:v[5],providerCalls:v[6],awaitedLedgerCalls:v[7],hostInvocations:v[8],epochSelects:v[9],headerSelects:v[10],
       ok:result?.ok,error:result?.error?.code,state:result?.value?.channels?.semantic?.state??result?.value?.diagnostics?.candidates?.channels?.semantic?.state,
       items:result?.value?.items?.length??result?.value?.metered?.items?.length,...(rawLineage==='none'?{}:{rawLineage})};

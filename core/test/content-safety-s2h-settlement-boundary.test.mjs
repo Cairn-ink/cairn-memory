@@ -1,7 +1,10 @@
+import { testClock } from '../testing/context-product-test-clock.mjs';
+import { familyGate } from '../testing/receipt-event-time-gates.mjs';
+const complete=familyGate('native settlement-boundary',78);
+const semanticSafetyLayouts=[{version:18,family:'safety'},...([18,23,33].map(version=>({version,family:'event-time'})))];
 // Native service Workers and IPC; all faults live in the synthetic test host.
 import threads from 'node:worker_threads';
 import { syncBuiltinESMExports } from 'node:module';
-import { testClock } from '../testing/context-product-test-clock.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,9 +23,9 @@ import { accessDigest,digest } from '../context-product-validation.mjs';
 import { tokenCost } from '../context-semantic-input.mjs';
 
 const input={readSet:[ns],types:['memory'],intent:'current'};
-async function fixture(t,journal,host={}) {
+async function fixture(t,journal,layout,host={}) {
  const portState=new SharedArrayBuffer(80),state=new Int32Array(portState);
- const s=await setupProductSemantic(t,{safety:true,corpus:2,canonicalMode:journal,host:{portState,counterDivisor:1000,maxConcurrent:1,...host}});
+ const s=await setupProductSemantic(t,{...layout,safety:true,corpus:2,canonicalMode:journal,host:{portState,counterDivisor:1000,maxConcurrent:1,...host}});
  ok(await s.coordinator.setOwnerSemantic({ownerId:ns.ownerId,semantic:true,expectedRevision:0},s.token));
  const m=s.configure(true);Object.assign(m.options.host.configuration,{portState,counterDivisor:1000});
  const h=await openContextIndexMaintainer(m.options);s.f.workspace.defer(()=>h.close());
@@ -96,8 +99,8 @@ async function barrier(state){
  for(let i=0;i<2000&&!Atomics.load(state,10);i++)await delay(5);
  assert.equal(Atomics.load(state,10),1,'native settlement/admission barrier reached');
 }
-for(const ordering of ['all Workers','request Worker first'])for(const journal of ['DELETE','WAL'])for(const mode of [40,41])for(const method of ['findCandidates','contextRead'])test(`P1 public sub-cutoff ${ordering} ${journal} mode${mode} ${method}`,async t=>{
- const {s,h,portState,state}=await fixture(t,journal);
+for(const layout of semanticSafetyLayouts)for(const ordering of ['all Workers','request Worker first'])for(const journal of ['DELETE','WAL'])for(const mode of [40,41])for(const method of ['findCandidates','contextRead'])test(`P1 public sub-cutoff ${ordering} ${layout.family} v${layout.version} ${journal} mode${mode} ${method}`,async t=>{
+ const {s,h,portState,state}=await fixture(t,journal,layout);
  const db=new DatabaseSync(s.f.path);let body;try{body=db.prepare('SELECT content FROM memories ORDER BY id LIMIT 1').get().content;}finally{db.close();}
  const r=s.configure(false);Object.assign(r.options.host.configuration,{portState,counterDivisor:1000,protectedQuery:body});
  const reader=await openContextProductReader(r.options);s.f.workspace.defer(()=>reader.close());
@@ -119,9 +122,10 @@ for(const ordering of ['all Workers','request Worker first'])for(const journal o
  assert.equal(result.error.code,'evidence_unavailable');assert.equal(sourceText,false);
  assert.equal(Atomics.load(state,17),1,'semantic client decision receives a marked refusal');
  assert.equal(Atomics.load(s.view,4),attempts,'no provider dispatch');
+ if(layout.family==='event-time')complete(t.name);
 });
-for(const journal of ['DELETE','WAL'])for(const method of ['findCandidates','contextRead'])test(`control unlatched public sub-cutoff ${journal} ${method}`,async t=>{
- const {s,h,portState,state}=await fixture(t,journal);
+for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])for(const method of ['findCandidates','contextRead'])test(`control unlatched public sub-cutoff ${layout.family} v${layout.version} ${journal} ${method}`,async t=>{
+ const {s,h,portState,state}=await fixture(t,journal,layout);
  const r=s.configure(false);Object.assign(r.options.host.configuration,{portState,counterDivisor:1000});
  const reader=await openContextProductReader(r.options);s.f.workspace.defer(()=>reader.close());
  Atomics.store(state,0,50);
@@ -135,10 +139,11 @@ for(const journal of ['DELETE','WAL'])for(const method of ['findCandidates','con
  assert.equal(Atomics.load(state,16),1,'plain timeout has no marker');assert.equal(Atomics.load(state,17),0);
  assert.equal(Atomics.load(state,1),0,'no refusal fact');assert.equal(Atomics.load(state,15),0,'no E1 failure');
  await reader.close();await h.close();await s.coordinator.close();await s.supervisor.close();
+ if(layout.family==='event-time')complete(t.name);
 });
-for(const journal of ['DELETE','WAL'])for(const mode of [43,48])test(`P2 sustained outage ${journal} mode${mode}`,async t=>{
+for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])for(const mode of [43,48])test(`P2 sustained outage ${layout.family} v${layout.version} ${journal} mode${mode}`,async t=>{
  const observation=new SharedArrayBuffer(8),sizes=new Int32Array(observation);
- const {s,m,h,state}=await fixture(t,journal,{settlementObservation:observation});
+ const {s,m,h,state}=await fixture(t,journal,layout,{settlementObservation:observation});
  const n=await nativeClient(t,s,m),old=new Set(Object.keys(ledgerState(s).reservations)),attempts=Atomics.load(s.view,4);
  const text='synthetic sustained outage';Atomics.store(state,0,mode);
  const first=await n.client.call('embed',{texts:[text],kind:'query',expected:n.snapshot.policy,projection:n.projection}).then(()=>null,e=>e);
@@ -165,9 +170,10 @@ for(const journal of ['DELETE','WAL'])for(const mode of [43,48])test(`P2 sustain
  t.diagnostic(JSON.stringify({journal,mode,retained,maximum,created:created.length,retries:errors.length}));
  assert.ok(maximum<=2,'retention bound maxConcurrent + one uncertain reserving mutation');
  assert.equal(retained,1,'failed pre-reservation admissions retain nothing');
+ if(layout.family==='event-time')complete(t.name);
 });
-for(const journal of ['DELETE','WAL'])test(`P2 uncertain reserving commit ${journal}`,async t=>{
- const {s,m,h,state}=await fixture(t,journal),n=await nativeClient(t,s,m),old=new Set(Object.keys(ledgerState(s).reservations)),attempts=Atomics.load(s.view,4);
+for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])test(`P2 uncertain reserving commit ${layout.family} v${layout.version} ${journal}`,async t=>{
+ const {s,m,h,state}=await fixture(t,journal,layout),n=await nativeClient(t,s,m),old=new Set(Object.keys(ledgerState(s).reservations)),attempts=Atomics.load(s.view,4);
  Atomics.store(state,0,49);
  const error=await n.client.call('embed',{texts:['synthetic uncertain reserve'],kind:'query',expected:n.snapshot.policy,projection:n.projection}).then(()=>null,e=>e);
  assert.equal(error?.code,'ledger_unavailable');assert.equal(error?.safetyFence,undefined);
@@ -179,6 +185,7 @@ for(const journal of ['DELETE','WAL'])test(`P2 uncertain reserving commit ${jour
  assert.equal(anchor(s).pending,null);
  ok(await s.coordinator.getOwnerSemanticStatus({ownerId:ns.ownerId},s.token));assert.deepEqual(ledgerState(s).reservations,after.reservations);
  n.close();await h.close();await s.coordinator.close();await s.supervisor.close();
+ if(layout.family==='event-time')complete(t.name);
 });
 
 for(const point of ['timer','message cutoff','close'])for(const latched of [false,true])test(`control client decision ${point} latch=${latched}`,async()=>{

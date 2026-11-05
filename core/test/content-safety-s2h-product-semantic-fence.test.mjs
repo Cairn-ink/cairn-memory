@@ -1,5 +1,6 @@
-// Install the shared clock before product factories capture their timers.
 import '../testing/context-product-test-clock.mjs';
+import { costGateFamilies } from '../testing/content-safety-cost-families.mjs';
+// Install the shared clock before product factories capture their timers.
 import { DatabaseSync } from 'node:sqlite';
 import { transaction } from '../database.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
@@ -19,8 +20,8 @@ import { semanticClient } from '../context-semantic-client.mjs';
 // Fail-before: query transmission on a6ec0e0e ignores suppressionEpoch and
 // dispatches the provider for each malformed projection below. No synthetic
 // wrapper replaces the native service Worker, ledger or IPC transport.
-for(const base of [18,23,33])for(const journal of ['DELETE','WAL'])test(`native query epoch projection v${base} ${journal}`,async t=>{
- const s=await setupProductSemantic(t,{version:base,safety:true,corpus:1,canonicalMode:journal});
+for(const family of costGateFamilies())for(const base of [18,23,33])for(const journal of ['DELETE','WAL'])test(`native query epoch projection v${base} ${family} ${journal}`,async t=>{
+ const s=await setupProductSemantic(t,{version:base,family,safety:true,corpus:1,canonicalMode:journal});
  ok(await s.coordinator.setOwnerSemantic({ownerId:ns.ownerId,semantic:true,expectedRevision:0},s.token));
  const m=s.configure(true),h=await openContextIndexMaintainer(m.options);s.f.workspace.defer(()=>h.close());
  const input={readSet:[ns],types:['memory'],intent:'current'};
@@ -50,8 +51,8 @@ for(const base of [18,23,33])for(const journal of ['DELETE','WAL'])test(`native 
 // Controls on a6ec0e0e: a positive same-namespace fact still suppresses every
 // retained surface, while unrelated facts do not erase readable neighbours.
 // These pin the behaviour of the newly folded visible-count proof.
-for(const base of [18,23,33])for(const journal of ['DELETE','WAL'])for(const intent of ['current','history'])test(`control native positive fact v${base} ${journal} ${intent}`,async t=>{
- const s=await setupProductSemantic(t,{version:base,safety:true,corpus:12,canonicalMode:journal});
+for(const family of costGateFamilies())for(const base of [18,23,33])for(const journal of ['DELETE','WAL'])for(const intent of ['current','history'])test(`control native positive fact v${base} ${family} ${journal} ${intent}`,async t=>{
+ const s=await setupProductSemantic(t,{version:base,family,safety:true,corpus:12,canonicalMode:journal});
  ok(await s.coordinator.setOwnerSemantic({ownerId:ns.ownerId,semantic:true,expectedRevision:0},s.token));
  const m=s.configure(true),h=await openContextIndexMaintainer(m.options);s.f.workspace.defer(()=>h.close());
  const input={readSet:[ns],types:['memory'],intent};

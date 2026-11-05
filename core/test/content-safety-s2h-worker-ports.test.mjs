@@ -1,5 +1,8 @@
-// Install the shared clock before product factories capture their timers.
 import '../testing/context-product-test-clock.mjs';
+import { familyGate } from '../testing/receipt-event-time-gates.mjs';
+const complete=familyGate('native worker-ports',510);
+const semanticSafetyLayouts=[{version:18,family:'safety'},...([18,23,33].map(version=>({version,family:'event-time'})))];
+// Install the shared clock before product factories capture their timers.
 import test from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { semanticHandle } from '../context-semantic-coordinator.mjs';
@@ -21,10 +24,10 @@ function targetFact(db,mutation){
    reason:{forget:'user_forget',correction:'correction_supersession',privacy:'privacy_erase'}[mutation],actionId:'synthetic-port',
    ...(mutation==='correction'?{matchMode:'revision-through',sourceVersion:JSON.stringify(['memory-revision-through-v1',row.revision])}:{})});
 }
-for(const journal of ['DELETE','WAL'])for(const [mode,name]of [[1,'load'],[2,'cas'],[3,'provider'],[4,'getter'],[5,'proxy'],[6,'listOwners'],[8,'anchor Proxy'],[9,'anchor accessor'],[10,'inventory Proxy'],[11,'error accessor'],[15,'thenable'],[16,'reservation seal'],[17,'transmission prepare'],[18,'transmission seal'],[19,'compensation'],[22,'last price sample'],[23,'CAS bool Proxy'],[24,'CAS error accessor'],[28,'refused dispatch retry']])for(const mutation of ['account','forget','correction','privacy'])test(`native worker E1 ${journal} ${name} ${mutation}`,async t=>{
+for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])for(const [mode,name]of [[1,'load'],[2,'cas'],[3,'provider'],[4,'getter'],[5,'proxy'],[6,'listOwners'],[8,'anchor Proxy'],[9,'anchor accessor'],[10,'inventory Proxy'],[11,'error accessor'],[15,'thenable'],[16,'reservation seal'],[17,'transmission prepare'],[18,'transmission seal'],[19,'compensation'],[22,'last price sample'],[23,'CAS bool Proxy'],[24,'CAS error accessor'],[28,'refused dispatch retry']])for(const mutation of ['account','forget','correction','privacy'])test(`native worker E1 ${layout.family} v${layout.version} ${journal} ${name} ${mutation}`,async t=>{
  const portState=new SharedArrayBuffer(64),state=new Int32Array(portState);
  t.after(()=>{Atomics.store(state,11,1);Atomics.notify(state,11);});
- const s=await setupProductSemantic(t,{safety:true,corpus:12,canonicalMode:journal,host:{portState,factMutation:mutation,counterDivisor:1000}});
+ const s=await setupProductSemantic(t,{...layout,safety:true,corpus:12,canonicalMode:journal,host:{portState,factMutation:mutation,counterDivisor:1000}});
  ok(await s.coordinator.setOwnerSemantic({ownerId:ns.ownerId,semantic:true,expectedRevision:0},s.token));
  const m=s.configure(true);Object.assign(m.options.host.configuration,{portState,counterDivisor:1000});
  const h=await openContextIndexMaintainer(m.options);s.f.workspace.defer(()=>h.close());
@@ -70,14 +73,15 @@ for(const journal of ['DELETE','WAL'])for(const [mode,name]of [[1,'load'],[2,'ca
  }finally{ledger.close();}
  assert.equal(JSON.parse(s.authority.prepare('SELECT anchor FROM anchors WHERE owner=?').get(ns.ownerId).anchor).pending,null,'exact prepared anchor is reconciled (CAS-return refusals are regressions; other cases are controls)');
  await reader.close();await h.close();await s.coordinator.close();await s.supervisor.close();
+ if(layout.family==='event-time')complete(t.name);
 });
 
 // These cases isolate the first protected service snapshot through the real
 // service Worker and semantic client. They need no lexical/vector sidecar.
-for(const journal of ['DELETE','WAL'])for(const mutation of ['account','forget','correction','privacy'])test(`native snapshot refusal survives client catch ${journal} ${mutation}`,async t=>{
+for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])for(const mutation of ['account','forget','correction','privacy'])test(`native snapshot refusal survives client catch ${layout.family} v${layout.version} ${journal} ${mutation}`,async t=>{
  const portState=new SharedArrayBuffer(64),state=new Int32Array(portState);
  t.after(()=>{Atomics.store(state,11,1);Atomics.notify(state,11);});
- const s=await setupProductSemantic(t,{safety:true,corpus:1,canonicalMode:journal,host:{portState,factMutation:mutation,counterDivisor:1000}});
+ const s=await setupProductSemantic(t,{...layout,safety:true,corpus:1,canonicalMode:journal,host:{portState,factMutation:mutation,counterDivisor:1000}});
  ok(await s.coordinator.setOwnerSemantic({ownerId:ns.ownerId,semantic:true,expectedRevision:0},s.token));
  const handle=semanticHandle(s.coordinator),port=handle.attach({ownerId:ns.ownerId,path:s.f.path,readSet:[ns],maintenance:false});
  const operation={operationId:randomUUID(),operationCutoffMonoNs:String(process.hrtime.bigint()+5000000000n)};
@@ -101,13 +105,14 @@ for(const journal of ['DELETE','WAL'])for(const mutation of ['account','forget',
  assert.equal(Atomics.load(state,8),1,'control: exactly one actual awaited load');
  assert.equal(Atomics.load(state,12),1,'exactly one total worker epoch SELECT for that load');
  client.close();await s.coordinator.close();await s.supervisor.close();
+ if(layout.family==='event-time')complete(t.name);
 });
 
 // Refusing caller method lookup/async policy cannot consume a provider attempt.
 // No fact is inserted here; ordinary lexical availability is a control.
-for(const journal of ['DELETE','WAL'])for(const [mode,name]of [[12,'poisoned Promise.catch'],[13,'provider accessor'],[14,'provider prototype Proxy'],[26,'inert CAS bool return'],[33,'detached provider dispatch callback']])test(`native protected model port ${journal} ${name}`,async t=>{
+for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])for(const [mode,name]of [[12,'poisoned Promise.catch'],[13,'provider accessor'],[14,'provider prototype Proxy'],[26,'inert CAS bool return'],[33,'detached provider dispatch callback']])test(`native protected model port ${layout.family} v${layout.version} ${journal} ${name}`,async t=>{
  const portState=new SharedArrayBuffer(64),state=new Int32Array(portState);
- const s=await setupProductSemantic(t,{safety:true,corpus:12,canonicalMode:journal,host:{portState,factMutation:'account',counterDivisor:1000}});
+ const s=await setupProductSemantic(t,{...layout,safety:true,corpus:12,canonicalMode:journal,host:{portState,factMutation:'account',counterDivisor:1000}});
  ok(await s.coordinator.setOwnerSemantic({ownerId:ns.ownerId,semantic:true,expectedRevision:0},s.token));
  const m=s.configure(true);Object.assign(m.options.host.configuration,{portState,counterDivisor:1000});
  const h=await openContextIndexMaintainer(m.options);s.f.workspace.defer(()=>h.close());
@@ -130,4 +135,5 @@ for(const journal of ['DELETE','WAL'])for(const [mode,name]of [[12,'poisoned Pro
  const ledger=new DatabaseSync(s.ledgerPath);
  try{assert.ok(Object.values(JSON.parse(ledger.prepare('SELECT state FROM semantic_owners WHERE owner_id=?').get(ns.ownerId).state).reservations).every(r=>!['reserved','may_transmit'].includes(r.status)),'control: no untransmitted reservation remains outstanding');}finally{ledger.close();}
  await reader.close();await h.close();await s.coordinator.close();await s.supervisor.close();
+ if(layout.family==='event-time')complete(t.name);
 });

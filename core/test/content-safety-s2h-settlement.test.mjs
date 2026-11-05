@@ -1,5 +1,8 @@
-// Native service Workers and IPC; all faults live in the synthetic test host.
 import '../testing/context-product-test-clock.mjs';
+import { familyGate } from '../testing/receipt-event-time-gates.mjs';
+const complete=familyGate('native settlement',78);
+const semanticSafetyLayouts=[{version:18,family:'safety'},...([18,23,33].map(version=>({version,family:'event-time'})))];
+// Native service Workers and IPC; all faults live in the synthetic test host.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -17,9 +20,9 @@ import { accessDigest,digest } from '../context-product-validation.mjs';
 import { tokenCost } from '../context-semantic-input.mjs';
 
 const input={readSet:[ns],types:['memory'],intent:'current'};
-async function fixture(t,journal) {
+async function fixture(t,journal,layout) {
  const portState=new SharedArrayBuffer(64),state=new Int32Array(portState);
- const s=await setupProductSemantic(t,{safety:true,corpus:2,canonicalMode:journal,host:{portState,counterDivisor:1000,maxConcurrent:1}});
+ const s=await setupProductSemantic(t,{...layout,safety:true,corpus:2,canonicalMode:journal,host:{portState,counterDivisor:1000,maxConcurrent:1}});
  ok(await s.coordinator.setOwnerSemantic({ownerId:ns.ownerId,semantic:true,expectedRevision:0},s.token));
  const m=s.configure(true);Object.assign(m.options.host.configuration,{portState,counterDivisor:1000});
  const h=await openContextIndexMaintainer(m.options);s.f.workspace.defer(()=>h.close());
@@ -41,8 +44,8 @@ function boundaryCounts(state) {
  assert.equal(Atomics.load(state,12),Atomics.load(state,8),'exactly one E1 read per awaited callback, none for internal awaits');
  assert.equal(Atomics.load(state,9),0,'D2 accounting arguments stay on the allowlist');
 }
-for(const journal of ['DELETE','WAL'])for(const [mode,name] of [[41,'Memory forget'],[40,'epoch SELECT I/O']])for(const method of ['findCandidates','contextRead'])test(`terminal settlement refusal ${journal} ${name} ${method}`,async t=>{
- const {s,h,portState,state}=await fixture(t,journal);
+for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])for(const [mode,name] of [[41,'Memory forget'],[40,'epoch SELECT I/O']])for(const method of ['findCandidates','contextRead'])test(`terminal settlement refusal ${layout.family} v${layout.version} ${journal} ${name} ${method}`,async t=>{
+ const {s,h,portState,state}=await fixture(t,journal,layout);
  const db=new DatabaseSync(s.f.path);let body;
  try{body=db.prepare('SELECT content FROM memories ORDER BY id LIMIT 1').get().content;}finally{db.close();}
  const r=s.configure(false);Object.assign(r.options.host.configuration,{portState,counterDivisor:1000,protectedQuery:body});
@@ -61,6 +64,7 @@ for(const journal of ['DELETE','WAL'])for(const [mode,name] of [[41,'Memory forg
  assert.equal(Atomics.load(state,3),0,'no later counter payload');
  boundaryCounts(state);
  await reader.close();await h.close();await s.coordinator.close();await s.supervisor.close();
+ if(layout.family==='event-time')complete(t.name);
 });
 
 async function nativeClient(t,s,m) {
@@ -77,8 +81,8 @@ async function nativeClient(t,s,m) {
  const projection={...input,accessDigest:observed.publication.accessDigest,lexicalValidationDigest:digest(observed.publication),vectorValidationDigest:digest(vector.record),suppressionEpoch:'0:0'};
  return {client,bind,snapshot,projection,close(){client.close();storage.close();facade.close();}};
 }
-for(const journal of ['DELETE','WAL'])for(const [stage,offset] of [['load',0],['prepare',2],['seal',4]])for(const [fault,delta] of [['Proxy',0],['throw',1]])test(`D2 settlement retry ${journal} ${stage} ${fault}`,async t=>{
- const {s,m,h,state}=await fixture(t,journal),n=await nativeClient(t,s,m);
+for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])for(const [stage,offset] of [['load',0],['prepare',2],['seal',4]])for(const [fault,delta] of [['Proxy',0],['throw',1]])test(`D2 settlement retry ${layout.family} v${layout.version} ${journal} ${stage} ${fault}`,async t=>{
+ const {s,m,h,state}=await fixture(t,journal,layout),n=await nativeClient(t,s,m);
  const initial=ledgerState(s),oldIds=new Set(Object.keys(initial.reservations)),attempts=Atomics.load(s.view,4);
  const text='synthetic settlement query';Atomics.store(state,0,42+offset+delta);
  const error=await n.client.call('embed',{texts:[text],kind:'query',expected:n.snapshot.policy,projection:n.projection}).then(()=>null,e=>e);
@@ -109,9 +113,10 @@ for(const journal of ['DELETE','WAL'])for(const [stage,offset] of [['load',0],['
  assert.equal(Atomics.load(state,4),0,'no Proxy inspection beyond native async then assimilation');
  boundaryCounts(state);
  n.close();await h.close();await s.coordinator.close();await s.supervisor.close();
+ if(layout.family==='event-time')complete(t.name);
 });
-for(const journal of ['DELETE','WAL'])for(const [providerMode,name] of [[3,'unknown usage'],[8,'protocol failure']])test(`D2 retry preserves ${name} ${journal}`,async t=>{
- const {s,m,h,state}=await fixture(t,journal),n=await nativeClient(t,s,m);
+for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])for(const [providerMode,name] of [[3,'unknown usage'],[8,'protocol failure']])test(`D2 retry preserves ${name} ${layout.family} v${layout.version} ${journal}`,async t=>{
+ const {s,m,h,state}=await fixture(t,journal,layout),n=await nativeClient(t,s,m);
  const before=ledgerState(s),oldIds=new Set(Object.keys(before.reservations));
  Atomics.store(s.view,7,providerMode);Atomics.store(state,0,43);
  const error=await n.client.call('embed',{texts:['synthetic unknown query'],kind:'query',expected:n.snapshot.policy,projection:n.projection}).then(()=>null,e=>e);
@@ -124,15 +129,17 @@ for(const journal of ['DELETE','WAL'])for(const [providerMode,name] of [[3,'unkn
  assert.deepEqual({code:error?.code,marker:error?.safetyFence,status:r.status,usage:r.usage,cost:r.cost,blocked:after.identities[r.identity]?.blocked===true},
    {code:'evidence_unavailable',marker:true,status:'unknown',usage:'unknown',cost:entry.cost,blocked:providerMode===8},'retry preserves unknown charge and protocol identity block');
  boundaryCounts(state);n.close();await h.close();await s.coordinator.close();await s.supervisor.close();
+ if(layout.family==='event-time')complete(t.name);
 });
-for(const journal of ['DELETE','WAL'])test(`control ordinary settlement failure ${journal}`,async t=>{
- const {s,m,h,state}=await fixture(t,journal),n=await nativeClient(t,s,m);Atomics.store(state,0,48);
+for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])test(`control ordinary settlement failure ${layout.family} v${layout.version} ${journal}`,async t=>{
+ const {s,m,h,state}=await fixture(t,journal,layout),n=await nativeClient(t,s,m);Atomics.store(state,0,48);
  const error=await n.client.call('embed',{texts:['synthetic ordinary query'],kind:'query',expected:n.snapshot.policy,projection:n.projection}).then(()=>null,e=>e);
  assert.equal(Atomics.load(state,10),1,'accounting failure injected');
  assert.equal(error?.code,'ledger_unavailable','ordinary accounting failure keeps existing mapping');
  assert.equal(error?.safetyFence,undefined,'ordinary failure gains no refusal marker');
  assert.equal(Atomics.load(state,1),0,'no erasure/refusal');boundaryCounts(state);
  n.close();await h.close();await s.coordinator.close();await s.supervisor.close();
+ if(layout.family==='event-time')complete(t.name);
 });
 test('latched client IPC marker wins over late-message timeout',async()=>{
  const port=new EventEmitter();port.postMessage=message=>port.emit('message',{id:message.id,ok:false,code:'evidence_unavailable',safetyFence:true});

@@ -1,3 +1,4 @@
+import { costFamilyFixture, costFamilyPhysical, costGateFamilies } from '../testing/content-safety-cost-families.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as sidecar from '../context-product-sidecar.mjs';
@@ -21,8 +22,9 @@ const precisions=['exact','whole-message'];
 // Fixture order, subset order and duplicate positions are deterministic. UUIDs
 // are supplied by public writers; no generated decision is sampled or skipped.
 function random(seed){return ()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/2**32;};}
-for(const base of [18,23,33])test(`Memory independent safety gate and old-path equivalence control v${base}`,async t=>{
- const f=safetyFixture(t,base);await f.migrate();const db=f.connect(),core=openMemoryCore({path:f.path});
+for(const family of costGateFamilies())for(const base of [18,23,33])test(`Memory independent safety gate and old-path equivalence control ${family} v${base}`,async t=>{
+ const f=costFamilyFixture(t,base,family);await f.migrate();
+ const db=f.connect();assert.equal(db.prepare('PRAGMA user_version').get().user_version,costFamilyPhysical(base,family),'actual differential physical layout');const core=openMemoryCore({path:f.path});
  const raw=base===33?openRawCaptureCore({path:f.path,model:{contextWindow:8192,countTokens:()=>1,extract:()=>({items:[{content:'Synthetic captured interpretation',kind:'fact',confidence:.8,sourceIndices:[0]}]})}},
   {mode:'raw-v1',deletion:true,port:localPlainPort(),readPolicy:()=>({generation:'synthetic',reason:null})}):null;
  t.after(()=>{raw?.close();core.close();db.close();});
@@ -110,7 +112,7 @@ for(const base of [18,23,33])test(`Memory independent safety gate and old-path e
    }
   }
  }
- t.diagnostic('BATCH_DIFFERENTIAL '+JSON.stringify({node:process.version,base,seeds,fixtures,cases,candidates,allowed:allowedCount,denied:deniedCount,actualAllowed:actualAllowedCount,actualDenied:candidates-actualAllowedCount,oracle:'fixture-labels',mismatchCases:mismatches.length,equivalenceMismatchCases:equivalenceMismatches.length}));
+ t.diagnostic('BATCH_DIFFERENTIAL '+JSON.stringify({node:process.version,family,base,seeds,fixtures,cases,candidates,allowed:allowedCount,denied:deniedCount,actualAllowed:actualAllowedCount,actualDenied:candidates-actualAllowedCount,oracle:'fixture-labels',mismatchCases:mismatches.length,equivalenceMismatchCases:equivalenceMismatches.length}));
  assert.ok(cases&&allowedCount&&deniedCount);
  await t.test('independent expected-by-construction safety decisions',()=>assert.equal(mismatches.length,0,JSON.stringify({count:mismatches.length,first:mismatches.slice(0,3)})));
  await t.test('equivalence control: old per-candidate predicate versus batch',()=>assert.equal(equivalenceMismatches.length,0,JSON.stringify({count:equivalenceMismatches.length,first:equivalenceMismatches.slice(0,3)})));
@@ -178,8 +180,8 @@ function nullRawProject(db,id) {
  }
  assert.equal(db.prepare('SELECT project_id FROM raw_conversations WHERE id=?').get(id).project_id,null);
 }
-for(const ancestry of ['foreign-scope','null-project'])test(`independent zero-fact ancestry safety and equivalence control: ${ancestry}`,async t=>{
- const f=safetyFixture(t,33);await f.migrate();const db=f.connect(),core=openMemoryCore({path:f.path});
+for(const family of costGateFamilies())for(const ancestry of ['foreign-scope','null-project'])test(`independent zero-fact ancestry safety and equivalence control: ${family} ${ancestry}`,async t=>{
+ const f=costFamilyFixture(t,33,family);await f.migrate();const db=f.connect(),core=openMemoryCore({path:f.path});
  t.after(()=>{core.close();db.close();});
  const m=ok(core.admit({namespace:ns,memory:{content:'Synthetic boundary candidate',kind:'fact'},receipts:[receipt('boundary')]})).memory;
  const rid=db.prepare('SELECT id FROM receipts WHERE memory_id=?').get(m.id).id;
