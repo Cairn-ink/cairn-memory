@@ -818,6 +818,49 @@ is distinct from incremental work and COMMIT; failure stages also admit
 treat unknown kinds as unavailable. Dispatch, RPC, delivery and settlement
 intervals overlap and must not be added as an elapsed breakdown.
 
+**Amendment v2.1: pump factory host seams.** The internal
+`createMaintenancePumpRuntime` factory accepts the dependency options below.
+These do not add public renewal options.
+
+| Dependency option | Contract | Purpose |
+| --- | --- | --- |
+| `open` | Supported host seam | Open the maintainer for a reserved turn. |
+| `admit` | Supported host seam | Dispatch non-observing lexical admission. |
+| `work` | Supported host seam | Dispatch lexical refresh work. |
+| `observedAt` | Supported host seam | Read the native observation timestamp from the work result. |
+| `stallOf` | Supported host seam | Read private stall diagnostics from a handle, control or result. |
+| `setTimer` | Supported host seam | Schedule pump turns and watchdogs. |
+| `clearTimer` | Supported host seam | Cancel the corresponding scheduled timer. |
+| `now` | Supported host seam | Supply monotonic milliseconds in the observation clock domain. |
+| `receiptOf` | Test-only | Inject private admission receipts. |
+| `admissionIdentity` | Test-only | Inject admission-domain identities. |
+| `phasesOf` | Test-only | Inject private phase diagnostics. |
+| `cutoffQualified` | Test-only | Exercise gated cutoff recovery. |
+
+The default `admit` and `work` look up private dispatch by the engine's native
+maintainer identity. The default `open` returns that native handle. A host that
+returns a wrapper must inject **both** `admit` and `work` and unwrap to the native
+maintainer in each bridge. Both injected bridges are trusted to do so. If only
+one is injected, the remaining default still requires a native handle: a
+non-native handle is rejected on the first open before either dispatch runs.
+Preserve lazy close descriptors and the original close function's identity so
+the existing disposal and timeout-disposal rules continue to apply.
+
+Lexical pump turns call `admit` and `work`, not `refreshContextIndex`. A host
+observes refresh input (including `intent` and `readSet`) and results through
+`work`, then reads observation timing through `observedAt`. Pass the same result
+object through both seams to retain its native observation metadata. Admission
+earns no observation. The semantic pump does not use these dispatch seams.
+
+When either dispatch remains default and `open` returns a non-native maintainer,
+the lexical pump fails terminally on its first open with public
+`error:'invalid_input'` and private cause `maintainer_identity_unrecognized`.
+This cause is appended to the private failure vocabulary; existing failure and
+stall numbers remain unchanged. The opened handle follows existing disposal
+rules, with no admission retry, hold or backoff, and no subsequent open or
+observation. Only the existing opening reservation is charged. No public code,
+state or option is added.
+
 Maintenance failures also have private latest-value diagnostics. Log
 `maintenanceFailureDiagnostic(resultOrOpeningError)` and
 `maintenanceReaderFailureDiagnostic(handleOrOpeningError)`, plus
