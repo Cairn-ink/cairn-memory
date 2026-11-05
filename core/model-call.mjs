@@ -18,7 +18,7 @@ export const modelRequestText = (system, input) =>
 
 /** A bounded adapter call. No database transaction may surround this helper. */
 export async function callModel(model, method, system, input,
-  { validateFresh = () => {}, failureCode = 'recall_failed', deadline } = {}) {
+  { validateFresh = () => {}, beforeDispatch = () => {}, failureCode = 'recall_failed', deadline } = {}) {
   const legacyFreshness = hasLegacyContentReadBoundary();
   const protectedRead = hasContentPortBoundary();
   const reject = (code, reason = code) => { emitDiagnostic(model, method, 'core_call', reason); fail(code); };
@@ -81,6 +81,10 @@ export async function callModel(model, method, system, input,
         catch (error) { freshnessError = error; return freshnessFailure; }
         check();
         assertContentPort({before:true});
+        // Synchronous durable dispatch fence, after freshness and before any
+        // provider call. Its errors keep their trusted storage provenance.
+        try { beforeDispatch(); }
+        catch (error) { freshnessError = error; return freshnessFailure; }
         providerInvoked = true;
         return assertContentPort({invoke:async()=>{
           try {

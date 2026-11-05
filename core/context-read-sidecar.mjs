@@ -346,23 +346,27 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     open();
   }
 
-  function fence(p, validate, candidateRefs) {
+  function fence(p, validate, candidateWorklist) {
     return canonicalRead(() => {
       // Unknown Raw/Card counts still require canonical candidate decisions.
       // Carry their bounded metadata in the store fence SELECT already needed
       // by this snapshot; no extra transaction or per-candidate row refetch.
-      const selected = candidateRefs?.length ? canonical.prepare(`SELECT store_id,
+      const chunks=candidateWorklist?.chunks(), first=chunks?.next();
+      const select = candidateRefs => candidateRefs?.length ? canonical.prepare(`SELECT store_id,
         (SELECT json_group_array(json_object('id',m.id,'owner_id',m.owner_id,'scope',m.scope,'project_id',m.project_id,
           'revision',m.revision,'deleted',m.deleted,'currentness',m.currentness,'review_state',m.review_state,
           'invalid_raw_ancestry',${cachedContentLayout(canonical)?.rawLineage ? `EXISTS(
             SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id
             LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=m.id
             AND (ac.owner_id IS NOT m.owner_id OR ac.scope IS NOT m.scope OR ac.project_id IS NOT m.project_id))` : '0'}))
-          FROM memories m JOIN json_each(?) wanted ON m.owner_id=json_extract(wanted.value,'$[0]')
-            AND m.scope=json_extract(wanted.value,'$[1]') AND m.project_id=json_extract(wanted.value,'$[2]')
-            AND m.id=json_extract(wanted.value,'$[3]')) AS candidate_memories
+          FROM (SELECT m.id,m.owner_id,m.scope,m.project_id,m.revision,m.deleted,m.currentness,m.review_state
+            FROM (SELECT value FROM json_each(?) LIMIT 128) wanted
+            CROSS JOIN memories m ON m.id=json_extract(wanted.value,'$[3]')
+            AND m.owner_id=json_extract(wanted.value,'$[0]') AND m.scope=json_extract(wanted.value,'$[1]')
+            AND m.project_id=json_extract(wanted.value,'$[2]') LIMIT 128) m) AS candidate_memories
         FROM store_metadata WHERE singleton=1`).get(JSON.stringify(candidateRefs)) :
         canonical.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();
+      const selected=select(first?.value?.refs);
       const store=selected?.store_id;
       if (store !== identity.storeId) unavailable('wrong_store');
       if (p.types.includes('card') && !features.cards) fail('invalid_input');
@@ -378,7 +382,16 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
         }else memory=canonical.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch??1;
         return {memory,...(p.types.includes('card') ? { card: canonical.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1, ...cardDependencyFence(canonical, ns, p.readSet) } : {})};
       });
-      validate?.(values,selected?.candidate_memories ? JSON.parse(selected.candidate_memories) : []);return values;
+      if(candidateWorklist) {
+        let chunk=first, rows=selected;
+        while(!chunk.done) {
+          candidateWorklist.check();
+          candidateWorklist.accept(chunk.value,rows?.candidate_memories ? JSON.parse(rows.candidate_memories) : []);
+          chunk=chunks.next();
+          if(!chunk.done) { candidateWorklist.check(); rows=select(chunk.value.refs); }
+        }
+      }
+      validate?.(values);return values;
     });
   }
   const generation = p => sideRead(() => side.prepare('SELECT * FROM generations WHERE id=?').get(p.id));
@@ -387,8 +400,8 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     if (!current || current.sequence !== g.sequence || current.checkpoint !== g.checkpoint ||
         current.fence !== g.fence || current.access !== g.access || current.incarnation !== g.incarnation) unavailable('stale_index');
   }
-  function fresh(p, g, validate, candidateRefs) {
-    return g && g.published === 1 && g.access === p.access && g.fence === JSON.stringify(fence(p,validate,candidateRefs));
+  function fresh(p, g, validate, candidateWorklist) {
+    return g && g.published === 1 && g.access === p.access && g.fence === JSON.stringify(fence(p,validate,candidateWorklist));
   }
 
   function supportDatabase(metrics) {
@@ -715,17 +728,26 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       if(!visible?.unknown)return rank();
       // These are sidecar rows, not retained canonical rows or read memos.
       // Fresh canonical metadata is consumed only by the final fence below.
-      pending={refs:[...docs.values()].filter(row=>p.streams[row.stream].type==='memory').map(row=>
-        [...boundary(p.streams[row.stream].ns),row.id]),finish(selected){
-        const memo=createContentReadMemo(canonical), memories=new Map(selected.map(row=>
-          [JSON.stringify([row.owner_id,row.scope,row.project_id,row.id]),row]));
-        for(const [key,row]of docs){
-          if(performance.now()>=deadlineAt)unavailable('timeout');
-          const stream=p.streams[row.stream], item=ref(stream,row);
-          if(!candidateAllowed(item,p.intent,p.readSet,memo,memories.get(JSON.stringify([...boundary(stream.ns),row.id]))))docs.delete(key);
-        }
-        return rank();
-      }};
+      pending={
+        check(){if(performance.now()>=deadlineAt)unavailable('timeout');},
+        *chunks(){
+          let refs=[],keys=[];
+          for(const [key,row]of docs){
+            this.check(); const stream=p.streams[row.stream]; keys.push(key);
+            if(stream.type==='memory')refs.push([...boundary(stream.ns),row.id]);
+            if(keys.length===128){yield {refs,keys};refs=[];keys=[];}
+          }
+          if(keys.length)yield {refs,keys};
+        },
+        accept(chunk,selected){
+          const memo=createContentReadMemo(canonical), memories=new Map(selected.map(row=>
+            [JSON.stringify([row.owner_id,row.scope,row.project_id,row.id]),row]));
+          for(const key of chunk.keys){
+            this.check(); const row=docs.get(key);
+            const stream=p.streams[row.stream], item=ref(stream,row);
+            if(!candidateAllowed(item,p.intent,p.readSet,memo,memories.get(JSON.stringify([...boundary(stream.ns),row.id]))))docs.delete(key);
+          }
+        },finish:rank};
       return {rows:[],matched:0};
     });
     // Legacy keeps its original snapshot order. Safety batches the additional
@@ -734,7 +756,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     if(keys===null)result=work();
     if(suppressionEpoch!==safetyEpoch(p))unavailable('stale_index');
     const current = generation(p);
-    if (!fresh(p, current,pending?(_values,selected)=>{result=pending.finish(selected);}:undefined,pending?.refs) ||
+    if (!fresh(p, current,pending?()=>{result=pending.finish();}:undefined,pending) ||
         current.sequence !== g.sequence || current.incarnation !== g.incarnation) unavailable('stale_index');
     if(result.rows.length && suppressionEpoch!==undefined && suppressionEpoch!=='0:0' &&
         !cachedContentSuppressionRequestInside(canonical,p.readSet[0].ownerId)) {

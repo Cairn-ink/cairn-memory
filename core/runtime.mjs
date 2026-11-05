@@ -1,8 +1,9 @@
 import { captureSnapshot } from './capture-input.mjs';
+import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
 import { registerContentWriteBoundary } from './content-write-context.mjs';
 import { contentScopeEpochGuard, assertContentOutput, contentReceiptCount, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
 import { receiptEventTimeEnabled, cachedContentLayout, installedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
-import { writeContentSuppressionInside, suppressReceiptsInside, requireSuppressionTransaction, allocateContentKey, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, hasContentSuppressionRequestInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { writeContentSuppressionInside, suppressReceiptsInside, withContentSuppressionReadInside, requireSuppressionTransaction, allocateContentKey, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, hasContentSuppressionRequestInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { roleProfileOptions } from './role-profile-input.mjs';
 import { createRoleProfileStorage } from './role-profile-storage.mjs';
@@ -35,7 +36,7 @@ import { createPrivateCardStorage } from './private-card-storage.mjs';
 import { createRawCardInvalidation } from './card-raw-sources.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { createRawDeletionStorage } from './raw-deletion-storage.mjs';
-import { createRawLineageStorage } from './raw-lineage-storage.mjs';
+import { createRawLineageStorage, isSourceSnapshotOverflow, SOURCE_SNAPSHOT_MS } from './raw-lineage-storage.mjs';
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
 const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
@@ -780,29 +781,46 @@ export function createMemoryRuntime(input, internal) {
       if(result)assertContentOutput(db,identity,result,[ns],{factsOnly:true});
     } });
 
+  let captureSourceDepth = 0;
   const assertContentScope = (scopes, { delivery = false } = {}) => { ready();
     if (!cachedContentLayout(db)?.suppressionRevision) return;
     if (!delivery && scopes.length && hasContentSuppressionRequestInside(db) && !db.isTransaction) {
       contentSuppressionRequestInside(db, scopes, { defer: true }); return;
     }
-    if (delivery) assertContentSuppressionRequestInside(db, scopes);
-    assertContentScopes(db, scopes, 'memory_not_found');
+    const check = () => {
+      if (delivery) assertContentSuppressionRequestInside(db, scopes);
+      assertContentScopes(db, scopes, 'memory_not_found');
+    };
+    // Capture may be nested in a writer's deliberately uncached context. Its
+    // entry/delivery scope lookup must not run an unbounded fact fallback in
+    // an implicit SHARED snapshot either. Acquire writer priority first.
+    if (captureSourceDepth && !db.isTransaction && scopes.some(ns =>
+        { const proof=cachedContentSuppressionRequestInside(db,ns.ownerId);
+          return !proof?.facts || !proof.readSet.some(selected=>selected.scope==='owner' ||
+            selected.scope===ns.scope && (selected.projectId??'')===(ns.projectId??'')); })) return transaction(db, check);
+    check();
   };
-  function captureSourceRead(work) {
+  function captureSourceRead(ns, work) {
     const layout = cachedContentLayout(db);
     if (!layout) fail('unsupported_database');
     // Legacy source checks retain their exact direct-call cost and semantics.
-    // Safety checks need a coherent suppression snapshot, never a writer lock.
+    // Safety first tries a bounded coherent read; uncertainty uses the complete
+    // writer validator after releasing SHARED.
     if (!layout.suppressionRevision) return work();
+    const deadline = performance.now()+SOURCE_SNAPSHOT_MS;
     try { return readTransaction(db, () => {
-      // Retain transaction()'s installed-safety fence locally. The parallel
-      // recall hotfix adds an opt-in shared helper; the second merge should
-      // consolidate this call there without fencing other readTransaction users.
+      // Reattest the installed safety layout inside this source snapshot.
       checkInstalledContentSafety(db);
-      return work();
+      return withContentSuppressionReadInside(db,[ns],proof=>rawLineage.sourceSnapshot(work,proof,deadline));
     }); }
     catch (error) {
-      if (isStorageBusy(error)) fail('storage_busy');
+      if (isSourceSnapshotOverflow(error)) {
+        // The incomplete read has rolled back and released SHARED. Respect an
+        // earlier RESERVED writer before validating the entire source population.
+        try { return transaction(db,work); }
+        catch (failure) { if(isStorageBusy(failure))throw captureSourceBusy(); throw failure; }
+      }
+      if (isStorageBusy(error)) throw captureSourceBusy();
       throw error;
     }
   }
@@ -906,8 +924,8 @@ export function createMemoryRuntime(input, internal) {
     rebuildIndex(ns, input) { ready(); return indexStorage.rebuildIndex(ns, input); },
     inspectAdmission(ns, input) { ready(); return admissionStorage.inspectAdmission(ns, input); },
     claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },
-    filterCaptureSources(ns, sources) { ready(); return captureSourceRead(() => rawLineage.filter(ns, sources)); },
-    assertCaptureSources(ns, sources) { ready(); return captureSourceRead(() => rawLineage.assertReceipts(ns, sources)); },
+    filterCaptureSources(ns, sources) { ready(); return captureSourceRead(ns, () => rawLineage.filter(ns, sources)); },
+    assertCaptureSources(ns, sources) { ready(); return captureSourceRead(ns, () => rawLineage.assertReceipts(ns, sources)); },
     captureSnapshot(ns, input, qualification, policy) {
       ready();
       // Old layouts validate new times, then omit them before hashing or staging.
@@ -924,7 +942,8 @@ export function createMemoryRuntime(input, internal) {
     },
     inspectCaptureEvidence(ns, input) { ready(); return stagedEvidence.inspect(ns, input); },
     discardCaptureEvidence(ns, input) { ready(); return stagedEvidence.discard(ns, input); },
-    assertCaptureEvidence(ns, input) { ready(); return admissionStorage.assertCaptureEvidence(ns, input); },
+    assertCaptureEvidence(ns, input, deadline) { ready(); return input[captureDispatch]
+      ? admissionStorage.beginCaptureDispatch(ns, input, deadline) : admissionStorage.assertCaptureEvidence(ns, input); },
     finishAdmission(ns, input) { ready(); return admissionStorage.finishAdmission(ns, input); },
     finishCapturedAdmission(ns, input, deadline, captureQualifiedDuplicates) {
       ready(); return admissionStorage.finishAdmission(ns, input, { initialClassification: true,
@@ -962,11 +981,13 @@ export function createMemoryRuntime(input, internal) {
   // Include the facade's entry/delivery attestation in these two error
   // boundaries, without changing any other runtime method's error handling.
   const captureSourceBoundary = method => (...args) => {
+    captureSourceDepth++;
     try { return runtime[method](...args); }
     catch (error) {
-      if (cachedContentLayout(db)?.suppressionRevision && isStorageBusy(error)) fail('storage_busy');
+      if (cachedContentLayout(db)?.suppressionRevision && isStorageBusy(error)) throw captureSourceBusy();
       throw error;
     }
+    finally { captureSourceDepth--; }
   };
   return Object.freeze({ ...runtime,
     filterCaptureSources: captureSourceBoundary('filterCaptureSources'),

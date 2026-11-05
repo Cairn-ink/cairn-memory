@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { isStorageBusy } from './database.mjs';
+import { isCaptureSourceBusy, isPreDispatchToken } from './capture-source-safety.mjs';
 import { captureSnapshot, extractedItems, retainedSourceView } from './capture-input.mjs';
 import { callModel } from './model-call.mjs';
 import { fittingCap, prefixUnits, requestFits } from './model-packing.mjs';
@@ -151,7 +152,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
       previousOutcome: 'unavailable' } } : {}) };
   const owned = { ...key, token: claim.token };
   const qualificationReport = {};
-  let finished;
+  let finished, stagedDispatched = false;
   try {
     const allowed = operations.filterCaptureSources?.(identities) ?? identities.map((_, index) => index);
     if (!allowed.length && !episodeRun?.skip) fail('source_excluded');
@@ -171,7 +172,14 @@ export async function captureMessages({ model, input, operations, captureQualifi
       messages: allowed.map((index, position) => ({ ...request.input.messages[index], index: position })) } };
     deadline?.check();
     const output = episodeRun?.skip ? { items: [] } : await callModel(model, 'extract', request.system, request.input,
-      { failureCode: 'extraction_failed', deadline, validateFresh: assertSources });
+      { failureCode: 'extraction_failed', deadline, validateFresh: assertSources,
+        beforeDispatch: () => {
+          if (isPreDispatchToken(owned.token)) {
+            owned.token = operations.beginCaptureDispatch(owned).token;
+            stagedDispatched = true;
+            deadline?.check();
+          }
+        } });
     let items = catalog ? extractedWindowItems(output, snapshot, catalog,
       reason => emitDiagnostic(model, 'extract', 'core_validation', reason)) : extractedItems(output, snapshot,
       retained ? sourceMessages : sourceMessages.map(message => ({ ...message, content: boundedText(message.content, 800, true) })),
@@ -206,8 +214,8 @@ export async function captureMessages({ model, input, operations, captureQualifi
         ({ ...receipt, occurredAt: receiptTimes[index] })) } : item) }));
   } catch (error) {
     // A failed or stale cleanup cannot replace the original error or release a successor's claim.
-    try { operations.abandonAdmission(owned, Boolean(episodeRun &&
-      (isStorageBusy(error) || (error instanceof MemoryStoreError && error.code === 'storage_busy')))); } catch { /* The bounded lease can expire. */ }
+    try { operations.abandonAdmission(owned, (isCaptureSourceBusy(error) && !stagedDispatched) || Boolean(episodeRun &&
+      (isStorageBusy(error) || (error instanceof MemoryStoreError && error.code === 'storage_busy')))); } catch { /* Pre-dispatch staged tokens remain reclaimable without cleanup. */ }
     if (error instanceof MemoryStoreError) throw error;
     if (episodeRun && isStorageBusy(error)) fail('storage_busy');
     fail(episodeRun?.keep ? 'storage_error' : 'extraction_failed');
