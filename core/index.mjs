@@ -19,7 +19,7 @@ export { CONTEXT_SOURCES, SOURCE_LIMITS } from './context-read-input.mjs';
 
 /** Embedded storage only. The caller, not this library, authenticates owners. */
 export function openMemoryStore(input) {
-  object(input, ["path", "sessionEpisodes", "contentSafety"]);
+  object(input, ["path", "sessionEpisodes", "contentSafety", "busyTimeoutMs"]);
   const runtime = createMemoryRuntime(input);
 
   function bindScope(input) {

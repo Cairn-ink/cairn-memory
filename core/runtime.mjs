@@ -16,7 +16,7 @@ import { createEpisodeReads } from './episode-reads.mjs';
 import { createEpisodeStorage, episodeOptions } from './episode-storage.mjs';
 import { createProceduralStorage } from './procedural-storage.mjs';
 import { createHash } from "node:crypto";
-import { openDatabase, transaction, readTransaction, isConnectionDiscarded, isStorageBusy } from "./database.mjs";
+import { openDatabase, transaction, readTransaction, isConnectionDiscarded, isStorageBusy, busyTimeoutOption } from "./database.mjs";
 import { createMocStorage } from "./moc-storage.mjs";
 import { createAdmissionStorage } from "./admission-storage.mjs";
 import { createClassificationJournalStorage } from './classification-journal-storage.mjs';
@@ -42,7 +42,8 @@ const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
 
 /** Shared persistence runtime used by both the legacy and envelope facades. */
 export function createMemoryRuntime(input, internal) {
-  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "methodPackages", "assets", "roleProfiles", "existingStore", "storeFence", "contentSafety"]);
+  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "methodPackages", "assets", "roleProfiles", "existingStore", "storeFence", "contentSafety", "busyTimeoutMs"]);
+  const busyTimeoutMs = busyTimeoutOption(input);
   const privateCards = privateCardOptions(input.privateCards);
   const methodPackages = methodPackageOptions(input.methodPackages);
   if (privateCards?.currentDependencies && !methodPackages) fail('invalid_input');
@@ -50,7 +51,7 @@ export function createMemoryRuntime(input, internal) {
   const roleProfiles = roleProfileOptions(input.roleProfiles);
   const sessionEpisodes = input.sessionEpisodes === undefined ? undefined : episodeOptions(input.sessionEpisodes);
   const decisionReview = decisionReviewOption(input);
-  const db = openDatabase(input.path, { privateCards: Boolean(privateCards), currentDependencies: Boolean(privateCards?.currentDependencies), methodPackages: Boolean(methodPackages), assets: Boolean(assets), roleProfiles: Boolean(roleProfiles), rawCapture: Boolean(internal?.rawCapture),
+  const db = openDatabase(input.path, { ...(busyTimeoutMs !== undefined ? { busyTimeoutMs } : {}), privateCards: Boolean(privateCards), currentDependencies: Boolean(privateCards?.currentDependencies), methodPackages: Boolean(methodPackages), assets: Boolean(assets), roleProfiles: Boolean(roleProfiles), rawCapture: Boolean(internal?.rawCapture),
     rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore, storeFence: input.storeFence, contentSafety: input.contentSafety });
   try {
   const rawLineage = createRawLineageStorage(db);

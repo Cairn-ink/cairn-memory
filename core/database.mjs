@@ -374,9 +374,26 @@ export function transaction(db, work, check, { deferred = false } = {}) {
   return contentWriteOperation(db) ? withoutContentSuppressionReadCacheInside(db, execute) : execute();
 }
 
+// Presence is significant: explicit undefined and accessors are invalid.
+export function busyTimeoutOption(input) {
+  if (!input || typeof input !== 'object') return undefined;
+  if (types.isProxy(input)) fail('invalid_input');
+  const descriptor = Object.getOwnPropertyDescriptor(input, 'busyTimeoutMs');
+  if (!descriptor) {
+    if ('busyTimeoutMs' in input) fail('invalid_input');
+    return undefined;
+  }
+  if (!Object.hasOwn(descriptor, 'value') || !Number.isInteger(descriptor.value) ||
+      descriptor.value < 0 || descriptor.value > STORAGE_BUSY_TIMEOUT_MS) fail('invalid_input');
+  return descriptor.value;
+}
+
 /** contentSafety:'s2h-v1' creates only a new file, at its base's safety cell.
  * Default creation and all existing-store maintenance paths stay unchanged. */
-export function openDatabase(path, { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false, localControls = false, methodPackages = false, assets = false, roleProfiles = false, currentDependencies = false, existingStore, storeFence, contentSafety } = {}) {
+export function openDatabase(path, options = {}) {
+  const busyTimeoutMs = busyTimeoutOption(options);
+  const timeout = Math.min(STORAGE_BUSY_TIMEOUT_MS, busyTimeoutMs ?? STORAGE_BUSY_TIMEOUT_MS);
+  let { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false, localControls = false, methodPackages = false, assets = false, roleProfiles = false, currentDependencies = false, existingStore, storeFence, contentSafety } = options;
   if ([rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls].some(value => typeof value !== 'boolean')) fail('invalid_input');
   rawDeletion ||= rawSources || localControls;
   rawLineage ||= rawDeletion;
@@ -391,7 +408,7 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
   const fence = storeFence === undefined ? undefined : storeFenceOption(storeFence);
   if (existingStore !== undefined) {
     const option = existingStoreOption(existingStore), location = existingStorePath(path);
-    const db = new DatabaseSync(location.uri, { timeout: STORAGE_BUSY_TIMEOUT_MS });
+    const db = new DatabaseSync(location.uri, { timeout });
     try {
       location.check();
       db.exec('PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;');
@@ -434,7 +451,7 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
   let db;
   try {
     // URI mode=rw is mandatory for fences: no mkdir or creation fallback.
-    db = new DatabaseSync(fence ? noncreatingStoreURI(path) : path, { timeout: STORAGE_BUSY_TIMEOUT_MS });
+    db = new DatabaseSync(fence ? noncreatingStoreURI(path) : path, { timeout });
     db.exec("PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;");
     transaction(db, () => {
       if (fence) {
