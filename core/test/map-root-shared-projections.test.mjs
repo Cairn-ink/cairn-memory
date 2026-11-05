@@ -14,17 +14,18 @@ const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); re
 const memoryId = i => `memory-${String(i).padStart(4, '0')}`;
 const authority = { authorize({ input, ...binding }) { return { ...binding, accessGeneration: 1 }; }, isCurrent: grant => grant };
 
-function fixture(t) {
+function fixture(t, countTokens = () => 1) {
   const workspace = createTestWorkspace(t, { prefix: 'map-root-projections-' });
   const path = join(workspace.path, 'store.sqlite');
   let counterCalls = 0;
-  const core = openMemoryCore({ path, model: { countTokens() { counterCalls++; return 1; } },
+  const core = openMemoryCore({ path, model: { countTokens(text) { counterCalls++; return countTokens(text); } },
     privateCards: { version: 'private-cards-local-v1', source: 'submitted-note-v1', storage: 'local-plain-v1',
       disclosure: 'explicit-submitted-note-v1', authority } });
   workspace.defer(() => core.close());
   const seed = ok(core.admit({ namespace: ns, memory: { content: 'Synthetic map seed', kind: 'fact' }, receipts: [receipt('map-seed')] })).memory;
-  const db = new DatabaseSync(path); db.exec('PRAGMA busy_timeout=5000; PRAGMA foreign_keys=OFF');
+  const db = new DatabaseSync(path);
   workspace.defer(() => db.close());
+  db.exec('PRAGMA busy_timeout=5000; PRAGMA foreign_keys=OFF');
   const original = db.prepare('SELECT * FROM memories WHERE id=?').get(seed.id);
   const columns = Object.keys(original);
   const insert = db.prepare(`INSERT INTO memories (${columns.join(',')}) VALUES (${columns.map(() => '?').join(',')})`);
@@ -113,10 +114,52 @@ for (const purpose of ['recall', 'classification']) test(`root metadata paging: 
   assert.ok(f.counterCalls > 0, 'recall uses the configured token budget counter');
 });
 
+for (const purpose of ['recall', 'classification']) test(`root token budget shrinks pages and preserves exact continuations: ${purpose}`, t => {
+  // One envelope token plus one per row is monotone, including invalid refs.
+  // The budget therefore fits exactly 37 rows, independently of take probes.
+  const rowsPerPage = 37, tokenBudget = 1 + rowsPerPage, limit = 100;
+  const f = fixture(t, text => {
+    if (text === '') return 0;
+    const { value } = JSON.parse(text);
+    return 1 + value.items.length + value.invalidRefs.length;
+  });
+  ok(f.core.forget({ namespace: ns, memoryId: memoryId(4), expectedRevision: 1 }));
+  const expected = expectedRows(false, purpose), seenItems = [], seenInvalidRefs = [];
+  const invoke = cursor => f.core.map({ namespace: ns, purpose, limit, tokenBudget, ...(cursor ? { cursor } : {}) });
+  const deepOffset = Math.ceil(1001 / rowsPerPage) * rowsPerPage;
+  let cursor, checkedDeepPage = false;
+  for (let offset = 0; offset < expected.length; offset += rowsPerPage) {
+    const page = ok(invoke(cursor)), slice = expected.slice(offset, offset + rowsPerPage);
+    assert.deepEqual(page.items, slice.filter(row => row.item).map(row => row.item), `items at offset ${offset}`);
+    assert.deepEqual(page.invalidRefs, slice.filter(row => row.invalidRef).map(row => row.invalidRef), `invalid refs at offset ${offset}`);
+    const exhausted = offset + rowsPerPage >= expected.length;
+    assert.equal(page.exhausted, exhausted);
+    assert.equal(page.truncatedBy, exhausted ? null : 'token_budget');
+    if (exhausted) assert.equal(page.nextCursor, null);
+    else {
+      assert.equal(typeof page.nextCursor, 'string');
+      assert.ok(page.nextCursor.length > 0);
+      assert.notEqual(page.nextCursor, cursor, 'cursor advances after exactly the returned rows');
+    }
+    if (offset === deepOffset) {
+      assert.deepEqual(ok(invoke(cursor)), page, 'shrunken deep cursor page is repeatable');
+      checkedDeepPage = true;
+    }
+    seenItems.push(...page.items); seenInvalidRefs.push(...page.invalidRefs);
+    // Reusing this cursor must return the fixture slice starting at offset + 37.
+    cursor = page.nextCursor;
+  }
+  assert.equal(checkedDeepPage, true, 'a shrunken page past offset 1000 was checked');
+  assert.deepEqual(seenItems, expected.filter(row => row.item).map(row => row.item), 'complete item sequence has no gaps or duplicates');
+  assert.deepEqual(seenInvalidRefs, expected.filter(row => row.invalidRef).map(row => row.invalidRef), 'complete invalid-ref sequence has no gaps or duplicates');
+});
+
 test('root body hydration retains safety-layout suppression and forget fences', async t => {
   const f = safetyFixture(t); await f.migrate();
-  const core = openMemoryCore({ path: f.path, model: { countTokens: () => 1 } }), db = f.connect();
-  t.after(() => { core.close(); db.close(); });
+  const core = openMemoryCore({ path: f.path, model: { countTokens: () => 1 } });
+  f.workspace.defer(() => core.close());
+  const db = f.connect();
+  f.workspace.defer(() => db.close());
   const memories = Array.from({ length: 3 }, (_, i) => ok(core.admit({ namespace: safetyNamespace,
     memory: { content: `Synthetic safety map ${i}`, kind: 'fact' }, receipts: [receipt(`map-safety-${i}`)] })).memory);
   for (const purpose of ['recall', 'classification']) {
