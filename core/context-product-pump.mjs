@@ -1,6 +1,6 @@
 import { captureMaintenanceTurnPort, createMaintenanceTurnController, maintenanceTurnPoisoned } from './context-maintenance-turn.mjs';
 import { admitMaintenance, refreshMaintenance, maintenanceAdmissionReceipt, isNativeMaintenanceMaintainer } from './context-product-admission.mjs';
-import { maintenanceAdmissionIdentity, maintenanceAdmissionDomain, retainMaintenanceAdmission, failMaintenanceAdmission, maintenanceAdmissionStatus, maintenanceAdmissionSlots, maintenanceAdmissionFits } from './context-product-admission-policy.mjs';
+import { maintenanceAdmissionIdentity, maintenanceAdmissionDomain, retainMaintenanceAdmission, failMaintenanceAdmission, maintenanceAdmissionStatus, maintenanceAdmissionProgress, maintenanceAdmissionSlots, maintenanceAdmissionFits } from './context-product-admission-policy.mjs';
 import { maintenanceFailureCounts, maintenanceFailureRecord, maintenanceFailureKind, maintenanceErrorName } from './context-product-attribution.mjs';
 import { attributionFields, maintenanceWorkFields, maintenanceKinds, add, maintenanceDispatchControl, maintenanceControlState } from './context-product-attribution.mjs';
 import { maintenanceComparison } from './context-product-attribution.mjs';
@@ -98,6 +98,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     const coldSlots=maintenanceAdmissionSlots(residentKeys,writerKeys);
     if(!maintenanceAdmissionFits(projections.length,coldSlots,spacing,quantum.maxMs))fail('invalid_input');
     const admissionDomain=p=>maintenanceAdmissionDomain(admissionIdentity(p.options),quantum.maxMs);
+    const progressLane=p=>canonicalJson([p.options.readSet,['memory','card'].filter(type=>p.types.includes(type)),p.intent]);
     const fingerprint=JSON.stringify(projections.map((p,i)=>[projectionKey(p),residentKeys[i]]));
     const domainOf=p=>JSON.stringify([resolve(p.options.path),p.options.readSet[0].ownerId,p.options.host.moduleUrl]);
     const domains=[...new Set(projections.map(domainOf))];
@@ -210,7 +211,11 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       checkCadence(now());
       const value=Object.freeze({id:c.id,state:error?'failed':stopped?'stopped':exhausted()?'budget_exhausted':now()>=renewedUntil?'renewal_expired':'active',
         windowId:window.id,usedItems:Math.max(...[...ledgers.values()].map(l=>l.items)),usedMs:Math.max(...[...ledgers.values()].map(l=>l.ms)),maxItems:budgets.maxItems,maxMs:budgets.maxMs,error});
-      pumpDiagnostics.set(value,Object.freeze({cadenceMisses,worstGapMs,observation:lastObservation,lastFailure,failureCounts:Object.freeze({...failureCounts}),secondaryFailure,secondaryFailureCounts:Object.freeze({...secondaryFailureCounts}),...(turns?turns.snapshot(admissionHold()):unbrokeredPoison?{turnPhase:'poisoned'}:{}),admission:Object.freeze(projections.map(p=>{const state=admissionDomain(p);return state.attempts||state.pending||state.quarantined||state.held?maintenanceAdmissionStatus(state):null;}))}));
+      pumpDiagnostics.set(value,Object.freeze({cadenceMisses,worstGapMs,observation:lastObservation,lastFailure,failureCounts:Object.freeze({...failureCounts}),secondaryFailure,secondaryFailureCounts:Object.freeze({...secondaryFailureCounts}),...(turns?turns.snapshot(admissionHold()):unbrokeredPoison?{turnPhase:'poisoned'}:{}),admission:Object.freeze(projections.map((p,lane)=>{
+        const state=admissionDomain(p),count=maintenanceAdmissionProgress(state,progressLane(p));
+        const retry=state.attempts||state.pending||state.quarantined||state.held?maintenanceAdmissionStatus(state):null;
+        return count?Object.freeze({...retry,cause:'admission_no_progress',lane,count}):retry;
+      }))}));
       phaseDiagnostics.set(value,freezeTree(structuredClone({elapsedBucketMs:10,projections:phases})));
       snapshotMaintenanceCutoff(value,cutoffDiagnostic);
       return value;
@@ -419,13 +424,15 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           const p=projections[index],dispatchEpoch=residentEpoch,key=JSON.stringify([residentKeys[index],dispatchEpoch]),ledger=ledgers.get(domainOf(p));
           const maxItems=quantum.maxItems,maxMs=quantum.maxMs;
           if(maxItems<1||maxMs<1)return;
+          lane=phases[index];sequence=quantumNumber;quantumNumber=add(quantumNumber,1);
+          const count=maintenanceAdmissionProgress(admissionDomain(p),progressLane(p));
+          if(count>=3){recordFailure(null,'admission_no_progress',{count});error='reader_failed';return;}
           disposalCutoff=lastTick+maxMs;
           // Reserve the full quantum before dispatch. Unknown usage remains
           // charged after crash/timeout; restarting or renewing cannot refund it.
           ledger.items+=maxItems;ledger.ms+=maxMs;
           originalLedger=ledger;reservedItems=maxItems;reservedMs=maxMs;activeKey=key;
           const existing=handles.get(key);admissionTurn=!existing||!admittedHandles.has(existing);admissionState=admissionDomain(p);if(admissionTurn)admissionState.busy=true;
-          lane=phases[index];sequence=quantumNumber;quantumNumber=add(quantumNumber,1);
           // Disposal can await a Worker/host resource. Expose timeout even if
           // that await has not settled; supervision still owns the drain.
           activeControl=maintenanceDispatchControl();ordinal=maintenanceControlState(activeControl).ordinal;
@@ -513,7 +520,13 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             if(receiptOf(result)!=='admitted'){recordFailure(result,'protocol',{protocolKind:'result_shape'});error='reader_failed';return;}
             admittedHandles.add(h);admissionSucceeded=true;return;
           }
-          if(receiptOf(result)==='required'){at=index;admittedHandles.delete(h);return;}
+          if(receiptOf(result)==='required'){
+            // Yield the lane fairly; admission is no observing progress.
+            at=index+1;admittedHandles.delete(h);
+            const count=maintenanceAdmissionProgress(admissionDomain(p),progressLane(p),true);
+            if(count>=3){recordFailure(null,'admission_no_progress',{count});error='reader_failed';}
+            return;
+          }
           // dispatch: call entry to Worker receipt; epochObservation: the final
           // fresh snapshot transaction. refreshCall includes both. settle adds
           // Worker response delivery/validation and pump accounting. These
@@ -543,6 +556,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           // admission/delivery. A quantum overrun retains its full reservation.
           if(finished-lastTick>maxMs){recordStall(h);recordFailure(h,'engine',{engineCode:'read_timeout'});error='read_timeout';return;}
           if(!Number.isFinite(time)||time<lastTick||time>finished){recordFailure(result,'observation_timing',{stage:'observation'});error='reader_failed';return;}
+          maintenanceAdmissionProgress(admissionDomain(p),progressLane(p),false);
           checkCadence(time);
           lastObservation=Object.freeze({projection:index,atMonoMs:time,gapMs:time-observations[index],cadenceMiss:missed[index]});
           at=index+1;

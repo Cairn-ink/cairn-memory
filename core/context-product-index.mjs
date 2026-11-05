@@ -223,7 +223,13 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       }
       if(admitting) {
         if(!maintenance||p.mode!=='lexical')fail('authority_required');
-        const perform=()=>storage.admit();
+        const perform=()=>{
+          if(now()>=p.deadlineAt)fail('read_timeout');
+          storage.admit(p.deadlineAt);
+          if(now()>=p.deadlineAt)fail('read_timeout');
+          access.check();
+          if(now()>=p.deadlineAt)fail('read_timeout');
+        };
         if(attribution)attribution.measure('admission',perform);else perform();
         return access.envelope(()=>{if(observation)observation.admission='admitted';return success(null);});
       }
