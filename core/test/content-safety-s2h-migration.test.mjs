@@ -100,3 +100,45 @@ test('S2h raw seeding reconciles independent retained exclusions and deletion ef
       db.prepare('SELECT count(DISTINCT conversation_id||char(0)||message_id) n FROM raw_source_exclusions').get().n);
   } finally { db.close(); }
 });
+
+for (const base of [18,23,33]) for (const safety of [false,true])
+test(`event-time direct migration ${safety ? {18:34,23:38,33:48}[base] : base} to ${{18:51,23:52,33:53}[base]} preserves receipts and exact base schema`, async t => {
+  const { migrateEventTime } = await import('../testing/receipt-event-time-fixture.mjs');
+  const { receiptEventTimeEnabled } = await import('../content-safety-schema.mjs');
+  const f = safetyFixture(t, base), core = openMemoryCore({ path: f.path });
+  ok(core.admit({ namespace: ns, memory: { content: 'Synthetic retained migration content', kind: 'fact' }, receipts: [receipt('retained')] })); core.close();
+  if (safety) await f.migrate();
+  let db = f.connect();
+  const rows = db.prepare('SELECT * FROM receipts').all();
+  const schemaBefore = db.prepare("SELECT type,name,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' ORDER BY name").all();
+  const control = safety ? db.prepare('SELECT * FROM content_safety_control').get() : null;
+  const facts = safety ? db.prepare('SELECT * FROM content_suppressions').all() : null;
+  db.close();
+  const result = await migrateEventTime(f); assert.equal(result.physical, {18:51,23:52,33:53}[base]);
+  db = f.connect();
+  assert.deepEqual(db.prepare('SELECT * FROM receipts').all().map(row => ({ ...row })), rows.map(row => ({ ...row, occurred_at: null })));
+  assert.equal(attestContentSafety(db).base, base);
+  assert.equal(receiptEventTimeEnabled(attestContentSafety(db)), true);
+  assert.equal(db.prepare('SELECT receipt_event_time FROM content_safety_control').get().receipt_event_time, 1);
+  if (safety) {
+    assert.deepEqual(db.prepare('SELECT * FROM content_safety_control').get(), Object.assign(Object.create(null), control, { receipt_event_time: 1 }));
+    assert.deepEqual(db.prepare('SELECT * FROM content_suppressions').all(), facts);
+  }
+  const schemaAfter = db.prepare("SELECT type,name,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' ORDER BY name").all();
+  for (const row of schemaBefore.filter(row => !['receipts','safety_receipt_identity','content_safety_control','safety_control_update'].includes(row.name)))
+    assert.deepEqual(schemaAfter.find(next => next.name === row.name), row, row.name);
+  if (safety) assert.deepEqual(schemaBefore.filter(row => JSON.stringify(schemaAfter.find(next => next.name === row.name)) !== JSON.stringify(row)).map(row => row.name).sort(),
+    ['content_safety_control','receipts','safety_control_update','safety_receipt_identity'].sort(), 'only the four declared schema objects change');
+  db.close();
+  await assert.rejects(() => migrateEventTime(f), { code: 'unsupported_database' });
+});
+
+for (const safety of [false,true]) test(`event-time migration rollback after column DDL, safety=${safety}`, async t => {
+  const { migrateEventTime } = await import('../testing/receipt-event-time-fixture.mjs');
+  const f = safetyFixture(t); if (safety) await f.migrate();
+  const before = readSqliteFixture(f.path), exec = DatabaseSync.prototype.exec;
+  DatabaseSync.prototype.exec = function(sql) { const value = exec.call(this, sql); if (sql.includes('ALTER TABLE receipts')) throw Error('synthetic-event-time-failure'); return value; };
+  try { await assert.rejects(() => migrateEventTime(f), /synthetic-event-time-failure/); }
+  finally { DatabaseSync.prototype.exec = exec; }
+  assert.deepEqual(readSqliteFixture(f.path), before);
+});

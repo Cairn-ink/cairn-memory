@@ -1,3 +1,4 @@
+import { familyCostParity } from '../testing/receipt-event-time-gates.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -75,4 +76,26 @@ test(`R2 recall ${mode} v${v}: same-engine ceiling, slope and exact safety pins`
     assert.deepEqual([row.total, row.begin, row.portCalls], pins[JSON.stringify(['recall', base, [12, 24][index], mode])], 'exact safety cell');
   }
   assert.ok(sizes[1][1].total - sizes[0][1].total <= sizes[1][0].total - sizes[0][0].total, 'R2-A1 slope <= legacy');
+});
+
+
+test('R2 product family gate B: option smallest case, exact zero/five-fact parity', async t => {
+  await familyCostParity(t, 33, async (f, db, facts) => {
+
+  let calls = 0;
+  const core = openMemoryCore({ path: f.path, model: { countTokens: () => 1 }, contextRead: { version: 'context-read-v1', authority, sources: ['moc-v1'],
+    counter: { id: 'synthetic', countTokens() { calls++; return 1; } } } }); t.after(() => core.close());
+  for (let i = 0; i < 12; i++) {
+    const memory = ok(core.admit({ namespace: ns, memory: { content: 'probecommon synthetic memory ' + String(i).padStart(5, '0'), kind: 'fact' }, receipts: [receipt('moc-option-' + i)] })).memory;
+    const map = ok(core.map({ namespace: ns }));
+    ok(core.applyPlacement({ namespace: ns, expectedIndexRevision: map.indexRevision,
+      expectedMemoryRevisions: [{ memoryId: memory.id, revision: memory.revision }],
+      proposal: { items: [{ memoryId: memory.id, parentIds: [], newL1: { title: 'needle synthetic topic ' + i, parentL2Ids: [] } }] } }));
+  }
+  const p = { readSet: [ns], types: ['memory'], intent: 'current' };
+  ok(await core.refreshContextIndex({ ...p, budget: { maxItems: 1024, maxMs: 5000 } }, {}));
+  return { method: 'findCandidates', variant: 'moc-v1', ports: () => calls,
+    call: () => core.findCandidates({ ...p, query: 'needle', semantic: false, sources: ['moc-v1'], deadlineMs: 5000, limit: 12 }, {}),
+    check(result) { assert.equal(result.ok, true, JSON.stringify(result)); assert.equal(result.value.items.length, 12); } };
+  }, { factNamespace: { ...ns, scope: 'project', projectId: 'unrelated' } });
 });

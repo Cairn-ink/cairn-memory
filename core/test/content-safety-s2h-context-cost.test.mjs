@@ -1,3 +1,4 @@
+import { familyCostParity } from '../testing/receipt-event-time-gates.mjs';
 import { assertDeferredContentCost, assertDeferredContentCostInventory } from '../testing/content-safety-s2h-deferred-cost.mjs';
 import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
@@ -127,4 +128,20 @@ for(const base of [18,23,33])for(const semantic of [false,true])test(`embedded s
   if(small.variant==='lexical-absent'&&(small.statements!==large.statements||small.begin!==large.begin))problems.push({method:small.method,variant:small.variant,noHitSmall:[small.statements,small.begin],noHitLarge:[large.statements,large.begin]});
  }
  assert.deepEqual(problems,[],'non-deferred zero-fact and no-hit costs');
+});
+
+
+test('R2 product family gate B: context smallest case, exact zero/five-fact parity', async t => {
+  await familyCostParity(t, 33, async (f, db, facts) => {
+
+  let calls = 0;
+  const core = openMemoryCore({ path: f.path, contextRead: { version: 'context-read-v1', authority,
+    counter: { id: 'synthetic', countTokens() { calls++; return 1; } } } }); t.after(() => core.close());
+  for (let i = 0; i < 12; i++) ok(core.admit({ namespace: ns, memory: { content: 'Synthetic lexical evidence ' + i, kind: 'fact' }, receipts: [receipt('lexical-' + i)] }));
+  const p = { readSet: [ns], types: ['memory'], intent: 'current' };
+  ok(await core.refreshContextIndex({ ...p, budget: { maxItems: 1024, maxMs: 5000 } }, {}));
+  return { method: 'contextRead', variant: 'lexical', ports: () => calls,
+    call: () => core.contextRead({ ...p, query: 'Synthetic lexical', budget: { maxTokens: 4000, maxItems: 12 }, deadlineMs: 5000 }, {}),
+    check(result) { assert.equal(result.ok, true, JSON.stringify(result)); assert.equal(result.value.metered.items.length, 12); } };
+  }, { factNamespace: { ...ns, scope: 'project', projectId: 'unrelated' } });
 });

@@ -1,3 +1,4 @@
+import { familyCostParity } from '../testing/receipt-event-time-gates.mjs';
 import { assertDeferredContentCost, assertDeferredContentCostInventory } from '../testing/content-safety-s2h-deferred-cost.mjs';
 import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
@@ -92,4 +93,21 @@ for(const n of [0,12,24])test(`role modes R2: ${n} items, now/refresh/compare/fi
   assert.equal(fixed,(row.variant==='file-binary'?6:4)+(current.facts?2:0),'exact fixed role mode cost: '+row.variant);
  }
  assertDeferredContentCostInventory(ratchets,t.name);
+});
+
+
+test('R2 product family gate B: role smallest case, exact zero/five-fact parity', async t => {
+  await familyCostParity(t, 33, async (f, db, facts) => {
+
+  let calls = 0;
+  const h = host({ counter: { id: 'synthetic-host', countTokens() { calls++; return 1; } } });
+  const core = openMemoryCore({ path: f.path, methodPackages: h.methods, roleProfiles: h.options, contextRead: h.context });
+  t.after(() => core.close());
+  ok(core.publishRoleProfileRelease(publish(ns, 'finance', 'profile'), {}));
+  const now = ok(core.readRoleTaskContext(read('finance', [ns]), {}));
+  assert.equal(now.metered.evidence.length, 0);
+  return { method: 'readRoleTaskContext', variant: 'then-0', ports: () => calls,
+    call: () => core.readRoleTaskContext({ mode: 'then', readSet: [ns], receipt: now.metered.receipt }, {}),
+    check(result) { assert.equal(result.ok, true, JSON.stringify(result)); assert.equal(result.value.metered.evidence.length, 0); } };
+  });
 });

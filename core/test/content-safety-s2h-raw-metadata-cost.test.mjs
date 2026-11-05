@@ -1,3 +1,4 @@
+import { familyCostParity } from '../testing/receipt-event-time-gates.mjs';
 import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -39,4 +40,18 @@ for(const n of [1,12])test(`R2 Raw metadata ${n} conversations, cursor and succe
   const expected=row.method==='getRawUsage'?(row.variant==='absent'?5:current.facts?6:5):current.facts?6:4;
   assert.equal(row.statements-old.statements,expected,row.method+' '+row.variant);
  }
+});
+
+
+test('R2 product family gate B: raw-metadata smallest case, exact zero/five-fact parity', async t => {
+  await familyCostParity(t, 33, async (f, db, facts) => {
+
+  const h = cardHost();
+  const core = openRawCaptureCore({ path: f.path, privateCards: h.options, model: { contextWindow: 8192, countTokens: () => 1, extract: () => ({ items: [] }) } },
+    { mode: 'raw-v1', port: localPlainPort(), sources: true, readPolicy: () => ({ generation: 'synthetic', reason: null }) });
+  t.after(() => core.close());
+  ok(await core.captureRaw(request(splitRaw('Synthetic retained metadata')[0], { namespace: ns, client: 'codex', sessionId: 'metadata', eventId: 'metadata' })));
+  return { method: 'listRawConversations', variant: 'hit', call: () => core.listRawConversations({ namespace: ns, client: 'codex', limit: 1 }),
+    check(result) { assert.equal(result.ok, true, JSON.stringify(result)); assert.equal(result.value.conversations.length, 1); } };
+  });
 });

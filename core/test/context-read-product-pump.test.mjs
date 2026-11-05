@@ -1,3 +1,5 @@
+import '../testing/context-product-test-clock.mjs';
+import { attachMaintenanceAdmissionReceipt, admitMaintenance, refreshMaintenance } from '../context-product-admission.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -22,13 +24,20 @@ function setup(t,patch={},faults={}) {
     ownerId:'pump',namespaces:{readSet,ownerCoverage},issuedAt:0};
   const options={supervisor,path:'/synthetic-pump-'+randomUUID()+'.sqlite',readSet,ownerCoverage,host:{moduleUrl:'file:///synthetic-host.mjs',configuration:{serviceBinding}}};
   const c={supervisor,id:randomUUID(),window:{id:'minute-1',endsAtMonoMs:60000,usedItems:0,usedMs:0},budgets:{maxItems:8,maxMs:800},
-    quantum:{maxItems:1,maxMs:100},pollMs:1000,renewalMs:60000,serviceCredential:credential,
+    quantum:{maxItems:1,maxMs:100},pollMs:700,renewalMs:60000,serviceCredential:credential,
     projections:[{options,types:['memory']},{options:{...options,readSet:[{ownerId:'pump',scope:'project',projectId:'p'}],ownerCoverage,
       host:{...options.host,configuration:{serviceBinding:{...serviceBinding,namespaces:{readSet:[{ownerId:'pump',scope:'project',projectId:'p'}],ownerCoverage}}}}},types:['memory']}],...patch};
   const cost=(name,n)=>typeof faults[name]==='function'?faults[name](n):faults[name]??0;
-  const renew=createMaintenancePumpRuntime({phasesOf:faults.phasesOf,stallOf:faults.stallOf,now:()=>now,observedAt:()=>faults.observedAt?faults.observedAt(observations.at(-1)?.at):observations.at(-1)?.at,setTimer:(f,ms)=>{const id=++serial;timers.set(id,{f,at:now+ms});return id;},clearTimer:id=>timers.delete(id),
+  const renew=createMaintenancePumpRuntime({admit:async()=>{const result={ok:true,value:null};attachMaintenanceAdmissionReceipt(result,'admitted');return result;},work:(h,...args)=>h.refreshContextIndex(...args),phasesOf:faults.phasesOf,stallOf:faults.stallOf,now:()=>now,observedAt:()=>faults.observedAt?faults.observedAt(observations.at(-1)?.at):observations.at(-1)?.at,setTimer:(f,ms)=>{const id=++serial;timers.set(id,{f,at:now+ms});return id;},clearTimer:id=>timers.delete(id),
     open:async (opts,control)=>{if(faults.open)return faults.open(opts,control);const writer=JSON.stringify([opts.path,opts.readSet]);if(faults.exclusive)assert.equal(live.has(writer),false,'drain the previous writer before opening');live.add(writer);opened.push(opts);now+=cost('openMs',opened.length);return {async refreshContextIndex(input,token){calls.push([input,token]);if(faults.refresh)throw Error('refresh failed');now+=cost('dispatchMs',calls.length)+cost('workMs',calls.length);observations.push({at:now,input});now+=cost('deliveryMs',calls.length);return faults.result?faults.result(input):{ok:true,value:{status:'complete'}};},async close(){closed.push(opts);now+=cost('disposeMs',closed.length);if(faults.dispose)await faults.dispose(closed.length);live.delete(writer);if(faults.close)throw Error('close failed');}};}});
-  return {renew,c,calls,opened,closed,timers,observations,admissions,setTime:n=>{now=n;},async next(){const [id,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];timers.delete(id);now=timer.at;admissions.push(now);await timer.f();}};
+  return {renew,c,calls,opened,closed,timers,observations,admissions,async turn(){const [id,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];timers.delete(id);now=Math.max(now,timer.at);admissions.push(now);await timer.f();},setTime:n=>{now=n;},async next(){
+    // Existing scheduler regressions count work calls; consume the explicit
+    // admission slot first. Admission behavior has its own turn-level suite.
+    const before=calls.length;
+    do {const [id,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0]??[];if(!timer)return;
+      timers.delete(id);now=Math.max(now,timer.at);admissions.push(now);await timer.f();
+    }while(calls.length===before&&timers.size);
+  }};
 }
 
 test('pump round-robins both intents and active projections, renewal retains pump identity, restart preserves exhaustion',async t=>{
@@ -67,7 +76,7 @@ test('renewal expiry is observable and a new quota window cannot overlap its pre
   // End this duty interval before the deliberate jump to the next minute.
   // Leaving authority active during that jump would simulate overdue timers,
   // which must be reported rather than silently discard observation deadlines.
-  const expired=p.completion;s.renew({...s.c,renewalMs:2000});assert.notEqual(p.completion,expired);await s.next();assert.equal(s.calls.length,1);
+  const expired=p.completion;s.renew({...s.c,renewalMs:3000});assert.notEqual(p.completion,expired);await s.next();assert.equal(s.calls.length,1);
   s.setTime(60000);const next={...s.c,window:{id:'minute-2',endsAtMonoMs:120000,usedItems:0,usedMs:0},renewalMs:60000};
   assert.equal(s.renew(next),p);await s.next();assert.equal(p.getStatus().windowId,'minute-2');assert.equal(s.calls.length,2);await p.close();
 });
@@ -194,20 +203,20 @@ test('P2-06/09/18 four/32 selection cutover prebuilds both intents and retires t
   const ownerCoverage=descriptor(readSet,1),b=configured(t,f.path,[...readSet].reverse(),{service:true,supervisor,ownerCoverage});
   b.binding.credentialDigest=a.binding.credentialDigest;
   let now=0,serial=0;const timers=new Map(),attempted=new Set(),completed=new Set(),partial=new Set();
-  const renew=createMaintenancePumpRuntime({now:()=>now,observedAt:()=>now,setTimer:(f,ms)=>{const id=++serial;timers.set(id,{f,at:now+ms});return id;},clearTimer:id=>timers.delete(id),
+  const renew=createMaintenancePumpRuntime({admit:(h,...args)=>admitMaintenance(h.native,...args),work:(h,...args)=>h.refreshContextIndex(...args),now:()=>now,observedAt:()=>now,setTimer:(f,ms)=>{const id=++serial;timers.set(id,{f,at:now+ms});return id;},clearTimer:id=>timers.delete(id),
     open:async options=>{
       const h=await openContextIndexMaintainer(options);
-      return {close:()=>h.close(),async refreshContextIndex(input,token){
+      return {native:h,close:()=>h.close(),async refreshContextIndex(input,token){
         const key=input.readSet.length+':'+input.intent,first=!attempted.has(key);attempted.add(key);
         // Force a durable partial first quantum for both intents/selections.
         // The same native deadline applies; no machine-speed gate is needed.
-        const result=await h.refreshContextIndex(first?{...input,budget:{...input.budget,maxItems:1}}:input,token);
+        const result=await refreshMaintenance(h,first?{...input,budget:{...input.budget,maxItems:1}}:input,token);
         if(result.ok){if(first){assert.equal(result.value.status,'rebuilding');partial.add(key);}if(result.value.status==='complete')completed.add(key);}
         return result;
       }};
     }});
   const base={supervisor,window:{id:randomUUID(),endsAtMonoMs:60000,usedItems:0,usedMs:0},budgets:{maxItems:32*1024,maxMs:60000},
-    quantum:{maxItems:1024,maxMs:1600},pollMs:1,renewalMs:60000,serviceCredential:a.token};
+    quantum:{maxItems:1024,maxMs:1000},pollMs:1,renewalMs:60000,serviceCredential:a.token};
   // Activate each selection explicitly. Multi-selection round-robin is covered
   // above with the same mock scheduler; native operation cutoffs are unchanged.
   for(const options of [a.options,b.options]){
@@ -328,7 +337,7 @@ for(const usage of ['missing','invalid','crashed','failed','overrun'])test(`Fix 
 });
 
 test('Fix A known partial usage returns only unused attempts and respects host cumulative floors',async t=>{
-  const s=setup(t,{quantum:{maxItems:4,maxMs:100}}, {workMs:13,result:()=>settled(2)}),p=s.renew(s.c);
+  const s=setup(t,{quantum:{maxItems:4,maxMs:100},budgets:{maxItems:12,maxMs:800}}, {workMs:13,result:()=>settled(2)}),p=s.renew(s.c);
   await s.next();assert.equal(p.getStatus().usedItems,2);assert.equal(p.getStatus().usedMs,13);
   s.renew({...s.c,window:{...s.c.window,usedItems:5,usedMs:200}});
   await s.next();assert.equal(p.getStatus().usedItems,7);assert.equal(p.getStatus().usedMs,213);
@@ -340,7 +349,7 @@ test('Fix A low-quota no-op scheduling spans the minute with every projection/in
   for(let i=0;i<60&&s.timers.size;i++)await s.next();
   assert.equal(p.getStatus().error,null);assert.equal((await p.completion).state,'budget_exhausted');
   assert.ok(s.calls.length>=47);assert.equal(p.getStatus().usedItems,0);assert.equal(p.getStatus().usedMs,0);
-  assert.equal(s.observations[0].at,1250,'pace the first admission too');
+  assert.equal(s.admissions[0],1250,'pace the first admission too');
   for(const scope of ['personal','project'])for(const intent of ['current','history']){
     const times=[0,...s.observations.filter(o=>o.input.readSet[0].scope===scope&&o.input.intent===intent).map(o=>o.at),60000];
     for(let i=1;i<times.length;i++)assert.ok(times[i]-times[i-1]<=5000,JSON.stringify(times));
@@ -353,7 +362,7 @@ test('Fix A low-quota no-op scheduling spans the minute with every projection/in
 test('Fix A full known usage is paced while quota lasts and stops at exhaustion',async t=>{
   const s=setup(t,{pollMs:25}, {workMs:100,result:()=>settled(1)}),p=s.renew(s.c);
   for(let i=0;i<8;i++)await s.next();
-  assert.deepEqual(s.observations.map(o=>o.at),[1350,2600,3850,5000,6250,7500,8750,10000]);
+  assert.deepEqual(s.observations.map(o=>o.at),[2600,3850,4900,5000,6250,7500,8750,10000]);
   assert.equal((await p.completion).state,'budget_exhausted');assert.equal(s.timers.size,0);
   assert.equal(p.getStatus().usedItems,8);assert.equal(p.getStatus().usedMs,800);await p.close();
 });
@@ -409,7 +418,7 @@ for(const [name,faults] of [
   }
   assert.deepEqual(s.calls.map(([i])=>[i.readSet[0].scope,i.intent]),Array.from({length:3},()=>[
     ['personal','current'],['personal','history'],['project','current'],['project','history']]).flat());
-  for(let i=1;i<s.admissions.length;i++)assert.ok(s.admissions[i]-s.admissions[i-1]>=1000,'minimum admission spacing');
+  for(let i=1;i<s.admissions.length;i++)assert.ok(s.admissions[i]-s.admissions[i-1]>=s.c.pollMs,'minimum admission spacing');
   await p.close();assert.equal(s.closed.length,s.opened.length);
 });
 
@@ -466,8 +475,8 @@ test('Fix A2 overdue first timer reports missed observations and keeps maintaini
   assert.equal(status.state,'active');assert.equal(status.error,null);
   const diagnostic=maintenancePumpDiagnostic(status);
   assert.equal(diagnostic.cadenceMisses,4);assert.equal(diagnostic.worstGapMs,5001);
-  assert.deepEqual(diagnostic.observation,{projection:0,atMonoMs:5001,gapMs:5001,cadenceMiss:true});
-  assert.equal(s.calls.length,1);assert.equal(s.opened.length,1);assert.equal(s.timers.size,1);
+  assert.equal(diagnostic.observation,null,'overdue first turn still only admits');
+  assert.equal(s.calls.length,0);assert.equal(s.opened.length,1);assert.equal(s.timers.size,1);
   for(let i=0;i<7;i++)await s.next();
   assert.equal(maintenancePumpDiagnostic(p.getStatus()).cadenceMisses,4,'one miss per overdue interval');
   assert.equal(p.getStatus().usedItems,0);assert.equal(p.getStatus().usedMs,0);await p.close();
@@ -475,26 +484,26 @@ test('Fix A2 overdue first timer reports missed observations and keeps maintaini
 });
 
 for(const [name,delivered,workMs] of [
-  ['spec late timer',6251,0],['standards late timer',6300,0],['late successful refresh',6240,20],
+  ['spec late timer',11151,0],['standards late timer',11200,0],['late successful refresh',11140,20],
 ])test(`Fix A2 ${name} reports cadence and converges without renewal`,async t=>{
   const visits=new Map(),complete=new Set();
-  const s=setup(t,{}, {workMs:n=>n===5?workMs:0,result:input=>{
+  const s=setup(t,{}, {workMs:n=>n===9?workMs:0,result:input=>{
     const key=JSON.stringify([input.readSet,input.intent]),count=(visits.get(key)??0)+1;
     visits.set(key,count);if(count>=3)complete.add(key);
     return settled(0,count>=3?'complete':'rebuilding');
   }}),p=s.renew(s.c);
-  for(let i=0;i<4;i++)await s.next();
-  assert.deepEqual(s.observations.map(o=>o.at),[1250,2500,3750,4900]);
+  for(let i=0;i<8;i++)await s.next();
+  assert.deepEqual(s.observations.map(o=>o.at),[2100,2800,4200,4900,6150,7400,8650,9800]);
   const before=p.getStatus(),[id,timer]=[...s.timers][0];
-  assert.equal(timer.at,6150);s.timers.delete(id);s.setTime(delivered);await timer.f();
-  const status=p.getStatus(),gap=delivered+workMs-1250;
+  assert.equal(timer.at,11050);s.timers.delete(id);s.setTime(delivered);await timer.f();
+  const status=p.getStatus(),gap=delivered+workMs-6150;
   assert.equal(status.state,'active');assert.equal(status.error,null);assert.equal(s.timers.size,1);
   assert.equal(status.usedItems,0);assert.equal(status.usedMs,workMs,'known late usage is refunded');
   const diagnostic=maintenancePumpDiagnostic(status);
   assert.equal(diagnostic.cadenceMisses,1);assert.equal(diagnostic.worstGapMs,gap);
   assert.deepEqual(diagnostic.observation,{projection:0,atMonoMs:delivered+workMs,gapMs:gap,cadenceMiss:true});
   assert.deepEqual(maintenancePumpDiagnostic(before),{cadenceMisses:0,worstGapMs:0,
-    observation:{projection:3,atMonoMs:4900,gapMs:4900,cadenceMiss:false},lastFailure:null,failureCounts:attribution.maintenanceFailureCounts(),secondaryFailure:null,secondaryFailureCounts:attribution.maintenanceFailureCounts()},'old status is an immutable snapshot');
+    observation:{projection:3,atMonoMs:9800,gapMs:4900,cadenceMiss:false},lastFailure:null,failureCounts:attribution.maintenanceFailureCounts(),secondaryFailure:null,secondaryFailureCounts:attribution.maintenanceFailureCounts(),admission:[null,null,null,null]},'old status is an immutable snapshot');
   assert.deepEqual(Reflect.ownKeys(status).sort(),['error','id','maxItems','maxMs','state','usedItems','usedMs','windowId']);
   assert.equal(JSON.stringify(status).includes('cadence'),false,'internal diagnostic never enters public JSON');
   assert.ok(Object.isFrozen(diagnostic));assert.ok(Object.isFrozen(diagnostic.observation));
@@ -505,7 +514,7 @@ for(const [name,delivered,workMs] of [
   assert.equal(p.getStatus().windowId,s.c.window.id);assert.equal(s.timers.size,1);
   for(const scope of ['personal','project'])for(const intent of ['current','history']){
     const times=s.observations.filter(o=>o.input.readSet[0].scope===scope&&o.input.intent===intent).map(o=>o.at);
-    assert.equal(times.length,4,'fair round-robin visits');
+    assert.equal(times.length,5,'fair round-robin visits');
     assert.ok(times[3]-times[2]<=5000,'actual observation deadlines recover after the delayed sweep');
   }
   const final=maintenancePumpDiagnostic(p.getStatus());
@@ -516,7 +525,7 @@ for(const [name,delivered,workMs] of [
 
 test('Fix A2 successful delivery crossing other observation deadlines keeps scheduling and refunds',async t=>{
   const s=setup(t,{}, {workMs:n=>n===1?20:0,deliveryMs:n=>n===1?40:0,result:()=>settled()}),p=s.renew(s.c);
-  const [id,timer]=[...s.timers][0];s.timers.delete(id);s.setTime(4950);await timer.f();
+  await s.turn();const [id,timer]=[...s.timers][0];s.timers.delete(id);s.setTime(4950);await timer.f();
   assert.equal(p.getStatus().state,'active');assert.equal(p.getStatus().error,null);
   assert.equal(p.getStatus().usedItems,0);assert.equal(p.getStatus().usedMs,60);
   const diagnostic=maintenancePumpDiagnostic(p.getStatus());
@@ -530,13 +539,13 @@ test('Fix A2 successful delivery crossing other observation deadlines keeps sche
 for(const cutoff of ['native','parent'])test(`Fix A2 ${cutoff} quantum cutoff after cadence recovery still stops and drains`,async t=>{
   let attempt=0,entered,release;
   const pending=new Promise(resolve=>{entered=resolve;});
-  const s=setup(t,{}, {workMs:n=>n===5?20:0,result:()=>{
-    if(++attempt!==6)return settled();
+  const s=setup(t,{}, {workMs:n=>n===9?20:0,result:()=>{
+    if(++attempt!==10)return settled();
     if(cutoff==='native')return {ok:false,error:{code:'read_timeout'}};
     entered();return new Promise(resolve=>{release=()=>resolve(settled());});
   }}),p=s.renew(s.c);
-  for(let i=0;i<4;i++)await s.next();
-  const [id,timer]=[...s.timers][0];s.timers.delete(id);s.setTime(6240);await timer.f();
+  for(let i=0;i<8;i++)await s.next();
+  const [id,timer]=[...s.timers][0];s.timers.delete(id);s.setTime(11140);await timer.f();
   assert.equal(p.getStatus().state,'active');assert.equal(p.getStatus().usedMs,20);
   const operation=s.next();
   if(cutoff==='parent'){
@@ -587,36 +596,37 @@ test('Fix A1 pending disposal reports timeout before it settles and never dispat
 
 for(const recovered of [false,true])for(const boundary of ['authority','window'])for(const action of ['expiry','renew','expiry then renew'])
 test(`Fix A3 ${recovered?'recovered':'unvisited'} lanes retain cadence at ${boundary} ${action}`,async t=>{
-  const endpoint=recovered?8000:10000;
+  const endpoint=recovered?13000:10000;
   const s=setup(t,{...(boundary==='authority'?{renewalMs:endpoint}:{})},
     {result:()=>settled()});
   if(boundary==='window')s.c.window.endsAtMonoMs=endpoint;
   const p=s.renew(s.c),completion=p.completion;
   if(recovered){
-    for(let i=0;i<4;i++)await s.next();
-    assert.deepEqual(s.observations.map(o=>o.at),[1250,2500,3750,4900]);
-    const [id,timer]=[...s.timers][0];s.timers.delete(id);s.setTime(6300);await timer.f();
+    for(let i=0;i<8;i++)await s.next();
+    assert.deepEqual(s.observations.map(o=>o.at),[2100,2800,4200,4900,6150,7400,8650,9800]);
+    const [id,timer]=[...s.timers][0];s.timers.delete(id);s.setTime(11200);await timer.f();
     assert.equal(maintenancePumpDiagnostic(p.getStatus()).cadenceMisses,1);
   }
   const [id,timer]=[...s.timers][0];s.timers.delete(id);s.setTime(endpoint+(recovered?100:1));
-  const expected={cadenceMisses:recovered?2:4,worstGapMs:recovered?5500:10000};
+  const expected={cadenceMisses:recovered?2:4,worstGapMs:recovered?5600:10000};
   const check=status=>{
     const {cadenceMisses,worstGapMs}=maintenancePumpDiagnostic(status);
     assert.deepEqual({cadenceMisses,worstGapMs},expected);
   };
   if(action!=='renew'){
     await timer.f();check(await completion);
-    assert.equal(s.calls.length,recovered?5:0);
+    assert.equal(s.calls.length,recovered?9:0);
     assert.equal(p.getStatus().state,boundary==='authority'?'renewal_expired':'budget_exhausted');
   }
   if(action!=='expiry'){
     s.renew({...s.c,...(boundary==='window'?{window:{...s.c.window,id:'next',endsAtMonoMs:endpoint+60000}}:{})});
+    if(boundary==='window')expected.worstGapMs+=recovered?100:1;
     check(p.getStatus());
-    if(boundary==='window')check(await completion);
+    if(boundary==='window'){const old=maintenancePumpDiagnostic(await completion);assert.equal(old.cadenceMisses,expected.cadenceMisses);}
     await s.next();
+    if(boundary==='window'&&!recovered)expected.worstGapMs+=s.c.pollMs;
     // A prompt lexical window succession keeps the old baselines. Its next
     // tick accounts the delivery gap under the newly renewed authority too.
-    if(boundary==='window')expected.worstGapMs+=recovered?100:1;
     check(p.getStatus());
     assert.equal(p.getStatus().state,'active');
   }
@@ -663,7 +673,7 @@ for(const residents of [1,4])test(`B0 ${residents} owner split reuses one mainta
       {exclusive:true,openMs:7,workMs:11,result:()=>{
         const status=pump.getStatus();
         assert.equal(status.usedItems,32,'full item reservation before every dispatch');
-        assert.equal(status.usedMs,1000+(attempt++?18:0),'full time reservation before dispatch');
+        assert.equal(status.usedMs,1000+(attempt++?18:7),'full time reservation before dispatch');
         return settled();
       }});
     const options=s.c.projections[0].options,readSet=four.map(ns=>({...ns,ownerId:'resident-'+owner})),ownerCoverage=descriptor(readSet);
@@ -687,20 +697,20 @@ test('B0 bounded phase counters include opening in quantum zero, remain private 
   const shape=JSON.stringify(first).length;
   for(let i=0;i<20;i++)await s.next();
   const status=p.getStatus(),detail=maintenancePumpPhaseDiagnostic(status),[current,history]=detail.projections;
-  assert.equal(current.first.number,0);assert.equal(current.first.elapsedMs,20);
+  assert.equal(current.first.number,0);assert.equal(current.first.elapsedMs,7);
   assert.equal(history.first.elapsedMs,13,'resident history has no open cost');
   assert.equal(current.phases.open.count,1);assert.equal(history.phases.open.count,0);
   assert.equal(current.phases.refreshCall.latestMs,13);
   assert.equal(current.phases.dispatch.latestMs,1);assert.equal(current.phases.epochObservation.latestMs,2);
-  assert.equal(current.phases.settle.latestMs,3);assert.equal(current.phases.settle.count,11);
+  assert.equal(current.phases.settle.latestMs,3);assert.equal(current.phases.settle.count,12);
   assert.equal(current.work.canonicalRows,44);assert.equal(current.work.metadataBytes,55);
   for(const [i,name] of ['reused','replaced','removed','copied','tokenized','retargets','verificationRestarts','verificationKept'].entries())assert.equal(current.work[name],11*(i+6));
   assert.equal(JSON.stringify(detail).includes('private-diagnostic-probe'),false);
-  assert.equal(current.quanta,11);assert.equal(history.quanta,10);
+  assert.equal(current.quanta,12);assert.equal(history.quanta,10);
   assert.equal(current.elapsedBuckets.length,502);assert.equal(history.elapsedBuckets.length,502);
-  assert.equal(current.elapsedBuckets.reduce((a,b)=>a+b),11);
+  assert.equal(current.elapsedBuckets.reduce((a,b)=>a+b),12);
   assert.equal(detail.projections.length,2);assert.ok(JSON.stringify(detail).length<shape+500,'fixed counters, no sample history');
-  assert.equal(first.projections[0].quanta,1);assert.ok(Object.isFrozen(current.elapsedBuckets));
+  assert.equal(first.projections[0].quanta,2);assert.ok(Object.isFrozen(current.elapsedBuckets));
   assert.equal(JSON.stringify(detail).includes(s.c.projections[0].options.path),false);
   assert.equal(JSON.stringify(detail).includes(s.c.serviceCredential.service),false);
   assert.equal(JSON.stringify(status).includes('phases'),false);
@@ -817,7 +827,7 @@ test(`stall attribution: pump watchdog retains kind ${kind}, full reservation an
   try {
     const [id,deadline]=[...s.timers][0];s.timers.delete(id);s.setTime(deadline.at);await deadline.f();
     const lane=maintenancePumpPhaseDiagnostic(p.getStatus()).projections[0];
-    assert.deepEqual(legacyStall(lane.lastStall),{number:0,kind,runningMs:80,unitCount:7},'last stall survives parent watchdog before pending refresh returns');
+    assert.deepEqual(legacyStall(lane.lastStall),{number:1,kind,runningMs:80,unitCount:7},'last stall survives parent watchdog before pending refresh returns');
     assert.equal(lane.stallCounts[kind],1);assert.equal(lane.stallCounts.reduce((a,b)=>a+b),1);
     assert.equal(p.getStatus().error,'read_timeout');assert.equal(p.getStatus().usedItems,1);assert.equal(p.getStatus().usedMs,100);
   } finally {release();await pending;await p.close();}
@@ -832,7 +842,7 @@ for(const boundary of ['overrun','reader cutoff'])test(`stall attribution: ${bou
   const s=setup(t,{}, {workMs:boundary==='overrun'?101:20,stallOf:()=>({kind:8,runningMs:44,unitCount:3}),
     result:()=>boundary==='overrun'?settled():{ok:false,error:{code:'read_timeout'}}});
   const p=s.renew(s.c);await s.next();const final=await p.completion;
-  assert.deepEqual(legacyStall(maintenancePumpPhaseDiagnostic(final).projections[0].lastStall),{number:0,kind:8,runningMs:44,unitCount:3},'overrun/cutoff samples active operation');
+  assert.deepEqual(legacyStall(maintenancePumpPhaseDiagnostic(final).projections[0].lastStall),{number:1,kind:8,runningMs:44,unitCount:3},'overrun/cutoff samples active operation');
   assert.equal(final.error,'read_timeout');assert.equal(final.usedItems,1);assert.equal(final.usedMs,100);await p.close();
 });
 
@@ -896,7 +906,7 @@ test('round 2 C1 exhausted cutoff records no join key or previous-call attributi
   assert.equal(s.calls.length,1,'exhausted cutoff still dispatches');assert.equal(status.error,'read_timeout');assert.equal(status.usedItems,1);assert.equal(status.usedMs,100);
   assert.ok(lane.lastStall,'exhausted cutoff keeps an unattributed stall record');
   for(const value of [lane.latest,lane.lastStall])assert.equal(Object.hasOwn(value,'ordinal'),false,'exhausted records have no join key');
-  assert.deepEqual(lane.lastStall,{number:0,kind:0,runningMs:0,unitCount:0,unattributed:1},'exhaustion never accepts previous-call units or guesses running time');
+  assert.deepEqual(lane.lastStall,{number:1,kind:0,runningMs:0,unitCount:0,unattributed:1},'exhaustion never accepts previous-call units or guesses running time');
   await pump.close();
 });
 
@@ -912,7 +922,7 @@ test('K2 incompatible resident close failure is counted once on its owning lane'
   assert.equal(diagnostic.failureCounts.cleanup,1,'one physical rejected close has one cleanup count');
   assert.equal(diagnostic.lastFailure.cause,'cleanup');assert.equal(diagnostic.lastFailure.lane,0,'failed close stays on the resident owning lane');
   assert.equal(lanes[0].failureCounts.cleanup,1);assert.equal(lanes[2].failureCounts.cleanup,0);assert.equal(diagnostic.lastFailure.stage,'close');
-  assert.equal(diagnostic.lastFailure.number,2,'drain failure carries the triggering quantum number');
+  assert.equal(diagnostic.lastFailure.number,3,'drain failure carries the triggering quantum number');
 });
 
 test('K4 pump watchdog failure records the active stage and quantum',async t=>{
@@ -922,7 +932,7 @@ test('K4 pump watchdog failure records the active stage and quantum',async t=>{
   try {
     const [id,timer]=[...s.timers][0];s.timers.delete(id);s.setTime(timer.at);await timer.f();
     const failure=maintenancePumpDiagnostic(p.getStatus()).lastFailure;
-    assert.equal(failure.stage,'refresh','watchdog failure identifies active refresh stage');assert.equal(failure.number,0);assert.equal(failure.lane,0);
+    assert.equal(failure.stage,'refresh','watchdog failure identifies active refresh stage');assert.equal(failure.number,1);assert.equal(failure.lane,0);
   } finally {release();await pending;await p.close();}
 });
 
@@ -936,7 +946,7 @@ test('K4 explicit idle drain omits quantum number and includes close stage',asyn
 test('K4 failed quantum drain carries its triggering number',async t=>{
   const s=setup(t,{}, {close:true,refresh:true}),p=s.renew(s.c);await s.next();const final=await p.completion,diagnostic=maintenancePumpDiagnostic(final);
   const failure=diagnostic.secondaryFailure??diagnostic.lastFailure;
-  assert.equal(failure.number,0,'quantum-triggered drain retains its quantum number');assert.equal(failure.stage,'close');assert.equal(failure.lane,0);
+  assert.equal(failure.number,1,'quantum-triggered drain retains its quantum number');assert.equal(failure.stage,'close');assert.equal(failure.lane,0);
 });
 
 test('K4 watchdog during incompatible resident disposal records close stage',async t=>{
@@ -947,6 +957,6 @@ test('K4 watchdog during incompatible resident disposal records close stage',asy
   try {
     const [id,timer]=[...s.timers][0];s.timers.delete(id);s.setTime(timer.at);await timer.f();
     const failure=maintenancePumpDiagnostic(p.getStatus()).lastFailure;
-    assert.equal(failure.stage,'close','watchdog identifies the resident disposal stage');assert.equal(failure.number,2);
+    assert.equal(failure.stage,'close','watchdog identifies the resident disposal stage');assert.equal(failure.number,3);
   } finally {release();await pending;await p.close();}
 });

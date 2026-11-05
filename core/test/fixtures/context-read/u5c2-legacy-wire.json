@@ -74,6 +74,7 @@
         "fetchCandidateEvidence",
         "contextRead"
       ],
+      "receiptEventTime": false,
       "types": [
         "memory"
       ],
@@ -1361,6 +1362,7 @@
         "fetchCandidateEvidence",
         "contextRead"
       ],
+      "receiptEventTime": false,
       "types": [
         "memory"
       ],

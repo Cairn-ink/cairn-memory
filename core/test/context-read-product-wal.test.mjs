@@ -306,12 +306,14 @@ test(`P2-21 WAL actual maintainer ${flag} has correct completion and fresh-reade
 test('P2-01/10 WAL opt-in is strict, default refusal and capability bytes stay identical',async t=>{
   const f=setup(t,'DELETE'),a=configured(t,f.path,{wal:false}),b=configured(t,f.path,{wal:false});delete a.options.wal;
   const first=await a.open(),second=await b.open();
-  // Frozen P2b capability/assembly bytes, with P2c's approved 32-namespace
-  // maximum as the sole delta. Both default spellings must match every byte;
-  // preserve the original P2b fixture as independent historical evidence.
+  // Frozen P2b bytes plus P2c's approved 32-namespace maximum and PR 1's
+  // explicit disabled receipt-event-time capability. Both default spellings
+  // must match every byte; preserve the original P2b historical fixture.
   const golden=readFileSync(new URL('./fixtures/context-product-capabilities-p2b.json',import.meta.url),'utf8').trimEnd()
-    .replace('"readSetMaximum":2,','"readSetMaximum":32,');
+    .replace('"readSetMaximum":2,','"readSetMaximum":32,')
+    .replace('"intents":["current","history"],','"intents":["current","history"],"receiptEventTime":false,');
   assert.equal(JSON.parse(golden).value.readSetMaximum,32);
+  assert.equal(JSON.parse(golden).value.receiptEventTime,false);
   assert.equal(JSON.stringify(await first.getContextReadCapabilities()),golden);
   assert.equal(JSON.stringify(await second.getContextReadCapabilities()),golden);
   assert.deepEqual(ok(await first.getContextReadCapabilities()).journals,['DELETE']);await first.close();await second.close();

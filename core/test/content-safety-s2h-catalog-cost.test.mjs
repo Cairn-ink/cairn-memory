@@ -1,3 +1,4 @@
+import { familyCostParity } from '../testing/receipt-event-time-gates.mjs';
 import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -76,4 +77,17 @@ test('R2 Method/Asset catalog: all 22 read identities, zero/five facts and curso
   assert.deepEqual(current.records.map(r=>[r.method,r.variant]),legacy.records.map(r=>[r.method,r.variant]),'exact method/case/cell inventory');
   for(const [i,row]of current.records.entries()) {const old=legacy.records[i];assert.equal(row.statements-old.statements,current.facts?6:4,row.method);assert.equal(row.begin,old.begin,row.method);}
  }
+});
+
+
+test('R2 product family gate B: catalog smallest case, exact zero/five-fact parity', async t => {
+  await familyCostParity(t, 33, async (f, db, facts) => {
+
+  const core = openMemoryCore({ path: f.path, methodPackages: { version: 'method-packages-local-v1', storage: 'local-plain-v1', authority } });
+  t.after(() => core.close());
+  const m = ok(core.importMethodVersion({ namespace: ns, actionId: 'family-method', title: 'Synthetic family method',
+    files: [{ path: 'SKILL.md', text: 'Synthetic retained text', mediaType: 'text/markdown' }] }, {}));
+  return { method: 'getMethodVersion', variant: 'hit', call: () => core.getMethodVersion({ version: m.version, intent: 'history' }, {}),
+    check(result) { assert.equal(result.ok, true, JSON.stringify(result)); assert.ok(result.value); } };
+  });
 });

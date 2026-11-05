@@ -198,6 +198,9 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
     });
   }
   function filter(ns, receipts) {
+    const layout = cachedContentLayout(db);
+    if (!layout) fail('unsupported_database');
+    if (!layout.suppressionRevision && !enabled()) return receipts.map((_, index) => index);
     return receipts.flatMap((receipt, index) => {
       try { assertReceipts(ns, [receipt]); return [index]; }
       catch (error) { if (error.code === 'source_excluded') return []; throw error; }

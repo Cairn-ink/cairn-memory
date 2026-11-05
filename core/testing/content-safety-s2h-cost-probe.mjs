@@ -57,7 +57,7 @@ const {writeContentSuppressionInside,suppressOwnerInside}=await load('content-su
 if(factCount==='owner')transaction(canonical,()=>suppressOwnerInside(canonical,{ownerId:ns.ownerId,reason:'account_erasure',actionId:'synthetic-erase'}));
 else if(Number(factCount))transaction(canonical,()=>{for(let i=0;i<Number(factCount);i++)writeContentSuppressionInside(canonical,{namespace:ns,kind:'memory',key:memories[i].id,reason:'user_forget',actionId:'synthetic-fact-'+i});});
 assert.equal(canonical.prepare('PRAGMA user_version').get().user_version,physical);
-console.log(JSON.stringify({phase:'setup',node:process.version,rev,n,physical,factCount,memories:canonical.prepare('SELECT count(*) AS n FROM memories').get().n,facts:[34,38,48].includes(physical)?canonical.prepare('SELECT count(*) AS n FROM content_suppressions').get().n:0,profile:PRODUCT_PROFILE}));
+console.log(JSON.stringify({phase:'setup',node:process.version,rev,n,physical,factCount,memories:canonical.prepare('SELECT count(*) AS n FROM memories').get().n,facts:[34,38,48,51,52,53].includes(physical)?canonical.prepare('SELECT count(*) AS n FROM content_suppressions').get().n:0,profile:PRODUCT_PROFILE}));
 // Public reader runtime's injectable Worker seam delegates to the exact production facade/index dispatcher.
 const {openContextProductReader}=await load('context-product-reader');
 class ProbeWorker extends EventEmitter{
@@ -96,7 +96,7 @@ async function measure(label,query){
    : await reader.findCandidates(query,token);const c=active;active=null;
  const executed=c.get+c.all+c.iterate+c.run;
  console.log(JSON.stringify({phase:'query',label,node:process.version,rev,n,physical,factCount,method:kind==='context'?'contextRead':kind==='status'?'getContextIndexStatus':kind==='evidence'?'fetchCandidateEvidence':'findCandidates',case:label,hostInvocations:contentHostInvocations()-hostBefore,counterCalls:c.counterCalls??0,prepare:c.prepare,executed,exec:c.exec,totalExecuted:executed+c.exec,preparePlusExecuted:c.prepare+executed+c.exec,ok:result.ok,error:result.error?.code,items:kind==='context'?result.value?.metered?.items?.length:result.value?.items?.length,empty:kind==='status'?null:kind==='context'?result.value?.metered?.items?.length===0:result.value?.items?.length===0,eligible:result.value?.coverage?.byType?.memory?.eligible,safetyTrace:c.safetyTrace,sqlSummary:Object.entries(c.sql).map(([sql,v])=>({sql,prepare:v.prepare,executions:v.get+v.all+v.iterate+v.run,exec:v.exec})),stacks:c.stacks}));
- if(factCount==='owner'||expectedFailure)assert.equal(result.error?.code,'evidence_unavailable');else {assert.equal(result.ok,true,JSON.stringify(result));if(kind==='query')assert.equal(result.value.coverage.byType.memory.eligible,physical===48&&Number(factCount)>0?null:n-effectiveFacts);if(absent&&kind!=='status'&&kind!=='evidence')assert.equal(kind==='context'?result.value.metered.items.length:result.value.items.length,0);}
+ if(factCount==='owner'||expectedFailure)assert.equal(result.error?.code,'evidence_unavailable');else {assert.equal(result.ok,true,JSON.stringify(result));if(kind==='query')assert.equal(result.value.coverage.byType.memory.eligible,[48,53].includes(physical)&&Number(factCount)>0?null:n-effectiveFacts);if(absent&&kind!=='status'&&kind!=='evidence')assert.equal(kind==='context'?result.value.metered.items.length:result.value.items.length,0);}
  return result;
 }
 for(const intent of ['current','history']){

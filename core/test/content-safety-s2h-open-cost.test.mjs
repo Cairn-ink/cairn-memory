@@ -1,3 +1,4 @@
+import { familyCostParity } from '../testing/receipt-event-time-gates.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -38,4 +39,23 @@ test('S2h-1 read-open budgets equal main 8c698dda on every legacy base and hoste
 test('S2h-1 agreed opener seam attests first and marks productLayout immediately after product validation',()=>{
   const code=readFileSync(new URL('../read-database.mjs',import.meta.url),'utf8');
   assert.match(code,/const validate = \(\) => \{\s*const layout = attestContentSafety\(db\);\s*const version = layout.base;\s*validateProduct\?\.\(db, layout\);\s*nativeObserver\?\.openDiagnostic\?\.mark\('productLayout'\);/);
+});
+
+
+test('R2 product family gate B: open smallest case, exact zero/five-fact parity', async t => {
+  await familyCostParity(t, 33, async (f, db, facts) => {
+
+  const familySource = source.replace('let total=0;', 'let total=0,begin=0;')
+    .replace('charge(this,sql.split', "if(/^BEGIN/.test(sql.trim()))begin++;charge(this,sql.split")
+    .replace('JSON.stringify({total,target:', 'JSON.stringify({begin,total,target:');
+  assert.notEqual(familySource, source);
+  return { method: 'openReadDatabase', variant: 'plain',
+    measure() {
+      const child = spawnSync(process.execPath, ['--input-type=module', '-e', familySource, root, f.path, 'false'], { encoding: 'utf8', timeout: 30000 });
+      assert.equal(child.error, undefined); assert.equal(child.signal, null); assert.equal(child.status, 0, child.stderr);
+      const counts = JSON.parse(child.stdout);
+      assert.equal(typeof counts.begin, 'number'); assert.equal(counts.total, counts.target);
+      return { method: 'openReadDatabase', variant: 'plain', statements: counts.total, begin: counts.begin, ports: 0, hostInvocations: 0, result: { ok: true } };
+    }, check(result) { assert.equal(result.ok, true); } };
+  });
 });

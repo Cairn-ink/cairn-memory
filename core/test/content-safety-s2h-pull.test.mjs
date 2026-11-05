@@ -1,3 +1,5 @@
+import { eventTimeSafetyFixture } from '../testing/receipt-event-time-fixture.mjs';
+import { familyGate } from '../testing/receipt-event-time-gates.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -121,4 +123,34 @@ test('S2h malformed fact versions cannot serialize arbitrary source text as a De
   const { handle } = await f.reader();
   const response = await handle.listSuppressionsSince(ns.ownerId,'0',{ expected:f.checkpoint(0) },f.credential);
   assert.equal(response.ok,false); f.clean(response);
+});
+
+
+const completeFamilyPull = familyGate('H/pull', 1);
+test('family gate H: v53 pull', async t => {
+  const f = await suppressionFixture(t,33,eventTimeSafetyFixture), a = f.descriptor(f.memory()), b = f.descriptor(f.memory('Synthetic second source'));
+  const { handle } = await f.reader();
+  assert.deepEqual(Object.keys(handle).sort(),['close','isSuppressed','listSuppressionsSince']);
+  const options = { expected:f.checkpoint(0),limit:1 };
+  const initial = ok(await handle.isSuppressed(ns.ownerId,[a,b],options,f.credential));
+  assert.deepEqual(initial.results,[{ inputIndex:0,suppressed:false,reasons:[],matchedEpoch:null }]);
+  f.fact(b,{ reason:'privacy_erase' });
+  f.db.exec("UPDATE content_suppressions SET cleanup_status='failed',cleanup_attempt=cleanup_attempt+1; UPDATE content_suppressions SET cleanup_status='complete',cleanup_attempt=cleanup_attempt+1");
+  const later = ok(await handle.isSuppressed(ns.ownerId,[a,b],{ ...options,cursor:initial.nextCursor },f.credential));
+  assert.deepEqual(later.results,[{ inputIndex:1,suppressed:false,reasons:[],matchedEpoch:null }]);
+  assert.equal(later.observedEpoch,'0'); assert.equal(later.nextCursor,null);
+  const fresh = ok(await handle.isSuppressed(ns.ownerId,[a,b],{ expected:f.checkpoint(0) },f.credential));
+  assert.equal(fresh.observedEpoch,'1'); assert.equal(fresh.results[1].suppressed,true);
+  f.fact(a); const first = ok(await handle.listSuppressionsSince(ns.ownerId,'0',options,f.credential));
+  assert.equal(first.items[0].epoch,'1'); assert.equal(first.throughEpoch,'2'); assert.ok(first.nextCursor);
+  f.fact(a,{ reason:'user_forget' });
+  const second = ok(await handle.listSuppressionsSince(ns.ownerId,'0',{ ...options,cursor:first.nextCursor },f.credential));
+  assert.equal(second.throughEpoch,'2'); assert.equal(second.items[0].epoch,'2'); assert.equal(second.nextCursor,null);
+  const next = ok(await handle.listSuppressionsSince(ns.ownerId,'2',{ expected:f.checkpoint(2) },f.credential));
+  assert.equal(next.items.length,1); assert.equal(next.items[0].epoch,'3');
+  const empty = ok(await handle.listSuppressionsSince(ns.ownerId,'3',{ expected:f.checkpoint(3) },f.credential));
+  assert.deepEqual(empty,{ items:[],throughEpoch:'3',nextCursor:null });
+  for (const value of [initial,later,fresh,first,second,next,empty]) f.clean(value);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 53);
+  completeFamilyPull('pull');
 });

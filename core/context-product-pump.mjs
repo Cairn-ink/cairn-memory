@@ -1,3 +1,5 @@
+import { admitMaintenance, refreshMaintenance, maintenanceAdmissionReceipt } from './context-product-admission.mjs';
+import { maintenanceAdmissionIdentity, maintenanceAdmissionDomain, retainMaintenanceAdmission, failMaintenanceAdmission, maintenanceAdmissionStatus, maintenanceAdmissionSlots, maintenanceAdmissionFits } from './context-product-admission-policy.mjs';
 import { maintenanceFailureCounts, maintenanceFailureRecord, maintenanceFailureKind, maintenanceErrorName } from './context-product-attribution.mjs';
 import { attributionFields, maintenanceWorkFields, maintenanceKinds, add, maintenanceDispatchControl, maintenanceControlState } from './context-product-attribution.mjs';
 import { maintenanceComparison } from './context-product-attribution.mjs';
@@ -21,7 +23,7 @@ const integer=(n,max)=>{if(!Number.isSafeInteger(n)||n<1||n>max)fail('invalid_in
 // No history, paths, credentials or callbacks; snapshots die with their DTOs.
 const pumpDiagnostics=new WeakMap(), phaseDiagnostics=new WeakMap();
 export const maintenancePumpPhaseDiagnostic=observation=>phaseDiagnostics.get(observation);
-const phaseNames=['drain','open','dispatch','epochObservation','refreshCall','settle'];
+const phaseNames=['drain','open','dispatch','epochObservation','refreshCall','settle','admission'];
 const phaseCounter=()=>({count:0,totalMs:0,worstMs:0,latestMs:0});
 const recordPhase=(counter,ms)=>{if(Number.isFinite(ms)&&ms>=0){ms=Math.min(Number.MAX_SAFE_INTEGER,ms);counter.count=add(counter.count,1);counter.totalMs=add(counter.totalMs,ms);counter.worstMs=Math.max(counter.worstMs,ms);counter.latestMs=ms;}};
 // Log2 buckets: zero, (0,1], (1,2], ...; final bucket includes saturation.
@@ -45,7 +47,7 @@ export const maintenancePumpDiagnostic=observation=>pumpDiagnostics.get(observat
 // beyond handle shutdown; a host persists the same monotonic window/quota state
 // across process restarts before reopening admission (see the product guide).
 export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigint())/1e6,setTimer=setTimeout,clearTimer=clearTimeout,
-  open=openContextIndexMaintainer,observedAt=maintenanceObservation,phasesOf=maintenancePhaseDiagnostic,stallOf=maintenanceStallDiagnostic,cutoffQualified=maintenanceCutoffQualified}={}) {
+  open=openContextIndexMaintainer,admit=admitMaintenance,work=refreshMaintenance,receiptOf=maintenanceAdmissionReceipt,admissionIdentity=maintenanceAdmissionIdentity,observedAt=maintenanceObservation,phasesOf=maintenancePhaseDiagnostic,stallOf=maintenanceStallDiagnostic,cutoffQualified=maintenanceCutoffQualified}={}) {
   // Test-only dependency seam on this internal factory; public renewal never reaches it.
   const recoveryEnabled=cutoffQualified();
   return function renewContextMaintenancePump(original) {
@@ -79,15 +81,18 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       if(!selected.length||selected.length>2||new Set(selected).size!==selected.length||selected.some(t=>!['memory','card'].includes(t)))fail('invalid_input');
       return ['current','history'].map(intent=>({options,types:selected,intent}));
     });
-    // Reserve one entire quantum for drain/open/dispatch and the epoch read,
-    // beyond the minimum admission sweep. Latency is variable, not free.
+    // Each fresh admission consumes a non-observing slot. Reserve the final
+    // full work quantum as well as every intervening start-to-start spacing.
     const spacing=Math.max(c.pollMs,quantum.maxMs);
-    if(projections.length*spacing+quantum.maxMs>5000)fail('invalid_input');
     const projectionKey=p=>JSON.stringify([p.options.path,p.options.readSet,canonicalJson(p.options.ownerCoverage),p.types,p.intent,p.options.host.moduleUrl,p.options.wal===true,p.options.sidecarJournalMode]);
     // Intent belongs to each call, not to the resident Worker. Keep all other
     // constructor/scope options in its identity; incompatible policies still drain.
     const residentKey=p=>{const {supervisor,ownerCoverage,...options}=p.options;return JSON.stringify([projectionKey({...p,intent:undefined}),optionIdentity(options)]);};
     const residentKeys=projections.map(residentKey);
+    const writerKeys=projections.map(p=>JSON.stringify([resolve(p.options.path),p.options.readSet]));
+    const coldSlots=maintenanceAdmissionSlots(residentKeys,writerKeys);
+    if(!maintenanceAdmissionFits(projections.length,coldSlots,spacing,quantum.maxMs))fail('invalid_input');
+    const admissionDomain=p=>maintenanceAdmissionDomain(admissionIdentity(p.options),quantum.maxMs);
     const fingerprint=JSON.stringify(projections.map((p,i)=>[projectionKey(p),residentKeys[i]]));
     const domainOf=p=>JSON.stringify([resolve(p.options.path),p.options.readSet[0].ownerId,p.options.host.moduleUrl]);
     const domains=[...new Set(projections.map(domainOf))];
@@ -98,7 +103,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       if(old.fingerprint!==fingerprint || old.supervisor!==c.supervisor)fail('read_in_progress');
       old.renew(c,window,budgets,credential); return old.api;
     }
-    function admit(w,b) {
+    function admitLedger(w,b) {
       for(const [key,l] of all.ledgers)if(now()>=l.endsAt)all.ledgers.delete(key);
       if(recoveryEnabled)for(const [domain,r] of recoveryDomains){
         if(!r.pending && r.cooldownUntil<=now() && ![...all.ledgers.values()].some(l=>l.domain===domain) &&
@@ -122,12 +127,12 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       }
       return new Map(candidates.map(({ledger})=>[ledger.domain,ledger]));
     }
-    let ledgers=admit(window,budgets);
+    let ledgers=admitLedger(window,budgets);
     const record=registry.register(owner,{path:projections[0].options.path,domain:'context-read-product-v1.1/pump/'+c.id});
     let timer,closing,stopped=false,running,disposalCutoff,lastTick=now(),at=0,renewedUntil=now()+c.renewalMs,error=null,grant=credential;
     let report,completion,settled=false;
     function cycle(){settled=false;completion=new Promise(resolve=>{report=value=>{settled=true;resolve(value);};});}cycle();
-    const handles=new Map(),writers=new Map(),handleLanes=new Map();
+    const handles=new Map(),writers=new Map(),handleLanes=new Map(),admittedHandles=new WeakSet();
     let cutoffDiagnostic,cancelRecovery,lastFailure=null;const failureCounts=maintenanceFailureCounts(),secondaryFailureCounts=maintenanceFailureCounts();let secondaryFailure=null;
     const pendingDrains=new Map(),failedDrains=new Map(),drainErrors=new WeakSet(),seenReaderFailures=new WeakSet(),readerSecondaryCounts=new WeakMap(),readerSources=new WeakMap(),cutoffFailures=new WeakMap();
     // Fixed 10-ms elapsed counters (last bucket is >5000 ms), never samples.
@@ -157,11 +162,11 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       readerSecondaryCounts.set(identity,diagnostic.secondaryFailureCounts);
       if(changed)saveSecondary(index,{...diagnostic.secondaryFailure,...(number===undefined?{}:{number})},counts);
     }
-    async function drain(key,index=handleLanes.get(key),number){
+    async function drain(key,index=handleLanes.get(key),number,cause){
       // Attribution follows the resident being disposed, not its replacement.
       const failureLane=handleLanes.get(key)??index;
       const started=now();
-      try{const handle=handles.get(key);await disposeProductReader(handle,error==='read_timeout'?error:'store_closed',disposalCutoff,cutoffFailures.get(handle));readerSecondary(failureLane,maintenanceFailureDiagnostic(handle)?handle:readerSources.get(handle),number);handles.delete(key);handleLanes.delete(key);}
+      try{const handle=handles.get(key);await disposeProductReader(handle,cause??(error==='read_timeout'?error:'store_closed'),disposalCutoff,cutoffFailures.get(handle));readerSecondary(failureLane,maintenanceFailureDiagnostic(handle)?handle:readerSources.get(handle),number);handles.delete(key);handleLanes.delete(key);}
       catch(error){
         if(error&&typeof error==='object')drainErrors.add(error);
         if(!failedDrains.has(key)){
@@ -194,16 +199,17 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       }
     }
     function observation(){
+      checkCadence(now());
       const value=Object.freeze({id:c.id,state:error?'failed':stopped?'stopped':exhausted()?'budget_exhausted':now()>=renewedUntil?'renewal_expired':'active',
         windowId:window.id,usedItems:Math.max(...[...ledgers.values()].map(l=>l.items)),usedMs:Math.max(...[...ledgers.values()].map(l=>l.ms)),maxItems:budgets.maxItems,maxMs:budgets.maxMs,error});
-      pumpDiagnostics.set(value,Object.freeze({cadenceMisses,worstGapMs,observation:lastObservation,lastFailure,failureCounts:Object.freeze({...failureCounts}),secondaryFailure,secondaryFailureCounts:Object.freeze({...secondaryFailureCounts})}));
+      pumpDiagnostics.set(value,Object.freeze({cadenceMisses,worstGapMs,observation:lastObservation,lastFailure,failureCounts:Object.freeze({...failureCounts}),secondaryFailure,secondaryFailureCounts:Object.freeze({...secondaryFailureCounts}),admission:Object.freeze(projections.map(p=>{const state=admissionDomain(p);return state.attempts||state.pending||state.quarantined||state.held?maintenanceAdmissionStatus(state):null;}))}));
       phaseDiagnostics.set(value,freezeTree(structuredClone({elapsedBucketMs:10,projections:phases})));
       snapshotMaintenanceCutoff(value,cutoffDiagnostic);
       return value;
     }
     // Stop this selection conservatively at its first exhausted domain; a new
     // selection can still use another domain, but cannot recharge this one.
-    function exhausted(){return [...ledgers.values()].some(l=>now()>=l.endsAt||l.items>=l.maxItems||l.ms>=l.maxMs);}
+    function exhausted(){return [...ledgers.values()].some(l=>now()>=l.endsAt||l.maxItems-l.items<quantum.maxItems||l.maxMs-l.ms<quantum.maxMs);}
     function stop(){
       if(closing)return closing;
       stopped=true;clearTimer(timer);cancelRecovery?.();registry.cleanup(record);
@@ -230,29 +236,35 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       }));
       return Math.max(spacing,Math.min(5000/projections.length,60000/Math.max(1,turns)));
     }
+    const needsAdmission=index=>!admittedHandles.has(handles.get(JSON.stringify([residentKeys[index],residentEpoch])));
     function schedule(){
       if(stopped||error||exhausted()||now()>=renewedUntil)return;
       if(Math.min(window.endsAtMonoMs,renewedUntil)-now()<quantum.maxMs){
         timer=setTimer(tick,Math.max(1,Math.min(window.endsAtMonoMs,renewedUntil)-now()));return;
       }
-      // Look ahead through the unchanged round-robin order. Each future turn
-      // needs its full pre-observation quantum plus minimum admission spacing
-      // for intervening turns. A fixed admission period cannot bound reads.
-      // N*S+Q <= 5000 makes this deadline at least lastTick+S after each
-      // punctual, in-budget turn, so advancing it preserves minimum spacing.
-      let due=Math.min(...observations.map((time,i)=>time+5000-quantum.maxMs-
-        ((i-at%projections.length+projections.length)%projections.length)*spacing));
+      // Simulate the pending lane's work and all resident replacements before
+      // each observation. An admission consumes spacing but earns no deadline.
+      const cache=new Map([...writers].filter(([,key])=>admittedHandles.has(handles.get(key))));
+      let slots=0;const deadlines=[];
+      for(let n=0;n<projections.length;n++){
+        const i=(at+n)%projections.length,key=JSON.stringify([residentKeys[i],residentEpoch]),writer=writerKeys[i];
+        if(cache.get(writer)!==key){slots++;cache.set(writer,key);}
+        deadlines.push(observations[i]+5000-quantum.maxMs-slots*spacing);slots++;
+      }
+      let due=Math.min(...deadlines);
       if(recoveryEnabled){
         const order=projections.map((_,i)=>(at+i)%projections.length).filter(i=>!cooling(i));
         if(!order.length){
           const next=Math.min(Math.max(lastTick+spacing,Math.min(...[...ledgers.keys()].map(eligibleAt))),renewedUntil,window.endsAtMonoMs);
           timer=setTimer(tick,Math.max(1,next-now()));return;
         }
-        due=Math.min(...order.map((i,position)=>observations[i]+5000-quantum.maxMs-position*spacing));
+        due=Math.min(due,...order.map((i,position)=>observations[i]+5000-quantum.maxMs-(position+coldSlots)*spacing));
       }
       // After a cadence miss the old deadline can be in the past. Recover in
       // round-robin order without violating spacing or spinning overdue timers.
-      timer=setTimer(tick,Math.max(0,Math.min(Math.max(lastTick+spacing,Math.min(lastTick+interval(),due)),renewedUntil,window.endsAtMonoMs)-now()));
+      const gate=admissionDomain(projections[at%projections.length]);
+      const eligible=!needsAdmission(at%projections.length)?0:gate.held||gate.quarantined||gate.pending?Math.min(renewedUntil,window.endsAtMonoMs):gate.busy?now()+spacing:gate.until;
+      timer=setTimer(tick,Math.max(0,Math.min(Math.max(eligible,lastTick+spacing,Math.min(lastTick+interval(),due)),renewedUntil,window.endsAtMonoMs)-now()));
     }
     const eligibleAt=domain=>{const r=recoveryDomains.get(domain);return Math.max(r?.cooldownUntil??0,r?.pending?Math.max(r.pendingUntil,now()+spacing):0);};
     const cooling=index=>recoveryEnabled && eligibleAt(domainOf(projections[index]))>now();
@@ -261,14 +273,23 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       checkCadence(now());
       if(exhausted()||now()>=renewedUntil){report(observation());return;}
       if(Math.min(window.endsAtMonoMs,renewedUntil)-now()<quantum.maxMs){schedule();return;}
+      const gate=admissionDomain(projections[at%projections.length]);
+      if(needsAdmission(at%projections.length)&&(gate.held||gate.quarantined||gate.pending||gate.busy||gate.until>now())){schedule();return;}
       if(recoveryEnabled && projections.every((_,i)=>cooling(i))){schedule();return;}
       lastTick=now();
-      let quantumTimer,lane,sequence,settleStarted,deliveryMs=0,activeHandle,activeControl,ordinal,openingOrdinal,quantumDetail={},stallRecorded=false,capability,recovery,activeStage='open';
+      let quantumTimer,lane,sequence,settleStarted,deliveryMs=0,activeHandle,activeControl,ordinal,openingOrdinal,quantumDetail={},stallRecorded=false,capability,recovery,activeStage='open',admissionTurn=false,admissionTimedOut=false,admissionState,admissionSucceeded=false,originalLedger,reservedItems,reservedMs,activeKey,admissionDrain;
       const recordedFailures=new Set();
       function recordFailure(value,kind='engine',detail={}){
         if(!lane||value&&typeof value==='object'&&drainErrors.has(value))return;
-        const found=maintenanceFailureDiagnostic(value),captured=kind!=='disposal_proof'&&(found?.ordinal===undefined||found.ordinal===ordinal)?found:undefined,stamp=now(),source=captured??maintenanceFailureRecord(kind,{...detail,ordinal,stall:stallOf(value,stamp)??stallOf(activeHandle??activeControl,stamp)});
-        const key=maintenanceFailureKind(source);if(recordedFailures.has(key))return;
+        const found=maintenanceFailureDiagnostic(value),captured=kind!=='disposal_proof'&&(found?.ordinal===undefined||found.ordinal===ordinal)?found:undefined,stamp=now();
+        if(kind==='cleanup'&&captured&&seenReaderFailures.has(captured)&&recordedFailures.has('open_exceeds_quantum')){readerSecondary(phases.indexOf(lane),value,sequence);return;}
+        const source=kind==='open_exceeds_quantum'?maintenanceFailureRecord(kind,{...detail,ordinal,stall:captured?.stall??stallOf(value,stamp)??stallOf(activeHandle??activeControl,stamp)}):captured??maintenanceFailureRecord(kind,{...detail,ordinal,stall:stallOf(value,stamp)??stallOf(activeHandle??activeControl,stamp)});
+        const key=maintenanceFailureKind(source);if(recordedFailures.has(key)){
+          // A later reader copy joins the already-recorded admission cutoff;
+          // retain its cleanup deltas without recounting that initiating error.
+          if(kind==='open_exceeds_quantum'&&captured){seenReaderFailures.add(captured);if(activeHandle)readerSources.set(activeHandle,value);readerSecondary(phases.indexOf(lane),value,sequence);}
+          return;
+        }
         const secondary=recordedFailures.size>0;recordedFailures.add(key);
         const index=phases.indexOf(lane),failure=Object.freeze({...source,stage:source.stage??activeStage,number:sequence});
         if(secondary)saveSecondary(index,failure);else saveFailure(index,failure);
@@ -284,20 +305,23 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
         lane.lastStall={number:sequence,...(ordinal===null?{}:{ordinal}),kind:stall.kind,runningMs:Math.min(Number.MAX_SAFE_INTEGER,stall.runningMs),unitCount:stall.unitCount,...(stall.pendingDispatch===undefined?{}:{pendingDispatch:stall.pendingDispatch}),...(stall.unattributed===1?{unattributed:1}:{})};
         lane.stallCounts[stall.kind]=add(lane.stallCounts[stall.kind],1);stallRecorded=true;
       }
+      function exceedAdmission(value){admissionTimedOut=true;admissionState.pending=true;error='read_timeout';recordFailure(value,'open_exceeds_quantum');}
       return running=(async()=>{
         try {
-          let index=at++%projections.length;
+          let index=at%projections.length;
           if(recoveryEnabled){
-            let skipped=0;while(cooling(index)&&++skipped<projections.length)index=at++%projections.length;
+            let skipped=0;while(cooling(index)&&++skipped<projections.length)index=++at%projections.length;
             if(cooling(index))return;
           }
           const p=projections[index],dispatchEpoch=residentEpoch,key=JSON.stringify([residentKeys[index],dispatchEpoch]),ledger=ledgers.get(domainOf(p));
-          const maxItems=Math.min(quantum.maxItems,ledger.maxItems-ledger.items),maxMs=Math.min(quantum.maxMs,ledger.maxMs-ledger.ms,Math.floor(ledger.endsAt-now()),Math.floor(renewedUntil-now()));
+          const maxItems=quantum.maxItems,maxMs=quantum.maxMs;
           if(maxItems<1||maxMs<1)return;
           disposalCutoff=lastTick+maxMs;
           // Reserve the full quantum before dispatch. Unknown usage remains
           // charged after crash/timeout; restarting or renewing cannot refund it.
           ledger.items+=maxItems;ledger.ms+=maxMs;
+          originalLedger=ledger;reservedItems=maxItems;reservedMs=maxMs;activeKey=key;
+          const existing=handles.get(key);admissionTurn=!existing||!admittedHandles.has(existing);admissionState=admissionDomain(p);if(admissionTurn)admissionState.busy=true;
           lane=phases[index];sequence=quantumNumber;quantumNumber=add(quantumNumber,1);
           // Disposal can await a Worker/host resource. Expose timeout even if
           // that await has not settled; supervision still owns the drain.
@@ -333,7 +357,13 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             finally {domainRecovery.pending--;clearTimer(confirmationTimer);capability.rescheduleProof=undefined;cancelRecovery=undefined;}
           })();
           quantumTimer=setTimer(()=>{
-            recordStall(activeHandle);recordFailure(activeHandle,'engine',{engineCode:'read_timeout'});
+            recordStall(activeHandle);
+            if(admissionTurn){
+              exceedAdmission();
+              if(activeHandle){admissionDrain=drain(key,index,sequence,'read_timeout');admissionDrain.catch(()=>{});}
+              return;
+            }
+            recordFailure(activeHandle,'engine',{engineCode:'read_timeout'});
             if(capability && (capability.attested||capability.expire?.())){
               if((ledger.recoveries??0)<2){void recover();return;}describeCutoff(5);
             }
@@ -346,24 +376,35 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             // full-key handle; never weaken admission to populate this cache.
             const writer=JSON.stringify([resolve(p.options.path),p.options.readSet]),previous=writers.get(writer);
             if(previous!==undefined){activeStage='close';await drain(previous,index,sequence);writers.delete(writer);activeStage='open';}
-            if(stopped||error)return;
+            if(stopped||error||admissionTimedOut)return;
             const openingMs=Math.min(maxMs,Math.floor(maxMs-(now()-lastTick)));
-            if(openingMs<1){recordFailure(activeControl,'engine',{engineCode:'read_timeout',stage:'open'});error='read_timeout';return;}
+            if(openingMs<1){exceedAdmission();return;}
             const opening=now();openingOrdinal=ordinal;
             try{h=await open({...p.options,deadlineMs:openingMs},activeControl);openedHere=true;lane.opens=add(lane.opens,1);handles.set(key,h);handleLanes.set(key,index);writers.set(writer,key);}
             finally{recordPhase(lane.phases.open,now()-opening);}
           }
-          activeHandle=h;activeStage='refresh';
+          activeHandle=h;activeStage=admissionTurn?'admission':'refresh';
           if(stopped||error)return;
           const remainingMs=Math.min(maxMs,Math.floor(maxMs-(now()-lastTick)));
-          if(remainingMs<1){recordStall(h);recordFailure(h,'engine',{engineCode:'read_timeout'});error='read_timeout';return;}
+          if(remainingMs<1){recordStall(h);if(admissionTurn){exceedAdmission();return;}recordFailure(h,'engine',{engineCode:'read_timeout'});error='read_timeout';return;}
           if(openedHere){
             activeControl=maintenanceDispatchControl();ordinal=maintenanceControlState(activeControl).ordinal;
           }
-          if(recoveryEnabled && ordinal!==null)capability=authorizeMaintenanceCutoff(activeControl,{pumpEpoch:record.id,ordinal,ledger,cutoffAt:lastTick+maxMs,quantum:sequence,resident:dispatchEpoch,lane:index});
+          if(!admissionTurn && recoveryEnabled && ordinal!==null)capability=authorizeMaintenanceCutoff(activeControl,{pumpEpoch:record.id,ordinal,ledger,cutoffAt:lastTick+maxMs,quantum:sequence,resident:dispatchEpoch,lane:index});
+          if(!admissionTurn)at=index+1;
           const refreshing=now();let result;
-          try{result=await h.refreshContextIndex({readSet:p.options.readSet,types:p.types,intent:p.intent,mode:'lexical',budget:{maxItems,maxMs:remainingMs}},grant,activeControl);}
-          finally{settleStarted=now();recordPhase(lane.phases.refreshCall,settleStarted-refreshing);}
+          try{result=await (admissionTurn?admit:work)(h,{readSet:p.options.readSet,types:p.types,intent:p.intent,mode:'lexical',budget:{maxItems,maxMs:remainingMs}},grant,activeControl);}
+          finally{settleStarted=now();recordPhase(lane.phases[admissionTurn?'admission':'refreshCall'],settleStarted-refreshing);}
+          if(admissionTurn) {
+            const detail=phasesOf(result);
+            if(detail){recordPhase(lane.phases.dispatch,detail.dispatchMs);if(Number.isFinite(detail.deliveryMs)&&detail.deliveryMs>=0)deliveryMs=detail.deliveryMs;}
+            if(admissionTimedOut||now()-lastTick>maxMs||result?.error?.code==='read_timeout'){exceedAdmission(result);return;}
+            if(!result?.ok){recordFailure(result,'engine',{engineCode:result?.error?.code});error=result?.error?.code??'reader_failed';return;}
+            // This private receipt is deliberately independent of observation.
+            if(receiptOf(result)!=='admitted'){recordFailure(result,'protocol',{protocolKind:'result_shape'});error='reader_failed';return;}
+            admittedHandles.add(h);admissionSucceeded=true;return;
+          }
+          if(receiptOf(result)==='required'){at=index;admittedHandles.delete(h);return;}
           // dispatch: call entry to Worker receipt; epochObservation: the final
           // fresh snapshot transaction. refreshCall includes both. settle adds
           // Worker response delivery/validation and pump accounting. These
@@ -395,6 +436,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           if(!Number.isFinite(time)||time<lastTick||time>finished){recordFailure(result,'observation_timing',{stage:'observation'});error='reader_failed';return;}
           checkCadence(time);
           lastObservation=Object.freeze({projection:index,atMonoMs:time,gapMs:time-observations[index],cadenceMiss:missed[index]});
+          at=index+1;
           observations[index]=time;
           missed[index]=false;
           checkCadence(finished);
@@ -408,21 +450,52 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             ledger.ms=Math.max(ledger.ms-maxMs+elapsed,ledger.floorMs);
           }
         } catch(e){
-          recordFailure(e,'call_error',{errorName:maintenanceErrorName(e),stage:'call'});
-          if(e.code==='read_timeout')recordStall(e);error=e.code??'reader_failed';
+          if(admissionTurn&&admissionState&&(admissionTimedOut||e.code==='read_timeout'||now()-lastTick>reservedMs))exceedAdmission(e);
+          else recordFailure(e,'call_error',{errorName:maintenanceErrorName(e),stage:'call'});
+          if(admissionTimedOut&&e&&typeof e==='object'&&drainErrors.has(e)){admissionState.quarantined=true;admissionState.held=true;}
+          if(e.code==='read_timeout')recordStall(e);if(!admissionTimedOut)error=e.code??'reader_failed';
           // An opening failure returns no handle; its cleanup ID still owns disposal.
-          if(e.cleanupId)try{await c.supervisor.drain(e.cleanupId);}catch(failure){recordFailure(failure,'cleanup',{stage:'close'});readerSecondary(phases.indexOf(lane),e,sequence);error='reader_failed';}
+          if(e.cleanupId)try{await c.supervisor.drain(e.cleanupId);}catch(failure){if(admissionTimedOut){admissionState.quarantined=true;admissionState.held=true;}recordFailure(failure,'cleanup',{stage:'close'});readerSecondary(phases.indexOf(lane),e,sequence);error='reader_failed';}
         }
-      })().finally(()=>{
+      })().finally(async()=>{
+        async function rejectAdmission(){
+          exceedAdmission();admissionSucceeded=false;
+          let confirmed=!admissionState.quarantined;
+          try {
+            if(admissionDrain)await admissionDrain;
+            else if(handles.has(activeKey))await drain(activeKey,phases.indexOf(lane),sequence,'read_timeout');
+            for(const [writer,id] of writers)if(id===activeKey)writers.delete(writer);
+          }
+          catch {confirmed=false;error='reader_failed';}
+          try {retainMaintenanceAdmission(admissionIdentity(projections[phases.indexOf(lane)].options),quantum.maxMs,admissionState);}
+          catch(failure){confirmed=false;recordFailure(failure,'identity',{stage:'admission'});}
+          failMaintenanceAdmission(admissionState,now(),confirmed);
+          error=confirmed?'read_timeout':'reader_failed';
+        }
+        if(admissionTurn&&admissionTimedOut)await rejectAdmission();
+        // Admission never alters observation timestamps or missed flags.
+        checkCadence(now());
         if(lane){
           if(settleStarted!==undefined)recordPhase(lane.phases.settle,deliveryMs+now()-settleStarted);
           const elapsedMs=now()-lastTick;
-          const sample={number:sequence,...(ordinal==null?{}:{ordinal}),...(ordinal===null||openingOrdinal==null?{}:{openingOrdinal}),elapsedMs,attribution:quantumDetail};
+          const sample={number:sequence,turn:admissionTurn?'admission':'work',...(ordinal==null?{}:{ordinal}),...(ordinal===null||openingOrdinal==null?{}:{openingOrdinal}),elapsedMs,attribution:quantumDetail};
           lane.quanta=add(lane.quanta,1);lane.first??=sample;lane.latest=sample;
           lane.worstElapsedMs=Math.max(lane.worstElapsedMs,elapsedMs);
           const bucket=Math.min(501,Math.ceil(elapsedMs/10));lane.elapsedBuckets[bucket]=add(lane.elapsedBuckets[bucket],1);
         }
-        clearTimer(quantumTimer);running=null;if(error){void stop();return;}if(exhausted() || now()>=renewedUntil)report(observation());schedule();});
+        clearTimer(quantumTimer);
+        if(admissionSucceeded&&!admissionTimedOut&&!error){
+          try {retainMaintenanceAdmission(admissionIdentity(projections[phases.indexOf(lane)].options),quantum.maxMs,admissionState);}
+          catch(failure){admissionSucceeded=false;error='reader_failed';recordFailure(failure,'identity',{stage:'admission'});}
+          const elapsed=Math.ceil(now()-lastTick);
+          if(elapsed>reservedMs){await rejectAdmission();checkCadence(now());}
+          else if(admissionSucceeded&&Number.isSafeInteger(elapsed)&&elapsed>=0){
+            originalLedger.items=Math.max(originalLedger.items-reservedItems,originalLedger.floorItems);
+            originalLedger.ms=Math.max(originalLedger.ms-reservedMs+elapsed,originalLedger.floorMs);
+          }
+        }
+        if(admissionTurn&&admissionState)admissionState.busy=false;
+        running=null;if(error){void stop();return;}if(exhausted() || now()>=renewedUntil)report(observation());schedule();});
     }
     const api=Object.freeze({getStatus:observation,get completion(){return completion;},close:stop});
     const entry={api,supervisor:c.supervisor,fingerprint,...(recoveryEnabled?{cutoffDomains:domains}:{}),renew(next,w,b,g){
@@ -441,10 +514,10 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       checkCadence(now());
       if(w.id!==window.id){
         if([...ledgers.values()].some(l=>now()<l.endsAt))fail('invalid_input');
-        const nextLedgers=admit(w,b);
+        const nextLedgers=admitLedger(w,b);
         // Retire the old observer before exposing the new window's promise.
         report(observation());ledgers=nextLedgers;window=w;budgets=b;cycle();
-      } else ledgers=admit(w,b);
+      } else ledgers=admitLedger(w,b);
       // A settled observer cannot report renewed usage, even at exhaustion.
       if(settled)cycle();
       if(inactive){
