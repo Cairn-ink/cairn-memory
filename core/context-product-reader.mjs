@@ -434,7 +434,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       settle(slot, result);
       armIdle();
     }
-    function dispatch(method, payload, credential, control, entered, opening = false) {
+    function dispatch(method, payload, credential, control, entered, opening = false, semanticOutstanding) {
       if (closed){const result=productFailure(terminal === 'read_timeout' || terminal === 'read_cancelled' ? 'store_closed' : terminal ?? 'store_closed');if(maintenance&&terminalFailure){maintenanceFailures.set(result,terminalFailure);maintenanceReaderFailures.set(result,failureState);}return Promise.resolve(result);}
       let input, token, signal, duration;
       try {
@@ -463,7 +463,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       const operation = opening ? first : operationRecord(callRequest, entered, duration, epoch);
       const callFrame = opening ? frame : options.diagnostics ? nativeTelemetry(operation.operationId, epoch) : null;
       const ordinal=maintenance ? opening ? firstOrdinal : claimMaintenanceOrdinal(control) : undefined;
-      const outbound = opening ? openingData : { method, input, credential: token, request: callRequest, operation, frame: callFrame };
+      const outbound = opening ? openingData : { method, input, credential: token, request: callRequest, operation, frame: callFrame,...(semanticOutstanding===undefined?{}:{semanticOutstanding}) };
       if(maintenance){
         const {maintenanceMarker:internalMarker,semanticPort,openPhases,memoryComparison:internalComparison,verificationBatching:internalBatching,verificationBatchState:internalBatchState,...data}=outbound;operationMessage(data);
         outbound.maintenanceOrdinal=ordinal;bindMaintenanceControl(control,marker);prepareMaintenanceMarker(marker,ordinal,entered);
@@ -601,6 +601,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       ...(maintenance ? { refreshContextIndex: (input, credential, control) => call('refreshContextIndex', input, credential, control) } : {}),
       close() { return dispose('store_closed'); },
     });
+    if(maintenance&&semantic)semanticMaintenanceCalls.set(handle,(method,input,credential,control,semanticOutstanding)=>dispatch(method,input,credential,control,now(),false,semanticOutstanding));
     if(maintenance&&!semantic)bindMaintenanceAdmission(handle,call);
     disposals.set(handle.close, dispose);
     const holdDiagnostic = registryHolds.get(opened); if (holdDiagnostic) registryHolds.set(handle, holdDiagnostic);
@@ -608,6 +609,12 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     if(maintenance){maintenanceMarkers.set(handle,marker);maintenanceReaderFailures.set(handle,failureState);}
     return handle;
   };
+}
+// Only the engine pump can attach turn settlement metadata to a request.
+const semanticMaintenanceCalls=new WeakMap();
+export function semanticMaintenanceRequest(handle,method,input,credential,control,{semanticOutstanding}) {
+  const call=semanticMaintenanceCalls.get(handle);if(!call)fail('authority_required');
+  return call(method,input,credential,control,semanticOutstanding);
 }
 export const openContextProductReader = createProductReaderRuntime();
 

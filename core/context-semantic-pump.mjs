@@ -1,3 +1,6 @@
+import { hrtime } from 'node:process';
+import { captureMaintenanceTurnPort, createMaintenanceTurnController, maintenanceTurnPoisoned } from './context-maintenance-turn.mjs';
+import { maintenanceAdmissionIdentity } from './context-product-admission-policy.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { boundedData, coverage, credentialDigest, PRODUCT_PROFILE, hostConfiguration } from './context-product-control.mjs';
 import { contextReadSet } from './context-read-input.mjs';
@@ -6,7 +9,7 @@ import { semanticConfiguration } from './context-semantic-coordinator.mjs';
 import { supervisorOwner } from './context-read-supervisor.mjs';
 import { integer, usd, dollars, exact } from './context-semantic-input.mjs';
 import { fail } from './validation.mjs';
-import { productFailure, disposeProductReader, maintenanceObservation, maintenanceFailureDiagnostic, maintenanceReaderFailureDiagnostic } from './context-product-reader.mjs';
+import { productFailure, disposeProductReader, maintenanceObservation, maintenanceFailureDiagnostic, maintenanceReaderFailureDiagnostic, semanticMaintenanceRequest } from './context-product-reader.mjs';
 import { add, maintenanceDispatchControl, maintenanceControlState, maintenanceFailureCounts, maintenanceFailureRecord, maintenanceFailureKind, maintenanceErrorName } from './context-product-attribution.mjs';
 import { resolve } from 'node:path';
 
@@ -22,7 +25,7 @@ function optionIdentity(value) {
   return value;
 }
 export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=maintenanceObservation,snapshot}) {
-  const c=ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential','semanticConfig','semanticServiceCredential','firstCoverageValidation']);
+  const c=ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential','semanticConfig','semanticServiceCredential','firstCoverageValidation','preQuantum']);
   const selected=semanticConfiguration(c.semanticConfig,{maintenance:true}),coordinator=c.semanticConfig.coordinator,handle=selected.handle;
   handle.validatePumpCredential(c.semanticServiceCredential);
   const credential=boundedData(c.serviceCredential,16384),semanticCredential=boundedData(c.semanticServiceCredential,16384);
@@ -54,7 +57,10 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
   const residentKeys=new Map(projections.map(p=>[p,residentKey(p)]));
   const all=globalThis[key]??=new Map(),fingerprint=JSON.stringify(projections.map(p=>[residentKeys.get(p),p.intent,p.mode,p.bindingId]));
   const old=all.get(c.id);
+  if(old&&old.preQuantum!==c.preQuantum)fail('invalid_input');
+  const turnPort=old?old.turnPort:captureMaintenanceTurnPort(c.preQuantum);
   if(old){if(old.fingerprint!==fingerprint||old.supervisor!==c.supervisor||old.coordinator!==coordinator||old.semanticCredentialDigest!==credentialDigest(semanticCredential)||JSON.stringify(old.first)!==JSON.stringify(first))fail('read_in_progress');old.renew(c,w,b);return old.api;}
+  const turns=turnPort?createMaintenanceTurnController(turnPort,{now,setTimer,clearTimer}):undefined;
   const {owner,registry}=supervisorOwner(c.supervisor),record=registry.register(owner,{path:projections[0].options.path,domain:'context-read-product-p2e-v1/pump/'+c.id});
   let window=w,budgets=b,usedItems=w.usedItems,usedMs=w.usedMs,usedUsd=w.usedUsd,cursor=0,timer,running,closing,stopped=false,error=null,renewedUntil=now()+c.renewalMs,lastTick=now(),validationPending=false;
   let resolveCompletion,completion,settled=false,completionEpoch=0;
@@ -97,12 +103,13 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
   };
   let account=accountingWindow(w),windowExhausted=false,pendingUsage;
   // Lifecycle ownership is independent of accounting-window settlement.
+  let pendingAdmission,retryNotBefore=0,awaitingProof=false;
   let generation=0,activeTurn,turnNumber=0,lastFailure=null,secondaryFailure=null,drainFailed=false,timeoutDisposal=false;
   const failureCounts=maintenanceFailureCounts(),secondaryFailureCounts=maintenanceFailureCounts();
   const drains=new Map(),disposed=new WeakMap(),openings=new Set(),seenFailures=new WeakSet(),readerCounts=new WeakMap();
   const interrupted=Symbol('retired turn');
   const attach=value=>{
-    snapshot(value,Object.freeze({cadenceMisses,worstGapMs,observation:lastObservation,lastFailure,failureCounts:Object.freeze({...failureCounts}),secondaryFailure,secondaryFailureCounts:Object.freeze({...secondaryFailureCounts})}));return value;
+    snapshot(value,Object.freeze({cadenceMisses,worstGapMs,observation:lastObservation,lastFailure,failureCounts:Object.freeze({...failureCounts}),secondaryFailure,secondaryFailureCounts:Object.freeze({...secondaryFailureCounts}),...(turns?turns.snapshot():{})}));return value;
   };
   const status=()=>{
     const value=Object.freeze({id:c.id,state:error?'failed':stopped?'stopped':exhausted()?'budget_exhausted':now()>=renewedUntil?'renewal_expired':'active',windowId:window.id,
@@ -171,12 +178,92 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
     ctx.stage=stage;ctx.coordinator=coordinator;check(ctx);
     const result=await Promise.race([Promise.resolve().then(()=>{check(ctx);return work();}),ctx.cancelled]);check(ctx);return result;
   }
-  async function turn(maxMs,work) {
+  async function turn(maxMs,work,ticket) {
     maxMs=Math.min(maxMs,budgets.maxMs-usedMs);if(maxMs<1)return;
     const control=maintenanceDispatchControl(),ctx={control,ordinal:maintenanceControlState(control).ordinal,number:turnNumber,generation,account,end:dutyEnd(),until:now()+maxMs,stage:'call',failures:new Set()};
+    if(ticket){
+      ctx.ticket=ticket;ctx.semanticOutstanding=new SharedArrayBuffer(8);
+      ctx.join=handle.pumpTurn({semanticOutstanding:ctx.semanticOutstanding});
+      void ctx.join.proof.catch(()=>{ctx.coordinatorFailed=true;});
+      turns.started(ticket);
+    }
     turnNumber=add(turnNumber,1);ctx.cancelled=new Promise((_,reject)=>{ctx.cancel=()=>reject(interrupted);});activeTurn=ctx;
     ctx.watchdog=setTimer(()=>expire(ctx),maxMs);
-    try{return await work(ctx);}catch(e){if(e!==interrupted){note(e,ctx,ctx.stage);error??=terminalCode(e.code);}}finally{clearTimer(ctx.watchdog);if(activeTurn===ctx)activeTurn=undefined;}
+    try{return await work(ctx);}catch(e){if(e!==interrupted){note(e,ctx,ctx.stage);error??=terminalCode(e.code);}}finally{clearTimer(ctx.watchdog);if(ticket)await finalizeTurn(ctx);if(activeTurn===ctx)activeTurn=undefined;}
+  }
+  function turnFailure(code){error=terminalCode(code);void stop().catch(()=>{});}
+  function releaseTurn(ticket,outcome,reason){
+    const result=turns.release(ticket,outcome,reason);
+    if(result==='poisoned'||result==='authority_required')turnFailure(result==='poisoned'?'reader_failed':'authority_required');
+  }
+  function poisonTurn(ctx){turns.poison(ctx.ticket);turnFailure('reader_failed');}
+  const settlementNow=()=>{const [seconds,nanos]=hrtime();return seconds*1000+nanos/1e6;};
+  async function finalizeTurn(ctx){
+    const state=new Int32Array(ctx.semanticOutstanding),until=settlementNow()+5000;
+    turns.settling(ctx.ticket);
+    if(error||stopped)for(const h of handles.values())void dispose(h,ctx);
+    // Seal under the same lock used by caller increments. A stalled caller is
+    // bounded too: the host disposal proof becomes the only release authority.
+    let sealed=false;
+    while(settlementNow()<until){
+      const flag=Atomics.compareExchange(state,1,0,1);
+      if(flag===0){sealed=true;break;}
+      if(flag===2){poisonTurn(ctx);return;}
+      await Atomics.waitAsync(state,1,flag,Math.max(1,until-settlementNow())).value;
+    }
+    const late=()=>{if(Atomics.load(state,1)===2)poisonTurn(ctx);};
+    if(sealed){
+      // The unreferenced atomic waiter observes violations even after release;
+      // coordinator disposal closes its lifetime without adding a polling timer.
+      void Promise.resolve(Atomics.waitAsync(state,1,1).value).then(late);
+      void ctx.join.proof.finally(()=>{Atomics.notify(state,1);}).catch(()=>{});
+    }
+    while(sealed&&Atomics.load(state,0)!==0&&settlementNow()<until&&!stopped){
+      const count=Atomics.load(state,0);if(count===0)break;
+      await Atomics.waitAsync(state,0,count,Math.max(1,until-settlementNow())).value;
+      if(Atomics.load(state,1)===2){poisonTurn(ctx);return;}
+    }
+    // Required reader cleanup is part of this grant, including late opens.
+    await Promise.allSettled([...openings]);
+    const disposals=await Promise.allSettled([...drains.values()]);
+    if(ctx.coordinatorFailed||drainFailed||disposals.some(r=>r.status==='rejected')||Atomics.load(state,1)===2){poisonTurn(ctx);return;}
+    if(sealed&&Atomics.load(state,0)===0&&!ctx.requireCoordinatorProof){ctx.join.detach?.();releaseTurn(ctx.ticket,'settled');return;}
+    awaitingProof=true;
+    // Pump close never closes a host coordinator. This continuation is owned
+    // by its already registered delivery proof and survives pump completion.
+    void ctx.join.proof.then(()=>{
+      if(Atomics.load(state,1)===2){poisonTurn(ctx);return;}
+      releaseTurn(ctx.ticket,'settled');awaitingProof=false;
+      if(!stopped&&!error)schedule();
+    },()=>poisonTurn(ctx));
+  }
+  async function brokered(index,slot){
+    const epoch=residentEpoch,enteredGeneration=generation,controller=new AbortController();
+    const pending={controller};pendingAdmission=pending;
+    let result;
+    try{
+      const maxMs=turnMs(),identity=maintenanceAdmissionIdentity((slot.p??projections[0]).options);
+      result=await turns.wait({version:1,pumpId:c.id,windowId:window.id,lane:index,family:'semantic',
+        kind:slot.kind==='startup'?'status':slot.kind==='validation'?'validation':slot.p.mode,phase:'work',intent:slot.kind==='regular'&&slot.p.mode==='lexical'?slot.p.intent:null,maxMs},
+        {signal:controller.signal,identity,untilMonoMs:Math.min(now()+turnPort.maxWaitMs,dutyEnd()-maxMs)});
+    }catch{result={status:'failed',error:'reader_failed'};}
+    if(pendingAdmission===pending)pendingAdmission=undefined;
+    if(result.status==='failed'){turnFailure(result.error);return;}
+    if(result.status!=='admitted'){retryNotBefore=now()+spacing;return;}
+    const ticket=result.ticket;
+    let reason;
+    if(stopped||error)reason='stopped';
+    else if(generation!==enteredGeneration)reason='generation_changed';
+    else if(result.waitExpired)reason='wait_expired';
+    else if(dutyEnd()-now()<turnMs())reason='renewal_expired';
+    else if(exhausted())reason='budget_exhausted';
+    else if(now()<lastTick+spacing)reason='spacing';
+    else if(epoch!==residentEpoch||plan()[0]!==index)reason='lane_changed';
+    if(reason){retryNotBefore=now()+spacing;releaseTurn(ticket,'declined',reason);return;}
+    if(!turns.portUnchanged()){releaseTurn(ticket,'withdrawn');turnFailure('authority_required');return;}
+    try{turns.bindIdentity(ticket,maintenanceAdmissionIdentity((slot.p??projections[0]).options));}
+    catch{releaseTurn(ticket,'withdrawn');turnFailure('reader_failed');return;}
+    return runSelected(index,slot,ticket);
   }
   function interval(count){
     const turns=Math.min(budgets.maxItems/q.maxItems,budgets.maxMs/Math.max(q.maxMs,first.maxMs));
@@ -185,6 +272,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
   function schedule(){
     if(exhausted()||usedItems>=budgets.maxItems)cadenceUntil=Math.min(cadenceUntil,now());
     checkCadence(now());
+    if(awaitingProof)return;
     if(stopped||error||exhausted()||now()>=renewedUntil){if(!stopped&&!error)resolveCompletion(status());return;}
     fits(turnMs());
     if(parkedUntil!==undefined){timer=setTimer(tick,Math.max(1,parkedUntil-now()));return;}
@@ -199,11 +287,11 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
         ?observations[slot.index]+5000-q.maxMs-position*spacing:Infinity;
     }));
     const next=Math.min(Math.max(lastTick+spacing,Math.min(lastTick+interval(order.length),due)),dutyEnd());
-    timer=setTimer(tick,Math.max(0,next-now()));
+    timer=setTimer(tick,Math.max(0,Math.max(next,retryNotBefore)-now()));
   }
   function fits(maxMs){const end=dutyEnd();parkedUntil=end-now()>=maxMs?undefined:end;return parkedUntil===undefined;}
   async function control(ctx,method,input) {
-    const result=await wait(ctx,()=>handle.pumpCall(method,input,Math.max(1,Math.ceil(ctx.until-now()))),'call',true);check(ctx);return result;
+    const result=await wait(ctx,()=>handle.pumpCall(method,input,Math.max(1,Math.ceil(ctx.until-now())),...(ctx.semanticOutstanding?[{semanticOutstanding:ctx.semanticOutstanding}]:[])),'call',true);check(ctx);return result;
   }
   function apply(ctx,result) {
     const a=ctx.account;
@@ -280,7 +368,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
       if(maintenanceControlState(ctx.control).claimed){ctx.control=maintenanceDispatchControl();ctx.ordinal=maintenanceControlState(ctx.control).ordinal;}
       ctx.handle=h;ctx.stage=method==='refreshContextIndex'?'refresh':'call';
       const args=method==='refreshContextIndex'?{...input,budget:{...input.budget,maxMs:remaining}}:{...input,deadlineMs:remaining};
-      result=await wait(ctx,()=>h[method](args,credential,ctx.control),ctx.stage);check(ctx);
+      result=await wait(ctx,()=>ctx.semanticOutstanding?semanticMaintenanceRequest(h,method,args,credential,ctx.control,{semanticOutstanding:ctx.semanticOutstanding}):h[method](args,credential,ctx.control),ctx.stage);check(ctx);
       if(!result.ok)note(result,ctx,ctx.stage);
       if(result.ok&&method==='refreshContextIndex'&&reservation.mode==='lexical'){
         ctx.observedAt=observedAt(result);
@@ -307,7 +395,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
     if(!fits(first.maxMs))return;
     const maxMs=Math.min(first.maxMs,budgets.maxMs-usedMs,Math.floor(window.endsAtMonoMs-now()),Math.floor(renewedUntil-now()));
     if(maxMs<1)return;const reservation=await reserve(ctx,'validation',0,maxMs,'0');check(ctx);
-    const result=await wait(ctx,()=>coordinator.validateOwnerSemanticCoverage({ownerId:handle.ownerId,expectedTargetDigest:targetSetDigest,budget:{maxTargets:first.maxTargets,maxMs:Math.max(1,Math.floor(ctx.until-now()))}},semanticCredential),'call',true);check(ctx);
+    const result=await wait(ctx,()=>ctx.join?ctx.join.validate({ownerId:handle.ownerId,expectedTargetDigest:targetSetDigest,budget:{maxTargets:first.maxTargets,maxMs:Math.max(1,Math.floor(ctx.until-now()))}},semanticCredential):coordinator.validateOwnerSemanticCoverage({ownerId:handle.ownerId,expectedTargetDigest:targetSetDigest,budget:{maxTargets:first.maxTargets,maxMs:Math.max(1,Math.floor(ctx.until-now()))}},semanticCredential),'call',true);check(ctx);
     // This API's own deadline returns read_timeout without retiring the coordinator.
     // Keep that private origin; public classification follows coordinator timeouts.
     const code=!result.ok&&result.error.code==='read_timeout'?'timeout':result.error?.code;
@@ -336,14 +424,24 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
     if(isEmbedding){const current=await control(ctx,'firstCoverage');check(ctx);observeCoverage(current);if(result.value.status==='complete')completeTargets.add(JSON.stringify([p.options.path,p.types,p.intent]));}
   }
   async function tick() {
-    if(stopped||error||running)return;checkCadence(now());
+    if(stopped||error||running||pendingAdmission||awaitingProof)return;
+    if(projections.some(p=>turns?turns.isPoisoned(maintenanceAdmissionIdentity(p.options)):maintenanceTurnPoisoned(()=>maintenanceAdmissionIdentity(p.options)))){turnFailure('reader_failed');return;}
+    checkCadence(now());
     if(exhausted()||now()>=renewedUntil){resolveCompletion(status());return;}
     parkedUntil=undefined;
     // Early callbacks and renewal cannot bypass minimum start spacing.
     if(now()<lastTick+spacing){schedule();return;}
     const index=plan()[0],slot=slots[index];if(!slot){schedule();return;}
     if(!fits(turnMs())){schedule();return;}
-    lastTick=now();return running=turn(turnMs(),async ctx=>{
+    if(turns){
+      // Latch before the host's synchronous factory can reenter this pump.
+      const task=Promise.resolve().then(()=>brokered(index,slot));running=task;
+      return task.finally(()=>{if(running===task){running=null;if(error)void stop().catch(()=>{});else schedule();}});
+    }
+    return running=runSelected(index,slot);
+  }
+  function runSelected(index,slot,ticket){
+    lastTick=now();return turn(turnMs(),async ctx=>{
       const current=await control(ctx,'firstCoverage');check(ctx);targetSetDigest=current.targetSetDigest;observeCoverage(current);
       if(slot.kind==='validation'){
         await validation(ctx);check(ctx);cursor=(index+1)%slots.length;
@@ -356,10 +454,10 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
           startupAt++;cursor=(index+1)%slots.length;
         }
       }else await regular(ctx,slot);
-    }).finally(async()=>{await Promise.allSettled([...openings]);running=null;if(error){void stop();return;}schedule();});
+    },ticket).finally(async()=>{await Promise.allSettled([...openings]);if(turns)return;running=null;if(error){void stop();return;}schedule();});
   }
   function stop() {
-    if(closing)return closing;stopped=true;generation++;activeTurn?.cancel();clearTimer(timer);registry.cleanup(record);
+    if(closing)return closing;stopped=true;generation++;pendingAdmission?.controller.abort();activeTurn?.cancel();if(activeTurn?.semanticOutstanding){const state=new Int32Array(activeTurn.semanticOutstanding);if(Atomics.load(state,0)!==0)activeTurn.requireCoordinatorProof=true;Atomics.notify(state,0);}clearTimer(timer);registry.cleanup(record);
     const ctx=activeTurn??{number:turnNumber,until:now(),failures:new Set()};
     // Cancel/dispose residents before waiting for an outstanding call to settle.
     for(const h of handles.values())void dispose(h,ctx);
@@ -381,7 +479,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
   }
   record.stop=()=>{void stop();};
   const api=Object.freeze({getStatus:status,get completion(){return completion;},close:stop});
-  const entry={api,fingerprint,supervisor:c.supervisor,coordinator,semanticCredentialDigest:credentialDigest(semanticCredential),first,renew(next,w,b){
+  const entry={api,fingerprint,preQuantum:c.preQuantum,turnPort,supervisor:c.supervisor,coordinator,semanticCredentialDigest:credentialDigest(semanticCredential),first,renew(next,w,b){
     if(stopped)fail('store_closed');if(JSON.stringify(next.quantum)!==JSON.stringify(c.quantum)||next.pollMs!==c.pollMs)fail('invalid_input');
     // Settled item exhaustion ends resident duty even if validation can continue.
     const inactive=now()>renewedUntil||now()>window.endsAtMonoMs||!running&&(windowExhausted||usedMs>=budgets.maxMs||usedItems>=budgets.maxItems);
@@ -390,7 +488,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
     else{if(JSON.stringify(b)!==JSON.stringify(budgets)||w.endsAtMonoMs!==window.endsAtMonoMs)fail('invalid_input');usedItems=Math.max(usedItems,w.usedItems);usedMs=Math.max(usedMs,w.usedMs);usedUsd=dollars(usd(usedUsd)>usd(w.usedUsd)?usd(usedUsd):usd(w.usedUsd));}
     account.floorItems=Math.max(account.floorItems,w.usedItems);account.floorMs=Math.max(account.floorMs,w.usedMs);
     account.items=usedItems;account.ms=usedMs;account.usd=usedUsd;
-    generation++;
+    generation++;pendingAdmission?.controller.abort();
     if(inactive){residentEpoch++;observations.fill(now());missed.fill(false);cadenceUntil=Infinity;}
     if(settled)cycle();renewedUntil=now()+next.renewalMs;parkedUntil=undefined;clearTimer(timer);if(!running)schedule();
   }};
