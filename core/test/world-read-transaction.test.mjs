@@ -379,13 +379,44 @@ test('all widened bodies hide a committed forget on a suppression-enabled store'
   }
 });
 
+function readOnlyInventoryEntry({ sql, source, db }) {
+  // exec executes whole scripts; allow only the observed single control statements.
+  if (source === 'exec') return ['BEGIN', 'COMMIT'].includes(sql.trim());
+  if (/^(?:SELECT|PRAGMA|BEGIN|COMMIT)\b/i.test(sql.trim())) return true;
+  if (!/^WITH\b/i.test(sql.trim())) return false;
+  const bytecode = db.prepare(`EXPLAIN ${sql}`).all();
+  // Materialized CTEs may insert into ephemeral storage; reject persistent writes.
+  return bytecode.every(({ opcode, p2 }) =>
+    (opcode !== 'Transaction' || p2 === 0) && opcode !== 'OpenWrite');
+}
+
+test('statement inventory rejects exec scripts with read-only prefixes', t => {
+  const db = new DatabaseSync(':memory:');
+  t.after(() => db.close());
+  db.exec('CREATE TABLE memories(updated_at INTEGER); INSERT INTO memories VALUES(1)');
+  for (const sql of [
+    'WITH x AS (SELECT 1) SELECT * FROM x; UPDATE memories SET updated_at=updated_at WHERE 0',
+    'SELECT 1; UPDATE memories SET updated_at=updated_at WHERE 0',
+  ]) {
+    db.exec(sql);
+    assert.equal(readOnlyInventoryEntry({ sql, source: 'exec', db }), false, sql);
+  }
+  for (const sql of ['BEGIN', 'COMMIT', '  BEGIN  ', '  COMMIT  ']) {
+    assert.equal(readOnlyInventoryEntry({ sql, source: 'exec', db }), true, sql);
+  }
+  for (const sql of ['BEGIN; SELECT 1', 'COMMIT; SELECT 1', 'BEGIN; COMMIT', 'BEGIN;;',
+    'SELECT 1', 'WITH x AS (SELECT 1) SELECT * FROM x', 'PRAGMA query_only', 'BEGIN IMMEDIATE', 'ROLLBACK']) {
+    assert.equal(readOnlyInventoryEntry({ sql, source: 'exec', db }), false, sql);
+  }
+});
+
 for (const safety of [false, true]) test('widened entry statement inventory, safety=' + safety, async t => {
   const f = await fixture(t, safety);
   for (const [name, call] of Object.entries(calls(f, true))) {
-    const statements = [], connections = [], exec = DatabaseSync.prototype.exec, prepare = DatabaseSync.prototype.prepare;
+    const statements = [], entries = [], exec = DatabaseSync.prototype.exec, prepare = DatabaseSync.prototype.prepare;
     const execution = t.mock.method(DatabaseSync.prototype, 'exec', function(sql) {
       statements.push(sql);
-      connections.push(this);
+      entries.push({ sql, source: 'exec', db: this });
       return exec.call(this, sql);
     });
     const preparation = t.mock.method(DatabaseSync.prototype, 'prepare', function(sql) {
@@ -393,21 +424,14 @@ for (const safety of [false, true]) test('widened entry statement inventory, saf
       for (const method of ['get', 'all', 'iterate', 'run']) {
         if (typeof statement[method] !== 'function') continue;
         const execute = statement[method].bind(statement);
-        statement[method] = (...args) => { statements.push(sql); connections.push(this); return execute(...args); };
+        statement[method] = (...args) => { statements.push(sql); entries.push({ sql, source: method, db: this }); return execute(...args); };
       }
       return statement;
     });
     const result = call();
     execution.mock.restore(); preparation.mock.restore();
     ok(result);
-    assert.ok(statements.every((sql, index) => {
-      if (/^(?:SELECT|PRAGMA|BEGIN|COMMIT)\b/i.test(sql.trim())) return true;
-      if (!/^WITH\b/i.test(sql.trim())) return false;
-      const bytecode = prepare.call(connections[index], `EXPLAIN ${sql}`).all();
-      // Materialized CTEs may insert into ephemeral storage; reject persistent writes.
-      return bytecode.every(({ opcode, p2 }) =>
-        (opcode !== 'Transaction' || p2 === 0) && opcode !== 'OpenWrite');
-    }), name);
+    assert.ok(entries.every(readOnlyInventoryEntry), name);
     const begin = statements.findIndex(sql => sql.startsWith('BEGIN'));
     const end = statements.indexOf('COMMIT', begin);
     assert.ok(begin >= 0 && end > begin, name + ' must execute its snapshot transaction');
