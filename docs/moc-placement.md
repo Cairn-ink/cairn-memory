@@ -156,3 +156,13 @@ With a counter that is monotone over those prefixes, the result is the same as
 the largest fitting prefix. Otherwise it is a prefix that fits, possibly a
 smaller one. The returned page is always exactly counted, including its cursor,
 completion flags, index revision and invalid references.
+
+## Map paging amendment v2 (2026-11-06)
+
+`core.map` first probes the full page, then the page one row shorter if the
+full page does not fit. If neither fits, it binary-searches the remaining
+nonempty prefixes. A fitting page one row shorter therefore takes two counts.
+
+The v1 semantics still hold: monotone counters give the largest fitting prefix,
+and the returned page is always exactly counted with its entire success envelope.
+With a non-monotone counter, a smaller fitting prefix is permitted.
