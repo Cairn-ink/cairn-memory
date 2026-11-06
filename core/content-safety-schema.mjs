@@ -179,8 +179,9 @@ function expectedSchema(base, receiptEventTime = false, attestedFeatures = false
   }
   return expected.get(key);
 }
-const matchesSafetySchema = (rows, layout, receiptEventTime, lineage = 0) => {
-  const wanted = expectedSchema(layout.base, receiptEventTime, layout.attestedFeatures, lineage);
+const matchesSafetySchema = (rows, layout, receiptEventTime, lineage = 0, baseScan = false) => {
+  const wanted = new Map([...expectedSchema(layout.base, receiptEventTime, layout.attestedFeatures, lineage)]
+    .filter(([name]) => !baseScan || !/^card_body_|^card_operations_owner_action$/.test(name)));
   return rows.length === wanted.size && rows.every(row => wanted.has(row.name) &&
     row.type === wanted.get(row.name).type && normalize(row.sql ?? '') === wanted.get(row.name).sql);
 };
@@ -200,7 +201,6 @@ const safetyObjects = `SELECT schema_version AS cookie,name,type,sql FROM pragma
  name GLOB 'content_safety_*' OR name GLOB 'content_identity_*' OR name='owner_suppression_epochs'
  OR name GLOB 'content_suppression*' OR name GLOB 'safety_*') LIMIT 65`;
 const lineageObjects = safetyObjects.replace(") LIMIT 65", " OR name GLOB 'card_body_*' OR name='card_operations_owner_action') LIMIT 85");
-const safetyObjectsFor = layout => layout.attestedFeatures&&[23,33].includes(layout.base)?lineageObjects:safetyObjects;
 export function verifyContentSafetyDDL(db, physical) {
   const layout = resolveContentLayout(physical);
   const receiptEventTime = layout.attestedFeatures
@@ -208,7 +208,7 @@ export function verifyContentSafetyDDL(db, physical) {
     : false;
   const lineage = layout.attestedFeatures ? db.prepare('SELECT card_lineage_revision FROM content_safety_control WHERE singleton=1').get()?.card_lineage_revision : 0;
   const wanted = expectedSchema(layout.base, receiptEventTime, layout.attestedFeatures, lineage);
-  const rows = db.prepare(safetyObjectsFor(layout)).all().filter(row => row.name !== null);
+  const rows = db.prepare(lineage ? lineageObjects : safetyObjects).all().filter(row => row.name !== null);
   if (!layout.suppressionRevision || rows.length !== wanted.size || rows.some(row => !wanted.has(row.name) ||
       row.type !== wanted.get(row.name).type || normalize(row.sql ?? '') !== wanted.get(row.name).sql)) fail('unsupported_database');
 }
@@ -277,9 +277,9 @@ export function attestContentSafety(db, physical) {
     const layout = resolveContentLayout(physical);
     // The schema rows and their cookie share one statement snapshot. Compare
     // with the final header without adding any opener statements.
-    const scanned = metadataRows(db.prepare(safetyObjectsFor(layout)));
+    const scanned = metadataRows(db.prepare(safetyObjects));
     const cookie = scanned[0]?.cookie;
-    const rows = scanned.filter(row => row.name !== null);
+    let rows = scanned.filter(row => row.name !== null);
     let controlBinding, header;
     if (!layout.suppressionRevision) {
       if (rows.length) fail('unsupported_database');
@@ -288,7 +288,7 @@ export function attestContentSafety(db, physical) {
       // only the two supported tuple shapes; the row must then select exactly
       // the matching shape. Legacy cells retain their original preflight.
       const lineageAlternatives = layout.attestedFeatures && [23,33].includes(layout.base) ? [0,1] : [0];
-      if (!(layout.attestedFeatures ? [false, true] : [false]).some(flag => lineageAlternatives.some(lineage => matchesSafetySchema(rows, layout, flag, lineage)))) fail('unsupported_database');
+      if (!(layout.attestedFeatures ? [false, true] : [false]).some(flag => lineageAlternatives.some(lineage => matchesSafetySchema(rows, layout, flag, lineage, true)))) fail('unsupported_database');
       // Read the control population and final schema/version header together.
       // This retains the cookie fence without a separate singleton statement.
       const control = metadataRows(db.prepare(`SELECT c.*,schema_version AS cookie,
@@ -302,6 +302,14 @@ export function attestContentSafety(db, physical) {
           ![row.suppression_domain, row.migration_id].every(value => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value)) ||
           !/^[0-9a-f]{64}$/.test(row.inventory_digest)) fail('unsupported_database');
       const eventTime = layout.attestedFeatures ? supportedReceiptEventTime(row.receipt_event_time) : false;
+      // Lineage-zero openers retain the original bounded query and sequence.
+      // Only the selected installed package needs the extended object scan;
+      // bind it to both the initial schema cookie and final control snapshot.
+      if (row.card_lineage_revision === 1) {
+        const extended = metadataRows(db.prepare(lineageObjects));
+        if (extended[0]?.cookie !== cookie || row.cookie !== cookie) fail('unsupported_database');
+        rows = extended.filter(object => object.name !== null);
+      }
       // Shared by every safety-attested opener, including legacy ordinary
       // readers and lazy topic preparation. Metadata only, in the existing
       // final header snapshot; cached reads retain their single header check.
