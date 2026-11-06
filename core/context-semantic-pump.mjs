@@ -244,26 +244,27 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,admit=admitM
   async function brokered(index,slot){
     const epoch=residentEpoch,enteredGeneration=generation,controller=new AbortController();
     const pending={controller};pendingAdmission=pending;
-    let result;
+    let result,untilMonoMs;
     try{
       const maxMs=turnMs(),identity=maintenanceAdmissionIdentity((slot.p??projections[0]).options);
       result=await turns.wait({version:1,pumpId:c.id,windowId:window.id,lane:index,family:'semantic',
         kind:slot.kind==='startup'?'status':slot.kind==='validation'?'validation':slot.p.mode,phase:'work',intent:slot.kind==='regular'&&slot.p.mode==='lexical'?slot.p.intent:null,maxMs},
-        {signal:controller.signal,identity,untilMonoMs:Math.min(now()+turnPort.maxWaitMs,dutyEnd()-maxMs)});
+        {signal:controller.signal,identity,untilMonoMs:untilMonoMs=Math.min(now()+turnPort.maxWaitMs,dutyEnd()-maxMs)});
     }catch{result={status:'failed',error:'reader_failed'};}
     if(pendingAdmission===pending)pendingAdmission=undefined;
     if(result.status==='failed'){turnFailure(result.error);return;}
     if(result.status!=='admitted'){retryNotBefore=now()+spacing;return;}
-    const ticket=result.ticket;
+    const ticket=result.ticket,admittedAt=now();
     let reason;
     if(stopped||error)reason='stopped';
     else if(generation!==enteredGeneration)reason='generation_changed';
-    else if(result.waitExpired)reason='wait_expired';
     else if(dutyEnd()-now()<turnMs())reason='renewal_expired';
     else if(exhausted())reason='budget_exhausted';
     else if(now()<lastTick+spacing)reason='spacing';
     else if(epoch!==residentEpoch||plan()[0]!==index)reason='lane_changed';
-    if(reason){retryNotBefore=now()+spacing;releaseTurn(ticket,'declined',reason);return;}
+    if(turns.isPoisoned(maintenanceAdmissionIdentity((slot.p??projections[0]).options))){reason??='stopped';error='reader_failed';}
+    if(!reason&&(result.waitExpired||admittedAt>=untilMonoMs))reason='wait_expired';
+    if(reason){retryNotBefore=now()+spacing;releaseTurn(ticket,'declined',reason);if(error)turnFailure(error);return;}
     if(!turns.portUnchanged()){releaseTurn(ticket,'withdrawn');turnFailure('authority_required');return;}
     try{turns.bindIdentity(ticket,maintenanceAdmissionIdentity((slot.p??projections[0]).options));}
     catch{releaseTurn(ticket,'withdrawn');turnFailure('reader_failed');return;}

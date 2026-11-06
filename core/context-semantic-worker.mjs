@@ -20,6 +20,21 @@ import { pumpFloors, pumpExpiry, pumpUsage } from './context-semantic-accounting
 const ownerId=c.binding.ownerId,resources=new Int32Array(c.resources),owned=[],active=new Set(),clients=new Set(),operations=new Map();
 const sqlContext=new AsyncLocalStorage();sqlContext.enterWith({until:-Infinity});
 const sqlite=createProductSqlitePolicy({state:()=>sqlContext.getStore()});let host,ledger,port,providerModel,policy,maintenance,closed=false,queue=Promise.resolve(),pendingSeal,lastState;
+const handleRequests=new Map();
+parentPort.on('message',message=>{
+  if(message.kind!=='sidecar-reserved')return;
+  const request=handleRequests.get(message.id);if(!request)return;
+  handleRequests.delete(message.id);
+  if(message.sidecarHandles)request.resolve(message.sidecarHandles);else request.reject(Object.assign(Error('store_closed'),{code:'store_closed'}));
+});
+function reserveHandles(identity) {
+  if(closed)fail('store_closed');
+  return new Promise((resolve,reject)=>{
+    const id=randomUUID();handleRequests.set(id,{resolve,reject});
+    try{parentPort.postMessage({kind:'sidecar-reserve',id,identity});}
+    catch(error){handleRequests.delete(id);reject(error);}
+  });
+}
 // Failed protected accounting is retried before the next admission checks capacity.
 // Retain engine-owned accounting data and its private fence, never a provider payload.
 const pendingSettlements=new Map();
@@ -285,8 +300,12 @@ async function embed(input,op,metadata) {
     if(usage!==undefined||!Number.isSafeInteger(value)||value<0||value>bound){protocolFailure=true;fail('provider_error');}usage=value;
   };
   let underlying;
+  const invokeProvider=async()=>{
+    await maintenance.prepare(metadata.path);checkDispatch();const provider=contentRequest.getStore()?modelPortValue(providerModel,'embed','provider_error'):undefined;if(contentRequest.getStore()&&typeof provider!=='function')fail('provider_error');invoked=true;const operation=operations.get(op.operationId);if(operation){operation.attempts=1;if(operation.attemptState)Atomics.store(new Int32Array(operation.attemptState),0,1);}return contentRequest.getStore()?callerPort(providerModel,'embed',[Object.freeze([...texts]),{signal:controller.signal,deadlineAt,beforeDispatch,settleInputTokens}],'provider_error',provider,result=>{if(result?.error?.code==='provider_unavailable')providerUnavailable=true;if(result?.error?.usageBoundExceeded===true)protocolFailure=true;}):Promise.resolve(port.embed(Object.freeze([...texts]),{signal:controller.signal,deadlineAt,beforeDispatch,settleInputTokens}));
+  };
+  // Register the settlement before the preparation round-trip can resume.
   Atomics.add(resources,2,1);
-  try {if(admissionError)throw admissionError;checkDispatch();const provider=contentRequest.getStore()?modelPortValue(providerModel,'embed','provider_error'):undefined;if(contentRequest.getStore()&&typeof provider!=='function')fail('provider_error');invoked=true;const operation=operations.get(op.operationId);if(operation){operation.attempts=1;if(operation.attemptState)Atomics.store(new Int32Array(operation.attemptState),0,1);}underlying=contentRequest.getStore()?callerPort(providerModel,'embed',[Object.freeze([...texts]),{signal:controller.signal,deadlineAt,beforeDispatch,settleInputTokens}],'provider_error',provider,result=>{if(result?.error?.code==='provider_unavailable')providerUnavailable=true;if(result?.error?.usageBoundExceeded===true)protocolFailure=true;}):Promise.resolve(port.embed(Object.freeze([...texts]),{signal:controller.signal,deadlineAt,beforeDispatch,settleInputTokens}));}
+  try {if(admissionError)throw admissionError;underlying=invokeProvider();}
   catch(error){underlying=Promise.reject(error);}
   const settled=underlying.then(value=>({value}),error=>({error})).then(async result=>{
     if(result.error?.code==='provider_unavailable')providerUnavailable=true;
@@ -347,7 +366,7 @@ async function dataCall(message) {
     if(typeof input.semantic!=='boolean')fail('invalid_input');
     if(a.state.policy.revision!==input.expectedRevision)fail('revision_conflict');
     if(a.state.policy.semantic===input.semantic){value=a.state.policy;within(operation);final();return {ok:true,value};}
-    const prepared=input.semantic&&a.state.targets===null?await maintenance.targets(c.backfillTargets):null;
+    const prepared=input.semantic&&a.state.targets===null?await maintenance.prepareTargets(c.backfillTargets):null;
     const release=input.semantic?()=>{}:await gate.stop();
     let changed;
     try{changed=await scopedChange(s=>{
@@ -461,6 +480,7 @@ async function internalCall(message,metadata) {
 let disposing;
 function dispose() {return disposing??=(async()=>{
   closed=true;let failed=false,release;
+  for(const request of handleRequests.values())request.reject(Object.assign(Error('store_closed'),{code:'store_closed'}));handleRequests.clear();
   for(const controller of controllers)controller.abort();
   for(const op of operations.values())for(const controller of op.controllers)controller.abort();
   await Promise.allSettled([...active]);await queue;
@@ -513,8 +533,8 @@ try {
     });lastState=recovered.state;
   }
   gate.publish(lastState,true);
-  const {semanticMaintenance}=await import('./context-semantic-maintenance.mjs');maintenance=semanticMaintenance({c,sqlite,identity:identityMetadata,secretState:()=>ledger.read(ownerId).state});
-  if(lastState.targets&&!lastState.firstCoverageComplete){const configured=maintenance.targets(c.backfillTargets),ids=new Set(configured.map(digest));if(lastState.targets.some(t=>!ids.has(digest(t))))fail('revision_conflict');}
+  const {semanticMaintenance}=await import('./context-semantic-maintenance.mjs');maintenance=semanticMaintenance({c,sqlite,identity:identityMetadata,secretState:()=>ledger.read(ownerId).state,reserveHandles});
+  if(lastState.targets&&!lastState.firstCoverageComplete){const configured=await maintenance.prepareTargets(c.backfillTargets),ids=new Set(configured.map(digest));if(lastState.targets.some(t=>!ids.has(digest(t))))fail('revision_conflict');}
   within(c.operation);parentPort.postMessage({kind:'ready',result:{ok:true,value:{identity:identityMetadata()}}});
 }catch(error){try{await dispose();}catch{}parentPort.postMessage({kind:'ready',result:failure(error)});}
 function ownEmbedding(value) {
@@ -553,7 +573,7 @@ parentPort.on('message',async message=>{
       let outstanding;
       try{
         outstanding=outstandingState(m);
-        let guard;try{guard=maintenance.portGuard(m,message.metadata);}catch{throw latchRefusal(state);}
+        let guard;try{if(m.contentFence)await maintenance.prepare(message.metadata.path);guard=maintenance.portGuard(m,message.metadata);}catch{throw latchRefusal(state);}
         const observe=guard?phase=>{try{guard(phase);}catch(error){latchRefusal(state);if(!phase?.accounting)throw state.refusal;}}:undefined;
         const value=await withContentPortBoundary(observe,()=>observe?contentRequest.run({guard:observe,state,accounting:false},()=>internalCall(m,message.metadata)):internalCall(m,message.metadata));
         if(state.refusal)throw state.refusal;
