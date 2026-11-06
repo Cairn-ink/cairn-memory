@@ -923,17 +923,17 @@
     {
       "file": "core/content-safety-migration.mjs",
       "sha256": "cfa4de31c06a67b0677faa77287fe5c353c670cbf3320855c6414200892cd0cf",
-      "reason": "D-40 approved offline lineage installation preserves canonical denial populations and the suppression domain, then seals classified retained Card bodies under the existing backup/quiescence transaction."
+      "reason": "Reviewed Card lineage: offline lineage installation preserves canonical denial populations and the suppression domain, then seals classified retained Card bodies under the existing backup/quiescence transaction."
     },
     {
       "file": "core/content-safety-schema.mjs",
       "sha256": "461210f6a71b902ded6aaca22572af53bad060953306f4bf235a7b9375d668c2",
-      "reason": "D-40 approved exact lineage tuple/DDL attestation and synchronous canonical snapshot registration; feature accessors expose only privately attested revisions and add no fact-only writer."
+      "reason": "Reviewed Card lineage: exact lineage tuple/DDL attestation and synchronous canonical snapshot registration; feature accessors expose only privately attested revisions and add no fact-only writer."
     },
     {
       "file": "core/card-lineage.mjs",
       "sha256": "e50641b6a7dd91f909b91dbf084ec843304b28059c92490d446690ead49f7c22",
-      "reason": "D-40 approved in-transaction Card provenance/authority sealer and its private retained-source reservation helper, including offline unknown-body seeding; the whole-module pin closes helper forwarding and export changes."
+      "reason": "Reviewed Card lineage: in-transaction Card provenance/authority sealer and its private retained-source reservation helper, including offline unknown-body seeding; the whole-module pin closes helper forwarding and export changes."
     }
   ],
   "writers": [
@@ -972,7 +972,7 @@
       "start": "    if (method === 'deleteSourceNote') {",
       "end": "    const confirmed =",
       "sha256": "2e39fed28931476da4b220b0ec3d6258a4d2b4304d5626370ae72329ecf6aa5e",
-      "reason": "D-40 approved lineage-one note deletion retains Card bytes and invalidates revision/effects; the lineage-zero cancellation and canonical suppression insertion remain in this exact region."
+      "reason": "Reviewed Card lineage: lineage-one note deletion retains Card bytes and invalidates revision/effects; the lineage-zero cancellation and canonical suppression insertion remain in this exact region."
     },
     {
       "id": "raw-delete",

@@ -259,7 +259,7 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // Foreign-binding repair: the read-only disposal check adds one
   // validation_invalid failure-reason string in context-product-sidecar (6 -> 7).
   // It is not a canonical content identity or a writer acknowledgement field.
-  // D-40: actorId/actor_id and host_action_id bind trusted Card authorization
+  // Card lineage: actorId/actor_id and host_action_id bind trusted Card authorization
   // requests and private audit rows. Card/source/namespace ids in the lineage
   // module, Card storage and offline migration bind retained provenance and
   // canonical read refs; the observation messageId matches retained Raw facts.
