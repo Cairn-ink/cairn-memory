@@ -1899,10 +1899,23 @@ share: its first parent seal uses one initialization BEGIN/COMMIT pair. This is
 a first-open cost, including after replacement; matched admissions and steady
 maintenance turns add no transactions.
 
-A missing or invalid seal makes the cache unavailable to reads. Explicit
-maintenance uses the existing excluded replacement protocol, then performs the
-normal bounded, checkpointed rebuild before publication. Existing sidecars have
-no seal and intentionally incur this one-time replacement and full rebuild.
+A reader opened after a mismatch is detected never serves the untrusted file;
+a reader opened before an out-of-band seal removal keeps serving until its next
+reopen (content safety by delivery revalidation).
+Invalidating serving handles on rejection is a planned follow-up.
+
+DELETE-mode caches with a missing or invalid seal use the existing excluded
+replacement protocol, then perform the normal bounded, checkpointed rebuild
+before publication. WAL-mode hosts pay main's integrity check once on the first
+open after upgrade; DELETE-mode caches rebuild once. A missing WAL seal means
+no attestation table or no singleton row. A healthy host-configured WAL cache
+runs `quick_check` and `foreign_key_check` at that writable open, then writes its
+seal in the first write transaction. A missing-table upgrade retires the old
+schema-bound publication/progress records in bounded slices in that transaction;
+normal maintenance rebuilds them. Missing-row upgrades preserve publications.
+A rollback leaves the seal missing, so the next open checks again. An attested
+WAL open runs zero whole-file statements. A present but invalid WAL seal is
+refused under the existing non-DELETE rule, without a whole-file check.
 Under lifecycle exclusion the replacement child checks the parent's exact-row
 SHA-256 verdict again; a changed row or file stamp refuses replacement with
 ESTALE. This attestation verdict needs no whole-file integrity check. Other

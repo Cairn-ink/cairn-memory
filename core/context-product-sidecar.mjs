@@ -90,9 +90,9 @@ const expectedSchema = (ddl+VECTOR_DDL).trim().split(';').filter(sql => sql.trim
   sql=sql.trim(); const match=/^CREATE (TABLE|INDEX) (\w+)/.exec(sql);
   return {type:match[1].toLowerCase(),name:match[2],tbl_name:match[1]==='TABLE'?match[2]:/ ON (\w+)/.exec(sql)[1],sql};
 }).sort((a,b) => Buffer.compare(Buffer.from(a.type),Buffer.from(b.type)) || Buffer.compare(Buffer.from(a.name),Buffer.from(b.name)));
-function attest(db, objects) {
+function attest(db, objects, legacyWal = false) {
   if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID ||
-      db.prepare('PRAGMA user_version').get().user_version !== PRODUCT_SIDECAR_FORMAT || !same(objects ?? schema(db), expectedSchema)) unavailable('incompatible');
+      db.prepare('PRAGMA user_version').get().user_version !== PRODUCT_SIDECAR_FORMAT || !same(objects ?? schema(db), legacyWal?expectedSchema.filter(row=>row.name!=='product_attestation'):expectedSchema)) unavailable('incompatible');
 }
 function productStat(path, optional = false) {
   let s;
@@ -195,7 +195,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   const handleRegistry=()=>handles??=sidecarHandleGuard(localHandle=reserveSidecarHandle(Object.values(productFile(path)).join(':')));
   const compare=memoryComparison?memoryComparison.createMemoryComparator():null;
   let comparisonBase=null, reuseOnlyWork=false;
-  let sideFormat, side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, unattestedIdentity=null, guardDepth=0, discardAfterGuard=false, guardWritable=false;
+  let sideFormat, side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, unattestedIdentity=null, legacySealTable=false, guardDepth=0, discardAfterGuard=false, guardWritable=false;
   function failed(error, wasWritable) {
     if(wasWritable || error.reason==='storage_unavailable' ||
         error.code==='ERR_SQLITE_ERROR' && Number.isInteger(error.errcode) && [10,11,13,26].includes(error.errcode&255))discardAfterGuard=true;
@@ -256,10 +256,10 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     sideFiles?.();
     if(!same(openedIdentity,productFile(sidePath,true)))unavailable('storage_unavailable');
   }
-  function read(work) {
-    const wasWritable=sideWritable===true;
-    try { sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});return readTransaction(side,()=>{
-      side.prepare('PRAGMA schema_version').get();
+  function read(work,checkAdmission) {
+    const wasWritable=sideWritable===true,reader=admissionDatabase(side,checkAdmission);
+    try { sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});return readTransaction(reader,()=>{
+      reader.prepare('PRAGMA schema_version').get();
       verifyOpened();rendezvous('snapshot');return work();
     }); } catch(e) {failed(e,wasWritable);attribution?.captureFailure(e); if(e.reason==='storage_unavailable')try{close();}catch{}throw e; }
   }
@@ -268,7 +268,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       : new DatabaseSync(sidePath, { readOnly: !write }); }
     catch (error) {attribution?.captureFailure(error); if(sqlite)sqlite.openingFailure(error);throw error; }
   };
-  function close() { discardAfterGuard=true;if (side?.isOpen) side.close(); handles?.closed(); side = null; metadata = null; sideFiles = null; discardAfterGuard=false; }
+  function close() { discardAfterGuard=true;if (side?.isOpen) side.close(); handles?.closed(); side = null; metadata = null; sideFiles = null; legacySealTable=false;discardAfterGuard=false; }
   function write(work, kind='setup', beforeCommit) {
     // A caught verification rollback can continue within this refresh. Reopen
     // and check integrity before its fallback or any other transaction writes.
@@ -278,10 +278,10 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     const beginning=attribution?.start('begin');
     try {attribution?.checkpoint('begin');side.exec('BEGIN IMMEDIATE');}catch(error){failed(error,wasWritable);attribution?.captureFailure(error);throw error;}finally{attribution?.end(beginning);}
     try {
-      verifyOpened();const result=work();rendezvous('batch');beforeCommit?.();
+      verifyOpened();if(legacySealTable)side.exec(expectedSchema.find(row=>row.name==='product_attestation').sql);const result=work();rendezvous('batch');beforeCommit?.();
       writeSidecarAttestation(side,identity.cursorSecret,sidecarAttestationFile(sidePath),PRODUCT_SIDECAR_FORMAT);
       const committing=attribution?.start('commit');
-      try {attribution?.checkpoint('commit');attribution?.add(kind+'CommitAttempts',1);side.exec('COMMIT');attribution?.add(kind+'Commits',1);}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.end(committing);}
+      try {attribution?.checkpoint('commit');attribution?.add(kind+'CommitAttempts',1);side.exec('COMMIT');legacySealTable=false;attribution?.add(kind+'Commits',1);}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.end(committing);}
       return result;
     }
     catch (e) {failed(e,wasWritable);attribution?.captureFailure(e);
@@ -368,7 +368,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     const admittedIdentity=productFile(sidePath), files=sqlite?.files(sidePath);
     checkAdmission?.();
     handleRegistry().opening();
-    let candidate, admitted, admittedMetadata, bootstrap=false;
+    let candidate, admitted, admittedMetadata, bootstrap=false, missingSealTable=false, legacyWalMissing=false;
     sideMode=undefined;sideFormat=undefined;
     try {
       candidate=openNative(wantsWrite);
@@ -393,21 +393,46 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         const objects=schema(candidate);
         // A legacy missing table has no row to query. Every present table must
         // have the exact singleton primary key before the bounded lookup.
-        if(objects.some(row=>row.name==='product_attestation'))attest(candidate,objects);
+        missingSealTable=!objects.some(row=>row.name==='product_attestation');
+        if(!missingSealTable)attest(candidate,objects);
         const seal=readSidecarAttestation(candidate,objects);
         bootstrap=wantsWrite&&same(unattestedIdentity,admittedIdentity)&&seal===null;
-        if(!bootstrap&&!validSidecarAttestation(identity.cursorSecret,seal,sidecarAttestationFile(sidePath),PRODUCT_SIDECAR_FORMAT))
-          throw Object.assign(Error('index_unavailable'),{code:'index_unavailable',reason:'attestation_invalid',expectedAttestation:sidecarAttestationDigest(seal)});
+        if(!bootstrap&&!validSidecarAttestation(identity.cursorSecret,seal,sidecarAttestationFile(sidePath),PRODUCT_SIDECAR_FORMAT)) {
+          // Upgrade decision table (missing means no table or no singleton row):
+          // DELETE + missing/invalid: excluded replacement and bounded rebuild.
+          // Host-configured WAL + missing: main's quick/FK checks once, then
+          // seal atomically with this open's first write (DDL rolls back too).
+          // WAL + present invalid: non-DELETE refusal, never whole-file checks.
+          // Valid seal in either mode: no whole-file checks.
+          if(wantsWrite&&sideMode==='WAL'&&sidecarJournalMode==='WAL'&&seal===null) {
+            if(missingSealTable)attest(candidate,objects,true);
+            if(candidate.prepare('PRAGMA quick_check').get().quick_check!=='ok'||candidate.prepare('PRAGMA foreign_key_check').get())unavailable('corrupt');
+            bootstrap=true;legacyWalMissing=true;
+          } else throw Object.assign(Error('index_unavailable'),{code:'index_unavailable',reason:'attestation_invalid',expectedAttestation:sidecarAttestationDigest(seal)});
+        }
       });
       checkAdmission?.();candidate=admitted;
     } catch(error) {attribution?.captureFailure(error);try{if(candidate?.isOpen)candidate.close();}catch{}
       if(candidate?.isOpen)side=candidate;else handles.closed();throw error;}
-    side=candidate;sideWritable=wantsWrite;sideFiles=files;openedIdentity=admittedIdentity;metadata=admittedMetadata;
+    side=candidate;sideWritable=wantsWrite;sideFiles=files;openedIdentity=admittedIdentity;metadata=admittedMetadata;legacySealTable=bootstrap&&missingSealTable;
     // Subsequent work starts on this admitted mode, including upgrade callers.
     guardWritable=wantsWrite;
-    // Standalone admission has no later write. Other write callers seal with
-    // their existing first transaction, before any generation can publish.
-    if(bootstrap&&bootstrapCommit){checkAdmission?.();write(()=>{},'setup',checkAdmission);unattestedIdentity=null;}
+    // Missing-table WAL upgrades change the schema cookie. Authenticate the
+    // old bindings before retiring them; never reinterpret their signatures.
+    // Retire only bounded pointer/certificate slices, leaving corpus retirement
+    // to ordinary GC. DDL, retirement and first seal roll back together.
+    const check=checkAdmission??(()=>{});
+    if(legacyWalMissing&&missingSealTable&&admissionBindings(check))unavailable('foreign_binding');
+    // Standalone admission has no later write. A WAL upgrade's one-time first
+    // write also retires the old schema-bound pointers before any observation.
+    if(bootstrap&&(bootstrapCommit||legacyWalMissing)){
+      check();const writing=side;side=admissionDatabase(side,check);
+      try {write(()=>{
+        if(legacyWalMissing&&missingSealTable)for(const table of ['vector_publications','vector_work','vector_validation_records','vector_purge_checkpoints','publications','work','validation_records','progress_records','selections']){
+          for(;;){check();const result=side.prepare(`DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} LIMIT 128)`).run();if(!result.changes)break;}
+        }
+      },'setup',check);}finally{if(side?.isOpen)side=writing;}unattestedIdentity=null;
+    }
     return true;
   }
   const initialization=()=>({autoVacuum:'INCREMENTAL',...(sqlite ? {journalMode:sidecarJournalMode} : {}),sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=${PRODUCT_SIDECAR_FORMAT}; ${ddl} ${VECTOR_DDL}`,
@@ -861,10 +886,10 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   function admissionBindings(checkAdmission) {
     // Authenticate before interpreting identity metadata, including retained
     // certificates without live pointers. Never scan corpus rows here.
-    const canonicalIdentity=canonicalRead(()=>canonicalProductIdentity(path,canonical));
+    const canonicalIdentity=canonicalRead(()=>canonicalProductIdentity(path,admissionDatabase(canonical,checkAdmission)));
     checkAdmission();
     return read(()=>{
-      const cacheIdentity=sideIdentity();
+      const cacheIdentity=sideIdentity(admissionDatabase(side,checkAdmission));
       for(const sql of [
         'SELECT 1 FROM publications p LEFT JOIN validation_records r ON r.publication=p.publication AND r.generation=p.generation WHERE r.publication IS NULL LIMIT 1',
         'SELECT 1 FROM work w LEFT JOIN progress_records r ON r.generation=w.generation WHERE r.generation IS NULL LIMIT 1'
@@ -889,7 +914,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       }
       // Complete authentication of both sets before authorizing replacement.
       return foreign?basis.digest('hex'):null;
-    });
+    },checkAdmission);
   }
   // The bootstrap exception belongs to this call only. A later turn must
   // revalidate the file and treat an unsigned empty successor as untrusted.
@@ -909,8 +934,8 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       const oldFormat = sideFormat > 0 && sideFormat !== PRODUCT_SIDECAR_FORMAT; close();
       checkAdmission();
       if (oldFormat) unavailable(e.reason==='wrong_store'?'wrong_store':'incompatible');
-      // A WAL cache (or an indeterminate mode) cannot enter the legacy nolock
-      // replacement protocol. Quiesce and rebuild it explicitly at the host.
+      // Invalid or corrupt WAL caches cannot enter the legacy nolock
+      // replacement protocol. Missing healthy WAL seals are handled at open.
       if(sqlite && sideMode!=='DELETE')unavailable('storage_unavailable');
       // Repair is explicit maintenance, never a read fallback. Refuse live or
       // unsafe companions; SQLite alone performs journal recovery on opening.

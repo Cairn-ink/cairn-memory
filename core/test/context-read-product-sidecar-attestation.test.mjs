@@ -10,7 +10,7 @@ import { configured } from '../testing/context-product-owner-fixture.mjs';
 import { selection } from '../testing/context-product-verification-fixture.mjs';
 import { productSidecar, PRODUCT_SIDECAR_SUFFIX, PRODUCT_SIDECAR_FORMAT } from '../context-product-sidecar.mjs';
 import { openContextProductFacade } from '../context-read-facade.mjs';
-import { accessDigest } from '../context-product-validation.mjs';
+import { accessDigest, digest, signedRecord, verifiedRecord } from '../context-product-validation.mjs';
 import { createProductSqlitePolicy } from '../context-product-sqlite.mjs';
 import { nativeObserver } from '../context-product-telemetry.mjs';
 import { createExclusiveSqliteFile, sqliteFileStat } from '../sqlite-journal-probe.mjs';
@@ -69,6 +69,25 @@ function setup(t,{build=true,mode='DELETE',batching=false,state=new SharedArrayB
     row(){return sql(path,db=>seals.readSidecarAttestation(db));},
     valid(){return seals.validSidecarAttestation(facade.port.identity.cursorSecret,s.row(),seals.sidecarAttestationFile(path),PRODUCT_SIDECAR_FORMAT);}};
   f.workspace.defer(()=>{s.close();facade.close();});s.open();if(build)s.finish();return s;
+}
+// Construct a healthy pre-upgrade WAL layout. Dropping a table also changes
+// SQLite's cookie; rebind the test certificates to the resulting legacy schema
+// so the fixture does not accidentally start with a foreign-binding defect.
+function legacyWal(s,missing) {
+  sql(s.path,db=>{
+    db.exec(missing==='table'?'DROP TABLE product_attestation':'DELETE FROM product_attestation');
+    if(missing!=='table')return;
+    const secret=s.facade.port.identity.cursorSecret,file=seals.sidecarAttestationFile(s.path);
+    const sidecar={device:file.device,inode:file.inode,incarnation:db.prepare('SELECT incarnation FROM product_metadata WHERE singleton=1').get().incarnation,
+      schemaVersion:db.prepare('PRAGMA schema_version').get().schema_version};
+    for(const [purpose,table,key]of [['validation','validation_records','publication'],['progress','progress_records','generation']]){
+      for(const row of db.prepare(`SELECT ${key} AS id,record FROM ${table}`).all()){
+        const {mac,...record}=verifiedRecord(secret,purpose,row.record);
+        if(purpose==='validation')record.sidecar=sidecar;else record.sidecarIdentityDigest=digest({format:PRODUCT_SIDECAR_FORMAT,...sidecar});
+        db.prepare(`UPDATE ${table} SET record=? WHERE ${key}=?`).run(signedRecord(secret,purpose,record),row.id);
+      }
+    }
+  });
 }
 function replacementCalls(s){return s.children.filter(r=>r.events.some(e=>e.begin?.database==='incumbent'));}
 function wholeChecks(report){return report.events.filter(e=>e.outcome?.database==='incumbent'&&e.outcome.stage==='execute'&&e.outcome.statement==='context_evidence').length;}
@@ -377,5 +396,61 @@ test('child initialization refuses unknown fields and mistyped known fields befo
     {attestation:{...payload.attestation,applicationId:'1'}},{sql:{}},{expectedAttestation:[]}])
     assert.throws(()=>createExclusiveSqliteFile(s.path,undefined,{...payload,...patch}),{name:'TypeError',message:'invalid_cache_initialization'});
   assert.equal(spawns,before,'rejected payloads reach no child channel');
+});
+
+
+for(const missing of ['table','row'])test(`legacy WAL missing ${missing} checks once, seals in place and reopens without whole-file statements`,t=>{
+  const s=setup(t,{mode:'WAL'}),publication=s.observe().publication,file=seals.sidecarAttestationFile(s.path);s.close();
+  legacyWal(s,missing);
+  s.open();s.storage.admit(2000);assert.equal(s.checks,2);assert.equal(replacementCalls(s).length,0);
+  assert.equal(s.valid(),true);assert.deepEqual(seals.sidecarAttestationFile(s.path),file);
+  s.open();s.storage.admit(2000);assert.equal(s.checks,2,'attested WAL open adds zero whole-file statements');
+  // A dropped table changes the schema cookie, so ordinary bounded maintenance
+  // revalidates/rebuilds the inner publication as needed.
+  assert.ok(s.finish().publication);if(missing==='row')assert.deepEqual(s.observe().publication,publication);
+});
+
+test('corrupt legacy WAL retains main non-DELETE refusal',t=>{
+  const s=setup(t,{mode:'WAL'});s.close();sql(s.path,db=>db.exec('DELETE FROM product_attestation'));
+  s.setHook(text=>{if(text==='PRAGMA quick_check')throw Object.assign(Error('synthetic corrupt legacy WAL'),{code:'ERR_SQLITE_ERROR',errcode:11});});
+  s.open();assert.throws(()=>s.storage.admit(2000),{code:'index_unavailable',reason:'storage_unavailable'});
+  assert.equal(replacementCalls(s).length,0);assert.equal(s.row(),null);
+});
+
+for(const damage of ['mac','stamp'])test(`present invalid WAL ${damage} refuses with zero whole-file statements`,t=>{
+  const s=setup(t,{mode:'WAL'});s.close();sql(s.path,db=>db.exec(damage==='mac'?"UPDATE product_attestation SET record='invalid'":'PRAGMA ignore_check_constraints=ON;UPDATE product_attestation SET stamp=9223372036854775807'));
+  s.open();assert.throws(()=>s.storage.admit(2000),{code:'index_unavailable',reason:'storage_unavailable'});
+  assert.equal(s.checks,0);assert.equal(replacementCalls(s).length,0);
+});
+
+for(const missing of ['table','row'])test(`legacy WAL SIGKILL before sealing COMMIT leaves missing ${missing} and checks again`,t=>{
+  const s=setup(t,{mode:'WAL'});s.close();legacyWal(s,missing);
+  const code=`
+    import {DatabaseSync} from 'node:sqlite';
+    import {writeSync} from 'node:fs';
+    import {productSidecar} from ${JSON.stringify(new URL('../context-product-sidecar.mjs',import.meta.url).href)};
+    import {openContextProductFacade} from ${JSON.stringify(new URL('../context-read-facade.mjs',import.meta.url).href)};
+    import {createProductSqlitePolicy} from ${JSON.stringify(new URL('../context-product-sqlite.mjs',import.meta.url).href)};
+    const sqlite=createProductSqlitePolicy({now:()=>0});sqlite.start(Infinity);
+    const facade=openContextProductFacade(process.argv[1],{sqlite});
+    let checks=0,sealed=false;const prepare=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;
+    DatabaseSync.prototype.prepare=function(sql){const statement=prepare.call(this,sql);return new Proxy(statement,{get(target,key){
+      const value=Reflect.get(target,key,target);if(typeof value!=='function')return value;
+      return (...args)=>{if(key==='get'&&['PRAGMA quick_check','PRAGMA foreign_key_check'].includes(sql))checks++;
+        if(key==='run'&&sql.startsWith('INSERT INTO product_attestation'))sealed=true;
+        return Reflect.apply(value,target,args);};}});};
+    DatabaseSync.prototype.exec=function(sql){
+      if(sql==='COMMIT'&&sealed){writeSync(1,JSON.stringify({checks,transaction:this.isTransaction}));process.kill(process.pid,'SIGKILL');}
+      return exec.call(this,sql);
+    };
+    const storage=productSidecar({path:process.argv[1],db:facade.port.db,identity:facade.port.identity,features:facade.port.features,
+      sqlite,writable:true,sidecarJournalMode:'WAL',now:()=>0});
+    storage.admit(2000);throw Error('must die before sealing commit');`;
+  const killed=childProcess.spawnSync(process.execPath,['--input-type=module','-e',code,s.f.path],{encoding:'utf8',env:{},timeout:10000});
+  assert.equal(killed.error,undefined);assert.equal(killed.signal,'SIGKILL',killed.stderr);assert.equal(killed.status,null);
+  assert.deepEqual(JSON.parse(killed.stdout),{checks:2,transaction:true});
+  assert.equal(s.row(),null,'native crash rollback leaves the seal missing');
+  s.open();s.storage.admit(2000);assert.equal(s.checks,2);assert.equal(s.valid(),true);assert.equal(replacementCalls(s).length,0);
+  s.open();s.storage.admit(2000);assert.equal(s.checks,2,'only the retry runs whole-file checks');
 });
 
