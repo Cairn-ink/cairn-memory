@@ -970,6 +970,17 @@ rules, with no admission retry, hold or backoff, and no subsequent open or
 observation. Only the existing opening reservation is charged. No public code,
 state or option is added.
 
+**Amendment v2.1 addendum: semantic turn dispatch.** With a `preQuantum` port,
+the semantic pump now honours the same `admit` and `work` host bridges for
+turn-bearing reader dispatch. Status uses `admit`; refresh uses `work`. Native
+maintainers accept default dispatch. A host wrapper requires **both** trusted
+bridges, each unwrapping to its native maintainer through the host's mapping.
+If either bridge remains default, an unrecognised wrapper fails on the first
+open, before dispatch, with public `invalid_input` and private
+`maintainer_identity_unrecognized`, exactly as in the lexical pump. Preserve
+the lazy original close descriptor for the existing disposal proof. Without a
+port the semantic pump retains its existing public-method dispatch.
+
 **Amendment v3: private turn diagnostics.** The lexical private diagnostic
 adds saturating `deferredTurns`, `turnWaitMs` (including a pending wait),
 `declinedTurns` keyed by the seven closed reasons, `turnPhase` (`idle`,

@@ -601,8 +601,10 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       ...(maintenance ? { refreshContextIndex: (input, credential, control) => call('refreshContextIndex', input, credential, control) } : {}),
       close() { return dispose('store_closed'); },
     });
-    if(maintenance&&semantic)semanticMaintenanceCalls.set(handle,(method,input,credential,control,semanticOutstanding)=>dispatch(method,input,credential,control,now(),false,semanticOutstanding));
-    if(maintenance&&!semantic)bindMaintenanceAdmission(handle,call);
+    if(maintenance)bindMaintenanceAdmission(handle,semantic?(method,input,credential,control)=>{
+      const turn=semanticMaintenanceTurns.get(control);
+      return turn?dispatch(turn.method,input,credential,control,now(),false,turn.semanticOutstanding):call(method,input,credential,control);
+    }:call);
     disposals.set(handle.close, dispose);
     const holdDiagnostic = registryHolds.get(opened); if (holdDiagnostic) registryHolds.set(handle, holdDiagnostic);
     if (phaseBuffer) openPhases.set(handle, phaseBuffer);
@@ -610,11 +612,13 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     return handle;
   };
 }
-// Only the engine pump can attach turn settlement metadata to a request.
-const semanticMaintenanceCalls=new WeakMap();
-export function semanticMaintenanceRequest(handle,method,input,credential,control,{semanticOutstanding}) {
-  const call=semanticMaintenanceCalls.get(handle);if(!call)fail('authority_required');
-  return call(method,input,credential,control,semanticOutstanding);
+// Turn metadata is scoped to the engine's dispatch control, never a handle
+// identity. The established admission bridges alone unwrap host maintainers.
+const semanticMaintenanceTurns=new WeakMap();
+export async function semanticMaintenanceRequest(handle,method,input,credential,control,{semanticOutstanding,dispatch}) {
+  semanticMaintenanceTurns.set(control,{method,semanticOutstanding});
+  try{return await dispatch(handle,input,credential,control);}
+  finally{semanticMaintenanceTurns.delete(control);}
 }
 export const openContextProductReader = createProductReaderRuntime();
 

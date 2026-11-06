@@ -193,13 +193,14 @@ function pumpRuntime(s, hooks = {}) {
     worker.postMessage = (message, ...args) => { capture.outbound.push(message); return post(message, ...args); };
     return worker;
   } });
-  const runtimeRenew = createMaintenancePumpRuntime({ now: testClock.now,
+  const runtimeRenew = createMaintenancePumpRuntime({ ...hooks.dispatch, now: testClock.now,
     setTimer(fn, ms) { const id = ++next; timers.set(id, { fn, ms, at:testClock.now()+ms }); return id; },
     clearTimer: id => timers.delete(id),
     async open(options, control) {
       try {
         const h = await nativeOpen(hooks.openingDeadline?{...options,deadlineMs:hooks.openingDeadline}:options, control); opened.push(h);
         if(hooks.open)await hooks.open(h);
+        if(hooks.wrap)return hooks.wrap(h);
         if(hooks.native)return h;
         return { ...h, async getContextIndexStatus(...args) {
           const result=await h.getContextIndexStatus(...args);if(hooks.status)await hooks.status(result);return result;

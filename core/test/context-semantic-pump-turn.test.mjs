@@ -198,8 +198,13 @@ test('absent port allocates no join and preserves control messages and output',a
   const {id,...output}=s.status();const evidence={output,messages:s.events,allocations};
   if(process.env.C2_ABSENCE_OUTPUT)writeFileSync(process.env.C2_ABSENCE_OUTPUT,JSON.stringify(evidence,null,2)+'\n');
   assert.deepEqual(s.events,['firstCoverage','pumpReserve']);
+  const {output:expected,messages,allocations:count}=JSON.parse(readFileSync(new URL('./fixtures/semantic-turn-absence-main.json',import.meta.url),'utf8')).evidence;
+  assert.equal(JSON.stringify(evidence),JSON.stringify({output:expected,messages,allocations:count}),'absent model byte differential from archived main');
 });
 
+// Golden evidence was generated from archived c4e6b6e0 with the same model
+// operation and six native steps. Stable DTO values and every statement count
+// remain asserted after normalization of random identity and clock metadata.
 test('absent port native DTOs, SQL counts, allocations and messages match archived engine',async t=>{
   const s=await setup(t),r=pumpRuntime(s,{native:true}),NativeShared=globalThis.SharedArrayBuffer,allocations=[];
   globalThis.SharedArrayBuffer=function(n){allocations.push(n);return new NativeShared(n);};globalThis.SharedArrayBuffer.prototype=NativeShared.prototype;
@@ -215,7 +220,10 @@ test('absent port native DTOs, SQL counts, allocations and messages match archiv
   const frames=r.spawned.flatMap(c=>[c.data.frame,...c.outbound.map(m=>m.frame)]).filter(Boolean);
   const native={allocations,statements:frames.map(f=>{const v=new Int32Array(f.buffer);return {begun:v[0],completed:v[1],failures:v[2]};}),messages:r.spawned.flatMap(c=>c.outbound).map(m=>({method:m.method,keys:Object.keys(m).sort(),input:clean(m.input)})),outputs:r.spawned.flatMap(c=>c.inbound).filter(m=>m.result).map(m=>clean(m.result)),status:clean(p.getStatus())};
   delete native.status.id;delete native.status.windowId;
-  assert.ok(native.statements.some(x=>x.begun>0));assert.ok(native.messages.every(m=>!m.keys.includes('semanticOutstanding')));
+  const baseline=JSON.parse(readFileSync(new URL('./fixtures/semantic-turn-absence-main.json',import.meta.url),'utf8'));
+  assert.equal(baseline.sourceRevision,'c4e6b6e0');
+  assert.deepEqual(native.statements,baseline.evidence.native.statements,'absent-port SQL statement differential from archived main');
+  assert.equal(JSON.stringify(native),JSON.stringify(baseline.evidence.native),'absent-port byte differential: allocations, messages, DTOs and status');
   if(process.env.C2_ABSENCE_OUTPUT){const path=process.env.C2_ABSENCE_OUTPUT;let evidence={};try{evidence=JSON.parse(readFileSync(path,'utf8'));}catch{}writeFileSync(path,JSON.stringify({...evidence,native},null,2)+'\n');}
 });
 
@@ -240,7 +248,8 @@ test('timeout racing native provider settlement releases once through disposal p
 });
 test('waiting adds no work charge or failure and preserves honest observation duty',async t=>{
   const s=model(t,{maxWaitMs:5000}),queued=gate();s.entry=()=>queued.promise;s.create();const work=s.fire();await flush();s.set(s.time()+6000);queued.resolve('defer');await guard(work,'late scheduling defer');
-  assert.equal(s.status().error,null);assert.equal(s.status().usedMs,0);assert.equal(s.diagnostic().lastFailure,null);assert.equal(s.diagnostic().turnWaitMs,6000);assert.equal(s.diagnostic().cadenceMisses,2);
+  assert.equal(s.status().error,null);assert.equal(s.status().usedMs,0);assert.equal(s.diagnostic().lastFailure,null);assert.equal(s.diagnostic().turnWaitMs,6000);assert.equal(s.diagnostic().cadenceMisses,2);assert.equal(s.diagnostic().missedObservations,2);
+  s.renew();s.status();assert.equal(s.diagnostic().cadenceMisses,2);assert.equal(s.diagnostic().missedObservations,2,'one miss per overdue interval');
 });
 
 test('a throwing release is attempted once and poisons the semantic claim',async t=>{
@@ -260,4 +269,29 @@ test('a late internal validation call fails before posting and poisons the seale
 
 test('renewal cancellation after an overdue lookahead retains retry spacing without a failure',async t=>{
   const s=model(t,{maxWaitMs:5000}),entry=gate();s.entry=()=>entry.promise;s.create();const work=s.fire();await flush();s.set(s.time()+1500);s.renew();await guard(work,'overdue renewal cancellation');assert.ok([...s.timers.values()].every(v=>v.at>=s.time()+100),'cancelled retry never spins at zero delay');assert.equal(s.status().error,null);assert.equal(s.status().usedMs,0);assert.equal(s.diagnostic().lastFailure,null);entry.resolve('admitted');await flush();assert.deepEqual(s.tickets[0].releases,[['withdrawn']]);
+});
+
+for(const failed of [false,true])test('expiry boundary requires disposal proof '+failed,async t=>{
+  const s=model(t);s.count=method=>method==='firstCoverage';s.create();
+  const original=Atomics.waitAsync;let expired=false;
+  Atomics.waitAsync=function(view,index,expected,timeout){
+    const result=Reflect.apply(original,Atomics,[view,index,expected,timeout]);
+    if(view.buffer===s.buffer&&index===0&&result.async)return {async:true,value:result.value.then(reason=>{
+      if(reason==='timed-out'){
+        expired=true;
+        // Deterministic rendezvous: settlement wins after the wait has already
+        // expired, before the finalizer's subsequent release/proof decision.
+        Atomics.sub(view,0,1);Atomics.notify(view,0);
+      }
+      return reason;
+    })};
+    return result;
+  };
+  try{await guard(s.fire(),'review expired join',7000);}finally{Atomics.waitAsync=original;}
+  assert.equal(expired,true,'the atomic wait itself reported expiry');
+  t.diagnostic(JSON.stringify({expired,outstanding:new Int32Array(s.buffer)[0],releases:s.tickets[0].releases}));
+  assert.deepEqual(s.tickets[0].releases,[],'expiry must retain the registered host disposal proof even if settlement then reaches zero');
+  if(failed)s.proof.reject(Error('synthetic failed proof'));else s.proof.resolve();
+  await flush();assert.deepEqual(s.tickets[0].releases,failed?[]:[['settled']]);
+  if(failed){assert.equal(s.status().error,'reader_failed');assert.equal(s.diagnostic().turnPhase,'poisoned');}
 });

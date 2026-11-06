@@ -207,21 +207,25 @@ export async function openContextSemanticCoordinator(original,controls={}) {
       // notification. Unexpected exit is never a successful disposal proof.
       const proof=delivery.then(value=>{if(failedExit)fail('reader_failed');return value;}).finally(detach);void proof.catch(()=>{});
       return {proof,detach,
-        validate(input,credential){
+        validate(input,credential,control={}){
           const at=process.hrtime.bigint();
           try{
             if(closed)return Promise.resolve(productFailure('store_closed'));
             const method='validateOwnerSemanticCoverage',value=semanticOperationInput(method,input);
             if(!binding.methods.includes(method)||credential===undefined||credentialDigest(credential)!==binding.credentialDigest)fail('authority_required');
-            const token=boundedData(credential,16384),r=request(at),operation=operationRecord(r,at,deadline(value.budget?.maxMs??5000),1),id=randomUUID();
+            const token=boundedData(credential,16384),{signal}=ownData(control,['signal']);
+            if(signalAborted(signal))return Promise.resolve(productFailure('read_cancelled'));
+            const r=request(at),operation=operationRecord(r,at,deadline(value.budget?.maxMs??5000),1),id=randomUUID();
             const record=registry.register(owner,{path:c.ledgerPath,domain:resourceDomain,parent:resource});
             return new Promise(resolve=>{
-              const p={resolve,record,operation};pending.set(id,p);let counted;
+              const p={resolve,record,operation,signal};pending.set(id,p);let counted;
               try{
+                const cancelled=()=>{resolve(productFailure('read_cancelled'));worker.postMessage({kind:'cancel',id});};
+                signal?.addEventListener('abort',cancelled,{once:true});p.detach=()=>signal?.removeEventListener('abort',cancelled);
                 counted=semanticOutstandingStart(semanticOutstanding);
                 p.timer=setTimeout(()=>{resolve(productFailure('read_timeout'));worker.postMessage({kind:'cancel',id});},Math.max(0,Number(mono(operation.operationCutoffMonoNs)-process.hrtime.bigint())/1e6));
                 worker.postMessage({kind:'call',id,method,input:value,credential:token,request:r,operation,semanticOutstanding});
-              }catch(error){if(counted){Atomics.sub(counted,0,1);Atomics.notify(counted,0);}clearTimeout(p.timer);pending.delete(id);registry.finish(record);resolve(productFailure(error.code));}
+              }catch(error){if(counted){Atomics.sub(counted,0,1);Atomics.notify(counted,0);}clearTimeout(p.timer);p.detach?.();pending.delete(id);registry.finish(record);resolve(productFailure(error.code));}
             });
           }catch(error){return Promise.resolve(productFailure(error.code));}
         },

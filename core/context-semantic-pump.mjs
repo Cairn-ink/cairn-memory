@@ -1,4 +1,5 @@
 import { hrtime } from 'node:process';
+import { admitMaintenance, refreshMaintenance, isNativeMaintenanceMaintainer } from './context-product-admission.mjs';
 import { captureMaintenanceTurnPort, createMaintenanceTurnController, maintenanceTurnPoisoned } from './context-maintenance-turn.mjs';
 import { maintenanceAdmissionIdentity } from './context-product-admission-policy.mjs';
 import { ownData } from './local-authority-input.mjs';
@@ -24,7 +25,7 @@ function optionIdentity(value) {
   if(value&&typeof value==='object')return ['object',Object.keys(value).sort().map(k=>[k,optionIdentity(value[k])])];
   return value;
 }
-export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=maintenanceObservation,snapshot}) {
+export function semanticPump(original,{now,setTimer,clearTimer,open,admit=admitMaintenance,work=refreshMaintenance,observedAt=maintenanceObservation,snapshot}) {
   const c=ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential','semanticConfig','semanticServiceCredential','firstCoverageValidation','preQuantum']);
   const selected=semanticConfiguration(c.semanticConfig,{maintenance:true}),coordinator=c.semanticConfig.coordinator,handle=selected.handle;
   handle.validatePumpCredential(c.semanticServiceCredential);
@@ -85,7 +86,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
     const until=Math.min(time,dutyEnd(),cadenceUntil);
     for(const i of lexical){
       const gap=until-observations[i];if(gap<=5000)continue;
-      if(!missed[i]){missed[i]=true;cadenceMisses=add(cadenceMisses,1);}
+      if(!missed[i]){missed[i]=true;cadenceMisses=add(cadenceMisses,1);turns?.missedObservation();}
       worstGapMs=Math.max(worstGapMs,gap);
     }
   }
@@ -209,7 +210,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
       const flag=Atomics.compareExchange(state,1,0,1);
       if(flag===0){sealed=true;break;}
       if(flag===2){poisonTurn(ctx);return;}
-      await Atomics.waitAsync(state,1,flag,Math.max(1,until-settlementNow())).value;
+      if(await Atomics.waitAsync(state,1,flag,Math.max(1,until-settlementNow())).value==='timed-out'){ctx.requireCoordinatorProof=true;break;}
     }
     const late=()=>{if(Atomics.load(state,1)===2)poisonTurn(ctx);};
     if(sealed){
@@ -218,15 +219,18 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
       void Promise.resolve(Atomics.waitAsync(state,1,1).value).then(late);
       void ctx.join.proof.finally(()=>{Atomics.notify(state,1);}).catch(()=>{});
     }
-    while(sealed&&Atomics.load(state,0)!==0&&settlementNow()<until&&!stopped){
+    while(sealed&&!ctx.requireCoordinatorProof&&Atomics.load(state,0)!==0&&settlementNow()<until&&!stopped){
       const count=Atomics.load(state,0);if(count===0)break;
-      await Atomics.waitAsync(state,0,count,Math.max(1,until-settlementNow())).value;
+      if(await Atomics.waitAsync(state,0,count,Math.max(1,until-settlementNow())).value==='timed-out')ctx.requireCoordinatorProof=true;
       if(Atomics.load(state,1)===2){poisonTurn(ctx);return;}
     }
+    // Expiry is irreversible even if the final notification races this check.
+    if(settlementNow()>=until)ctx.requireCoordinatorProof=true;
     // Required reader cleanup is part of this grant, including late opens.
     await Promise.allSettled([...openings]);
     const disposals=await Promise.allSettled([...drains.values()]);
     if(ctx.coordinatorFailed||drainFailed||disposals.some(r=>r.status==='rejected')||Atomics.load(state,1)===2){poisonTurn(ctx);return;}
+    if(settlementNow()>=until)ctx.requireCoordinatorProof=true;
     if(sealed&&Atomics.load(state,0)===0&&!ctx.requireCoordinatorProof){ctx.join.detach?.();releaseTurn(ctx.ticket,'settled');return;}
     awaitingProof=true;
     // Pump close never closes a host coordinator. This continuation is owned
@@ -350,7 +354,12 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
       // completion even after its turn has lost dispatch authority.
       const opening=Promise.resolve().then(()=>{check(ctx);const remaining=Math.floor(ctx.until-now());if(remaining<1)fail('read_timeout');return open({...p.options,deadlineMs:remaining},ctx.control);}).then(async opened=>{
         if(!owns(ctx)||now()>=ctx.until){await dispose(opened,ctx);return opened;}
-        handles.set(id,opened);writers.set(writer,id);return opened;
+        handles.set(id,opened);writers.set(writer,id);
+        // Match lexical dispatch: either default bridge requires native identity.
+        if(ctx.semanticOutstanding&&(admit===admitMaintenance||work===refreshMaintenance)&&!isNativeMaintenanceMaintainer(opened)){
+          note(opened,ctx,'open','maintainer_identity_unrecognized');error='invalid_input';throw interrupted;
+        }
+        return opened;
       },failure=>{
         if(failure!==interrupted)note(failure,ctx,'open');
         if(failure.cleanupId)void drain(failure.cleanupId,()=>c.supervisor.drain(failure.cleanupId),ctx);
@@ -368,7 +377,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,observedAt=m
       if(maintenanceControlState(ctx.control).claimed){ctx.control=maintenanceDispatchControl();ctx.ordinal=maintenanceControlState(ctx.control).ordinal;}
       ctx.handle=h;ctx.stage=method==='refreshContextIndex'?'refresh':'call';
       const args=method==='refreshContextIndex'?{...input,budget:{...input.budget,maxMs:remaining}}:{...input,deadlineMs:remaining};
-      result=await wait(ctx,()=>ctx.semanticOutstanding?semanticMaintenanceRequest(h,method,args,credential,ctx.control,{semanticOutstanding:ctx.semanticOutstanding}):h[method](args,credential,ctx.control),ctx.stage);check(ctx);
+      result=await wait(ctx,()=>ctx.semanticOutstanding?semanticMaintenanceRequest(h,method,args,credential,ctx.control,{semanticOutstanding:ctx.semanticOutstanding,dispatch:method==='getContextIndexStatus'?admit:work}):h[method](args,credential,ctx.control),ctx.stage);check(ctx);
       if(!result.ok)note(result,ctx,ctx.stage);
       if(result.ok&&method==='refreshContextIndex'&&reservation.mode==='lexical'){
         ctx.observedAt=observedAt(result);
