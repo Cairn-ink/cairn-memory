@@ -101,7 +101,7 @@ o200k × 1.15 reached 3,608 tokens. A plain or indexed-window message of up to
 (4,611 tokens at most). Dense rare-script text such as CJK Extension A, Yi or
 Tangut can reach about 14,000 tokens alone and is then reported as oversized.
 The caller must split an oversized message itself with its own windowing, as
-cairn-wiki's hosted H4a already does; local automatic capture (LAC) must do
+the hosted product's H4a already does; local automatic capture (LAC) must do
 the same. See [model input budgets](model-input-budgets.md).
 
 Trusted embedded callers may opt in with

@@ -139,7 +139,7 @@ quota/concurrency controls; the latter require both clients to be upgraded.
 
 ### Second D1 exception: plugin 0.1.1 privacy filter
 
-**Decision (chichi, 2026-09-29, 「F0 修」):** plugin 0.1.1 stops sending user-role
+**Decision (project owner, 2026-09-29, 「F0 修」):** plugin 0.1.1 stops sending user-role
 records that Claude Code generates itself, which 0.1.0 sent as if the person had
 typed them (F0 finding 1). A user record is no longer sent when it:
 
@@ -686,7 +686,7 @@ requires a documented breaking version for widening capture; accepting a new
 publish a 0.2.0 compatibility note and schemas before any enabled Codex send.
 At the coordinated release, repository/runtime/plugin/marketplace version metadata
 must agree at 0.2.0 as required by the existing release checks; this does not change
-Claude's hosted payload behavior. CX-4 prepares the full 0.2.0 release; merging it needs chichi's go.
+Claude's hosted payload behavior. CX-4 prepares the full 0.2.0 release; merging it needs the project owner's go.
 
 Compatibility note: 0.2.0 servers accept the unchanged 0.1 Claude payload and the
 new Codex discriminator; 0.1-only servers reject Codex and must not receive its
@@ -749,7 +749,7 @@ session package does not deliver local automatic capture.
 
 ## Model access, billing and runtime guards
 
-**Owner decision (chichi, 2026-09-27):** paid Cairn plans use cloud processing;
+**Owner decision (2026-09-27):** paid Cairn plans use cloud processing;
 people choosing cloud without a paid plan receive a bounded free quota. The
 hosted service enforces entitlements/quotas outside this repository. On a verified
 quota refusal, keep the pending batch/cursor, persist target-wide `quota_reached`,
@@ -1046,7 +1046,7 @@ injection part until A7; do not substitute a direct API check for human acceptan
 
 ## F0 results
 
-Run on 2026-09-28 under chichi's explicit authorization for synthetic sessions on
+Run on 2026-09-28 under the project owner's explicit authorization for synthetic sessions on
 their Claude Code and Codex subscriptions, with the disposable harness in
 `integrations/client/test/feasibility/` at base `c3eba89`. Pins: Claude Code
 `2.1.283`, `codex-cli 0.157.1`, Node `v22.16.0`, Ubuntu 22.04.3 on WSL2 (Linux
@@ -2615,7 +2615,7 @@ injection 與 EOF resume barrier 的 hook 接線仍是 CX-5 的工作。
 
 外部接手／未執行：H5 服務實作與實際 hosted acceptance、CX-5 hook
 消費、原生 Windows/macOS 驗收；這些不在本包範圍。合併即發布 0.2.0，
-仍需 chichi 的 go，由協調者處理。沒有 push、PR、tag 或 release。
+仍需專案負責人的 go，由協調者處理。沒有 push、PR、tag 或 release。
 執行紀錄寫入此節後，僅移除此工作建立的 scratch（含臨時 HOME、
 TMPDIR、cache、demo DB 及 logs）；不掃描其他使用者目錄。
 
@@ -2860,7 +2860,7 @@ plugin appears; setup explains why and gives stopped-host uninstall/setup steps.
 
 ## A7 pinned-host evaluation — 2026-10-09
 
-Authorized by chichi (「安全測試做」), with a Traditional Chinese addendum.
+Authorized by the project owner (「安全測試做」), with a Traditional Chinese addendum.
 The harness lives in `evaluation/codex-a7/`; results and limits are in
 [RESULTS.md](../../evaluation/codex-a7/RESULTS.md). Each run used a disposable
 0700 `CODEX_HOME` holding only a copied `auth.json`, the installer's own runtime

@@ -12,7 +12,7 @@ versioning. The 112-test result uses the code at `9b00753`.
 
 Status: proposed docs-only plan, researched 2026-09-27.
 Revision: integrated evidence, public quota protocol and deadline-review dependencies.
-Implements maintainer chichi's one-command decision through CX-7, after CX-5 and
+Implements the maintainer's one-command decision through CX-7, after CX-5 and
 before CX-6 in the [Codex client package order](codex-client.md#ordered-packages-and-exclusive-file-ownership).
 This plan owns installer/distribution behavior; the [client contract](codex-client.md)
 owns parsing, transport, identity, pause and host hooks. No implementation,

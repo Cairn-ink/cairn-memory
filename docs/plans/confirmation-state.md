@@ -2,7 +2,7 @@
 
 Status: implemented in CF-1; synthetic acceptance tests accompany the implementation.
 
-Extends [session episodes](session-episodes.md). Acceptance: cairn-wiki
+Extends [session episodes](session-episodes.md). Acceptance: the product repository's
 `origin/main:docs/plans/one-brain-u6.md`, D1, D6 and CF-1; one-brain-v1,
 decision 5. Implementation base: `c558593bd7dc4700a09235aeb8ebbd93184a0ea4`.
 
@@ -14,12 +14,12 @@ Only inferred decisions admitted through capture/admission jobs wait. Explicit
 `remember`/`admit` and other kinds retain their existing behavior. Manual trusted
 admission jobs use the same inferred-admission semantics as capture.
 
-**Decision (chichi, 2026-09-29):** the conservative admission is chosen.
+**Decision (project owner, 2026-09-29):** the conservative admission is chosen.
 Under `decisionReview: 'required-v1'`, every automatically captured decision
-waits, and explicit `remember`/`admit` stay direct. Chichi noted that asking
+waits, and explicit `remember`/`admit` stay direct. The project owner noted that asking
 people to confirm these is probably too much. The follow-up is a provenance
 contract: decisions from the person's own typed prompts, which plugin 0.1.1
-marks with `promptSource`, are admitted as direct. It is recorded in cairn-wiki
+marks with `promptSource`, are admitted as direct. It is recorded in the product repository's
 `docs/plans/one-brain-u6.md` → “Confirmation burden”.
 
 Today's extractor and qualification contracts cannot distinguish a person's

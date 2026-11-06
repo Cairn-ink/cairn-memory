@@ -1932,13 +1932,13 @@ The evidence behind it is narrow:
 ## Decision confirmation hides whole episode context
 
 CF-1's optional `decisionReview: 'required-v1'` uses conservative admission,
-chosen by **chichi on 2026-09-29**. Every automatically captured decision waits,
+chosen by **the project owner on 2026-09-29**. Every automatically captured decision waits,
 including paraphrases of the person's direct statements; explicit remember/admit
 stay direct. The extractor has no provenance contract that can reliably tell
-those statements from inference. Chichi noted that confirming all of these is
+those statements from inference. The project owner noted that confirming all of these is
 probably too much. The follow-up admits decisions from the person's typed
 prompts, marked by plugin 0.1.1's `promptSource`, as direct; it is recorded in
-cairn-wiki `docs/plans/one-brain-u6.md` → “Confirmation burden” and is not part of
+the product repository's `docs/plans/one-brain-u6.md` → “Confirmation burden” and is not part of
 CF-1.
 
 - **Measured synthetic cost.** The fixture built from the existing episode
@@ -2023,9 +2023,9 @@ or planning, and capture batches are planned. See
   planner reports such a message in `oversizedMessageIndices` instead of
   splitting it inside the message, and capture refuses it with
   `context_budget_exceeded` before any write. **The caller must split such a
-  message itself, with its own windowing,** as cairn-wiki's hosted H4a already
+  message itself, with its own windowing,** as the hosted product's H4a already
   does. Local automatic capture (LAC) must do the same. This is an accepted,
-  documented boundary (chichi, 2026-09-29). Retained (`source-bound-v2`) and
+  documented boundary (project owner, 2026-09-29). Retained (`source-bound-v2`) and
   episode capture, which extract from 800-unit views, are not affected.
 - **Capture batches must be planned.** Capture refuses a batch whose single
   extraction request cannot fit, before any claim, staging, write or provider
@@ -2160,7 +2160,7 @@ Plugin 0.3.1 already contains the required hook credential-state correction.
 Installer status queries configuration presence without reading the token;
 installer credential checks never write hook-owned observations. Real hook
 verification still needs a restarted Claude Code session and a submitted message.
-Installer 0.2.0 remains unpublished; chichi publishes from her laptop.
+Installer 0.2.0 remains unpublished; the project owner publishes from their own laptop.
 
 
 ### Installer 0.2.0 review follow-up
@@ -2193,7 +2193,7 @@ The prior round's review also noted intentional changes in endpoint path
 validation, no-install CLI exit status, dry-run MCP queries, non-TTY setup, and
 release/readme wording. This follow-up retains those reviewed behaviors: the
 explicit authorization brief still governs endpoint/TTY/network safety and
-publication is still reserved for chichi.
+publication is still reserved for the project owner.
 
 ## Codex app-server client scope (installer 0.5.1)
 

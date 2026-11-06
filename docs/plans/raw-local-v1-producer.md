@@ -662,7 +662,7 @@ both non-author review axes accepted it, all31 latest-head checks pass, and
 the merge tree matches the candidate. It is ready/unmerged; no deployment or
 product pin update occurred. That repair is not included in P4a's fixed P3c
 base or counted as Raw acceptance. The product handoff is
-[wiki #453 comment](https://github.com/wsxqaza12/cairn-wiki/issues/453#issuecomment-6311652844).
+comment 6311652844 on product repository issue #453.
 
 ### Primary frozen-source acceptance
 

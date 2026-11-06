@@ -4,7 +4,7 @@
 
 本機是 **codex-cli 0.160.1**。CX-5 已接上 browser credential、私有 runtime、四個 user hooks、Stop／PreCompact capture，以及 SessionStart pause EOF boundary。UserPromptSubmit recall 注入已通過 [A7 pinned-host adversarial evaluation](../evaluation/codex-a7/RESULTS.md)，**在格式合格的 host 預設開啟**，可用 kill switch 關閉。MCP recall 仍可使用。
 
-格式驗收只讀安裝的 binary 與本機 repo refs，使用自製 synthetic sessions，沒有讀真實對話。A7 另經 chichi 授權，以真實模型跑在隔離的 disposable CODEX_HOME／repo 與本機 fake Cairn 上；沒有遠端 Cairn 查詢、production 操作或發布。
+格式驗收只讀安裝的 binary 與本機 repo refs，使用自製 synthetic sessions，沒有讀真實對話。A7 另經專案負責人授權，以真實模型跑在隔離的 disposable CODEX_HOME／repo 與本機 fake Cairn 上；沒有遠端 Cairn 查詢、production 操作或發布。
 
 ## Installer 0.6.0 本機模式
 

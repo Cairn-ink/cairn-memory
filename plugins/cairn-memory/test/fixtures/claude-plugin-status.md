@@ -14,7 +14,7 @@ Skill names, paths, IDs and all text here are synthetic substitutions. The cache
 path uses marketplace `cairn-memory`, plugin `cairn-memory`, then version and the
 direct `skills/status` directory. Parser tests also inject that exact loaded root
 and verify project skills and other marketplace/plugin roots remain eligible. The
-status invocation and assistant output reproduce the shape of chichi's 10/6
+status invocation and assistant output reproduce the shape of the project owner's 10/6
 report. Additional assistant messages and a meta record check the whole-turn
 boundary. The normal turns include a conversational mention of “cairn memory
 status” and records without UUIDs to check legacy fallback identities.

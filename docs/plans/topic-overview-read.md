@@ -10,7 +10,7 @@ implementation. Separate non-author fixed-candidate reviews remain required.
 
 ## Report and priority
 
-Product issue wsxqaza12/cairn-wiki#453, comments6285922802 (original E-1) and
+Product repository issue #453, comments 6285922802 (original E-1) and
 6313060464 (2026-10-21 urgent performance report), requests a generic model-free
 topic metadata port rather than product-side private-table reads. The report
 attributes roughly33seconds of synchronous CPU to core.map on a synthetic

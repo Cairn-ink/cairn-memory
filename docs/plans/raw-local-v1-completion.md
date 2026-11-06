@@ -687,8 +687,8 @@ Raw candidate before marking that row complete.
 | T16 | Owned temporary-workspace infrastructure | Every new success/failure fixture must participate; no historical cleanup. |
 | T18 | Existing trusted-action/final-evidence fences | Add Raw prepare/open/commit races and eventual product-adapter checks. |
 
-Product issue #453 now records this development exception at
-https://github.com/wsxqaza12/cairn-wiki/issues/453#issuecomment-6298041894.
+Product issue #453 now records this development exception in comment
+6298041894 of the product repository.
 Product #490 is a separately owned local adapter, not approval to migrate or
 deploy. Its capacity/import/multi-namespace and hosted gaps stay explicit;
 completion of this journal does not close those product requirements.
