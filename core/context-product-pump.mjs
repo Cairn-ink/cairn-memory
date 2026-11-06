@@ -233,7 +233,13 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     }
     // Stop this selection conservatively at its first exhausted domain; a new
     // selection can still use another domain, but cannot recharge this one.
-    function exhausted(){return [...ledgers.values()].some(l=>now()>=l.endsAt||l.maxItems-l.items<quantum.maxItems||l.maxMs-l.ms<turnMs());}
+    function exhausted(){return [...ledgers.values()].some(l=>{
+      // Price this domain's next lane, even while another domain is cold.
+      const first=selectedLane();
+      const index=Array.from({length:projections.length},(_,n)=>(first+n)%projections.length)
+        .find(i=>domainOf(projections[i])===l.domain);
+      return now()>=l.endsAt||l.maxItems-l.items<quantum.maxItems||l.maxMs-l.ms<turnMs(index);
+    });}
     function stop(){
       if(closing)return closing;
       let resolveClose,rejectClose;

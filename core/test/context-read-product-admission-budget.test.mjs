@@ -192,3 +192,18 @@ test('canonical forget commits during long cooperative admission with no canonic
   assert.equal(forgotten,true);assert.equal(clock,1500);
   assert.equal(facade.port.db.isTransaction,false);
 });
+
+for(const domains of [1,2])test(`each ledger prices its own next turn: ${domains} owner domains, two lexical intents`,async t=>{
+  const s=model(t,{openMs:500,admitMs:600,workMs:200}),a=s.config.projections[0];
+  const projections=domains===1?[a]:[a,{...a,options:{...a.options,path:a.options.path+'-second'}}];
+  const pump=s.create({projections,quantum:{maxItems:1,maxMs:500},admissionMs:1250,
+    budgets:{maxItems:100,maxMs:2000}});
+  await s.next();await s.next();await s.next();
+  assert.deepEqual(s.events.filter(e=>e.kind==='work').map(e=>e.intent),['current','history']);
+  assert.equal(s.status().usedMs,1500);assert.notEqual(s.status().state,'budget_exhausted');
+  assert.ok(s.timers.size,'both next work and cold admission remain affordable');
+  await s.next();
+  assert.equal(s.events.filter(e=>e.kind==='admission').length,domains);
+  assert.equal(s.events.filter(e=>e.kind==='work').length,domains===1?3:2);
+  await pump.close();
+});
