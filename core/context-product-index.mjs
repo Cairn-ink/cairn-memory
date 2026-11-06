@@ -504,7 +504,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       return success(maintenanceDelivery(p,{status:isReady?complete?'complete':'partial':'rebuilding',progress:{lexical:dto.lexical.progress,transformed:0,embeddingAttempts:attempts,embedded},coverage:covered,channels:{lexical:channels(isReady).lexical,semantic:{state:complete?'ready':channelFor(isReady?reason??dto.semantic.reason:dto.semantic.reason),causes:complete?[]:[channelFor(isReady?reason??dto.semantic.reason:dto.semantic.reason)]}}},current.publication));
     });
   }
-  return {run: contentSafetyFacade({ run }, { select: args => args[1],
+  const safe=contentSafetyFacade({ run }, { select: args => args[1],
     check: (scopes,{delivery}) => { facade.port.ready();
       if (!cachedContentLayout(db)?.suppressionRevision || !scopes.length) return;
       if (delivery) assertContentSuppressionRequestInside(db, scopes);
@@ -520,6 +520,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         ? [5,6].includes(error.errcode & 255) ? 'storage_busy' : 'storage_error'
         : error.code === 'memory_not_found' ? 'evidence_unavailable' : error.code ?? 'storage_error';
       return failure(code);
-    } }).run,discard(){storage.discard();},close(){storage.close();rankings.clear();},assembly:{representation:'representation-v2',representations:ASSEMBLY_REPRESENTATIONS,defaults:ASSEMBLY_DEFAULTS,policies:ASSEMBLY_POLICIES,
+    } });
+  return {run:(...args)=>storage.measureObservation(()=>safe.run(...args)),discard(){storage.discard();},close(){storage.close();rankings.clear();},assembly:{representation:'representation-v2',representations:ASSEMBLY_REPRESENTATIONS,defaults:ASSEMBLY_DEFAULTS,policies:ASSEMBLY_POLICIES,
     defaultPolicy:'rank-first-whole-v1',counter:counter?{id:counter.id}:null,limits:ASSEMBLY_LIMITS}};
 }
