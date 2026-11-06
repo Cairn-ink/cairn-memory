@@ -107,7 +107,7 @@ for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])
  assert.equal(Atomics.load(state,8),1,'control: exactly one actual awaited load');
  assert.equal(Atomics.load(state,12),1,'exactly one total worker epoch SELECT for that load');
  client.close();await s.coordinator.close();await s.supervisor.close();
- // The reader, client, coordinator and supervisor are closed; expire the finished requests' 5000 ms reservations.
+ // The client, coordinator and supervisor are closed; expire the finished requests' 5000 ms reservations.
  await testClock.advance(5001,{waitForWorkers:false});
  if(layout.family==='event-time')complete(t.name);
 });

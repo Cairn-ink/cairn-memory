@@ -1318,17 +1318,17 @@ option B on the capture source-check regression fix, and two review decisions:
 the latched refusal stays terminal through settlement errors, and R2-A1 is
 gated with Raw lineage present, using a batched check with a differential
 proof. This append-only addendum leaves revisions 3.4–3.8
-unchanged except where it says it clarifies them.
+unchanged except where it says it supersedes them.
 
-### R2-A1 paired slope (clarifies revision 3.5)
+### R2-A1 paired slope (supersedes the revision 3.5 slope equation)
 
-The paired slope compares overhead after the E1 allowance:
-(S − E1)(24) − (S − E1)(12) ≤ L(24) − L(12). E1(n) is the **measured**
-number of caller-port invocations, never an estimate. This reading follows
-from the 3.5 ceiling S(n) ≤ L(n) + 6 + E1(n), which already allows E1 to
-grow with n. It also follows from the 3.4 Raw gate (legacy + 6 + n) and
-from 3.5's statement that overhead after the E1 allowance must not grow.
-The ceiling, the BEGIN bound and the same-engine comparator are unchanged.
+This addendum supersedes revision 3.5's paired-slope equation,
+S(24) − S(12) ≤ L(24) − L(12). The paired slope now compares overhead after
+the E1 allowance: (S − E1)(24) − (S − E1)(12) ≤ L(24) − L(12). E1(n) is the
+**measured** number of caller-port invocations, never an estimate. The two
+equations differ whenever E1 grows with n; the gates enforce the net form.
+Revision 3.5's ceiling S(n) ≤ L(n) + 6 + E1(n), the BEGIN bound, the
+same-engine comparator and the downward-only pin policy are unchanged.
 
 ### Scope of "no transaction spans an await"
 
@@ -1400,7 +1400,10 @@ below.
 - Any future deferral of a cost-gated variant must keep a minimal native
   count smoke that executes the unmigrated path in its original change. The
   inventory test rejects a deferral without one.
-- Unmigrated v18/v23/v33 stay within main `26f9e467` on every gated
+- This supersedes revision 3.5's deferral status and its round 3 cap
+  tables in favour of these resolved gates and pins. It also supersedes
+  3.5's historical unmigrated comparator, main `a546ee43`: unmigrated
+  v18/v23/v33 now stay within main `26f9e467` on every gated
   method/variant. The enabled-semantic cold refresh and the capture source
   checks are now gated too; they were coverage gaps in revision 3.5's
   inventory.
@@ -1411,18 +1414,20 @@ Before any hosted store moves to a safety cell (34/38/48 or 51/52/53), and
 before any enablement of a safety layout, all of the following hold on the
 merged engine:
 
-1. A busy during a capture source check on a safety layout never consumes
-   staged evidence or an Episode attempt. A staged claim carries a pre-dispatch
-   phase in its private claim token, so a retry in the same process, after
-   reopening the core, or after lease expiry reclaims it and admits exactly
-   once. A synchronous dispatch write just before the provider call ends that
-   phase and stores the claim's own id as its token, exactly as main stores it.
-   A claim that may have reached the provider keeps the conservative close.
+1. A busy during a pre-dispatch capture source check on a safety layout does
+   not consume staged evidence or start an Episode attempt. A staged claim
+   carries a pre-dispatch phase in its private claim token, so a retry in the
+   same process, after reopening the core, or after lease expiry reclaims it
+   and admits exactly once. A synchronous dispatch write just before the
+   provider call ends that phase and stores the claim's own id as its token,
+   exactly as main stores it. After dispatch may have occurred, the existing
+   conservative close and attempt accounting apply.
 2. The capture source-check read snapshot allows at most 512 nested statements
    (conservatively 524 including acquisition and fences), with a cooperative
    100 ms budget checked between bounded steps. This is a budget, not a hard
-   duration limit. An already-RESERVED DELETE-mode writer can commit while a
-   maximum-size snapshot is held.
+   duration limit. An already-RESERVED DELETE-mode writer can complete after
+   the bounded source-check read snapshot releases SHARED; on overflow, that
+   snapshot is released before complete validation under BEGIN IMMEDIATE.
 3. The final fence's aggregation under Raw uncertainty is chunked and bounded,
    with deadline checks between chunks.
 
