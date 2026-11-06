@@ -382,9 +382,10 @@ test('all widened bodies hide a committed forget on a suppression-enabled store'
 for (const safety of [false, true]) test('widened entry statement inventory, safety=' + safety, async t => {
   const f = await fixture(t, safety);
   for (const [name, call] of Object.entries(calls(f, true))) {
-    const statements = [], exec = DatabaseSync.prototype.exec, prepare = DatabaseSync.prototype.prepare;
+    const statements = [], connections = [], exec = DatabaseSync.prototype.exec, prepare = DatabaseSync.prototype.prepare;
     const execution = t.mock.method(DatabaseSync.prototype, 'exec', function(sql) {
       statements.push(sql);
+      connections.push(this);
       return exec.call(this, sql);
     });
     const preparation = t.mock.method(DatabaseSync.prototype, 'prepare', function(sql) {
@@ -392,14 +393,21 @@ for (const safety of [false, true]) test('widened entry statement inventory, saf
       for (const method of ['get', 'all', 'iterate', 'run']) {
         if (typeof statement[method] !== 'function') continue;
         const execute = statement[method].bind(statement);
-        statement[method] = (...args) => { statements.push(sql); return execute(...args); };
+        statement[method] = (...args) => { statements.push(sql); connections.push(this); return execute(...args); };
       }
       return statement;
     });
     const result = call();
     execution.mock.restore(); preparation.mock.restore();
     ok(result);
-    assert.ok(statements.every(sql => /^(?:SELECT|PRAGMA|BEGIN|COMMIT)\b/i.test(sql.trim())), name);
+    assert.ok(statements.every((sql, index) => {
+      if (/^(?:SELECT|PRAGMA|BEGIN|COMMIT)\b/i.test(sql.trim())) return true;
+      if (!/^WITH\b/i.test(sql.trim())) return false;
+      const bytecode = prepare.call(connections[index], `EXPLAIN ${sql}`).all();
+      // Materialized CTEs may insert into ephemeral storage; reject persistent writes.
+      return bytecode.every(({ opcode, p2 }) =>
+        (opcode !== 'Transaction' || p2 === 0) && opcode !== 'OpenWrite');
+    }), name);
     const begin = statements.findIndex(sql => sql.startsWith('BEGIN'));
     const end = statements.indexOf('COMMIT', begin);
     assert.ok(begin >= 0 && end > begin, name + ' must execute its snapshot transaction');
