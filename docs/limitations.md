@@ -2761,3 +2761,31 @@ and do not show generic-term visibility. These API results do not establish
 Cairn.ink website or Google search order, AI citations, or discovery improvement.
 See the [discovery plan](https://github.com/Cairn-ink/cairn-memory/blob/main/docs/plans/memory-discovery-2026-10-30.md) for the query
 list, method, totals, timestamps, and retained responses.
+
+## Optional local Raw search
+
+The selected Raw index is a plaintext derived sidecar, including its vocabulary,
+vectors and rollback journal. Search validates canonical authority independently
+of cleanup; stopped services and host backups still require the host's explicit
+retention, non-serving restore and owner-purge policy. No online index export or
+hosted backend is available.
+
+Bounded snapshots admit at most 8 MiB of encoded hints. Large vector-bearing
+corpora can therefore return partial lexical coverage and explicit BM25-only
+semantics before reaching the turn/work limits. Synthetic storage and paged
+vector-scan measurements do not establish complete hybrid retrieval or answer
+quality at those sizes. The main-file page cap reserves rollback-journal space
+inside the separate 512 MiB owner quota; exhausting that quota leaves canonical
+Raw intact and permits denial reconciliation.
+
+Joint vector residency covers Memory preflights created while the Raw service
+is selected. Hosts must select it before admitting reads, or drain existing
+reads before changing selection. The local path shares process embedding
+allowances, not a durable hosted owner ledger. See [the interface](../RAW-SEARCH-INTERFACE.md)
+and [host seam](../SEAM.md) for the final-snapshot and later-consumer boundaries.
+
+The latest full synthetic performance run fails the frozen capture-contention
+allowance at the measured turn sizes, and reports a failed maintenance lane in
+the largest turn profile. Short measured SHARED sections alone do not establish
+capture-cost qualification. The failed gate is retained; performance approval
+and complete hybrid coverage remain open.

@@ -4,6 +4,20 @@ import { tokenizeT1 } from './context-read-tokenize.mjs';
 export const MAX_DIMENSIONS = 32768;
 export const MAX_VECTORS = 20000;
 export const MAX_CACHE_BYTES = 134217728;
+// Activated only by the separately selected Raw service. Legacy reads retain
+// their existing cache path while no participating service is selected.
+export let rawVectorResidencySelected = false;
+let rawServices=0,residentVectors=0,residentBytes=0;
+export function selectRawVectorResidency() {
+  rawServices++;rawVectorResidencySelected=true;let released=false;
+  return ()=>{if(!released){released=true;rawServices--;rawVectorResidencySelected=rawServices>0;}};
+}
+export function reserveSharedVectors(count,metadata) {
+  const capacity=semanticCapacity(count,metadata);
+  if(!capacity.eligible||residentVectors+count>MAX_VECTORS||residentBytes+capacity.bytes>MAX_CACHE_BYTES)return null;
+  residentVectors+=count;residentBytes+=capacity.bytes;let released=false;
+  return {release(){if(!released){released=true;residentVectors-=count;residentBytes-=capacity.bytes;}}};
+}
 const invalid = code => { throw Object.assign(new TypeError(code), { code }); };
 export function validateEmbedderMetadata(value) {
   for (const key of ['id', 'revision']) {

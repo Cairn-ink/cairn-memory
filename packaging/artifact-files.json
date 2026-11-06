@@ -353,5 +353,13 @@
   "core/content-safety-files-child.mjs",
   "core/content-safety-observations.mjs",
   "core/content-safety-preflight.mjs",
-  "adapters/mcp/safety-command.mjs"
+  "adapters/mcp/safety-command.mjs",
+  "core/raw-search-input.mjs",
+  "core/raw-search-storage.mjs",
+  "core/raw-search-authority.mjs",
+  "core/raw-search-index.mjs",
+  "core/raw-search-retrieval.mjs",
+  "core/raw-search-maintenance.mjs",
+  "RAW-SEARCH-INTERFACE.md",
+  "SEAM.md"
 ]

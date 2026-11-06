@@ -322,3 +322,16 @@ verification, fixed-candidate independent reviews, commit and PR delivery. Base
 is recorded above; no browser flow, runtime caller or historical result changes.
 
 [reliability]: https://github.com/Cairn-ink/cairn-memory/blob/36c566013d615bc29852428bbf5fb1c77b80c70f/docs/plans/reliability-three-stage.md
+
+
+### Optional local Raw search service
+
+The separately selected `raw-search-v1` service implements a derived local
+index and canonical Raw candidate/materialization interface. It does not select
+Raw saving or add context output. Existing capture, read and privacy mutation
+branches remain unchanged when it is absent or disabled. Hosted backend
+selection refuses. See [the interface](../../RAW-SEARCH-INTERFACE.md) and
+[the host seam](../../SEAM.md) for plaintext storage, explicit maintenance,
+current/history policy and final canonical validation. This optional service
+supersedes earlier statements that no Raw search implementation exists; it does
+not authorize automatic Cards or an additional context representation.

@@ -1,5 +1,12 @@
 # Local context candidates: core and host
 
+An independent local Raw index is available through the trusted
+[`openRawSearch` interface](../RAW-SEARCH-INTERFACE.md). It is default-off and
+does not alter the context representations or MCP tools described here.
+Selection does not enable Raw saving. Its plaintext sidecar, explicit
+maintenance lane and canonical final validation are described in
+[the host seam](../SEAM.md).
+
 `context-read-v1` is an explicit opt-in over the existing canonical SQLite store.
 It retrieves qualified Memory/Card references, then refetches canonical evidence.
 It can also assemble whole evidence units within an exact local token budget.

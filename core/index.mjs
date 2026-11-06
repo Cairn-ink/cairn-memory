@@ -9,6 +9,7 @@ export { MemoryStoreError, normalizeBoundedText, normalizedTextLength } from "./
 export { openMemoryCore } from "./contract.mjs";
 export { openMemoryReader } from './memory-reader.mjs';
 export { openContextReader } from './context-reader.mjs';
+export { openRawSearch } from './raw-search-index.mjs';
 export { openContentSuppressionReader } from './content-suppression-reader.mjs';
 export { openContextProductReader, openContextIndexMaintainer } from './context-product-reader.mjs';
 export { createContextReadSupervisor, createContextReaderPool } from './context-read-supervisor.mjs';

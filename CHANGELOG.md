@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — optional local Raw index
+
+- Add a separately selected local Raw search and maintenance service. It uses
+  canonical source authority, a per-owner plaintext SQLite sidecar, bounded
+  lexical/semantic retrieval and explicit progress/disposal. Hosted backends
+  refuse; existing reads, capture and privacy mutations do not select it.
+- No new context output or automatic Cards are added. See
+  [the interface](RAW-SEARCH-INTERFACE.md) and [host seam](SEAM.md).
+
 ## Unreleased — semantic provider key channel
 
 - Admit only `CAIRN_CONTEXT_SEMANTIC_OPENAI_API_KEY`, when non-empty, to the

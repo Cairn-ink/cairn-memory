@@ -1,5 +1,10 @@
 # Product adapter: P2a–P2e
 
+The independent [local Raw index](../RAW-SEARCH-INTERFACE.md) does not enter
+this product worker profile. Hosted Raw selection refuses until a separate
+backend and durable accounting integration exist. The existing product read,
+maintenance, broker and worker APIs described below are unchanged.
+
 Select `profile:'context-read-product-v1.1'` and `version:'context-read-v1'`
 with `openContextProductReader` from the core entry. P2a releases capabilities
 and canonical exact evidence fetch for DELETE stores: Memories on physical
