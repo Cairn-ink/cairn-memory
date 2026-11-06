@@ -160,3 +160,162 @@ test('a genuine busy COMMIT after source denial rolls back atomically with no su
     clearTimeout(timer);assert.deepEqual(result,{code:0,signal:null});
   }
 });
+
+
+async function receiptAncestryCard(t,confirmed,count) {
+  const f=await lineageFixture(t,{base:33,raw:true,options:{model:{contextWindow:8192,countTokens:()=>1,
+    extract:()=>({items:Array.from({length:count},(_,i)=>({content:'Synthetic Raw interpretation '+i,kind:'fact',confidence:.8,sourceIndices:[0]}))})}}});
+  const part=splitRaw('Synthetic retained Raw source for both facts.')[0];
+  const saved=ok(await f.core.captureRaw(request(part,{namespace:ns,eventId:'multi-source-capture'})));
+  const memories=ok(saved.interpretation).admission.memories;
+  assert.equal(memories.length,count);
+  let card=ok(f.call('createCardDraft',{actionId:'draft',drafting:'authored',input:{title:'Synthetic title',body:'Synthetic retained body',
+    memoryRefs:memories.map(memory=>({type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision})),sourcePolicy:'retained-receipts-v1'}}));
+  if(confirmed)card=f.confirm(card);
+  const conversationId=saved.raw.conversationId;
+  const revision=f.db.prepare('SELECT revision FROM raw_conversations WHERE id=?').get(conversationId).revision;
+  return {f,card,memories,conversationId,revision};
+}
+
+for (const confirmed of [false,true]) for (const count of [1,2]) test(`delete Raw with ${count} receipt Memory contributors, ${confirmed?'confirmed':'draft'}`, async t => {
+  const {f,card,memories,conversationId,revision}=await receiptAncestryCard(t,confirmed,count);
+  const before=f.row(card.id).revision,bytes=retained(f.row(card.id));
+  const authority=['card_body_sources','card_body_provenance','card_body_authorizations'].map(table=>f.db.prepare('SELECT * FROM '+table).all());
+  assert.equal(f.db.prepare('SELECT count(*) n FROM card_raw_bindings WHERE card_id=?').get(card.id).n,0);
+  let during,validated=0;
+  registerContentWriteGuard((db,operation)=>{
+    const guard=beginContentWriteSafety(db,operation);if(!guard)return guard;
+    return {...guard,validate(result){
+      const current=db.prepare('SELECT revision FROM private_cards WHERE id=?').get(card.id);
+      validated++;during={before,after:current.revision,delta:current.revision-before,
+        effects:db.prepare("SELECT count(*) n FROM card_effects WHERE entity_id=? AND kind='evidence_invalidated'").get(card.id).n};
+      guard.validate(result);
+    }};
+  });
+  let result;
+  try{result=f.core.deleteConversation({namespace:ns,conversationId,expectedRevision:revision,actionId:'delete-both'});}
+  finally{registerContentWriteGuard(beginContentWriteSafety);}
+  t.diagnostic(JSON.stringify({result,during,rawStillExists:!!f.db.prepare('SELECT 1 FROM raw_conversations WHERE id=?').get(conversationId),
+    suppressionFacts:f.db.prepare('SELECT count(*) n FROM content_suppressions').get().n,cardRevision:f.row(card.id).revision}));
+  assert.equal(result.ok,true,'authorized source deletion must commit');
+  assert.equal(validated,1,'real outer native validation');
+  assert.equal(during.delta,count);assert.equal(during.effects,count);
+  assert.equal(f.db.prepare('SELECT 1 FROM raw_conversations WHERE id=?').get(conversationId),undefined);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM receipts').get().n,0);
+  assert.deepEqual(retained(f.row(card.id)),bytes);
+  assert.deepEqual(['card_body_sources','card_body_provenance','card_body_authorizations'].map(table=>f.db.prepare('SELECT * FROM '+table).all()),authority);
+  const effects=f.db.prepare("SELECT revision,action_id FROM card_effects WHERE entity_id=? AND kind='evidence_invalidated' ORDER BY ordinal").all(card.id);
+  assert.deepEqual(effects.map(e=>e.revision),Array.from({length:count},(_,i)=>before+i+1));
+  assert.deepEqual(new Set(effects.map(e=>e.action_id)),new Set(memories.map(m=>'memory-revision-'+m.id+'-'+(m.revision+1))));
+  hidden(f,card);cold(f,card);
+});
+
+
+for(const confirmed of [false,true])for(const sameBytes of [false,true])test(`repeat correction ${sameBytes?'same':'changed'} bytes, ${confirmed?'confirmed':'draft'} already denied Card`,async t=>{
+  const f=await lineageFixture(t);
+  const original=ok(f.core.admit({namespace:ns,memory:{content:'Synthetic original Memory',kind:'fact'},receipts:[receipt('original')]})).memory;
+  let card=ok(f.call('createCardDraft',{actionId:'draft',drafting:'authored',input:{title:'Synthetic title',body:'Synthetic original Card body',
+    memoryRefs:[{type:'memory',namespace:ns,memoryId:original.id,revision:original.revision}],sourcePolicy:'retained-receipts-v1'}}));
+  if(confirmed)card=f.confirm(card);
+  const first=ok(f.core.correct({namespace:ns,memoryId:original.id,expectedRevision:original.revision,content:'Synthetic corrected Memory',kind:'fact',receipt:receipt('first-correction')})).memory;
+  assert.equal(ok(f.call('getCard',{cardId:card.id})).card,null,'the old bound body is already denied');
+  const beforeCardRevision=f.row(card.id).revision,bytes=retained(f.row(card.id));
+  const authority=['card_body_sources','card_body_provenance','card_body_authorizations'].map(table=>f.db.prepare('SELECT * FROM '+table).all());
+  const retiredReceipts=f.db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(original.id);
+  let atValidation,validated=0;
+  registerContentWriteGuard((db,operation)=>{
+    const guard=beginContentWriteSafety(db,operation);if(!guard)return guard;
+    return {...guard,validate(result){
+      validated++;atValidation={memory:db.prepare('SELECT revision,content FROM memories WHERE id=?').get(original.id),
+        cardRevision:db.prepare('SELECT revision FROM private_cards WHERE id=?').get(card.id).revision,
+        beforeCardRevision,factCount:db.prepare('SELECT count(*) n FROM content_suppressions').get().n};
+      guard.validate(result);
+    }};
+  });
+  let second;
+  try{second=f.core.correct({namespace:ns,memoryId:original.id,expectedRevision:first.revision,
+    content:sameBytes?'Synthetic corrected Memory':'Synthetic second corrected Memory',kind:'fact',receipt:receipt('second-correction')});}
+  finally{registerContentWriteGuard(beginContentWriteSafety);}
+  const stored=f.db.prepare('SELECT revision,content FROM memories WHERE id=?').get(original.id);
+  const facts=f.db.prepare('SELECT kind,match_mode,source_version,reason FROM content_suppressions ORDER BY epoch_hi,epoch_lo').all();
+  t.diagnostic(JSON.stringify({second,atValidation,stored,facts,cardRevision:f.row(card.id).revision}));
+  assert.equal(second.ok,true,'a valid correction must not be vetoed by an already-denied old Card body');
+  assert.equal(stored.revision,first.revision+1);assert.equal(validated,1);
+  assert.equal(atValidation.memory.revision,stored.revision);assert.equal(atValidation.factCount,4);
+  assert.equal(f.row(card.id).revision,beforeCardRevision+1);
+  assert.equal(facts.length,4);assert.ok(facts.some(f=>f.source_version===JSON.stringify(['memory-revision-through-v1',first.revision])));
+  for(const row of retiredReceipts)assert.equal(f.db.prepare('SELECT 1 FROM receipts WHERE id=?').get(row.id),undefined);
+  assert.deepEqual(f.db.prepare('SELECT event_id FROM receipts WHERE memory_id=?').all(original.id).map(r=>r.event_id),['second-correction']);
+  assert.deepEqual(retained(f.row(card.id)),bytes);
+  assert.deepEqual(['card_body_sources','card_body_provenance','card_body_authorizations'].map(table=>f.db.prepare('SELECT * FROM '+table).all()),authority);
+  hidden(f,card);cold(f,card);
+});
+
+
+test('an unrelated submitted-note write cannot name a denied Card through an injected effect',async t=>{
+  const f=await lineageFixture(t),a=f.note('a'),card=f.draft([a]);
+  ok(f.call('deleteSourceNote',{actionId:'deny-card',sourceId:a.sourceId,expectedRevision:a.revision}));
+  const revision=f.row(card.id).revision,before=contentSafetyInventory(f.db);
+  registerContentWriteGuard((db,operation)=>{
+    const guard=beginContentWriteSafety(db,operation);if(!guard)return guard;
+    return {...guard,validate(result){
+      db.prepare(`INSERT INTO card_effects VALUES('synthetic-unrelated-effect',?,?,?,?,?,?,?,?,
+        (SELECT coalesce(max(ordinal),0)+1 FROM card_effects))`)
+        .run(ns.ownerId,ns.scope,ns.projectId??'','evidence_invalidated','card',card.id,revision,'unrelated-note');
+      guard.validate(result);
+    }};
+  });
+  let result;
+  try{result=f.call('submitSourceNote',{actionId:'unrelated-note',text:'Synthetic unrelated note',occurredAt:null});}
+  finally{registerContentWriteGuard(beginContentWriteSafety);}
+  const effect=!!f.db.prepare("SELECT 1 FROM card_effects WHERE effect_id='synthetic-unrelated-effect'").get();
+  t.diagnostic(JSON.stringify({result,unrelatedEffectCommitted:effect}));
+  assert.equal(result.ok,false,'unrelated mutation must retain normal Card-readable validation');
+  assert.equal(effect,false,'the unrelated write must roll back');
+  assert.equal(contentSafetyInventory(f.db),before,'the note, operation receipt, audit authorization and effect all roll back');
+});
+
+for(const confirmed of [false,true])for(const fault of ['extra-revision','missing-step','duplicate-step','reversed-step','unrelated-cause','timestamp','title','body'])
+test(`multi-Memory invalidation rejects ${fault}, ${confirmed?'confirmed':'draft'}`,async t=>{
+  const {f,card,conversationId,revision}=await receiptAncestryCard(t,confirmed,2),before=contentSafetyInventory(f.db);
+  let injected=false;
+  registerContentWriteGuard((db,operation)=>{
+    const guard=beginContentWriteSafety(db,operation);if(!guard)return guard;
+    return {...guard,validate(result){
+      const effects=db.prepare("SELECT * FROM card_effects WHERE entity_id=? AND kind='evidence_invalidated' ORDER BY ordinal").all(card.id);
+      assert.equal(effects.length,2);injected=true;
+      if(fault==='extra-revision')db.prepare('UPDATE private_cards SET revision=revision+1 WHERE id=?').run(card.id);
+      if(fault==='missing-step')db.prepare('DELETE FROM card_effects WHERE effect_id=?').run(effects[0].effect_id);
+      if(fault==='duplicate-step')db.prepare('UPDATE card_effects SET revision=? WHERE effect_id=?').run(effects[1].revision,effects[0].effect_id);
+      if(fault==='reversed-step') {
+        db.prepare('UPDATE card_effects SET revision=? WHERE effect_id=?').run(effects[1].revision,effects[0].effect_id);
+        db.prepare('UPDATE card_effects SET revision=? WHERE effect_id=?').run(effects[0].revision,effects[1].effect_id);
+      }
+      if(fault==='unrelated-cause')db.prepare('UPDATE card_effects SET action_id=? WHERE effect_id=?').run('synthetic-unrelated-cause',effects[0].effect_id);
+      if(fault==='timestamp')db.prepare('UPDATE private_cards SET updated_at=? WHERE id=?').run('2001-01-01T00:00:00.000Z',card.id);
+      if(fault==='title')db.prepare('UPDATE private_cards SET title=?,body_revision=body_revision+1 WHERE id=?').run('Disguised multi-Memory title',card.id);
+      if(fault==='body')db.prepare('UPDATE private_cards SET body=?,body_revision=body_revision+1 WHERE id=?').run('Disguised multi-Memory body',card.id);
+      guard.validate(result);
+    }};
+  });
+  let result;
+  try{result=f.core.deleteConversation({namespace:ns,conversationId,expectedRevision:revision,actionId:'delete-both'});}
+  finally{registerContentWriteGuard(beginContentWriteSafety);}
+  assert.equal(injected,true);assert.equal(result.ok,false);assert.equal(result.error.code,'evidence_unavailable');
+  assert.equal(contentSafetyInventory(f.db),before,'all source denials/deletions and Card changes roll back');
+});
+
+for(const confirmed of [false,true])test(`metadata-only supersession cannot use retirement exemption, ${confirmed?'confirmed':'draft'}`,async t=>{
+  const f=await lineageFixture(t);
+  const original=ok(f.core.admit({namespace:ns,memory:{content:'Synthetic supersession original',kind:'fact'},receipts:[receipt('original')]})).memory;
+  let card=ok(f.call('createCardDraft',{actionId:'draft',drafting:'authored',input:{title:'Synthetic title',body:'Synthetic retained body',
+    memoryRefs:[{type:'memory',namespace:ns,memoryId:original.id,revision:original.revision}],sourcePolicy:'retained-receipts-v1'}}));
+  if(confirmed)card=f.confirm(card);
+  const corrected=ok(f.core.correct({namespace:ns,memoryId:original.id,expectedRevision:original.revision,
+    content:'Synthetic corrected supersession target',kind:'fact',receipt:receipt('corrected')})).memory;
+  hidden(f,card);const before=contentSafetyInventory(f.db);
+  const result=f.core.supersede({namespace:ns,memoryId:corrected.id,expectedRevision:corrected.revision,
+    replacement:{content:'Synthetic historical replacement',kind:'fact'},receipts:[receipt('replacement')]});
+  assert.equal(result.ok,false);assert.equal(result.error.code,'evidence_unavailable');
+  assert.equal(contentSafetyInventory(f.db),before,'no new canonical denial means normal retained-history validation');
+});

@@ -121,10 +121,24 @@ export function beginContentWriteSafety(db, operation) {
       const row=get(names[kind],key);return {row,ns:namespace(row)};
     }
     const lineage=hasCardLineage(db);
+    const oldValue=(change,name)=>change.old?.[change.columns.findIndex(column=>column.name===name)]??change.row[name];
+    // Corrections retire a revision even when its text/fingerprint is identical.
+    // Require the native revision transition and removed receipt identities,
+    // covered by the same scoped correction facts. Supersession has no such facts.
+    function retiredMemory(fact) {
+      if(fact.kind!=='memory'||fact.match_mode!=='revision-through'||fact.reason!=='correction_supersession')return false;
+      const change=canonical.find(c=>c.table==='memories'&&c.old&&c.row.id===fact.stable_key&&
+        contentSuppressionTargetMatches(fact,namespace(c.row),{kind:'memory',key:c.row.id,revision:oldValue(c,'revision')}));
+      if(!change)return false;
+      const previous=oldValue(change,'revision'),receipts=removed.filter(c=>c.table==='receipts'&&c.row.memory_id===change.row.id);
+      return Number.isSafeInteger(previous)&&previous>0&&change.row.revision===previous+1&&
+        fact.source_version===JSON.stringify(['memory-revision-through-v1',previous])&&receipts.length>0&&
+        receipts.every(({row})=>newFacts.some(f=>f.kind==='receipt'&&f.match_mode==='incarnation'&&
+          f.reason===fact.reason&&f.action_id===fact.action_id&&
+          contentSuppressionTargetMatches(f,namespace(change.row),{kind:'receipt',key:row.id})));
+    }
     const terminalFacts=newFacts.filter(f=>terminal.has(JSON.stringify([f.owner_id,f.scope,f.project_id,f.kind,f.stable_key]))||
-      lineage&&f.kind==='memory'&&f.match_mode==='revision-through'&&canonical.some(c=>c.table==='memories'&&c.old&&c.row.id===f.stable_key&&
-        c.row.owner_id===f.owner_id&&c.row.scope===f.scope&&c.row.project_id===f.project_id&&
-        c.columns.some((column,i)=>['content','fingerprint'].includes(column.name)&&c.old[i]!==undefined))||
+      lineage&&retiredMemory(f)||
       f.kind==='raw'&&f.match_mode==='span'&&exists('raw_source_exclusions')&&
       db.prepare(`SELECT 1 FROM raw_source_exclusions x JOIN raw_conversations c ON c.id=x.conversation_id
         WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND x.conversation_id=? AND x.message_id=? AND x.start=? AND x.end=?`)
@@ -208,12 +222,8 @@ export function beginContentWriteSafety(db, operation) {
       if(!row||!['draft','confirmed'].includes(row.state)||changedBindings.has(key)||
         JSON.stringify(boundary(namespace(row)))!==JSON.stringify(boundary(ns)))return false;
       if(change&&(!change.old||change.columns.some((c,i)=>!['id','revision','updated_at'].includes(c.name)&&change.old[i]!==undefined)||
-        row.revision!==change.old[change.columns.findIndex(c=>c.name==='revision')]+1))return false;
-      if([...canonical,...removed].some(c=>['card_body_provenance','card_body_sources'].includes(c.table)&&c.row.card_id===key))return false;
-      const effects=canonical.filter(c=>c.table==='card_effects'&&!c.old&&c.row.kind==='evidence_invalidated'&&
-        c.row.entity_type==='card'&&c.row.entity_id===key&&c.row.revision===row.revision&&
-        JSON.stringify(boundary(namespace(c.row)))===JSON.stringify(boundary(ns)));
-      if(change&&!effects.length)return false;
+        !Number.isSafeInteger(oldValue(change,'revision'))||!Number.isSafeInteger(row.revision)||row.revision<=oldValue(change,'revision')))return false;
+      if([...canonical,...removed].some(c=>['card_body_provenance','card_body_sources','card_body_authorizations'].includes(c.table)&&c.row.card_id===key))return false;
       // This is dependency evidence only. Unknown and previously denied siblings
       // retain their denial and are never evaluated as readable content here.
       const durable=db.prepare(`SELECT * FROM card_body_sources WHERE owner_id=? AND scope=? AND project_id=?
@@ -228,7 +238,37 @@ export function beginContentWriteSafety(db, operation) {
       // Stable presentation rows are positive evidence when an older body's
       // closure was unknown. They cannot grant completeness or serving access.
       if(!changedBindings.has(key))for(const ref of cardContributorsInside(db,key))targets.push(...sourceTargets(ref));
-      return targets.some(target=>ownTarget(ns,target));
+      if(!targets.some(target=>ownTarget(ns,target)))return false;
+      if(!change)return true;
+      // A receipt-only Card can be invalidated once per changed Memory. Native
+      // sessions retain only the net Card update, so reconstruct every step from
+      // its newly inserted effects and canonical source transitions. A larger
+      // delta alone never authorizes a write.
+      const effects=canonical.filter(c=>c.table==='card_effects'&&c.row.entity_type==='card'&&c.row.entity_id===key)
+        .sort((a,b)=>a.row.ordinal-b.row.ordinal);
+      const previous=oldValue(change,'revision');
+      if(effects.length!==row.revision-previous||removed.some(c=>c.table==='card_effects'&&c.row.entity_type==='card'&&c.row.entity_id===key))return false;
+      const causes=new Set();let timestamp;
+      for(const [index,effect]of effects.entries()) {
+        const e=effect.row;
+        if(effect.old||e.kind!=='evidence_invalidated'||e.revision!==previous+index+1||
+          JSON.stringify(boundary(namespace(e)))!==JSON.stringify(boundary(ns)))return false;
+        const memory=canonical.find(c=>c.table==='memories'&&c.old&&
+          e.action_id==='memory-revision-'+c.row.id+'-'+c.row.revision&&
+          JSON.stringify(boundary(namespace(c.row)))===JSON.stringify(boundary(ns)));
+        if(memory) {
+          if(causes.has(memory.row.id)||memory.row.revision!==oldValue(memory,'revision')+1||
+            !targets.some(target=>ownTarget(ns,target)&&(target.kind==='memory'&&target.key===memory.row.id||
+              target.kind==='receipt'&&removed.some(c=>c.table==='receipts'&&c.row.id===target.key&&c.row.memory_id===memory.row.id))))return false;
+          causes.add(memory.row.id);timestamp=memory.row.updated_at;
+        } else {
+          // Note and coalesced Raw writers emit one step for their canonical
+          // source action. Multi-step sequences belong to Memory triggers only.
+          if(effects.length!==1||!terminalFacts.some(f=>f.action_id===e.action_id&&
+            targets.some(target=>contentSuppressionTargetMatches(f,ns,target))))return false;
+        }
+      }
+      return timestamp===undefined||row.updated_at===timestamp;
     }
     const sourceAuthority=createRawLineageStorage(db);
     function episodeSource(key,ns) {
