@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { writeFileSync, readFileSync, openSync, closeSync, existsSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { scopedFixture, ns, project, scopes, ok } from './card-current-scope-fixture.mjs';
+import { scopedFixture, warmProjection, ns, project, scopes, ok } from './card-current-scope-fixture.mjs';
 import { child, adopt } from './card-current-fixture.mjs';
 function reader(t, f, job) {
   const file = join(f.dir, 'reader-' + (++f.serial) + '.json'), output = file + '.out', error = file + '.err';
@@ -51,7 +51,9 @@ function stale(result, f) {
 for (const enabled of [true, false]) for (const kind of ['ordinary', 'managed', 'read-only']) for (const source of ['relations-one-hop-v1', 'moc-v1'])
   test(`C21 real child-reader restart and rebuild retain adoption/revocation fences; ${kind}, authoring ${enabled}, ${source}`, async t => {
     const f = scopedFixture(t);
+    await warmProjection(t, f, scopes);
     ok(await f.call('findCandidates', f.request));
+    await warmProjection(t, f, [ns]);
     ok(await f.call('findCandidates', { ...f.request, readSet: [ns] }));
     const job = { kind, enabled, source, a: f.a, b: f.b, control: f.control, deniedValues: [...f.deniedValues],
       existingStore: { version: 'schema33-existing-v1', storeId: f.db.prepare('SELECT store_id FROM store_metadata').get().store_id } };
@@ -64,11 +66,14 @@ for (const enabled of [true, false]) for (const kind of ['ordinary', 'managed', 
     child(f, { method: 'adoptMethodVersion', input: adopt(f.personalV2, 'override-personal', 'finance', project, null, scopes) });
     child(f, { method: 'adoptMethodVersion', input: adopt(f.v2, 'project-v2-adopt', null, project, 1, [project]) });
     first.release(); const firstResult = await first.done; stale(firstResult, f);
+    await warmProjection(t, f, scopes);
     ok(await f.call('findCandidates', f.request));
     const restarted = await reader(t, f, { ...job, saved: prepared.saved }).done; stale(restarted, f);
     assert.notEqual(restarted.pid, prepared.pid);
     unlinkSync(f.path + '.context-read-v1.sqlite');
+    await warmProjection(t, f, scopes);
     ok(await f.call('findCandidates', f.request));
+    await warmProjection(t, f, [ns]);
     ok(await f.call('findCandidates', { ...f.request, readSet: [ns] }));
     const rebuilt = await reader(t, f, { ...job, saved: prepared.saved }).done; stale(rebuilt, f);
     assert.notEqual(rebuilt.pid, restarted.pid);
