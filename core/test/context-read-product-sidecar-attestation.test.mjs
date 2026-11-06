@@ -312,3 +312,16 @@ test('malformed singleton schema is refused before any seal lookup in parent or 
   assert.equal(reads.length,0);assert.equal(refusal?.code,'index_unavailable');assert.equal(report.value.error,'ESTALE');
 });
 
+
+for(const boundary of ['PRAGMA journal_mode','PRAGMA application_id','PRAGMA user_version',
+  'SELECT CAST(stamp AS TEXT) AS stamp,typeof(stamp) AS stampType,record FROM product_attestation WHERE singleton=1'])
+test(`opening deadline stops at the statement boundary after ${boundary}`,t=>{
+  const s=setup(t);s.close();let expired=false,journals=0;const after=[];
+  s.setHook(text=>{
+    if(expired&&!['ROLLBACK','PRAGMA query_only'].some(prefix=>text.startsWith(prefix)))after.push(text);
+    if(text===boundary&&(boundary!=='PRAGMA journal_mode'||++journals===2)){expired=true;s.setClock(2000);}
+  });
+  s.open();assert.throws(()=>s.storage.admit(2000),{code:'read_timeout'});
+  assert.equal(expired,true);assert.deepEqual(after,[],'no subsequent storage statement starts after cutoff');
+});
+

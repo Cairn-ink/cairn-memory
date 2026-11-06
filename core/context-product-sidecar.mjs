@@ -296,6 +296,22 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       if(e!==fenceChanged && e!==verificationBound && e.reason==='storage_unavailable')close();throw e;
     }
   }
+  // Apply only during opening, then discard this proxy. Check every native
+  // boundary; rollback, restoration and disposal must always remain possible.
+  function admissionDatabase(db,checkAdmission) {
+    if(!checkAdmission)return db;
+    const wrap=object=>new Proxy(object,{get(target,key){
+      const value=Reflect.get(target,key,target);
+      if(typeof value!=='function')return value;
+      return (...args)=>{
+        const cleanup=key==='close'||key===Symbol.dispose||key==='exec'&&/^(ROLLBACK|PRAGMA query_only=)/.test(args[0]);
+        if(!cleanup)checkAdmission();
+        const result=Reflect.apply(value,target,args);
+        return key==='prepare'?wrap(result):result;
+      };
+    }});
+    return wrap(db);
+  }
   function connection(create = false, checkAdmission, bootstrapCommit = false) {
     checkAdmission?.();
     if (closed) fail('store_closed');
@@ -322,10 +338,10 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         }
       }
       if (create) read(() => {
-        sideFormat=side.prepare('PRAGMA user_version').get().user_version;
-        metadata=side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
+        checkAdmission?.();sideFormat=side.prepare('PRAGMA user_version').get().user_version;
+        checkAdmission?.();metadata=side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
         if (!metadata || metadata.store_id!==identity.storeId) unavailable('wrong_store');
-        attest(side);
+        checkAdmission?.();attest(admissionDatabase(side,checkAdmission));
         if (metadata.profile!==PRODUCT_PROFILE) unavailable('incompatible');
       });
       guardWritable=sideWritable;
@@ -352,16 +368,17 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     const admittedIdentity=productFile(sidePath), files=sqlite?.files(sidePath);
     checkAdmission?.();
     handleRegistry().opening();
-    let candidate, admittedMetadata, bootstrap=false;
+    let candidate, admitted, admittedMetadata, bootstrap=false;
     sideMode=undefined;sideFormat=undefined;
     try {
       candidate=openNative(wantsWrite);
       if(sqlite){
         const native=candidate; // Retain disposal evidence if policy admission refuses.
-        const opened=sqlite.open(native,sidePath);candidate=opened.db;sideMode=opened.mode;
+        const opened=sqlite.open(native,sidePath,checkAdmission);candidate=opened.db;sideMode=opened.mode;
         files({afterProbe:true});
         if(wantsWrite && sideMode!==sidecarJournalMode)unavailable('storage_unavailable');
       }else if(observer)candidate=observer.database(candidate);
+      admitted=candidate;candidate=admissionDatabase(candidate,checkAdmission);
       candidate.exec(sqlite ? 'PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF;' : 'PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=0;');
       files?.({betweenSnapshots:sideMode==='DELETE'});
       readTransaction(candidate,()=>{
@@ -382,7 +399,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         if(!bootstrap&&!validSidecarAttestation(identity.cursorSecret,seal,sidecarAttestationFile(sidePath),PRODUCT_SIDECAR_FORMAT))
           throw Object.assign(Error('index_unavailable'),{code:'index_unavailable',reason:'attestation_invalid',expectedAttestation:sidecarAttestationDigest(seal)});
       });
-      checkAdmission?.();
+      checkAdmission?.();candidate=admitted;
     } catch(error) {attribution?.captureFailure(error);try{if(candidate?.isOpen)candidate.close();}catch{}
       if(candidate?.isOpen)side=candidate;else handles.closed();throw error;}
     side=candidate;sideWritable=wantsWrite;sideFiles=files;openedIdentity=admittedIdentity;metadata=admittedMetadata;
