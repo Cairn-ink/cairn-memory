@@ -54,6 +54,10 @@ test('RH-04 schema fallback shares remaining invocation and HTTP deadlines', asy
   const result = await invocation(t, scenarios['schema-fallback']);
   assertScenario('schema-fallback', result);
 });
+test('RH-04 schema fallback after late lock acquisition shares remaining invocation and HTTP deadlines', async t => {
+  const result = await invocation(t, { ...scenarios['schema-fallback'], lockMs: 1400 });
+  assertScenario('schema-fallback', result);
+});
 test('RH-05 pause and resume during recall still suppress stale injection', async t => {
   const result = await invocation(t, { onFetch: async root => {
     await setPaused(root, true); await setPaused(root, false);
