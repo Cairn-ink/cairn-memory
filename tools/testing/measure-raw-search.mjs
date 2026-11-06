@@ -182,6 +182,9 @@ export async function measureRawSearch(t,targets) {
       const state=await storage.status(),report={scenario:cap?'raw-cap':'turns',quotaExhausted:quota,indexedParts:built,partial:snapshot.partial||quota,returnedParts:snapshot.rows.length,vectorPayloadBytes:built*6144,turns:count,chunks:snapshot.rows.reduce((n,r)=>n+r.chunks.length,0),rawBytes,
         canonicalBuildMs,rebuildMs,coldMs,factoryMs,api:summary(api),apiCoverage,apiSemantic,warm:summary(warm),full:summary(full),canonical:summary(sections),canonicalReadWait:summary(readWaits),canonicalMeasurement:'first-read-probe-to-commit',authorityWork:{inventory:summary(inventoryTimes),fence:summary(fenceTimes),selected:summary(selectedTimes)},opening:summary(openingTimes),hintBytes:snapshot.hintBytes,snapshotWork:{sqlite:summary(snapshotTimes.map(t=>t.sqliteMs)),authentication:summary(snapshotTimes.map(t=>t.authenticationMs)),decode:summary(snapshotTimes.map(t=>t.decodeMs))},hintEncoding:summary(encodingTimes),coldApiMs,coldApiCoverage:coldApi?.coverage,coldApiError,apiErrors,prepareErrors,failedApi:summary(failedApiTimes),warmupSearches:Math.min(warmup+1,targets.warmupSearches),prepare:summary(prepareTimes),semanticProfile:apiSemantic?.state==='ready'?'complete-hybrid':'bm25-only',scanWork:Math.max(...work),
         vectorScan,capture,cacheResidency,coldApiDistribution,coldApiErrors,residencyAfterClose,...state,rssBytes:process.memoryUsage().rss,bytesPerTurn:state.allocatedBytes/count,failures:[]};
+      // Preserve the original timing/RSS distributions above. This additional
+      // capture profile samples live tickets within their unchanged lifetime.
+      if(!cap)report.proofCapture=await captureProofStability(path,service,host.token,authority,searchInput,targets);
       if(count===10000&&report.api.p95>targets.warmRetrievalP95Ms)report.failures.push('warm_search_api');
       if(!cap&&count<=targets.completeHybridTurns&&(apiCoverage?.status!=='complete'||apiSemantic?.state!=='ready'))report.failures.push('complete_hybrid');
       if(!cap&&(report.full.p95>targets.fullReadP95Ms||report.api.p95>targets.fullReadP95Ms))report.failures.push('full_read');
@@ -266,4 +269,46 @@ async function captureContention(path,service,token,targets){
   const overlap=rows.filter(row=>intervals.some(([start,end])=>BigInt(row.start)<end&&BigInt(row.end)>start));
   return {baseline:summary(baseline.map(row=>row.ms)),contended:summary(rows.map(row=>row.ms)),overlap:summary(overlap.map(row=>row.ms)),
     writerBegin:{baseline:summary(baseline.map(r=>r.beginMs)),contended:summary(rows.map(r=>r.beginMs))},writerCommit:{baseline:summary(baseline.map(r=>r.commitMs)),contended:summary(rows.map(r=>r.commitMs))},sharedSections:summary(intervals.map(([start,end])=>Number(end-start)/1e6)),maintenanceError,maintenanceStatus,maintainCalls};
+}
+
+async function captureProofStability(path,service,token,authority,input,targets){
+  const result={captureCalls:0,fenceChecks:0,fenceChanges:0,fenceUnavailable:0,ticketChecks:0,ticketRefusals:0,
+    expiredChecksSkipped:0,settledTicketChecks:0,settledTicketRefusals:0,overlapCalls:0,setupErrors:[]};
+  for(let group=0;group<6;group++){
+    await new Promise(resolve=>setTimeout(resolve,30));
+    let search;
+    // A newly invalidated cold reader may first return a deadline-partial set.
+    // This setup is outside the original warm/cold timing distributions.
+    for(let attempt=0;attempt<3&&!search?.candidates.length;attempt++)search=await service.search(input,token);
+    if(!search?.candidates.length){result.setupErrors.push('no_candidate');break;}
+    const ticket=await service.prepare(search.candidates[0],{},token),created=performance.now(),expected=authority.fence();
+    const intervals=[],exec=DatabaseSync.prototype.exec,active=new WeakMap();
+    DatabaseSync.prototype.exec=function(sql){const value=exec.call(this,sql);
+      if(sql==='BEGIN')active.set(this,process.hrtime.bigint());
+      else if((sql==='COMMIT'||sql==='ROLLBACK')&&active.has(this)){
+        intervals.push([active.get(this),process.hrtime.bigint()]);active.delete(this);
+      }return value;};
+    let rows;
+    try{
+      const run=await captureBurst(path,'proof-'+group,Math.ceil(targets.captureSamples/6));await run.started;
+      let finished=false;const writing=run.finish().then(rows=>{finished=true;return rows;},error=>{finished=true;throw error;});writing.catch(()=>{});
+      while(!finished){
+        result.fenceChecks++;
+        try{if(authority.fence(expected)!==expected)result.fenceChanges++;}catch{result.fenceUnavailable++;}
+        if(performance.now()-created<4500){result.ticketChecks++;
+          try{service.revalidate([ticket]);}catch{result.ticketRefusals++;}
+        }else result.expiredChecksSkipped++;
+        await new Promise(resolve=>setTimeout(resolve,20));
+      }
+      rows=await writing;
+      if(performance.now()-created<4500){result.settledTicketChecks++;
+        try{service.revalidate([ticket]);}catch{result.settledTicketRefusals++;}}
+      console.log('measurement proof-progress='+JSON.stringify({...result,group,captureCalls:result.captureCalls+rows.length}));
+    }finally{DatabaseSync.prototype.exec=exec;}
+    result.captureCalls+=rows.length;
+    result.overlapCalls+=rows.filter(row=>intervals.some(([start,end])=>BigInt(row.start)<end&&BigInt(row.end)>start)).length;
+  }
+  const measured=result.fenceChecks-result.fenceUnavailable;
+  return {...result,fenceChangeRate:measured?result.fenceChanges/measured:null,
+    ticketRefusalRate:result.ticketChecks?result.ticketRefusals/result.ticketChecks:null};
 }
