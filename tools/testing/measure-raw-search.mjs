@@ -104,8 +104,9 @@ export async function measureRawSearch(t,targets) {
       const host=rawSearchHost(),queryVector=Array(1536).fill(0);queryVector[0]=1;
       const provider={id:'synthetic-measurement',revision:'1',dimensions:1536,normalization:'l2',async embed(texts,controls){controls.beforeDispatch();return texts.map(()=>queryVector);}};
       const factoryStart=performance.now();
-      service=await openRawSearch({version:'raw-search-v1',enabled:true,backend:'local',path,directory,ownerId:ns.ownerId,readSet:[ns],
-        authority:host.authority,crypto:localPlainPort(),maintenanceTurn:broker(),embedder:provider,policy:{family:'local',maxBatchDocuments:1,maxRequests:100,maxConcurrent:1,maxUsd:0}});
+      const serviceOptions={version:'raw-search-v1',enabled:true,backend:'local',path,directory,ownerId:ns.ownerId,readSet:[ns],
+        authority:host.authority,crypto:localPlainPort(),maintenanceTurn:broker(),embedder:provider,policy:{family:'local',maxBatchDocuments:1,maxRequests:100,maxConcurrent:1,maxUsd:0}};
+      service=await openRawSearch(serviceOptions);
       const factoryMs=performance.now()-factoryStart;
       const searchInput={query:'copper telescope',queryVector:{input:'copper telescope',embedder:{id:provider.id,revision:provider.revision,dimensions:1536,normalization:'l2'},vector:queryVector}};
       const apiErrors=[],prepareErrors=[],failedApiTimes=[];
@@ -146,7 +147,29 @@ export async function measureRawSearch(t,targets) {
       }
       if(!quota)assert.equal(built,cap?count:count+Math.ceil(count/100));
       assert.equal(db.prepare('SELECT saved_bytes FROM raw_owner_usage').get()?.saved_bytes,rawBytes);
+      // Trusted synthetic harness only, independent of all public status and
+      // coverage paths. Probes reserve/release capacity without keeping blocks.
+      const cacheResidency=measureResidency(provider);
       const vectorScan=await scanVectors(storage,provider,queryVector);
+      let coldApiDistribution,coldApiErrors,residencyAfterClose;
+      if(!cap){
+        // Fresh reader each time: no eligibility, inventory or block reuse.
+        // Keep the original cold observation too for comparisons with older
+        // measurements, whose cold API metric had only a single sample.
+        await service.close();service=null;
+        const coldTimes=[],coldErrors=[];
+        for(let sample=0;sample<targets.searchSamples;sample++){
+          const cold=await openRawSearch(serviceOptions),start=performance.now();
+          try{await cold.search(searchInput,host.token);coldTimes.push(performance.now()-start);}
+          catch(error){coldErrors.push({code:error.code,ms:performance.now()-start});}
+          finally{await cold.close();}
+          if((sample+1)%5===0)console.log('measurement cold-progress='+JSON.stringify({turns:count,samples:sample+1}));
+        }
+        coldApiDistribution=summary(coldTimes);coldApiErrors=coldErrors;
+        residencyAfterClose=measureResidency(provider);
+        service=await openRawSearch(serviceOptions);
+        for(let i=0;i<targets.warmupSearches;i++){const result=await service.search(searchInput,host.token);if(result.semantic.state==='ready'||snapshot.partial)break;}
+      }
       console.log('measurement phase=capture turns='+count);
       const readsCheckpoint={turns:count,cap,indexedParts:built,returnedParts:snapshot.rows.length,hintBytes:snapshot.hintBytes,
         rebuildMs,coldMs,api:summary(api),apiCoverage,apiSemantic,warm:summary(warm),full:summary(full),vectorScan,
@@ -158,7 +181,7 @@ export async function measureRawSearch(t,targets) {
       catch(error){capture={unavailable:true,error:error.message};console.log('measurement capture-failed='+JSON.stringify({turns:count,error:error.message}));}
       const state=await storage.status(),report={scenario:cap?'raw-cap':'turns',quotaExhausted:quota,indexedParts:built,partial:snapshot.partial||quota,returnedParts:snapshot.rows.length,vectorPayloadBytes:built*6144,turns:count,chunks:snapshot.rows.reduce((n,r)=>n+r.chunks.length,0),rawBytes,
         canonicalBuildMs,rebuildMs,coldMs,factoryMs,api:summary(api),apiCoverage,apiSemantic,warm:summary(warm),full:summary(full),canonical:summary(sections),canonicalReadWait:summary(readWaits),canonicalMeasurement:'first-read-probe-to-commit',authorityWork:{inventory:summary(inventoryTimes),fence:summary(fenceTimes),selected:summary(selectedTimes)},opening:summary(openingTimes),hintBytes:snapshot.hintBytes,snapshotWork:{sqlite:summary(snapshotTimes.map(t=>t.sqliteMs)),authentication:summary(snapshotTimes.map(t=>t.authenticationMs)),decode:summary(snapshotTimes.map(t=>t.decodeMs))},hintEncoding:summary(encodingTimes),coldApiMs,coldApiCoverage:coldApi?.coverage,coldApiError,apiErrors,prepareErrors,failedApi:summary(failedApiTimes),warmupSearches:Math.min(warmup+1,targets.warmupSearches),prepare:summary(prepareTimes),semanticProfile:apiSemantic?.state==='ready'?'complete-hybrid':'bm25-only',scanWork:Math.max(...work),
-        vectorScan,capture,...state,rssBytes:process.memoryUsage().rss,bytesPerTurn:state.allocatedBytes/count,failures:[]};
+        vectorScan,capture,cacheResidency,coldApiDistribution,coldApiErrors,residencyAfterClose,...state,rssBytes:process.memoryUsage().rss,bytesPerTurn:state.allocatedBytes/count,failures:[]};
       if(count===10000&&report.api.p95>targets.warmRetrievalP95Ms)report.failures.push('warm_search_api');
       if(!cap&&count<=targets.completeHybridTurns&&(apiCoverage?.status!=='complete'||apiSemantic?.state!=='ready'))report.failures.push('complete_hybrid');
       if(!cap&&(report.full.p95>targets.fullReadP95Ms||report.api.p95>targets.fullReadP95Ms))report.failures.push('full_read');
@@ -174,6 +197,15 @@ export async function measureRawSearch(t,targets) {
     }finally{DatabaseSync.prototype.exec=originalExec;await service?.close();await storage?.close();reader?.db.close();db?.close();await ws.cleanup();}
   }
   assert.deepEqual(reports.flatMap(report=>report.failures),[],'frozen performance targets');
+}
+
+function measureResidency(metadata){
+  const probe={...metadata,dimensions:1},available=(count,bytes=0)=>{
+    const lease=reserveSharedVectors(count,probe,bytes);if(!lease)return false;lease.release();return true;
+  };
+  const maximum=(limit,predicate)=>{let low=0,high=limit;
+    while(low<high){const mid=Math.ceil((low+high)/2);if(predicate(mid))low=mid;else high=mid-1;}return low;};
+  return {vectors:20000-maximum(20000,n=>available(n)),accountedBytes:128*1024*1024-maximum(128*1024*1024,n=>available(0,n))};
 }
 
 async function scanVectors(storage,provider,query){
