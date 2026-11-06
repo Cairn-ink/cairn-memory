@@ -136,8 +136,10 @@ export function createMaintenanceTurnController(capture,{now,setTimer,clearTimer
         if(released==='poisoned'){complete({status:'failed',error:'reader_failed'});return;}
         if(released==='authority_required'){complete({status:'failed',error:'authority_required'});return;}
       }
+      // Expose a conservative whole-millisecond admission boundary. Consumers
+      // round their fresh sample up; the legacy snapshot stays unchanged.
       if(status==='failed')complete({status,error:'authority_required'});
-      else complete({status,...(granted?{ticket,waitExpired:cancelCause==='defer'||now()>=untilMonoMs}:{})});
+      else complete({status,...(granted?{ticket,untilMonoMs:Math.floor(untilMonoMs),waitExpired:cancelCause==='defer'||now()>=untilMonoMs}:{})});
     }
     function withdraw(status){
       // Let a native Promise reaction queued in this turn observe a raced
