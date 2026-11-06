@@ -1,3 +1,4 @@
+import { sidecarAttestationFile, readSidecarAttestation, sidecarAttestationDigest, validSidecarAttestation, writeSidecarAttestation } from './context-product-sidecar-attestation.mjs';
 import { reserveSidecarHandle, sidecarHandleGuard } from './context-product-handles.mjs';
 import { admissionRequired, PRODUCT_SIDECAR_SUFFIX } from './context-product-admission.mjs';
 import { cachedContentSuppressionRequestInside, contentSuppressionRequestInside, withMemoryCandidateBatchInside, withContentSuppressionReadInside, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
@@ -66,6 +67,7 @@ function projection(p) {
   return { ...p, readSet };
 }
 const ddl = `
+CREATE TABLE product_attestation(singleton INTEGER PRIMARY KEY CHECK(singleton=1),stamp INTEGER NOT NULL CHECK(stamp>=1),record TEXT NOT NULL CHECK(length(record)<=4096)) STRICT;
 CREATE TABLE product_metadata(singleton INTEGER PRIMARY KEY CHECK(singleton=1),store_id TEXT NOT NULL,profile TEXT NOT NULL,incarnation TEXT NOT NULL,kind TEXT NOT NULL) STRICT;
 CREATE TABLE generations(storage_id INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL UNIQUE,owner TEXT NOT NULL,projection TEXT NOT NULL,incarnation TEXT NOT NULL,sequence INTEGER NOT NULL,base_sequence INTEGER NOT NULL,checkpoint INTEGER NOT NULL,kind TEXT NOT NULL,fences TEXT NOT NULL,access TEXT NOT NULL,phase INTEGER NOT NULL,last_key TEXT NOT NULL,base_id TEXT,verify TEXT NOT NULL,manifest TEXT,published INTEGER NOT NULL,seed TEXT NOT NULL) STRICT;
 CREATE TABLE publications(projection TEXT PRIMARY KEY,generation TEXT NOT NULL,publication TEXT NOT NULL) STRICT;
@@ -193,7 +195,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   const handleRegistry=()=>handles??=sidecarHandleGuard(localHandle=reserveSidecarHandle(Object.values(productFile(path)).join(':')));
   const compare=memoryComparison?memoryComparison.createMemoryComparator():null;
   let comparisonBase=null, reuseOnlyWork=false;
-  let sideFormat, side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0, discardAfterGuard=false, guardWritable=false;
+  let sideFormat, side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, unattestedIdentity=null, guardDepth=0, discardAfterGuard=false, guardWritable=false;
   function failed(error, wasWritable) {
     if(wasWritable || error.reason==='storage_unavailable' ||
         error.code==='ERR_SQLITE_ERROR' && Number.isInteger(error.errcode) && [10,11,13,26].includes(error.errcode&255))discardAfterGuard=true;
@@ -239,7 +241,13 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   }
   function publish(replacement,init) {
     const work=()=>createExclusiveSqliteFile(sidePath,replacement,init,sqlite && observer ? {observe:observer.creation} : {});
-    try { return observer && !sqlite ? observer.invoke('execute','transaction',work) : work(); }
+    try {
+      const result=observer && !sqlite ? observer.invoke('execute','transaction',work) : work();
+      // A successful child initialized this physical file, but wrote no seal.
+      // Only this parent may bootstrap it; a later open must replace 'missing'.
+      unattestedIdentity={device:String(result.dev),inode:String(result.ino)};
+      return result;
+    }
     catch(error) {attribution?.captureFailure(error); if(sqlite)sqlite.initializationFailure(error);throw error; }
   }
   function verifyOpened() {
@@ -269,6 +277,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     try {attribution?.checkpoint('begin');side.exec('BEGIN IMMEDIATE');}catch(error){failed(error,wasWritable);attribution?.captureFailure(error);throw error;}finally{attribution?.end(beginning);}
     try {
       verifyOpened();const result=work();rendezvous('batch');beforeCommit?.();
+      writeSidecarAttestation(side,identity.cursorSecret,sidecarAttestationFile(sidePath),PRODUCT_SIDECAR_FORMAT);
       const committing=attribution?.start('commit');
       try {attribution?.checkpoint('commit');attribution?.add(kind+'CommitAttempts',1);side.exec('COMMIT');attribution?.add(kind+'Commits',1);}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.end(committing);}
       return result;
@@ -341,7 +350,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     const admittedIdentity=productFile(sidePath), files=sqlite?.files(sidePath);
     checkAdmission?.();
     handleRegistry().opening();
-    let candidate, admittedMetadata;
+    let candidate, admittedMetadata, bootstrap=false;
     sideMode=undefined;sideFormat=undefined;
     try {
       candidate=openNative(wantsWrite);
@@ -361,9 +370,12 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         admittedMetadata=candidate.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
         if(!admittedMetadata || admittedMetadata.store_id!==identity.storeId)unavailable('wrong_store');
         if (sideFormat > 0 && sideFormat !== PRODUCT_SIDECAR_FORMAT) unavailable('incompatible');
+        const seal=readSidecarAttestation(candidate);
+        bootstrap=wantsWrite&&same(unattestedIdentity,admittedIdentity)&&seal===null;
+        if(!bootstrap&&!validSidecarAttestation(identity.cursorSecret,seal,sidecarAttestationFile(sidePath),PRODUCT_SIDECAR_FORMAT))
+          throw Object.assign(Error('index_unavailable'),{code:'index_unavailable',reason:'attestation_invalid',expectedAttestation:sidecarAttestationDigest(seal)});
         attest(candidate);
         if(admittedMetadata.profile!==PRODUCT_PROFILE)unavailable('incompatible');
-        if(wantsWrite && (candidate.prepare('PRAGMA quick_check').get().quick_check!=='ok' || candidate.prepare('PRAGMA foreign_key_check').get()))unavailable('corrupt');
       });
       checkAdmission?.();
     } catch(error) {attribution?.captureFailure(error);try{if(candidate?.isOpen)candidate.close();}catch{}
@@ -371,6 +383,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     side=candidate;sideWritable=wantsWrite;sideFiles=files;openedIdentity=admittedIdentity;metadata=admittedMetadata;
     // Subsequent work starts on this admitted mode, including upgrade callers.
     guardWritable=wantsWrite;
+    if(bootstrap){checkAdmission?.();write(()=>{},'setup',checkAdmission);unattestedIdentity=null;}
     return true;
   }
   const initialization=()=>({autoVacuum:'INCREMENTAL',...(sqlite ? {journalMode:sidecarJournalMode} : {}),sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=${PRODUCT_SIDECAR_FORMAT}; ${ddl} ${VECTOR_DDL}`,
@@ -758,7 +771,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     if(quantum.admit('gc'))quantum.measure(()=>{
       if(discardAfterGuard)connection(true);
       const wasWritable=sideWritable===true;
-      try {side.exec('PRAGMA incremental_vacuum(32)');}
+      try {write(()=>side.exec('PRAGMA incremental_vacuum(32)'),'gc');}
       catch(e) {failed(e,wasWritable);if(e.code!=='ERR_SQLITE_ERROR' || (e.errcode&255)!==5)throw e;}
       // Optional BUSY skips reclamation; attribution counts admitted attempts.
     },'gc','vacuum');
@@ -851,7 +864,12 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       return foreign?basis.digest('hex'):null;
     });
   }
-  function admit(checkBindings=false,cutoff=Infinity) {
+  // The bootstrap exception belongs to this call only. A later turn must
+  // revalidate the file and treat an unsigned empty successor as untrusted.
+  function admit(...args) {
+    try {return admitInside(...args);}finally{unattestedIdentity=null;}
+  }
+  function admitInside(checkBindings=false,cutoff=Infinity) {
     const checkAdmission=()=>{if(cutoff!==Infinity&&now()>=cutoff)fail('read_timeout');};
     checkAdmission();
     // Retain the identity whose validation failed. A different selection may
@@ -860,7 +878,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     let foreignBindingDigest;
     try { connection(true,checkAdmission);if(checkBindings&&(foreignBindingDigest=admissionBindings(checkAdmission)))unavailable('foreign_binding'); }
     catch(e) {if(e===admissionRequired)throw e;attribution?.captureFailure(e);
-      if (!['wrong_store','incompatible','corrupt','foreign_binding'].includes(e.reason) && !(e.code==='ERR_SQLITE_ERROR' && [1,11,26].includes(e.errcode&255))) throw e;
+      if (!['wrong_store','incompatible','corrupt','foreign_binding','attestation_invalid'].includes(e.reason) && !(e.code==='ERR_SQLITE_ERROR' && [1,11,26].includes(e.errcode&255))) throw e;
       const oldFormat = sideFormat > 0 && sideFormat !== PRODUCT_SIDECAR_FORMAT; close();
       checkAdmission();
       if (oldFormat) unavailable(e.reason==='wrong_store'?'wrong_store':'incompatible');
@@ -874,7 +892,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       if(!repairIdentity || !same(old,repairIdentity))unavailable('storage_unavailable');
       try {
         release();
-        cleaned(()=>handleRegistry().replace(()=>{checkAdmission();return publish(old.device+':'+old.inode,{...initialization(),expectedStamp:repairStamp,...(foreignBindingDigest?{foreignBindingDigest}:{})});},()=>{throw admissionRequired;}),()=>acquire());
+        cleaned(()=>handleRegistry().replace(()=>{checkAdmission();return publish(old.device+':'+old.inode,{...initialization(),expectedStamp:repairStamp,...(e.reason==='attestation_invalid'?{expectedAttestation:e.expectedAttestation}:{}),...(foreignBindingDigest?{foreignBindingDigest}:{})});},()=>{throw admissionRequired;}),()=>acquire());
       } catch(e) {attribution?.captureFailure(e);
         if(['ESTALE','EEXIST','EBUSY'].includes(e.code))unavailable('storage_unavailable');
         throw e;

@@ -1867,3 +1867,36 @@ each admission slot at `A` and each work slot at `S`. With one projection
 1,000 ms, the largest feasible `admissionMs` is 2,000 ms. A 5,000 ms admission
 budget is infeasible and fails with `invalid_input`. A host on a slower volume
 can opt in within these bounds without extending its work quantum.
+
+## Sidecar integrity attestation (append-only amendment)
+
+Writable admission and read-only opens verify a keyed attestation before using
+an existing cache. Its HMAC key is derived from the store's cursor secret with
+the `sidecar-attestation-v1` domain. The certificate binds device, inode, birth
+identity, the sidecar format, engine profile, and an in-file monotonic stamp.
+Size and modification time are excluded. Every parent sidecar write transaction
+increments and signs the stamp before COMMIT, including lexical and vector
+writes, verification resets, publication, garbage collection, incremental vacuum,
+and explicit reset. A rollback restores the previous matching stamp and seal.
+
+A missing or invalid seal makes the cache unavailable to reads. Explicit
+maintenance uses the existing excluded replacement protocol, then performs the
+normal bounded, checkpointed rebuild before publication. Existing sidecars have
+no seal and intentionally incur this one-time replacement and full rebuild.
+Under lifecycle exclusion the replacement child checks the parent's exact-row
+SHA-256 verdict again; a changed row or file stamp refuses replacement with
+ESTALE. This attestation verdict needs no whole-file integrity check. Other
+corrupt verdicts retain the existing child integrity checks and foreign-binding
+certificate recheck. Neither the cursor secret nor its derived key reaches the
+child. The child initializes an unsigned empty cache; the parent seals its first
+write transaction against the identity verified on its opened connection. A
+crash before that write leaves an unavailable empty cache that the next writable
+open replaces again.
+
+Previously every writable cold open ran SQLite `quick_check` and
+`foreign_key_check` over the entire cache. These audited database structure,
+constraints, and referential consistency. The cache is derived data: candidates
+are re-fetched from canonical storage and revalidated at delivery, and existing
+`SQLITE_CORRUPT` classifications still route to repair. The keyed seal permits
+bounded admission without repeating those whole-file statements. Status and
+coverage from unverified files confer no readiness or serving authority.

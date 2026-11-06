@@ -151,7 +151,7 @@ const create = `
         return call(role,stage,sql.startsWith('PRAGMA journal_mode=')?'journal_mode':'transaction',()=>native.exec(sql));
       },
       prepare(sql) {
-        const statement=sql.startsWith('PRAGMA application_id')?'application_id':sql.startsWith('PRAGMA user_version')?'user_version':sql.includes('sqlite_schema')?'schema_metadata':'context_metadata';
+        const statement=sql.startsWith('PRAGMA application_id')?'application_id':sql.startsWith('PRAGMA user_version')?'user_version':sql.includes('sqlite_schema')?'schema_metadata':['PRAGMA quick_check','PRAGMA foreign_key_check'].includes(sql)?'context_evidence':'context_metadata';
         const prepared=call(role,'prepare',statement,()=>native.prepare(sql));
         return Object.fromEntries(['get','all','run'].map(method=>[method,(...args)=>call(role,'execute',statement,()=>prepared[method](...args))]));
       },
@@ -194,7 +194,16 @@ const create = `
               const metadata=incumbent.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
               damaged=!metadata || metadata.store_id!==init.storeId || metadata.profile!==init.profile;
             }
-            if(!damaged)damaged=incumbent.prepare('PRAGMA quick_check').get().quick_check!=='ok' || Boolean(incumbent.prepare('PRAGMA foreign_key_check').get());
+            if(init.expectedAttestation!==undefined){
+              // The parent authenticated (or refused) the exact row. This
+              // verdict rechecks only its basis under lifecycle exclusion.
+              // Never accept a changed row, even if another cheap check failed.
+              const exists=incumbent.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='product_attestation'").get();
+              const row=exists?incumbent.prepare('SELECT stamp,record FROM product_attestation WHERE singleton=1').get():null;
+              const actual=row?createHash('sha256').update(JSON.stringify([row.stamp,row.record])).digest('hex'):'missing';
+              if(actual!==init.expectedAttestation)throw Object.assign(Error('valid_cache'),{code:'ESTALE'});
+              damaged=true;
+            }else if(!damaged)damaged=incumbent.prepare('PRAGMA quick_check').get().quick_check!=='ok' || Boolean(incumbent.prepare('PRAGMA foreign_key_check').get());
             if(!damaged && init.expectedStamp && /^[a-f0-9]{64}$/.test(init.foreignBindingDigest ?? '')) {
               // Admission authenticated these exact stored certificates and
               // proved a foreign physical binding. Recheck its complete basis
