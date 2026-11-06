@@ -691,15 +691,15 @@ test('required cycles fail at three, expose their lane/count early and let histo
   for(let n=0;n<20&&p.getStatus().state==='active';n++){
     await s.next();const status=p.getStatus(),d=maintenancePumpDiagnostic(status);
     if(d.observation?.projection===1)history++;
-    if(d.admission[0]?.count===1){
-      assert.deepEqual(d.admission[0],{cause:'admission_no_progress',lane:0,count:1});
+    if(d.admission[0]?.noProgress?.count===1){
+      assert.deepEqual(d.admission[0],{noProgress:{lane:0,count:1}});
       assert.equal(status.state,'active');assert.equal(status.error,null);
     }
   }
   const status=await p.completion,d=maintenancePumpDiagnostic(status);
   assert.equal(status.state,'failed');assert.equal(status.error,'reader_failed');
   assert.equal(d.lastFailure.cause,'admission_no_progress');assert.equal(d.lastFailure.lane,0);assert.equal(d.lastFailure.count,3);
-  assert.equal(d.failureCounts.admission_no_progress,1);assert.equal(d.admission[0].count,3);
+  assert.equal(d.failureCounts.admission_no_progress,1);assert.deepEqual(d.admission[0].noProgress,{lane:0,count:3});
   assert.ok(history>=2,'history must earn observations between current yields');
   assert.ok(s.events.filter(e=>e.kind==='work'&&e.intent==='history').length>=2);
 });
@@ -708,17 +708,17 @@ test('required evidence survives renewal, a new pump ID, capacity/cache epochs a
   const s=cycling(t),identity={key:randomUUID(),physical:randomUUID(),cache:'first'};
   s.deps.admissionIdentity=()=>identity;s.runtime=createMaintenancePumpRuntime(s.deps);
   let p=s.runtime(s.config);await s.next();await s.next();
-  assert.equal(maintenancePumpDiagnostic(p.getStatus()).admission[0].count,1);
-  assert.equal(s.runtime(s.config),p);assert.equal(maintenancePumpDiagnostic(p.getStatus()).admission[0].count,1);
+  assert.deepEqual(maintenancePumpDiagnostic(p.getStatus()).admission[0].noProgress,{lane:0,count:1});
+  assert.equal(s.runtime(s.config),p);assert.deepEqual(maintenancePumpDiagnostic(p.getStatus()).admission[0].noProgress,{lane:0,count:1});
   await p.close();identity.cache='changed';identity.key=randomUUID();
   p=s.runtime({...s.config,id:randomUUID(),quantum:{maxItems:32,maxMs:1250}});t.after(()=>p.close());
-  assert.equal(maintenancePumpDiagnostic(p.getStatus()).admission[0].count,1);
+  assert.deepEqual(maintenancePumpDiagnostic(p.getStatus()).admission[0].noProgress,{lane:0,count:1});
   for(let n=0;n<20&&p.getStatus().state==='active';n++)await s.next();
   assert.equal((await p.completion).error,'reader_failed');
   assert.equal(maintenancePumpDiagnostic(p.getStatus()).lastFailure.count,3);
   await p.close();
   const next=s.runtime({...s.config,id:randomUUID()});t.after(()=>next.close());
-  assert.equal(maintenancePumpDiagnostic(next.getStatus()).admission[0].count,3);
+  assert.deepEqual(maintenancePumpDiagnostic(next.getStatus()).admission[0].noProgress,{lane:0,count:3});
   const opens=s.handles.length;await s.next();
   assert.equal((await next.completion).state,'failed');assert.equal(s.handles.length,opens,'terminal evidence prevents another admission');
 });
@@ -732,9 +732,9 @@ test('accepted observing work resets required evidence; successful admission alo
   for(let repeat=0;repeat<4;repeat++){
     cycle=true;
     for(let n=0;n<8&&maintenancePumpDiagnostic(p.getStatus()).admission[0]===null;n++)await s.next();
-    assert.equal(maintenancePumpDiagnostic(p.getStatus()).admission[0].count,1);
+    assert.deepEqual(maintenancePumpDiagnostic(p.getStatus()).admission[0].noProgress,{lane:0,count:1});
     await s.next();assert.equal(s.events.at(-1).kind,'admission');
-    assert.equal(maintenancePumpDiagnostic(p.getStatus()).admission[0].count,1,'admission cannot erase evidence');
+    assert.deepEqual(maintenancePumpDiagnostic(p.getStatus()).admission[0].noProgress,{lane:0,count:1},'admission cannot erase evidence');
     cycle=false;
     for(let n=0;n<8&&maintenancePumpDiagnostic(p.getStatus()).admission[0]!==null;n++)await s.next();
     assert.equal(maintenancePumpDiagnostic(p.getStatus()).admission[0],null);
@@ -760,7 +760,7 @@ test('a required work result reacquires indexed evidence after clean domain reti
   const old=policy.maintenanceAdmissionDomain(identity,1000),pending=s.next();await started;
   try{for(let n=0;n<1100;n++)policy.maintenanceAdmissionDomain(admissionIdentity(),1000);assert.equal(old.domain.capacities.size,0);}
   finally{release();await pending;}
-  assert.equal(maintenancePumpDiagnostic(p.getStatus()).admission[0].count,1);
+  assert.deepEqual(maintenancePumpDiagnostic(p.getStatus()).admission[0].noProgress,{lane:0,count:1});
   assert.deepEqual([...policy.maintenanceAdmissionDomain(identity,1000).domain.noProgress.values()],[1]);
 }));
 
@@ -783,3 +783,33 @@ test('no-progress cells are process-bounded and merges and accepted work release
   policy.maintenanceAdmissionProgress(merged,'overflow',true);assert.equal(all().progressCount,1024);
   assertAdmissionIndexes(all());
 }));
+
+test('admission diagnostic keeps retry cause and fields beside no-progress evidence',async t=>{
+  const s=cycling(t),admit=s.deps.admit;let admissions=0;
+  s.deps.admit=async(...args)=>{
+    const result=await admit(...args);
+    if(++admissions===2)s.spend(1001);
+    return result;
+  };
+  const p=createMaintenancePumpRuntime(s.deps)(s.config);t.after(()=>p.close());
+  await s.next();await s.next(); // Current yields required; history next re-admits.
+  await s.next(); // The second admission exceeds its quantum and enters backoff.
+  const d=maintenancePumpDiagnostic(p.getStatus()),entry=d.admission[0];
+  assert.equal(entry.cause,'open_exceeds_quantum');
+  assert.equal(entry.attempts,1);assert.equal(entry.state,'backoff');
+  assert.equal(entry.retryAtMonoMs,s.now()+5000);
+  assert.deepEqual(entry.noProgress,{lane:0,count:1});
+  assert.deepEqual(entry,{cause:'open_exceeds_quantum',attempts:1,state:'backoff',retryAtMonoMs:s.now()+5000,noProgress:{lane:0,count:1}});
+  assert.equal(Object.isFrozen(entry),true);assert.equal(Object.isFrozen(entry.noProgress),true);
+  assert.deepEqual(d.admission[1],{cause:'open_exceeds_quantum',attempts:1,state:'backoff',retryAtMonoMs:s.now()+5000},'retry-only lane keeps its exact status');
+});
+
+test('admission diagnostic without a retry contains only frozen no-progress evidence',async t=>{
+  const s=cycling(t),p=s.runtime(s.config);t.after(()=>p.close());
+  assert.deepEqual(maintenancePumpDiagnostic(p.getStatus()).admission,[null,null]);
+  await s.next();await s.next();
+  const entry=maintenancePumpDiagnostic(p.getStatus()).admission[0];
+  assert.deepEqual(entry,{noProgress:{lane:0,count:1}});
+  assert.equal(Object.hasOwn(entry,'cause'),false);
+  assert.equal(Object.isFrozen(entry),true);assert.equal(Object.isFrozen(entry.noProgress),true);
+});
