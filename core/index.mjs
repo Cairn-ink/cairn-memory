@@ -1,6 +1,13 @@
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { contentSafetyFacade } from './content-safety-boundary.mjs';
 import { createMemoryRuntime } from "./runtime.mjs";
+// This entry already loads the SQLite engine. Register the optional Raw
+// implementation in its installed module closure; evaluation opens no files.
+// The separately imported Raw factory keeps its selection-gated dependencies.
+import './raw-search-authority.mjs';
+import './raw-search-storage.mjs';
+import './raw-search-maintenance.mjs';
+import './raw-search-retrieval.mjs';
 import {
   fail, identifier, limit, memoryInput, namespace, object, revision,
 } from "./validation.mjs";

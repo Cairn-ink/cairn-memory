@@ -259,6 +259,10 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // Foreign-binding repair: the read-only disposal check adds one
   // validation_invalid failure-reason string in context-product-sidecar (6 -> 7).
   // It is not a canonical content identity or a writer acknowledgement field.
+  // Optional Raw identities bind read candidates, source proofs, publications,
+  // provider metadata and private maintenance budget windows. They add no
+  // canonical writer acknowledgement fields. Returned reader methods check
+  // canonical denials independently of these hints.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};

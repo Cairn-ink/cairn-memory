@@ -354,6 +354,7 @@
   "core/content-safety-observations.mjs",
   "core/content-safety-preflight.mjs",
   "adapters/mcp/safety-command.mjs",
+  "core/raw-search-cache.mjs",
   "core/raw-search-input.mjs",
   "core/raw-search-storage.mjs",
   "core/raw-search-authority.mjs",

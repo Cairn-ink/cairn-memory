@@ -12,11 +12,13 @@ export function selectRawVectorResidency() {
   rawServices++;rawVectorResidencySelected=true;let released=false;
   return ()=>{if(!released){released=true;rawServices--;rawVectorResidencySelected=rawServices>0;}};
 }
-export function reserveSharedVectors(count,metadata) {
+export function reserveSharedVectors(count,metadata,overheadBytes=0) {
   const capacity=semanticCapacity(count,metadata);
-  if(!capacity.eligible||residentVectors+count>MAX_VECTORS||residentBytes+capacity.bytes>MAX_CACHE_BYTES)return null;
-  residentVectors+=count;residentBytes+=capacity.bytes;let released=false;
-  return {release(){if(!released){released=true;residentVectors-=count;residentBytes-=capacity.bytes;}}};
+  if(!Number.isSafeInteger(overheadBytes)||overheadBytes<0)return null;
+  const bytes=capacity.bytes+overheadBytes;
+  if(!capacity.eligible||residentVectors+count>MAX_VECTORS||residentBytes+bytes>MAX_CACHE_BYTES)return null;
+  residentVectors+=count;residentBytes+=bytes;let released=false;
+  return {release(){if(!released){released=true;residentVectors-=count;residentBytes-=bytes;}}};
 }
 const invalid = code => { throw Object.assign(new TypeError(code), { code }); };
 export function validateEmbedderMetadata(value) {

@@ -1546,5 +1546,37 @@
   },
   "core/context-semantic-client.mjs": {
     "key:operationId": 1
+  },
+  "core/raw-search-input.mjs": {
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "literal:ownerId": 2,
+    "literal:projectId": 1
+  },
+  "core/raw-search-authority.mjs": {
+    "key:actionId": 1,
+    "key:conversationId": 2,
+    "key:memoryId": 2,
+    "key:messageId": 2,
+    "key:ownerId": 2,
+    "key:projectId": 1,
+    "key:receiptId": 2,
+    "key:storeId": 2,
+    "key:targetId": 1
+  },
+  "core/raw-search-index.mjs": {
+    "key:centerId": 1,
+    "key:conversationId": 3,
+    "key:id": 2,
+    "key:messageId": 3
+  },
+  "core/raw-search-retrieval.mjs": {
+    "key:centerId": 1,
+    "key:id": 4
+  },
+  "core/raw-search-maintenance.mjs": {
+    "key:id": 1,
+    "key:pumpId": 1,
+    "key:windowId": 1
   }
 }

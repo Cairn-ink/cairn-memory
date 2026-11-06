@@ -4,6 +4,7 @@ import { performance } from 'node:perf_hooks';
 import { contextBudget } from './context-read-budget.mjs';
 import { randomUUID } from 'node:crypto';
 import { dirname } from 'node:path';
+import { createRawSearchCache } from './raw-search-cache.mjs';
 
 const publicCodes = new Set(['invalid_input','invalid_query','invalid_read_set','authority_required','scope_changed',
   'stale_publication','store_closed','read_in_progress','maintenance_authority_required','raw_search_backend_unavailable']);
@@ -31,6 +32,12 @@ export async function openRawSearch(value) {
     database.assertFile=()=>{assertFile();canonicalFile();};
     const authority=createRawSearchAuthority(database,options);
     storage=await openRawSearchStorage({directory:options.directory,identity:authority.identity,bind:authority.bind,quotaBytes:options.quotaBytes});
+    const metadata=options.embedder&&{id:options.embedder.id,revision:options.embedder.revision,
+      dimensions:options.embedder.dimensions,normalization:options.embedder.normalization};
+    const cacheEnabled=options.policy?.family==='local'&&!!metadata;
+    const cache=createRawSearchCache({enabled:cacheEnabled,checkKey:()=>{
+      database.assertFile();return authority.cacheKey(storage.publication({shape:false}),metadata);
+    }});
     const maintenance=createRawSearchMaintenance(storage,authority,options),prepared=new Map(),searches=new Map();
     const dispatch=options.embedder&&contextBudget({budgetConfigured:true,policy:options.policy,embedder:options.embedder});
     const releaseResidency=embedding.selectRawVectorResidency();
@@ -51,66 +58,83 @@ export async function openRawSearch(value) {
     async function search(value,token) {
       const input=searchInput(value),access=authority.authorize('rawSearch',input,token);access();
       const deadlineAt=performance.now()+1000;
-      const snapshot=await storage.search();access();
-      let current=false;
-      let fence;
-      try{fence=authority.fence();current=snapshot.checkpoint.coverageComplete&&snapshot.checkpoint.fence===fence;}
-      catch(error){if(error.code!=='source_budget_exceeded')throw error;}
-      const {eligible,denied,timedOut}=authority.select(snapshot.rows,input.intent,deadlineAt);
-      const dependencies=eligible.map(row=>row.source);
-      const canonical=()=>{if(fence)authority.checkFence(fence);else checkSources(dependencies,input.intent);};
-      const guard=()=>{ready();canonical();access(canonical);};
-      let semantic={state:'bm25-only',reason:options.embedder?'partial_coverage':'disabled'},vectors=null,queryVector=null;
-      const port=options.embedder;let query=input.queryVector;
-      const metadata=port&&{id:port.id,revision:port.revision,dimensions:port.dimensions,normalization:port.normalization};
-      const chunks=eligible.reduce((n,row)=>n+row.chunks.length,0);
-      const complete=current&&!denied&&!snapshot.partial&&!timedOut&&eligible.every(row=>same(row.embedder,metadata)&&row.chunks.every(c=>c.vector));
-      if(port&&!query&&complete&&eligible.length&&embedding.semanticCapacity(chunks,port).eligible){
-        try{
-          if(Buffer.byteLength(input.query)+64>8192)fail('provider_error');
-          const result=await dispatch(port,[input.query],{signal:new AbortController().signal,deadlineAt,guard});
-          if(!Array.isArray(result)||result.length!==1)fail('invalid_vector');
-          query={input:input.query,embedder:metadata,vector:result[0]};
-        }catch(error){guard();semantic={state:'bm25-only',reason:['budget_denied','timeout','rate_limited'].includes(error.code)?error.code:'provider_error'};}
-      }
-      let residency;
-      if(port&&query&&query.input===input.query&&same(query.embedder,metadata)&&embedding.semanticCapacity(chunks,port).eligible&&complete){
-        try {
-          residency=embedding.reserveSharedVectors(chunks,port);
-          if(!residency)fail('partial_coverage');
-          queryVector=embedding.validateVector(query.vector,port);
-          vectors=retrieval.loadRawVectorBlocks(eligible,port);
-          semantic={state:'ready',reason:null};
-        }catch(error){vectors=null;queryVector=null;semantic={state:'bm25-only',reason:error.code==='partial_coverage'?'partial_coverage':'invalid_vector'};}
-      }
-      let result;
-      try{result=retrieval.retrieveRaw(eligible,input.query,{vectors,queryVector});}
-      finally{vectors=null;residency?.release();}
-      const publication=authority.bind('raw-search-publication-v1',[authority.identity,snapshot.sequence]);
-      const proof=authority.bind('raw-search-proof-v1',[instance,publication,++serial]);
-      const candidates=result.rows.map(row=>{
-        const sources=row.turn.segments.map(s=>s.source),source=sources[0],ref=source.ref;
-        const historical=sources.some(s=>s.classification.kind==='history-only');
-        const bare=sources.some(s=>s.classification.kind==='current-eligible-bare');
-        return {id:row.id,namespace:ref.namespace,conversationId:ref.conversationId,messageId:ref.messageId,
-          ordinal:source.ordinal,role:source.role,occurredAt:source.occurredAt,ranges:sources.map(s=>s.ref),score:row.score,
-          centerId:row.centerId,neighbor:row.neighbor,currentness:historical?source.currentness:bare?'unknown':'current',
-          classification:historical?{kind:'history-only',reason:'history-contributor'}:bare?
-            {kind:'current-eligible-bare',reason:'complete-privacy-no-memory-link'}:{kind:'current-eligible-linked',reason:'current-memory-links'},
-          rangeClassifications:sources.map(s=>s.classification),publication,proof};
-      });
-      const coverage=result.coverage;
-      if(snapshot.partial||denied||timedOut||!current){coverage.status='partial';coverage.causes.push(timedOut?'deadline':snapshot.partial?snapshot.partialReason:'stale_index');}
-      // Work/population counters can describe denied/stale rows. Public coverage
-      // reports limits and availability only; operational counts stay internal.
-      coverage.scanned=null;coverage.expanded=null;
-      const output=immutable({version:RAW_SEARCH_VERSION,publication,candidates,coverage,semantic});
-      const materialized=result.rows.flatMap(row=>row.turn.segments.map(segment=>segment.source));
-      retain(searches,proof,{dependencies,fence,intent:input.intent,access,candidates},4);
-      // Every lexical corpus row, semantic chunk, session and neighbor dependency
-      // is retained, including contributors that are not in the final 24.
-      authority.validate([{sources:dependencies,materialized,fence,intent:input.intent,access,value:output}]);
-      return output;
+      let cacheProof,borrowed,residency,vectors=null;
+      try {
+        let state=null;
+        if(cacheEnabled)try{
+          const publication=storage.publication();
+          cacheProof={publication,metadata,key:authority.cacheKey(publication,metadata)};
+          state=publication;borrowed=cache.acquire(cacheProof.key);
+        }catch{cache.drop();cacheProof=undefined;}
+        const snapshot=borrowed?{...state,rows:borrowed.rows}:await storage.search();access();
+        // A concurrent publication between the optional header read and the
+        // payload snapshot only defers caching. It adds no new search error.
+        if(state&&snapshot.sequence!==state.sequence){cache.drop();cacheProof=undefined;}
+        let current=false;
+        let fence;
+        try{fence=authority.fence();current=snapshot.checkpoint.coverageComplete&&snapshot.checkpoint.fence===fence;}
+        catch(error){if(error.code!=='source_budget_exceeded')throw error;}
+        const {eligible,denied,timedOut}=authority.select(snapshot.rows,input.intent,deadlineAt);
+        const dependencies=eligible.map(row=>row.source);
+        const canonical=()=>{if(fence)authority.checkFence(fence);else checkSources(dependencies,input.intent);};
+        const guard=()=>{ready();canonical();access(canonical);};
+        let semantic={state:'bm25-only',reason:options.embedder?'partial_coverage':'disabled'},queryVector=null;
+        const port=options.embedder;let query=input.queryVector;
+        const chunks=eligible.reduce((n,row)=>n+row.chunks.length,0);
+        const complete=current&&!denied&&!snapshot.partial&&!timedOut&&eligible.every(row=>same(row.embedder,metadata)&&row.chunks.every(c=>c.vector));
+        if(port&&!query&&complete&&eligible.length&&embedding.semanticCapacity(chunks,port).eligible){
+          try{
+            if(Buffer.byteLength(input.query)+64>8192)fail('provider_error');
+            const result=await dispatch(port,[input.query],{signal:new AbortController().signal,deadlineAt,guard});
+            if(!Array.isArray(result)||result.length!==1)fail('invalid_vector');
+            query={input:input.query,embedder:metadata,vector:result[0]};
+          }catch(error){guard();semantic={state:'bm25-only',reason:['budget_denied','timeout','rate_limited'].includes(error.code)?error.code:'provider_error'};}
+        }
+        if(port&&query&&query.input===input.query&&same(query.embedder,metadata)&&embedding.semanticCapacity(chunks,port).eligible&&complete){
+          try {
+            // Another search may have populated the same reader while this
+            // operation awaited its query provider. Reuse that reservation.
+            if(!borrowed&&cacheProof)borrowed=cache.acquire(cacheProof.key);
+            if(!borrowed){residency=embedding.reserveSharedVectors(chunks,port);if(!residency)fail('partial_coverage');}
+            queryVector=embedding.validateVector(query.vector,port);
+            vectors=borrowed?borrowed.vectors:retrieval.loadRawVectorBlocks(eligible,port);
+            if(!vectors)fail('partial_coverage');
+            semantic={state:'ready',reason:null};
+          }catch(error){vectors=null;queryVector=null;semantic={state:'bm25-only',reason:error.code==='partial_coverage'?'partial_coverage':'invalid_vector'};}
+        }
+        const result=retrieval.retrieveRaw(eligible,input.query,{vectors,queryVector});
+        const publication=authority.bind('raw-search-publication-v1',[authority.identity,snapshot.sequence]);
+        const proof=authority.bind('raw-search-proof-v1',[instance,publication,++serial]);
+        const candidates=result.rows.map(row=>{
+          const sources=row.turn.segments.map(s=>s.source),source=sources[0],ref=source.ref;
+          const historical=sources.some(s=>s.classification.kind==='history-only');
+          const bare=sources.some(s=>s.classification.kind==='current-eligible-bare');
+          return {id:row.id,namespace:ref.namespace,conversationId:ref.conversationId,messageId:ref.messageId,
+            ordinal:source.ordinal,role:source.role,occurredAt:source.occurredAt,ranges:sources.map(s=>s.ref),score:row.score,
+            centerId:row.centerId,neighbor:row.neighbor,currentness:historical?source.currentness:bare?'unknown':'current',
+            classification:historical?{kind:'history-only',reason:'history-contributor'}:bare?
+              {kind:'current-eligible-bare',reason:'complete-privacy-no-memory-link'}:{kind:'current-eligible-linked',reason:'current-memory-links'},
+            rangeClassifications:sources.map(s=>s.classification),publication,proof};
+        });
+        const coverage=result.coverage;
+        if(snapshot.partial||denied||timedOut||!current){coverage.status='partial';coverage.causes.push(timedOut?'deadline':snapshot.partial?snapshot.partialReason:'stale_index');}
+        // Work/population counters can describe denied/stale rows. Public coverage
+        // reports limits and availability only; operational counts stay internal.
+        coverage.scanned=null;coverage.expanded=null;
+        const output=immutable({version:RAW_SEARCH_VERSION,publication,candidates,coverage,semantic});
+        const materialized=result.rows.flatMap(row=>row.turn.segments.map(segment=>segment.source));
+        retain(searches,proof,{dependencies,fence,intent:input.intent,access,candidates},4);
+        // Every lexical corpus row, semantic chunk, session and neighbor dependency
+        // is retained, including contributors that are not in the final 24.
+        authority.validate([{sources:dependencies,materialized,fence,cache:cacheProof,intent:input.intent,access,value:output}]);
+        if(cacheProof&&!borrowed&&!denied&&!timedOut&&(vectors||snapshot.partial)){
+          // Transfer the operation's reservation synchronously. Admission failure
+          // only leaves this operation uncached; it cannot change its result.
+          residency?.release();residency=null;
+          borrowed=cache.install(cacheProof.key,eligible,vectors,metadata,snapshot.hintBytes);
+        }
+        return output;
+      }finally{vectors=null;borrowed?.release();residency?.release();}
     }
     function candidateEntry(candidate,intent) {
       const entry=searches.get(candidate?.proof);
@@ -187,10 +211,11 @@ export async function openRawSearch(value) {
     };
     return Object.freeze({search:tracked(search),prepare:tracked(prepare),prepareSource:tracked(prepareSource),classify:tracked(classify),validate:revalidate,revalidate,
       maintain:tracked(async(input,token)=>{const access=authority.authorize('rawSearchMaintenance',{},token);
+        cache.maintain();
         await maintenance.maintain(input,access);return status();}),
       async status(){try{ready();await storage.status();return status();}catch{return {state:'unavailable',eligible:null,indexed:null,embedded:null,coverage:'unknown',error:'raw_search_unavailable'};}},
-      purge:tracked(async()=>{await maintenance.close();await storage.dropOwner();prepared.clear();searches.clear();}),
-      async close(){if(closed)return;closed=true;await maintenance.close();await Promise.allSettled([...operations]);prepared.clear();searches.clear();
+      purge:tracked(async()=>{cache.close();await maintenance.close();await storage.dropOwner();prepared.clear();searches.clear();}),
+      async close(){if(closed)return;closed=true;cache.close();await maintenance.close();await Promise.allSettled([...operations]);prepared.clear();searches.clear();
         try{await storage.close();}finally{database.db.close();releaseResidency();}}});
   }catch(error){await storage?.close();database?.db.close();safeFailure(error);}
 }

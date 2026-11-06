@@ -73,7 +73,7 @@ The selected handle provides:
   worker/transport hook or atomic wire-send-versus-forget guarantee. A later
   consumer must install and test its own call to `revalidate`.
 - `maintain({ maxItems?, maxMs?, embeddings? }, token)` runs one explicit quantum
-  under the existing version-1 `maintenanceTurn` broker. No timer/pump is made.
+  under the existing version-1 `maintenanceTurn` broker. No index timer/pump is made.
   The host owns scheduling, renewal, supervision and joined disposal. Denial
   reconciliation precedes positive refresh. Each Raw opener and actual provider
   `beforeDispatch` checks canonical denials and access after waits. Embeddings
@@ -117,3 +117,26 @@ partial coverage. Native SQLite changes invalidate the search-eligibility
 cache; actual per-port and final source checks remain independent of that cache. Public coverage reports
 partial causes with unknown scan/expansion counts. The later allocator owns
 Memory-first floor, excerpt counting, coalescing and rendering.
+
+A reader with the selected `local` embedding policy privately retains verified
+fp32 blocks and bounded decoded hints. Other policies never retain this cache.
+It supplies ranking hints only; exact canonical delivery and protected dispatch
+validation remain mandatory. The key binds owner/read set, sidecar generation
+and publication, native sidecar revision, full provider/model identity, owner
+suppression epoch, namespace exclusion clocks and scoped session-fence digests.
+All canonical components are read together in one snapshot and compared again
+inside the final delivery snapshot. Native canonical changes also invalidate it.
+Coverage is read freshly from the sidecar, and status, diagnostics and errors
+contain no cache state. The cache never holds source prose or supplies openings.
+
+The private cache rechecks its key every second, on the existing maintenance
+cadence, including while searches and host maintenance calls are idle. A failed
+check drops it. Five seconds without use also drops it at the next cadence tick;
+close and purge drop it immediately. Timers are unreferenced and cancelled on
+disposal. The bound is subject to the running reader's event-loop scheduling;
+a terminated Worker owns no surviving blocks. A borrow already in an operation
+keeps its shared reservation until that operation settles. Blocks are never
+handed to another reader or successor. There is no cache persistence or privacy
+mutation callback. Encoded hint overhead (reserved at four times its size) and
+block indexing share the 128 MiB ceiling with fp32 vectors and Memory; the joint
+vector count remains 20,000. Admission failure leaves the operation uncached.

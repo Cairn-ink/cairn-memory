@@ -229,6 +229,27 @@ export function createRawSearchAuthority(database, options) {
     return cachedFence.value;
   }
   const checkFence = expected => read(() => { if(fenceInside()!==expected)fail('source_unavailable'); });
+  function cacheKeyInside(publication,metadata) {
+    const observed=versionInside();
+    const namespaces=options.readSet.map(ns=>{
+      const args=boundary(ns);
+      const fences=db.prepare(`SELECT client,session_key FROM raw_session_fences WHERE ${where} ORDER BY client,session_key LIMIT 50001`).all(...args);
+      if(fences.length>50000)fail('source_budget_exceeded');
+      return [ns,db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...args)??null,
+        db.prepare(`SELECT generation FROM raw_exclusion_clocks WHERE ${where}`).get(...args)??null,
+        bind('raw-search-session-fences-v1',fences)];
+    });
+    return bind('raw-search-cache-key-v1',[identity.store_id,options.ownerId,publication.generation,
+      publication.sequence,publication.revision,metadata,contentSuppressionFenceInside(db,options.ownerId),namespaces,observed]);
+  }
+  // Every key component is read in a single canonical snapshot. The final
+  // delivery snapshot repeats this read, closing any scoring/provider wait.
+  const cacheKey = (publication,metadata) => {
+    database.assertFile();
+    // An optional cache check must not set the shared reader's busy backoff:
+    // a failed idle check cannot manufacture an error on a later operation.
+    return readTransaction(db,()=>cacheKeyInside(publication,metadata));
+  };
   function check(source,intent = 'history') {
     return read(() => {
       const next = inspectInside(source.ref,intent);
@@ -245,7 +266,7 @@ export function createRawSearchAuthority(database, options) {
     const eligible=[];let denied=0,timedOut=false;
     for(const row of rows){
       if(performance.now()>=deadlineAt){timedOut=true;break;}
-      const key=fingerprint(row.source);
+      const key=row.source.canonical??fingerprint(row.source);
       let entry=eligibility.get(key);
       if(!entry){
         try{const next=check(row.source);entry={classification:next.classification};}
@@ -281,6 +302,7 @@ export function createRawSearchAuthority(database, options) {
     const inside = () => {
       let observed;
       for (const entry of entries) {
+        if(entry.cache && cacheKeyInside(entry.cache.publication,entry.cache.metadata)!==entry.cache.key)fail('source_unavailable');
         if(entry.fence){observed??=fenceInside();if(observed!==entry.fence)fail('source_unavailable');}
         // A full keyed canonical inventory binds *all* contributor identities,
         // bytes and denial facts. Materialized ranges additionally rerun the
@@ -297,6 +319,6 @@ export function createRawSearchAuthority(database, options) {
     });
   }
   return { read,identity:{storeId:identity.store_id,fileIdentity:database.fileIdentity,ownerId:options.ownerId,readSet:options.readSet},
-    bind,authorize,inventory,check,select,open,validate,fingerprint,fence,checkFence,
+    bind,authorize,inventory,check,select,open,validate,fingerprint,fence,checkFence,cacheKey,
     inspect:(ref,intent='history')=>read(()=>inspectInside(ref,intent)) };
 }

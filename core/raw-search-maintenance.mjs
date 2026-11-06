@@ -5,6 +5,7 @@ import { encodeVector } from './context-read-embedder.mjs';
 import { rawSearchChunks, rawSearchPostings } from './raw-search-retrieval.mjs';
 import { same } from './raw-search-input.mjs';
 import { fail } from './validation.mjs';
+import { RAW_SEARCH_CADENCE_MS } from './raw-search-cache.mjs';
 
 const retryable = new Set(['provider_error','rate_limited','timeout']);
 const refusal = error => ['budget_denied','timeout','rate_limited','dimension_mismatch','invalid_vector'].includes(error?.code) ? error.code : 'provider_error';
@@ -39,13 +40,13 @@ export function createRawSearchMaintenance(storage,authority,options) {
     const now=performance.now(),controller=new AbortController();
     const grant=await turns.wait({version:1,pumpId:'raw-search',windowId:'raw-search-local',lane:0,
       family:'lexical',kind:'lexical',phase:'work',intent:null,maxMs},{signal:controller.signal,untilMonoMs:now+maxMs,identity});
-    if (grant.status!=='admitted') return {deferred:true};
+    if (grant.status!=='admitted') return {postponed:true};
     turns.started(grant.ticket);
     try {
       if (closed) fail('store_closed');
       // This lane joins the host's existing broker. The local guard also
       // prevents repeated explicit calls from defeating the commit cadence.
-      if (performance.now()-(commitTimes.get(cadenceKey)??-Infinity)<1000) return {deferred:true};
+      if (performance.now()-(commitTimes.get(cadenceKey)??-Infinity)<RAW_SEARCH_CADENCE_MS) return {postponed:true};
       return await work(()=>{commitTimes.set(cadenceKey,performance.now());});
     } finally {
       turns.settling(grant.ticket);

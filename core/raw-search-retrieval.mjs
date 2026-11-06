@@ -82,7 +82,7 @@ export function retrieveRaw(segments,query,{ vectors = null,queryVector = null,m
     Math.max(-Infinity,...(vectors.get(segment.key)??[]).map(v=>cosine(queryVector,v)));
   const semantic=vectors&&queryVector?new Map(all.map(t=>[t.id,Math.max(-Infinity,...t.segments.map(chunkMax))])):null;
   const semRank=docs=>docs.map(d=>({id:d.id,score:semantic.get(d.id)})).filter(d=>Number.isFinite(d.score)).sort(order).slice(0,24);
-  const global=semantic ? rawSearchRrf(lexical,semRank(all)) : lexical;
+  const globalRank=semantic ? rawSearchRrf(lexical,semRank(all)) : lexical;
   const semSessions=semantic ? [...sessions].map(([id,m])=>({id,score:Math.max(...m.map(t=>semantic.get(t.id)))})).sort(order).slice(0,24) : null;
   const sessionRank=rank(sessionDocs,terms).slice(0,24);
   const rankedSessions=semantic?rawSearchRrf(sessionRank,semSessions):sessionRank;
@@ -98,7 +98,7 @@ export function retrieveRaw(segments,query,{ vectors = null,queryVector = null,m
   }
   const centers=[0,1,2].flatMap(i=>within.flatMap(hits=>hits[i]?[hits[i]]:[]));
   const scores=new Map();
-  for (const list of [global,centers]) list.forEach((row,i)=>scores.set(row.id,(scores.get(row.id)??0)+1/(61+i)));
+  for (const list of [globalRank,centers]) list.forEach((row,i)=>scores.set(row.id,(scores.get(row.id)??0)+1/(61+i)));
   const candidates=new Map();
   for (const [id,score] of [...scores].sort((a,b)=>b[1]-a[1]||binary(a[0],b[0]))) {
     const center=turns.get(id),members=sessions.get(center.sessionId),index=members.indexOf(center);

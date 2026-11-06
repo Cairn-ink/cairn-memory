@@ -20,6 +20,7 @@
       "openMemoryCore",
       "openMemoryReader",
       "openMemoryStore",
+      "openRawSearch",
       "renewContextMaintenancePump",
       "roleProfileRef",
       "roleProfileReleaseRef",
@@ -1129,7 +1130,8 @@
     "runtime.assertContentScope": "Refuses suppressed scopes at the runtime facade boundary.",
     "runtime.contentPortGuard": "Protects external ports against suppression changes during a runtime call.",
     "runtime.assertContentOutput": "Validates typed runtime output before facade delivery.",
-    "runtime.suppressionFence": "Binds runtime delivery to the current owner suppression epoch."
+    "runtime.suppressionFence": "Binds runtime delivery to the current owner suppression epoch.",
+    "exports.openRawSearch": "Optional Raw search handle construction returns no retained content and exposes no fact writer; returned methods are covered by the Raw privacy and erasure tests."
   },
   "moduleExports": {
     "core/content-safety-boundary.mjs": {
@@ -1349,6 +1351,7 @@
         "openMemoryCore",
         "openMemoryReader",
         "openMemoryStore",
+        "openRawSearch",
         "renewContextMaintenancePump",
         "roleProfileRef",
         "roleProfileReleaseRef",
@@ -1358,7 +1361,8 @@
       ],
       "additions": {
         "openContentSuppressionReader": "Opens the independent read-only denial reconciliation handle required by D-15.",
-        "createContextReaderPool": "Returns a frozen close-only lifecycle handle with no database access or path to a fact writer."
+        "createContextReaderPool": "Returns a frozen close-only lifecycle handle with no database access or path to a fact writer.",
+        "openRawSearch": "Optional Raw search handle construction returns no retained content and exposes no fact writer; returned methods are covered by the Raw privacy and erasure tests."
       }
     },
     "core/model-budget.mjs": {

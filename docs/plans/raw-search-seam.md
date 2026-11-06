@@ -16,7 +16,7 @@ The local service accepts the existing private-read authority protocol with
 dedicated Raw methods, the existing Raw opening port, and the existing
 maintenance-turn broker protocol. Broker requests use the lexical family and
 `pumpId: 'raw-search'`. Hosts must include this lane in their existing physical
-store cadence/fairness authority. There is no additional timer or pump. Calls
+store cadence/fairness authority. There is no additional index timer or pump. Calls
 are explicit, bounded and joined by `close`; public status exposes unknown counts and fixed errors; internal maintenance
 state tracks actual progress and retries. The host owns recurring supervision.
 
@@ -122,3 +122,28 @@ The selected handle also exposes `prepareSource` for an authenticated exact Raw
 ref resolved by the allocator from canonical Memory lineage. It permits Memory
 source expansion without an independent index hit. It uses the same source
 authority and ticket revalidation, and adds no legacy constructor method.
+
+The general core entry already loads SQLite and also evaluates the Raw
+implementation modules to preserve the installed module inventory. Their
+evaluation defines functions only and performs no probes, statements, clocks,
+ports or scheduling. The directly imported Raw factory retains its deferred
+SQLite dependencies and disabled selection returns before loading them.
+
+Only a reader selecting the local embedding policy owns a verified vector/hint
+cache. Its one-second invalidation timer performs no indexing, provider calls
+or canonical writes. It runs without host maintenance calls, drops on any
+unavailable/key-changed authority, expires after five idle seconds at the next
+tick, and is cancelled on close/purge. Each reader has its own owner-bound
+cache, including readers in a Worker; forced termination discards its blocks.
+No cache is persisted, shared between owners, or transferred across restart.
+
+Cache keys read all canonical suppression, exclusion and session-fence facts in
+one snapshot. The final canonical delivery snapshot repeats that key read as
+well as existing source validation. Generation/publication and native sidecar
+revision are checked on each search; warm coverage is freshly read independently
+of cache residency. No public signature, status field, diagnostic, coverage
+counter or error changes according to cache state. Privacy mutations gain no
+statements or synchronous purge. The shared byte reservation includes fp32
+payload, conservatively reserved hints and block indexing. Existing reads can
+therefore report semantic partial coverage while a selected local reader holds
+a reservation; readers with other embedding policies retain no such cache.

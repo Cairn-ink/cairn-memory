@@ -38,6 +38,7 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
   const path = join(directory,bind('raw-search-owner-file-v2',ownerIdentity)+'.raw-search.sqlite');
   if (!stat(path)) createExclusiveSqliteFile(path);
   const initial = privateFile(path);
+  const generation = bind('raw-search-generation-v1',[binding,String(initial.dev),String(initial.ino)]);
   for (const suffix of ['-wal','-shm']) if (stat(path+suffix)) fail('unsafe_index_file');
   const journal = stat(path+'-journal');
   if (journal) privateFile(path+'-journal');
@@ -152,6 +153,30 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
     }}finally{iterator.return();}
     return {sequence,checkpoint,rows,partial,partialReason,hintBytes:bytes,vectorBytes:vectorSize,timings};
   }
+  function publication({shape=true}={}) {
+    ready();
+    // Native change detection also invalidates on an out-of-band sidecar write
+    // that did not advance the signed publication clock. One sidecar snapshot
+    // reads the authenticated header and the uncached coverage shape.
+    db.exec('BEGIN DEFERRED');
+    try {
+      const current=header(),revision=db.prepare('PRAGMA data_version').get().data_version;
+      if(!shape){db.exec('COMMIT');return {generation,revision,sequence:current.sequence};}
+      const iterator=db.prepare('SELECT length(CAST(data AS BLOB)) AS hints,length(vectors) AS vectors FROM segments WHERE published=1 ORDER BY id LIMIT ?')
+        .iterate(RAW_SEARCH_LIMITS.work+1);
+      let hintBytes=0,vectorBytes=0,count=0,partial=false,partialReason=null;
+      try{for(const row of iterator){
+        if(count===RAW_SEARCH_LIMITS.work||hintBytes+row.hints>RAW_SEARCH_LIMITS.snapshotBytes){
+          partial=true;partialReason=count===RAW_SEARCH_LIMITS.work?'inventory_limit':'snapshot_byte_limit';break;
+        }
+        if(vectorBytes+row.vectors>128*1024*1024){partial=true;partialReason='vector_byte_limit';break;}
+        hintBytes+=row.hints;vectorBytes+=row.vectors;count++;
+      }}finally{iterator.return();}
+      db.exec('COMMIT');
+      return {generation,revision,sequence:current.sequence,checkpoint:JSON.parse(current.checkpoint),
+        partial,partialReason,hintBytes,vectorBytes};
+    }catch(error){if(db.isTransaction)db.exec('ROLLBACK');throw error;}
+  }
   async function stage(segment) {
     ready();
     const {data,vectors} = pack(segment);
@@ -225,6 +250,6 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
     });}while(removed);
     db.exec('VACUUM');
   }
-  return Object.freeze({ openOwner:async () => binding,snapshot,search:snapshot,stage,publish,invalidate,checkpoint,lookup,commitBatch,status,dropOwner,
+  return Object.freeze({ openOwner:async () => binding,snapshot,search:snapshot,publication,stage,publish,invalidate,checkpoint,lookup,commitBatch,status,dropOwner,
     async close() { if (!closed) { closed = true; db.close(); } } });
 }
