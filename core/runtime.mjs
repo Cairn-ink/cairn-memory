@@ -674,7 +674,7 @@ export function createMemoryRuntime(input, internal) {
       if (expected && JSON.stringify(snapshot) !== JSON.stringify(expected)) fail('revision_conflict');
       sourceSnapshotIdentities.set(snapshot, contentIdentities);
       return snapshot;
-    });
+    }, undefined, { deferred: true });
   }
 
   function recallSnapshot(candidates, selected, namespaces = [], includeQualification = false, contextMode) {
@@ -847,7 +847,7 @@ export function createMemoryRuntime(input, internal) {
           {type:'memory',namespace:ns,memoryId:row.memory_id,revision:row.memory_revision},
           {type:'memory',namespace:ns,memoryId:row.target_id,revision:row.target_revision}], [ns]);
         return { rows, epoch: current };
-      });
+      }, undefined, { deferred: true });
     },
     listReviewTransitions(ns, count, status, after, expectedEpoch) {
       ready();
@@ -865,7 +865,7 @@ export function createMemoryRuntime(input, internal) {
           {type:'memory',namespace:ns,memoryId:row.replacement_id,revision:row.replacement_revision},
           {namespace:ns,receiptIds:[...JSON.parse(row.previous_receipt_ids),...JSON.parse(row.receipt_ids)]}], [ns]);
         return { rows, epoch: current };
-      });
+      }, undefined, { deferred: true });
     },
     isAwaiting(ns, id) { ready(); return activeRow(ns, id)?.review_state === 'awaiting'; },
     resolveReview(ns, action, input) { ready(); return resolveReview(ns, action, input); },

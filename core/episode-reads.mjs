@@ -146,6 +146,7 @@ export function createEpisodeReadProjection({ db, epoch }) {
 }
 export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRead, episodeProjection }) {
   return function read(ns, operation, filter, cursor) {
+    // Reviewed read-only pages can share a snapshot with a RESERVED writer.
     return transaction(db, () => {
       const original = rangeQuery(ns,operation,filter,cursor?.a);
       const projected = operation === 'listEpisodes' ? episodeProjection(ns, original, cursor?.e) : { epoch: epoch(ns), query: original };
@@ -168,7 +169,7 @@ export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRea
           id: row.receipt_id, createdAt: row.receipt_time, client: row.receipt_client } } : {}) },
           key: receipt ? { time: row.receipt_time, id: row.receipt_id, memoryId: row.id } : { time: row.updated_at, id: row.id } };
       }) };
-    });
+    }, undefined, { deferred: true });
   };
 }
 export function rangePage(page, filter, binding, encodeCursor, operation) {
