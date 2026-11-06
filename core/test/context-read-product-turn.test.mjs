@@ -193,6 +193,67 @@ test(`short wait expiry declines ${phase}, grant settled ${grantFirst?'before':'
   assert.equal(s.tickets.at(-1).request.phase,phase);assert.equal(s.tickets.at(-1).request.lane,ticket.request.lane);
 });
 
+for(const start of ['open','admission','refresh'])for(const offset of [-1,0,1])
+test(`post-admission continuation: ${start} at deadline ${offset} uses a fresh clock`,async t=>{
+  const s=model(t,{maxWaitMs:1000}),p=s.create();
+  if(start==='admission'){
+    s.admit=async()=>({ok:true,value:null,receipt:'required'});await s.next();s.admit=async()=>{};
+  }else if(start==='refresh')await s.next();
+  const before=p.getStatus(),phases=s.phases(),prior=s.events.length,admitted=s.diagnostic().admittedTurns;
+  const queued=deferred();s.entry=()=>queued.promise;
+  const pending=s.fire();await flush();const ticket=s.tickets.at(-1);
+  assert.equal(ticket.request.phase,start==='refresh'?'work':'admission');
+  s.set(ticket.until-1);queued.resolve('admitted');
+  // Run the controller's entry reaction, which caches a timely grant, then
+  // delay the pump continuation without firing the admission timeout timer.
+  await Promise.resolve();
+  assert.equal(s.diagnostic().turnPhase,'running');assert.equal(s.timers.size,0);
+  s.set(ticket.until+offset);await pending;
+  assert.equal(ticket.signal.aborted,false,'the controller already completed its wait');
+  if(offset<0){
+    assert.deepEqual(ticket.releases,[['settled']]);
+    assert.deepEqual(s.events.slice(prior).map(e=>e.kind),
+      start==='open'?['request','open','admission','release']:['request',start==='refresh'?'work':'admission','release']);
+    assert.equal(s.diagnostic().admittedTurns,admitted+1);
+  }else{
+    assert.deepEqual(ticket.releases,[['declined','wait_expired']]);
+    assert.deepEqual(s.events.slice(prior).map(e=>e.kind),['request','release']);
+    assert.equal(s.diagnostic().declinedTurns.wait_expired,1);
+    assert.equal(s.diagnostic().admittedTurns,admitted);
+    assert.equal(s.diagnostic().turnPhase,'idle');
+    assert.deepEqual(p.getStatus(),before);assert.deepEqual(s.phases(),phases);
+  }
+});
+
+test('post-admission continuation preserves renewal expiry precedence over wait expiry',async t=>{
+  const s=model(t,{maxWaitMs:1000}),queued=deferred();s.entry=()=>queued.promise;
+  const p=s.create(),pending=s.fire();await flush();const ticket=s.tickets[0];
+  s.set(ticket.until-1);queued.resolve('admitted');await Promise.resolve();
+  s.set(s.config.window.endsAtMonoMs);await pending;
+  assert.deepEqual(ticket.releases,[['declined','renewal_expired']]);
+  assert.equal(s.diagnostic().declinedTurns.renewal_expired,1);assert.equal(s.diagnostic().declinedTurns.wait_expired,0);
+  assert.deepEqual(s.events.map(e=>e.kind),['request','release']);assert.equal(p.getStatus().usedMs,0);
+});
+
+test('fractional admission deadline rounds down and the fresh clock sample rounds up',async t=>{
+  const s=model(t,{maxWaitMs:1000}),queued=deferred();s.entry=()=>queued.promise;
+  s.create();s.set(1000.25);const pending=s.fire();await flush();const ticket=s.tickets[0];
+  assert.equal(ticket.until%1,0.25,'the host still receives the original deadline');
+  s.set(ticket.until-1);queued.resolve('admitted');await Promise.resolve();
+  s.set(ticket.until-0.5);await pending;
+  assert.deepEqual(ticket.releases,[['declined','wait_expired']]);
+  assert.deepEqual(s.events.map(e=>e.kind),['request','release']);
+});
+
+test('an accepted quantum continues admission and settlement beyond the admission deadline',async t=>{
+  const s=model(t,{maxWaitMs:1000}),queued=deferred();s.entry=()=>queued.promise;
+  s.open=async()=>{s.spend(2);};s.create();const pending=s.fire();await flush();const ticket=s.tickets[0];
+  s.set(ticket.until-1);queued.resolve('admitted');await pending;
+  assert.equal(s.events.find(e=>e.kind==='open').at,ticket.until-1);
+  assert.equal(s.events.find(e=>e.kind==='admission').at,ticket.until+1);
+  assert.deepEqual(ticket.releases,[['settled']]);assert.equal(s.diagnostic().declinedTurns.wait_expired,0);
+});
+
 test('an always-late broker exposes missed duty and rising declines without started turns or a timer spin',async t=>{
   const s=model(t,{maxWaitMs:1000});
   s.entry=ticket=>{
