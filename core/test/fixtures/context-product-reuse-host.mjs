@@ -21,7 +21,7 @@ export async function createContextReadHost(configuration) {
       return (...args)=>{
         if(countSql&&['get','all','iterate','run'].includes(key))Atomics.add(control,10,1);
         if(key==='get'&&index>=0)Atomics.add(control,index,1);
-        if(key==='get'&&sql==='SELECT stamp,record FROM product_attestation WHERE singleton=1')Atomics.add(control,11,1);
+        if(key==='get'&&sql==='SELECT CAST(stamp AS TEXT) AS stamp,typeof(stamp) AS stampType,record FROM product_attestation WHERE singleton=1')Atomics.add(control,11,1);
         return Reflect.apply(value,target,args);
       };}});
   };

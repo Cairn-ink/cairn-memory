@@ -198,9 +198,12 @@ const create = `
               // The parent authenticated (or refused) the exact row. This
               // verdict rechecks only its basis under lifecycle exclusion.
               // Never accept a changed row, even if another cheap check failed.
-              const exists=rows.some(row=>row.type==='table'&&row.name==='product_attestation');
-              const row=exists?incumbent.prepare('SELECT stamp,record FROM product_attestation WHERE singleton=1').get():null;
-              const actual=row?createHash('sha256').update(JSON.stringify([row.stamp,row.record])).digest('hex'):'missing';
+              const table=rows.find(row=>row.name==='product_attestation');
+              const expected=format.schema.find(row=>row.name==='product_attestation');
+              if(table && JSON.stringify(table)!==JSON.stringify(expected))throw Object.assign(Error('valid_cache'),{code:'ESTALE'});
+              const row=table?incumbent.prepare('SELECT CAST(stamp AS TEXT) AS stamp,typeof(stamp) AS stampType,record FROM product_attestation WHERE singleton=1').get():null;
+              if(row && row.stampType==='integer' && /^[1-9][0-9]*$/.test(row.stamp) && Number.isSafeInteger(Number(row.stamp)))row.stamp=Number(row.stamp);
+              const actual=row?createHash('sha256').update(JSON.stringify([row.stamp,row.record,row.stampType])).digest('hex'):'missing';
               if(actual!==init.expectedAttestation)throw Object.assign(Error('valid_cache'),{code:'ESTALE'});
               damaged=true;
             }else if(!damaged)damaged=incumbent.prepare('PRAGMA quick_check').get().quick_check!=='ok' || Boolean(incumbent.prepare('PRAGMA foreign_key_check').get());

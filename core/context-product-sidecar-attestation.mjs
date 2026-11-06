@@ -14,14 +14,19 @@ export function readSidecarAttestation(db, schema) {
   const exists=schema ? schema.some(row=>row.type==='table'&&row.name==='product_attestation') :
     db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='product_attestation'").get();
   if(!exists)return null;
-  return db.prepare('SELECT stamp,record FROM product_attestation WHERE singleton=1').get()??null;
+  // TEXT conversion never asks node:sqlite to decode an unsafe INTEGER.
+  // Preserve the storage class: TEXT/REAL values cannot masquerade as integers.
+  const row=db.prepare('SELECT CAST(stamp AS TEXT) AS stamp,typeof(stamp) AS stampType,record FROM product_attestation WHERE singleton=1').get();
+  if(!row)return null;
+  if(row.stampType==='integer'&&/^[1-9][0-9]*$/.test(row.stamp)&&Number.isSafeInteger(Number(row.stamp)))row.stamp=Number(row.stamp);
+  return row;
 }
 // Exact stored text, including its original whitespace, participates in the
 // exclusion recheck. No parsing/reserialization of the certificate is allowed.
 export const sidecarAttestationDigest = row => row===null?'missing':
-  createHash('sha256').update(JSON.stringify([row.stamp,row.record])).digest('hex');
+  createHash('sha256').update(JSON.stringify([row.stamp,row.record,row.stampType])).digest('hex');
 export function validSidecarAttestation(secret,row,file,format) {
-  if(!row||!Number.isSafeInteger(row.stamp)||row.stamp<1||typeof row.record!=='string'||Buffer.byteLength(row.record)>4096)return false;
+  if(!row||row.stampType!=='integer'||!Number.isSafeInteger(row.stamp)||row.stamp<1||typeof row.record!=='string'||Buffer.byteLength(row.record)>4096)return false;
   const expected=signedRecord(key(secret),'sidecar-attestation',{version:1,profile:PRODUCT_PROFILE,format,file,stamp:row.stamp});
   const actual=Buffer.from(row.record),wanted=Buffer.from(expected);
   return actual.length===wanted.length&&timingSafeEqual(actual,wanted);

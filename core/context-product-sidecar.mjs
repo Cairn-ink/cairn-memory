@@ -373,11 +373,14 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         if(!admittedMetadata || admittedMetadata.store_id!==identity.storeId)unavailable('wrong_store');
         if (sideFormat > 0 && sideFormat !== PRODUCT_SIDECAR_FORMAT) unavailable('incompatible');
         if(admittedMetadata.profile!==PRODUCT_PROFILE)unavailable('incompatible');
-        const objects=schema(candidate),seal=readSidecarAttestation(candidate,objects);
+        const objects=schema(candidate);
+        // A legacy missing table has no row to query. Every present table must
+        // have the exact singleton primary key before the bounded lookup.
+        if(objects.some(row=>row.name==='product_attestation'))attest(candidate,objects);
+        const seal=readSidecarAttestation(candidate,objects);
         bootstrap=wantsWrite&&same(unattestedIdentity,admittedIdentity)&&seal===null;
         if(!bootstrap&&!validSidecarAttestation(identity.cursorSecret,seal,sidecarAttestationFile(sidePath),PRODUCT_SIDECAR_FORMAT))
           throw Object.assign(Error('index_unavailable'),{code:'index_unavailable',reason:'attestation_invalid',expectedAttestation:sidecarAttestationDigest(seal)});
-        attest(candidate,objects);
       });
       checkAdmission?.();
     } catch(error) {attribution?.captureFailure(error);try{if(candidate?.isOpen)candidate.close();}catch{}

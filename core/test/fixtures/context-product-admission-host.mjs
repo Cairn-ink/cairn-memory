@@ -13,7 +13,7 @@ export async function createContextReadHost(configuration) {
       return (...args)=>{
         if(['get','all','iterate','run'].includes(key)){
           if(slot>=0)Atomics.add(c,slot,1);
-          const attestation=sql==='SELECT stamp,record FROM product_attestation WHERE singleton=1';
+          const attestation=sql==='SELECT CAST(stamp AS TEXT) AS stamp,typeof(stamp) AS stampType,record FROM product_attestation WHERE singleton=1';
           if(attestation)Atomics.add(c,8,1);
           if(attestation&&Atomics.compareExchange(c,7,1,2)===1){Atomics.notify(c,7);while(Atomics.load(c,7)===2)Atomics.wait(c,7,2);}
           if(attestation&&Atomics.load(c,5))void testClock.advance(Atomics.exchange(c,5,0),{waitForWorkers:false});

@@ -19371,7 +19371,7 @@
   },
   "sidecarAttestationOpening": {
     "additionalStatements": 1,
-    "statement": "SELECT stamp,record FROM product_attestation WHERE singleton=1",
+    "statement": "SELECT CAST(stamp AS TEXT) AS stamp,typeof(stamp) AS stampType,record FROM product_attestation WHERE singleton=1",
     "scope": "Cold sidecar opening only; warm query and recall pins are unchanged."
   }
 }

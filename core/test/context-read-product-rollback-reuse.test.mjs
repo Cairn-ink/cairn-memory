@@ -14,7 +14,7 @@ for(const mode of ['DELETE','WAL'])test(`oversized verification rollback attests
   const events=[],prepare=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;
   t.mock.method(DatabaseSync.prototype,'prepare',function(sql){
     const statement=Reflect.apply(prepare,this,[sql]),db=this;
-    if(sql!=='PRAGMA quick_check'&&sql!=='PRAGMA foreign_key_check'&&sql!=='SELECT stamp,record FROM product_attestation WHERE singleton=1')return statement;
+    if(sql!=='PRAGMA quick_check'&&sql!=='PRAGMA foreign_key_check'&&sql!=='SELECT CAST(stamp AS TEXT) AS stamp,typeof(stamp) AS stampType,record FROM product_attestation WHERE singleton=1')return statement;
     return new Proxy(statement,{get(target,key){const value=Reflect.get(target,key,target);if(typeof value!=='function')return value;
       return (...args)=>{const result=Reflect.apply(value,target,args);if(key==='get')events.push({db,sql});return result;};}});
   });
@@ -27,7 +27,7 @@ for(const mode of ['DELETE','WAL'])test(`oversized verification rollback attests
   const continuation=events.findIndex((event,index)=>index>rollback&&event.sql==='BEGIN IMMEDIATE');
   assert.ok(continuation>rollback,'legacy fallback still writes within the same refresh');
   const next=events[continuation],checks=events.slice(rollback+1,continuation).filter(event=>event.db===next.db);
-  assert.equal(checks.filter(event=>event.sql==='SELECT stamp,record FROM product_attestation WHERE singleton=1').length,1,
+  assert.equal(checks.filter(event=>event.sql==='SELECT CAST(stamp AS TEXT) AS stamp,typeof(stamp) AS stampType,record FROM product_attestation WHERE singleton=1').length,1,
     'the reopened handle attests before the first write after a caught rollback');
   assert.equal(checks.filter(event=>event.sql==='PRAGMA quick_check'||event.sql==='PRAGMA foreign_key_check').length,0,
     'attested reopen skips both whole-file checks');

@@ -61,7 +61,7 @@ export async function createContextReadHost(configuration){
           if(sql==='PRAGMA foreign_key_check'){
             Atomics.add(c,3,1);
           }
-          if(sql==='SELECT stamp,record FROM product_attestation WHERE singleton=1'){
+          if(sql==='SELECT CAST(stamp AS TEXT) AS stamp,typeof(stamp) AS stampType,record FROM product_attestation WHERE singleton=1'){
             const n=Atomics.add(c,14,1)+1,fault=Atomics.load(c,8);
             if(n===2&&fault)return {stamp:fault===1?1:0,record:'synthetic invalid seal'};
           }

@@ -133,7 +133,7 @@ test('a rejected engine COMMIT rolls back its completed seal write with the data
   const s=setup(t),before=s.row(),exec=DatabaseSync.prototype.exec;let rejected;
   t.mock.method(DatabaseSync.prototype,'exec',function(text){
     if(text==='COMMIT'&&!rejected&&this.prepare('PRAGMA application_id').get().application_id===0x43525032){
-      const row=this.prepare('SELECT stamp,record FROM product_attestation WHERE singleton=1').get();
+      const row=seals.readSidecarAttestation(this);
       if(row.stamp>before.stamp){
         assert.equal(seals.validSidecarAttestation(s.facade.port.identity.cursorSecret,row,seals.sidecarAttestationFile(s.path),PRODUCT_SIDECAR_FORMAT),true,'the new seal was written before the rejected COMMIT');
         rejected=row;throw Object.assign(Error('synthetic commit rejection'),{code:'storage_error'});
@@ -271,3 +271,44 @@ test('a replacement COMMIT overrun settles durably and the next cold admission n
   assert.equal(overrun,true);assert.equal(s.valid(),true);assert.equal(replacementCalls(s).length,1);
   s.setClock(0);s.open();s.storage.admit(2000);assert.equal(replacementCalls(s).length,1);assert.ok(s.finish().publication);
 });
+
+for(const value of ['9007199254740992','9223372036854775807','-1',"'unreadable'",'1.5'])test(`invalid stored stamp ${value} replaces and rebuilds`,t=>{
+  const s=setup(t);s.close();
+  // Temporarily use ANY to create values that a damaged file can contain, then
+  // restore the exact expected schema before the engine opens the file.
+  const changeType=type=>sql(s.path,db=>{
+    db.enableDefensive?.(false);db.exec('PRAGMA writable_schema=ON');
+    db.prepare("UPDATE sqlite_schema SET sql=replace(sql,?,?) WHERE name='product_attestation'")
+      .run(type==='ANY'?'stamp INTEGER NOT NULL':'stamp ANY NOT NULL',type==='ANY'?'stamp ANY NOT NULL':'stamp INTEGER NOT NULL');
+    const version=db.prepare('PRAGMA schema_version').get().schema_version;
+    db.exec('PRAGMA schema_version='+(version+1));
+  });
+  changeType('ANY');sql(s.path,db=>db.exec('PRAGMA ignore_check_constraints=ON;UPDATE product_attestation SET stamp='+value));changeType('INTEGER');
+  s.open(false);assert.equal(s.observe().publication,null);
+  s.open();s.storage.admit(2000);
+  assert.equal(replacementCalls(s).length,1);assert.equal(wholeChecks(replacementCalls(s)[0]),0);
+  assert.equal(s.valid(),true);assert.ok(s.finish().publication);
+});
+
+test('malformed singleton schema is refused before any seal lookup in parent or child',t=>{
+  const s=setup(t);s.close();sql(s.path,db=>db.exec(`DROP TABLE product_attestation;
+    CREATE TABLE product_attestation(singleton INTEGER,stamp INTEGER,record TEXT);
+    WITH RECURSIVE n(i) AS (VALUES(2) UNION ALL SELECT i+1 FROM n WHERE i<1001)
+    INSERT INTO product_attestation SELECT i,1,'invalid' FROM n;`));
+  let lookups=0;s.setHook(text=>{if(/FROM product_attestation WHERE singleton=1/.test(text))lookups++;});
+  spawnHook(t,(spawn,command,args,options)=>{
+    if(args[4]==='replace-product-cache'){
+      // Even an exact-row verdict raced against incompatible schema must not
+      // query that schema. The child must refuse this changed basis.
+      const init=JSON.parse(args[6]);init.expectedAttestation='missing';args[6]=JSON.stringify(init);
+    }
+    return spawn(command,args,options);
+  });
+  s.open();let refusal;try{s.storage.admit(2000);}catch(error){refusal=error;}
+  assert.equal(lookups,0,'no unindexed parent lookup');
+  const report=replacementCalls(s).at(-1);assert.ok(report);
+  const reads=report.events.filter(e=>e.begin?.database==='incumbent'&&e.begin.stage==='execute'&&e.begin.statement==='context_metadata');
+  // schema and header checks only; no metadata or seal lookup on damaged schema.
+  assert.equal(reads.length,0);assert.equal(refusal?.code,'index_unavailable');assert.equal(report.value.error,'ESTALE');
+});
+
