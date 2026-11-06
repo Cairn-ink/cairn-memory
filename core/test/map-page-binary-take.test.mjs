@@ -380,6 +380,7 @@ test('SQL census: ordinary map statements are identical; safety drops only one E
     assert.deepEqual(ordinary(binary), ordinary(scan), 'same SQL text and execution multiplicities outside E1');
     assert.equal(binary.begin, scan.begin);
     assert.equal(f.calls.filter(Boolean).length, 9, 'envelope probes');
+    assert.equal(binary.ports, 10, 'pre-loop count plus envelope probes');
     assert.equal(scan.statements - binary.statements, safety ? scan.ports - binary.ports : 0);
     t.diagnostic('MAP_SQL_CENSUS ' + JSON.stringify({ safety,
       scan: { statements: scan.statements, begin: scan.begin, callerCounts: scan.ports },
