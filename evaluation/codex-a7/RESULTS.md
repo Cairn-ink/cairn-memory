@@ -17,7 +17,7 @@ default for exact host 0.160.1 only, with a kill switch
 
 | | |
 |---|---|
-| Authorization | chichi, 2026-10-09 (「安全測試做」), plus the Traditional Chinese addendum |
+| Authorization | project owner, 2026-10-09 (「安全測試做」), plus the Traditional Chinese addendum |
 | Host | `codex-cli 0.160.1` (every rollout's `session_meta.cli_version`, source `exec`) |
 | Model | `gpt-6-astra`, reasoning effort `medium`, personality `pragmatic` (the person's `config.toml` defaults) |
 | Runtime under test | installer 0.3.0 runtime from `feat/cx5-codex-hooks` at `dbfba49`, with only `qualifiedContextHost` forced on in each disposable copy |

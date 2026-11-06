@@ -17,7 +17,7 @@ on Node 22.16 and 24.15. It uses a fake `claude` on PATH and synthetic tokens,
 without real client configuration or hosted/model calls. Build with
 `npm pack` (including the runtime-manifest prepack check) from the package directory and cross-check the file
 list against the archive listing. See [the release checklist](docs/npx-setup-release.md);
-the installer has its own version and release requires chichi's approval.
+the installer has its own version and release requires the project owner's approval.
 
 This single-file suite runs directly through the owned runner's `--script` mode;
 `node:test` still executes all assertions and reports its actual exit status.

@@ -1,11 +1,11 @@
 # Session episodes retain their own sources and obey conversation deletion
 
-**Partial supersession (2026-10-07):** D5 in cairn-wiki ADR 0006 and the decided
+**Partial supersession (2026-10-07):** D5 in the product repository's ADR 0006 and the decided
 [raw-layer contract (RL-0)](../plans/raw-layer-contract.md) replaces the
 multi-source deletion choice below. RL-2 deletes raw/episodes and suppresses
 memories derived only from that conversation; memories with other live sources
 stay without the deleted receipts. Their wording may have come from the deleted
-conversation; chichi accepted that trade-off to preserve independently supported
+conversation; the project owner accepted that trade-off to preserve independently supported
 memories. Until RL-2 ships, the legacy runtime still uses the old rule. Bounded
 episode citations, staging and their retention rules remain as described here;
 raw adds a separate archive with no automatic expiry.

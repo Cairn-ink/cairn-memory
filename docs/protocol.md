@@ -904,7 +904,7 @@ hook. Clients cannot masquerade as Claude or invent version headers. Existing
 success shapes are preserved, but the new refusal alternatives omit their required
 success fields and therefore require this breaking version.
 
-Today's cairn-wiki H4c recall returns HTTP 429
+Today's hosted product H4c recall returns HTTP 429
 `{error:<message>,code:"daily_quota_memory_recall"}` with `Retry-After` and
 `X-Quota-Reset`; capture uses its own `daily_quota_memory_capture` refusal.
 Those are the shapes 0.1 clients see today. H5 must serve the **published 0.2.0
@@ -1049,7 +1049,7 @@ stores do not imply a cross-store atomic snapshot. Too-small budgets return
 400 `invalid_memory_input`, never a partial success. Authentication/rollout
 failures are 401/404. Rate limiting is distinct from the recall/capture quota
 refusal. CX-4 publishes/parses this contract; CX-5 owns hook consumption and real
-hosted acceptance under cairn-wiki U-6 D4.
+hosted acceptance under the hosted product's U-6 D4.
 
 ### Shared hosted pause state and generation
 

@@ -1,10 +1,10 @@
 # One-command installer release checklist
 
-chichi approves this release. Merging into this repository is a release;
+The project owner approves this release. Merging into this repository is a release;
 publishing to npm is outward-facing. Building/testing does not authorize merge,
 publish, tags or pushing to main.
 
-chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對外發布。
+專案負責人核准這次 release。合併進 repo 就是 release，npm publish 是對外發布。
 完成建置與測試，不代表核准合併、發布、tag 或 push 到 main。
 
 - [ ] Review delivered patches and recorded checks; approve the release before
@@ -162,7 +162,7 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
   Never put a PAT or proof in arguments, environment, URLs or logs.
 - [ ] Check current CLI and older fallback. `configure --values-stdin` requires
   Claude Code 2.1.285+; setup checks actual help output.
-- [ ] After chichi approves, the npm owner publishes the **tested file**.
+- [ ] After the project owner approves, the npm owner publishes the **tested file**.
   OTP is required; do not publish the package directory or rebuild the archive:
 
   ```sh
@@ -198,7 +198,7 @@ token-bearing `install --config` arguments.
 The client implements the server's `/api/cli-auth/v1` contract: S256 device
 proof, credential validation, secure stdin configuration and ACK/cancel.
 The default flow opens a bare `/device` URL and requires manual code entry.
-Generic create 404/501 falls back to hidden manual input per chichi's task;
+Generic create 404/501 falls back to hidden manual input per the project owner's task;
 5xx/TLS/protocol errors do not. Manual credential 404/501 saves unverified
 configuration. Browser credentials expire after 180 days.
 
@@ -207,4 +207,4 @@ including HTTP/HTTPS proxies, CONNECT, CA trust, certificate rejection and
 secret scans. The restricted environment rejects loopback binds with EPERM.
 This does not establish deployed server, native desktop/browser, corporate
 network, OS credential storage or signed-in hook behavior. Native OS and
-hosted smoke checks above remain release work on chichi's laptop.
+hosted smoke checks above remain release work on the project owner's laptop.

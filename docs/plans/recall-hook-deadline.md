@@ -7,7 +7,7 @@ the main merge. The post-merge coverage section below describes current tests.
 Historical fixed base: `cd6d1ad32ac3d6f5926c6846e8c6d27645bb7c9a`.
 Branch: `fix/recall-hook-deadline`.
 Source report: product coordination issue
-[wiki #453 comment 6309026333](https://github.com/wsxqaza12/cairn-wiki/issues/453#issuecomment-6309026333).
+issue #453, comment 6309026333, in the product repository.
 
 This is an independent repair to the existing installed Claude recall path,
 not part of the dependent internal Raw source packet. Preserve the user's

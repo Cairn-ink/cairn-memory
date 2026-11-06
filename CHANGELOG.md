@@ -708,7 +708,7 @@ unchanged.
   without sockets or real credentials. Record actual check exits; legacy suites
   requiring loopback listen are blocked by this sandbox’s EPERM. No network,
   production access, model call or publication in this delivery. Installer
-  publication and real host/endpoint acceptance remain with chichi.
+  publication and real host/endpoint acceptance remain with the project owner.
 
 ## @cairn-ink/memory installer 0.2.0 — published
 
@@ -908,7 +908,7 @@ No hosted/server implementation or hook enablement is included.
   claim, staging, write or provider call. A message that cannot fit even alone
   is listed as oversized, never split. This only happens for dense scripts in
   4,000-unit modes. Callers must split such a message with their own windowing,
-  as cairn-wiki's hosted H4a does, and LAC must do the same; see limitations.
+  as the hosted product's H4a does, and LAC must do the same; see limitations.
 - Keeping an episode shortens its sources in the extraction request when they
   no longer fit, reported as `extractionTruncated`.
 - Classification packs too: memory bodies are shortened first, then the catalog
@@ -944,11 +944,11 @@ No hosted/server implementation or hook enablement is included.
 - Eager additive schema v18 migration; older openers refuse it. See the
   [CF-1 contract](docs/plans/confirmation-state.md), including the limitation that
   automatic extraction cannot yet distinguish directly stated decisions.
-- **Decision (chichi, 2026-09-29):** conservative admission is chosen; all
+- **Decision (project owner, 2026-09-29):** conservative admission is chosen; all
   automatic decisions wait when opted in, while explicit remember/admit stay
   direct. Confirmation may be too burdensome. The provenance follow-up for
   typed prompts marked with plugin 0.1.1's `promptSource` is recorded in
-  cairn-wiki `docs/plans/one-brain-u6.md` → “Confirmation burden”.
+  the product repository's `docs/plans/one-brain-u6.md` → “Confirmation burden”.
 - Confirmation completes held supersession and conflict links atomically;
   unrelated transitions in a mixed capture apply immediately. Rejection drops
   the held work and preserves its current predecessor. Explicit promotion also

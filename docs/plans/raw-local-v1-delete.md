@@ -158,7 +158,7 @@ not an invented return shape. Total 25 distinct independently constructed cases
 have now passed on this working tree; the other ten and full final gates remain.
 
 P3a handoff was posted to the named product issue only:
-<https://github.com/wsxqaza12/cairn-wiki/issues/453#issuecomment-6307510653>.
+comment 6307510653 on product repository issue #453.
 It explicitly keeps the product pin unchanged and does not claim P3b/P3c/P4.
 
 First full primary acceptance (`primary-first35-22.log`, Node 22.16) completed

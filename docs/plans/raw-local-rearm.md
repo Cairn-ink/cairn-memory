@@ -312,7 +312,7 @@ expectation must be cross-checked against actual diff and tree inventories.
 
 2026-10-21: parent #465 ready/unmerged at exact base above. All31 CI checks and
 4 workflow runs succeeded, exact merge-preview tree matched; final ready-proof
-exit0. Product checkpoint: cairn-wiki#453 comment6328258163. No activation or
+exit0. Product checkpoint: product repository issue #453, comment 6328258163. No activation or
 merge. New isolated dependent worktree created with actual exit0; primary dirty
 worktrees preserved. Independent acceptance directory:
 /tmp/cairn-raw-rearm-evidence.xrYSLT. No rearm acceptance has run yet.

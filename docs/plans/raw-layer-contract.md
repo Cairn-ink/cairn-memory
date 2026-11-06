@@ -4,24 +4,21 @@ Status: decided contract, **not implemented or enabled behavior**. RL-0 changes
 documentation only; it changes no schema, executable, default or release version.
 Implementation is split into RL-1–RL-3 here and RL-4 in the host.
 
-Authority: cairn-wiki [raw-layer plan (#309)][plan] and [ADR 0006][adr], supplied
+Authority: the product repository's raw-layer plan (#309) and ADR 0006, supplied
 as `one-brain-raw-layer.md` and `adr-0006.md` in the RL-0 packet. The plan's
-recorded bases are cairn-wiki `940e6309` and cairn-memory `7467aeb`.
+recorded bases are the product repository at `940e6309` and cairn-memory `7467aeb`.
 This documentation uses cairn-memory `0c7aa20a9cb490bac4d15eca28b2036823a5f48e`
 (the worktree's `origin/main`), so the follow-up quotes below use current lines,
 not the plan's older line numbers.
 
-On **2026-10-07 chichi accepted D2, D4, D6, D9, D10 and D11 as recommended**.
+On **2026-10-07 the project owner accepted D2, D4, D6, D9, D10 and D11 as recommended**.
 The initial raw-text cap is **200 MB per person = 200,000,000 UTF-8 bytes**,
 across clients and personal/project namespaces in the selected cloud/local store,
 not 200 MiB or a cap per client. Separate local stores do not synchronize usage.
 D13 requires the privacy page to be updated before anyone else receives raw
 storage. The plan's stricter production gate also remains: copy, listings,
 notice email and quotas merge before enabling the production flag, including
-for chichi. RL-0 is not permission to cross that gate.
-
-[plan]: https://github.com/wsxqaza12/cairn-wiki/blob/main/docs/plans/one-brain-raw-layer.md
-[adr]: https://github.com/wsxqaza12/cairn-wiki/blob/main/docs/adr/0006-keep-full-conversations-as-a-raw-layer.md
+for the project owner. RL-0 is not permission to cross that gate.
 
 ## Scope, ownership and gates
 
@@ -53,7 +50,7 @@ are outside this capture contract; ChatGPT export import is RL-8.
 RL-1 code waits for RL-0, G1 (production backups running and a staging restore)
 and G2 (completed H6 cutover). RL-2/RL-3 follow RL-1. RL-4 additionally waits for
 RL-1–RL-3 and H6-T's pinned-core adoption. Launch waits for RL-5's H6-E inventory,
-erasure/restore fixtures, RL-6 UI, RL-7 copy and cap enforcement. Only chichi
+erasure/restore fixtures, RL-6 UI, RL-7 copy and cap enforcement. Only the project owner
 authorizes the production flag at the time. No backfill from before launch,
 before notice or across pause/resume barriers.
 
@@ -616,7 +613,7 @@ include their implementation, schema/docs and conformance tests in their own PRs
 | **RL-1: core storage** | Reconstruct submitted redacted text byte-for-byte from paged parts for Claude/Codex, including Unicode/escaping and messages >4,000 and >20,000 units (RA1 foundation). Verify raw/event/usage/admission atomic rollback, save before staging expiry/release/bypass and extraction failure, duplicate/overlap/restart charge zero, out-of-order/changed totals refuse, missing final part stays incomplete. Test raw with episodes/staging off. Port spy verifies exact AAD, seal-before-commit control recheck, no callback under write lock, no plaintext fallback and read failure/race without leakage. Two-process reservation races cannot exceed 200,000,000 bytes; test exact boundary, oversized-message skip with first-part extraction and no eviction/backfill (RA6 foundation). Test paged bounded reads/cursors across restart/foreign namespace/mutation, unknown times, legacy/null reads, owner-wide usage and schema rollback/old opener/option-off preservation. |
 | **RL-2: lineage and cascade** | Fixture includes only-source, multi-source, explicit and historical memories, quick episode with no memory, cross-episode consumers, pending ask/preview and confirmed Commitment (host effects asserted here, consumed in RL-4). Every deletion-table row holds; old `forgetEpisode` shares D5; late session batches and in-flight workers cannot publish (RA3). Counts/CAS/action replay survive restart and usage is decremented once. Forget keeps raw and blocks exact/paraphrased same-span candidates via changed event IDs, including keep, normalization mapping, ambiguous whole-message anchors, option-off opens and concurrent exclusion changes; a disjoint source is allowed (RA8 hooks). Verify staging purge cannot remove unrelated raw, receipt provenance cannot be laundered as an independent source, historical prose/source consumers clear, unresolved legacy lineage fails visibly. |
 | **RL-3: both clients/local setup** | Remove Claude's `transcript.mjs` 20,000-unit slice and shared `common-profile.mjs` 4,000-unit cut; end-to-end synthetic transcripts round-trip full redacted selected text (RA1/RA11). Secret crossing a part boundary is redacted before splitting; excluded tool/control records remain excluded. Strict v2 batches meet 24/20,000/65,536 bounds for Unicode and JSON escaping. Test interrupted middle/final part, lost ack, processing/202, daily quota, exact frozen replay and cursor/EOF progression without repeated extraction. Pause/resume and project-stop discard pending/partial records and never backfill (RA5). Local default-on switch/status/usage, CAS failure and off-next-batch memory-continuation hold (RA4/RA11); setup disclosure appears before capture with no new confirmation. Unsupported host and frozen legacy batch tests cannot silently claim full raw. |
-| **RL-4: hosted adoption (cairn-wiki)** | Pin tested RL-1–RL-3 through H6-T. Serve authorized v2 capture/read/delete/usage/control routes with strict DTOs, no-store raw reads, scope/client isolation and no raw telemetry/log/body dumps. Two owners have different wrapped keys; raw-only canary absent from DB/WAL/backup; missing/wrong master/AAD fails; rewrap/rotation/restart works (RA2). At 200 MB, messages skip whole with visible reason, no eviction, unchanged daily memory quota and concurrent clients cannot overspend (RA6). OAuth/token/install/setup notice precedes first batch; each credential's record is enforced; old credentials require website notice plus email; off takes effect next batch and memory continues (RA4). Pause generation races/pre-notice batches cannot save raw (RA5). Durable host deletion effects withdraw asks/previews across restart while confirmed records stay (RA3). Prove staged restore/erasure replay covers raw and owner keys with RL-5 (RA10). No production writes before gates; privacy page/copy/listings/email and cap merged before flag, chichi authorizes flag (RA9/RA12). |
+| **RL-4: hosted adoption (hosted product)** | Pin tested RL-1–RL-3 through H6-T. Serve authorized v2 capture/read/delete/usage/control routes with strict DTOs, no-store raw reads, scope/client isolation and no raw telemetry/log/body dumps. Two owners have different wrapped keys; raw-only canary absent from DB/WAL/backup; missing/wrong master/AAD fails; rewrap/rotation/restart works (RA2). At 200 MB, messages skip whole with visible reason, no eviction, unchanged daily memory quota and concurrent clients cannot overspend (RA6). OAuth/token/install/setup notice precedes first batch; each credential's record is enforced; old credentials require website notice plus email; off takes effect next batch and memory continues (RA4). Pause generation races/pre-notice batches cannot save raw (RA5). Durable host deletion effects withdraw asks/previews across restart while confirmed records stay (RA3). Prove staged restore/erasure replay covers raw and owner keys with RL-5 (RA10). No production writes before gates; privacy page/copy/listings/email and cap merged before flag, the project owner authorizes flag (RA9/RA12). |
 
 RL-6 owns RA7: phone/desktop prototype comparison, paged full text and accurate
 span highlights, excerpt fallback plus reason, switch/usage and split deletion
@@ -656,6 +653,6 @@ today's runtime: implementation summaries identify legacy behavior until RL-2.
 
 ## Remaining later decisions
 
-Tool output remains excluded unless chichi decides otherwise. KMS adoption,
+Tool output remains excluded unless the project owner decides otherwise. KMS adoption,
 bulk deletion per tool and later plan-specific cap changes are separate work.
 The six accepted rows and the initial 200 MB cap are settled, not open questions.
