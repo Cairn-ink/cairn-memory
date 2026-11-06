@@ -151,7 +151,7 @@ test('differential: exact whole envelopes match the descending scan on monotone 
           const probes = f.calls.filter(Boolean);
           const capacity = Math.min(limit, Math.max(0, 103 - offset));
           maximum[capacity] = Math.max(maximum[capacity] ?? 0, probes.length);
-          assert.ok(probes.length <= 2 * Math.ceil(Math.log2(Math.max(1, capacity))) + 2,
+          assert.ok(probes.length <= Math.ceil(Math.log2(Math.max(1, capacity))) + 2,
             `probe bound capacity=${capacity} probes=${probes.length}`);
           assert.equal(comparable(actual), comparable(expected),
             JSON.stringify({ safety, mix, purpose, limit, offset, counterName, tokenBudget }));
@@ -189,6 +189,22 @@ test('optional o200k tokenizer: exact envelopes match the descending scan', asyn
   t.diagnostic(`MAP_OPTIONAL_O200K_DIFFERENTIAL comparisons=${comparisons}`);
 });
 
+test('near-capacity: the one-shorter page takes exactly two envelope probes', async t => {
+  for (const safety of [false, true]) for (const capacity of [2, 3, 7, 50, 100]) {
+    const f = await fixture(t, { safety, count: capacity + 1 });
+    f.setCounter(text => !text || JSON.parse(text).value.items.length < capacity ? 1 : 4001);
+    const result = f.core.map({ namespace, limit: capacity });
+    const probes = f.calls.filter(Boolean);
+    assert.deepEqual(probes.map(text => JSON.parse(text).value.items.length),
+      [capacity, capacity - 1], `capacity=${capacity} safety=${safety}`);
+    assert.equal(probes.length, 2);
+    assert.equal(ok(result).items.length, capacity - 1);
+    assert.equal(probes[1], JSON.stringify(result), 'return the exactly counted page');
+    assert.equal(f.calls.filter(text => text === '').length, 1, 'exclude the pre-loop count');
+    t.diagnostic(`MAP_NEAR_CAPACITY capacity=${capacity} safety=${safety} probes=${probes.length}`);
+  }
+});
+
 test('probe bound: every capacity 1..100, every monotone fitting threshold, and one-probe fast path', async t => {
   const f = await fixture(t);
   const maximum = {};
@@ -199,7 +215,7 @@ test('probe bound: every capacity 1..100, every monotone fitting threshold, and 
       const result = f.core.map({ namespace, limit: capacity });
       const probes = f.calls.filter(Boolean).length;
       max = Math.max(max, probes);
-      assert.ok(probes <= 2 * Math.ceil(Math.log2(capacity)) + 2,
+      assert.ok(probes <= Math.ceil(Math.log2(capacity)) + 2,
         `capacity=${capacity} threshold=${threshold} probes=${probes}`);
       if (threshold === 0) assert.equal(result.error?.code, 'context_item_too_large');
       else assert.equal(ok(result).items.length, threshold);
@@ -215,12 +231,13 @@ test('non-monotone counters retain a probed fit and their cursors continue witho
   for (const safety of [false, true]) {
     const f = await fixture(t, { safety, count: 12 });
     const visited = [];
-    // Capacity 7 fails, midpoint 3 fits, 5 fails and 4 fits; 6 would also fit.
+    // Capacity 8 and one-shorter 7 fail; 3 fits, 5 fails, then 4 fits.
+    // The unprobed 6 would fit, so a smaller observed fit is still permitted.
     const fits = new Set([1, 2, 3, 4, 6]);
     f.setCounter(text => !text || fits.has(JSON.parse(text).value.items.length) ? 1 : 4001);
     let cursor;
     do {
-      const result = f.core.map({ namespace, limit: 7, ...(cursor ? { cursor } : {}) });
+      const result = f.core.map({ namespace, limit: 8, ...(cursor ? { cursor } : {}) });
       const value = ok(result);
       const serialized = JSON.stringify(result);
       assert.ok(f.calls.includes(serialized), 'returned exact envelope occurred among probes');
@@ -362,6 +379,11 @@ test('SQL census: ordinary map statements are identical; safety drops only one E
     const ordinary = row => row.sql.filter(([sql]) => !isE1(sql)).sort(([a], [b]) => a.localeCompare(b));
     assert.deepEqual(ordinary(binary), ordinary(scan), 'same SQL text and execution multiplicities outside E1');
     assert.equal(binary.begin, scan.begin);
+    // One additional rejected envelope and caller-port observation versus v1.
+    assert.equal(f.calls.filter(Boolean).length, 9, 'envelope probes');
+    assert.equal(binary.ports, 10, 'pre-loop count plus envelope probes');
+    assert.equal(binary.statements, safety ? 22 : 8);
+    assert.equal(binary.begin, 2);
     assert.equal(scan.statements - binary.statements, safety ? scan.ports - binary.ports : 0);
     t.diagnostic('MAP_SQL_CENSUS ' + JSON.stringify({ safety,
       scan: { statements: scan.statements, begin: scan.begin, callerCounts: scan.ports },
@@ -377,7 +399,7 @@ test('a later rejected probe cannot return an earlier fit after a namespace muta
     f.setCounter(text => {
       if (!text) return 0;
       const take = JSON.parse(text).value.items.length;
-      if (take === 5 && !mutated) {
+      if (take === 4 && !mutated) {
         mutated = true;
         const memory = f.memories[0];
         ok(f.core.forget({ namespace, memoryId: memory.id, expectedRevision: memory.revision }));
