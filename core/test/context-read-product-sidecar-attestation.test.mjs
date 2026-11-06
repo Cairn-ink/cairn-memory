@@ -19,7 +19,8 @@ const seals=await import('../context-product-sidecar-attestation.mjs').catch(()=
 const stamp=path=>{const s=sqliteFileStat(path);return [s.dev,s.ino,s.size,s.mtimeNs,s.ctimeNs].join(':');};
 function sql(path,work){const db=new DatabaseSync(path);try{return work(db);}finally{db.close();}}
 function child(code,...args){const r=childProcess.spawnSync(process.execPath,['--input-type=module','-e',code,...args],{encoding:'utf8',env:{},timeout:10000});assert.equal(r.status,0,r.stderr);assert.equal(r.error,undefined);return r.stdout;}
-function setup(t,{build=true,mode='DELETE'}={}) {
+function setup(t,{build=true,mode='DELETE',batching=false,state=new SharedArrayBuffer(8)}={}) {
+  const stackLimit=Error.stackTraceLimit;Error.stackTraceLimit=64;t.after(()=>{Error.stackTraceLimit=stackLimit;});
   const f=fixture(t),first=f.admit('attestation first canary'),second=f.admit('attestation second canary');
   const path=f.path+PRODUCT_SIDECAR_SUFFIX,p=selection,access=accessDigest({ownerId:ns.ownerId,namespaces:{readSet:[ns]}});
   const children=[],statements=[],commits=[],transactions=new WeakMap(),sideDatabases=new WeakSet();
@@ -34,7 +35,7 @@ function setup(t,{build=true,mode='DELETE'}={}) {
     return new Proxy(statement,{get(target,key){const value=Reflect.get(target,key,target);if(typeof value!=='function')return value;
       return (...args)=>{
         if(['get','all','iterate','run'].includes(key)){
-          statements.push(text);hook(text,key,database);
+          statements.push(text);transactions.get(database)?.sql.push(text);hook(text,key,database);
           if(text==='PRAGMA quick_check'||text==='PRAGMA foreign_key_check'){checks++;if(delayChecks)clock+=1500;}
           if(sideDatabases.has(database)&&text.startsWith('INSERT INTO product_attestation')&&key==='run'){
             const tx=transactions.get(database);assert.ok(tx,'seal write belongs to a transaction');tx.sealed=true;tx.stamp=args[0];
@@ -46,7 +47,7 @@ function setup(t,{build=true,mode='DELETE'}={}) {
   t.mock.method(DatabaseSync.prototype,'exec',function(text){
     const writing=sideDatabases.has(this)&&transactions.has(this);
     if(sideDatabases.has(this)){
-      if(text==='BEGIN IMMEDIATE')transactions.set(this,{sealed:false});
+      if(text==='BEGIN IMMEDIATE')transactions.set(this,{sealed:false,sql:[],site:new Error().stack});
       if(text==='COMMIT'&&transactions.has(this)){
         const tx=transactions.get(this);
         if(seals.validSidecarAttestation)assert.equal(tx?.sealed,true,'every parent sidecar COMMIT includes a seal update');
@@ -54,15 +55,16 @@ function setup(t,{build=true,mode='DELETE'}={}) {
       }
       if(text==='ROLLBACK')transactions.delete(this);
     }
+    if(text!=='BEGIN IMMEDIATE'&&text!=='COMMIT'&&text!=='ROLLBACK')transactions.get(this)?.sql.push(text);
     const result=Reflect.apply(exec,this,[text]);afterExec(text,this,writing);return result;
   });
-  const options={path:f.path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,observer,sqlite,writable:true,sidecarJournalMode:mode,now:()=>clock};
-  const s={f,path,p,access,first,second,facade,children,statements,commits,
+  const options={path:f.path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,observer,sqlite,writable:true,sidecarJournalMode:mode,verificationBatching:batching,verificationBatchState:state,now:()=>clock};
+  const s={f,path,p,access,first,second,facade,children,statements,commits,state,
     get storage(){return storage;},get clock(){return clock;},get checks(){return checks;},
     setHook(fn){hook=fn;},afterExec(fn){afterExec=fn;},setClock(n){clock=n;},delayChecks(){delayChecks=true;},
     open(write=true){storage?.close();storage=productSidecar({...options,writable:write});return storage;},
     observe(){return storage.observe(p,access);},
-    finish(){for(let i=0;i<100;i++){storage.refresh(p,access,{maxItems:32,maxMs:1000});const r=s.observe();if(r.publication)return r;}assert.fail('bounded rebuild converges');},
+    finish(picked=p){for(let i=0;i<100;i++){storage.refresh(picked,access,{maxItems:32,maxMs:1000});const r=storage.observe(picked,access);if(r.publication)return r;}assert.fail('bounded rebuild converges');},
     close(){storage?.close();storage=null;},
     row(){return sql(path,db=>seals.readSidecarAttestation(db));},
     valid(){return seals.validSidecarAttestation(facade.port.identity.cursorSecret,s.row(),seals.sidecarAttestationFile(path),PRODUCT_SIDECAR_FORMAT);}};
@@ -185,15 +187,45 @@ for(const mode of ['DELETE','WAL'])test(`SIGKILL after autocommit vacuum retains
   assert.deepEqual(s.observe().publication,publication);assert.equal(replacementCalls(s).length,0);assert.equal(s.checks,0);
 });
 
-test('structural: initialization, work, GC, vector writes, reset and publication all seal their commits',t=>{
-  const s=setup(t,{build:false});s.storage.admit(2000);const first=s.row().stamp;s.finish();
+for(const batching of [false,true])test(`structural: every write class seals its commits, batching=${batching}`,t=>{
+  const s=setup(t,{build:false,batching});
+  // Enough rows keep verification out of comparison's opportunistic tail.
+  for(let i=0;i<70;i++)s.f.admit('structural verification row '+i);
+  s.storage.admit(2000);const first=s.row().stamp;s.finish();
+  if(batching)new Int32Array(s.state)[1]=15; // Exercise the remembered fallback for every verification phase.
   s.f.admit('delta attestation canary');s.finish();
-  s.storage.vectors(db=>db.exec('DELETE FROM vector_work'),true);
+  let retired;
+  s.storage.vectors(db=>{
+    retired=Number(db.prepare("INSERT INTO vector_generations(id,lexical_generation,owner,projection,identity,epoch,lexical,state,published) VALUES('retire',-1,?,'retire','identity',1,'lexical','{}',0)").run(ns.ownerId).lastInsertRowid);
+    db.prepare("INSERT INTO vector_rows VALUES(?,1,'item',1,1,'representation',NULL,x'00')").run(retired);
+  },true);
+  assert.equal(sql(s.path,db=>db.prepare('SELECT count(*) n FROM vector_rows WHERE generation=?').get(retired).n),1);
+  s.finish();assert.equal(sql(s.path,db=>db.prepare('SELECT count(*) n FROM vector_generations WHERE storage_id=?').get(retired).n),0);
+  const other={...s.p,readSet:[{...ns,scope:'project',projectId:'retention'}]};s.finish(other);
   s.storage.reset();s.finish();
-  assert.ok(s.commits.length>10);assert.ok(s.commits.every(tx=>tx.sealed));
-  assert.equal(new Set(s.commits.map(tx=>tx.stamp)).size,s.commits.length);
+  const reached=new Set();
+  for(const tx of s.commits){
+    const has=prefix=>tx.sql.some(q=>q.startsWith(prefix));
+    if(tx.sql.filter(q=>!q.includes('product_attestation')).length===0)reached.add('bootstrap');
+    if(has('INSERT OR IGNORE INTO selections'))reached.add('selection');
+    if(has('DELETE FROM selections WHERE projection'))reached.add('selection-retention');
+    if(has('INSERT INTO generations'))reached.add('generation');
+    if(has('UPDATE generations SET incarnation'))reached.add('comparison');
+    if(has('DELETE FROM generations WHERE id'))reached.add('lexical-retirement');
+    if(has('DELETE FROM vector_generations WHERE storage_id'))reached.add('vector-retirement');
+    if(has('INSERT INTO vector_generations'))reached.add('vector-write');
+    if(has('INSERT INTO validation_records'))reached.add('publication');
+    if(has('DELETE FROM vector_publications;'))reached.add('reset');
+    if(has('SAVEPOINT verification_chunk'))reached.add('batched-verification');
+    if(tx.site.includes('legacyVerification'))reached.add('fallback-verification');
+    if(!has('SAVEPOINT verification_chunk')&&!tx.site.includes('legacyVerification')&&has('UPDATE statistics SET verified_df'))reached.add('unbatched-verification');
+  }
+  const expected=['bootstrap','selection','selection-retention','generation','comparison','lexical-retirement','vector-retirement','vector-write','publication','reset',
+    ...(batching?['batched-verification','fallback-verification']:['unbatched-verification'])];
+  for(const kind of expected)assert.ok(reached.has(kind),'write class actually reached: '+kind);
+  assert.ok(s.commits.every(tx=>tx.sealed));assert.equal(new Set(s.commits.map(tx=>tx.stamp)).size,s.commits.length);
   assert.equal(s.row().stamp,s.commits.length);assert.equal(first,1);assert.equal(s.valid(),true);
-  assert.ok(s.statements.some(text=>text.startsWith('INSERT INTO validation_records')),'publication was exercised');
+  t.diagnostic('write classes: '+[...reached].sort().join(', '));
 });
 
 for(const race of ['attestation','stamp'])test(`child exclusion refuses a concurrent ${race} change with ESTALE`,t=>{
