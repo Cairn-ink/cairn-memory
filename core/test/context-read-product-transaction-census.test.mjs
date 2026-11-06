@@ -34,3 +34,13 @@ for(const phase of ['first','repeat'])test(`legacy maintenance ceilings retain b
     assert.equal(row.counts[1],variant.endsWith('repeat')?11:n===12?40:52,'no new BEGIN allowance: '+row.key);
   }
 });
+
+
+test('seal accounting metadata retains zero recall and statement-only maintenance deltas',()=>{
+  const {attestationAmendment:a}=JSON.parse(readFileSync(new URL('./fixtures/content-safety-s2h-product-semantic-counts.json',import.meta.url),'utf8'));
+  assert.deepEqual(a.measuredNodes,['v22.16.0','v24.22.1']);
+  assert.deepEqual(a.enabledColdStatements,{empty:8,nonempty:10});
+  assert.equal(a.enabledRepeatStatements,2);
+  assert.deepEqual(a.coldCandidateOpeningStatements,{empty:0,nonempty:0});
+  assert.equal(a.note.includes('allowance'),false,'no cold-read allowance remains');
+});

@@ -1805,17 +1805,18 @@
   },
   "attestationAmendment": {
     "measuredNodes": [
-      "v22.16.0"
+      "v22.16.0",
+      "v24.22.1"
     ],
     "enabledColdStatements": {
       "empty": 8,
-      "nonempty": 11
+      "nonempty": 10
     },
     "enabledRepeatStatements": 2,
     "coldCandidateOpeningStatements": {
-      "empty": 2,
-      "nonempty": 1
+      "empty": 0,
+      "nonempty": 0
     },
-    "note": "Exact pins count every statement. Raw historical legacy counts are retained; the explicit allowance covers one seal read per cold sidecar connection."
+    "note": "Exact pins count every statement. Recall/query deltas are zero. Maintenance additions are stamp reads and seal writes inside existing write transactions; the historical legacy comparator is unchanged. The paired native census covers both Nodes; the complete matrix runs on Node 22."
   }
 }
