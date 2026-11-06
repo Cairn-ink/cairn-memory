@@ -1883,10 +1883,21 @@ Writable admission and read-only opens verify a keyed attestation before using
 an existing cache. Its HMAC key is derived from the store's cursor secret with
 the `sidecar-attestation-v1` domain. The certificate binds device, inode, birth
 identity, the sidecar format, engine profile, and an in-file monotonic stamp.
-Size and modification time are excluded. Every parent sidecar write transaction
+Size and modification time are excluded. Every parent logical sidecar write transaction
 increments and signs the stamp before COMMIT, including lexical and vector
-writes, verification resets, publication, garbage collection, incremental vacuum,
+writes, verification resets, publication, garbage collection,
 and explicit reset. A rollback restores the previous matching stamp and seal.
+
+Bounded incremental vacuum retains its existing autocommit boundary. It changes
+page placement and the freelist, leaving logical rows, the schema cookie, file
+identity and seal unchanged. A crash after reclamation and before the next
+logical write therefore leaves a matching seal. The next logical write advances
+the stamp in its existing transaction. Vacuum adds no explicit BEGIN or COMMIT.
+
+Standalone admission of a newly initialized cache has no projection write to
+share: its first parent seal uses one initialization BEGIN/COMMIT pair. This is
+a first-open cost, including after replacement; matched admissions and steady
+maintenance turns add no transactions.
 
 A missing or invalid seal makes the cache unavailable to reads. Explicit
 maintenance uses the existing excluded replacement protocol, then performs the

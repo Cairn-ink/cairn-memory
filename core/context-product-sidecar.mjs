@@ -775,7 +775,10 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     if(quantum.admit('gc'))quantum.measure(()=>{
       if(discardAfterGuard)connection(true);
       const wasWritable=sideWritable===true;
-      try {write(()=>side.exec('PRAGMA incremental_vacuum(32)'),'gc');}
+      // Reclamation changes page placement, not logical rows, schema or any
+      // attestation binding. Keep the matching seal until the next logical
+      // write seals its own changes; a vacuum-only seal would add an fsync.
+      try {side.exec('PRAGMA incremental_vacuum(32)');}
       catch(e) {failed(e,wasWritable);if(e.code!=='ERR_SQLITE_ERROR' || (e.errcode&255)!==5)throw e;}
       // Optional BUSY skips reclamation; attribution counts admitted attempts.
     },'gc','vacuum');

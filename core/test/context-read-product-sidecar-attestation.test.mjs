@@ -19,7 +19,7 @@ const seals=await import('../context-product-sidecar-attestation.mjs').catch(()=
 const stamp=path=>{const s=sqliteFileStat(path);return [s.dev,s.ino,s.size,s.mtimeNs,s.ctimeNs].join(':');};
 function sql(path,work){const db=new DatabaseSync(path);try{return work(db);}finally{db.close();}}
 function child(code,...args){const r=childProcess.spawnSync(process.execPath,['--input-type=module','-e',code,...args],{encoding:'utf8',env:{},timeout:10000});assert.equal(r.status,0,r.stderr);assert.equal(r.error,undefined);return r.stdout;}
-function setup(t,{build=true}={}) {
+function setup(t,{build=true,mode='DELETE'}={}) {
   const f=fixture(t),first=f.admit('attestation first canary'),second=f.admit('attestation second canary');
   const path=f.path+PRODUCT_SIDECAR_SUFFIX,p=selection,access=accessDigest({ownerId:ns.ownerId,namespaces:{readSet:[ns]}});
   const children=[],statements=[],commits=[],transactions=new WeakMap(),sideDatabases=new WeakSet();
@@ -56,7 +56,7 @@ function setup(t,{build=true}={}) {
     }
     const result=Reflect.apply(exec,this,[text]);afterExec(text,this,writing);return result;
   });
-  const options={path:f.path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,observer,sqlite,writable:true,now:()=>clock};
+  const options={path:f.path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,observer,sqlite,writable:true,sidecarJournalMode:mode,now:()=>clock};
   const s={f,path,p,access,first,second,facade,children,statements,commits,
     get storage(){return storage;},get clock(){return clock;},get checks(){return checks;},
     setHook(fn){hook=fn;},afterExec(fn){afterExec=fn;},setClock(n){clock=n;},delayChecks(){delayChecks=true;},
@@ -127,6 +127,62 @@ test('crash before COMMIT rolls back the stamp and retains a matching seal',t=>{
   const s=setup(t),before=s.row();s.close();
   child("import {DatabaseSync} from 'node:sqlite';const db=new DatabaseSync(process.argv[1]);db.exec('BEGIN IMMEDIATE;UPDATE product_attestation SET stamp=stamp+1;UPDATE documents SET token_length=token_length+1');process.exit(0);",s.path);
   s.open();s.storage.admit(2000);assert.deepEqual(s.row(),before);assert.equal(s.valid(),true);assert.equal(replacementCalls(s).length,0);assert.equal(s.checks,0);
+});
+
+test('a rejected engine COMMIT rolls back its completed seal write with the data',t=>{
+  const s=setup(t),before=s.row(),exec=DatabaseSync.prototype.exec;let rejected;
+  t.mock.method(DatabaseSync.prototype,'exec',function(text){
+    if(text==='COMMIT'&&!rejected&&this.prepare('PRAGMA application_id').get().application_id===0x43525032){
+      const row=this.prepare('SELECT stamp,record FROM product_attestation WHERE singleton=1').get();
+      if(row.stamp>before.stamp){
+        assert.equal(seals.validSidecarAttestation(s.facade.port.identity.cursorSecret,row,seals.sidecarAttestationFile(s.path),PRODUCT_SIDECAR_FORMAT),true,'the new seal was written before the rejected COMMIT');
+        rejected=row;throw Object.assign(Error('synthetic commit rejection'),{code:'storage_error'});
+      }
+    }
+    return Reflect.apply(exec,this,[text]);
+  });
+  s.f.admit('rollback with a completed seal write');
+  assert.throws(()=>s.storage.refresh(s.p,s.access,{maxItems:32,maxMs:1000}),{code:'storage_error'});
+  assert.ok(rejected);assert.deepEqual(s.row(),before,'ROLLBACK restores the exact earlier stamp and MAC');
+  s.open();s.storage.admit(2000);assert.equal(s.valid(),true);assert.equal(replacementCalls(s).length,0);
+});
+
+test('a published no-op refresh adds no write transaction and retains its seal',t=>{
+  const s=setup(t),before=s.row(),commits=s.commits.length,publication=s.observe().publication;
+  s.storage.refresh(s.p,s.access,{maxItems:32,maxMs:1000});
+  assert.equal(s.commits.length,commits,'optional vacuums cannot create seal-only commits');
+  assert.deepEqual(s.row(),before);assert.deepEqual(s.observe().publication,publication);assert.equal(s.valid(),true);
+});
+
+for(const mode of ['DELETE','WAL'])test(`SIGKILL after autocommit vacuum retains matching logical content and seal ${mode}`,t=>{
+  const s=setup(t,{mode});
+  // Allocate then release overflow pages in an existing sealed write. The
+  // committed metadata, schema and published corpus remain identical.
+  s.storage.vectors(db=>{
+    const kind=db.prepare('SELECT kind FROM product_metadata WHERE singleton=1').get().kind;
+    const update=db.prepare('UPDATE product_metadata SET kind=? WHERE singleton=1');
+    update.run('x'.repeat(1024*1024));update.run(kind);
+  },true);
+  const logical=db=>({schema:db.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY type,name").all(),
+    cookie:db.prepare('PRAGMA schema_version').get().schema_version,
+    tables:db.prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name").all().map(({name})=>
+      [name,db.prepare('SELECT * FROM "'+name.replaceAll('"','""')+'"').all().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)))])});
+  const before=sql(s.path,logical),seal=s.row(),file=seals.sidecarAttestationFile(s.path),publication=s.observe().publication;
+  s.close();
+  sql(s.path,db=>{
+    const free=db.prepare('PRAGMA freelist_count').get().freelist_count;assert.ok(free>32);
+    db.exec('BEGIN IMMEDIATE');db.exec('PRAGMA incremental_vacuum(32)');
+    assert.ok(db.prepare('PRAGMA freelist_count').get().freelist_count<free,'incremental vacuum can share an explicit transaction');
+    db.exec('ROLLBACK');assert.equal(db.prepare('PRAGMA freelist_count').get().freelist_count,free,'physical reclamation rolls back too');
+  });
+  const code="import {DatabaseSync} from 'node:sqlite';const db=new DatabaseSync(process.argv[1]);const before=db.prepare('PRAGMA freelist_count').get().freelist_count;db.exec('PRAGMA incremental_vacuum(32)');const after=db.prepare('PRAGMA freelist_count').get().freelist_count;process.stdout.write(JSON.stringify({before,after,transaction:db.isTransaction}),()=>process.kill(process.pid,'SIGKILL'));";
+  const killed=childProcess.spawnSync(process.execPath,['--input-type=module','-e',code,s.path],{encoding:'utf8',env:{},timeout:10000});
+  assert.equal(killed.error,undefined);assert.equal(killed.status,null);assert.equal(killed.signal,'SIGKILL','the vacuum process was killed and reaped before a later write');
+  const result=JSON.parse(killed.stdout);assert.ok(result.after<result.before,'the interrupted process actually reclaimed pages');assert.equal(result.transaction,false);
+  // Let the engine perform the first cold open/recovery after the kill.
+  s.open();s.storage.admit(2000);assert.deepEqual(s.row(),seal);assert.equal(s.valid(),true);
+  assert.deepEqual(seals.sidecarAttestationFile(s.path),file);assert.deepEqual(sql(s.path,logical),before);
+  assert.deepEqual(s.observe().publication,publication);assert.equal(replacementCalls(s).length,0);assert.equal(s.checks,0);
 });
 
 test('structural: initialization, work, GC, vector writes, reset and publication all seal their commits',t=>{
