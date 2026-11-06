@@ -98,7 +98,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
         guard:()=>{if(closed)fail('store_closed');protect(row.source);}});
       authority.check(row.source);
       if (!Array.isArray(vectors)||vectors.length!==selected.length) fail('invalid_vector');
-      vectors=vectors.map(v=>encodeVector(v,port).toString('hex'));
+      vectors=vectors.map(v=>encodeVector(v,port));
     } catch (failure) { error=refusal(failure); }
     finally{controllers.delete(controller);}
     if(!reserved)return;
@@ -115,7 +115,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
     // the shared cadence remains authoritative. Pending vectors are ephemeral.
     return {next,expected:reserved.segment,embedded:error?0:selected.length};
   }
-  let pending=null;
+  let pending=null,refreshAfter=0;
   async function run({maxItems=16,maxMs=1000,embeddings=false}={}, currentAccess) {
     if (closed||stopped) fail('store_closed');
     if (!Number.isSafeInteger(maxItems)||maxItems<1||maxItems>128||!Number.isSafeInteger(maxMs)||maxMs<1||maxMs>5000) fail('invalid_input');
@@ -127,12 +127,13 @@ export function createRawSearchMaintenance(storage,authority,options) {
     try {
       let refreshed=false;
       if (embeddings&&options.embedder&&!pending) {
-        const snapshot=await storage.snapshot({limit:maxItems});
+        const snapshot=await storage.snapshot({after:refreshAfter,limit:maxItems});
         const reconciled=snapshot.checkpoint.coverageComplete&&snapshot.checkpoint.fence===inventoryFence();
         const rows=reconciled?snapshot.rows:[];
         const row=rows.find(row=>(!same(row.embedder,metadata(options.embedder))||row.chunks.some(c=>!c.vector))&&
           (!same(row.embedder,metadata(options.embedder))||!row.retry?.terminal&&(row.retry?.nextAt??0)<=Date.now()));
-        if(row) {pending=await refresh(row,maxMs);refreshed=!!pending;}
+        if(row) {refreshAfter=row.segment;pending=await refresh(row,maxMs);refreshed=!!pending;}
+        else refreshAfter=snapshot.partial?snapshot.rows.at(-1).segment:0;
       }
       if(!refreshed) await broker(async commit=>{
         admitted=true;
@@ -165,7 +166,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
               if (!['source_unavailable','source_excluded'].includes(error.code)) throw error;
             }
           } else {
-            const inventory=authority.inventory(checkpoint.after,Math.min(maxItems,16));
+            const inventory=authority.inventory(checkpoint.after,Math.min(maxItems,4));
             const known=await storage.lookup(inventory.rows.map(entry=>JSON.stringify(entry.key)));
             const byKey=new Map(known.map(row=>[row.key,row]));
             let processed=0;
@@ -199,7 +200,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
         }
         // All async preparation is over before this last canonical comparison;
         // sidecar commit occurs with no canonical lock. Delivery closes its gap.
-        for(const row of staged)protect(JSON.parse(row.data).source);
+        for(const row of staged)protect(row.source);
         if(fence&&inventoryFence()!==fence){
           // Canonical capture or denial won the race. Discard this quantum's
           // positive work and retry on the host's next turn; source movement
@@ -208,7 +209,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
         }
         // Also close callback races when a full inventory fence is unavailable
         // at the work ceiling. No callback follows this exact batch snapshot.
-        if(staged.length)authority.validate([{sources:staged.map(row=>JSON.parse(row.data).source),intent:'history',access,value:null}]);
+        if(staged.length)authority.validate([{sources:staged.map(row=>row.source),intent:'history',access,value:null}]);
         if(staged.length||remove.length||!same(checkpoint,state.checkpoint)) {
           try {
             const result=await storage.commitBatch({staged,remove:[...new Set(remove)],checkpoint});commit();

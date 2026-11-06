@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { fork } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
-import { cosine,loadVector,reserveSharedVectors } from '../../core/context-read-embedder.mjs';
+import { reserveSharedVectors } from '../../core/context-read-embedder.mjs';
 import { cpus,totalmem } from 'node:os';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -11,7 +11,7 @@ import { openDatabase,transaction } from '../../core/database.mjs';
 import { createRawSearchAuthority } from '../../core/raw-search-authority.mjs';
 import { openReadDatabase } from '../../core/read-database.mjs';
 import { openRawSearchStorage } from '../../core/raw-search-storage.mjs';
-import { rawSearchChunks,rawSearchPostings,retrieveRaw } from '../../core/raw-search-retrieval.mjs';
+import { rawSearchChunks,rawSearchPostings,retrieveRaw,loadRawVectorBlocks,scoreRawVectorBlocks } from '../../core/raw-search-retrieval.mjs';
 import { localPlainPort,rawNamespace as ns } from '../../core/testing/raw-fixtures.mjs';
 import { openRawSearch } from '../../core/raw-search-index.mjs';
 import { rawSearchHost,broker } from '../../core/testing/raw-search-fixtures.mjs';
@@ -23,7 +23,7 @@ export async function measureRawSearch(t,targets) {
   const reports=[];
   t.diagnostic(JSON.stringify({hardware:{cpu:cpus()[0].model,cores:cpus().length,memoryBytes:totalmem()},node:process.version,targets}));
   const scenarios=[...targets.sizes.map(count=>({count,cap:false})),{count:Math.ceil(targets.rawCapBytes/4000),cap:true}];
-  for(const scenario of scenarios.filter(s=>!process.env.CAIRN_RAW_MEASURE_TURNS||s.count===Number(process.env.CAIRN_RAW_MEASURE_TURNS))){
+  for(const scenario of scenarios.filter(s=>!process.env.CAIRN_RAW_MEASURE_TURNS||process.env.CAIRN_RAW_MEASURE_TURNS.split(',').map(Number).includes(s.count))){
     const {count,cap}=scenario;console.log('measurement phase=seed turns='+count);
     const ws=createTestWorkspace(null,{prefix:'raw-search-measure-'}),path=join(ws.path,'canonical.sqlite'),directory=join(ws.path,'index');
     mkdirSync(directory,{mode:0o700});
@@ -82,7 +82,7 @@ export async function measureRawSearch(t,targets) {
       let after=['','',-1],checkpoint={after,sweep:0,cycles:1},built=0,quota=false;
       const payload=Buffer.alloc(1536*4);payload.writeFloatLE(1);
       const vectorHex=payload.toString('hex');
-      const rebuildStart=performance.now(),inventoryTimes=[],fenceTimes=[],selectedTimes=[],openingTimes=[];
+      const rebuildStart=performance.now(),inventoryTimes=[],fenceTimes=[],selectedTimes=[],openingTimes=[],encodingTimes=[],snapshotTimes=[];
       while(true){
         const start=performance.now(),inventory=authority.inventory(after,16);inventoryTimes.push(performance.now()-start);
         const staged=[];
@@ -91,7 +91,7 @@ export async function measureRawSearch(t,targets) {
           const text=await authority.open(entry.source),chunks=rawSearchChunks(text,entry.source.ref.span.start);
           const segment={key:JSON.stringify(entry.key),source:entry.source,fingerprint:authority.fingerprint(entry.source),
             postings:rawSearchPostings(text),chunks:chunks.map(({input,...chunk})=>({...chunk,vector:vectorHex})),embedder:{id:'synthetic-measurement',revision:'1',dimensions:1536,normalization:'l2'},retry:{attempts:0,nextAt:0,terminal:false}};
-          staged.push({...await storage.stage(segment),expected:null});after=entry.key;
+          const encodeStart=performance.now();staged.push({...await storage.stage(segment),expected:null});encodingTimes.push(performance.now()-encodeStart);after=entry.key;
         }
         if(staged.length)try{await storage.commitBatch({staged,checkpoint});built+=staged.length;}catch(error){if((error.errcode&255)!==13)throw error;quota=true;break;}
         if(inventory.complete)break;
@@ -107,9 +107,23 @@ export async function measureRawSearch(t,targets) {
       service=await openRawSearch({version:'raw-search-v1',enabled:true,backend:'local',path,directory,ownerId:ns.ownerId,readSet:[ns],
         authority:host.authority,crypto:localPlainPort(),maintenanceTurn:broker(),embedder:provider,policy:{family:'local',maxBatchDocuments:1,maxRequests:100,maxConcurrent:1,maxUsd:0}});
       const factoryMs=performance.now()-factoryStart;
-      const warm=[],full=[],work=[],api=[];let apiCoverage,apiSemantic;
-      for(let sample=0;sample<(cap?3:12);sample++){
-        const begin=performance.now(),next=await storage.search();
+      const searchInput={query:'copper telescope',queryVector:{input:'copper telescope',embedder:{id:provider.id,revision:provider.revision,dimensions:1536,normalization:'l2'},vector:queryVector}};
+      const apiErrors=[],prepareErrors=[],failedApiTimes=[];
+      let coldApi,coldApiMs,coldApiError=null;
+      const coldApiStart=performance.now();
+      try{coldApi=await service.search(searchInput,host.token);}
+      catch(error){coldApiError=error.code;console.log('measurement call-failed='+JSON.stringify({turns:count,stage:'cold-search',error:error.code}));}
+      coldApiMs=performance.now()-coldApiStart;
+      let warmup=0;
+      for(;warmup<targets.warmupSearches;warmup++){
+        let actual;
+        try{actual=await service.search(searchInput,host.token);}
+        catch(error){apiErrors.push({stage:'warmup',code:error.code});break;}
+        if(actual.semantic.state==='ready'||snapshot.partial||quota||count>targets.completeHybridTurns)break;
+      }
+      const warm=[],full=[],work=[],api=[],prepareTimes=[];let apiCoverage,apiSemantic;
+      for(let sample=0;sample<(cap?5:targets.searchSamples);sample++){
+        const begin=performance.now(),next=await storage.search();snapshotTimes.push(next.timings);
         const rankStart=performance.now(),result=retrieveRaw(next.rows,'copper telescope');warm.push(performance.now()-rankStart);
         const start=performance.now();try{authority.fence();}catch(error){assert.equal(error.code,'source_budget_exceeded');}fenceTimes.push(performance.now()-start);
         for(const row of result.rows)for(const segment of row.turn.segments){
@@ -117,57 +131,84 @@ export async function measureRawSearch(t,targets) {
           const openStart=performance.now();await authority.open(segment.source);openingTimes.push(performance.now()-openStart);
         }
         full.push(performance.now()-begin);work.push(result.coverage.scanned);
-        const apiStart=performance.now(),actual=await service.search({query:'copper telescope',queryVector:{input:'copper telescope',embedder:{id:provider.id,revision:provider.revision,dimensions:1536,normalization:'l2'},vector:queryVector}},host.token);
+        const apiStart=performance.now();let actual;
+        try{actual=await service.search(searchInput,host.token);}
+        catch(error){failedApiTimes.push(performance.now()-apiStart);apiErrors.push({stage:'search',code:error.code});
+          console.log('measurement call-failed='+JSON.stringify({turns:count,sample,stage:'search',error:error.code}));continue;}
         api.push(performance.now()-apiStart);apiCoverage=actual.coverage;apiSemantic=actual.semantic;
+        console.log('measurement search='+JSON.stringify({turns:count,sample,ms:api.at(-1),coverage:actual.coverage.status,semantic:actual.semantic.state}));
+        // Raw-cap measures retrieval and failure bounds. Projection/packing is
+        // a later consumer's surface; representative source preparation is
+        // measured separately for the turn profiles.
+        if(!cap&&actual.candidates.length){const start=performance.now();
+          try{await service.prepare(actual.candidates[0],{},host.token);prepareTimes.push(performance.now()-start);}
+          catch(error){prepareErrors.push({code:error.code,ms:performance.now()-start});}}
       }
       if(!quota)assert.equal(built,cap?count:count+Math.ceil(count/100));
       assert.equal(db.prepare('SELECT saved_bytes FROM raw_owner_usage').get()?.saved_bytes,rawBytes);
       const vectorScan=await scanVectors(storage,provider,queryVector);
       console.log('measurement phase=capture turns='+count);
-      const capture=cap?null:await captureContention(path,service,host.token);
+      const readsCheckpoint={turns:count,cap,indexedParts:built,returnedParts:snapshot.rows.length,hintBytes:snapshot.hintBytes,
+        rebuildMs,coldMs,api:summary(api),apiCoverage,apiSemantic,warm:summary(warm),full:summary(full),vectorScan,
+        canonical:summary(sections),canonicalReadWait:summary(readWaits),snapshotWork:snapshotTimes,
+        hintEncoding:summary(encodingTimes),rssBytes:process.memoryUsage().rss,...await storage.status()};
+      console.log('measurement reads='+JSON.stringify(readsCheckpoint));
+      let capture=null;
+      if(!cap)try{capture=await captureContention(path,service,host.token,targets);}
+      catch(error){capture={unavailable:true,error:error.message};console.log('measurement capture-failed='+JSON.stringify({turns:count,error:error.message}));}
       const state=await storage.status(),report={scenario:cap?'raw-cap':'turns',quotaExhausted:quota,indexedParts:built,partial:snapshot.partial||quota,returnedParts:snapshot.rows.length,vectorPayloadBytes:built*6144,turns:count,chunks:snapshot.rows.reduce((n,r)=>n+r.chunks.length,0),rawBytes,
-        canonicalBuildMs,rebuildMs,coldMs,factoryMs,api:summary(api),apiCoverage,apiSemantic,warm:summary(warm),full:summary(full),canonical:summary(sections),canonicalReadWait:summary(readWaits),canonicalMeasurement:'first-read-probe-to-commit',authorityWork:{inventory:summary(inventoryTimes),fence:summary(fenceTimes),selected:summary(selectedTimes)},opening:summary(openingTimes),semanticProfile:'bm25-only-operationally-partial',scanWork:Math.max(...work),
+        canonicalBuildMs,rebuildMs,coldMs,factoryMs,api:summary(api),apiCoverage,apiSemantic,warm:summary(warm),full:summary(full),canonical:summary(sections),canonicalReadWait:summary(readWaits),canonicalMeasurement:'first-read-probe-to-commit',authorityWork:{inventory:summary(inventoryTimes),fence:summary(fenceTimes),selected:summary(selectedTimes)},opening:summary(openingTimes),hintBytes:snapshot.hintBytes,snapshotWork:{sqlite:summary(snapshotTimes.map(t=>t.sqliteMs)),authentication:summary(snapshotTimes.map(t=>t.authenticationMs)),decode:summary(snapshotTimes.map(t=>t.decodeMs))},hintEncoding:summary(encodingTimes),coldApiMs,coldApiCoverage:coldApi?.coverage,coldApiError,apiErrors,prepareErrors,failedApi:summary(failedApiTimes),warmupSearches:Math.min(warmup+1,targets.warmupSearches),prepare:summary(prepareTimes),semanticProfile:apiSemantic?.state==='ready'?'complete-hybrid':'bm25-only',scanWork:Math.max(...work),
         vectorScan,capture,...state,rssBytes:process.memoryUsage().rss,bytesPerTurn:state.allocatedBytes/count,failures:[]};
-      if(count===10000&&report.warm.p95>targets.warmRetrievalP95Ms)report.failures.push('warm_retrieval');
+      if(count===10000&&report.api.p95>targets.warmRetrievalP95Ms)report.failures.push('warm_search_api');
+      if(!cap&&count<=targets.completeHybridTurns&&(apiCoverage?.status!=='complete'||apiSemantic?.state!=='ready'))report.failures.push('complete_hybrid');
       if(!cap&&(report.full.p95>targets.fullReadP95Ms||report.api.p95>targets.fullReadP95Ms))report.failures.push('full_read');
       if(!cap&&(report.canonical.p95>targets.canonicalP95Ms||report.canonical.p99>targets.canonicalP99Ms))report.failures.push('canonical_section');
-      if(capture&&capture.overlap.samples&&capture.overlap.p95>Math.max(capture.baseline.p95+targets.captureP95AllowanceMs,capture.baseline.p95*(1+targets.captureP95AllowanceFraction)))report.failures.push('capture_contention');
-      if(capture&&!capture.overlap.samples)report.failures.push('capture_overlap_unobserved');
-      if(capture&&(capture.sharedSections.p95>targets.canonicalP95Ms||capture.sharedSections.p99>targets.canonicalP99Ms))report.failures.push('contended_canonical_section');
+      if(capture?.overlap?.samples&&capture.overlap.p95>Math.max(capture.baseline.p95+targets.captureP95AllowanceMs,capture.baseline.p95*(1+targets.captureP95AllowanceFraction)))report.failures.push('capture_contention');
+      if(capture?.overlap&&capture.overlap.samples<targets.minCaptureOverlap)report.failures.push('capture_overlap_unobserved');
+      if(capture?.sharedSections&&(capture.sharedSections.p95>targets.canonicalP95Ms||capture.sharedSections.p99>targets.canonicalP99Ms))report.failures.push('contended_canonical_section');
       if(capture?.maintenanceError)report.failures.push('maintenance_concurrent_capture');
-      reports.push(report);t.diagnostic(JSON.stringify(report));
+      if(capture?.unavailable)report.failures.push('capture_unavailable');
+      if(apiErrors.length||coldApiError)report.failures.push('search_unavailable');
+      if(prepareErrors.length)report.failures.push('source_prepare_unavailable');
+      reports.push(report);console.log('measurement result='+JSON.stringify(report));t.diagnostic(JSON.stringify(report));
     }finally{DatabaseSync.prototype.exec=originalExec;await service?.close();await storage?.close();reader?.db.close();db?.close();await ws.cleanup();}
   }
   assert.deepEqual(reports.flatMap(report=>report.failures),[],'frozen performance targets');
 }
 
 async function scanVectors(storage,provider,query){
-  let after=0,scanned=0,sum=0;const start=performance.now();
-  while(true){const page=await storage.snapshot({after,limit:512});
-    for(const row of page.rows)for(const chunk of row.chunks){if(!chunk.vector)continue;
-      const lease=reserveSharedVectors(1,provider);assert.ok(lease);
-      try{sum+=cosine(query,loadVector(Buffer.from(chunk.vector,'hex'),provider));scanned++;}finally{lease.release();}}
+  let after=0,scanned=0,sum=0,loadMs=0,scoreMs=0,pagingMs=0;const start=performance.now();
+  while(true){const pageStart=performance.now(),page=await storage.snapshot({after,limit:512});pagingMs+=performance.now()-pageStart;
+    const count=page.rows.reduce((n,r)=>n+r.chunks.length,0),lease=reserveSharedVectors(count,provider);assert.ok(lease);
+    try{
+      const loadStart=performance.now(),blocks=loadRawVectorBlocks(page.rows,provider);loadMs+=performance.now()-loadStart;
+      const scoreStart=performance.now(),scores=scoreRawVectorBlocks(blocks,query);scoreMs+=performance.now()-scoreStart;
+      sum+=scores.reduce((a,b)=>a+b,0);scanned+=count;
+    }finally{lease.release();}
     if(!page.partial)break;assert.ok(page.rows.length);after=page.rows.at(-1).segment;
   }
-  return {method:'paged-indexed-chunks',ms:performance.now()-start,scannedChunks:scanned,vectorBytes:scanned*provider.dimensions*4,scoreSum:sum};
+  return {method:'paged-fp32-blocks',ms:performance.now()-start,pagingMs,loadMs,scoreMs,scannedChunks:scanned,vectorBytes:scanned*provider.dimensions*4,scoreSum:sum};
 }
-async function captureBurst(path,phase){
+async function captureBurst(path,phase,count){
   const child=fork(new URL('../../core/testing/raw-search-mutation-child.mjs',import.meta.url),[path],{stdio:['ignore','ignore','pipe','ipc']});
   let stderr='',resolveStarted,rejectStarted;child.stderr.on('data',value=>{stderr+=value;});
   const started=new Promise((resolve,reject)=>{resolveStarted=resolve;rejectStarted=reject;});
   const exited=new Promise(resolve=>child.once('exit',(code,signal)=>resolve({code,signal})));
   let timer;const done=new Promise((resolve,reject)=>{
-    timer=setTimeout(()=>{child.kill();const error=Error('capture_timeout');rejectStarted(error);reject(error);},30000);
+    timer=setTimeout(()=>{child.kill();const error=Error('capture_timeout:'+phase);rejectStarted(error);reject(error);},90000);
     child.on('error',reject);child.on('message',value=>{
-      if(value.ready)child.send({operation:'capture-burst',input:{namespace:ns,phase,count:40}});
-      else if(value.started)resolveStarted();else if(value.ok)resolve(value.value.samples);else reject(Error(JSON.stringify(value)));
+      if(value.ready)child.send({operation:'capture-burst',input:{namespace:ns,phase,count}});
+      else if(value.started)resolveStarted();else if(value.progress)console.log('measurement capture-progress='+JSON.stringify(value.progress));else if(value.ok)resolve(value.value.samples);else reject(Error(JSON.stringify(value)));
     });
   });
+  // The caller may still be waiting for startup or collecting reader intervals.
+  // Preserve failures until its joined await without an unhandled rejection.
+  done.catch(()=>{});
   const finish=async()=>{try{const rows=await done;assert.deepEqual(await exited,{code:0,signal:null},stderr);return rows;}finally{clearTimeout(timer);child.kill();}};
   return {started,finish};
 }
-async function captureContention(path,service,token){
-  const baselineRun=await captureBurst(path,'baseline');await baselineRun.started;const baseline=await baselineRun.finish();
+async function captureContention(path,service,token,targets){
+  const baselineRun=await captureBurst(path,'baseline',targets.captureSamples);await baselineRun.started;const baseline=await baselineRun.finish();
   const original=DatabaseSync.prototype.exec,active=new WeakMap(),intervals=[];
   DatabaseSync.prototype.exec=function(sql){
     const value=original.call(this,sql);
@@ -178,9 +219,10 @@ async function captureContention(path,service,token){
     return value;
   };
   let rows,maintenanceError=null,maintenanceStatus=null,maintainCalls=0;
-  try{const run=await captureBurst(path,'contended');await run.started;
+  try{const run=await captureBurst(path,'contended',targets.captureSamples);await run.started;
     let finished=false;
-    const writing=run.finish().then(value=>{finished=true;return value;}),until=performance.now()+10000;
+    const writing=run.finish().then(value=>{finished=true;return value;}),until=performance.now()+25000;
+    writing.catch(()=>{});
     while(!finished&&performance.now()<until){
       maintainCalls++;
       try{await service.maintain({maxItems:16,maxMs:5000},token);}
@@ -191,5 +233,5 @@ async function captureContention(path,service,token){
   }finally{DatabaseSync.prototype.exec=original;}
   const overlap=rows.filter(row=>intervals.some(([start,end])=>BigInt(row.start)<end&&BigInt(row.end)>start));
   return {baseline:summary(baseline.map(row=>row.ms)),contended:summary(rows.map(row=>row.ms)),overlap:summary(overlap.map(row=>row.ms)),
-    sharedSections:summary(intervals.map(([start,end])=>Number(end-start)/1e6)),maintenanceError,maintenanceStatus,maintainCalls};
+    writerBegin:{baseline:summary(baseline.map(r=>r.beginMs)),contended:summary(rows.map(r=>r.beginMs))},writerCommit:{baseline:summary(baseline.map(r=>r.commitMs)),contended:summary(rows.map(r=>r.commitMs))},sharedSections:summary(intervals.map(([start,end])=>Number(end-start)/1e6)),maintenanceError,maintenanceStatus,maintainCalls};
 }

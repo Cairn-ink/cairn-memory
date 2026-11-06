@@ -2770,22 +2770,24 @@ of cleanup; stopped services and host backups still require the host's explicit
 retention, non-serving restore and owner-purge policy. No online index export or
 hosted backend is available.
 
-Bounded snapshots admit at most 8 MiB of encoded hints. Large vector-bearing
-corpora can therefore return partial lexical coverage and explicit BM25-only
-semantics before reaching the turn/work limits. Synthetic storage and paged
-vector-scan measurements do not establish complete hybrid retrieval or answer
-quality at those sizes. The main-file page cap reserves rollback-journal space
+Bounded snapshots admit at most 8 MiB of compact encoded source hints, with
+separately bounded fp32 vector BLOBs. Redundant canonical manifest hints are
+refetched rather than duplicated. Larger corpora can still return partial
+lexical coverage and explicit BM25-only semantics before reaching the turn/work
+limits. Complete synthetic hybrid reads within those bounds do not establish
+answer quality, cold-start completeness or passing latency. The main-file page cap reserves rollback-journal space
 inside the separate 512 MiB owner quota; exhausting that quota leaves canonical
 Raw intact and permits denial reconciliation.
 
 Joint vector residency covers Memory preflights created while the Raw service
 is selected. Hosts must select it before admitting reads, or drain existing
 reads before changing selection. The local path shares process embedding
-allowances, not a durable hosted owner ledger. See [the interface](../RAW-SEARCH-INTERFACE.md)
-and [host seam](../SEAM.md) for the final-snapshot and later-consumer boundaries.
+allowances, not a durable hosted owner ledger. See [the interface](plans/raw-search-interface.md)
+and [host seam](plans/raw-search-seam.md) for the final-snapshot and later-consumer boundaries.
 
-The latest full synthetic performance run fails the frozen capture-contention
-allowance at the measured turn sizes, and reports a failed maintenance lane in
-the largest turn profile. Short measured SHARED sections alone do not establish
-capture-cost qualification. The failed gate is retained; performance approval
-and complete hybrid coverage remain open.
+Synthetic qualification still fails frozen search-latency and capture-contention
+gates. Short canonical SHARED sections and a faster vector-scoring loop alone
+do not establish capture-cost or complete-pipeline qualification. Larger profiles
+also encounter hint, vector-residency and owner-quota limits. Performance
+approval remains open; complete hybrid availability within bounds is separate
+from latency and answer-quality qualification.

@@ -7,7 +7,7 @@
   lexical/semantic retrieval and explicit progress/disposal. Hosted backends
   refuse; existing reads, capture and privacy mutations do not select it.
 - No new context output or automatic Cards are added. See
-  [the interface](RAW-SEARCH-INTERFACE.md) and [host seam](SEAM.md).
+  [the interface](docs/plans/raw-search-interface.md) and [host seam](docs/plans/raw-search-seam.md).
 
 ## Unreleased — semantic provider key channel
 

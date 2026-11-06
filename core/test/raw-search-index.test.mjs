@@ -205,3 +205,35 @@ test('candidate projection keeps more than the final item count available for va
   for(let i=0;i<25;i++)handles.push(await s.prepare(candidate));
   assert.equal(s.service.revalidate([handles[0],handles.at(-1)]).length,2);
 });
+
+test('fp32 blocks preserve cosine maxima and hierarchy across block boundaries without decoding during scoring',async()=>{
+  const {loadRawVectorBlocks,scoreRawVectorBlocks}=await import('../raw-search-retrieval.mjs');
+  const {encodeVector,cosine}=await import('../context-read-embedder.mjs');
+  const metadata={id:'synthetic-blocks',revision:'1',dimensions:3,normalization:'none'},query=Float32Array.of(.4,.7,-.2);
+  const rows=Array.from({length:270},(_,i)=>segment(String(i),'copper',i+1));
+  const vectors=new Map();
+  for(const [i,row] of rows.entries()){
+    const values=[Float32Array.of(i+1,1,-2),Float32Array.of(-1,i+1,3)];vectors.set(row.key,values);
+    row.chunks=values.map(vector=>({vector:encodeVector(vector,metadata)}));
+  }
+  const blocks=loadRawVectorBlocks(rows,metadata),parse=JSON.parse;
+  let scores;
+  JSON.parse=()=>{throw Error('scoring must not decode');};
+  try{scores=scoreRawVectorBlocks(blocks,query);}finally{JSON.parse=parse;}
+  for(const [i,row] of rows.entries())assert.ok(Math.abs(scores[i]-Math.max(...vectors.get(row.key).map(v=>cosine(query,v))))<1e-12);
+  assert.deepEqual(retrieveRaw(rows,'copper',{vectors:blocks,queryVector:query}),retrieveRaw(rows,'copper',{vectors,queryVector:query}));
+  rows[0].chunks[0].vector=Buffer.alloc(12);
+  assert.throws(()=>loadRawVectorBlocks(rows,metadata),{code:'invalid_vector'});
+});
+
+test('binary vector bytes are authenticated independently of compact hint decoding',async t=>{
+  const {DatabaseSync}=await import('node:sqlite'),{join}=await import('node:path');
+  const {createFakeEmbedder}=await import('../context-read-embedder.mjs');
+  const port=createFakeEmbedder(),f=sourceFixture(t);await savedSource(f,'Synthetic copper telescope.');
+  const s=await searchFixture(f,{embedder:port,policy:{family:'local',maxBatchDocuments:1,maxRequests:10,maxConcurrent:1,maxUsd:0}});
+  await s.maintain();await s.tick({embeddings:true});await s.tick();
+  assert.equal((await s.search({query:'copper'})).semantic.state,'ready');
+  const db=new DatabaseSync(join(s.directory,readdirSync(s.directory).find(name=>name.endsWith('.sqlite'))));
+  try{db.exec('UPDATE segments SET vectors=zeroblob(length(vectors))');}finally{db.close();}
+  await assert.rejects(s.search({query:'copper'}),{code:'raw_search_unavailable'});
+});

@@ -108,3 +108,20 @@ test('a stable rebuild advances each inventory page after one denial sweep',asyn
   await s.tick({maxItems:1});await s.tick({maxItems:1});
   assert.equal(s.indexCount(),3);
 });
+
+test('a pending canonical writer defers maintenance without stopping the lane',async t=>{
+  const f=sourceFixture(t);await savedSource(f,'Synthetic copper telescope.');const s=await searchFixture(f);
+  f.db.exec('BEGIN EXCLUSIVE');
+  try{const status=await s.maintain();assert.equal(status.error,null);assert.equal(status.maintenance.phase,'idle');}
+  finally{f.db.exec('ROLLBACK');}
+  await s.tick();assert.equal(s.indexCount(),1);
+});
+
+test('embedding refresh advances beyond a fully embedded first page',async t=>{
+  const f=sourceFixture(t),port=createFakeEmbedder();
+  for(let i=1;i<=3;i++)ok(await f.core.captureRaw(request(splitRaw('Synthetic copper '+i,{id:'vector-'+i,ordinal:i})[0],{eventId:'vector-'+i})));
+  const s=await searchFixture(f,{embedder:port,policy:{family:'local',maxBatchDocuments:1,maxRequests:20,maxConcurrent:1,maxUsd:0}});
+  await s.maintain();
+  for(let i=0;i<6;i++)await s.tick({maxItems:1,embeddings:true});
+  assert.equal((await s.search({query:'copper'})).semantic.state,'ready');
+});

@@ -1,10 +1,12 @@
+import { performance } from 'node:perf_hooks';
+import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { resolve, dirname, join } from 'node:path';
 import { createExclusiveSqliteFile, sqliteFileStat, sameJournal } from './sqlite-journal-probe.mjs';
 import { fail } from './validation.mjs';
-import { same, RAW_SEARCH_LIMITS } from './raw-search-input.mjs';
+import { same, RAW_SEARCH_LIMITS, rawSourceHint } from './raw-search-input.mjs';
 
-const FORMAT = 2;
+const FORMAT = 3;
 function stat(path) { try { return sqliteFileStat(path); } catch (e) { if (e.code === 'ENOENT') return null; throw e; } }
 function privateDirectory(path) {
   const own = stat(path);
@@ -65,7 +67,7 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
     const exists = db.prepare("SELECT 1 FROM sqlite_master WHERE name='header'").get();
     if (!exists) transaction(() => db.exec(`
       CREATE TABLE header(singleton INTEGER PRIMARY KEY CHECK(singleton=1),binding TEXT NOT NULL,sequence INTEGER NOT NULL,checkpoint TEXT NOT NULL,signature TEXT NOT NULL);
-      CREATE TABLE segments(id INTEGER PRIMARY KEY,segment_key TEXT NOT NULL UNIQUE,data TEXT NOT NULL,signature TEXT NOT NULL,published INTEGER NOT NULL CHECK(published IN(0,1)));
+      CREATE TABLE segments(id INTEGER PRIMARY KEY,segment_key TEXT NOT NULL UNIQUE,data TEXT NOT NULL,signature TEXT NOT NULL,vectors BLOB NOT NULL,published INTEGER NOT NULL CHECK(published IN(0,1)));
       CREATE INDEX published_segments ON segments(published,id);
     `));
     const previous = db.prepare('SELECT * FROM header WHERE singleton=1').get();
@@ -80,42 +82,84 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
     // A crash can leave an unpublished segment; it is never searchable.
     transaction(() => db.prepare('DELETE FROM segments WHERE id IN (SELECT id FROM segments WHERE published=0 LIMIT 4096)').run());
   } catch (error) { db.close(); throw error; }
-  const sign = data => bind('raw-search-segment-v1',[binding,data]);
-  function decode(row) {
-    if (!row || row.signature !== sign(row.data)) fail('forged_index');
-    const data = JSON.parse(row.data);
+  const vectorBytes = value => value instanceof Uint8Array ? Buffer.from(value.buffer,value.byteOffset,value.byteLength) : Buffer.from(value,'hex');
+  const sign = (data,vectors) => bind('raw-search-segment-v3',[binding,data,
+    createHash('sha256').update(vectors).digest('hex')]);
+  // Fixed tuples avoid repeated property names and duplicate source identities.
+  // Generic records are retained for storage-only callers and refusal fixtures.
+  function pack(segment) {
+    if(!segment.source?.manifest&&!segment.source?.canonical)return {data:JSON.stringify(segment),vectors:Buffer.alloc(0)};
+    const source=rawSourceHint(segment.source,bind),ref=source.ref,ns=binding.readSet.findIndex(ns=>same(ns,ref.namespace));
+    if(ns<0)fail('foreign_index');
+    const vectors=[];
+    const chunks=segment.chunks.map(c=>{if(c.vector)vectors.push(vectorBytes(c.vector));return [c.start,c.end,c.inputIdentity,c.vector?vectorBytes(c.vector).length:0];});
+    const data=JSON.stringify([segment.key,ns,ref.span.start,ref.span.end,ref.span.precision,ref.contentIdentity,
+      source.ordinal,source.role,source.occurredAt,source.currentness,source.classification.kind,source.classification.reason,
+      source.totalUnits,source.bytes,source.canonical,segment.fingerprint,segment.postings.length,segment.postings.terms,
+      chunks,segment.embedder,segment.retry]);
+    return {data,vectors:Buffer.concat(vectors)};
+  }
+  function unpack(data,bytes) {
+    const value=JSON.parse(data);
+    if(!Array.isArray(value))return value;
+    const [key,ns,start,end,precision,contentIdentity,ordinal,role,occurredAt,currentness,kind,reason,
+      totalUnits,sourceBytes,canonical,fingerprint,length,terms,chunks,embedder,retry]=value;
+    const [conversationId,messageId]=JSON.parse(key);let offset=0;
+    const decoded=chunks.map(([start,end,inputIdentity,size])=>{
+      const c={start,end,inputIdentity};
+      if(size){if(offset+size>bytes.length)fail('forged_index');c.vector=bytes.subarray(offset,offset+size);offset+=size;}
+      return c;
+    });
+    if(offset!==bytes.length||!binding.readSet[ns])fail('forged_index');
+    return {key,source:{ref:{type:'raw',namespace:binding.readSet[ns],conversationId,messageId,
+      span:{start,end,precision},contentIdentity},ordinal,role,occurredAt,currentness,
+      classification:{kind,reason},totalUnits,bytes:sourceBytes,canonical},fingerprint,
+      postings:{length,terms},chunks:decoded,embedder,retry};
+  }
+  function decode(row, timings) {
+    let start=performance.now();
+    if (!row || row.signature !== sign(row.data,row.vectors)) fail('forged_index');
+    if(timings)timings.authenticationMs+=performance.now()-start;start=performance.now();
+    const data = unpack(row.data,vectorBytes(row.vectors));
+    if(timings)timings.decodeMs+=performance.now()-start;
     if (data.key !== row.segment_key) fail('forged_index');
     return { ...data,segment:row.id };
   }
+  const stagedKey = row => {if(row.signature!==sign(row.data,row.vectors))fail('forged_index');
+    const data=JSON.parse(row.data);if((Array.isArray(data)?data[0]:data.key)!==row.key)fail('forged_index');};
   async function snapshot({ after = 0, limit = RAW_SEARCH_LIMITS.work } = {}) {
     ready();
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > RAW_SEARCH_LIMITS.work) fail('invalid_input');
     // One statement owns the snapshot, including its publication sequence.
     const statement = db.prepare(`SELECT s.*,h.sequence,h.checkpoint,h.signature AS header_signature,h.binding AS header_binding FROM header h LEFT JOIN segments s ON s.published=1 AND s.id>?
       WHERE h.singleton=1 ORDER BY s.id LIMIT ?`);
-    let sequence=0,checkpoint,bytes=0,partial=false,partialReason=null;
-    const rows=[];
+    let sequence=0,checkpoint,bytes=0,vectorSize=0,partial=false,partialReason=null;
+    const rows=[],timings={sqliteMs:0,authenticationMs:0,decodeMs:0};
     // A native iterator bounds allocation before decoding large vector-bearing
     // segments. Closing it also releases its single-statement read snapshot.
-    for (const row of statement.iterate(after,limit+1)) {
-      if(row.header_binding!==JSON.stringify(binding)||row.header_signature!==signHeader(row.sequence,row.checkpoint))fail('forged_index');
+    const iterator=statement.iterate(after,limit+1);
+    try{while(true){
+      const start=performance.now(),step=iterator.next();timings.sqliteMs+=performance.now()-start;
+      if(step.done)break;const row=step.value;
+      if(checkpoint===undefined&&(row.header_binding!==JSON.stringify(binding)||row.header_signature!==signHeader(row.sequence,row.checkpoint)))fail('forged_index');
       sequence=row.sequence;checkpoint??=JSON.parse(row.checkpoint);
       if(row.id===null)break;
       const size=Buffer.byteLength(row.data);
       if(rows.length===limit||bytes+size>RAW_SEARCH_LIMITS.snapshotBytes){partial=true;
         partialReason=rows.length===limit?'inventory_limit':'snapshot_byte_limit';break;}
-      bytes+=size;rows.push(decode(row));
-    }
-    return {sequence,checkpoint,rows,partial,partialReason};
+      if(vectorSize+row.vectors.byteLength>128*1024*1024){partial=true;partialReason='vector_byte_limit';break;}
+      bytes+=size;vectorSize+=row.vectors.byteLength;rows.push(decode(row,timings));
+    }}finally{iterator.return();}
+    return {sequence,checkpoint,rows,partial,partialReason,hintBytes:bytes,vectorBytes:vectorSize,timings};
   }
   async function stage(segment) {
     ready();
-    const data = JSON.stringify(segment);
+    const {data,vectors} = pack(segment);
     if (Buffer.byteLength(data) > 1024*1024) fail('index_segment_too_large');
-    return Object.freeze({ key:segment.key,data,signature:sign(data) });
+    return Object.freeze({ key:segment.key,data,vectors,signature:sign(data,vectors),source:segment.source });
   }
   async function publish(staged, expected) {
-    if (staged.signature !== sign(staged.data) || JSON.parse(staged.data).key!==staged.key) fail('forged_index');
+    stagedKey(staged);
     return transaction(() => {
       const previous = db.prepare('SELECT id FROM segments WHERE segment_key=? AND published=1').get(staged.key);
       if ((previous?.id ?? null) !== expected) fail('stale_publication');
@@ -124,7 +168,7 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
       writeHeader(sequence,current.checkpoint);
       // Use the monotone header clock as immutable segment ID, never SQLite's
       // reusable rowid after a complete purge.
-      db.prepare('INSERT INTO segments VALUES(?,?,?,?,0)').run(sequence,staged.key,staged.data,staged.signature);
+      db.prepare('INSERT INTO segments VALUES(?,?,?,?,?,0)').run(sequence,staged.key,staged.data,staged.signature,staged.vectors);
       db.prepare('UPDATE segments SET published=1 WHERE id=?').run(sequence);
       return sequence;
     });
@@ -145,11 +189,11 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
     ready();
     if(keys.length>128)fail('invalid_input');
     return db.prepare('SELECT * FROM segments WHERE published=1 AND segment_key IN (SELECT value FROM json_each(?))')
-      .all(JSON.stringify(keys)).map(decode);
+      .all(JSON.stringify(keys)).map(row=>decode(row));
   }
   async function commitBatch({staged=[],remove=[],checkpoint:next}) {
     if(staged.length>128||remove.length>1024)fail('invalid_input');
-    for(const row of staged)if(row.signature!==sign(row.data)||JSON.parse(row.data).key!==row.key)fail('forged_index');
+    for(const row of staged)stagedKey(row);
     return transaction(()=>{
       const previous=db.prepare('SELECT segment_key,id FROM segments WHERE segment_key IN (SELECT value FROM json_each(?))')
         .all(JSON.stringify(staged.map(row=>row.key)));
@@ -158,9 +202,8 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
       const base=header().sequence;
       const removed=db.prepare(`DELETE FROM segments WHERE id IN (SELECT value FROM json_each(?))
         OR segment_key IN (SELECT value FROM json_each(?))`).run(JSON.stringify(remove),JSON.stringify(staged.map(row=>row.key))).changes;
-      const records=staged.map((row,i)=>({id:base+i+1,key:row.key,data:row.data,signature:row.signature}));
-      db.prepare(`INSERT INTO segments SELECT json_extract(value,'$.id'),json_extract(value,'$.key'),
-        json_extract(value,'$.data'),json_extract(value,'$.signature'),1 FROM json_each(?)`).run(JSON.stringify(records));
+      if(staged.length)db.prepare('INSERT INTO segments VALUES '+staged.map(()=>'(?,?,?,?,?,1)').join(','))
+        .run(...staged.flatMap((row,i)=>[base+i+1,row.key,row.data,row.signature,row.vectors]));
       writeHeader(base+staged.length+1,JSON.stringify(next));
       return {removed,sequence:base+staged.length+1};
     });

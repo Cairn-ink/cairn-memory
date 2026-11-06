@@ -109,7 +109,11 @@ batches retain 16 anchors / 64,000 bytes / 1,024 rows. Semantic chunks preserve
 code points and exact source offsets, with at most 4,000 UTF-16 units / 8,000
 input bytes plus adapter framing. The 512 MiB owner index quota is separate
 from Raw retention; the 20,000-vector / 128 MiB resident ceiling is shared.
-Missing/partial embeddings yield explicit BM25-only. Sidecar snapshots admit at most 8 MiB of encoded hint segments before
-decoding and report partial coverage when that bound is reached. Public coverage reports
+Missing/partial embeddings yield explicit BM25-only. Sidecar snapshots admit at
+most 8 MiB of compact encoded hints before decoding, with separately bounded
+fp32 vector BLOBs. Exact refs bind the complete canonical manifest; omitted
+manifest hints are refetched canonically. Exhausting either bound reports
+partial coverage. Native SQLite changes invalidate the search-eligibility
+cache; actual per-port and final source checks remain independent of that cache. Public coverage reports
 partial causes with unknown scan/expansion counts. The later allocator owns
 Memory-first floor, excerpt counting, coalescing and rendering.

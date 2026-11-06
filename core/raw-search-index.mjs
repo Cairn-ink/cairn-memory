@@ -26,7 +26,7 @@ export async function openRawSearch(value) {
       }
     };
     canonicalFile();
-    database=openReadDatabase(options.path,{contextRead:true});
+    database=openReadDatabase(options.path,{contextRead:true,busyTimeoutMs:0});
     const assertFile=database.assertFile;
     database.assertFile=()=>{assertFile();canonicalFile();};
     const authority=createRawSearchAuthority(database,options);
@@ -52,18 +52,11 @@ export async function openRawSearch(value) {
       const input=searchInput(value),access=authority.authorize('rawSearch',input,token);access();
       const deadlineAt=performance.now()+1000;
       const snapshot=await storage.search();access();
-      const eligible=[];let denied=0,timedOut=false,current=false;
+      let current=false;
       let fence;
       try{fence=authority.fence();current=snapshot.checkpoint.coverageComplete&&snapshot.checkpoint.fence===fence;}
       catch(error){if(error.code!=='source_budget_exceeded')throw error;}
-      for(const row of snapshot.rows){
-        if(performance.now()>=deadlineAt){timedOut=true;break;}
-        // Even a current publication is a hint. The source policy class and
-        // every later dispatch/final snapshot remain canonical authority.
-        try{authority.check(row.source,input.intent);eligible.push(row);}catch(error){
-          if(!['source_unavailable','source_excluded','raw_crypto_unavailable'].includes(error.code))throw error;denied++;
-        }
-      }
+      const {eligible,denied,timedOut}=authority.select(snapshot.rows,input.intent,deadlineAt);
       const dependencies=eligible.map(row=>row.source);
       const canonical=()=>{if(fence)authority.checkFence(fence);else checkSources(dependencies,input.intent);};
       const guard=()=>{ready();canonical();access(canonical);};
@@ -86,13 +79,13 @@ export async function openRawSearch(value) {
           residency=embedding.reserveSharedVectors(chunks,port);
           if(!residency)fail('partial_coverage');
           queryVector=embedding.validateVector(query.vector,port);
-          vectors=new Map(eligible.map(row=>[row.key,row.chunks.map(c=>embedding.loadVector(Buffer.from(c.vector,'hex'),port))]));
+          vectors=retrieval.loadRawVectorBlocks(eligible,port);
           semantic={state:'ready',reason:null};
-        }catch{vectors=null;queryVector=null;semantic={state:'bm25-only',reason:'invalid_vector'};}
+        }catch(error){vectors=null;queryVector=null;semantic={state:'bm25-only',reason:error.code==='partial_coverage'?'partial_coverage':'invalid_vector'};}
       }
       let result;
       try{result=retrieval.retrieveRaw(eligible,input.query,{vectors,queryVector});}
-      finally{residency?.release();vectors?.clear();}
+      finally{vectors=null;residency?.release();}
       const publication=authority.bind('raw-search-publication-v1',[authority.identity,snapshot.sequence]);
       const proof=authority.bind('raw-search-proof-v1',[instance,publication,++serial]);
       const candidates=result.rows.map(row=>{
@@ -148,7 +141,7 @@ export async function openRawSearch(value) {
       const rows=snapshot.rows.filter(row=>candidate.ranges.some(ref=>same(ref,row.source.ref)))
         .sort((a,b)=>a.source.ref.span.start-b.source.ref.span.start);
       if(!rows.length||rows.length!==candidate.ranges.length||rows.length>1024)fail('source_unavailable');
-      const bytes=rows.reduce((n,row)=>n+row.source.manifest.parts.reduce((sum,p)=>sum+p.byte_count,0),0);
+      const bytes=rows.reduce((n,row)=>n+row.source.bytes,0);
       if(bytes>256*1024)fail('source_budget_exceeded');
       const ranges=[];
       for(const row of rows){

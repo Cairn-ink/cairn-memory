@@ -65,3 +65,14 @@ export function searchInput(value) {
   }
   return { ...input, intent };
 }
+
+// Source hints retain a binding to the complete canonical manifest, without
+// duplicating that manifest in every postings/vector record.
+export function rawSourceHint(source, bind) {
+  if (source.canonical) return source;
+  const {ref,role,ordinal,occurredAt,currentness,classification}=source;
+  return {ref,ordinal,role,occurredAt,currentness,classification,
+    totalUnits:source.manifest.message.total_units,
+    bytes:source.manifest.parts.reduce((n,part)=>n+part.byte_count,0),
+    canonical:bind('raw-search-manifest-v1',source)};
+}

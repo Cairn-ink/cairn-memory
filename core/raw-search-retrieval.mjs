@@ -65,7 +65,7 @@ export function retrieveRaw(segments,query,{ vectors = null,queryVector = null,m
     const spans=turn.segments.map(s=>s.source.ref.span).filter(Boolean).sort((a,b)=>a.start-b.start);
     let through=0;
     for(const span of spans){if(span.start!==through)break;through=span.end;}
-    const total=turn.segments[0].source.manifest?.message.total_units;
+    const total=turn.segments[0].source.totalUnits??turn.segments[0].source.manifest?.message.total_units;
     turn.complete=total===undefined||through===total;
     const members=sessions.get(turn.sessionId)??[]; members.push(turn);sessions.set(turn.sessionId,members);
   }
@@ -77,8 +77,10 @@ export function retrieveRaw(segments,query,{ vectors = null,queryVector = null,m
     const roleDocs=members.map(m=>{const tf=termFrequencies(m.role);return {...tf};});
     return {id,...merge([...members,...roleDocs])};
   });
-  const semantic=vectors&&queryVector ? new Map(all.map(t=>[t.id,Math.max(-Infinity,
-    ...t.segments.flatMap(s=>(vectors.get(s.key)??[]).map(v=>cosine(queryVector,v))))])) : null;
+  const vectorScores=vectors?.blocks?scoreRawVectorBlocks(vectors,queryVector):null;
+  const chunkMax=segment=>vectorScores?vectorScores[vectors.positions.get(segment.key)]:
+    Math.max(-Infinity,...(vectors.get(segment.key)??[]).map(v=>cosine(queryVector,v)));
+  const semantic=vectors&&queryVector?new Map(all.map(t=>[t.id,Math.max(-Infinity,...t.segments.map(chunkMax))])):null;
   const semRank=docs=>docs.map(d=>({id:d.id,score:semantic.get(d.id)})).filter(d=>Number.isFinite(d.score)).sort(order).slice(0,24);
   const global=semantic ? rawSearchRrf(lexical,semRank(all)) : lexical;
   const semSessions=semantic ? [...sessions].map(([id,m])=>({id,score:Math.max(...m.map(t=>semantic.get(t.id)))})).sort(order).slice(0,24) : null;
@@ -111,4 +113,48 @@ export function retrieveRaw(segments,query,{ vectors = null,queryVector = null,m
   const rows=[...candidates.values()].sort(order).slice(0,RAW_SEARCH_LIMITS.depth),incomplete=rows.some(row=>!row.turn.complete);
   return {rows,coverage:{status:partial||turnPartial||incomplete?'partial':'complete',scanned:Math.min(work,maxWork),expanded:candidates.size,
     causes:[...(partial?['work_limit']:[]),...(turnPartial?['turn_limit']:[]),...(incomplete?['partial_turn']:[])]}};
+}
+
+/** Load/validate once before the scoring loop. Blocks contain whole fp32 vectors;
+ * segment offsets retain every contributing chunk, including chunk maxima. */
+export function loadRawVectorBlocks(segments,metadata) {
+  const dimensions=metadata.dimensions,blockVectors=256,blocks=[],positions=new Map();
+  const offsets=new Uint32Array(segments.length+1),total=segments.reduce((n,s)=>n+s.chunks.length,0);let count=0;
+  for(let i=0;i<segments.length;i++){
+    positions.set(segments[i].key,i);offsets[i]=count;
+    for(const chunk of segments[i].chunks){
+      const bytes=chunk.vector;
+      if(!(bytes instanceof Uint8Array)||bytes.byteLength!==dimensions*4)throw Object.assign(Error('dimension_mismatch'),{code:'dimension_mismatch'});
+      if(count%blockVectors===0)blocks.push(new Float32Array(Math.min(blockVectors,total-count)*dimensions));
+      const block=blocks.at(-1),start=count%blockVectors*dimensions;
+      const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);let squared=0;
+      for(let j=0;j<dimensions;j++){
+        const value=view.getFloat32(j*4,true);block[start+j]=value;squared+=value*value;
+      }
+      const norm=Math.sqrt(squared);
+      if(!Number.isFinite(norm)||norm<=0||metadata.normalization==='l2'&&Math.abs(norm-1)>1e-5)
+        throw Object.assign(Error('invalid_vector'),{code:'invalid_vector'});
+      count++;
+    }
+  }
+  offsets[segments.length]=count;
+  return {blocks,offsets,positions,dimensions,blockVectors,count};
+}
+/** No row objects, vector conversions, JSON or allocation in the inner scan. */
+export function scoreRawVectorBlocks({blocks,offsets,dimensions,blockVectors},query) {
+  const scores=new Float64Array(offsets.length-1);let querySquared=0;
+  for(let j=0;j<dimensions;j++)querySquared+=query[j]*query[j];
+  for(let segment=0;segment<scores.length;segment++){
+    let max=-Infinity;
+    for(let vector=offsets[segment];vector<offsets[segment+1];vector++){
+      const block=blocks[Math.floor(vector/blockVectors)],start=vector%blockVectors*dimensions;
+      let dot=0,squared=0;
+      for(let j=0;j<dimensions;j++){const v=block[start+j];dot+=query[j]*v;squared+=v*v;}
+      const score=dot/(Math.sqrt(querySquared)*Math.sqrt(squared));
+      if(!Number.isFinite(score))throw Object.assign(Error('invalid_vector'),{code:'invalid_vector'});
+      max=Math.max(max,Math.max(-1,Math.min(1,score)));
+    }
+    scores[segment]=max;
+  }
+  return scores;
 }

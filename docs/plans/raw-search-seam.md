@@ -2,7 +2,7 @@
 
 `openRawSearch` is the only new export from `core/index.mjs`. Its asynchronous
 factory and complete handle contract are frozen in
-[RAW-SEARCH-INTERFACE.md](RAW-SEARCH-INTERFACE.md). Existing engine constructors,
+[raw-search-interface.md](raw-search-interface.md). Existing engine constructors,
 methods, options, results, errors, capabilities, tool schemas and transports
 retain their signatures. No new context representation or output is installed.
 
@@ -55,17 +55,22 @@ there is one active file per canonical store/file and owner; selecting a
 different read set refuses the existing binding and requires an explicit
 rebuild, instead of allocating a second full quota.
 
-Canonical inventory hashing uses keyset pages of at most 256 metadata rows per
+Canonical inventory hashing uses keyset pages of at most 32 metadata rows per
 read snapshot, with serialization outside those snapshots. SQLite's native
 `data_version` on the permanently read-only connection must stay unchanged
-throughout a build. It invalidates the in-memory inventory cache for every
+throughout a build. It invalidates the in-memory inventory and search-eligibility caches for every
 other-writer commit, including direct facts with no application epoch change.
 That connection-local cache key is never a durable publication authority.
 Final validation checks it inside the fresh canonical snapshot and reruns the
 exact materialized source predicates there. Protected openers and document
 provider dispatches still read actual denial facts independently. Concurrent
 source movement discards a maintenance quantum and leaves the next host turn
-available; it does not mark maintenance permanently failed.
+available; it does not mark maintenance permanently failed. Inventory descriptions
+use one source per canonical snapshot; maintenance prepares at most four sources
+per quantum. The selected canonical connection uses a zero busy timeout. A
+pending writer causes a 25 ms read backoff and a deferred host turn, rather than
+a permanently failed maintenance lane. No provider call retains a canonical or
+sidecar transaction or a broker grant.
 
 Exclusions, correction and forgetting deny current and history. Search also
 withholds terminally fenced sessions in both intents. Known historical lineage
@@ -99,11 +104,19 @@ semantic preflight can report partial coverage when the shared vector ceiling
 is exhausted. When no Raw service participates, the existing branch is used.
 The product worker has its own existing cache path and is unchanged.
 
-Bounded sidecar snapshots admit at most 8 MiB of encoded hint segments before
-decoding; exhaustion marks coverage partial and semantics BM25-only. This can
-limit coverage before the turn/work ceilings for large vector-bearing corpora.
-It is not evidence of complete hybrid coverage at those sizes. The main-file
-page cap reserves rollback-journal space within the owner quota.
+Bounded sidecar snapshots admit at most 8 MiB of encoded hints before decoding.
+Compact tuples retain exact source refs and a binding to the complete canonical
+manifest; repeated manifest fields are refetched from canonical storage instead
+of duplicated in each hint. Vectors are authenticated fp32 BLOBs outside that
+hint allowance, bounded by 128 MiB. Semantic scans load contiguous typed-array
+blocks, then score without per-vector objects or JSON decoding. The shared
+20,000-vector / 128 MiB residency reservation still applies; insufficient or
+incomplete coverage is explicitly BM25-only. The main-file page cap reserves
+rollback-journal space within the owner quota.
+
+The internal sidecar format is version 3. An incompatible existing sidecar
+refuses attachment without mutation; an explicit replacement/rebuild is needed.
+No canonical schema migration or automatic sidecar conversion is performed.
 
 The selected handle also exposes `prepareSource` for an authenticated exact Raw
 ref resolved by the allocator from canonical Memory lineage. It permits Memory

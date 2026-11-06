@@ -1,5 +1,6 @@
+import { performance } from 'node:perf_hooks';
 import { createHash, createHmac } from 'node:crypto';
-import { readTransaction } from './database.mjs';
+import { readTransaction, isStorageBusy } from './database.mjs';
 import { installedContentLayout } from './content-safety-schema.mjs';
 import { contentSuppressionFenceInside } from './content-suppression-storage.mjs';
 import { sourceReadSafety } from './content-safety.mjs';
@@ -9,7 +10,7 @@ import { rawSourceRef } from './raw-source-input.mjs';
 import { verifyPrivateGrant } from './private-card-facade.mjs';
 import { contentAuthorityPort } from './content-safety-boundary.mjs';
 import { fail } from './validation.mjs';
-import { immutable, same } from './raw-search-input.mjs';
+import { immutable, same, rawSourceHint } from './raw-search-input.mjs';
 import { rawSessionKeys } from './raw-source-roots.mjs';
 
 const boundary = ns => [ns.ownerId,ns.scope,ns.projectId ?? ''];
@@ -21,7 +22,17 @@ export function createRawSearchAuthority(database, options) {
   const openRaw = options.crypto.openRaw.bind(options.crypto);
   // Engine-owned pure hashing, never a caller port or a raw filesystem read.
   db.function('raw_search_sealed_digest',{deterministic:true},value=>value===null?null:createHash('sha256').update(value).digest('hex'));
-  const read = work => { database.assertFile(); return readTransaction(db,work); };
+  let resumeAt=0;
+  const read = work => {
+    database.assertFile();
+    if(performance.now()<resumeAt)fail('source_unavailable');
+    try{return readTransaction(db,work);}catch(error){
+      // A pending writer makes a fresh SHARED acquisition busy. Abandon the
+      // quantum instead of waiting or repeatedly reacquiring ahead of capture.
+      if(isStorageBusy(error)){resumeAt=performance.now()+25;fail('source_unavailable');}
+      throw error;
+    }
+  };
   const identity = read(() => {
     const layout = installedContentLayout(db);
     if (!layout.rawSources || !layout.rawLineage || !layout.rawDeletion) fail('unsupported_database');
@@ -121,23 +132,22 @@ export function createRawSearchAuthority(database, options) {
     const ref = sources.refFor(ns,anchor,view);
     return inspectInside(ref);
   }
+  const matches=(source,next)=>same(source,source.canonical?rawSourceHint(next,bind):next);
   function inventory(after = ['', '', -1], limit = 16) {
-    return read(() => {
-      // Global owner keyset also catches old writers and capture-only fences.
-      const rows = db.prepare(`SELECT p.conversation_id,p.message_id,p.part_index,p.start,p.end,c.scope,c.project_id
-        FROM raw_parts p JOIN raw_conversations c ON c.id=p.conversation_id
-        WHERE c.owner_id=? AND (p.conversation_id,p.message_id,p.part_index)>(?,?,?)
-        ORDER BY p.conversation_id,p.message_id,p.part_index LIMIT ?`).all(options.ownerId,...after,limit);
-      return { rows:rows.map(part => {
-        const ns = { ownerId:options.ownerId,scope:part.scope,projectId:part.project_id || null };
-        if (!options.readSet.some(value => same(value,ns))) return { key:[part.conversation_id,part.message_id,part.part_index] };
-        try { return { key:[part.conversation_id,part.message_id,part.part_index],source:describe(part,ns) }; }
-        catch (error) {
-          if (!['source_unavailable','source_excluded','raw_crypto_unavailable','source_budget_exceeded'].includes(error.code)) throw error;
-          return { key:[part.conversation_id,part.message_id,part.part_index] };
-        }
-      }),complete:rows.length < limit };
-    });
+    // Global owner keyset also catches old writers and capture-only fences.
+    const rows = read(()=>db.prepare(`SELECT p.conversation_id,p.message_id,p.part_index,p.start,p.end,c.scope,c.project_id
+      FROM raw_parts p JOIN raw_conversations c ON c.id=p.conversation_id
+      WHERE c.owner_id=? AND (p.conversation_id,p.message_id,p.part_index)>(?,?,?)
+      ORDER BY p.conversation_id,p.message_id,p.part_index LIMIT ?`).all(options.ownerId,...after,limit));
+    return { rows:rows.map(part => {
+      const ns = { ownerId:options.ownerId,scope:part.scope,projectId:part.project_id || null };
+      if (!options.readSet.some(value => same(value,ns))) return { key:[part.conversation_id,part.message_id,part.part_index] };
+      try { return { key:[part.conversation_id,part.message_id,part.part_index],source:read(()=>describe(part,ns)) }; }
+      catch (error) {
+        if (!['source_unavailable','source_excluded','raw_crypto_unavailable','source_budget_exceeded'].includes(error.code)) throw error;
+        return { key:[part.conversation_id,part.message_id,part.part_index] };
+      }
+    }),complete:rows.length < limit };
   }
   const fingerprint = source => bind('raw-search-manifest-v1',source);
   // This connection is read-only for its entire lifetime. SQLite's native
@@ -160,7 +170,7 @@ export function createRawSearchAuthority(database, options) {
       if(positions.some(index=>index<0))fail('storage_error');
       const pages=[];let after=null;
       while(true){
-        const limit=Math.min(256,remaining+1);
+        const limit=Math.min(32,remaining+1);
         const bounded=sql.replace(' ORDER BY ',(after?' AND ('+order.join(',')+')>('+order.map(()=>'?').join(',')+')':'')+' ORDER BY ')
           .replace('LIMIT 50001','LIMIT '+limit);
         const page=read(()=>{
@@ -222,9 +232,32 @@ export function createRawSearchAuthority(database, options) {
   function check(source,intent = 'history') {
     return read(() => {
       const next = inspectInside(source.ref,intent);
-      if (!same(source,next)) fail('source_unavailable');
+      if (!matches(source,next)) fail('source_unavailable');
       return next;
     });
+  }
+  // Eligibility memoization is keyed by this read-only connection's native
+  // change counter. It never bypasses per-port checks or final source checks.
+  let eligibilityVersion;const eligibility=new Map();
+  function select(rows,intent,deadlineAt) {
+    const observed=version();
+    if(eligibilityVersion!==observed){eligibility.clear();eligibilityVersion=observed;}
+    const eligible=[];let denied=0,timedOut=false;
+    for(const row of rows){
+      if(performance.now()>=deadlineAt){timedOut=true;break;}
+      const key=fingerprint(row.source);
+      let entry=eligibility.get(key);
+      if(!entry){
+        try{const next=check(row.source);entry={classification:next.classification};}
+        catch(error){if(!['source_unavailable','source_excluded','raw_crypto_unavailable'].includes(error.code))throw error;
+          entry={denied:true};}
+        if(!entry.denied)eligibility.set(key,entry);
+      }
+      if(entry.denied||intent==='current'&&entry.classification.kind==='history-only')denied++;
+      else eligible.push(row);
+    }
+    if(version()!==observed)fail('source_unavailable');
+    return {eligible,denied,timedOut};
   }
   async function open(source,intent = 'history',guard = () => {}) {
     const protectedDispatch = () => { check(source,intent); guard(); check(source,intent); };
@@ -253,7 +286,7 @@ export function createRawSearchAuthority(database, options) {
         // bytes and denial facts. Materialized ranges additionally rerun the
         // existing exact-source predicate in this same snapshot.
         for (const source of entry.fence ? entry.materialized ?? [] : entry.sources)
-        if (!same(source,inspectInside(source.ref,entry.intent))) fail('source_unavailable');
+        if (!matches(source,inspectInside(source.ref,entry.intent))) fail('source_unavailable');
       }
     };
     const checkAll = () => read(inside);
@@ -264,6 +297,6 @@ export function createRawSearchAuthority(database, options) {
     });
   }
   return { read,identity:{storeId:identity.store_id,fileIdentity:database.fileIdentity,ownerId:options.ownerId,readSet:options.readSet},
-    bind,authorize,inventory,check,open,validate,fingerprint,fence,checkFence,
+    bind,authorize,inventory,check,select,open,validate,fingerprint,fence,checkFence,
     inspect:(ref,intent='history')=>read(()=>inspectInside(ref,intent)) };
 }

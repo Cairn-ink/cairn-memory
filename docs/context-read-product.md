@@ -1,6 +1,6 @@
 # Product adapter: P2a–P2e
 
-The independent [local Raw index](../RAW-SEARCH-INTERFACE.md) does not enter
+The independent [local Raw index](plans/raw-search-interface.md) does not enter
 this product worker profile. Hosted Raw selection refuses until a separate
 backend and durable accounting integration exist. The existing product read,
 maintenance, broker and worker APIs described below are unchanged.
