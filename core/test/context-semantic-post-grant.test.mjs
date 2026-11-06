@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -38,9 +40,9 @@ function model(t,{maxWaitMs=100}={}) {
       return {exhausted:true,id:'synthetic',windowId:'window',generation:0,usedItems:2048,usedMs:100,usedUsd:'0'};
     }});
   t.after(async()=>{resolveProof();for(const p of pumps)await bounded(p.close());await bounded(supervisor.close());handles.delete(coordinator);});
-  function make(enter=()=> 'admitted') {
+  function make(enter=()=> 'admitted',onRelease=()=>{}) {
     const timers=new Map(),releases=[];
-    const preQuantum={version:1,maxWaitMs,createTurn(){return {enter,release(...args){releases.push(args);}};}};
+    const preQuantum={version:1,maxWaitMs,createTurn(){return {enter,release(...args){releases.push(args);onRelease(...args);}};}};
     const config={supervisor,id:randomUUID(),window:{id:'window',endsAtMonoMs:60000,usedItems:0,usedMs:0,usedUsd:'0'},budgets:{maxItems:2048,maxMs:60000,maxUsd:'0.5'},quantum:{maxItems:32,maxMs:100,maxUsd:'0.01'},pollMs:25,renewalMs:60000,projections:[{options,types:['memory']}],serviceCredential:credential,semanticServiceCredential:credential,semanticConfig:{version:'context-read-product-p2e-v1',coordinator},firstCoverageValidation:{maxTargets:1,maxMs:100},preQuantum};
     const pump=semanticPump(config,{now:()=>time,setTimer(fn,ms){const id=++serial;timers.set(id,{fn,at:time+ms});return id;},clearTimer:id=>timers.delete(id),snapshot(){},open(){throw Error('unexpected reader opening');}});
     pumps.push(pump);
@@ -89,4 +91,39 @@ test('admission expiry after quantum start permits its settlement and release',a
   assert.deepEqual(s.calls.map(c=>c.method),['firstCoverage','pumpReserve']);
   assert.ok(s.calls.every(c=>c.at>deadline));
   assert.deepEqual(p.releases,[['settled']]);assert.equal(p.pump.getStatus().error,null);
+});
+
+for(const code of ['EIO','EACCES'])test('post-grant identity '+code+' withdraws once even with reentrant close',async t=>{
+  const original=fs.lstatSync;let failStat=false,closing,p;
+  fs.lstatSync=(...args)=>{if(failStat)throw Object.assign(Error('synthetic metadata failure'),{code});return original(...args);};
+  syncBuiltinESMExports();
+  t.after(()=>{fs.lstatSync=original;syncBuiltinESMExports();});
+  const s=model(t);
+  p=s.make(()=>{failStat=true;return 'admitted';},()=>{closing=p.pump.close();});
+  // Observe a rejected callback without letting the injected fault affect cleanup.
+  const outcome=await p.fire().then(()=> 'resolved',()=> 'rejected');failStat=false;
+  // The pre-fix callback rejects; its close joins that same rejection.
+  if(outcome==='rejected')await bounded(p.pump.close()).catch(()=>{});
+  assert.equal(outcome,'resolved','metadata failures must reach owned-ticket failure handling');
+  await bounded(closing);await bounded(p.pump.close());await bounded(p.pump.completion);
+  assert.deepEqual(p.releases,[['withdrawn']]);
+  assert.equal(p.pump.getStatus().state,'failed');
+  assert.equal(p.pump.getStatus().error,'reader_failed');
+  assert.deepEqual(s.calls,[]);assert.deepEqual(s.buffers,[],'no quantum starts');
+});
+
+for(const offset of [1,0])test('post-grant identity lookup crosses admission deadline at offset '+offset,async t=>{
+  const original=fs.lstatSync;let postGrant=false,deadline,s,lookups=0;
+  fs.lstatSync=(...args)=>{if(postGrant){lookups++;s.set(deadline+offset);}return original(...args);};
+  syncBuiltinESMExports();
+  t.after(()=>{fs.lstatSync=original;syncBuiltinESMExports();});
+  s=model(t);const p=s.make(({untilMonoMs})=>{
+    deadline=untilMonoMs;queueMicrotask(()=>{postGrant=true;});return 'admitted';
+  });
+  try{await p.fire();}finally{postGrant=false;}
+  assert.deepEqual(s.calls,[],'blocking metadata validation must precede the fresh admission clock');
+  assert.deepEqual(s.buffers,[],'no quantum starts');
+  assert.equal(lookups,2,'one identity capture probes the sidecar and its directory once');
+  assert.deepEqual(p.releases,[['declined','wait_expired']]);
+  assert.equal(p.pump.getStatus().error,null);assert.equal(p.pump.getStatus().usedMs,0);
 });

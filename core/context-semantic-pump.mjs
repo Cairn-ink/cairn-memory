@@ -254,20 +254,28 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,admit=admitM
     if(pendingAdmission===pending)pendingAdmission=undefined;
     if(result.status==='failed'){turnFailure(result.error);return;}
     if(result.status!=='admitted'){retryNotBefore=now()+spacing;return;}
-    const ticket=result.ticket,admittedAt=now();
-    let reason;
-    if(stopped||error)reason='stopped';
-    else if(generation!==enteredGeneration)reason='generation_changed';
-    else if(dutyEnd()-now()<turnMs())reason='renewal_expired';
-    else if(exhausted())reason='budget_exhausted';
-    else if(now()<lastTick+spacing)reason='spacing';
-    else if(epoch!==residentEpoch||plan()[0]!==index)reason='lane_changed';
-    if(turns.isPoisoned(maintenanceAdmissionIdentity((slot.p??projections[0]).options))){reason??='stopped';error='reader_failed';}
-    if(!reason&&(result.waitExpired||admittedAt>=untilMonoMs))reason='wait_expired';
+    const ticket=result.ticket;
+    let reason,portUnchanged;
+    try{
+      if(stopped||error)reason='stopped';
+      else if(generation!==enteredGeneration)reason='generation_changed';
+      else if(dutyEnd()-now()<turnMs())reason='renewal_expired';
+      else if(exhausted())reason='budget_exhausted';
+      else if(now()<lastTick+spacing)reason='spacing';
+      else if(epoch!==residentEpoch||plan()[0]!==index)reason='lane_changed';
+      const currentIdentity=maintenanceAdmissionIdentity((slot.p??projections[0]).options);
+      if(turns.isPoisoned(currentIdentity)){reason??='stopped';error='reader_failed';}
+      if(!reason){
+        portUnchanged=turns.portUnchanged();
+        if(portUnchanged)turns.bindIdentity(ticket,currentIdentity);
+        // All metadata/port validation precedes this sample. Expiry retains
+        // its decline precedence, including over a changed port.
+        const admittedAt=now();
+        if(result.waitExpired||admittedAt>=untilMonoMs)reason='wait_expired';
+      }
+    }catch{releaseTurn(ticket,'withdrawn');turnFailure('reader_failed');return;}
     if(reason){retryNotBefore=now()+spacing;releaseTurn(ticket,'declined',reason);if(error)turnFailure(error);return;}
-    if(!turns.portUnchanged()){releaseTurn(ticket,'withdrawn');turnFailure('authority_required');return;}
-    try{turns.bindIdentity(ticket,maintenanceAdmissionIdentity((slot.p??projections[0]).options));}
-    catch{releaseTurn(ticket,'withdrawn');turnFailure('reader_failed');return;}
+    if(!portUnchanged){releaseTurn(ticket,'withdrawn');turnFailure('authority_required');return;}
     return runSelected(index,slot,ticket);
   }
   function interval(count){
