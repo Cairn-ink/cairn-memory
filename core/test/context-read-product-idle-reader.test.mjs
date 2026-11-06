@@ -78,13 +78,13 @@ for(const release of [false,true])test(`real Worker: retained idle handle ${rele
       checkedFirst=true;
       assert.equal(pump.getStatus().state,'active');
       const d=maintenancePumpDiagnostic(pump.getStatus());
-      assert.equal(d.admission.find(x=>x?.count===1)?.cause,'admission_no_progress');
+      assert.deepEqual(d.admission[0]?.noProgress,{lane:0,count:1});
       assert.equal(control[1],0,'first refusal never invokes replacement');
       if(release)await reader.close();
     }
     if(release&&observations>=2)break;
   }
-  if(release){assert.equal(pump.getStatus().error,null);assert.ok(observations>=2,'both lanes converge');assert.equal(control[1],1);assert.equal(control[2],0);assert.ok(required<3);assert.ok(maintenancePumpDiagnostic(pump.getStatus()).admission.every(x=>x?.cause!=='admission_no_progress'),'accepted observations reset each lane');}
+  if(release){assert.equal(pump.getStatus().error,null);assert.ok(observations>=2,'both lanes converge');assert.equal(control[1],1);assert.equal(control[2],0);assert.ok(required<3);assert.ok(maintenancePumpDiagnostic(pump.getStatus()).admission.every(x=>x?.noProgress===undefined),'accepted observations reset each lane');}
   else{
     const status=await pump.completion,d=maintenancePumpDiagnostic(status);
     assert.equal(status.state,'failed');assert.equal(status.error,'reader_failed');
