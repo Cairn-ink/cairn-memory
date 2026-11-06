@@ -1839,3 +1839,19 @@ sidecar or its companions.
 Replacement waits until no other connection for that store is open in the
 process; each refusal counts as a no-progress admission cycle until those
 handles close. The lifecycle lock excludes other processes’ active operations.
+
+## Lexical checkpoint admission (amendment v2.3, 2026-11-06)
+
+Lexical work turns price the complete next checkpoint transaction before
+starting it: begin, bounded page or reset work, freshness checks, signed save
+and commit, followed by the final fresh canonical observation and delivery
+tail. Handle-local wall-cost high-water marks start with conservative defaults;
+a transaction that cannot fit with that tail yields the turn with its existing
+progress. Selection, generation setup, verification, publication and cleanup
+writes use the same admission gate. The final snapshot and publication proof
+still run after a yield.
+
+The host quantum and its existing reserve are unchanged. An unseen, indivisible
+commit that alone takes longer than the quantum can still overrun it; pricing
+cannot interrupt a native commit. SQLite durability, signed checkpoint semantics
+and failure reservations remain unchanged.
