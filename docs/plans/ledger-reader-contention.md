@@ -146,7 +146,7 @@ Final gates on both Node 22.16.0 and 24.15.0:
 The live-evidence opt-in skips are not an installed-runtime pass claim. Native
 gates used the existing pinned synthetic installation with
 `CAIRN_MEM0_NATIVE_VENV_ROOT=/tmp/cairn-mem0-preflight.vDNO3z/venv` and
-`CAIRN_MEM0_NATIVE_PYTHON_ROOT=/home/chichieh/.local/share/uv/python/cpython-3.11.12-linux-x86_64-gnu`.
+`CAIRN_MEM0_NATIVE_PYTHON_ROOT=~/.local/share/uv/python/cpython-3.11.12-linux-x86_64-gnu`.
 Adapter and maintainer tooling were installed from their existing lockfiles.
 Logs are `/tmp/ledger-reader-final-{22.16.0,24.15.0}-<script>.log`; earlier failed
 budget logs remain separately at `/tmp/ledger-reader-{22.16.0,24.15.0}-test:experiment-budget.log`.

@@ -5,7 +5,7 @@ corrected source/installed acceptance and all22 affected correction commands pas
 on Node22.16/24.15. Original red evidence remains. New exact-commit acceptance,
 renewed Standards/Spec review and latest-head CI remain pending at this checkpoint.
 Base: 363c1da01296e892fed94a1074edd774ede37733, ready/unmerged parent PR #465.
-Worktree: /home/chichieh/Github/cairn-memory-worktrees/raw-local-rearm.
+Worktree: ~/Github/cairn-memory-worktrees/raw-local-rearm.
 Branch: feat/raw-local-rearm. This packet has no PR yet.
 Main owns this contract and independent acceptance. One actual GPT6.1Sol/high
 worker owns implementation; separate nonauthor Standards/Spec review follows.

@@ -6,7 +6,7 @@ Fixed dependency: `98ef7916072e63e777c0cec21b4f5a28794c39ee`, P3c
 acceptance and independent Standards/Spec reviews passed. All 31 latest-head
 remote checks passed on that same candidate; the PR is mergeable and ready,
 not merged. The synthetic merge tree equals the reviewed candidate tree.
-Worktree: `/home/chichieh/Github/cairn-memory-worktrees/raw-local-v1-producer`.
+Worktree: `~/Github/cairn-memory-worktrees/raw-local-v1-producer`.
 Branch: `feat/raw-local-v1-producer`.
 Owner: primary for contract/integration/acceptance; one GPT6.1Sol/high worker
 for implementation; separate non-author reviewers for both axes.

@@ -172,8 +172,8 @@ key-path checks on both runtimes and the installed source-qualified path on
 Node22.16; Node24 capacity totals match the worker's Node22 report.
 
 M7 used explicit PATH prefixes
-`/home/chichieh/.nvm/versions/node/v22.16.0/bin` and
-`/home/chichieh/.nvm/versions/node/v24.15.0/bin`. Locked isolated OpenAI, MCP
+`~/.nvm/versions/node/v22.16.0/bin` and
+`~/.nvm/versions/node/v24.15.0/bin`. Locked isolated OpenAI, MCP
 and `tools/plugin-validation` dependencies were installed; public metadata cache
 was prepared with `node packaging/prepare-cache.mjs` per install documentation.
 No provider or operational ledger was accessed. All tests used synthetic stores

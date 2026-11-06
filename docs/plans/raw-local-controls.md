@@ -4,7 +4,7 @@ Status: implementation authorized for this bounded synthetic-local packet.
 Fixed dependent base: `1824f81ef77321613907f56565c0c261d55d04f5`
 ([B2a PR #458](https://github.com/Cairn-ink/cairn-memory/pull/458)).
 Branch: `feat/raw-local-controls`.
-Worktree: `/home/chichieh/Github/cairn-memory-worktrees/raw-local-controls`.
+Worktree: `~/Github/cairn-memory-worktrees/raw-local-controls`.
 Evidence: `/tmp/cairn-raw-b2b-evidence.CV8jdu`.
 Main at creation: `cd6d1ad32ac3d6f5926c6846e8c6d27645bb7c9a`.
 
