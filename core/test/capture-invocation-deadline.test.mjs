@@ -20,7 +20,6 @@ const input = (eventId, content = `Synthetic ${eventId} source.`, causal) => ({ 
   client: 'deadline-client', eventId, sessionId: 'deadline-session',
   messages: [{ id: `message-${eventId}`, role: 'user', content }],
   ...(causal ? { causal } : {}) });
-const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const pause = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 const scripted = (observe = () => {}) => ({ contextWindow: 8192, countTokens: () => 1,
   extract: ({ input: request, signal }) => { observe('extract', signal); return { items: [{
@@ -110,38 +109,13 @@ test('D2 monotonic budget checks before scheduled adapter invocation and after t
   }
 });
 
-test('D2/D4 late extraction is ignored, core signal provenance is private, and another capture is independent', async t => {
-  let release;
-  let savedSignal;
-  let classifyCalls = 0;
-  const model = scripted();
-  model.extract = ({ input: request, signal }) => {
-    if (request.messages[0].content.includes('stalled')) {
-      savedSignal = signal;
-      return new Promise(resolve => { release = resolve; });
-    }
-    return { items: [{ content: request.messages[0].content, kind: 'fact',
-      confidence: 0.8, sourceIndices: [0] }] };
-  };
-  model.classify = ({ input: request }) => {
-    classifyCalls++;
-    return { items: request.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) };
-  };
-  const { core, db } = fixture(t, { model, captureDeadlineMs: 1_000 });
-  const pending = core.capture(input('stalled'));
-  assert.equal((await pending).error.code, 'model_timeout');
-  assert.equal(savedSignal.aborted, true);
-  assert.equal(isCoreModelDeadlineSignal(savedSignal), true);
-  assert.equal(isCoreModelDeadlineSignal(AbortSignal.abort('model_timeout')), false);
-  assert.equal(count(db, 'memories'), 0);
-  assert.equal(count(db, 'receipts'), 0);
-  release({ items: [{ content: 'Late synthetic answer.', kind: 'fact',
-    confidence: 0.8, sourceIndices: [0] }] });
-  await wait(10);
-  assert.equal(count(db, 'memories'), 0);
-  assert.equal(classifyCalls, 0);
-  assert.equal(ok(await core.capture(input('later'))).classification.status, 'applied');
-  assert.equal(classifyCalls, 1);
+test('D2/D4 late extraction is ignored, core signal provenance is private, and another capture is independent', () => {
+  const child = fileURLToPath(new URL('../testing/capture-late-extraction-clock-child.mjs', import.meta.url));
+  const actual = spawnSync(process.execPath, [child],
+    { encoding: 'utf8', env: {}, timeout: 10_000 });
+  assert.equal(actual.status, 0, actual.stderr);
+  assert.deepEqual(JSON.parse(actual.stdout), { timeout: true, aborted: true,
+    privateProvenance: true, classifyCalls: 1, memories: 1, receipts: 1 });
 });
 
 test('D4 post-admission classifier expiry retains receipts and cold failed journal without later rationale', async t => {
