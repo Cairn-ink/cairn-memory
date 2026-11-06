@@ -65,3 +65,36 @@ test('legacy owner-wide action collisions refuse migration without adopting an a
   await assert.rejects(migrateCardLineage({path:f.path,backupPath:f.backupPath,expected:{storeId:f.storeId,base:23},quiescence}),/action_conflict/);
   assert.deepEqual(readSqliteFixture(f.path),bytes);
 });
+
+
+for(const currentBody of [false,true])test(`installed correction denials count as known-suppressed during lineage migration, current body ${currentBody}`,async t=>{
+  const f=safetyFixture(t,23);await f.migrate();
+  const host=lineageHost(),core=openMemoryCore({path:f.path,privateCards:host.options});
+  const memory=ok(core.admit({namespace:ns,memory:{content:'Synthetic original',kind:'fact'},receipts:[receipt('original')]})).memory;
+  let card=ok(host.call(core,'createCardDraft',{namespace:ns,actionId:'draft',drafting:'authored',input:{title:'Synthetic title',body:'Synthetic old body',
+    memoryRefs:[{type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision}],sourcePolicy:'retained-receipts-v1'}}));
+  card=ok(host.call(core,'confirmCardDraft',{namespace:ns,actionId:'confirm',cardId:card.id,expectedRevision:card.revision}));
+  const corrected=ok(core.correct({namespace:ns,memoryId:memory.id,expectedRevision:memory.revision,content:'Synthetic corrected',kind:'fact',receipt:receipt('corrected')})).memory;
+  if(currentBody)ok(host.call(core,'createCardDraft',{actionId:'current-body',drafting:'authored',input:{title:'Synthetic current title',body:'Synthetic current body',
+    memoryRefs:[{type:'memory',namespace:ns,memoryId:corrected.id,revision:corrected.revision}],sourcePolicy:'retained-receipts-v1'}}));
+  core.close();
+  const before=f.connect(),domain=before.prepare('SELECT suppression_domain FROM content_safety_control').get().suppression_domain;
+  const facts=before.prepare('SELECT * FROM content_suppressions').all(),epochs=before.prepare('SELECT * FROM owner_suppression_epochs').all();
+  const stored=before.prepare('SELECT title,body,body_revision,state FROM private_cards WHERE id=?').get(card.id);
+  before.close();copySqliteFixture(f.path,f.backupPath);
+  const result=await migrateCardLineage({path:f.path,backupPath:f.backupPath,expected:{storeId:f.storeId,base:23,suppressionDomain:domain},quiescence});
+  t.diagnostic(JSON.stringify({facts,counts:result.counts}));
+  assert.equal(result.counts.knownSuppressed,1,'existing canonical correction fact must win over unknown legacy completeness');
+  assert.deepEqual(result.counts,{complete:0,unknown:Number(currentBody),knownSuppressed:1});
+  const after=f.connect();t.after(()=>after.close());
+  assert.deepEqual(after.prepare('SELECT * FROM content_suppressions').all(),facts);
+  assert.deepEqual(after.prepare('SELECT * FROM owner_suppression_epochs').all(),epochs);
+  assert.deepEqual(after.prepare('SELECT title,body,body_revision,state FROM private_cards WHERE id=?').get(card.id),stored);
+  const headers=after.prepare('SELECT completeness,origin FROM card_body_provenance WHERE card_id=?').all(card.id);
+  assert.deepEqual(headers.map(h=>[h.completeness,h.origin]),[['unknown','legacy-unknown']]);
+  assert.ok(after.prepare("SELECT 1 FROM card_body_sources WHERE card_id=? AND source_kind='memory'").get(card.id));
+  assert.ok(after.prepare("SELECT 1 FROM card_body_sources WHERE card_id=? AND source_kind='receipt'").get(card.id));
+  const reopened=openMemoryCore({path:f.path,privateCards:host.options});t.after(()=>reopened.close());
+  assert.equal(ok(host.call(reopened,'getCard',{cardId:card.id})).card,null,'known suppression does not grant legacy completeness');
+  assert.deepEqual(ok(host.call(reopened,'listCards',{states:['draft','confirmed']})).cards,[]);
+});
