@@ -1866,9 +1866,10 @@ cannot interrupt a native commit. SQLite durability, signed checkpoint semantics
 and failure reservations remain unchanged.
 
 Fix round 1: pricing may decline only additional checkpoint transactions in a
-work turn. The first checkpoint, verification or page transaction is always
-admitted under the existing rules, even when its estimate cannot fit; selection
-retention before that checkpoint does not consume its admission. An indivisible
+work turn. The first work transaction (page/comparison, verification, publication
+or cleanup) is always admitted under the existing rules, even when its estimate
+cannot fit; setup-only transactions, including selection retention and generation
+initialization, do not consume its admission. An indivisible
 slow first commit can therefore overrun exactly as before. For each complete
 transaction, remaining transaction, commit and doubled observation-tail sample,
 the handle-local estimate is the maximum of its seed, the new sample and half

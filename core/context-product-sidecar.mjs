@@ -196,9 +196,9 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   let comparisonBase=null, reuseOnlyWork=false;
   const costs=checkpointCost(now), checkpointYield=Symbol('checkpoint yield');
   let workQuantum=null, checkpointStarted, observationStarted, checkpointAttempted=false;
-  // Pricing only limits additional transactions in this turn. The first
-  // checkpoint retains the base engine's admission, even after a slow commit.
-  // Selection retention precedes that checkpoint and cannot consume its slot.
+  // Pricing only limits later work transactions in this turn. The first
+  // retains the base engine's admission, even after a slow commit. Setup-only
+  // writes (selection retention and generation initialization) cannot consume it.
   const admitCheckpoint=(started=checkpointStarted)=>!workQuantum || !checkpointAttempted || costs.admit(workQuantum,started);
   let sideFormat, side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0, discardAfterGuard=false, guardWritable=false;
   function failed(error, wasWritable) {
@@ -267,6 +267,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   };
   function close() { discardAfterGuard=true;if (side?.isOpen) side.close(); handles?.closed(); side = null; metadata = null; sideFiles = null; discardAfterGuard=false; }
   function write(work, kind='setup', beforeCommit, checkpoint=true) {
+    // Setup-only callers opt out explicitly; ambiguous writes count as work.
     // All lexical write starts share this gate, including setup, GC and the
     // qualified verification fallback. A denied start leaves signed work intact.
     if(!admitCheckpoint())throw checkpointYield;
@@ -952,7 +953,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         side.prepare('INSERT INTO generations(id,owner,projection,incarnation,sequence,base_sequence,checkpoint,kind,fences,access,phase,last_key,base_id,verify,manifest,published,seed) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)').run(g.id,p.readSet[0].ownerId,g.projection,g.incarnation,g.sequence,g.base_sequence,0,g.kind,g.fences,g.access,0,'',g.base_id,JSON.stringify(g.verify),null,g.seed);
         g.storage_id=side.prepare('SELECT storage_id FROM generations WHERE id=?').get(g.id).storage_id;
         side.prepare("INSERT INTO statistics(generation,term_id,term,df,n,total_length) VALUES(?,0,'',0,0,0)").run(g.storage_id); save(g,t);
-      });
+      },'setup',undefined,false);
     } else {
       g.verify=JSON.parse(g.verify);
       if(mergeOrder && workStatus.retargetable===g.id) {

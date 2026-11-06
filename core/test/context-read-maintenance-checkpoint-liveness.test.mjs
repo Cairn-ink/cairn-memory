@@ -4,6 +4,29 @@ import { DatabaseSync } from 'node:sqlite';
 import { fixture } from '../testing/context-read-fixture.mjs';
 import { local, workRow, inspect, snapshot, authenticate } from '../testing/context-product-verification-fixture.mjs';
 
+for(const scanCost of [100,250])test(`setup-only transactions preserve first-work admission after a ${scanCost}ms scan`,t=>{
+  const f=fixture(t);
+  for(let i=0;i<9;i++)f.admit('setup admission orchard '+i);
+  const a=local(f.path);f.workspace.defer(()=>a.close());
+  let clock=0,items=0;
+  a.setHook(point=>{
+    if(point==='opened')clock+=600;
+    if(point==='scan')clock+=scanCost;
+    if(point==='item'){clock+=scanCost===250?1:70;items++;}
+    if(point==='checkpoint')clock+=20;
+    a.setClock(clock);
+  });
+  const progress=a.step(),commits=a.attribution.snapshot();
+  assert.equal(commits.setupCommits,2,'selection retention and generation initialization precede the page');
+  assert.equal(commits.comparisonCommits,1,'the first work transaction is admitted after setup');
+  assert.ok(items>0&&items<9,'the first turn makes partial item progress');
+  assert.equal(progress.transformed,items);
+  const durable=inspect(f.path,snapshot);authenticate(a,durable);
+  assert.equal(durable.documents.length,items);
+  assert.equal(durable.generation.checkpoint,1);
+  t.diagnostic(JSON.stringify({scanCost,items,setupCommits:commits.setupCommits,workCommits:commits.comparisonCommits,checkpoint:durable.generation.checkpoint}));
+});
+
 test('one indivisible commit stall cannot refuse later turns or prevent publication',t=>{
   const f=fixture(t);
   for(let i=0;i<320;i++)f.admit('checkpoint liveness orchard '+i);
