@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { lineageFixture,ns,ok,receipt } from '../testing/card-lineage-fixture.mjs';
 import { transaction } from '../database.mjs';
-import { cardBodyDigest,cardLineageStampInside,sealCardBodyInside,collectCardBodySourcesInside,exactCardInside } from '../card-lineage.mjs';
+import { cardBodyDigest,cardLineageStampInside,cardLineageNamespaceInside,sealCardBodyInside,collectCardBodySourcesInside,exactCardInside } from '../card-lineage.mjs';
 import { sourceReadSafety } from '../content-safety.mjs';
 import { reserveContentIdentityInside } from '../content-suppression-storage.mjs';
 
@@ -112,4 +112,19 @@ test('receipt closure binds exact parent Memory bytes independently of metadata 
   assert.equal(f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(memory.id).n,1);
   assert.equal(f.db.prepare('SELECT count(*) n FROM content_suppressions').get().n,0);
   assert.equal(ok(f.call('getCard',{cardId:card.id})).card,null);
+});
+
+test('retired body history does not exhaust a live publication fence',async t=>{
+  const f=await lineageFixture(t),a=f.note('source'),card=f.draft([a]);
+  const sources=collectCardBodySourcesInside(f.db,f.identity,ns,[a],()=>true),old=cardLineageNamespaceInside(f.db,ns);
+  transaction(f.db,()=>{
+    const next=f.db.prepare('UPDATE private_cards SET revision=revision+1,body_revision=body_revision+1 WHERE id=?');
+    for(let i=0;i<4097;i++) {
+      next.run(card.id);
+      sealCardBodyInside(f.db,{identity:f.identity,namespace:ns,cardId:card.id,newBody:true,sources});
+    }
+  });
+  assert.equal(f.db.prepare('SELECT count(*) n FROM card_body_provenance').get().n,4098);
+  assert.notDeepEqual(cardLineageNamespaceInside(f.db,ns),old);
+  assert.equal(ok(f.call('getCard',{cardId:card.id})).card.bodyRevision,4098);
 });

@@ -62,13 +62,20 @@ export function cardLineageItemInside(db,item) {
 }
 export function cardLineageNamespaceInside(db,ns) {
   if(!hasCardLineage(db))return {};
-  const rows=db.prepare(`SELECT card_id,body_revision,provenance_revision,body_digest,provenance_digest
-    FROM card_body_provenance WHERE ${where} ORDER BY card_id,body_revision,provenance_revision LIMIT 4097`).all(...boundary(ns));
+  // Retained history is append-only. Fence the latest authority of live Cards,
+  // so retired bodies do not consume the publication's live-item budget.
+  const rows=db.prepare(`SELECT c.id,c.revision,c.body_revision AS pointer_body_revision,c.state,
+    p.body_revision,p.provenance_revision,p.body_digest,p.provenance_digest
+    FROM private_cards c LEFT JOIN card_body_provenance p
+      ON (p.owner_id,p.scope,p.project_id,p.card_id)=(c.owner_id,c.scope,c.project_id,c.id)
+      AND (p.body_revision,p.provenance_revision)=(SELECT h.body_revision,h.provenance_revision
+        FROM card_body_provenance h WHERE (h.owner_id,h.scope,h.project_id,h.card_id)=(c.owner_id,c.scope,c.project_id,c.id)
+        ORDER BY h.body_revision DESC,h.provenance_revision DESC LIMIT 1)
+    WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state IN ('draft','confirmed')
+    ORDER BY c.id LIMIT 4097`).all(...boundary(ns));
   if(rows.length>4096||Buffer.byteLength(JSON.stringify(rows))>8*1024*1024)fail('source_budget_exceeded');
   const identity=db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get();
-  const pointers=db.prepare(`SELECT id,revision,body_revision,state FROM private_cards WHERE ${where} ORDER BY id LIMIT 4097`).all(...boundary(ns));
-  if(pointers.length>4096)fail('source_budget_exceeded');
-  return {lineage:lineageHmac(identity,'card-publication-s2-v1',[identity.storeId,ns,rows,pointers])};
+  return {lineage:lineageHmac(identity,'card-publication-s2-v1',[identity.storeId,ns,rows])};
 }
 const headers = (db,ns,id) => db.prepare(`SELECT * FROM card_body_provenance WHERE ${where}
   AND card_id=? ORDER BY body_revision DESC,provenance_revision DESC LIMIT 1`).get(...boundary(ns),id);
