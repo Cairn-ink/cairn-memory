@@ -1,5 +1,6 @@
 import { testClock } from '../testing/context-product-test-clock.mjs';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
@@ -158,4 +159,14 @@ test('identity failure appends to the private vocabulary without changing stall 
     'open_exceeds_quantum', 'maintainer_identity_unrecognized', 'admission_no_progress']);
   assert.deepEqual(maintenanceKinds, ['idle', 'scan', 'item', 'verify', 'publication', 'gc', 'vacuum', 'begin', 'commit', 'save',
     'canonical-read', 'serialize', 'admission']);
+});
+
+// Pin both bridges at the factory boundary as well as the real lexical and
+// semantic dispatch tests. The factory must forward its own captured values.
+test('semantic delegation forwards the same open, admit and work factory seams', () => {
+  const source = readFileSync(new URL('../context-product-pump.mjs', import.meta.url), 'utf8');
+  const delegations = source.match(/return semanticPump\(original,.*$/gm);
+  assert.deepEqual(delegations, [
+    'return semanticPump(original,{now,setTimer,clearTimer,open,admit,work,snapshot:(value,diagnostic)=>pumpDiagnostics.set(value,diagnostic)});',
+  ]);
 });

@@ -793,9 +793,11 @@ export function createMemoryCore(input, internal) {
       // The full page can lose its cursor/change flags, so probe it separately.
       // Only [1, capacity - 1] has the uniform token-budget envelope shape.
       let fitted = probe(capacity);
+      // Keep a one-row budget miss to two counts before searching lower fits.
+      if (!fitted && capacity > 1) fitted = probe(capacity - 1);
       if (!fitted) {
         let low = 1;
-        let high = capacity - 1;
+        let high = capacity - 2;
         while (low <= high) {
           const take = low + Math.floor((high - low) / 2);
           const value = probe(take);

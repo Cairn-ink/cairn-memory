@@ -1,0 +1,716 @@
+{
+  "sourceRevision": "c4e6b6e0",
+  "evidence": {
+    "output": {
+      "state": "budget_exhausted",
+      "windowId": "window",
+      "usedItems": 1,
+      "usedMs": 100,
+      "usedUsd": "0",
+      "maxItems": 100,
+      "maxMs": 60000,
+      "maxUsd": "0.5",
+      "error": null
+    },
+    "messages": [
+      "firstCoverage",
+      "pumpReserve"
+    ],
+    "allocations": 0,
+    "native": {
+      "allocations": [
+        4,
+        8,
+        8,
+        4,
+        296,
+        10280,
+        16,
+        56,
+        4096,
+        10280,
+        8,
+        8,
+        8,
+        10280,
+        8,
+        8,
+        8,
+        10280,
+        8,
+        8,
+        8,
+        8,
+        10280,
+        8,
+        8,
+        8,
+        8,
+        10280,
+        8,
+        8,
+        8,
+        8,
+        10280,
+        8,
+        8
+      ],
+      "statements": [
+        {
+          "begun": 238,
+          "completed": 238,
+          "failures": 0
+        },
+        {
+          "begun": 99,
+          "completed": 99,
+          "failures": 0
+        },
+        {
+          "begun": 181,
+          "completed": 181,
+          "failures": 0
+        },
+        {
+          "begun": 74,
+          "completed": 74,
+          "failures": 0
+        },
+        {
+          "begun": 500,
+          "completed": 500,
+          "failures": 0
+        },
+        {
+          "begun": 174,
+          "completed": 174,
+          "failures": 0
+        },
+        {
+          "begun": 506,
+          "completed": 506,
+          "failures": 0
+        }
+      ],
+      "messages": [
+        {
+          "keys": [
+            "kind",
+            "operation",
+            "sidecarHandles"
+          ]
+        },
+        {
+          "method": "getContextIndexStatus",
+          "keys": [
+            "credential",
+            "frame",
+            "input",
+            "maintenanceOrdinal",
+            "method",
+            "operation",
+            "request"
+          ],
+          "input": {
+            "deadlineMs": 500,
+            "intent": "current",
+            "readSet": [
+              {
+                "ownerId": "synthetic-u5a",
+                "projectId": "test",
+                "scope": "project"
+              }
+            ],
+            "types": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "method": "refreshContextIndex",
+          "keys": [
+            "credential",
+            "frame",
+            "input",
+            "maintenanceOrdinal",
+            "method",
+            "operation",
+            "request"
+          ],
+          "input": {
+            "budget": {
+              "maxItems": 1,
+              "maxMs": 500
+            },
+            "intent": "current",
+            "mode": "lexical",
+            "readSet": [
+              {
+                "ownerId": "synthetic-u5a",
+                "projectId": "test",
+                "scope": "project"
+              }
+            ],
+            "types": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "method": "getContextIndexStatus",
+          "keys": [
+            "credential",
+            "frame",
+            "input",
+            "maintenanceOrdinal",
+            "method",
+            "operation",
+            "request"
+          ],
+          "input": {
+            "deadlineMs": 500,
+            "intent": "history",
+            "readSet": [
+              {
+                "ownerId": "synthetic-u5a",
+                "projectId": "test",
+                "scope": "project"
+              }
+            ],
+            "types": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "method": "refreshContextIndex",
+          "keys": [
+            "credential",
+            "frame",
+            "input",
+            "maintenanceOrdinal",
+            "method",
+            "operation",
+            "request"
+          ],
+          "input": {
+            "budget": {
+              "maxItems": 1,
+              "maxMs": 500,
+              "maxUsd": "0.01"
+            },
+            "intent": "current",
+            "mode": "embeddings",
+            "readSet": [
+              {
+                "ownerId": "synthetic-u5a",
+                "projectId": "test",
+                "scope": "project"
+              }
+            ],
+            "types": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "method": "refreshContextIndex",
+          "keys": [
+            "credential",
+            "frame",
+            "input",
+            "maintenanceOrdinal",
+            "method",
+            "operation",
+            "request"
+          ],
+          "input": {
+            "budget": {
+              "maxItems": 1,
+              "maxMs": 500
+            },
+            "intent": "history",
+            "mode": "lexical",
+            "readSet": [
+              {
+                "ownerId": "synthetic-u5a",
+                "projectId": "test",
+                "scope": "project"
+              }
+            ],
+            "types": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "method": "refreshContextIndex",
+          "keys": [
+            "credential",
+            "frame",
+            "input",
+            "maintenanceOrdinal",
+            "method",
+            "operation",
+            "request"
+          ],
+          "input": {
+            "budget": {
+              "maxItems": 1,
+              "maxMs": 500,
+              "maxUsd": "0.01"
+            },
+            "intent": "history",
+            "mode": "embeddings",
+            "readSet": [
+              {
+                "ownerId": "synthetic-u5a",
+                "projectId": "test",
+                "scope": "project"
+              }
+            ],
+            "types": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "method": "close",
+          "keys": [
+            "method"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "ok": true,
+          "value": null
+        },
+        {
+          "ok": true,
+          "value": {
+            "profile": "context-read-product-v1.1",
+            "lexical": {
+              "state": "ready",
+              "reason": null,
+              "progress": {
+                "phase": 4,
+                "checkpoint": 5,
+                "sequence": 1,
+                "baseSequence": 0
+              }
+            },
+            "semantic": {
+              "state": "partial_coverage",
+              "reason": "missing_vectors",
+              "extension": "context-read-product-p2e-v1",
+              "enabled": true,
+              "ownerPolicyRevision": 1,
+              "identity": {
+                "provider": "openai",
+                "model": "text-embedding-3-small",
+                "id": "openai:text-embedding-3-small:ec5de0ef28028972",
+                "revision": "provider-unversioned",
+                "dimensions": 1536,
+                "normalization": "l2"
+              },
+              "coverage": {
+                "status": "partial",
+                "byType": {
+                  "memory": {
+                    "eligible": null,
+                    "embedded": null
+                  }
+                }
+              }
+            },
+            "coverage": {
+              "status": "complete",
+              "freshness": "current",
+              "byType": {
+                "memory": {
+                  "eligible": 2,
+                  "indexed": 2,
+                  "embedded": null
+                }
+              },
+              "namespaces": {
+                "policy": "recent-projects-v1",
+                "selectionRevision": "synthetic",
+                "requestedNamespaces": 1,
+                "selectedNamespaces": 1,
+                "omittedNamespaces": 0
+              }
+            }
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "complete",
+            "progress": {
+              "lexical": {
+                "phase": 4,
+                "checkpoint": 5,
+                "sequence": 1,
+                "baseSequence": 0
+              },
+              "transformed": 0,
+              "embeddingAttempts": 0,
+              "embedded": 0
+            },
+            "coverage": {
+              "status": "complete",
+              "freshness": "current",
+              "byType": {
+                "memory": {
+                  "eligible": 2,
+                  "indexed": 2,
+                  "embedded": null,
+                  "scanned": 0,
+                  "embeddedFraction": null,
+                  "scannedFraction": 0
+                }
+              },
+              "namespaces": {
+                "policy": "recent-projects-v1",
+                "selectionRevision": "synthetic",
+                "requestedNamespaces": 1,
+                "selectedNamespaces": 1,
+                "omittedNamespaces": 0
+              },
+              "maintenance": {
+                "available": true,
+                "state": "ready",
+                "buildState": "ready",
+                "reason": null,
+                "progress": {
+                  "phase": 4,
+                  "checkpoint": 5,
+                  "sequence": 1,
+                  "baseSequence": 0
+                }
+              },
+              "depths": {
+                "lexical": 24,
+                "semantic": 0
+              },
+              "omitted": {
+                "lexical": null,
+                "semantic": null,
+                "horizon": null
+              },
+              "stops": {
+                "deadline": false,
+                "budget": false
+              }
+            },
+            "channels": {
+              "lexical": {
+                "state": "ready",
+                "causes": []
+              },
+              "semantic": {
+                "state": "disabled",
+                "causes": [
+                  "disabled"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "profile": "context-read-product-v1.1",
+            "lexical": {
+              "state": "ready",
+              "reason": null,
+              "progress": {
+                "phase": 4,
+                "checkpoint": 5,
+                "sequence": 1,
+                "baseSequence": 0
+              }
+            },
+            "semantic": {
+              "state": "partial_coverage",
+              "reason": "missing_vectors",
+              "extension": "context-read-product-p2e-v1",
+              "enabled": true,
+              "ownerPolicyRevision": 1,
+              "identity": {
+                "provider": "openai",
+                "model": "text-embedding-3-small",
+                "id": "openai:text-embedding-3-small:ec5de0ef28028972",
+                "revision": "provider-unversioned",
+                "dimensions": 1536,
+                "normalization": "l2"
+              },
+              "coverage": {
+                "status": "partial",
+                "byType": {
+                  "memory": {
+                    "eligible": null,
+                    "embedded": null
+                  }
+                }
+              }
+            },
+            "coverage": {
+              "status": "complete",
+              "freshness": "current",
+              "byType": {
+                "memory": {
+                  "eligible": 2,
+                  "indexed": 2,
+                  "embedded": null
+                }
+              },
+              "namespaces": {
+                "policy": "recent-projects-v1",
+                "selectionRevision": "synthetic",
+                "requestedNamespaces": 1,
+                "selectedNamespaces": 1,
+                "omittedNamespaces": 0
+              }
+            }
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "partial",
+            "progress": {
+              "lexical": {
+                "phase": 4,
+                "checkpoint": 5,
+                "sequence": 1,
+                "baseSequence": 0
+              },
+              "transformed": 0,
+              "embeddingAttempts": 1,
+              "embedded": 1
+            },
+            "coverage": {
+              "status": "complete",
+              "freshness": "current",
+              "byType": {
+                "memory": {
+                  "eligible": 2,
+                  "indexed": 2,
+                  "embedded": 1,
+                  "scanned": 0,
+                  "embeddedFraction": null,
+                  "scannedFraction": 0
+                }
+              },
+              "namespaces": {
+                "policy": "recent-projects-v1",
+                "selectionRevision": "synthetic",
+                "requestedNamespaces": 1,
+                "selectedNamespaces": 1,
+                "omittedNamespaces": 0
+              },
+              "maintenance": {
+                "available": true,
+                "state": "ready",
+                "buildState": "ready",
+                "reason": null,
+                "progress": {
+                  "phase": 4,
+                  "checkpoint": 5,
+                  "sequence": 1,
+                  "baseSequence": 0
+                }
+              },
+              "depths": {
+                "lexical": 24,
+                "semantic": 0
+              },
+              "omitted": {
+                "lexical": null,
+                "semantic": null,
+                "horizon": null
+              },
+              "stops": {
+                "deadline": false,
+                "budget": true
+              }
+            },
+            "channels": {
+              "lexical": {
+                "state": "ready",
+                "causes": []
+              },
+              "semantic": {
+                "state": "partial_coverage",
+                "causes": [
+                  "partial_coverage"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "complete",
+            "progress": {
+              "lexical": {
+                "phase": 4,
+                "checkpoint": 5,
+                "sequence": 1,
+                "baseSequence": 0
+              },
+              "transformed": 0,
+              "embeddingAttempts": 0,
+              "embedded": 0
+            },
+            "coverage": {
+              "status": "complete",
+              "freshness": "current",
+              "byType": {
+                "memory": {
+                  "eligible": 2,
+                  "indexed": 2,
+                  "embedded": null,
+                  "scanned": 0,
+                  "embeddedFraction": null,
+                  "scannedFraction": 0
+                }
+              },
+              "namespaces": {
+                "policy": "recent-projects-v1",
+                "selectionRevision": "synthetic",
+                "requestedNamespaces": 1,
+                "selectedNamespaces": 1,
+                "omittedNamespaces": 0
+              },
+              "maintenance": {
+                "available": true,
+                "state": "ready",
+                "buildState": "ready",
+                "reason": null,
+                "progress": {
+                  "phase": 4,
+                  "checkpoint": 5,
+                  "sequence": 1,
+                  "baseSequence": 0
+                }
+              },
+              "depths": {
+                "lexical": 24,
+                "semantic": 0
+              },
+              "omitted": {
+                "lexical": null,
+                "semantic": null,
+                "horizon": null
+              },
+              "stops": {
+                "deadline": false,
+                "budget": false
+              }
+            },
+            "channels": {
+              "lexical": {
+                "state": "ready",
+                "causes": []
+              },
+              "semantic": {
+                "state": "disabled",
+                "causes": [
+                  "disabled"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "complete",
+            "progress": {
+              "lexical": {
+                "phase": 4,
+                "checkpoint": 5,
+                "sequence": 1,
+                "baseSequence": 0
+              },
+              "transformed": 0,
+              "embeddingAttempts": 1,
+              "embedded": 1
+            },
+            "coverage": {
+              "status": "complete",
+              "freshness": "current",
+              "byType": {
+                "memory": {
+                  "eligible": 2,
+                  "indexed": 2,
+                  "embedded": 2,
+                  "scanned": 0,
+                  "embeddedFraction": null,
+                  "scannedFraction": 0
+                }
+              },
+              "namespaces": {
+                "policy": "recent-projects-v1",
+                "selectionRevision": "synthetic",
+                "requestedNamespaces": 1,
+                "selectedNamespaces": 1,
+                "omittedNamespaces": 0
+              },
+              "maintenance": {
+                "available": true,
+                "state": "ready",
+                "buildState": "ready",
+                "reason": null,
+                "progress": {
+                  "phase": 4,
+                  "checkpoint": 5,
+                  "sequence": 1,
+                  "baseSequence": 0
+                }
+              },
+              "depths": {
+                "lexical": 24,
+                "semantic": 0
+              },
+              "omitted": {
+                "lexical": null,
+                "semantic": null,
+                "horizon": null
+              },
+              "stops": {
+                "deadline": false,
+                "budget": true
+              }
+            },
+            "channels": {
+              "lexical": {
+                "state": "ready",
+                "causes": []
+              },
+              "semantic": {
+                "state": "ready",
+                "causes": []
+              }
+            }
+          }
+        }
+      ],
+      "status": {
+        "state": "stopped",
+        "usedItems": 2,
+        "usedMs": 0,
+        "usedUsd": "0.00000082",
+        "maxItems": 100,
+        "maxMs": 20000,
+        "maxUsd": "0.50",
+        "error": null
+      }
+    }
+  }
+}
