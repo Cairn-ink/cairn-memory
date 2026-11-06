@@ -66,13 +66,21 @@ if(mode==='run'){
     try{const rows=d?d.prepare(`SELECT s.intent,COUNT(d.doc) AS documents FROM publications p JOIN selections s ON s.projection=p.projection JOIN generations g ON g.id=p.generation LEFT JOIN documents d ON d.generation=g.storage_id GROUP BY s.intent ORDER BY s.intent`).all().map(r=>({...r})):[];emit('publications',{rows});process.send?.({rows});}finally{d?.close();}
     const d2=new DatabaseSync(path,{readOnly:true});try{emit('canonical',{count:d2.prepare('SELECT COUNT(*) AS n FROM memories').get().n,journal:d2.prepare('PRAGMA journal_mode').get()});}finally{d2.close();}process.disconnect?.();
   }else if(mode==='pump'){
+    const readerApi=await import(pathToFileURL(join(source,'core/context-product-reader.mjs')));
     const c=configured(t,path,readSet,{service:true});let turns=0;const replies=[];const successes=new Set();let release;const enough=new Promise(r=>release=r);
-    const wrap=(method,fn)=>async(...args)=>{emit('dispatch',{method,intent:args[1].intent});const r=await fn(...args);emit('reply',{method,intent:args[1].intent,receipt:protocol.maintenanceAdmissionReceipt?.(r)??null,status:r.value?.status,error:r.error?.code});replies.push({method,intent:args[1].intent,receipt:protocol.maintenanceAdmissionReceipt?.(r)??null});turns++;if(r.ok&&r.value?.status==='complete')successes.add(args[1].intent);if(turns>=12||successes.size===2)release();return r;};
+    const wrap=(method,fn)=>async(...args)=>{emit('dispatch',{method,intent:args[1].intent});const r=await fn(...args);emit('reply',{method,intent:args[1].intent,receipt:protocol.maintenanceAdmissionReceipt?.(r)??null,status:r.value?.status,error:r.error?.code});if(!r.ok)setImmediate(()=>emit('failed_reply',{method,intent:args[1].intent,phases:readerApi.maintenancePhaseDiagnostic(r)??null,stall:readerApi.maintenanceStallDiagnostic(r)??null}));replies.push({method,intent:args[1].intent,receipt:protocol.maintenanceAdmissionReceipt?.(r)??null});turns++;if(r.ok&&r.value?.status==='complete')successes.add(args[1].intent);if(turns>=12||successes.size===2)release();return r;};
     const deps={};if(protocol.admitMaintenance){deps.admit=wrap('admitMaintenance',protocol.admitMaintenance);deps.work=wrap('refreshMaintenance',protocol.refreshMaintenance);}else{deps.open=async options=>{const h=await api.openContextIndexMaintainer(options);return {close:()=>h.close(),refreshContextIndex:wrap('refreshContextIndex',(_h,...a)=>h.refreshContextIndex(...a)).bind(null,null)};};}
     const renew=pumpApi.createMaintenancePumpRuntime(deps),now=Number(process.hrtime.bigint())/1e6;
     const p=renew({supervisor:c.supervisor,id:randomUUID(),window:{id:randomUUID(),endsAtMonoMs:Math.floor(now)+60000,usedItems:0,usedMs:0},budgets:{maxItems:2048,maxMs:60000},quantum:{maxItems:32,maxMs:1000},pollMs:1000,renewalMs:60000,serviceCredential:c.token,projections:[{options:c.options,types:['memory']}]});
     const monitor=setInterval(()=>{const s=p.getStatus();if(s.state!=='active')release();},1000);
     const bound=setTimeout(release,16000);
-    try{await enough;await new Promise(setImmediate);const s=p.getStatus();emit('bounded_result',{turns,successes:[...successes],status:s,diagnostic:pumpApi.maintenancePumpDiagnostic(s)});assert.equal(successes.size,2,'both lanes must converge within bounded observation');}finally{clearInterval(monitor);clearTimeout(bound);await p.close();await cleanup();const final=p.getStatus();emit('closed',{status:final});process.disconnect?.();}
+    try{await enough;await new Promise(setImmediate);const s=p.getStatus();emit('bounded_result',{turns,successes:[...successes],status:s,diagnostic:pumpApi.maintenancePumpDiagnostic(s),phases:pumpApi.maintenancePumpPhaseDiagnostic(s)});assert.equal(successes.size,2,'both lanes must converge within bounded observation');}finally{
+      clearInterval(monitor);clearTimeout(bound);
+      try{await p.close();}finally{
+        try{await cleanup();}finally{
+          const final=p.getStatus();emit('closed',{status:final,diagnostic:pumpApi.maintenancePumpDiagnostic(final),phases:pumpApi.maintenancePumpPhaseDiagnostic(final)});process.disconnect?.();
+        }
+      }
+    }
   }else throw Error('bad mode');
 }
