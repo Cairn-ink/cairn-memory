@@ -59,7 +59,7 @@ async function referenceEngine(t) {
 // Count executions at execution time, independently of prepare frequency.
 // Keep statements strongly reachable through the lock probe: GC must not be
 // responsible for releasing a cursor/lock. The methods still call native get/all.
-async function measure(call, { afterReuse } = {}) {
+async function measure(call, { afterReuse, afterPrepare } = {}) {
   const prepare = DatabaseSync.prototype.prepare, exec = DatabaseSync.prototype.exec;
   const methods = new Map(['get', 'all', 'run', 'iterate'].map(key => [key, StatementSync.prototype[key]]));
   const sql = new Map(), prepares = new Map(), statements = [], uses = new Map(), connections = new Set();
@@ -81,7 +81,10 @@ async function measure(call, { afterReuse } = {}) {
   DatabaseSync.prototype.prepare = function(text) {
     const statement = prepare.call(this, text);
     prepares.set(text, (prepares.get(text) ?? 0) + 1);
-    if (discoveryKind(text)) { statements.push(statement); connections.add(this); }
+    if (discoveryKind(text)) {
+      statements.push(statement); connections.add(this);
+      afterPrepare?.(statement, discoveryKind(text));
+    }
     return statement;
   };
   DatabaseSync.prototype.exec = function(text) {
@@ -282,6 +285,55 @@ test('prepare counts: exact lazy per-namespace bound at zero, one, many and scan
   t.diagnostic('PREPARE_COUNTS ' + JSON.stringify(rows));
 });
 
+test('cache lifetime: retained discovery statements are closed after recall', {
+  skip: typeof StatementSync.prototype.close !== 'function' && typeof StatementSync.prototype[Symbol.dispose] !== 'function'
+    ? 'This runtime has no statement close/dispose API (Node 22); get() resets statements instead.' : false,
+}, async t => {
+  const f = await fixture(t, 'creation', 3);
+  const core = openMemoryCore({ path: f.path, model: model() });
+  try {
+    const row = await measure(() => core.recall({ readSet: namespaces, query: 'amber' }));
+    assert.equal(row.error, undefined);
+    ok(row.result);
+    assert.deepEqual(row.counts, { membership: 2, placement: 2 });
+    assert.equal(row.statements.length, 4);
+    for (const statement of row.statements) {
+      assert.throws(() => statement.get(), { code: 'ERR_INVALID_STATE', message: 'statement has been finalized' });
+    }
+  } finally { core.close(); }
+});
+
+test('cache cleanup: close preference, dispose fallback and errors preserve the primary failure', async t => {
+  const f = await fixture(t, 'creation', 3);
+  const runtime = createMemoryRuntime({ path: f.path });
+  try {
+    for (const disposeOnly of [false, true]) for (const primary of [false, true]) {
+      const failures = [new Error('first close failure'), new Error('second close failure')];
+      const primaryFailure = new Error('primary discovery failure'), closed = [];
+      const row = await measure(() => runtime.queryCandidateRows(internal(namespaces[0]), {
+        score: () => 1, memoryLabel: text => text,
+      }), {
+        afterPrepare(statement, kind) {
+          const nativeClose = statement.close ?? statement[Symbol.dispose];
+          const close = function() {
+            assert.equal(this, statement);
+            closed.push(kind);
+            nativeClose?.call(this);
+            throw failures[closed.length - 1];
+          };
+          statement.close = disposeOnly ? undefined : close;
+          statement[Symbol.dispose] = disposeOnly ? close : () => assert.fail('close takes precedence');
+        },
+        afterReuse(kind) { if (primary && kind === 'placement') throw primaryFailure; },
+      });
+      assert.equal(row.error, primary ? primaryFailure : failures[0]);
+      assert.deepEqual(closed, ['membership', 'placement'], 'one close failure must not skip the rest');
+      assert.deepEqual(row.releases, [{ before: 2, after: 0 }]);
+      assert.equal([...row.connections][0].isTransaction, false);
+    }
+  } finally { runtime.close(); }
+});
+
 test('cache lifetime: repeated transactions and separate connections prepare independently', async t => {
   const f = await fixture(t, 'creation', 3);
   const first = createMemoryRuntime({ path: f.path }), second = createMemoryRuntime({ path: f.path });
@@ -299,6 +351,8 @@ test('cache lifetime: repeated transactions and separate connections prepare ind
 
 // The writer is a separate process. No in-process raw database descriptor is
 // opened/closed, and all reader handles/statements remain strongly reachable.
+// Closed statements make this trivial on Node 24; Node 22 meaningfully checks
+// that get() resets statements and releases locks without a finalization API.
 function writerProbe(path) {
   const source = `import { DatabaseSync } from 'node:sqlite';
     const db = new DatabaseSync(process.argv[1]);

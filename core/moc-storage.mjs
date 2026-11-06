@@ -392,6 +392,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         if (!discoveryStatements.has(sql)) discoveryStatements.set(sql, db.prepare(sql));
         return discoveryStatements.get(sql);
       };
+      let primaryError = false;
       try {
       if (![0, SOURCE_QUERY_RECEIPT_LIMIT].includes(sourceReceiptLimit)) fail('invalid_input');
       const keyset = sourceCandidatePolicy === BOUNDED_KEYSET_SOURCE_CANDIDATES.version;
@@ -532,11 +533,21 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
             label: sourceLabel ?? memoryLabel(memory.content) } };
       });
       return { rows, epoch: currentEpoch, scanExhausted, suppressionEpoch: suppressionEpochInside(ns) };
+      } catch (error) {
+        primaryError = true;
+        throw error;
       } finally {
-        // Every use is get() (never iterate()), so no cursor remains active.
-        // node:sqlite StatementSync has no finalize API; release our references
-        // on success, early return and throw, before the transaction ends.
+        // Close where supported; otherwise get() has reset each statement
+        // (never iterate()), and clearing references releases it to GC.
+        const closeErrors = [];
+        for (const statement of discoveryStatements.values()) {
+          try {
+            if (typeof statement.close === 'function') statement.close();
+            else if (typeof statement[Symbol.dispose] === 'function') statement[Symbol.dispose]();
+          } catch (error) { closeErrors.push(error); }
+        }
         discoveryStatements.clear();
+        if (!primaryError && closeErrors.length) throw closeErrors[0];
       }
     }, undefined, { deferred: sourceCandidatePolicy !== BOUNDED_KEYSET_SOURCE_CANDIDATES.version });
   }
