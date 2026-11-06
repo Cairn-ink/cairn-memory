@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "28772a75448dbf7a2331a9c1af0492feef35cb8451c600f3c1a0071389483f79",
-  "bytes": 1210376,
+  "sha256": "af4c2563a62deaa7ff2e9be769784a36fb28a9f5de9259b6e02fcfe49879dc20",
+  "bytes": 1211583,
   "files": [
     "LICENSE",
     "README.md",
@@ -377,7 +377,7 @@
   "sourceHashes": {
     "core/content-write-context.mjs": "4ed7ed25ebfd6e2a4783cd4918aadd3a8d2d4b4a5b568a5385a042a6af420273",
     "core/content-write-changes.mjs": "876f6fa7bc67c69031ef8ccc645eab9b321713803b77f9203ac30ca783e88caa",
-    "core/content-write-safety.mjs": "31ac79d1fd2ebece19e257a4312ba2f399cbe5cd7adb3b624d6e6c4a11b1c4f5",
+    "core/content-write-safety.mjs": "c7671a5717721fb51a7310c29c3a3e03639e7456d297c597777c4cd14d75556b",
     "core/admission-storage.mjs": "d3deb28680351aa826c938e426b9216c4b1a88acb1dd64a85cb7363579a184ad",
     "core/local-authority-input.mjs": "bfce603a1081956e8d4dd790d09e8e394c0b06b20cca987980217d2e4d85a988",
     "core/local-authority-schema.mjs": "ab0a8f7fe89ce3dd50c8c920e65e78c6da57ba33b3335d89d3e223a606940c9c",
@@ -727,7 +727,7 @@
     "core/context-product-attribution.mjs": "1e3cc366918d0d7ee2ab1944fc5ee98b5ef651a3d8dc41cd4f09aec366be6eea",
     "core/content-safety-classifier.mjs": "60cf43447d6c39d10301a39a9cb1b67b9b4b55cb4ce9a1162b711022a325fb58",
     "core/content-safety-files-child.mjs": "1003ed0c93108b0664c5cd3b388adcffa77ba7707512a2870ddca907e16f1745",
-    "core/content-safety-observations.mjs": "1ebef98b09d1dfdc3be8d2132dd402656e19abe4b671c4f94978fc5de59f68ae",
+    "core/content-safety-observations.mjs": "33520e67e2af62ae7f8d5623b25c0c2ca5c4abc193ae839ab41a4daa50e36745",
     "core/content-safety-preflight.mjs": "e338e43a21182f94c5b46f8378c07ad44a60bb9b40aee53eb3cac33f010bf83b",
     "adapters/mcp/safety-command.mjs": "9aada99bb9663e086307e11a51ac44930642b3b93c905062de9c3ca19d23e145",
     "core/card-lineage.mjs": "e50641b6a7dd91f909b91dbf084ec843304b28059c92490d446690ead49f7c22",
