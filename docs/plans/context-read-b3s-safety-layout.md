@@ -1309,3 +1309,127 @@ fence, as nested read success already does. The contract immediately returns
 the failure envelope; no content or subsequent caller port can follow the
 failed snapshot. Normal caller-return E1 observations remain unchanged, and
 the final delivery fence remains in place.
+
+## Revision 3.9 addendum: S2h-3 completion, R2-A1 slope and safety-layout preconditions (2026-11-06)
+
+Decisions: 2026-11-04 and 2026-11-05. The 2026-11-04 decisions are D1,
+D2, D3 and S1, made on the S2h-3 phase A plan. The 2026-11-05 decisions are
+option B on the capture source-check regression fix, and two review decisions:
+the latched refusal stays terminal through settlement errors, and R2-A1 is
+gated with Raw lineage present, using a batched check with a differential
+proof. This append-only addendum leaves revisions 3.4–3.8
+unchanged except where it says it supersedes them.
+
+### R2-A1 paired slope (supersedes the revision 3.5 slope equation)
+
+This addendum supersedes revision 3.5's paired-slope equation,
+S(24) − S(12) ≤ L(24) − L(12). The paired slope now compares overhead after
+the E1 allowance: (S − E1)(24) − (S − E1)(12) ≤ L(24) − L(12). E1(n) is the
+**measured** number of caller-port invocations, never an estimate. The two
+equations differ whenever E1 grows with n; the gates enforce the net form.
+Revision 3.5's ceiling S(n) ≤ L(n) + 6 + E1(n), the BEGIN bound, the
+same-engine comparator and the downward-only pin policy are unchanged.
+
+### Scope of "no transaction spans an await"
+
+The rule covers transactions on databases that a read observes: canonical,
+ledger and anchor. The semantic service's dedicated ownership lock is a
+`BEGIN EXCLUSIVE` on its own lock file, held across ledger authentication. It
+is the coordinator's service-exclusion mechanism (see the bounded close and
+recovery design in `docs/context-read-product.md`), and it is outside this
+rule. S2h-3 does not change it.
+
+### Settlement after an E1 refusal (D2)
+
+Suppose an E1 observation refuses a protected semantic request after a
+provider or ledger caller port has returned. The request then delivers no
+protected content and dispatches no further protected payload. The
+accounting-only callbacks that settle its reservation still run, each with
+its own inert return and exactly one owner-epoch observation: authority
+`load`, plus the prepare, seal, compensation and recovery `compareAndSwap`.
+Their arguments are built from an explicit allowlist of accounting fields
+only. A reservation reaches `settled` or its existing terminal state; it is
+never left `reserved` or `may_transmit` past the next successful admission.
+
+The refusal is terminal. If a settlement or cleanup step fails after the
+refusal is latched, the request still fails with the safety refusal
+(`evidence_unavailable`, carrying the safety-fence marker), never with the
+later error. The accounting failure does not reopen the request: nothing
+after the refusal dispatches the query or any protected payload to any host.
+A refusal latched before the client's deadline decision, in the shared-memory
+order, reaches the caller as the marked safety refusal. A plain timeout with
+no latched refusal degrades as before.
+
+If a settlement callback fails, the next successful admission on that Worker
+finalizes the reservation, before its own concurrency check, with the values
+the failed settlement would have written. If the Worker exits first, startup
+recovery's existing rule applies. Finalization is idempotent: it neither
+duplicates nor loses a charge, and it never replays the provider. A failed
+settlement is retained only when its reserving write was attempted, so a live
+Worker retains at most C + Q + 1 settlements (C = `maxConcurrent`, Q = the
+serial queue limit), however many requests arrive.
+
+### R2-A1 with Raw lineage present
+
+R2-A1 holds for every product read population with Raw lineage present: Raw
+in another owner or namespace, Raw-backed Memories in the selected
+namespaces, and both. Raw-present stores are the normal hosted case, so this
+is a gate, not a ratchet. The lexical candidate filter checks Raw ancestry
+and canonical eligibility for the whole ranked candidate set in a constant
+number of statements, up to the product's maximum limit. For a batch of n
+candidates, Q(0) = 0 and Q(n > 0) = 1. Each lexical filter uses at most two
+batches; the ranked maximum is 24. A differential test over generated fixtures
+covers 75,600 cases across the two safety families (37,800 per family), using
+seeds 17 and 41, and proves that this check decides every candidate exactly
+as the per-candidate check does. The presence bit is only a snapshot-local
+fast path, and final canonical S1 filtering is unchanged.
+
+The native gates now include these Raw-present cells on v33/v48 and v33/v53
+(foreign, in-scope and both), alongside the cells listed under S2h-3 completion
+below.
+
+### S2h-3 completion
+
+- The coverage-deferred category is empty. The three product enabled-semantic
+  variants (`refreshContextIndex`, `findCandidates`, `contextRead`) have native
+  gates on 34/38/48 and 51/52/53, each paired with its same-engine legacy
+  cell.
+- The 106 deferred ratchets are formula assertions (ceiling, net slope,
+  BEGIN) with downward exact pins: Episode 42, Role 4 and embedded 60. The
+  Episode n24 and Session nextSteps cells are added.
+- Any future deferral of a cost-gated variant must keep a minimal native
+  count smoke that executes the unmigrated path in its original change. The
+  inventory test rejects a deferral without one.
+- This supersedes revision 3.5's deferral status and its round 3 cap
+  tables in favour of these resolved gates and pins. It also supersedes
+  3.5's historical unmigrated comparator, main `a546ee43`: unmigrated
+  v18/v23/v33 now stay within main `26f9e467` on every gated
+  method/variant. The enabled-semantic cold refresh and the capture source
+  checks are now gated too; they were coverage gaps in revision 3.5's
+  inventory.
+
+### Preconditions for enabling a safety layout
+
+Before any hosted store moves to a safety cell (34/38/48 or 51/52/53), and
+before any enablement of a safety layout, all of the following hold on the
+merged engine:
+
+1. A busy during a pre-dispatch capture source check on a safety layout does
+   not consume staged evidence or start an Episode attempt. A staged claim
+   carries a pre-dispatch phase in its private claim token, so a retry in the
+   same process, after reopening the core, or after lease expiry reclaims it
+   and admits exactly once. A synchronous dispatch write just before the
+   provider call ends that phase and stores the claim's own id as its token,
+   exactly as main stores it. After dispatch may have occurred, the existing
+   conservative close and attempt accounting apply.
+2. The capture source-check read snapshot allows at most 512 nested statements
+   (conservatively 524 including acquisition and fences), with a cooperative
+   100 ms budget checked between bounded steps. This is a budget, not a hard
+   duration limit. An already-RESERVED DELETE-mode writer can complete after
+   the bounded source-check read snapshot releases SHARED; on overflow, that
+   snapshot is released before complete validation under BEGIN IMMEDIATE.
+3. The final fence's aggregation under Raw uncertainty is chunked and bounded,
+   with deadline checks between chunks.
+
+For event dates on safety layouts, see the existing dated-memo projection
+addendum in §3 (Addendum v1, 2026-11-05).
