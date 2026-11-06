@@ -18,6 +18,7 @@ import { PRODUCT_PROFILE } from './context-product-control.mjs';
 import { contextReadSet } from './context-read-input.mjs';
 import { canonicalJson, digest, projectionDigest, signedRecord, verifiedRecord } from './context-product-validation.mjs';
 import { maintenanceQuantum } from './context-product-quantum.mjs';
+import { checkpointCost } from './context-product-checkpoint-cost.mjs';
 import { ManifestHash } from './context-product-manifest.mjs';
 import { fail } from './validation.mjs';
 import { VECTOR_DDL } from './context-product-vectors.mjs';
@@ -193,6 +194,9 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   const handleRegistry=()=>handles??=sidecarHandleGuard(localHandle=reserveSidecarHandle(Object.values(productFile(path)).join(':')));
   const compare=memoryComparison?memoryComparison.createMemoryComparator():null;
   let comparisonBase=null, reuseOnlyWork=false;
+  const costs=checkpointCost(now), checkpointYield=Symbol('checkpoint yield');
+  let workQuantum=null, checkpointStarted, observationStarted;
+  const admitCheckpoint=()=>!workQuantum || costs.admit(workQuantum,checkpointStarted);
   let sideFormat, side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0, discardAfterGuard=false, guardWritable=false;
   function failed(error, wasWritable) {
     if(wasWritable || error.reason==='storage_unavailable' ||
@@ -260,17 +264,23 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   };
   function close() { discardAfterGuard=true;if (side?.isOpen) side.close(); handles?.closed(); side = null; metadata = null; sideFiles = null; discardAfterGuard=false; }
   function write(work, kind='setup', beforeCommit) {
+    // All lexical write starts share this gate, including setup, GC and the
+    // qualified verification fallback. A denied start leaves signed work intact.
+    if(!admitCheckpoint())throw checkpointYield;
+    const started=checkpointStarted??now();checkpointStarted=undefined;
     // A caught verification rollback can continue within this refresh. Reopen
     // and check integrity before its fallback or any other transaction writes.
     if(discardAfterGuard)connection(true);
     const wasWritable=sideWritable===true;
     sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});
-    const beginning=attribution?.start('begin');
+    if(workQuantum && !costs.admit(workQuantum,started))throw checkpointYield;
+    const began=now(),beginning=attribution?.start('begin');
     try {attribution?.checkpoint('begin');side.exec('BEGIN IMMEDIATE');}catch(error){failed(error,wasWritable);attribution?.captureFailure(error);throw error;}finally{attribution?.end(beginning);}
     try {
       verifyOpened();const result=work();rendezvous('batch');beforeCommit?.();
-      const committing=attribution?.start('commit');
-      try {attribution?.checkpoint('commit');attribution?.add(kind+'CommitAttempts',1);side.exec('COMMIT');attribution?.add(kind+'Commits',1);}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.end(committing);}
+      const commitStarted=now(),committing=attribution?.start('commit');
+      try {attribution?.checkpoint('commit');attribution?.add(kind+'CommitAttempts',1);side.exec('COMMIT');attribution?.add(kind+'Commits',1);}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.end(committing);if(workQuantum)costs.commit(now()-commitStarted);}
+      if(workQuantum){const ended=now();costs.transaction(ended-started,ended-began);}
       return result;
     }
     catch (e) {failed(e,wasWritable);attribution?.captureFailure(e);
@@ -726,7 +736,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   }
   function collect(quantum,owner,maximum=128) {
     let slices=0;
-    while(quantum.admit('gc') && slices++<maximum) {
+    while(admitCheckpoint() && quantum.admit('gc') && slices++<maximum) {
       // A read-only hint avoids empty write transactions. Repeat both
       // lexical and vector retirement decisions under BEGIN IMMEDIATE.
       const lexicalCandidate=side.prepare(`SELECT 1 FROM generations g WHERE g.owner=? AND
@@ -755,7 +765,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       },'gc');if(found)rendezvous('gc');},'gc');
       if(!found)break;
     }
-    if(quantum.admit('gc'))quantum.measure(()=>{
+    if(admitCheckpoint() && quantum.admit('gc'))quantum.measure(()=>{
       if(discardAfterGuard)connection(true);
       const wasWritable=sideWritable===true;
       try {side.exec('PRAGMA incremental_vacuum(32)');}
@@ -887,6 +897,12 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     if (!writable) fail('invalid_input');
     const m = { transformed:0,canonicalRows:0,metadataBytes:0,textRows:0,textBytes:0,supportLookups:0,supportBytes:0,verifiedRows:0,
       reused:0,replaced:0,removed:0,copied:0,tokenized:0,retargets:0,verificationRestarts:0,verificationKept:0 };
+    workQuantum=quantum;
+    try {return refreshWork(p,access,budget,quantum,m);}
+    catch(error){if(error!==checkpointYield)throw error;attribution?.resetFailure();return m;}
+    finally {workQuantum=null;checkpointStarted=undefined;}
+  }
+  function refreshWork(p,access,budget,quantum,m) {
     if(reuseOnlyWork) {
       try {connection(true);}catch(error) {
         if(error===admissionRequired)throw error;
@@ -942,7 +958,8 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       }
     }
     g.streams = streams(p);
-    while (quantum.admit('scan') && quantum.admit('item') && g.phase < g.streams.length && m.transformed<budget.maxItems) {
+    while (admitCheckpoint() && quantum.admit('scan') && quantum.admit('item') && g.phase < g.streams.length && m.transformed<budget.maxItems) {
+      checkpointStarted=now();
       if (!fresh(t,p,access)) return m;
       const stream = g.streams[g.phase], maximum = stream.type === 'card' ? 1 : 128;
       const { rows, exhausted } = quantum.measure(()=>{
@@ -1033,7 +1050,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       },'comparison'); } catch(e) {attribution?.captureFailure(e); if(e===fenceChanged)return m;throw e; }
       rendezvous('checkpoint');
     }
-    const verificationAdmitted=()=>g.phase>=g.streams.length && g.verify.phase<3 && quantum.admit('verify-scan') && quantum.admit('verification') &&
+    const verificationAdmitted=()=>admitCheckpoint() && g.phase>=g.streams.length && g.verify.phase<3 && quantum.admit('verify-scan') && quantum.admit('verification') &&
       (g.verify.phase!==1 || g.verify.resetDone || quantum.admit('verification-reset'));
     const batching=verificationBatching && verificationBatch({now,quantum,state:verificationBatchState});
     const legacyVerification=()=>{
@@ -1054,6 +1071,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       g=copy;batching.observe(finalized);return true;
     };
     while (verificationAdmitted()) {
+      checkpointStarted=now();
       if (!fresh(t,p,access)) return m;
       if(!batching) {
         write(() => { verifyPage(g,p,m,quantum); g.checkpoint++; save(g,t); },'verification');
@@ -1103,8 +1121,9 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       }
       rendezvous('verification');
     }
-    if (g.phase>=g.streams.length && g.verify.phase===3 && quantum.admit('publication') && fresh(t,p,access)) {
-      quantum.measure(()=>{
+    if (g.phase>=g.streams.length && g.verify.phase===3 && admitCheckpoint() && quantum.admit('publication')) {
+      checkpointStarted=now();
+      if(fresh(t,p,access))quantum.measure(()=>{
         if(!side.prepare("SELECT 1 FROM statistics WHERE generation=? AND term=''").get(g.storage_id))unavailable('corrupt');
         const publicationId=randomUUID(), manifestDigest=new ManifestHash(g.verify.hash).digest();
         // Last pre-commit canonical snapshot ends here. The independent writer
@@ -1297,7 +1316,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       if(verificationBatching)quantum.batchStart=started;
       reuseOnlyWork=reuseOnly;
       try {return guarded(()=>refresh(p,access,budget,quantum),true);}
-      finally {reuseOnlyWork=false;}
+      finally {reuseOnlyWork=false;observationStarted=now();}
     },
     compare:(p,access,budget,quantum)=>{
       if(!compare)return null;
@@ -1308,6 +1327,14 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       });
     },
     lexical:(p,...args)=>{p=projection(p);return guarded(()=>lexical(p,...args));},
+    // Start after refresh, finish outside the index's safety delivery envelope:
+    // canonical acquisition, authorization, DTO preparation and delivery proofs.
+    // The unchanged quantum reserve also leaves room for Worker/parent delivery.
+    measureObservation(work) {
+      try {return work();}finally {
+        if(observationStarted!==undefined){costs.tail(now()-observationStarted);observationStarted=undefined;}
+      }
+    },
     prepareObservation() {
     try {return guarded(()=>{ connection(false);return null; }); }
     catch(e) {attribution?.captureFailure(e);
