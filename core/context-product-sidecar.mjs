@@ -195,8 +195,11 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   const compare=memoryComparison?memoryComparison.createMemoryComparator():null;
   let comparisonBase=null, reuseOnlyWork=false;
   const costs=checkpointCost(now), checkpointYield=Symbol('checkpoint yield');
-  let workQuantum=null, checkpointStarted, observationStarted;
-  const admitCheckpoint=()=>!workQuantum || costs.admit(workQuantum,checkpointStarted);
+  let workQuantum=null, checkpointStarted, observationStarted, checkpointAttempted=false;
+  // Pricing only limits additional transactions in this turn. The first
+  // checkpoint retains the base engine's admission, even after a slow commit.
+  // Selection retention precedes that checkpoint and cannot consume its slot.
+  const admitCheckpoint=(started=checkpointStarted)=>!workQuantum || !checkpointAttempted || costs.admit(workQuantum,started);
   let sideFormat, side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0, discardAfterGuard=false, guardWritable=false;
   function failed(error, wasWritable) {
     if(wasWritable || error.reason==='storage_unavailable' ||
@@ -263,7 +266,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     catch (error) {attribution?.captureFailure(error); if(sqlite)sqlite.openingFailure(error);throw error; }
   };
   function close() { discardAfterGuard=true;if (side?.isOpen) side.close(); handles?.closed(); side = null; metadata = null; sideFiles = null; discardAfterGuard=false; }
-  function write(work, kind='setup', beforeCommit) {
+  function write(work, kind='setup', beforeCommit, checkpoint=true) {
     // All lexical write starts share this gate, including setup, GC and the
     // qualified verification fallback. A denied start leaves signed work intact.
     if(!admitCheckpoint())throw checkpointYield;
@@ -273,7 +276,8 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     if(discardAfterGuard)connection(true);
     const wasWritable=sideWritable===true;
     sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});
-    if(workQuantum && !costs.admit(workQuantum,started))throw checkpointYield;
+    if(!admitCheckpoint(started))throw checkpointYield;
+    if(workQuantum && checkpoint)checkpointAttempted=true;
     const began=now(),beginning=attribution?.start('begin');
     try {attribution?.checkpoint('begin');side.exec('BEGIN IMMEDIATE');}catch(error){failed(error,wasWritable);attribution?.captureFailure(error);throw error;}finally{attribution?.end(beginning);}
     try {
@@ -707,7 +711,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         side.prepare('DELETE FROM vector_work WHERE projection=?').run(old.projection);
         side.prepare('DELETE FROM selections WHERE projection=?').run(old.projection);
       }
-    });
+    },'setup',undefined,false);
   }
   function vectorCandidate(owner,lexicalGeneration) {
     return side.prepare(`SELECT storage_id,id FROM vector_generations v WHERE owner=? AND ${lexicalGeneration!==undefined?'lexical_generation=?':`
@@ -898,6 +902,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     const m = { transformed:0,canonicalRows:0,metadataBytes:0,textRows:0,textBytes:0,supportLookups:0,supportBytes:0,verifiedRows:0,
       reused:0,replaced:0,removed:0,copied:0,tokenized:0,retargets:0,verificationRestarts:0,verificationKept:0 };
     workQuantum=quantum;
+    checkpointAttempted=false;costs.turn(quantum);
     try {return refreshWork(p,access,budget,quantum,m);}
     catch(error){if(error!==checkpointYield)throw error;attribution?.resetFailure();return m;}
     finally {workQuantum=null;checkpointStarted=undefined;}

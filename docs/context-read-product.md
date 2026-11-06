@@ -1855,3 +1855,15 @@ The host quantum and its existing reserve are unchanged. An unseen, indivisible
 commit that alone takes longer than the quantum can still overrun it; pricing
 cannot interrupt a native commit. SQLite durability, signed checkpoint semantics
 and failure reservations remain unchanged.
+
+Fix round 1: pricing may decline only additional checkpoint transactions in a
+work turn. The first checkpoint, verification or page transaction is always
+admitted under the existing rules, even when its estimate cannot fit; selection
+retention before that checkpoint does not consume its admission. An indivisible
+slow first commit can therefore overrun exactly as before. For each complete
+transaction, remaining transaction, commit and doubled observation-tail sample,
+the handle-local estimate is the maximum of its seed, the new sample and half
+its previous estimate (one-observation half-life). Seeds are respectively 100,
+100, 50 and 50 ms. The combined transaction-plus-tail estimate is capped at the
+turn's usable budget after its unchanged reserve. No estimate can refuse every
+start, and normal observations recover from an outlier.

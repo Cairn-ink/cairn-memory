@@ -89,7 +89,7 @@ test('staged verification converges for both intents with bounded turns and zero
   t.diagnostic(JSON.stringify({turns,counts,overruns}));assert.equal(overruns,0);
 });
 
-test('private estimate keeps complete transaction and observation high-water marks on a handle',async t=>{
+test('private estimate prices whole transactions and tails, clamps and recovers after outliers',async t=>{
   const module=await import('../context-product-checkpoint-cost.mjs').catch(error=>{if(error.code==='ERR_MODULE_NOT_FOUND')return null;throw error;});
   if(!module){t.skip('private estimator absent in the base control');return;}
   const {checkpointCost}=module;
@@ -99,11 +99,13 @@ test('private estimate keeps complete transaction and observation high-water mar
   cost.transaction(400,200);now=400;assert.equal(cost.admit(q),false,'whole commit-inclusive cost is retained');
   now=0;assert.equal(cost.admit(q),true,'next turn can make progress');
   cost.tail(150);now=200;assert.equal(cost.admit(q),false,'doubled observed final tail is additional to the unchanged reserve');
-  cost.transaction(1);cost.tail(1);assert.equal(cost.admit(q),false,'cheap samples cannot hide earlier expensive samples');
   now=300;assert.equal(cost.admit(q,100),true,'an elapsed freshness/scan prefix is not charged twice');
   now=450;assert.equal(cost.admit(q,50),false,'a slower prefix cannot consume the measured work still due');
   cost.commit(250);now=300;assert.equal(cost.admit(q,100),false,'elapsed work cannot consume the observed native commit floor');
-  cost.transaction(1100);now=0;assert.equal(cost.admit(q),false,'an indivisible transaction beyond the quantum has no promised fit');
+  now=0;cost.turn(q);cost.transaction(10000);assert.equal(cost.admit(q),false,'the combined estimate is clamped to the usable budget, with strict admission');
+  now=-1;assert.equal(cost.admit(q),true,'a clamped estimate never exceeds the usable budget');
+  for(let i=0;i<8;i++){cost.transaction(1);cost.commit(1);cost.tail(1);}
+  now=699;assert.equal(cost.admit(q),true,'cheap observations halve old peaks down to conservative seed floors');
 });
 
 test('index learns the fresh final observation tail for the following work call',async t=>{
