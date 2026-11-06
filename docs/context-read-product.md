@@ -1839,3 +1839,12 @@ sidecar or its companions.
 Replacement waits until no other connection for that store is open in the
 process; each refusal counts as a no-progress admission cycle until those
 handles close. The lifecycle lock excludes other processes’ active operations.
+
+
+## Admission diagnostic shape (amendment v2.3, 2026-11-06)
+
+`maintenancePumpDiagnostic(status).admission[lane]` keeps the admission retry
+status unchanged at its top level when present, including its `cause`.
+No-progress state appears only as `noProgress: {lane, count}`.
+`admission_no_progress` remains the private failure cause; private failure
+records and the failure vocabulary are unchanged.

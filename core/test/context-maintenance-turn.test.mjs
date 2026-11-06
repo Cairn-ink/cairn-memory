@@ -58,6 +58,13 @@ test('descriptor-chain capture preserves the port receiver and frozen primitive 
   for(const patch of [{intent:{}},{lane:'0'},{pumpId:{}},{maxMs:NaN}])assert.throws(()=>maintenanceTurnRequest({...request(),...patch}),{code:'invalid_input'});
 });
 
+test('admitted result retains a downward-rounded deadline without changing the wait snapshot',async()=>{
+  const s=setup(),r=await s.turns.wait(request(),{identity:s.identity,signal:s.abort.signal,untilMonoMs:1000.75});
+  assert.equal(r.untilMonoMs,1000);assert.equal(r.waitExpired,false);
+  s.set(1001);assert.equal(r.untilMonoMs,1000);assert.equal(r.waitExpired,false);
+  assert.equal(s.turns.release(r.ticket,'declined','wait_expired'),'released');
+});
+
 test('ticket reflection refuses accessors and proxies before either method is called',async()=>{
   let calls=0;const trap=()=>{calls++;throw null;};
   for(const ticket of [new Proxy({}, {getPrototypeOf:trap,ownKeys:trap,getOwnPropertyDescriptor:trap}),
