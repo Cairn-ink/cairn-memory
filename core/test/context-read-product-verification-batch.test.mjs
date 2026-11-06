@@ -302,8 +302,11 @@ test('fence race preserves an earlier committed batch, discarding all tentative 
 });
 test('post-BEGIN admission miss rolls back without signing an empty checkpoint',t=>{
   const {f,a}=seeded(t);a.prepare();const old=inspect(f.path,snapshot),exec=DatabaseSync.prototype.exec;
-  t.mock.method(DatabaseSync.prototype,'exec',function(sql){const result=exec.call(this,sql);if(sql==='BEGIN IMMEDIATE')a.setClock(900);return result;});
+  const seal=inspect(f.path,db=>db.prepare('SELECT stamp,record FROM product_attestation WHERE singleton=1').get());let begins=0;
+  t.mock.method(DatabaseSync.prototype,'exec',function(sql){const result=exec.call(this,sql);if(sql==='BEGIN IMMEDIATE'){begins++;a.setClock(900);}return result;});
   a.step();assert.deepEqual(inspect(f.path,snapshot),old,'lock acquisition cannot manufacture a successful empty checkpoint');
+  assert.equal(begins,1,'the admission miss reaches the verification BEGIN');
+  assert.deepEqual(inspect(f.path,db=>db.prepare('SELECT stamp,record FROM product_attestation WHERE singleton=1').get()),seal,'the rejected transaction cannot advance its seal');
   assert.equal(a.attribution.snapshot().verificationCommitAttempts,0);assert.equal(a.attribution.snapshot().verificationRollbacks,1);
 });
 test('passing control: genuine cutoff stays terminal and retains the full reservation',async t=>{
