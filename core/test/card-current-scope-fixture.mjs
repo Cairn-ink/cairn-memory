@@ -1,8 +1,35 @@
 import { DatabaseSync } from 'node:sqlite';
+import assert from 'node:assert/strict';
+import { setTimeout as delay } from 'node:timers/promises';
 import { fixture, host, ns, project, ok, importMethod, adopt } from './card-current-fixture.mjs';
 export { ns, project, ok };
 export const sources = ['relations-one-hop-v1', 'moc-v1'];
 export const scopes = [ns, project];
+export async function warmProjection(t, f, readSet) {
+  // Cold projection commits are preparation, not the revocation under test.
+  const maxAttempts = 3, attempts = [];
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const started = performance.now();
+    let method = 'refreshContextIndex';
+    let result = await f.call(method, { readSet, types: f.request.types, intent: f.request.intent,
+      budget: { maxItems: 1024, maxMs: 5000 } });
+    if (result.ok) {
+      // A bounded refresh can return rebuilding; verify readiness before use.
+      method = 'findCandidates';
+      result = await f.call(method, { ...f.request, readSet });
+    }
+    if (result.ok) return;
+    const failure = { attempt, method, elapsedMs: performance.now() - started, error: result.error };
+    attempts.push(failure);
+    // Legacy failure details include trace.maintenance (notably commitMs).
+    t.diagnostic(`projection warm failure: ${JSON.stringify({ readSet, maxAttempts, ...failure })}`);
+    const lexical = result.error?.details?.channels?.lexical;
+    const retry = result.error?.code === 'index_unavailable' && lexical?.state === 'timeout' && lexical.causes?.includes('timeout');
+    if (!retry || attempt === maxAttempts)
+      assert.fail(`projection warm failed: ${JSON.stringify({ readSet, maxAttempts, attempts })}`);
+    await delay(50);
+  }
+}
 export function scopedHost() {
   const state = { revoked: false, check: null, count: null };
   const h = host({ allow: request => !(state.revoked && request.namespace.scope === 'project'),
