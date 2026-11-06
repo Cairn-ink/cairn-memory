@@ -172,10 +172,10 @@ test('successive opener and counter/authority ports stop after an unchanged-epoc
   assert.equal((await s.service.classify(hit,{},s.host.token)).kind,'denied');
 });
 
-test('fusion dependency manifest refuses a changed nonselected semantic or lexical child',{timeout:30000},async t=>{
+test('fusion dependency manifest refuses a changed nonselected lexical child',{timeout:30000},async t=>{
   const f=sourceFixture(t),source=await savedSource(f,'Synthetic copper telescope.');
   ok(await f.core.captureRaw((await import('../testing/raw-source-fixtures.mjs')).request(
-    (await import('../testing/raw-source-fixtures.mjs')).splitRaw('Synthetic copper adjacent.',{id:'sibling',ordinal:2})[0],{eventId:'sibling'})));
+    (await import('../testing/raw-source-fixtures.mjs')).splitRaw('Synthetic copper adjacent.',{id:'sibling',ordinal:2})[0],{client:'codex',eventId:'sibling'})));
   const s=await searchFixture(f);await s.maintain();
   const hit=(await s.search({query:'copper'})).candidates.find(row=>row.messageId==='sibling');assert.ok(hit);
   const prepared=await s.prepare(hit),mutate=await mutator(t,f.path);

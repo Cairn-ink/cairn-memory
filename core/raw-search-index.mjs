@@ -122,11 +122,10 @@ export async function openRawSearch(value) {
         // reports limits and availability only; operational counts stay internal.
         coverage.scanned=null;coverage.expanded=null;
         const output=immutable({version:RAW_SEARCH_VERSION,publication,candidates,coverage,semantic});
-        const materialized=result.rows.flatMap(row=>row.turn.segments.map(segment=>segment.source));
         retain(searches,proof,{dependencies,fence,intent:input.intent,access,candidates},4);
         // Every lexical corpus row, semantic chunk, session and neighbor dependency
         // is retained, including contributors that are not in the final 24.
-        authority.validate([{sources:dependencies,materialized,fence,cache:cacheProof,intent:input.intent,access,value:output}]);
+        authority.validate([{sources:dependencies,fence,cache:cacheProof,intent:input.intent,access,value:output}]);
         if(cacheProof&&!borrowed&&!denied&&!timedOut&&(vectors||snapshot.partial)){
           // Transfer the operation's reservation synchronously. Admission failure
           // only leaves this operation uncached; it cannot change its result.
@@ -177,7 +176,7 @@ export async function openRawSearch(value) {
         ordinal:source.ordinal,role:source.role,occurredAt:source.occurredAt,classification:candidate.classification,ranges});
       const ticket=authority.bind('raw-search-prepared-v1',[candidate.proof,++serial]);
       const handle=Object.freeze({value:output,ticket,validate(){return revalidate([ticket])[0];}});
-      retain(prepared,ticket,{sources:dependencies,materialized:rows.map(row=>row.source),fence:entry.fence,intent,access,value:output,handle},RAW_SEARCH_LIMITS.preparations);
+      retain(prepared,ticket,{sources:dependencies,fence:entry.fence,intent,access,value:output,handle},RAW_SEARCH_LIMITS.preparations);
       revalidate([ticket]);return handle;
     }
     async function prepareSource(ref,{intent='current'}={},token) {

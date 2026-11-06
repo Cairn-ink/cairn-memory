@@ -62,7 +62,9 @@ throughout a build. It invalidates the in-memory inventory and search-eligibilit
 other-writer commit, including direct facts with no application epoch change.
 That connection-local cache key is never a durable publication authority.
 Final validation checks it inside the fresh canonical snapshot and reruns the
-exact materialized source predicates there. Protected openers and document
+full canonical predicate for every ranking contributor there, including receipt
+integrity and inbound missing or foreign ancestry. The inventory fence is an
+early refusal guard, never a substitute for those predicates. Protected openers and document
 provider dispatches still read actual denial facts independently. Concurrent
 source movement discards a maintenance quantum and leaves the next host turn
 available; it does not mark maintenance permanently failed. Inventory descriptions

@@ -59,6 +59,8 @@ The selected handle provides:
   before each source-bearing counter/callback too. All retained dependencies,
   exact identities, currentness, exclusions, actual terminal fences, suppression
   and access bindings are rechecked. A mismatch refuses the whole preparation.
+  Every contributor reruns the full canonical predicate in that final snapshot,
+  including receipt integrity and inbound missing or foreign ancestry.
   No stale-envelope survivor filtering is allowed.
   Inventory metadata is read in bounded snapshots; native SQLite change
   detection must prove it unchanged across those reads and at final validation.

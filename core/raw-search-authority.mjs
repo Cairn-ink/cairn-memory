@@ -304,10 +304,10 @@ export function createRawSearchAuthority(database, options) {
       for (const entry of entries) {
         if(entry.cache && cacheKeyInside(entry.cache.publication,entry.cache.metadata)!==entry.cache.key)fail('source_unavailable');
         if(entry.fence){observed??=fenceInside();if(observed!==entry.fence)fail('source_unavailable');}
-        // A full keyed canonical inventory binds *all* contributor identities,
-        // bytes and denial facts. Materialized ranges additionally rerun the
-        // existing exact-source predicate in this same snapshot.
-        for (const source of entry.fence ? entry.materialized ?? [] : entry.sources)
+        // The inventory fence is only an early refusal guard. Rerun the full
+        // canonical predicate for every ranking contributor in this snapshot:
+        // receipt integrity and inbound ancestry need not change that fence.
+        for (const source of entry.sources)
         if (!matches(source,inspectInside(source.ref,entry.intent))) fail('source_unavailable');
       }
     };
