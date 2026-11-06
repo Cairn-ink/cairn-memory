@@ -214,7 +214,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       pumpDiagnostics.set(value,Object.freeze({cadenceMisses,worstGapMs,observation:lastObservation,lastFailure,failureCounts:Object.freeze({...failureCounts}),secondaryFailure,secondaryFailureCounts:Object.freeze({...secondaryFailureCounts}),...(turns?turns.snapshot(admissionHold()):unbrokeredPoison?{turnPhase:'poisoned'}:{}),admission:Object.freeze(projections.map((p,lane)=>{
         const state=admissionDomain(p),count=maintenanceAdmissionProgress(state,progressLane(p));
         const retry=state.attempts||state.pending||state.quarantined||state.held?maintenanceAdmissionStatus(state):null;
-        return count?Object.freeze({...retry,cause:'admission_no_progress',lane,count}):retry;
+        return count?Object.freeze({...(retry ?? {}),noProgress:Object.freeze({lane,count})}):retry;
       }))}));
       phaseDiagnostics.set(value,freezeTree(structuredClone({elapsedBucketMs:10,projections:phases})));
       snapshotMaintenanceCutoff(value,cutoffDiagnostic);
