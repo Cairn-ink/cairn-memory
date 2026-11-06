@@ -40,7 +40,24 @@
     "refreshContextIndex",
     "findCandidates",
     "contextRead",
-    "readRoleTaskContext"
+    "readRoleTaskContext",
+    "inspectCardOperation",
+    "revalidateEvidence",
+    "fetchCandidateEvidence",
+    "getContextIndexStatus",
+    "isSuppressed",
+    "listMethodManifest",
+    "listMethodPackages",
+    "listMethodVersions",
+    "compareMethodVersions",
+    "deleteMethodVersion",
+    "deleteMethodPackage",
+    "listMethodEffects",
+    "getMethodPackageUsage",
+    "disableMethodBinding",
+    "resolveMethodsForRole",
+    "listMethodBindingEvents",
+    "readMethodAttachmentBytes"
   ],
   "records": {
     "open:23": {
@@ -53,7 +70,7 @@
         ]
       ],
       "statements": 11,
-      "sql": "68f501bdd6964ef5cef993ae702297041cadedf123528fe5cff0ea8ae61d1b97",
+      "sql": "7bd5fb9d90a54147d76764863d72b504998666bf7ad3273e47880ce673a1e0b5",
       "tables": [
         [
           "admission_claims",
@@ -345,7 +362,793 @@
           0,
           "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
         ]
-      ]
+      ],
+      "effectWitnesses": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "workload:23": {
+      "calls": [
+        [
+          "open",
+          "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+          72,
+          null
+        ],
+        [
+          "capture",
+          "bf35dcb6a51413eceba6883150363d70f6bb14f8878a52cd5b709df8236dbce6",
+          72,
+          182
+        ],
+        [
+          "capture",
+          "7c772d1e206229e84e1441f7c92b0cc649d6e9d495388443af3a6597fa9b1934",
+          182,
+          194
+        ],
+        [
+          "list",
+          "c75f2de7d1bec7f4c4b9f46f1de3db2a647baa32508ce79cda92394e3d726213",
+          194,
+          198
+        ],
+        [
+          "recall",
+          "6b854b8122309b563530bb209d9708449ecd008f4321f99765df7b4e9f95ea51",
+          198,
+          357
+        ],
+        [
+          "submitSourceNote",
+          "739386208991255daa179450a851a183ad71d537dc829c8d2508c0e1f14fa78b",
+          357,
+          368
+        ],
+        [
+          "submitSourceNote",
+          "739386208991255daa179450a851a183ad71d537dc829c8d2508c0e1f14fa78b",
+          368,
+          371
+        ],
+        [
+          "submitSourceNote",
+          "65e5ace67336f4b8a6f8c70dea1cb66da0d2d0ecb1db1e8ef918453f6cd54886",
+          371,
+          374
+        ],
+        [
+          "createCardDraft",
+          "2065f2d077a8f01bf4baec4bdbb17fc3697ba1a7b7403e75633d65f153a39d46",
+          374,
+          389
+        ],
+        [
+          "editCardDraft",
+          "b6f7718a770eaccd9354fdc74e4c97721a72779cc5444f49995522fe0e7f6b48",
+          389,
+          410
+        ],
+        [
+          "editCardDraft",
+          "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
+          410,
+          414
+        ],
+        [
+          "confirmCardDraft",
+          "0db3db3760a776a9e78c1621102173a6e311a3fdce4b02a07a1c008332db0bad",
+          414,
+          442
+        ],
+        [
+          "editKnowledgeCard",
+          "49bcf96fb2127f2e551b29913c33cbecddc88f6db8f6e46fa5b32a2960f14054",
+          442,
+          469
+        ],
+        [
+          "getCard",
+          "71559a38e33736f6faed8de84d69c369c5bb64929dd5af6822f272b68804e557",
+          469,
+          481
+        ],
+        [
+          "inspectCardOperation",
+          "6cc21ce33d4bb0ccb04e473838e3817616cf9d94f85aad9eecd1c688cef951c6",
+          481,
+          484
+        ],
+        [
+          "inspectCardOperation",
+          "3b5f5e21c5b580819e6ca26dbaa09479ee2d902d53add0bbd66ff6e4f71b9e90",
+          484,
+          487
+        ],
+        [
+          "getSource",
+          "a6a0793d4f660797a58212316ea829dc8fdd03a135a16f702528a332799a0cde",
+          487,
+          490
+        ],
+        [
+          "fetchEvidence",
+          "54a52ae7525a96fd4a6227906fa70e03ddee790960f0e29ff698fb13db3c9aff",
+          490,
+          505
+        ],
+        [
+          "revalidateEvidence",
+          "54a52ae7525a96fd4a6227906fa70e03ddee790960f0e29ff698fb13db3c9aff",
+          505,
+          522
+        ],
+        [
+          "createCardDraft",
+          "09c76bb8612fe2f6c1bf000e626f4d6a44647aaf3c015c176f7c2dbea41af73f",
+          522,
+          543
+        ],
+        [
+          "createCardDraft",
+          "0d78aa53646b6d8bd43d69f7a6cd7c2ac109864cc73cec9d9b8ca26f115a2244",
+          543,
+          562
+        ],
+        [
+          "confirmCardDraft",
+          "13ecc363c6d85511c4639778249d9c4c229df841c5c79e55fc0119530de71b36",
+          562,
+          594
+        ],
+        [
+          "listCards",
+          "ffb03d5918c1b8efa13ec2bf6457188de617b2dcbe2d9f0c8a6de6ba9ea07548",
+          594,
+          608
+        ],
+        [
+          "listCards",
+          "6a7480f9a267bb5b3cbf77c4fc81f152918e13a246cce48b1bd40dcd4ebea72e",
+          608,
+          625
+        ],
+        [
+          "listCards",
+          "046eaf624dd3fb3acbdc2fecd3b97c0e9eb35698e7f9ba3f9eb769c701b967c4",
+          625,
+          642
+        ],
+        [
+          "mapEvidence",
+          "ad871ac1a7ecafdf688da4a6ad649dda8a4ec1b21a9e42575e2caefd34aeff21",
+          642,
+          686
+        ],
+        [
+          "applyCardPlacement",
+          "7daa1768b880146bb97af5a7967e22fc48e6225fc8461ee65b6cf76ced0a1406",
+          686,
+          722
+        ],
+        [
+          "applyCardPlacement",
+          "7daa1768b880146bb97af5a7967e22fc48e6225fc8461ee65b6cf76ced0a1406",
+          722,
+          725
+        ],
+        [
+          "mapEvidence",
+          "0d4ab685cae8974556ea5d233f664d4dc2a72f4463ef7156bdd02e0829f27710",
+          725,
+          829
+        ],
+        [
+          "refreshCardTopic",
+          "3be1c6dfc79aadfa2ea2bca25a216906385f6abb28b801dcbc99b9e804d17480",
+          829,
+          862
+        ],
+        [
+          "map",
+          "82ec8576fcc473a7c47fa74504c90261103a08a5c3f06933be1753f394fe2615",
+          862,
+          870
+        ],
+        [
+          "applyPlacement",
+          "9a5e6bb510abf0d938f5aafbc5d4fab1d84d4b2bcab9decbeae8192f2f0bfd25",
+          870,
+          900
+        ],
+        [
+          "mapEvidence",
+          "cbb5703a6c98fe0bdc221dc0e5f41a3bfd8faa4d865a950af8c0b99ad00a46b5",
+          900,
+          911
+        ],
+        [
+          "mapEvidence",
+          "6ee2ad16ac866a186da4f6a25a696ca70f9b73a27b64b462d8cdad84ec1e34d8",
+          911,
+          1015
+        ],
+        [
+          "proposeEvidenceMapping",
+          "854e9e19e5c8f95618f40e5aa281865c9c731979ca2af78b6d0d34c40809d706",
+          1015,
+          1046
+        ],
+        [
+          "reviewEvidenceMapping",
+          "b690b818c35be47b2d9e31211b2d2245e45a3c62e0abbf9ac86a2900c4639138",
+          1046,
+          1080
+        ],
+        [
+          "listEvidenceMappings",
+          "9ef3887e904d86b7ff5d937c881a72be34ed7139cf7e8f600f3d5e22c7dd2179",
+          1080,
+          1109
+        ],
+        [
+          "mapEvidence",
+          "6ee2ad16ac866a186da4f6a25a696ca70f9b73a27b64b462d8cdad84ec1e34d8",
+          1109,
+          1213
+        ],
+        [
+          "selectEvidence",
+          "2478fd9f380811bdb921a36f18771791ea4168048e2217781353632d439af18c",
+          1213,
+          1252
+        ],
+        [
+          "refreshContextIndex",
+          "24b52cdd311839d9c8e4ba0c5f9b923ecfcfc570ef712cb6677a623927daf77d",
+          1252,
+          1645
+        ],
+        [
+          "findCandidates",
+          "6d7060f372f7ed2ebac62757f693787b519370f5dadf6ef9d5258897d088dae8",
+          1645,
+          1811
+        ],
+        [
+          "contextRead",
+          "4f2d03fab389d23765a68453fc747b139544d2b9d433df1baa866f6cad75e201",
+          1811,
+          2046
+        ],
+        [
+          "fetchCandidateEvidence",
+          "125d54f21c1329b55e421e8921237ed6961c104b398b426785357b3a90aafb67",
+          2046,
+          2086
+        ],
+        [
+          "fetchCandidateEvidence",
+          "4420852df2c275051c3a9dca99d0fcdf42311c9696e549d6e4813bbc7edb5f6f",
+          2086,
+          2184
+        ],
+        [
+          "openMemoryReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          2184,
+          2184
+        ],
+        [
+          "openMemoryReader.readTopicOverview",
+          "f050913ccbd942d756026a542ae27dce5bd42492701e96cb3dfb903dc0bd04e6",
+          2184,
+          2261
+        ],
+        [
+          "openMemoryReader.readTopicOverview",
+          "0894e538cd5be17677a0fb89daadeac62ed1042b3667b6fc7a45ec299a900ade",
+          2261,
+          2271
+        ],
+        [
+          "openContextReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          2271,
+          2329
+        ],
+        [
+          "openContextReader.findCandidates",
+          "580bc80844f068be555e3863abcc936d1ccbb07596d296e37da0c6e4615b20a6",
+          2329,
+          2507
+        ],
+        [
+          "openContextReader.contextRead",
+          "7e2788f155fb189542a1d1345b9df78b114b7dbc1f3304b8034afca1dd8b7e46",
+          2507,
+          2712
+        ],
+        [
+          "openContextReader.fetchCandidateEvidence",
+          "4420852df2c275051c3a9dca99d0fcdf42311c9696e549d6e4813bbc7edb5f6f",
+          2712,
+          2810
+        ],
+        [
+          "openContextReader.fetchCandidateEvidence",
+          "125d54f21c1329b55e421e8921237ed6961c104b398b426785357b3a90aafb67",
+          2810,
+          2850
+        ],
+        [
+          "openContextIndexMaintainer",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          2850,
+          3082
+        ],
+        [
+          "openContextIndexMaintainer.getContextIndexStatus",
+          "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
+          3082,
+          3088
+        ],
+        [
+          "openContextProductReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          3088,
+          3320
+        ],
+        [
+          "openContextProductReader.getContextIndexStatus",
+          "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
+          3320,
+          3326
+        ],
+        [
+          "openContextProductReader.fetchCandidateEvidence",
+          "9122d2f9a732cc619f857704014b264288c74005d9c30bc5d8a6542e0151e420",
+          3326,
+          3366
+        ],
+        [
+          "openContentSuppressionReader",
+          "64f55618b13d9afeebded345a4e67fa85c54d913cfc2658456aed99684cba951",
+          3366,
+          3421
+        ],
+        [
+          "correct",
+          "85f6fb4faeb31f011e1c7d7f8bbeb8825e078ad41dfcb1f935f14bfff116b5a5",
+          3421,
+          3460
+        ],
+        [
+          "getCard",
+          "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
+          3460,
+          3473
+        ],
+        [
+          "get",
+          "2b5ca6f58052e5cde3d834a08499c495f84f5a008824bc9fa24cd1aec692f2bb",
+          3473,
+          3483
+        ],
+        [
+          "supersede",
+          "b629cf9658c5d818d8f176dfebfc2ec7d3a130d8168b6b3dee8ebfc99e03ff68",
+          3483,
+          3524
+        ],
+        [
+          "forget",
+          "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
+          3524,
+          3528
+        ],
+        [
+          "get",
+          "db2260c63a3b7d05840e014d0c60bd734c5598233edfeaf0e71ae85c2da2c2cf",
+          3528,
+          3537
+        ],
+        [
+          "forget",
+          "b0937277a5a2824a9219e78d9a027e6583e12fc7c188d861db912ff17124fefb",
+          3537,
+          3563
+        ],
+        [
+          "admit",
+          "f501774841453b6aa07e74470cf2eb1e72bd6511edfbf2c5195f249085e4ac2f",
+          3563,
+          3587
+        ],
+        [
+          "forget",
+          "837e5753f92d579c1b6f8adf8f718e8c634d622dfb027c4230c52773ddc6c2e8",
+          3587,
+          3613
+        ],
+        [
+          "submitSourceNote",
+          "2a44dacc85af984c07680dd4888e96bc05aee0b0532ba88ced1e8a2e0924d648",
+          3613,
+          3624
+        ],
+        [
+          "createCardDraft",
+          "cd2a5b757129d43fe2d19ee688f18ee2112e58327f3c12a05496dae18e09da90",
+          3624,
+          3639
+        ],
+        [
+          "createCardDraft",
+          "3e74a22726d77c1c76a00bd997d676a0cb762047b49ac063650b1b760876ea9e",
+          3639,
+          3654
+        ],
+        [
+          "confirmCardDraft",
+          "3e20dd54a19f149424d37537911fcdcde843fbb449d212cdb9a04bdc980258d3",
+          3654,
+          3682
+        ],
+        [
+          "deleteSourceNote",
+          "b31d216492e3dbdc8266f0314810528f7c075d834268f9af18dd0dc65b8495a7",
+          3682,
+          3707
+        ],
+        [
+          "getCard",
+          "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
+          3707,
+          3711
+        ],
+        [
+          "getCard",
+          "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
+          3711,
+          3721
+        ],
+        [
+          "cancelCardDraft",
+          "59dead7c3040409d4f3fd3aa9cafbf5cce64f1a966946ed0db6fafb8ad84f5a9",
+          3721,
+          3735
+        ],
+        [
+          "deleteKnowledgeCard",
+          "5a66832abd3dd64e57fa8bc8d328405ec1c03fc01344829e7518aeb37b185c3c",
+          3735,
+          3749
+        ],
+        [
+          "deleteSourceNote",
+          "e599d7cbeb4a1fcd8d3e316241113a6157e4e522c6a80ae0d8dfde8c54f39f50",
+          3749,
+          3761
+        ],
+        [
+          "listCardEffects",
+          "21ece43ee72d29507d70e449663ea224ca3c4d9b845824ff11448d24c674665d",
+          3761,
+          3764
+        ],
+        [
+          "getPrivateCardUsage",
+          "69c7335d36b31ad5f695501c82725d4359230e9816b6d38e2b85ee3a652ad2cc",
+          3764,
+          3768
+        ],
+        [
+          "recall",
+          "8893101c7945b3853b74b9efa10374a1c6c0c4da58ef9e5ea60d2a050b10cc89",
+          3768,
+          3867
+        ],
+        [
+          "modelCalls",
+          "9da9259c5745452da84b389580d67b47830abd7d58beb15eb63cdbb2562e9d35",
+          null,
+          null
+        ]
+      ],
+      "statements": 3867,
+      "sql": "afcf18099c971d587be29bd56825f2b0340e106300d17f3b8d3c49d76d209f1d",
+      "tables": [
+        [
+          "admission_claims",
+          1,
+          "2e13c600e384547bcebe835c65b24dba7cd116d1ce51661aef61c153a681bb1f"
+        ],
+        [
+          "capture_events",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "capture_initial_classification",
+          1,
+          "da975f10f2b4946e20b9239b6f93081b6d17474683a4d5077a80b8ac95278bb0"
+        ],
+        [
+          "capture_streams",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_applicability_reviews",
+          3,
+          "fe4f6ee2032d9a17a5cd96176a4d2e5308153947b567d76b54f64e6c4b05f397"
+        ],
+        [
+          "card_bindings",
+          1,
+          "88bffd4b6de9eb090b75a1361d4af24d2938074026afc25f637dac96d5c37dc0"
+        ],
+        [
+          "card_effects",
+          10,
+          "40dd041412d64f9199cb97412a70d7b1f76c589b4a6545c1f347b61ed4680e79"
+        ],
+        [
+          "card_epochs",
+          1,
+          "b7835936e53cd622d9735bc25a75fe34ce892b15dbd88d8a916b2aac0d295414"
+        ],
+        [
+          "card_memory_bindings",
+          1,
+          "2fa50838d787b442f1e8fec2600ddc8cde7205a22f86af77ac33754948ab6ec4"
+        ],
+        [
+          "card_moc_edges",
+          1,
+          "9da70a9cdd0adc04e0a8ac3422a36ce3d5add3f946b58de90e3d873cf04be65b"
+        ],
+        [
+          "card_moc_epochs",
+          1,
+          "9d980a13ad69351d4215b662d417428cc9d7e7e8fedbc07aae2dcf7d13336d79"
+        ],
+        [
+          "card_moc_refs",
+          1,
+          "2e3649fb6c116e976ec2b21abe646e1c9187c8a928d77e8fa8970f4976c0f3e0"
+        ],
+        [
+          "card_moc_title_sources",
+          2,
+          "60753537c1b98f27e2db91e8dff8ff5fdfd8af4126e04d7a6a740d8f1a5758e4"
+        ],
+        [
+          "card_mocs",
+          2,
+          "0aa0bba3e46a55f3e7f829c6741ef60b76ceda37daec417b55d5f8601b8eca74"
+        ],
+        [
+          "card_note_usage",
+          1,
+          "8d8ce7abe7b55d603358e3b4dc907e03dad304d388db7d0ee8525e46d6985a06"
+        ],
+        [
+          "card_notes",
+          3,
+          "6a6d6bafa2550c66c500b94c18c2518cbf50f19f8d1f432447b9f12a3ce5a222"
+        ],
+        [
+          "card_operations",
+          20,
+          "0c09363a6f4e5542ee0a53c9e1e33ce99891a36e9b9d00170ad82e8548dd3ed1"
+        ],
+        [
+          "confirmation_actions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "confirmation_conflicts",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "confirmation_supersessions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_attempts",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_controls",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_events",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_identity",
+          1,
+          "fb778bffdad50f6b8cdb0a6fac2dddafb67182a06a9425f94e5a96dd724d811c"
+        ],
+        [
+          "episode_keep_actions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_memory_links",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_messages",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_sources",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "evidence_mappings",
+          1,
+          "64687fde4add0753c1145dd8724227963f89bf61bfdabcf470bec022ac0e1741"
+        ],
+        [
+          "index_edges",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_generations",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_memories",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_memory_refs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_mocs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_title_sources",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "memories",
+          4,
+          "86c388f131b4da2bd03d8d218c50c6990755590ebed189df070c2b3eb983bead"
+        ],
+        [
+          "memory_conflicts",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "memory_qualifications",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "memory_supersessions",
+          1,
+          "3b3d8822d0cb6524282278e4c93f5140c22b4cf99115c9cd86be289fcabbd85e"
+        ],
+        [
+          "moc_edges",
+          1,
+          "d69a92f517699f71f9674e8ed69ffcbafdd17ed0f60bd1b52790ad7cd25c4ea5"
+        ],
+        [
+          "moc_memory_refs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "moc_title_sources",
+          2,
+          "5ba5d9bc3b912862ce36928750a81bed9ab55591d030833737797315cb42360c"
+        ],
+        [
+          "mocs",
+          2,
+          "7e9765fe717e739e87536deea1500bd5a6fa781a0fe76cf560e084de031dc76a"
+        ],
+        [
+          "namespace_epochs",
+          1,
+          "205489a59d6a07c164ec24b07d8d80da1cec8cc52d8976ae38f4aa903eb00c59"
+        ],
+        [
+          "namespace_index_state",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "private_cards",
+          5,
+          "f239733356a0de264bb16ee3d8de56db25afff41a1db17a7588aca84dc5c267d"
+        ],
+        [
+          "procedural_tags",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "qualification_anchors",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "qualified_claim_bindings",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "qualified_slots",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "rationale_edges",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "receipt_causality",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "receipts",
+          2,
+          "a4656c0debde6a7961d65ca95314a6a5972a766f04382e0b72a9afd52f0920f9"
+        ],
+        [
+          "session_episodes",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "staged_capture_clocks",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "staged_capture_evidence",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "store_metadata",
+          1,
+          "53626d8205bd18ad9da3a25f2eadde26c87809f4b28d84d40491ad20e3b410a6"
+        ],
+        [
+          "suppressed",
+          4,
+          "3de05550f3b2f82414bc204f298f6089d04887b0d39bced47df04ab693c8fbef"
+        ]
+      ],
+      "effectWitnesses": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
     },
     "open:52": {
       "calls": [
@@ -357,7 +1160,7 @@
         ]
       ],
       "statements": 180,
-      "sql": "0755cacb2ed95617c67545be82d4f7c9ad623df14dbe09336b86f37be21d37ca",
+      "sql": "169172c8f1ceb755e926bd0e2828f5b09e6b8254df46fe44382bc966f811e56c",
       "tables": [
         [
           "admission_claims",
@@ -669,69 +1472,535 @@
           0,
           "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
         ]
-      ]
+      ],
+      "effectWitnesses": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
     },
-    "open:33": {
+    "workload:52": {
       "calls": [
         [
           "open",
           "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
-          245,
+          241,
+          null
+        ],
+        [
+          "capture",
+          "1b8c8ecc147c632d0d3075d223988dd8091e554d7b49e3b9d8be596819f00c7b",
+          241,
+          783
+        ],
+        [
+          "capture",
+          "8555abcb6d471d698d60f0e3e8a269990e22c8a9bb6353bd814f236f275612cd",
+          783,
+          842
+        ],
+        [
+          "list",
+          "af34431f748c09902f6e529cd40e1b72ca33b697183d6a0e26251025dd40b28f",
+          842,
+          850
+        ],
+        [
+          "recall",
+          "9b9dd270cadb14415cc37c792fae35150768053635cc27974324adcd6dea22ad",
+          850,
+          1027
+        ],
+        [
+          "submitSourceNote",
+          "c3bc92d801b29d7299ffefc4229a6779e21045ea9e0d96d9c5b52f439b810d59",
+          1027,
+          1121
+        ],
+        [
+          "submitSourceNote",
+          "c3bc92d801b29d7299ffefc4229a6779e21045ea9e0d96d9c5b52f439b810d59",
+          1121,
+          1159
+        ],
+        [
+          "submitSourceNote",
+          "65e5ace67336f4b8a6f8c70dea1cb66da0d2d0ecb1db1e8ef918453f6cd54886",
+          1159,
+          1182
+        ],
+        [
+          "createCardDraft",
+          "d683157e519d9a7521fbeb025c0129f1d37fdd1092113341791297324b726a8e",
+          1182,
+          1343
+        ],
+        [
+          "editCardDraft",
+          "f127482dc6a3e33385125636cedaee814341ff43aac4d75ee8f3251429e1e33c",
+          1343,
+          1477
+        ],
+        [
+          "editCardDraft",
+          "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
+          1477,
+          1501
+        ],
+        [
+          "confirmCardDraft",
+          "204fdc39b575e77f54017032e403ec7668388a0cd04b4b9c53f697f4f94f4a50",
+          1501,
+          1658
+        ],
+        [
+          "editKnowledgeCard",
+          "2dda1653dfd23113761d11998b63fd2b40637cabcd225f91ab856c0261568b7d",
+          1658,
+          1818
+        ],
+        [
+          "getCard",
+          "3c3154b515394ed43822d9be67502fff2033c0aebcc469de30ef49340b3c9e85",
+          1818,
+          1834
+        ],
+        [
+          "inspectCardOperation",
+          "75e0093ae780626fe6e383cb8a6d5a549a0c2e1f58a8be0cd3f3aea15afe9d89",
+          1834,
+          1841
+        ],
+        [
+          "inspectCardOperation",
+          "3b5f5e21c5b580819e6ca26dbaa09479ee2d902d53add0bbd66ff6e4f71b9e90",
+          1841,
+          1848
+        ],
+        [
+          "getSource",
+          "88294972fac7801ae02fbcd1d4f7d47e55ec3e850743d94f75153155915ab03b",
+          1848,
+          1855
+        ],
+        [
+          "fetchEvidence",
+          "8d6d3e5780285750d1987e100ce02c30fb0e7609ed85d44597c31ea733f6bd77",
+          1855,
+          1874
+        ],
+        [
+          "revalidateEvidence",
+          "8d6d3e5780285750d1987e100ce02c30fb0e7609ed85d44597c31ea733f6bd77",
+          1874,
+          1895
+        ],
+        [
+          "createCardDraft",
+          "f25b765d12f82d69d18544a1e47da40e90c08fca90964be3c36bad9a5ac0e4a4",
+          1895,
+          2079
+        ],
+        [
+          "createCardDraft",
+          "b2a46f9aa771f6828dd3965fbdebf3afca50e7945c92f13426113068a04a0471",
+          2079,
+          2297
+        ],
+        [
+          "confirmCardDraft",
+          "f5c0424b3e118fc841fd968466d0adebd34641da7df8173395dd04b037fbb97d",
+          2297,
+          2478
+        ],
+        [
+          "listCards",
+          "dfe364701567a8070231e867cd7b3c225a822a30e371d4a304a94d1580616a29",
+          2478,
+          2496
+        ],
+        [
+          "listCards",
+          "bd858d6aea77925b0597fcd6a05dc317a787b4feeb6975f84b1393adcf7fc237",
+          2496,
+          2517
+        ],
+        [
+          "listCards",
+          "9d1d11a85eb65f92d2f6808bfc7ee17c4c1f889fd19690bcc1545d306962b162",
+          2517,
+          2538
+        ],
+        [
+          "mapEvidence",
+          "c46c382816fbcb00644428e7ec7e4b046e53c7ba122215b38fe5d5ef4cbfd877",
+          2538,
+          2586
+        ],
+        [
+          "applyCardPlacement",
+          "3af6803023678ba25236f78f7adf406a068a4720c9b83bf1e99ebfe29d86e0b1",
+          2586,
+          2828
+        ],
+        [
+          "applyCardPlacement",
+          "3af6803023678ba25236f78f7adf406a068a4720c9b83bf1e99ebfe29d86e0b1",
+          2828,
+          2913
+        ],
+        [
+          "mapEvidence",
+          "10d54d51590e2c749718d6ca85ad73ac7806757d9d17cd75f1180b2ace858f97",
+          2913,
+          3021
+        ],
+        [
+          "refreshCardTopic",
+          "807e45455402ae3f2a3395543c7459fcd71eca71bb5e3dc6da13c6e937f0d385",
+          3021,
+          3247
+        ],
+        [
+          "map",
+          "9460f02d57f334bad1f9512856bfa28db079abafc6df3358d0b54f72af1a0cbc",
+          3247,
+          3261
+        ],
+        [
+          "applyPlacement",
+          "7055c921865f30f7911f8708d997354b4e9c075554f28327e085469e7ea2d900",
+          3261,
+          3469
+        ],
+        [
+          "mapEvidence",
+          "6f0b9c2b4b37349c7f46b2e9916d2d2239ebd876f3d35e6852954714eb1dfadf",
+          3469,
+          3484
+        ],
+        [
+          "mapEvidence",
+          "5acb38b04b2078af25ddaa880162dff3f8a5df9437e7b0d32a2eaf8074081de8",
+          3484,
+          3592
+        ],
+        [
+          "proposeEvidenceMapping",
+          "aea97711e1d33da29f5c86daaef7920fd5b1e5775370cab081eb6ac1fac38bfc",
+          3592,
+          3742
+        ],
+        [
+          "reviewEvidenceMapping",
+          "f750a3979c5dde979f2f2007a638c034ac03b3e31f60a70365ab0c014dfe95b6",
+          3742,
+          3895
+        ],
+        [
+          "listEvidenceMappings",
+          "f5234b08ce811f3bd18ed4731299419a7c9adee044c9c9593f5b5efa52609a8e",
+          3895,
+          3928
+        ],
+        [
+          "mapEvidence",
+          "5acb38b04b2078af25ddaa880162dff3f8a5df9437e7b0d32a2eaf8074081de8",
+          3928,
+          4036
+        ],
+        [
+          "selectEvidence",
+          "06de59b603b6e35d33819c3e1dc082399184190cc002a8f8483e95e9f433a501",
+          4036,
+          4079
+        ],
+        [
+          "refreshContextIndex",
+          "24b52cdd311839d9c8e4ba0c5f9b923ecfcfc570ef712cb6677a623927daf77d",
+          4079,
+          4476
+        ],
+        [
+          "findCandidates",
+          "aac88178ba69d2b0dd38aae7914bcbd8926773d0c8c52aca67e40c8ae2424312",
+          4476,
+          4626
+        ],
+        [
+          "contextRead",
+          "dbf54b18ad86dcd507a538c9bd2dd29c7b834c47470c0768b15d5e3c534579d9",
+          4626,
+          4837
+        ],
+        [
+          "fetchCandidateEvidence",
+          "0a47f85b11dd7adda92f4b09775687c909c8204c8bd7f72627f5f98699dacfad",
+          4837,
+          4881
+        ],
+        [
+          "fetchCandidateEvidence",
+          "c7b1a6bf77d0f7835d0291fb21ba14706d1a1e7b830ea2c03111b81aaba708f2",
+          4881,
+          4943
+        ],
+        [
+          "openMemoryReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          4943,
+          4943
+        ],
+        [
+          "openMemoryReader.readTopicOverview",
+          "d03c5b0e37c34f0a879ea65e89024eb52c43241fb7ece8b977f63d06e610b858",
+          4943,
+          5024
+        ],
+        [
+          "openMemoryReader.readTopicOverview",
+          "0fdd479278f2ac03b9f474c94bdebe80d53938625a965820f9b70c7a6349b2d1",
+          5024,
+          5038
+        ],
+        [
+          "openContextReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          5038,
+          5096
+        ],
+        [
+          "openContextReader.findCandidates",
+          "200a18d015df9d2fcba3b3f10080acfb5fbe6dfdf99490a441064f66d8f10a5d",
+          5096,
+          5258
+        ],
+        [
+          "openContextReader.contextRead",
+          "cb72ce4696c59f1e2a29945ac6a8e509593ecf36a444fb33d433a703cee6307a",
+          5258,
+          5439
+        ],
+        [
+          "openContextReader.fetchCandidateEvidence",
+          "c7b1a6bf77d0f7835d0291fb21ba14706d1a1e7b830ea2c03111b81aaba708f2",
+          5439,
+          5501
+        ],
+        [
+          "openContextReader.fetchCandidateEvidence",
+          "0a47f85b11dd7adda92f4b09775687c909c8204c8bd7f72627f5f98699dacfad",
+          5501,
+          5545
+        ],
+        [
+          "openContextIndexMaintainer",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          5545,
+          5777
+        ],
+        [
+          "openContextIndexMaintainer.getContextIndexStatus",
+          "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
+          5777,
+          5787
+        ],
+        [
+          "openContextProductReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          5787,
+          6019
+        ],
+        [
+          "openContextProductReader.getContextIndexStatus",
+          "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
+          6019,
+          6029
+        ],
+        [
+          "openContextProductReader.fetchCandidateEvidence",
+          "5c5d56fc7cffe0e386011d8fb8dd5ef57358b53899ec1f994ec0cde5393ddcd5",
+          6029,
+          6073
+        ],
+        [
+          "openContentSuppressionReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          6073,
+          6130
+        ],
+        [
+          "admit",
+          "74ffd1f925b43380dece1387d60602afef808a8c7c80ba3ff704f6f8df8e9ca1",
+          6130,
+          6246
+        ],
+        [
+          "admit",
+          "f4d553f54b703fc9154e36346e793a1be47d31e3b05012520719ff8d23de1976",
+          6246,
+          6362
+        ],
+        [
+          "isSuppressed",
+          "71940e8adf4746729f2c6baa93c954413cc24ed227d710cac6e2e10a403af872",
+          6362,
+          6388
+        ],
+        [
+          "isSuppressed",
+          "29f32fb7905d749051233e41242dd0adde76852352e4567ad785fd484c7a221b",
+          6388,
+          6410
+        ],
+        [
+          "isSuppressed",
+          "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
+          6410,
+          6423
+        ],
+        [
+          "correct",
+          "abadc37995cd74714f355c26854cf3068165dea8da863fbbafe612823912db71",
+          6423,
+          6633
+        ],
+        [
+          "getCard",
+          "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
+          6633,
+          6652
+        ],
+        [
+          "get",
+          "b6ba495a951487aebf576a116bd21724627ed3af6a564c36e356d68033572ac5",
+          6652,
+          6669
+        ],
+        [
+          "supersede",
+          "b544e3ca5f63f9a724ec303dde396332d0b832e20a32dd47e49d71b31501cace",
+          6669,
+          6883
+        ],
+        [
+          "forget",
+          "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
+          6883,
+          6906
+        ],
+        [
+          "get",
+          "bea8097c7a130babda6e39b36a7d3ed49942a1a26d7a02f011edb7fc8abb2b31",
+          6906,
+          6922
+        ],
+        [
+          "forget",
+          "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
+          6922,
+          7028
+        ],
+        [
+          "admit",
+          "9edf9d731e70145b9c331ead3249ce79a3d2c11baf8fab0a0fc90cabd72dc179",
+          7028,
+          7146
+        ],
+        [
+          "forget",
+          "b6d3bcb1ec2b6efd2283a4f5430cba3ef5fe152cacf08e437150507d50fca739",
+          7146,
+          7236
+        ],
+        [
+          "submitSourceNote",
+          "1049feee923a5d81404baf6ca59a5945269db8a588dcfc5ca004a3513e0f2de6",
+          7236,
+          7330
+        ],
+        [
+          "createCardDraft",
+          "3f0f46f15e676f8541adcbe3f970906e2a31e7064c6cec3ebe80c270e267a633",
+          7330,
+          7493
+        ],
+        [
+          "createCardDraft",
+          "8148851483e4fbb0107253489e9e2fd17e2caf81c0dce55c33532d64e4ac667f",
+          7493,
+          7656
+        ],
+        [
+          "confirmCardDraft",
+          "dba5d6774fb920225f2ce65857f843f4e884cb5a45f284b6d2ad2849d3ec354f",
+          7656,
+          7815
+        ],
+        [
+          "deleteSourceNote",
+          "2be84a758e627d377a7bca04dbc187b1e96578df9158b88566538f65b4cb28e2",
+          7815,
+          7975
+        ],
+        [
+          "getCard",
+          "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
+          7975,
+          7985
+        ],
+        [
+          "getCard",
+          "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
+          7985,
+          8001
+        ],
+        [
+          "cancelCardDraft",
+          "8786ce3708574795b5c7a0bda0d37df2ba69ba05933a9c9bdb253abb3f29f886",
+          8001,
+          8101
+        ],
+        [
+          "deleteKnowledgeCard",
+          "399e67e51366104aa635520d179c22ba846ed031b3f5e049150a7fc0d4021a78",
+          8101,
+          8201
+        ],
+        [
+          "deleteSourceNote",
+          "842a8943dd8257f41c9296debcc7631e9f70f230642087fb4f396a81d8cb36e2",
+          8201,
+          8298
+        ],
+        [
+          "listCardEffects",
+          "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
+          8298,
+          8307
+        ],
+        [
+          "getPrivateCardUsage",
+          "69c7335d36b31ad5f695501c82725d4359230e9816b6d38e2b85ee3a652ad2cc",
+          8307,
+          8321
+        ],
+        [
+          "recall",
+          "f2a0114df4337fe822695966a75394fc08f92ee5223e16f80bf775f9f5e16596",
+          8321,
+          8660
+        ],
+        [
+          "modelCalls",
+          "9da9259c5745452da84b389580d67b47830abd7d58beb15eb63cdbb2562e9d35",
+          null,
           null
         ]
       ],
-      "statements": 245,
-      "sql": "823188a3366864813e64445b8afc71cb5362d4930064e254c5305086861a8822",
+      "statements": 8660,
+      "sql": "8fd8df620e85f67a17e4f6c6cbac255be5e976ef5f575e95539192e74ac7f7d8",
       "tables": [
         [
           "admission_claims",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "asset_derivatives",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "asset_effects",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "asset_epochs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "asset_operations",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "asset_versions",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "assets",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "binary_chunks",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "binary_objects",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "binary_owner_usage",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "dc5250048ec4c38faeb7b3887158651a64f79d178dbfbdaf3770b5e5a87fecfd"
         ],
         [
           "capture_events",
@@ -740,8 +2009,8 @@
         ],
         [
           "capture_initial_classification",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "a4cf662e97edfd77b4144a48e74e2a2afb2ad27470870dd5b2bb50424e5aad82"
         ],
         [
           "capture_streams",
@@ -750,652 +2019,68 @@
         ],
         [
           "card_applicability_reviews",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          3,
+          "07804240fddff6defec7f6b0f3c6dbed47bd89aed53b9afddc0a1f5efc910d69"
         ],
         [
           "card_bindings",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_current_dependencies",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "1c5b81f4a146606079f4cf2742aefdd6f8e649b193b7878fd66d2ffc694117f3"
         ],
         [
           "card_effects",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          9,
+          "9d40c6ec91647ec1c996210bac579c29b8b67a7b914e5bbef0822046faf0f5ac"
         ],
         [
           "card_epochs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "6699829879e045d098a6a53c0df1da8955fb24af16bdc7b6ecbcee8f7911f44f"
         ],
         [
           "card_memory_bindings",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "fee476f61048be92ec5d9e5b0b58ab597e56a575b4139b9939d37881ac49b05a"
         ],
         [
           "card_moc_edges",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "91bbbf9d3d3aaa8eee167b304ee29df5f9d673efc8ec949c08f1222af7566892"
         ],
         [
           "card_moc_epochs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "797d7cf573bdba3ac38c6cf60b4b729c9aff1a6a7f76d92c415ee484a98f82d5"
         ],
         [
           "card_moc_refs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "3ac087d867869f33a3bf0d9b8cc1d4565a46e3dd34779acf92e4ce1b3f979df2"
         ],
         [
           "card_moc_title_sources",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          2,
+          "c271c905b1bde558682901dff9a50fefa2f696f08fbf5e14964d268337d5940c"
         ],
         [
           "card_mocs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          2,
+          "b8bad48ebddd7bb9172abcdb085a87f388114aaad94195c147291d5a311b162d"
         ],
         [
           "card_note_usage",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "8d8ce7abe7b55d603358e3b4dc907e03dad304d388db7d0ee8525e46d6985a06"
         ],
         [
           "card_notes",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          3,
+          "ad9e2aeabc15ff96f723f154a1326b33ff94bcbc9e8e8d10a9870c1aa4d526c1"
         ],
         [
           "card_operations",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_raw_bindings",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_raw_mutation_context",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_raw_pending_invalidations",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "confirmation_actions",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "confirmation_conflicts",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "confirmation_supersessions",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "episode_attempts",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "episode_controls",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "episode_events",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "episode_identity",
-          1,
-          "fb778bffdad50f6b8cdb0a6fac2dddafb67182a06a9425f94e5a96dd724d811c"
-        ],
-        [
-          "episode_keep_actions",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "episode_memory_links",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "episode_messages",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "episode_sources",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "evidence_mappings",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "index_edges",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "index_generations",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "index_memories",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "index_memory_refs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "index_mocs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "index_title_sources",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "local_capture_controls",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "memories",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "memory_conflicts",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "memory_qualifications",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "memory_supersessions",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "method_binding_events",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "method_binding_generations",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "method_bindings",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "method_changes",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "method_effects",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "method_epochs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "method_files",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "method_manifest_formats",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "method_mixed_entries",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "method_operations",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "method_owner_usage",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "method_packages",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "method_versions",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "moc_edges",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "moc_memory_refs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "moc_title_sources",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "mocs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "namespace_epochs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "namespace_index_state",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "private_cards",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "procedural_tags",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "qualification_anchors",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "qualified_claim_bindings",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "qualified_slots",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "rationale_edges",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "raw_capture_controls",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "raw_capture_events",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "raw_closed_jobs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "raw_conversations",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "raw_deletion_actions",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "raw_deletion_effects",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "raw_events",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "raw_exclusion_clocks",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "raw_job_sources",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "raw_messages",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "raw_owner_usage",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "raw_parts",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "raw_receipt_lineage",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "raw_receipt_origins",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "raw_session_fences",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "raw_source_exclusions",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "raw_source_maps",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "receipt_causality",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "receipts",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "role_profile_changes",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "role_profile_epochs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "role_profile_events",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "role_profile_operations",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "role_profile_owner_usage",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "role_profile_releases",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "role_profiles",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "session_episodes",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "sqlite_sequence",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "staged_capture_clocks",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "staged_capture_evidence",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "store_metadata",
-          1,
-          "53626d8205bd18ad9da3a25f2eadde26c87809f4b28d84d40491ad20e3b410a6"
-        ],
-        [
-          "suppressed",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ]
-      ]
-    },
-    "open:53": {
-      "calls": [
-        [
-          "open",
-          "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
-          318,
-          null
-        ]
-      ],
-      "statements": 318,
-      "sql": "9d131899b0da9071d4ea15d7545e899f525d71fa8425566ee0265ccf8310e25a",
-      "tables": [
-        [
-          "admission_claims",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "asset_derivatives",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "asset_effects",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "asset_epochs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "asset_operations",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "asset_versions",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "assets",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "binary_chunks",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "binary_objects",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "binary_owner_usage",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "capture_events",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "capture_initial_classification",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "capture_streams",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_applicability_reviews",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_bindings",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_current_dependencies",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_effects",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_epochs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_memory_bindings",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_moc_edges",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_moc_epochs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_moc_refs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_moc_title_sources",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_mocs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_note_usage",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_notes",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_operations",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_raw_bindings",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_raw_mutation_context",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
-          "card_raw_pending_invalidations",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          20,
+          "761e4a74120b2c6806e4aba51d9bfde4ef5642fa5aae31ab70e14ecf6bfe5006"
         ],
         [
           "confirmation_actions",
@@ -1414,16 +2099,391 @@
         ],
         [
           "content_identity_reservations",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          9,
+          "2eeaffb2b6a73c334a947d1cabde215aa1ed87b1000523fdc3694868fa59ca85"
         ],
         [
           "content_safety_control",
           1,
-          "6a78ee9a811c6d77d4f6d0bd00108d32b4769866346f44b2a359126f5bf9554a"
+          "9a3562dff2b3e4661f4bf6235c969d46115e138fca2ee714cbf23c83a8cb7af6"
         ],
         [
           "content_suppressions",
+          9,
+          "4d0b85d0ee24a541a64f54eb62d33ddae1bc3a650857cf7edc109f47663836c7"
+        ],
+        [
+          "episode_attempts",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_controls",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_events",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_identity",
+          1,
+          "fb778bffdad50f6b8cdb0a6fac2dddafb67182a06a9425f94e5a96dd724d811c"
+        ],
+        [
+          "episode_keep_actions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_memory_links",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_messages",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_sources",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "evidence_mappings",
+          1,
+          "9b8e14d5a3d5cbc455002543f3dde7516f3546d68295046ddf4ced22b7a4daa4"
+        ],
+        [
+          "index_edges",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_generations",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_memories",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_memory_refs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_mocs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_title_sources",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "memories",
+          6,
+          "c6a28594e8b4138144677acc5f227f2255d52c49242927633f13ea186a6f3ae9"
+        ],
+        [
+          "memory_conflicts",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "memory_qualifications",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "memory_supersessions",
+          1,
+          "f25e9eaf52e57c977ccc5621a72f4341d80d5dbb755e01e03f97b6b786c53fa7"
+        ],
+        [
+          "moc_edges",
+          1,
+          "48268f0ae7440db2930e4c0751f778ca5e61693753c9b61652a50562dca0b60b"
+        ],
+        [
+          "moc_memory_refs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "moc_title_sources",
+          2,
+          "67f37ab49502716a385cef11d9403bac7a75136f2fa465f47cfb1884534cb644"
+        ],
+        [
+          "mocs",
+          2,
+          "120781bc38ab0186e153688f7d97639c37c45e5b9f65e43383a3a6c904f5660c"
+        ],
+        [
+          "namespace_epochs",
+          1,
+          "163c39e4cf73f514b0df844575d6301d7ad5885659a6271b208d8f40501be6d2"
+        ],
+        [
+          "namespace_index_state",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "owner_suppression_epochs",
+          1,
+          "63f1202e1408da7ea53210a64a6c368f30b7ad516c110a2a03e265817d077575"
+        ],
+        [
+          "private_cards",
+          5,
+          "6556cd923a65e43fc36f45d22a6db367f4d6fc5cd403f57d9b0e5f8f594206dd"
+        ],
+        [
+          "procedural_tags",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "qualification_anchors",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "qualified_claim_bindings",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "qualified_slots",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "rationale_edges",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "receipt_causality",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "receipts",
+          5,
+          "29fb49110c14f51f6cd01830ad9de42d65de3ab3f8b9b3f4c9b8d2dbd858a7bd"
+        ],
+        [
+          "session_episodes",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "staged_capture_clocks",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "staged_capture_evidence",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "store_metadata",
+          1,
+          "53626d8205bd18ad9da3a25f2eadde26c87809f4b28d84d40491ad20e3b410a6"
+        ],
+        [
+          "suppressed",
+          3,
+          "a382d435ec58bc551d153a7329c634848f1554f4dd9a8841cd07cd2e242803cd"
+        ]
+      ],
+      "effectWitnesses": "f14bd452717a1ba81c2ff028ac540cbc723823d2359e840a6bf303bfe8b31476"
+    },
+    "open:33": {
+      "calls": [
+        [
+          "open",
+          "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+          245,
+          null
+        ]
+      ],
+      "statements": 245,
+      "sql": "dd9b20b5f35411c11c1b783d34b0ca58fa238ccd15b732720bdd2ffc238cd996",
+      "tables": [
+        [
+          "admission_claims",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "asset_derivatives",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "asset_effects",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "asset_epochs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "asset_operations",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "asset_versions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "assets",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "binary_chunks",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "binary_objects",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "binary_owner_usage",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "capture_events",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "capture_initial_classification",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "capture_streams",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_applicability_reviews",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_bindings",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_current_dependencies",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_effects",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_epochs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_memory_bindings",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_moc_edges",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_moc_epochs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_moc_refs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_moc_title_sources",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_mocs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_note_usage",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_notes",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_operations",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_raw_bindings",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_raw_mutation_context",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_raw_pending_invalidations",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "confirmation_actions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "confirmation_conflicts",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "confirmation_supersessions",
           0,
           "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
         ],
@@ -1623,11 +2683,6 @@
           "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
         ],
         [
-          "owner_suppression_epochs",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-        ],
-        [
           "private_cards",
           0,
           "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
@@ -1817,7 +2872,8 @@
           0,
           "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
         ]
-      ]
+      ],
+      "effectWitnesses": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
     },
     "workload:33": {
       "calls": [
@@ -1906,439 +2962,823 @@
           1299
         ],
         [
-          "listCards",
-          "279fe5f2437f42754f77ee5c367e6249eb082f3b02209d2d5d01a356be1b38dd",
+          "inspectCardOperation",
+          "6cc21ce33d4bb0ccb04e473838e3817616cf9d94f85aad9eecd1c688cef951c6",
           1299,
-          1313
+          1302
+        ],
+        [
+          "inspectCardOperation",
+          "3b5f5e21c5b580819e6ca26dbaa09479ee2d902d53add0bbd66ff6e4f71b9e90",
+          1302,
+          1305
         ],
         [
           "getSource",
           "a6a0793d4f660797a58212316ea829dc8fdd03a135a16f702528a332799a0cde",
-          1313,
-          1316
+          1305,
+          1308
         ],
         [
           "fetchEvidence",
           "54a52ae7525a96fd4a6227906fa70e03ddee790960f0e29ff698fb13db3c9aff",
-          1316,
-          1333
+          1308,
+          1325
+        ],
+        [
+          "revalidateEvidence",
+          "54a52ae7525a96fd4a6227906fa70e03ddee790960f0e29ff698fb13db3c9aff",
+          1325,
+          1344
         ],
         [
           "createCardDraft",
           "09c76bb8612fe2f6c1bf000e626f4d6a44647aaf3c015c176f7c2dbea41af73f",
-          1333,
-          1354
+          1344,
+          1365
         ],
         [
           "createCardDraft",
           "0d78aa53646b6d8bd43d69f7a6cd7c2ac109864cc73cec9d9b8ca26f115a2244",
-          1354,
-          1394
+          1365,
+          1405
         ],
         [
           "confirmCardDraft",
           "13ecc363c6d85511c4639778249d9c4c229df841c5c79e55fc0119530de71b36",
-          1394,
-          1468
+          1405,
+          1479
+        ],
+        [
+          "listCards",
+          "ffb03d5918c1b8efa13ec2bf6457188de617b2dcbe2d9f0c8a6de6ba9ea07548",
+          1479,
+          1496
+        ],
+        [
+          "listCards",
+          "6a7480f9a267bb5b3cbf77c4fc81f152918e13a246cce48b1bd40dcd4ebea72e",
+          1496,
+          1517
+        ],
+        [
+          "listCards",
+          "046eaf624dd3fb3acbdc2fecd3b97c0e9eb35698e7f9ba3f9eb769c701b967c4",
+          1517,
+          1558
         ],
         [
           "mapEvidence",
           "ad871ac1a7ecafdf688da4a6ad649dda8a4ec1b21a9e42575e2caefd34aeff21",
-          1468,
-          1557
+          1558,
+          1647
         ],
         [
           "applyCardPlacement",
           "7daa1768b880146bb97af5a7967e22fc48e6225fc8461ee65b6cf76ced0a1406",
-          1557,
-          1596
+          1647,
+          1686
         ],
         [
           "applyCardPlacement",
           "7daa1768b880146bb97af5a7967e22fc48e6225fc8461ee65b6cf76ced0a1406",
-          1596,
-          1599
+          1686,
+          1689
         ],
         [
           "mapEvidence",
           "0d4ab685cae8974556ea5d233f664d4dc2a72f4463ef7156bdd02e0829f27710",
-          1599,
-          1757
+          1689,
+          1847
         ],
         [
           "refreshCardTopic",
           "3be1c6dfc79aadfa2ea2bca25a216906385f6abb28b801dcbc99b9e804d17480",
-          1757,
-          1793
+          1847,
+          1883
         ],
         [
           "map",
           "82ec8576fcc473a7c47fa74504c90261103a08a5c3f06933be1753f394fe2615",
-          1793,
-          1801
+          1883,
+          1891
         ],
         [
           "applyPlacement",
           "9a5e6bb510abf0d938f5aafbc5d4fab1d84d4b2bcab9decbeae8192f2f0bfd25",
-          1801,
-          1831
+          1891,
+          1921
         ],
         [
           "mapEvidence",
           "cbb5703a6c98fe0bdc221dc0e5f41a3bfd8faa4d865a950af8c0b99ad00a46b5",
-          1831,
-          1842
+          1921,
+          1932
         ],
         [
           "mapEvidence",
           "6ee2ad16ac866a186da4f6a25a696ca70f9b73a27b64b462d8cdad84ec1e34d8",
-          1842,
-          2000
+          1932,
+          2090
         ],
         [
           "proposeEvidenceMapping",
           "854e9e19e5c8f95618f40e5aa281865c9c731979ca2af78b6d0d34c40809d706",
-          2000,
-          2034
+          2090,
+          2124
         ],
         [
           "reviewEvidenceMapping",
           "b690b818c35be47b2d9e31211b2d2245e45a3c62e0abbf9ac86a2900c4639138",
-          2034,
-          2071
+          2124,
+          2161
         ],
         [
           "listEvidenceMappings",
           "9ef3887e904d86b7ff5d937c881a72be34ed7139cf7e8f600f3d5e22c7dd2179",
-          2071,
-          2103
+          2161,
+          2193
         ],
         [
           "mapEvidence",
           "6ee2ad16ac866a186da4f6a25a696ca70f9b73a27b64b462d8cdad84ec1e34d8",
-          2103,
-          2261
+          2193,
+          2351
         ],
         [
           "selectEvidence",
           "2478fd9f380811bdb921a36f18771791ea4168048e2217781353632d439af18c",
-          2261,
-          2327
+          2351,
+          2417
         ],
         [
           "importMethodVersion",
           "b31af757b4bc08ff12416ee108caf05c38879fea54afbdc98365d0dbfdbf4a94",
-          2327,
-          2376
+          2417,
+          2466
         ],
         [
           "checkMethodReasonRefs",
           "fc4e7b14ca14317f6130ef67a422b5c3841266bb37e8374014db8e464fa69b85",
-          2376,
-          2391
+          2466,
+          2481
         ],
         [
           "getMethodVersion",
           "94f96f0d80b751dd5e44337362e66592143005b0d4641c1b9e7e17163b4a227f",
-          2391,
-          2402
+          2481,
+          2492
         ],
         [
           "adoptMethodVersion",
           "c31d42e4a8ebb75cf6808cce9a42398749cc339d1a850d02d9687c2de397fbdc",
-          2402,
-          2422
+          2492,
+          2512
         ],
         [
           "resolveMethod",
           "73e9367e3cd5cd3ef27172e0ba65eaf0ff1d1908e47489adb52a73bba14adde3",
-          2422,
-          2436
+          2512,
+          2526
         ],
         [
           "readMethodFile",
           "4de4c47fafa9a7ae1ed3f93e3cc08eb406eae8fcb6975f48256378b44e2a9e94",
-          2436,
-          2446
+          2526,
+          2536
         ],
         [
           "declareCardCurrentDependencies",
           "edecb1918291d00a6fba49e72c01c28ab80134a2ed45305192fb0e997089f433",
-          2446,
-          2473
+          2536,
+          2563
         ],
         [
           "declareCardCurrentDependencies",
           "edecb1918291d00a6fba49e72c01c28ab80134a2ed45305192fb0e997089f433",
-          2473,
-          2476
+          2563,
+          2566
         ],
         [
           "revalidateCardCurrentDependencies",
           "af433845eba18c415338ebb8c438ec33530bb2040451ce2c08b0dd00dd240acf",
-          2476,
-          2502
+          2566,
+          2592
         ],
         [
           "publishRoleProfileRelease",
           "bfe59e6a11e0ae4cd55ced3b292be8f50b215fd3a6e82c8d8ebc26c84138f56c",
-          2502,
-          2520
+          2592,
+          2610
         ],
         [
           "refreshContextIndex",
           "24b52cdd311839d9c8e4ba0c5f9b923ecfcfc570ef712cb6677a623927daf77d",
-          2520,
-          2971
+          2610,
+          3061
         ],
         [
           "findCandidates",
           "6d7060f372f7ed2ebac62757f693787b519370f5dadf6ef9d5258897d088dae8",
-          2971,
-          3228
+          3061,
+          3318
         ],
         [
           "contextRead",
           "8394cd56e337a8cbb5dcdcc69655e1deb7bdbbc5e23d2dfa2adc65c89178f95b",
-          3228,
-          3633
+          3318,
+          3723
+        ],
+        [
+          "fetchCandidateEvidence",
+          "d7f952dd543f7438eb205443ae32cba1f9d5bc991fdd8d2365448746726fe9e0",
+          3723,
+          3809
+        ],
+        [
+          "fetchCandidateEvidence",
+          "031f7b0b497657574cd161c7d62c69f318e6786b0ae69a30cea04c1c4c2c9b14",
+          3809,
+          4059
         ],
         [
           "readRoleTaskContext",
           "5d931d24065e27f7c6dab23590f1962765122b8c1ece2c157a8516af5f3084c9",
-          3633,
-          4164
+          4059,
+          4590
         ],
         [
           "readRoleTaskContext",
           "97beb1a2a20b0b844a4b87989054f33ea002fb5f10e216688e782cda1f401889",
-          4164,
-          4532
+          4590,
+          4958
         ],
         [
           "readRoleTaskContext",
           "e535c7ad854b981766c9afa676d6d5bfb8b6deed6b9f4d7f0bfe6e384b27a89c",
-          4532,
-          4690
+          4958,
+          5116
+        ],
+        [
+          "importMethodVersion",
+          "a4b0189ed839c26d455b1dbaef9bd2bdfe03b661844f1793ecba08ff151f65e6",
+          5116,
+          5187
+        ],
+        [
+          "importMethodVersion",
+          "58171c01d4561a94034fc7278d6a2d95b1f18f13c932987371d0f3c57cfc8d2a",
+          5187,
+          5263
+        ],
+        [
+          "importMethodVersion",
+          "5d6d9c9634bccc8fc8bd64f2c6457a49e1335b4ae4df1c0f66b34eae49798282",
+          5263,
+          5325
+        ],
+        [
+          "listMethodManifest",
+          "af43c379f5bda6811566e71f9ae3ee9c0ba11e1ae0d6c897bdfb4f434fbe2158",
+          5325,
+          5339
+        ],
+        [
+          "listMethodManifest",
+          "664e9c379f524f4749bb94142811ceb2a9489c0e19a622678ce842ee748dcf10",
+          5339,
+          5357
+        ],
+        [
+          "listMethodPackages",
+          "d89a39a590cd3ffed77fc9028b43a61755b25888132074bc1acdd3f5ca15e22c",
+          5357,
+          5367
+        ],
+        [
+          "listMethodPackages",
+          "b409fd9d21d5362165885fd144da06da7845305a555ef8221a160169ef4b591f",
+          5367,
+          5385
+        ],
+        [
+          "listMethodPackages",
+          "0cff484cea45bc3c9e7edf6a72afa12476747d61c9160638f94ff5aef9d95e15",
+          5385,
+          5399
+        ],
+        [
+          "listMethodVersions",
+          "18c260557d6ec4f0a13973af44258ce1e1ff032b1100c23f2926f8e0555d7f8a",
+          5399,
+          5412
+        ],
+        [
+          "listMethodVersions",
+          "27028fb3688130a063a4a4317f781fed14a3f29f88057778eada1ebb3bf433ed",
+          5412,
+          5429
+        ],
+        [
+          "compareMethodVersions",
+          "35e4fd9e367faed339ec98fd79e654d12ae88b5cbc65e05745fdafaadbc0a2b3",
+          5429,
+          5483
+        ],
+        [
+          "compareMethodVersions",
+          "ddb50543e2089dd9353748555e77d52753fc30e1ab7dcd8050333df7a335fcf9",
+          5483,
+          5541
+        ],
+        [
+          "adoptMethodVersion",
+          "245ce680e3dbde222ab3a27a92bc384e2334868386bcea3b5aa9f7bcf1cbfc3b",
+          5541,
+          5561
+        ],
+        [
+          "adoptMethodVersion",
+          "e5f9dbd40ab147638782b67910a29c45cb7b2e9ece7225adf45243d5689d050f",
+          5561,
+          5582
+        ],
+        [
+          "resolveMethodsForRole",
+          "7aefdef33f44ab5fcccd23ffdbb7456062ebba19bceb64a62fe0159ffef0e0b1",
+          5582,
+          5624
+        ],
+        [
+          "resolveMethodsForRole",
+          "17dce2f2dab86cc60b50268b84bad57be970983f94a4e10296b7c40e7a00046b",
+          5624,
+          5674
+        ],
+        [
+          "resolveMethodsForRole",
+          "76e7906012f825707a1f93662dd4a8eb054e43464e900784bd36e621a725c386",
+          5674,
+          5720
+        ],
+        [
+          "disableMethodBinding",
+          "5d8ffb15b33fc6274d283fcb65ff143ba79c3b9e6a569e89b048200d601f9a7e",
+          5720,
+          5734
+        ],
+        [
+          "disableMethodBinding",
+          "5d8ffb15b33fc6274d283fcb65ff143ba79c3b9e6a569e89b048200d601f9a7e",
+          5734,
+          5737
+        ],
+        [
+          "listMethodBindingEvents",
+          "f8b2468f3290fb7a74dc8211679a0fcf488229e8c74d81d273dd427fd23324a0",
+          5737,
+          5749
+        ],
+        [
+          "listMethodBindingEvents",
+          "66f85125ae641351cf02f005f966207f746f53afdeb6db19b8c4f882be998f19",
+          5749,
+          5765
+        ],
+        [
+          "readMethodAttachmentBytes",
+          "0301c4bdebd4db83f9a633811b2aedb24efa8cfe1c58f6fca6eeacc57acc5e00",
+          5765,
+          5778
+        ],
+        [
+          "readMethodAttachmentBytes",
+          "218998e7dfac6d3d47c8786c170a5494adc7d0f31150682382ccaa40a99ea3bc",
+          5778,
+          5791
+        ],
+        [
+          "deleteMethodVersion",
+          "62fae707c1f0a4f0ef83f27e7670fb4a0e151b38c222435e23b61dd53e1286af",
+          5791,
+          5805
+        ],
+        [
+          "deleteMethodVersion",
+          "62fae707c1f0a4f0ef83f27e7670fb4a0e151b38c222435e23b61dd53e1286af",
+          5805,
+          5808
+        ],
+        [
+          "deleteMethodPackage",
+          "ad452c742ad9458beea71d055a186f10d0404807d38cd49c262c7cdbc084bb71",
+          5808,
+          5822
+        ],
+        [
+          "deleteMethodPackage",
+          "ad452c742ad9458beea71d055a186f10d0404807d38cd49c262c7cdbc084bb71",
+          5822,
+          5825
+        ],
+        [
+          "listMethodEffects",
+          "03584cb62b2a63500681b2c397df9ad9e864103f3e464afbe21e79bbef1aa6bb",
+          5825,
+          5835
+        ],
+        [
+          "listMethodEffects",
+          "64f6a6e034b08a4befe974f5d99881d562328397f75c7747e19fe32c1c0a83d6",
+          5835,
+          5853
+        ],
+        [
+          "listMethodEffects",
+          "2bf3e68ec7abe8a56f8bc659ebaf8878e92215308e5693b3ba9cdff172621ef8",
+          5853,
+          5871
+        ],
+        [
+          "listMethodEffects",
+          "0eaa7085d0bc2a51a0b2cc57b1399097c38ea1a444b437b75229ae09db600d77",
+          5871,
+          5889
+        ],
+        [
+          "listMethodEffects",
+          "64fb17b544dbbcb768be92d0008517a5e52c5028e30f3748329dd94657b06383",
+          5889,
+          5907
+        ],
+        [
+          "listMethodEffects",
+          "b0bae3ea6dc9137daa1f453237823aaf01a55a897d2f12386e15a3a14a9585c0",
+          5907,
+          5921
+        ],
+        [
+          "getMethodPackageUsage",
+          "dfbefc1de191b4dd741adb91582885d2e51ff02f580eb49d8c6a0d9f594dbfeb",
+          5921,
+          5927
+        ],
+        [
+          "listMethodManifest",
+          "d1f84f46d28118ff5a27cb06af017f0fd139bafe816faf860f197e7491b81f75",
+          5927,
+          5934
         ],
         [
           "captureRaw",
-          "c000cb1c5f95974448c14d6d3b9015948e21d12a48a621799e6f2ae27e10184d",
-          4690,
-          4930
+          "3c2532f8b014ee3ec621c4b0a15c0d60cd378515a245db953e221fda302cd8db",
+          5934,
+          6174
         ],
         [
           "getConversation",
-          "ceba9c6d9d601f9d84eed19654f40bc6f6f7f4351354359de806405d62d934f9",
-          4930,
-          4944
+          "97e4fb50a8fd8dbe3aa4543e4ec3b9d6c2acc42734e19a0b6f052e2ce2bcb1e9",
+          6174,
+          6188
         ],
         [
           "resolveSourceReferences",
-          "77841a965f4d3e11384fedf4d602bf6ea75e3f0ea40c4c35ad5b37313d5be2aa",
-          4944,
-          4969
+          "e00c53a6c221627a63266ae1ce53a6a0b0bd7b26594e9bb1baf93f54a4959d96",
+          6188,
+          6213
         ],
         [
           "createCardDraft",
-          "f0490cf6d600741f9a1c4f3e48c310b69dc14303536255fb266d65075d8cea0e",
-          4969,
-          4988
+          "b36bc8bf37de1440c280b22300418a02d82c2ea26d06136932568516c9366889",
+          6213,
+          6232
         ],
         [
           "confirmCardDraft",
-          "2dfc1b9b7f1410e012b992dfc882cd54504e2948a3c79aef4bfe2c8e51ac707e",
-          4988,
-          5030
+          "3a6b07fd5695076ea7410af4ef5debaecd8e7f5708abeccf4dab5111ab9d4cd8",
+          6232,
+          6274
         ],
         [
           "getSource",
-          "a820fa4373475809c39159b189e253a6dccddc3c464c5b25114428ef30b614ea",
-          5030,
-          5054
+          "bc59e3bb56ef7b34a1d1c6327d947549a38917954f4d668aba8f0b84a46d9e1e",
+          6274,
+          6298
         ],
         [
           "setRawCaptureControl",
           "3653110e79aa84b356285089adbb6cb1f6b056ba465b72ba1fe4f24561d78032",
-          5054,
-          5060
+          6298,
+          6304
         ],
         [
           "setRawCaptureControl",
           "9234c78fe0ef0056a5b34f634681a6fe7c7e9e5adc29e6b88a5e0b268c7be69d",
-          5060,
-          5065
+          6304,
+          6309
+        ],
+        [
+          "refreshContextIndex",
+          "ac891be91cd86b6a4b6d2cb16cd2ee70ac93485fa3fa224d7af6ed6ae687d7f6",
+          6309,
+          6717
+        ],
+        [
+          "openMemoryReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          6717,
+          6717
+        ],
+        [
+          "openMemoryReader.readTopicOverview",
+          "0ae33fcf0f7e7a795f6312641aac14a4b97d686b37fec5e383255b741096183f",
+          6717,
+          7087
+        ],
+        [
+          "openMemoryReader.readTopicOverview",
+          "d8d35ab0c86e3faa4607f1c2ed678cacf51f723fb70e5c700900f077ac3adef4",
+          7087,
+          7097
+        ],
+        [
+          "openContextReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          7097,
+          7389
+        ],
+        [
+          "openContextReader.findCandidates",
+          "8ccb86713bf3ba5a309e21d256cc2c1b81fa8a9a9253e5489f23d6fa1d57a22c",
+          7389,
+          7691
+        ],
+        [
+          "openContextReader.contextRead",
+          "0245593b1244bf2a98e28881eb52f58dc19c435e9b243893c40e664e86dcafc4",
+          7691,
+          8137
+        ],
+        [
+          "openContextReader.fetchCandidateEvidence",
+          "451b94f61c263d38d89ec1fe33fc17a0c41a8b53ae3ce9c27b510be1e26fab58",
+          8137,
+          8461
+        ],
+        [
+          "openContextReader.fetchCandidateEvidence",
+          "6dfc841403a9bfba144ceb91fc800e0b388227d84e016549d182787b6e6c0578",
+          8461,
+          8547
+        ],
+        [
+          "openContextIndexMaintainer",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          8547,
+          8914
+        ],
+        [
+          "openContextIndexMaintainer.getContextIndexStatus",
+          "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
+          8914,
+          8920
+        ],
+        [
+          "openContextProductReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          8920,
+          9287
+        ],
+        [
+          "openContextProductReader.getContextIndexStatus",
+          "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
+          9287,
+          9293
+        ],
+        [
+          "openContextProductReader.fetchCandidateEvidence",
+          "ab49640ef7ea32336a288af9ff810e0c079d7ca3a831f974f1994d8d7efb38d0",
+          9293,
+          9379
+        ],
+        [
+          "openContentSuppressionReader",
+          "64f55618b13d9afeebded345a4e67fa85c54d913cfc2658456aed99684cba951",
+          9379,
+          9668
+        ],
+        [
+          "openRawCaptureCore",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          9668,
+          9934
+        ],
+        [
+          "openRawCaptureCore.getConversation",
+          "97e4fb50a8fd8dbe3aa4543e4ec3b9d6c2acc42734e19a0b6f052e2ce2bcb1e9",
+          9934,
+          9948
+        ],
+        [
+          "openRawCaptureCore.captureRaw",
+          "872e1551bbceff794151f6541924c86ad73abf0e8c61d46d4a2178029a43bb4d",
+          9948,
+          10339
+        ],
+        [
+          "openRawCaptureCore.getConversation",
+          "6d17fa294e6a986af82b8c961c6dfe96e0e73371907c5bc0f71915721eeb6ff2",
+          10339,
+          10355
+        ],
+        [
+          "openRawCaptureCore.getConversation",
+          "2d5a18bf112f6f26a5119b7a6922ae6e8902bf2c85442784a4210e6b30c03916",
+          10355,
+          10369
+        ],
+        [
+          "openRawCaptureCore.listRawConversations",
+          "571ee60b6ff0c4c63fb45c0c1f86e6424d94cbaa0283aff6f2895d23cc8d45bb",
+          10369,
+          10373
+        ],
+        [
+          "openRawCaptureCore.listRawConversations",
+          "7e3dc1f41a5f45d789c3ffc77fd42e9cb4857cf25d740e5d2a9eb34fa3d602b1",
+          10373,
+          10377
         ],
         [
           "deleteConversation",
-          "201b48bec41739baf30cffacb7f11b1c4a26841b73a287205390095272bd6eb3",
-          5065,
-          5163
+          "7c7ab2d9136d6c49f1d0a70939b301a8307200184574f4a8322b5b7a4c1cf8fa",
+          10377,
+          10477
         ],
         [
           "deleteConversation",
-          "201b48bec41739baf30cffacb7f11b1c4a26841b73a287205390095272bd6eb3",
-          5163,
-          5166
+          "7c7ab2d9136d6c49f1d0a70939b301a8307200184574f4a8322b5b7a4c1cf8fa",
+          10477,
+          10480
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          5166,
-          5180
+          10480,
+          10494
         ],
         [
           "correct",
-          "984ab970214f38185ed6666a8faf7b94f2d27f9f4928e7496a68c067c9e6aad0",
-          5180,
-          5256
+          "70c4e925846dcd32d8b26c480ae91cc34e2d42e27e0b3ad9c6487c711cdae920",
+          10494,
+          10583
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          5256,
-          5270
+          10583,
+          10597
         ],
         [
           "get",
           "2b5ca6f58052e5cde3d834a08499c495f84f5a008824bc9fa24cd1aec692f2bb",
-          5270,
-          5301
+          10597,
+          10628
         ],
         [
           "supersede",
-          "c5272c09a8bcedeb6658c8fc48516cb8bbfa4b4d50676ad9604791626b2d3e56",
-          5301,
-          5369
+          "85a132991b83f00e80c42000aceac0019e48ee517011857e8f74e73f36e051be",
+          10628,
+          10696
         ],
         [
           "forget",
           "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
-          5369,
-          5375
+          10696,
+          10702
         ],
         [
           "get",
-          "f3e931221d732873d37c910ceb3adf687e4588d4ecc68ee4434a3ef500e82863",
-          5375,
-          5406
+          "0c1761396a0caa357777c813104e85734df24166e734f4ea4e6c4b8f4e8b8ed9",
+          10702,
+          10733
         ],
         [
           "forget",
-          "bcb485438785c33811caf132dbbeadc7bdcf4d2bd569ecbe167b29e43e2635f6",
-          5406,
-          5447
+          "842bca929001887de46060ceb41958218fe160f882674e064a4c266993ce8c36",
+          10733,
+          10790
         ],
         [
           "admit",
-          "e8c7f273b9f706fee29e57c58423d1104a9f4c9489b5059ab0f4f90174c72f24",
-          5447,
-          5502
+          "8c0069625defe656be7efa5842f2c611f0de14604360d73e3719a603b208ca21",
+          10790,
+          10845
         ],
         [
           "forget",
-          "2dacfa155190ff731dd0736d432430379a370c5b53b12c12166aa854b035c553",
-          5502,
-          5543
+          "9af50378e5cef59c000dfe2ad8b41f4e441cb9aad7b0e4964ac3db8dfa0161b3",
+          10845,
+          10902
         ],
         [
           "submitSourceNote",
-          "14c1de5202618e8feec3f9345d818363f4e5bde937c3ab5a060c87298a289572",
-          5543,
-          5554
+          "b128a9849ab6ad8f6eac48b1f07c728136d208ff99239d69e7737191a883c05c",
+          10902,
+          10913
         ],
         [
           "createCardDraft",
-          "8c9beb1f3950b7f7622e54c261fb86d92fdb081db6923805a75ad3ec867de13f",
-          5554,
-          5569
+          "212a257dc881f37ac626cd89471b43631c7b3fec0651570cd25a83e0f2710bbf",
+          10913,
+          10928
         ],
         [
           "createCardDraft",
-          "cd2a5b757129d43fe2d19ee688f18ee2112e58327f3c12a05496dae18e09da90",
-          5569,
-          5584
+          "c35def3828dac4fed01ed93ace309724438fa4cb83b5c328dc706b437a5bf100",
+          10928,
+          10943
         ],
         [
           "confirmCardDraft",
-          "f92a83718df7635036e35dd01482a1e51ac84129da53ca50f934a8a0f1e99c44",
-          5584,
-          5615
+          "f9c972af890c6b29e26caea918edd9de0b83fde25dcb599d49b19be7353990e9",
+          10943,
+          10974
         ],
         [
           "deleteSourceNote",
-          "4cc2fa630dee215b08aaf9c7ad173235dbd2fbe58f8fde69fa9dc922c43a47ff",
-          5615,
-          5640
+          "130faba56067cb2cfcb212249b417add4ff5642ee12be7dd85384e38bf055923",
+          10974,
+          10999
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          5640,
-          5644
+          10999,
+          11003
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          5644,
-          5655
+          11003,
+          11014
         ],
         [
           "cancelCardDraft",
           "59dead7c3040409d4f3fd3aa9cafbf5cce64f1a966946ed0db6fafb8ad84f5a9",
-          5655,
-          5669
+          11014,
+          11028
         ],
         [
           "deleteKnowledgeCard",
           "5a66832abd3dd64e57fa8bc8d328405ec1c03fc01344829e7518aeb37b185c3c",
-          5669,
-          5683
+          11028,
+          11042
         ],
         [
           "checkMethodReasonRefs",
           "a59808dac96996843c9c766296bf1aaf8abadfe59a67e89b216de944a6e952a0",
-          5683,
-          5690
+          11042,
+          11049
         ],
         [
           "deleteSourceNote",
           "e599d7cbeb4a1fcd8d3e316241113a6157e4e522c6a80ae0d8dfde8c54f39f50",
-          5690,
-          5702
+          11049,
+          11061
         ],
         [
           "listCardEffects",
-          "759fd28cc3a4a5fe3f427fb0506f94deac28c8c1c0b5bac7b8c2907bb7177d1b",
-          5702,
-          5705
+          "a2dbe844a3a2e064af92095d1480365111c5f5a62fd7d8dcf2f0b43bd48c4341",
+          11061,
+          11064
         ],
         [
           "getPrivateCardUsage",
           "69c7335d36b31ad5f695501c82725d4359230e9816b6d38e2b85ee3a652ad2cc",
-          5705,
-          5709
+          11064,
+          11068
         ],
         [
           "recall",
-          "9d5e82e07846371b895b9dc3316ddce1752bfeb1520e95f17731e9e2a3224c57",
-          5709,
-          5874
+          "5f1ed616c1b4fc4a9ab0ae19f343358a8ad9f88ecc207b06ac9d9bce40b87058",
+          11068,
+          11326
         ],
         [
           "modelCalls",
-          "8e1f54cf83c6b07f0f50f1f53af049a3a750e5a5f738707091eade09997525fe",
+          "3728d557896d57e2cc2cc6efad56bfbe83aca7fbd9da9351d20d1a1f5aece8bc",
           null,
           null
         ]
       ],
-      "statements": 5874,
-      "sql": "d3e3c576e3135a2659f90bcd4549d00f2a2adf27c2cc47e83d0967fd90f11fc1",
+      "statements": 11326,
+      "sql": "e28c5325046d654f15d58984c5ce30e9228872ac1b650233f9cf77f8c2583502",
       "tables": [
         [
           "admission_claims",
-          2,
-          "52c13aa47b1d9c5e8f0792c61b00b4a05438d3933056ee59e57afcd6bff437a2"
+          3,
+          "abc65a6fc2f799a80ce7544f1f0d99287ec3676a35a76e2205d55ecc32a2fdfb"
         ],
         [
           "asset_derivatives",
@@ -2372,18 +3812,18 @@
         ],
         [
           "binary_chunks",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          2,
+          "64bb41ce50ed2061df0925ef48798cc23ac8b371a9bb51f22334ac06f8d15091"
         ],
         [
           "binary_objects",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "70ccd1a8eee0c871ec10db783c85ab61628d3b719ef12cd0b915b4b48ed05ed9"
         ],
         [
           "binary_owner_usage",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "5d03b3e010850a9acf15caf63045e0e53e91f20108cedc4b9e2c2788e030ef69"
         ],
         [
           "capture_events",
@@ -2392,8 +3832,8 @@
         ],
         [
           "capture_initial_classification",
-          2,
-          "a8c764e33204aad4e3fcfb90c4bc678b88a4b81e25e19c043a475bcb11b3caae"
+          3,
+          "197ca83085dc5426604cfbf606e6de8fefc5cccf0dd0e4b12641ecb7a47d76b1"
         ],
         [
           "capture_streams",
@@ -2403,12 +3843,12 @@
         [
           "card_applicability_reviews",
           4,
-          "63cd921ef974397e802ec3ec0226502a4111a953d20ae046b498714a127aafd7"
+          "07421457eae3e78eda968bb00abd0f16b7b6fa772afe073d44745049faf9c970"
         ],
         [
           "card_bindings",
           1,
-          "8fe5dd0bc4b2966cd41592c88872d4573dbd461e0e205906c04c4a835eb2b1e5"
+          "2f213963d73f6c12f7358c390bd832706e36080088758c1e83e685c093e7a015"
         ],
         [
           "card_current_dependencies",
@@ -2418,7 +3858,7 @@
         [
           "card_effects",
           11,
-          "b13a9eb0ce044ca95a528bda154ba1becf02556fa67c3b28f56ae62757ffaee1"
+          "6e278781ab4ffbf103880ec817faecaebe8c5e3a05a2ce8f1a6491c98b01afd9"
         ],
         [
           "card_epochs",
@@ -2463,17 +3903,17 @@
         [
           "card_notes",
           3,
-          "795a53e7c5c33626f8bea175d0daaeaa8cacb46e9f7ffdde9c2ad48c2405ebb1"
+          "5252c8d1613580d932e8ee4db22bec652d08de14d4ea89f84c82a60cedb763b0"
         ],
         [
           "card_operations",
           24,
-          "add85d9aebe3faf3421c873986ed88cf87824e9fde37a12820d0fbcc09d943d3"
+          "7f806097a1be88a3f67646b3a2b4fc20f9d1b9d96d1c97a6cdfdfad983c18804"
         ],
         [
           "card_raw_bindings",
           1,
-          "19324b26d96bb108c6e00789e9b1f606a209cc00c2c61fdfb56d14c399f702dd"
+          "dda98cca1f3b1aa1983f375b7e78c86f7ada6cbb6505e345a107a551f8ea2cf1"
         ],
         [
           "card_raw_mutation_context",
@@ -2582,8 +4022,8 @@
         ],
         [
           "memories",
-          5,
-          "200c27f93a6ae98467064c8a5cb0cd8b3c4af6294ebe447f8da18b80a0eea3eb"
+          6,
+          "3339452f382d4747e154a86d50f509c99bf8ab730756979fff78b0d870408c88"
         ],
         [
           "memory_conflicts",
@@ -2598,72 +4038,72 @@
         [
           "memory_supersessions",
           1,
-          "39098f5e0da984ea503fad83658978fb3ca02f9a2c04f1732e79a33598405792"
+          "4fe85a537e692e882f63da8a8cf00f20849ef89a862a9879c4a19fe2f1a27a86"
         ],
         [
           "method_binding_events",
-          1,
-          "82d6ef781b368dc8dc2adc7d73e79927674d5c0a3e8a5b07cf49d60d39be73f6"
+          4,
+          "e4a5b0b62bb31a51af28065f7c7d5e8878fe3ab489a5473c653ec530308c0fcf"
         ],
         [
           "method_binding_generations",
-          1,
-          "167da1af140bdf2da84598196c24b2e42f39b30a201efa20ee7535fab86704c0"
+          3,
+          "c0072a1eef978b4666a9fe6dab6241bf426473e92deddb72171e8b6883fb18e2"
         ],
         [
           "method_bindings",
-          1,
-          "e19d8c7a8bec9ddf5e0bf4853122845d059e222acb72f1b1b5c6dbc76ee3b835"
+          3,
+          "e992718d1e6c42060c924504dbe724cf83c24b8fb2d71513c0276d5afece7fd4"
         ],
         [
           "method_changes",
-          1,
-          "f12dde11810442cf229916ba24b7dd723f8879268bf04c419ed0b03e358b852b"
+          2,
+          "be006540683175abe674efc488021b300a838ce9326275c9006c3762de4d4532"
         ],
         [
           "method_effects",
-          1,
-          "b6a8ae411c30e7b53bb090eb28a8131346b03e5bdf61529723ed31b15c32a09c"
+          6,
+          "f0cad28133dc55ce599cb9e63d8dda62f2b0be8aad30fa196fc0303d3250cd6f"
         ],
         [
           "method_epochs",
           1,
-          "77dd8273b8bdcf3b3fc46718f69620123acc255aa60ac39b8929aeb48bb8b322"
+          "c0f91d5cd897d1f928767fc3c7f31648e742e995dff97e1766223f7a8f2799f1"
         ],
         [
           "method_files",
-          1,
-          "d1ef1c14b9298ae33b59683d60a59d9752ed4ace1a3b3468d01f7846e8011ff3"
+          2,
+          "53caaec8203d045325707447cab479d6cc586a273439df46cd57b426cba4757c"
         ],
         [
           "method_manifest_formats",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "5cc4a87dec72dc01ecff385feb2823f7dbc3f0862d9ab9cabee6992315dbae49"
         ],
         [
           "method_mixed_entries",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          2,
+          "78df57de3e18128e0b5134acde3993db07a0b3915de80c101f322e4d6e120acb"
         ],
         [
           "method_operations",
-          2,
-          "c5beaf91f0386c17ccf98529848de2ebbf5b26d9a3870a171c6449176855f989"
+          10,
+          "17248979be30ccb300ac5f162eda136c84c2b1b1c3c64481f096ea3a6438b379"
         ],
         [
           "method_owner_usage",
           1,
-          "8d8ce7abe7b55d603358e3b4dc907e03dad304d388db7d0ee8525e46d6985a06"
+          "5bcbff5c3b8ab2e820e27a1f7924a8e0aa9365469f06239e18427b10fab58129"
         ],
         [
           "method_packages",
-          1,
-          "ad26e6adcecef5bc84bfeab204a1c2672c5c0b9a9adc8d1074d71175b26ba0f1"
+          3,
+          "06afa6c54b4761ac21052cab35a32d2150b8441503eeaedd596c19a9ec1a25c8"
         ],
         [
           "method_versions",
-          1,
-          "bc20735f1cd7d0af795fa397e5876f118d188631e246bbff4be33eb74af38d04"
+          4,
+          "188e40188736ff8ab4ab72deb17c06d16f062f2f9d9c0a608fb3b1a8b45ff658"
         ],
         [
           "moc_edges",
@@ -2688,7 +4128,7 @@
         [
           "namespace_epochs",
           1,
-          "e996cf1594b2b7793622354aa98a5ef40fc35f1e340663cb2fdee01c7cf3a1be"
+          "dbd6050a60a510435171e1e51d2f78adde8995ea11f16a206f88d88cddbade80"
         ],
         [
           "namespace_index_state",
@@ -2698,7 +4138,7 @@
         [
           "private_cards",
           6,
-          "4c4e8edbfce2d9af4fba8f3550d814dadb443d4bad402a331fe74ccf35ccebd7"
+          "86d6fe1265cc24d360891a309a692be90e62e347d637677eaac734698a1de9ce"
         ],
         [
           "procedural_tags",
@@ -2732,8 +4172,8 @@
         ],
         [
           "raw_capture_events",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "c87659bce8ede613d985317aa956c5ca35ee83a602aae20c38cab6bf6441ae6a"
         ],
         [
           "raw_closed_jobs",
@@ -2742,23 +4182,23 @@
         ],
         [
           "raw_conversations",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "f706a15c488b165462b01904a6d47ec14129f86cd5fcc4c4f6f1ca2888159af3"
         ],
         [
           "raw_deletion_actions",
           1,
-          "6aa27ebfebf713587ec317e4432c931067da87b7c74c57ffcc7f63677080be25"
+          "513b5d35cca4fadbae402b7d5074fc3147cd6a2914a33909827b0cd888aefe2d"
         ],
         [
           "raw_deletion_effects",
           2,
-          "44db036f6a72ad9407fda024160d892833ce1b99fbf1cfcfa640042b9cb8ff2a"
+          "3ccc569dfffe97610ca60b5686537076af92def24455fe8f84412f052da3c85d"
         ],
         [
           "raw_events",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "00ad073eacf5ce382f8505692772e4a27afbf51c49c88acb4acc7bd1ec19c608"
         ],
         [
           "raw_exclusion_clocks",
@@ -2767,33 +4207,33 @@
         ],
         [
           "raw_job_sources",
-          2,
-          "7243dcb11947f8462fa1b1aba7094f7d735745b57e11c508f54f197644288e35"
+          4,
+          "0448db4d0856e680efaa82ea3526681f6f2852eefa4afb089c26bc811bfe34a6"
         ],
         [
           "raw_messages",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          2,
+          "964d6c5bd82cfa2ef10f664b383fdc4c95f750c677da7b4bebf57528738b5678"
         ],
         [
           "raw_owner_usage",
           1,
-          "d38de7705bedbe85a27abf1e0c112e5a7fc56f409d47dc300b287d78892ddc56"
+          "b35f5584b35e44477a57d6eea74122e74a51b9c881ff0b2a6d454c591ebd1e94"
         ],
         [
           "raw_parts",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          2,
+          "9ea2d8ac019f4ae333d2f9ca9e5047a3cff87075b5ac1f7e945f7bd086cf772c"
         ],
         [
           "raw_receipt_lineage",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          2,
+          "2959df2d3d299572d16bce2cfeeeb59b55bfbc78f640530b5a5ed4dc40e384d1"
         ],
         [
           "raw_receipt_origins",
-          2,
-          "7172d4c3742ecda39a61a5e5b4a093d2cab712081044051a5f32a4c1fff03147"
+          4,
+          "7a1626725b76f7a7729d8ad3e01f8d07c6a820998304ed491aea061d23135ef8"
         ],
         [
           "raw_session_fences",
@@ -2807,8 +4247,8 @@
         ],
         [
           "raw_source_maps",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          2,
+          "b3a93a40d68fde979a2ed6da25abc74804001a7438bf03bd0963640feb0082f1"
         ],
         [
           "receipt_causality",
@@ -2817,8 +4257,8 @@
         ],
         [
           "receipts",
-          2,
-          "59f5d69ca0f0b8616839f016a6b722f4b22f42898dd38da5e1f6a72e51f0a6c6"
+          4,
+          "d1cd28686bdc65a3716025aeb7173358c9ea9f9542346d69578054ad392609b1"
         ],
         [
           "role_profile_changes",
@@ -2885,7 +4325,593 @@
           5,
           "1b4c0cc31ca400b7c68bd9a268720b9ccaf6d993f0ae9ec74a87ec4f9572bfea"
         ]
-      ]
+      ],
+      "effectWitnesses": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "open:53": {
+      "calls": [
+        [
+          "open",
+          "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+          318,
+          null
+        ]
+      ],
+      "statements": 318,
+      "sql": "e8b265763b25dbf6b9e480673d64d74a407b7fa6f2fa395c16b0863280abaadb",
+      "tables": [
+        [
+          "admission_claims",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "asset_derivatives",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "asset_effects",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "asset_epochs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "asset_operations",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "asset_versions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "assets",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "binary_chunks",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "binary_objects",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "binary_owner_usage",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "capture_events",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "capture_initial_classification",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "capture_streams",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_applicability_reviews",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_bindings",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_current_dependencies",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_effects",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_epochs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_memory_bindings",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_moc_edges",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_moc_epochs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_moc_refs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_moc_title_sources",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_mocs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_note_usage",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_notes",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_operations",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_raw_bindings",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_raw_mutation_context",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_raw_pending_invalidations",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "confirmation_actions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "confirmation_conflicts",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "confirmation_supersessions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "content_identity_reservations",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "content_safety_control",
+          1,
+          "6a78ee9a811c6d77d4f6d0bd00108d32b4769866346f44b2a359126f5bf9554a"
+        ],
+        [
+          "content_suppressions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_attempts",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_controls",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_events",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_identity",
+          1,
+          "fb778bffdad50f6b8cdb0a6fac2dddafb67182a06a9425f94e5a96dd724d811c"
+        ],
+        [
+          "episode_keep_actions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_memory_links",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_messages",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_sources",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "evidence_mappings",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_edges",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_generations",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_memories",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_memory_refs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_mocs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_title_sources",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "local_capture_controls",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "memories",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "memory_conflicts",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "memory_qualifications",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "memory_supersessions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "method_binding_events",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "method_binding_generations",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "method_bindings",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "method_changes",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "method_effects",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "method_epochs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "method_files",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "method_manifest_formats",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "method_mixed_entries",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "method_operations",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "method_owner_usage",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "method_packages",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "method_versions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "moc_edges",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "moc_memory_refs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "moc_title_sources",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "mocs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "namespace_epochs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "namespace_index_state",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "owner_suppression_epochs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "private_cards",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "procedural_tags",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "qualification_anchors",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "qualified_claim_bindings",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "qualified_slots",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "rationale_edges",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_capture_controls",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_capture_events",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_closed_jobs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_conversations",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_deletion_actions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_deletion_effects",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_events",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_exclusion_clocks",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_job_sources",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_messages",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_owner_usage",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_parts",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_receipt_lineage",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_receipt_origins",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_session_fences",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_source_exclusions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_source_maps",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "receipt_causality",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "receipts",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "role_profile_changes",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "role_profile_epochs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "role_profile_events",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "role_profile_operations",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "role_profile_owner_usage",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "role_profile_releases",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "role_profiles",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "session_episodes",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "sqlite_sequence",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "staged_capture_clocks",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "staged_capture_evidence",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "store_metadata",
+          1,
+          "53626d8205bd18ad9da3a25f2eadde26c87809f4b28d84d40491ad20e3b410a6"
+        ],
+        [
+          "suppressed",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      ],
+      "effectWitnesses": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
     },
     "workload:53": {
       "calls": [
@@ -2974,439 +5000,853 @@
           2805
         ],
         [
-          "listCards",
-          "34403d613324d7f970e6a2d226d1c9ded07a290c0bda79a5e1750d88838beb22",
+          "inspectCardOperation",
+          "75e0093ae780626fe6e383cb8a6d5a549a0c2e1f58a8be0cd3f3aea15afe9d89",
           2805,
-          2823
+          2812
+        ],
+        [
+          "inspectCardOperation",
+          "3b5f5e21c5b580819e6ca26dbaa09479ee2d902d53add0bbd66ff6e4f71b9e90",
+          2812,
+          2819
         ],
         [
           "getSource",
           "88294972fac7801ae02fbcd1d4f7d47e55ec3e850743d94f75153155915ab03b",
-          2823,
-          2830
+          2819,
+          2826
         ],
         [
           "fetchEvidence",
           "8d6d3e5780285750d1987e100ce02c30fb0e7609ed85d44597c31ea733f6bd77",
-          2830,
-          2851
+          2826,
+          2847
+        ],
+        [
+          "revalidateEvidence",
+          "8d6d3e5780285750d1987e100ce02c30fb0e7609ed85d44597c31ea733f6bd77",
+          2847,
+          2870
         ],
         [
           "createCardDraft",
           "f25b765d12f82d69d18544a1e47da40e90c08fca90964be3c36bad9a5ac0e4a4",
-          2851,
-          3050
+          2870,
+          3069
         ],
         [
           "createCardDraft",
           "b2a46f9aa771f6828dd3965fbdebf3afca50e7945c92f13426113068a04a0471",
-          3050,
-          3430
+          3069,
+          3449
         ],
         [
           "confirmCardDraft",
           "f5c0424b3e118fc841fd968466d0adebd34641da7df8173395dd04b037fbb97d",
-          3430,
-          3740
+          3449,
+          3759
+        ],
+        [
+          "listCards",
+          "dfe364701567a8070231e867cd7b3c225a822a30e371d4a304a94d1580616a29",
+          3759,
+          3780
+        ],
+        [
+          "listCards",
+          "bd858d6aea77925b0597fcd6a05dc317a787b4feeb6975f84b1393adcf7fc237",
+          3780,
+          3805
+        ],
+        [
+          "listCards",
+          "9d1d11a85eb65f92d2f6808bfc7ee17c4c1f889fd19690bcc1545d306962b162",
+          3805,
+          3850
         ],
         [
           "mapEvidence",
           "c46c382816fbcb00644428e7ec7e4b046e53c7ba122215b38fe5d5ef4cbfd877",
-          3740,
-          3833
+          3850,
+          3943
         ],
         [
           "applyCardPlacement",
           "3af6803023678ba25236f78f7adf406a068a4720c9b83bf1e99ebfe29d86e0b1",
-          3833,
-          4094
+          3943,
+          4204
         ],
         [
           "applyCardPlacement",
           "3af6803023678ba25236f78f7adf406a068a4720c9b83bf1e99ebfe29d86e0b1",
-          4094,
-          4191
+          4204,
+          4301
         ],
         [
           "mapEvidence",
           "10d54d51590e2c749718d6ca85ad73ac7806757d9d17cd75f1180b2ace858f97",
-          4191,
-          4353
+          4301,
+          4463
         ],
         [
           "refreshCardTopic",
           "807e45455402ae3f2a3395543c7459fcd71eca71bb5e3dc6da13c6e937f0d385",
-          4353,
-          4601
+          4463,
+          4711
         ],
         [
           "map",
           "9460f02d57f334bad1f9512856bfa28db079abafc6df3358d0b54f72af1a0cbc",
-          4601,
-          4615
+          4711,
+          4725
         ],
         [
           "applyPlacement",
           "7055c921865f30f7911f8708d997354b4e9c075554f28327e085469e7ea2d900",
-          4615,
-          4833
+          4725,
+          4943
         ],
         [
           "mapEvidence",
           "6f0b9c2b4b37349c7f46b2e9916d2d2239ebd876f3d35e6852954714eb1dfadf",
-          4833,
-          4848
+          4943,
+          4958
         ],
         [
           "mapEvidence",
           "5acb38b04b2078af25ddaa880162dff3f8a5df9437e7b0d32a2eaf8074081de8",
-          4848,
-          5010
+          4958,
+          5120
         ],
         [
           "proposeEvidenceMapping",
           "aea97711e1d33da29f5c86daaef7920fd5b1e5775370cab081eb6ac1fac38bfc",
-          5010,
-          5197
+          5120,
+          5307
         ],
         [
           "reviewEvidenceMapping",
           "f750a3979c5dde979f2f2007a638c034ac03b3e31f60a70365ab0c014dfe95b6",
-          5197,
-          5387
+          5307,
+          5497
         ],
         [
           "listEvidenceMappings",
           "f5234b08ce811f3bd18ed4731299419a7c9adee044c9c9593f5b5efa52609a8e",
-          5387,
-          5423
+          5497,
+          5533
         ],
         [
           "mapEvidence",
           "5acb38b04b2078af25ddaa880162dff3f8a5df9437e7b0d32a2eaf8074081de8",
-          5423,
-          5585
+          5533,
+          5695
         ],
         [
           "selectEvidence",
           "06de59b603b6e35d33819c3e1dc082399184190cc002a8f8483e95e9f433a501",
-          5585,
-          5655
+          5695,
+          5765
         ],
         [
           "importMethodVersion",
           "14edd013e4e7360405573e5481e45a7b454f500aaddc806790dc7243f586bd69",
-          5655,
-          5859
+          5765,
+          5969
         ],
         [
           "checkMethodReasonRefs",
           "16469c89046ba72cb943b8ccda9156cbfbfe85bbfc9c1ffe0676c3e95f22c0cc",
-          5859,
-          5886
+          5969,
+          5996
         ],
         [
           "getMethodVersion",
           "fd9b4dda310182d3d3d5128a2e2c2f675dcf478d4c2a19176c33ce8702d80ac2",
-          5886,
-          5901
+          5996,
+          6011
         ],
         [
           "adoptMethodVersion",
           "504f290fe2ca7b4b284bedb22beb7c51582ee15db875e5a94778cc6f093d4503",
-          5901,
-          5994
+          6011,
+          6104
         ],
         [
           "resolveMethod",
           "831cd3e0100059908d9ba21d7ca1522efb16e92518f464bf06043be4c3210a19",
-          5994,
-          6012
+          6104,
+          6122
         ],
         [
           "readMethodFile",
           "4de4c47fafa9a7ae1ed3f93e3cc08eb406eae8fcb6975f48256378b44e2a9e94",
-          6012,
-          6026
+          6122,
+          6136
         ],
         [
           "declareCardCurrentDependencies",
           "c7e890b5d6650247d9e6d556b53fed5ea3bfd7c4d891807d9a74d4fbe68802e7",
-          6026,
-          6220
+          6136,
+          6330
         ],
         [
           "declareCardCurrentDependencies",
           "c7e890b5d6650247d9e6d556b53fed5ea3bfd7c4d891807d9a74d4fbe68802e7",
-          6220,
-          6283
+          6330,
+          6393
         ],
         [
           "revalidateCardCurrentDependencies",
           "ca9404d7c0a53a88aaf8376ee9b9f7bb94e785f182e93092384bde75e14a6d0a",
-          6283,
-          6476
+          6393,
+          6586
         ],
         [
           "publishRoleProfileRelease",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          6476,
-          6560
+          6586,
+          6670
         ],
         [
           "refreshContextIndex",
           "24b52cdd311839d9c8e4ba0c5f9b923ecfcfc570ef712cb6677a623927daf77d",
-          6560,
-          7015
+          6670,
+          7125
         ],
         [
           "findCandidates",
           "aac88178ba69d2b0dd38aae7914bcbd8926773d0c8c52aca67e40c8ae2424312",
-          7015,
-          7227
+          7125,
+          7337
         ],
         [
           "contextRead",
           "8f56bc81c86413599daeee19556884cb77c4e51f0bf9f60294c01f947f75cdc5",
-          7227,
-          7550
+          7337,
+          7660
+        ],
+        [
+          "fetchCandidateEvidence",
+          "5f2ba0aba7cd0dbe814afcabdc25822ecfffae6c50a52f2822706ad486e0ea89",
+          7660,
+          7750
+        ],
+        [
+          "fetchCandidateEvidence",
+          "2aa19c535fcf4fa82b16507c28f5eca4f8e62aafbeb7e94e96956b0540119e41",
+          7750,
+          7906
         ],
         [
           "readRoleTaskContext",
           "c2e2a042bd7c5dc20e6c65b6260648ea99d5dbb2f2d5826c1dcf99c6c9b5a888",
-          7550,
-          7971
+          7906,
+          8327
         ],
         [
           "readRoleTaskContext",
           "0535751003daea2694a356110b0260a49472d98b0e486b5ff1da90ab46233bd0",
-          7971,
-          8223
+          8327,
+          8579
         ],
         [
           "readRoleTaskContext",
           "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
-          8223,
-          8238
+          8579,
+          8594
+        ],
+        [
+          "importMethodVersion",
+          "d1470368f0dca3e58aff26b2963dbb768147b295a4e030c5e2b993dafebcb302",
+          8594,
+          8864
+        ],
+        [
+          "importMethodVersion",
+          "3169b4d13d30b8346f739e7176183be62ff93da1c0f1b76c4a8c66bae0ed5064",
+          8864,
+          9141
+        ],
+        [
+          "importMethodVersion",
+          "2c72a4848f50413495191379fa3466407960b7ca0ef6ab0ace432054795e73df",
+          9141,
+          9381
+        ],
+        [
+          "listMethodManifest",
+          "26db8a9c598984385b4bd90bbae00d823f7f9a905cf5d794451375ad01f4bd2d",
+          9381,
+          9399
+        ],
+        [
+          "listMethodManifest",
+          "664e9c379f524f4749bb94142811ceb2a9489c0e19a622678ce842ee748dcf10",
+          9399,
+          9421
+        ],
+        [
+          "listMethodPackages",
+          "84c4328442f7ff3b443a589fb11236c1d516f0bdf79eb021ffefa39e71d44eb3",
+          9421,
+          9435
+        ],
+        [
+          "listMethodPackages",
+          "f0e1845e0d1551f6304c9eea279b8dbb2827d0f4f44f453bed36cae9cf14b89f",
+          9435,
+          9457
+        ],
+        [
+          "listMethodPackages",
+          "dad3422f85263293f78cf3bb62daed53eb0b68976a5535f549793cce7fce1d16",
+          9457,
+          9475
+        ],
+        [
+          "listMethodVersions",
+          "8cabeb7c90afe17854c26f2f6aa526dc86d7a8e3b09e937eb08b87648e9be5c6",
+          9475,
+          9492
+        ],
+        [
+          "listMethodVersions",
+          "add8ebd136d8596c3daf3c2d2735ece07c5d67e40487d44f853a92bcf5764371",
+          9492,
+          9513
+        ],
+        [
+          "compareMethodVersions",
+          "0ed804bf85381167fab8474e923d14c61c4830ddb84597c98354ebbdcc9db49f",
+          9513,
+          9599
+        ],
+        [
+          "compareMethodVersions",
+          "869ca467f400cc3c94e158eae381dac9d80c14f55a948b3ca83e42cd53f649f2",
+          9599,
+          9689
+        ],
+        [
+          "adoptMethodVersion",
+          "f515fa29bedc6441bd34227c2aed8349bda010d1b2b3ef3e9bebaffaa9245ae7",
+          9689,
+          9782
+        ],
+        [
+          "adoptMethodVersion",
+          "3838c88d32be1027e92a3684970cbf5387f35491d788f4496200713051741a81",
+          9782,
+          9876
+        ],
+        [
+          "resolveMethodsForRole",
+          "b41db58681c73627894a96b921919073d476f9689c3b43496df0ac4de1a2dd2f",
+          9876,
+          9922
+        ],
+        [
+          "resolveMethodsForRole",
+          "4c28aea90c73a19dafece234435b1d57d2bdf25bfc71d7e9ed68ed8ce6de7bef",
+          9922,
+          9976
+        ],
+        [
+          "resolveMethodsForRole",
+          "02936ebccac75804ad95542b9aaed6f8561709e7f1a69b385604eb8a370a541f",
+          9976,
+          10026
+        ],
+        [
+          "disableMethodBinding",
+          "7938905de53b0a73ae5a1da961bcee940fffc84d585ff83ee6ca4d268c10213a",
+          10026,
+          10109
+        ],
+        [
+          "disableMethodBinding",
+          "7938905de53b0a73ae5a1da961bcee940fffc84d585ff83ee6ca4d268c10213a",
+          10109,
+          10148
+        ],
+        [
+          "listMethodBindingEvents",
+          "98ae8eab9afa3379deb234d52f131a524e15903bceb4aa0a611ae9a0eef1a4fc",
+          10148,
+          10164
+        ],
+        [
+          "listMethodBindingEvents",
+          "c27e1f9e2c8e957dd11c81b1f7dcfff1678f145ccb252d52684e8cf75031c672",
+          10164,
+          10184
+        ],
+        [
+          "readMethodAttachmentBytes",
+          "f4fc1dba2331be25b5f4412775c62ba5189b1bda14c41988fb8e8849e8375b10",
+          10184,
+          10201
+        ],
+        [
+          "readMethodAttachmentBytes",
+          "3b593796b734e381e921915e5ac413a66c55e79f04728263350d7120178f6bae",
+          10201,
+          10218
+        ],
+        [
+          "deleteMethodVersion",
+          "f8803401b7258e12a514ee62c131e7a7be4b6cf430c387dc9ae7c4328f6d8b5a",
+          10218,
+          10317
+        ],
+        [
+          "deleteMethodVersion",
+          "f8803401b7258e12a514ee62c131e7a7be4b6cf430c387dc9ae7c4328f6d8b5a",
+          10317,
+          10364
+        ],
+        [
+          "deleteMethodPackage",
+          "6ea3ec699dc15d089604b9fb2a72cbd321a70573c5d0ef97a2de2f3c59b69e45",
+          10364,
+          10462
+        ],
+        [
+          "deleteMethodPackage",
+          "6ea3ec699dc15d089604b9fb2a72cbd321a70573c5d0ef97a2de2f3c59b69e45",
+          10462,
+          10510
+        ],
+        [
+          "listMethodEffects",
+          "3717ac5ceb55d4eb5b5c553679dff881fdf1bbe1f40fc9542794bf84fa0d5e05",
+          10510,
+          10524
+        ],
+        [
+          "listMethodEffects",
+          "5bacec7afe75fdc6b06eba7efa08bc5a3e51fae8ca3b1a1b0423075117ed47c2",
+          10524,
+          10546
+        ],
+        [
+          "listMethodEffects",
+          "bcb18c6cab0782ead6098c01237d5676b36123f1354c312743ed7c40f601ba8c",
+          10546,
+          10568
+        ],
+        [
+          "listMethodEffects",
+          "a0dc2f7a89a6ef720bca41ad8e9f273f4fd573f2ece83c8d9f87f19e81c42d4b",
+          10568,
+          10590
+        ],
+        [
+          "listMethodEffects",
+          "aaa8a43fd24d87cc922a84604138a88b98df216b78fe80d3a182f02adec4b325",
+          10590,
+          10612
+        ],
+        [
+          "listMethodEffects",
+          "9f2c768000f22be468504e4fc7466811962f5eebf20f0fa3855dc314c25924b7",
+          10612,
+          10630
+        ],
+        [
+          "getMethodPackageUsage",
+          "dfbefc1de191b4dd741adb91582885d2e51ff02f580eb49d8c6a0d9f594dbfeb",
+          10630,
+          10640
+        ],
+        [
+          "listMethodManifest",
+          "d1f84f46d28118ff5a27cb06af017f0fd139bafe816faf860f197e7491b81f75",
+          10640,
+          10651
         ],
         [
           "captureRaw",
-          "d02b0d5c20da05b59ebeec2251c0f452bf70d28c32e3c6ed27b182f0004d2972",
-          8238,
-          8957
+          "340ff266cfd9db465d24d844007178841bf9282a8be4b367d150ee987bd1e50f",
+          10651,
+          11370
         ],
         [
           "getConversation",
-          "2a42e9d5d312c74d12eaf441befa4e20cabd87a09b074cd1199646b410749e09",
-          8957,
-          8978
+          "0889df3a2f44f6361c03b53c75ccc8f158992a5dbf4276446b3576329d46880c",
+          11370,
+          11391
         ],
         [
           "resolveSourceReferences",
-          "bd080870977fbd72df513757e1136bba1c29875b19a899ac27db38adc50fda9b",
-          8978,
-          9008
+          "537de7a68f9e17ba4830de4f5e935e3f6ab4cb0ab30df40f3f2c4eddfbcdbed7",
+          11391,
+          11421
         ],
         [
           "createCardDraft",
-          "c63de37a3a981ae71541f153024415b1458ff9cfb078f8c9d8b939a8bd07ed49",
-          9008,
-          9231
+          "2d808124afb6cbf470043edece67e0aa73184ff788351f1d2d2e97b5e1c82ac9",
+          11421,
+          11644
         ],
         [
           "confirmCardDraft",
-          "296e84cb64aefe981e992efc60e11fbc782cbb1a58f297c0d568f7c2a8942bc7",
-          9231,
-          9443
+          "cdc6982d26b1e19e94d434936fff35615131b786f69baaf317639089cfbbec75",
+          11644,
+          11856
         ],
         [
           "getSource",
-          "5f714515735a303e2c5da42865b142d62566eb30af5a8234c6ff545764071abf",
-          9443,
-          9472
+          "b9b5a876b14967879489dea4aea99429e44b7f208faa3fd78572ca7d9b993518",
+          11856,
+          11885
         ],
         [
           "setRawCaptureControl",
           "3653110e79aa84b356285089adbb6cb1f6b056ba465b72ba1fe4f24561d78032",
-          9472,
-          9502
+          11885,
+          11915
         ],
         [
           "setRawCaptureControl",
           "9234c78fe0ef0056a5b34f634681a6fe7c7e9e5adc29e6b88a5e0b268c7be69d",
-          9502,
-          9531
+          11915,
+          11944
+        ],
+        [
+          "refreshContextIndex",
+          "ac891be91cd86b6a4b6d2cb16cd2ee70ac93485fa3fa224d7af6ed6ae687d7f6",
+          11944,
+          12356
+        ],
+        [
+          "openMemoryReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          12356,
+          12356
+        ],
+        [
+          "openMemoryReader.readTopicOverview",
+          "ee99514cf7165d5846fb966a5de18fd99674f2d62e2ec40df79f24c860f97abf",
+          12356,
+          12751
+        ],
+        [
+          "openMemoryReader.readTopicOverview",
+          "9bb97f27f3b3794a4b97a9bdef627d12d98c5dbdd86b810e8f2d12057cfcd278",
+          12751,
+          12765
+        ],
+        [
+          "openContextReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          12765,
+          13135
+        ],
+        [
+          "openContextReader.findCandidates",
+          "4dc172f9bd1997f9ad500642287df1df35ba10291835103fedae78b716301d9c",
+          13135,
+          13378
+        ],
+        [
+          "openContextReader.contextRead",
+          "78f299e24f8b6284ec13a086d9ea3b8938661f915aa198c05012d455822bc63a",
+          13378,
+          13719
+        ],
+        [
+          "openContextReader.fetchCandidateEvidence",
+          "96126a0a09f1b7fbc0b0acb1dd0021311c7a72f5ddd3ed052a0135f5a71bb2f3",
+          13719,
+          13921
+        ],
+        [
+          "openContextReader.fetchCandidateEvidence",
+          "2cca6b19e8b21821b228d88c50dc7927badd7469f42cec60b25050d604d1b3f7",
+          13921,
+          14011
+        ],
+        [
+          "openContextIndexMaintainer",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          14011,
+          14378
+        ],
+        [
+          "openContextIndexMaintainer.getContextIndexStatus",
+          "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
+          14378,
+          14388
+        ],
+        [
+          "openContextProductReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          14388,
+          14755
+        ],
+        [
+          "openContextProductReader.getContextIndexStatus",
+          "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
+          14755,
+          14765
+        ],
+        [
+          "openContextProductReader.fetchCandidateEvidence",
+          "8ee2591f0baa77ee3e3241afeb6fd896a02f90072fc9fee0eaa69fc62487eb98",
+          14765,
+          14855
+        ],
+        [
+          "openContentSuppressionReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          14855,
+          15224
+        ],
+        [
+          "admit",
+          "1afd187087b802e588d17913a81b72a794598e7cd72f68fc6f80d8620946f19d",
+          15224,
+          15409
+        ],
+        [
+          "admit",
+          "60ce7c8b569aee6153089eeb056b05e401a997e9668cff86541ba9cd7fcb15d7",
+          15409,
+          15594
+        ],
+        [
+          "isSuppressed",
+          "a996475046b1c48ddc20fa7c8d16711b7a90d6e18000ee73b3ead7b7b3347592",
+          15594,
+          15626
+        ],
+        [
+          "isSuppressed",
+          "29f32fb7905d749051233e41242dd0adde76852352e4567ad785fd484c7a221b",
+          15626,
+          15648
+        ],
+        [
+          "isSuppressed",
+          "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
+          15648,
+          15661
+        ],
+        [
+          "openRawCaptureCore",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          15661,
+          15992
+        ],
+        [
+          "openRawCaptureCore.getConversation",
+          "0889df3a2f44f6361c03b53c75ccc8f158992a5dbf4276446b3576329d46880c",
+          15992,
+          16013
+        ],
+        [
+          "openRawCaptureCore.captureRaw",
+          "90cb15caaf3e506f3a282bfbf049236c51bf6ac41b544603a94e390bfa7ae1fe",
+          16013,
+          17045
+        ],
+        [
+          "openRawCaptureCore.getConversation",
+          "e31de347cc0b238e767454a92f9d73a7213c7bc25e9cda6afcf708fb1ef1e110",
+          17045,
+          17068
+        ],
+        [
+          "openRawCaptureCore.getConversation",
+          "8c645415490e80efd696f7925c5e5c6e59520480bcd2eb401d89740718970e44",
+          17068,
+          17089
+        ],
+        [
+          "openRawCaptureCore.listRawConversations",
+          "10c28dfc5a6da689b814588d30b6c2c3a9c840fc592e4508d2365255052e3065",
+          17089,
+          17097
+        ],
+        [
+          "openRawCaptureCore.listRawConversations",
+          "5d3841c87ace91cb7023c8d45c17d2f3d0c98cc6e86313bac516c4684ad3e492",
+          17097,
+          17105
         ],
         [
           "deleteConversation",
-          "65112a50e635e22f771a1a949859e160b2b4f1c817a7ab14f78014242a033e6f",
-          9531,
-          9803
+          "9d63a1cfe2fc7ede2c6051839af8b718df0abfdc2de1efe779a9a0ceff8a2cee",
+          17105,
+          17403
         ],
         [
           "deleteConversation",
-          "65112a50e635e22f771a1a949859e160b2b4f1c817a7ab14f78014242a033e6f",
-          9803,
-          9833
+          "9d63a1cfe2fc7ede2c6051839af8b718df0abfdc2de1efe779a9a0ceff8a2cee",
+          17403,
+          17433
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          9833,
-          9853
+          17433,
+          17453
         ],
         [
           "correct",
-          "7b1d7ad63b9d0fb85bda6b4fd58267b2e07a435436a7a0cb289a3db484df2518",
-          9853,
-          10140
+          "a12e644eb852003803643079f7944bf1b43c7ce131e2ee15bd96f09682029768",
+          17453,
+          17753
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          10140,
-          10160
+          17753,
+          17773
         ],
         [
           "get",
           "b6ba495a951487aebf576a116bd21724627ed3af6a564c36e356d68033572ac5",
-          10160,
-          10201
+          17773,
+          17814
         ],
         [
           "supersede",
-          "b61b0f2814c4a292eb04518a8edfb858d3083f5a9fd5c8dcdba0287d3881575b",
-          10201,
-          10482
+          "12e30216ddc17cc2caa15a30d3625b08efa0ad2df9d0a31bde8991ecd2e084aa",
+          17814,
+          18096
         ],
         [
           "forget",
           "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
-          10482,
-          10515
+          18096,
+          18129
         ],
         [
           "get",
-          "a2194b0afd8bdf8e5eacc60690fb2f6f7985ac669383ed16f84d35e027a0e807",
-          10515,
-          10555
+          "25c6755f3e407823ce16323b95cc7cc68ca3d9be6740abfa41808fe859e00fef",
+          18129,
+          18169
         ],
         [
           "forget",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          10555,
-          10686
+          18169,
+          18316
         ],
         [
           "admit",
-          "80aa6ac04d9dde700782039e789143a6b5076766ee7ddb2de899e9eda98b8e88",
-          10686,
-          10873
+          "4b705af427f0e26ad140af672be31aefc695be698055a943dc8e422232f5b041",
+          18316,
+          18505
         ],
         [
           "forget",
-          "e22a34626bf43a831bf75e6b7d2a066b86342825161aab25342913340a3a0897",
-          10873,
-          10987
+          "176118e5b6311059400a89f6ec160ca53dd1ff1b709940a0f415dd1a04124c62",
+          18505,
+          18635
         ],
         [
           "submitSourceNote",
-          "1c2433156cb4f63df6ec2089539b1a19eb1ea47540fa6bee1bfb75aab9c71839",
-          10987,
-          11090
+          "840865933d6fc57a1dfdce3cef7129bd2c2b982e1a5e49b723c4b1587d37bbec",
+          18635,
+          18738
         ],
         [
           "createCardDraft",
-          "3e74a22726d77c1c76a00bd997d676a0cb762047b49ac063650b1b760876ea9e",
-          11090,
-          11268
+          "a6fedd70f7d0e615dcc5abaabbedf32bb763a467d80529bfd8a25940bebd8089",
+          18738,
+          18916
         ],
         [
           "createCardDraft",
-          "114a98c78c49ccbcafdd89e7c75c2a483ea112dacaeea57e137062addc982f5b",
-          11268,
-          11446
+          "e13ccdbc58b56eb7b1d15dc28259eb04e58f9505029cfed9ece704a28c5f857c",
+          18916,
+          19094
         ],
         [
           "confirmCardDraft",
-          "8d39a84b18257afbe19ebb49f660a71ba008cc126c88f6385957f2b24d0f39c0",
-          11446,
-          11623
+          "31865010fde95a6fc16c0762438951aae4ad233b7471c5e187e03c49b63e1401",
+          19094,
+          19271
         ],
         [
           "deleteSourceNote",
-          "8d8c607a851fa8e5bb1f41238efcf50d19839e0edacae560558f417058cf6cb0",
-          11623,
-          11798
+          "56bab4654f0200addb24ccd1220428617ff3c7235b30dbca3d17cd6a53a65543",
+          19271,
+          19446
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          11798,
-          11808
+          19446,
+          19456
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          11808,
-          11825
+          19456,
+          19473
         ],
         [
           "cancelCardDraft",
           "8786ce3708574795b5c7a0bda0d37df2ba69ba05933a9c9bdb253abb3f29f886",
-          11825,
-          11938
+          19473,
+          19586
         ],
         [
           "deleteKnowledgeCard",
           "399e67e51366104aa635520d179c22ba846ed031b3f5e049150a7fc0d4021a78",
-          11938,
-          12052
+          19586,
+          19700
         ],
         [
           "checkMethodReasonRefs",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          12052,
-          12064
+          19700,
+          19712
         ],
         [
           "deleteSourceNote",
           "842a8943dd8257f41c9296debcc7631e9f70f230642087fb4f396a81d8cb36e2",
-          12064,
-          12174
+          19712,
+          19822
         ],
         [
           "listCardEffects",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          12174,
-          12183
+          19822,
+          19831
         ],
         [
           "getPrivateCardUsage",
           "69c7335d36b31ad5f695501c82725d4359230e9816b6d38e2b85ee3a652ad2cc",
-          12183,
-          12197
+          19831,
+          19845
         ],
         [
           "recall",
-          "c982454e86be195b918eac167f169853cd8bc094bc9a381bccc5be2ed6a38c47",
-          12197,
-          12550
+          "d99e80a99a5ed9562a6a3e91f11344ff9e3215d35d4b0b0d9c5c637f55fdc944",
+          19845,
+          20693
         ],
         [
           "modelCalls",
-          "8e1f54cf83c6b07f0f50f1f53af049a3a750e5a5f738707091eade09997525fe",
+          "3728d557896d57e2cc2cc6efad56bfbe83aca7fbd9da9351d20d1a1f5aece8bc",
           null,
           null
         ]
       ],
-      "statements": 12550,
-      "sql": "0a12f991eff84cbde182314365a52c493219136bacc1e9b9a1e9bd7fff63f804",
+      "statements": 20693,
+      "sql": "6d12abc0f89d04883be41216e829200e7603f5922803ccb40eceaaeaf7d0f8aa",
       "tables": [
         [
           "admission_claims",
-          2,
-          "617972c1f723d2d90551f97641b20540bf5d327a0b49cc661de66954ef3fb099"
+          3,
+          "db35f6c3f1e3dddefa07286f8ca99d53ece0a0329113e8d54177284d85e8f3d0"
         ],
         [
           "asset_derivatives",
@@ -3440,18 +5880,18 @@
         ],
         [
           "binary_chunks",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          2,
+          "165c9adfaed4557b13175237a840a4f4bff7fe94d53e6e43f212ae1c848314d1"
         ],
         [
           "binary_objects",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "9b255d325266a41a51440beeaf2f2b6f5b6977a83962c97a168ea3fbcfa6365d"
         ],
         [
           "binary_owner_usage",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "5d03b3e010850a9acf15caf63045e0e53e91f20108cedc4b9e2c2788e030ef69"
         ],
         [
           "capture_events",
@@ -3460,8 +5900,8 @@
         ],
         [
           "capture_initial_classification",
-          2,
-          "9167ec9b55888787b425c6e65de5266214da4a3b6e1ae19418550cf1663b7bd9"
+          3,
+          "d8bf3e7b6a5e28b5a0be224022faf14cc2fdbaa8f625c09693ec66a7bb0aa876"
         ],
         [
           "capture_streams",
@@ -3471,12 +5911,12 @@
         [
           "card_applicability_reviews",
           4,
-          "e09934e3570b6851e3218afe7a065e1c1be9a7f3cef6a4930c5a1cc41331cb06"
+          "628a4740cfe64b299f76b015182a4a2933e47e643f4840f12edbd46aba77f316"
         ],
         [
           "card_bindings",
           1,
-          "0a1d96f2b003f2c34c827e0f7a54d005777b3097e302d3ebdae67a9230ff3bb7"
+          "be3455a55b3abaf77556ff45251c0476f413923d5a7368fd5efb844f138a80f3"
         ],
         [
           "card_current_dependencies",
@@ -3486,7 +5926,7 @@
         [
           "card_effects",
           10,
-          "71dad880ed807027bee14a50f592d56f1a977e8ffdd6ae4f4e818a04eef63234"
+          "65c078d079af7c075fa98580a68a5f1ddfea3446de7aad349dfc1c890015179a"
         ],
         [
           "card_epochs",
@@ -3531,17 +5971,17 @@
         [
           "card_notes",
           3,
-          "90e61baae5f619065dda9e84a7589c55f7ac67d9b7069dcca817efe02cbf8ce5"
+          "89da5c5704f9d0612588408a5095a1f6370ca741db485326027b05f419c74cc7"
         ],
         [
           "card_operations",
           24,
-          "c5cbcc8edb4b44d201bcaf02bff5ba1e34de5053a22a508406bac98f54a15199"
+          "80b2621c5594ff30631a71d4a0ee631bec88335e5e52914b920410c06efbdfaa"
         ],
         [
           "card_raw_bindings",
           1,
-          "28ba817cc4f3ec6ede010e7ee90096b336a627189780acb457ccbab759641aaf"
+          "6d4cc15db6a55de5f92f469a05f2b0cb50bbdf3ea9dfa5dc72e7c728574a61ec"
         ],
         [
           "card_raw_mutation_context",
@@ -3571,7 +6011,7 @@
         [
           "content_identity_reservations",
           13,
-          "bf957184accf618a856f0bc8644fb5ea84cec5ad14aa95e49afd496d28266a31"
+          "e526c39c0d881c5fdbe7fffa2a794b0e5514a8c29f2b2945a17d235e4b0cabd0"
         ],
         [
           "content_safety_control",
@@ -3581,7 +6021,7 @@
         [
           "content_suppressions",
           13,
-          "2f9d7f0547d763e5c525778d638690974071699fc8315a9dedf1bf90d937ff52"
+          "4d31c76f36b461e4a71eefd0c1633c7cc96263c57db70447f48bac6ef85b6c1f"
         ],
         [
           "episode_attempts",
@@ -3665,8 +6105,8 @@
         ],
         [
           "memories",
-          5,
-          "cd74bee96c1f8ec6c4cd10441fe6f464e5ad38d1ac0ea68904a8021336a0fe1b"
+          8,
+          "bb6ff58dab15fab06532c29dad039cfd884d4d3bdfead45c006ff6db67a752cf"
         ],
         [
           "memory_conflicts",
@@ -3681,72 +6121,72 @@
         [
           "memory_supersessions",
           1,
-          "f489ed43beda35ea5f1f1389f9154ceedb1c89e93ac07e99de6ea801e0c1432f"
+          "0ff0b559d647fb44ecd01fbc4f50decf578c7e9f4979870ca79e7be22c33744b"
         ],
         [
           "method_binding_events",
-          1,
-          "d202e9d2612a9e04eeb39a9cae362c88b7f57681949854f860ba483eb3c7e090"
+          4,
+          "3f11668e2ddfd66b90382ffe1a3e02b9f90eda91e7fa44ddc9102f684333fec0"
         ],
         [
           "method_binding_generations",
-          1,
-          "ed62523fb19af35749b6580bb721133fcabcaa32839f4d92a11955de3e372931"
+          3,
+          "d06eddc7711783bcfc9f0551b7b9c4532f7d5e564e7b2c516969c8d9faed1354"
         ],
         [
           "method_bindings",
-          1,
-          "0ecea3ee53d5361c88dd442a4534096f10a5ac77dab424b9225e751f93d7e3e6"
+          3,
+          "daadc78d89f7e50ffeae38400d41d708f5ee600c6a1345263e2d4ccc189088c7"
         ],
         [
           "method_changes",
-          1,
-          "050a2c77484f37d34e1725a525fa1e0c72aba98d35feff5ec9192365b75d1a9f"
+          2,
+          "401dc59125b1ac2a93e348e1abdb36d5bd267c9001b8e71e1489429351493745"
         ],
         [
           "method_effects",
-          1,
-          "7158e8800d404849dd7dca7415ae58dfc3f34d813a34c02a9665a1be2c894ca8"
+          6,
+          "4357566f64dabcb4df1e99055dd03937532b688c47015b3968698c509407ce93"
         ],
         [
           "method_epochs",
           1,
-          "77dd8273b8bdcf3b3fc46718f69620123acc255aa60ac39b8929aeb48bb8b322"
+          "c0f91d5cd897d1f928767fc3c7f31648e742e995dff97e1766223f7a8f2799f1"
         ],
         [
           "method_files",
-          1,
-          "bfa93ee7b8df95da2af6e4e507624eb7eb3e6d44da9fb5f1ec69c61c2cce122c"
+          2,
+          "4ad86f77924732be10673070cc1ad832c8262c75e1c37049e68470dd8c76d8c4"
         ],
         [
           "method_manifest_formats",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "be48656148c0c3e52a70cd3868c6e8b02e7cf3a7a96585569294451cc913db6c"
         ],
         [
           "method_mixed_entries",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          2,
+          "ffb4fa94b2879b281a03eb0c743ad4aa168ad15687260944da307b137a8fd098"
         ],
         [
           "method_operations",
-          2,
-          "221439a32c01f381f9bcb64fab9d7db35037c78c3edee848433ed2d1e1688709"
+          10,
+          "de1ea46466d75a1a693e0a41a41401b43d5ba4f02083b2abf0ee108d12ca55a0"
         ],
         [
           "method_owner_usage",
           1,
-          "8d8ce7abe7b55d603358e3b4dc907e03dad304d388db7d0ee8525e46d6985a06"
+          "5bcbff5c3b8ab2e820e27a1f7924a8e0aa9365469f06239e18427b10fab58129"
         ],
         [
           "method_packages",
-          1,
-          "343250dc9359e19f0878c11c7a182c15daa35e2d98809e35012db92847e60f85"
+          3,
+          "e9335ab7c07b9b95c88a0bb8b64c981fbdd26a18d902d7313ea812f802e3022a"
         ],
         [
           "method_versions",
-          1,
-          "7f1bf596cf0eba6a71cbbee6ee77fea70c8079f4ab8afb3ed545e679efad9036"
+          4,
+          "1c46073abe6acdcc109aa4baee8f8d257bcabca921e47eaa8dd70a5fff5cb297"
         ],
         [
           "moc_edges",
@@ -3771,7 +6211,7 @@
         [
           "namespace_epochs",
           1,
-          "3c30121b3f3614bc0fb9d8fba8cd0be2a9fe66c321f01a8c5e861f28d6cd906e"
+          "2c570401a860dffc641719599e08b2c0525a5ed2a3737b621bf9fb48d5cd96c9"
         ],
         [
           "namespace_index_state",
@@ -3786,7 +6226,7 @@
         [
           "private_cards",
           6,
-          "a006a0278b057802a79d7a5f0ba1fa851256c6529f166c36b0e775437f2001fc"
+          "cd621fc1fa9153de36655bcd91fe8bd91af85807b444cac6e759c3311e7af7ff"
         ],
         [
           "procedural_tags",
@@ -3820,8 +6260,8 @@
         ],
         [
           "raw_capture_events",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "dbb9c3b335d587e2edd8f7be6a31a15463ac750154c6009dd546e42f93f23097"
         ],
         [
           "raw_closed_jobs",
@@ -3830,23 +6270,23 @@
         ],
         [
           "raw_conversations",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "ae32001109c65d14e0e7f49f1fd1202aaa68295a26b0fe6b8c769d8d794f49a2"
         ],
         [
           "raw_deletion_actions",
           1,
-          "636259c3706ae439a3036d7ccdc19a122e0a0f27a1c5ca97490114243384fc01"
+          "e07b5b6d8717677913ae093b31940c459e2b645cc525f200db175a58573689a5"
         ],
         [
           "raw_deletion_effects",
           2,
-          "4e8860b280b4c896e788481d1c0c2475b0185f4a1d9a47dd204305bc9aeceff6"
+          "acca98bb56aec33c9b5e1d7311f0f7df7000dc6d786d50a8bb59e3e35c240d01"
         ],
         [
           "raw_events",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          1,
+          "a0ad3661a71fc95687315a0a158ae84445088a03b828a66fef93a0d843d22062"
         ],
         [
           "raw_exclusion_clocks",
@@ -3855,33 +6295,33 @@
         ],
         [
           "raw_job_sources",
-          2,
-          "7243dcb11947f8462fa1b1aba7094f7d735745b57e11c508f54f197644288e35"
+          4,
+          "0448db4d0856e680efaa82ea3526681f6f2852eefa4afb089c26bc811bfe34a6"
         ],
         [
           "raw_messages",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          2,
+          "3082dc682235fbc7de8097528668d9745f01ada5c39fc53baa74d30e15d50af6"
         ],
         [
           "raw_owner_usage",
           1,
-          "d38de7705bedbe85a27abf1e0c112e5a7fc56f409d47dc300b287d78892ddc56"
+          "b35f5584b35e44477a57d6eea74122e74a51b9c881ff0b2a6d454c591ebd1e94"
         ],
         [
           "raw_parts",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          2,
+          "c4d4b04f4e38682593eadec9d53e815f3d0bf189c3702263de6dae50590a873f"
         ],
         [
           "raw_receipt_lineage",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          2,
+          "d351d521987218bd63501fb68cf7320a156f388dce73628a8d14928017c72d48"
         ],
         [
           "raw_receipt_origins",
-          3,
-          "5952f2a5f9b8d32a79434996263d2747509e8ffc40f0fba6fc5c23ce932469dc"
+          7,
+          "4200e86d7e4e23e76aafa398016a71f6de118cba6e5def4317616e601ad49fe8"
         ],
         [
           "raw_session_fences",
@@ -3895,8 +6335,8 @@
         ],
         [
           "raw_source_maps",
-          0,
-          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          2,
+          "6c386e98048335fdc50b107b1259a6bcb27c8f829fa60805e7fb888db716d52c"
         ],
         [
           "receipt_causality",
@@ -3905,8 +6345,8 @@
         ],
         [
           "receipts",
-          3,
-          "b6e5717f906acb9ab053e8df4b14f5151694c1663e07d395f0998c39c100a588"
+          7,
+          "99ebfc3dbd3c8c449fbc4cf526923fe2a67024a26d5743b0d691969420914720"
         ],
         [
           "role_profile_changes",
@@ -3973,7 +6413,16 @@
           4,
           "a12121cadedd5afed4eb697466effc22d3db9270ea13b0734974ab31b3376f64"
         ]
-      ]
+      ],
+      "effectWitnesses": "e1ee63894d6de92f6aa373707f4049d50405e613ffe3e29206935ef09f3f4908"
     }
-  }
+  },
+  "directOpeners": [
+    "openMemoryReader",
+    "openContextReader",
+    "openContextProductReader",
+    "openContextIndexMaintainer",
+    "openContentSuppressionReader",
+    "openRawCaptureCore"
+  ]
 }
