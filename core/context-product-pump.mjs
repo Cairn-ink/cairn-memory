@@ -53,7 +53,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
   // docs/context-read-product.md, Amendment v2.1; public renewal adds no options.
   const recoveryEnabled=cutoffQualified();
   return function renewContextMaintenancePump(original) {
-    if(ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential','semanticConfig','semanticServiceCredential','firstCoverageValidation','preQuantum']).semanticConfig!==undefined)return semanticPump(original,{now,setTimer,clearTimer,open,snapshot:(value,diagnostic)=>pumpDiagnostics.set(value,diagnostic)});
+    if(ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential','semanticConfig','semanticServiceCredential','firstCoverageValidation','preQuantum']).semanticConfig!==undefined)return semanticPump(original,{now,setTimer,clearTimer,open,admit,work,snapshot:(value,diagnostic)=>pumpDiagnostics.set(value,diagnostic)});
     const c=ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential','preQuantum']);
     const previous=state().entries.get(c.id);
     if(previous&&previous.preQuantum!==c.preQuantum)fail('invalid_input');

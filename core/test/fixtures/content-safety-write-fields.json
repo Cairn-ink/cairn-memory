@@ -1443,8 +1443,9 @@
   "core/context-semantic-pump.mjs": {
     "key:bindingId": 1,
     "key:id": 3,
-    "key:ownerId": 1,
-    "key:windowId": 2,
+    "key:ownerId": 2,
+    "key:pumpId": 1,
+    "key:windowId": 3,
     "literal:id": 1
   },
   "core/context-semantic-worker.mjs": {
@@ -1452,7 +1453,7 @@
     "key:authorityId": 2,
     "key:bindingId": 1,
     "key:credentialBindingId": 1,
-    "key:id": 7,
+    "key:id": 8,
     "key:ledgerId": 1,
     "key:windowId": 3,
     "literal:accountingDomainId": 1,

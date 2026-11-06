@@ -24,12 +24,12 @@ const exceptions = frozenExceptions.map(entry => {
   if (entry.file === 'core/context-semantic-worker.mjs') {
     assert.equal(entry.sha256, 'ef2961fcb0114b9d9062084d57babea2adfad4d0753619c500728ca657da5fa5',
       'frozen semantic Worker loader pin');
-    return { ...entry, line: 482, sha256: '88fde8f37cedb4c84ba6d7610f1beff290e5020752c0900d8ca019157015e803' };
+    return { ...entry, line: 482, sha256: '8a047f53c00109c71616536fa7a8c8bc01ca5e4b6f57a4f4eb4fef4be46ce63b' };
   }
   if (entry.file !== 'core/context-product-worker.mjs') return entry;
   assert.equal(entry.sha256, '073071759a46698824ffd029a5fe48fbd737513c5c6936ba826b5d413be32bbe',
     'frozen pre-rebase Worker loader pin');
-  return { ...entry, line: 114, sha256: '60ea8d89dd1ba3e8f4f70bcb713bab61345f27c482f4cbf3b8f76540d289c54b' };
+  return { ...entry, line: 117, sha256: '240f21435db7fabbc70764a6563660aa9e5ceb3ce86f82f69c7449bc836328cc' };
 });
 export const moduleLoadingExceptions = exceptions;
 const cache = new Map();
