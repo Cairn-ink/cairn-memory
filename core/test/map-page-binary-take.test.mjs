@@ -394,7 +394,7 @@ test('a later rejected probe cannot return an earlier fit after a namespace muta
     f.setCounter(text => {
       if (!text) return 0;
       const take = JSON.parse(text).value.items.length;
-      if (take === 5 && !mutated) {
+      if (take === 4 && !mutated) {
         mutated = true;
         const memory = f.memories[0];
         ok(f.core.forget({ namespace, memoryId: memory.id, expectedRevision: memory.revision }));
