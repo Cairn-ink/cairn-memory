@@ -6,7 +6,7 @@ finding remains below. Not delivered; renewed dual review and CI are pending.
 This is an internal packet, not a shipped Raw capability or complete local V1.
 Fixed base: `50230c0390a0e035b8d15f0cdeb9c335f97e3ffb` (reviewed P3b;
 PR #452 has 31/31 latest-head CI checks successful, ready and unmerged).
-Worktree: `/home/chichieh/Github/cairn-memory-worktrees/raw-local-v1-sources`.
+Worktree: `~/Github/cairn-memory-worktrees/raw-local-v1-sources`.
 Branch: `feat/raw-local-v1-sources`. This explicitly dependent branch does not merge
 or change the product pin `cd6d1ad32ac3d6f5926c6846e8c6d27645bb7c9a`. Reuse the three-layer contract §2–7 and the approved
 local/synthetic exception. Do not expand to live data, installed host exposure,

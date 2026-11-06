@@ -2714,7 +2714,7 @@ hosted-quota.test.mjs，以相同 home guard 執行，避開壞掉的 worker pip
 | 16 | 22.16.0 | `["node", "--import", "./plugins/cairn-memory/test/fixtures/hosted-fetch-preload.mjs", "plugins/cairn-memory/scripts/hook.mjs", "status"]` | 0 | —/—/—/— |
 | 17 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "--test-name-pattern=Claude refusal retains", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 1/0/1/0 |
 | 18 | 22.16.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
-| 19 | 22.16.0 | `["/home/chichieh/.nvm/versions/node/v22.16.0/bin/node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
+| 19 | 22.16.0 | `["~/.nvm/versions/node/v22.16.0/bin/node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
 | 20 | 22.16.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
 | 21 | 24.15.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
 | 22 | 20.19.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |

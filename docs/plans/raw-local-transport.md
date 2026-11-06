@@ -4,7 +4,7 @@ Status: final source and affected regression accepted; candidate commit,
 committed acceptance, independent dual review and remote CI pending.
 Fixed base: `581786936a06d8f185faf175493fcbbea04fbc83` (B3 PR #460,
 dual independent reviews passed; all31 remote checks now pass, ready/unmerged).
-Worktree: `/home/chichieh/Github/cairn-memory-worktrees/raw-local-transport`.
+Worktree: `~/Github/cairn-memory-worktrees/raw-local-transport`.
 Branch: `feat/raw-local-transport`.
 
 ## Outcome and scope

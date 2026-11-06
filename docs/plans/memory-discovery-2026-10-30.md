@@ -4,7 +4,7 @@ Review base: `e329d57fd0e7d3fad71eda704add0a116b3af715`; previous review base
 `88d168f81979d51d1861fbd6d70cd91ea18f9936` and original task base
 `eeef2e8ff777e27515e03b55452e4211578ca912` remain in the commit history.
 Worktree:
-`/home/chichieh/Github/cairn-memory-worktrees/memory-discovery-20261030`, branch
+`~/Github/cairn-memory-worktrees/memory-discovery-20261030`, branch
 `docs/memory-discovery-20261030`. This is a bounded metadata and entry-point
 copy change. It does not alter product behavior or installer version, or
 publish a package.
@@ -128,7 +128,7 @@ each target was absent from the sampled top 20. These API results do not measure
 the website's search order, Google web rankings, site citations, or AI citations.
 The focused response summary and its eight raw responses are retained outside
 the worktree at
-`/home/chichieh/.local/share/cairn/seo-geo/2026-10-30-discovery/`.
+`~/.local/share/cairn/seo-geo/2026-10-30-discovery/`.
 
 After a separately approved package publication, record its actual version and
 release date, then repeat these same query URLs and compare npm and GitHub

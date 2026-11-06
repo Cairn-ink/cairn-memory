@@ -3,7 +3,7 @@
 Status: milestone1-3, primary acceptance and all38 final affected gates passed
 locally; committed independent review and latest-head CI remain pending.
 Fixed base: c76196e8ca0d08f6efee8919e7167d6c684bfc33 (PR #461).
-Worktree: /home/chichieh/Github/cairn-memory-worktrees/raw-local-worker.
+Worktree: ~/Github/cairn-memory-worktrees/raw-local-worker.
 Branch: feat/raw-local-worker.
 B4a is ready/unmerged: 31 latest-head checks, four workflows all success,
 independent Standards/Spec zero findings, primary committed21+installed2 cases

@@ -137,8 +137,8 @@ and authorized; no existing extraction guard accepts this combined wire.
 
 ### Verification commands
 
-Run each under `PATH=/home/chichieh/.nvm/versions/node/v22.16.0/bin:$PATH`
-and then `PATH=/home/chichieh/.nvm/versions/node/v24.15.0/bin:$PATH`:
+Run each under `PATH=~/.nvm/versions/node/v22.16.0/bin:$PATH`
+and then `PATH=~/.nvm/versions/node/v24.15.0/bin:$PATH`:
 
 ```sh
 node --test adapters/openai/test/ingestion-design.test.mjs

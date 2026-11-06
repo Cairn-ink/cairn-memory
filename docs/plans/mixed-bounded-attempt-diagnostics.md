@@ -96,7 +96,7 @@ including the 394,629-attempt fixture and unchanged-envelope rejection. Both
 runtimes passed JSON validation, marketplace validation, strict plugin
 validation, and the ingestion, comparison, public, and mixed synthetic demos.
 The exact commands were the package scripts' Node entrypoints invoked with
-`/home/chichieh/.nvm/versions/node/v22.16.0/bin/node` and the corresponding
+`~/.nvm/versions/node/v22.16.0/bin/node` and the corresponding
 `v24.15.0` binary. The pinned Claude validator's native CLI was invoked via
 its `cli-wrapper.cjs` with each Node version; both marketplace and strict plugin
 checks reported `Validation passed`. `node --check` on both edited `.mjs` files
