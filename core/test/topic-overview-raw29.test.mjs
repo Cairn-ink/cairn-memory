@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { openMemoryReader } from '../index.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { topicOverviewFixture, overviewNamespace } from '../testing/topic-overview-fixture.mjs';
-import { rawOverviewFixture, installOverviewLayout, fileBytes, collectOverview, namespace, ok } from '../testing/topic-overview-raw29-fixture.mjs';
+import { rawOverviewFixture, installOverviewLayout, fileBytes, collectOverview, namespace, ok, overviewReadBarrier } from '../testing/topic-overview-raw29-fixture.mjs';
 
 for (const version of [18, 20, 21, 22, 23]) test(`R29 legacy physical schema ${version} remains readable without migration`, async t => {
   const f = topicOverviewFixture(t); f.core.close();
@@ -129,13 +129,18 @@ test('R29 cold native and reader WAL reads change only read marks; warm all-file
   }
 });
 test('R29 reader permits a reserved writer, refuses exclusive contention and leaves actual capture responsive', async t => {
-  const f = rawOverviewFixture(t); await f.hierarchy(); const reader = f.reader();
+  const f = rawOverviewFixture(t); await f.hierarchy(); const barrier = overviewReadBarrier(t), reader = f.reader();
   f.db.exec('BEGIN IMMEDIATE');
   try { assert.equal((await reader.readTopicOverview({ namespace })).ok, true); } finally { f.db.exec('ROLLBACK'); }
   f.db.exec('BEGIN EXCLUSIVE'); const start = performance.now();
   try { assert.equal((await reader.readTopicOverview({ namespace })).error.code, 'storage_busy'); } finally { f.db.exec('ROLLBACK'); }
   assert.ok(performance.now() - start < 1000);
-  const pending = reader.readTopicOverview({ namespace, workLimit: 16 }); await f.capture('later');
+  barrier.arm();
+  const pending = reader.readTopicOverview({ namespace, workLimit: 16 });
+  try {
+    await barrier.entered(); await f.capture('later');
+    assert.equal((await reader.readTopicOverview({ namespace })).error.code, 'read_in_progress');
+  } finally { barrier.release(); }
   const observed = await pending; assert.ok(observed.ok || observed.error.code === 'cursor_stale');
   assert.equal((await collectOverview(reader, { namespace })).totals.unique.total, 5);
 });
