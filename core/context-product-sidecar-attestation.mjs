@@ -10,8 +10,10 @@ export function sidecarAttestationFile(path) {
   const s=sqliteFileStat(path);
   return {device:String(s.dev),inode:String(s.ino),birth:String(s.birthtimeNs)};
 }
-export function readSidecarAttestation(db) {
-  if(!db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='product_attestation'").get())return null;
+export function readSidecarAttestation(db, schema) {
+  const exists=schema ? schema.some(row=>row.type==='table'&&row.name==='product_attestation') :
+    db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='product_attestation'").get();
+  if(!exists)return null;
   return db.prepare('SELECT stamp,record FROM product_attestation WHERE singleton=1').get()??null;
 }
 // Exact stored text, including its original whitespace, participates in the

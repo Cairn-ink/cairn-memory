@@ -90,6 +90,19 @@ test('match: normal maintenance seals every commit and a cold open returns ident
   assert.deepEqual(s.row(),row,'read admission does not rewrite a matching seal');
 });
 
+test('interrupted first reset write discards the bootstrap exception',t=>{
+  const s=setup(t,{build:false});let interrupted=false;
+  s.setHook(text=>{
+    if(!interrupted&&text==='SELECT stamp FROM product_attestation WHERE singleton=1'){
+      interrupted=true;throw Object.assign(Error('synthetic first write failure'),{code:'storage_error'});
+    }
+  });
+  assert.throws(()=>s.storage.reset(),{code:'storage_error'});
+  assert.equal(interrupted,true);assert.equal(s.row(),null);
+  s.setHook(()=>{});s.storage.admit(2000);
+  assert.equal(replacementCalls(s).length,1,'the next operation replaces the unsigned file');assert.equal(s.valid(),true);
+});
+
 for(const damage of ['legacy','missing','mac','stamp','identity'])test(`${damage}: refuse old candidates, replace, rebuild and publish`,t=>{
   const s=setup(t),before=s.observe().publication;s.close();
   if(damage==='identity')child("import {copyFileSync,renameSync} from 'node:fs';copyFileSync(process.argv[1],process.argv[1]+'.successor');renameSync(process.argv[1]+'.successor',process.argv[1]);",s.path);

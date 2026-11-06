@@ -198,7 +198,7 @@ const create = `
               // The parent authenticated (or refused) the exact row. This
               // verdict rechecks only its basis under lifecycle exclusion.
               // Never accept a changed row, even if another cheap check failed.
-              const exists=incumbent.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='product_attestation'").get();
+              const exists=rows.some(row=>row.type==='table'&&row.name==='product_attestation');
               const row=exists?incumbent.prepare('SELECT stamp,record FROM product_attestation WHERE singleton=1').get():null;
               const actual=row?createHash('sha256').update(JSON.stringify([row.stamp,row.record])).digest('hex'):'missing';
               if(actual!==init.expectedAttestation)throw Object.assign(Error('valid_cache'),{code:'ESTALE'});

@@ -90,9 +90,9 @@ const expectedSchema = (ddl+VECTOR_DDL).trim().split(';').filter(sql => sql.trim
   sql=sql.trim(); const match=/^CREATE (TABLE|INDEX) (\w+)/.exec(sql);
   return {type:match[1].toLowerCase(),name:match[2],tbl_name:match[1]==='TABLE'?match[2]:/ ON (\w+)/.exec(sql)[1],sql};
 }).sort((a,b) => Buffer.compare(Buffer.from(a.type),Buffer.from(b.type)) || Buffer.compare(Buffer.from(a.name),Buffer.from(b.name)));
-function attest(db) {
+function attest(db, objects) {
   if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID ||
-      db.prepare('PRAGMA user_version').get().user_version !== PRODUCT_SIDECAR_FORMAT || !same(schema(db), expectedSchema)) unavailable('incompatible');
+      db.prepare('PRAGMA user_version').get().user_version !== PRODUCT_SIDECAR_FORMAT || !same(objects ?? schema(db), expectedSchema)) unavailable('incompatible');
 }
 function productStat(path, optional = false) {
   let s;
@@ -234,6 +234,8 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         return cleaned(()=>{acquire(createLock);guardDepth++;return work();},()=>{guardDepth=0;release();});
       } catch(error) {failed(error,guardWritable);throw error;}
     },()=>{
+      // Only this guarded operation may bootstrap its newly published file.
+      unattestedIdentity=null;
       // A caught bound may return honest progress without another write.
       // Discard here too when no later writable step consumed the flag.
       if(discardAfterGuard)close();
@@ -294,7 +296,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       if(e!==fenceChanged && e!==verificationBound && e.reason==='storage_unavailable')close();throw e;
     }
   }
-  function connection(create = false, checkAdmission) {
+  function connection(create = false, checkAdmission, bootstrapCommit = false) {
     checkAdmission?.();
     if (closed) fail('store_closed');
     // Capture the mode before admission can replace or upgrade the handle.
@@ -370,12 +372,12 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         admittedMetadata=candidate.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
         if(!admittedMetadata || admittedMetadata.store_id!==identity.storeId)unavailable('wrong_store');
         if (sideFormat > 0 && sideFormat !== PRODUCT_SIDECAR_FORMAT) unavailable('incompatible');
-        const seal=readSidecarAttestation(candidate);
+        if(admittedMetadata.profile!==PRODUCT_PROFILE)unavailable('incompatible');
+        const objects=schema(candidate),seal=readSidecarAttestation(candidate,objects);
         bootstrap=wantsWrite&&same(unattestedIdentity,admittedIdentity)&&seal===null;
         if(!bootstrap&&!validSidecarAttestation(identity.cursorSecret,seal,sidecarAttestationFile(sidePath),PRODUCT_SIDECAR_FORMAT))
           throw Object.assign(Error('index_unavailable'),{code:'index_unavailable',reason:'attestation_invalid',expectedAttestation:sidecarAttestationDigest(seal)});
-        attest(candidate);
-        if(admittedMetadata.profile!==PRODUCT_PROFILE)unavailable('incompatible');
+        attest(candidate,objects);
       });
       checkAdmission?.();
     } catch(error) {attribution?.captureFailure(error);try{if(candidate?.isOpen)candidate.close();}catch{}
@@ -383,7 +385,9 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     side=candidate;sideWritable=wantsWrite;sideFiles=files;openedIdentity=admittedIdentity;metadata=admittedMetadata;
     // Subsequent work starts on this admitted mode, including upgrade callers.
     guardWritable=wantsWrite;
-    if(bootstrap){checkAdmission?.();write(()=>{},'setup',checkAdmission);unattestedIdentity=null;}
+    // Standalone admission has no later write. Other write callers seal with
+    // their existing first transaction, before any generation can publish.
+    if(bootstrap&&bootstrapCommit){checkAdmission?.();write(()=>{},'setup',checkAdmission);unattestedIdentity=null;}
     return true;
   }
   const initialization=()=>({autoVacuum:'INCREMENTAL',...(sqlite ? {journalMode:sidecarJournalMode} : {}),sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=${PRODUCT_SIDECAR_FORMAT}; ${ddl} ${VECTOR_DDL}`,
@@ -876,7 +880,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     // repair the cache before this maintainer reaches its own repair branch.
     const repairIdentity=productFile(sidePath,true),repairStamp=repairIdentity && stamp();
     let foreignBindingDigest;
-    try { connection(true,checkAdmission);if(checkBindings&&(foreignBindingDigest=admissionBindings(checkAdmission)))unavailable('foreign_binding'); }
+    try { connection(true,checkAdmission,checkBindings);if(checkBindings&&(foreignBindingDigest=admissionBindings(checkAdmission)))unavailable('foreign_binding'); }
     catch(e) {if(e===admissionRequired)throw e;attribution?.captureFailure(e);
       if (!['wrong_store','incompatible','corrupt','foreign_binding','attestation_invalid'].includes(e.reason) && !(e.code==='ERR_SQLITE_ERROR' && [1,11,26].includes(e.errcode&255))) throw e;
       const oldFormat = sideFormat > 0 && sideFormat !== PRODUCT_SIDECAR_FORMAT; close();
@@ -897,7 +901,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         if(['ESTALE','EEXIST','EBUSY'].includes(e.code))unavailable('storage_unavailable');
         throw e;
       }
-      connection(true,checkAdmission);
+      connection(true,checkAdmission,checkBindings);
       if(checkBindings&&admissionBindings(checkAdmission))unavailable('foreign_binding');
     }
   }
