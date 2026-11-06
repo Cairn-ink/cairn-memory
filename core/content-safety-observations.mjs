@@ -188,7 +188,7 @@ export function contentSafetyObservations(native, limits, check, installedLayout
     const textBytes = value => {
       if (value === null) return null;
       const bytes = Buffer.from(value);
-      const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
       if (!Buffer.from(text).equals(bytes)) throw Error();
       return bytes.toString('hex');
     };

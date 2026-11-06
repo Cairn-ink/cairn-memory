@@ -313,14 +313,38 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
       const after = typeof cursor?.after === 'number' ? db.prepare(`SELECT id FROM private_cards WHERE ${where} AND rowid=?`)
         .get(...boundary(ns), cursor.after)?.id : cursor?.after ?? '';
       if (after === undefined) fail('cursor_stale');
-      const rows = db.prepare(`SELECT rowid AS cursor_row,id,revision,state,body_revision,created_at,updated_at,confirmed_at
+      if (hasCardLineage(db)) {
+        const probe = db.prepare(`SELECT rowid AS cursor_row,id,revision,state,body_revision,created_at,updated_at,confirmed_at
+          FROM private_cards WHERE ${where} AND state=? AND id>? ORDER BY id LIMIT ?`);
+        const visible = [];
+        let scanned = 0, scanAfter = after;
+        cardComplete = false;
+        while (scanned < 1024 && visible.length <= count) {
+          const batchLimit = Math.min(128, 1024 - scanned);
+          const rows = input.states.flatMap(state => probe.all(...boundary(ns), state, scanAfter, batchLimit))
+            .sort((a,b) => Buffer.compare(Buffer.from(a.id), Buffer.from(b.id))).slice(0, batchLimit);
+          for (const row of rows) {
+            scanned++; scanAfter = row.id; cardAfter = row.cursor_row;
+            if (cardSafe(ns, row, 'listCards', memo)) visible.push(row);
+            if (visible.length > count) break;
+          }
+          if (rows.length < batchLimit) { cardComplete = true; break; }
+        }
+        if (visible.length > count) {
+          cardComplete = false;
+          cardAfter = visible[count - 1].cursor_row;
+        }
+        // If denied bodies exhaust this turn, the cursor resumes after the
+        // last examined row, including when the page contains no visible IDs.
+        cardRows.push(...visible.slice(0, count));
+      } else {
+        const rows = db.prepare(`SELECT rowid AS cursor_row,id,revision,state,body_revision,created_at,updated_at,confirmed_at
         FROM private_cards WHERE ${where} AND state IN (${input.states.map(() => '?').join(',')}) AND id>? ORDER BY id LIMIT ?`)
-        .all(...boundary(ns), ...input.states, after, hasCardLineage(db)?1025:count + 1);
-      if(hasCardLineage(db)&&rows.length>1024)fail('evidence_unavailable');
-      const visible=hasCardLineage(db)?rows.filter(row=>cardSafe(ns,row,'listCards',memo)):rows;
-      cardComplete = visible.length <= count;
-      cardAfter = visible.slice(0, count).at(-1)?.cursor_row;
-      cardRows.push(...visible.slice(0, count).filter(row => hasCardLineage(db)||cardSafe(ns, row, 'listCards', memo)));
+          .all(...boundary(ns), ...input.states, after, count + 1);
+        cardComplete = rows.length <= count;
+        cardAfter = rows.slice(0, count).at(-1)?.cursor_row;
+        cardRows.push(...rows.slice(0, count).filter(row => cardSafe(ns, row, 'listCards', memo)));
+      }
     }
     let items = isCards ? cardRows.map(row => metadata(ns, row, undefined, undefined, memo)) :
       db.prepare(`SELECT * FROM card_effects WHERE ${where} AND ordinal>? ORDER BY ordinal LIMIT ?`)

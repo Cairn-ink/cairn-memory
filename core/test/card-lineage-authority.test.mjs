@@ -128,3 +128,38 @@ test('retired body history does not exhaust a live publication fence',async t=>{
   assert.notDeepEqual(cardLineageNamespaceInside(f.db,ns),old);
   assert.equal(ok(f.call('getCard',{cardId:card.id})).card.bodyRevision,4098);
 });
+
+test('publication candidates use bounded indexed state probes before merging a large namespace',async t=>{
+  const f=await lineageFixture(t),a=f.note('source'),card=f.draft([a]);
+  const sources=collectCardBodySourcesInside(f.db,f.identity,ns,[a],()=>true);
+  f.db.exec('BEGIN');
+  try {
+    const insert=f.db.prepare(`INSERT INTO private_cards SELECT ?,owner_id,scope,project_id,revision,?,title,body,
+      body_revision,created_at,updated_at,confirmed_at FROM private_cards WHERE id=?`);
+    for(let i=0;i<8192;i++) {
+      const id=`10000000-0000-4000-8000-${String(i).padStart(12,'0')}`;
+      insert.run(id,i<4095?'draft':'confirmed',card.id);
+      sealCardBodyInside(f.db,{identity:f.identity,namespace:ns,cardId:id,newBody:true,sources});
+    }
+    f.db.exec('COMMIT');
+  } finally {if(f.db.isTransaction)f.db.exec('ROLLBACK');}
+  const prepare=f.db.prepare,executions=[];
+  f.db.prepare=function(sql) {
+    const statement=prepare.call(this,sql);
+    if(sql.includes('pointer_body_revision')) {
+      const all=statement.all;
+      statement.all=function(...args) {const rows=all.call(this,...args);executions.push({sql,args,count:rows.length});return rows;};
+    }
+    return statement;
+  };
+  try {assert.throws(()=>cardLineageNamespaceInside(f.db,ns),/source_budget_exceeded/);}
+  finally {f.db.prepare=prepare;}
+  assert.deepEqual(executions.map(({args,count})=>[args.at(-2),args.at(-1),count]),[['draft',4097,4096],['confirmed',1,1]],
+    'overflow refuses after 4097 total candidates without scanning the remaining confirmed Cards');
+  for(const {sql,args}of executions) {
+    const plan=f.db.prepare('EXPLAIN QUERY PLAN '+sql).all(...args);
+    assert.ok(plan.some(row=>/SEARCH c USING INDEX private_card_scope/.test(row.detail)),JSON.stringify(plan));
+    assert.ok(plan.some(row=>/SEARCH h USING COVERING INDEX card_body_header_latest/.test(row.detail)),JSON.stringify(plan));
+    assert.equal(plan.some(row=>/TEMP B-TREE|SCAN c\b/.test(row.detail)),false,JSON.stringify(plan));
+  }
+});

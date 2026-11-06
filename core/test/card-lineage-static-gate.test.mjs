@@ -42,7 +42,7 @@ test('offline lineage migration remains outside every serving, CLI and installer
 });
 
 const paths=[
-  ['direct/metadata','core/private-card-storage.mjs',[/function detail\(/,/!cardSafe\(ns, row/,/cardMetadataInside[\s\S]*cardSafe/,/visible=hasCardLineage/]],
+  ['direct/metadata','core/private-card-storage.mjs',[/function detail\(/,/!cardSafe\(ns, row/,/cardMetadataInside[\s\S]*cardSafe/,/if \(cardSafe\(ns, row, 'listCards', memo\)\) visible.push\(row\)/]],
   ['MOC navigation','core/private-organization-storage.mjs',[/cardDetailInside\(/,/contentReadSafety\(/,/cardLineageNamespaceInside/]],
   ['MOC endpoints','core/context-read-relations.mjs',[/contextCardEligible\(/]],
   ['MOC title/member dispatch','core/context-read-moc.mjs',[/reader.endpoint\(original, \{ projection: memory, titleSource: !memory \}\)/,/reader.endpoint\(original, \{ projection: memory \}\)/]],

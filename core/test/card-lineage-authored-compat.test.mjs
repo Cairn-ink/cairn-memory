@@ -5,6 +5,52 @@ import { contentSafetyInventory } from '../content-safety-migration.mjs';
 import { openMemoryCore } from '../index.mjs';
 import { request,splitRaw } from '../testing/raw-capture-fixtures.mjs';
 
+test('leading U+FEFF title/body bytes survive authored sealing and reads',async t=>{
+  const f=await lineageFixture(t),source=f.note('bom-source');
+  const title='\uFEFFSynthetic title',body='\uFEFFSynthetic body';
+  const card=ok(f.call('createCardDraft',{actionId:'bom-card',drafting:'authored',input:{title,body,sources:[source]}}));
+  const detail=ok(f.call('getCard',{cardId:card.id})).card;
+  assert.equal(detail.title,title);assert.equal(detail.body,body);
+  assert.equal(f.db.prepare('SELECT hex(CAST(body AS BLOB)) bytes FROM private_cards WHERE id=?').get(card.id).bytes,
+    Buffer.from(body).toString('hex').toUpperCase());
+});
+
+test('leading U+FEFF submitted note remains a usable exact-byte source',async t=>{
+  const f=await lineageFixture(t),text='\uFEFFSynthetic note';
+  const source=ok(f.call('submitSourceNote',{actionId:'bom-note',text,occurredAt:null})).source;
+  const card=f.draft([source]);
+  assert.ok(ok(f.call('getCard',{cardId:card.id})).card);
+  assert.equal(ok(f.call('getSource',{source})).parts.map(part=>part.text).join(''),text);
+});
+
+test('small Card pages and continuations work above the per-call scan budget',async t=>{
+  const f=await lineageFixture(t);
+  for(let i=0;i<1025;i++)ok(f.call('createCardDraft',{actionId:'bulk-'+i,drafting:'authored',input:{
+    title:'Synthetic title',body:'Synthetic body',authoredInput:{text:'Synthetic original',occurredAt:null}}}));
+  const first=ok(f.call('listCards',{states:['draft'],limit:1}));
+  assert.equal(first.cards.length,1);assert.ok(first.nextCursor);
+  const second=ok(f.call('listCards',{states:['draft'],limit:1,cursor:first.nextCursor}));
+  assert.equal(second.cards.length,1);assert.ok(second.nextCursor);
+  assert.ok(second.cards[0].id>first.cards[0].id);
+  const ids=[];let cursor;
+  do {
+    const page=ok(f.call('listCards',{states:['draft','confirmed'],limit:50,...(cursor?{cursor}:{})}));
+    ids.push(...page.cards.map(card=>card.id));cursor=page.nextCursor;
+  } while(cursor);
+  assert.equal(ids.length,1025);assert.equal(new Set(ids).size,1025);
+  assert.deepEqual(ids,[...ids].sort());
+  // Force a full bounded scan of denied bodies. A content-free continuation
+  // must still advance and eventually reach the end without leaking IDs.
+  f.db.exec('DROP TRIGGER safety_header_delete; DELETE FROM card_body_provenance;');
+  // Restore the attested declaration before the next public read.
+  const {cardLineageDDL}=await import('../card-lineage-schema.mjs');
+  f.db.exec(cardLineageDDL.match(/CREATE TRIGGER safety_header_delete[\s\S]*?END;/)[0]);
+  const hidden=ok(f.call('listCards',{states:['draft'],limit:1}));
+  assert.deepEqual(hidden.cards,[]);assert.ok(hidden.nextCursor);
+  const end=ok(f.call('listCards',{states:['draft'],limit:1,cursor:hidden.nextCursor}));
+  assert.deepEqual(end.cards,[]);assert.equal(end.nextCursor,null);
+});
+
 test('authored operation audit is owner-wide, actor-bound, idempotent and keeps the first timestamp',async t=>{
   const f=await lineageFixture(t),input={actionId:'one-action',text:'Synthetic source',occurredAt:null};
   const first=f.call('submitSourceNote',input),inventory=contentSafetyInventory(f.db);

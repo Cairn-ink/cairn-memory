@@ -30,7 +30,7 @@ function strictTextBytes(db,table,id,fields) {
   if(!row)fail('source_unavailable');
   for(const field of fields) {
     const bytes=Buffer.from(row[field],'hex');
-    try { const text=new TextDecoder('utf-8',{fatal:true}).decode(bytes);if(!Buffer.from(text).equals(bytes))fail('source_unavailable'); }
+    try { const text=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(bytes);if(!Buffer.from(text).equals(bytes))fail('source_unavailable'); }
     catch { fail('source_unavailable'); }
   }
 }
@@ -46,7 +46,7 @@ export function exactCardInside(db, ns, id) {
   if (!row) fail('source_unavailable');
   for (const [field,limit] of [['title',200],['body',20000]]) {
     const bytes = Buffer.from(row[field+'_utf8'],'hex');
-    let text; try { text = new TextDecoder('utf-8',{fatal:true}).decode(bytes); } catch { fail('source_unavailable'); }
+    let text; try { text = new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(bytes); } catch { fail('source_unavailable'); }
     if (!Buffer.from(text).equals(bytes) || text !== row[field] || cardText(text,limit) !== text) fail('source_unavailable');
   }
   return row;
@@ -64,16 +64,23 @@ export function cardLineageNamespaceInside(db,ns) {
   if(!hasCardLineage(db))return {};
   // Retained history is append-only. Fence the latest authority of live Cards,
   // so retired bodies do not consume the publication's live-item budget.
-  const rows=db.prepare(`SELECT c.id,c.revision,c.body_revision AS pointer_body_revision,c.state,
+  const probe=db.prepare(`SELECT c.id,c.revision,c.body_revision AS pointer_body_revision,c.state,
     p.body_revision,p.provenance_revision,p.body_digest,p.provenance_digest
     FROM private_cards c LEFT JOIN card_body_provenance p
       ON (p.owner_id,p.scope,p.project_id,p.card_id)=(c.owner_id,c.scope,c.project_id,c.id)
       AND (p.body_revision,p.provenance_revision)=(SELECT h.body_revision,h.provenance_revision
         FROM card_body_provenance h WHERE (h.owner_id,h.scope,h.project_id,h.card_id)=(c.owner_id,c.scope,c.project_id,c.id)
         ORDER BY h.body_revision DESC,h.provenance_revision DESC LIMIT 1)
-    WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state IN ('draft','confirmed')
-    ORDER BY c.id LIMIT 4097`).all(...boundary(ns));
-  if(rows.length>4096||Buffer.byteLength(JSON.stringify(rows))>8*1024*1024)fail('source_budget_exceeded');
+    WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state=?
+    ORDER BY c.id LIMIT ?`);
+  const rows=[];
+  for(const state of ['draft','confirmed']) {
+    rows.push(...probe.all(...boundary(ns),state,4097-rows.length));
+    if(rows.length>4096||Buffer.byteLength(JSON.stringify(rows))>8*1024*1024)fail('source_budget_exceeded');
+  }
+  // Each state probe follows the namespace/state/id index. Only this bounded
+  // population is merged, preserving the publication commitment's ID order.
+  rows.sort((a,b)=>Buffer.compare(Buffer.from(a.id),Buffer.from(b.id)));
   const identity=db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get();
   return {lineage:lineageHmac(identity,'card-publication-s2-v1',[identity.storeId,ns,rows])};
 }

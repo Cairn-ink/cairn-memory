@@ -5,10 +5,10 @@ import { migrateCardLineage,contentSafetyInventory } from '../content-safety-mig
 import { safetyFixture,copySqliteFixture,readSqliteFixture,quiescence,ns,ok,receipt } from '../testing/content-safety-s2h-fixture.mjs';
 import { lineageHost } from '../testing/card-lineage-fixture.mjs';
 
-test('canonical legacy seeding preserves bytes and positive edges, never invents own writing',async t=>{
+test('canonical legacy seeding preserves leading U+FEFF bytes and positive edges, never invents own writing',async t=>{
   const f=safetyFixture(t,23),host=lineageHost(),core=openMemoryCore({path:f.path,privateCards:host.options});
   const card=ok(host.call(core,'createCardDraft',{namespace:ns,actionId:'legacy-own',drafting:'authored',
-    input:{title:'Synthetic legacy title',body:'Synthetic legacy body',authoredInput:{text:'Synthetic note',occurredAt:null}}}));
+    input:{title:'\uFEFFSynthetic legacy title',body:'\uFEFFSynthetic legacy body',authoredInput:{text:'\uFEFFSynthetic note',occurredAt:null}}}));
   core.close();const db=f.connect(),before=db.prepare('SELECT title,body FROM private_cards WHERE id=?').get(card.id);db.close();
   copySqliteFixture(f.path,f.backupPath);
   const result=await migrateCardLineage({path:f.path,backupPath:f.backupPath,expected:{base:23,storeId:f.storeId},quiescence});
