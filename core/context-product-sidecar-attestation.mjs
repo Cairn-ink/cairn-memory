@@ -17,9 +17,21 @@ export function readSidecarAttestation(db, schema) {
   // TEXT conversion never asks node:sqlite to decode an unsafe INTEGER.
   // Preserve the storage class: TEXT/REAL values cannot masquerade as integers.
   const row=db.prepare('SELECT CAST(stamp AS TEXT) AS stamp,typeof(stamp) AS stampType,record FROM product_attestation WHERE singleton=1').get();
+  return normalizeSidecarAttestation(row);
+}
+export function normalizeSidecarAttestation(row) {
   if(!row)return null;
   if(row.stampType==='integer'&&/^[1-9][0-9]*$/.test(row.stamp)&&Number.isSafeInteger(Number(row.stamp)))row.stamp=Number(row.stamp);
   return row;
+}
+// The schema is authenticated by the caller before this indexed singleton
+// join. Folding the seal into the existing metadata read adds no cold query.
+export function readAttestedSidecarMetadata(db,objects) {
+  if(!objects.some(row=>row.name==='product_attestation'))return {metadata:db.prepare('SELECT * FROM product_metadata WHERE singleton=1').get(),seal:null};
+  const row=db.prepare('SELECT m.*,CAST(a.stamp AS TEXT) AS attestation_stamp,typeof(a.stamp) AS attestation_type,a.record AS attestation_record,a.singleton AS attestation_present FROM product_metadata m LEFT JOIN product_attestation a ON a.singleton=1 WHERE m.singleton=1').get();
+  if(!row)return {metadata:null,seal:null};
+  const {attestation_stamp,attestation_type,attestation_record,attestation_present,...metadata}=row;
+  return {metadata,seal:attestation_present===null?null:normalizeSidecarAttestation({stamp:attestation_stamp,stampType:attestation_type,record:attestation_record})};
 }
 // Exact stored text, including its original whitespace, participates in the
 // exclusion recheck. No parsing/reserialization of the certificate is allowed.

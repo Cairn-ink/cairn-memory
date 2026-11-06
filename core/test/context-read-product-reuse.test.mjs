@@ -46,7 +46,7 @@ function setup(t,{mode='DELETE',policy=false,suppression=false,rendezvous=()=>{}
   finally {builder.close();}
   const checks={quick:0,foreign:0,attested:0},handles=new Set(),prepare=DatabaseSync.prototype.prepare;
   t.mock.method(DatabaseSync.prototype,'prepare',function(sql){
-    const stmt=Reflect.apply(prepare,this,[sql]),kind=sql==='PRAGMA quick_check'?'quick':sql==='PRAGMA foreign_key_check'?'foreign':sql==='SELECT CAST(stamp AS TEXT) AS stamp,typeof(stamp) AS stampType,record FROM product_attestation WHERE singleton=1'?'attested':null;
+    const stmt=Reflect.apply(prepare,this,[sql]),kind=sql==='PRAGMA quick_check'?'quick':sql==='PRAGMA foreign_key_check'?'foreign':sql==='SELECT m.*,CAST(a.stamp AS TEXT) AS attestation_stamp,typeof(a.stamp) AS attestation_type,a.record AS attestation_record,a.singleton AS attestation_present FROM product_metadata m LEFT JOIN product_attestation a ON a.singleton=1 WHERE m.singleton=1'?'attested':null;
     if(!kind)return stmt;
     const db=this;
     return new Proxy(stmt,{get(target,key){const value=Reflect.get(target,key,target);if(typeof value!=='function')return value;

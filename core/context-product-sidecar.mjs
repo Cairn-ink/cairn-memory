@@ -1,4 +1,4 @@
-import { sidecarAttestationFile, readSidecarAttestation, sidecarAttestationDigest, validSidecarAttestation, writeSidecarAttestation } from './context-product-sidecar-attestation.mjs';
+import { sidecarAttestationFile, readAttestedSidecarMetadata, sidecarAttestationDigest, validSidecarAttestation, writeSidecarAttestation } from './context-product-sidecar-attestation.mjs';
 import { reserveSidecarHandle, sidecarHandleGuard } from './context-product-handles.mjs';
 import { admissionRequired, PRODUCT_SIDECAR_SUFFIX } from './context-product-admission.mjs';
 import { cachedContentSuppressionRequestInside, contentSuppressionRequestInside, withMemoryCandidateBatchInside, withContentSuppressionReadInside, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
@@ -386,16 +386,21 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         if(!same(admittedIdentity,productFile(sidePath)))unavailable('storage_unavailable');
         rendezvous('snapshot');
         sideFormat=candidate.prepare('PRAGMA user_version').get().user_version;
-        admittedMetadata=candidate.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
-        if(!admittedMetadata || admittedMetadata.store_id!==identity.storeId)unavailable('wrong_store');
-        if (sideFormat > 0 && sideFormat !== PRODUCT_SIDECAR_FORMAT) unavailable('incompatible');
-        if(admittedMetadata.profile!==PRODUCT_PROFILE)unavailable('incompatible');
+        if (sideFormat > 0 && sideFormat !== PRODUCT_SIDECAR_FORMAT) {
+          // Preserve legacy wrong-store precedence without querying its seal.
+          admittedMetadata=candidate.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
+          if(!admittedMetadata||admittedMetadata.store_id!==identity.storeId)unavailable('wrong_store');
+          unavailable('incompatible');
+        }
         const objects=schema(candidate);
         // A legacy missing table has no row to query. Every present table must
-        // have the exact singleton primary key before the bounded lookup.
+        // have the exact singleton primary key before the bounded metadata join.
         missingSealTable=!objects.some(row=>row.name==='product_attestation');
         if(!missingSealTable)attest(candidate,objects);
-        const seal=readSidecarAttestation(candidate,objects);
+        const admitted=readAttestedSidecarMetadata(candidate,objects),seal=admitted.seal;
+        admittedMetadata=admitted.metadata;
+        if(!admittedMetadata || admittedMetadata.store_id!==identity.storeId)unavailable('wrong_store');
+        if(admittedMetadata.profile!==PRODUCT_PROFILE)unavailable('incompatible');
         bootstrap=wantsWrite&&same(unattestedIdentity,admittedIdentity)&&seal===null;
         if(!bootstrap&&!validSidecarAttestation(identity.cursorSecret,seal,sidecarAttestationFile(sidePath),PRODUCT_SIDECAR_FORMAT)) {
           // Upgrade decision table (missing means no table or no singleton row):

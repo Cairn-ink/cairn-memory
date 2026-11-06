@@ -264,14 +264,14 @@ for(const race of ['attestation','stamp'])test(`child exclusion refuses a concur
 
 test('corrupt verdict still executes the incumbent whole-file checks',t=>{
   const s=setup(t);s.close();let injected=false;
-  s.setHook(text=>{if(!injected&&text==='SELECT * FROM product_metadata WHERE singleton=1'){injected=true;throw Object.assign(Error('synthetic corrupt'),{code:'ERR_SQLITE_ERROR',errcode:11});}});
+  s.setHook(text=>{if(!injected&&text.includes('FROM product_metadata')){injected=true;throw Object.assign(Error('synthetic corrupt'),{code:'ERR_SQLITE_ERROR',errcode:11});}});
   s.open();assert.throws(()=>s.storage.admit(2000),{code:'index_unavailable'});
   assert.equal(injected,true);const report=replacementCalls(s).at(-1);assert.equal(wholeChecks(report),2);assert.equal(report.value.error,'ESTALE');
 });
 
 test('SQLITE_CORRUPT continues into repair when the child confirms corruption',t=>{
   const s=setup(t);s.close();let injected=false;
-  s.setHook(text=>{if(!injected&&text==='SELECT * FROM product_metadata WHERE singleton=1'){injected=true;throw Object.assign(Error('synthetic corrupt'),{code:'ERR_SQLITE_ERROR',errcode:11});}});
+  s.setHook(text=>{if(!injected&&text.includes('FROM product_metadata')){injected=true;throw Object.assign(Error('synthetic corrupt'),{code:'ERR_SQLITE_ERROR',errcode:11});}});
   spawnHook(t,(spawn,command,args,options)=>{
     if(args[4]==='replace-product-cache')args[2]=args[2].replace(".get().quick_check!=='ok'", ".get().quick_check!=='synthetic corrupt'");
     return spawn(command,args,options);
@@ -350,7 +350,7 @@ test('malformed singleton schema is refused before any seal lookup in parent or 
     CREATE TABLE product_attestation(singleton INTEGER,stamp INTEGER,record TEXT);
     WITH RECURSIVE n(i) AS (VALUES(2) UNION ALL SELECT i+1 FROM n WHERE i<1001)
     INSERT INTO product_attestation SELECT i,1,'invalid' FROM n;`));
-  let lookups=0;s.setHook(text=>{if(/FROM product_attestation WHERE singleton=1/.test(text))lookups++;});
+  let lookups=0;s.setHook(text=>{if(/FROM product_attestation WHERE singleton=1|JOIN product_attestation/.test(text))lookups++;});
   spawnHook(t,(spawn,command,args,options)=>{
     if(args[4]==='replace-product-cache'){
       // Even an exact-row verdict raced against incompatible schema must not
@@ -367,9 +367,8 @@ test('malformed singleton schema is refused before any seal lookup in parent or 
   assert.equal(reads.length,0);assert.equal(refusal?.code,'index_unavailable');assert.equal(report.value.error,'ESTALE');
 });
 
-
 for(const boundary of ['PRAGMA journal_mode','PRAGMA application_id','PRAGMA user_version',
-  'SELECT CAST(stamp AS TEXT) AS stamp,typeof(stamp) AS stampType,record FROM product_attestation WHERE singleton=1'])
+  'SELECT m.*,CAST(a.stamp AS TEXT) AS attestation_stamp,typeof(a.stamp) AS attestation_type,a.record AS attestation_record,a.singleton AS attestation_present FROM product_metadata m LEFT JOIN product_attestation a ON a.singleton=1 WHERE m.singleton=1'])
 test(`opening deadline stops at the statement boundary after ${boundary}`,t=>{
   const s=setup(t);s.close();let expired=false,journals=0;const after=[];
   s.setHook(text=>{
@@ -379,7 +378,6 @@ test(`opening deadline stops at the statement boundary after ${boundary}`,t=>{
   s.open();assert.throws(()=>s.storage.admit(2000),{code:'read_timeout'});
   assert.equal(expired,true);assert.deepEqual(after,[],'no subsequent storage statement starts after cutoff');
 });
-
 
 test('child initialization refuses unknown fields and mistyped known fields before spawning',t=>{
   const s=setup(t);s.close();sql(s.path,db=>db.exec('DELETE FROM product_attestation'));
@@ -397,7 +395,6 @@ test('child initialization refuses unknown fields and mistyped known fields befo
     assert.throws(()=>createExclusiveSqliteFile(s.path,undefined,{...payload,...patch}),{name:'TypeError',message:'invalid_cache_initialization'});
   assert.equal(spawns,before,'rejected payloads reach no child channel');
 });
-
 
 for(const missing of ['table','row'])test(`legacy WAL missing ${missing} checks once, seals in place and reopens without whole-file statements`,t=>{
   const s=setup(t,{mode:'WAL'}),publication=s.observe().publication,file=seals.sidecarAttestationFile(s.path);s.close();
@@ -454,3 +451,10 @@ for(const missing of ['table','row'])test(`legacy WAL SIGKILL before sealing COM
   s.open();s.storage.admit(2000);assert.equal(s.checks,2,'only the retry runs whole-file checks');
 });
 
+test('cold admission folds the seal lookup into the existing singleton metadata read',t=>{
+  const s=setup(t);s.close();const before=s.statements.length;s.open();s.storage.admit(2000);
+  const opening=s.statements.slice(before);
+  assert.equal(opening.filter(q=>q.includes('LEFT JOIN product_attestation')).length,1);
+  assert.equal(opening.filter(q=>q.includes('FROM product_attestation')).length,0,'no standalone cold seal lookup');
+  assert.equal(s.checks,0);assert.equal(s.valid(),true);
+});
