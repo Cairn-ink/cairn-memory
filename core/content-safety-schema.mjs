@@ -1,6 +1,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { resolveContentLayout } from './content-safety-layout.mjs';
 import { fail } from './validation.mjs';
+import { cardLineageDDL, authoredInvalidationDDL } from './card-lineage-schema.mjs';
+import { lineageBaseDeclarations, extendedReceiptDeclarations } from './card-lineage-base-schema.mjs';
 
 const tables = `CREATE TABLE content_safety_control (
  singleton INTEGER PRIMARY KEY CHECK(singleton=1),
@@ -164,34 +166,49 @@ CREATE TRIGGER safety_${table}_identity BEFORE UPDATE ON ${table}
 }
 const normalize = sql => sql.trim().replace(/;$/, '').replace(/\s+/g, ' ');
 const expected = new Map();
-function expectedSchema(base, receiptEventTime = false, attestedFeatures = false) {
-  const key = JSON.stringify([base, receiptEventTime, attestedFeatures]);
+function expectedSchema(base, receiptEventTime = false, attestedFeatures = false, lineage = 0) {
+  const key = JSON.stringify([base, receiptEventTime, attestedFeatures, lineage]);
   if (!expected.has(key)) {
     // Comparison needs no SQLite handle: use the closed normative declarations.
-    const sql = contentSafetyDDL(base, receiptEventTime, attestedFeatures);
-    const declarations = sql.match(/CREATE (?:TABLE|INDEX)[\s\S]*?;|CREATE TRIGGER[\s\S]*?END;/g);
+    const sql = contentSafetyDDL(base, receiptEventTime, attestedFeatures) + (lineage ? cardLineageDDL : '');
+    const declarations = sql.match(/CREATE (?:TABLE|(?:UNIQUE )?INDEX)[\s\S]*?;|CREATE TRIGGER[\s\S]*?END;/g);
     expected.set(key, new Map(declarations.map(sql => {
-      const [, type, name] = sql.match(/^CREATE (TABLE|INDEX|TRIGGER) (\w+)/);
+      const [, type, name] = sql.match(/^CREATE (?:UNIQUE )?(TABLE|INDEX|TRIGGER) (\w+)/);
       return [name, { type: type.toLowerCase(), sql: normalize(sql) }];
     })));
   }
   return expected.get(key);
 }
-const matchesSafetySchema = (rows, layout, receiptEventTime) => {
-  const wanted = expectedSchema(layout.base, receiptEventTime, layout.attestedFeatures);
+const matchesSafetySchema = (rows, layout, receiptEventTime, lineage = 0, baseScan = false) => {
+  const wanted = new Map([...expectedSchema(layout.base, receiptEventTime, layout.attestedFeatures, lineage)]
+    .filter(([name]) => !baseScan || !/^card_body_|^card_operations_owner_action$/.test(name)));
   return rows.length === wanted.size && rows.every(row => wanted.has(row.name) &&
     row.type === wanted.get(row.name).type && normalize(row.sql ?? '') === wanted.get(row.name).sql);
 };
+// Preserve quoted SQL bytes when comparing the complete inherited package.
+// Whitespace inside a CHECK literal is meaningful and cannot be normalized away.
+const exactDDL = sql => JSON.stringify((sql??'').match(/'(?:''|[^'])*'|"(?:""|[^"])*"|`(?:``|[^`])*`|\[[^\]]*\]|[A-Za-z_][A-Za-z_0-9]*|[0-9]+|[^\s;]/g)??[]);
+function verifyCompleteCardSchema(db,layout,eventTime) {
+  const wanted=new Map(lineageBaseDeclarations[layout.base].map(row=>[row.name,{...row}]));
+  if(eventTime)wanted.get('receipts').sql=extendedReceiptDeclarations[layout.base];
+  wanted.get('card_memory_revision_invalidation').sql=authoredInvalidationDDL(layout.base);
+  for(const [name,row]of expectedSchema(layout.base,eventTime,true,1))wanted.set(name,{name,...row});
+  const actual=metadataRows(db.prepare('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT '+(wanted.size+1)));
+  if(actual.length!==wanted.size||actual.some(row=>!wanted.has(row.name)||row.type!==wanted.get(row.name).type||
+    exactDDL(row.sql)!==exactDDL(wanted.get(row.name).sql)))fail('unsupported_database');
+}
 const safetyObjects = `SELECT schema_version AS cookie,name,type,sql FROM pragma_schema_version LEFT JOIN sqlite_schema ON (
  name GLOB 'content_safety_*' OR name GLOB 'content_identity_*' OR name='owner_suppression_epochs'
  OR name GLOB 'content_suppression*' OR name GLOB 'safety_*') LIMIT 65`;
+const lineageObjects = safetyObjects.replace(") LIMIT 65", " OR name GLOB 'card_body_*' OR name='card_operations_owner_action') LIMIT 85");
 export function verifyContentSafetyDDL(db, physical) {
   const layout = resolveContentLayout(physical);
   const receiptEventTime = layout.attestedFeatures
     ? supportedReceiptEventTime(db.prepare('SELECT receipt_event_time FROM content_safety_control WHERE singleton=1').get()?.receipt_event_time)
     : false;
-  const wanted = expectedSchema(layout.base, receiptEventTime, layout.attestedFeatures);
-  const rows = db.prepare(safetyObjects).all().filter(row => row.name !== null);
+  const lineage = layout.attestedFeatures ? db.prepare('SELECT card_lineage_revision FROM content_safety_control WHERE singleton=1').get()?.card_lineage_revision : 0;
+  const wanted = expectedSchema(layout.base, receiptEventTime, layout.attestedFeatures, lineage);
+  const rows = db.prepare(lineage ? lineageObjects : safetyObjects).all().filter(row => row.name !== null);
   if (!layout.suppressionRevision || rows.length !== wanted.size || rows.some(row => !wanted.has(row.name) ||
       row.type !== wanted.get(row.name).type || normalize(row.sql ?? '') !== wanted.get(row.name).sql)) fail('unsupported_database');
 }
@@ -227,6 +244,17 @@ export function withContentSafetyLayoutInside(db, work, proof) {
 // property access and destructuring cannot expose the attested bit.
 const eventTimeLayouts = new WeakSet();
 export function receiptEventTimeEnabled(layout) { return eventTimeLayouts.has(layout); }
+const lineageLayouts = new WeakSet();
+export function cardLineageRevision(layout) { return lineageLayouts.has(layout) ? 1 : 0; }
+// The native transaction implementation registers this seam without linking
+// SQLite into configuration/CLI imports of the safety boundary.
+let contentReadSnapshot;
+export function registerContentReadSnapshot(read) { contentReadSnapshot=read; }
+export function withCanonicalContentSnapshot(db,work) {
+  if(db.isTransaction)return work();
+  if(!contentReadSnapshot)fail('storage_error');
+  return contentReadSnapshot(contentSafetyConnection(db),work);
+}
 const layouts = new WeakMap();
 const refused = new WeakSet();
 const controlFields = ['singleton','base_layout','suppression_revision','card_lineage_revision','migration_state',
@@ -251,7 +279,7 @@ export function attestContentSafety(db, physical) {
     // with the final header without adding any opener statements.
     const scanned = metadataRows(db.prepare(safetyObjects));
     const cookie = scanned[0]?.cookie;
-    const rows = scanned.filter(row => row.name !== null);
+    let rows = scanned.filter(row => row.name !== null);
     let controlBinding, header;
     if (!layout.suppressionRevision) {
       if (rows.length) fail('unsupported_database');
@@ -259,7 +287,8 @@ export function attestContentSafety(db, physical) {
       // Reject unknown DDL before reading any control values. Families admit
       // only the two supported tuple shapes; the row must then select exactly
       // the matching shape. Legacy cells retain their original preflight.
-      if (!(layout.attestedFeatures ? [false, true] : [false]).some(flag => matchesSafetySchema(rows, layout, flag))) fail('unsupported_database');
+      const lineageAlternatives = layout.attestedFeatures && [23,33].includes(layout.base) ? [0,1] : [0];
+      if (!(layout.attestedFeatures ? [false, true] : [false]).some(flag => lineageAlternatives.some(lineage => matchesSafetySchema(rows, layout, flag, lineage, true)))) fail('unsupported_database');
       // Read the control population and final schema/version header together.
       // This retains the cookie fence without a separate singleton statement.
       const control = metadataRows(db.prepare(`SELECT c.*,schema_version AS cookie,
@@ -269,16 +298,30 @@ export function attestContentSafety(db, physical) {
         FROM pragma_schema_version LEFT JOIN content_safety_control c ON 1 LIMIT 2`));
       const row = control[0];
       if (control.length !== 1 || row.singleton !== 1 || row.base_layout !== layout.base ||
-          row.suppression_revision !== 1 || row.card_lineage_revision !== 0 || row.migration_state !== 'complete' ||
+          row.suppression_revision !== 1 || !lineageAlternatives.includes(row.card_lineage_revision) || row.migration_state !== 'complete' ||
           ![row.suppression_domain, row.migration_id].every(value => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value)) ||
           !/^[0-9a-f]{64}$/.test(row.inventory_digest)) fail('unsupported_database');
       const eventTime = layout.attestedFeatures ? supportedReceiptEventTime(row.receipt_event_time) : false;
+      // Lineage-zero openers retain the original bounded query and sequence.
+      // Only the selected installed package needs the extended object scan;
+      // bind it to both the initial schema cookie and final control snapshot.
+      if (row.card_lineage_revision === 1) {
+        const extended = metadataRows(db.prepare(lineageObjects));
+        if (extended[0]?.cookie !== cookie || row.cookie !== cookie) fail('unsupported_database');
+        rows = extended.filter(object => object.name !== null);
+      }
       // Shared by every safety-attested opener, including legacy ordinary
       // readers and lazy topic preparation. Metadata only, in the existing
       // final header snapshot; cached reads retain their single header check.
       if (Boolean(row.receiptEventTimeColumn) !== eventTime ||
-          !matchesSafetySchema(rows, layout, eventTime)) fail('unsupported_database');
+          !matchesSafetySchema(rows, layout, eventTime, row.card_lineage_revision)) fail('unsupported_database');
       if (eventTime) eventTimeLayouts.add(layout);
+      if (row.card_lineage_revision === 1) {
+        const invalidation=db.prepare("SELECT sql FROM sqlite_schema WHERE name='card_memory_revision_invalidation'").get();
+        if(normalize(invalidation?.sql??'')!==normalize(authoredInvalidationDDL(layout.base)))fail('unsupported_database');
+        verifyCompleteCardSchema(db,layout,eventTime);
+        lineageLayouts.add(layout);
+      }
       // Exact DDL closes the feature/revision vocabulary; the control row selects
       // only supported values. Missing, extra or future columns refuse above.
       controlBinding = JSON.stringify(attestedControlFields(layout).map(field => row[field]));

@@ -10,7 +10,7 @@ const organization = new Set(['applyCardPlacement', 'refreshCardTopic', 'propose
 
 // Local process configuration grants only these bounded read/draft/organization operations.
 // This module has no explicit-user grant constructor.
-export function createScopedCardAccess(namespace, { rawSources = false, methodPackages = false, currentDependencies = false, readSet = [namespace] } = {}) {
+export function createScopedCardAccess(namespace, { rawSources = false, methodPackages = false, currentDependencies = false, readSet = [namespace], actorId } = {}) {
   const scope = structuredClone(namespace);
   const tokens = new WeakMap(), grants = new WeakMap();
   let closed = false;
@@ -24,7 +24,8 @@ export function createScopedCardAccess(namespace, { rawSources = false, methodPa
             request.actionClass === 'organization' && organization.has(request.method))) return null;
       const grant = Object.freeze({});
       const { input, ...binding } = request;
-      grants.set(grant, { ...binding, accessGeneration: 1 });
+      grants.set(grant, { ...binding, accessGeneration: 1,
+        ...(request.auditVersion ? {actorId,authorizedAt:new Date().toISOString(),authorizationKind:'operation'} : {}) });
       return grant;
     },
     isCurrent(grant) { return closed ? null : grants.get(grant) ?? null; },

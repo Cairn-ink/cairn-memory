@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { hasCardLineage, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { assertContentPort, inertContentPortValue, hasContentPortBoundary } from './content-safety-boundary.mjs';
 import { isBudgetEmbeddingPort } from './context-read-budget.mjs';
 import { withContentSuppressionReadInside, contentSuppressionReasonInside, inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
@@ -380,7 +381,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
           if(`${row.epoch_hi}:${row.epoch_lo}`!==proof.epoch)fail('evidence_unavailable');
           memory=row.epoch??1;
         }else memory=canonical.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch??1;
-        return {memory,...(p.types.includes('card') ? { card: canonical.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1, ...cardDependencyFence(canonical, ns, p.readSet) } : {})};
+        return {memory,...(p.types.includes('card') ? { card: canonical.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1, ...cardDependencyFence(canonical, ns, p.readSet), ...cardLineageNamespaceInside(canonical,ns) } : {})};
       });
       if(candidateWorklist) {
         let chunk=first, rows=selected;
@@ -455,6 +456,10 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     return result;
   }
   function textFor(stream, id, metrics, proof) {
+    if(stream.type==='card'&&hasCardLineage(canonical)) {
+      const row=canonical.prepare(`SELECT id,revision,body_revision,state FROM private_cards WHERE ${where} AND id=?`).get(...boundary(stream.ns),id);
+      if(!row||!cardEligible(stream.ns,row,proof?.intent??'history',metrics,[stream.ns]))unavailable('stale_index');
+    }
     const layout = cachedContentLayout(canonical);
     const ancestry = stream.type === 'memory' && layout?.suppressionRevision && layout.rawLineage ? `,EXISTS(
       SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id
@@ -640,6 +645,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
   // no canonical row or read memo is retained by this projection.
   function factDocuments(p, state = cachedContentSuppressionRequestInside(canonical,p.readSet[0].ownerId)) {
     const layout=state?.layout ?? cachedContentLayout(canonical);
+    if(hasCardLineage(canonical)&&p.types.includes('card'))return '[]';
     if (!layout?.suppressionRevision || state?.epoch==='0:0' || state?.facts?.length===0 && p.readSet.every(ns=>state.readSet.some(selected=>
       selected.scope==='owner' || selected.scope===ns.scope && (selected.projectId??'')===(ns.projectId??'')))) return null;
     const keys = new Map();
@@ -662,8 +668,8 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
   // with sidecar metadata from its existing totals/count query.
   function visibleDocuments(p, totals, deadlineAt = performance.now()+1000, state) {
     const inspect=memo=>{
-      if (!memo.layout.suppressionRevision || memo.epoch==='0:0') return null;
-      if (memo.facts?.length === 0) return null;
+      if (!memo.layout.suppressionRevision || !hasCardLineage(canonical)&&memo.epoch==='0:0') return null;
+      if (!hasCardLineage(canonical)&&memo.facts?.length === 0) return null;
       const ids=new Set(); let totalLength=totals.total_length;
       const unknown=!memo.facts||memo.layout.rawLineage||p.types.includes('card')||memo.facts.some(f=>!['memory','owner','namespace','receipt'].includes(f.kind));
       for (const fact of memo.facts ?? []) {
@@ -758,11 +764,13 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     const current = generation(p);
     if (!fresh(p, current,pending?()=>{result=pending.finish();}:undefined,pending) ||
         current.sequence !== g.sequence || current.incarnation !== g.incarnation) unavailable('stale_index');
-    if(result.rows.length && suppressionEpoch!==undefined && suppressionEpoch!=='0:0' &&
-        !cachedContentSuppressionRequestInside(canonical,p.readSet[0].ownerId)) {
+    if(result.rows.length && (hasCardLineage(canonical)||suppressionEpoch!==undefined && suppressionEpoch!=='0:0' &&
+        !cachedContentSuppressionRequestInside(canonical,p.readSet[0].ownerId))) {
       // Direct internal sidecar callers have no facade's final evidence pass.
       result.rows=canonicalRead(()=>{const memo=createContentReadMemo(canonical);
-        return result.rows.filter(({ref:item})=>candidateAllowed(item,p.intent,p.readSet,memo));});
+        const visible=result.rows.filter(({ref:item})=>candidateAllowed(item,p.intent,p.readSet,memo));
+        if(hasCardLineage(canonical)&&visible.length!==result.rows.length)unavailable('stale_index');
+        return visible;});
     }
     return result;
   }
@@ -781,7 +789,8 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     const safetyLayout = Boolean((cachedContentLayout(canonical) ?? installedContentLayout(canonical)).suppressionRevision);
     // The budget port already fences namespace and owner epochs before each
     // dispatch. Its scoped-empty proof needs no per-document fact recheck.
-    const checkCandidates = safetyLayout && !(isBudgetEmbeddingPort(embedder) && emptyRequestFacts(p));
+    const lineage=hasCardLineage(canonical)&&p.types.includes('card');
+    const checkCandidates = safetyLayout && (lineage || !(isBudgetEmbeddingPort(embedder) && emptyRequestFacts(p)));
     const started = performance.now(); let attempted = 0, embedded = 0;
     while (attempted < maximum && performance.now() - started < maxMs) {
       guard();
@@ -816,7 +825,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       // The trusted budget wrapper invokes its existing namespace/owner fence
       // before transport. Unbranded direct callers retain the conservative
       // canonical candidate guard after text selection.
-      const dispatch = !checkCandidates || isBudgetEmbeddingPort(embedder) ? () => {} : engineGuard(() => canonicalRead(() => {
+      const dispatch = !checkCandidates || !lineage&&isBudgetEmbeddingPort(embedder) ? () => {} : engineGuard(() => canonicalRead(() => {
         const memo=createContentReadMemo(canonical);
         for (const row of rows) {
           const stream=p.streams[row.stream];
@@ -824,7 +833,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
               !candidateAllowed(ref(stream,row),p.intent,p.readSet,memo)) unavailable('stale_index');
         }
       }));
-      if(checkCandidates && !isBudgetEmbeddingPort(embedder))dispatch();
+      if(checkCandidates && (lineage||!isBudgetEmbeddingPort(embedder)))dispatch();
       let vectors;
       const budgetPort=isBudgetEmbeddingPort(embedder);
       assertContentPort({before:true});
@@ -993,6 +1002,7 @@ export function contextSourceFences(db, readSet, types, sources, features) {
     if (types.includes('card') && features.cards) {
       Object.assign(value, cardDependencyFence(db, ns, readSet));
       value.card = db.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1;
+      Object.assign(value,cardLineageNamespaceInside(db,ns));
       if (sources.includes('moc-v1') && features.organization)
         value.cardMoc = db.prepare(`SELECT revision FROM card_moc_epochs WHERE ${where}`).get(...boundary(ns))?.revision ?? 1;
     }

@@ -10,6 +10,7 @@ import { engineProjectionCounter } from './model-budget.mjs';
 import { assembleContext, receiptEventDate } from './context-read-assembly.mjs';
 import { keyed } from './private-card-input.mjs';
 import { fail } from './validation.mjs';
+import { cardLineageItemInside } from './card-lineage.mjs';
 
 // Reuses U5b's candidate index, canonical readers, full fence, v2 projection
 // and deduplication. Only admission/metering belongs to the enclosing role call.
@@ -18,7 +19,7 @@ export function roleEvidence(storage,config) {
   const cards=createPrivateCardStorage({db,identity,ready,rawSources:true});
   const receipts=createCardReceiptSources(db,(purpose,value)=>keyed(identity.cursorSecret,purpose,[identity.storeId,value]));
   const evidence=createPrivateEvidenceStorage({db,identity,cardDetailInside:cards.cardDetailInside,receiptRefInside:receipts.refInside});
-  const fence=item=>createHmac('sha256',identity.cursorSecret).update(JSON.stringify(['context-read-v1','snapshot-item',identity.storeId,item])).digest('base64url');
+  const fence=item=>createHmac('sha256',identity.cursorSecret).update(JSON.stringify(['context-read-v1','snapshot-item',identity.storeId,cardLineageItemInside(db,item)])).digest('base64url');
   function item(ref,readSet,rank,intent='current') {
     const canonical=evidence.itemsInside(ref.namespace,[ref],intent,readSet)[0],{type,state,origin}=canonical;
     const sourceRows=type==='memory'&&canonical.provenance.sourceAccess==='available'?

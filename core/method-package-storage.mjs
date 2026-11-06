@@ -7,6 +7,7 @@ import { createCardCurrentStorage } from './card-current-storage.mjs';
 import { randomUUID } from 'node:crypto';
 import { createMethodBindingStorage } from './method-binding-storage.mjs';
 import { createMethodAttachmentStorage } from './method-attachment-storage.mjs';
+import { hasCardLineage, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { transaction, readTransaction } from './database.mjs';
 import { fail, MemoryStoreError } from './validation.mjs';
 import { keyed } from './private-card-input.mjs';
@@ -29,6 +30,7 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
     ...['method_epochs','card_epochs'].map(table => db.prepare(`SELECT generation FROM ${table} WHERE ${where}`).get(...boundary(ns))?.generation ?? 1),
     db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch ?? 1,
     db.prepare(`SELECT generation FROM raw_exclusion_clocks WHERE ${where}`).get(...boundary(ns))?.generation ?? 1,
+    ...(hasCardLineage(db)?[cardLineageNamespaceInside(db,ns)]:[]),
   ]);
   const cursors = createPrivateCursor({ binding, purpose: 'method-cursor-v1', epoch });
   function advance(ns) {

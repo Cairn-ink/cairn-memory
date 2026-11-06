@@ -922,13 +922,18 @@
     },
     {
       "file": "core/content-safety-migration.mjs",
-      "sha256": "71e8b4f47507ad47a6ef6a065dc1938c23dd74c2f0222724de32d7d77732495b",
-      "reason": "PR 1 adds the offline receipt-event-time migration and transaction-owned installer; the legacy S2h installer and insertion graph remain closed."
+      "sha256": "cfa4de31c06a67b0677faa77287fe5c353c670cbf3320855c6414200892cd0cf",
+      "reason": "Reviewed Card lineage: offline lineage installation preserves canonical denial populations and the suppression domain, then seals classified retained Card bodies under the existing backup/quiescence transaction."
     },
     {
       "file": "core/content-safety-schema.mjs",
-      "sha256": "57af537be7b5e0ce29cc7d025dd7123bba0d6cdb8c2f08b871c0ba3cf5ef2fb0",
-      "reason": "PR 1 attests the receipt-event-time control bit, column and identity trigger, caches its proof privately, and preserves the legacy S2h tuple checks."
+      "sha256": "461210f6a71b902ded6aaca22572af53bad060953306f4bf235a7b9375d668c2",
+      "reason": "Reviewed Card lineage: exact lineage tuple/DDL attestation and synchronous canonical snapshot registration; feature accessors expose only privately attested revisions and add no fact-only writer."
+    },
+    {
+      "file": "core/card-lineage.mjs",
+      "sha256": "e50641b6a7dd91f909b91dbf084ec843304b28059c92490d446690ead49f7c22",
+      "reason": "Reviewed Card lineage: in-transaction Card provenance/authority sealer and its private retained-source reservation helper, including offline unknown-body seeding; the whole-module pin closes helper forwarding and export changes."
     }
   ],
   "writers": [
@@ -966,7 +971,8 @@
       "file": "core/private-card-storage.mjs",
       "start": "    if (method === 'deleteSourceNote') {",
       "end": "    const confirmed =",
-      "sha256": "0d0e12c0c5b8e8a703c799a590e9c37de283b40c681db1d10a0fb34b6d64ae12"
+      "sha256": "2e39fed28931476da4b220b0ec3d6258a4d2b4304d5626370ae72329ecf6aa5e",
+      "reason": "Reviewed Card lineage: lineage-one note deletion retains Card bytes and invalidates revision/effects; the lineage-zero cancellation and canonical suppression insertion remain in this exact region."
     },
     {
       "id": "raw-delete",
@@ -1029,6 +1035,11 @@
     {
       "file": "core/private-card-storage.mjs",
       "name": "writeContentSuppressionInside",
+      "from": "core/content-suppression-storage.mjs"
+    },
+    {
+      "file": "core/card-lineage.mjs",
+      "name": "reserveContentIdentityInside",
       "from": "core/content-suppression-storage.mjs"
     }
   ],
@@ -1167,18 +1178,24 @@
         "attestContentSafety",
         "bindContentSafetyConnection",
         "cachedContentLayout",
+        "cardLineageRevision",
         "checkInstalledContentSafety",
         "contentSafetyBudgetError",
         "contentSafetyConnection",
         "contentSafetyDDL",
         "installedContentLayout",
         "receiptEventTimeEnabled",
+        "registerContentReadSnapshot",
         "verifyContentSafetyDDL",
+        "withCanonicalContentSnapshot",
         "withContentSafetyLayoutInside"
       ],
       "additions": {
         "withContentSafetyLayoutInside": "Reuses one attested layout within a synchronous canonical snapshot.",
-        "receiptEventTimeEnabled": "Feature accessor for privately attested receipt-event-time metadata, not a content safety gate. The separate static gate permits only runtime, context-product-schema and context-read-facade consumers."
+        "receiptEventTimeEnabled": "Feature accessor for privately attested receipt-event-time metadata, not a content safety gate. The separate static gate permits only runtime, context-product-schema and context-read-facade consumers.",
+        "cardLineageRevision": "Reads the lineage bit only from the module-private set of attested layouts; no SQL or mutation capability.",
+        "registerContentReadSnapshot": "Registers the native synchronous read-transaction seam without importing SQLite into the CLI/configuration graph; no fact writer.",
+        "withCanonicalContentSnapshot": "Runs the trusted canonical read callback in the registered synchronous snapshot, preserving the final lineage fence without an await or fact insertion."
       }
     },
     "core/content-suppression-evidence.mjs": {

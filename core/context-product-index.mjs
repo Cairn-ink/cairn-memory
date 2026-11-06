@@ -1,3 +1,4 @@
+import { hasCardLineage, cardLineageItemInside } from './card-lineage.mjs';
 import { admissionRequired } from './context-product-admission.mjs';
 import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
@@ -150,11 +151,11 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         items.push({type:item.type,ref,ns:p.readSet.findIndex(ns=>namespaceKey(ns)===namespaceKey(ref.namespace)),rank:candidate.rank,
           metadata:item.type==='memory'?{state:item.state,reviewState:item.reviewState,filing:item.filing,kind:item.kind,origin:item.origin,confidence:item.confidence}
             :{state:item.state,support:item.support,origin:item.origin},text:item.type==='memory'?item.content:item.title+'\n'+item.body,
-          date,sources,sourceAccess:item.type==='memory'?item.provenance.sourceAccess:'unsupported',sourcesComplete:item.type==='memory' && item.provenance.coverage.status==='complete',fence:bind('snapshot-item',item)});
+          date,sources,sourceAccess:item.type==='memory'?item.provenance.sourceAccess:'unsupported',sourcesComplete:item.type==='memory' && item.provenance.coverage.status==='complete',fence:bind('snapshot-item',cardLineageItemInside(db,item))});
       }
       return {generations,items,unavailable};
     });
-    const generationsFor=items=>prepared.generations.map(g=>({memory:g.memory,...(items.some(i=>i.type==='card')?{card:g.card}:{})}));
+    const generationsFor=items=>prepared.generations.map(g=>({memory:g.memory,...(items.some(i=>i.type==='card')?{card:g.card,...(g.lineage?{lineage:g.lineage}:{})}:{})}));
     const snapshotValue=items=>({v:1,scope:bind('snapshot-scope',p.readSet),intent:p.intent,
       refs:items.map(({ref,ns})=>[ns,ref.type,ref.memoryId??ref.cardId,ref.revision,...(ref.type==='card'?[ref.bodyRevision]:[])]),
       generations:generationsFor(items),access:access.accessGenerations,fences:items.map(i=>i.fence)});
@@ -174,7 +175,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         let current;
         try{current=evidence.itemsInside(item.ref.namespace,[item.ref],p.intent,p.readSet)[0];}
         catch(e){if(['evidence_unavailable','revision_conflict'].includes(e.code))fail('snapshot_stale');throw e;}
-        if(bind('snapshot-item',current)!==item.fence)fail('snapshot_stale');
+        if(bind('snapshot-item',cardLineageItemInside(db,current))!==item.fence)fail('snapshot_stale');
       }
       return result;
     };
@@ -394,14 +395,14 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       // The request's zero owner epoch proves every retained candidate has no
       // fact to match. Delivery still independently fences facts added during
       // semantic callbacks; a safety layout alone is not a populated fact set.
-      if(c.suppressionEpoch && c.suppressionEpoch !== '0:0' && ranked.some(candidate=>contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId}))) ranked=read(()=>ranked.filter(candidate=>{
+      if((hasCardLineage(db) || c.suppressionEpoch && c.suppressionEpoch !== '0:0') && ranked.some(candidate=>hasCardLineage(db)&&candidate.ref.type==='card'||contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId}))) ranked=read(()=>ranked.filter(candidate=>{
         try{evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);return true;}
         catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
       }));
       const fusionStarted=performance.now(),lexical=c.lexical,fused=fuseCandidates(lexical.rows,ranked,{preset:'rrf-k10',limit:24,semanticState:channel,coverageComplete:preflight?.status==='complete'});
       detail.timings.fusionMs=performance.now()-fusionStarted;
       c.items=fused.rows.map((row,i)=>({ref:row.ref,rank:i+1,fusionScore:row.fusionScore,channels:row.channels}));
-      if(c.suppressionEpoch && c.suppressionEpoch !== '0:0' && c.items.some(candidate=>contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId})))c.items=read(()=>c.items.filter(candidate=>{
+      if((hasCardLineage(db) || c.suppressionEpoch && c.suppressionEpoch !== '0:0') && c.items.some(candidate=>hasCardLineage(db)&&candidate.ref.type==='card'||contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId})))c.items=read(()=>c.items.filter(candidate=>{
         try{evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);return true;}
         catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
       }));

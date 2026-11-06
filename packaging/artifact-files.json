@@ -354,5 +354,10 @@
   "core/content-safety-files-child.mjs",
   "core/content-safety-observations.mjs",
   "core/content-safety-preflight.mjs",
-  "adapters/mcp/safety-command.mjs"
+  "adapters/mcp/safety-command.mjs",
+  "core/card-lineage.mjs",
+  "core/card-lineage-schema.mjs",
+  "core/card-lineage-base-schema.mjs",
+  "docs/plans/card-lineage-v1.md",
+  "SEAM.md"
 ]

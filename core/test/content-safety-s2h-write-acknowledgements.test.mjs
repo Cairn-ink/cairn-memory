@@ -259,6 +259,16 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // Foreign-binding repair: the read-only disposal check adds one
   // validation_invalid failure-reason string in context-product-sidecar (6 -> 7).
   // It is not a canonical content identity or a writer acknowledgement field.
+  // Card lineage: actorId/actor_id and host_action_id bind trusted Card authorization
+  // requests and private audit rows. Card/source/namespace ids in the lineage
+  // module, Card storage and offline migration bind retained provenance and
+  // canonical read refs; the observation messageId matches retained Raw facts.
+  // Generated base DDL repeats existing JSON field names; safety_header_invalid
+  // is a trigger error string. The final output boundary checks the existing
+  // effectId/actionId/affectedIds projection against canonical audit rows.
+  // The native guard's added Card/source ids and literal id classify captured
+  // changes and validate the approved causal invalidation; they add no public
+  // acknowledgement field or terminal exemption. Keep that guard unchanged.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};

@@ -2,6 +2,8 @@ import { createHash, createHmac } from 'node:crypto';
 import { createCardRawSources } from './card-raw-sources.mjs';
 import { identityKey, SUPPRESSION_LIMITS } from './content-suppression-input.mjs';
 import { fail } from './validation.mjs';
+import { hasCardLineage, loadCardBodyContributorsInside } from './card-lineage.mjs';
+import { sourceReadSafety } from './content-safety.mjs';
 
 const boundary = c => [c.namespace.ownerId,c.namespace.scope,c.namespace.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
@@ -90,6 +92,23 @@ export function createSuppressionEvidence(db, layout, identity, charge) {
         messageId:c.messageId,span:c.span,contentIdentity:c.contentIdentity },budget);
       charge(budget.scanned + 1);
       version = ['raw-span-v1',c.messageId,c.span.start,c.span.end,c.span.precision,view.parts.map(p => p.part_index).sort((a,b) => a-b)];
+    } else if(c.kind==='card'&&hasCardLineage(db)) {
+      const body=loadCardBodyContributorsInside(db,identity,ns,c.key,{validateSource:ref=>sourceReadSafety(db,{identity,namespace:ns,ref}).allowed});
+      if(body.row.revision!==c.boundRevision||body.row.body_revision!==c.bodyRevision)fail('evidence_unavailable');
+      const supplied=new Map();
+      const visit=items=>{for(const a of items){supplied.set(identityKey(a),a);visit(a.ancestors);}};
+      visit(c.ancestors);charge(supplied.size+body.sources.length);
+      const matches=(a,s)=>{
+        const v=JSON.parse(s.source_version);
+        return a.kind===s.source_kind&&a.key===s.source_key&&a.incarnation===s.source_incarnation&&
+          a.namespace.ownerId===ns.ownerId&&a.namespace.scope===s.source_scope&&(a.namespace.projectId??'')===s.source_project&&
+          (s.source_kind==='memory'?a.boundRevision===v[1]:s.source_kind==='receipt'?a.memoryId===v[1]&&a.boundRevision===v[2]:
+            s.source_kind==='submitted-note'?a.boundRevision===v[1]&&body.refs.some(ref=>ref.sourceId===a.key&&ref.contentIdentity===a.contentIdentity):
+              s.source_kind==='raw'&&a.messageId===v[1]&&a.span.start===v[2]&&a.span.end===v[3]&&a.span.precision===v[4]&&
+                body.refs.some(ref=>ref.type==='raw'&&ref.conversationId===a.key&&ref.messageId===a.messageId&&ref.contentIdentity===a.contentIdentity));
+      };
+      if(body.sources.some(s=>![...supplied.values()].some(a=>matches(a,s)))||[...supplied.values()].some(a=>!body.sources.some(s=>matches(a,s))))fail('evidence_unavailable');
+      version=['card-body-v1',c.bodyRevision];
     } else {
       // S2h has no retained, bound-body S2c records. A supplied Card closure,
       // including an empty one on v18, can never establish a negative answer.

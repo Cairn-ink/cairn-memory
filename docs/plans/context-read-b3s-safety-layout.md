@@ -611,6 +611,26 @@ pull results.
 
 ## 6. S2c lineage storage and exact-byte commitments
 
+The complete revision-1 family tuples are `(52,23,1,1,e)` and
+`(53,33,1,1,e)`, ordered as physical family, base, suppression revision, Card
+lineage revision and receipt-event-time flag, with `e` in `{0,1}` and no
+`engine_capture_cards_revision` column. No other lineage revision/feature
+combination is accepted by this package. Base 18 has no Card lineage capability;
+49/50 remain reserved and rejected. Each receipt-time alternative retains its
+exact column/identity-trigger shape and the existing private receipt-time
+accessor/consumer graph.
+
+Revision 1 requires the complete schema below together with shared writers,
+audited authorization adapters, source matcher, loader, all authored read swaps
+and canonical legacy seeding. Installation is an explicit offline, quiescent,
+atomic migration with complete schema/population verification and preservation
+of the suppression domain, epochs, denials, reservations and commitments.
+Ordinary opens never migrate. Installed authored lineage remains authoritative
+independently of engine creation/read choices. The complete-package and local
+legacy-policy installer prerequisite remain in force; no partial package or
+automatic installer selection is authorized. See
+[the implementation note](card-lineage-v1.md) and [host seam](../../SEAM.md).
+
 Each body revision has a monotone contributor set, independent of current bindings.
 The current body is hidden on all purposes if any contributor/ancestor is suppressed,
 missing or identity-mismatched. Supersession alone is not suppression. Unknown
