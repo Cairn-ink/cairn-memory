@@ -434,7 +434,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       settle(slot, result);
       armIdle();
     }
-    function dispatch(method, payload, credential, control, entered, opening = false) {
+    function dispatch(method, payload, credential, control, entered, opening = false, semanticOutstanding) {
       if (closed){const result=productFailure(terminal === 'read_timeout' || terminal === 'read_cancelled' ? 'store_closed' : terminal ?? 'store_closed');if(maintenance&&terminalFailure){maintenanceFailures.set(result,terminalFailure);maintenanceReaderFailures.set(result,failureState);}return Promise.resolve(result);}
       let input, token, signal, duration;
       try {
@@ -463,7 +463,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       const operation = opening ? first : operationRecord(callRequest, entered, duration, epoch);
       const callFrame = opening ? frame : options.diagnostics ? nativeTelemetry(operation.operationId, epoch) : null;
       const ordinal=maintenance ? opening ? firstOrdinal : claimMaintenanceOrdinal(control) : undefined;
-      const outbound = opening ? openingData : { method, input, credential: token, request: callRequest, operation, frame: callFrame };
+      const outbound = opening ? openingData : { method, input, credential: token, request: callRequest, operation, frame: callFrame,...(semanticOutstanding===undefined?{}:{semanticOutstanding}) };
       if(maintenance){
         const {maintenanceMarker:internalMarker,semanticPort,openPhases,memoryComparison:internalComparison,verificationBatching:internalBatching,verificationBatchState:internalBatchState,...data}=outbound;operationMessage(data);
         outbound.maintenanceOrdinal=ordinal;bindMaintenanceControl(control,marker);prepareMaintenanceMarker(marker,ordinal,entered);
@@ -601,13 +601,24 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       ...(maintenance ? { refreshContextIndex: (input, credential, control) => call('refreshContextIndex', input, credential, control) } : {}),
       close() { return dispose('store_closed'); },
     });
-    if(maintenance&&!semantic)bindMaintenanceAdmission(handle,call);
+    if(maintenance)bindMaintenanceAdmission(handle,semantic?(method,input,credential,control)=>{
+      const turn=semanticMaintenanceTurns.get(control);
+      return turn?dispatch(turn.method,input,credential,control,now(),false,turn.semanticOutstanding):call(method,input,credential,control);
+    }:call);
     disposals.set(handle.close, dispose);
     const holdDiagnostic = registryHolds.get(opened); if (holdDiagnostic) registryHolds.set(handle, holdDiagnostic);
     if (phaseBuffer) openPhases.set(handle, phaseBuffer);
     if(maintenance){maintenanceMarkers.set(handle,marker);maintenanceReaderFailures.set(handle,failureState);}
     return handle;
   };
+}
+// Turn metadata is scoped to the engine's dispatch control, never a handle
+// identity. The established admission bridges alone unwrap host maintainers.
+const semanticMaintenanceTurns=new WeakMap();
+export async function semanticMaintenanceRequest(handle,method,input,credential,control,{semanticOutstanding,dispatch}) {
+  semanticMaintenanceTurns.set(control,{method,semanticOutstanding});
+  try{return await dispatch(handle,input,credential,control);}
+  finally{semanticMaintenanceTurns.delete(control);}
 }
 export const openContextProductReader = createProductReaderRuntime();
 

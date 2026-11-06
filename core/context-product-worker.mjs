@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { types } from 'node:util';
 import { maintenanceErrorName, maintenanceFailureCode, maintenanceIndexFailure } from './context-product-attribution.mjs';
 import { createMaintenanceAttribution } from './context-product-attribution.mjs';
 import { performance } from 'node:perf_hooks';
@@ -17,7 +19,8 @@ phase?.mark('workerFirst', workerFirst);
 const { request, operation: opening, binding } = workerData;
 let sidecarHandles;
 let facade, index, host, active = false, disposing, currentControl = request;
-let semantic,currentOperation=opening,booting=true,closing=false,rejectPermission,exiting;
+let semanticTurn;
+let semantic,semanticOutstanding,currentOperation=opening,booting=true,closing=false,rejectPermission,exiting;
 const owned = [], resources = new Int32Array(workerData.resources);
 const resourceOwner = Object.freeze({
   register(kind, close) {
@@ -118,7 +121,7 @@ try {
   const authorize = (method,payload,credential) => requestAuthority(host,binding,currentControl)(method,payload,credential);
   if(workerData.semanticConfig) {
     const {semanticClient}=await import('./context-semantic-client.mjs'); within(opening);
-    semantic=semanticClient(workerData.semanticPort,workerData.semanticConfig,()=>currentOperation);
+    semantic=semanticClient(workerData.semanticPort,workerData.semanticConfig,()=>currentOperation,{semanticOutstanding:()=>semanticTurn?.getStore()?.semanticOutstanding});
   }
   within(opening);
   phase?.mark('hostCreated');
@@ -161,6 +164,10 @@ parentPort.on('message', async message => {
     verifyRecords(message.request, operation, callRequest, operationRecord(callRequest, mono(operation.enteredMonoNs),
       deadline(['refreshContextIndex','refreshMaintenance','admitMaintenance'].includes(message.method) ? message.input?.budget?.maxMs : message.input?.deadlineMs), opening.workerEpoch, operation.operationId));
     if (operation.workerEpoch !== opening.workerEpoch) fail('authority_required');
+    if(Object.hasOwn(message,'semanticOutstanding')){
+      if(!workerData.maintenance||!semantic||!types.isSharedArrayBuffer(message.semanticOutstanding)||message.semanticOutstanding.byteLength!==8)fail('authority_required');
+      semanticTurn??=new AsyncLocalStorage();semanticOutstanding=message.semanticOutstanding;
+    }else semanticOutstanding=undefined;
     currentControl = callRequest;
     currentOperation=operation;
     startSqlite(operation);
@@ -188,8 +195,9 @@ parentPort.on('message', async message => {
     } else {
       if(['admitMaintenance','refreshMaintenance'].includes(message.method)&&!workerData.maintenance)fail('authority_required');
       if (workerData.maintenance && !['getContextIndexStatus','refreshContextIndex','admitMaintenance','refreshMaintenance'].includes(message.method)) fail('authority_required');
-      response = await index.run(message.method, boundedData(message.input), message.credential,
+      const run=()=>index.run(message.method, boundedData(message.input), message.credential,
         performance.now() + Number(mono(operation.operationCutoffMonoNs)-process.hrtime.bigint())/1e6, observation);
+      response = await (semanticOutstanding===undefined?run():semanticTurn.run({semanticOutstanding},run));
     }
     if(!response.ok)try{index?.discard();}catch(error){nativeFailure(error,false,true);}
     if(attribution) {
@@ -210,5 +218,5 @@ parentPort.on('message', async message => {
   } catch (error) {attribution?.captureFailure(error);attribution?.selectFailure(error);
     try{index?.discard();}catch(cleanupError){nativeFailure(cleanupError,false,true);}
     sealNative(frame); result(operation, nativeFailure(error)); }
-  finally { active = false; if (closing) await exitWhenIdle(); }
+  finally { semanticOutstanding=undefined; active = false; if (closing) await exitWhenIdle(); }
 });

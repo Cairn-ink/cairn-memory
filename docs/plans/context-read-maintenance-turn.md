@@ -243,3 +243,51 @@ Neither pump removes these. A multi-owner deployment check should watch them.
 3. **Lexical open-only admission turn:** `phase:"admission"` with `kind:"lexical"`. The broker queues admission and work tickets the same way.
 4. **Shared helper: agreed.** A small module for port validation and the ticket lifecycle. It covers validation, the `createTurn`/`enter` race against the engine signal, the exactly-once release ledger, poisoning and the counters. It lands with the lexical seam; the semantic seam reuses it. Cadence stays per pump.
 5. **Semantic implementation scope** (stacks after the lexical seam). It covers the finalizer/settlement join (§5), a separate admission controller and retry clock (§3), and the private counters (§8), all reusing the shared helper.
+
+## §5 clarification v2 — semantic turn settlement join
+
+This clarification supersedes the proposed semantic settlement description in
+§5. A semantic pump with a `preQuantum` port allocates one internal 8-byte shared
+buffer for each granted turn. Word 0 counts outstanding calls; word 1 seals the
+turn. The buffer follows direct pump calls, the reader's internal refresh
+request (only its semantic embed calls), and the coordinator's internal
+validation handle. It never enters a public DTO or public coordinator control.
+Without a port the engine allocates no turn buffer, sends no settlement field,
+and keeps the existing calls, SQL, timers and public status.
+
+Every caller increments before posting and rolls back synchronously if posting
+throws. Seal and increment share an atomic lock: word 1 is 0 while open, -1
+only during the short increment critical section, 1 when sealed, and 2 for a
+latched protocol violation. A sealed turn refuses further increments without
+counting them. The violation wakes the finalizer, fails loudly and poisons the
+claim, including a violation observed after its single release attempt.
+
+The Worker validates the buffer before use and decrements and notifies only
+after the handler, its provider children and their ledger-mutation attempts
+have finished. A failed settlement retained in `pendingSettlements` counts as
+done: the existing next-admission drain still owns that debt. Retention does
+not justify another provider dispatch or alter the refusal latch or debt bound.
+
+After the selected turn's top-level operation has returned, including its
+reserve/finish and coverage controls, the finalizer seals the buffer and joins
+outstanding calls through `Atomics.waitAsync`. A successful partial reader DTO
+after a caught embed timeout is not a settlement proof. The atomic wait has a
+5000-ms engine limit measured by a real monotonic clock, independent of the
+operation clock; lock contention is bounded too. Required reader disposals and
+late openings are joined before release. Healthy resident readers remain cached.
+
+An unsettled turn at pump close, or one whose bounded wait expires, retains
+its grant for the host coordinator's disposal proof. Pump close does not close
+that coordinator and does not await the host's later action. The finalizer's
+registered proof continuation survives pump completion. Successful proof can
+release once; a failed proof or a protocol violation poisons and withholds the
+grant. A Worker crash cannot supply a successful proof for a still-outstanding
+call. The shared ticket ledger records a release attempt before invoking the
+host and prevents duplicate release under settlement, timeout and close races.
+
+Admission waits preserve real observation horizons. They add no reservation,
+work time, failure record or dispatch ordinal, and do not move the startup or
+slot cursor. A separate retry-not-before time prevents overdue lookahead from
+spinning. Real wall-clock observation gaps remain visible under §7; waiting
+never resets duty, extends authority, or earns observation credit. Turn counters
+and wait time appear only in the private diagnostic snapshot.

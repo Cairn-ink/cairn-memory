@@ -310,7 +310,7 @@ async function embed(input,op,metadata) {
     if(!transmitted||protocolFailure||!Array.isArray(result.value)||result.value.length!==texts.length)fail('provider_error');
     return result.value.map(v=>validateVector(v,port));
   });
-  active.add(settled);settled.catch(()=>{});
+  active.add(settled);operations.get(op.operationId)?.settlements?.add(settled);settled.catch(()=>{});
   let timer;
   try {
     const values=await Promise.race([settled,new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(Object.assign(Error('timeout'),{code:'timeout'}));},Math.max(0,deadlineAt-performance.now()));})]);
@@ -528,6 +528,18 @@ function ownEmbedding(value) {
   if(p.family!=='hosted'||!Number.isSafeInteger(p.maxRequests)||p.maxRequests<1||!Number.isSafeInteger(p.maxConcurrent)||p.maxConcurrent<1||p.maxConcurrent>1024||!Number.isFinite(p.maxUsd)||p.maxUsd<=0)fail('invalid_input');
   numericUsd(p.maxUsd);return {embedder:descriptors.embedder.value,policy:{...p,maxUsd:p.maxUsd,estimateUsd:texts=>Number(dollars(tokenCost(inputBound(texts),c.priceTable.usdPerMillionInputTokens[c.provider.model])))}};
 }
+function outstandingState(message) {
+  if(!Object.hasOwn(message,'semanticOutstanding'))return;
+  if(!types.isSharedArrayBuffer(message.semanticOutstanding)||message.semanticOutstanding.byteLength!==8)fail('authority_required');
+  return new Int32Array(message.semanticOutstanding);
+}
+async function settleOutstanding(state,op) {
+  if(!state)return;
+  // The handler has finished starting children. A retained failed ledger
+  // settlement is done here; the existing next-admission drain owns its debt.
+  try{await Promise.allSettled([...op.settlements]);}
+  finally{Atomics.sub(state,0,1);Atomics.notify(state,0);}
+}
 parentPort.on('message',async message=>{
   if(message.kind==='close'){try{await dispose();parentPort.close();}catch{process.exitCode=1;parentPort.close();}return;}
   if(message.kind==='cancel'){const op=operations.get(message.id);if(op)for(const controller of op.controllers)controller.abort();return;}
@@ -536,9 +548,11 @@ parentPort.on('message',async message=>{
     const p=message.port,attached=new Set();clients.add(p);p.on('close',()=>{clients.delete(p);for(const op of attached)for(const controller of op.controllers)controller.abort();});
     p.on('message',m=>sqlContext.run({until:-Infinity},async()=>{
       sqlite.start(Number(mono(m.operation.operationCutoffMonoNs))/1e6);
-      const op={controllers:new Set(),attempts:0,attemptState:m.attemptState};operations.set(m.operation.operationId,op);attached.add(op);
+      const op={controllers:new Set(),...(Object.hasOwn(m,'semanticOutstanding')?{settlements:new Set()}:{}),attempts:0,attemptState:m.attemptState};operations.set(m.operation.operationId,op);attached.add(op);
       const state={refusal:null,attempts:m.attemptState?new Int32Array(m.attemptState):null};
+      let outstanding;
       try{
+        outstanding=outstandingState(m);
         let guard;try{guard=maintenance.portGuard(m,message.metadata);}catch{throw latchRefusal(state);}
         const observe=guard?phase=>{try{guard(phase);}catch(error){latchRefusal(state);if(!phase?.accounting)throw state.refusal;}}:undefined;
         const value=await withContentPortBoundary(observe,()=>observe?contentRequest.run({guard:observe,state,accounting:false},()=>internalCall(m,message.metadata)):internalCall(m,message.metadata));
@@ -546,18 +560,21 @@ parentPort.on('message',async message=>{
         if(value?.vectors?.length>32){const parts=Math.ceil(value.vectors.length/32);for(let part=0;part<parts;part++)p.postMessage({id:m.id,ok:true,part,parts,value:{...value,vectors:value.vectors.slice(part*32,(part+1)*32)}});}
         else p.postMessage({id:m.id,ok:true,value});}
       catch(error){error=state.refusal??error;p.postMessage({id:m.id,ok:false,attempts:op.attempts,...(fenceFailures.has(error)?{safetyFence:true}:{}),code:fenceFailures.has(error)?'evidence_unavailable':['not_enabled','purge_pending','backfill_ceiling','price_unavailable','budget_denied','provider_error','rate_limited','dimension_mismatch','timeout','provider_unavailable'].includes(error.code)?error.code:['context_item_too_large','invalid_vector'].includes(error.code)?'provider_error':error.code==='read_timeout'?'timeout':'ledger_unavailable'});}
-      finally{operations.delete(m.operation.operationId);attached.delete(op);}
+      finally{if(outstanding)await settleOutstanding(outstanding,op);operations.delete(m.operation.operationId);attached.delete(op);}
     }));return;
   }
   if(message.kind!=='call')return;
-  const op={controllers:new Set()};operations.set(message.id,op);operations.set(message.operation.operationId,op);
+  const op={controllers:new Set(),...(Object.hasOwn(message,'semanticOutstanding')?{settlements:new Set()}:{})};operations.set(message.id,op);operations.set(message.operation.operationId,op);
   await sqlContext.run({until:-Infinity},async()=>{
-    let result;
+    let result,outstanding;
     try{
+      outstanding=outstandingState(message);
       if(message.request.clockDomainId!==c.request.clockDomainId||message.request.credentialBindingId!==c.binding.credentialBindingId||message.request.credentialExpiresUtcMs!==c.binding.credentialExpiresUtcMs)fail('authority_required');
       verifyRecords(message.request,message.operation,message.request,operationRecord(message.request,mono(message.operation.enteredMonoNs),deadline(message.input?.budget?.maxMs??message.input?.deadlineMs??5000),1,message.operation.operationId));
       sqlite.start(Number(mono(message.operation.operationCutoffMonoNs))/1e6);result=await dataCall(message);
     }catch(error){result=failure(error);}
-    operations.delete(message.id);operations.delete(message.operation.operationId);parentPort.postMessage({id:message.id,result});
+    if(!outstanding){operations.delete(message.id);operations.delete(message.operation.operationId);parentPort.postMessage({id:message.id,result});}
+    else try{parentPort.postMessage({id:message.id,result});}
+    finally{await settleOutstanding(outstanding,op);operations.delete(message.id);operations.delete(message.operation.operationId);}
   });
 });
