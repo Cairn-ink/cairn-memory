@@ -151,7 +151,7 @@ test('differential: exact whole envelopes match the descending scan on monotone 
           const probes = f.calls.filter(Boolean);
           const capacity = Math.min(limit, Math.max(0, 103 - offset));
           maximum[capacity] = Math.max(maximum[capacity] ?? 0, probes.length);
-          assert.ok(probes.length <= 2 * Math.ceil(Math.log2(Math.max(1, capacity))) + 2,
+          assert.ok(probes.length <= Math.ceil(Math.log2(Math.max(1, capacity))) + 2,
             `probe bound capacity=${capacity} probes=${probes.length}`);
           assert.equal(comparable(actual), comparable(expected),
             JSON.stringify({ safety, mix, purpose, limit, offset, counterName, tokenBudget }));
@@ -189,6 +189,22 @@ test('optional o200k tokenizer: exact envelopes match the descending scan', asyn
   t.diagnostic(`MAP_OPTIONAL_O200K_DIFFERENTIAL comparisons=${comparisons}`);
 });
 
+test('near-capacity: the one-shorter page takes exactly two envelope probes', async t => {
+  for (const safety of [false, true]) for (const capacity of [2, 3, 7, 50, 100]) {
+    const f = await fixture(t, { safety, count: capacity + 1 });
+    f.setCounter(text => !text || JSON.parse(text).value.items.length < capacity ? 1 : 4001);
+    const result = f.core.map({ namespace, limit: capacity });
+    const probes = f.calls.filter(Boolean);
+    assert.deepEqual(probes.map(text => JSON.parse(text).value.items.length),
+      [capacity, capacity - 1], `capacity=${capacity} safety=${safety}`);
+    assert.equal(probes.length, 2);
+    assert.equal(ok(result).items.length, capacity - 1);
+    assert.equal(probes[1], JSON.stringify(result), 'return the exactly counted page');
+    assert.equal(f.calls.filter(text => text === '').length, 1, 'exclude the pre-loop count');
+    t.diagnostic(`MAP_NEAR_CAPACITY capacity=${capacity} safety=${safety} probes=${probes.length}`);
+  }
+});
+
 test('probe bound: every capacity 1..100, every monotone fitting threshold, and one-probe fast path', async t => {
   const f = await fixture(t);
   const maximum = {};
@@ -199,7 +215,7 @@ test('probe bound: every capacity 1..100, every monotone fitting threshold, and 
       const result = f.core.map({ namespace, limit: capacity });
       const probes = f.calls.filter(Boolean).length;
       max = Math.max(max, probes);
-      assert.ok(probes <= 2 * Math.ceil(Math.log2(capacity)) + 2,
+      assert.ok(probes <= Math.ceil(Math.log2(capacity)) + 2,
         `capacity=${capacity} threshold=${threshold} probes=${probes}`);
       if (threshold === 0) assert.equal(result.error?.code, 'context_item_too_large');
       else assert.equal(ok(result).items.length, threshold);
