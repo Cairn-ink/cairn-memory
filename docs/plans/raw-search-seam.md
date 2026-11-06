@@ -61,10 +61,18 @@ read snapshot, with serialization outside those snapshots. SQLite's native
 throughout a build. It invalidates the in-memory inventory and search-eligibility caches for every
 other-writer commit, including direct facts with no application epoch change.
 That connection-local cache key is never a durable publication authority.
-Final validation checks it inside the fresh canonical snapshot and reruns the
-full canonical predicate for every ranking contributor there, including receipt
-integrity and inbound missing or foreign ancestry. The inventory fence is an
-early refusal guard, never a substitute for those predicates. Protected openers and document
+Final validation compares the complete source commitment inside the fresh
+canonical snapshot. It binds canonical part metadata/bytes, maps, exclusions,
+session fences, receipt text and integrity, Memory eligibility, all inbound
+ancestry edges and their endpoints' own scopes, suppression facts and schema
+identity. Each proof retains its original message population; unrelated appended
+messages leave those source inputs unchanged. Fresh inventory still observes
+new messages. Every delivered range, coalesced sibling, centre and neighbouring
+source feeding a returned candidate also receives the full predicate there.
+Population-wide corpus statistics, ranking competition, semantic readiness and
+coverage rely on that complete commitment and the snapshot's eligible set. If
+the inventory bound prevents it, full dependency predicates remain mandatory
+and coverage is partial. Protected openers and document
 provider dispatches still read actual denial facts independently. Concurrent
 source movement discards a maintenance quantum and leaves the next host turn
 available; it does not mark maintenance permanently failed. Inventory descriptions

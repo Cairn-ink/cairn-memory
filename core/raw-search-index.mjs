@@ -103,6 +103,7 @@ export async function openRawSearch(value) {
           }catch(error){vectors=null;queryVector=null;semantic={state:'bm25-only',reason:error.code==='partial_coverage'?'partial_coverage':'invalid_vector'};}
         }
         const result=retrieval.retrieveRaw(eligible,input.query,{vectors,queryVector});
+        const sources=fence?result.sources:dependencies;
         const publication=authority.bind('raw-search-publication-v1',[authority.identity,snapshot.sequence]);
         const proof=authority.bind('raw-search-proof-v1',[instance,publication,++serial]);
         const candidates=result.rows.map(row=>{
@@ -122,10 +123,11 @@ export async function openRawSearch(value) {
         // reports limits and availability only; operational counts stay internal.
         coverage.scanned=null;coverage.expanded=null;
         const output=immutable({version:RAW_SEARCH_VERSION,publication,candidates,coverage,semantic});
-        retain(searches,proof,{dependencies,fence,intent:input.intent,access,candidates},4);
-        // Every lexical corpus row, semantic chunk, session and neighbor dependency
-        // is retained, including contributors that are not in the final 24.
-        authority.validate([{sources:dependencies,fence,cache:cacheProof,intent:input.intent,access,value:output}]);
+        retain(searches,proof,{dependencies,sources,fence,intent:input.intent,access,candidates},4);
+        // Corpus statistics, rank competition, readiness and coverage use the
+        // eligible snapshot plus its complete commitment. Direct contributors
+        // additionally receive full predicates in the final canonical snapshot.
+        authority.validate([{sources,fence,cache:cacheProof,intent:input.intent,access,value:output}]);
         if(cacheProof&&!borrowed&&!denied&&!timedOut&&(vectors||snapshot.partial)){
           // Transfer the operation's reservation synchronously. Admission failure
           // only leaves this operation uncached; it cannot change its result.
@@ -149,7 +151,7 @@ export async function openRawSearch(value) {
         const access=authority.authorize('rawSearchSource',{publication:candidate.publication,intent},token,
           canonical);
         access();
-        return authority.validate([{sources:entry.dependencies,fence:entry.fence,intent,access,value:candidate.classification}])[0];
+        return authority.validate([{sources:entry.sources,fence:entry.fence,intent,access,value:candidate.classification}])[0];
       }catch {return immutable({kind:'denied',reason:'source-or-authority-unavailable'});}
     }
     async function prepare(candidate,{intent='current'}={},token) {
@@ -176,7 +178,7 @@ export async function openRawSearch(value) {
         ordinal:source.ordinal,role:source.role,occurredAt:source.occurredAt,classification:candidate.classification,ranges});
       const ticket=authority.bind('raw-search-prepared-v1',[candidate.proof,++serial]);
       const handle=Object.freeze({value:output,ticket,validate(){return revalidate([ticket])[0];}});
-      retain(prepared,ticket,{sources:dependencies,fence:entry.fence,intent,access,value:output,handle},RAW_SEARCH_LIMITS.preparations);
+      retain(prepared,ticket,{sources:entry.sources,fence:entry.fence,intent,access,value:output,handle},RAW_SEARCH_LIMITS.preparations);
       revalidate([ticket]);return handle;
     }
     async function prepareSource(ref,{intent='current'}={},token) {

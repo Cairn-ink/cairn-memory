@@ -167,7 +167,7 @@ function sourceSuppression(db, ns, ref, rawTargets, ancestryChecked) {
 
 /** Canonical only: caller owns authorization and the existing transaction/snapshot.
  * Reasons are internal and must never be serialized or used as public errors. */
-export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = false, rawBudget, memo }) {
+export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = false, rawBudget, memo, rawMutableRevision = true }) {
   const decision = ref?.type === 'raw' ? ['raw', boundary(ns ?? {}), ref.conversationId, ref.messageId,
     ref.span?.start, ref.span?.end, ref.span?.precision] :
     [ref?.type, boundary(ns ?? {}), ref?.receiptId ?? ref?.sourceId];
@@ -234,7 +234,7 @@ export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = fa
           db.prepare(`SELECT 1 FROM raw_deletion_effects WHERE ${where} AND entity_type='conversation' AND entity_id=? LIMIT 1`).get(...boundary(ns), ref.conversationId);
         return denied(deleted ? 'purge' : 'missing');
       }
-      try { return remember(allowed, createCardRawSources(db, identity).resolve(ns, ref, rawBudget)); }
+      try { return remember(allowed, createCardRawSources(db, identity, { mutableRevision: rawMutableRevision }).resolve(ns, ref, rawBudget)); }
       catch (error) {
         if (error.code === 'source_excluded') return denied('purge');
         if (['source_unavailable', 'raw_crypto_unavailable', 'revision_conflict'].includes(error.code)) return denied('identity_mismatch');

@@ -111,7 +111,15 @@ export function retrieveRaw(segments,query,{ vectors = null,queryVector = null,m
     }
   }
   const rows=[...candidates.values()].sort(order).slice(0,RAW_SEARCH_LIMITS.depth),incomplete=rows.some(row=>!row.turn.complete);
-  return {rows,coverage:{status:partial||turnPartial||incomplete?'partial':'complete',scanned:Math.min(work,maxWork),expanded:candidates.size,
+  const contributors=new Map();
+  for(const row of rows){
+    const center=turns.get(row.centerId),members=sessions.get(center.sessionId),index=members.indexOf(center);
+    // The centre's neighbouring terms feed within-session ranking. Retain all
+    // physical siblings of the centre, those neighbours and the delivered turn.
+    for(const turn of [row.turn,center,members[index-1],members[index+1]])if(turn)
+      for(const segment of turn.segments)contributors.set(JSON.stringify(segment.source.ref),segment.source);
+  }
+  return {rows,sources:[...contributors.values()],coverage:{status:partial||turnPartial||incomplete?'partial':'complete',scanned:Math.min(work,maxWork),expanded:candidates.size,
     causes:[...(partial?['work_limit']:[]),...(turnPartial?['turn_limit']:[]),...(incomplete?['partial_turn']:[])]}};
 }
 

@@ -78,7 +78,7 @@ export function createRawCardInvalidation(db) {
 }
 
 /** Canonical metadata only. No port, source plaintext or host callback is used. */
-export function createCardRawSources(db, identity) {
+export function createCardRawSources(db, identity, { mutableRevision = true } = {}) {
   const bind = (purpose, value) => createHmac('sha256', identity.cursorSecret)
     .update(JSON.stringify([purpose,[identity.storeId,value]])).digest('base64url');
   let available;
@@ -87,7 +87,8 @@ export function createCardRawSources(db, identity) {
   const budget = (bytes = 64000, rows = 1024) => ({ bytes, rows, scanned: 0, used: 0, parts: new Map(), payloads: new Map() });
   function metadata(ns, anchor, state) {
     if (!enabled()) fail('source_unavailable');
-    const row = db.prepare(`SELECT c.client,c.session_key,c.revision,m.ordinal,m.role,m.occurred_at,m.total_units,m.total_bytes
+    const revision = mutableRevision || anchor.expectedRevision !== undefined ? 'c.revision' : '0 AS revision';
+    const row = db.prepare(`SELECT c.client,c.session_key,${revision},m.ordinal,m.role,m.occurred_at,m.total_units,m.total_bytes
       FROM raw_conversations c JOIN raw_messages m ON m.conversation_id=c.id WHERE c.owner_id=? AND c.scope=? AND c.project_id=?
       AND c.id=? AND m.message_id=?`).get(...boundary(ns), anchor.conversationId, anchor.messageId);
     if (!row || anchor.span.end > row.total_units || anchor.span.precision === 'whole-message' &&

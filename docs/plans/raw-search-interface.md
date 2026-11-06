@@ -59,12 +59,21 @@ The selected handle provides:
   before each source-bearing counter/callback too. All retained dependencies,
   exact identities, currentness, exclusions, actual terminal fences, suppression
   and access bindings are rechecked. A mismatch refuses the whole preparation.
-  Every contributor reruns the full canonical predicate in that final snapshot,
-  including receipt integrity and inbound missing or foreign ancestry.
+  Delivered ranges, coalesced siblings, centres and neighbours feeding returned
+  candidates rerun the full canonical predicate in that final snapshot.
+  Corpus size, lengths and document frequencies, ranking competition, semantic
+  readiness and coverage use the snapshot's eligible set and a complete source
+  commitment. That commitment binds receipt text/integrity, all inbound ancestry
+  edges and each endpoint's own owner/namespace, including unresolved endpoints.
+  Its comparison precedes release of any row, score, hint or status. When the
+  inventory bound prevents a commitment, all dependencies receive full predicates
+  and coverage remains declared partial.
   No stale-envelope survivor filtering is allowed.
   Inventory metadata is read in bounded snapshots; native SQLite change
   detection must prove it unchanged across those reads and at final validation.
-  A changed cache key refuses the prepared result. It never substitutes for
+  A retained proof keeps its original message population, so unrelated appended
+  messages do not invalidate it. A fresh search observes the new inventory.
+  A changed cache key refuses that search result. It never substitutes for
   the actual per-source denial checks at protected ports.
 - Opaque tickets can be passed back to the same owning service after an IPC/host
   wait; the consumer must request fresh validation there before its dispatch.

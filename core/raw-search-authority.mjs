@@ -41,7 +41,9 @@ export function createRawSearchAuthority(database, options) {
   const key = Buffer.from(read(() => db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get()).secret,'hex');
   const bind = (purpose,value) => createHmac('sha256',identity.cursor_secret).update(JSON.stringify([purpose,identity.store_id,value])).digest('base64url');
   const sourceIdentity = { storeId: identity.store_id, cursorSecret: identity.cursor_secret };
-  const sources = createCardRawSources(db,sourceIdentity);
+  // Search refs bind immutable message/part manifests, not a conversation's
+  // append counter. Other source readers retain their original revision query.
+  const sources = createCardRawSources(db,sourceIdentity,{mutableRevision:false});
   const partDigest = m => createHmac('sha256',key).update(JSON.stringify(['raw-part-v1',m.id,m.messageOrdinal,m.role,m.occurredAt,
     m.part.index,m.part.start,m.part.totalUnits,m.part.totalBytes,m.content])).digest('hex');
   const host = contentAuthorityPort(options.authority);
@@ -83,7 +85,7 @@ export function createRawSearchAuthority(database, options) {
     }
     if (db.prepare(`SELECT 1 FROM raw_session_fences WHERE ${where} AND client=? AND session_key=?`)
       .get(...boundary(ns),view.message.client,view.message.session_key)) fail('source_unavailable');
-    if (!sourceReadSafety(db,{identity:sourceIdentity,namespace:ns,ref,rawBudget:state}).allowed) fail('source_unavailable');
+    if (!sourceReadSafety(db,{identity:sourceIdentity,namespace:ns,ref,rawBudget:state,rawMutableRevision:false}).allowed) fail('source_unavailable');
     // A message saved before lineage registration has no complete privacy
     // ancestry proof. Schema presence alone cannot repair that old gap.
     if (!db.prepare('SELECT 1 FROM raw_source_maps WHERE conversation_id=? AND message_id=? LIMIT 1')
@@ -159,8 +161,11 @@ export function createRawSearchAuthority(database, options) {
     return db.prepare('PRAGMA data_version').get().data_version;
   };
   let cachedFence;
+  const fencesByValue=new Map();
   const version = () => read(versionInside);
-  function buildFence(expectedVersion) {
+  function buildFence(expectedVersion, bounds) {
+    bounds??=read(()=>({conversations:db.prepare('SELECT coalesce(max(rowid),0) AS last FROM raw_conversations').get().last,
+      messages:db.prepare('SELECT coalesce(max(rowid),0) AS last FROM raw_messages').get().last}));
     let remaining=50000;
     const scan=(sql,args)=>{
       const columns=read(()=>db.prepare(sql).columns().map(column=>column.name));
@@ -186,49 +191,108 @@ export function createRawSearchAuthority(database, options) {
       return {columns,pages};
     };
     const rows=options.readSet.map(ns=>{
-      const args=boundary(ns);
-      const conversations=scan(`SELECT id,revision,client,session_key FROM raw_conversations WHERE ${where} ORDER BY id LIMIT 50001`,args);
+      const args=boundary(ns), horizon=`c.rowid<=${bounds.conversations} AND m.rowid<=${bounds.messages}`;
+      // A proof keeps its original source population. Appending another message
+      // cannot change that population's inputs; edits and inbound edges can.
+      const related=`WITH roots AS MATERIALIZED (
+        SELECT c.id AS conversation_id,m.message_id,c.owner_id,c.scope,c.project_id,c.client
+        FROM raw_conversations c JOIN raw_messages m ON m.conversation_id=c.id
+        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND ${horizon}),
+      bound_memories AS MATERIALIZED (
+        SELECT r.memory_id FROM raw_receipt_lineage l CROSS JOIN receipts r ON r.id=l.receipt_id
+        WHERE (l.conversation_id,l.message_id) IN (SELECT conversation_id,message_id FROM roots)
+        UNION SELECT r.memory_id FROM receipts r JOIN memories m ON m.id=r.memory_id
+        WHERE EXISTS(SELECT 1 FROM roots s WHERE s.owner_id=m.owner_id AND s.scope=m.scope AND s.project_id=m.project_id
+          AND s.client=r.client AND s.message_id=r.event_id)),
+      bound_receipts AS MATERIALIZED (
+        SELECT r.id FROM bound_memories b CROSS JOIN receipts r ON r.memory_id=b.memory_id),
+      edges AS MATERIALIZED (
+        SELECT l.* FROM raw_receipt_lineage l WHERE l.receipt_id IN (SELECT id FROM bound_receipts)
+        OR (l.conversation_id,l.message_id) IN (SELECT conversation_id,message_id FROM roots)),
+      bound_scopes AS MATERIALIZED (
+        SELECT owner_id,scope,project_id FROM roots
+        UNION SELECT c.owner_id,c.scope,c.project_id FROM edges l JOIN raw_conversations c ON c.id=l.conversation_id
+        UNION SELECT m.owner_id,m.scope,m.project_id FROM bound_memories b JOIN memories m ON m.id=b.memory_id)
+      `;
+      const conversations=scan(`SELECT id,owner_id,scope,project_id,client,session_key FROM raw_conversations WHERE ${where}
+        AND rowid<=${bounds.conversations} ORDER BY id LIMIT 50001`,args);
       const parts=scan(`SELECT p.conversation_id,p.message_id,p.part_index,p.start,p.end,p.saved,p.digest,
         p.byte_count,p.event_id,p.reason,p.format,p.key_version,length(p.sealed) AS bytes,raw_search_sealed_digest(p.sealed) AS fingerprint,
         m.role,m.ordinal,m.occurred_at,m.total_units,m.total_bytes
         FROM raw_parts p CROSS JOIN raw_conversations c ON c.id=p.conversation_id
         JOIN raw_messages m ON m.conversation_id=p.conversation_id AND m.message_id=p.message_id
-        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? ORDER BY p.conversation_id,p.message_id,p.part_index LIMIT 50001`,args);
-      const exclusions=scan(`SELECT x.* FROM raw_source_exclusions x JOIN raw_conversations c ON c.id=x.conversation_id
-        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? ORDER BY x.conversation_id,x.message_id,x.start,x.end LIMIT 50001`,args);
-      const fences=scan(`SELECT client,session_key FROM raw_session_fences WHERE ${where} ORDER BY client,session_key LIMIT 50001`,args);
-      const lineage=scan(`SELECT l.*,m.currentness,m.deleted,o.kind FROM raw_receipt_lineage l
-        JOIN raw_conversations c ON c.id=l.conversation_id
-        LEFT JOIN receipts r ON r.id=l.receipt_id LEFT JOIN memories m ON m.id=r.memory_id
-        LEFT JOIN raw_receipt_origins o ON o.receipt_id=l.receipt_id
-        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? ORDER BY l.receipt_id,l.conversation_id,l.message_id,l.start,l.end LIMIT 50001`,args);
-      const receipts=scan(`SELECT r.id,r.memory_id,r.client,r.session_id,r.event_id,r.role,r.receipt_key,
-        m.revision,m.currentness,m.review_state,m.deleted,o.kind FROM receipts r JOIN memories m ON m.id=r.memory_id
-        LEFT JOIN raw_receipt_origins o ON o.receipt_id=r.id WHERE m.owner_id=? AND m.scope=? AND m.project_id=? ORDER BY r.id LIMIT 50001`,args);
+        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND ${horizon}
+        ORDER BY p.conversation_id,p.message_id,p.part_index LIMIT 50001`,args);
+      const exclusions=scan(related+`SELECT x.* FROM raw_source_exclusions x WHERE (x.conversation_id,x.message_id) IN (
+        SELECT conversation_id,message_id FROM roots UNION SELECT conversation_id,message_id FROM edges)
+        ORDER BY x.conversation_id,x.message_id,x.start,x.end LIMIT 50001`,args);
+      const fences=scan(related+`SELECT f.* FROM raw_session_fences f
+        WHERE (f.owner_id,f.scope,f.project_id) IN (SELECT owner_id,scope,project_id FROM bound_scopes)
+        ORDER BY f.owner_id,f.scope,f.project_id,f.client,f.session_key LIMIT 50001`,args);
+      const lineage=scan(related+`SELECT l.* FROM edges l
+        ORDER BY l.receipt_id,l.conversation_id,l.message_id,l.start,l.end LIMIT 50001`,args);
+      // Preserve every endpoint, even if the other end is absent, foreign or in
+      // another namespace. Scope belongs to that endpoint, never to the searcher.
+      const ancestors=scan(related+`SELECT l.receipt_id,l.conversation_id,l.message_id,l.start,l.end,
+        c.id,c.owner_id,c.scope,c.project_id,c.client,c.session_key,m.role,m.total_units
+        FROM edges l LEFT JOIN raw_conversations c ON c.id=l.conversation_id
+        LEFT JOIN raw_messages m ON m.conversation_id=l.conversation_id AND m.message_id=l.message_id
+        ORDER BY l.receipt_id,l.conversation_id,l.message_id,l.start,l.end LIMIT 50001`,args);
+      const receipts=scan(related+`SELECT r.*,m.id AS parent_id,m.owner_id,m.scope,m.project_id,
+        m.revision,m.currentness,m.review_state,m.deleted,o.kind
+        FROM bound_receipts b CROSS JOIN receipts r ON r.id=b.id
+        LEFT JOIN memories m ON m.id=r.memory_id LEFT JOIN raw_receipt_origins o ON o.receipt_id=r.id
+        ORDER BY r.id LIMIT 50001`,args);
       const maps=scan(`SELECT a.* FROM raw_source_maps a JOIN raw_conversations c ON c.id=a.conversation_id
-        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? ORDER BY a.conversation_id,a.message_id,a.source_key,a.start,a.end LIMIT 50001`,args);
+        JOIN raw_messages m ON m.conversation_id=a.conversation_id AND m.message_id=a.message_id
+        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND ${horizon}
+        ORDER BY a.conversation_id,a.message_id,a.source_key,a.start,a.end LIMIT 50001`,args);
       const controls=read(()=>db.prepare("SELECT 1 FROM sqlite_master WHERE name='local_capture_controls'").get())?
         scan(`SELECT client,revision FROM local_capture_controls WHERE ${where} ORDER BY client LIMIT 50001`,args):[];
       const facts=read(()=>db.prepare("SELECT 1 FROM sqlite_master WHERE name='content_suppressions'").get())?
-        scan('SELECT * FROM content_suppressions WHERE owner_id=? ORDER BY fact_id LIMIT 50001',[ns.ownerId]):[];
-      return {ns,conversations,parts,exclusions,fences,lineage,receipts,maps,controls,facts,suppression:read(()=>contentSuppressionFenceInside(db,ns.ownerId)),
-        epoch:read(()=>db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...args)),
+        scan(related+`SELECT f.* FROM content_suppressions f WHERE f.owner_id=? OR f.owner_id IN (SELECT owner_id FROM bound_scopes)
+          ORDER BY f.owner_id,f.fact_id LIMIT 50001`,[...args,ns.ownerId]):[];
+      const suppressions=read(()=>db.prepare("SELECT 1 FROM sqlite_master WHERE name='owner_suppression_epochs'").get())?
+        scan(related+`SELECT e.* FROM owner_suppression_epochs e WHERE e.owner_id=? OR e.owner_id IN (SELECT owner_id FROM bound_scopes)
+          ORDER BY e.owner_id LIMIT 50001`,[...args,ns.ownerId]):[];
+      return {ns,conversations,parts,exclusions,fences,lineage,ancestors,receipts,maps,controls,facts,suppressions,
         exclusion:read(()=>db.prepare(`SELECT generation FROM raw_exclusion_clocks WHERE ${where}`).get(...args))};
     });
-    // Hashing and serialization happen after every canonical lock is released.
-    const value=bind('raw-search-inventory-fence-v2',rows);
+    const schema=scan('SELECT type,name,tbl_name,sql FROM sqlite_master WHERE 1 ORDER BY type,name LIMIT 50001',[]);
+    const control=read(()=>db.prepare("SELECT 1 FROM sqlite_master WHERE name='content_safety_control'").get())?
+      scan('SELECT * FROM content_safety_control WHERE 1 ORDER BY singleton LIMIT 50001',[]):[];
+    const identities=read(()=>({store:db.prepare('SELECT singleton,store_id,cursor_secret FROM store_metadata WHERE singleton=1').get(),
+      episode:db.prepare('SELECT singleton,secret FROM episode_identity WHERE singleton=1').get(),
+      schema:db.prepare('PRAGMA schema_version').get(),version:db.prepare('PRAGMA user_version').get(),
+      application:db.prepare('PRAGMA application_id').get()}));
+    // Serialize/hash after each bounded canonical snapshot has released SHARED.
+    const value=bind('raw-search-inventory-fence-v3',[rows,schema,control,identities]);
     if(version()!==expectedVersion)fail('source_unavailable');
-    cachedFence={version:expectedVersion,value};return value;
+    const record={version:expectedVersion,value,bounds};
+    fencesByValue.set(value,record);
+    while(fencesByValue.size>512)fencesByValue.delete(fencesByValue.keys().next().value);
+    return record;
   }
-  function fence() {
+  function fence(expected) {
     const current=version();
-    return cachedFence?.version===current?cachedFence.value:buildFence(current);
-  }
-  function fenceInside() {
-    if(!cachedFence||versionInside()!==cachedFence.version)fail('source_unavailable');
+    if(expected!==undefined){
+      const record=fencesByValue.get(expected);
+      if(!record)fail('source_unavailable');
+      return record.version===current?record.value:buildFence(current,record.bounds).value;
+    }
+    if(cachedFence?.version!==current)cachedFence=buildFence(current);
+    fencesByValue.set(cachedFence.value,cachedFence);
     return cachedFence.value;
   }
-  const checkFence = expected => read(() => { if(fenceInside()!==expected)fail('source_unavailable'); });
+  function fenceInside(expected) {
+    const record=fencesByValue.get(expected);
+    if(!record||versionInside()!==record.version)fail('source_unavailable');
+    return record.value;
+  }
+  function checkFence(expected) {
+    if(fence(expected)!==expected)fail('source_unavailable');
+    return read(()=>{if(fenceInside(expected)!==expected)fail('source_unavailable');});
+  }
   function cacheKeyInside(publication,metadata) {
     const observed=versionInside();
     const namespaces=options.readSet.map(ns=>{
@@ -298,20 +362,20 @@ export function createRawSearchAuthority(database, options) {
     return text;
   }
   function validate(entries) {
-    // All host callbacks run first, then one deferred canonical snapshot.
-    const inside = () => {
-      let observed;
+    // Refresh commitments without holding one population-sized read snapshot.
+    for(const entry of entries)if(entry.fence)checkFence(entry.fence);
+    // Host callbacks precede the final snapshot. Complete commitments cover
+    // aggregate-only dependencies; exact output contributors still run the full predicate.
+    const inside = (predicates = true) => {
       for (const entry of entries) {
         if(entry.cache && cacheKeyInside(entry.cache.publication,entry.cache.metadata)!==entry.cache.key)fail('source_unavailable');
-        if(entry.fence){observed??=fenceInside();if(observed!==entry.fence)fail('source_unavailable');}
-        // The inventory fence is only an early refusal guard. Rerun the full
-        // canonical predicate for every ranking contributor in this snapshot:
-        // receipt integrity and inbound ancestry need not change that fence.
-        for (const source of entry.sources)
+        if(entry.fence&&fenceInside(entry.fence)!==entry.fence)fail('source_unavailable');
+        // Without a complete commitment, every dependency remains mandatory.
+        for (const source of predicates || !entry.fence ? entry.sources : [])
         if (!matches(source,inspectInside(source.ref,entry.intent))) fail('source_unavailable');
       }
     };
-    const checkAll = () => read(inside);
+    const checkAll = () => read(()=>inside(false));
     entries.forEach(entry => entry.access(checkAll));
     return read(() => {
       inside();
