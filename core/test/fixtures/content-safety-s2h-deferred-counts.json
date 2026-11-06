@@ -2378,12 +2378,12 @@
     },
     "[\"event-time\",51,\"R2 semantic fallback v51: empty-owner proof prevents retained-candidate revalidation\",18,12,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        138,
+        139,
         9,
         0
       ],
       "legacy": [
-        218,
+        219,
         9,
         0
       ]
@@ -2438,12 +2438,12 @@
     },
     "[\"event-time\",51,\"R2 semantic fallback v51: empty-owner proof prevents retained-candidate revalidation\",18,24,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        162,
+        163,
         9,
         0
       ],
       "legacy": [
-        242,
+        243,
         9,
         0
       ]
@@ -2510,12 +2510,12 @@
     },
     "[\"event-time\",51,\"R2 semantic fallback v51: empty-owner proof prevents retained-candidate revalidation\",18,300,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        716,
+        717,
         9,
         0
       ],
       "legacy": [
-        796,
+        797,
         9,
         0
       ]
@@ -2582,12 +2582,12 @@
     },
     "[\"event-time\",51,\"R2 semantic fallback v51: empty-owner proof prevents retained-candidate revalidation\",18,600,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        1318,
+        1319,
         9,
         0
       ],
       "legacy": [
-        1398,
+        1399,
         9,
         0
       ]
@@ -2822,12 +2822,12 @@
     },
     "[\"event-time\",51,\"R2 v51: zero-fact constant budget, five-fact slope and corpus-independent no-hit\",18,300,null,\"findCandidates\",\"lexical:current-first\",0]": {
       "counts": [
-        716,
+        717,
         9,
         0
       ],
       "legacy": [
-        796,
+        797,
         9,
         0
       ]
@@ -2894,12 +2894,12 @@
     },
     "[\"event-time\",51,\"R2 v51: zero-fact constant budget, five-fact slope and corpus-independent no-hit\",18,600,null,\"findCandidates\",\"lexical:current-first\",0]": {
       "counts": [
-        1318,
+        1319,
         9,
         0
       ],
       "legacy": [
-        1398,
+        1399,
         9,
         0
       ]
@@ -5306,12 +5306,12 @@
     },
     "[\"event-time\",52,\"R2 semantic fallback v52: empty-owner proof prevents retained-candidate revalidation\",23,12,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        138,
+        139,
         9,
         0
       ],
       "legacy": [
-        218,
+        219,
         9,
         0
       ]
@@ -5366,12 +5366,12 @@
     },
     "[\"event-time\",52,\"R2 semantic fallback v52: empty-owner proof prevents retained-candidate revalidation\",23,24,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        162,
+        163,
         9,
         0
       ],
       "legacy": [
-        242,
+        243,
         9,
         0
       ]
@@ -5438,12 +5438,12 @@
     },
     "[\"event-time\",52,\"R2 semantic fallback v52: empty-owner proof prevents retained-candidate revalidation\",23,300,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        716,
+        717,
         9,
         0
       ],
       "legacy": [
-        796,
+        797,
         9,
         0
       ]
@@ -5510,12 +5510,12 @@
     },
     "[\"event-time\",52,\"R2 semantic fallback v52: empty-owner proof prevents retained-candidate revalidation\",23,600,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        1318,
+        1319,
         9,
         0
       ],
       "legacy": [
-        1398,
+        1399,
         9,
         0
       ]
@@ -5750,12 +5750,12 @@
     },
     "[\"event-time\",52,\"R2 v52: zero-fact constant budget, five-fact slope and corpus-independent no-hit\",23,300,null,\"findCandidates\",\"lexical:current-first\",0]": {
       "counts": [
-        716,
+        717,
         9,
         0
       ],
       "legacy": [
-        796,
+        797,
         9,
         0
       ]
@@ -5822,12 +5822,12 @@
     },
     "[\"event-time\",52,\"R2 v52: zero-fact constant budget, five-fact slope and corpus-independent no-hit\",23,600,null,\"findCandidates\",\"lexical:current-first\",0]": {
       "counts": [
-        1318,
+        1319,
         9,
         0
       ],
       "legacy": [
-        1398,
+        1399,
         9,
         0
       ]
@@ -8378,12 +8378,12 @@
     },
     "[\"event-time\",53,\"R2 semantic fallback v53: empty-owner proof prevents retained-candidate revalidation\",33,12,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        126,
+        127,
         9,
         0
       ],
       "legacy": [
-        350,
+        351,
         9,
         0
       ]
@@ -8438,12 +8438,12 @@
     },
     "[\"event-time\",53,\"R2 semantic fallback v53: empty-owner proof prevents retained-candidate revalidation\",33,24,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        150,
+        151,
         9,
         0
       ],
       "legacy": [
-        374,
+        375,
         9,
         0
       ]
@@ -8510,12 +8510,12 @@
     },
     "[\"event-time\",53,\"R2 semantic fallback v53: empty-owner proof prevents retained-candidate revalidation\",33,300,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        704,
+        705,
         9,
         0
       ],
       "legacy": [
-        928,
+        929,
         9,
         0
       ]
@@ -8582,12 +8582,12 @@
     },
     "[\"event-time\",53,\"R2 semantic fallback v53: empty-owner proof prevents retained-candidate revalidation\",33,600,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        1306,
+        1307,
         9,
         0
       ],
       "legacy": [
-        1530,
+        1531,
         9,
         0
       ]
@@ -8822,12 +8822,12 @@
     },
     "[\"event-time\",53,\"R2 v53: zero-fact constant budget, five-fact slope and corpus-independent no-hit\",33,300,null,\"findCandidates\",\"lexical:current-first\",0]": {
       "counts": [
-        704,
+        705,
         9,
         0
       ],
       "legacy": [
-        928,
+        929,
         9,
         0
       ]
@@ -8894,12 +8894,12 @@
     },
     "[\"event-time\",53,\"R2 v53: zero-fact constant budget, five-fact slope and corpus-independent no-hit\",33,600,null,\"findCandidates\",\"lexical:current-first\",0]": {
       "counts": [
-        1306,
+        1307,
         9,
         0
       ],
       "legacy": [
-        1530,
+        1531,
         9,
         0
       ]
@@ -11474,12 +11474,12 @@
     },
     "[\"safety\",34,\"R2 semantic fallback v34: empty-owner proof prevents retained-candidate revalidation\",18,12,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        138,
+        139,
         9,
         0
       ],
       "legacy": [
-        218,
+        219,
         9,
         0
       ]
@@ -11534,12 +11534,12 @@
     },
     "[\"safety\",34,\"R2 semantic fallback v34: empty-owner proof prevents retained-candidate revalidation\",18,24,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        162,
+        163,
         9,
         0
       ],
       "legacy": [
-        242,
+        243,
         9,
         0
       ]
@@ -11606,12 +11606,12 @@
     },
     "[\"safety\",34,\"R2 semantic fallback v34: empty-owner proof prevents retained-candidate revalidation\",18,300,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        716,
+        717,
         9,
         0
       ],
       "legacy": [
-        796,
+        797,
         9,
         0
       ]
@@ -11678,12 +11678,12 @@
     },
     "[\"safety\",34,\"R2 semantic fallback v34: empty-owner proof prevents retained-candidate revalidation\",18,600,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        1318,
+        1319,
         9,
         0
       ],
       "legacy": [
-        1398,
+        1399,
         9,
         0
       ]
@@ -11918,12 +11918,12 @@
     },
     "[\"safety\",34,\"R2 v34: zero-fact constant budget, five-fact slope and corpus-independent no-hit\",18,300,null,\"findCandidates\",\"lexical:current-first\",0]": {
       "counts": [
-        716,
+        717,
         9,
         0
       ],
       "legacy": [
-        796,
+        797,
         9,
         0
       ]
@@ -11990,12 +11990,12 @@
     },
     "[\"safety\",34,\"R2 v34: zero-fact constant budget, five-fact slope and corpus-independent no-hit\",18,600,null,\"findCandidates\",\"lexical:current-first\",0]": {
       "counts": [
-        1318,
+        1319,
         9,
         0
       ],
       "legacy": [
-        1398,
+        1399,
         9,
         0
       ]
@@ -14402,12 +14402,12 @@
     },
     "[\"safety\",38,\"R2 semantic fallback v38: empty-owner proof prevents retained-candidate revalidation\",23,12,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        138,
+        139,
         9,
         0
       ],
       "legacy": [
-        218,
+        219,
         9,
         0
       ]
@@ -14462,12 +14462,12 @@
     },
     "[\"safety\",38,\"R2 semantic fallback v38: empty-owner proof prevents retained-candidate revalidation\",23,24,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        162,
+        163,
         9,
         0
       ],
       "legacy": [
-        242,
+        243,
         9,
         0
       ]
@@ -14534,12 +14534,12 @@
     },
     "[\"safety\",38,\"R2 semantic fallback v38: empty-owner proof prevents retained-candidate revalidation\",23,300,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        716,
+        717,
         9,
         0
       ],
       "legacy": [
-        796,
+        797,
         9,
         0
       ]
@@ -14606,12 +14606,12 @@
     },
     "[\"safety\",38,\"R2 semantic fallback v38: empty-owner proof prevents retained-candidate revalidation\",23,600,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        1318,
+        1319,
         9,
         0
       ],
       "legacy": [
-        1398,
+        1399,
         9,
         0
       ]
@@ -14846,12 +14846,12 @@
     },
     "[\"safety\",38,\"R2 v38: zero-fact constant budget, five-fact slope and corpus-independent no-hit\",23,300,null,\"findCandidates\",\"lexical:current-first\",0]": {
       "counts": [
-        716,
+        717,
         9,
         0
       ],
       "legacy": [
-        796,
+        797,
         9,
         0
       ]
@@ -14918,12 +14918,12 @@
     },
     "[\"safety\",38,\"R2 v38: zero-fact constant budget, five-fact slope and corpus-independent no-hit\",23,600,null,\"findCandidates\",\"lexical:current-first\",0]": {
       "counts": [
-        1318,
+        1319,
         9,
         0
       ],
       "legacy": [
-        1398,
+        1399,
         9,
         0
       ]
@@ -17474,12 +17474,12 @@
     },
     "[\"safety\",48,\"R2 semantic fallback v48: empty-owner proof prevents retained-candidate revalidation\",33,12,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        126,
+        127,
         9,
         0
       ],
       "legacy": [
-        350,
+        351,
         9,
         0
       ]
@@ -17534,12 +17534,12 @@
     },
     "[\"safety\",48,\"R2 semantic fallback v48: empty-owner proof prevents retained-candidate revalidation\",33,24,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        150,
+        151,
         9,
         0
       ],
       "legacy": [
-        374,
+        375,
         9,
         0
       ]
@@ -17606,12 +17606,12 @@
     },
     "[\"safety\",48,\"R2 semantic fallback v48: empty-owner proof prevents retained-candidate revalidation\",33,300,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        704,
+        705,
         9,
         0
       ],
       "legacy": [
-        928,
+        929,
         9,
         0
       ]
@@ -17678,12 +17678,12 @@
     },
     "[\"safety\",48,\"R2 semantic fallback v48: empty-owner proof prevents retained-candidate revalidation\",33,600,null,\"findCandidates\",\"semantic:current-first\",0]": {
       "counts": [
-        1306,
+        1307,
         9,
         0
       ],
       "legacy": [
-        1530,
+        1531,
         9,
         0
       ]
@@ -17918,12 +17918,12 @@
     },
     "[\"safety\",48,\"R2 v48: zero-fact constant budget, five-fact slope and corpus-independent no-hit\",33,300,null,\"findCandidates\",\"lexical:current-first\",0]": {
       "counts": [
-        704,
+        705,
         9,
         0
       ],
       "legacy": [
-        928,
+        929,
         9,
         0
       ]
@@ -17990,12 +17990,12 @@
     },
     "[\"safety\",48,\"R2 v48: zero-fact constant budget, five-fact slope and corpus-independent no-hit\",33,600,null,\"findCandidates\",\"lexical:current-first\",0]": {
       "counts": [
-        1306,
+        1307,
         9,
         0
       ],
       "legacy": [
-        1530,
+        1531,
         9,
         0
       ]
@@ -19368,5 +19368,10 @@
         98
       ]
     }
+  },
+  "sidecarAttestationOpening": {
+    "additionalStatements": 1,
+    "statement": "SELECT stamp,record FROM product_attestation WHERE singleton=1",
+    "scope": "Cold sidecar opening only; warm query and recall pins are unchanged."
   }
 }

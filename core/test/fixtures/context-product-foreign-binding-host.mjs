@@ -56,12 +56,14 @@ export async function createContextReadHost(configuration){
             return {...Reflect.apply(value,target,args),profile:'synthetic invalidated resident'};
           }
           if(sql==='PRAGMA quick_check'){
-            const n=Atomics.add(c,2,1)+1;
-            if(n===2&&Atomics.load(c,8)===1)return {quick_check:'synthetic corrupt replacement'};
+            Atomics.add(c,2,1);
           }
           if(sql==='PRAGMA foreign_key_check'){
-            const n=Atomics.add(c,3,1)+1;
-            if(n===2&&Atomics.load(c,8)===2)return {table:'synthetic integrity refusal'};
+            Atomics.add(c,3,1);
+          }
+          if(sql==='SELECT stamp,record FROM product_attestation WHERE singleton=1'){
+            const n=Atomics.add(c,14,1)+1,fault=Atomics.load(c,8);
+            if(n===2&&fault)return {stamp:fault===1?1:0,record:'synthetic invalid seal'};
           }
           if(sql.startsWith('SELECT substr(record,')){
             Atomics.add(c,5,1);

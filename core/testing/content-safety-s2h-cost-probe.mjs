@@ -28,6 +28,15 @@ const baseBinding={credentialDigest:credentialDigest(token),ownerId:ns.ownerId,n
 const bindService={...baseBinding,kind:'service',serviceId:randomUUID(),credentialBindingId:randomUUID(),credentialExpiresUtcMs:null};
 const authorizer=b=>requestAuthority(trackContentHostOptions({authorize:()=>b,isCurrent:()=>true}),b,{});
 const maintainAuth=authorizer(bindService),maintainFacade=openContextProductFacade(path,{authorize:maintainAuth});
+// The synthetic transport installs the schema itself and cannot replace files.
+// Seed the same trusted empty cache that parent initialization now produces,
+// before query measurement begins. Older source roots have no seal table.
+if(side.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='product_attestation'").get()){
+ const {writeSidecarAttestation,sidecarAttestationFile}=await load('context-product-sidecar-attestation');
+ side.exec('BEGIN IMMEDIATE');
+ try {writeSidecarAttestation(side,maintainFacade.port.identity.cursorSecret,sidecarAttestationFile(path+suffix),3);side.exec('COMMIT');}
+ catch(error){side.exec('ROLLBACK');throw error;}
+}
 const maintainer=openProductIndex({path,facade:maintainFacade,authorize:maintainAuth,ownerCoverage,maintenance:true,sidecarJournalMode:'DELETE'});
 if(kind==='maintenance') {
  const {measureContentRead}=await import('./content-safety-cost-meter.mjs');

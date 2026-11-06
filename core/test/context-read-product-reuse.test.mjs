@@ -44,9 +44,9 @@ function setup(t,{mode='DELETE',policy=false,suppression=false,rendezvous=()=>{}
   f.workspace.defer(()=>builder.close());
   try {let ready=false;for(let i=0;i<100&&!ready;i++){builder.refresh(p,access,budget);ready=builder.observe(p,access).dto.lexical.state==='ready';}assert.equal(ready,true);}
   finally {builder.close();}
-  const checks={quick:0,foreign:0},handles=new Set(),prepare=DatabaseSync.prototype.prepare;
+  const checks={quick:0,foreign:0,attested:0},handles=new Set(),prepare=DatabaseSync.prototype.prepare;
   t.mock.method(DatabaseSync.prototype,'prepare',function(sql){
-    const stmt=Reflect.apply(prepare,this,[sql]),kind=sql==='PRAGMA quick_check'?'quick':sql==='PRAGMA foreign_key_check'?'foreign':null;
+    const stmt=Reflect.apply(prepare,this,[sql]),kind=sql==='PRAGMA quick_check'?'quick':sql==='PRAGMA foreign_key_check'?'foreign':sql==='SELECT stamp,record FROM product_attestation WHERE singleton=1'?'attested':null;
     if(!kind)return stmt;
     const db=this;
     return new Proxy(stmt,{get(target,key){const value=Reflect.get(target,key,target);if(typeof value!=='function')return value;
@@ -85,13 +85,13 @@ for(const fault of ['setup','storage.close'])test(`reuse setup closes the facade
 });
 
 for(const config of [{mode:'DELETE',policy:false},{mode:'DELETE',policy:true},{mode:'WAL',policy:true}])
-test(`healthy maintainer checks integrity once across quanta and reads (${config.mode}, policy ${config.policy})`,t=>{
+test(`healthy maintainer attests once across quanta and reads (${config.mode}, policy ${config.policy})`,t=>{
   const s=setup(t,config);
   for(let i=0;i<4;i++){
     assert.equal(s.step().dto.lexical.state,'ready');
     assert.match(s.storage.compare(s.p,s.access,budget).comparison.status,/^complete\//);
   }
-  assert.deepEqual(s.checks,{quick:1,foreign:1},'read steps must retain the checked writable connection');
+  assert.deepEqual(s.checks,{quick:0,foreign:0,attested:1},'read steps must retain the checked writable connection');
   assert.equal(s.handles.size,1);assert.equal([...s.handles][0].isTransaction,false,'no snapshot retained between quanta');
   s.f.admit('canonical writer after released observation');
   const fresh=s.observe();assert.equal(fresh.dto.lexical.state,'stale');assert.equal(fresh.dto.lexical.reason,'fence_changed','observation acquires a fresh canonical snapshot');
@@ -100,7 +100,7 @@ test(`healthy maintainer checks integrity once across quanta and reads (${config
 });
 
 for(const fault of ['refresh','cutoff','rollback','rollback failure','close failure'])
-test(`sidecar ${fault} forces integrity checks on the next writable open`,t=>{
+test(`sidecar ${fault} forces attestation on the next writable open`,t=>{
   let armed=false;const code=fault==='cutoff'?'read_timeout':'storage_error';
   const s=setup(t,{rendezvous(point){if(armed&&point===(fault.startsWith('rollback')?'batch':'opened')){armed=false;throw Object.assign(Error('synthetic refresh failure'),{code});}}});
   s.step();const before={...s.checks};
@@ -121,8 +121,8 @@ test(`sidecar ${fault} forces integrity checks on the next writable open`,t=>{
   let observed;
   assert.doesNotThrow(()=>{observed=s.step();},'a failed transaction must be discarded before the next writable use');
   assert.equal(observed.dto.lexical.state,'ready');
-  assert.equal(s.checks.quick,failed.quick+1,'failed writable connection must not be reused');
-  assert.equal(s.checks.foreign,failed.foreign+1,'reopen includes foreign-key checking');
+  assert.equal(s.checks.attested,failed.attested+1,'failed writable connection must not be reused');
+  assert.equal(s.checks.foreign,failed.foreign,'attested reopen skips foreign-key checking');
 });
 
 test('passing control: an unavailable observation discards the connection before recovery',t=>{
@@ -134,25 +134,25 @@ test('passing control: an unavailable observation discards the connection before
     side.prepare('UPDATE product_metadata SET profile=?').run('context-read-product-v1.1');
   } finally {side.close();}
   const before={...s.checks};assert.equal(s.step().dto.lexical.state,'ready');
-  assert.equal(s.checks.quick,before.quick+1);assert.equal(s.checks.foreign,before.foreign+1);
+  assert.equal(s.checks.attested,before.attested+1);assert.equal(s.checks.foreign,before.foreign);
 });
 
-test('a caught fence rollback returning progress still forces the next writable open to check integrity',t=>{
+test('a caught fence rollback returning progress still forces the next writable open to attest',t=>{
   let armed=false,raced=false;
   const s=setup(t,{rendezvous(point){if(armed&&point==='transformed'){armed=false;raced=true;s.f.admit('writer during the comparison transaction');}}});
   s.step();s.f.admit('source requiring comparison work');armed=true;
   assert.ok(s.refresh().transformed>0);assert.equal(raced,true,'fence change rolls back an actual transformed batch');
   const before={...s.checks};s.step();
-  assert.equal(s.checks.quick,before.quick+1,'caught rollback cannot leave a reusable connection');
-  assert.equal(s.checks.foreign,before.foreign+1);
+  assert.equal(s.checks.attested,before.attested+1,'caught rollback cannot leave a reusable connection');
+  assert.equal(s.checks.foreign,before.foreign);
 });
 
 test('passing control: identity replacement reopens and refuses the old certificate',t=>{
   const s=setup(t);s.refresh();
   child('copy',s.path,s.path+'.replacement');renameSync(s.path,s.path+'.previous');renameSync(s.path+'.replacement',s.path);
-  const observed=s.observe();assert.equal(observed.dto.lexical.state,'unavailable');assert.equal(observed.dto.lexical.reason,'validation_invalid');
+  const observed=s.observe();assert.equal(observed.dto.lexical.state,'unavailable');assert.equal(observed.dto.lexical.reason,'storage_unavailable','the copied file has a different identity and an untrusted seal');
   const before={...s.checks};assert.equal(s.step().dto.lexical.state,'ready');
-  assert.ok(s.checks.quick>=before.quick+1);assert.equal(s.checks.quick-before.quick,s.checks.foreign-before.foreign);
+  assert.ok(s.checks.attested>=before.attested+1);assert.equal(s.checks.quick-before.quick,s.checks.foreign-before.foreign);
 });
 
 for(const suffix of ['-journal','-wal','-shm'])test(`passing control: writable reuse retains non-write companion refusal (${suffix})`,t=>{
@@ -162,7 +162,7 @@ for(const suffix of ['-journal','-wal','-shm'])test(`passing control: writable r
     else assert.equal(s.observe().dto.lexical.reason,'storage_unavailable');
   } finally {unlinkSync(s.path+suffix);}
   const before={...s.checks};assert.equal(s.step().dto.lexical.state,'ready');
-  assert.equal(s.checks.quick,before.quick+1);assert.equal(s.checks.foreign,before.foreign+1);
+  assert.equal(s.checks.attested,before.attested+1);assert.equal(s.checks.foreign,before.foreign);
 });
 
 test('passing control: writable reuse preserves the non-write header mode refusal',t=>{
@@ -172,22 +172,23 @@ test('passing control: writable reuse preserves the non-write header mode refusa
 
 for(const code of ['storage_error','read_timeout'])test(`native maintainer ${code} result forces a checked writable reopen`,async t=>{
   const f=fixture(t);f.admit('native connection failure');const c=configured(t,f.path,[ns],{service:true});
-  const control=new Int32Array(new SharedArrayBuffer(32));
+  const control=new Int32Array(new SharedArrayBuffer(48));
   c.options.host={moduleUrl:new URL('./fixtures/context-product-reuse-host.mjs',import.meta.url).href,configuration:{...c.options.host.configuration,reuseControl:control.buffer}};
   const h=await guard(c.open());t.after(()=>guard(h.close()));
   const input={readSet:[ns],types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:32,maxMs:5000}};
   let ready=false;for(let i=0;i<100&&!ready;i++)ready=ok(await guard(h.refreshContextIndex(input,c.token))).status==='complete';assert.equal(ready,true);
   f.admit('changed native source requiring a transaction');control[2]=code==='read_timeout'?2:1;
   assert.equal((await guard(h.refreshContextIndex(input,c.token))).error.code,code);
-  const quick=control[0],foreign=control[1];
+  const quick=control[0],foreign=control[1],attested=control[11];
   ok(await guard(h.refreshContextIndex(input,c.token)));
-  assert.equal(control[0],quick+1,'worker result failure invalidates its sidecar connection');assert.equal(control[1],foreign+1);
+  assert.equal(control[11],attested+1,'failure requires a fresh attested connection');
+  assert.equal(control[0],quick,'worker result failure invalidates its sidecar connection');assert.equal(control[1],foreign);
 });
 
 for(const splitInitialization of [false,true])
 for(const failure of ['final authority','Worker exception'])test(`native ${failure} failure after committed sidecar work forces a checked writable reopen${splitInitialization?' (split initialization)':''}`,async t=>{
   const f=fixture(t);f.admit('native final authority failure');const c=configured(t,f.path,[ns],{service:true});
-  const control=new Int32Array(new SharedArrayBuffer(44));
+  const control=new Int32Array(new SharedArrayBuffer(48));
   c.options.host={moduleUrl:new URL('./fixtures/context-product-reuse-host.mjs',import.meta.url).href,configuration:{...c.options.host.configuration,reuseControl:control.buffer,reuseSidePath:f.path+PRODUCT_SIDECAR_SUFFIX,reuseSplitInitialization:splitInitialization}};
   const h=await guard(c.open());t.after(()=>guard(h.close()));
   const input={readSet:[ns],types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:32,maxMs:5000}};
@@ -196,12 +197,12 @@ for(const failure of ['final authority','Worker exception'])test(`native ${failu
   const initialization=[];
   for(let i=0;i<100&&initialization.at(-1)!=='complete';i++)initialization.push(ok(await refresh()).status);
   assert.deepEqual(initialization,splitInitialization?['rebuilding','complete']:['complete'],'selection completes before failure instrumentation starts');
-  assert.deepEqual(counts,splitInitialization?[153,275]:[288],'production Worker SQL executions during initialization');
+  assert.deepEqual(counts,splitInitialization?[156,293]:[309],'production Worker SQL executions during initialization');
   counts.length=0;Atomics.store(control,10,0);
   assert.deepEqual([control[8],control[9]],[1,0],'initial writable admission is retained');
   f.admit('changed source committed before final authority validation');
   const commits=control[4];
-  assert.deepEqual([control[0],control[1]],[1,1]);
+  assert.deepEqual([control[0],control[1]],[0,0]);
   if(failure==='final authority')c.view[2]=c.view[1]+2;
   else {control[7]=commits;control[6]=1;}
   const failed=await refresh();
@@ -211,19 +212,20 @@ for(const failure of ['final authority','Worker exception'])test(`native ${failu
   if(failure==='Worker exception')assert.equal(control[6],3,'exception was thrown after index.run returned to the Worker');
   assert.ok(control[4]>commits,'sidecar transactions committed successfully before the failure');
   assert.equal(control[5],control[4],'final authority sample occurs after those commits');
-  const quick=control[0],foreign=control[1];
-  assert.deepEqual([quick,foreign],[1,1],'successful sidecar work has not reopened before Worker disposal');
+  const quick=control[0],foreign=control[1],attested=control[11];
+  assert.deepEqual([quick,foreign],[0,0],'successful sidecar work has not reopened before Worker disposal');
   c.view[0]=1;c.view[2]=0;
   assert.equal(ok(await refresh()).status,'complete');
-  assert.equal(control[0],quick+1,'Worker failure discard forces quick_check after committed sidecar work');
-  assert.equal(control[1],foreign+1,'Worker failure discard forces foreign_key_check after committed sidecar work');
+  assert.equal(control[11],attested+1,'Worker disposal requires a fresh attested connection');
+  assert.equal(control[0],quick,'Worker failure discard skips quick_check after committed sidecar work');
+  assert.equal(control[1],foreign,'Worker failure discard skips foreign_key_check after committed sidecar work');
   assert.deepEqual([control[8],control[9]],[2,1],'one fresh sidecar admission follows Worker disposal');
-  assert.deepEqual(counts,failure==='final authority'?[313,110]:[344,110],'production Worker SQL executions for failure and recovery');
+  assert.deepEqual(counts,failure==='final authority'?[341,117]:[372,117],'production Worker SQL executions for failure and recovery');
 });
 
 for(const service of [false,true])test(`real Worker keeps a read-only handle across owner-suppression denials (maintainer ${service})`,async t=>{
   const s=setup(t,{policy:true,suppression:true});
-  const c=configured(t,s.f.path,[ns],{service}),control=new Int32Array(new SharedArrayBuffer(44));
+  const c=configured(t,s.f.path,[ns],{service}),control=new Int32Array(new SharedArrayBuffer(48));
   c.options.host={moduleUrl:new URL('./fixtures/context-product-reuse-host.mjs',import.meta.url).href,
     configuration:{...c.options.host.configuration,reuseControl:control.buffer,reuseSidePath:s.path}};
   const h=await guard(c.open());t.after(()=>guard(h.close()));
@@ -246,12 +248,12 @@ for(const service of [false,true])test(`real Worker keeps a read-only handle acr
   }
   // B1 downward ratchet: the folded status and owner-suppression checks retain
   // the admitted handle without repeating eligibility queries after denial.
-  assert.deepEqual(counts,service?[52,40,40,40]:[52,36,36,40],'production Worker SQL executions retain the folded denial counts');
+  assert.deepEqual(counts,service?[53,40,40,40]:[53,36,36,40],'production Worker SQL executions retain the folded denial counts');
 });
 
-test('passing control: a reader watchdog cutoff disposes the connection and its successor checks integrity',async t=>{
+test('passing control: a reader watchdog cutoff disposes the connection and its successor attests',async t=>{
   const f=fixture(t);f.admit('native watchdog connection');const c=configured(t,f.path,[ns],{service:true});
-  const control=new Int32Array(new SharedArrayBuffer(32)),timers=new Set();let offset=0n;
+  const control=new Int32Array(new SharedArrayBuffer(48)),timers=new Set();let offset=0n;
   c.options.host={moduleUrl:new URL('./fixtures/context-product-reuse-host.mjs',import.meta.url).href,configuration:{...c.options.host.configuration,reuseControl:control.buffer}};
   const open=createProductReaderRuntime({maintenance:true,now:()=>process.hrtime.bigint()+offset,
     setTimer(fn,ms){const timer={fn,ms,unref(){}};timers.add(timer);return timer;},clearTimer:timer=>timers.delete(timer)});
@@ -268,18 +270,19 @@ test('passing control: a reader watchdog cutoff disposes the connection and its 
   } finally {
     Atomics.store(control,3,2);Atomics.notify(control,3);await guard(h.close());
   }
-  const quick=control[0],foreign=control[1],next=await guard(c.open());
+  const quick=control[0],foreign=control[1],attested=control[11],next=await guard(c.open());
   try {ok(await guard(next.refreshContextIndex(input,c.token)));}
   finally {await guard(next.close());}
-  assert.equal(control[0],quick+1);assert.equal(control[1],foreign+1);
+  assert.equal(control[11],attested+1,'watchdog successor attests a fresh connection');
+  assert.equal(control[0],quick);assert.equal(control[1],foreign);
 });
 
-test('passing control: explicit close requires full integrity checks in a fresh resident',t=>{
+test('passing control: explicit close requires attestation in a fresh resident',t=>{
   const s=setup(t);s.step();s.storage.close();const before={...s.checks};
   assert.throws(s.refresh,{code:'store_closed'});
   const storage=productSidecar({path:s.f.path,db:s.facade.port.db,identity:s.facade.port.identity,features:s.facade.port.features,writable:true,now:()=>0});
   try {storage.refresh(s.p,s.access,budget);}finally {storage.close();}
-  assert.equal(s.checks.quick,before.quick+1);assert.equal(s.checks.foreign,before.foreign+1);
+  assert.equal(s.checks.attested,before.attested+1);assert.equal(s.checks.foreign,before.foreign);
 });
 
 // Reuse the native-prepare injection used by the read-only disposal audit;
@@ -344,14 +347,14 @@ for(const row of readOnlyFailures)test(`read-only failure disposal: ${row.name} 
   assert.equal(handle.isOpen,!row.discard,'mapped observation follows the original failure, including missing-code fallback');
 });
 
-test('failure inside read on a reused writable handle forces both integrity checks from one to two',t=>{
+test('failure inside read on a reused writable handle forces a second attested open',t=>{
   const s=setup(t,{policy:true});s.step();let handle;
   s.storage.vectors(db=>{handle=db;return null;});
-  assert.deepEqual(s.checks,{quick:1,foreign:1});
+  assert.deepEqual(s.checks,{quick:0,foreign:0,attested:1});
   const inject=injectedRead(t,Object.assign(Error('synthetic content-safety denial'),{code:'evidence_unavailable'}));
   assert.throws(()=>inject(s.storage),{code:'evidence_unavailable'});
   assert.equal(handle.isOpen,false,'the same denial discards when the read started on a writable connection');
-  s.storage.reset();assert.deepEqual(s.checks,{quick:2,foreign:2});
+  s.storage.reset();assert.deepEqual(s.checks,{quick:0,foreign:0,attested:2});
 });
 
 for(const site of ['refresh','vectors','reset'])test(`failure after read-only upgrade at ${site} forces a checked writable reopen`,t=>{
@@ -359,7 +362,7 @@ for(const site of ['refresh','vectors','reset'])test(`failure after read-only up
   const error=Object.assign(Error('synthetic upgraded operation failure'),{code:'evidence_unavailable'});
   const s=setup(t,{policy:true,rendezvous(point){if(armed&&site==='refresh'&&point==='opened'){armed=false;throw error;}}});
   let old;s.storage.vectors(db=>{old=db;return null;});
-  assert.deepEqual(s.checks,{quick:0,foreign:0});
+  assert.deepEqual(s.checks,{quick:0,foreign:0,attested:1});
   const prepare=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;
   t.mock.method(DatabaseSync.prototype,'prepare',function(sql){
     if(armed&&site==='vectors'&&sql==="SELECT 1 FROM sqlite_schema WHERE name='vector_publications' AND type='table'"){armed=false;throw error;}
@@ -369,8 +372,8 @@ for(const site of ['refresh','vectors','reset'])test(`failure after read-only up
   armed=true;
   assert.throws(()=>site==='refresh'?s.refresh():site==='vectors'?s.storage.vectors(()=>null,true):s.storage.reset(),{code:'evidence_unavailable'});
   assert.equal(armed,false,'fault occurs after writable admission');assert.equal(old.isOpen,false);
-  assert.deepEqual(s.checks,{quick:1,foreign:1});
-  s.storage.reset();assert.deepEqual(s.checks,{quick:2,foreign:2},'next write uses another fully checked handle');
+  assert.deepEqual(s.checks,{quick:0,foreign:0,attested:2});
+  s.storage.reset();assert.deepEqual(s.checks,{quick:0,foreign:0,attested:3},'next write uses another attested handle');
 });
 
 test('persistently corrupt sidecar has one opening attempt per query and preserves main statuses',t=>{

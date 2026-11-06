@@ -1362,6 +1362,7 @@
     "key:base_id": 1,
     "key:id": 9,
     "key:storeId": 4,
+    "literal:attestation_invalid": 3,
     "literal:cardId": 2,
     "literal:comparison_base_invalid": 1,
     "literal:id": 1,

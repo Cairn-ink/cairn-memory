@@ -519,17 +519,20 @@ test('Fix2 A starting an ordinary batch while B stages repair is excluded',t=>{
 });
 
 for(const point of ['batch','snapshot'])test('Fix2 repair refuses while an ordinary '+point+' holds its lock',t=>{
-  const f=fixture(t);f.admit('held transaction');let enabled=false,seen=0;
+  const f=fixture(t);f.admit('held transaction');let enabled=false,seen=0,journalBatches=0;
   const a=local(f,{rendezvous(actual){
     if(!enabled||actual!==point)return;seen++;
     const path=f.path+PRODUCT_SIDECAR_SUFFIX,stat=lstatSync(path);
-    if(point==='batch')assert.equal(existsSync(path+'-journal'),true);
+    // A vacuum transaction can reach this boundary before its seal creates a
+    // journal. Both that reservation and ordinary changed batches exclude repair.
+    if(point==='batch'&&existsSync(path+'-journal'))journalBatches++;
     assert.throws(()=>createExclusiveSqliteFile(path,stat.dev+':'+stat.ino),{code:'ERR_SQLITE_ERROR',errcode:5,published:false});
     assert.equal(lstatSync(path).ino,stat.ino);
   }});t.after(()=>a.close());a.storage.refresh(a.p,a.access,{maxItems:1024,maxMs:5000});enabled=true;
   if(point==='batch'){f.admit('new batch');a.storage.refresh(a.p,a.access,{maxItems:1,maxMs:5000});}
   else assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.state,'ready');
   assert.ok(seen>0);
+  if(point==='batch')assert.ok(journalBatches>0,'an ordinary changed batch created its rollback journal');
 });
 
 const repairKillSteps=[
@@ -628,5 +631,5 @@ for(const writing of [false,true])test(`Fix2 ${writing?'writer':'reader'} checks
   else assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.reason,'storage_unavailable');
   assert.equal(changed,true);assert.notEqual(lstatSync(path).ino,before.ino);assert.equal(existsSync(path+'-journal'),false);
   t.mock.restoreAll();
-  assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.reason,'validation_invalid');
+  assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.reason,'storage_unavailable','the copied inode has an untrusted seal before certificate validation');
 });

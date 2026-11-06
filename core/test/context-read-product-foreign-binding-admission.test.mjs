@@ -11,6 +11,7 @@ import { admitMaintenance, refreshMaintenance, maintenanceAdmissionReceipt, PROD
 import { maintenanceObservation } from '../context-product-reader.mjs';
 import { createMaintenancePumpRuntime, maintenancePumpDiagnostic } from '../context-product-pump.mjs';
 import { randomUUID } from 'node:crypto';
+import { attestCopiedSidecar } from '../testing/context-product-attested-copy-fixture.mjs';
 const input={readSet:[personal],types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:32,maxMs:1000}};
 function child(code,...args){
   const r=spawnSync(process.execPath,['--input-type=module','-e',code,...args],{encoding:'utf8'});
@@ -35,6 +36,7 @@ async function copied(t,{checkpoint=false,mutate=''}={}){
   child(`import {execFileSync} from 'node:child_process';execFileSync('cp',process.argv.slice(1));`,original,original+PRODUCT_SIDECAR_SUFFIX,directory);
   const path=join(directory,'canonical.sqlite');
   child(`import {DatabaseSync} from 'node:sqlite';const d=new DatabaseSync(process.argv[1]);try{d.exec("INSERT INTO semantic_vectors VALUES(1,1,'synthetic','identity',1,'item',1,1,'representation',x'00',x'01')");${mutate}}finally{d.close();}`,path+PRODUCT_SIDECAR_SUFFIX);
+  attestCopiedSidecar(path);
   const before=inspect(path),service=configured(t,path,[personal],{service:true}),control=new Int32Array(new SharedArrayBuffer(64));
   workspace.onCleanup(()=>service.supervisor.close());
   service.options.host={moduleUrl:new URL('./fixtures/context-product-foreign-binding-host.mjs',import.meta.url).href,configuration:{...service.options.host.configuration,bindingControl:control.buffer}};
@@ -45,7 +47,7 @@ for(const checkpoint of [false,true])test(`real Worker: foreign ${checkpoint?'ch
   for(let i=0;i<8;i++)Atomics.store(control,i,0);
   const admitted=await admitMaintenance(h,input,service.token);assert.equal(admitted.ok,true,JSON.stringify(admitted));
   assert.equal(maintenanceAdmissionReceipt(admitted),'admitted');assert.equal(maintenanceObservation(admitted),undefined);
-  assert.equal(control[2],2);assert.equal(control[3],2);assert.equal(control[4],2,'old and replacement writable opens belong only to admission');
+  assert.equal(control[2],0);assert.equal(control[3],0);assert.equal(control[14],2,'old and replacement opens each read the seal');assert.equal(control[4],2,'old and replacement writable opens belong only to admission');
   assert.ok(control[7]>20,'replacement child SQL is included in the census');
   console.log('FOREIGN_BINDING_ADMISSION_COUNTS '+JSON.stringify({checkpoint,statements:control[0]+control[1]+control[7],workerExecuted:control[0],workerExecStatements:control[1],childExecutedCalls:control[6],childStatements:control[7],quick:control[2],foreignKey:control[3],writableOpens:control[4],certificateQueries:control[5]}));
   // Close before inspecting files, then use a fresh admission to test later work.
@@ -56,10 +58,10 @@ for(const checkpoint of [false,true])test(`real Worker: foreign ${checkpoint?'ch
   assert.equal(work.ok,true);assert.equal(work.value.status,'complete');assert.equal(control[4],opens,'work performs no fresh writable open');assert.equal(maintenanceObservation(work),testClock.now());
   await next.close();
 });
-for(const fault of [1,2])test(`real Worker: repaired cache still runs integrity check ${fault}`,async t=>{
+for(const fault of [1,2])test(`real Worker: repaired cache refuses ${fault===1?'a malformed seal':'an invalid stamp'}`,async t=>{
   const {service,control}=await copied(t);control[8]=fault;const h=await service.open();
   const r=await admitMaintenance(h,input,service.token);assert.equal(r.ok,false);assert.equal(r.error.code,'index_unavailable');assert.equal(maintenanceAdmissionReceipt(r),undefined);assert.equal(maintenanceObservation(r),undefined);
-  assert.equal(control[2],2);assert.equal(control[4],2);await h.close();
+  assert.equal(control[2],0);assert.equal(control[3],0);assert.equal(control[14],2);assert.equal(control[4],2);await h.close();
 });
 for(const checkpoint of [false,true])test(`real Worker: authentication refuses tampered ${checkpoint?'progress':'publication'} before replacement`,async t=>{
   const table=checkpoint?'progress_records':'validation_records';

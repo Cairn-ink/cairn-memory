@@ -310,6 +310,7 @@
   "core/context-product-manifest.mjs",
   "core/context-product-service.mjs",
   "core/context-product-sidecar.mjs",
+  "core/context-product-sidecar-attestation.mjs",
   "core/context-product-handles.mjs",
   "core/context-product-verification-batch.mjs",
   "core/context-product-comparison.mjs",

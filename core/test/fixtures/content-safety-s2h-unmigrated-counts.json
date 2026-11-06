@@ -4063,7 +4063,7 @@
     {
       "key": "[\"child\",\"context-18-24-False-lexical-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        390,
+        391,
         10,
         9
       ]
@@ -4095,7 +4095,7 @@
     {
       "key": "[\"child\",\"context-18-24-False-lexical-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        489,
+        490,
         10,
         53
       ]
@@ -4127,7 +4127,7 @@
     {
       "key": "[\"child\",\"context-18-24-False-semantic-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        390,
+        391,
         10,
         9
       ]
@@ -4159,7 +4159,7 @@
     {
       "key": "[\"child\",\"context-18-24-False-semantic-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        489,
+        490,
         10,
         53
       ]
@@ -4191,7 +4191,7 @@
     {
       "key": "[\"child\",\"context-18-24-True-lexical-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -4223,7 +4223,7 @@
     {
       "key": "[\"child\",\"context-18-24-True-lexical-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -4255,7 +4255,7 @@
     {
       "key": "[\"child\",\"context-18-24-True-semantic-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -4287,7 +4287,7 @@
     {
       "key": "[\"child\",\"context-18-24-True-semantic-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -4319,7 +4319,7 @@
     {
       "key": "[\"child\",\"context-18-300-False-lexical-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        944,
+        945,
         10,
         9
       ]
@@ -4351,7 +4351,7 @@
     {
       "key": "[\"child\",\"context-18-300-False-lexical-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        1043,
+        1044,
         10,
         53
       ]
@@ -4383,7 +4383,7 @@
     {
       "key": "[\"child\",\"context-18-300-False-semantic-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        944,
+        945,
         10,
         9
       ]
@@ -4415,7 +4415,7 @@
     {
       "key": "[\"child\",\"context-18-300-False-semantic-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        1043,
+        1044,
         10,
         53
       ]
@@ -4447,7 +4447,7 @@
     {
       "key": "[\"child\",\"context-18-300-True-lexical-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -4479,7 +4479,7 @@
     {
       "key": "[\"child\",\"context-18-300-True-lexical-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -4511,7 +4511,7 @@
     {
       "key": "[\"child\",\"context-18-300-True-semantic-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -4543,7 +4543,7 @@
     {
       "key": "[\"child\",\"context-18-300-True-semantic-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -4575,7 +4575,7 @@
     {
       "key": "[\"child\",\"context-18-600-False-lexical-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        1546,
+        1547,
         10,
         9
       ]
@@ -4607,7 +4607,7 @@
     {
       "key": "[\"child\",\"context-18-600-False-lexical-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        1645,
+        1646,
         10,
         53
       ]
@@ -4639,7 +4639,7 @@
     {
       "key": "[\"child\",\"context-18-600-False-semantic-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        1546,
+        1547,
         10,
         9
       ]
@@ -4671,7 +4671,7 @@
     {
       "key": "[\"child\",\"context-18-600-False-semantic-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        1645,
+        1646,
         10,
         53
       ]
@@ -4703,7 +4703,7 @@
     {
       "key": "[\"child\",\"context-18-600-True-lexical-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -4735,7 +4735,7 @@
     {
       "key": "[\"child\",\"context-18-600-True-lexical-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -4767,7 +4767,7 @@
     {
       "key": "[\"child\",\"context-18-600-True-semantic-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -4799,7 +4799,7 @@
     {
       "key": "[\"child\",\"context-18-600-True-semantic-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -4831,7 +4831,7 @@
     {
       "key": "[\"child\",\"context-23-24-False-lexical-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        390,
+        391,
         10,
         9
       ]
@@ -4863,7 +4863,7 @@
     {
       "key": "[\"child\",\"context-23-24-False-lexical-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        489,
+        490,
         10,
         53
       ]
@@ -4895,7 +4895,7 @@
     {
       "key": "[\"child\",\"context-23-24-False-semantic-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        390,
+        391,
         10,
         9
       ]
@@ -4927,7 +4927,7 @@
     {
       "key": "[\"child\",\"context-23-24-False-semantic-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        489,
+        490,
         10,
         53
       ]
@@ -4959,7 +4959,7 @@
     {
       "key": "[\"child\",\"context-23-24-True-lexical-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -4991,7 +4991,7 @@
     {
       "key": "[\"child\",\"context-23-24-True-lexical-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -5023,7 +5023,7 @@
     {
       "key": "[\"child\",\"context-23-24-True-semantic-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -5055,7 +5055,7 @@
     {
       "key": "[\"child\",\"context-23-24-True-semantic-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -5087,7 +5087,7 @@
     {
       "key": "[\"child\",\"context-23-300-False-lexical-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        944,
+        945,
         10,
         9
       ]
@@ -5119,7 +5119,7 @@
     {
       "key": "[\"child\",\"context-23-300-False-lexical-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        1043,
+        1044,
         10,
         53
       ]
@@ -5151,7 +5151,7 @@
     {
       "key": "[\"child\",\"context-23-300-False-semantic-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        944,
+        945,
         10,
         9
       ]
@@ -5183,7 +5183,7 @@
     {
       "key": "[\"child\",\"context-23-300-False-semantic-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        1043,
+        1044,
         10,
         53
       ]
@@ -5215,7 +5215,7 @@
     {
       "key": "[\"child\",\"context-23-300-True-lexical-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -5247,7 +5247,7 @@
     {
       "key": "[\"child\",\"context-23-300-True-lexical-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -5279,7 +5279,7 @@
     {
       "key": "[\"child\",\"context-23-300-True-semantic-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -5311,7 +5311,7 @@
     {
       "key": "[\"child\",\"context-23-300-True-semantic-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -5343,7 +5343,7 @@
     {
       "key": "[\"child\",\"context-23-600-False-lexical-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        1546,
+        1547,
         10,
         9
       ]
@@ -5375,7 +5375,7 @@
     {
       "key": "[\"child\",\"context-23-600-False-lexical-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        1645,
+        1646,
         10,
         53
       ]
@@ -5407,7 +5407,7 @@
     {
       "key": "[\"child\",\"context-23-600-False-semantic-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        1546,
+        1547,
         10,
         9
       ]
@@ -5439,7 +5439,7 @@
     {
       "key": "[\"child\",\"context-23-600-False-semantic-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        1645,
+        1646,
         10,
         53
       ]
@@ -5471,7 +5471,7 @@
     {
       "key": "[\"child\",\"context-23-600-True-lexical-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -5503,7 +5503,7 @@
     {
       "key": "[\"child\",\"context-23-600-True-lexical-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -5535,7 +5535,7 @@
     {
       "key": "[\"child\",\"context-23-600-True-semantic-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -5567,7 +5567,7 @@
     {
       "key": "[\"child\",\"context-23-600-True-semantic-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -5599,7 +5599,7 @@
     {
       "key": "[\"child\",\"context-33-24-False-lexical-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        665,
+        666,
         10,
         9
       ]
@@ -5631,7 +5631,7 @@
     {
       "key": "[\"child\",\"context-33-24-False-lexical-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        885,
+        886,
         10,
         53
       ]
@@ -5663,7 +5663,7 @@
     {
       "key": "[\"child\",\"context-33-24-False-semantic-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        665,
+        666,
         10,
         9
       ]
@@ -5695,7 +5695,7 @@
     {
       "key": "[\"child\",\"context-33-24-False-semantic-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        885,
+        886,
         10,
         53
       ]
@@ -5727,7 +5727,7 @@
     {
       "key": "[\"child\",\"context-33-24-True-lexical-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -5759,7 +5759,7 @@
     {
       "key": "[\"child\",\"context-33-24-True-lexical-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -5791,7 +5791,7 @@
     {
       "key": "[\"child\",\"context-33-24-True-semantic-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -5823,7 +5823,7 @@
     {
       "key": "[\"child\",\"context-33-24-True-semantic-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -5855,7 +5855,7 @@
     {
       "key": "[\"child\",\"context-33-300-False-lexical-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        1219,
+        1220,
         10,
         9
       ]
@@ -5887,7 +5887,7 @@
     {
       "key": "[\"child\",\"context-33-300-False-lexical-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        1439,
+        1440,
         10,
         53
       ]
@@ -5919,7 +5919,7 @@
     {
       "key": "[\"child\",\"context-33-300-False-semantic-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        1219,
+        1220,
         10,
         9
       ]
@@ -5951,7 +5951,7 @@
     {
       "key": "[\"child\",\"context-33-300-False-semantic-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        1439,
+        1440,
         10,
         53
       ]
@@ -5983,7 +5983,7 @@
     {
       "key": "[\"child\",\"context-33-300-True-lexical-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -6015,7 +6015,7 @@
     {
       "key": "[\"child\",\"context-33-300-True-lexical-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -6047,7 +6047,7 @@
     {
       "key": "[\"child\",\"context-33-300-True-semantic-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -6079,7 +6079,7 @@
     {
       "key": "[\"child\",\"context-33-300-True-semantic-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -6111,7 +6111,7 @@
     {
       "key": "[\"child\",\"context-33-600-False-lexical-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        1821,
+        1822,
         10,
         9
       ]
@@ -6143,7 +6143,7 @@
     {
       "key": "[\"child\",\"context-33-600-False-lexical-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        2041,
+        2042,
         10,
         53
       ]
@@ -6175,7 +6175,7 @@
     {
       "key": "[\"child\",\"context-33-600-False-semantic-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        1821,
+        1822,
         10,
         9
       ]
@@ -6207,7 +6207,7 @@
     {
       "key": "[\"child\",\"context-33-600-False-semantic-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        2041,
+        2042,
         10,
         53
       ]
@@ -6239,7 +6239,7 @@
     {
       "key": "[\"child\",\"context-33-600-True-lexical-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -6271,7 +6271,7 @@
     {
       "key": "[\"child\",\"context-33-600-True-lexical-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -6303,7 +6303,7 @@
     {
       "key": "[\"child\",\"context-33-600-True-semantic-1\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -6335,7 +6335,7 @@
     {
       "key": "[\"child\",\"context-33-600-True-semantic-12\",\"contextRead\",\"current-first\",\"current-first\"]",
       "counts": [
-        92,
+        93,
         10,
         5
       ]
@@ -6943,8 +6943,8 @@
     {
       "key": "[\"child\",\"maintenance-18-12-12\",\"refreshContextIndex\",\"current-first\",null]",
       "counts": [
-        574,
-        40,
+        581,
+        41,
         3
       ]
     },
@@ -6952,15 +6952,15 @@
       "key": "[\"child\",\"maintenance-18-12-12\",\"refreshContextIndex\",\"current-repeat\",null]",
       "counts": [
         124,
-        11,
+        12,
         3
       ]
     },
     {
       "key": "[\"child\",\"maintenance-18-12-12\",\"refreshContextIndex\",\"history-first\",null]",
       "counts": [
-        574,
-        40,
+        577,
+        41,
         3
       ]
     },
@@ -6968,15 +6968,15 @@
       "key": "[\"child\",\"maintenance-18-12-12\",\"refreshContextIndex\",\"history-repeat\",null]",
       "counts": [
         124,
-        11,
+        12,
         3
       ]
     },
     {
       "key": "[\"child\",\"maintenance-18-24-12\",\"refreshContextIndex\",\"current-first\",null]",
       "counts": [
-        874,
-        52,
+        881,
+        53,
         3
       ]
     },
@@ -6984,15 +6984,15 @@
       "key": "[\"child\",\"maintenance-18-24-12\",\"refreshContextIndex\",\"current-repeat\",null]",
       "counts": [
         124,
-        11,
+        12,
         3
       ]
     },
     {
       "key": "[\"child\",\"maintenance-18-24-12\",\"refreshContextIndex\",\"history-first\",null]",
       "counts": [
-        874,
-        52,
+        877,
+        53,
         3
       ]
     },
@@ -7000,15 +7000,15 @@
       "key": "[\"child\",\"maintenance-18-24-12\",\"refreshContextIndex\",\"history-repeat\",null]",
       "counts": [
         124,
-        11,
+        12,
         3
       ]
     },
     {
       "key": "[\"child\",\"maintenance-23-12-12\",\"refreshContextIndex\",\"current-first\",null]",
       "counts": [
-        574,
-        40,
+        581,
+        41,
         3
       ]
     },
@@ -7016,15 +7016,15 @@
       "key": "[\"child\",\"maintenance-23-12-12\",\"refreshContextIndex\",\"current-repeat\",null]",
       "counts": [
         124,
-        11,
+        12,
         3
       ]
     },
     {
       "key": "[\"child\",\"maintenance-23-12-12\",\"refreshContextIndex\",\"history-first\",null]",
       "counts": [
-        574,
-        40,
+        577,
+        41,
         3
       ]
     },
@@ -7032,15 +7032,15 @@
       "key": "[\"child\",\"maintenance-23-12-12\",\"refreshContextIndex\",\"history-repeat\",null]",
       "counts": [
         124,
-        11,
+        12,
         3
       ]
     },
     {
       "key": "[\"child\",\"maintenance-23-24-12\",\"refreshContextIndex\",\"current-first\",null]",
       "counts": [
-        874,
-        52,
+        881,
+        53,
         3
       ]
     },
@@ -7048,15 +7048,15 @@
       "key": "[\"child\",\"maintenance-23-24-12\",\"refreshContextIndex\",\"current-repeat\",null]",
       "counts": [
         124,
-        11,
+        12,
         3
       ]
     },
     {
       "key": "[\"child\",\"maintenance-23-24-12\",\"refreshContextIndex\",\"history-first\",null]",
       "counts": [
-        874,
-        52,
+        877,
+        53,
         3
       ]
     },
@@ -7064,15 +7064,15 @@
       "key": "[\"child\",\"maintenance-23-24-12\",\"refreshContextIndex\",\"history-repeat\",null]",
       "counts": [
         124,
-        11,
+        12,
         3
       ]
     },
     {
       "key": "[\"child\",\"maintenance-33-12-12\",\"refreshContextIndex\",\"current-first\",null]",
       "counts": [
-        574,
-        40,
+        581,
+        41,
         3
       ]
     },
@@ -7080,15 +7080,15 @@
       "key": "[\"child\",\"maintenance-33-12-12\",\"refreshContextIndex\",\"current-repeat\",null]",
       "counts": [
         124,
-        11,
+        12,
         3
       ]
     },
     {
       "key": "[\"child\",\"maintenance-33-12-12\",\"refreshContextIndex\",\"history-first\",null]",
       "counts": [
-        574,
-        40,
+        577,
+        41,
         3
       ]
     },
@@ -7096,15 +7096,15 @@
       "key": "[\"child\",\"maintenance-33-12-12\",\"refreshContextIndex\",\"history-repeat\",null]",
       "counts": [
         124,
-        11,
+        12,
         3
       ]
     },
     {
       "key": "[\"child\",\"maintenance-33-24-12\",\"refreshContextIndex\",\"current-first\",null]",
       "counts": [
-        874,
-        52,
+        881,
+        53,
         3
       ]
     },
@@ -7112,15 +7112,15 @@
       "key": "[\"child\",\"maintenance-33-24-12\",\"refreshContextIndex\",\"current-repeat\",null]",
       "counts": [
         124,
-        11,
+        12,
         3
       ]
     },
     {
       "key": "[\"child\",\"maintenance-33-24-12\",\"refreshContextIndex\",\"history-first\",null]",
       "counts": [
-        874,
-        52,
+        877,
+        53,
         3
       ]
     },
@@ -7128,7 +7128,7 @@
       "key": "[\"child\",\"maintenance-33-24-12\",\"refreshContextIndex\",\"history-repeat\",null]",
       "counts": [
         124,
-        11,
+        12,
         3
       ]
     },
@@ -14767,7 +14767,7 @@
     {
       "key": "[\"child\",\"query-18-12-False-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        218,
+        219,
         9,
         3
       ]
@@ -14799,7 +14799,7 @@
     {
       "key": "[\"child\",\"query-18-12-False-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        218,
+        219,
         9,
         3
       ]
@@ -14831,7 +14831,7 @@
     {
       "key": "[\"child\",\"query-18-12-True-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -14863,7 +14863,7 @@
     {
       "key": "[\"child\",\"query-18-12-True-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -14903,7 +14903,7 @@
     {
       "key": "[\"child\",\"query-18-24-False-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        242,
+        243,
         9,
         3
       ]
@@ -14951,7 +14951,7 @@
     {
       "key": "[\"child\",\"query-18-24-False-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        242,
+        243,
         9,
         3
       ]
@@ -14991,7 +14991,7 @@
     {
       "key": "[\"child\",\"query-18-24-True-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -15023,7 +15023,7 @@
     {
       "key": "[\"child\",\"query-18-24-True-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -15063,7 +15063,7 @@
     {
       "key": "[\"child\",\"query-18-300-False-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        796,
+        797,
         9,
         3
       ]
@@ -15111,7 +15111,7 @@
     {
       "key": "[\"child\",\"query-18-300-False-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        796,
+        797,
         9,
         3
       ]
@@ -15151,7 +15151,7 @@
     {
       "key": "[\"child\",\"query-18-300-True-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -15183,7 +15183,7 @@
     {
       "key": "[\"child\",\"query-18-300-True-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -15223,7 +15223,7 @@
     {
       "key": "[\"child\",\"query-18-600-False-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        1398,
+        1399,
         9,
         3
       ]
@@ -15271,7 +15271,7 @@
     {
       "key": "[\"child\",\"query-18-600-False-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        1398,
+        1399,
         9,
         3
       ]
@@ -15311,7 +15311,7 @@
     {
       "key": "[\"child\",\"query-18-600-True-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -15343,7 +15343,7 @@
     {
       "key": "[\"child\",\"query-18-600-True-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -15375,7 +15375,7 @@
     {
       "key": "[\"child\",\"query-23-12-False-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        218,
+        219,
         9,
         3
       ]
@@ -15407,7 +15407,7 @@
     {
       "key": "[\"child\",\"query-23-12-False-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        218,
+        219,
         9,
         3
       ]
@@ -15439,7 +15439,7 @@
     {
       "key": "[\"child\",\"query-23-12-True-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -15471,7 +15471,7 @@
     {
       "key": "[\"child\",\"query-23-12-True-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -15511,7 +15511,7 @@
     {
       "key": "[\"child\",\"query-23-24-False-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        242,
+        243,
         9,
         3
       ]
@@ -15559,7 +15559,7 @@
     {
       "key": "[\"child\",\"query-23-24-False-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        242,
+        243,
         9,
         3
       ]
@@ -15599,7 +15599,7 @@
     {
       "key": "[\"child\",\"query-23-24-True-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -15631,7 +15631,7 @@
     {
       "key": "[\"child\",\"query-23-24-True-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -15671,7 +15671,7 @@
     {
       "key": "[\"child\",\"query-23-300-False-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        796,
+        797,
         9,
         3
       ]
@@ -15719,7 +15719,7 @@
     {
       "key": "[\"child\",\"query-23-300-False-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        796,
+        797,
         9,
         3
       ]
@@ -15759,7 +15759,7 @@
     {
       "key": "[\"child\",\"query-23-300-True-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -15791,7 +15791,7 @@
     {
       "key": "[\"child\",\"query-23-300-True-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -15831,7 +15831,7 @@
     {
       "key": "[\"child\",\"query-23-600-False-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        1398,
+        1399,
         9,
         3
       ]
@@ -15879,7 +15879,7 @@
     {
       "key": "[\"child\",\"query-23-600-False-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        1398,
+        1399,
         9,
         3
       ]
@@ -15919,7 +15919,7 @@
     {
       "key": "[\"child\",\"query-23-600-True-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -15951,7 +15951,7 @@
     {
       "key": "[\"child\",\"query-23-600-True-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -15983,7 +15983,7 @@
     {
       "key": "[\"child\",\"query-33-12-False-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        350,
+        351,
         9,
         3
       ]
@@ -16015,7 +16015,7 @@
     {
       "key": "[\"child\",\"query-33-12-False-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        350,
+        351,
         9,
         3
       ]
@@ -16047,7 +16047,7 @@
     {
       "key": "[\"child\",\"query-33-12-True-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -16079,7 +16079,7 @@
     {
       "key": "[\"child\",\"query-33-12-True-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -16119,7 +16119,7 @@
     {
       "key": "[\"child\",\"query-33-24-False-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        374,
+        375,
         9,
         3
       ]
@@ -16167,7 +16167,7 @@
     {
       "key": "[\"child\",\"query-33-24-False-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        374,
+        375,
         9,
         3
       ]
@@ -16207,7 +16207,7 @@
     {
       "key": "[\"child\",\"query-33-24-True-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -16239,7 +16239,7 @@
     {
       "key": "[\"child\",\"query-33-24-True-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -16279,7 +16279,7 @@
     {
       "key": "[\"child\",\"query-33-300-False-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        928,
+        929,
         9,
         3
       ]
@@ -16327,7 +16327,7 @@
     {
       "key": "[\"child\",\"query-33-300-False-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        928,
+        929,
         9,
         3
       ]
@@ -16367,7 +16367,7 @@
     {
       "key": "[\"child\",\"query-33-300-True-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -16399,7 +16399,7 @@
     {
       "key": "[\"child\",\"query-33-300-True-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -16439,7 +16439,7 @@
     {
       "key": "[\"child\",\"query-33-600-False-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        1530,
+        1531,
         9,
         3
       ]
@@ -16487,7 +16487,7 @@
     {
       "key": "[\"child\",\"query-33-600-False-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        1530,
+        1531,
         9,
         3
       ]
@@ -16527,7 +16527,7 @@
     {
       "key": "[\"child\",\"query-33-600-True-lexical\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -16559,7 +16559,7 @@
     {
       "key": "[\"child\",\"query-33-600-True-semantic\",\"findCandidates\",\"current-first\",\"current-first\"]",
       "counts": [
-        86,
+        87,
         9,
         3
       ]
@@ -17615,7 +17615,7 @@
     {
       "key": "[\"child\",\"status-18-24-False-lexical-12\",\"getContextIndexStatus\",\"current-first\",\"current-first\"]",
       "counts": [
-        48,
+        49,
         5,
         3
       ]
@@ -17647,7 +17647,7 @@
     {
       "key": "[\"child\",\"status-18-24-True-lexical-12\",\"getContextIndexStatus\",\"current-first\",\"current-first\"]",
       "counts": [
-        48,
+        49,
         5,
         3
       ]
@@ -17679,7 +17679,7 @@
     {
       "key": "[\"child\",\"status-18-300-False-lexical-12\",\"getContextIndexStatus\",\"current-first\",\"current-first\"]",
       "counts": [
-        48,
+        49,
         5,
         3
       ]
@@ -17711,7 +17711,7 @@
     {
       "key": "[\"child\",\"status-18-300-True-lexical-12\",\"getContextIndexStatus\",\"current-first\",\"current-first\"]",
       "counts": [
-        48,
+        49,
         5,
         3
       ]
@@ -17743,7 +17743,7 @@
     {
       "key": "[\"child\",\"status-18-600-False-lexical-12\",\"getContextIndexStatus\",\"current-first\",\"current-first\"]",
       "counts": [
-        48,
+        49,
         5,
         3
       ]
@@ -17775,7 +17775,7 @@
     {
       "key": "[\"child\",\"status-18-600-True-lexical-12\",\"getContextIndexStatus\",\"current-first\",\"current-first\"]",
       "counts": [
-        48,
+        49,
         5,
         3
       ]
@@ -17807,7 +17807,7 @@
     {
       "key": "[\"child\",\"status-23-24-False-lexical-12\",\"getContextIndexStatus\",\"current-first\",\"current-first\"]",
       "counts": [
-        48,
+        49,
         5,
         3
       ]
@@ -17839,7 +17839,7 @@
     {
       "key": "[\"child\",\"status-23-24-True-lexical-12\",\"getContextIndexStatus\",\"current-first\",\"current-first\"]",
       "counts": [
-        48,
+        49,
         5,
         3
       ]
@@ -17871,7 +17871,7 @@
     {
       "key": "[\"child\",\"status-23-300-False-lexical-12\",\"getContextIndexStatus\",\"current-first\",\"current-first\"]",
       "counts": [
-        48,
+        49,
         5,
         3
       ]
@@ -17903,7 +17903,7 @@
     {
       "key": "[\"child\",\"status-23-300-True-lexical-12\",\"getContextIndexStatus\",\"current-first\",\"current-first\"]",
       "counts": [
-        48,
+        49,
         5,
         3
       ]
@@ -17935,7 +17935,7 @@
     {
       "key": "[\"child\",\"status-23-600-False-lexical-12\",\"getContextIndexStatus\",\"current-first\",\"current-first\"]",
       "counts": [
-        48,
+        49,
         5,
         3
       ]
@@ -17967,7 +17967,7 @@
     {
       "key": "[\"child\",\"status-23-600-True-lexical-12\",\"getContextIndexStatus\",\"current-first\",\"current-first\"]",
       "counts": [
-        48,
+        49,
         5,
         3
       ]
@@ -17999,7 +17999,7 @@
     {
       "key": "[\"child\",\"status-33-24-False-lexical-12\",\"getContextIndexStatus\",\"current-first\",\"current-first\"]",
       "counts": [
-        48,
+        49,
         5,
         3
       ]
@@ -18031,7 +18031,7 @@
     {
       "key": "[\"child\",\"status-33-24-True-lexical-12\",\"getContextIndexStatus\",\"current-first\",\"current-first\"]",
       "counts": [
-        48,
+        49,
         5,
         3
       ]
@@ -18063,7 +18063,7 @@
     {
       "key": "[\"child\",\"status-33-300-False-lexical-12\",\"getContextIndexStatus\",\"current-first\",\"current-first\"]",
       "counts": [
-        48,
+        49,
         5,
         3
       ]
@@ -18095,7 +18095,7 @@
     {
       "key": "[\"child\",\"status-33-300-True-lexical-12\",\"getContextIndexStatus\",\"current-first\",\"current-first\"]",
       "counts": [
-        48,
+        49,
         5,
         3
       ]
@@ -18127,7 +18127,7 @@
     {
       "key": "[\"child\",\"status-33-600-False-lexical-12\",\"getContextIndexStatus\",\"current-first\",\"current-first\"]",
       "counts": [
-        48,
+        49,
         5,
         3
       ]
@@ -18159,7 +18159,7 @@
     {
       "key": "[\"child\",\"status-33-600-True-lexical-12\",\"getContextIndexStatus\",\"current-first\",\"current-first\"]",
       "counts": [
-        48,
+        49,
         5,
         3
       ]
@@ -32015,5 +32015,13 @@
   "round4bPreviousMainSha": "a546ee4372e72ad06e713fd0449ca84f168a340b",
   "round4bDecision": "e9, 2026-11-02 03:10",
   "round5PreviousMainSha": "a69cc9795f97596b3e1c9829d65545b3cdf3dbd7",
-  "round5Decision": "e9, 2026-11-02 15:01"
+  "round5Decision": "e9, 2026-11-02 15:01",
+  "sidecarAttestationAmendment": {
+    "measuredNodes": [
+      "22.16.0"
+    ],
+    "coldOpeningCells": 138,
+    "maintenanceCells": 24,
+    "scope": "Cold seal reads and atomic maintenance seal writes only; warm read and recall caps are unchanged."
+  }
 }

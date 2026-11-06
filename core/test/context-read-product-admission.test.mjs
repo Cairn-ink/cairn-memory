@@ -266,7 +266,7 @@ test('renewal during admission settles original window and preserves old and new
 test('real Worker: lazy construction, admission checks once, no work/observation, released transactions and fresh next-turn snapshot',async t=>{
   assert.equal(typeof protocol.admitMaintenance,'function','private admission dispatch exists');
   const f=fixture(t);f.admit('first admission evidence');
-  const service=configured(t,f.path,[ns],{service:true}),control=new Int32Array(new SharedArrayBuffer(32));
+  const service=configured(t,f.path,[ns],{service:true}),control=new Int32Array(new SharedArrayBuffer(36));
   service.options.host={moduleUrl:new URL('./fixtures/context-product-admission-host.mjs',import.meta.url).href,
     configuration:{...service.options.host.configuration,admissionControl:control.buffer}};
   const h=await openContextIndexMaintainer(service.options);t.after(()=>h.close());
@@ -275,25 +275,25 @@ test('real Worker: lazy construction, admission checks once, no work/observation
   Atomics.store(control,3,1);const admitted=await protocol.admitMaintenance(h,input,service.token);
   ok(admitted);assert.equal(protocol.maintenanceAdmissionReceipt(admitted),'admitted');
   assert.equal(maintenanceObservation(admitted),undefined);assert.equal(maintenancePhaseDiagnostic(admitted).epochObservationMs,undefined);
-  assert.deepEqual([...control].slice(0,3),[1,1,0],'both checks once and no corpus/maintenance reads');assert.equal(control[6],0,'no retained transaction at final authority');
+  assert.deepEqual([...control].slice(0,3),[0,0,0],'attested admission skips whole-file checks and corpus reads');assert.equal(control[6],0,'no retained transaction at final authority');assert.equal(control[8],1,'one seal read during admission');
   Atomics.store(control,3,0);f.admit('canonical write between admission and work');await testClock.advance(10);
   const result=await protocol.refreshMaintenance(h,input,service.token);ok(result);
-  assert.equal(maintenanceObservation(result),testClock.now());assert.deepEqual([...control].slice(0,2),[1,1]);
+  assert.equal(maintenanceObservation(result),testClock.now());assert.equal(control[8],1,'work retains the attested handle');assert.deepEqual([...control].slice(0,2),[0,0]);
   assert.ok(control[2]>0,'work starts only on the later call');
   // A public failed writable operation must still discard under the existing rule.
   f.admit('force another writable batch');Atomics.store(control,4,1);
   assert.equal((await h.refreshContextIndex(input,service.token)).error.code,'storage_error');
   const yielded=await protocol.refreshMaintenance(h,input,service.token);
-  assert.equal(protocol.maintenanceAdmissionReceipt(yielded),'required');assert.deepEqual([...control].slice(0,2),[1,1]);
-  ok(await protocol.admitMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,2),[2,2]);
-  ok(await protocol.refreshMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,2),[2,2]);
+  assert.equal(protocol.maintenanceAdmissionReceipt(yielded),'required');assert.deepEqual([...control].slice(0,2),[0,0]);
+  ok(await protocol.admitMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,2),[0,0]);assert.equal(control[8],2,'retry attests a fresh handle');
+  ok(await protocol.refreshMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,2),[0,0]);
   service.view[0]=0;assert.equal((await protocol.admitMaintenance(h,input,service.token)).error.code,'authority_required');
   const publicEntry=await import('../index.mjs');assert.equal(publicEntry.admitMaintenance,undefined);
 });
 
 for(const live of [false,true])test(`real Worker: ${live?'live stall':'overrun'} admission timeout is private, fully charged and confirmed before retry`,async t=>{
   const f=fixture(t);f.admit('native admission cutoff');const service=configured(t,f.path,[ns],{service:true});
-  const control=new Int32Array(new SharedArrayBuffer(32));if(live)control[7]=1;else control[5]=1001;
+  const control=new Int32Array(new SharedArrayBuffer(36));if(live)control[7]=1;else control[5]=1001;
   service.options.host={moduleUrl:new URL('./fixtures/context-product-admission-host.mjs',import.meta.url).href,
     configuration:{...service.options.host.configuration,admissionControl:control.buffer}};
   let serial=0;const timers=new Map();
@@ -304,10 +304,10 @@ for(const live of [false,true])test(`real Worker: ${live?'live stall':'overrun'}
   const p=renew(config);t.after(()=>p.close());const [id,timer]=[...timers][0];timers.delete(id);await testClock.advance(timer.at-testClock.now());const pending=timer.fn();
   if(live){
     try {
-      await Promise.resolve(Atomics.waitAsync(control,7,1).value);assert.equal(control[7],2,'integrity check is still live');
+      await Promise.resolve(Atomics.waitAsync(control,7,1).value);assert.equal(control[7],2,'seal read is still live');
       await testClock.advance(1000,{waitForWorkers:false});
       for(const [key,value] of [...timers])if(value.at<=testClock.now()){timers.delete(key);value.fn();}
-      assert.equal(maintenancePumpPhaseDiagnostic(p.getStatus()).projections[0].lastStall.kind,12,'live integrity work is attributed to admission');
+      assert.equal(maintenancePumpPhaseDiagnostic(p.getStatus()).projections[0].lastStall.kind,12,'live seal reading is attributed to admission');
     } finally {Atomics.store(control,7,0);Atomics.notify(control,7);}
   }
   await pending;
@@ -319,24 +319,24 @@ for(const live of [false,true])test(`real Worker: ${live?'live stall':'overrun'}
 test('real Worker: read-only upgrade and repair both yield before fresh writable admission',async t=>{
   assert.equal(typeof protocol.admitMaintenance,'function','private admission dispatch exists');
   const f=fixture(t);f.admit('upgrade and repair admission');const service=configured(t,f.path,[ns],{service:true});
-  const control=new Int32Array(new SharedArrayBuffer(32));
+  const control=new Int32Array(new SharedArrayBuffer(36));
   service.options.host={moduleUrl:new URL('./fixtures/context-product-admission-host.mjs',import.meta.url).href,
     configuration:{...service.options.host.configuration,admissionControl:control.buffer}};
   const h=await openContextIndexMaintainer(service.options);t.after(()=>h.close());
   const input={readSet:[ns],types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:32,maxMs:1000}};
   ok(await h.getContextIndexStatus({readSet:[ns],types:['memory'],intent:'current',deadlineMs:1000},service.token));
   assert.equal(protocol.maintenanceAdmissionReceipt(await protocol.refreshMaintenance(h,input,service.token)),'required');
-  assert.deepEqual([...control].slice(0,2),[0,0],'upgrade cannot hide integrity checks in work');
-  ok(await protocol.admitMaintenance(h,input,service.token));ok(await protocol.refreshMaintenance(h,input,service.token));
-  assert.deepEqual([...control].slice(0,2),[1,1]);
+  assert.deepEqual([...control].slice(0,2),[0,0],'upgrade cannot open the sidecar inside work');
+  ok(await protocol.admitMaintenance(h,input,service.token));assert.equal(control[8],1);ok(await protocol.refreshMaintenance(h,input,service.token));
+  assert.deepEqual([...control].slice(0,2),[0,0]);
   const db=new DatabaseSync(f.path+protocol.PRODUCT_SIDECAR_SUFFIX);
   try {db.prepare('UPDATE product_metadata SET profile=?').run('synthetic-invalid-profile');}finally{db.close();}
   Atomics.store(control,2,0);
   const yielded=await protocol.refreshMaintenance(h,input,service.token);
   assert.equal(protocol.maintenanceAdmissionReceipt(yielded),'required');assert.equal(maintenanceObservation(yielded),undefined);
-  assert.deepEqual([...control].slice(0,3),[1,1,0],'repair cannot open or scan inside work');
-  ok(await protocol.admitMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,3),[2,2,0]);
-  ok(await protocol.refreshMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,2),[2,2]);
+  assert.deepEqual([...control].slice(0,3),[0,0,0],'repair cannot open or scan inside work');
+  ok(await protocol.admitMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,3),[0,0,0]);assert.equal(control[8],2,'repair attests the successor');
+  ok(await protocol.refreshMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,2),[0,0]);
 });
 
 test('a work cutoff remains terminal and receives no admission retry authority',async t=>{

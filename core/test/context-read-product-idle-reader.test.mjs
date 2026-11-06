@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { openContextProductFacade } from '../context-read-facade.mjs';
 import { productSidecar } from '../context-product-sidecar.mjs';
+import { attestCopiedSidecar } from '../testing/context-product-attested-copy-fixture.mjs';
 import { openMemoryCore } from '../index.mjs';
 import { configured, personal } from '../testing/context-product-owner-fixture.mjs';
 import { admitMaintenance, refreshMaintenance, maintenanceAdmissionReceipt, PRODUCT_SIDECAR_SUFFIX } from '../context-product-admission.mjs';
@@ -32,6 +33,7 @@ async function copied(t,{idleProjection=false}={}) {
   // Copy only after the source's connections close, and only in a child.
   const copy=spawnSync(process.execPath,['--input-type=module','-e',`import {mkdirSync,copyFileSync} from 'node:fs';import {dirname} from 'node:path';mkdirSync(dirname(process.argv[2]),{mode:0o700});for(const suffix of ['',process.argv[3],process.argv[3]+'.lifecycle-lock.sqlite'])copyFileSync(process.argv[1]+suffix,process.argv[2]+suffix);`,original,path,PRODUCT_SIDECAR_SUFFIX],{encoding:'utf8'});
   assert.equal(copy.status,0,copy.stderr);
+  attestCopiedSidecar(path);
   const control=new Int32Array(new SharedArrayBuffer(16)),service=configured(owner,path,[personal],{service:true}),request=configured(owner,path,[personal]);
   for(const c of [service,request])c.options.host={moduleUrl:new URL('./fixtures/context-product-idle-reader-host.mjs',import.meta.url).href,
     configuration:{...c.options.host.configuration,idleControl:control.buffer}};
