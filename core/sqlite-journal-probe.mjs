@@ -301,7 +301,23 @@ export function createExclusiveSqliteFile(path, productReplacement, productIniti
   if(observe)return observe(()=>runCreation(path,productReplacement,productInitialization,true));
   return runCreation(path,productReplacement,productInitialization,false);
 }
+// Closed initialization envelope. The child needs public schema/identity data,
+// never an extension bag that could accidentally transport signing material.
+function validateProductInitialization(init) {
+  const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value)&&Object.getPrototypeOf(value)===Object.prototype;
+  const exact=(value,required,optional=[])=>object(value)&&required.every(k=>Object.hasOwn(value,k))&&Object.keys(value).every(k=>[...required,...optional].includes(k));
+  const text=value=>typeof value==='string';
+  if(!exact(init,['autoVacuum','sql','storeId','profile','incarnation','attestation'],['journalMode','expectedStamp','expectedAttestation','foreignBindingDigest']) ||
+    init.autoVacuum!=='INCREMENTAL'||!['sql','storeId','profile','incarnation'].every(k=>text(init[k]))||
+    Object.hasOwn(init,'journalMode')&&!['DELETE','WAL'].includes(init.journalMode)||
+    ['expectedStamp','expectedAttestation','foreignBindingDigest'].some(k=>Object.hasOwn(init,k)&&!text(init[k]))||
+    !exact(init.attestation,['applicationId','userVersion','schema'])||
+    !Number.isSafeInteger(init.attestation.applicationId)||!Number.isSafeInteger(init.attestation.userVersion)||
+    !Array.isArray(init.attestation.schema)||!init.attestation.schema.every(row=>exact(row,['type','name','tbl_name','sql'])&&Object.values(row).every(text)))
+    throw new TypeError('invalid_cache_initialization');
+}
 function runCreation(path, productReplacement, productInitialization, structured) {
+  if(productInitialization!==undefined)validateProductInitialization(productInitialization);
   if (productReplacement) {
     const current = sqliteFileStat(path);
     if (!path.endsWith('.context-read-product-v1.1.sqlite') || !current.isFile() || current.isSymbolicLink() ||

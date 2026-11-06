@@ -13,7 +13,7 @@ import { openContextProductFacade } from '../context-read-facade.mjs';
 import { accessDigest } from '../context-product-validation.mjs';
 import { createProductSqlitePolicy } from '../context-product-sqlite.mjs';
 import { nativeObserver } from '../context-product-telemetry.mjs';
-import { sqliteFileStat } from '../sqlite-journal-probe.mjs';
+import { createExclusiveSqliteFile, sqliteFileStat } from '../sqlite-journal-probe.mjs';
 // Keep the fail-before test runnable against the engine before this module exists.
 const seals=await import('../context-product-sidecar-attestation.mjs').catch(()=>({}));
 const stamp=path=>{const s=sqliteFileStat(path);return [s.dev,s.ino,s.size,s.mtimeNs,s.ctimeNs].join(':');};
@@ -246,7 +246,11 @@ test('child argv, input and environment carry no store or derived key material',
   const secret=s.facade.port.identity.cursorSecret,derived=createHmac('sha256',secret).update('sidecar-attestation-v1').digest();
   spawnHook(t,(spawn,command,args,options)=>{
     const serialized=JSON.stringify({command,args,options});
-    for(const value of [secret,derived.toString('hex'),derived.toString('base64'),derived.toString('base64url')])assert.equal(serialized.includes(value),false);
+    for(const key of [Buffer.from(secret),derived])for(const value of [key.toString(),key.toString('hex'),key.toString('base64'),key.toString('base64url'),JSON.stringify([...key]),JSON.stringify(key)]) {
+      assert.equal(serialized.includes(value),false,'key material must stay outside every child channel');
+      assert.equal(serialized.includes(JSON.stringify(value).slice(1,-1)),false,'escaped key material must stay outside every child channel');
+    }
+    const init=JSON.parse(args[6]);assert.deepEqual(Object.keys(init).sort(),['attestation','autoVacuum','expectedAttestation','expectedStamp','incarnation','journalMode','profile','sql','storeId']);
     assert.deepEqual(options.env,{});assert.equal(options.input,undefined);inspected++;
     return spawn(command,args,options);
   });
@@ -323,5 +327,23 @@ test(`opening deadline stops at the statement boundary after ${boundary}`,t=>{
   });
   s.open();assert.throws(()=>s.storage.admit(2000),{code:'read_timeout'});
   assert.equal(expired,true);assert.deepEqual(after,[],'no subsequent storage statement starts after cutoff');
+});
+
+
+test('child initialization refuses unknown fields and mistyped known fields before spawning',t=>{
+  const s=setup(t);s.close();sql(s.path,db=>db.exec('DELETE FROM product_attestation'));
+  let payload,spawns=0;spawnHook(t,(spawn,command,args,options)=>{
+    spawns++;if(args[4]==='replace-product-cache')payload=JSON.parse(args[6]);return spawn(command,args,options);
+  });
+  s.open();s.storage.admit(2000);assert.ok(payload);const before=spawns;
+  const secret=s.facade.port.identity.cursorSecret,derived=createHmac('sha256',secret).update('sidecar-attestation-v1').digest();
+  for(const bytes of [Buffer.from(secret),derived])for(const leak of [bytes.toString(),bytes.toString('hex'),bytes.toString('base64'),bytes.toString('base64url'),[...bytes],bytes.toJSON()]){
+    assert.throws(()=>createExclusiveSqliteFile(s.path,undefined,{...payload,extra:leak}),{name:'TypeError',message:'invalid_cache_initialization'});
+  }
+  for(const patch of [{storeId:[]},{attestation:{...payload.attestation,extra:'x'}},
+    {attestation:{...payload.attestation,schema:[{...payload.attestation.schema[0],extra:'x'}]}},
+    {attestation:{...payload.attestation,applicationId:'1'}},{sql:{}},{expectedAttestation:[]}])
+    assert.throws(()=>createExclusiveSqliteFile(s.path,undefined,{...payload,...patch}),{name:'TypeError',message:'invalid_cache_initialization'});
+  assert.equal(spawns,before,'rejected payloads reach no child channel');
 });
 
