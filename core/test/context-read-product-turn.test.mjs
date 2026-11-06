@@ -7,6 +7,7 @@ import { createContextReadSupervisor } from '../context-read-supervisor.mjs';
 import { credentialDigest } from '../context-product-control.mjs';
 import { maintenanceAdmissionDomain, failMaintenanceAdmission } from '../context-product-admission-policy.mjs';
 import { maintenanceDispatchControl, maintenanceControlState } from '../context-product-attribution.mjs';
+import { captureMaintenanceTurnPort, createMaintenanceTurnController } from '../context-maintenance-turn.mjs';
 import { setup as recoveryModel } from '../testing/context-product-cutoff-fixture.mjs';
 
 const flush=async()=>{for(let i=0;i<40;i++)await Promise.resolve();};
@@ -223,6 +224,25 @@ test(`post-admission continuation: ${start} at deadline ${offset} uses a fresh c
     assert.equal(s.diagnostic().turnPhase,'idle');
     assert.deepEqual(p.getStatus(),before);assert.deepEqual(s.phases(),phases);
   }
+});
+
+test('post-admission continuation preserves poison precedence over wait expiry',async t=>{
+  const s=model(t,{maxWaitMs:1000}),queued=deferred();s.entry=()=>queued.promise;
+  const p=s.create(),pending=s.fire();await flush();const ticket=s.tickets[0];
+  const port={version:1,maxWaitMs:1000,createTurn:()=>({enter:()=> 'admitted',release(){throw Error('release failed');}})};
+  const poisoner=createMaintenanceTurnController(captureMaintenanceTurnPort(port),s.deps);
+  const grant=await poisoner.wait(ticket.request,{signal:new AbortController().signal,untilMonoMs:ticket.until,identity:s.identity});
+  assert.equal(grant.status,'admitted');
+  s.set(ticket.until-1);queued.resolve('admitted');await Promise.resolve();
+  assert.equal(s.diagnostic().turnPhase,'running');assert.equal(s.timers.size,0);
+  // A different controller poisons the same domain before the pump resumes.
+  assert.equal(poisoner.release(grant.ticket,'settled'),'poisoned');
+  s.set(ticket.until+1);await pending;await p.completion;
+  assert.deepEqual(ticket.releases,[['declined','stopped']]);
+  assert.equal(p.getStatus().error,'reader_failed');assert.equal(s.diagnostic().declinedTurns.wait_expired,0);
+  assert.deepEqual(s.events.map(e=>e.kind),['request','release']);
+  assert.equal(s.diagnostic().admittedTurns,0);assert.equal(s.phases().reduce((n,lane)=>n+lane.quanta,0),0);
+  assert.equal(p.getStatus().usedItems,0);assert.equal(p.getStatus().usedMs,0);
 });
 
 test('post-admission continuation preserves renewal expiry precedence over wait expiry',async t=>{
