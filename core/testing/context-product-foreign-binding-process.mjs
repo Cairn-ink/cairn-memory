@@ -11,11 +11,15 @@ const [engine, mode='run', dirArg, caseArg='copy-write', killArg='close']=proces
 const source=resolve(engine),rev='regression';
 const root=mode==='run'?mkdtempSync(join(tmpdir(),'context-foreign-binding-')):null;
 const emit=(kind,data={})=>console.log(JSON.stringify({rev,mode,kind,...data}));
+const failure=(kind,step,error)=>emit(kind,{step,name:error?.name??'Error',message:error?.message??String(error)});
+// Diagnostics are best effort; disposal failures still fail an otherwise passing run.
+const diagnostic=(step,read)=>{try{return read();}catch(error){failure('secondary_failure',step,error);return null;}};
 const children=new Set();
 const child=(args,ipc=false)=>{const p=spawn(process.execPath,[fileURLToPath(import.meta.url),engine,...args],{stdio:ipc?['ignore','inherit','inherit','ipc']:['ignore','inherit','inherit']});children.add(p);emit('child_started',{phase:args[0],pid:p.pid});return p;};
 const done=p=>new Promise((res,rej)=>{p.once('error',rej);p.once('exit',(code,signal)=>res({code,signal}));});
 const command=(cmd,args)=>{const r=spawnSync(cmd,args,{encoding:'utf8'});emit('command',{cmd,args,pid:r.pid,status:r.status,signal:r.signal,stdout:r.stdout,stderr:r.stderr});assert.equal(r.status,0);return r.stdout;};
 if(mode==='run'){
+  let primary;
   try{
     emit('run_entry',{pid:process.pid});
     const name=dirArg??'copy-write',termination=caseArg==='sigterm'?'sigterm':'close';
@@ -36,13 +40,18 @@ if(mode==='run'){
     assert.deepEqual(finalRows,[{intent:'current',documents:expectedDocuments},{intent:'history',documents:expectedDocuments}]);
     emit('asserted',{outcome:'converged',finalRows});
     emit('finished',{case:name,termination,directory,target,expected:write||drop?3:2});
-  }finally{
+  }catch(error){primary={error};failure('primary_failure','run',error);}finally{
     // A failed assertion can leave a builder waiting for its close message.
-    await Promise.all([...children].map(async p=>{
+    const reaped=await Promise.allSettled([...children].map(async p=>{
       if(!p.pid||p.exitCode!==null||p.signalCode!==null)return;
       const exit=done(p);p.kill('SIGTERM');await exit;
     }));
-    command('rm',['-rf','--',root]);
+    let disposal;
+    for(const r of reaped)if(r.status==='rejected'){failure('secondary_failure','reap',r.reason);disposal??={error:r.reason};}
+    // Only remove files after every child has been reaped.
+    if(!disposal)try{command('rm',['-rf','--',root]);}catch(error){failure('secondary_failure','workspace_cleanup',error);disposal={error};}
+    if(primary)throw primary.error;
+    if(disposal)throw disposal.error;
   }
 }else{
   const api=await import(pathToFileURL(join(source,'core/index.mjs'))),pumpApi=await import(pathToFileURL(join(source,'core/context-product-pump.mjs')));
@@ -50,7 +59,7 @@ if(mode==='run'){
   const {configured,personal,project}=await import(pathToFileURL(join(source,'core/testing/context-product-owner-fixture.mjs')));
   const path=join(dirArg,'core.sqlite'),readSet=[personal,project('restart-project')];
   const cleanups=[],t={after:f=>cleanups.push(f)};
-  const cleanup=async()=>{for(const f of cleanups.reverse())await f();};
+  const cleanup=async()=>{let first;for(const f of cleanups.reverse())try{await f();}catch(error){failure('secondary_failure','cleanup',error);first??={error};}if(first)throw first.error;};
   function admitOne(text,ns=personal){const c=api.openMemoryCore({path});try{assert.equal(c.admit({namespace:ns,memory:{content:text,kind:'fact'},receipts:[{client:'synthetic',sessionId:'restart',eventId:text,role:'user',excerpt:text}]}).ok,true);}finally{c.close();}}
   if(mode==='write'){admitOne('Post-builder restart canary');emit('wrote');process.disconnect?.();}
   else if(mode==='build'){
@@ -66,13 +75,24 @@ if(mode==='run'){
     try{const rows=d?d.prepare(`SELECT s.intent,COUNT(d.doc) AS documents FROM publications p JOIN selections s ON s.projection=p.projection JOIN generations g ON g.id=p.generation LEFT JOIN documents d ON d.generation=g.storage_id GROUP BY s.intent ORDER BY s.intent`).all().map(r=>({...r})):[];emit('publications',{rows});process.send?.({rows});}finally{d?.close();}
     const d2=new DatabaseSync(path,{readOnly:true});try{emit('canonical',{count:d2.prepare('SELECT COUNT(*) AS n FROM memories').get().n,journal:d2.prepare('PRAGMA journal_mode').get()});}finally{d2.close();}process.disconnect?.();
   }else if(mode==='pump'){
+    try{
+    const readerApi=await import(pathToFileURL(join(source,'core/context-product-reader.mjs')));
     const c=configured(t,path,readSet,{service:true});let turns=0;const replies=[];const successes=new Set();let release;const enough=new Promise(r=>release=r);
-    const wrap=(method,fn)=>async(...args)=>{emit('dispatch',{method,intent:args[1].intent});const r=await fn(...args);emit('reply',{method,intent:args[1].intent,receipt:protocol.maintenanceAdmissionReceipt?.(r)??null,status:r.value?.status,error:r.error?.code});replies.push({method,intent:args[1].intent,receipt:protocol.maintenanceAdmissionReceipt?.(r)??null});turns++;if(r.ok&&r.value?.status==='complete')successes.add(args[1].intent);if(turns>=12||successes.size===2)release();return r;};
+    const wrap=(method,fn)=>async(...args)=>{emit('dispatch',{method,intent:args[1].intent});const r=await fn(...args);emit('reply',{method,intent:args[1].intent,receipt:protocol.maintenanceAdmissionReceipt?.(r)??null,status:r.value?.status,error:r.error?.code});if(!r.ok)setImmediate(()=>{try{emit('failed_reply',{method,intent:args[1].intent,phases:diagnostic('maintenancePhaseDiagnostic',()=>readerApi.maintenancePhaseDiagnostic(r))??null,stall:diagnostic('maintenanceStallDiagnostic',()=>readerApi.maintenanceStallDiagnostic(r))??null});}catch(error){failure('secondary_failure','failed_reply',error);}});replies.push({method,intent:args[1].intent,receipt:protocol.maintenanceAdmissionReceipt?.(r)??null});turns++;if(r.ok&&r.value?.status==='complete')successes.add(args[1].intent);if(turns>=12||successes.size===2)release();return r;};
     const deps={};if(protocol.admitMaintenance){deps.admit=wrap('admitMaintenance',protocol.admitMaintenance);deps.work=wrap('refreshMaintenance',protocol.refreshMaintenance);}else{deps.open=async options=>{const h=await api.openContextIndexMaintainer(options);return {close:()=>h.close(),refreshContextIndex:wrap('refreshContextIndex',(_h,...a)=>h.refreshContextIndex(...a)).bind(null,null)};};}
     const renew=pumpApi.createMaintenancePumpRuntime(deps),now=Number(process.hrtime.bigint())/1e6;
     const p=renew({supervisor:c.supervisor,id:randomUUID(),window:{id:randomUUID(),endsAtMonoMs:Math.floor(now)+60000,usedItems:0,usedMs:0},budgets:{maxItems:2048,maxMs:60000},quantum:{maxItems:32,maxMs:1000},pollMs:1000,renewalMs:60000,serviceCredential:c.token,projections:[{options:c.options,types:['memory']}]});
     const monitor=setInterval(()=>{const s=p.getStatus();if(s.state!=='active')release();},1000);
     const bound=setTimeout(release,16000);
-    try{await enough;await new Promise(setImmediate);const s=p.getStatus();emit('bounded_result',{turns,successes:[...successes],status:s,diagnostic:pumpApi.maintenancePumpDiagnostic(s)});assert.equal(successes.size,2,'both lanes must converge within bounded observation');}finally{clearInterval(monitor);clearTimeout(bound);await p.close();await cleanup();const final=p.getStatus();emit('closed',{status:final});process.disconnect?.();}
+    let primary,disposal;
+    try{await enough;await new Promise(setImmediate);const s=p.getStatus();emit('bounded_result',{turns,successes:[...successes],status:s,diagnostic:diagnostic('maintenancePumpDiagnostic',()=>pumpApi.maintenancePumpDiagnostic(s)),phases:diagnostic('maintenancePumpPhaseDiagnostic',()=>pumpApi.maintenancePumpPhaseDiagnostic(s))});assert.equal(successes.size,2,'both lanes must converge within bounded observation');}catch(error){primary={error};failure('primary_failure','pump',error);}finally{
+      clearInterval(monitor);clearTimeout(bound);
+      try{await p.close();}catch(error){failure('secondary_failure','close',error);disposal={error};}
+      try{await cleanup();}catch(error){disposal??={error};}
+      const final=diagnostic('getStatus',()=>p.getStatus());emit('closed',{status:final,diagnostic:diagnostic('maintenancePumpDiagnostic',()=>pumpApi.maintenancePumpDiagnostic(final)),phases:diagnostic('maintenancePumpPhaseDiagnostic',()=>pumpApi.maintenancePumpPhaseDiagnostic(final))});
+    }
+    if(primary)throw primary.error;
+    if(disposal)throw disposal.error;
+    }finally{process.disconnect?.();}
   }else throw Error('bad mode');
 }
