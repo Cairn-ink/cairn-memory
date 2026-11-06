@@ -433,7 +433,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     if(bootstrap&&(bootstrapCommit||legacyWalMissing)){
       check();const writing=side;side=admissionDatabase(side,check);
       try {write(()=>{
-        if(legacyWalMissing&&missingSealTable)for(const table of ['vector_publications','vector_work','vector_validation_records','vector_purge_checkpoints','publications','work','validation_records','progress_records','selections']){
+        if(legacyWalMissing&&missingSealTable)for(const table of ['vector_publications','vector_work','vector_validation_records','publications','work','validation_records','progress_records']){
           for(;;){check();const result=side.prepare(`DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} LIMIT 128)`).run();if(!result.changes)break;}
         }
       },'setup',check);}finally{if(side?.isOpen)side=writing;}unattestedIdentity=null;

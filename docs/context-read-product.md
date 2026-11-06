@@ -1923,8 +1923,9 @@ corrupt verdicts retain the existing child integrity checks and foreign-binding
 certificate recheck. Neither the cursor secret nor its derived key reaches the
 child. The child initializes an unsigned empty cache; the parent seals its first
 write transaction against the identity verified on its opened connection. A
-crash before that write leaves an unavailable empty cache that the next writable
-open replaces again.
+crash before that write leaves an unavailable empty cache. Its next writable
+open replaces it again in DELETE mode; a host-configured WAL cache follows the
+missing-seal check described above.
 
 Previously every writable cold open ran SQLite `quick_check` and
 `foreign_key_check` over the entire cache. These audited database structure,

@@ -8,9 +8,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { fixture, ns, ok } from '../testing/context-read-fixture.mjs';
 import { configured } from '../testing/context-product-owner-fixture.mjs';
 import { selection } from '../testing/context-product-verification-fixture.mjs';
-import { productSidecar, PRODUCT_SIDECAR_SUFFIX, PRODUCT_SIDECAR_FORMAT } from '../context-product-sidecar.mjs';
+import { productSidecar, productFile, canonicalProductIdentity, PRODUCT_SIDECAR_SUFFIX, PRODUCT_SIDECAR_FORMAT } from '../context-product-sidecar.mjs';
 import { openContextProductFacade } from '../context-read-facade.mjs';
-import { accessDigest, digest, signedRecord, verifiedRecord } from '../context-product-validation.mjs';
+import { accessDigest, canonicalJson, digest, signedRecord, verifiedRecord } from '../context-product-validation.mjs';
 import { createProductSqlitePolicy } from '../context-product-sqlite.mjs';
 import { nativeObserver } from '../context-product-telemetry.mjs';
 import { createExclusiveSqliteFile, sqliteFileStat } from '../sqlite-journal-probe.mjs';
@@ -466,4 +466,19 @@ test('a stored CHECK violation in a legacy WAL cache is refused by the one-time 
   s.open();assert.throws(()=>s.storage.admit(2000),{code:'index_unavailable',reason:'storage_unavailable'});
   assert.equal(s.checks,1,'quick_check detects the stored violation before foreign_key_check');
   assert.equal(replacementCalls(s).length,0);assert.equal(s.row(),null);
+});
+
+test('legacy WAL table upgrade preserves purge checkpoints and selection metadata byte for byte',t=>{
+  const s=setup(t,{mode:'WAL'});
+  const body={ownerId:ns.ownerId,storeId:s.facade.port.identity.storeId,
+    canonicalIdentity:s.facade.port.read(()=>canonicalProductIdentity(s.f.path,s.facade.port.db)),sidecarIdentity:productFile(s.path),epoch:7,deleted:11,complete:false};
+  const record=canonicalJson({body,mac:createHmac('sha256',s.facade.port.identity.cursorSecret)
+    .update('context-read-product-v1.1/vector-purge\0'+canonicalJson(body)).digest('base64url')});
+  s.storage.vectors(db=>db.prepare('INSERT INTO vector_purge_checkpoints VALUES(?,?,?)').run(ns.ownerId,7,record),true);
+  s.close();legacyWal(s,'table');
+  const retained=()=>sql(s.path,db=>({checkpoint:db.prepare('SELECT * FROM vector_purge_checkpoints').all(),selections:db.prepare('SELECT * FROM selections ORDER BY projection').all()}));
+  const before=retained();assert.equal(before.checkpoint.length,1);assert.equal(before.selections.length,1);
+  s.open();s.storage.admit(2000);
+  assert.deepEqual(retained(),before,'schema-independent metadata must survive first sealing commit');
+  assert.equal(s.checks,2);assert.equal(s.valid(),true);assert.ok(s.finish().publication);
 });
