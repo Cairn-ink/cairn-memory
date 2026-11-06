@@ -141,6 +141,8 @@ test('G1 G2 maintenance inventory cannot publish after an opener commits a termi
   const epochs=f.db.prepare('SELECT * FROM namespace_epochs').all();let opens=0;
   f.port.openRaw=async input=>{if(opens++===0)await mutate('fence',{conversationId:source.conversationId});return open(input);};
   const s=await searchFixture(f);await s.maintain().catch(error=>assert.equal(error.code,'raw_search_unavailable'));
+  assert.equal(opens,1,'the fence lands in the opener after the inventory read');
+  assert.equal(f.db.prepare('SELECT count(*) n FROM raw_session_fences').get().n,1);
   assert.deepEqual(f.db.prepare('SELECT * FROM namespace_epochs').all(),epochs);
   assert.equal(s.indexCount(),0);assert.equal((await s.service.status()).coverage,'unknown');
   assert.equal((await s.search({query:'retained'})).candidates.length,0);
