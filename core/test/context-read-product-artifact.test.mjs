@@ -42,7 +42,9 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   // S2h-1 storage, S2h-2's boundary, suppression grant grammar and three transaction validators, the gated B3 comparator,
   // the verification commit batch and semantic accounting stay behind the SQLite Worker boundary. Keep the exact closure
   // pin and independently verify the installed edges.
-  assert.equal(expected.length, 122, 'private_maintenance_admission_closure_pin');
+  // The private checkpoint wall-cost estimator adds one Worker-only module.
+  assert.equal(expected.length, 123, 'private_maintenance_admission_closure_pin');
+  assert.ok(expected.includes('core/context-product-checkpoint-cost.mjs'));
   assert.ok(expected.includes('core/context-maintenance-turn.mjs'));
   assert.ok(expected.includes('core/context-product-admission.mjs'));
   assert.ok(expected.includes('core/context-product-handles.mjs'));
