@@ -119,7 +119,7 @@ test('real Worker: repeated resident invalidation fails at three while history o
   for(let n=0;n<20&&p.getStatus().state==='active';n++){
     const [id,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];timers.delete(id);
     await testClock.advance(timer.at-testClock.now());await timer.fn();
-    if(required===1){const s=p.getStatus();assert.equal(s.state,'active');assert.equal(maintenancePumpDiagnostic(s).admission[0].count,1);}
+    if(required===1){const s=p.getStatus();assert.equal(s.state,'active');assert.deepEqual(maintenancePumpDiagnostic(s).admission[0].noProgress,{lane:0,count:1});}
   }
   const status=await p.completion,d=maintenancePumpDiagnostic(status);
   assert.equal(status.state,'failed');assert.equal(status.error,'reader_failed');assert.equal(required,3);assert.ok(history>=2);
