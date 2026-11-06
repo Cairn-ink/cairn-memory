@@ -1,4 +1,5 @@
 import { assertContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { hasCardLineage, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
@@ -29,7 +30,8 @@ export function createRoleContextReader(storage,options,config) {
   const evidence=roleEvidence(storage,config);
   function generation(readSet) {
     return readSet.map(ns=>['role_profile_epochs','method_epochs','card_epochs','raw_exclusion_clocks'].map(table=>db.prepare(`SELECT generation FROM ${table} WHERE ${where}`).get(...boundary(ns))?.generation??0)
-      .concat(db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch??0));
+      .concat(db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch??0,
+        ...(hasCardLineage(db)?[cardLineageNamespaceInside(db,ns)]:[])));
   }
   function cursor(payload) {const body=Buffer.from(canonicalJSON(payload)).toString('base64url');return body+'.'+bind('role-context-cursor-v1',body);}
   function offset(token,binding,gens) {

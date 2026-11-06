@@ -9,6 +9,9 @@ const CHECKOUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 export const installedCoreDeadlineFiles = Object.freeze([
   "core/asset-identity.mjs",
   "core/card-current-input.mjs",
+  "core/card-lineage-base-schema.mjs",
+  "core/card-lineage-schema.mjs",
+  "core/card-lineage.mjs",
   "core/card-raw-sources.mjs",
   "core/content-safety-boundary.mjs",
   "core/content-safety-layout.mjs",
@@ -22,6 +25,7 @@ export const installedCoreDeadlineFiles = Object.freeze([
   "core/model-diagnostics.mjs",
   "core/placement-input.mjs",
   "core/private-card-input.mjs",
+  "core/private-card-schema.mjs",
   "core/private-evidence-input.mjs",
   "core/private-organization-input.mjs",
   "core/raw-lineage-storage.mjs",
