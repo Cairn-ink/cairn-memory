@@ -313,6 +313,34 @@ test(`unchanged Card rejects ${fault} during source deletion, ${confirmed?'confi
   hidden(f,card);cold(f,card);
 });
 
+for(const confirmed of [false,true])test(`invalidation rejects a real changed Memory outside retained dependencies, ${confirmed?'confirmed':'draft'}`,async t=>{
+  const {f,card,memories,conversationId,revision}=await receiptAncestryCard(t,false,3);
+  ok(f.call('cancelCardDraft',{actionId:'cancel-original',cardId:card.id,expectedRevision:card.revision}));
+  let target=ok(f.call('createCardDraft',{actionId:'two-memory-card',drafting:'authored',input:{title:'Synthetic title',body:'Synthetic retained body',
+    memoryRefs:memories.slice(0,2).map(memory=>({type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision})),sourcePolicy:'retained-receipts-v1'}}));
+  if(confirmed)target=f.confirm(target);
+  const foreign=memories[2],before=contentSafetyInventory(f.db);
+  assert.equal(f.db.prepare("SELECT count(*) n FROM card_body_sources WHERE card_id=? AND source_kind='memory' AND source_key=?").get(target.id,foreign.id).n,0);
+  assert.equal(f.db.prepare("SELECT count(*) n FROM card_body_sources s JOIN receipts r ON s.source_kind='receipt' AND s.source_key=r.id WHERE s.card_id=? AND r.memory_id=?").get(target.id,foreign.id).n,0);
+  let injected=false;
+  registerContentWriteGuard((db,operation)=>{
+    const guard=beginContentWriteSafety(db,operation);if(!guard)return guard;
+    return {...guard,validate(result){
+      const effects=db.prepare("SELECT * FROM card_effects WHERE entity_id=? AND kind='evidence_invalidated' ORDER BY ordinal").all(target.id);
+      const changed=db.prepare('SELECT revision,deleted FROM memories WHERE id=?').get(foreign.id);
+      assert.equal(effects.length,2);assert.equal(changed.revision,foreign.revision+1);assert.equal(changed.deleted,1);
+      injected=true;
+      db.prepare('UPDATE card_effects SET action_id=? WHERE effect_id=?').run('memory-revision-'+foreign.id+'-'+changed.revision,effects[0].effect_id);
+      guard.validate(result);
+    }};
+  });
+  let result;
+  try{result=f.core.deleteConversation({namespace:ns,conversationId,expectedRevision:revision,actionId:'delete-negative'});}
+  finally{registerContentWriteGuard(beginContentWriteSafety);}
+  assert.equal(injected,true);assert.equal(result.ok,false);assert.equal(result.error.code,'evidence_unavailable');
+  assert.equal(contentSafetyInventory(f.db),before,'all three canonical Memory mutations, Raw deletion and effects roll back');
+});
+
 for(const confirmed of [false,true])for(const fault of ['extra-revision','missing-step','duplicate-step','reversed-step','unrelated-cause','timestamp','title','body'])
 test(`multi-Memory invalidation rejects ${fault}, ${confirmed?'confirmed':'draft'}`,async t=>{
   const {f,card,conversationId,revision}=await receiptAncestryCard(t,confirmed,2),before=contentSafetyInventory(f.db);
@@ -356,4 +384,62 @@ for(const confirmed of [false,true])test(`metadata-only supersession cannot use 
     replacement:{content:'Synthetic historical replacement',kind:'fact'},receipts:[receipt('replacement')]});
   assert.equal(result.ok,false);assert.equal(result.error.code,'evidence_unavailable');
   assert.equal(contentSafetyInventory(f.db),before,'no new canonical denial means normal retained-history validation');
+});
+
+const authority=f=>['card_body_sources','card_body_provenance','card_body_authorizations'].map(table=>f.db.prepare('SELECT * FROM '+table).all());
+for(const confirmed of [false,true])for(const count of [3,5])for(const mixed of [false,true])
+test(`delete Raw with ${count} Memories and ${mixed?'direct Raw plus receipts':'receipts only'}, ${confirmed?'confirmed':'draft'}`,async t=>{
+  let {f,card,conversationId,revision}=await receiptAncestryCard(t,false,count);
+  if(mixed){
+    const messageId=f.db.prepare('SELECT message_id FROM raw_messages WHERE conversation_id=?').get(conversationId).message_id;
+    const raw=ok(await f.call('resolveSourceReferences',{anchors:[{rawAnchor:{conversationId,messageId,start:0,end:8,precision:'exact'},expectedConversationRevision:revision}]})).sources[0];
+    card=edit(f,card,[...ok(f.call('getCard',{cardId:card.id})).card.bindings.map(b=>b.source),raw],'add-raw');
+  }
+  if(confirmed)card=f.confirm(card);
+  const bytes=retained(f.row(card.id)),a=authority(f),before=f.row(card.id).revision;
+  const beforeEffects=f.db.prepare("SELECT count(*) n FROM card_effects WHERE entity_id=? AND kind='evidence_invalidated'").get(card.id).n;
+  ok(f.core.deleteConversation({namespace:ns,conversationId,expectedRevision:revision,actionId:'delete-many'}));
+  assert.equal(f.db.prepare('SELECT 1 FROM raw_conversations WHERE id=?').get(conversationId),undefined);
+  assert.equal(f.row(card.id).revision-before,mixed?1:count);
+  assert.equal(f.db.prepare("SELECT count(*) n FROM card_effects WHERE entity_id=? AND kind='evidence_invalidated'").get(card.id).n-beforeEffects,mixed?1:count);
+  assert.deepEqual(retained(f.row(card.id)),bytes);assert.deepEqual(authority(f),a);hidden(f,card);cold(f,card);
+});
+
+for(const fault of ['foreign-namespace','skipped-cause','extra-effect','authorization'])
+test(`three-Memory invalidation rejects ${fault}`,async t=>{
+  const {f,card,conversationId,revision}=await receiptAncestryCard(t,false,3),before=contentSafetyInventory(f.db);
+  let injected=false;
+  registerContentWriteGuard((db,operation)=>{
+    const guard=beginContentWriteSafety(db,operation);if(!guard)return guard;
+    return {...guard,validate(result){
+      const effects=db.prepare("SELECT * FROM card_effects WHERE entity_id=? AND kind='evidence_invalidated' ORDER BY ordinal").all(card.id);
+      assert.equal(effects.length,3);injected=true;
+      if(fault==='foreign-namespace')db.prepare("UPDATE card_effects SET project_id='foreign-project' WHERE effect_id=?").run(effects[0].effect_id);
+      if(fault==='skipped-cause')db.prepare('DELETE FROM card_effects WHERE effect_id=?').run(effects[1].effect_id);
+      if(fault==='extra-effect')db.prepare(`INSERT INTO card_effects SELECT 'synthetic-extra',owner_id,scope,project_id,kind,entity_type,entity_id,revision,action_id,
+        (SELECT max(ordinal)+1 FROM card_effects) FROM card_effects WHERE effect_id=?`).run(effects[0].effect_id);
+      if(fault==='authorization')db.prepare("UPDATE card_body_authorizations SET actor_id='forged-human' WHERE authorization_kind='operation'").run();
+      guard.validate(result);
+    }};
+  });
+  let result;
+  try{result=f.core.deleteConversation({namespace:ns,conversationId,expectedRevision:revision,actionId:'delete-negative'});}
+  finally{registerContentWriteGuard(beginContentWriteSafety);}
+  assert.equal(injected,true);assert.equal(result.ok,false);assert.equal(result.error.code,fault==='authorization'?'storage_error':'evidence_unavailable');
+  assert.equal(contentSafetyInventory(f.db),before,'the canonical source denials and all dependent writes roll back');
+});
+
+for(const confirmed of [false,true])test(`four repeated same-byte corrections, ${confirmed?'confirmed':'draft'}`,async t=>{
+  const f=await lineageFixture(t);
+  let memory=ok(f.core.admit({namespace:ns,memory:{content:'Synthetic constant content',kind:'fact'},receipts:[receipt('first')]})).memory;
+  let card=ok(f.call('createCardDraft',{actionId:'draft',drafting:'authored',input:{title:'Synthetic title',body:'Synthetic retained body',
+    memoryRefs:[{type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision}],sourcePolicy:'retained-receipts-v1'}}));
+  if(confirmed)card=f.confirm(card);
+  const bytes=retained(f.row(card.id)),a=authority(f);
+  for(let i=0;i<4;i++){
+    memory=ok(f.core.correct({namespace:ns,memoryId:memory.id,expectedRevision:memory.revision,content:'Synthetic constant content',kind:'fact',receipt:receipt('replacement-'+i)})).memory;
+    assert.equal(memory.revision,i+2);assert.equal(f.db.prepare('SELECT count(*) n FROM content_suppressions').get().n,(i+1)*2);
+    assert.deepEqual(retained(f.row(card.id)),bytes);assert.deepEqual(authority(f),a);hidden(f,card);
+  }
+  cold(f,card);
 });
