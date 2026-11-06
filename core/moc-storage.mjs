@@ -384,6 +384,15 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     // Serialize it behind RESERVED exactly as before; ordinary recall reads
     // remain deferred so they can proceed alongside an uncommitted writer.
     return transaction(db, () => {
+      // Only the two per-candidate discovery probes use this transaction-local
+      // cache. Key by the exact projected SQL; never share across connections.
+      const discoveryStatements = new Map();
+      const discoveryPrepare = sql => {
+        sql = projectSQL(sql);
+        if (!discoveryStatements.has(sql)) discoveryStatements.set(sql, db.prepare(sql));
+        return discoveryStatements.get(sql);
+      };
+      try {
       if (![0, SOURCE_QUERY_RECEIPT_LIMIT].includes(sourceReceiptLimit)) fail('invalid_input');
       const keyset = sourceCandidatePolicy === BOUNDED_KEYSET_SOURCE_CANDIDATES.version;
       if (sourceCandidatePolicy !== null && (!keyset || sourceReceiptLimit !== SOURCE_QUERY_RECEIPT_LIMIT)) {
@@ -501,7 +510,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         for (const memory of scanned.slice(0, QUERY_SCAN_LIMIT)) {
           if (memory.deleted || memory.currentness !== 'current' || safety && !safeMemory(ns, memory, true)) continue;
           // Respect active-generation membership, never bypass its read authority.
-          if (!projectPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
+          if (!discoveryPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
             AND revision = ?`).get(...boundary(ns), memory.id, memory.revision)) continue;
           const candidate = scoreMemory(memory);
           eligible.push({ ...candidate, sourceLabel: candidate.winningExcerpt === undefined
@@ -511,7 +520,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       }
       eligible.sort(compare);
       const rows = eligible.map(({ memory, sourceLabel }) => {
-        const placement = projectPrepare(`SELECT r.* FROM moc_memory_refs r
+        const placement = discoveryPrepare(`SELECT r.* FROM moc_memory_refs r
           JOIN mocs parent ON parent.id = r.moc_id
           WHERE r.memory_id = ? AND r.memory_revision = ? AND ${qualifiedNamespace('parent')}
             AND parent.level = 1 AND parent.revision = r.moc_revision
@@ -523,6 +532,12 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
             label: sourceLabel ?? memoryLabel(memory.content) } };
       });
       return { rows, epoch: currentEpoch, scanExhausted, suppressionEpoch: suppressionEpochInside(ns) };
+      } finally {
+        // Every use is get() (never iterate()), so no cursor remains active.
+        // node:sqlite StatementSync has no finalize API; release our references
+        // on success, early return and throw, before the transaction ends.
+        discoveryStatements.clear();
+      }
     }, undefined, { deferred: sourceCandidatePolicy !== BOUNDED_KEYSET_SOURCE_CANDIDATES.version });
   }
 
