@@ -1839,3 +1839,31 @@ sidecar or its companions.
 Replacement waits until no other connection for that store is open in the
 process; each refusal counts as a no-progress admission cycle until those
 handles close. The lifecycle lock excludes other processes’ active operations.
+
+## Lexical admission turn budget (amendment v2.3)
+
+The lexical maintenance pump accepts optional `admissionMs`, defaulting to
+`quantum.maxMs`. It budgets an entire admission turn, including cold open,
+admission, delivery and settlement. Work and refresh retain `quantum.maxMs`.
+An explicit value must be a safe integer at least `quantum.maxMs`, no greater
+than `budgets.maxMs` or any projection's maintainer `deadlineMs` (default
+5,000 ms), and no greater than `DISPOSAL_GRACE_MS - 2000` (8,000 ms).
+Invalid values fail with `invalid_input` at pump creation. The budget
+is fixed across renewals of the same pump.
+
+Admission reserves `admissionMs` and the usual quantum item allowance in the
+window ledger before dispatch. Successful admission refunds the item allowance
+and settles time to elapsed usage; uncertain or failed settlement retains the
+full reservation under the existing rules. Admission must fit the remaining
+window quota, window lifetime and renewal authority, including after a broker
+wait. It earns no observation.
+
+The five-second observation cadence still applies. Let `L` be the expanded
+intent lane count, `C` the maximum cold resident replacements in a sweep,
+`S = max(pollMs, quantum.maxMs)` and `A = max(pollMs, admissionMs)`.
+Configuration requires `L*S + C*A + quantum.maxMs <= 5000`; scheduling prices
+each admission slot at `A` and each work slot at `S`. With one projection
+(two intents), one cold slot, a 1,000 ms work quantum and polling at most
+1,000 ms, the largest feasible `admissionMs` is 2,000 ms. A 5,000 ms admission
+budget is infeasible and fails with `invalid_input`. A host on a slower volume
+can opt in within these bounds without extending its work quantum.
