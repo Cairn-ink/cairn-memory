@@ -1,4 +1,5 @@
 import { fail } from './validation.mjs';
+import { cardLineageRevision } from './content-safety-schema.mjs';
 
 // Deliberately finite: legacy cells and per-base attested-feature families.
 // The integer selects a family, never an installed feature or future revision.
@@ -18,6 +19,7 @@ export function safetyPhysicalVersion(base) {
   for (const [physical, layout] of cells) if (base === layout) return physical;
   fail('unsupported_database');
 }
+export const supportsCardLineage = layout => layout.attestedFeatures && [23,33].includes(layout.base);
 export function assertContentFeatures(layout, options) {
   for (const [option, capability] of Object.entries({ privateCards: 'cards', rawConversations: 'raw',
     rawCapture: 'rawCapture', rawLineage: 'rawLineage', rawDeletion: 'rawDeletion', rawSources: 'rawSources',
@@ -28,6 +30,6 @@ export function assertContentFeatures(layout, options) {
 }
 export function contentSafetyPin(layout, storeId) {
   return layout.suppressionRevision ? Object.freeze({ version: 'content-safety-existing-v1', storeId,
-    physical: layout.physical, base: layout.base, suppressionRevision: 1, cardLineageRevision: 0 }) :
+    physical: layout.physical, base: layout.base, suppressionRevision: 1, cardLineageRevision: cardLineageRevision(layout) }) :
     Object.freeze({ version: 'schema29-existing-v1', storeId });
 }

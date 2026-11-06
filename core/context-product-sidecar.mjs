@@ -1,4 +1,5 @@
 import { reserveSidecarHandle, sidecarHandleGuard } from './context-product-handles.mjs';
+import { hasCardLineage, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { admissionRequired, PRODUCT_SIDECAR_SUFFIX } from './context-product-admission.mjs';
 import { cachedContentSuppressionRequestInside, contentSuppressionRequestInside, withMemoryCandidateBatchInside, withContentSuppressionReadInside, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { bindContentSafetyConnection, cachedContentLayout } from './content-safety-schema.mjs';
@@ -170,7 +171,8 @@ export function canonicalProductFences(db, p) {
       memory=row.epoch??1;
     }else memory=db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch??1;
     canonical.push({ memory,
-      ...(p.types.includes('card') ? { card: db.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1 } : {}) });
+      ...(p.types.includes('card') ? { card: db.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1,
+        ...cardLineageNamespaceInside(db,ns) } : {}) });
     dependency.push(p.types.includes('card') ? cardDependencyFence(db, ns, p.readSet) : {});
   }
   return { canonicalFenceDigest: digest(canonical), dependencyFenceDigest: digest(dependency) };
@@ -991,6 +993,10 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
               if(exactDocument(base,row)) {tokens={length:base.token_length};source=g.base_id;}
               else {
                 const text=row.eligible ? canonicalRead(()=>{
+                  if(stream.type==='card'&&hasCardLineage(canonical)) {
+                    const current=canonical.prepare(`SELECT id,revision,body_revision,state FROM private_cards WHERE ${where} AND id=?`).get(...boundary(stream.ns),row.id);
+                    if(!current||!contextCardEligible(canonical,identity,features,stream.ns,current,p.intent,{readSet:p.readSet}))unavailable('stale_index');
+                  }
                   attribution?.step();
                   let found;
                   try {found=canonical.prepare(stream.type==='memory'
@@ -1131,12 +1137,13 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     return m;
   }
   const suppressionProofs=new WeakMap();
+  const lineageCards=p=>hasCardLineage(canonical)&&p.types.includes('card');
   function suppressionMemo(p) {
     if(!cachedContentLayout(canonical)?.suppressionRevision||!cachedContentSuppressionRequestInside(canonical,p.readSet[0].ownerId))return null;
     return contentSuppressionRequestInside(canonical,p.readSet);
   }
   function suppressionView(p,publication,memo,document) {
-    if(memo.epoch==='0:0'||memo.facts?.length===0)return null;
+    if(!lineageCards(p)&& (memo.epoch==='0:0'||memo.facts?.length===0))return null;
     const ss=streams(p),denied=new Set();
     const counts={...publication.counts,byType:Object.fromEntries(p.types.map(type=>[type,{...publication.counts.byType[type]}]))};
     let unknown=!memo.facts || memo.layout.rawLineage || p.types.includes('card') || memo.facts.some(f=>!['memory','owner','namespace','receipt'].includes(f.kind));
@@ -1153,16 +1160,17 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       }
     }
     if(unknown)for(const type of p.types)counts.byType[type]={eligible:null,indexed:null};
+    if(hasCardLineage(canonical)&&p.types.includes('card'))counts.totalTokenLength=null;
     return {denied,counts,unknown,canonicalRequired:p.rawLineagePresent!==false,checkEach:!memo.facts || p.types.includes('card') || memo.facts.some(f=>f.kind==='raw'),filtered:unknown||denied.size>0};
   }
   function suppressionRequest(p,publication,work) {
     if(!publication || !cachedContentLayout(canonical)?.suppressionRevision ||
-      contentSuppressionRequestFenceInside(canonical,p.readSet[0].ownerId)==='0:0')return work(null);
+      !lineageCards(p)&&contentSuppressionRequestFenceInside(canonical,p.readSet[0].ownerId)==='0:0')return work(null);
     const memo=suppressionMemo(p),proof=memo&&suppressionProofs.get(memo)?.get(publication);
-    if(memo?.facts?.length===0)return work(null);
+    if(!lineageCards(p)&&memo?.facts?.length===0)return work(null);
     if(proof)return work(proof.visible);
     const inspect=()=>withContentSuppressionReadInside(canonical,p.readSet,memo=>{
-      if(memo.facts?.length===0)return work(null);
+      if(!lineageCards(p)&&memo.facts?.length===0)return work(null);
       const generation=storageKey(publication.generation.id);
       return work(suppressionView(p,publication,memo,(stream,key)=>side.prepare(
         'SELECT doc,revision,body_revision,eligible,token_length FROM documents WHERE generation=? AND stream=? AND id=?').get(generation,stream,key)));
@@ -1171,9 +1179,9 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   }
   function visibleCounts(p,publication) {
     if(!publication||!cachedContentLayout(canonical)?.suppressionRevision||
-      contentSuppressionRequestFenceInside(canonical,p.readSet[0].ownerId)==='0:0')return null;
+      !lineageCards(p)&&contentSuppressionRequestFenceInside(canonical,p.readSet[0].ownerId)==='0:0')return null;
     const memo=suppressionMemo(p),proof=memo&&suppressionProofs.get(memo)?.get(publication);
-    if(memo?.facts?.length===0)return null;
+    if(!lineageCards(p)&&memo?.facts?.length===0)return null;
     if(proof)return proof.visible?.counts??null;
     return read(()=>suppressionRequest(p,publication,visible=>visible?.counts??null));
   }
@@ -1201,7 +1209,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
           if(!document?.eligible)continue;
           const stream=ss[document.stream],ref={type:stream.type,namespace:stream.ns,[stream.type==='memory'?'memoryId':'cardId']:document.id,
             revision:document.revision,...(stream.type==='card'?{bodyRevision:document.body_revision}:{})};
-          if(stream.type==='card'&&visible.checkEach&&contentSuppressionMayMatchInside(canonical,stream.ns,{kind:'card',key:document.id})){
+          if(stream.type==='card'&&visible.checkEach&&(hasCardLineage(canonical)||contentSuppressionMayMatchInside(canonical,stream.ns,{kind:'card',key:document.id}))){
             if(!cardCandidateAllowed(ref,p))continue;
             checked.add(ref);
           }

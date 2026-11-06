@@ -16,6 +16,8 @@ import { createPrivateOrganizationStorage } from './private-organization-storage
 import { createCardReceiptSources } from './card-receipt-sources.mjs';
 import { createCardRawSources } from './card-raw-sources.mjs';
 import { cardText, keyed, noteInput, OWNER_NOTE_CAP, pageLimit, refs, sourceRef } from './private-card-input.mjs';
+import { hasCardLineage, collectCardBodySourcesInside, sealCardBodyInside, checkCardActionInside,
+  recordCardActionInside, cardBodyDigest } from './card-lineage.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
@@ -50,7 +52,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     return memo.sources.get(JSON.stringify(ref)).value;
   }
   function validateRefs(ns, values, existing = [], currentCardId = '') {
-    const selected = refs(values, ns, rawSources), rawBudget = raw.budget();
+    const selected = refs(values, ns, rawSources, hasCardLineage(db)), rawBudget = raw.budget();
     let bytes = 0;
     for (const ref of selected) {
       if (ref.type === 'raw') {
@@ -116,7 +118,8 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
   function metadata(ns, row, readSet = [ns], { historicalReason = false, deadlineAt = Infinity } = {}, memo = createContentReadMemo(db)) {
     const review = cardApplicabilityInside(db, row), currentDependency = historicalReason ? null : dependencies.compare(ns, row, readSet, { deadlineAt });
     return { id: row.id, namespace: ns, revision: row.revision, state: row.state,
-      bodyRevision: row.body_revision, origin: 'authored', support: { ...support(ns, getRefs(row.id, memo), memo),
+      bodyRevision: row.body_revision, origin: 'authored', support: { ...(hasCardLineage(db) && memo?.cardBodies?.get(row.id)?.header.origin === 'user-authored'
+        ? {status:'eligible',applicability:'unknown',reasons:['unassessed']} : support(ns, hasCardLineage(db)?memo?.cardBodies?.get(row.id)?.refs??getRefs(row.id,memo):getRefs(row.id, memo), memo)),
         applicability: review.applicability,
         applicabilityReviewedRevision: review.reviewedRevision, checkedAt: row.updated_at,
         ...(currentDependency ? { currentDependency } : {}) },
@@ -158,7 +161,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     effect(ns, state === 'deleted' ? 'card_deleted' : 'evidence_invalidated', 'card', row.id, row.revision + 1, actionId);
     return card(ns, row.id);
   }
-  function mutate(method, ns, input, currentAccess) {
+  function mutate(method, ns, input, currentAccess, claim) {
     if (CARD_CURRENT_METHODS.includes(method)) {
       const row = existing(ns, input, 'confirmed');
       validateRefs(ns, getRefs(row.id), [], row.id);
@@ -167,13 +170,15 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     if (method === 'submitSourceNote') return { source: insertNote(ns, { text: input.text, occurredAt: input.occurredAt }) };
     if (method === 'createCardDraft') {
       const value = input.input;
-      const selected = value.authoredInput !== undefined ? [insertNote(ns, value.authoredInput)]
+      const lineage=hasCardLineage(db), own=lineage && value.authoredInput !== undefined;
+      const selected = own ? [] : value.authoredInput !== undefined ? [insertNote(ns, value.authoredInput)]
         : value.memoryRefs !== undefined ? receiptSources.fromMemories(ns, value.memoryRefs) : value.sources;
       const sources = validateRefs(ns, selected);
       const id = allocateContentKey(db, ns, 'card'), timestamp = now();
-      db.prepare(`INSERT INTO private_cards VALUES(?,?,?,?,1,'draft',?,?,NULL,?,?,NULL)`)
+      db.prepare(`INSERT INTO private_cards VALUES(?,?,?,?,1,'draft',?,?,${lineage?'1':'NULL'},?,?,NULL)`)
         .run(id, ...boundary(ns), cardText(value.title, 200), cardText(value.body, 20_000), timestamp, timestamp);
       putRefs(id, sources);
+      if(lineage) sealAuthored(ns,id,sources,claim,{newBody:true,own});
       return receipt(card(ns, id));
     }
     if (method === 'deleteSourceNote') {
@@ -189,10 +194,10 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
       let count = 0;
       const dependents = db.prepare(`SELECT c.id FROM private_cards c JOIN card_bindings b ON b.card_id=c.id
         WHERE b.source_id=? AND c.state IN ('draft','confirmed') ORDER BY c.id LIMIT 129`).all(row.id);
-      if (dependents.length > 128) fail('dependency_limit_reached');
+      if (dependents.length > 128 && !hasCardLineage(db)) fail('dependency_limit_reached');
       for (const { id } of dependents) {
         const dependent = card(ns, id);
-        if (dependent.state === 'draft') purgeCard(ns, dependent, 'cancelled', input.actionId);
+        if (dependent.state === 'draft' && !hasCardLineage(db)) purgeCard(ns, dependent, 'cancelled', input.actionId);
         else {
           db.prepare('UPDATE private_cards SET revision=revision+1,updated_at=? WHERE id=?').run(now(), id);
           effect(ns, 'evidence_invalidated', 'card', id, dependent.revision + 1, input.actionId);
@@ -207,25 +212,41 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     if (method === 'cancelCardDraft' || method === 'deleteKnowledgeCard') {
       return receipt(purgeCard(ns, row, method === 'cancelCardDraft' ? 'cancelled' : 'deleted', input.actionId), 1);
     }
-    getRefs(row.id); // Ordinary facades cannot consume unsupported Raw bindings.
+    // Explicit human own-writing supplies a complete new body without consuming
+    // the retained old bindings, including unavailable Raw sources.
+    const lineage=hasCardLineage(db), own=lineage && ['keep-as-own','user-rewrite'].includes(claim?.authorization_kind);
+    if(!own)getRefs(row.id);
     if (method === 'confirmCardDraft') {
       if (!cardSafe(ns, row, method)) fail('source_unavailable');
       validateRefs(ns, getRefs(row.id), [], row.id);
-      db.prepare(`UPDATE private_cards SET state='confirmed',revision=revision+1,body_revision=1,
+      db.prepare(`UPDATE private_cards SET state='confirmed',revision=revision+1,body_revision=${hasCardLineage(db)?'body_revision':'1'},
         confirmed_at=?,updated_at=? WHERE id=?`).run(now(), now(), row.id);
       if (input.applicability !== undefined) reviewCardApplicabilityInside(db, row.id, row.revision + 1, input.applicability);
       if (input.currentDependencies) dependencies.write(ns, card(ns, row.id), { ...input, expectedRevision: row.revision + 1, expectedDependencyRevision: null }, currentAccess);
       return receipt(card(ns, row.id));
     }
-    const selected = validateRefs(ns, input.bindings, confirmed ? getRefs(row.id) : [], row.id);
+    const selected = validateRefs(ns, input.bindings, confirmed && !own ? getRefs(row.id) : [], row.id);
     const title = cardText(input.title, 200), body = cardText(input.body, 20_000);
-    const bodyRevision = confirmed ? row.body_revision + Number(row.title !== title || row.body !== body) : null;
+    const changed=row.title!==title||row.body!==body||own;
+    const bodyRevision = lineage ? row.body_revision+Number(changed) : confirmed ? row.body_revision + Number(changed) : null;
     db.prepare('UPDATE private_cards SET revision=revision+1,title=?,body=?,body_revision=?,updated_at=? WHERE id=?')
       .run(title, body, bodyRevision, now(), row.id);
     putRefs(row.id, selected);
+    if(lineage)sealAuthored(ns,row.id,selected,claim,{newBody:changed,own});
     if (confirmed) reviewCardApplicabilityInside(db, row.id, row.revision + 1, input.applicability);
     effect(ns, 'evidence_invalidated', 'card', row.id, row.revision + 1, input.actionId);
     return receipt(card(ns, row.id), 1);
+  }
+  function sealAuthored(ns,id,values,claim,{newBody,own}) {
+    if(own && values.length)fail('authority_required');
+    if(own && !['authored-input','keep-as-own','user-rewrite'].includes(claim.authorization_kind))fail('authority_required');
+    const sources=collectCardBodySourcesInside(db,identity,ns,values,ref=>sourceReadSafety(db,{identity,namespace:ns,ref,strict:newBody}).allowed);
+    if(own) {
+      const row=card(ns,id);
+      Object.assign(claim,{card_id:id,body_revision:row.body_revision,body_digest:cardBodyDigest(identity,ns,row)});
+      recordCardActionInside(db,claim);
+    }
+    sealCardBodyInside(db,{identity,namespace:ns,cardId:id,sources,newBody,authorization:own?claim:null});
   }
   const cardEpoch = ns => { const fence = cardDependencyFence(db, ns); return Object.keys(fence).length ? binding('card-dependency-cursor-v1', [epoch(ns), fence]) : epoch(ns); };
   const cardCursor = createPrivateCursor({ binding, purpose: 'card-cursor-v1', epoch: cardEpoch });
@@ -294,10 +315,12 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
       if (after === undefined) fail('cursor_stale');
       const rows = db.prepare(`SELECT rowid AS cursor_row,id,revision,state,body_revision,created_at,updated_at,confirmed_at
         FROM private_cards WHERE ${where} AND state IN (${input.states.map(() => '?').join(',')}) AND id>? ORDER BY id LIMIT ?`)
-        .all(...boundary(ns), ...input.states, after, count + 1);
-      cardComplete = rows.length <= count;
-      cardAfter = rows.slice(0, count).at(-1)?.cursor_row;
-      cardRows.push(...rows.slice(0, count).filter(row => cardSafe(ns, row, 'listCards', memo)));
+        .all(...boundary(ns), ...input.states, after, hasCardLineage(db)?1025:count + 1);
+      if(hasCardLineage(db)&&rows.length>1024)fail('evidence_unavailable');
+      const visible=hasCardLineage(db)?rows.filter(row=>cardSafe(ns,row,'listCards',memo)):rows;
+      cardComplete = visible.length <= count;
+      cardAfter = visible.slice(0, count).at(-1)?.cursor_row;
+      cardRows.push(...visible.slice(0, count).filter(row => hasCardLineage(db)||cardSafe(ns, row, 'listCards', memo)));
     }
     let items = isCards ? cardRows.map(row => metadata(ns, row, undefined, undefined, memo)) :
       db.prepare(`SELECT * FROM card_effects WHERE ${where} AND ordinal>? ORDER BY ordinal LIMIT ?`)
@@ -323,6 +346,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
   const organization = createPrivateOrganizationStorage({ db, identity, memoryMapInside, memoryTopicInside,
     cardDetailInside: (ns, id, readSet, options) => detail(ns, card(ns, id), readSet, options) });
   return Object.freeze({ assertContentOutput(value, scopes) { if(!cachedContentLayout(db)?.suppressionRevision)return; return assertContentOutput(db,identity,value,scopes); }, assertContentScope: (scopes,{delivery=false}={}) => { ready(); if(!cachedContentLayout(db)?.suppressionRevision)return; if(!delivery && scopes.length && hasContentSuppressionRequestInside(db) && !db.isTransaction) { contentSuppressionRequestInside(db,scopes,{defer:true}); return; } assertContentScopes(db,scopes); },
+    lineageEnabled:()=>hasCardLineage(db),
     // Internal shared-read seams: caller owns scope authorization and transaction.
     cardDetailInside(ns, id, readSet, intent) { ready(); return detail(ns, card(ns, id), readSet, intent); },
     cardMetadataInside(ns, row) { ready(); const memo = createContentReadMemo(db); return row && cardSafe(ns, row, 'listCards', memo) ? metadata(ns, row, undefined, undefined, memo) : null; },
@@ -335,12 +359,18 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
         if (ORGANIZATION_READS.includes(method)) return organization.call(method, ns, input, context.accessGeneration);
         if (isRead) return read(method, ns, input);
         if(cachedContentLayout(db)?.suppressionRevision&&db.prepare('SELECT 1 FROM owner_suppression_epochs WHERE owner_id=?').get(ns.ownerId)&&!/^(delete|cancel|disable)/.test(method))assertContentOutput(db,identity,input,[ns],{factsOnly:true});
+        const action=hasCardLineage(db)?checkCardActionInside(db,identity,ns,method,input,payloadBinding,context.audit):null;
+        if(action)action.claim.authorization_kind=context.audit.authorizationKind;
         const replay = ledger.replay(ns, input.actionId, method, payloadBinding, input);
         if (replay !== undefined) return replay;
-        const result = ORGANIZATION_METHODS.includes(method) ? organization.call(method, ns, input, context.accessGeneration) : mutate(method, ns, input, context.access);
+        const result = ORGANIZATION_METHODS.includes(method) ? organization.call(method, ns, input, context.accessGeneration) : mutate(method, ns, input, context.access,action?.claim);
         if (size(result) > 65536) fail('context_item_too_large');
         const target = result.source?.sourceId ?? result.id;
         ledger.record(ns, input.actionId, method, payloadBinding, target, result, now());
+        if(action && !action.claim.card_id) {
+          if(action.claim.authorization_kind!=='operation')fail('authority_required');
+          recordCardActionInside(db,action.claim);
+        }
         advance(ns);
         return result;
       });

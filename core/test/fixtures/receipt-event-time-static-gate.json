@@ -4,21 +4,21 @@
     "start": null,
     "end": null,
     "purpose": "finite family mapping; no feature inferred from the integer",
-    "sha256": "a4319af04125ed6a26961bac9dba6ae10ae3f65bc60af39e47d74d071076eff9"
+    "sha256": "882b2d183de2d97bcd83650d901ec9f8c21a43e048d1ef92def9b6006fc8fe85"
   },
   {
     "file": "core/content-safety-schema.mjs",
     "start": null,
     "end": null,
     "purpose": "control tuple, exact DDL and cached attestation",
-    "sha256": "57af537be7b5e0ce29cc7d025dd7123bba0d6cdb8c2f08b871c0ba3cf5ef2fb0"
+    "sha256": "0b920c478db844d667836dbf0ab06a102bc31538202a9fb4e164b8b845cfc15a"
   },
   {
     "file": "core/content-safety-migration.mjs",
     "start": null,
     "end": null,
     "purpose": "offline migration selects and installs the attested tuple",
-    "sha256": "71e8b4f47507ad47a6ef6a065dc1938c23dd74c2f0222724de32d7d77732495b"
+    "sha256": "cfa4de31c06a67b0677faa77287fe5c353c670cbf3320855c6414200892cd0cf"
   },
   {
     "file": "core/validation.mjs",
@@ -88,6 +88,6 @@
     "start": "export function createPrivateEvidenceStorage(",
     "end": "  function selectedReceiptRef(",
     "purpose": "private evidence storage: memo receipt projection sink",
-    "sha256": "d2e3aa32b375c0f5cc5a1116e16924d01314a08a0bbe8b3ebd1f160173c71ada"
+    "sha256": "866203b0a2ec5885a575988e9da3199572e5fce077068961819e4a1d028042f6"
   }
 ]

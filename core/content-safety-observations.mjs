@@ -76,14 +76,15 @@ function boundedReader(db, limits, check) {
  * result receipts, not body payloads. Any future historical provider needs an
  * explicit layout/observation adapter; unknown physical cells never fall back.
  */
-export function contentSafetyObservations(native, limits, check) {
+export function contentSafetyObservations(native, limits, check, installedLayout) {
   const db = boundedReader(native, limits, check);
-  const schemaBase = db.prepare('PRAGMA user_version').get().user_version;
+  const physical = db.prepare('PRAGMA user_version').get().user_version;
+  const schemaBase = installedLayout?.base ?? physical;
   if (![18, 23, 33].includes(schemaBase) || db.prepare('PRAGMA application_id').get().application_id !== 0x43414952) throw Error();
   const objects = db.prepare('SELECT name,tbl_name FROM sqlite_schema').all();
   const safety = /^(?:content_safety_|content_identity_|content_suppression|owner_suppression_|card_body_|safety_|card_operations_owner_action$)/i;
-  if (objects.some(row => safety.test(row.name) || safety.test(row.tbl_name))) throw Error();
-  validateContextProductLayout(db);
+  if (installedLayout ? physical!==installedLayout.physical || !native.isTransaction : objects.some(row => safety.test(row.name) || safety.test(row.tbl_name))) throw Error();
+  validateContextProductLayout(db,installedLayout);
   const identities = db.prepare('SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1').all();
   if (identities.length !== 1 || !identities[0].store_id || !/^[0-9a-f]{64}$/.test(identities[0].cursor_secret)) throw Error();
   const { store_id: storeId, cursor_secret: cursorSecret } = identities[0];

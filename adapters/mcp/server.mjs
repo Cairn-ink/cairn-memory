@@ -146,7 +146,7 @@ export function createCairnServer(options = {}) {
   identifier(binding.ownerId);
   if (binding.scope === 'project') identifier(binding.projectId);
   else if (binding.scope !== 'personal' || binding.projectId !== null) throw new Error('invalid_mcp_configuration');
-  const cards = cardsConfigured ? createScopedCardAccess(binding, { currentDependencies: cardCurrent, readSet: methodsConfigured && options.methodReadPersonal ? [{ ownerId: binding.ownerId, scope: 'personal', projectId: null }, binding] : [binding] }) : null;
+  const cards = cardsConfigured ? createScopedCardAccess(binding, { actorId:'local-mcp-service', currentDependencies: cardCurrent, readSet: methodsConfigured && options.methodReadPersonal ? [{ ownerId: binding.ownerId, scope: 'personal', projectId: null }, binding] : [binding] }) : null;
   const assets=assetsConfigured?createAssetReadAccess(binding):null;
   const methods=methodsConfigured?createMethodReadAccess(binding,options.methodReadPersonal===true):null;
   const context=contextConfigured?createContextReadAccess(binding,options.contextReadPersonal===true):null;

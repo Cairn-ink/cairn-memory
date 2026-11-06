@@ -1,3 +1,4 @@
+import { hasCardLineage, cardLineageItemInside, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { contentSuppressionReasonInside, cachedContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety, memoryReadEligible, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
@@ -22,7 +23,8 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     createHash('sha256').update(JSON.stringify(receipt)).digest('hex') });
   const generations = ns => ({ memory: db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`)
     .get(...boundary(ns))?.epoch ?? 1,
-  card: db.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1 });
+  card: db.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1,
+  ...cardLineageNamespaceInside(db,ns) });
   function encode(purpose, value, maximum) {
     const body = Buffer.from(JSON.stringify(value)).toString('base64url');
     const token = `${body}.${bind(purpose, body)}`;
@@ -168,7 +170,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     return encode('evidence-snapshot-v1', { version: 1,
       binding: bind('evidence-scope-v1', ns), intent, refs,
       generations: generations(ns), accessGeneration,
-      fences: items.map(value => bind('evidence-item-v1', value)) }, 16384);
+      fences: items.map(value => bind('evidence-item-v1', cardLineageItemInside(db,value))) }, 16384);
   }
   function fetched(ns, input, accessGeneration) {
     const memo = createContentReadMemo(db), items = input.refs.map(ref => item(ns, ref, input.intent, undefined, undefined, memo));
@@ -185,7 +187,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     // Empty selections also have a meaningful generation fence.
     const refs = previous.refs.length ? evidenceRefs(previous.refs, ns) : [];
     const memo = createContentReadMemo(db), items = refs.map(ref => item(ns, ref, previous.intent, undefined, undefined, memo));
-    if (JSON.stringify(previous.fences) !== JSON.stringify(items.map(value => bind('evidence-item-v1', value)))) fail('snapshot_stale');
+    if (JSON.stringify(previous.fences) !== JSON.stringify(items.map(value => bind('evidence-item-v1', cardLineageItemInside(db,value))))) fail('snapshot_stale');
     const result = { items, snapshot: makeSnapshot(ns, previous.intent, refs, items, accessGeneration) };
     if (size(result) > input.responseByteLimit) fail('context_item_too_large');
     return result;
@@ -228,7 +230,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
         return;
       }
       const proof=cachedContentSuppressionRequestInside(db,ns.ownerId);
-      if(peek&&proof?.facts?.length===0&&proof.readSet.some(n=>n.scope==='owner'||n.scope===ns.scope&&(n.projectId??'')===(ns.projectId??'')))return;
+      if(peek&&!hasCardLineage(db)&&proof?.facts?.length===0&&proof.readSet.some(n=>n.scope==='owner'||n.scope===ns.scope&&(n.projectId??'')===(ns.projectId??'')))return;
       // Share this decision with the existing detail read, including its
       // contributor/source memo. No extra canonical pass per scanned Card.
       if(!contentReadSafety(db,{identity,namespace:ns,memo,method:'getCard',

@@ -5,6 +5,7 @@ import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { keyed } from './private-card-input.mjs';
 import { organizationInput } from './private-organization-input.mjs';
 import { fail, MemoryStoreError } from './validation.mjs';
+import { hasCardLineage, cardLineageNamespaceInside } from './card-lineage.mjs';
 
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
@@ -19,7 +20,8 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
   const memoryIndex = ns => db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch ?? 1;
   const cardIndex = ns => db.prepare(`SELECT revision FROM card_moc_epochs WHERE ${where}`).get(...boundary(ns))?.revision ?? 1;
   const routing = ns => db.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1;
-  const generations = ns => [memoryIndex(ns), cardIndex(ns), routing(ns), ...(Object.keys(cardDependencyFence(db, ns)).length ? [cardDependencyFence(db, ns)] : [])];
+  const generations = ns => [memoryIndex(ns), cardIndex(ns), routing(ns), ...(Object.keys(cardDependencyFence(db, ns)).length ? [cardDependencyFence(db, ns)] : []),
+    ...(hasCardLineage(db)?[cardLineageNamespaceInside(db,ns)]:[])];
   const advanceIndex = ns => db.prepare(`INSERT INTO card_moc_epochs VALUES(?,?,?,2)
     ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET revision=revision+1`).run(...boundary(ns));
   const topic = (ns, id) => db.prepare(`SELECT * FROM card_mocs WHERE ${where} AND id=?`).get(...boundary(ns), id);
