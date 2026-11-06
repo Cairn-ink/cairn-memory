@@ -379,8 +379,11 @@ test('SQL census: ordinary map statements are identical; safety drops only one E
     const ordinary = row => row.sql.filter(([sql]) => !isE1(sql)).sort(([a], [b]) => a.localeCompare(b));
     assert.deepEqual(ordinary(binary), ordinary(scan), 'same SQL text and execution multiplicities outside E1');
     assert.equal(binary.begin, scan.begin);
+    // One additional rejected envelope and caller-port observation versus v1.
     assert.equal(f.calls.filter(Boolean).length, 9, 'envelope probes');
     assert.equal(binary.ports, 10, 'pre-loop count plus envelope probes');
+    assert.equal(binary.statements, safety ? 22 : 8);
+    assert.equal(binary.begin, 2);
     assert.equal(scan.statements - binary.statements, safety ? scan.ports - binary.ports : 0);
     t.diagnostic('MAP_SQL_CENSUS ' + JSON.stringify({ safety,
       scan: { statements: scan.statements, begin: scan.begin, callerCounts: scan.ports },
