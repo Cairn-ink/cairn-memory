@@ -231,12 +231,13 @@ test('non-monotone counters retain a probed fit and their cursors continue witho
   for (const safety of [false, true]) {
     const f = await fixture(t, { safety, count: 12 });
     const visited = [];
-    // Capacity 7 fails, midpoint 3 fits, 5 fails and 4 fits; 6 would also fit.
+    // Capacity 8 and one-shorter 7 fail; 3 fits, 5 fails, then 4 fits.
+    // The unprobed 6 would fit, so a smaller observed fit is still permitted.
     const fits = new Set([1, 2, 3, 4, 6]);
     f.setCounter(text => !text || fits.has(JSON.parse(text).value.items.length) ? 1 : 4001);
     let cursor;
     do {
-      const result = f.core.map({ namespace, limit: 7, ...(cursor ? { cursor } : {}) });
+      const result = f.core.map({ namespace, limit: 8, ...(cursor ? { cursor } : {}) });
       const value = ok(result);
       const serialized = JSON.stringify(result);
       assert.ok(f.calls.includes(serialized), 'returned exact envelope occurred among probes');
