@@ -15,11 +15,12 @@ export const scenarios = {
   'slow-recall': { recallMs: 5000 },
   'success-slow-telemetry': { lockMs: 450, recallMs: 1800, telemetry: true },
   'unavailable-quota-lock': { holdQuotaLock: true, telemetry: true },
-  // A 50 ms schema rejection starts fallback promptly even after late acquisition;
-  // fallback waits 5000 ms with the shared signal, so it is still in flight at
-  // the 2500 ms application cutoff. The 900 ms lock hold puts the shared HTTP
-  // deadline (first fetch + 2000 ms) at least ~2900 ms after entry, later still
-  // with acquisition jitter or the regression's 1400 ms hold.
+  // The schema rejection comes 50 ms after the first fetch, and the fallback
+  // waits 5000 ms on the shared signal, so it is still in flight at the
+  // 2500 ms application cutoff. The fallback starts in time while contention
+  // time plus lock acquisition delay stays under about 1.5 s (it was about
+  // 0.3 s with a 1300 ms rejection). The 900 ms lock hold puts the shared
+  // HTTP deadline (first fetch + 2000 ms) at least ~2900 ms after entry.
   'schema-fallback': { lockMs: 900, reply: 'old-schema' },
 };
 
