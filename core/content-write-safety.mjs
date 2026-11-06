@@ -239,14 +239,13 @@ export function beginContentWriteSafety(db, operation) {
       // closure was unknown. They cannot grant completeness or serving access.
       if(!changedBindings.has(key))for(const ref of cardContributorsInside(db,key))targets.push(...sourceTargets(ref));
       if(!targets.some(target=>ownTarget(ns,target)))return false;
-      if(!change)return true;
       // A receipt-only Card can be invalidated once per changed Memory. Native
       // sessions retain only the net Card update, so reconstruct every step from
-      // its newly inserted effects and canonical source transitions. A larger
-      // delta alone never authorizes a write.
+      // its newly inserted effects and canonical source transitions. An unchanged
+      // Card has zero steps: a source denial cannot authorize extra audit effects.
       const effects=canonical.filter(c=>c.table==='card_effects'&&c.row.entity_type==='card'&&c.row.entity_id===key)
         .sort((a,b)=>a.row.ordinal-b.row.ordinal);
-      const previous=oldValue(change,'revision');
+      const previous=change?oldValue(change,'revision'):row.revision;
       if(effects.length!==row.revision-previous||removed.some(c=>c.table==='card_effects'&&c.row.entity_type==='card'&&c.row.entity_id===key))return false;
       const causes=new Set();let timestamp;
       for(const [index,effect]of effects.entries()) {
@@ -392,9 +391,15 @@ export function beginContentWriteSafety(db, operation) {
       const sourceMethods=new Set(['forget','correct','deleteSourceNote','deleteConversation','setRawCaptureControl']);
       let sourceOperation=false;
       for(let context=operation;context;context=context.parent)sourceOperation ||= sourceMethods.has(context.method);
-      if(sourceOperation)for(const {table,row}of canonical) {
-        if(['card_body_sources','card_body_provenance'].includes(table)||table==='card_body_authorizations'&&row.authorization_kind!=='operation')fail('evidence_unavailable');
-        if(table==='private_cards'&&!lineageInvalidatedCard(row.id,namespace(row)))fail('evidence_unavailable');
+      if(sourceOperation) {
+        // Audit removals have no surviving row for generic reference walking.
+        // Validate effects even when the source writer leaves its Card untouched.
+        if(removed.some(c=>c.table==='card_effects'))fail('evidence_unavailable');
+        for(const {table,row,old}of canonical) {
+          if(['card_body_sources','card_body_provenance'].includes(table)||table==='card_body_authorizations'&&row.authorization_kind!=='operation')fail('evidence_unavailable');
+          if(table==='private_cards'&&!lineageInvalidatedCard(row.id,namespace(row)))fail('evidence_unavailable');
+          if(table==='card_effects'&&(old||row.entity_type==='card'&&!lineageInvalidatedCard(row.entity_id,namespace(row))))fail('evidence_unavailable');
+        }
       }
     }
     validateRows(db,ceilings,()=>{

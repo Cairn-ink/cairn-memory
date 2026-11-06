@@ -275,6 +275,44 @@ test('an unrelated submitted-note write cannot name a denied Card through an inj
   assert.equal(contentSafetyInventory(f.db),before,'the note, operation receipt, audit authorization and effect all roll back');
 });
 
+for(const confirmed of [false,true])for(const fault of ['forged-effect','canonical-action','foreign-namespace','changed-effect','removed-effect'])
+test(`unchanged Card rejects ${fault} during source deletion, ${confirmed?'confirmed':'draft'}`,async t=>{
+  const f=await lineageFixture(t),a=f.note('target'),b=f.note('survivor');let card=f.draft([a,b]);
+  if(confirmed)card=f.confirm(card);
+  card=edit(f,card,[b],'remove-target');
+  const before=contentSafetyInventory(f.db),previous=f.row(card.id).revision;
+  const prior=f.db.prepare("SELECT effect_id FROM card_effects WHERE entity_type='card' AND entity_id=? ORDER BY ordinal LIMIT 1").get(card.id);
+  let validated=0;
+  registerContentWriteGuard((db,operation)=>{
+    const guard=beginContentWriteSafety(db,operation);if(!guard)return guard;
+    return {...guard,validate(result){
+      validated++;assert.equal(db.prepare('SELECT revision FROM private_cards WHERE id=?').get(card.id).revision,previous);
+      if(fault==='changed-effect')db.prepare('UPDATE card_effects SET action_id=? WHERE effect_id=?').run('unrelated-forged-action',prior.effect_id);
+      else if(fault==='removed-effect')db.prepare('DELETE FROM card_effects WHERE effect_id=?').run(prior.effect_id);
+      else db.prepare(`INSERT INTO card_effects VALUES('synthetic-forged-no-card-change',?,?,?,?,?,?,?,?,
+        (SELECT coalesce(max(ordinal),0)+1 FROM card_effects))`)
+        .run(fault==='foreign-namespace'?'foreign-owner':ns.ownerId,ns.scope,ns.projectId??'','evidence_invalidated','card',card.id,
+          previous+(fault==='forged-effect'?100:1),fault==='forged-effect'?'unrelated-forged-action':'genuine-source-denial');
+      guard.validate(result);
+    }};
+  });
+  let result;
+  try{result=f.call('deleteSourceNote',{actionId:'genuine-source-denial',sourceId:a.sourceId,expectedRevision:a.revision});}
+  finally{registerContentWriteGuard(beginContentWriteSafety);}
+  assert.equal(validated,1);assert.equal(result.ok,false);assert.equal(result.error.code,'evidence_unavailable');
+  assert.equal(contentSafetyInventory(f.db),before,'the source, canonical denial, operation receipt and effects roll back');
+  assert.equal(ok(f.call('listCardEffects',{limit:50})).effects.some(e=>e.effectId==='synthetic-forged-no-card-change'),false);
+  assert.ok(ok(f.call('getCard',{cardId:card.id})).card,'the rolled-back deletion leaves the Card readable');
+  // Removing the injected mutation must still allow the actual privacy action.
+  const row=f.row(card.id),authority=['card_body_sources','card_body_provenance','card_body_authorizations'].map(table=>f.db.prepare('SELECT * FROM '+table+' WHERE card_id=?').all(card.id));
+  ok(f.call('deleteSourceNote',{actionId:'genuine-source-denial',sourceId:a.sourceId,expectedRevision:a.revision}));
+  assert.deepEqual(f.row(card.id),row,'a removed presentation binding needs no Card row update');
+  assert.deepEqual(['card_body_sources','card_body_provenance','card_body_authorizations'].map(table=>f.db.prepare('SELECT * FROM '+table+' WHERE card_id=?').all(card.id)),authority,'retained body authority stays unchanged');
+  assert.equal(f.db.prepare('SELECT state FROM card_notes WHERE id=?').get(a.sourceId).state,'deleted');
+  assert.ok(f.db.prepare('SELECT 1 FROM content_suppressions WHERE stable_key=?').get(a.sourceId));
+  hidden(f,card);cold(f,card);
+});
+
 for(const confirmed of [false,true])for(const fault of ['extra-revision','missing-step','duplicate-step','reversed-step','unrelated-cause','timestamp','title','body'])
 test(`multi-Memory invalidation rejects ${fault}, ${confirmed?'confirmed':'draft'}`,async t=>{
   const {f,card,conversationId,revision}=await receiptAncestryCard(t,confirmed,2),before=contentSafetyInventory(f.db);
