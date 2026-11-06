@@ -1269,7 +1269,7 @@ regenerates its cap downward; a measurement above its round 3 cap requires a coo
 before merge and must not raise that cap. The caps are the measured values.
 This supersedes revision 3.5's instruction to retain a higher round 3 cap when
 current measurements are lower. After merge, lowering a cap needs no approval;
-raising one needs e9. The S2h-3 target remains the R2-A1 formula.
+raising one needs a coordinator decision. The S2h-3 target remains the R2-A1 formula.
 
 
 ## Revision 3.7 addendum: model ports at protected read boundaries (2026-11-02)
