@@ -226,11 +226,11 @@ test('absent port native DTOs, SQL counts, allocations and messages match archiv
   delete native.status.id;delete native.status.windowId;
   const baseline=JSON.parse(readFileSync(new URL('./fixtures/semantic-turn-absence-main.json',import.meta.url),'utf8'));
   assert.equal(baseline.sourceRevision,'c4e6b6e0');
-  // Each seal read adds prepare+execute. The cold work frame also removes
-  // quick_check and foreign_key_check (four native calls). Frames 4 and 6
+  // Cold seal lookups share the existing metadata statement. The cold work
+  // frame removes quick_check and foreign_key_check (four native calls). Frames 4 and 6
   // each have four existing write commits, with a stamp read and seal write
   // (four calls per commit). No transaction or journal-probe count changes.
-  const delta=[0,2,-2,0,16,0,16],expected=structuredClone(baseline.evidence.native);
+  const delta=[0,0,-4,0,16,0,16],expected=structuredClone(baseline.evidence.native);
   expected.statements=expected.statements.map((row,i)=>({...row,begun:row.begun+delta[i],completed:row.completed+delta[i]}));
   assert.deepEqual(native.statements,expected.statements,'absent-port SQL statement differential from archived main plus exact seal accounting');
   assert.equal(JSON.stringify(native),JSON.stringify(expected),'absent-port byte differential: allocations, messages, DTOs and status');

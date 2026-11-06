@@ -20,10 +20,7 @@ function pinned(row) {
   const main=pins.mainLegacyCounts[key];assert.ok(main,'historical legacy pin required: '+key);
   for(const metric of ['statements','begin','hostInvocations']){
    const i=pins.metrics.indexOf(metric);assert.ok(i>=0);
-   // Preserve the historical comparator. This exact first-call allowance
-   // covers the independently counted seal reads at cold sidecar opening.
-   const opening=metric==='statements'?(pins.legacyOpeningAllowance[key]??0):0;
-   assert.ok(row[metric]<=main[i]+opening,`${key}: unmigrated ${metric} ${row[metric]} > main 26f9e467 ${main[i]} + opening ${opening}`);
+   assert.ok(row[metric]<=main[i],`${key}: unmigrated ${metric} ${row[metric]} > main 26f9e467 ${main[i]}`);
   }
  }
 }
@@ -99,5 +96,4 @@ after(()=>{
  assert.deepEqual(measured.map(recordKey).sort(),expected.sort(),'exact native product cost matrix: no missing, renamed or duplicate case');
  assert.deepEqual(Object.keys(pins.counts).sort(),expected.toSorted(),'exact native count pin keys: no missing or stale record');
  assert.deepEqual(Object.keys(pins.mainLegacyCounts).sort(),measured.filter(r=>!r.safety&&!r.rawLineage).map(recordKey).sort(),'exact immutable native legacy pin keys');
- assert.deepEqual(Object.keys(pins.legacyOpeningAllowance).sort(),measured.filter(r=>!r.safety&&!r.rawLineage&&r.method==='findCandidates'&&r.variant==='hit').map(recordKey).sort(),'exact cold-opening allowance keys');
 });

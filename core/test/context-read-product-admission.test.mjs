@@ -335,7 +335,7 @@ test('real Worker: read-only upgrade and repair both yield before fresh writable
   const yielded=await protocol.refreshMaintenance(h,input,service.token);
   assert.equal(protocol.maintenanceAdmissionReceipt(yielded),'required');assert.equal(maintenanceObservation(yielded),undefined);
   assert.deepEqual([...control].slice(0,3),[0,0,0],'repair cannot open or scan inside work');
-  ok(await protocol.admitMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,3),[0,0,0]);assert.equal(control[8],2,'repair attests the successor');
+  ok(await protocol.admitMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,3),[0,0,0]);assert.equal(control[8],3,'repair reads the incumbent metadata/seal join and attests the successor');
   ok(await protocol.refreshMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,2),[0,0]);
 });
 

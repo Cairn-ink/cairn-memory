@@ -197,7 +197,7 @@ for(const failure of ['final authority','Worker exception'])test(`native ${failu
   const initialization=[];
   for(let i=0;i<100&&initialization.at(-1)!=='complete';i++)initialization.push(ok(await refresh()).status);
   assert.deepEqual(initialization,splitInitialization?['rebuilding','complete']:['complete'],'selection completes before failure instrumentation starts');
-  assert.deepEqual(counts,splitInitialization?[156,285]:[301],'production Worker SQL executions during initialization');
+  assert.deepEqual(counts,splitInitialization?[155,285]:[300],'production Worker SQL executions during initialization');
   counts.length=0;Atomics.store(control,10,0);
   assert.deepEqual([control[8],control[9]],[1,0],'initial writable admission is retained');
   f.admit('changed source committed before final authority validation');
@@ -220,7 +220,7 @@ for(const failure of ['final authority','Worker exception'])test(`native ${failu
   assert.equal(control[0],quick,'Worker failure discard skips quick_check after committed sidecar work');
   assert.equal(control[1],foreign,'Worker failure discard skips foreign_key_check after committed sidecar work');
   assert.deepEqual([control[8],control[9]],[2,1],'one fresh sidecar admission follows Worker disposal');
-  assert.deepEqual(counts,failure==='final authority'?[333,109]:[364,109],'production Worker SQL executions for failure and recovery');
+  assert.deepEqual(counts,failure==='final authority'?[333,108]:[364,108],'production Worker SQL executions for failure and recovery');
 });
 
 for(const service of [false,true])test(`real Worker keeps a read-only handle across owner-suppression denials (maintainer ${service})`,async t=>{
@@ -248,7 +248,7 @@ for(const service of [false,true])test(`real Worker keeps a read-only handle acr
   }
   // B1 downward ratchet: the folded status and owner-suppression checks retain
   // the admitted handle without repeating eligibility queries after denial.
-  assert.deepEqual(counts,service?[53,40,40,40]:[53,36,36,40],'production Worker SQL executions retain the folded denial counts');
+  assert.deepEqual(counts,service?[52,40,40,40]:[52,36,36,40],'production Worker SQL executions retain the folded denial counts');
 });
 
 test('passing control: a reader watchdog cutoff disposes the connection and its successor attests',async t=>{

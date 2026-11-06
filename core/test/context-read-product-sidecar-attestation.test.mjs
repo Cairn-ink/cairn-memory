@@ -373,7 +373,8 @@ test(`opening deadline stops at the statement boundary after ${boundary}`,t=>{
   const s=setup(t);s.close();let expired=false,journals=0;const after=[];
   s.setHook(text=>{
     if(expired&&!['ROLLBACK','PRAGMA query_only'].some(prefix=>text.startsWith(prefix)))after.push(text);
-    if(text===boundary&&(boundary!=='PRAGMA journal_mode'||++journals===2)){expired=true;s.setClock(2000);}
+    const atBoundary=text===boundary||boundary.includes('LEFT JOIN product_attestation')&&text==='SELECT stamp,record FROM product_attestation WHERE singleton=1';
+    if(atBoundary&&(boundary!=='PRAGMA journal_mode'||++journals===2)){expired=true;s.setClock(2000);}
   });
   s.open();assert.throws(()=>s.storage.admit(2000),{code:'read_timeout'});
   assert.equal(expired,true);assert.deepEqual(after,[],'no subsequent storage statement starts after cutoff');
@@ -457,4 +458,12 @@ test('cold admission folds the seal lookup into the existing singleton metadata 
   assert.equal(opening.filter(q=>q.includes('LEFT JOIN product_attestation')).length,1);
   assert.equal(opening.filter(q=>q.includes('FROM product_attestation')).length,0,'no standalone cold seal lookup');
   assert.equal(s.checks,0);assert.equal(s.valid(),true);
+});
+
+test('a stored CHECK violation in a legacy WAL cache is refused by the one-time integrity check',t=>{
+  const s=setup(t,{mode:'WAL'});s.close();legacyWal(s,'row');
+  sql(s.path,db=>db.exec('PRAGMA ignore_check_constraints=ON;UPDATE documents SET token_length=-1'));
+  s.open();assert.throws(()=>s.storage.admit(2000),{code:'index_unavailable',reason:'storage_unavailable'});
+  assert.equal(s.checks,1,'quick_check detects the stored violation before foreign_key_check');
+  assert.equal(replacementCalls(s).length,0);assert.equal(s.row(),null);
 });

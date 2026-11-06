@@ -1411,11 +1411,11 @@
     ],
     "[\"context\",34,24,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        391,
+        390,
         10
       ],
       [
-        226,
+        225,
         10
       ],
       6
@@ -1455,11 +1455,11 @@
     ],
     "[\"context\",34,24,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        490,
+        489,
         10
       ],
       [
-        292,
+        291,
         10
       ],
       50
@@ -1499,11 +1499,11 @@
     ],
     "[\"context\",34,24,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        391,
+        390,
         10
       ],
       [
-        226,
+        225,
         10
       ],
       6
@@ -1543,11 +1543,11 @@
     ],
     "[\"context\",34,24,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        490,
+        489,
         10
       ],
       [
-        292,
+        291,
         10
       ],
       50
@@ -1587,11 +1587,11 @@
     ],
     "[\"context\",34,300,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        945,
+        944,
         10
       ],
       [
-        780,
+        779,
         10
       ],
       6
@@ -1631,11 +1631,11 @@
     ],
     "[\"context\",34,300,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        1044,
+        1043,
         10
       ],
       [
-        846,
+        845,
         10
       ],
       50
@@ -1675,11 +1675,11 @@
     ],
     "[\"context\",34,300,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        945,
+        944,
         10
       ],
       [
-        780,
+        779,
         10
       ],
       6
@@ -1719,11 +1719,11 @@
     ],
     "[\"context\",34,300,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        1044,
+        1043,
         10
       ],
       [
-        846,
+        845,
         10
       ],
       50
@@ -1763,11 +1763,11 @@
     ],
     "[\"context\",34,600,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        1547,
+        1546,
         10
       ],
       [
-        1382,
+        1381,
         10
       ],
       6
@@ -1807,11 +1807,11 @@
     ],
     "[\"context\",34,600,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        1646,
+        1645,
         10
       ],
       [
-        1448,
+        1447,
         10
       ],
       50
@@ -1851,11 +1851,11 @@
     ],
     "[\"context\",34,600,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        1547,
+        1546,
         10
       ],
       [
-        1382,
+        1381,
         10
       ],
       6
@@ -1895,11 +1895,11 @@
     ],
     "[\"context\",34,600,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        1646,
+        1645,
         10
       ],
       [
-        1448,
+        1447,
         10
       ],
       50
@@ -1939,11 +1939,11 @@
     ],
     "[\"status\",34,24,\"lexical\",12,\"getContextIndexStatus:current-first\"]": [
       [
-        49,
+        48,
         5
       ],
       [
-        53,
+        52,
         5
       ],
       0
@@ -3391,11 +3391,11 @@
     ],
     "[\"context\",38,24,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        391,
+        390,
         10
       ],
       [
-        226,
+        225,
         10
       ],
       6
@@ -3435,11 +3435,11 @@
     ],
     "[\"context\",38,24,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        490,
+        489,
         10
       ],
       [
-        292,
+        291,
         10
       ],
       50
@@ -3479,11 +3479,11 @@
     ],
     "[\"context\",38,24,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        391,
+        390,
         10
       ],
       [
-        226,
+        225,
         10
       ],
       6
@@ -3523,11 +3523,11 @@
     ],
     "[\"context\",38,24,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        490,
+        489,
         10
       ],
       [
-        292,
+        291,
         10
       ],
       50
@@ -3567,11 +3567,11 @@
     ],
     "[\"context\",38,300,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        945,
+        944,
         10
       ],
       [
-        780,
+        779,
         10
       ],
       6
@@ -3611,11 +3611,11 @@
     ],
     "[\"context\",38,300,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        1044,
+        1043,
         10
       ],
       [
-        846,
+        845,
         10
       ],
       50
@@ -3655,11 +3655,11 @@
     ],
     "[\"context\",38,300,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        945,
+        944,
         10
       ],
       [
-        780,
+        779,
         10
       ],
       6
@@ -3699,11 +3699,11 @@
     ],
     "[\"context\",38,300,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        1044,
+        1043,
         10
       ],
       [
-        846,
+        845,
         10
       ],
       50
@@ -3743,11 +3743,11 @@
     ],
     "[\"context\",38,600,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        1547,
+        1546,
         10
       ],
       [
-        1382,
+        1381,
         10
       ],
       6
@@ -3787,11 +3787,11 @@
     ],
     "[\"context\",38,600,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        1646,
+        1645,
         10
       ],
       [
-        1448,
+        1447,
         10
       ],
       50
@@ -3831,11 +3831,11 @@
     ],
     "[\"context\",38,600,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        1547,
+        1546,
         10
       ],
       [
-        1382,
+        1381,
         10
       ],
       6
@@ -3875,11 +3875,11 @@
     ],
     "[\"context\",38,600,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        1646,
+        1645,
         10
       ],
       [
-        1448,
+        1447,
         10
       ],
       50
@@ -3919,11 +3919,11 @@
     ],
     "[\"status\",38,24,\"lexical\",12,\"getContextIndexStatus:current-first\"]": [
       [
-        49,
+        48,
         5
       ],
       [
-        53,
+        52,
         5
       ],
       0
@@ -5415,11 +5415,11 @@
     ],
     "[\"context\",48,24,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        666,
+        665,
         10
       ],
       [
-        201,
+        200,
         10
       ],
       6
@@ -5459,11 +5459,11 @@
     ],
     "[\"context\",48,24,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        886,
+        885,
         10
       ],
       [
-        256,
+        255,
         10
       ],
       50
@@ -5503,11 +5503,11 @@
     ],
     "[\"context\",48,24,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        666,
+        665,
         10
       ],
       [
-        201,
+        200,
         10
       ],
       6
@@ -5547,11 +5547,11 @@
     ],
     "[\"context\",48,24,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        886,
+        885,
         10
       ],
       [
-        256,
+        255,
         10
       ],
       50
@@ -5591,11 +5591,11 @@
     ],
     "[\"context\",48,300,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        1220,
+        1219,
         10
       ],
       [
-        755,
+        754,
         10
       ],
       6
@@ -5635,11 +5635,11 @@
     ],
     "[\"context\",48,300,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        1440,
+        1439,
         10
       ],
       [
-        810,
+        809,
         10
       ],
       50
@@ -5679,11 +5679,11 @@
     ],
     "[\"context\",48,300,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        1220,
+        1219,
         10
       ],
       [
-        755,
+        754,
         10
       ],
       6
@@ -5723,11 +5723,11 @@
     ],
     "[\"context\",48,300,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        1440,
+        1439,
         10
       ],
       [
-        810,
+        809,
         10
       ],
       50
@@ -5767,11 +5767,11 @@
     ],
     "[\"context\",48,600,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        1822,
+        1821,
         10
       ],
       [
-        1357,
+        1356,
         10
       ],
       6
@@ -5811,11 +5811,11 @@
     ],
     "[\"context\",48,600,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        2042,
+        2041,
         10
       ],
       [
-        1412,
+        1411,
         10
       ],
       50
@@ -5855,11 +5855,11 @@
     ],
     "[\"context\",48,600,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        1822,
+        1821,
         10
       ],
       [
-        1357,
+        1356,
         10
       ],
       6
@@ -5899,11 +5899,11 @@
     ],
     "[\"context\",48,600,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        2042,
+        2041,
         10
       ],
       [
-        1412,
+        1411,
         10
       ],
       50
@@ -5943,11 +5943,11 @@
     ],
     "[\"status\",48,24,\"lexical\",12,\"getContextIndexStatus:current-first\"]": [
       [
-        49,
+        48,
         5
       ],
       [
-        53,
+        52,
         5
       ],
       0
@@ -8444,7 +8444,7 @@
       0
     ],
     "[\"R2 v34: zero-fact constant budget, five-fact slope and corpus-independent no-hit\",18,300,null,\"findCandidates\",\"lexical:current-first\",0]": [
-      717,
+      716,
       9,
       0
     ],
@@ -8474,7 +8474,7 @@
       0
     ],
     "[\"R2 v34: zero-fact constant budget, five-fact slope and corpus-independent no-hit\",18,600,null,\"findCandidates\",\"lexical:current-first\",0]": [
-      1319,
+      1318,
       9,
       0
     ],
@@ -8504,7 +8504,7 @@
       0
     ],
     "[\"R2 v38: zero-fact constant budget, five-fact slope and corpus-independent no-hit\",23,300,null,\"findCandidates\",\"lexical:current-first\",0]": [
-      717,
+      716,
       9,
       0
     ],
@@ -8534,7 +8534,7 @@
       0
     ],
     "[\"R2 v38: zero-fact constant budget, five-fact slope and corpus-independent no-hit\",23,600,null,\"findCandidates\",\"lexical:current-first\",0]": [
-      1319,
+      1318,
       9,
       0
     ],
@@ -8564,7 +8564,7 @@
       0
     ],
     "[\"R2 v48: zero-fact constant budget, five-fact slope and corpus-independent no-hit\",33,300,null,\"findCandidates\",\"lexical:current-first\",0]": [
-      705,
+      704,
       9,
       0
     ],
@@ -8594,7 +8594,7 @@
       0
     ],
     "[\"R2 v48: zero-fact constant budget, five-fact slope and corpus-independent no-hit\",33,600,null,\"findCandidates\",\"lexical:current-first\",0]": [
-      1307,
+      1306,
       9,
       0
     ],
@@ -8624,7 +8624,7 @@
       0
     ],
     "[\"R2 semantic fallback v34: empty-owner proof prevents retained-candidate revalidation\",18,12,null,\"findCandidates\",\"semantic:current-first\",0]": [
-      139,
+      138,
       9,
       0
     ],
@@ -8644,7 +8644,7 @@
       0
     ],
     "[\"R2 semantic fallback v34: empty-owner proof prevents retained-candidate revalidation\",18,24,null,\"findCandidates\",\"semantic:current-first\",0]": [
-      163,
+      162,
       9,
       0
     ],
@@ -8674,7 +8674,7 @@
       0
     ],
     "[\"R2 semantic fallback v34: empty-owner proof prevents retained-candidate revalidation\",18,300,null,\"findCandidates\",\"semantic:current-first\",0]": [
-      717,
+      716,
       9,
       0
     ],
@@ -8704,7 +8704,7 @@
       0
     ],
     "[\"R2 semantic fallback v34: empty-owner proof prevents retained-candidate revalidation\",18,600,null,\"findCandidates\",\"semantic:current-first\",0]": [
-      1319,
+      1318,
       9,
       0
     ],
@@ -8734,7 +8734,7 @@
       0
     ],
     "[\"R2 semantic fallback v38: empty-owner proof prevents retained-candidate revalidation\",23,12,null,\"findCandidates\",\"semantic:current-first\",0]": [
-      139,
+      138,
       9,
       0
     ],
@@ -8754,7 +8754,7 @@
       0
     ],
     "[\"R2 semantic fallback v38: empty-owner proof prevents retained-candidate revalidation\",23,24,null,\"findCandidates\",\"semantic:current-first\",0]": [
-      163,
+      162,
       9,
       0
     ],
@@ -8784,7 +8784,7 @@
       0
     ],
     "[\"R2 semantic fallback v38: empty-owner proof prevents retained-candidate revalidation\",23,300,null,\"findCandidates\",\"semantic:current-first\",0]": [
-      717,
+      716,
       9,
       0
     ],
@@ -8814,7 +8814,7 @@
       0
     ],
     "[\"R2 semantic fallback v38: empty-owner proof prevents retained-candidate revalidation\",23,600,null,\"findCandidates\",\"semantic:current-first\",0]": [
-      1319,
+      1318,
       9,
       0
     ],
@@ -8844,7 +8844,7 @@
       0
     ],
     "[\"R2 semantic fallback v48: empty-owner proof prevents retained-candidate revalidation\",33,12,null,\"findCandidates\",\"semantic:current-first\",0]": [
-      127,
+      126,
       9,
       0
     ],
@@ -8864,7 +8864,7 @@
       0
     ],
     "[\"R2 semantic fallback v48: empty-owner proof prevents retained-candidate revalidation\",33,24,null,\"findCandidates\",\"semantic:current-first\",0]": [
-      151,
+      150,
       9,
       0
     ],
@@ -8894,7 +8894,7 @@
       0
     ],
     "[\"R2 semantic fallback v48: empty-owner proof prevents retained-candidate revalidation\",33,300,null,\"findCandidates\",\"semantic:current-first\",0]": [
-      705,
+      704,
       9,
       0
     ],
@@ -8924,7 +8924,7 @@
       0
     ],
     "[\"R2 semantic fallback v48: empty-owner proof prevents retained-candidate revalidation\",33,600,null,\"findCandidates\",\"semantic:current-first\",0]": [
-      1307,
+      1306,
       9,
       0
     ],
@@ -8972,11 +8972,11 @@
   "byFamily": {
     "[\"event-time\",51,\"context\",24,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        391,
+        390,
         10
       ],
       [
-        226,
+        225,
         10
       ],
       6
@@ -9016,11 +9016,11 @@
     ],
     "[\"event-time\",51,\"context\",24,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        490,
+        489,
         10
       ],
       [
-        292,
+        291,
         10
       ],
       50
@@ -9060,11 +9060,11 @@
     ],
     "[\"event-time\",51,\"context\",24,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        391,
+        390,
         10
       ],
       [
-        226,
+        225,
         10
       ],
       6
@@ -9104,11 +9104,11 @@
     ],
     "[\"event-time\",51,\"context\",24,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        490,
+        489,
         10
       ],
       [
-        292,
+        291,
         10
       ],
       50
@@ -9148,11 +9148,11 @@
     ],
     "[\"event-time\",51,\"context\",300,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        945,
+        944,
         10
       ],
       [
-        780,
+        779,
         10
       ],
       6
@@ -9192,11 +9192,11 @@
     ],
     "[\"event-time\",51,\"context\",300,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        1044,
+        1043,
         10
       ],
       [
-        846,
+        845,
         10
       ],
       50
@@ -9236,11 +9236,11 @@
     ],
     "[\"event-time\",51,\"context\",300,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        945,
+        944,
         10
       ],
       [
-        780,
+        779,
         10
       ],
       6
@@ -9280,11 +9280,11 @@
     ],
     "[\"event-time\",51,\"context\",300,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        1044,
+        1043,
         10
       ],
       [
-        846,
+        845,
         10
       ],
       50
@@ -9324,11 +9324,11 @@
     ],
     "[\"event-time\",51,\"context\",600,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        1547,
+        1546,
         10
       ],
       [
-        1382,
+        1381,
         10
       ],
       6
@@ -9368,11 +9368,11 @@
     ],
     "[\"event-time\",51,\"context\",600,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        1646,
+        1645,
         10
       ],
       [
-        1448,
+        1447,
         10
       ],
       50
@@ -9412,11 +9412,11 @@
     ],
     "[\"event-time\",51,\"context\",600,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        1547,
+        1546,
         10
       ],
       [
-        1382,
+        1381,
         10
       ],
       6
@@ -9456,11 +9456,11 @@
     ],
     "[\"event-time\",51,\"context\",600,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        1646,
+        1645,
         10
       ],
       [
-        1448,
+        1447,
         10
       ],
       50
@@ -10820,11 +10820,11 @@
     ],
     "[\"event-time\",51,\"status\",24,\"lexical\",12,\"getContextIndexStatus:current-first\"]": [
       [
-        49,
+        48,
         5
       ],
       [
-        53,
+        52,
         5
       ],
       0
@@ -10996,11 +10996,11 @@
     ],
     "[\"event-time\",52,\"context\",24,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        391,
+        390,
         10
       ],
       [
-        226,
+        225,
         10
       ],
       6
@@ -11040,11 +11040,11 @@
     ],
     "[\"event-time\",52,\"context\",24,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        490,
+        489,
         10
       ],
       [
-        292,
+        291,
         10
       ],
       50
@@ -11084,11 +11084,11 @@
     ],
     "[\"event-time\",52,\"context\",24,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        391,
+        390,
         10
       ],
       [
-        226,
+        225,
         10
       ],
       6
@@ -11128,11 +11128,11 @@
     ],
     "[\"event-time\",52,\"context\",24,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        490,
+        489,
         10
       ],
       [
-        292,
+        291,
         10
       ],
       50
@@ -11172,11 +11172,11 @@
     ],
     "[\"event-time\",52,\"context\",300,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        945,
+        944,
         10
       ],
       [
-        780,
+        779,
         10
       ],
       6
@@ -11216,11 +11216,11 @@
     ],
     "[\"event-time\",52,\"context\",300,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        1044,
+        1043,
         10
       ],
       [
-        846,
+        845,
         10
       ],
       50
@@ -11260,11 +11260,11 @@
     ],
     "[\"event-time\",52,\"context\",300,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        945,
+        944,
         10
       ],
       [
-        780,
+        779,
         10
       ],
       6
@@ -11304,11 +11304,11 @@
     ],
     "[\"event-time\",52,\"context\",300,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        1044,
+        1043,
         10
       ],
       [
-        846,
+        845,
         10
       ],
       50
@@ -11348,11 +11348,11 @@
     ],
     "[\"event-time\",52,\"context\",600,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        1547,
+        1546,
         10
       ],
       [
-        1382,
+        1381,
         10
       ],
       6
@@ -11392,11 +11392,11 @@
     ],
     "[\"event-time\",52,\"context\",600,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        1646,
+        1645,
         10
       ],
       [
-        1448,
+        1447,
         10
       ],
       50
@@ -11436,11 +11436,11 @@
     ],
     "[\"event-time\",52,\"context\",600,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        1547,
+        1546,
         10
       ],
       [
-        1382,
+        1381,
         10
       ],
       6
@@ -11480,11 +11480,11 @@
     ],
     "[\"event-time\",52,\"context\",600,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        1646,
+        1645,
         10
       ],
       [
-        1448,
+        1447,
         10
       ],
       50
@@ -12844,11 +12844,11 @@
     ],
     "[\"event-time\",52,\"status\",24,\"lexical\",12,\"getContextIndexStatus:current-first\"]": [
       [
-        49,
+        48,
         5
       ],
       [
-        53,
+        52,
         5
       ],
       0
@@ -13020,11 +13020,11 @@
     ],
     "[\"event-time\",53,\"context\",24,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        666,
+        665,
         10
       ],
       [
-        201,
+        200,
         10
       ],
       6
@@ -13064,11 +13064,11 @@
     ],
     "[\"event-time\",53,\"context\",24,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        886,
+        885,
         10
       ],
       [
-        256,
+        255,
         10
       ],
       50
@@ -13108,11 +13108,11 @@
     ],
     "[\"event-time\",53,\"context\",24,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        666,
+        665,
         10
       ],
       [
-        201,
+        200,
         10
       ],
       6
@@ -13152,11 +13152,11 @@
     ],
     "[\"event-time\",53,\"context\",24,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        886,
+        885,
         10
       ],
       [
-        256,
+        255,
         10
       ],
       50
@@ -13196,11 +13196,11 @@
     ],
     "[\"event-time\",53,\"context\",300,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        1220,
+        1219,
         10
       ],
       [
-        755,
+        754,
         10
       ],
       6
@@ -13240,11 +13240,11 @@
     ],
     "[\"event-time\",53,\"context\",300,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        1440,
+        1439,
         10
       ],
       [
-        810,
+        809,
         10
       ],
       50
@@ -13284,11 +13284,11 @@
     ],
     "[\"event-time\",53,\"context\",300,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        1220,
+        1219,
         10
       ],
       [
-        755,
+        754,
         10
       ],
       6
@@ -13328,11 +13328,11 @@
     ],
     "[\"event-time\",53,\"context\",300,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        1440,
+        1439,
         10
       ],
       [
-        810,
+        809,
         10
       ],
       50
@@ -13372,11 +13372,11 @@
     ],
     "[\"event-time\",53,\"context\",600,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        1822,
+        1821,
         10
       ],
       [
-        1357,
+        1356,
         10
       ],
       6
@@ -13416,11 +13416,11 @@
     ],
     "[\"event-time\",53,\"context\",600,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        2042,
+        2041,
         10
       ],
       [
-        1412,
+        1411,
         10
       ],
       50
@@ -13460,11 +13460,11 @@
     ],
     "[\"event-time\",53,\"context\",600,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        1822,
+        1821,
         10
       ],
       [
-        1357,
+        1356,
         10
       ],
       6
@@ -13504,11 +13504,11 @@
     ],
     "[\"event-time\",53,\"context\",600,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        2042,
+        2041,
         10
       ],
       [
-        1412,
+        1411,
         10
       ],
       50
@@ -14890,11 +14890,11 @@
     ],
     "[\"event-time\",53,\"status\",24,\"lexical\",12,\"getContextIndexStatus:current-first\"]": [
       [
-        49,
+        48,
         5
       ],
       [
-        53,
+        52,
         5
       ],
       0
@@ -15022,11 +15022,11 @@
     ],
     "[\"safety\",34,\"context\",24,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        391,
+        390,
         10
       ],
       [
-        226,
+        225,
         10
       ],
       6
@@ -15066,11 +15066,11 @@
     ],
     "[\"safety\",34,\"context\",24,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        490,
+        489,
         10
       ],
       [
-        292,
+        291,
         10
       ],
       50
@@ -15110,11 +15110,11 @@
     ],
     "[\"safety\",34,\"context\",24,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        391,
+        390,
         10
       ],
       [
-        226,
+        225,
         10
       ],
       6
@@ -15154,11 +15154,11 @@
     ],
     "[\"safety\",34,\"context\",24,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        490,
+        489,
         10
       ],
       [
-        292,
+        291,
         10
       ],
       50
@@ -15198,11 +15198,11 @@
     ],
     "[\"safety\",34,\"context\",300,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        945,
+        944,
         10
       ],
       [
-        780,
+        779,
         10
       ],
       6
@@ -15242,11 +15242,11 @@
     ],
     "[\"safety\",34,\"context\",300,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        1044,
+        1043,
         10
       ],
       [
-        846,
+        845,
         10
       ],
       50
@@ -15286,11 +15286,11 @@
     ],
     "[\"safety\",34,\"context\",300,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        945,
+        944,
         10
       ],
       [
-        780,
+        779,
         10
       ],
       6
@@ -15330,11 +15330,11 @@
     ],
     "[\"safety\",34,\"context\",300,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        1044,
+        1043,
         10
       ],
       [
-        846,
+        845,
         10
       ],
       50
@@ -15374,11 +15374,11 @@
     ],
     "[\"safety\",34,\"context\",600,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        1547,
+        1546,
         10
       ],
       [
-        1382,
+        1381,
         10
       ],
       6
@@ -15418,11 +15418,11 @@
     ],
     "[\"safety\",34,\"context\",600,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        1646,
+        1645,
         10
       ],
       [
-        1448,
+        1447,
         10
       ],
       50
@@ -15462,11 +15462,11 @@
     ],
     "[\"safety\",34,\"context\",600,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        1547,
+        1546,
         10
       ],
       [
-        1382,
+        1381,
         10
       ],
       6
@@ -15506,11 +15506,11 @@
     ],
     "[\"safety\",34,\"context\",600,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        1646,
+        1645,
         10
       ],
       [
-        1448,
+        1447,
         10
       ],
       50
@@ -16870,11 +16870,11 @@
     ],
     "[\"safety\",34,\"status\",24,\"lexical\",12,\"getContextIndexStatus:current-first\"]": [
       [
-        49,
+        48,
         5
       ],
       [
-        53,
+        52,
         5
       ],
       0
@@ -17046,11 +17046,11 @@
     ],
     "[\"safety\",38,\"context\",24,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        391,
+        390,
         10
       ],
       [
-        226,
+        225,
         10
       ],
       6
@@ -17090,11 +17090,11 @@
     ],
     "[\"safety\",38,\"context\",24,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        490,
+        489,
         10
       ],
       [
-        292,
+        291,
         10
       ],
       50
@@ -17134,11 +17134,11 @@
     ],
     "[\"safety\",38,\"context\",24,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        391,
+        390,
         10
       ],
       [
-        226,
+        225,
         10
       ],
       6
@@ -17178,11 +17178,11 @@
     ],
     "[\"safety\",38,\"context\",24,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        490,
+        489,
         10
       ],
       [
-        292,
+        291,
         10
       ],
       50
@@ -17222,11 +17222,11 @@
     ],
     "[\"safety\",38,\"context\",300,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        945,
+        944,
         10
       ],
       [
-        780,
+        779,
         10
       ],
       6
@@ -17266,11 +17266,11 @@
     ],
     "[\"safety\",38,\"context\",300,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        1044,
+        1043,
         10
       ],
       [
-        846,
+        845,
         10
       ],
       50
@@ -17310,11 +17310,11 @@
     ],
     "[\"safety\",38,\"context\",300,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        945,
+        944,
         10
       ],
       [
-        780,
+        779,
         10
       ],
       6
@@ -17354,11 +17354,11 @@
     ],
     "[\"safety\",38,\"context\",300,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        1044,
+        1043,
         10
       ],
       [
-        846,
+        845,
         10
       ],
       50
@@ -17398,11 +17398,11 @@
     ],
     "[\"safety\",38,\"context\",600,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        1547,
+        1546,
         10
       ],
       [
-        1382,
+        1381,
         10
       ],
       6
@@ -17442,11 +17442,11 @@
     ],
     "[\"safety\",38,\"context\",600,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        1646,
+        1645,
         10
       ],
       [
-        1448,
+        1447,
         10
       ],
       50
@@ -17486,11 +17486,11 @@
     ],
     "[\"safety\",38,\"context\",600,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        1547,
+        1546,
         10
       ],
       [
-        1382,
+        1381,
         10
       ],
       6
@@ -17530,11 +17530,11 @@
     ],
     "[\"safety\",38,\"context\",600,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        1646,
+        1645,
         10
       ],
       [
-        1448,
+        1447,
         10
       ],
       50
@@ -18894,11 +18894,11 @@
     ],
     "[\"safety\",38,\"status\",24,\"lexical\",12,\"getContextIndexStatus:current-first\"]": [
       [
-        49,
+        48,
         5
       ],
       [
-        53,
+        52,
         5
       ],
       0
@@ -19070,11 +19070,11 @@
     ],
     "[\"safety\",48,\"context\",24,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        666,
+        665,
         10
       ],
       [
-        201,
+        200,
         10
       ],
       6
@@ -19114,11 +19114,11 @@
     ],
     "[\"safety\",48,\"context\",24,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        886,
+        885,
         10
       ],
       [
-        256,
+        255,
         10
       ],
       50
@@ -19158,11 +19158,11 @@
     ],
     "[\"safety\",48,\"context\",24,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        666,
+        665,
         10
       ],
       [
-        201,
+        200,
         10
       ],
       6
@@ -19202,11 +19202,11 @@
     ],
     "[\"safety\",48,\"context\",24,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        886,
+        885,
         10
       ],
       [
-        256,
+        255,
         10
       ],
       50
@@ -19246,11 +19246,11 @@
     ],
     "[\"safety\",48,\"context\",300,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        1220,
+        1219,
         10
       ],
       [
-        755,
+        754,
         10
       ],
       6
@@ -19290,11 +19290,11 @@
     ],
     "[\"safety\",48,\"context\",300,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        1440,
+        1439,
         10
       ],
       [
-        810,
+        809,
         10
       ],
       50
@@ -19334,11 +19334,11 @@
     ],
     "[\"safety\",48,\"context\",300,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        1220,
+        1219,
         10
       ],
       [
-        755,
+        754,
         10
       ],
       6
@@ -19378,11 +19378,11 @@
     ],
     "[\"safety\",48,\"context\",300,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        1440,
+        1439,
         10
       ],
       [
-        810,
+        809,
         10
       ],
       50
@@ -19422,11 +19422,11 @@
     ],
     "[\"safety\",48,\"context\",600,\"lexical\",1,\"contextRead:current-first\"]": [
       [
-        1822,
+        1821,
         10
       ],
       [
-        1357,
+        1356,
         10
       ],
       6
@@ -19466,11 +19466,11 @@
     ],
     "[\"safety\",48,\"context\",600,\"lexical\",12,\"contextRead:current-first\"]": [
       [
-        2042,
+        2041,
         10
       ],
       [
-        1412,
+        1411,
         10
       ],
       50
@@ -19510,11 +19510,11 @@
     ],
     "[\"safety\",48,\"context\",600,\"semantic\",1,\"contextRead:current-first\"]": [
       [
-        1822,
+        1821,
         10
       ],
       [
-        1357,
+        1356,
         10
       ],
       6
@@ -19554,11 +19554,11 @@
     ],
     "[\"safety\",48,\"context\",600,\"semantic\",12,\"contextRead:current-first\"]": [
       [
-        2042,
+        2041,
         10
       ],
       [
-        1412,
+        1411,
         10
       ],
       50
@@ -20940,11 +20940,11 @@
     ],
     "[\"safety\",48,\"status\",24,\"lexical\",12,\"getContextIndexStatus:current-first\"]": [
       [
-        49,
+        48,
         5
       ],
       [
-        53,
+        52,
         5
       ],
       0
@@ -21078,10 +21078,5 @@
     ],
     "nodeDifferences": 0,
     "familyPhysicalKeys": true
-  },
-  "sidecarAttestationOpening": {
-    "additionalStatements": 1,
-    "statement": "SELECT CAST(stamp AS TEXT) AS stamp,typeof(stamp) AS stampType,record FROM product_attestation WHERE singleton=1",
-    "scope": "Cold sidecar opening only; warm query and recall pins are unchanged."
   }
 }
