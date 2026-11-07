@@ -353,7 +353,8 @@ The diagnostics value is a frozen plain object with these keys in this order:
 | `hostWaitMs` | Sum of times from invoking each `select` or `rank` provider until its await resumes, including event-loop delay before resumption. |
 | `storageMs` | Sum of synchronous storage time at the `map`, `fetch`, `validateFresh`, `recentReceipts` and `finalize` closures passed to recall. Includes SQLite busy waits. |
 | `storageCalls` | Number of calls through those storage closures, a non-negative integer. |
-| `storageMaxMs` | Longest single synchronous storage call, including any native wait. |
+| `storageMaxMs` | Longest single synchronous storage call, including any native wait; `0` with zero storage calls. |
+| `storageMaxCall` | Name of that call: `map`, `fetch`, `validateFresh`, `recentReceipts` or `finalize`; `null` with zero storage calls. Compares unrounded elapsed times; only a strictly greater duration replaces the maximum, so the earliest call wins ties. Names the closure only, with no content, SQL, arguments or counts. |
 | `journalMode` | Lowercase `delete`, `truncate`, `persist`, `memory`, `wal`, `off`, `other` or `unknown`. Unrecognized values map to `other`; a failed read reports `unknown`. |
 
 All times use `performance.now()` in milliseconds, sum unrounded values, and
@@ -369,4 +370,4 @@ lazily on its existing connection, at most once per open core after a successful
 read, and caches the result for that core's lifetime. No connection, file
 descriptor or attachment is added. A throwing read does not change the recall
 outcome and is not cached, allowing a later diagnostics recall to retry. The
-object contains only numbers and one enum string, with no memory content.
+object contains only numbers, closed enum strings and the zero-call `null`, with no memory content.
