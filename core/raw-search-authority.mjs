@@ -169,30 +169,36 @@ export function createRawSearchAuthority(database, options) {
     let remaining=50000;
     // Keyset predicates always belong to the projected rows. Never splice a
     // predicate into a projection's final JOIN condition.
-    const scan=(sql,args,keys)=>{
+    const scan=(sql,args,keys,partitions)=>{
       const columns=read(()=>db.prepare(sql).columns().map(column=>column.name));
       const quoted=columns.map(name=>'"'+name.replaceAll('"','""')+'"');
       const order=sql.match(/ ORDER BY (.+) LIMIT 50001$/s)[1].split(',').map(name=>name.split('.').at(-1));
       const positions=order.map(name=>columns.indexOf(name));
+      const seek=partitions?order.slice(1):order;
       if(positions.some(index=>index<0))fail('storage_error');
       const projection=sql.replace(/ ORDER BY (.+) LIMIT 50001$/s,'');
-      const pages=[];let after=null,offset=0;
+      const pages=[];let after=null,offset=0,partitionIndex=0;
       while(true){
+        if(partitions&&partitionIndex===partitions.length)break;
         const limit=Math.min(32,remaining+1);
         const batch=keys?.slice(offset,offset+limit);
         if(batch&&!batch.length){if(!pages.length||JSON.parse(pages.at(-1)).length===32)pages.push('[]');break;}
         const bounded=`SELECT * FROM (${projection}) WHERE `+
-          (after?'('+order.join(',')+')>('+order.map(()=>'?').join(',')+')':'1')+
+          (partitions?'conversation_id=? AND ':'')+
+          (after?'('+seek.join(',')+')>('+seek.map(()=>'?').join(',')+')':'1')+
           ' ORDER BY '+order.join(',')+' LIMIT '+limit;
         const page=read(()=>{
           if(versionInside()!==expectedVersion)fail('source_unavailable');
           return db.prepare(`SELECT count(*) AS count,json_group_array(json_array(${quoted.join(',')})) AS rows FROM (${bounded})`)
-            .get(...args,...(batch?[JSON.stringify(batch)]:[]),...after??[]);
+            .get(...(batch?[JSON.stringify(batch)]:[]),...args,...(partitions?[partitions[partitionIndex]]:[]),...(after?.slice(partitions?1:0)??[]));
         });
         remaining-=page.count;if(remaining<0)fail('source_budget_exceeded');
         pages.push(page.rows);
         if(batch){offset+=batch.length;if(!page.count)continue;}
-        else if(page.count<limit)break;
+        else if(page.count<limit){
+          if(partitions){partitionIndex++;after=null;continue;}
+          break;
+        }
         const last=JSON.parse(page.rows).at(-1);after=positions.map(index=>last[index]);
       }
       return {columns,pages};
@@ -200,19 +206,24 @@ export function createRawSearchAuthority(database, options) {
     // Build membership once. Each native read advances an indexed key and
     // returns at most 32 rows; no namespace-sized CTE runs again on each page.
     // Only bound identities are retained. Unrelated rows are streamed past.
-    const each=(sql,args,visit)=>{
-      let after=null;
+    const each=(sql,args,visit,partitions)=>{
+      let after=null,partitionIndex=0;
       const order=sql.match(/ ORDER BY (.+)$/s)[1].split(',');
       const projection=sql.replace(/ ORDER BY (.+)$/s,'');
+      const seek=partitions?order.slice(1):order;
       while(true){
+        if(partitions&&partitionIndex===partitions.length)break;
         const page=read(()=>{
           if(versionInside()!==expectedVersion)fail('source_unavailable');
           return db.prepare(`SELECT * FROM (${projection}) WHERE `+
-            (after?'('+order.join(',')+')>('+order.map(()=>'?').join(',')+')':'1')+
-            ' ORDER BY '+order.join(',')+' LIMIT 32').all(...args,...after??[]);
+            (after?'('+seek.join(',')+')>('+seek.map(()=>'?').join(',')+')':'1')+
+            ' ORDER BY '+order.join(',')+' LIMIT 32').all(...args,...(partitions?[partitions[partitionIndex]]:[]),...(after?.slice(partitions?1:0)??[]));
         });
         for(const row of page)visit(row);
-        if(page.length<32)break;
+        if(page.length<32){
+          if(partitions){partitionIndex++;after=null;continue;}
+          break;
+        }
         after=order.map(key=>page.at(-1)[key]);
       }
     };
@@ -227,12 +238,18 @@ export function createRawSearchAuthority(database, options) {
       const edgeKeys=[],receiptKeys=[],exclusionKeys=[],fenceKeys=[],factKeys=[],epochKeys=[];
       const pair=(c,m)=>JSON.stringify([c,m]);
       const scope=(owner,kind,project)=>JSON.stringify([owner,kind,project]);
+      // Discover conversations through the namespace's existing unique prefix.
+      // Sorting their bounded identity list happens once, after releasing SHARED.
+      const conversationIds=[];
+      each(`SELECT client,session_key,id FROM raw_conversations WHERE ${where}
+        AND rowid<=${bounds.conversations} ORDER BY client,session_key`,args,row=>append(conversationIds,row.id));
+      conversationIds.sort();
       each(`SELECT c.id AS conversation_id,m.message_id,c.client FROM raw_conversations c
         CROSS JOIN raw_messages m ON m.conversation_id=c.id
-        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND ${horizon}
-        ORDER BY conversation_id,message_id`,args,row=>{
+        WHERE c.id=? AND ${horizon}
+        ORDER BY conversation_id,message_id`,[],row=>{
         remember(roots,pair(row.conversation_id,row.message_id));remember(events,pair(row.client,row.message_id));
-      });
+      },conversationIds);
       if(roots.size)scopes.add(scope(...args));
       each('SELECT receipt_id,conversation_id,message_id,start,end FROM raw_receipt_lineage ORDER BY receipt_id,conversation_id,message_id,start,end',[],row=>{
         if(roots.has(pair(row.conversation_id,row.message_id)))remember(rootReceipts,row.receipt_id);
@@ -272,15 +289,18 @@ export function createRawSearchAuthority(database, options) {
       });
       const related=`WITH edges AS (SELECT l.* FROM json_each(?) seek
         CROSS JOIN raw_receipt_lineage l ON l.rowid=seek.value) `;
-      const conversations=scan(`SELECT id,owner_id,scope,project_id,client,session_key FROM raw_conversations WHERE ${where}
-        AND rowid<=${bounds.conversations} ORDER BY id LIMIT 50001`,args);
+      const conversations=scan(`SELECT id,owner_id,scope,project_id,client,session_key FROM (
+        SELECT c.id,c.owner_id,c.scope,c.project_id,c.client,c.session_key
+        FROM json_each(?) seek CROSS JOIN raw_conversations c ON c.id=seek.value
+        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.rowid<=${bounds.conversations})
+        ORDER BY id LIMIT 50001`,args,conversationIds);
       const parts=scan(`SELECT p.conversation_id,p.message_id,p.part_index,p.start,p.end,p.saved,p.digest,
         p.byte_count,p.event_id,p.reason,p.format,p.key_version,length(p.sealed) AS bytes,raw_search_sealed_digest(p.sealed) AS fingerprint,
         m.role,m.ordinal,m.occurred_at,m.total_units,m.total_bytes
         FROM raw_parts p CROSS JOIN raw_conversations c ON c.id=p.conversation_id
         JOIN raw_messages m ON m.conversation_id=p.conversation_id AND m.message_id=p.message_id
         WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND ${horizon}
-        ORDER BY p.conversation_id,p.message_id,p.part_index LIMIT 50001`,args);
+        ORDER BY p.conversation_id,p.message_id,p.part_index LIMIT 50001`,args,undefined,conversationIds);
       const exclusions=scan(`SELECT x.* FROM json_each(?) seek CROSS JOIN raw_source_exclusions x ON x.rowid=seek.value
         ORDER BY x.conversation_id,x.message_id,x.start,x.end LIMIT 50001`,[],exclusionKeys);
       const fences=scan(`SELECT f.* FROM json_each(?) seek CROSS JOIN raw_session_fences f ON f.rowid=seek.value
@@ -298,10 +318,10 @@ export function createRawSearchAuthority(database, options) {
         FROM json_each(?) seek CROSS JOIN receipts r ON r.id=seek.value
         LEFT JOIN memories m ON m.id=r.memory_id LEFT JOIN raw_receipt_origins o ON o.receipt_id=r.id
         ORDER BY r.id LIMIT 50001`,[],receiptKeys);
-      const maps=scan(`SELECT a.* FROM raw_source_maps a JOIN raw_conversations c ON c.id=a.conversation_id
+      const maps=scan(`SELECT a.* FROM raw_source_maps a CROSS JOIN raw_conversations c ON c.id=a.conversation_id
         JOIN raw_messages m ON m.conversation_id=a.conversation_id AND m.message_id=a.message_id
         WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND ${horizon}
-        ORDER BY a.conversation_id,a.message_id,a.source_key,a.start,a.end LIMIT 50001`,args);
+        ORDER BY a.conversation_id,a.message_id,a.source_key,a.start,a.end LIMIT 50001`,args,undefined,conversationIds);
       const controls=read(()=>db.prepare("SELECT 1 FROM sqlite_master WHERE name='local_capture_controls'").get())?
         scan(`SELECT client,revision FROM local_capture_controls WHERE ${where} ORDER BY client LIMIT 50001`,args):[];
       const facts=has('content_suppressions')?
