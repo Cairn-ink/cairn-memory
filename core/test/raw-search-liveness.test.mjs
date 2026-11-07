@@ -2,11 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {performance} from 'node:perf_hooks';
-import {sourceFixture,savedSource} from '../testing/raw-source-fixtures.mjs';
-import {searchFixture} from '../testing/raw-search-fixtures.mjs';
+import {sourceFixture,savedSource,ns} from '../testing/raw-source-fixtures.mjs';
+import {transaction} from '../database.mjs';
+import {writeContentSuppressionInside} from '../content-suppression-storage.mjs';
+import {searchFixture,safetySourceFixture} from '../testing/raw-search-fixtures.mjs';
 
 async function fixture(t,count=1){
-  const f=sourceFixture(t);
+  const f=safetySourceFixture(t);
   for(let i=0;i<count;i++)await savedSource(f,'Synthetic copper telescope '+i+'.',{sessionId:'synthetic-'+i});
   const s=await searchFixture(f);await s.maintain({maxItems:128,maxMs:5000});await s.reopen();
   const own=Object.getOwnPropertyDescriptor(performance,'now');let now=100;
@@ -48,4 +50,24 @@ test('a canonical version change between deadline attempts rebuilds from zero',a
   f.db.exec('UPDATE raw_owner_usage SET revision=revision+1');
   assert.equal((await s.search({query:'copper'})).candidates.length,1);
   assert.equal(work.rebuilds,2);
+});
+
+test('a complete version-verified commitment remains reusable after a later deadline',async t=>{
+  const {s,advance}=await fixture(t),work=observe(t,{advance,expireSelection:true});
+  assertEmpty(await s.search({query:'copper'}));assert.equal(work.rebuilds,1);
+  const completed=await s.search({query:'copper'});
+  assert.equal(completed.coverage.status,'complete');assert.equal(completed.candidates.length,1);
+  assert.equal(work.rebuilds,1,'a later attempt reuses only the completed commitment');
+});
+for(const mutation of ['forget','suppression'])test(`a ${mutation} after a complete rebuild invalidates the admitted commitment before reuse`,async t=>{
+  const {f,s,advance}=await fixture(t),work=observe(t,{advance,expireSelection:true});
+  assertEmpty(await s.search({query:'copper'}));assert.equal(work.rebuilds,1);
+  const row=f.db.prepare('SELECT conversation_id,message_id FROM raw_messages').get();
+  if(mutation==='forget'){
+    const memory=f.db.prepare('SELECT id,revision FROM memories WHERE deleted=0').get();assert.ok(memory);
+    assert.equal((await f.call('forget',{namespace:ns,memoryId:memory.id,expectedRevision:memory.revision})).ok,true);
+  }else transaction(f.db,()=>writeContentSuppressionInside(f.db,{namespace:ns,kind:'raw',key:row.conversation_id,
+    matchMode:'span',messageId:row.message_id,start:0,end:1000,reason:'privacy_erase',actionId:'synthetic-suppression'}));
+  assert.equal((await s.search({query:'copper'})).candidates.length,0);
+  assert.equal(work.rebuilds,2,'the changed canonical version must start the rebuild from zero');
 });

@@ -549,8 +549,9 @@ export function createRawSearchAuthority(database, options) {
       return entries.map(entry => entry.value);
     },at);
   }
-  function reset() {
-    cachedFence=undefined;eligibility.clear();eligibilityVersion=undefined;
+  function reset({keepCommitment=false}={}) {
+    if(!keepCommitment)cachedFence=undefined;
+    eligibility.clear();eligibilityVersion=undefined;
   }
   function refresh(at=Infinity) {
     deadline(at);resetContentSuppressionRequestInside(db);
