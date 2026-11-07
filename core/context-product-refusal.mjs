@@ -12,4 +12,3 @@ export function refuseAuthority(cause, code = 'authority_required') {
     throw error;
   }
 }
-
