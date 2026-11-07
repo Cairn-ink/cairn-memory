@@ -627,6 +627,20 @@ for(const kind of ['new','replaced','matched'])test(`standalone first-seal censu
   assert.equal(s.replacements,Number(kind==='replaced'));
 });
 
+// Existing legacy WAL is a second one-time first-open exception. Counts
+// include canonical/lifecycle reads; the creation child is not involved.
+for(const missing of ['row','table'])test(`standalone legacy WAL migration census: missing ${missing}`,t=>{
+  const s=setup(t,{mode:'WAL'});s.close();legacyWal(s,missing);s.open();
+  s.executed.length=0;const checksBefore=s.checks;s.storage.admit(2000);
+  const actual={begin:s.executed.filter(q=>q.startsWith('BEGIN')).length,
+    commit:s.executed.filter(q=>q==='COMMIT').length,writeBegin:s.executed.filter(q=>q==='BEGIN IMMEDIATE').length};
+  const expected=missing==='row'?{begin:5,commit:4,writeBegin:1}:{begin:6,commit:5,writeBegin:1};
+  t.diagnostic(JSON.stringify({missing,baseline:{begin:4,commit:3,writeBegin:0},actual,wholeFileStatements:s.checks-checksBefore}));
+  assert.deepEqual(actual,expected,'absolute standalone legacy migration transaction census');
+  assert.equal(s.checks-checksBefore,2);assert.equal(replacementCalls(s).length,0);assert.equal(s.valid(),true);
+  assert.equal(Boolean(s.observe().publication),missing==='row','admission alone does not republish retired schema-bound pointers');
+});
+
 for(const [mode,replaced] of [['DELETE',false],['DELETE',true],['WAL',false]])test(`failed first-seal COMMIT: ${mode} ${replaced?'replacement':'new'} rolls back, clears bootstrap and recovers once`,t=>{
   const s=setup(t,{build:false,mode});
   if(replaced){s.storage.admit(2000);s.close();sql(s.path,db=>db.exec('UPDATE product_attestation SET stamp=stamp+1'));s.open();}

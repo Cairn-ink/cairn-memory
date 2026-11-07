@@ -1928,6 +1928,14 @@ share: its first parent seal uses one initialization BEGIN/COMMIT pair. This is
 a first-open cost, including after replacement; matched admissions and steady
 maintenance turns add no transactions.
 
+A second one-time exception is the first-open migration of an existing legacy
+WAL cache. Standalone admission with a missing seal row uses 5 BEGINs, 4 COMMITs
+and 1 write BEGIN; a missing seal table uses 6 BEGINs, 5 COMMITs and 1 write BEGIN.
+Both compare with 4 BEGINs, 3 COMMITs and no write BEGIN before attestation.
+These parent counts include canonical and lifecycle reads. Authenticating the
+old bindings inside the sealing writer transaction adds one canonical read pair
+for the missing-table case; it needs no separate sidecar read transaction.
+
 A reader opened after a mismatch is detected never serves the untrusted file;
 a reader opened before an out-of-band seal removal keeps serving until its next
 reopen (content safety by delivery revalidation).
@@ -1940,8 +1948,14 @@ open after upgrade; DELETE-mode caches rebuild once. A missing WAL seal means
 no attestation table or no singleton row. A healthy host-configured WAL cache
 runs `quick_check` and `foreign_key_check` inside the first write transaction,
 before the DDL and the seal. A missing-table upgrade retires the old
-schema-bound publication/progress records in bounded slices in that transaction;
-normal maintenance rebuilds them. Missing-row upgrades preserve publications.
+schema-bound publication/progress records in 128-row slices in that transaction.
+The aggregate migration cost scales with the number of legacy pointer and
+certificate rows. On a direct refresh it may exceed one turn, including a turn
+that performs no corpus work. Admission and readiness are separate: the
+missing-table upgrade retires the old schema-bound publications, so lexical
+reads are not ready until normal maintenance republishes. Missing-row upgrades
+preserve publications. A bounded multi-transaction migration is a planned
+follow-up.
 A rollback leaves the seal missing, so the next open checks again. An attested
 WAL open runs zero whole-file statements. A present but invalid WAL seal is
 refused under the existing non-DELETE rule, without a whole-file check.
