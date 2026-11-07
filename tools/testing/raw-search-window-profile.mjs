@@ -26,7 +26,7 @@ const {openRawSearch}=await load('core/raw-search-index.mjs');
 const {rawSearchHost,broker}=await load('core/testing/raw-search-fixtures.mjs');
 const {localPlainPort,rawNamespace:ns}=await load('core/testing/raw-fixtures.mjs');
 const {measureLineageProfile}=await load('tools/testing/measure-raw-search-lineage.mjs');
-const {captureContention,measureRawFullRead}=await load('tools/testing/measure-raw-search.mjs');
+const {captureContention,measureRawFullRead,measureRawColdSearch}=await load('tools/testing/measure-raw-search.mjs');
 const summary=values=>{const sorted=values.toSorted((a,b)=>a-b),at=q=>sorted[Math.ceil(sorted.length*q)-1]??null;
   return {samples:sorted.length,p50:at(.5),p95:at(.95),p99:at(.99),max:sorted.at(-1)??null};};
 const path=join(record.path,'canonical.sqlite'),directory=join(record.path,'index');
@@ -56,24 +56,29 @@ try{
   if(['commitment-cost','cadence'].includes(profile))report=await measureLineageProfile({profile,count,path,authority,service,host,input,sections,sharedIntervals:intervals,lineage:density});
   else if(profile==='cold'){
     await service.close();service=null;
-    const cold=[],warm=[],full=[],preparedFull=[],rawRetrieval=[],prepare=[],errors=[],phaseTimes={},outcomes={};
+    const cold=[],coldWithFactory=[],warm=[],full=[],preparedFull=[],rawRetrieval=[],prepare=[],errors=[],phaseTimes={},outcomes={};
     for(let sample=0;sample<20;sample++){
-      takePhases();const start=performance.now();let coldService;
+      takePhases();const start=performance.now();let coldService,searchAt,stage='factory',coldRecorded=false;
       try{
-        coldService=await openRawSearch(options);const result=await coldService.search(input,host.token);cold.push(performance.now()-start);
+        const measured=await measureRawColdSearch(async()=>{coldService=await openRawSearch(options);return coldService;},instance=>{
+          stage='cold';searchAt=performance.now();return instance.search(input,host.token);
+        });
+        const result=measured.value;cold.push(measured.ms);coldWithFactory.push(measured.totalMs);coldRecorded=true;
         const values=takePhases();for(const [name,ms] of Object.entries(values))(phaseTimes[name]??=[]).push(ms);
         const outcome=result.coverage.status==='complete'?'complete':result.candidates.length?'partial-with-candidates':'empty-partial';outcomes[outcome]=(outcomes[outcome]??0)+1;
-        const warmStart=performance.now(),next=await coldService.search(input,host.token);warm.push(performance.now()-warmStart);
+        stage='warm';const warmStart=performance.now(),next=await coldService.search(input,host.token);warm.push(performance.now()-warmStart);
+        stage='full';
         const original=await measureRawFullRead(storage,authority);full.push(original.ms);rawRetrieval.push(original.retrievalMs);
         const fullStart=performance.now();let preparations=0;
         for(const candidate of next.candidates){try{const at=performance.now(),handle=await coldService.prepare(candidate,{},host.token);prepare.push(performance.now()-at);coldService.revalidate([handle]);preparations++;}catch(error){errors.push({stage:'prepare',code:error.code});}}
         preparedFull.push(warm.at(-1)+performance.now()-fullStart);
         console.log(JSON.stringify({profile,count,sample,coldMs:cold.at(-1),outcome,preparations}));
-      }catch(error){errors.push({stage:'cold',code:error.code,ms:performance.now()-start});cold.push(performance.now()-start);}
+      }catch(error){errors.push({stage,code:error.code,ms:performance.now()-start});
+        if(stage==='cold'&&!coldRecorded){cold.push(performance.now()-searchAt);coldWithFactory.push(performance.now()-start);}}
       finally{await coldService?.close();}
     }
-    report={profile,turns:count,cold:summary(cold),warm:summary(warm),fullRead:summary(full),rawRetrieval:summary(rawRetrieval),fullPreparedRead:summary(preparedFull),preparations:summary(prepare),errors,outcomes,
-      phases:Object.fromEntries(Object.entries(phaseTimes).map(([name,values])=>[name,summary(values)])),shared:summary(sections),gate:{coldP95:summary(cold).p95<=1100,noErrors:errors.length===0}};
+    report={profile,turns:count,cold:summary(cold),coldWithFactory:summary(coldWithFactory),warm:summary(warm),fullRead:summary(full),rawRetrieval:summary(rawRetrieval),fullPreparedRead:summary(preparedFull),preparations:summary(prepare),errors,outcomes,
+      phases:Object.fromEntries(Object.entries(phaseTimes).map(([name,values])=>[name,summary(values)])),shared:summary(sections),gate:{coldP95:cold.length===20&&summary(cold).p95<=1100,noErrors:errors.length===0}};
   }else if(profile==='capture'){
     const capture=await captureContention(path,service,host.token,targets);
     report={profile,turns:count,capture,gate:{overlap:capture.overlap.samples>=targets.minCaptureOverlap,

@@ -20,6 +20,11 @@ import { createTestWorkspace } from './workspace.mjs';
 
 const summary=values=>{const sorted=[...values].sort((a,b)=>a-b),at=q=>sorted[Math.min(sorted.length-1,Math.ceil(sorted.length*q)-1)];
   return {p50:at(.5),p95:at(.95),p99:at(.99),max:sorted.at(-1),samples:sorted.length};};
+export async function measureRawColdSearch(factory,search,now=()=>performance.now()){
+  const openedAt=now(),service=await factory(),searchAt=now();
+  const value=await search(service),endedAt=now();
+  return {value,ms:endedAt-searchAt,factoryMs:searchAt-openedAt,totalMs:endedAt-openedAt};
+}
 // The original full-read profile: payload, lexical hierarchy, commitment, then
 // canonical check/open for every returned physical segment. Preparations remain
 // a separate API measurement so retained-fixture runs stay comparable.

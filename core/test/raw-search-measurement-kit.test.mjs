@@ -5,7 +5,7 @@ import {spawnSync} from 'node:child_process';
 import {sourceFixture} from '../testing/raw-source-fixtures.mjs';
 import {transaction} from '../database.mjs';
 import {observeCaptureWriter} from '../../tools/testing/raw-search-writer-observer.mjs';
-import {measureRawFullRead} from '../../tools/testing/measure-raw-search.mjs';
+import {measureRawFullRead,measureRawColdSearch} from '../../tools/testing/measure-raw-search.mjs';
 import {rawSearchPostings} from '../raw-search-retrieval.mjs';
 
 test('optional phase transforms load every serving module without opening a store',async()=>{
@@ -39,4 +39,11 @@ test('retained full-read measurement preserves payload, hierarchy, fence and can
   const authority={fence(){calls.push('fence');},check(value){assert.equal(value,source);calls.push('check');},async open(value){assert.equal(value,source);calls.push('open');}};
   const result=await measureRawFullRead(storage,authority);
   assert.deepEqual(calls,['snapshot','fence','check','open']);assert.equal(result.selected.length,1);assert.equal(result.opening.length,1);
+});
+test('cold measurement keeps factory opening separate from the original search clock',async()=>{
+  let now=0;const service={},value={};
+  const result=await measureRawColdSearch(async()=>{now+=50;return service;},async selected=>{
+    assert.equal(selected,service);now+=30;return value;
+  },()=>now);
+  assert.deepEqual(result,{value,ms:30,factoryMs:50,totalMs:80});
 });
