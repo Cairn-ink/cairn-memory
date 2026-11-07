@@ -16,3 +16,9 @@ export function outcomeSummary(samples){
 export function selectionSummary(units){
   return {count:units.length,checked:distribution(units.map(unit=>unit.checked??unit.rows)),rows:distribution(units.map(unit=>unit.rows)),holdMs:distribution(units.map(unit=>unit.holdMs))};
 }
+
+// Keep the complete operation chain in compact console summaries as in JSON.
+export function errorSummary(error){
+  const {code,internalCode,originInternalCode,finalInternalCode,internalCodes,internalRecords}=error;
+  return {code,internalCode,originInternalCode,finalInternalCode,internalCodes,internalRecords};
+}

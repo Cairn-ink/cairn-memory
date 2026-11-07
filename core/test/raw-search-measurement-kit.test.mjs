@@ -158,7 +158,9 @@ test('measurement hooks retain internal error codes and operation deadline overs
         mode='status';assert.equal((await s.service.status()).error,'raw_search_unavailable');
         assert.deepEqual(takeInternalErrors(),['synthetic_status_failure']);mode='complete';
         internalFailure({code:'synthetic_original'});internalFailure({code:'raw_search_unavailable'});
-        assert.equal(measurementError({code:'raw_search_unavailable'}).internalCode,'synthetic_original');
+        const mapped=measurementError({code:'raw_search_unavailable'});assert.equal(mapped.internalCode,'synthetic_original');
+        assert.equal(mapped.originInternalCode,'synthetic_original');assert.equal(mapped.finalInternalCode,'synthetic_original');
+        assert.deepEqual(mapped.internalCodes,['synthetic_original','raw_search_unavailable']);
         const f2=sourceFixture(t);await savedSource(f2,'Synthetic copper provider.');
         const provider={id:'synthetic-failing',revision:'1',dimensions:2,normalization:'l2',async embed(texts,controls){controls.beforeDispatch();throw Object.assign(Error('synthetic_provider_failure'),{code:'synthetic_provider_failure'});}};
         const s2=await searchFixture(f2,{embedder:provider,policy:{family:'local',maxBatchDocuments:1,maxRequests:100,maxConcurrent:1,maxUsd:0}});
@@ -209,7 +211,10 @@ test('preparation deadline cause precedes the opener crypto mapping',()=>{
       await s.reopen();const current=(await s.search({query:'copper'})).candidates[0];assert.ok(current);takeInternalErrors();
       try{let failure;await assert.rejects(s.prepare(current),error=>{failure=error;return error.code==='raw_search_unavailable';});
         const result=measurementError(failure);assert.equal(result.code,'raw_search_unavailable');
-        assert.equal(result.internalCode,'search_deadline');assert.equal(result.internalCodes[0],'search_deadline');
+        assert.equal(result.internalCode,'search_deadline');assert.equal(result.originInternalCode,'search_deadline');
+        assert.equal(result.finalInternalCode,'raw_crypto_unavailable');assert.equal(result.internalCodes[0],'search_deadline');
+        assert.deepEqual(result.internalRecords[0],{code:'search_deadline',site:'origin'});
+        assert.ok(result.internalRecords.some(row=>row.code==='raw_crypto_unavailable'&&row.site==='mapping'));
         assert.ok(result.internalCodes.includes('raw_crypto_unavailable'));
         f.port.openRaw=open;await s.reopen();const fresh=(await s.search({query:'copper'})).candidates[0];
         assert.ok(await s.prepare(fresh));
@@ -217,4 +222,98 @@ test('preparation deadline cause precedes the opener crypto mapping',()=>{
     });`;
   const child=spawnSync(process.execPath,['--input-type=module','-e',script],{encoding:'utf8',timeout:30000});
   assert.equal(child.status,0,child.stdout+child.stderr);assert.equal(child.signal,null);
+});
+
+
+test('retry refresh deadline and later attempt failure retain origin, final code and chain',()=>{
+  const url=path=>new URL(path,import.meta.url).href;
+  const script=`const {registerHooks}=await import('node:module');
+    const injection=registerHooks({load(url,context,next){const result=next(url,context);
+      if(!url.endsWith('/core/raw-search-authority.mjs'))return result;
+      const source=String(result.source),before='deadline(at);resetContentSuppressionRequestInside(db);';
+      if(source.split(before).length!==2)throw Error('synthetic_refresh_match_missing');
+      return {...result,source:source.replace(before,'rawSearchDeadline();resetContentSuppressionRequestInside(db);')};}});
+    const {installPhaseMeasurement}=await import(${JSON.stringify(url('../../tools/testing/raw-search-phase-loader.mjs'))});const hook=installPhaseMeasurement();
+    const {default:test}=await import('node:test');const {default:assert}=await import('node:assert/strict');
+    const {performance}=await import('node:perf_hooks');Object.defineProperty(performance,'now',{configurable:true,value:()=>100});
+    const {DatabaseSync}=await import('node:sqlite');
+    const {sourceFixture,savedSource}=await import(${JSON.stringify(url('../testing/raw-source-fixtures.mjs'))});
+    const {searchFixture}=await import(${JSON.stringify(url('../testing/raw-search-fixtures.mjs'))});
+    const {measurementError,takeInternalErrors,takeInternalErrorCounts}=await import(${JSON.stringify(url('../../tools/testing/raw-search-phase-ledger.mjs'))});
+    test('retry chain',async t=>{const f=sourceFixture(t);await savedSource(f,'Synthetic copper.');const s=await searchFixture(f);await s.maintain();
+      takeInternalErrors();takeInternalErrorCounts();const prepare=DatabaseSync.prototype.prepare;let attempts=0;
+      DatabaseSync.prototype.prepare=function(sql){if(sql.startsWith('SELECT s.*,h.sequence')){
+        attempts++;throw Object.assign(Error('synthetic_attempt'),{code:attempts===1?'source_changed':'unsupported_database'});
+      }return prepare.call(this,sql);};
+      try{let failure;await assert.rejects(s.search({query:'copper'}),error=>{failure=error;return error.code==='raw_search_unavailable';});
+        assert.equal(attempts,2);const result=measurementError(failure);
+        assert.equal(result.internalCode,'search_deadline');assert.equal(result.originInternalCode,'search_deadline');
+        assert.equal(result.finalInternalCode,'unsupported_database');assert.deepEqual(result.internalCodes,['search_deadline','unsupported_database']);
+        const {errorSummary}=await import(${JSON.stringify(url('../../tools/testing/raw-search-window-summary.mjs'))});
+        assert.deepEqual(errorSummary(result),result);
+        assert.deepEqual(takeInternalErrorCounts(),{search_deadline:1,unsupported_database:1});assert.deepEqual(takeInternalErrors(),[]);
+      }finally{DatabaseSync.prototype.prepare=prepare;hook.deregister();injection.deregister();}
+    });`;
+  const child=spawnSync(process.execPath,['--input-type=module','-e',script],{encoding:'utf8',timeout:30000});
+  assert.equal(child.status,0,child.stdout+child.stderr);assert.equal(child.signal,null);
+});
+
+test('cold window scopes handled partials across samples and warm operations',async t=>{
+  const {createTestWorkspace}=await import('../../tools/testing/workspace.mjs');
+  const {writeFileSync,readFileSync,statSync,rmSync}=await import('node:fs');
+  const {join,resolve}=await import('node:path');
+  const {fileURLToPath}=await import('node:url');
+  const workspace=createTestWorkspace(t),recordPath=join(workspace.path,'fixture.json');
+  const url=path=>new URL(path,import.meta.url).href;
+  const seed=`const {performance}=await import('node:perf_hooks');Object.defineProperty(performance,'now',{configurable:true,value:()=>100});
+    const {measureRawSearch}=await import(${JSON.stringify(url('../../tools/testing/measure-raw-search.mjs'))});
+    await measureRawSearch({diagnostic(){}},{sizes:[3],rawCapBytes:12000});
+    const {readFileSync}=await import('node:fs'),{join}=await import('node:path');
+    const record=JSON.parse(readFileSync(process.env.CAIRN_RAW_MEASURE_FIXTURE_OUTPUT,'utf8'));
+    const {openRawSearch}=await import(${JSON.stringify(url('../raw-search-index.mjs'))});
+    const {rawSearchHost,broker}=await import(${JSON.stringify(url('../testing/raw-search-fixtures.mjs'))});
+    const {localPlainPort,rawNamespace:ns}=await import(${JSON.stringify(url('../testing/raw-fixtures.mjs'))});
+    const host=rawSearchHost(),service=await openRawSearch({version:'raw-search-v1',enabled:true,backend:'local',
+      path:join(record.path,'canonical.sqlite'),directory:join(record.path,'index'),ownerId:ns.ownerId,readSet:[ns],
+      authority:host.authority,crypto:localPlainPort(),maintenanceTurn:broker()});
+    try{await service.maintain({maxItems:16,maxMs:5000},host.token);}finally{await service.close();}`;
+  for(const mode of ['sample','warm','later-sample']){
+    const seedRun=spawnSync(process.execPath,['--input-type=module','-e',seed],{encoding:'utf8',timeout:30000,
+      env:{...process.env,CAIRN_RAW_MEASURE_PROFILE:'fixture-only',CAIRN_RAW_MEASURE_FIXTURE_OUTPUT:recordPath}});
+    assert.equal(seedRun.status,0,seedRun.stdout+seedRun.stderr);assert.equal(seedRun.signal,null);
+    const record=JSON.parse(readFileSync(recordPath,'utf8')),identity=statSync(record.path);
+    // Only this test's freshly generated fixture is removed.
+    t.after(()=>{assert.equal(statSync(record.path).ino,identity.ino);rmSync(record.path,{recursive:true});});
+    const density=join(workspace.path,'density.json'),output=join(workspace.path,'report.json'),preload=join(workspace.path,'observe.mjs');
+    writeFileSync(density,JSON.stringify({lineage:record.lineage}));
+    writeFileSync(preload,`import {performance} from 'node:perf_hooks';import {DatabaseSync} from 'node:sqlite';import {registerHooks} from 'node:module';
+      let now=100,reads=0,opens=0;Object.defineProperty(performance,'now',{configurable:true,value:()=>now});
+      registerHooks({load(url,context,next){const result=next(url,context);
+        if(url.endsWith('/tools/testing/raw-search-window-profile.mjs')&&${JSON.stringify(mode)}==='sample'){
+          const source=String(result.source),before="  if(['commitment-cost','cadence'].includes(profile))";
+          if(source.split(before).length!==2)throw Error('synthetic_profile_match_missing');
+          return {...result,source:source.replace(before,"  const earlier=await service.search(input,host.token);if(earlier.coverage.status!=='partial'||earlier.candidates.length)throw Error('synthetic_partial_missing'); "+before)};
+        }
+        if(!url.endsWith('/core/raw-search-index.mjs'))return result;
+        const source=String(result.source),before='const canonicalFile=()=>{';if(source.split(before).length!==2)throw Error('synthetic_factory_match_missing');
+        return {...result,source:source.replace(before,"if(globalThis.syntheticFactory())throw Object.assign(Error('synthetic_factory'),{code:'unsupported_database'});"+before)};}});
+      globalThis.syntheticFactory=()=>++opens===2&&${JSON.stringify(mode)}==='sample';
+      const prepare=DatabaseSync.prototype.prepare;
+      DatabaseSync.prototype.prepare=function(sql){const statement=prepare.call(this,sql);if(sql.startsWith('SELECT s.*,h.sequence')&&new Error().stack.includes('at searchAttempt')){
+        reads++;if(reads===(${JSON.stringify(mode)}==='later-sample'?5:1))now+=1001;
+        if((${JSON.stringify(mode)}==='warm'&&reads===2)||(${JSON.stringify(mode)}==='later-sample'&&reads===13))throw Object.assign(Error('synthetic_warm'),{code:'unsupported_database'});
+      }return statement;};`);
+    const run=spawnSync(process.execPath,['--import='+preload,fileURLToPath(new URL('../../tools/testing/raw-search-window-profile.mjs',import.meta.url)),
+      '--worktree='+resolve(fileURLToPath(new URL('../..',import.meta.url))),'--fixture='+recordPath,'--profile=cold','--output='+output,
+      '--targets='+fileURLToPath(new URL('./raw-search-performance.test.mjs',import.meta.url)),'--density='+density],{encoding:'utf8',timeout:60000});
+    assert.equal(run.status,0,run.stdout+run.stderr);assert.equal(run.signal,null);
+    const report=JSON.parse(readFileSync(output,'utf8'));
+    assert.equal(report.errors.length,1,JSON.stringify(report.errors));const error=report.errors[0];
+    assert.equal(error.stage,mode==='sample'?'factory':mode==='warm'?'warm':'cold');
+    if(mode==='later-sample'){assert.equal(error.sample,6);assert.equal(report.coldSamples[2].outcome,'empty-partial');}assert.equal(error.originInternalCode,'unsupported_database');
+    assert.equal(error.internalCode,'unsupported_database');assert.equal(error.finalInternalCode,'unsupported_database');
+    assert.deepEqual(error.internalCodes,['unsupported_database']);
+    assert.ok(report.internalErrors.search_deadline>=1);assert.equal(report.internalErrors.unsupported_database,1);
+    const partials=[...report.coldSamples,...report.warmSamples].filter(row=>row.outcome==='empty-partial');assert.equal(partials.length,mode==='sample'?0:1);
+  }
 });

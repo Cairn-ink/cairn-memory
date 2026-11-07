@@ -22,6 +22,10 @@ const observer=`{
   };
 }\n`;
 threads.Worker=class extends OriginalWorker{
-  constructor(source,options){super(options?.eval&&source.includes('const service=await openRawSearch(')?observer+source:source,options);}
+  constructor(source,options){
+    const inject=options?.eval&&source.includes('const service=await openRawSearch(');
+    super(inject?observer+source:source,options);
+    if(inject)process.stdout.write('synthetic_worker_clock_injected\n');
+  }
 };
 syncBuiltinESMExports();

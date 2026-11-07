@@ -261,4 +261,5 @@ test('Worker clocks cover opening and search independently of the parent clock',
     '--test-timeout=110000',fileURLToPath(import.meta.url)],{encoding:'utf8',timeout:120000,env:childEnv});
   assert.equal(child.status,0,child.stdout+child.stderr);assert.equal(child.signal,null);
   assert.match(child.stdout,/# pass 1\b/);
+  assert.equal(child.stdout.match(/synthetic_worker_clock_injected/g)?.length,2,child.stdout);
 });

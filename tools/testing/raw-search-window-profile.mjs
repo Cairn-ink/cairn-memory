@@ -20,7 +20,7 @@ const targetLiteral=frozen.match(/RAW_SEARCH_TARGETS=Object\.freeze\((\{[\s\S]*?
 const targets=runInNewContext('('+targetLiteral[1]+')');
 const phases=['cold','commitment-cost','cadence'].includes(profile);
 (await load('tools/testing/raw-search-phase-loader.mjs')).installPhaseMeasurement();
-const {takePhases,takeSelectionUnits,measurementError,takeInternalErrors,takeOperationOvershoots}=await load('tools/testing/raw-search-phase-ledger.mjs');
+const {takePhases,takeSelectionUnits,measurementError,takeInternalErrors,takeOperationOvershoots,takeInternalErrorCounts}=await load('tools/testing/raw-search-phase-ledger.mjs');
 const {createRawSearchAuthority}=await load('core/raw-search-authority.mjs');
 const {openReadDatabase}=await load('core/read-database.mjs');
 const {openRawSearchStorage}=await load('core/raw-search-storage.mjs');
@@ -56,31 +56,31 @@ try{
     authority:host.authority,crypto:localPlainPort(),maintenanceTurn:broker(),embedder:provider,
     policy:{family:'local',maxBatchDocuments:1,maxRequests:100,maxConcurrent:1,maxUsd:0}};
   const input={query:'copper telescope',queryVector:{input:'copper telescope',embedder:{id:provider.id,revision:provider.revision,dimensions:1536,normalization:'l2'},vector}};
-  service=await openRawSearch(options);let report;
+  takeInternalErrors();service=await openRawSearch(options);let report;
   if(['commitment-cost','cadence'].includes(profile))report=await measureLineageProfile({profile,count,path,authority,service,host,input,sections,sharedIntervals:intervals,lineage:density});
   else if(profile==='cold'){
     await service.close();service=null;
     const cold=[],coldWithFactory=[],warm=[],full=[],preparedFull=[],rawRetrieval=[],prepare=[],errors=[],phaseTimes={},outcomes={},coldSamples=[],warmSamples=[],selectionUnits=[];
     for(let sample=0;sample<20;sample++){
-      takePhases();takeSelectionUnits();const start=performance.now();let coldService,searchAt,stage='factory',coldRecorded=false;
+      takePhases();takeSelectionUnits();takeInternalErrors();const start=performance.now();let coldService,searchAt,stage='factory',coldRecorded=false;
       try{
         const measured=await measureRawColdSearch(async()=>{coldService=await openRawSearch(options);return coldService;},instance=>{
-          stage='cold';searchAt=performance.now();return instance.search(input,host.token);
+          takeInternalErrors();stage='cold';searchAt=performance.now();return instance.search(input,host.token);
         });
         const result=measured.value;cold.push(measured.ms);coldWithFactory.push(measured.totalMs);coldRecorded=true;
         const values=takePhases();for(const [name,ms] of Object.entries(values))(phaseTimes[name]??=[]).push(ms);
         const outcome=searchOutcome(result),units=takeSelectionUnits(),rowsChecked=units.reduce((n,u)=>n+u.checked,0);coldSamples.push({ms:measured.ms,outcome,rowsChecked,selectionMs:values.selection??0});selectionUnits.push(...units);outcomes[outcome]=(outcomes[outcome]??0)+1;
-        stage='warm';const warmStart=performance.now();let next;
+        takeInternalErrors();stage='warm';const warmStart=performance.now();let next;
         try{next=await coldService.search(input,host.token);const ms=performance.now()-warmStart;warm.push(ms);warmSamples.push({ms,outcome:searchOutcome(next)});}
         catch(error){const ms=performance.now()-warmStart;warm.push(ms);warmSamples.push({ms,outcome:'error'});throw error;}
         finally{selectionUnits.push(...takeSelectionUnits());}
-        stage='full';
+        takeInternalErrors();stage='full';
         const original=await measureRawFullRead(storage,authority);full.push(original.ms);rawRetrieval.push(original.retrievalMs);
         const fullStart=performance.now();let preparations=0;
-        for(const candidate of next.candidates){try{const at=performance.now(),handle=await coldService.prepare(candidate,{},host.token);prepare.push(performance.now()-at);coldService.revalidate([handle]);preparations++;}catch(error){errors.push({stage:'prepare',...measurementError(error)});}}
+        for(const candidate of next.candidates){let preparationStage='prepare';takeInternalErrors();try{const at=performance.now(),handle=await coldService.prepare(candidate,{},host.token);prepare.push(performance.now()-at);takeInternalErrors();preparationStage='revalidate';coldService.revalidate([handle]);preparations++;}catch(error){errors.push({sample,stage:preparationStage,...measurementError(error)});}}
         preparedFull.push(warm.at(-1)+performance.now()-fullStart);
         console.log(JSON.stringify({profile,count,sample,coldMs:cold.at(-1),outcome,preparations,rowsChecked,selectionMs:values.selection??0}));
-      }catch(error){errors.push({stage,...measurementError(error),ms:performance.now()-start});
+      }catch(error){errors.push({sample,stage,...measurementError(error),ms:performance.now()-start});
         if(stage==='cold'&&!coldRecorded){const ms=performance.now()-searchAt;cold.push(ms);coldWithFactory.push(performance.now()-start);const units=takeSelectionUnits(),values=takePhases();selectionUnits.push(...units);coldSamples.push({ms,outcome:'error',rowsChecked:units.reduce((n,u)=>n+u.checked,0),selectionMs:values.selection??0});outcomes.error=(outcomes.error??0)+1;}}
       finally{selectionUnits.push(...takeSelectionUnits());await coldService?.close();}
     }
@@ -102,24 +102,24 @@ try{
       await Promise.race([started,new Promise((_,reject)=>setTimeout(()=>reject(Error('writer_start_timeout')),15000))]);
       // Establish the post-capture semantic state before comparing scores.
       // A declared hybrid-to-lexical downgrade is not a wrong comparison.
-      await call('capture');await service.search(input,host.token);
+      await call('capture');takeInternalErrors();await service.search(input,host.token);
       for(let burst=0;burst<20;burst++){
-        const before=await service.search(input,host.token);
+        takeInternalErrors();const before=await service.search(input,host.token);
         const writing=Promise.all(Array.from({length:5},()=>call('capture')));writing.catch(()=>{});
-        let during;try{during=await service.search(input,host.token);}catch(error){errors.push(measurementError(error));}
+        takeInternalErrors();let during;try{during=await service.search(input,host.token);}catch(error){errors.push(measurementError(error));}
         await writing;
-        const after=await service.search(input,host.token);
+        takeInternalErrors();const after=await service.search(input,host.token);
         const canonical=result=>result.candidates.map(({proof,publication,...row})=>row);
         if(before.candidates.length&&after.candidates.length){comparisons++;try{assert.deepEqual(canonical(before),canonical(after));}catch{wrong++;}}
         if(during?.candidates.length&&after.candidates.length){comparisons++;try{assert.deepEqual(canonical(during),canonical(after));}catch{wrong++;}}
-        if(after.candidates.length)try{const handle=await service.prepare(after.candidates[0],{},host.token);service.revalidate([handle]);}catch{refusals++;}
+        if(after.candidates.length){takeInternalErrors();try{const handle=await service.prepare(after.candidates[0],{},host.token);takeInternalErrors();service.revalidate([handle]);}catch(error){refusals++;errors.push(measurementError(error));}}
       }
       report={profile,turns:count,comparisons,silentWrongComparisons:wrong,refusals,errors,gate:{noSilentWrong:comparisons>0&&wrong===0}};
       await call('stop');assert.deepEqual(await exited,{code:0,signal:null});
     }finally{child.kill();await exited;}
   }else throw Error('invalid_profile');
   report.maxOperationDeadlineOvershootMs=Math.max(0,...takeOperationOvershoots());
-  report.internalErrors=takeInternalErrors();
+  report.internalErrors=takeInternalErrorCounts();
   report.sessionFences=sessionFences;
   writeFileSync(args['--output'],JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({profile,count,output:args['--output'],gate:report.gate}));
-}catch(error){writeFileSync(args['--output'],JSON.stringify({profile,sessionFences,errors:[measurementError(error)],maxOperationDeadlineOvershootMs:Math.max(0,...takeOperationOvershoots())},null,2)+'\n');throw error;}finally{await service?.close();await storage?.close();reader?.db.close();DatabaseSync.prototype.exec=exec;}
+}catch(error){writeFileSync(args['--output'],JSON.stringify({profile,sessionFences,errors:[measurementError(error)],internalErrors:takeInternalErrorCounts(),maxOperationDeadlineOvershootMs:Math.max(0,...takeOperationOvershoots())},null,2)+'\n');throw error;}finally{await service?.close();await storage?.close();reader?.db.close();DatabaseSync.prototype.exec=exec;}

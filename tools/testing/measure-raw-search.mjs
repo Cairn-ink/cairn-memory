@@ -1,4 +1,5 @@
-import {measurementError,takeInternalErrors,takeOperationOvershoots} from './raw-search-phase-ledger.mjs';
+import {errorSummary} from './raw-search-window-summary.mjs';
+import {measurementError,takeInternalErrors,takeOperationOvershoots,takeInternalErrorCounts} from './raw-search-phase-ledger.mjs';
 import {seedSessionFences,sessionFenceCount} from './raw-search-session-fences.mjs';
 import assert from 'node:assert/strict';
 import {sharedOverlapMs} from './raw-search-writer-observer.mjs';
@@ -32,7 +33,7 @@ export async function measureRawColdSearch(factory,search,now=()=>performance.no
 // canonical check/open for every returned physical segment. Preparations remain
 // a separate API measurement so retained-fixture runs stay comparable.
 export async function measureRawFullRead(storage,authority){
-  const start=performance.now(),snapshot=await storage.search(),rankStart=performance.now();
+  takeInternalErrors();const start=performance.now(),snapshot=await storage.search(),rankStart=performance.now();
   const result=retrieveRaw(snapshot.rows,'copper telescope'),retrievalMs=performance.now()-rankStart;
   const fenceStart=performance.now();
   try{authority.fence();}catch(error){assert.equal(error.code,'source_budget_exceeded');}
@@ -51,7 +52,7 @@ export async function measureRawSearch(t,targets) {
   t.diagnostic(JSON.stringify({hardware:{cpu:cpus()[0].model,cores:cpus().length,memoryBytes:totalmem()},node:process.version,targets}));
   const scenarios=[...targets.sizes.map(count=>({count,cap:false})),{count:Math.ceil(targets.rawCapBytes/4000),cap:true}];
   for(const scenario of scenarios.filter(s=>(!profile||!s.cap&&(profile!=='cadence'||s.count===10000))&&(!process.env.CAIRN_RAW_MEASURE_TURNS||process.env.CAIRN_RAW_MEASURE_TURNS.split(',').map(Number).includes(s.count)))){
-    const {count,cap}=scenario;console.log('measurement phase=seed turns='+count);
+    takeInternalErrors();takeInternalErrorCounts();const {count,cap}=scenario;console.log('measurement phase=seed turns='+count);
     const ws=createTestWorkspace(null,{prefix:'raw-search-measure-'}),path=join(ws.path,'canonical.sqlite'),directory=join(ws.path,'index');
     mkdirSync(directory,{mode:0o700});
     let db,reader,storage,service,retained=false;
@@ -146,12 +147,12 @@ export async function measureRawSearch(t,targets) {
       const factoryStart=performance.now();
       const serviceOptions={version:'raw-search-v1',enabled:true,backend:'local',path,directory,ownerId:ns.ownerId,readSet:[ns],
         authority:host.authority,crypto:localPlainPort(),maintenanceTurn:broker(),embedder:provider,policy:{family:'local',maxBatchDocuments:1,maxRequests:100,maxConcurrent:1,maxUsd:0}};
-      service=await openRawSearch(serviceOptions);
+      takeInternalErrors();service=await openRawSearch(serviceOptions);
       const factoryMs=performance.now()-factoryStart;
       const searchInput={query:'copper telescope',queryVector:{input:'copper telescope',embedder:{id:provider.id,revision:provider.revision,dimensions:1536,normalization:'l2'},vector:queryVector}};
       if(profile){
         const report=await lineageTools.measureLineageProfile({profile,count,path,authority,service,host,input:searchInput,sections,sharedIntervals,lineage});
-        report.maxOperationDeadlineOvershootMs=Math.max(0,...takeOperationOvershoots());report.internalErrors=takeInternalErrors();
+        report.maxOperationDeadlineOvershootMs=Math.max(0,...takeOperationOvershoots());report.internalErrors=takeInternalErrorCounts();
         report.indexedParts=built;report.sessionFences=sessionFences;
         report.checkpointError=checkpointError;
         report.measurement='synthetic lineage with native statement and exception observation';
@@ -162,9 +163,10 @@ export async function measureRawSearch(t,targets) {
         }
         const {samples,pages,pageTimeByIndex,rebuildErrors,searchErrors,warmOutcomes,cadences,...totals}=report;
         console.log('measurement lineage-result='+JSON.stringify({...totals,
-          rebuildErrors:rebuildErrors?.map(row=>({code:row.code,cause:row.cause,ms:row.ms})),
-          searchErrors:searchErrors?.map(row=>({code:row.code,cause:row.cause,ms:row.ms})),
-          cadences:cadences?.map(row=>({cadenceMs:row.cadenceMs,commits:row.commits,searches:row.searches.length,afterCommit:row.afterCommit,withoutCommit:row.withoutCommit,cache:row.cache}))}));
+          rebuildErrors:rebuildErrors?.map(row=>({...errorSummary(row),cause:row.cause,ms:row.ms})),
+          searchErrors:searchErrors?.map(row=>({...errorSummary(row),cause:row.cause,ms:row.ms})),
+          cadences:cadences?.map(row=>({cadenceMs:row.cadenceMs,commits:row.commits,searches:row.searches.length,afterCommit:row.afterCommit,withoutCommit:row.withoutCommit,cache:row.cache,
+            errors:['searches','prepares','revalidations'].flatMap(stage=>row[stage].filter(error=>!error.ok).map(error=>({stage,...errorSummary(error)})))}))}));
         if(process.env.CAIRN_RAW_MEASURE_FIXTURE_OUTPUT){
           const own=(await import('node:fs')).statSync(ws.path);
           writeFileSync(process.env.CAIRN_RAW_MEASURE_FIXTURE_OUTPUT,JSON.stringify({path:ws.path,dev:own.dev,inode:own.ino,count,lineage},null,2)+'\n');retained=true;
@@ -173,13 +175,13 @@ export async function measureRawSearch(t,targets) {
       }
       const apiErrors=[],prepareErrors=[],failedApiTimes=[];
       let coldApi,coldApiMs,coldApiError=null;
-      const coldApiStart=performance.now();
+      takeInternalErrors();const coldApiStart=performance.now();
       try{coldApi=await service.search(searchInput,host.token);}
       catch(error){coldApiError=measurementError(error);console.log('measurement call-failed='+JSON.stringify({turns:count,stage:'cold-search',error:error.code}));}
       coldApiMs=performance.now()-coldApiStart;
       let warmup=0;
       for(;warmup<targets.warmupSearches;warmup++){
-        let actual;
+        takeInternalErrors();let actual;
         try{actual=await service.search(searchInput,host.token);}
         catch(error){apiErrors.push({stage:'warmup',...measurementError(error)});break;}
         if(actual.semantic.state==='ready'||snapshot.partial||quota||count>targets.completeHybridTurns)break;
@@ -194,7 +196,7 @@ export async function measureRawSearch(t,targets) {
           const openStart=performance.now();await authority.open(segment.source);openingTimes.push(performance.now()-openStart);
         }
         full.push(performance.now()-begin);work.push(result.coverage.scanned);
-        const apiStart=performance.now();let actual;
+        takeInternalErrors();const apiStart=performance.now();let actual;
         try{actual=await service.search(searchInput,host.token);}
         catch(error){failedApiTimes.push(performance.now()-apiStart);apiErrors.push({stage:'search',...measurementError(error)});
           console.log('measurement call-failed='+JSON.stringify({turns:count,sample,stage:'search',error:error.code}));continue;}
@@ -203,7 +205,7 @@ export async function measureRawSearch(t,targets) {
         // Raw-cap measures retrieval and failure bounds. Projection/packing is
         // a later consumer's surface; representative source preparation is
         // measured separately for the turn profiles.
-        if(!cap&&actual.candidates.length){const start=performance.now();
+        if(!cap&&actual.candidates.length){takeInternalErrors();const start=performance.now();
           try{await service.prepare(actual.candidates[0],{},host.token);prepareTimes.push(performance.now()-start);}
           catch(error){prepareErrors.push({...measurementError(error),ms:performance.now()-start});}}
       }
@@ -221,16 +223,16 @@ export async function measureRawSearch(t,targets) {
         await service.close();service=null;
         const coldTimes=[],coldErrors=[];
         for(let sample=0;sample<targets.searchSamples;sample++){
-          const cold=await openRawSearch(serviceOptions),start=performance.now();
-          try{await cold.search(searchInput,host.token);coldTimes.push(performance.now()-start);}
+          takeInternalErrors();let cold,start=performance.now();
+          try{cold=await openRawSearch(serviceOptions);takeInternalErrors();start=performance.now();await cold.search(searchInput,host.token);coldTimes.push(performance.now()-start);}
           catch(error){coldErrors.push({...measurementError(error),ms:performance.now()-start});}
-          finally{await cold.close();}
+          finally{await cold?.close();}
           if((sample+1)%5===0)console.log('measurement cold-progress='+JSON.stringify({turns:count,samples:sample+1}));
         }
         coldApiDistribution=summary(coldTimes);coldApiErrors=coldErrors;
         residencyAfterClose=measureResidency(provider);
-        service=await openRawSearch(serviceOptions);
-        for(let i=0;i<targets.warmupSearches;i++){const result=await service.search(searchInput,host.token);if(result.semantic.state==='ready'||snapshot.partial)break;}
+        takeInternalErrors();service=await openRawSearch(serviceOptions);
+        for(let i=0;i<targets.warmupSearches;i++){takeInternalErrors();const result=await service.search(searchInput,host.token);if(result.semantic.state==='ready'||snapshot.partial)break;}
       }
       console.log('measurement phase=capture turns='+count);
       const readsCheckpoint={turns:count,cap,indexedParts:built,returnedParts:snapshot.rows.length,hintBytes:snapshot.hintBytes,
@@ -258,7 +260,7 @@ export async function measureRawSearch(t,targets) {
       if(capture?.unavailable)report.failures.push('capture_unavailable');
       if(apiErrors.length||coldApiError)report.failures.push('search_unavailable');
       if(prepareErrors.length)report.failures.push('source_prepare_unavailable');
-      report.maxOperationDeadlineOvershootMs=Math.max(0,...takeOperationOvershoots());report.internalErrors=takeInternalErrors();
+      report.maxOperationDeadlineOvershootMs=Math.max(0,...takeOperationOvershoots());report.internalErrors=takeInternalErrorCounts();
       reports.push(report);console.log('measurement result='+JSON.stringify(report));t.diagnostic(JSON.stringify(report));
     }finally{DatabaseSync.prototype.exec=originalExec;await service?.close();await storage?.close();reader?.db.close();db?.close();if(!retained)await ws.cleanup();}
   }
@@ -327,9 +329,9 @@ export async function captureContention(path,service,token,targets){
     const writing=run.finish().then(value=>{finished=true;return value;}),until=performance.now()+25000;
     writing.catch(()=>{});
     while(!finished&&performance.now()<until){
-      maintainCalls++;
+      takeInternalErrors();maintainCalls++;
       try{await service.maintain({maxItems:16,maxMs:5000},token);}
-      catch(error){maintenanceError=measurementError(error);maintenanceStatus=await service.status();break;}
+      catch(error){maintenanceError=measurementError(error);takeInternalErrors();maintenanceStatus=await service.status();break;}
       await new Promise(resolve=>setTimeout(resolve,5));
     }
     rows=await writing;
@@ -355,9 +357,9 @@ async function captureProofStability(path,service,token,authority,input,targets)
     let search;
     // A newly invalidated cold reader may first return a deadline-partial set.
     // This setup is outside the original warm/cold timing distributions.
-    for(let attempt=0;attempt<3&&!search?.candidates.length;attempt++)search=await service.search(input,token);
+    for(let attempt=0;attempt<3&&!search?.candidates.length;attempt++){takeInternalErrors();search=await service.search(input,token);}
     if(!search?.candidates.length){result.setupErrors.push('no_candidate');break;}
-    const ticket=await service.prepare(search.candidates[0],{},token),created=performance.now(),expected=authority.fence();
+    takeInternalErrors();const ticket=await service.prepare(search.candidates[0],{},token),created=performance.now();takeInternalErrors();const expected=authority.fence();
     const intervals=[],exec=DatabaseSync.prototype.exec,active=new WeakMap();
     DatabaseSync.prototype.exec=function(sql){const value=exec.call(this,sql);
       if(sql==='BEGIN')active.set(this,process.hrtime.bigint());
@@ -369,16 +371,16 @@ async function captureProofStability(path,service,token,authority,input,targets)
       const run=await captureBurst(path,'proof-'+group,Math.ceil(targets.captureSamples/6));await run.started;
       let finished=false;const writing=run.finish().then(rows=>{finished=true;return rows;},error=>{finished=true;throw error;});writing.catch(()=>{});
       while(!finished){
-        result.fenceChecks++;
+        takeInternalErrors();result.fenceChecks++;
         try{if(authority.fence(expected)!==expected)result.fenceChanges++;}catch{result.fenceUnavailable++;}
         if(performance.now()-created<4500){result.ticketChecks++;
-          try{service.revalidate([ticket]);}catch{result.ticketRefusals++;}
+          try{takeInternalErrors();service.revalidate([ticket]);}catch{result.ticketRefusals++;}
         }else result.expiredChecksSkipped++;
         await new Promise(resolve=>setTimeout(resolve,20));
       }
       rows=await writing;
       if(performance.now()-created<4500){result.settledTicketChecks++;
-        try{service.revalidate([ticket]);}catch{result.settledTicketRefusals++;}}
+        try{takeInternalErrors();service.revalidate([ticket]);}catch{result.settledTicketRefusals++;}}
       console.log('measurement proof-progress='+JSON.stringify({...result,group,captureCalls:result.captureCalls+rows.length}));
     }finally{DatabaseSync.prototype.exec=exec;}
     result.captureCalls+=rows.length;

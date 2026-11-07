@@ -19,7 +19,7 @@ export function installPhaseMeasurement(){
     if(url.endsWith('/raw-search-sqlite.mjs')){
       // Capture at the origin before an opener's foreign catch can rename it.
       replace("throw Object.assign(new MemoryStoreError('search_deadline'),{reason:'deadline'});",
-        "const error=Object.assign(new MemoryStoreError('search_deadline'),{reason:'deadline'});internalFailure(error);throw error;");
+        "const error=Object.assign(new MemoryStoreError('search_deadline'),{reason:'deadline'});internalFailure(error,'origin');throw error;");
     }else if(url.endsWith('/raw-search-index.mjs')){
       replace("const safeFailure = error => { fail(","const safeFailure = error => { internalFailure(error); fail(");
       replace("}catch{fail('raw_search_unavailable');}","}catch(error){internalFailure(error);fail('raw_search_unavailable');}finally{operationEnd(at);}");
