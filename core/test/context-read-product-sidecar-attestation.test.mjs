@@ -5,6 +5,9 @@ import childProcess from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { createHmac } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { readFileSync } from 'node:fs';
+import { createMaintenanceAttribution } from '../context-product-attribution.mjs';
+import { verificationBound } from '../context-product-verification-batch.mjs';
 import { fixture, ns, ok } from '../testing/context-read-fixture.mjs';
 import { configured } from '../testing/context-product-owner-fixture.mjs';
 import { selection } from '../testing/context-product-verification-fixture.mjs';
@@ -19,11 +22,11 @@ const seals=await import('../context-product-sidecar-attestation.mjs').catch(()=
 const stamp=path=>{const s=sqliteFileStat(path);return [s.dev,s.ino,s.size,s.mtimeNs,s.ctimeNs].join(':');};
 function sql(path,work){const db=new DatabaseSync(path);try{return work(db);}finally{db.close();}}
 function child(code,...args){const r=childProcess.spawnSync(process.execPath,['--input-type=module','-e',code,...args],{encoding:'utf8',env:{},timeout:10000});assert.equal(r.status,0,r.stderr);assert.equal(r.error,undefined);return r.stdout;}
-function setup(t,{build=true,mode='DELETE',batching=false,state=new SharedArrayBuffer(8)}={}) {
+function setup(t,{build=true,mode='DELETE',batching=false,state=new SharedArrayBuffer(8),factory=productSidecar,attribution,rendezvous}={}) {
   const stackLimit=Error.stackTraceLimit;Error.stackTraceLimit=64;t.after(()=>{Error.stackTraceLimit=stackLimit;});
   const f=fixture(t),first=f.admit('attestation first canary'),second=f.admit('attestation second canary');
   const path=f.path+PRODUCT_SIDECAR_SUFFIX,p=selection,access=accessDigest({ownerId:ns.ownerId,namespaces:{readSet:[ns]}});
-  const children=[],statements=[],commits=[],transactions=new WeakMap(),sideDatabases=new WeakSet();
+  const children=[],statements=[],executed=[],commits=[],transactions=new WeakMap(),sideDatabases=new WeakSet();
   let clock=0,delayChecks=false,checks=0,storage,hook=()=>{},afterExec=()=>{};
   const base=nativeObserver(),observer={...base,creation(work){return base.creation(()=>{const report=work();children.push(report);return report;});}};
   const sqlite=createProductSqlitePolicy({observer,now:()=>clock});sqlite.start(Infinity);
@@ -45,6 +48,7 @@ function setup(t,{build=true,mode='DELETE',batching=false,state=new SharedArrayB
       };}});
   });
   t.mock.method(DatabaseSync.prototype,'exec',function(text){
+    executed.push(text);
     const writing=sideDatabases.has(this)&&transactions.has(this);
     if(sideDatabases.has(this)){
       if(text==='BEGIN IMMEDIATE')transactions.set(this,{sealed:false,sql:[],site:new Error().stack});
@@ -58,11 +62,11 @@ function setup(t,{build=true,mode='DELETE',batching=false,state=new SharedArrayB
     if(text!=='BEGIN IMMEDIATE'&&text!=='COMMIT'&&text!=='ROLLBACK')transactions.get(this)?.sql.push(text);
     const result=Reflect.apply(exec,this,[text]);afterExec(text,this,writing);return result;
   });
-  const options={path:f.path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,observer,sqlite,writable:true,sidecarJournalMode:mode,verificationBatching:batching,verificationBatchState:state,now:()=>clock};
-  const s={f,path,p,access,first,second,facade,children,statements,commits,state,
+  const options={path:f.path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,observer,sqlite,writable:true,sidecarJournalMode:mode,verificationBatching:batching,verificationBatchState:state,attribution,rendezvous,now:()=>clock};
+  const s={f,path,p,access,first,second,facade,children,statements,executed,commits,state,
     get storage(){return storage;},get clock(){return clock;},get checks(){return checks;},
     setHook(fn){hook=fn;},afterExec(fn){afterExec=fn;},setClock(n){clock=n;},delayChecks(){delayChecks=true;},
-    open(write=true){storage?.close();storage=productSidecar({...options,writable:write});return storage;},
+    open(write=true){storage?.close();storage=factory({...options,writable:write});return storage;},
     observe(){return storage.observe(p,access);},
     finish(picked=p){for(let i=0;i<100;i++){storage.refresh(picked,access,{maxItems:32,maxMs:1000});const r=storage.observe(picked,access);if(r.publication)return r;}assert.fail('bounded rebuild converges');},
     close(){storage?.close();storage=null;},
@@ -481,4 +485,97 @@ test('legacy WAL table upgrade preserves purge checkpoints and selection metadat
   s.open();s.storage.admit(2000);
   assert.deepEqual(retained(),before,'schema-independent metadata must survive first sealing commit');
   assert.equal(s.checks,2);assert.equal(s.valid(),true);assert.ok(s.finish().publication);
+});
+
+// Test-only source observation of private gate state, following the opening
+// probe. The production module and its hooks remain unchanged. All native SQL
+// still passes through setup's statement observer and the real estimator runs.
+async function firstSealProbe(t) {
+  const url=new URL('../context-product-sidecar.mjs',import.meta.url);
+  let source=readFileSync(url,'utf8');
+  const replace=(from,to)=>{assert.ok(source.includes(from),from);source=source.replace(from,to);};
+  replace('const costs=checkpointCost(now),',`const originalCosts=checkpointCost(now), costs={...originalCosts,admit(...args){const admitted=originalCosts.admit(...args);probe('estimate',{admitted});return admitted;}},`);
+  replace('  function failed(error, wasWritable) {',`  const probe=(event,details={})=>attribution?.probe?.({event,workQuantumActive:!!workQuantum,checkpointAttempted,...details});
+  function failed(error, wasWritable) {`);
+  replace('if(bootstrap&&(bootstrapCommit||legacyWalMissing)){',`if(bootstrap&&(bootstrapCommit||legacyWalMissing)){
+      probe('first-seal',{bootstrapCommit,legacyWalMissing,sideMode});`);
+  replace("    const began=now(),beginning=attribution?.start('begin');",`    probe('write',{kind,checkpoint,estimate:workQuantum?originalCosts.admit(workQuantum,started):true});
+    const began=now(),beginning=attribution?.start('begin');`);
+  replace('if(error!==checkpointYield)throw error;',"if(error!==checkpointYield)throw error;probe('yield');");
+  source=source.replace(/(['"])(\.\/[^'"]+\.mjs)\1/g,(_,quote,ref)=>JSON.stringify(new URL(ref,url).href));
+  source=source.replaceAll('import.meta.url',JSON.stringify(url.href));
+  const module=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+  const events=[],attribution=createMaintenanceAttribution();attribution.probe=event=>events.push(event);
+  return {factory:module.productSidecar,attribution,events};
+}
+
+for(const replaced of [false,true])test(`first-seal setup: standalone ${replaced?'replaced':'new'} cache cannot be denied`,async t=>{
+  const probe=await firstSealProbe(t),s=setup(t,{build:false,...probe});
+  if(replaced){s.storage.admit(2000);s.close();sql(s.path,db=>db.exec('UPDATE product_attestation SET stamp=stamp+1'));s.open();probe.events.length=0;}
+  s.storage.admit(2000);
+  const openings=probe.events.filter(e=>e.event==='first-seal');
+  assert.equal(openings.length,1);assert.equal(openings[0].workQuantumActive,false);assert.equal(openings[0].checkpointAttempted,false);
+  const writes=probe.events.filter(e=>e.event==='write');assert.equal(writes.length,1);assert.equal(writes[0].checkpoint,false);assert.equal(writes[0].checkpointAttempted,false);
+  assert.equal(s.valid(),true);assert.equal(replacementCalls(s).length,Number(replaced));
+  t.diagnostic(JSON.stringify({openings,writes,replacements:replacementCalls(s).length}));
+});
+
+for(const missing of ['table','row'])test(`first-seal setup: direct refresh WAL missing ${missing} preserves and prices work admission`,async t=>{
+  const probe=await firstSealProbe(t),s=setup(t,{mode:'WAL',...probe});s.close();legacyWal(s,missing);s.open();
+  // Make real work necessary for either legacy layout.
+  s.f.admit('first seal work after upgrade');probe.events.length=0;
+  let opening=false;
+  s.afterExec((text,db,writing)=>{if(opening&&text==='COMMIT'&&writing){s.setClock(700);opening=false;}});
+  s.setHook(text=>{if(text.startsWith('INSERT INTO product_attestation')&&!probe.events.some(e=>e.event==='write'&&e.checkpoint))opening=true;});
+  assert.doesNotThrow(()=>s.storage.refresh(s.p,s.access,{maxItems:32,maxMs:1000}));
+  const openings=probe.events.filter(e=>e.event==='first-seal');assert.equal(openings.length,1);
+  assert.equal(openings[0].workQuantumActive,true);assert.equal(openings[0].checkpointAttempted,false);
+  const writes=probe.events.filter(e=>e.event==='write'),setupWrite=writes[0],work=writes.filter(e=>e.checkpoint);
+  assert.equal(setupWrite.checkpoint,false);assert.equal(setupWrite.checkpointAttempted,false);
+  assert.ok(work.length>0,'the first real work transaction retains its exemption');assert.equal(work[0].estimate,false,'the actual estimator would deny the first work transaction');
+  assert.equal(work.length,1,'a second work transaction is priced and denied');
+  assert.ok(probe.events.some(e=>e.event==='estimate'&&!e.admitted),'real estimator refuses later work');
+  assert.equal(s.checks,2);assert.equal(replacementCalls(s).length,0);assert.equal(s.valid(),true);
+  t.diagnostic(JSON.stringify({openings,writes,estimates:probe.events.filter(e=>e.event==='estimate'),wholeFileStatements:s.checks}));
+});
+
+for(const [remove,denySeal] of [[false,false],[true,false],[true,true]])test(`first-seal setup: mid-turn WAL reconnect is bounded, out-of-band removal=${remove}, priced yield=${denySeal}`,async t=>{
+  let staging=true;
+  const probe=await firstSealProbe(t),s=setup(t,{build:false,mode:'WAL',batching:true,...probe,rendezvous:point=>{if(staging&&point==='checkpoint')s.setClock(900);}});
+  for(let i=0;i<70;i++)s.f.admit('reconnect verification '+i);
+  // Start with durable comparison work and unfinished verification.
+  s.storage.admit(2000);
+  s.storage.refresh(s.p,s.access,{maxItems:1024,maxMs:1000});
+  assert.ok(probe.events.some(e=>e.event==='write'&&e.kind==='comparison'));
+  staging=false;s.setClock(0);probe.events.length=0;
+  let injected=false,removed=false,rolledBack=false;
+  s.setHook(text=>{
+    if(!injected&&text.startsWith('SELECT count(*) AS n,coalesce(sum(')){injected=true;throw verificationBound;}
+    if(removed&&denySeal&&text==='PRAGMA foreign_key_check')s.setClock(700);
+  });
+  s.afterExec((text,db,writing)=>{
+    if(text.startsWith('ROLLBACK TO verification_chunk'))rolledBack=true;
+    if(text==='ROLLBACK'&&writing&&rolledBack&&remove&&!removed){sql(s.path,d=>d.exec('DELETE FROM product_attestation'));removed=true;}
+  });
+  assert.doesNotThrow(()=>s.storage.refresh(s.p,s.access,{maxItems:32,maxMs:1000}));
+  assert.equal(injected,true);assert.equal(rolledBack,true);assert.equal(removed,remove);
+  const openings=probe.events.filter(e=>e.event==='first-seal');
+  assert.equal(openings.length,Number(remove),'only out-of-band removal can reach the mid-turn first seal');
+  if(remove){assert.equal(openings[0].workQuantumActive,true);assert.equal(openings[0].checkpointAttempted,true);}
+  assert.equal(replacementCalls(s).length,0);
+  const missing=s.row()===null;assert.equal(missing,denySeal);
+  if(missing)assert.ok(probe.events.some(e=>e.event==='yield'),'missing seal can only remain on a checkpoint yield');
+  const checks=s.checks;s.setHook(()=>{});s.afterExec(()=>{});s.setClock(0);
+  assert.doesNotThrow(()=>s.storage.refresh(s.p,s.access,{maxItems:32,maxMs:1000}));
+  assert.equal(s.checks-checks,missing?2:0,'next opening checks missing once');assert.equal(s.valid(),true);assert.equal(replacementCalls(s).length,0);
+  t.diagnostic(JSON.stringify({openings,injected,removed,missing,wholeFileStatements:s.checks,replacements:replacementCalls(s).length}));
+});
+
+for(const replaced of [false,true])test(`first-seal setup: DELETE ${replaced?'replacement':'initialization'} inside refresh uses its existing data write`,async t=>{
+  const probe=await firstSealProbe(t),s=setup(t,{build:false,...probe});
+  if(replaced){s.storage.admit(2000);s.close();sql(s.path,db=>db.exec('UPDATE product_attestation SET stamp=stamp+1'));s.open();}
+  probe.events.length=0;
+  assert.doesNotThrow(()=>s.storage.refresh(s.p,s.access,{maxItems:32,maxMs:1000}));
+  assert.equal(probe.events.filter(e=>e.event==='first-seal').length,0,'neither opening first-seal caller is reachable for DELETE within a work turn');
+  assert.equal(s.valid(),true);assert.equal(replacementCalls(s).length,Number(replaced));
 });
