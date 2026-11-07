@@ -43,8 +43,24 @@ DatabaseSync.prototype.prepare=function(sql){
     sql=sql.replace('INSERT INTO generations(','INSERT INTO generations(incarnation,').replace(' VALUES('," VALUES('"+incarnation+"',");
   }
   const statement=prepare.call(this,sql);
-  for(const method of ['all','get','run']){const execute=statement[method];statement[method]=function(...args){
-    if(tracing)trace.push([method,sql,encode(args)]);return execute.apply(this,args);};}return statement;};
+  const record=(method,args)=>{
+    if(rawCaller())rawWork.statements.push([method,sql]);
+    if(tracing)trace.push([method,sql,encode(args)]);
+  };
+  for(const method of Object.getOwnPropertyNames(Object.getPrototypeOf(statement))){
+    if(method==='constructor'||typeof statement[method]!=='function')continue;
+    const execute=statement[method];statement[method]=function(...args){
+      record(method,args);const result=execute.apply(this,args);
+      if(method!=='iterate')return result;
+      const iterator=new Proxy(result,{get(target,key){
+        if(key===Symbol.iterator)return ()=>iterator;
+        const value=Reflect.get(target,key,target);
+        return typeof value==='function'?(...values)=>{record('iterate.'+String(key),values);return value.apply(target,values);}:value;
+      }});return iterator;
+    };
+  }
+  return statement;
+};
 const engine=await load('core/index.mjs');
 const embedding=guard?await load('core/context-read-embedder.mjs'):null;
 const checkResidency=()=>{if(guard){residency.push(embedding.rawVectorResidencySelected);assert.equal(embedding.rawVectorResidencySelected,false);}};
