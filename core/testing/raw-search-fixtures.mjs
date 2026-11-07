@@ -30,9 +30,10 @@ export function attestRawSearchCopy(f,path) {
   try {
     db.exec('BEGIN IMMEDIATE');
     const binding=JSON.parse(db.prepare('SELECT binding FROM header WHERE singleton=1').get().binding);
-    const sealKey=createHmac('sha256',identity.cursor_secret)
-      .update(JSON.stringify(['raw-search-attestation-key-v1',identity.store_id,binding])).digest('base64url');
-    writeSidecarAttestation(db,sealKey,sidecarAttestationFile(path),{name:'raw-search',binding});
+    const bind=purpose=>createHmac('sha256',identity.cursor_secret)
+      .update(JSON.stringify([purpose,identity.store_id,binding])).digest('base64url');
+    writeSidecarAttestation(db,bind('raw-search-attestation-key-v1'),sidecarAttestationFile(path),
+      {name:'raw-search',binding:bind('raw-search-attestation-format-v1')});
     db.exec('COMMIT');
   } finally {try {if(db.isTransaction)db.exec('ROLLBACK');}finally{db.close();}}
 }

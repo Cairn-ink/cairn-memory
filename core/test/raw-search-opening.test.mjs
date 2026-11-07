@@ -25,6 +25,21 @@ async function storageFixture(t) {
   const path=join(ws.path,readdirSync(ws.path).find(name=>name.endsWith('.sqlite')));
   return {options,store,path};
 }
+test('maximum namespace identifiers keep the complete binding and a bounded seal across reopen',async t=>{
+  const ws=createTestWorkspace(t,{prefix:'raw-opening-namespaces-'}),ownerId='o'.repeat(200);
+  const readSet=Array.from({length:32},(_,i)=>({ownerId,scope:'project',projectId:String(i).padStart(3,'0')+'p'.repeat(197)}));
+  const options={directory:ws.path,identity:{storeId:'synthetic-store',fileIdentity:'1:2',ownerId,readSet},
+    bind:(purpose,value)=>createHmac('sha256','synthetic-secret').update(JSON.stringify([purpose,value])).digest('base64url'),quotaBytes:1024*1024};
+  const store=await openRawSearchStorage(options);ws.defer(()=>store.close());
+  assert.deepEqual((await store.openOwner()).readSet,readSet);
+  const path=join(ws.path,readdirSync(ws.path).find(name=>name.endsWith('.sqlite'))),db=new DatabaseSync(path);
+  try {
+    assert.deepEqual(JSON.parse(db.prepare('SELECT binding FROM header').get().binding).readSet,readSet);
+    assert.ok(Buffer.byteLength(db.prepare('SELECT record FROM product_attestation').get().record)<=4096);
+  } finally {db.close();}
+  await store.close();const reopened=await openRawSearchStorage(options);ws.defer(()=>reopened.close());
+  assert.deepEqual((await reopened.openOwner()).readSet,readSet);
+});
 test('Raw sidecar reopens through attestation without a whole-file check and retains seals across vacuum',async t=>{
   const {options,store,path}=await storageFixture(t);
   await store.publish(await store.stage({key:'one'}),null);

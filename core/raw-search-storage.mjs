@@ -59,7 +59,9 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
   const journal = stat(path+'-journal');
   if (journal) privateFile(path+'-journal');
   const sealKey = bind('raw-search-attestation-key-v1',binding);
-  const sealFormat = {name:'raw-search',binding};
+  // Bound the record independently of identifier sizes. Both the key and this
+  // digest bind the complete owner/store/projection, including every namespace.
+  const sealFormat = {name:'raw-search',binding:bind('raw-search-attestation-format-v1',binding)};
   const sealFile = sidecarAttestationFile(path);
   check();
   const db = rawSearchSqlite(new DatabaseSync(path),check);
