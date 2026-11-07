@@ -20,6 +20,21 @@ import { createTestWorkspace } from './workspace.mjs';
 
 const summary=values=>{const sorted=[...values].sort((a,b)=>a-b),at=q=>sorted[Math.min(sorted.length-1,Math.ceil(sorted.length*q)-1)];
   return {p50:at(.5),p95:at(.95),p99:at(.99),max:sorted.at(-1),samples:sorted.length};};
+// The original full-read profile: payload, lexical hierarchy, commitment, then
+// canonical check/open for every returned physical segment. Preparations remain
+// a separate API measurement so retained-fixture runs stay comparable.
+export async function measureRawFullRead(storage,authority){
+  const start=performance.now(),snapshot=await storage.search(),rankStart=performance.now();
+  const result=retrieveRaw(snapshot.rows,'copper telescope'),retrievalMs=performance.now()-rankStart;
+  const fenceStart=performance.now();
+  try{authority.fence();}catch(error){assert.equal(error.code,'source_budget_exceeded');}
+  const fenceMs=performance.now()-fenceStart,selected=[],opening=[];
+  for(const row of result.rows)for(const segment of row.turn.segments){
+    const checkStart=performance.now();authority.check(segment.source);selected.push(performance.now()-checkStart);
+    const openStart=performance.now();await authority.open(segment.source);opening.push(performance.now()-openStart);
+  }
+  return {ms:performance.now()-start,retrievalMs,fenceMs,selected,opening,work:result.coverage.scanned,snapshot:snapshot.timings};
+}
 export async function measureRawSearch(t,targets) {
   const profile=process.env.CAIRN_RAW_MEASURE_PROFILE;
   if(profile&&!['commitment-cost','cadence'].includes(profile))throw Error('invalid_measurement_profile');

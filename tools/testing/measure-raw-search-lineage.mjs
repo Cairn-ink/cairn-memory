@@ -277,7 +277,7 @@ export async function measureLineageProfile({profile,count,path,authority,servic
           const startedOffsetMs=performance.now()-start;
           const result=await call('search',()=>service.search(input,host.token));
           const row={sample,afterCommit,scheduledOffsetMs:target-start,startedOffsetMs,...result,value:undefined};
-          if(result.ok){row.outcome=result.value.coverage.status==='complete'?'complete':result.value.candidates.length?'partial-with-candidates':'empty-partial';row.coverage=result.value.coverage;row.semantic=result.value.semantic;}
+          if(result.ok){row.outcome=result.value.coverage.status==='complete'&&result.value.semantic.state==='ready'?'complete':result.value.candidates.length?'partial-with-candidates':'empty-partial';row.coverage=result.value.coverage;row.semantic=result.value.semantic;}
           else row.outcome='error';
           intervals.push(...result.trace.intervals);
           rows.push(row);
@@ -312,8 +312,8 @@ export async function measureLineageProfile({profile,count,path,authority,servic
           withoutCommit:summary(rows.filter(row=>!row.afterCommit).map(row=>row.ms)),
           successfulAfterCommit:summary(rows.filter(row=>row.ok&&row.afterCommit).map(row=>row.ms)),
           successfulWithoutCommit:summary(rows.filter(row=>row.ok&&!row.afterCommit).map(row=>row.ms)),
-          cache:{hits:rows.filter(row=>row.ok&&!row.trace.payloadReads).length,searches:rows.length,
-            rate:rows.filter(row=>row.ok&&!row.trace.payloadReads).length/rows.length},
+          cache:{hits:rows.filter(row=>row.ok&&row.outcome!=='empty-partial'&&!row.trace.payloadReads).length,searches:rows.length,
+            rate:rows.filter(row=>row.ok&&row.outcome!=='empty-partial'&&!row.trace.payloadReads).length/rows.length},
           prepares:compact(prepares),revalidations:compact(revalidations),expiredCandidatesSkipped,expiredTicketsSkipped});
       }
     }
