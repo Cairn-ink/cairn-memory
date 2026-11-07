@@ -3,7 +3,7 @@ import { isDeepStrictEqual, types } from 'node:util';
 import { boundedData, credentialDigest } from './context-product-control.mjs';
 import { deepFreeze } from './private-card-input.mjs';
 import { fail } from './validation.mjs';
-import { refuseAuthority } from './context-product-attribution.mjs';
+import { refuseAuthority } from './context-product-refusal.mjs';
 import { accessDigest } from './context-product-validation.mjs';
 
 const promiseThen = Promise.prototype.then;

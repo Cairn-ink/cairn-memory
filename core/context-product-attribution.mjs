@@ -1,15 +1,4 @@
-import { fail } from './validation.mjs';
-
-// Diagnostic state never changes the thrown Error or supplies authority proof.
-const refusals = new WeakMap();
-export const authorityRefusal = error => refusals.get(error);
-export function refuseAuthority(cause, code = 'authority_required') {
-  try { fail(code); }
-  catch (error) {
-    if (code === 'authority_required') refusals.set(error, cause);
-    throw error;
-  }
-}
+import { authorityRefusal, refusalCause } from './context-product-refusal.mjs';
 
 // Private, fixed numeric maintenance telemetry. Never supplies admission proof.
 export const maintenanceKinds = Object.freeze(['idle','scan','item','verify','publication','gc','vacuum','begin','commit','save','canonical-read','serialize','admission']);
@@ -125,8 +114,6 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
       failureResolved=true;
       if(!failureCaptured)return undefined;
       const error=rawFailureError,classified=classifiedFailureError??failureError??error;rawFailureError=undefined;failureError=undefined;classifiedFailureError=undefined;
-      // index.run may have converted the captured Error into a public result.
-      if(failureData(classified,'code')==='authority_required')return failureDetail={kind:'engine',engineCode:'authority_required',refusal:refusalCause(authorityRefusal(classified))};
       const indexFailure=maintenanceIndexFailure(classified);
       try{for(let object=Object(error);object;object=Object.getPrototypeOf(object)){
         const code=Object.getOwnPropertyDescriptor(object,'code');
@@ -134,6 +121,7 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
       }}catch{return undefined;}
       return failureDetail={kind:'exception',errorName:maintenanceErrorName(error),step:failureStep,...(indexFailure?{reason:indexFailure.reason}:{})};
     },
+    get refusal(){return authorityRefusal(classifiedFailureError);},
     get stepKind(){return Number(current&15n);},
     // Read-only: true once selectFailure() has chosen this operation's failure, until reset()/resetFailure().
     get failureSelected(){return failureSelected;},
@@ -179,8 +167,6 @@ const failureCode=/^[a-z][a-z0-9_]{0,47}$/,failureName=/^[A-Za-z][A-Za-z0-9_]{0,
 export const maintenanceFailureCode=value=>typeof value==='string'&&failureCode.test(value)?value:'other';
 const indexReasons=Object.freeze(['storage_unavailable','auxiliary_file','unsafe_file','incompatible','wrong_store','missing','corrupt','validation_missing','validation_invalid',
   'memory_store','replaced','stale_index','rebuilding','timeout']);
-const authorityRefusals=Object.freeze(['host_port','credential_missing','credential_digest','grant_mismatch','authorize_error','not_current','request_binding','worker_epoch','semantic_outstanding','method_gate','other']);
-const refusalCause=value=>authorityRefusals.includes(value)?value:'other';
 const protocolKinds=Object.freeze(['frame_conflict','identity_shape','result_bounds','result_clone','result_shape','open_identity']);
 export const maintenanceFailureReason=value=>indexReasons.includes(value)?value:'other';
 function failureData(error,key){

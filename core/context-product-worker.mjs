@@ -1,6 +1,7 @@
+import { refuseAuthority, authorityRefusal, refusalCause } from './context-product-refusal.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { types } from 'node:util';
-import { maintenanceErrorName, maintenanceFailureCode, maintenanceIndexFailure, refuseAuthority, authorityRefusal } from './context-product-attribution.mjs';
+import { maintenanceErrorName, maintenanceFailureCode, maintenanceIndexFailure } from './context-product-attribution.mjs';
 import { createMaintenanceAttribution } from './context-product-attribution.mjs';
 import { performance } from 'node:perf_hooks';
 import { parentPort, workerData } from 'node:worker_threads';
@@ -40,7 +41,7 @@ const startSqlite = op => sqlite?.start(Number(mono(op.operationCutoffMonoNs)) /
 // Keep the initiating call and the first disposal failure independent.
 let failureDetail,secondaryFailureDetail,disposalFailureDetail;
 const noteFailure=(kind,engineCode,error,disposal=false,secondary=false,step=attribution?.stepKind??0)=>{if(!workerData.maintenance)return;const detail={kind,...(kind==='engine'||kind==='unmapped'?{engineCode:maintenanceFailureCode(engineCode)}:{}),
-  ...(kind==='engine'&&engineCode==='authority_required'?{refusal:authorityRefusal(error)??'other'}:{}),
+  ...(kind==='engine'&&engineCode==='authority_required'?{refusal:refusalCause(authorityRefusal(error))}:{}),
   ...(kind==='engine'&&engineCode==='index_unavailable'?maintenanceIndexFailure(error)??{reason:'other'}:{}),
   ...(kind==='protocol'?{protocolKind:'frame_conflict'}:{}),...(kind==='exception'?{errorName:maintenanceErrorName(error),step}:{})};if(secondary)secondaryFailureDetail??=detail;else if(disposal)disposalFailureDetail??=detail;else failureDetail??=detail;};
 const nativeFailure = (error, disposal = false, secondary = false, step) => {
@@ -54,8 +55,9 @@ const within = op => { if (closing) fail('store_closed'); if (process.hrtime.big
 function result(operation, result, extra = {}) {
   const secondary=!result.ok&&attribution?.takeSecondaryFailure();
   if(secondary)try{nativeFailure(secondary.error,false,true,secondary.step);}catch{noteFailure('exception',undefined,secondary.error,false,true,secondary.step);}
+  const maintenanceRefusal=workerData.maintenance&&!result.ok?refusalCause(attribution?.refusal):undefined;
   const failure=workerData.maintenance&&!result.ok&&!(closing&&result.error?.code==='store_closed')?(attribution?.failure()??failureDetail):undefined;
-  parentPort.postMessage({ operation, result, ...extra,...(failure?{maintenanceFailure:failure}:{}),...(!result.ok&&secondaryFailureDetail?{maintenanceSecondaryFailure:secondaryFailureDetail}:{}) });
+  parentPort.postMessage({ operation, result, ...extra,...(failure?{maintenanceFailure:failure}:{}),...(maintenanceRefusal===undefined?{}:{maintenanceRefusal}),...(!result.ok&&secondaryFailureDetail?{maintenanceSecondaryFailure:secondaryFailureDetail}:{}) });
 }
 function dispose() {
   return disposing ??= (async () => {

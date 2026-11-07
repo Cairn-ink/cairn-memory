@@ -1,6 +1,8 @@
 // Fault injection stays in the host fixture; the actual Worker checks execute.
 import { parentPort, workerData } from 'node:worker_threads';
-export function createContextReadHost({serviceBinding, requestBinding, mode, calls}) {
+import { DatabaseSync } from 'node:sqlite';
+import * as refusals from '../context-product-refusal.mjs';
+export function createContextReadHost({serviceBinding, requestBinding, mode, calls, path}) {
   const binding = serviceBinding ?? requestBinding;
   const counts = new Int32Array(calls);
   if (mode === 'worker_epoch') parentPort.on('message', message => {
@@ -16,6 +18,11 @@ export function createContextReadHost({serviceBinding, requestBinding, mode, cal
   const host = {
     authorize() {
       Atomics.add(counts, 0, 1);
+      if (mode === 'later_delivery') {
+        const db = new DatabaseSync(path);
+        try {db.exec('PRAGMA journal_mode=WAL');} finally {db.close();}
+        throw new TypeError('synthetic authority failure');
+      }
       if (mode === 'authorize_error') throw new TypeError('synthetic authority failure');
       if (mode === 'grant_mismatch') return {...binding, issuedAt: binding.issuedAt + 1};
       return binding;
@@ -23,6 +30,7 @@ export function createContextReadHost({serviceBinding, requestBinding, mode, cal
     isCurrent() {Atomics.add(counts, 1, 1); return mode !== 'not_current';},
     counter: {id: 'synthetic-refusal-counter', countTokens: () => 1},
   };
+  if (mode === 'unknown_close') host.close = () => refusals.refuseAuthority('unknown_value');
   if (mode === 'host_port') delete host.authorize;
   return host;
 }
