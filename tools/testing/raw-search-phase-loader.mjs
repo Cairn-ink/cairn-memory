@@ -27,7 +27,8 @@ export function installPhaseMeasurement(){
     }else if(url.endsWith('/raw-search-authority.mjs')){
       wrap('  function bindWithin(', '  const sourceIdentity','bounded-hash');
       wrap('  function buildFence(', '  function fence(','commitment');
-      replace('    const unitHoldMs=performance.now()-unitStart;',"    const unitHoldMs=performance.now()-unitStart;selectionUnit(entries.length,unitHoldMs);");
+      replace('    read(()=>{\n      if(versionInside()!==observed)', '    try{read(()=>{\n      if(versionInside()!==observed)');
+      replace('    },deadlineAt);\n    const unitHoldMs', '    },deadlineAt);}finally{selectionUnit(entries.length,performance.now()-unitStart); }\n    const unitHoldMs');
       wrap('  function select(', '  async function open(','selection');
       wrap('  function validate(', '  function reset(','final-validation');
     }else if(url.endsWith('/raw-search-storage.mjs')){

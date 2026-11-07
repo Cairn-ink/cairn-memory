@@ -33,8 +33,13 @@ The selected handle provides:
 
   The single owner-neutral cause also covers contention and version movement;
   it never identifies another owner's write. No count, identity, score, hint,
-  proof or ticket comes from interrupted work. No interrupted cache, vector
-  reservation or eligibility memo survives. A retry starts the rebuild afresh.
+  proof or ticket comes from interrupted work. Nothing from a torn or interrupted rebuild is admitted. Vector reservations
+  from interrupted searches are released. A complete rebuild verified at both
+  ends may retain its commitment after a later deadline, and eligibility checks
+  may remain reusable after their bounded unit verifies an unchanged version.
+  Both are keyed by the canonical version and invalidated before reuse after
+  any commit, including a forget or suppression. A version retry starts the
+  rebuild from zero.
   Consumers must render this as incomplete and count it as unavailable, never
   as a successful search with no matches. When the source population bound
   instead prevents a commitment, the existing full dependency validation path

@@ -47,3 +47,44 @@ test('cold measurement keeps factory opening separate from the original search c
   },()=>now);
   assert.deepEqual(result,{value,ms:30,factoryMs:50,totalMs:80});
 });
+
+test('session fence fixture knob uses engine barriers and preserves eligible sources and lexical candidates',async t=>{
+  const {savedSource,ns}=await import('../testing/raw-source-fixtures.mjs');
+  const {searchFixture}=await import('../testing/raw-search-fixtures.mjs');
+  const {openReadDatabase}=await import('../read-database.mjs');
+  const {createRawSearchAuthority}=await import('../raw-search-authority.mjs');
+  const {seedSessionFences,sessionFenceCount}=await import('../../tools/testing/raw-search-session-fences.mjs');
+  const f=sourceFixture(t);await savedSource(f,'Synthetic copper telescope.');const s=await searchFixture(f);
+  await s.maintain();const before=await s.search({query:'copper'});
+  const reader=openReadDatabase(f.path,{contextRead:true});t.after(()=>reader.db.close());
+  const authority=createRawSearchAuthority(reader,s.options),eligible=authority.inventory().rows;
+  const count=sessionFenceCount(['--session-fences','7']);assert.equal(sessionFenceCount(['--session-fences=7']),7);
+  seedSessionFences(f.path,ns,count);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM raw_session_fences').get().n,7);
+  assert.equal(f.db.prepare("SELECT count(*) n FROM raw_conversations WHERE client='claude-code'").get().n,0);
+  assert.deepEqual(authority.inventory().rows,eligible);
+  const after=await s.search({query:'copper'}),canonical=result=>result.candidates.map(({proof,publication,...row})=>row);
+  assert.deepEqual(canonical(after),canonical(before));assert.ok(after.candidates.length);
+  const prepare=DatabaseSync.prototype.prepare;let fenceInputs=0;
+  DatabaseSync.prototype.prepare=function(sql){
+    const statement=prepare.call(this,sql);
+    if(sql.startsWith('SELECT count(*) AS count,')&&sql.includes('raw_session_fences f')){
+      const execute=statement.get;statement.get=function(...args){const result=execute.apply(this,args);fenceInputs+=result.count;return result;};
+    }return statement;
+  };
+  try{authority.fence();assert.equal(fenceInputs,count);}finally{DatabaseSync.prototype.prepare=prepare;}
+});
+test('outcome summaries include errors and empty partials in all-sample latency only',async()=>{
+  const {outcomeSummary,selectionSummary}=await import('../../tools/testing/raw-search-window-summary.mjs');
+  const report=outcomeSummary([{outcome:'complete',ms:1},{outcome:'partial-with-candidates',ms:2},{outcome:'empty-partial',ms:900},{outcome:'error',ms:1000}]);
+  assert.deepEqual(report.outcomes,{complete:1,'partial-with-candidates':1,'empty-partial':1,error:1});
+  assert.equal(report.unavailableRate,.5);assert.equal(report.all.p95,1000);assert.equal(report.available.p95,2);
+  const units=selectionSummary([{rows:32,holdMs:25},{rows:4,holdMs:3}]);
+  assert.equal(units.count,2);assert.equal(units.rows.max,32);assert.equal(units.holdMs.p95,25);assert.equal(units.holdMs.max,25);
+});
+
+test('capture phase timeout grows with the requested sample count',async()=>{
+  const {captureTimeoutMs}=await import('../../tools/testing/measure-raw-search.mjs');
+  assert.equal(captureTimeoutMs(1),90000);assert.ok(captureTimeoutMs(120)>90000);
+  assert.ok(captureTimeoutMs(240)>captureTimeoutMs(120));
+});

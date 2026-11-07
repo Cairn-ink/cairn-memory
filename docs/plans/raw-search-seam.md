@@ -23,7 +23,8 @@ state tracks actual progress and retries. The host owns recurring supervision.
 Memory's internal semantic cache participates in the shared vector residency
 ceiling only while a Raw service is selected in the same process. This can
 degrade a selected semantic channel to partial coverage when the joint limit is
-reached. The old unselected branch uses its existing cache path. Process-local
+reached. Closing the selected service releases its shared residency selection, including
+after partial results or errors. The old unselected branch uses its existing cache path. Process-local
 embedding request/concurrency/spend accounting is shared by exact provider
 identity; it is not durable owner accounting across processes.
 Select the Raw service before admitting Memory reads. A host changing this
@@ -61,6 +62,14 @@ read snapshot, with serialization outside those snapshots. SQLite's native
 throughout a build. It invalidates the in-memory inventory and search-eligibility caches for every
 other-writer commit, including direct facts with no application epoch change.
 That connection-local cache key is never a durable publication authority.
+Search eligibility uses the same per-row classification and denial predicate
+inside units of at most 32 rows and 25 operation-clock milliseconds. Native
+statement and row boundaries check the operation deadline; an unfinished row
+restarts in the next snapshot. Each unit releases its snapshot before checking
+the native version again. Verified entries remain reusable if later work expires;
+a version change drops them before reuse. A complete commitment verified at both
+ends likewise survives a later deadline. Interrupted rebuilds retain nothing.
+Search proofs and vector-cache admission still require final delivery validation.
 Final validation compares the complete source commitment inside the fresh
 canonical snapshot. It binds canonical part metadata/bytes, maps, exclusions,
 session fences, receipt text and integrity, Memory eligibility, all inbound
@@ -166,3 +175,11 @@ statements or synchronous purge. The shared byte reservation includes fp32
 payload, conservatively reserved hints and block indexing. Existing reads can
 therefore report semantic partial coverage while a selected local reader holds
 a reservation; readers with other embedding policies retain no such cache.
+
+The ordinary off-path guard compares absent and disabled selection without Git
+history. It attributes statements and timers to Raw module stack frames, checks
+that shared vector residency stays unselected after opening and each context
+read, and preserves the shared revision defaults. A separate fresh import child
+checks resources, process listeners and created files. An explicit parent
+comparison is available as `tools/testing/raw-search-off-parent-differential.mjs
+--parent=<commit>` for review evidence outside the core test job.

@@ -1,3 +1,4 @@
+import {seedSessionFences,sessionFenceCount} from './raw-search-session-fences.mjs';
 import assert from 'node:assert/strict';
 import {sharedOverlapMs} from './raw-search-writer-observer.mjs';
 import { performance } from 'node:perf_hooks';
@@ -9,14 +10,15 @@ import { mkdirSync,writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { openDatabase,transaction } from '../../core/database.mjs';
-import { createRawSearchAuthority } from '../../core/raw-search-authority.mjs';
 import { openReadDatabase } from '../../core/read-database.mjs';
-import { openRawSearchStorage } from '../../core/raw-search-storage.mjs';
-import { rawSearchChunks,rawSearchPostings,retrieveRaw,loadRawVectorBlocks,scoreRawVectorBlocks } from '../../core/raw-search-retrieval.mjs';
 import { localPlainPort,rawNamespace as ns } from '../../core/testing/raw-fixtures.mjs';
-import { openRawSearch } from '../../core/raw-search-index.mjs';
-import { rawSearchHost,broker } from '../../core/testing/raw-search-fixtures.mjs';
 import { createTestWorkspace } from './workspace.mjs';
+
+if(process.env.CAIRN_MEASURE_RAW_SEARCH==='1')(await import('./raw-search-phase-loader.mjs')).installPhaseMeasurement();
+const [{createRawSearchAuthority},{openRawSearchStorage},{rawSearchChunks,rawSearchPostings,retrieveRaw,loadRawVectorBlocks,scoreRawVectorBlocks},
+  {openRawSearch},{rawSearchHost,broker}]=await Promise.all([
+  import('../../core/raw-search-authority.mjs'),import('../../core/raw-search-storage.mjs'),import('../../core/raw-search-retrieval.mjs'),
+  import('../../core/raw-search-index.mjs'),import('../../core/testing/raw-search-fixtures.mjs')]);
 
 const summary=values=>{const sorted=[...values].sort((a,b)=>a-b),at=q=>sorted[Math.min(sorted.length-1,Math.ceil(sorted.length*q)-1)];
   return {p50:at(.5),p95:at(.95),p99:at(.99),max:sorted.at(-1),samples:sorted.length};};
@@ -99,6 +101,7 @@ export async function measureRawSearch(t,targets) {
         db.prepare('INSERT INTO raw_owner_usage VALUES(?,1,?, ?,0)').run(ns.ownerId,targets.rawCapBytes,rawBytes);
       });
       const lineage=profile?lineageTools.seedMeasurementLineage(db,count):null;
+      const sessionFences=sessionFenceCount();seedSessionFences(path,ns,sessionFences);
       const canonicalBuildMs=performance.now()-buildStart;console.log('measurement phase=index turns='+count);
       reader=openReadDatabase(path,{contextRead:true});
       const options={ownerId:ns.ownerId,readSet:[ns],crypto:localPlainPort(),authority:rawSearchHost().authority};
@@ -141,7 +144,7 @@ export async function measureRawSearch(t,targets) {
       const searchInput={query:'copper telescope',queryVector:{input:'copper telescope',embedder:{id:provider.id,revision:provider.revision,dimensions:1536,normalization:'l2'},vector:queryVector}};
       if(profile){
         const report=await lineageTools.measureLineageProfile({profile,count,path,authority,service,host,input:searchInput,sections,sharedIntervals,lineage});
-        report.indexedParts=built;
+        report.indexedParts=built;report.sessionFences=sessionFences;
         report.checkpointError=checkpointError;
         report.measurement='synthetic lineage with native statement and exception observation';
         report.stopThreshold=profile==='commitment-cost'&&(report.shared.p99>50||count===10000&&report.rebuild.p95!==null&&report.rebuild.p95>500);
@@ -275,13 +278,14 @@ async function scanVectors(storage,provider,query){
   }
   return {method:'paged-fp32-blocks',ms:performance.now()-start,pagingMs,loadMs,scoreMs,scannedChunks:scanned,vectorBytes:scanned*provider.dimensions*4,scoreSum:sum};
 }
+export const captureTimeoutMs=count=>Math.max(90000,30000+count*1500);
 async function captureBurst(path,phase,count){
   const child=fork(new URL('../../core/testing/raw-search-mutation-child.mjs',import.meta.url),[path],{stdio:['ignore','ignore','pipe','ipc']});
   let stderr='',resolveStarted,rejectStarted;child.stderr.on('data',value=>{stderr+=value;});
   const started=new Promise((resolve,reject)=>{resolveStarted=resolve;rejectStarted=reject;});
   const exited=new Promise(resolve=>child.once('exit',(code,signal)=>resolve({code,signal})));
   let timer;const done=new Promise((resolve,reject)=>{
-    timer=setTimeout(()=>{child.kill();const error=Error('capture_timeout:'+phase);rejectStarted(error);reject(error);},90000);
+    timer=setTimeout(()=>{child.kill();const error=Error('capture_timeout:'+phase);rejectStarted(error);reject(error);},captureTimeoutMs(count));
     child.on('error',reject);child.on('message',value=>{
       if(value.ready)child.send({operation:'capture-burst',input:{namespace:ns,phase,count}});
       else if(value.started)resolveStarted();else if(value.progress)console.log('measurement capture-progress='+JSON.stringify(value.progress));else if(value.ok)resolve(value.value.samples);else reject(Error(JSON.stringify(value)));

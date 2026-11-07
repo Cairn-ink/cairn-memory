@@ -1,3 +1,5 @@
+import {searchOutcome,outcomeSummary,selectionSummary} from './raw-search-window-summary.mjs';
+import {takeSelectionUnits} from './raw-search-phase-ledger.mjs';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
@@ -215,18 +217,19 @@ export async function measureLineageProfile({profile,count,path,authority,servic
   const probe=observe(),writes=await writer(path),report={profile,turns:count,lineage};
   const samples=[],warm=[],errors=[];
   async function call(label,work) {
-    probe.begin(label);const started=performance.now();
-    try{const value=await work(),ms=performance.now()-started,trace=probe.end();return {ok:true,value,ms,trace,cause:trace.exceptions.length?attribution(trace,'interrupted'):undefined};}
-    catch(error){const trace=probe.end();return {ok:false,code:error.code,ms:performance.now()-started,cause:attribution(trace,error.code),trace};}
+    probe.begin(label);takeSelectionUnits();const started=performance.now();
+    try{const value=await work(),ms=performance.now()-started,trace=probe.end();return {ok:true,value,ms,trace,selectionUnits:takeSelectionUnits(),cause:trace.exceptions.length?attribution(trace,'interrupted'):undefined};}
+    catch(error){const trace=probe.end();return {ok:false,code:error.code,ms:performance.now()-started,selectionUnits:takeSelectionUnits(),cause:attribution(trace,error.code),trace};}
   }
   try {
     if(profile==='commitment-cost') {
       let expected;
       try{expected=authority.fence();}catch(error){report.initialFenceError=error.code;report.initialFenceDetail=error.message;}
-      report.warmOutcomes=[];
+      report.warmOutcomes=[];const warmSamples=[],warmUnits=[];
       for(let sample=0;sample<36;sample++) {
         const result=await call('warm-search',()=>service.search(input,host.token));
         if(sample>=16){
+          warmSamples.push({ms:result.ms,outcome:result.ok?searchOutcome(result.value):'error'});warmUnits.push(...result.selectionUnits);
           if(result.ok){warm.push(result.ms);report.warmOutcomes.push({coverage:result.value.coverage,semantic:result.value.semantic});}
           else errors.push({...result,value:undefined});
         }
@@ -250,6 +253,7 @@ export async function measureLineageProfile({profile,count,path,authority,servic
       report.sharedSections=samples.map(sample=>sample.shared);
       report.pages=samples.map(sample=>sample.trace.pages);
       report.pageTimeByIndex=Object.fromEntries(Object.entries(pageGroups).map(([key,values])=>[key,summary(values)]));
+      report.warmOutcomeMix=outcomeSummary(warmSamples);report.selectionUnits=selectionSummary(warmUnits);
       report.warmSearch=summary(warm);report.searchErrors=errors;
       report.warmAttempts=summary([...warm,...errors.map(row=>row.ms)]);
       report.samples=samples;
@@ -277,7 +281,7 @@ export async function measureLineageProfile({profile,count,path,authority,servic
           const startedOffsetMs=performance.now()-start;
           const result=await call('search',()=>service.search(input,host.token));
           const row={sample,afterCommit,scheduledOffsetMs:target-start,startedOffsetMs,...result,value:undefined};
-          if(result.ok){row.outcome=result.value.coverage.status==='complete'&&result.value.semantic.state==='ready'?'complete':result.value.candidates.length?'partial-with-candidates':'empty-partial';row.coverage=result.value.coverage;row.semantic=result.value.semantic;}
+          if(result.ok){row.outcome=searchOutcome(result.value);row.coverage=result.value.coverage;row.semantic=result.value.semantic;}
           else row.outcome='error';
           intervals.push(...result.trace.intervals);
           rows.push(row);
@@ -305,7 +309,7 @@ export async function measureLineageProfile({profile,count,path,authority,servic
         const refusals=prepares.concat(revalidations),refusalRate=refusals.filter(row=>!row.ok).length/refusals.length;
         const e2e=summary(rows.map(row=>row.ms));
         const compact=values=>values.map(({trace,value,cause,...row})=>row);
-        report.cadences.push({cadenceMs,outcomes,unavailableRate,refusalRate,e2e,
+        report.cadences.push({cadenceMs,outcomes,unavailableRate,refusalRate,e2e,outcomeMix:outcomeSummary(rows),selectionUnits:selectionSummary(rows.flatMap(row=>row.selectionUnits)),
           gate:{unavailable:unavailableRate<=.01,refusals:refusalRate<=.01,e2e:e2e.p95<=1000},
           attribution:{unavailableSearches:causes(rows.filter(row=>['empty-partial','error'].includes(row.outcome))),recoveredSearches:causes(rows.filter(row=>!['empty-partial','error'].includes(row.outcome))),refusals:causes(refusals.filter(row=>!row.ok))},writerAttribution,writerCommits,seed:schedule.seed,commits:stopped.commits-schedule.commits,searches:compact(rows),
           afterCommit:summary(rows.filter(row=>row.afterCommit).map(row=>row.ms)),
