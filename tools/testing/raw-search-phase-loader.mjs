@@ -27,6 +27,7 @@ export function installPhaseMeasurement(){
     }else if(url.endsWith('/raw-search-authority.mjs')){
       wrap('  function bindWithin(', '  const sourceIdentity','bounded-hash');
       wrap('  function buildFence(', '  function fence(','commitment');
+      replace('    const unitHoldMs=performance.now()-unitStart;',"    const unitHoldMs=performance.now()-unitStart;selectionUnit(entries.length,unitHoldMs);");
       wrap('  function select(', '  async function open(','selection');
       wrap('  function validate(', '  function reset(','final-validation');
     }else if(url.endsWith('/raw-search-storage.mjs')){
@@ -43,6 +44,6 @@ export function installPhaseMeasurement(){
         "  return {blocks,offsets,positions,dimensions,blockVectors,count};\n}finally{sample('vector-load',performance.now()-phaseStart);}}" );
       source="import {performance} from 'node:perf_hooks';\n"+source;
     }
-    return {...result,source:'import {sample,measured} from '+JSON.stringify(helper)+';\n'+source.replace('\n__measurement_end__','')};
+    return {...result,source:'import {sample,measured,selectionUnit} from '+JSON.stringify(helper)+';\n'+source.replace('\n__measurement_end__','')};
   }});
 }

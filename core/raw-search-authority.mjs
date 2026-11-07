@@ -452,33 +452,60 @@ export function createRawSearchAuthority(database, options) {
     // a failed idle check cannot manufacture an error on a later operation.
     return readTransaction(db,()=>timed(()=>cacheKeyInside(publication,metadata,at),at));
   };
+  function checkInside(source,intent) {
+    const next=inspectInside(source.ref,intent);
+    if(!matches(source,next))fail('source_unavailable');
+    return next;
+  }
   function check(source,intent = 'history',at=Infinity) {
-    return read(() => {
-      const next = inspectInside(source.ref,intent);
-      if (!matches(source,next)) fail('source_unavailable');
-      return next;
-    },at);
+    return read(()=>checkInside(source,intent),at);
   }
   // Eligibility memoization is keyed by this read-only connection's native
   // change counter. It never bypasses per-port checks or final source checks.
   let eligibilityVersion;const eligibility=new Map();
+  function selectUnit(rows,offset,observed,deadlineAt) {
+    const pending=new Map(),entries=[];
+    const unitStart=performance.now(),unitAt=Math.min(deadlineAt,unitStart+25);
+    read(()=>{
+      if(versionInside()!==observed)fail('source_changed');
+      try{timed(()=>{
+        while(entries.length<32&&offset+entries.length<rows.length&&performance.now()<unitAt){
+          deadline(deadlineAt);
+          const row=rows[offset+entries.length],key=row.source.canonical??fingerprint(row.source);
+          let entry=eligibility.get(key);
+          if(!entry){
+            try{const next=checkInside(row.source,'history');entry={classification:next.classification};}
+            catch(error){if(!['source_unavailable','source_excluded','raw_crypto_unavailable'].includes(error.code))throw error;
+              entry={denied:true};}
+            if(!entry.denied)pending.set(key,entry);
+          }
+          entries.push({row,entry});
+        }
+      },unitAt);}catch(error){
+        // A time slice may interrupt the next row. Its incomplete check is
+        // retried in a fresh snapshot; only fully checked rows leave this unit.
+        if(error.code!=='search_deadline')throw error;
+        deadline(deadlineAt);
+      }
+    },deadlineAt);
+    const unitHoldMs=performance.now()-unitStart;
+    if(version(deadlineAt)!==observed)fail('source_changed');
+    return {entries,pending,unitHoldMs};
+  }
   function select(rows,intent,deadlineAt) {
     const observed=version(deadlineAt);
     const pending=new Map();
     if(eligibilityVersion!==observed){eligibility.clear();eligibilityVersion=observed;}
-    const eligible=[];let denied=0,timedOut=false;
-    for(const row of rows){
+    const eligible=[];let denied=0,timedOut=false,offset=0;
+    while(offset<rows.length){
       if(performance.now()>=deadlineAt){timedOut=true;break;}
-      const key=row.source.canonical??fingerprint(row.source);
-      let entry=eligibility.get(key);
-      if(!entry){
-        try{const next=check(row.source,'history',deadlineAt);entry={classification:next.classification};}
-        catch(error){if(!['source_unavailable','source_excluded','raw_crypto_unavailable'].includes(error.code))throw error;
-          entry={denied:true};}
-        if(!entry.denied)pending.set(key,entry);
+      const unit=selectUnit(rows,offset,observed,deadlineAt);
+      for(const [key,entry] of unit.pending)pending.set(key,entry);
+      for(const {row,entry} of unit.entries){
+        if(entry.denied||intent==='current'&&entry.classification.kind==='history-only')denied++;
+        else eligible.push(row);
       }
-      if(entry.denied||intent==='current'&&entry.classification.kind==='history-only')denied++;
-      else eligible.push(row);
+      offset+=unit.entries.length;
     }
     if(version(deadlineAt)!==observed)fail('source_changed');
     return {eligible,denied,timedOut,version:observed,commit(check=()=>{}){for(const [key,entry] of pending){check();eligibility.set(key,entry);}check();}};
