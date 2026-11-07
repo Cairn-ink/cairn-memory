@@ -1078,8 +1078,3 @@ through its newline. Text produced while paused is never uploaded afterwards,
 including offline, restarted and unseen sessions. Quota refusal instead keeps
 pending text/event identity. No pause consumption is wired here. These are U-6
 D5's client guarantees; publishing/parsing alone does not establish them.
-
-The separate direct `core.recall` interface accepts optional boolean
-`diagnostics`; hosted schemas and client tools do not expose it. See
-[core recall diagnostics](fetch-recall.md#optional-core-recall-diagnostics) for
-timing fields in milliseconds and the lazy journal-mode cache per open core.

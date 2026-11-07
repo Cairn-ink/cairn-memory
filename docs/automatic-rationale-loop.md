@@ -114,8 +114,3 @@ keyless inspection/replay and forgetting (0). These validate integration and
 retention, not model accuracy or natural host tool selection. The new method is
 not granted by existing paid experiment capabilities. A frozen fresh live
 comparison is a following gate; no new benchmark score is declared here.
-
-Direct `core.recall` additionally accepts optional boolean `diagnostics`,
-independent of rationale context. See [core recall diagnostics](fetch-recall.md#optional-core-recall-diagnostics)
-for timing fields in milliseconds and the lazy journal-mode cache per open core.
-Client tools do not expose this field.

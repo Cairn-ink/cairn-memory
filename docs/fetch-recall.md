@@ -349,17 +349,18 @@ The diagnostics value is a frozen plain object with these keys in this order:
 
 | Key | Meaning |
 | --- | --- |
-| `recallMs` | Wall time from entry to return of the engine recall function. |
-| `hostWaitMs` | Sum of elapsed times from each `select` or `rank` call until recall resumes after its await, including event-loop time lost to other work while waiting. |
+| `recallMs` | Wall time from input validation to return of the engine recall function. |
+| `hostWaitMs` | Sum of elapsed times from each `select` or `rank` call until recall resumes after its await, including event-loop time lost to other work while waiting, less storage time within those calls. |
 | `storageMs` | Sum of synchronous storage time at the `map`, `fetch`, `validateFresh`, `recentReceipts` and `finalize` closures passed to recall. Includes SQLite busy waits. |
 | `storageCalls` | Number of calls through those storage closures, a non-negative integer. |
 | `storageMaxMs` | Longest single synchronous storage call, including any native wait. |
 | `journalMode` | Lowercase `delete`, `truncate`, `persist`, `memory`, `wal`, `off`, `other` or `unknown`. Unrecognized values map to `other`; a failed read reports `unknown`. |
 
 All times use `performance.now()` in milliseconds, sum unrounded values, and
-report non-negative numbers rounded to 0.1 ms. Host waits can include engine
-freshness checks, so host and storage times can overlap; do not add them to
-estimate total time. These measurements do not set or change timeouts.
+report non-negative numbers rounded to 0.1 ms. Host and storage times do not
+overlap: storage time in model-call freshness checks is excluded from host wait.
+`recallMs >= hostWaitMs + storageMs` up to rounding. These measurements do not
+set or change timeouts.
 
 After a successful opted-in recall, the engine reads `PRAGMA journal_mode`
 lazily on its existing connection, at most once per open core after a successful

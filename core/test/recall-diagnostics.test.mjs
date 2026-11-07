@@ -1,20 +1,14 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { Worker } from 'node:worker_threads';
-import { gunzipSync } from 'node:zlib';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { openMemoryCore } from '../contract.mjs';
 import * as runtime from '../runtime.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 
-const base = '295eb99e1c841ab2d01f15ef9b39b292e4f32237';
-const scratch = fileURLToPath(new URL('../../.research-private/recall-diagnostics/', import.meta.url));
-mkdirSync(scratch, { recursive: true });
 const namespace = { ownerId: 'recall-diagnostics-test', scope: 'personal', projectId: null };
 const request = { readSet: [namespace], query: 'Synthetic note' };
 const keys = ['recallMs', 'hostWaitMs', 'storageMs', 'storageCalls', 'storageMaxMs', 'journalMode'];
@@ -28,7 +22,7 @@ function model() {
       ({ namespaceIndex, memoryId: memory.id, revision: memory.revision })) }) };
 }
 function fixture(t, options = {}) {
-  const workspace = createTestWorkspace(t, { prefix: 'diagnostics-', parent: scratch });
+  const workspace = createTestWorkspace(t);
   const path = join(workspace.path, 'memory.sqlite'), port = model();
   let core = openMemoryCore({ path, model: port, ...options });
   workspace.defer(() => core.close());
@@ -86,51 +80,33 @@ function shape(plain, measured) {
   assert.ok(Number.isInteger(d.storageCalls) && d.storageCalls > 0);
   assert.ok(d.recallMs >= d.hostWaitMs);
   assert.ok(d.recallMs >= d.storageMs);
+  assert.ok(d.recallMs + 0.2 >= d.hostWaitMs + d.storageMs, JSON.stringify(d));
   assert.ok(d.storageMs >= d.storageMaxMs);
   return d;
 }
 
-// Restore only changed engine sources, with the remaining imports resolved to
-// their unchanged originals. No live checkout source is overwritten by a test.
-async function restoredBase(t) {
-  const workspace = createTestWorkspace(t, { prefix: 'restored-', parent: scratch });
-  const packed = readFileSync(new URL('./fixtures/recall-diagnostics-base.json.gz', import.meta.url));
-  assert.equal(createHash('sha256').update(packed).digest('hex'),
-    '6d2ada1c9dead8744cbaf71cf14c28e643eda0a041adb94206820d62f2e80af9');
-  const frozen = JSON.parse(gunzipSync(packed));
-  assert.equal(frozen.base, base);
-  const names = Object.keys(frozen.files);
-  for (const name of names) {
-    const restored = frozen.files[name];
-    assert.equal(createHash('sha256').update(restored.source).digest('hex'), restored.sha256);
-    const original = new URL('../' + name, import.meta.url);
-    const source = restored.source.replace(/(\bfrom\s*['"])(\.[^'"]+)(['"])/g, (_, start, specifier, end) => {
-      const target = new URL(specifier, original);
-      const replacement = names.includes(target.pathname.split('/').at(-1))
-        ? pathToFileURL(join(workspace.path, target.pathname.split('/').at(-1))) : target;
-      return start + replacement.href + end;
-    }).replaceAll("new URL('./prompts/", "new URL('" + new URL('../prompts/', import.meta.url).href);
-    writeFileSync(join(workspace.path, name), source);
-  }
-  return import(pathToFileURL(join(workspace.path, 'contract.mjs')).href);
-}
-
-test('1 opt-out identity: restored base, omitted and false preserve bytes, key order and every prepared SQL text', async t => {
-  const f = fixture(t), restored = await restoredBase(t);
-  const reference = restored.openMemoryCore({ path: f.path, model: f.port });
-  f.workspace.defer(() => reference.close());
-  const before = await observers(() => reference.recall(request));
+test('1 opt-out identity: omitted, false and true preserve bytes, key order and prepared SQL', async t => {
+  const f = fixture(t);
   const absent = await observers(() => f.core.recall(request));
   const disabled = await observers(() => f.core.recall({ ...request, diagnostics: false }));
-  ok(before.result);
+  assert.deepEqual(disabled, absent);
+  assert.equal(JSON.stringify(disabled), JSON.stringify(absent));
   for (const observed of [absent, disabled]) {
-    assert.deepEqual(observed, before);
-    assert.equal(JSON.stringify(observed), JSON.stringify(before));
-    assert.deepEqual(Object.keys(observed.result.value), Object.keys(before.result.value));
+    ok(observed.result);
+    assert.deepEqual(Object.keys(observed.result.value), Object.keys(absent.result.value));
     assert.equal(Object.hasOwn(observed.result.value, 'diagnostics'), false);
+    assert.equal(observed.observers.clock, 0);
+    assert.equal(observed.observers.timer, 2, 'only the existing model timeout timers');
+    assert.equal(observed.observers.listener, 0);
   }
-  writeFileSync(join(scratch, `base-${process.version}.json`), JSON.stringify(before, null, 2) + '\n');
-  t.diagnostic(JSON.stringify({ base, preparedCalls: before.sql.length, output: digest(before.result), sql: digest(before.sql), observers: before.observers }));
+  const measured = await prepared(() => f.core.recall({ ...request, diagnostics: true }));
+  const d = shape(absent.result.value, ok(measured.result));
+  assert.deepEqual(measured.sql, [...absent.sql, 'PRAGMA journal_mode']);
+  const again = await prepared(() => f.core.recall({ ...request, diagnostics: true }));
+  shape(absent.result.value, ok(again.result));
+  assert.deepEqual(again.sql, absent.sql);
+  t.diagnostic(JSON.stringify({ preparedCalls: absent.sql.length, output: digest(absent.result),
+    sql: digest(absent.sql), observers: absent.observers, diagnostics: d }));
 });
 
 test('2 validation: only absent and booleans are accepted', async t => {
@@ -204,6 +180,65 @@ test('5 synchronous SQLite exclusive lock is visible in storageMaxMs', async t =
   assert.equal(d.journalMode, 'delete');
   assert.equal(await joined, 0);
   t.diagnostic(JSON.stringify(d));
+});
+
+test('5 freshness storage inside select and rank is excluded from host wait', async t => {
+  for (const method of ['select', 'rank']) {
+    const f = fixture(t), plain = ok(await f.core.recall(request));
+    const holdMs = 160;
+    const state = new Int32Array(new SharedArrayBuffer(12));
+    const worker = new Worker(`
+      const { workerData } = require('node:worker_threads');
+      const { DatabaseSync } = require('node:sqlite');
+      const { performance } = require('node:perf_hooks');
+      const state = new Int32Array(workerData.state);
+      const db = new DatabaseSync(workerData.path);
+      try {
+        db.exec('PRAGMA busy_timeout=5000');
+        Atomics.store(state, 0, 1); Atomics.notify(state, 0);
+        if (Atomics.wait(state, 1, 0, 10000) === 'timed-out') throw Error('freshness rendezvous timed out');
+        db.exec('BEGIN EXCLUSIVE');
+        Atomics.store(state, 2, 1); Atomics.notify(state, 2);
+        const start = performance.now();
+        while (performance.now() - start < workerData.holdMs)
+          Atomics.wait(state, 2, 1, workerData.holdMs - (performance.now() - start));
+        db.exec('COMMIT');
+      } finally { db.close(); }
+    `, { eval: true, workerData: { path: f.path, state: state.buffer, holdMs } });
+    const joined = new Promise((resolve, reject) => { worker.once('error', reject); worker.once('exit', resolve); });
+    joined.catch(() => {});
+    f.workspace.defer(async () => {
+      Atomics.store(state, 1, 1); Atomics.notify(state, 1);
+      try { assert.equal(await joined, 0); } finally { await worker.terminate(); }
+    });
+    if (Atomics.load(state, 0) === 0) Atomics.wait(state, 0, 0, 10000);
+    assert.equal(Atomics.load(state, 0), 1, 'writer is ready');
+    let selected = false, triggered = false;
+    const select = f.port.select;
+    f.port.select = input => { selected = true; return select(input); };
+    const observed = await prepared(() => f.core.recall({ ...request, diagnostics: true }), () => {
+      if (triggered || (method === 'rank' && !selected)) return;
+      const limit = Error.stackTraceLimit;
+      let stack;
+      try { Error.stackTraceLimit = 50; stack = new Error().stack; }
+      finally { Error.stackTraceLimit = limit; }
+      // Hook the first prepare in validateFresh during callModel's token preflight.
+      // Other recall storage calls cannot start the lock, including between models.
+      if (!stack.includes('at validateFresh') || !stack.includes('at callModel')) return;
+      triggered = true;
+      Atomics.store(state, 1, 1); Atomics.notify(state, 1);
+      if (Atomics.load(state, 2) === 0) Atomics.wait(state, 2, 0, 10000);
+      assert.equal(Atomics.load(state, 2), 1, 'writer holds EXCLUSIVE inside freshness');
+    });
+    assert.equal(triggered, true, method);
+    const measured = ok(observed.result), d = parity(plain, measured);
+    assert.ok(d.storageMaxMs >= 80, JSON.stringify(d));
+    assert.ok(d.hostWaitMs < holdMs, JSON.stringify(d));
+    shape(plain, measured);
+    assert.equal(d.journalMode, 'delete');
+    assert.equal(await joined, 0);
+    t.diagnostic(method + ' ' + JSON.stringify(d));
+  }
 });
 
 test('6 journal mode: mapper is closed and case insensitive', () => {

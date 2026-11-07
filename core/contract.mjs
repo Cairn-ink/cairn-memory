@@ -867,10 +867,10 @@ export function createMemoryCore(input, internal) {
 
   async function recall(input) {
     try {
-      const started = input && Object.hasOwn(input, 'diagnostics') && input.diagnostics === true ? performance.now() : undefined;
       runtime.ready();
       object(input, ['readSet', 'query', 'limit', 'includeQualification', 'contextMode', 'selectionMode', 'diagnostics']);
       const enabled = Object.hasOwn(input, 'diagnostics') ? input.diagnostics : false;
+      const started = enabled === true ? performance.now() : undefined;
       if (typeof enabled !== 'boolean') throw new MemoryStoreError('invalid_input');
       const diagnostics = enabled ? { hostWaitMs: 0, storageMs: 0, storageCalls: 0, storageMaxMs: 0 } : undefined;
       const includeQualification = Object.hasOwn(input, 'includeQualification') ? input.includeQualification : false;

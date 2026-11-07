@@ -115,10 +115,12 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
       if (ref) { const candidate = { namespaceIndex: page.namespaceIndex, ...ref }; allowed.set(key(candidate), candidate); }
     }
     if (packed.omitted && !packed.overflow && packed.input.maps.every((page) => !page.items.length)) continue;
+    const storageStart = diagnostics?.storageMs;
     const hostStart = diagnostics ? performance.now() : undefined;
     const output = await callModel(model, 'select', selectPrompt, packed.input,
       { validateFresh: () => validateFresh([...chosen.values()]) });
-    if (diagnostics) diagnostics.hostWaitMs += performance.now() - hostStart;
+    if (diagnostics) diagnostics.hostWaitMs += Math.max(0, performance.now() - hostStart -
+      (diagnostics.storageMs - storageStart));
     const selected = selection(output, allowed, maxRefs, model, 'select');
     for (let i = 0; i < readSet.length; i++) {
       if (selected.filter((ref) => ref.namespaceIndex === i).length > 12) {
@@ -188,10 +190,12 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
     });
     const shown = packed.included.map((index) => candidates[index]);
     if (shown.length || packed.overflow) {
+      const storageStart = diagnostics?.storageMs;
       const hostStart = diagnostics ? performance.now() : undefined;
       const rankOutput = await callModel(model, 'rank', prompt, packed.input,
         { validateFresh: () => validateFresh(candidates) });
-      if (diagnostics) diagnostics.hostWaitMs += performance.now() - hostStart;
+      if (diagnostics) diagnostics.hostWaitMs += Math.max(0, performance.now() - hostStart -
+        (diagnostics.storageMs - storageStart));
       ranked = selection(rankOutput, new Map(shown.map((ref) => [key(ref), ref])), limit, model, 'rank');
     }
   }
