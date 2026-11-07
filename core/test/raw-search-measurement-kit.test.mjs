@@ -104,8 +104,8 @@ test('phase ledger records each selection snapshot row count and hold on the fun
       const reader=openReadDatabase(f.path,{contextRead:true});t.after(()=>reader.db.close());
       const a=createRawSearchAuthority(reader,s.options),source=a.inventory().rows[0].source;
       const own=Object.getOwnPropertyDescriptor(performance,'now');Object.defineProperty(performance,'now',{configurable:true,value:()=>100});
-      try{takeSelectionUnits();a.select(Array.from({length:65},()=>({source})),'current',1100);
-        const units=takeSelectionUnits();assert.deepEqual(units.map(u=>u.rows),[32,32,1]);assert.deepEqual(units.map(u=>u.checked),[32,0,0]);assert.ok(units.every(u=>u.holdMs===0));
+      try{a.select([{source}],'current',1100).commit();takeSelectionUnits();a.select(Array.from({length:65},()=>({source})),'current',1100);
+        const units=takeSelectionUnits();assert.deepEqual(units.map(u=>u.rows),[32,32,1]);assert.deepEqual(units.map(u=>u.checked),[0,0,0]);assert.ok(units.every(u=>u.holdMs===0));
       }finally{if(own)Object.defineProperty(performance,'now',own);else delete performance.now;hook.deregister();}
     });`;
   const child=spawnSync(process.execPath,['--input-type=module','-e',script],{encoding:'utf8',timeout:30000});
