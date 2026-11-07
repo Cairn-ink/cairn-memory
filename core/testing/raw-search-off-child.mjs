@@ -24,12 +24,6 @@ for(const method of ['setTimeout','setInterval']){const schedule=globalThis[meth
 const residency=[];
 mkdirSync(scratch,{recursive:true,mode:0o700});
 const load=file=>import(pathToFileURL(join(root,file)).href);
-const engine=await load('core/index.mjs');
-const embedding=guard?await load('core/context-read-embedder.mjs'):null;
-const checkResidency=()=>{if(guard){residency.push(embedding.rawVectorResidencySelected);assert.equal(embedding.rawVectorResidencySelected,false);}};
-const {openRawCaptureCore}=await load('core/raw-capture.mjs');
-const {rationaleModel}=await load('core/testing/rationale-model.mjs');
-const {interpretation}=await load('core/testing/episode-capture-helpers.mjs');
 const ns={ownerId:'synthetic-owner',scope:'personal',projectId:null},path=join(scratch,'canonical.sqlite');
 const trace=[],ports=[],results=[],timeline=[];
 for(const [kind,array] of [['sql',trace],['port',ports],['clock',clockTrace]]){
@@ -51,6 +45,12 @@ DatabaseSync.prototype.prepare=function(sql){
   const statement=prepare.call(this,sql);
   for(const method of ['all','get','run']){const execute=statement[method];statement[method]=function(...args){
     if(tracing)trace.push([method,sql,encode(args)]);return execute.apply(this,args);};}return statement;};
+const engine=await load('core/index.mjs');
+const embedding=guard?await load('core/context-read-embedder.mjs'):null;
+const checkResidency=()=>{if(guard){residency.push(embedding.rawVectorResidencySelected);assert.equal(embedding.rawVectorResidencySelected,false);}};
+const {openRawCaptureCore}=await load('core/raw-capture.mjs');
+const {rationaleModel}=await load('core/testing/rationale-model.mjs');
+const {interpretation}=await load('core/testing/episode-capture-helpers.mjs');
 const port={version:'raw-seal-v1',async sealRaw(value){if(tracing)ports.push(['seal',encode(value)]);
   return {format:'local-plain-v1',keyVersion:null,sealed:Buffer.from(value.text)};},
 async openRaw(value){if(tracing)ports.push(['open',encode(value)]);return {text:Buffer.from(value.sealed).toString('utf8')};}};
