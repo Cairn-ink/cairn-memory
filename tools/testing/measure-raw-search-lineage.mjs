@@ -293,7 +293,7 @@ export async function measureLineageProfile({profile,count,path,authority,servic
             if(!checked.ok&&performance.now()-ticketAt>=5000&&checked.trace.versions.length===0)checked.cause='other:expired-ticket';
             revalidations.push({...checked,value:undefined});
           }else if(ticket)expiredTicketsSkipped++;
-          console.log('measurement cadence-progress='+JSON.stringify({cadenceMs,sample,outcome:row.outcome,ms:row.ms,cause:row.cause}));
+          console.log('measurement cadence-progress='+JSON.stringify({cadenceMs,sample,outcome:row.outcome,ms:row.ms}));
         }
         const stopped=await writes.call({operation:'pause'});
         const outcomes=Object.fromEntries(['complete','partial-with-candidates','empty-partial','error'].map(name=>[name,rows.filter(row=>row.outcome===name).length]));
@@ -304,10 +304,10 @@ export async function measureLineageProfile({profile,count,path,authority,servic
         const unavailableRate=(outcomes.error+outcomes['empty-partial'])/rows.length;
         const refusals=prepares.concat(revalidations),refusalRate=refusals.filter(row=>!row.ok).length/refusals.length;
         const e2e=summary(rows.map(row=>row.ms));
-        const compact=values=>values.map(({trace,value,...row})=>row);
+        const compact=values=>values.map(({trace,value,cause,...row})=>row);
         report.cadences.push({cadenceMs,outcomes,unavailableRate,refusalRate,e2e,
           gate:{unavailable:unavailableRate<=.01,refusals:refusalRate<=.01,e2e:e2e.p95<=1000},
-          attribution:{searches:causes(rows),refusals:causes(refusals.filter(row=>!row.ok))},writerAttribution,writerCommits,seed:schedule.seed,commits:stopped.commits-schedule.commits,searches:compact(rows),
+          attribution:{unavailableSearches:causes(rows.filter(row=>['empty-partial','error'].includes(row.outcome))),recoveredSearches:causes(rows.filter(row=>!['empty-partial','error'].includes(row.outcome))),refusals:causes(refusals.filter(row=>!row.ok))},writerAttribution,writerCommits,seed:schedule.seed,commits:stopped.commits-schedule.commits,searches:compact(rows),
           afterCommit:summary(rows.filter(row=>row.afterCommit).map(row=>row.ms)),
           withoutCommit:summary(rows.filter(row=>!row.afterCommit).map(row=>row.ms)),
           successfulAfterCommit:summary(rows.filter(row=>row.ok&&row.afterCommit).map(row=>row.ms)),

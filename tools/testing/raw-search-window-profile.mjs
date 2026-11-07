@@ -88,6 +88,9 @@ try{
     let comparisons=0,wrong=0,refusals=0;const errors=[];
     try{
       await Promise.race([started,new Promise((_,reject)=>setTimeout(()=>reject(Error('writer_start_timeout')),15000))]);
+      // Establish the post-capture semantic state before comparing scores.
+      // A declared hybrid-to-lexical downgrade is not a wrong comparison.
+      await call('capture');await service.search(input,host.token);
       for(let burst=0;burst<20;burst++){
         const before=await service.search(input,host.token);
         const writing=Promise.all(Array.from({length:5},()=>call('capture')));writing.catch(()=>{});

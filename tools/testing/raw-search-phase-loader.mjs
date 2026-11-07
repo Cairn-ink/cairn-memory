@@ -29,6 +29,7 @@ export function installPhaseMeasurement(){
     }else if(url.endsWith('/raw-search-storage.mjs')){
       wrap('export async function openRawSearchStorage(', '\n__measurement_end__','sidecar-open');
       wrap('  async function snapshot(', '  function publication(','snapshot');
+      wrap('  function publication(', '  async function stage(','publication-shape');
       replace('if (!row || row.signature !== sign(row.data,row.vectors))',"if (!row || row.signature !== measured('authentication',()=>sign(row.data,row.vectors)))");
       replace('unpack(row.data,vectorBytes(row.vectors))',"measured('hint-decode',()=>unpack(row.data,vectorBytes(row.vectors)))");
     }else{
