@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { createHmac } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
-import { readdirSync, copyFileSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { openRawSearchStorage } from '../raw-search-storage.mjs';
 import { openRawSearch } from '../raw-search-index.mjs';
@@ -41,7 +41,8 @@ test('Raw sidecar reopens through attestation without a whole-file check and ret
 for(const damage of ['record','stamp','copy'])test(`Raw sidecar rejects an invalid attestation at reopen: ${damage}`,async t=>{
   const {options,store,path}=await storageFixture(t);await store.close();
   if(damage==='copy') {
-    const target=path+'.copy';copyFileSync(path,target);
+    const {copySqliteFixture}=await import('../testing/content-safety-s2h-fixture.mjs');
+    const target=path+'.copy';copySqliteFixture(path,target);
     const {renameSync}=await import('node:fs');renameSync(target,path);
   } else {
     const db=new DatabaseSync(path);
