@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { types } from 'node:util';
-import { maintenanceErrorName, maintenanceFailureCode, maintenanceIndexFailure } from './context-product-attribution.mjs';
+import { maintenanceErrorName, maintenanceFailureCode, maintenanceIndexFailure, refuseAuthority, authorityRefusal } from './context-product-attribution.mjs';
 import { createMaintenanceAttribution } from './context-product-attribution.mjs';
 import { performance } from 'node:perf_hooks';
 import { parentPort, workerData } from 'node:worker_threads';
@@ -40,6 +40,7 @@ const startSqlite = op => sqlite?.start(Number(mono(op.operationCutoffMonoNs)) /
 // Keep the initiating call and the first disposal failure independent.
 let failureDetail,secondaryFailureDetail,disposalFailureDetail;
 const noteFailure=(kind,engineCode,error,disposal=false,secondary=false,step=attribution?.stepKind??0)=>{if(!workerData.maintenance)return;const detail={kind,...(kind==='engine'||kind==='unmapped'?{engineCode:maintenanceFailureCode(engineCode)}:{}),
+  ...(kind==='engine'&&engineCode==='authority_required'?{refusal:authorityRefusal(error)??'other'}:{}),
   ...(kind==='engine'&&engineCode==='index_unavailable'?maintenanceIndexFailure(error)??{reason:'other'}:{}),
   ...(kind==='protocol'?{protocolKind:'frame_conflict'}:{}),...(kind==='exception'?{errorName:maintenanceErrorName(error),step}:{})};if(secondary)secondaryFailureDetail??=detail;else if(disposal)disposalFailureDetail??=detail;else failureDetail??=detail;};
 const nativeFailure = (error, disposal = false, secondary = false, step) => {
@@ -160,12 +161,12 @@ parentPort.on('message', async message => {
   observer.select(frame);
   try {
     const callRequest = workerData.maintenance ? message.request : request;
-    if (workerData.maintenance && (callRequest.clockDomainId !== request.clockDomainId || callRequest.credentialBindingId !== binding.credentialBindingId || callRequest.credentialExpiresUtcMs !== binding.credentialExpiresUtcMs)) fail('authority_required');
+    if (workerData.maintenance && (callRequest.clockDomainId !== request.clockDomainId || callRequest.credentialBindingId !== binding.credentialBindingId || callRequest.credentialExpiresUtcMs !== binding.credentialExpiresUtcMs)) refuseAuthority('request_binding');
     verifyRecords(message.request, operation, callRequest, operationRecord(callRequest, mono(operation.enteredMonoNs),
       deadline(['refreshContextIndex','refreshMaintenance','admitMaintenance'].includes(message.method) ? message.input?.budget?.maxMs : message.input?.deadlineMs), opening.workerEpoch, operation.operationId));
-    if (operation.workerEpoch !== opening.workerEpoch) fail('authority_required');
+    if (operation.workerEpoch !== opening.workerEpoch) refuseAuthority('worker_epoch');
     if(Object.hasOwn(message,'semanticOutstanding')){
-      if(!workerData.maintenance||!semantic||!types.isSharedArrayBuffer(message.semanticOutstanding)||message.semanticOutstanding.byteLength!==8)fail('authority_required');
+      if(!workerData.maintenance||!semantic||!types.isSharedArrayBuffer(message.semanticOutstanding)||message.semanticOutstanding.byteLength!==8)refuseAuthority('semantic_outstanding');
       semanticTurn??=new AsyncLocalStorage();semanticOutstanding=message.semanticOutstanding;
     }else semanticOutstanding=undefined;
     currentControl = callRequest;
@@ -187,14 +188,14 @@ parentPort.on('message', async message => {
       }
     }
     else if (message.method === 'fetchCandidateEvidence') {
-      if (workerData.maintenance) fail('authority_required');
+      if (workerData.maintenance) refuseAuthority('method_gate');
       const payload = boundedData(message.input), { deadlineMs, ...fetchInput } = payload;
       deadline(deadlineMs);
       response = facade.fetchCandidateEvidence(fetchInput, message.credential, payload);
       phase?.mark('readFinished');
     } else {
-      if(['admitMaintenance','refreshMaintenance'].includes(message.method)&&!workerData.maintenance)fail('authority_required');
-      if (workerData.maintenance && !['getContextIndexStatus','refreshContextIndex','admitMaintenance','refreshMaintenance'].includes(message.method)) fail('authority_required');
+      if(['admitMaintenance','refreshMaintenance'].includes(message.method)&&!workerData.maintenance)refuseAuthority('method_gate');
+      if (workerData.maintenance && !['getContextIndexStatus','refreshContextIndex','admitMaintenance','refreshMaintenance'].includes(message.method)) refuseAuthority('method_gate');
       const run=()=>index.run(message.method, boundedData(message.input), message.credential,
         performance.now() + Number(mono(operation.operationCutoffMonoNs)-process.hrtime.bigint())/1e6, observation);
       response = await (semanticOutstanding===undefined?run():semanticTurn.run({semanticOutstanding},run));
