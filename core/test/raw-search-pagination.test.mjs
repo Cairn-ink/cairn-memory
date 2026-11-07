@@ -29,22 +29,20 @@ function observe(reader){
     statement.columns=()=>{const cols=columns();active={columns:cols.map(c=>c.name),rows:[],sizes:[],
       parameters:(sql.match(/\?/g)||[]).length,order:sql.match(/ ORDER BY (.+) LIMIT 50001$/s)[1].split(',').map(name=>name.split('.').at(-1))};scans.push(active);return cols;};
     if(sql.startsWith('SELECT count(*) AS count,json_group_array'))statement.get=(...args)=>{
-      const page=get(...args),rows=JSON.parse(page.rows);active.rows.push(...rows);active.sizes.push(page.count);
+      const page=get(...args),rows=JSON.parse(page.rows),positions=active.order.map(name=>active.columns.indexOf(name));
+      const key=row=>positions.map(index=>row[index]);
+      const compare=(a,b)=>{let value=0;for(let i=0;i<a.length&&!value;i++)
+        value=typeof a[i]==='number'?Math.sign(a[i]-b[i]):Buffer.compare(Buffer.from(a[i]),Buffer.from(b[i]));return value;};
+      if(rows.length&&active.rows.length)assert.ok(compare(key(rows[0]),key(active.rows.at(-1)))>0,'each page advances beyond the previous key');
+      for(let i=1;i<rows.length;i++)assert.ok(compare(key(rows[i]),key(rows[i-1]))>0,'page keys are strictly ordered');
+      active.rows.push(...rows);active.sizes.push(page.count);
       if(rows.length&&args.length===active.parameters+active.order.length){
         // Exercise the actual native pager with a cursor inside this batch.
         // A predicate accidentally attached to a LEFT JOIN still returns the
         // earlier rows, even when ordinary batch cursors happen to mask it.
-        const positions=active.order.map(name=>active.columns.indexOf(name));
         const cursor=positions.map(index=>rows[Math.floor(rows.length/2)][index]);
         const probe=[...args.slice(0,-cursor.length),...cursor],replayed=JSON.parse(get(...probe).rows);
-        for(const row of replayed){
-          let compared=0;
-          for(let i=0;i<positions.length&&!compared;i++){
-            const value=row[positions[i]],bound=cursor[i];
-            compared=typeof value==='number'?Math.sign(value-bound):Buffer.compare(Buffer.from(value),Buffer.from(bound));
-          }
-          assert.ok(compared>0,'keyset predicate filters projected rows before pagination');
-        }
+        for(const row of replayed)assert.ok(compare(key(row),cursor)>0,'keyset predicate filters projected rows before pagination');
       }
       return page;
     };
