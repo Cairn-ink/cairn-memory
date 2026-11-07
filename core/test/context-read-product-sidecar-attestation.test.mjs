@@ -663,3 +663,67 @@ for(const [mode,replaced] of [['DELETE',false],['DELETE',true],['WAL',false]])te
   const rebuilt=s.finish();assert.ok(rebuilt.publication);assert.equal(replacementCalls(s).length,replacements);
   t.diagnostic(JSON.stringify({mode,replaced,errorClass:'Error',code:'storage_error',rejected,firstSealRollbacks,totalSidecarRollbacks:rolledBack,signedWrites,unsigned,wholeFileStatements:s.checks,replacements}));
 });
+
+// Interleave a separate SQLite connection precisely after the opening read
+// commits, before sealing acquires its writer reservation.
+for(const damage of [false,true])test(`WAL sealing gap: second connection ${damage?'violates CHECK and is refused':'commits valid data before the checked seal'}`,t=>{
+  const failures=[],attribution=createMaintenanceAttribution();
+  const capture=attribution.captureFailure;attribution.captureFailure=error=>{failures.push(error.reason);capture(error);};
+  const s=setup(t,{mode:'WAL',attribution});s.close();legacyWal(s,'row');
+  const other=new DatabaseSync(s.path);t.after(()=>other.close());other.exec('PRAGMA busy_timeout=0');
+  let injected=false,opening=false;
+  s.setHook(text=>{if(text.includes('LEFT JOIN product_attestation'))opening=true;});
+  s.afterExec((text,database)=>{
+    if(text==='COMMIT'&&opening&&!injected){
+      injected=true;
+      other.exec('PRAGMA ignore_check_constraints=ON;BEGIN IMMEDIATE');
+      other.exec(damage?"INSERT INTO product_metadata SELECT 2,store_id,profile,incarnation,kind FROM product_metadata WHERE singleton=1":"UPDATE product_metadata SET kind=kind||' gap' WHERE singleton=1");
+      other.exec('COMMIT;PRAGMA ignore_check_constraints=OFF');assert.equal(database.isTransaction,false);
+    }
+  });
+  s.open();
+  if(damage){
+    const fail=s.storage.admit;
+    assert.throws(()=>fail(2000),{code:'index_unavailable',reason:'storage_unavailable'});
+    assert.ok(failures.includes('corrupt'),'whole-file failure retains the corrupt classification before WAL refusal');
+    assert.equal(s.row(),null,'a state changed after the opening read must never receive a seal');
+    const check=other.prepare('PRAGMA quick_check').all();assert.ok(check.some(r=>r.quick_check.includes('CHECK constraint failed')));
+  }else{
+    s.storage.admit(2000);assert.equal(s.valid(),true);assert.equal(s.checks,2);
+    s.open();s.storage.admit(2000);assert.equal(s.checks,2,'matching next open has zero whole-file statements');
+  }
+  assert.equal(injected,true);assert.equal(replacementCalls(s).length,0);
+  t.diagnostic(JSON.stringify({damage,injected,sealed:s.row()!==null,checks:s.checks}));
+});
+
+test('WAL sealing lock: a second connection is busy during both whole-file checks',t=>{
+  const s=setup(t,{mode:'WAL'});s.close();legacyWal(s,'row');
+  const other=new DatabaseSync(s.path);t.after(()=>other.close());other.exec('PRAGMA busy_timeout=0');
+  const attempts=[];
+  s.setHook((text,key,database)=>{
+    if(!['PRAGMA quick_check','PRAGMA foreign_key_check'].includes(text))return;
+    assert.equal(database.isTransaction,true);
+    assert.throws(()=>other.exec('BEGIN IMMEDIATE'),error=>{attempts.push({text,code:error.errcode&255});return (error.errcode&255)===5;});
+    assert.equal(other.isTransaction,false,'second writer has not committed');
+  });
+  s.open();s.storage.admit(2000);assert.equal(attempts.length,2);assert.equal(s.valid(),true);
+  other.exec('BEGIN IMMEDIATE;UPDATE product_metadata SET singleton=1 WHERE singleton=1;COMMIT');
+  t.diagnostic(JSON.stringify({attempts,sealed:s.valid()}));
+});
+
+test('WAL sealing gap: legacy binding authentication shares the retirement transaction',t=>{
+  const s=setup(t,{mode:'WAL'});s.close();legacyWal(s,'table');
+  const other=new DatabaseSync(s.path);t.after(()=>other.close());other.exec('PRAGMA busy_timeout=0');
+  const exec=DatabaseSync.prototype.exec;let opening=false,injected=false;
+  s.setHook(text=>{if(text==='PRAGMA user_version')opening=true;});
+  t.mock.method(DatabaseSync.prototype,'exec',function(text){
+    if(opening&&!injected&&text==='BEGIN IMMEDIATE'){
+      injected=true;other.exec("BEGIN IMMEDIATE;UPDATE validation_records SET record='unauthenticated';COMMIT");
+    }
+    return Reflect.apply(exec,this,[text]);
+  });
+  s.open();assert.throws(()=>s.storage.admit(2000),{code:'index_unavailable',reason:'validation_invalid'});
+  assert.equal(injected,true);assert.equal(s.row(),null,'DDL and seal rolled back with refused retirement');
+  assert.equal(other.prepare("SELECT count(*) n FROM validation_records WHERE record='unauthenticated'").get().n,1,'unauthenticated record was never retired');
+  assert.equal(replacementCalls(s).length,0);
+});

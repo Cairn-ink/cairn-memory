@@ -278,7 +278,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     catch (error) {attribution?.captureFailure(error); if(sqlite)sqlite.openingFailure(error);throw error; }
   };
   function close() { discardAfterGuard=true;if (side?.isOpen) side.close(); handles?.closed(); side = null; metadata = null; sideFiles = null; legacySealTable=false;discardAfterGuard=false; }
-  function write(work, kind='setup', beforeCommit, checkpoint=true) {
+  function write(work, kind='setup', beforeCommit, checkpoint=true, beforeSetup) {
     // Setup-only callers opt out explicitly; ambiguous writes count as work.
     // All lexical write starts share this gate, including setup, GC and the
     // qualified verification fallback. A denied start leaves signed work intact.
@@ -294,7 +294,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     const began=now(),beginning=attribution?.start('begin');
     try {attribution?.checkpoint('begin');side.exec('BEGIN IMMEDIATE');}catch(error){failed(error,wasWritable);attribution?.captureFailure(error);throw error;}finally{attribution?.end(beginning);}
     try {
-      verifyOpened();if(legacySealTable)side.exec(expectedSchema.find(row=>row.name==='product_attestation').sql);const result=work();rendezvous('batch');beforeCommit?.();
+      verifyOpened();if(beforeSetup){beforeSetup();if(!admitCheckpoint(started))throw checkpointYield;}if(legacySealTable)side.exec(expectedSchema.find(row=>row.name==='product_attestation').sql);const result=work();rendezvous('batch');beforeCommit?.();
       writeSidecarAttestation(side,identity.cursorSecret,sidecarAttestationFile(sidePath),PRODUCT_SIDECAR_FORMAT);
       const commitStarted=now(),committing=attribution?.start('commit');
       try {attribution?.checkpoint('commit');attribution?.add(kind+'CommitAttempts',1);side.exec('COMMIT');legacySealTable=false;attribution?.add(kind+'Commits',1);}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.end(committing);if(workQuantum)costs.commit(now()-commitStarted);}
@@ -428,7 +428,6 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
           // Valid seal in either mode: no whole-file checks.
           if(wantsWrite&&sideMode==='WAL'&&sidecarJournalMode==='WAL'&&seal===null) {
             if(missingSealTable)attest(candidate,objects,true);
-            if(candidate.prepare('PRAGMA quick_check').get().quick_check!=='ok'||candidate.prepare('PRAGMA foreign_key_check').get())unavailable('corrupt');
             bootstrap=true;legacyWalMissing=true;
           } else throw Object.assign(Error('index_unavailable'),{code:'index_unavailable',reason:'attestation_invalid',expectedAttestation:sidecarAttestationDigest(seal)});
         }
@@ -444,7 +443,6 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     // Retire only bounded pointer/certificate slices, leaving corpus retirement
     // to ordinary GC. DDL, retirement and first seal roll back together.
     const check=checkAdmission??(()=>{});
-    if(legacyWalMissing&&missingSealTable&&admissionBindings(check))unavailable('foreign_binding');
     // Standalone admission has no later write. A WAL upgrade's one-time first
     // write also retires the old schema-bound pointers before any observation.
     if(bootstrap&&(bootstrapCommit||legacyWalMissing)){
@@ -453,7 +451,14 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         if(legacyWalMissing&&missingSealTable)for(const table of ['vector_publications','vector_work','vector_validation_records','publications','work','validation_records','progress_records']){
           for(;;){check();const result=side.prepare(`DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} LIMIT 128)`).run();if(!result.changes)break;}
         }
-      },'setup',check,false);}catch(error){
+      },'setup',check,false,()=>{
+        if(!legacyWalMissing)return;
+        // The writer reservation covers the checked state, old binding
+        // authentication, DDL, retirement and seal as one atomic operation.
+        check();if(side.prepare('PRAGMA quick_check').get().quick_check!=='ok')unavailable('corrupt');
+        check();if(side.prepare('PRAGMA foreign_key_check').get())unavailable('corrupt');
+        if(missingSealTable&&admissionBindings(check,true))unavailable('foreign_binding');
+      });}catch(error){
         // A mid-turn reconnect may yield before sealing. Discard its unsealed
         // handle so the next opening checks the missing seal once again.
         if(error===checkpointYield)close();throw error;
@@ -909,12 +914,12 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     }
     return m;
   }
-  function admissionBindings(checkAdmission) {
+  function admissionBindings(checkAdmission, insideWrite=false) {
     // Authenticate before interpreting identity metadata, including retained
     // certificates without live pointers. Never scan corpus rows here.
     const canonicalIdentity=canonicalRead(()=>canonicalProductIdentity(path,admissionDatabase(canonical,checkAdmission)));
     checkAdmission();
-    return read(()=>{
+    const inspect=()=>{
       const cacheIdentity=sideIdentity(admissionDatabase(side,checkAdmission));
       for(const sql of [
         'SELECT 1 FROM publications p LEFT JOIN validation_records r ON r.publication=p.publication AND r.generation=p.generation WHERE r.publication IS NULL LIMIT 1',
@@ -940,7 +945,8 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       }
       // Complete authentication of both sets before authorizing replacement.
       return foreign?basis.digest('hex'):null;
-    },checkAdmission);
+    };
+    return insideWrite?inspect():read(inspect,checkAdmission);
   }
   // The bootstrap exception belongs to this call only. A later turn must
   // revalidate the file and treat an unsigned empty successor as untrusted.
