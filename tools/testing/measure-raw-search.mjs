@@ -4,7 +4,7 @@ import { fork } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { reserveSharedVectors } from '../../core/context-read-embedder.mjs';
 import { cpus,totalmem } from 'node:os';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync,writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { openDatabase,transaction } from '../../core/database.mjs';
@@ -20,10 +20,13 @@ import { createTestWorkspace } from './workspace.mjs';
 const summary=values=>{const sorted=[...values].sort((a,b)=>a-b),at=q=>sorted[Math.min(sorted.length-1,Math.ceil(sorted.length*q)-1)];
   return {p50:at(.5),p95:at(.95),p99:at(.99),max:sorted.at(-1),samples:sorted.length};};
 export async function measureRawSearch(t,targets) {
+  const profile=process.env.CAIRN_RAW_MEASURE_PROFILE;
+  if(profile&&!['commitment-cost','cadence'].includes(profile))throw Error('invalid_measurement_profile');
+  const lineageTools=profile?await import('./measure-raw-search-lineage.mjs'):null;
   const reports=[];
   t.diagnostic(JSON.stringify({hardware:{cpu:cpus()[0].model,cores:cpus().length,memoryBytes:totalmem()},node:process.version,targets}));
   const scenarios=[...targets.sizes.map(count=>({count,cap:false})),{count:Math.ceil(targets.rawCapBytes/4000),cap:true}];
-  for(const scenario of scenarios.filter(s=>!process.env.CAIRN_RAW_MEASURE_TURNS||process.env.CAIRN_RAW_MEASURE_TURNS.split(',').map(Number).includes(s.count))){
+  for(const scenario of scenarios.filter(s=>(!profile||!s.cap&&(profile!=='cadence'||s.count===10000))&&(!process.env.CAIRN_RAW_MEASURE_TURNS||process.env.CAIRN_RAW_MEASURE_TURNS.split(',').map(Number).includes(s.count)))){
     const {count,cap}=scenario;console.log('measurement phase=seed turns='+count);
     const ws=createTestWorkspace(null,{prefix:'raw-search-measure-'}),path=join(ws.path,'canonical.sqlite'),directory=join(ws.path,'index');
     mkdirSync(directory,{mode:0o700});
@@ -46,7 +49,7 @@ export async function measureRawSearch(t,targets) {
       return value;
     };
     try{
-      db=openDatabase(path,{rawSources:true});
+      db=openDatabase(path,profile?{rawSources:true,currentDependencies:true,contentSafety:'s2h-v1'}:{rawSources:true});
       const secret=db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get().secret;
       const key=Buffer.from(secret,'hex'),timestamp='2026-01-02T00:00:00.000Z';
       const conversation=db.prepare('INSERT INTO raw_conversations VALUES(?,?,?,?,?,?,1,?,?)');
@@ -74,6 +77,7 @@ export async function measureRawSearch(t,targets) {
         }
         db.prepare('INSERT INTO raw_owner_usage VALUES(?,1,?, ?,0)').run(ns.ownerId,targets.rawCapBytes,rawBytes);
       });
+      const lineage=profile?lineageTools.seedMeasurementLineage(db,count):null;
       const canonicalBuildMs=performance.now()-buildStart;console.log('measurement phase=index turns='+count);
       reader=openReadDatabase(path,{contextRead:true});
       const options={ownerId:ns.ownerId,readSet:[ns],crypto:localPlainPort(),authority:rawSearchHost().authority};
@@ -87,6 +91,7 @@ export async function measureRawSearch(t,targets) {
         const start=performance.now(),inventory=authority.inventory(after,16);inventoryTimes.push(performance.now()-start);
         const staged=[];
         for(const entry of inventory.rows){
+          if(profile&&!entry.source){after=entry.key;continue;}
           assert.ok(entry.source);
           const text=await authority.open(entry.source),chunks=rawSearchChunks(text,entry.source.ref.span.start);
           const segment={key:JSON.stringify(entry.key),source:entry.source,fingerprint:authority.fingerprint(entry.source),
@@ -109,6 +114,22 @@ export async function measureRawSearch(t,targets) {
       service=await openRawSearch(serviceOptions);
       const factoryMs=performance.now()-factoryStart;
       const searchInput={query:'copper telescope',queryVector:{input:'copper telescope',embedder:{id:provider.id,revision:provider.revision,dimensions:1536,normalization:'l2'},vector:queryVector}};
+      if(profile){
+        const report=await lineageTools.measureLineageProfile({profile,count,path,authority,service,host,input:searchInput,sections,lineage});
+        report.indexedParts=built;
+        report.measurement='synthetic lineage with native statement and exception observation';
+        report.stopThreshold=profile==='commitment-cost'&&(report.shared.p99>50||count===10000&&report.rebuildAttempts.p95>250);
+        if(process.env.CAIRN_RAW_MEASURE_OUTPUT){
+          mkdirSync(process.env.CAIRN_RAW_MEASURE_OUTPUT,{recursive:true});
+          writeFileSync(join(process.env.CAIRN_RAW_MEASURE_OUTPUT,profile+'-'+count+'.json'),JSON.stringify(report,null,2)+'\n');
+        }
+        const {samples,pages,pageTimeByIndex,rebuildErrors,searchErrors,warmOutcomes,cadences,...totals}=report;
+        console.log('measurement lineage-result='+JSON.stringify({...totals,
+          rebuildErrors:rebuildErrors?.map(row=>({code:row.code,cause:row.cause,ms:row.ms})),
+          searchErrors:searchErrors?.map(row=>({code:row.code,cause:row.cause,ms:row.ms})),
+          cadences:cadences?.map(row=>({cadenceMs:row.cadenceMs,commits:row.commits,searches:row.searches.length,afterCommit:row.afterCommit,withoutCommit:row.withoutCommit,cache:row.cache}))}));
+        reports.push(report);continue;
+      }
       const apiErrors=[],prepareErrors=[],failedApiTimes=[];
       let coldApi,coldApiMs,coldApiError=null;
       const coldApiStart=performance.now();
@@ -199,7 +220,7 @@ export async function measureRawSearch(t,targets) {
       reports.push(report);console.log('measurement result='+JSON.stringify(report));t.diagnostic(JSON.stringify(report));
     }finally{DatabaseSync.prototype.exec=originalExec;await service?.close();await storage?.close();reader?.db.close();db?.close();await ws.cleanup();}
   }
-  assert.deepEqual(reports.flatMap(report=>report.failures),[],'frozen performance targets');
+  if(!profile)assert.deepEqual(reports.flatMap(report=>report.failures),[],'frozen performance targets');
 }
 
 function measureResidency(metadata){
