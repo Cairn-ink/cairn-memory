@@ -60,9 +60,11 @@ for(const method of Object.keys(model)){const work=model[method];if(typeof work=
   if(tracing)ports.push(['model',method,encode(value)]);return work(value);};}
 model.countTokens=value=>{if(tracing)ports.push(['model-count',value]);return base.countTokens(value);};
 const raw={mode:'raw-v1',sources:true,port,readPolicy:()=>{if(tracing)ports.push(['policy']);return {generation:'synthetic',reason:null};}};
+const privateGrants=new WeakMap();
 const options={path,model,
   privateCards:{version:'private-cards-local-v1',source:'submitted-note-v1',storage:'local-plain-v1',disclosure:'explicit-submitted-note-v1',
-    authority:{authorize(){return null;},isCurrent(){return null;}}}};
+    authority:{authorize(request){if(tracing)ports.push(['private-authorize',request]);const grant={};const {input,...binding}=request;privateGrants.set(grant,binding);return grant;},
+      isCurrent(grant,request){if(tracing)ports.push(['private-current',request]);return {...privateGrants.get(grant),accessGeneration:1};}}}};
 const request=(id,session='session',ordinal=1)=>({namespace:ns,client:'codex',sessionId:session,eventId:id,
   messages:[{
     id,role:'user',occurredAt:null,messageOrdinal:ordinal,content:'Synthetic retained source '+id+'.',
@@ -96,6 +98,14 @@ const episodeResult=await episodeCore.captureRaw({...request('episode','episode'
 if(!episodeResult.ok)throw Error('episode_fixture_failed:'+JSON.stringify(episodeResult));results.push(['episode-capture',episodeResult]);episodeCore.close();
 for(const id of ['first','second'])commit('admit',{namespace:ns,memory:{content:'Synthetic seeded '+id+' fact.',kind:'fact'},
   receipts:[{client:'codex',sessionId:'session',eventId:id,role:'user',excerpt:'Synthetic retained source '+id+'.'}]});
+// Legacy Raw source reads keep the shared revision defaults while search is off.
+const db=new DatabaseSync(path);
+const retained=db.prepare("SELECT c.id,c.revision,m.message_id,m.total_units FROM raw_conversations c JOIN raw_messages m ON m.conversation_id=c.id WHERE m.message_id='first'").get();
+const references=await core.resolveSourceReferences({namespace:ns,anchors:[{rawAnchor:{conversationId:retained.id,
+  messageId:retained.message_id,start:0,end:retained.total_units,precision:'exact'},expectedConversationRevision:retained.revision}]},{});
+assert.equal(references.ok,true,JSON.stringify(references));results.push(['legacy-source-references',references]);
+const opened=await core.getSource({namespace:ns,source:references.value.sources[0]},{});
+assert.equal(opened.ok,true,JSON.stringify(opened));assert.ok(opened.value.parts.length);results.push(['legacy-source',opened]);
 call('list',{namespace:ns});
 call('getRawUsage',{ownerId:ns.ownerId});
 {const legacy=engine.openMemoryStore({path}),scoped=legacy.scope({ownerId:ns.ownerId});results.push(['legacy-search',scoped.search('synthetic')]);legacy.close();}
@@ -108,7 +118,7 @@ if(reader!==core){
     representation,...(maxTokens===undefined?{}:{budget:{maxTokens,maxItems:12}})}, {})]);checkResidency();}
   results.push(['context-capabilities',reader.getContextReadCapabilities()]);
 }
-const db=new DatabaseSync(path),memories=db.prepare('SELECT id,revision FROM memories WHERE deleted=0 ORDER BY id').all();
+const memories=db.prepare('SELECT id,revision FROM memories WHERE deleted=0 ORDER BY id').all();
 if(memories[0])commit('correct',{namespace:ns,memoryId:memories[0].id,expectedRevision:memories[0].revision,
   content:'Synthetic replacement.',kind:'fact',receipt:{client:'manual',sessionId:'manual',eventId:'manual',role:'user',excerpt:'Synthetic replacement.'}});
 const remaining=db.prepare('SELECT id,revision FROM memories WHERE deleted=0 AND id!=? ORDER BY id LIMIT 1').get(memories[0]?.id??'');
