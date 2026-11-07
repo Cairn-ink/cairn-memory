@@ -48,3 +48,6 @@ introduced. This is an opt-in architectural comparison motivated by a recorded
 Chinese prefilter omission, not a measured improvement in model accuracy.
 Scripted tests prove candidate preservation and isolation only. The immutable
 pilot is not rerun; a fresh frozen comparison must evaluate quality and cost.
+
+See [core recall diagnostics](fetch-recall.md#optional-core-recall-diagnostics)
+for the optional direct core `diagnostics` input and result.

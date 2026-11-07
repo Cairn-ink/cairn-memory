@@ -41,6 +41,21 @@ import { createRawLineageStorage, isSourceSnapshotOverflow, SOURCE_SNAPSHOT_MS }
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
 const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
 
+// Internal diagnostics only; the weak key keeps the cache scoped to one open runtime.
+const recallJournalModes = new WeakMap();
+export function normalizeRecallJournalMode(value) {
+  const mode = typeof value === 'string' ? value.toLowerCase() : '';
+  return ['delete', 'truncate', 'persist', 'memory', 'wal', 'off', 'other', 'unknown'].includes(mode) ? mode : 'other';
+}
+export function readRecallJournalMode(runtime) {
+  try {
+    const entry = recallJournalModes.get(runtime);
+    if (entry.mode === undefined) entry.mode = normalizeRecallJournalMode(
+      entry.db.prepare('PRAGMA journal_mode').get().journal_mode);
+    return entry.mode;
+  } catch { return 'unknown'; }
+}
+
 /** Shared persistence runtime used by both the legacy and envelope facades. */
 export function createMemoryRuntime(input, internal) {
   object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "methodPackages", "assets", "roleProfiles", "existingStore", "storeFence", "contentSafety", "busyTimeoutMs"]);
@@ -990,9 +1005,11 @@ export function createMemoryRuntime(input, internal) {
     }
     finally { captureSourceDepth--; }
   };
-  return Object.freeze({ ...runtime,
+  const result = Object.freeze({ ...runtime,
     filterCaptureSources: captureSourceBoundary('filterCaptureSources'),
     assertCaptureSources: captureSourceBoundary('assertCaptureSources') });
+  recallJournalModes.set(result, { db });
+  return result;
   } catch (error) {
     try { db.close(); } catch { /* Preserve the construction failure. */ }
     throw error;
