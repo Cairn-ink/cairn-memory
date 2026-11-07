@@ -6,6 +6,9 @@ import { syncBuiltinESMExports } from 'node:module';
 import { createHmac } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
+import { openMemoryCore } from '../index.mjs';
 import { createMaintenanceAttribution } from '../context-product-attribution.mjs';
 import { verificationBound } from '../context-product-verification-batch.mjs';
 import { fixture, ns, ok } from '../testing/context-read-fixture.mjs';
@@ -578,4 +581,85 @@ for(const replaced of [false,true])test(`first-seal setup: DELETE ${replaced?'re
   assert.doesNotThrow(()=>s.storage.refresh(s.p,s.access,{maxItems:32,maxMs:1000}));
   assert.equal(probe.events.filter(e=>e.event==='first-seal').length,0,'neither opening first-seal caller is reachable for DELETE within a work turn');
   assert.equal(s.valid(),true);assert.equal(replacementCalls(s).length,Number(replaced));
+});
+
+// Standalone admission has no data transaction into which the first seal can
+// fold. Census all parent transactions, including canonical/lifecycle reads;
+// creation-child transactions are outside this in-process statement observer.
+function standaloneAdmission(t) {
+  const workspace=createTestWorkspace(t),path=join(workspace.path,'canonical.sqlite');
+  const core=openMemoryCore({path});core.close();
+  const executed=[],base=nativeObserver();let replacements=0;
+  const observer={...base,invoke(stage,label,work){
+    if(stage==='execute'&&label==='transaction'&&productFile(path+PRODUCT_SIDECAR_SUFFIX,true))replacements++;
+    return base.invoke(stage,label,work);
+  }};
+  const exec=DatabaseSync.prototype.exec;
+  t.mock.method(DatabaseSync.prototype,'exec',function(text){executed.push(text);return Reflect.apply(exec,this,[text]);});
+  let facade,storage;
+  const close=()=>{storage?.close();storage=null;facade?.close();facade=null;};
+  const open=()=>{close();facade=openContextProductFacade(path,{});storage=productSidecar({path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,writable:true,observer,now:()=>0});};
+  const census=()=>({begin:executed.filter(q=>q.startsWith('BEGIN')).length,commit:executed.filter(q=>q==='COMMIT').length,writeBegin:executed.filter(q=>q==='BEGIN IMMEDIATE').length});
+  workspace.defer(close);open();
+  return {path:path+PRODUCT_SIDECAR_SUFFIX,executed,open,close,census,get replacements(){return replacements;},get storage(){return storage;}};
+}
+
+for(const kind of ['new','replaced','matched'])test(`standalone first-seal census: ${kind}`,t=>{
+  const s=standaloneAdmission(t);
+  if(kind!=='new'){
+    s.storage.admit(2000);s.close();
+    if(kind==='replaced')sql(s.path,db=>db.exec('UPDATE product_attestation SET stamp=stamp+1'));
+    s.open();
+  }
+  s.executed.length=0;
+  s.storage.admit(2000);
+  const actual=s.census(),expected=kind==='matched'?{begin:4,commit:3,writeBegin:0}:kind==='new'?{begin:6,commit:4,writeBegin:1}:{begin:7,commit:4,writeBegin:1};
+  t.diagnostic(JSON.stringify({kind,actual,expected,replacements:s.replacements}));
+  assert.deepEqual(actual,expected,'absolute parent transaction census');
+  // The refused incumbent read rolls back: replacement adds one read BEGIN
+  // to the fresh case, with no extra read COMMIT. Omission controls pin the
+  // unsealed baseline separately from the one retained sealing transaction.
+  const baseline=kind==='matched'?{begin:4,commit:3,writeBegin:0}:kind==='new'?{begin:5,commit:3,writeBegin:0}:{begin:6,commit:3,writeBegin:0};
+  assert.deepEqual(Object.fromEntries(Object.keys(actual).map(k=>[k,actual[k]-baseline[k]])),kind==='matched'?{begin:0,commit:0,writeBegin:0}:{begin:1,commit:1,writeBegin:1},'only the retained first-seal transaction is added');
+  assert.equal(s.replacements,Number(kind==='replaced'));
+});
+
+for(const [mode,replaced] of [['DELETE',false],['DELETE',true],['WAL',false]])test(`failed first-seal COMMIT: ${mode} ${replaced?'replacement':'new'} rolls back, clears bootstrap and recovers once`,t=>{
+  const s=setup(t,{build:false,mode});
+  if(replaced){s.storage.admit(2000);s.close();sql(s.path,db=>db.exec('UPDATE product_attestation SET stamp=stamp+1'));s.open();}
+  const exec=DatabaseSync.prototype.exec;
+  let rejected=0,rolledBack=0,seal;
+  t.mock.method(DatabaseSync.prototype,'exec',function(text){
+    if(text==='COMMIT'&&!rejected&&this.prepare('PRAGMA application_id').get().application_id===0x43525032){
+      seal=seals.readSidecarAttestation(this);
+      if(seal){
+        assert.equal(seal.stamp,1);assert.equal(seals.validSidecarAttestation(s.facade.port.identity.cursorSecret,seal,seals.sidecarAttestationFile(s.path),PRODUCT_SIDECAR_FORMAT),true);
+        rejected++;throw Object.assign(new Error('synthetic first-seal COMMIT rejection'),{code:'storage_error'});
+      }
+    }
+    if(text==='ROLLBACK'&&rejected&&this.prepare('PRAGMA application_id').get().application_id===0x43525032)rolledBack++;
+    return Reflect.apply(exec,this,[text]);
+  });
+  assert.throws(()=>s.storage.admit(2000),error=>error.constructor===Error&&error.code==='storage_error');
+  assert.equal(rejected,1);assert.equal(rolledBack,1);const firstSealRollbacks=rolledBack;assert.equal(s.row(),null,'no row or half-written seal survives rollback');
+  const signedWrites=s.statements.filter(q=>/^INSERT(?: OR \w+)? INTO (progress_records|validation_records|publications)\b/.test(q));
+  assert.deepEqual(signedWrites,[],'no checkpoint or publication signing write was executed');
+  const unsigned=sql(s.path,db=>({tables:db.prepare("SELECT count(*) n FROM sqlite_schema WHERE type='table' AND name='product_attestation'").get().n,
+    seals:db.prepare('SELECT count(*) n FROM product_attestation').get().n,
+    checkpoints:db.prepare('SELECT count(*) n FROM progress_records').get().n,
+    validations:db.prepare('SELECT count(*) n FROM validation_records').get().n,
+    publications:db.prepare('SELECT count(*) n FROM publications').get().n}));
+  assert.deepEqual(unsigned,{tables:1,seals:0,checkpoints:0,validations:0,publications:0});
+  assert.equal(replacementCalls(s).length,Number(replaced));assert.equal(s.checks,0);
+  // Retry on this same sidecar instance: admit()'s finally must have cleared
+  // the bootstrap identity. A leaked exception would skip replacement/checks.
+  s.storage.admit(2000);
+  assert.equal(replacementCalls(s).length,mode==='DELETE'?1+Number(replaced):0);
+  assert.equal(s.checks,mode==='WAL'?2:0,'WAL missing row runs quick_check and foreign_key_check exactly once');
+  assert.equal(s.valid(),true);assert.equal(s.row().stamp,1);
+  assert.equal(s.observe().publication,null,'admission signs no publication');
+  const checks=s.checks,replacements=replacementCalls(s).length;s.open();s.storage.admit(2000);
+  assert.equal(s.checks,checks);assert.equal(replacementCalls(s).length,replacements,'matching cold admission cannot start a retry loop');
+  const rebuilt=s.finish();assert.ok(rebuilt.publication);assert.equal(replacementCalls(s).length,replacements);
+  t.diagnostic(JSON.stringify({mode,replaced,errorClass:'Error',code:'storage_error',rejected,firstSealRollbacks,totalSidecarRollbacks:rolledBack,signedWrites,unsigned,wholeFileStatements:s.checks,replacements}));
 });
