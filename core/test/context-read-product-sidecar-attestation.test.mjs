@@ -3,12 +3,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import childProcess from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { openMemoryCore } from '../index.mjs';
+import { createMaintenancePumpRuntime, maintenancePumpDiagnostic, maintenancePumpPhaseDiagnostic } from '../context-product-pump.mjs';
 import { createMaintenanceAttribution } from '../context-product-attribution.mjs';
 import { verificationBound } from '../context-product-verification-batch.mjs';
 import { fixture, ns, ok } from '../testing/context-read-fixture.mjs';
@@ -741,4 +742,111 @@ test('reused-handle opening deadline: expired file guard permits zero subsequent
   assert.deepEqual(s.executed.filter(q=>q!=='ROLLBACK'&&!q.startsWith('PRAGMA query_only=')),[],'no BEGIN after cutoff');
   assert.deepEqual(statements,[],'no query_only read, schema_version or other statement after cutoff');
   t.diagnostic(JSON.stringify({expired,statements,executed:s.executed}));
+});
+
+
+test("numeric TEXT stamp '1' mismatches the valid integer 1 seal, replaces and rebuilds",t=>{
+  const s=setup(t,{build:false});s.storage.admit(2000);assert.equal(s.row().stamp,1);s.close();
+  const schema=sql(s.path,db=>db.prepare("SELECT sql FROM sqlite_schema WHERE name='product_attestation'").get().sql);
+  const rewrite=type=>sql(s.path,db=>{
+    db.enableDefensive?.(false);db.exec('PRAGMA writable_schema=ON');
+    db.prepare("UPDATE sqlite_schema SET sql=? WHERE name='product_attestation'").run(type==='ANY'?schema.replace('stamp INTEGER NOT NULL','stamp ANY NOT NULL'):schema);
+    db.exec('PRAGMA schema_version='+(db.prepare('PRAGMA schema_version').get().schema_version+1));
+  });
+  rewrite('ANY');sql(s.path,db=>db.exec("UPDATE product_attestation SET stamp='1'"));rewrite('INTEGER');
+  const damaged=sql(s.path,db=>({schema:db.prepare("SELECT sql FROM sqlite_schema WHERE name='product_attestation'").get().sql,
+    ...db.prepare('SELECT CAST(stamp AS TEXT) stamp,typeof(stamp) stampType FROM product_attestation').get()}));
+  assert.deepEqual(damaged,{schema,stamp:'1',stampType:'text'},'exact STRICT INTEGER schema with a numeric TEXT payload');
+  assert.equal(s.valid(),false,'numeric TEXT cannot authenticate against integer 1');
+  s.open(false);assert.equal(s.observe().publication,null);
+  s.open();s.storage.admit(2000);assert.equal(replacementCalls(s).length,1);assert.equal(wholeChecks(replacementCalls(s)[0]),0);
+  assert.equal(s.valid(),true);assert.ok(s.finish().publication);
+});
+
+function firstSealCommitFault(t,s) {
+  const exec=DatabaseSync.prototype.exec,error=Object.assign(new Error('synthetic persistent first-seal COMMIT rejection'),{code:'storage_error'});
+  let armed=true,rejected=0;
+  t.mock.method(DatabaseSync.prototype,'exec',function(text){
+    if(armed&&text==='COMMIT'&&this.prepare('PRAGMA application_id').get().application_id===0x43525032){
+      const seal=seals.readSidecarAttestation(this);
+      if(seal?.stamp===1){
+        assert.equal(seals.validSidecarAttestation(s.facade.port.identity.cursorSecret,seal,seals.sidecarAttestationFile(s.path),PRODUCT_SIDECAR_FORMAT),true);
+        rejected++;throw error;
+      }
+    }
+    return Reflect.apply(exec,this,[text]);
+  });
+  return {error,get rejected(){return rejected;},disarm(){armed=false;}};
+}
+function sealRows(s) {
+  return sql(s.path,db=>Object.fromEntries([['seals','product_attestation'],['checkpoints','progress_records'],['validations','validation_records'],['publications','publications']]
+    .map(([key,table])=>[key,db.prepare(`SELECT count(*) n FROM ${table}`).get().n])));
+}
+function unsignedState(s) {
+  const rows=sealRows(s);assert.deepEqual(rows,{seals:0,checkpoints:0,validations:0,publications:0});
+  const observed=s.observe();assert.equal(observed.publication,null);assert.notEqual(observed.dto.lexical.state,'ready');assert.equal(observed.dto.coverage.status,'unavailable');
+  assert.throws(()=>s.storage.lexical(s.p,observed.publication,'canary'),{code:'index_unavailable',reason:'missing'});
+  const signing=s.statements.filter(q=>/^INSERT(?: OR \w+)? INTO (progress_records|validation_records|publications)\b/.test(q));
+  assert.deepEqual(signing,[],'no checkpoint, validation or publication signing writes');
+  return {rows,publication:null,lexical:observed.dto.lexical.state,coverage:observed.dto.coverage.status,lexicalRead:'missing',signing:signing.length};
+}
+// Start DELETE with an existing unsigned empty cache, so every measured
+// admission must replace it. WAL starts with no cache and seals in place.
+function persistentCache(t,mode) {
+  const s=setup(t,{build:false,mode});
+  if(mode==='DELETE'){s.storage.admit(2000);s.close();sql(s.path,db=>db.exec('DELETE FROM product_attestation'));s.open();}
+  s.statements.length=0;return s;
+}
+for(const mode of ['DELETE','WAL'])test(`persistent first-seal COMMIT: standalone ${mode} fails closed three times then publishes`,t=>{
+  const s=persistentCache(t,mode),fault=firstSealCommitFault(t,s),attempts=[];
+  for(let n=1;n<=3;n++){
+    const checksBefore=s.checks;
+    assert.throws(()=>s.storage.admit(2000),error=>error===fault.error);
+    assert.equal(fault.rejected,n);assert.equal(replacementCalls(s).length,mode==='DELETE'?n:0);
+    assert.equal(s.checks,mode==='WAL'?2*(n-1):0);
+    const checksThisAttempt=s.checks-checksBefore;
+    assert.equal(checksThisAttempt,mode==='WAL'&&n>1?2:0);
+    attempts.push({attempt:n,replacements:replacementCalls(s).length,checks:s.checks,checksThisAttempt,...unsignedState(s)});
+  }
+  fault.disarm();s.storage.admit(2000);
+  assert.equal(replacementCalls(s).length,mode==='DELETE'?4:0);assert.equal(s.checks,mode==='WAL'?6:0);
+  assert.equal(s.valid(),true);assert.equal(s.row().stamp,1);assert.equal(s.observe().publication,null);
+  const admitted={replacements:replacementCalls(s).length,checks:s.checks,rows:sealRows(s)};
+  assert.deepEqual(admitted.rows,{seals:1,checkpoints:0,validations:0,publications:0});
+  assert.ok(s.finish().publication);
+  t.diagnostic(JSON.stringify({mode,attempts,recovery:{...admitted,rebuiltRows:sealRows(s),served:s.observe().dto.lexical.state}}));
+});
+
+test('persistent first-seal COMMIT: lexical pump stops once per host start without quarantine, then publishes',async t=>{
+  const s=persistentCache(t,'DELETE'),fault=firstSealCommitFault(t,s),service=configured(t,s.f.path,[ns],{service:true});
+  let time=0,serial=0,admissions=0,work=0;const timers=new Map(),receipts=new WeakMap();
+  const renew=createMaintenancePumpRuntime({now:()=>time,
+    setTimer:(fn,ms)=>{const id=++serial;timers.set(id,{fn,at:time+ms});return id;},clearTimer:id=>timers.delete(id),
+    open:async()=>{s.open();return {close:async()=>s.close()};},
+    admit:async(handle,input)=>{admissions++;try{s.storage.admit(input.budget.maxMs);const r={ok:true,value:null};receipts.set(r,'admitted');return r;}
+      catch(error){return {ok:false,error:{code:error.code}};}},
+    work:async(handle,input)=>{work++;const progress=s.storage.refresh(s.p,s.access,input.budget);return {ok:true,value:{status:s.observe().publication?'complete':'catching_up',progress}};},
+    receiptOf:r=>receipts.get(r),observedAt:()=>time,phasesOf:()=>undefined});
+  const start=()=>renew({supervisor:service.supervisor,id:randomUUID(),serviceCredential:service.token,
+    window:{id:'persistent-seal',endsAtMonoMs:60000,usedItems:0,usedMs:0},budgets:{maxItems:2048,maxMs:60000},
+    quantum:{maxItems:32,maxMs:1000},pollMs:25,renewalMs:20000,projections:[{options:service.options,types:['memory']}]});
+  const next=async()=>{const [id,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0]??[];assert.ok(timer,'pump scheduled a turn');timers.delete(id);time=Math.max(time,timer.at);await timer.fn();};
+  const attempts=[];
+  for(let n=1;n<=3;n++){
+    const pump=start();t.after(()=>pump.close());await next();const terminal=await pump.completion;
+    assert.equal(terminal.error,'storage_error');assert.equal(admissions,n,'one admission per host pump start');assert.equal(fault.rejected,n);
+    assert.equal(replacementCalls(s).length,n,'one replacement per host pump start');assert.equal(work,0);
+    assert.equal(maintenancePumpPhaseDiagnostic(terminal).projections[0].phases.admission.count,1);
+    const diagnostic=maintenancePumpDiagnostic(terminal).admission;assert.deepEqual(diagnostic,[null,null]);
+    assert.equal(timers.size,0,'terminal pump schedules no automatic retry');
+    s.open(false);attempts.push({start:n,admissions,retries:admissions-n,replacements:replacementCalls(s).length,diagnostic,...unsignedState(s)});s.close();await pump.close();
+  }
+  fault.disarm();const pump=start();t.after(()=>pump.close());await next();
+  assert.equal(admissions,4);assert.equal(replacementCalls(s).length,4);assert.equal(s.valid(),true);
+  const admitted={admissions,replacements:replacementCalls(s).length,rows:sealRows(s)};
+  assert.deepEqual(admitted.rows,{seals:1,checkpoints:0,validations:0,publications:0});
+  for(let n=0;n<100&&!s.observe().publication;n++)await next();
+  assert.ok(s.observe().publication,'a new host pump seals and completes bounded rebuild');assert.equal(admissions,4);assert.equal(pump.getStatus().error,null);
+  const recovery={...admitted,work,rebuiltRows:sealRows(s),served:s.observe().dto.lexical.state};await pump.close();
+  t.diagnostic(JSON.stringify({attempts,recovery}));
 });

@@ -1938,8 +1938,8 @@ replacement protocol, then perform the normal bounded, checkpointed rebuild
 before publication. WAL-mode hosts pay main's integrity check once on the first
 open after upgrade; DELETE-mode caches rebuild once. A missing WAL seal means
 no attestation table or no singleton row. A healthy host-configured WAL cache
-runs `quick_check` and `foreign_key_check` at that writable open, then writes its
-seal in the first write transaction. A missing-table upgrade retires the old
+runs `quick_check` and `foreign_key_check` inside the first write transaction,
+before the DDL and the seal. A missing-table upgrade retires the old
 schema-bound publication/progress records in bounded slices in that transaction;
 normal maintenance rebuilds them. Missing-row upgrades preserve publications.
 A rollback leaves the seal missing, so the next open checks again. An attested
@@ -1954,7 +1954,11 @@ child. The child initializes an unsigned empty cache; the parent seals its first
 write transaction against the identity verified on its opened connection. A
 crash before that write leaves an unavailable empty cache. Its next writable
 open replaces it again in DELETE mode; a host-configured WAL cache follows the
-missing-seal check described above.
+missing-seal check described above. If the first-seal COMMIT keeps failing, each
+admission attempt makes exactly one replacement, fails closed with `storage_error`
+and serves nothing; the maintenance pump stops on that error and does not retry
+by itself, so retries are paced by the host starting the next pump. The admission
+quarantine does not apply to this failure.
 
 Previously every writable cold open ran SQLite `quick_check` and
 `foreign_key_check` over the entire cache. These audited database structure,
