@@ -117,7 +117,11 @@ function observe() {
   });
   DatabaseSync.prototype.prepare=function(sql) {
     const preparing=performance.now();
-    const statement=prepare.call(this,sql);
+    let statement;
+    try{statement=prepare.call(this,sql);}catch(error){
+      if(current)current.nativeErrors.push({code:error.code,message:error.message,phase:'prepare',scan:scanName(sql),index:current.next[scanName(sql)]??0});
+      throw error;
+    }
     const prepareMs=performance.now()-preparing;
     if(current&&sql.startsWith('SELECT s.*,h.sequence'))current.payloadReads++;
     if(!sql.startsWith('SELECT count(*) AS count,json_group_array')&&sql!=='PRAGMA data_version')return statement;
@@ -165,7 +169,10 @@ function attribution(trace,code) {
     }
     before=read.value;
   }
-  if(trace.nativeErrors.length)return 'other:native-'+trace.nativeErrors[0].code;
+  if(trace.nativeErrors.length){
+    const error=trace.nativeErrors[0];
+    return error.message?.includes('syntax error')?'other:commitment-query-syntax':'other:native-'+error.code;
+  }
   return 'other:'+code;
 }
 
@@ -198,7 +205,7 @@ export async function measureLineageProfile({profile,count,path,authority,servic
   try {
     if(profile==='commitment-cost') {
       let expected;
-      try{expected=authority.fence();}catch(error){if(error.code!=='source_budget_exceeded')throw error;report.initialFenceError=error.code;}
+      try{expected=authority.fence();}catch(error){report.initialFenceError=error.code;report.initialFenceDetail=error.message;}
       report.warmOutcomes=[];
       for(let sample=0;sample<36;sample++) {
         const result=await call('warm-search',()=>service.search(input,host.token));
@@ -224,6 +231,7 @@ export async function measureLineageProfile({profile,count,path,authority,servic
       report.pages=samples.map(sample=>sample.trace.pages);
       report.pageTimeByIndex=Object.fromEntries(Object.entries(pageGroups).map(([key,values])=>[key,summary(values)]));
       report.warmSearch=summary(warm);report.searchErrors=errors;
+      report.warmAttempts=summary([...warm,...errors.map(row=>row.ms)]);
       report.samples=samples;
     } else {
       let random=0x59140;const rand=()=>{random=(Math.imul(random,1664525)+1013904223)>>>0;return random/2**32;};

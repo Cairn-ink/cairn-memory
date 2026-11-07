@@ -103,7 +103,11 @@ export async function measureRawSearch(t,targets) {
       }
       const rebuildMs=performance.now()-rebuildStart;console.log('measurement phase=reads turns='+count);
       checkpoint={after:['','',-1],sweep:0,cycles:1,coverageComplete:!quota};
-      try{checkpoint.fence=authority.fence();}catch(error){assert.equal(error.code,'source_budget_exceeded');checkpoint.coverageComplete=false;}
+      let checkpointError;
+      try{checkpoint.fence=authority.fence();}catch(error){
+        if(!profile)assert.equal(error.code,'source_budget_exceeded');
+        checkpointError={code:error.code,message:error.message};checkpoint.coverageComplete=false;
+      }
       await storage.commitBatch({checkpoint});
       const openStart=performance.now(),snapshot=await storage.search(),coldMs=performance.now()-openStart;
       const host=rawSearchHost(),queryVector=Array(1536).fill(0);queryVector[0]=1;
@@ -117,8 +121,9 @@ export async function measureRawSearch(t,targets) {
       if(profile){
         const report=await lineageTools.measureLineageProfile({profile,count,path,authority,service,host,input:searchInput,sections,lineage});
         report.indexedParts=built;
+        report.checkpointError=checkpointError;
         report.measurement='synthetic lineage with native statement and exception observation';
-        report.stopThreshold=profile==='commitment-cost'&&(report.shared.p99>50||count===10000&&report.rebuildAttempts.p95>250);
+        report.stopThreshold=profile==='commitment-cost'&&(report.shared.p99>50||count===10000&&report.rebuild.p95!==null&&report.rebuild.p95>250);
         if(process.env.CAIRN_RAW_MEASURE_OUTPUT){
           mkdirSync(process.env.CAIRN_RAW_MEASURE_OUTPUT,{recursive:true});
           writeFileSync(join(process.env.CAIRN_RAW_MEASURE_OUTPUT,profile+'-'+count+'.json'),JSON.stringify(report,null,2)+'\n');
