@@ -152,7 +152,7 @@ function observe() {
             }
           }
           return value;
-        }catch(error){if(current)current.nativeErrors.push({code:error.code,stack:error.stack});throw error;}
+        }catch(error){if(current)current.nativeErrors.push({code:error.code,message:error.message,errcode:error.errcode,stack:error.stack});throw error;}
       };
     }
     return statement;
@@ -163,6 +163,7 @@ function observe() {
 }
 
 function attribution(trace,code) {
+  if(trace.exceptions.some(error=>error.line.includes('entry.cache'))&&new Set(trace.versions.map(row=>row.value)).size>1)return 'version-move-before-final-snapshot';
   const exception=trace.exceptions.at(-1);
   if(exception) {
     if(exception.line.includes('versionInside()!==expectedVersion'))return 'version-move-during-rebuild';
@@ -181,6 +182,7 @@ function attribution(trace,code) {
     }
     before=read.value;
   }
+  if(trace.nativeErrors.some(error=>/locked|busy/i.test(error.message??error.stack??''))||trace.exceptions.some(error=>error.function==='read'&&/resumeAt|isStorageBusy/.test(error.line)))return 'canonical-busy';
   if(trace.nativeErrors.length){
     const error=trace.nativeErrors[0];
     return error.message?.includes('syntax error')?'other:commitment-query-syntax':'other:native-'+error.code;
@@ -272,7 +274,7 @@ export async function measureLineageProfile({profile,count,path,authority,servic
           const startedOffsetMs=performance.now()-start;
           const result=await call('search',()=>service.search(input,host.token));
           const row={sample,afterCommit,scheduledOffsetMs:target-start,startedOffsetMs,...result,value:undefined};
-          if(result.ok){row.outcome=result.value.coverage.status==='complete'&&result.value.semantic.state==='ready'?'complete-hybrid':'partial';row.coverage=result.value.coverage;row.semantic=result.value.semantic;}
+          if(result.ok){row.outcome=result.value.coverage.status==='complete'&&result.value.semantic.state==='ready'?'complete':result.value.candidates.length?'partial-with-candidates':'empty-partial';row.coverage=result.value.coverage;row.semantic=result.value.semantic;}
           else row.outcome='error';
           rows.push(row);
           if(result.ok&&result.value.candidates.length){candidate=result.value.candidates[0];candidateAt=performance.now();}
