@@ -14,5 +14,5 @@ export function outcomeSummary(samples){
     all:distribution(samples.map(row=>row.ms)),available:distribution(available.map(row=>row.ms))};
 }
 export function selectionSummary(units){
-  return {count:units.length,rows:distribution(units.map(unit=>unit.rows)),holdMs:distribution(units.map(unit=>unit.holdMs))};
+  return {count:units.length,checked:distribution(units.map(unit=>unit.checked??unit.rows)),rows:distribution(units.map(unit=>unit.rows)),holdMs:distribution(units.map(unit=>unit.holdMs))};
 }

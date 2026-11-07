@@ -105,8 +105,66 @@ test('phase ledger records each selection snapshot row count and hold on the fun
       const a=createRawSearchAuthority(reader,s.options),source=a.inventory().rows[0].source;
       const own=Object.getOwnPropertyDescriptor(performance,'now');Object.defineProperty(performance,'now',{configurable:true,value:()=>100});
       try{takeSelectionUnits();a.select(Array.from({length:65},()=>({source})),'current',1100);
-        const units=takeSelectionUnits();assert.deepEqual(units.map(u=>u.rows),[32,32,1]);assert.ok(units.every(u=>u.holdMs===0));
+        const units=takeSelectionUnits();assert.deepEqual(units.map(u=>u.rows),[32,32,1]);assert.deepEqual(units.map(u=>u.checked),[32,0,0]);assert.ok(units.every(u=>u.holdMs===0));
       }finally{if(own)Object.defineProperty(performance,'now',own);else delete performance.now;hook.deregister();}
+    });`;
+  const child=spawnSync(process.execPath,['--input-type=module','-e',script],{encoding:'utf8',timeout:30000});
+  assert.equal(child.status,0,child.stdout+child.stderr);assert.equal(child.signal,null);
+});
+
+test('capture profile completes baseline and contended phases on a small fixture',{timeout:120000},async t=>{
+  const {captureContention}=await import('../../tools/testing/measure-raw-search.mjs');
+  const {safetySourceFixture}=await import('../testing/raw-search-fixtures.mjs');
+  const f=safetySourceFixture(t);let calls=0;
+  const report=await captureContention(f.path,{async maintain(){calls++;},async status(){return {}; }},null,{captureSamples:120});
+  assert.equal(report.baseline.samples,120);assert.equal(report.contended.samples,120);assert.ok(calls>0);
+});
+
+test('measurement hooks retain internal error codes and operation deadline overshoot',()=>{
+  const url=path=>new URL(path,import.meta.url).href;
+  const script=`const {installPhaseMeasurement}=await import(${JSON.stringify(url('../../tools/testing/raw-search-phase-loader.mjs'))});const hook=installPhaseMeasurement();
+    const {default:test}=await import('node:test');const {default:assert}=await import('node:assert/strict');
+    const {performance}=await import('node:perf_hooks');const {DatabaseSync}=await import('node:sqlite');
+    const {sourceFixture,savedSource}=await import(${JSON.stringify(url('../testing/raw-source-fixtures.mjs'))});
+    const {searchFixture}=await import(${JSON.stringify(url('../testing/raw-search-fixtures.mjs'))});
+    const {takeInternalErrors,takeOperationOvershoots}=await import(${JSON.stringify(url('../../tools/testing/raw-search-phase-ledger.mjs'))});
+    test('measurement causes',async t=>{let now=100;Object.defineProperty(performance,'now',{configurable:true,value:()=>now});
+      const f=sourceFixture(t);await savedSource(f,'Synthetic copper.');const s=await searchFixture(f);await s.maintain();
+      const prepare=DatabaseSync.prototype.prepare;let mode='error',crossed=false;
+      DatabaseSync.prototype.prepare=function(sql){const stmt=prepare.call(this,sql);
+        if(!crossed&&sql.startsWith('SELECT s.*,h.sequence')){crossed=true;
+          if(mode==='error')throw Object.assign(Error('synthetic_internal_failure'),{code:'synthetic_internal_failure'});
+          now+=1007;
+        }return stmt;};
+      try{
+        await assert.rejects(s.search({query:'copper'}),{code:'raw_search_unavailable'});
+        assert.deepEqual(takeInternalErrors(),['synthetic_internal_failure']);takeOperationOvershoots();
+        mode='deadline';crossed=false;const result=await s.search({query:'copper'});
+        assert.equal(result.coverage.status,'partial');assert.equal(result.candidates.length,0);
+        assert.deepEqual(takeOperationOvershoots(),[7]);
+      }finally{DatabaseSync.prototype.prepare=prepare;hook.deregister();}
+    });`;
+  const child=spawnSync(process.execPath,['--input-type=module','-e',script],{encoding:'utf8',timeout:30000});
+  assert.equal(child.status,0,child.stdout+child.stderr);assert.equal(child.signal,null);
+});
+
+test('opening deadline cause is recorded before the public factory refusal',()=>{
+  const url=path=>new URL(path,import.meta.url).href;
+  const script=`const {installPhaseMeasurement}=await import(${JSON.stringify(url('../../tools/testing/raw-search-phase-loader.mjs'))});const hook=installPhaseMeasurement();
+    const {default:test}=await import('node:test');const {default:assert}=await import('node:assert/strict');
+    const {performance}=await import('node:perf_hooks');const {DatabaseSync}=await import('node:sqlite');
+    const {sourceFixture}=await import(${JSON.stringify(url('../testing/raw-source-fixtures.mjs'))});
+    const {searchFixture}=await import(${JSON.stringify(url('../testing/raw-search-fixtures.mjs'))});
+    const {openRawSearch}=await import(${JSON.stringify(url('../raw-search-index.mjs'))});
+    const {takeInternalErrors}=await import(${JSON.stringify(url('../../tools/testing/raw-search-phase-ledger.mjs'))});
+    test('opening cause',async t=>{let now=100;Object.defineProperty(performance,'now',{configurable:true,value:()=>now});
+      const f=sourceFixture(t),s=await searchFixture(f);await s.service.close();
+      const prepare=DatabaseSync.prototype.prepare;let crossed=false;
+      DatabaseSync.prototype.prepare=function(sql){const stmt=prepare.call(this,sql);
+        if(!crossed&&sql==='PRAGMA application_id'){crossed=true;now+=1001;}return stmt;};
+      try{await assert.rejects(openRawSearch(s.options),{code:'raw_search_unavailable'});assert.equal(crossed,true);assert.deepEqual(takeInternalErrors(),['search_deadline']);}
+      finally{DatabaseSync.prototype.prepare=prepare;hook.deregister();}
+      await s.reopen();
     });`;
   const child=spawnSync(process.execPath,['--input-type=module','-e',script],{encoding:'utf8',timeout:30000});
   assert.equal(child.status,0,child.stdout+child.stderr);assert.equal(child.signal,null);

@@ -52,8 +52,10 @@ process.once('message',async({operation,input})=>{
       const raw=openRawCaptureCore({path},{mode:'off',deletion:true,readPolicy:()=>{throw Error('unused');}});
       try{result=raw.deleteConversation(input);}finally{raw.close();}
     } else result=core[operation](input);
-    process.send(result);
-  }catch(error){process.send({ok:false,error:{code:error.code??'worker_failed'}});process.exitCode=1;}
+    // Large capture reports can exceed the IPC buffer. Finish the send before
+    // disconnecting so the parent receives the complete final message.
+    await new Promise((resolve,reject)=>process.send(result,error=>error?reject(error):resolve()));
+  }catch(error){await new Promise(resolve=>process.send({ok:false,error:{code:error.code??'worker_failed'}},resolve));process.exitCode=1;}
   finally{core.close();process.disconnect();}
 });
 process.send({ready:true});

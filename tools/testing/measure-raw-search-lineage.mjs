@@ -1,5 +1,5 @@
 import {searchOutcome,outcomeSummary,selectionSummary} from './raw-search-window-summary.mjs';
-import {takeSelectionUnits} from './raw-search-phase-ledger.mjs';
+import {takeSelectionUnits,measurementError,takeInternalErrors} from './raw-search-phase-ledger.mjs';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
@@ -217,9 +217,9 @@ export async function measureLineageProfile({profile,count,path,authority,servic
   const probe=observe(),writes=await writer(path),report={profile,turns:count,lineage};
   const samples=[],warm=[],errors=[];
   async function call(label,work) {
-    probe.begin(label);takeSelectionUnits();const started=performance.now();
+    probe.begin(label);takeSelectionUnits();takeInternalErrors();const started=performance.now();
     try{const value=await work(),ms=performance.now()-started,trace=probe.end();return {ok:true,value,ms,trace,selectionUnits:takeSelectionUnits(),cause:trace.exceptions.length?attribution(trace,'interrupted'):undefined};}
-    catch(error){const trace=probe.end();return {ok:false,code:error.code,ms:performance.now()-started,selectionUnits:takeSelectionUnits(),cause:attribution(trace,error.code),trace};}
+    catch(error){const trace=probe.end();return {ok:false,...measurementError(error),ms:performance.now()-started,selectionUnits:takeSelectionUnits(),cause:attribution(trace,error.code),trace};}
   }
   try {
     if(profile==='commitment-cost') {

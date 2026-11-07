@@ -19,8 +19,8 @@ assert.equal(createHash('sha256').update(frozen).digest('hex'),'6421ff87e4c7ae85
 const targetLiteral=frozen.match(/RAW_SEARCH_TARGETS=Object\.freeze\((\{[\s\S]*?\})\);/);assert.ok(targetLiteral);
 const targets=runInNewContext('('+targetLiteral[1]+')');
 const phases=['cold','commitment-cost','cadence'].includes(profile);
-if(phases)(await load('tools/testing/raw-search-phase-loader.mjs')).installPhaseMeasurement();
-const {takePhases,takeSelectionUnits}=await load('tools/testing/raw-search-phase-ledger.mjs');
+(await load('tools/testing/raw-search-phase-loader.mjs')).installPhaseMeasurement();
+const {takePhases,takeSelectionUnits,measurementError,takeInternalErrors,takeOperationOvershoots}=await load('tools/testing/raw-search-phase-ledger.mjs');
 const {createRawSearchAuthority}=await load('core/raw-search-authority.mjs');
 const {openReadDatabase}=await load('core/read-database.mjs');
 const {openRawSearchStorage}=await load('core/raw-search-storage.mjs');
@@ -41,8 +41,9 @@ DatabaseSync.prototype.exec=function(sql){const value=exec.call(this,sql);
   }else if((sql==='COMMIT'||sql==='ROLLBACK')&&starts.has(this)){
     const start=starts.get(this),end=process.hrtime.bigint();sections.push(Number(end-start)/1e6);intervals.push([start,end]);starts.delete(this);
   }return value;};
-const reader=openReadDatabase(path,{contextRead:true});let service,storage;
+let reader,service,storage;
 try{
+  reader=openReadDatabase(path,{contextRead:true});
   const count=reader.db.prepare("SELECT count(*) n FROM raw_messages WHERE conversation_id LIKE 'session-%'").get().n;
   const density=JSON.parse(readFileSync(args['--density'],'utf8')).lineage;
   for(const [table,key] of [['memories','memories'],['receipts','receipts'],['raw_receipt_lineage','edges'],['content_suppressions','facts']])
@@ -68,7 +69,7 @@ try{
         });
         const result=measured.value;cold.push(measured.ms);coldWithFactory.push(measured.totalMs);coldRecorded=true;
         const values=takePhases();for(const [name,ms] of Object.entries(values))(phaseTimes[name]??=[]).push(ms);
-        const outcome=searchOutcome(result);coldSamples.push({ms:measured.ms,outcome});selectionUnits.push(...takeSelectionUnits());outcomes[outcome]=(outcomes[outcome]??0)+1;
+        const outcome=searchOutcome(result),units=takeSelectionUnits(),rowsChecked=units.reduce((n,u)=>n+u.checked,0);coldSamples.push({ms:measured.ms,outcome,rowsChecked,selectionMs:values.selection??0});selectionUnits.push(...units);outcomes[outcome]=(outcomes[outcome]??0)+1;
         stage='warm';const warmStart=performance.now();let next;
         try{next=await coldService.search(input,host.token);const ms=performance.now()-warmStart;warm.push(ms);warmSamples.push({ms,outcome:searchOutcome(next)});}
         catch(error){const ms=performance.now()-warmStart;warm.push(ms);warmSamples.push({ms,outcome:'error'});throw error;}
@@ -76,14 +77,14 @@ try{
         stage='full';
         const original=await measureRawFullRead(storage,authority);full.push(original.ms);rawRetrieval.push(original.retrievalMs);
         const fullStart=performance.now();let preparations=0;
-        for(const candidate of next.candidates){try{const at=performance.now(),handle=await coldService.prepare(candidate,{},host.token);prepare.push(performance.now()-at);coldService.revalidate([handle]);preparations++;}catch(error){errors.push({stage:'prepare',code:error.code});}}
+        for(const candidate of next.candidates){try{const at=performance.now(),handle=await coldService.prepare(candidate,{},host.token);prepare.push(performance.now()-at);coldService.revalidate([handle]);preparations++;}catch(error){errors.push({stage:'prepare',...measurementError(error)});}}
         preparedFull.push(warm.at(-1)+performance.now()-fullStart);
-        console.log(JSON.stringify({profile,count,sample,coldMs:cold.at(-1),outcome,preparations}));
-      }catch(error){errors.push({stage,code:error.code,ms:performance.now()-start});
-        if(stage==='cold'&&!coldRecorded){const ms=performance.now()-searchAt;cold.push(ms);coldWithFactory.push(performance.now()-start);coldSamples.push({ms,outcome:'error'});outcomes.error=(outcomes.error??0)+1;}}
+        console.log(JSON.stringify({profile,count,sample,coldMs:cold.at(-1),outcome,preparations,rowsChecked,selectionMs:values.selection??0}));
+      }catch(error){errors.push({stage,...measurementError(error),ms:performance.now()-start});
+        if(stage==='cold'&&!coldRecorded){const ms=performance.now()-searchAt;cold.push(ms);coldWithFactory.push(performance.now()-start);const units=takeSelectionUnits(),values=takePhases();selectionUnits.push(...units);coldSamples.push({ms,outcome:'error',rowsChecked:units.reduce((n,u)=>n+u.checked,0),selectionMs:values.selection??0});outcomes.error=(outcomes.error??0)+1;}}
       finally{selectionUnits.push(...takeSelectionUnits());await coldService?.close();}
     }
-    report={profile,turns:count,cold:summary(cold),coldWithFactory:summary(coldWithFactory),warm:summary(warm),fullRead:summary(full),rawRetrieval:summary(rawRetrieval),fullPreparedRead:summary(preparedFull),preparations:summary(prepare),errors,outcomes,coldOutcomeMix:outcomeSummary(coldSamples),warmOutcomeMix:outcomeSummary(warmSamples),selectionUnits:selectionSummary(selectionUnits),
+    report={profile,turns:count,cold:summary(cold),coldWithFactory:summary(coldWithFactory),warm:summary(warm),fullRead:summary(full),rawRetrieval:summary(rawRetrieval),fullPreparedRead:summary(preparedFull),preparations:summary(prepare),errors,outcomes,coldSamples,warmSamples,coldOutcomeMix:outcomeSummary(coldSamples),warmOutcomeMix:outcomeSummary(warmSamples),selectionUnits:selectionSummary(selectionUnits),
       phases:Object.fromEntries(Object.entries(phaseTimes).map(([name,values])=>[name,summary(values)])),shared:summary(sections),gate:{coldP95:cold.length===20&&summary(cold).p95<=1100,warmP95:warmSamples.length===20&&outcomeSummary(warmSamples).all.p95<=1000,availability:coldSamples.length===20&&warmSamples.length===20&&outcomeSummary(coldSamples).unavailableRate<=.01&&outcomeSummary(warmSamples).unavailableRate<=.01,noErrors:errors.length===0}};
   }else if(profile==='capture'){
     const capture=await captureContention(path,service,host.token,targets);
@@ -105,7 +106,7 @@ try{
       for(let burst=0;burst<20;burst++){
         const before=await service.search(input,host.token);
         const writing=Promise.all(Array.from({length:5},()=>call('capture')));writing.catch(()=>{});
-        let during;try{during=await service.search(input,host.token);}catch(error){errors.push({code:error.code});}
+        let during;try{during=await service.search(input,host.token);}catch(error){errors.push(measurementError(error));}
         await writing;
         const after=await service.search(input,host.token);
         const canonical=result=>result.candidates.map(({proof,publication,...row})=>row);
@@ -117,6 +118,8 @@ try{
       await call('stop');assert.deepEqual(await exited,{code:0,signal:null});
     }finally{child.kill();await exited;}
   }else throw Error('invalid_profile');
+  report.maxOperationDeadlineOvershootMs=Math.max(0,...takeOperationOvershoots());
+  report.internalErrors=takeInternalErrors();
   report.sessionFences=sessionFences;
   writeFileSync(args['--output'],JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({profile,count,output:args['--output'],gate:report.gate}));
-}finally{await service?.close();await storage?.close();reader.db.close();DatabaseSync.prototype.exec=exec;}
+}catch(error){writeFileSync(args['--output'],JSON.stringify({profile,sessionFences,errors:[measurementError(error)],maxOperationDeadlineOvershootMs:Math.max(0,...takeOperationOvershoots())},null,2)+'\n');throw error;}finally{await service?.close();await storage?.close();reader?.db.close();DatabaseSync.prototype.exec=exec;}

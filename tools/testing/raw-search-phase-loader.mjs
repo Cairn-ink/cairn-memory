@@ -17,6 +17,9 @@ export function installPhaseMeasurement(){
       source=source.slice(0,brace)+'\n    const phaseStart=performance.now();try{'+source.slice(brace);
     };
     if(url.endsWith('/raw-search-index.mjs')){
+      replace("const safeFailure = error => { fail(","const safeFailure = error => { internalFailure(error); fail(");
+      replace('return retry(deadlineAt=>searchAttempt(value,token,deadlineAt),at,emptyPartial);',
+        'try{return await retry(deadlineAt=>searchAttempt(value,token,deadlineAt),at,emptyPartial);}finally{operationEnd(at);}');
       wrap('    async function search(value,token)', '    async function searchAttempt','search');
       replace(`database=openReadDatabase(options.path,{contextRead:true,busyTimeoutMs:0,preflight:openingCheck,
       nativeObserver:{invoke(_kind,_label,work){openingCheck();return work();},database:native=>rawSearchSqlite(native,openingCheck)}});`,
@@ -27,8 +30,10 @@ export function installPhaseMeasurement(){
     }else if(url.endsWith('/raw-search-authority.mjs')){
       wrap('  function bindWithin(', '  const sourceIdentity','bounded-hash');
       wrap('  function buildFence(', '  function fence(','commitment');
+      replace('const pending=new Map(),entries=[];','const pending=new Map(),entries=[];let checked=0;');
+      replace("try{const next=checkInside(row.source,'history');", "try{checked++;const next=checkInside(row.source,'history');");
       replace('    read(()=>{\n      if(versionInside()!==observed)', '    try{read(()=>{\n      if(versionInside()!==observed)');
-      replace('    },deadlineAt);\n    const unitHoldMs', '    },deadlineAt);}finally{selectionUnit(entries.length,performance.now()-unitStart); }\n    const unitHoldMs');
+      replace('    },deadlineAt);\n    const unitHoldMs', '    },deadlineAt);}finally{selectionUnit(entries.length,performance.now()-unitStart,checked); }\n    const unitHoldMs');
       wrap('  function select(', '  async function open(','selection');
       wrap('  function validate(', '  function reset(','final-validation');
     }else if(url.endsWith('/raw-search-storage.mjs')){
@@ -45,6 +50,6 @@ export function installPhaseMeasurement(){
         "  return {blocks,offsets,positions,dimensions,blockVectors,count};\n}finally{sample('vector-load',performance.now()-phaseStart);}}" );
       source="import {performance} from 'node:perf_hooks';\n"+source;
     }
-    return {...result,source:'import {sample,measured,selectionUnit} from '+JSON.stringify(helper)+';\n'+source.replace('\n__measurement_end__','')};
+    return {...result,source:'import {sample,measured,selectionUnit,internalFailure,operationEnd} from '+JSON.stringify(helper)+';\n'+source.replace('\n__measurement_end__','')};
   }});
 }
