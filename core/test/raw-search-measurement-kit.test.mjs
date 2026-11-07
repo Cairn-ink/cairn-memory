@@ -13,7 +13,7 @@ import {rawSearchPostings} from '../raw-search-retrieval.mjs';
 test('optional phase transforms load every serving module without opening a store',async()=>{
   const loader=new URL('../../tools/testing/raw-search-phase-loader.mjs',import.meta.url).href;
   const ledger=new URL('../../tools/testing/raw-search-phase-ledger.mjs',import.meta.url).href;
-  const modules=['authority','index','storage','retrieval'].map(name=>new URL('../raw-search-'+name+'.mjs',import.meta.url).href);
+  const modules=['authority','index','storage','retrieval','maintenance'].map(name=>new URL('../raw-search-'+name+'.mjs',import.meta.url).href);
   const script=`const {installPhaseMeasurement}=await import(${JSON.stringify(loader)});const hook=installPhaseMeasurement();
     try{for(const file of ${JSON.stringify(modules)})await import(file);
       const {takePhases}=await import(${JSON.stringify(ledger)});if(Object.keys(takePhases()).length)throw Error('unexpected_store_work');}
@@ -127,11 +127,12 @@ test('measurement hooks retain internal error codes and operation deadline overs
     const {performance}=await import('node:perf_hooks');const {DatabaseSync}=await import('node:sqlite');
     const {sourceFixture,savedSource}=await import(${JSON.stringify(url('../testing/raw-source-fixtures.mjs'))});
     const {searchFixture}=await import(${JSON.stringify(url('../testing/raw-search-fixtures.mjs'))});
-    const {takeInternalErrors,takeOperationOvershoots}=await import(${JSON.stringify(url('../../tools/testing/raw-search-phase-ledger.mjs'))});
+    const {takeInternalErrors,takeOperationOvershoots,internalFailure,measurementError}=await import(${JSON.stringify(url('../../tools/testing/raw-search-phase-ledger.mjs'))});
     test('measurement causes',async t=>{let now=100;Object.defineProperty(performance,'now',{configurable:true,value:()=>now});
       const f=sourceFixture(t);await savedSource(f,'Synthetic copper.');const s=await searchFixture(f);await s.maintain();
       const prepare=DatabaseSync.prototype.prepare;let mode='error',crossed=false;
       DatabaseSync.prototype.prepare=function(sql){const stmt=prepare.call(this,sql);
+        if(mode==='status'&&sql==='SELECT * FROM header WHERE singleton=1')throw Object.assign(Error('synthetic_status_failure'),{code:'synthetic_status_failure'});
         if(!crossed&&sql.startsWith('SELECT s.*,h.sequence')){crossed=true;
           if(mode==='error')throw Object.assign(Error('synthetic_internal_failure'),{code:'synthetic_internal_failure'});
           now+=1007;
@@ -142,6 +143,17 @@ test('measurement hooks retain internal error codes and operation deadline overs
         mode='deadline';crossed=false;const result=await s.search({query:'copper'});
         assert.equal(result.coverage.status,'partial');assert.equal(result.candidates.length,0);
         assert.deepEqual(takeOperationOvershoots(),[7]);
+        assert.throws(()=>s.service.revalidate([{ticket:'synthetic-missing'}]),{code:'raw_search_unavailable'});
+        assert.deepEqual(takeInternalErrors(),['source_unavailable']);
+        mode='status';assert.equal((await s.service.status()).error,'raw_search_unavailable');
+        assert.deepEqual(takeInternalErrors(),['synthetic_status_failure']);mode='complete';
+        internalFailure({code:'synthetic_original'});internalFailure({code:'raw_search_unavailable'});
+        assert.equal(measurementError({code:'raw_search_unavailable'}).internalCode,'synthetic_original');
+        const f2=sourceFixture(t);await savedSource(f2,'Synthetic copper provider.');
+        const provider={id:'synthetic-failing',revision:'1',dimensions:2,normalization:'l2',async embed(texts,controls){controls.beforeDispatch();throw Object.assign(Error('synthetic_provider_failure'),{code:'synthetic_provider_failure'});}};
+        const s2=await searchFixture(f2,{embedder:provider,policy:{family:'local',maxBatchDocuments:1,maxRequests:100,maxConcurrent:1,maxUsd:0}});
+        await s2.maintain();now+=1010;await s2.maintain({embeddings:true,maxMs:5000});
+        assert.ok(takeInternalErrors().includes('synthetic_provider_failure'));
       }finally{DatabaseSync.prototype.prepare=prepare;hook.deregister();}
     });`;
   const child=spawnSync(process.execPath,['--input-type=module','-e',script],{encoding:'utf8',timeout:30000});

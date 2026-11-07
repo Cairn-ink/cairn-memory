@@ -8,6 +8,6 @@ export function takePhases(){const result=totals;totals={};return result;}
 let failures=[],overshoots=[];
 export function internalFailure(error){failures.push(error?.code??'unknown');}
 export function takeInternalErrors(){const result=failures;failures=[];return result;}
-export function measurementError(error){const internalCodes=takeInternalErrors();return {code:error?.code??'unknown',internalCode:internalCodes.at(-1)??error?.code??'unknown',internalCodes};}
+export function measurementError(error){const internalCodes=takeInternalErrors();return {code:error?.code??'unknown',internalCode:internalCodes.find(code=>code!=='raw_search_unavailable')??internalCodes.at(-1)??error?.code??'unknown',internalCodes};}
 export function operationEnd(deadlineAt){overshoots.push(Math.max(0,performance.now()-deadlineAt));}
 export function takeOperationOvershoots(){const result=overshoots;overshoots=[];return result;}

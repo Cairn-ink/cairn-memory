@@ -6,20 +6,23 @@ export function installPhaseMeasurement(){
   const helper=new URL('./raw-search-phase-ledger.mjs',import.meta.url).href;
   return registerHooks({load(url,context,next){
     const result=next(url,context);
-    if(!/\/core\/raw-search-(index|authority|storage|retrieval)\.mjs$/.test(url))return result;
+    if(!/\/core\/raw-search-(index|authority|storage|retrieval|maintenance)\.mjs$/.test(url))return result;
     let source=typeof result.source==='string'?result.source:Buffer.from(result.source).toString('utf8');source+='\n__measurement_end__';
     const replace=(before,after)=>{if(source.split(before).length!==2)throw Error('measurement_source_changed');source=source.replace(before,after);};
-    const wrap=(start,next,name)=>{
+    const wrap=(start,next,name,finish='')=>{
       const a=source.indexOf(start),b=source.indexOf(next,a),end=source.lastIndexOf('\n'+start.match(/^ */)[0]+'}',b);
       if(a<0||b<0||end<a)throw Error('measurement_phase_missing');
       const brace=source.indexOf('{\n',a)+1;
-      source=source.slice(0,end)+'\n    }finally{sample('+JSON.stringify(name)+',performance.now()-phaseStart);}\n'+source.slice(end);
+      source=source.slice(0,end)+'\n    }finally{sample('+JSON.stringify(name)+',performance.now()-phaseStart);'+finish+'}\n'+source.slice(end);
       source=source.slice(0,brace)+'\n    const phaseStart=performance.now();try{'+source.slice(brace);
     };
     if(url.endsWith('/raw-search-index.mjs')){
       replace("const safeFailure = error => { fail(","const safeFailure = error => { internalFailure(error); fail(");
+      replace("}catch{fail('raw_search_unavailable');}","}catch(error){internalFailure(error);fail('raw_search_unavailable');}finally{operationEnd(at);}");
+      replace("catch{return {state:'unavailable'","catch(error){internalFailure(error);return {state:'unavailable'");
+      wrap('    async function retry(', '    async function search(','operation','operationEnd(at);');
       replace('return retry(deadlineAt=>searchAttempt(value,token,deadlineAt),at,emptyPartial);',
-        'try{return await retry(deadlineAt=>searchAttempt(value,token,deadlineAt),at,emptyPartial);}finally{operationEnd(at);}');
+        'return await retry(deadlineAt=>searchAttempt(value,token,deadlineAt),at,emptyPartial);');
       wrap('    async function search(value,token)', '    async function searchAttempt','search');
       replace(`database=openReadDatabase(options.path,{contextRead:true,busyTimeoutMs:0,preflight:openingCheck,
       nativeObserver:{invoke(_kind,_label,work){openingCheck();return work();},database:native=>rawSearchSqlite(native,openingCheck)}});`,
@@ -42,6 +45,9 @@ export function installPhaseMeasurement(){
       wrap('  function publicationInside(', '  async function stage(','publication-shape');
       replace('if (!row || row.signature !== sign(row.data,row.vectors))',"if (!row || row.signature !== measured('authentication',()=>sign(row.data,row.vectors)))");
       replace('unpack(row.data,vectorBytes(row.vectors))',"measured('hint-decode',()=>unpack(row.data,vectorBytes(row.vectors)))");
+    }else if(url.endsWith('/raw-search-maintenance.mjs')){
+      replace("const refusal = error => ['budget_denied','timeout','rate_limited','dimension_mismatch','invalid_vector'].includes(error?.code) ? error.code : 'provider_error';",
+        "const refusal = error => {internalFailure(error);return ['budget_denied','timeout','rate_limited','dimension_mismatch','invalid_vector'].includes(error?.code) ? error.code : 'provider_error';};");
     }else{
       // The vector loader is synchronous and has one terminal return.
       replace('export function loadRawVectorBlocks(segments,metadata,check=()=>{}) {',
