@@ -1,3 +1,16 @@
+import { fail } from './validation.mjs';
+
+// Diagnostic state never changes the thrown Error or supplies authority proof.
+const refusals = new WeakMap();
+export const authorityRefusal = error => refusals.get(error);
+export function refuseAuthority(cause, code = 'authority_required') {
+  try { fail(code); }
+  catch (error) {
+    if (code === 'authority_required') refusals.set(error, cause);
+    throw error;
+  }
+}
+
 // Private, fixed numeric maintenance telemetry. Never supplies admission proof.
 export const maintenanceKinds = Object.freeze(['idle','scan','item','verify','publication','gc','vacuum','begin','commit','save','canonical-read','serialize','admission']);
 export const comparisonWorkFields = Object.freeze(['comparisonAttempts','comparisonComplete','comparisonEqual','comparisonDifferent','comparisonIncomplete','comparisonRows','comparisonBytes']);
@@ -112,6 +125,8 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
       failureResolved=true;
       if(!failureCaptured)return undefined;
       const error=rawFailureError,classified=classifiedFailureError??failureError??error;rawFailureError=undefined;failureError=undefined;classifiedFailureError=undefined;
+      // index.run may have converted the captured Error into a public result.
+      if(failureData(classified,'code')==='authority_required')return failureDetail={kind:'engine',engineCode:'authority_required',refusal:refusalCause(authorityRefusal(classified))};
       const indexFailure=maintenanceIndexFailure(classified);
       try{for(let object=Object(error);object;object=Object.getPrototypeOf(object)){
         const code=Object.getOwnPropertyDescriptor(object,'code');
@@ -164,6 +179,8 @@ const failureCode=/^[a-z][a-z0-9_]{0,47}$/,failureName=/^[A-Za-z][A-Za-z0-9_]{0,
 export const maintenanceFailureCode=value=>typeof value==='string'&&failureCode.test(value)?value:'other';
 const indexReasons=Object.freeze(['storage_unavailable','auxiliary_file','unsafe_file','incompatible','wrong_store','missing','corrupt','validation_missing','validation_invalid',
   'memory_store','replaced','stale_index','rebuilding','timeout']);
+const authorityRefusals=Object.freeze(['host_port','credential_missing','credential_digest','grant_mismatch','authorize_error','not_current','request_binding','worker_epoch','semantic_outstanding','method_gate','other']);
+const refusalCause=value=>authorityRefusals.includes(value)?value:'other';
 const protocolKinds=Object.freeze(['frame_conflict','identity_shape','result_bounds','result_clone','result_shape','open_identity']);
 export const maintenanceFailureReason=value=>indexReasons.includes(value)?value:'other';
 function failureData(error,key){
@@ -178,12 +195,13 @@ export const maintenanceFailureCounts=()=>Object.fromEntries(maintenanceFailureK
 export function maintenanceErrorName(error){
   try {const constructor=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(error),'constructor')?.value,name=constructor&&Object.getOwnPropertyDescriptor(constructor,'name')?.value;return typeof name==='string'&&failureName.test(name)?name:'other';}catch{return 'other';}
 }
-export function maintenanceFailureRecord(kind,{engineCode,errorName,exitCode,ordinal,stage,stall,step,reason,count,protocolKind:protocol}={}) {
+export function maintenanceFailureRecord(kind,{engineCode,errorName,exitCode,ordinal,stage,stall,step,reason,count,refusal,protocolKind:protocol}={}) {
   if(!maintenanceFailureKinds.includes(kind)||kind==='none')kind='call_error';
   const code=maintenanceFailureCode(engineCode);
   return Object.freeze({cause:kind==='unmapped'?'unmapped:'+code:kind==='exception'?'exception:'+(typeof errorName==='string'&&failureName.test(errorName)?errorName:'other'):kind,
     ...(Number.isInteger(step)&&step>=0&&step<maintenanceKinds.length?{step}:{}),
     ...(kind==='engine'?{engineCode:code}:{}),
+    ...(kind==='engine'&&code==='authority_required'?{refusal:refusalCause(refusal)}:{}),
     ...(kind==='engine'&&code==='index_unavailable'||kind==='exception'&&reason!==undefined?{reason:maintenanceFailureReason(reason)}:{}),
     ...(kind==='protocol'?{protocolKind:protocolKinds.includes(protocol)?protocol:'other'}:{}),
     ...(kind==='worker_error'||kind==='spawn'||kind==='dispatch'||kind==='call_error'?{errorName:typeof errorName==='string'&&failureName.test(errorName)?errorName:'other'}:{}),
@@ -195,8 +213,8 @@ export function maintenanceFailureRecord(kind,{engineCode,errorName,exitCode,ord
 export const maintenanceFailureKind=record=>record.cause.startsWith('unmapped:')?'unmapped':record.cause.startsWith('exception:')?'exception':record.cause;
 export function readMaintenanceFailure(value){
   if(!value||typeof value!=='object'||!maintenanceFailureKinds.includes(value.kind)||value.kind==='none')return undefined;
-  const safe=maintenanceFailureRecord(value.kind,{engineCode:value.engineCode,errorName:value.errorName,step:value.step,reason:value.reason,protocolKind:value.protocolKind});
+  const safe=maintenanceFailureRecord(value.kind,{engineCode:value.engineCode,errorName:value.errorName,step:value.step,reason:value.reason,protocolKind:value.protocolKind,refusal:value.refusal});
   return {kind:value.kind,...(value.kind==='unmapped'?{engineCode:maintenanceFailureCode(value.engineCode)}:{}),
-    ...(safe.engineCode?{engineCode:safe.engineCode}:{}),...(safe.reason?{reason:safe.reason}:{}),...(safe.protocolKind?{protocolKind:safe.protocolKind}:{}),
+    ...(safe.engineCode?{engineCode:safe.engineCode}:{}),...(safe.reason?{reason:safe.reason}:{}),...(safe.refusal?{refusal:safe.refusal}:{}),...(safe.protocolKind?{protocolKind:safe.protocolKind}:{}),
     ...(value.kind==='exception'?{errorName:safe.cause.slice(10)}:{}),...(safe.step===undefined?{}:{step:safe.step})};
 }
