@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "fdf243e72957c468bef57b639da4cf6f111e35ed15dfffa5b0deaf2211f3a078",
-  "bytes": 1269990,
+  "sha256": "eec3162a104ccb1e1d1b474aff8fedc19771ce7139b2fb6400f8f80f419bde89",
+  "bytes": 1273098,
   "files": [
     "LICENSE",
     "README.md",
@@ -327,6 +327,7 @@
     "docs/plans/context-read-p2d-impl.md",
     "docs/plans/context-read-p2e-impl.md",
     "docs/plans/raw-search-interface.md",
+    "docs/plans/raw-search-predicate-plans.md",
     "docs/plans/raw-search-seam.md",
     "docs/plans/topic-overview-member-pages.md",
     "docs/plans/topic-reader-wal-fix.md",
@@ -753,8 +754,9 @@
     "core/raw-search-index.mjs": "7d6c1e9f2a0413eac9365e03b9526b47039608ec61d97bb2a18e529cae99a0f5",
     "core/raw-search-retrieval.mjs": "87497ea02797bae21c185ef07e3a50ddfa75a0ffe3af1cb986bf7b90e730a790",
     "core/raw-search-maintenance.mjs": "076cda13862034305cb5d3e1e902e03a7a10fc65357eba939027c1dd52e4ae8d",
-    "docs/plans/raw-search-interface.md": "fe752c999dcb9b0ce97b26a77508ea9b3ef691cf1c7ff98aa398685b2e3e9b58",
-    "docs/plans/raw-search-seam.md": "e9abe1c0943aea051750b81525e4b03b896cb6093d340497ae666d61d7613131",
+    "docs/plans/raw-search-interface.md": "532ef6bbf6aa3d9165de66737ef96712dfd8a689fd380a6922556f257dbafb5d",
+    "docs/plans/raw-search-predicate-plans.md": "9d80b7b36ea247c482cff498daeefac45d56cfbc8cb41abdf003bd8d2b703d28",
+    "docs/plans/raw-search-seam.md": "b0e10881a39112737450378f412f7bfd30e58da3e60d5cf7c82862194e947403",
     "core/context-product-checkpoint-cost.mjs": "739fee4d102de82ad7b6b496258bbe5ad594ef6ee3a27e252719f79c64c57a70",
     "core/card-lineage.mjs": "e50641b6a7dd91f909b91dbf084ec843304b28059c92490d446690ead49f7c22",
     "core/card-lineage-schema.mjs": "c5e92974b996d2d045d4e794b6e44255a57d301881ca5e7b90c9407bbadfc2f1",
@@ -767,7 +769,7 @@
     "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b"
   },
   "generatedHashes": {
-    "package.json": "921d4f510ee08589a89356daf0b58234cd029af42de9c5f39032630224e5cea5",
+    "package.json": "8302e943872eecfd9c7339b57a9e1b51e7c63630c1713c9048f81240690bf1b9",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8"
   }
 }
