@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "6e518d0d7d9b71addc27b4402bddfe84bcc57ae5b071a9ca9dc2bc77c320eff6",
-  "bytes": 1221632,
+  "sha256": "9b92699b01077989fa709229d2e82c2818e678204ce886cd59c36fd11c9df449",
+  "bytes": 1221729,
   "files": [
     "LICENSE",
     "README.md",
@@ -710,7 +710,7 @@
     "core/context-semantic-input.mjs": "638d1adeff5be6aa882ddaaebe97fc523be5133b71eb114cf837a340862879bc",
     "core/context-semantic-accounting.mjs": "96a47a11ecc6078ea8590cd921d43c43e07208af9fa08e84cb6d437600fc2d3a",
     "core/context-semantic-ledger.mjs": "bdcb674b5248bbaf459c0f0db96411436eaa4636bd4f3b2423c382d30e56228b",
-    "core/context-semantic-maintenance.mjs": "3c6ac5fa284fd064ed18c920e99ad9ca0a167cb07cdab4a97f760ab6126c86ba",
+    "core/context-semantic-maintenance.mjs": "c085c2f0f123f8fad64f4e07ae5e08765d33fcf9d792b4037e0778084dbca443",
     "core/context-semantic-pump.mjs": "4d69be42d96db7ead7cd25434c176549cf85faa0eeb36f37dfc11a6b8be86761",
     "core/context-semantic-worker.mjs": "184156b8181e5e9efabc107045fb7d50f52058b58a010570f487dd7ce36949fe",
     "core/context-vector-validation.mjs": "6c41a7eb081eeb61ce09c82cfd27682454e9cdcbdd54e538435d5796b29f0d6e",

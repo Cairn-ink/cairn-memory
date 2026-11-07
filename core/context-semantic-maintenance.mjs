@@ -144,10 +144,12 @@ export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandle
       if(entry.purge?.epoch===epoch&&entry.purge.complete)continue;
       if(remaining<=0||process.hrtime.bigint()+20000000n>=mono(operation.operationCutoffMonoNs)){complete=false;break;}
       const sidePath=entry.canonicalPath+PRODUCT_SIDECAR_SUFFIX;
-      if(!productFile(sidePath,true)) {
+      // Whole-cache replacement unlinks the incumbent without retaining a copy
+      // and refuses old journal/WAL companions. The path may now name a new
+      // cataloged file; only the old physical identity is gone.
+      if(!same(productFile(sidePath,true),entry.sidecarIdentity)) {
         await change(n=>{n.catalog[id].purge={epoch,deleted:entry.purge?.deleted??0,complete:true};});continue;
       }
-      if(!same(productFile(sidePath),entry.sidecarIdentity)){complete=false;break;}
       await prepare(entry.canonicalPath,true,entry.sidecarJournalMode);
       const v=open(entry.canonicalPath,true,entry.sidecarJournalMode),secret=v.facade.port.identity.cursorSecret;
       const sign=body=>createHmac('sha256',secret).update('context-read-product-v1.1/vector-purge\0'+canonicalJson(body)).digest('base64url');
