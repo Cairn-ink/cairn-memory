@@ -291,3 +291,55 @@ slot cursor. A separate retry-not-before time prevents overdue lookahead from
 spinning. Real wall-clock observation gaps remain visible under §7; waiting
 never resets duty, extends authority, or earns observation credit. Turn counters
 and wait time appear only in the private diagnostic snapshot.
+
+## Clarification v3 — poison scope, admission deadline and settlement accounting
+
+This append-only clarification supersedes the stated parts of §4, §6, the
+availability note and the §5 clarification v2 where they conflict. The earlier
+text stays unchanged.
+
+**Turn exclusivity and poison.** A granted turn remains exclusive across both
+realms until engine settlement and every required disposal proof permit release.
+Uncertain ownership is never reclaimed by timeout. Failed disposal withholds the
+permit (it is never released) until process restart. The engine's poison record
+is realm-local, and a realm rebuild clears it, but a rebuild never releases a
+withheld permit.
+
+A sealed-turn operation attempted after a completed release is rejected before
+posting. It requires poison in the originating realm and host quarantine of that
+physical domain and its successors in that realm: stop or cancel affected pumps
+and queued tickets, block renewal and replacement-pump bypass, keep accounting
+floors and late-violation watches, and obtain reader and coordinator cleanup
+proof before owner handoff. Failed cleanup closes core admission and requires
+process recovery. It need not synchronously stop the opposite realm.
+
+The availability note's "a poisoned claim blocks the whole core" holds only
+while the host still holds that claim's permit. After a successful release the
+engine does not notify the broker or retract the release; containment is then
+the host quarantine above.
+
+**Admission deadline.** `untilMonoMs` is an admission deadline in the process
+hrtime monotonic domain. The logical issue time is the host's clock sample
+immediately preceding the successful permit CAS. A grant is timely if and only if
+that time is strictly less than `untilMonoMs`; equality is expired. No atomic
+clock-and-CAS is claimed. Where the deadline crosses an encoding with less than
+nanosecond precision, `untilMonoMs` is rounded down and the sampled time up, so
+rounding can only make a grant expire earlier.
+
+Before starting a quantum, the engine freshly samples the same clock after the
+admission await. If the deadline has expired, it declines the owned grant with
+`wait_expired` and starts no quantum. An accepted quantum then uses its quantum,
+authority and window deadlines; admission expiry never prohibits required
+settlement or disposal.
+
+**Settlement accounting.** The §5 clarification v2 settlement join covers the
+counted calls: direct pump calls, the reader's semantic embed calls and the
+coordinator's internal validation. The reader's snapshot, catalog and hint
+metadata handlers are not counted; their ledger effects remain protected by the
+owner lock and the ledger's own guarded transactions, not by the turn join. A
+failed settlement retained for the next-admission drain counts as settled for the
+join, as v2 states.
+
+**Violation observation.** The post-release violation waiter is one-shot. It
+wakes on a violation or on coordinator disposal and is not rearmed; a turn's
+violation is observed at most once.

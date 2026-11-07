@@ -10,15 +10,42 @@ import { safePath } from './context-semantic-input.mjs';
 import { fail } from './validation.mjs';
 
 const same=(a,b)=>canonicalJson(a)===canonicalJson(b);
-export function semanticMaintenance({c,sqlite,identity,secretState}) {
-  const paths=new Map(),views=new Map();
+export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandles}) {
+  const paths=new Map(),views=new Map(),preparing=new Map();let closed=false;
   const coverage=readSet=>({policy:'recent-projects-v1',selectionRevision:'semantic-service',requestedNamespaces:readSet.length,selectedNamespaces:readSet.length,omittedNamespaces:0});
-  function open(path,writable=false,journalMode=c.host.configuration.semanticSidecarJournalMode??'DELETE') {
-    const key=JSON.stringify([path,writable,journalMode]);let view=views.get(key);if(view)return view;
-    const facade=openContextProductFacade(path,{sqlite});
+  const viewKey=(path,writable,journalMode)=>JSON.stringify([path,writable,journalMode]);
+  async function prepare(path,writable=false,journalMode=c.host.configuration.semanticSidecarJournalMode??'DELETE') {
+    if(closed)fail('store_closed');
+    const key=viewKey(path,writable,journalMode);
+    if(views.has(key))return;
+    if(!preparing.has(key)) {
+      const pending=(async()=>{
+        // Each connection needs its own slot, including two views of one store.
+        // Bind to the opened facade, as the product reader does, rather than
+        // a path stat that could become stale during the parent round-trip.
+        if(!reserveHandles){open(path,writable,journalMode);return;}
+        const facade=openContextProductFacade(path,{sqlite});let sidecarHandles;
+        try{sidecarHandles=await reserveHandles(facade.fileIdentity);if(closed)fail('store_closed');}
+        catch(error){facade.close();throw error;}
+        open(path,writable,journalMode,{facade,sidecarHandles});
+      })();
+      preparing.set(key,pending);
+      void pending.finally(()=>preparing.delete(key)).catch(()=>{});
+    }
+    await preparing.get(key);
+  }
+  async function prepareTargets(configured) {
+    for(const target of configured)await prepare(target.canonicalPath);
+    return targets(configured);
+  }
+  function open(path,writable=false,journalMode=c.host.configuration.semanticSidecarJournalMode??'DELETE',prepared) {
+    if(closed)fail('store_closed');
+    const key=viewKey(path,writable,journalMode);let view=views.get(key);if(view)return view;
+    if(reserveHandles&&!prepared)fail('reader_failed');
+    const facade=prepared?.facade??openContextProductFacade(path,{sqlite});
     try {
       const storage=productSidecar({path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,sqlite,writable,
-        sidecarJournalMode:journalMode});
+        sidecarJournalMode:journalMode,...(prepared?{sidecarHandles:prepared.sidecarHandles}:{})});
       view={path,facade,storage,vectors:productVectors({storage,facade})};views.set(key,view);return view;
     }catch(error){facade.close();throw error;}
   }
@@ -58,7 +85,7 @@ export function semanticMaintenance({c,sqlite,identity,secretState}) {
     if(input.expectedTargetDigest!==s.targetSetDigest)fail('revision_conflict');
     if(!s.targets)fail('revision_conflict');
     if(s.firstCoverageComplete){const value={status:'complete',firstCoverage:coverageStatus(s)};final();return {ok:true,value};}
-    targets(c.backfillTargets);
+    await prepareTargets(c.backfillTargets);
     const cutoff=mono(operation.operationCutoffMonoNs),hasTime=()=>process.hrtime.bigint()+20000000n<cutoff;
     let visited=0,invalid=false;
     const receipts=Object.assign(Object.create(null),s.receipts);
@@ -101,9 +128,10 @@ export function semanticMaintenance({c,sqlite,identity,secretState}) {
     recovery.sealed=sealed;
     return {ok:true,value:{status:'complete',firstCoverage:coverageStatus(next)}};
   }
-  function catalog(input,metadata) {
+  async function catalog(input,metadata) {
     safePath(input.canonicalPath);
     if(input.canonicalPath!==metadata.path||input.ownerId!==metadata.ownerId)fail('authority_required');
+    await prepare(input.canonicalPath);
     const v=open(input.canonicalPath),physical=v.facade.port.read(()=>canonicalProductIdentity(v.path,v.facade.port.db)),sidecar=productFile(v.path+PRODUCT_SIDECAR_SUFFIX);
     if(v.facade.port.identity.storeId!==input.storeId||!same(physical,input.canonicalIdentity)||!same(sidecar,input.sidecarIdentity)||input.catalogId!==digest({storeId:input.storeId,canonicalIdentity:physical,sidecarIdentity:sidecar}))fail('index_unavailable');
   }
@@ -120,6 +148,7 @@ export function semanticMaintenance({c,sqlite,identity,secretState}) {
         await change(n=>{n.catalog[id].purge={epoch,deleted:entry.purge?.deleted??0,complete:true};});continue;
       }
       if(!same(productFile(sidePath),entry.sidecarIdentity)){complete=false;break;}
+      await prepare(entry.canonicalPath,true,entry.sidecarJournalMode);
       const v=open(entry.canonicalPath,true,entry.sidecarJournalMode),secret=v.facade.port.identity.cursorSecret;
       const sign=body=>createHmac('sha256',secret).update('context-read-product-v1.1/vector-purge\0'+canonicalJson(body)).digest('base64url');
       const progress=v.storage.vectors(db=>{
@@ -197,5 +226,9 @@ export function semanticMaintenance({c,sqlite,identity,secretState}) {
       if((row?`${row.epoch_hi}:${row.epoch_lo}`:'0:0')!==f.suppressionEpoch)fail('evidence_unavailable');
     };
   }
-  return {targets,validate,catalog,purge,transmission,portGuard,close(){for(const v of views.values()){v.storage.close();v.facade.close();}views.clear();}};
+  return {prepare,prepareTargets,targets,validate,catalog,purge,transmission,portGuard,close(){
+    closed=true;let failure;
+    for(const v of views.values())for(const close of [()=>v.storage.close(),()=>v.facade.close()])try{close();}catch(error){failure??=error;}
+    views.clear();if(failure)throw failure;
+  }};
 }

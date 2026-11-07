@@ -13,6 +13,7 @@ import { productFailure, signalAborted, signalCancelled, DISPOSAL_GRACE_MS } fro
 import { fail } from './validation.mjs';
 import { semanticClient, semanticOutstandingStart } from './context-semantic-client.mjs';
 import { addAbortListener } from 'node:events';
+import { reserveSidecarHandle } from './context-product-handles.mjs';
 
 // The 980-ms SQLite bound covers lock waiting, not native statement execution.
 // This allowance bounds failed-proof delivery; native work may still outlive it.
@@ -63,7 +64,7 @@ export async function openContextSemanticCoordinator(original,controls={}) {
   const resources=new SharedArrayBuffer(16),resource=registry.register(owner,{path:c.ledgerPath,domain:resourceDomain,resources});
   if(policyConflict){registry.finish(resource);throw Object.assign(Error('index_unavailable'),{code:'index_unavailable',cleanupId:resource.id});}
   policyRegistry.set(policyKey,policyLedger);
-  const pending=new Map();let worker,exited=false,closed=false,closing,opened=false,readyResolve,readyReject,providerIdentity;
+  const pending=new Map(),sidecarHandles=new Map();let worker,exited=false,closed=false,closing,opened=false,readyResolve,readyReject,providerIdentity;
   const ready=new Promise((r,j)=>{readyResolve=r;readyReject=j;});
   all.set(key,resource);
   function reject(code,finished=false) {
@@ -139,8 +140,23 @@ export async function openContextSemanticCoordinator(original,controls={}) {
     worker=new Worker(new URL('./context-semantic-worker.mjs',import.meta.url),{workerData:{...data,resources},env,execArgv:[],stdout:true,stderr:true,resourceLimits:{maxOldGenerationSizeMb:192}});
     worker.stdout.resume();worker.stderr.resume();
     worker.on('error',()=>reject('reader_failed'));
-    worker.on('exit',code=>{exited=true;if(!closed){closed=true;registry.cleanup(resource);registry.finish(resource,true);all.delete(key);reject('reader_failed',true);}});
+    worker.on('exit',code=>{
+      exited=true;
+      // A close timeout or terminate() request is not termination proof. Only
+      // the actual exit permits reclaiming slots on this Worker's behalf.
+      for(const handle of sidecarHandles.values())handle.release();sidecarHandles.clear();
+      if(!closed){closed=true;registry.cleanup(resource);registry.finish(resource,true);all.delete(key);reject('reader_failed',true);}
+    });
     worker.on('message',message=>{
+      if(message.kind==='sidecar-reserve') {
+        if(closed){worker.postMessage({kind:'sidecar-reserved',id:message.id});return;}
+        try {
+          if(typeof message.id!=='string'||message.id.length>100||typeof message.identity!=='string'||!/^\d+:\d+$/.test(message.identity)||sidecarHandles.has(message.id))fail('reader_failed');
+          const handle=reserveSidecarHandle(message.identity);sidecarHandles.set(message.id,handle);
+          worker.postMessage({kind:'sidecar-reserved',id:message.id,sidecarHandles:{buffer:handle.buffer,slot:handle.slot}});
+        }catch{worker.postMessage({kind:'sidecar-reserved',id:message.id});}
+        return;
+      }
       if(message.kind==='identity') {
         try {
           if(typeof message.identity!=='string'||!/^\d+:\d+$/.test(message.identity)||JSON.stringify(message.operation)!==JSON.stringify(firstOperation))fail('reader_failed');
