@@ -21,6 +21,7 @@ export async function createContextReadHost(configuration) {
       return (...args)=>{
         if(countSql&&['get','all','iterate','run'].includes(key))Atomics.add(control,10,1);
         if(key==='get'&&index>=0)Atomics.add(control,index,1);
+        if(key==='get'&&sql==='SELECT m.*,CAST(a.stamp AS TEXT) AS attestation_stamp,typeof(a.stamp) AS attestation_type,a.record AS attestation_record,a.singleton AS attestation_present FROM product_metadata m LEFT JOIN product_attestation a ON a.singleton=1 WHERE m.singleton=1')Atomics.add(control,11,1);
         return Reflect.apply(value,target,args);
       };}});
   };

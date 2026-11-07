@@ -5,8 +5,22 @@ import { resolve, dirname, join } from 'node:path';
 import { createExclusiveSqliteFile, sqliteFileStat, sameJournal } from './sqlite-journal-probe.mjs';
 import { fail } from './validation.mjs';
 import { same, RAW_SEARCH_LIMITS, rawSourceHint } from './raw-search-input.mjs';
+import { sidecarAttestationFile, readSidecarAttestation, validSidecarAttestation, writeSidecarAttestation } from './context-product-sidecar-attestation.mjs';
+import { rawSearchSqlite } from './raw-search-sqlite.mjs';
 
 const FORMAT = 3;
+const schemaSql = [
+  'CREATE TABLE header(singleton INTEGER PRIMARY KEY CHECK(singleton=1),binding TEXT NOT NULL,sequence INTEGER NOT NULL,checkpoint TEXT NOT NULL,signature TEXT NOT NULL)',
+  'CREATE TABLE segments(id INTEGER PRIMARY KEY,segment_key TEXT NOT NULL UNIQUE,data TEXT NOT NULL,signature TEXT NOT NULL,vectors BLOB NOT NULL,published INTEGER NOT NULL CHECK(published IN(0,1)))',
+  'CREATE INDEX published_segments ON segments(published,id)',
+  'CREATE TABLE product_attestation(singleton INTEGER PRIMARY KEY CHECK(singleton=1),stamp INTEGER NOT NULL CHECK(stamp>=1),record TEXT NOT NULL CHECK(length(record)<=4096)) STRICT',
+];
+const schema = db => db.prepare('SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY name').all();
+function expectedSchema() {
+  const probe = new DatabaseSync(':memory:');
+  try { for (const sql of schemaSql) probe.exec(sql); return schema(probe); }
+  finally { probe.close(); }
+}
 function stat(path) { try { return sqliteFileStat(path); } catch (e) { if (e.code === 'ENOENT') return null; throw e; } }
 function privateDirectory(path) {
   const own = stat(path);
@@ -26,7 +40,9 @@ function privateFile(path) {
 }
 
 /** Owner-scoped segment backend. No canonical connection or callback is held. */
-export async function openRawSearchStorage({ directory, identity, bind, quotaBytes }) {
+export async function openRawSearchStorage({ directory, identity, bind, quotaBytes, deadlineAt = performance.now()+1000 }) {
+  const check = () => { if (performance.now() >= deadlineAt) fail('search_deadline'); };
+  check();
   directory = resolve(directory);
   const parent = privateDirectory(directory);
   const binding = { format:FORMAT,...identity,tokenizer:'hr1-t1-v1',projection:'raw-ranges-nfkc-v1',policy:'raw-hierarchy-v1' };
@@ -42,7 +58,12 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
   for (const suffix of ['-wal','-shm']) if (stat(path+suffix)) fail('unsafe_index_file');
   const journal = stat(path+'-journal');
   if (journal) privateFile(path+'-journal');
-  let db = new DatabaseSync(path);
+  check();
+  const db = rawSearchSqlite(new DatabaseSync(path),check);
+  const sealKey = bind('raw-search-attestation-key-v1',binding);
+  const sealFormat = {name:'raw-search',binding};
+  const sealFile = sidecarAttestationFile(path);
+  let sealing = false;
   let closed = false;
   function ready() {
     if (closed) fail('store_closed');
@@ -50,7 +71,7 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
   }
   function transaction(work) {
     ready(); db.exec('BEGIN IMMEDIATE');
-    try { const result = work(); db.exec('COMMIT'); return result; }
+    try { const result = work(); if (sealing) writeSidecarAttestation(db,sealKey,sealFile,sealFormat); db.exec('COMMIT'); return result; }
     catch (error) { if(db.isTransaction)db.exec('ROLLBACK'); throw error; }
   }
   function header() {
@@ -63,26 +84,35 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
       .run(sequence,checkpoint,signHeader(sequence,checkpoint));
   }
   try {
-    db.exec('PRAGMA busy_timeout=50; PRAGMA trusted_schema=OFF; PRAGMA foreign_keys=ON; PRAGMA secure_delete=ON;');
+    for (const sql of ['PRAGMA busy_timeout=0','PRAGMA trusted_schema=OFF','PRAGMA foreign_keys=ON','PRAGMA secure_delete=ON']) db.exec(sql);
     if (db.prepare('PRAGMA journal_mode').get().journal_mode !== 'delete') fail('unsafe_index_file');
     const exists = db.prepare("SELECT 1 FROM sqlite_master WHERE name='header'").get();
-    if (!exists) transaction(() => db.exec(`
-      CREATE TABLE header(singleton INTEGER PRIMARY KEY CHECK(singleton=1),binding TEXT NOT NULL,sequence INTEGER NOT NULL,checkpoint TEXT NOT NULL,signature TEXT NOT NULL);
-      CREATE TABLE segments(id INTEGER PRIMARY KEY,segment_key TEXT NOT NULL UNIQUE,data TEXT NOT NULL,signature TEXT NOT NULL,vectors BLOB NOT NULL,published INTEGER NOT NULL CHECK(published IN(0,1)));
-      CREATE INDEX published_segments ON segments(published,id);
-    `));
+    if (!exists) transaction(() => { for (const sql of schemaSql) db.exec(sql); });
+    const objects = schema(db), expected = expectedSchema();
+    const legacy = exists && !objects.some(row=>row.name==='product_attestation');
+    if (!same(objects,legacy?expected.filter(row=>row.name!=='product_attestation'):expected)) fail('index_corrupt');
     const previous = db.prepare('SELECT * FROM header WHERE singleton=1').get();
     if (!previous) transaction(() => db.prepare('INSERT INTO header VALUES(1,?,0,?,?)')
       .run(JSON.stringify(binding),emptyCheckpoint(),signHeader(0,emptyCheckpoint())));
     else {if (!same(JSON.parse(previous.binding),binding)) fail('foreign_index');header();}
+    if (exists && !legacy && !validSidecarAttestation(sealKey,readSidecarAttestation(db,objects),sealFile,sealFormat)) fail('forged_index');
+    // Old DELETE caches contain hints only. Discard their unauthenticated
+    // population once, sealing the reset atomically with its first write.
+    if (legacy) transaction(() => {
+      db.exec(schemaSql.at(-1));
+      db.prepare('DELETE FROM segments').run();
+      writeHeader(previous.sequence+1,emptyCheckpoint());
+      writeSidecarAttestation(db,sealKey,sealFile,sealFormat);
+    });
+    sealing = true;
     // Reserve rollback-journal pages and framing as part of the owner quota.
     // No second online generation or export is created by this backend.
     const pages = Math.floor((quotaBytes-8192)/2.01/db.prepare('PRAGMA page_size').get().page_size);
     db.exec(`PRAGMA max_page_count=${pages}`);
-    if (db.prepare('PRAGMA quick_check').get().quick_check !== 'ok') fail('index_corrupt');
     // A crash can leave an unpublished segment; it is never searchable.
     transaction(() => db.prepare('DELETE FROM segments WHERE id IN (SELECT id FROM segments WHERE published=0 LIMIT 4096)').run());
   } catch (error) { db.close(); throw error; }
+  deadlineAt = Infinity;
   const vectorBytes = value => value instanceof Uint8Array ? Buffer.from(value.buffer,value.byteOffset,value.byteLength) : Buffer.from(value,'hex');
   const sign = (data,vectors) => bind('raw-search-segment-v3',[binding,data,
     createHash('sha256').update(vectors).digest('hex')]);
@@ -128,7 +158,14 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
   }
   const stagedKey = row => {if(row.signature!==sign(row.data,row.vectors))fail('forged_index');
     const data=JSON.parse(row.data);if((Array.isArray(data)?data[0]:data.key)!==row.key)fail('forged_index');};
-  async function snapshot({ after = 0, limit = RAW_SEARCH_LIMITS.work,deadlineAt=Infinity } = {}) {
+  function within(at,work) {
+    const previous=deadlineAt;deadlineAt=at;
+    try { check();return work(); } finally { deadlineAt=previous; }
+  }
+  async function snapshot(options = {}) {
+    return within(options.deadlineAt??Infinity,()=>snapshotInside(options));
+  }
+  function snapshotInside({ after = 0, limit = RAW_SEARCH_LIMITS.work,deadlineAt=Infinity } = {}) {
     ready();
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > RAW_SEARCH_LIMITS.work) fail('invalid_input');
     // One statement owns the snapshot, including its publication sequence.
@@ -154,7 +191,10 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
     }}finally{iterator.return();}
     return {sequence,checkpoint,rows,partial,partialReason,hintBytes:bytes,vectorBytes:vectorSize,timings};
   }
-  function publication({shape=true,deadlineAt=Infinity}={}) {
+  function publication(options={}) {
+    return within(options.deadlineAt??Infinity,()=>publicationInside(options));
+  }
+  function publicationInside({shape=true,deadlineAt=Infinity}={}) {
     ready();
     // Native change detection also invalidates on an out-of-band sidecar write
     // that did not advance the signed publication clock. One sidecar snapshot

@@ -9,14 +9,14 @@ function companion(path, suffix) {
   try { lstatSync(path + suffix); return true; }
   catch (error) { if (error.code === 'ENOENT') return false; throw error; }
 }
-export function topicJournalMode(native, path, policy, { deferQueryErrors = false } = {}) {
+export function topicJournalMode(native, path, policy, { deferQueryErrors = false, checkAdmission } = {}) {
   const rollback = () => companion(path, '-journal');
   const hintedWal = !rollback() && (companion(path, '-wal') || companion(path, '-shm'));
   let queryFailure;
   const query = wait => {
     const db = policy.database(native, wait);
     let row;
-    try { row = db.prepare('PRAGMA journal_mode').get(); }
+    try { checkAdmission?.();const statement=db.prepare('PRAGMA journal_mode');checkAdmission?.();row=statement.get(); }
     catch (error) {
       // Installing a timeout happens inside the query proxy, but is configuration.
       if (error.code === 'ERR_SQLITE_ERROR' && sqliteFailureDiagnostics(error)?.stage !== 'configure') queryFailure = error;

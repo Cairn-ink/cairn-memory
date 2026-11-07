@@ -488,8 +488,10 @@
     "literal:storeId": 2
   },
   "core/sqlite-journal-probe.mjs": {
+    "literal:applicationId": 1,
     "literal:application_id": 1,
     "literal:gid": 1,
+    "literal:storeId": 2,
     "literal:uid": 3
   },
   "core/isolated-file-read-child.mjs": {
@@ -1368,7 +1370,9 @@
     "key:applicationId": 2,
     "key:base_id": 1,
     "key:id": 9,
+    "key:invalid": 2,
     "key:storeId": 4,
+    "literal:attestation_invalid": 3,
     "literal:cardId": 2,
     "literal:comparison_base_invalid": 1,
     "literal:id": 1,

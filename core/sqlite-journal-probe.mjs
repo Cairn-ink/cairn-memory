@@ -151,7 +151,7 @@ const create = `
         return call(role,stage,sql.startsWith('PRAGMA journal_mode=')?'journal_mode':'transaction',()=>native.exec(sql));
       },
       prepare(sql) {
-        const statement=sql.startsWith('PRAGMA application_id')?'application_id':sql.startsWith('PRAGMA user_version')?'user_version':sql.includes('sqlite_schema')?'schema_metadata':'context_metadata';
+        const statement=sql.startsWith('PRAGMA application_id')?'application_id':sql.startsWith('PRAGMA user_version')?'user_version':sql.includes('sqlite_schema')?'schema_metadata':['PRAGMA quick_check','PRAGMA foreign_key_check'].includes(sql)?'context_evidence':'context_metadata';
         const prepared=call(role,'prepare',statement,()=>native.prepare(sql));
         return Object.fromEntries(['get','all','run'].map(method=>[method,(...args)=>call(role,'execute',statement,()=>prepared[method](...args))]));
       },
@@ -194,7 +194,19 @@ const create = `
               const metadata=incumbent.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
               damaged=!metadata || metadata.store_id!==init.storeId || metadata.profile!==init.profile;
             }
-            if(!damaged)damaged=incumbent.prepare('PRAGMA quick_check').get().quick_check!=='ok' || Boolean(incumbent.prepare('PRAGMA foreign_key_check').get());
+            if(init.expectedAttestation!==undefined){
+              // The parent authenticated (or refused) the exact row. This
+              // verdict rechecks only its basis under lifecycle exclusion.
+              // Never accept a changed row, even if another cheap check failed.
+              const table=rows.find(row=>row.name==='product_attestation');
+              const expected=format.schema.find(row=>row.name==='product_attestation');
+              if(table && JSON.stringify(table)!==JSON.stringify(expected))throw Object.assign(Error('valid_cache'),{code:'ESTALE'});
+              const row=table?incumbent.prepare('SELECT CAST(stamp AS TEXT) AS stamp,typeof(stamp) AS stampType,record FROM product_attestation WHERE singleton=1').get():null;
+              if(row && row.stampType==='integer' && /^[1-9][0-9]*$/.test(row.stamp) && Number.isSafeInteger(Number(row.stamp)))row.stamp=Number(row.stamp);
+              const actual=row?createHash('sha256').update(JSON.stringify([row.stamp,row.record,row.stampType])).digest('hex'):'missing';
+              if(actual!==init.expectedAttestation)throw Object.assign(Error('valid_cache'),{code:'ESTALE'});
+              damaged=true;
+            }else if(!damaged)damaged=incumbent.prepare('PRAGMA quick_check').get().quick_check!=='ok' || Boolean(incumbent.prepare('PRAGMA foreign_key_check').get());
             if(!damaged && init.expectedStamp && /^[a-f0-9]{64}$/.test(init.foreignBindingDigest ?? '')) {
               // Admission authenticated these exact stored certificates and
               // proved a foreign physical binding. Recheck its complete basis
@@ -289,7 +301,23 @@ export function createExclusiveSqliteFile(path, productReplacement, productIniti
   if(observe)return observe(()=>runCreation(path,productReplacement,productInitialization,true));
   return runCreation(path,productReplacement,productInitialization,false);
 }
+// Closed initialization envelope. The child needs public schema/identity data,
+// never an extension bag that could accidentally transport signing material.
+function validateProductInitialization(init) {
+  const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value)&&Object.getPrototypeOf(value)===Object.prototype;
+  const exact=(value,required,optional=[])=>object(value)&&required.every(k=>Object.hasOwn(value,k))&&Object.keys(value).every(k=>[...required,...optional].includes(k));
+  const text=value=>typeof value==='string';
+  if(!exact(init,['autoVacuum','sql','storeId','profile','incarnation','attestation'],['journalMode','expectedStamp','expectedAttestation','foreignBindingDigest']) ||
+    init.autoVacuum!=='INCREMENTAL'||!['sql','storeId','profile','incarnation'].every(k=>text(init[k]))||
+    Object.hasOwn(init,'journalMode')&&!['DELETE','WAL'].includes(init.journalMode)||
+    ['expectedStamp','expectedAttestation','foreignBindingDigest'].some(k=>Object.hasOwn(init,k)&&!text(init[k]))||
+    !exact(init.attestation,['applicationId','userVersion','schema'])||
+    !Number.isSafeInteger(init.attestation.applicationId)||!Number.isSafeInteger(init.attestation.userVersion)||
+    !Array.isArray(init.attestation.schema)||!init.attestation.schema.every(row=>exact(row,['type','name','tbl_name','sql'])&&Object.values(row).every(text)))
+    throw new TypeError('invalid_cache_initialization');
+}
 function runCreation(path, productReplacement, productInitialization, structured) {
+  if(productInitialization!==undefined)validateProductInitialization(productInitialization);
   if (productReplacement) {
     const current = sqliteFileStat(path);
     if (!path.endsWith('.context-read-product-v1.1.sqlite') || !current.isFile() || current.isSymbolicLink() ||

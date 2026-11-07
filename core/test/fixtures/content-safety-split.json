@@ -918,8 +918,8 @@
   "implementations": [
     {
       "file": "core/content-suppression-storage.mjs",
-      "sha256": "9b809fa37126188bb6f45a50ab0045f41803ba771c31a59c3f2b58e7b36b22a3",
-      "reason": "Memory candidate batches share snapshot-local canonical and fact rows; writer functions and their pinned regions are byte-identical."
+      "sha256": "9578c16663871f6c8cdf51b09c304483cd4cbe7d0726a5f1a88b7fd44117f878",
+      "reason": "The retry reset clears only this connection’s request-local denial memos. Canonical writers, insertion capabilities and their separately pinned regions retain their exact bytes."
     },
     {
       "file": "core/content-safety-migration.mjs",
@@ -1134,7 +1134,7 @@
     ]
   },
   "additions": {
-    "exports.openContentSuppressionReader": "Opens the separate read-only denial reconciliation handle required by D-15 and \u00a75.",
+    "exports.openContentSuppressionReader": "Opens the separate read-only denial reconciliation handle required by D-15 and §5.",
     "pull.close": "Disposes the read-only connection and bounded reconciliation cache.",
     "pull.isSuppressed": "Reconciles captured bound identities against authoritative denial facts.",
     "pull.listSuppressionsSince": "Pages immutable denial keys after an authenticated owner checkpoint.",
@@ -1267,6 +1267,7 @@
         "registerContentSuppressionReadMemoInside",
         "requireSuppressionTransaction",
         "reserveContentIdentityInside",
+        "resetContentSuppressionRequestInside",
         "suppressOwnerInside",
         "suppressReceiptsInside",
         "suppressionEpoch",
@@ -1292,7 +1293,8 @@
         "withContentSuppressionReadInside": "Selects the scoped fact view for a synchronous canonical read.",
         "withContentSuppressionRequest": "Bounds all serving fact caches to a single request lifecycle.",
         "withoutContentSuppressionReadCacheInside": "Isolates nested writers from provisional serving request caches.",
-        "withMemoryCandidateBatchInside": "Shares SQL rows only within one synchronous Memory candidate batch; canonical S1 and suppression decisions remain independent."
+        "withMemoryCandidateBatchInside": "Shares SQL rows only within one synchronous Memory candidate batch; canonical S1 and suppression decisions remain independent.",
+        "resetContentSuppressionRequestInside": "Discards only request-local read memos for a connection before a fresh retry; it performs no SQL and exposes no fact insertion or writer capability."
       }
     },
     "core/content-write-changes.mjs": {

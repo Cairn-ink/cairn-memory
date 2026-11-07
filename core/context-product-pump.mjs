@@ -4,7 +4,7 @@ import { maintenanceAdmissionIdentity, maintenanceAdmissionDomain, retainMainten
 import { maintenanceFailureCounts, maintenanceFailureRecord, maintenanceFailureKind, maintenanceErrorName } from './context-product-attribution.mjs';
 import { attributionFields, maintenanceWorkFields, maintenanceKinds, add, maintenanceDispatchControl, maintenanceControlState } from './context-product-attribution.mjs';
 import { maintenanceComparison } from './context-product-attribution.mjs';
-import { openContextIndexMaintainer, disposeProductReader, maintenanceObservation, maintenancePhaseDiagnostic, maintenanceStallDiagnostic, maintenanceCutoffQualified, authorizeMaintenanceCutoff, snapshotMaintenanceCutoff, maintenanceFailureDiagnostic, maintenanceReaderFailureDiagnostic } from './context-product-reader.mjs';
+import { DISPOSAL_GRACE_MS, openContextIndexMaintainer, disposeProductReader, maintenanceObservation, maintenancePhaseDiagnostic, maintenanceStallDiagnostic, maintenanceCutoffQualified, authorizeMaintenanceCutoff, snapshotMaintenanceCutoff, maintenanceFailureDiagnostic, maintenanceReaderFailureDiagnostic } from './context-product-reader.mjs';
 import { supervisorOwner } from './context-read-supervisor.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { boundedData, hostConfiguration, coverage, PRODUCT_PROFILE } from './context-product-control.mjs';
@@ -53,8 +53,8 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
   // docs/context-read-product.md, Amendment v2.1; public renewal adds no options.
   const recoveryEnabled=cutoffQualified();
   return function renewContextMaintenancePump(original) {
-    if(ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential','semanticConfig','semanticServiceCredential','firstCoverageValidation','preQuantum']).semanticConfig!==undefined)return semanticPump(original,{now,setTimer,clearTimer,open,admit,work,snapshot:(value,diagnostic)=>pumpDiagnostics.set(value,diagnostic)});
-    const c=ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential','preQuantum']);
+    if(ownData(original,['supervisor','id','window','budgets','quantum','admissionMs','pollMs','renewalMs','projections','serviceCredential','semanticConfig','semanticServiceCredential','firstCoverageValidation','preQuantum']).semanticConfig!==undefined)return semanticPump(original,{now,setTimer,clearTimer,open,admit,work,snapshot:(value,diagnostic)=>pumpDiagnostics.set(value,diagnostic)});
+    const c=ownData(original,['supervisor','id','window','budgets','quantum','admissionMs','pollMs','renewalMs','projections','serviceCredential','preQuantum']);
     const previous=state().entries.get(c.id);
     if(previous&&previous.preQuantum!==c.preQuantum)fail('invalid_input');
     const turnPort=previous?previous.turnPort:captureMaintenanceTurnPort(c.preQuantum);
@@ -68,6 +68,8 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     const quantum=ownData(c.quantum,['maxItems','maxMs']);
     integer(budgets.maxItems,Number.MAX_SAFE_INTEGER);integer(budgets.maxMs,60000);
     integer(quantum.maxItems,1024);integer(quantum.maxMs,5000);integer(c.pollMs,5000);integer(c.renewalMs,60000);
+    const admissionMs=c.admissionMs===undefined?quantum.maxMs:integer(c.admissionMs,budgets.maxMs);
+    if(c.admissionMs!==undefined&&(admissionMs<quantum.maxMs||admissionMs>DISPOSAL_GRACE_MS-2000))fail('invalid_input');
     const credential=boundedData(c.serviceCredential,16384);
     if(!Array.isArray(c.projections)||!c.projections.length||c.projections.length>32)fail('invalid_input');
     // Each active selection includes both intents; host supplies physical type
@@ -76,6 +78,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       const admitted=ownData(p,['options','types']),types=admitted.types;
       const {supervisor,...data}=ownData(admitted.options,['supervisor','path','version','profile','readSet','ownerCoverage','requestControl','host','diagnostics','deadlineMs','sidecarJournalMode','wal']);
       const options={...hostConfiguration(data),supervisor};
+      if(c.admissionMs!==undefined&&admissionMs>integer(options.deadlineMs??5000,5000))fail('invalid_input');
       if(options.wal!==undefined && typeof options.wal!=='boolean')fail('invalid_input');
       options.readSet=contextReadSet(options.readSet,PRODUCT_PROFILE);
       options.ownerCoverage=coverage(options.ownerCoverage,options.readSet);
@@ -88,7 +91,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     });
     // Each fresh admission consumes a non-observing slot. Reserve the final
     // full work quantum as well as every intervening start-to-start spacing.
-    const spacing=Math.max(c.pollMs,quantum.maxMs);
+    const spacing=Math.max(c.pollMs,quantum.maxMs),admissionSpacing=Math.max(c.pollMs,admissionMs);
     const projectionKey=p=>JSON.stringify([p.options.path,p.options.readSet,canonicalJson(p.options.ownerCoverage),p.types,p.intent,p.options.host.moduleUrl,p.options.wal===true,p.options.sidecarJournalMode]);
     // Intent belongs to each call, not to the resident Worker. Keep all other
     // constructor/scope options in its identity; incompatible policies still drain.
@@ -96,8 +99,8 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     const residentKeys=projections.map(residentKey);
     const writerKeys=projections.map(p=>JSON.stringify([resolve(p.options.path),p.options.readSet]));
     const coldSlots=maintenanceAdmissionSlots(residentKeys,writerKeys);
-    if(!maintenanceAdmissionFits(projections.length,coldSlots,spacing,quantum.maxMs))fail('invalid_input');
-    const admissionDomain=p=>maintenanceAdmissionDomain(admissionIdentity(p.options),quantum.maxMs);
+    if(!maintenanceAdmissionFits(projections.length,coldSlots,spacing,quantum.maxMs,admissionMs))fail('invalid_input');
+    const admissionDomain=p=>maintenanceAdmissionDomain(admissionIdentity(p.options),admissionMs);
     const progressLane=p=>canonicalJson([p.options.readSet,['memory','card'].filter(type=>p.types.includes(type)),p.intent]);
     const fingerprint=JSON.stringify(projections.map((p,i)=>[projectionKey(p),residentKeys[i]]));
     const domainOf=p=>JSON.stringify([resolve(p.options.path),p.options.readSet[0].ownerId,p.options.host.moduleUrl]);
@@ -135,7 +138,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     }
     let ledgers=admitLedger(window,budgets);
     const record=registry.register(owner,{path:projections[0].options.path,domain:'context-read-product-v1.1/pump/'+c.id});
-    let timer,closing,stopped=false,running,disposalCutoff,lastTick=now(),at=0,renewedUntil=now()+c.renewalMs,error=null,grant=credential;
+    let timer,closing,stopped=false,running,disposalCutoff,lastTick=now(),lastSpacing=spacing,at=0,renewedUntil=now()+c.renewalMs,error=null,grant=credential;
     const turns=turnPort?createMaintenanceTurnController(turnPort,{now,setTimer,clearTimer}):undefined;
     let pendingAdmission,admissionGeneration=0,retryNotBefore=0,unbrokeredPoison=false;
     let report,completion,settled=false;
@@ -230,7 +233,13 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     }
     // Stop this selection conservatively at its first exhausted domain; a new
     // selection can still use another domain, but cannot recharge this one.
-    function exhausted(){return [...ledgers.values()].some(l=>now()>=l.endsAt||l.maxItems-l.items<quantum.maxItems||l.maxMs-l.ms<quantum.maxMs);}
+    function exhausted(){return [...ledgers.values()].some(l=>{
+      // Price this domain's next lane, even while another domain is cold.
+      const first=selectedLane();
+      const index=Array.from({length:projections.length},(_,n)=>(first+n)%projections.length)
+        .find(i=>domainOf(projections[i])===l.domain);
+      return now()>=l.endsAt||l.maxItems-l.items<quantum.maxItems||l.maxMs-l.ms<turnMs(index);
+    });}
     function stop(){
       if(closing)return closing;
       let resolveClose,rejectClose;
@@ -262,29 +271,30 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       return Math.max(spacing,Math.min(5000/projections.length,60000/Math.max(1,turns)));
     }
     const needsAdmission=index=>!admittedHandles.has(handles.get(JSON.stringify([residentKeys[index],residentEpoch])));
+    const turnMs=index=>admissionMs===quantum.maxMs?quantum.maxMs:needsAdmission(index??selectedLane())?admissionMs:quantum.maxMs;
     function schedule(){
       if(turns&&(pendingAdmission||running))return;
       if(stopped||error||exhausted()||now()>=renewedUntil)return;
-      if(Math.min(window.endsAtMonoMs,renewedUntil)-now()<quantum.maxMs){
+      if(Math.min(window.endsAtMonoMs,renewedUntil)-now()<turnMs()){
         timer=setTimer(tick,Math.max(1,Math.min(window.endsAtMonoMs,renewedUntil)-now()));return;
       }
       // Simulate the pending lane's work and all resident replacements before
-      // each observation. An admission consumes spacing but earns no deadline.
+      // each observation. Admission consumes its own spacing, earning no deadline.
       const cache=new Map([...writers].filter(([,key])=>admittedHandles.has(handles.get(key))));
-      let slots=0;const deadlines=[];
+      let slotsMs=0;const deadlines=[];
       for(let n=0;n<projections.length;n++){
         const i=(at+n)%projections.length,key=JSON.stringify([residentKeys[i],residentEpoch]),writer=writerKeys[i];
-        if(cache.get(writer)!==key){slots++;cache.set(writer,key);}
-        deadlines.push(observations[i]+5000-quantum.maxMs-slots*spacing);slots++;
+        if(cache.get(writer)!==key){slotsMs+=admissionSpacing;cache.set(writer,key);}
+        deadlines.push(observations[i]+5000-quantum.maxMs-slotsMs);slotsMs+=spacing;
       }
       let due=Math.min(...deadlines);
       if(recoveryEnabled){
         const order=projections.map((_,i)=>(at+i)%projections.length).filter(i=>!cooling(i));
         if(!order.length){
-          const next=Math.min(Math.max(lastTick+spacing,Math.min(...[...ledgers.keys()].map(eligibleAt))),renewedUntil,window.endsAtMonoMs);
+          const next=Math.min(Math.max(lastTick+lastSpacing,Math.min(...[...ledgers.keys()].map(eligibleAt))),renewedUntil,window.endsAtMonoMs);
           timer=setTimer(tick,Math.max(1,next-now()));return;
         }
-        due=Math.min(due,...order.map((i,position)=>observations[i]+5000-quantum.maxMs-(position+coldSlots)*spacing));
+        due=Math.min(due,...order.map((i,position)=>observations[i]+5000-quantum.maxMs-position*spacing-coldSlots*admissionSpacing));
       }
       // After a cadence miss the old deadline can be in the past. Recover in
       // round-robin order without violating spacing or spinning overdue timers.
@@ -292,7 +302,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       // A sidecar hold also blocks brokered resident work. Park at the
       // horizon so an overdue work lane cannot spin on declined grants.
       const eligible=turns&&(gate.held||gate.quarantined)?Math.min(renewedUntil,window.endsAtMonoMs):!needsAdmission(at%projections.length)?0:gate.held||gate.quarantined||gate.pending?Math.min(renewedUntil,window.endsAtMonoMs):gate.busy?now()+spacing:gate.until;
-      timer=setTimer(tick,Math.max(0,Math.min(Math.max(eligible,turns?retryNotBefore:0,lastTick+spacing,Math.min(lastTick+interval(),due)),renewedUntil,window.endsAtMonoMs)-now()));
+      timer=setTimer(tick,Math.max(0,Math.min(Math.max(eligible,turns?retryNotBefore:0,lastTick+lastSpacing,Math.min(lastTick+interval(),due)),renewedUntil,window.endsAtMonoMs)-now()));
     }
     const eligibleAt=domain=>{const r=recoveryDomains.get(domain);return Math.max(r?.cooldownUntil??0,r?.pending?Math.max(r.pendingUntil,now()+spacing):0);};
     const cooling=index=>recoveryEnabled && eligibleAt(domainOf(projections[index]))>now();
@@ -315,7 +325,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
         try{
           identity=admissionIdentity(p.options);
           result=await turns.wait({version:1,pumpId:c.id,windowId:window.id,lane:index,family:'lexical',kind:'lexical',
-            phase:needsAdmission(index)?'admission':'work',intent:p.intent,maxMs:quantum.maxMs},
+            phase:needsAdmission(index)?'admission':'work',intent:p.intent,maxMs:turnMs(index)},
           {signal:controller.signal,identity,untilMonoMs:Math.min(now()+turnPort.maxWaitMs,Math.min(window.endsAtMonoMs,renewedUntil)-quantum.maxMs)});
         }catch{result={status:'failed',error:'reader_failed'};}
         checkCadence(now());
@@ -331,16 +341,16 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           const released=turns.release(result.ticket,'withdrawn');
           turnFailure(released==='poisoned'?'reader_failed':'authority_required');return;
         }
-        const currentIdentity=admissionIdentity(p.options),currentGate=maintenanceAdmissionDomain(currentIdentity,quantum.maxMs);
+        const currentIdentity=admissionIdentity(p.options),currentGate=maintenanceAdmissionDomain(currentIdentity,admissionMs);
         turns.bindIdentity(result.ticket,currentIdentity);
         let reason;
         // Recompute every amount and condition synchronously from current
         // state. No captured ledger, grant or elapsed origin crosses the wait.
         if(stopped||error)reason='stopped';
         else if(generation!==admissionGeneration)reason='generation_changed';
-        else if(Math.min(window.endsAtMonoMs,renewedUntil)-now()<quantum.maxMs)reason='renewal_expired';
+        else if(Math.min(window.endsAtMonoMs,renewedUntil)-now()<turnMs(index))reason='renewal_expired';
         else if(exhausted())reason='budget_exhausted';
-        else if(now()<lastTick+spacing||now()<retryNotBefore)reason='spacing';
+        else if(now()<lastTick+lastSpacing||now()<retryNotBefore)reason='spacing';
         else if(index!==selectedLane()||epoch!==residentEpoch)reason='lane_changed';
         else {
           const gate=currentGate;
@@ -371,13 +381,13 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
         if(stopped||error)return;
         checkCadence(now());
         if(exhausted()||now()>=renewedUntil){report(observation());return;}
-        if(Math.min(window.endsAtMonoMs,renewedUntil)-now()<quantum.maxMs){schedule();return;}
+        if(Math.min(window.endsAtMonoMs,renewedUntil)-now()<turnMs()){schedule();return;}
         if(poisonedClaim()){turnFailure('reader_failed');return;}
         const gate=admissionDomain(projections[at%projections.length]);
         if((turns&&(gate.held||gate.quarantined))||needsAdmission(at%projections.length)&&(gate.held||gate.quarantined||gate.pending||gate.busy||gate.until>now())){schedule();return;}
         if(recoveryEnabled && projections.every((_,i)=>cooling(i))){schedule();return;}
         if(turns&&!ownedTurn){
-          if(now()<lastTick+spacing||now()<retryNotBefore){schedule();return;}
+          if(now()<lastTick+lastSpacing||now()<retryNotBefore){schedule();return;}
           return requestTurn();
         }
       }
@@ -423,7 +433,12 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             if(cooling(index))return;
           }
           const p=projections[index],dispatchEpoch=residentEpoch,key=JSON.stringify([residentKeys[index],dispatchEpoch]),ledger=ledgers.get(domainOf(p));
-          const maxItems=quantum.maxItems,maxMs=quantum.maxMs;
+          const existing=handles.get(key),isAdmissionTurn=!existing||!admittedHandles.has(existing);
+          const maxItems=quantum.maxItems,maxMs=isAdmissionTurn?admissionMs:quantum.maxMs;
+          // Admission has a separate fit gate; its run budget never changes
+          // the broker wait deadline or permits a partial reservation.
+          if(c.admissionMs!==undefined&&isAdmissionTurn&&(ledger.maxMs-ledger.ms<admissionMs||
+            Math.min(window.endsAtMonoMs,renewedUntil)-now()<admissionMs))return;
           if(maxItems<1||maxMs<1)return;
           lane=phases[index];sequence=quantumNumber;quantumNumber=add(quantumNumber,1);
           const count=maintenanceAdmissionProgress(admissionDomain(p),progressLane(p));
@@ -433,7 +448,8 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           // charged after crash/timeout; restarting or renewing cannot refund it.
           ledger.items+=maxItems;ledger.ms+=maxMs;
           originalLedger=ledger;reservedItems=maxItems;reservedMs=maxMs;activeKey=key;
-          const existing=handles.get(key);admissionTurn=!existing||!admittedHandles.has(existing);admissionState=admissionDomain(p);if(admissionTurn)admissionState.busy=true;
+          admissionTurn=isAdmissionTurn;lastSpacing=admissionTurn?admissionSpacing:spacing;
+          admissionState=admissionDomain(p);if(admissionTurn)admissionState.busy=true;
           // Disposal can await a Worker/host resource. Expose timeout even if
           // that await has not settled; supervision still owns the drain.
           activeControl=maintenanceDispatchControl();ordinal=maintenanceControlState(activeControl).ordinal;
@@ -592,7 +608,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             for(const [writer,id] of writers)if(id===activeKey)writers.delete(writer);
           }
           catch {confirmed=false;error='reader_failed';if(ownedTurn)disposalUnproven=true;}
-          try {retainMaintenanceAdmission(admissionIdentity(projections[phases.indexOf(lane)].options),quantum.maxMs,admissionState);}
+          try {retainMaintenanceAdmission(admissionIdentity(projections[phases.indexOf(lane)].options),admissionMs,admissionState);}
           catch(failure){confirmed=false;recordFailure(failure,'identity',{stage:'admission'});}
           failMaintenanceAdmission(admissionState,now(),confirmed);
           error=confirmed?'read_timeout':'reader_failed';
@@ -610,7 +626,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
         }
         clearTimer(quantumTimer);
         if(admissionSucceeded&&!admissionTimedOut&&!error){
-          try {retainMaintenanceAdmission(admissionIdentity(projections[phases.indexOf(lane)].options),quantum.maxMs,admissionState);}
+          try {retainMaintenanceAdmission(admissionIdentity(projections[phases.indexOf(lane)].options),admissionMs,admissionState);}
           catch(failure){admissionSucceeded=false;error='reader_failed';recordFailure(failure,'identity',{stage:'admission'});}
           const elapsed=Math.ceil(now()-lastTick);
           if(elapsed>reservedMs){await rejectAdmission();checkCadence(now());}
@@ -661,7 +677,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       const inactive=now()>renewedUntil||[...ledgers.values()].some(l=>(w.id===window.id ? now()>l.endsAt :
         now()-l.endsAt>quantum.maxMs||observations.some(time=>now()-time>=60000))||
         (!running&&(l.items>=l.maxItems||l.ms>=l.maxMs)));
-      if(next.pollMs!==c.pollMs||JSON.stringify(next.quantum)!==JSON.stringify(c.quantum))fail('invalid_input');
+      if(next.pollMs!==c.pollMs||JSON.stringify(next.quantum)!==JSON.stringify(c.quantum)||(next.admissionMs??quantum.maxMs)!==admissionMs)fail('invalid_input');
       // Account against the old authority and ledgers before any replacement
       // or inactive reset can erase this duty interval's overdue evidence.
       checkCadence(now());

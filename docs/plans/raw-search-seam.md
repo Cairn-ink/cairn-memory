@@ -124,9 +124,17 @@ blocks, then score without per-vector objects or JSON decoding. The shared
 incomplete coverage is explicitly BM25-only. The main-file page cap reserves
 rollback-journal space within the owner quota.
 
-The internal sidecar format is version 3. An incompatible existing sidecar
-refuses attachment without mutation; an explicit replacement/rebuild is needed.
-No canonical schema migration or automatic sidecar conversion is performed.
+The internal sidecar format is version 3. Opening authenticates its schema and
+file-bound integrity seal with the shared sidecar attestation helpers. Each
+logical write updates the seal in its transaction; vacuum retains that seal.
+An older unsealed DELETE cache discards its hints and seals the reset in one
+transaction. Other incompatible sidecars refuse attachment; the host must
+explicitly replace them. Canonical storage is never migrated by this service.
+Factory opening has one 1,000 ms deadline across the canonical and sidecar
+connections, checked before native statements. Reads also check their original
+operation deadline before prepared and reused sidecar statements. Rollback and
+disposal remain available after expiry. Raw maintenance requests work turns;
+the product pump's optional admission capacity does not extend its quantum.
 
 The selected handle also exposes `prepareSource` for an authenticated exact Raw
 ref resolved by the allocator from canonical Memory lineage. It permits Memory

@@ -150,4 +150,4 @@ export function maintenanceAdmissionSlots(residents,writers,initial=new Map()) {
   return maximum;
 }
 
-export const maintenanceAdmissionFits=(lanes,coldSlots,spacing,maxMs)=>lanes*spacing+maxMs<=5000&&(lanes+coldSlots)*spacing+maxMs<=5000;
+export const maintenanceAdmissionFits=(lanes,coldSlots,spacing,maxMs,admissionMs=maxMs)=>lanes*spacing+maxMs<=5000&&lanes*spacing+coldSlots*Math.max(spacing,admissionMs)+maxMs<=5000;

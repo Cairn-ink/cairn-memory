@@ -6,6 +6,7 @@ import { contextBudget } from './context-read-budget.mjs';
 import { randomUUID } from 'node:crypto';
 import { dirname } from 'node:path';
 import { createRawSearchCache } from './raw-search-cache.mjs';
+import { rawSearchSqlite } from './raw-search-sqlite.mjs';
 
 const publicCodes = new Set(['invalid_input','invalid_query','invalid_read_set','authority_required','scope_changed',
   'stale_publication','store_closed','read_in_progress','maintenance_authority_required','raw_search_backend_unavailable']);
@@ -20,6 +21,8 @@ const safeFailure = error => { fail(publicCodes.has(error?.code) ? error.code : 
 export async function openRawSearch(value) {
   if (value === undefined || value?.enabled === false) return null;
   const options=rawSearchOptions(value);
+  let openingDeadlineAt=performance.now()+1000;
+  const openingCheck=()=>expired(openingDeadlineAt);
   const [{openReadDatabase},{createRawSearchAuthority},{openRawSearchStorage},{createRawSearchMaintenance},retrieval,embedding,{sqliteFileStat}]=await Promise.all([
     import('./read-database.mjs'),import('./raw-search-authority.mjs'),import('./raw-search-storage.mjs'),
     import('./raw-search-maintenance.mjs'),import('./raw-search-retrieval.mjs'),import('./context-read-embedder.mjs'),import('./sqlite-journal-probe.mjs')]);
@@ -33,11 +36,13 @@ export async function openRawSearch(value) {
       }
     };
     canonicalFile();
-    database=openReadDatabase(options.path,{contextRead:true,busyTimeoutMs:0});
+    database=openReadDatabase(options.path,{contextRead:true,busyTimeoutMs:0,preflight:openingCheck,
+      nativeObserver:{invoke(_kind,_label,work){openingCheck();return work();},database:native=>rawSearchSqlite(native,openingCheck)}});
     const assertFile=database.assertFile;
     database.assertFile=()=>{assertFile();canonicalFile();};
     const authority=createRawSearchAuthority(database,options);
-    storage=await openRawSearchStorage({directory:options.directory,identity:authority.identity,bind:authority.bind,quotaBytes:options.quotaBytes});
+    storage=await openRawSearchStorage({directory:options.directory,identity:authority.identity,bind:authority.bind,quotaBytes:options.quotaBytes,deadlineAt:openingDeadlineAt});
+    openingCheck();openingDeadlineAt=Infinity;
     const metadata=options.embedder&&{id:options.embedder.id,revision:options.embedder.revision,
       dimensions:options.embedder.dimensions,normalization:options.embedder.normalization};
     const cacheEnabled=options.policy?.family==='local'&&!!metadata;

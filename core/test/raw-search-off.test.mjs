@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 
-const parent='4defed8563d10a07b13dc48da242147af9aaadd2';
+const parent='57d397b247930af2cbd95229ac1d266436420f72';
 test('unselected/disabled exact parent differential: results, errors, SQL arguments, ports and canonical state',{timeout:180000},t=>{
   const ws=createTestWorkspace(t,{prefix:'raw-search-off-'}),baseline=join(ws.path,'parent');mkdirSync(baseline);
   const archive=spawnSync('git',['archive',parent,'core','tools/testing','plugins/cairn-memory/lib'],{maxBuffer:32*1024*1024});assert.equal(archive.status,0,String(archive.stderr));
