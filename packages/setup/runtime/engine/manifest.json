@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "4d066e20d2bccd637828c027c73e56033a299b1ceb7db3cdc110492c4e9a39dd",
-  "bytes": 1228128,
+  "sha256": "4bbdfd73d02b25cd47fc03eec3a99e18705ceb9f78f684f747443f8cd743c584",
+  "bytes": 1228799,
   "files": [
     "LICENSE",
     "README.md",
@@ -135,6 +135,7 @@
     "core/context-product-reader-pool-worker.mjs",
     "core/context-product-reader-pool.mjs",
     "core/context-product-reader.mjs",
+    "core/context-product-refusal.mjs",
     "core/context-product-schema.mjs",
     "core/context-product-selection.mjs",
     "core/context-product-service.mjs",
@@ -670,15 +671,15 @@
     "docs/local-embedder-bge-m3.md": "d2ceeb0bd952007ff4413eba515a99d7e90a6254ffeb88636ef6ac82f2909fdf",
     "core/topic-reader-sqlite.mjs": "b284cf9ae1e2a307639e362940d59a08e238219342190a3701aae7f7c17fe51c",
     "docs/plans/topic-reader-wal-fix.md": "ff375d11f558b7c60245ee44a65020f1888a2fdc24e8def7d68dd4b47c3b57f0",
-    "core/context-product-authority.mjs": "de8129415c7a400b0b960385ddaf1ba6c2163dcd02b193caa366b8bb35f07cab",
+    "core/context-product-authority.mjs": "4b1baa5550b1042905dd5ecc1abf3867f2012ba727047a15ae54230eab4e6102",
     "core/context-product-control.mjs": "83f036d20faa2515ba98d270d88a92b641c778f124dd51bbfbee7a931a9c7744",
-    "core/context-product-reader.mjs": "7bb8ddf6a2794fd93e783ec90001331503d60a9c5cc2d8925dc19392fbbe454a",
+    "core/context-product-reader.mjs": "08637c07679875506249cf0c3b84d5865b2d36329cd0723b442f62cdbfe555bb",
     "core/context-product-reader-pool.mjs": "2c08a09693a92c84588d408539d693559e565eec66e3867da658b688f0452b4e",
     "core/context-product-reader-pool-worker.mjs": "a39dd2e00b8a223794560090eede6b555bb4bc24044afa8d00a2e92553ca3394",
     "core/context-product-open-diagnostic.mjs": "fcf436e5219a45ee91f629a33515e44b35523e638aaea65e326eb4853a6c0bf8",
     "core/context-product-schema.mjs": "09d6e58d79282f8d52e6b5132620c6028967d1eb948a8196cd805bb5c8355296",
     "core/context-product-telemetry.mjs": "fc12ecb54c0fba3d9a6d02ad2dbd20b480f185e533a24f4ccee795d7b6bdcbbe",
-    "core/context-product-worker.mjs": "240f21435db7fabbc70764a6563660aa9e5ceb3ce86f82f69c7449bc836328cc",
+    "core/context-product-worker.mjs": "450a1105d9dc2ec7865f4a1261ad205acd5ebc2826ba7622b863bf11ca4b855e",
     "core/context-read-supervisor.mjs": "6edba6ca75fb7c7b4d8babec670dba43dc97c802cd26182d05989d925d6180cb",
     "core/reader-worker-lifecycle.mjs": "ce12e0d18a3a0d5274989a088afd2fd2cd93f40529c7cfbae1156e8295f99ddf",
     "docs/context-read-product.md": "5fdc70627efaa87bdca480c2bcd237f529edc8e61ad418b77cb3e1786d351ba7",
@@ -728,7 +729,8 @@
     "core/content-safety-boundary.mjs": "635d937a8c6d608afefc3d480d3740e6df6d286cc4e9eb99acb99a49613df0ce",
     "core/context-product-admission.mjs": "2b72f2bc0348a0369e2747b43da2e204d8dfcb0a9cfebcf4d09205d3fc0d2b94",
     "core/context-product-admission-policy.mjs": "2c0b077b59230ab28041b193e21dee09791271060d9c53d2874c557f196b0a58",
-    "core/context-product-attribution.mjs": "1e3cc366918d0d7ee2ab1944fc5ee98b5ef651a3d8dc41cd4f09aec366be6eea",
+    "core/context-product-attribution.mjs": "ffd2ac64fad6fb1aa6b6a9b0a68cfa4af2e5b664e7562e959dc6880268ca8f29",
+    "core/context-product-refusal.mjs": "740248bdd14a5332da189dbb95d9f2f5bdc610c09b74453c6adf7de83dbb2470",
     "core/content-safety-classifier.mjs": "60cf43447d6c39d10301a39a9cb1b67b9b4b55cb4ce9a1162b711022a325fb58",
     "core/content-safety-files-child.mjs": "1003ed0c93108b0664c5cd3b388adcffa77ba7707512a2870ddca907e16f1745",
     "core/content-safety-observations.mjs": "33520e67e2af62ae7f8d5623b25c0c2ca5c4abc193ae839ab41a4daa50e36745",
@@ -745,7 +747,7 @@
     "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b"
   },
   "generatedHashes": {
-    "package.json": "82e23d567766ba28f4ee06650b5c2a1b5b89bdeb1b9d23e13d04b58a0f7d4dd6",
+    "package.json": "cc53768e1124864b77f9df87c142190a53c5ecde9bdbae5e27c773d576f657cb",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8"
   }
 }
