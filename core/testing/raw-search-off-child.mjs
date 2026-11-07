@@ -1,4 +1,5 @@
 // Independent engines receive identical identities, clocks, providers and input.
+import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { syncBuiltinESMExports } from 'node:module';
 import { performance } from 'node:perf_hooks';
@@ -13,10 +14,19 @@ crypto.randomBytes=size=>{if(tracing)clockTrace.push(['randomBytes',size]);retur
 const RealDate=Date,clock=Date.parse('2026-01-02T00:00:00.000Z');
 globalThis.Date=class extends RealDate {constructor(...args){super(...(args.length?args:[clock]));if(tracing)clockTrace.push(['Date',args]);}static now(){if(tracing)clockTrace.push(['Date.now']);return clock;}};
 Object.defineProperty(performance,'now',{configurable:true,value:()=>{if(tracing)clockTrace.push(['performance.now']);return 0;}});
-const [root,scratch,report,selection,population,contextMode]=process.argv.slice(2);
+const [root,scratch,report,selection,population,contextMode,guard]=process.argv.slice(2);
+Error.stackTraceLimit=50;
+const rawCaller=()=>/[/\\]core[/\\]raw-search-[^/\\\n]*\.mjs/.test(new Error().stack);
+const rawWork={statements:[],timers:[]},timerHandles=[];
+for(const method of ['setTimeout','setInterval']){const schedule=globalThis[method];globalThis[method]=(...args)=>{
+  const raw=rawCaller();if(raw)rawWork.timers.push(method);const handle=schedule(...args);if(raw)timerHandles.push(handle);return handle;
+};}
+const residency=[];
 mkdirSync(scratch,{recursive:true,mode:0o700});
 const load=file=>import(pathToFileURL(join(root,file)).href);
 const engine=await load('core/index.mjs');
+const embedding=guard?await load('core/context-read-embedder.mjs'):null;
+const checkResidency=()=>{if(guard){residency.push(embedding.rawVectorResidencySelected);assert.equal(embedding.rawVectorResidencySelected,false);}};
 const {openRawCaptureCore}=await load('core/raw-capture.mjs');
 const {rationaleModel}=await load('core/testing/rationale-model.mjs');
 const {interpretation}=await load('core/testing/episode-capture-helpers.mjs');
@@ -29,8 +39,9 @@ const encode=value=>value instanceof Uint8Array?{bytes:Buffer.from(value).toStri
   typeof value==='bigint'?String(value):Array.isArray(value)?value.map(encode):value&&typeof value==='object'?
     Object.fromEntries(Object.entries(value).map(([k,v])=>[k,encode(v)])):value;
 const exec=DatabaseSync.prototype.exec,prepare=DatabaseSync.prototype.prepare;
-DatabaseSync.prototype.exec=function(sql){if(tracing)trace.push(['exec',sql,[]]);return exec.call(this,sql);};
+DatabaseSync.prototype.exec=function(sql){if(rawCaller())rawWork.statements.push(['exec',sql]);if(tracing)trace.push(['exec',sql,[]]);return exec.call(this,sql);};
 DatabaseSync.prototype.prepare=function(sql){
+  if(rawCaller())rawWork.statements.push(['prepare',sql]);
   // Control the sidecar's generated incarnation at its INSERT. Keep native
   // randomblob available to canonical triggers under trusted_schema=OFF.
   if(sql.startsWith('INSERT INTO generations(')&&!sql.slice(0,sql.indexOf(')')).includes('incarnation')){
@@ -64,7 +75,7 @@ if(population==='populated'){
 }
 tracing=true;
 if(engine.openRawSearch)await engine.openRawSearch(selection==='disabled'?{enabled:false}:undefined);
-core=openRawCaptureCore(options,raw);
+core=openRawCaptureCore(options,raw);checkResidency();
 const grants=new WeakMap();
 const authority={authorize(request){ports.push(['authorize',request]);const grant={};const {input,...binding}=request;grants.set(grant,binding);return grant;},
   isCurrent(grant,request){ports.push(['current',request]);return {...grants.get(grant),accessGeneration:1};}};
@@ -73,6 +84,7 @@ if(contextMode!=='none')reader=engine.openMemoryCore({path,contextRead:{version:
   counter:{id:'synthetic-counter',countTokens(text){ports.push(['count',text]);return text.length;}},
   ...(contextMode==='hosted'?{policy:{family:'hosted',maxRequests:20,maxUsd:1,estimateUsd:()=>0},
     embedder:{id:'synthetic',revision:'1',dimensions:2,normalization:'l2',async embed(texts,controls){controls.beforeDispatch();ports.push(['embed',texts]);return texts.map(()=>[1,0]);}}}:{})}});
+checkResidency();
 const call=(method,input)=>{try{const value=core[method](input);results.push([method,value]);return value;}catch(error){results.push([method,{error:error.code}]);}};
 const commit=(method,input)=>{const value=call(method,input);if(value?.ok!==true)throw Error('privacy_fixture_failed_'+method+':'+JSON.stringify(value));return value;};
 for(const [id,session,ordinal] of [['first','session',1],['second','session',2],['first','session',1],['delete','delete',1]])
@@ -92,8 +104,8 @@ if(reader!==core){
     const refresh=await reader.refreshContextIndex({readSet:[ns],types:['memory'],intent,budget:{maxItems:100,maxMs:1000}},{});
     if(refresh.ok!==true)throw Error('refresh_fixture_failed');results.push(['refresh-'+intent,refresh]);
   }
-  for(const semantic of [false,true])for(const representation of ['representation-v2','representation-v2-dated'])for(const maxTokens of [undefined,1500,4000,4001])for(const intent of ['current','history'])results.push(['context',await reader.contextRead({readSet:[ns],types:['memory'],intent,query:'synthetic',semantic,
-    representation,...(maxTokens===undefined?{}:{budget:{maxTokens,maxItems:12}})}, {})]);
+  for(const semantic of [false,true])for(const representation of ['representation-v2','representation-v2-dated'])for(const maxTokens of [undefined,1500,4000,4001])for(const intent of ['current','history']){results.push(['context',await reader.contextRead({readSet:[ns],types:['memory'],intent,query:'synthetic',semantic,
+    representation,...(maxTokens===undefined?{}:{budget:{maxTokens,maxItems:12}})}, {})]);checkResidency();}
   results.push(['context-capabilities',reader.getContextReadCapabilities()]);
 }
 const db=new DatabaseSync(path),memories=db.prepare('SELECT id,revision FROM memories WHERE deleted=0 ORDER BY id').all();
@@ -117,4 +129,10 @@ const {readSqliteFixture}=await load('core/testing/content-safety-s2h-fixture.mj
 const canonicalBytes=readSqliteFixture(path).toString('hex');
 const auxiliaryBytes=readdirSync(scratch).filter(name=>name.endsWith('.sqlite')&&name!=='canonical.sqlite').sort()
   .map(name=>[name,readSqliteFixture(join(scratch,name)).toString('hex')]);
-writeFileSync(report,JSON.stringify(encode({results,trace,ports,clockTrace,timeline,schema,data,canonicalBytes,auxiliaryBytes,files:readdirSync(scratch).sort()})));
+if(guard){
+  for(const handle of timerHandles){clearTimeout(handle);clearInterval(handle);}
+  assert.deepEqual(rawWork,{statements:[],timers:[]});
+  assert.deepEqual(readdirSync(scratch).filter(name=>name.includes('.raw-search.')),population==='populated'?['previous.raw-search.sqlite']:[]);
+  assert.ok(trace.every(([,sql])=>!sql.includes('0 AS revision')));
+}
+writeFileSync(report,JSON.stringify(encode({...(guard?{rawWork,residency}:{}),results,trace,ports,clockTrace,timeline,schema,data,canonicalBytes,auxiliaryBytes,files:readdirSync(scratch).sort()})));

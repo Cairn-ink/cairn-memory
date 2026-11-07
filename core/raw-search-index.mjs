@@ -269,7 +269,8 @@ export async function openRawSearch(value) {
         await maintenance.maintain(input,access);return status();}),
       status:()=>withContentSuppressionRequest(async()=>{try{ready();await storage.status();return status();}catch{return {state:'unavailable',eligible:null,indexed:null,embedded:null,coverage:'unknown',error:'raw_search_unavailable'};}},{fresh:true}),
       purge:tracked(async()=>{cache.close();await maintenance.close();await storage.dropOwner();prepared.clear();searches.clear();}),
-      close:()=>withContentSuppressionRequest(async()=>{if(closed)return;closed=true;cache.close();await maintenance.close();await Promise.allSettled([...operations]);prepared.clear();searches.clear();
-        try{await storage.close();}finally{database.db.close();releaseResidency();}},{fresh:true})});
+      close:()=>withContentSuppressionRequest(async()=>{if(closed)return;closed=true;
+        try{cache.close();await maintenance.close();await Promise.allSettled([...operations]);prepared.clear();searches.clear();}
+        finally{try{await storage.close();}finally{try{database.db.close();}finally{releaseResidency();}}}},{fresh:true})});
   }catch(error){await storage?.close();database?.db.close();safeFailure(error);}
 }
