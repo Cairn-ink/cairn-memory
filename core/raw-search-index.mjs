@@ -6,12 +6,12 @@ import { contextBudget } from './context-read-budget.mjs';
 import { randomUUID } from 'node:crypto';
 import { dirname } from 'node:path';
 import { createRawSearchCache } from './raw-search-cache.mjs';
-import { rawSearchSqlite } from './raw-search-sqlite.mjs';
+import { rawSearchSqlite, rawSearchDeadline } from './raw-search-sqlite.mjs';
 
 const publicCodes = new Set(['invalid_input','invalid_query','invalid_read_set','authority_required','scope_changed',
   'stale_publication','store_closed','read_in_progress','maintenance_authority_required','raw_search_backend_unavailable']);
 const pageAllowanceMs=100;
-const expired = at => {if(performance.now()>=at)fail('search_deadline');};
+const expired = at => {if(performance.now()>=at)rawSearchDeadline();};
 const interrupted = error => ['source_changed','source_busy','search_deadline'].includes(error?.code);
 const emptyPartial = () => immutable({version:RAW_SEARCH_VERSION,publication:null,candidates:[],
   coverage:{status:'partial',scanned:null,expanded:null,causes:['deadline']},semantic:{state:'unknown',reason:null}});

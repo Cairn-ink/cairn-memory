@@ -1,3 +1,4 @@
+import { rawSearchDeadline } from './raw-search-sqlite.mjs';
 import { performance } from 'node:perf_hooks';
 import { createHash, createHmac } from 'node:crypto';
 import { readTransaction, isStorageBusy } from './database.mjs';
@@ -23,7 +24,7 @@ export function createRawSearchAuthority(database, options) {
   // Engine-owned pure hashing, never a caller port or a raw filesystem read.
   db.function('raw_search_sealed_digest',{deterministic:true},value=>value===null?null:createHash('sha256').update(value).digest('hex'));
   let resumeAt=0;
-  const deadline = at => {if(performance.now()>=at)fail('search_deadline');};
+  const deadline = at => {if(performance.now()>=at)rawSearchDeadline();};
   // Check before each native statement as well as each canonical snapshot.
   // Cleanup runs after restoring prepare, so expiry cannot prevent ROLLBACK.
   function timed(work,at) {

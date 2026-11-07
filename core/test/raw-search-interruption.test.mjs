@@ -156,3 +156,75 @@ test('a retry discards denial memos before rebuilding in the same request',async
     assert.ok(states.length>=2);assert.deepEqual(states,states.map(()=>false));
   }finally{change.restore();}
 });
+
+for(const modern of [false,true])for(const linked of [false,true])test(`every row statement deadline preserves the service connection; safety ${modern}, linked ${linked}`,async t=>{
+  const advance=clock(t),stackLimit=Error.stackTraceLimit;Error.stackTraceLimit=100;t.after(()=>{Error.stackTraceLimit=stackLimit;});
+  const f=(modern?safetySourceFixture:sourceFixture)(t,linked?{model:{extract:()=>({items:[{content:'Synthetic copper fact.',kind:'fact',confidence:.8,sourceIndices:[0]}]})}}:{model:{extract:()=>({items:[]})}});
+  await savedSource(f,'Synthetic copper telescope.');const s=await searchFixture(f);await s.maintain();await s.reopen();
+  const prepare=DatabaseSync.prototype.prepare;let count=0,target=Infinity,armed=true,crossed=false,connection;
+  DatabaseSync.prototype.prepare=function(sql){
+    const statement=prepare.call(this,sql),stack=new Error().stack;
+    if(armed&&stack.includes('at checkInside')&&stack.includes('at selectUnit')){
+      connection=this;count++;
+      if(count===target){crossed=true;advance(1001);}
+    }
+    return statement;
+  };
+  try{
+    assert.equal((await s.search({query:'copper'})).candidates.length,1);
+    const statements=count;assert.ok(statements>5);
+    for(let k=1;k<=statements;k++){
+      armed=false;await s.reopen();count=0;target=k;crossed=false;armed=true;
+      assert.deepEqual(await s.search({query:'copper'}),partial,`statement ${k}/${statements}`);
+      assert.equal(crossed,true);assert.equal(connection.isOpen,true);assert.equal(connection.isTransaction,false);
+      armed=false;
+      assert.equal((await s.search({query:'copper'})).candidates.length,1,`recovery after statement ${k}`);
+    }
+  }finally{DatabaseSync.prototype.prepare=prepare;}
+});
+
+test('an opening interrupt in layout attestation is deadline-shaped and a later factory open succeeds',async t=>{
+  const advance=clock(t),f=safetySourceFixture(t),s=await searchFixture(f);await savedSource(f,'Synthetic copper telescope.');
+  await s.maintain();await s.service.close();
+  const prepare=DatabaseSync.prototype.prepare;let crossed=false,connection;
+  DatabaseSync.prototype.prepare=function(sql){
+    const statement=prepare.call(this,sql);
+    if(!crossed&&new Error().stack.includes('at installedContentLayout')){connection=this;crossed=true;advance(1001);}
+    return statement;
+  };
+  try{await assert.rejects(s.reopen(),{code:'raw_search_unavailable'});assert.equal(crossed,true);assert.equal(connection.isOpen,false);}
+  finally{DatabaseSync.prototype.prepare=prepare;}
+  await s.reopen();assert.equal((await s.search({query:'copper'})).candidates.length,1);
+});
+
+test('a genuinely invalid layout permanently refuses the same connection after repair',async t=>{
+  clock(t);const f=sourceFixture(t),reader=openReadDatabase(f.path,{contextRead:true});t.after(()=>reader.db.close());
+  const {installedContentLayout}=await import('../content-safety-schema.mjs');
+  assert.ok(installedContentLayout(reader.db));
+  f.db.exec('PRAGMA application_id=1');
+  assert.throws(()=>installedContentLayout(reader.db),{code:'unsupported_database'});
+  f.db.exec('PRAGMA application_id=1128352082');
+  assert.throws(()=>installedContentLayout(reader.db),{code:'unsupported_database'});
+  const fresh=openReadDatabase(f.path,{contextRead:true});fresh.db.close();
+});
+
+for(const phase of ['opening','operation'])test(`native ${phase} deadline inside the layout header permits cleanup and connection reuse`,async t=>{
+  const advance=clock(t),f=safetySourceFixture(t);await savedSource(f,'Synthetic copper telescope.');
+  const s=await searchFixture(f),reader=openReadDatabase(f.path,{contextRead:true});t.after(()=>reader.db.close());
+  const {rawSearchSqlite,rawSearchDeadline}=await import('../raw-search-sqlite.mjs');
+  const {bindContentSafetyConnection}=await import('../content-safety-schema.mjs');
+  let armed=false,expired=false,crossed=false;
+  const db=rawSearchSqlite(reader.db,()=>{if(expired)rawSearchDeadline();});bindContentSafetyConnection(db,reader.db);
+  const authority=createRawSearchAuthority({...reader,db},s.options),source=authority.inventory().rows.find(row=>row.source).source;
+  const expected=authority.check(source).classification;
+  const prepare=DatabaseSync.prototype.prepare;
+  DatabaseSync.prototype.prepare=function(sql){const statement=prepare.call(this,sql);
+    if(armed&&!crossed&&new Error().stack.includes('at installedContentLayout')){crossed=true;expired=true;advance(1001);}
+    return statement;
+  };
+  try{
+    armed=true;assert.throws(()=>authority.check(source),{code:'search_deadline',reason:'deadline'});
+    assert.equal(crossed,true);assert.equal(reader.db.isOpen,true);assert.equal(reader.db.isTransaction,false);
+    expired=false;armed=false;assert.deepEqual(authority.check(source).classification,expected);
+  }finally{DatabaseSync.prototype.prepare=prepare;}
+});

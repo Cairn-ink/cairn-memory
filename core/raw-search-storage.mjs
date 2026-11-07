@@ -6,7 +6,7 @@ import { createExclusiveSqliteFile, sqliteFileStat, sameJournal } from './sqlite
 import { fail } from './validation.mjs';
 import { same, RAW_SEARCH_LIMITS, rawSourceHint } from './raw-search-input.mjs';
 import { sidecarAttestationFile, readSidecarAttestation, validSidecarAttestation, writeSidecarAttestation } from './context-product-sidecar-attestation.mjs';
-import { rawSearchSqlite } from './raw-search-sqlite.mjs';
+import { rawSearchSqlite, rawSearchDeadline } from './raw-search-sqlite.mjs';
 
 const FORMAT = 3;
 const schemaSql = [
@@ -41,7 +41,7 @@ function privateFile(path) {
 
 /** Owner-scoped segment backend. No canonical connection or callback is held. */
 export async function openRawSearchStorage({ directory, identity, bind, quotaBytes, deadlineAt = performance.now()+1000 }) {
-  const check = () => { if (performance.now() >= deadlineAt) fail('search_deadline'); };
+  const check = () => { if (performance.now() >= deadlineAt) rawSearchDeadline(); };
   check();
   directory = resolve(directory);
   const parent = privateDirectory(directory);
@@ -173,7 +173,7 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
     // segments. Closing it also releases its single-statement read snapshot.
     const iterator=statement.iterate(after,limit+1);
     try{while(true){
-      if(performance.now()>=deadlineAt)fail('search_deadline');
+      if(performance.now()>=deadlineAt)rawSearchDeadline();
       const start=performance.now(),step=iterator.next();timings.sqliteMs+=performance.now()-start;
       if(step.done)break;const row=step.value;
       if(checkpoint===undefined&&(row.header_binding!==JSON.stringify(binding)||row.header_signature!==signHeader(row.sequence,row.checkpoint)))fail('forged_index');
@@ -203,7 +203,7 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
         .iterate(RAW_SEARCH_LIMITS.work+1);
       let hintBytes=0,vectorBytes=0,count=0,partial=false,partialReason=null;
       try{for(const row of iterator){
-        if(performance.now()>=deadlineAt)fail('search_deadline');
+        if(performance.now()>=deadlineAt)rawSearchDeadline();
         if(count===RAW_SEARCH_LIMITS.work||hintBytes+row.hints>RAW_SEARCH_LIMITS.snapshotBytes){
           partial=true;partialReason=count===RAW_SEARCH_LIMITS.work?'inventory_limit':'snapshot_byte_limit';break;
         }
