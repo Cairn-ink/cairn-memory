@@ -351,6 +351,7 @@
   "core/context-product-admission.mjs",
   "core/context-product-admission-policy.mjs",
   "core/context-product-attribution.mjs",
+  "core/context-product-refusal.mjs",
   "core/content-safety-classifier.mjs",
   "core/content-safety-files-child.mjs",
   "core/content-safety-observations.mjs",
