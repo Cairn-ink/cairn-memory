@@ -284,9 +284,10 @@ for (const entry of ['content-suppression-reader', 'context-product-authority'])
     await import(${JSON.stringify(new URL('../', import.meta.url).href)} + ${JSON.stringify(entry + '.mjs')});
     assert.equal(Object.hasOwn(globalThis, Symbol.for('context-read-product/maintenance-dispatch-ordinal')), false);
     assert.deepEqual(process.getActiveResourcesInfo().filter(kind => kind !== 'CloseReq'), []);
-    // Allow the loader's pending file-close callback to finish.
-    await new Promise(resolve => setImmediate(resolve));
-    await new Promise(resolve => setImmediate(resolve));
+    // The loader's file close completes on the thread pool; wait for it with a
+    // bound rather than a fixed number of loop turns.
+    for (const end = Date.now() + 10000; process.getActiveResourcesInfo().includes('CloseReq') && Date.now() < end;)
+      await new Promise(resolve => setTimeout(resolve, 5));
     assert.deepEqual(process.getActiveResourcesInfo(), []);`;
   const workspace = createTestWorkspace(t), stderr = join(workspace.path, 'cold-import.stderr'), descriptor = openSync(stderr, 'wx', 0o600);
   let child;
