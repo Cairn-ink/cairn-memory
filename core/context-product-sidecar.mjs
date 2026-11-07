@@ -317,16 +317,16 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   // boundary; rollback, restoration and disposal must always remain possible.
   function admissionDatabase(db,checkAdmission) {
     if(!checkAdmission)return db;
-    const wrap=object=>new Proxy(object,{get(target,key){
+    const wrap=object=>{const proxy=new Proxy(object,{get(target,key){
       const value=Reflect.get(target,key,target);
       if(typeof value!=='function')return value;
       return (...args)=>{
-        const cleanup=key==='close'||key===Symbol.dispose||key==='exec'&&/^(ROLLBACK|PRAGMA query_only=)/.test(args[0]);
+        const cleanup=key==='close'||key==='return'||key===Symbol.dispose||key==='exec'&&/^(ROLLBACK|PRAGMA query_only=)/.test(args[0]);
         if(!cleanup)checkAdmission();
         const result=Reflect.apply(value,target,args);
-        return key==='prepare'?wrap(result):result;
+        return key==='prepare'||key==='iterate'?wrap(result):result===target?proxy:result;
       };
-    }});
+    }});return proxy;};
     return wrap(db);
   }
   function connection(create = false, checkAdmission, bootstrapCommit = false) {
@@ -355,10 +355,11 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         }
       }
       if (create) read(() => {
-        checkAdmission?.();sideFormat=side.prepare('PRAGMA user_version').get().user_version;
-        checkAdmission?.();metadata=side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
+        const reader=admissionDatabase(side,checkAdmission);
+        sideFormat=reader.prepare('PRAGMA user_version').get().user_version;
+        metadata=reader.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
         if (!metadata || metadata.store_id!==identity.storeId) unavailable('wrong_store');
-        checkAdmission?.();attest(admissionDatabase(side,checkAdmission));
+        attest(reader);
         if (metadata.profile!==PRODUCT_PROFILE) unavailable('incompatible');
       },checkAdmission);
       guardWritable=sideWritable;
@@ -920,11 +921,11 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     const canonicalIdentity=canonicalRead(()=>canonicalProductIdentity(path,admissionDatabase(canonical,checkAdmission)));
     checkAdmission();
     const inspect=()=>{
-      const cacheIdentity=sideIdentity(admissionDatabase(side,checkAdmission));
+      const reader=admissionDatabase(side,checkAdmission),cacheIdentity=sideIdentity(reader);
       for(const sql of [
         'SELECT 1 FROM publications p LEFT JOIN validation_records r ON r.publication=p.publication AND r.generation=p.generation WHERE r.publication IS NULL LIMIT 1',
         'SELECT 1 FROM work w LEFT JOIN progress_records r ON r.generation=w.generation WHERE r.generation IS NULL LIMIT 1'
-      ]){checkAdmission();if(side.prepare(sql).get())unavailable('validation_missing');}
+      ]){checkAdmission();if(reader.prepare(sql).get())unavailable('validation_missing');}
       checkAdmission();
       const basis=createHash('sha256');let foreign=false;
       for(const [purpose,sql] of [
@@ -932,7 +933,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         ['progress','SELECT substr(record,1,4097) AS record FROM progress_records ORDER BY generation']
       ]){
         checkAdmission();
-        for(const {record:text} of side.prepare(sql).iterate()) {
+        for(const {record:text} of reader.prepare(sql).iterate()) {
           checkAdmission();
           const record=verifiedRecord(identity.cursorSecret,purpose,text,attribution);
           if(record.storeId!==identity.storeId)unavailable('wrong_store');

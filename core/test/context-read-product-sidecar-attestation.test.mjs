@@ -31,7 +31,7 @@ function setup(t,{build=true,mode='DELETE',batching=false,state=new SharedArrayB
   const f=fixture(t),first=f.admit('attestation first canary'),second=f.admit('attestation second canary');
   const path=f.path+PRODUCT_SIDECAR_SUFFIX,p=selection,access=accessDigest({ownerId:ns.ownerId,namespaces:{readSet:[ns]}});
   const children=[],statements=[],executed=[],commits=[],transactions=new WeakMap(),sideDatabases=new WeakSet();
-  let clock=0,delayChecks=false,checks=0,storage,hook=()=>{},afterExec=()=>{},onFiles=()=>{};
+  let clock=0,delayChecks=false,checks=0,storage,hook=()=>{},prepared=statement=>statement,afterExec=()=>{},onFiles=()=>{};
   const base=nativeObserver(),observer={...base,creation(work){return base.creation(()=>{const report=work();children.push(report);return report;});}};
   const sqlite=createProductSqlitePolicy({observer,now:()=>clock}),files=sqlite.files;
   sqlite.files=file=>{const check=files(file);return options=>{check(options);if(file===path)onFiles();};};sqlite.start(Infinity);
@@ -40,7 +40,7 @@ function setup(t,{build=true,mode='DELETE',batching=false,state=new SharedArrayB
   t.mock.method(DatabaseSync.prototype,'prepare',function(text){
     if(text.includes('FROM product_metadata'))sideDatabases.add(this);
     const statement=Reflect.apply(prepare,this,[text]),database=this;
-    return new Proxy(statement,{get(target,key){const value=Reflect.get(target,key,target);if(typeof value!=='function')return value;
+    const wrapped=new Proxy(statement,{get(target,key){const value=Reflect.get(target,key,target);if(typeof value!=='function')return value;
       return (...args)=>{
         if(['get','all','iterate','run'].includes(key)){
           statements.push(text);transactions.get(database)?.sql.push(text);hook(text,key,database);
@@ -50,7 +50,7 @@ function setup(t,{build=true,mode='DELETE',batching=false,state=new SharedArrayB
           }
         }
         return Reflect.apply(value,target,args);
-      };}});
+      };}});return prepared(wrapped,text);
   });
   t.mock.method(DatabaseSync.prototype,'exec',function(text){
     executed.push(text);
@@ -70,7 +70,7 @@ function setup(t,{build=true,mode='DELETE',batching=false,state=new SharedArrayB
   const options={path:f.path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,observer,sqlite,writable:true,sidecarJournalMode:mode,verificationBatching:batching,verificationBatchState:state,attribution,rendezvous,now:()=>clock};
   const s={f,path,p,access,first,second,facade,children,statements,executed,commits,state,
     get storage(){return storage;},get clock(){return clock;},get checks(){return checks;},
-    setHook(fn){hook=fn;},afterExec(fn){afterExec=fn;},onFiles(fn){onFiles=fn;},setClock(n){clock=n;},delayChecks(){delayChecks=true;},
+    setPrepareHook(fn){prepared=fn;},setHook(fn){hook=fn;},afterExec(fn){afterExec=fn;},onFiles(fn){onFiles=fn;},setClock(n){clock=n;},delayChecks(){delayChecks=true;},
     open(write=true){storage?.close();storage=factory({...options,writable:write});return storage;},
     observe(){return storage.observe(p,access);},
     finish(picked=p){for(let i=0;i<100;i++){storage.refresh(picked,access,{maxItems:32,maxMs:1000});const r=storage.observe(picked,access);if(r.publication)return r;}assert.fail('bounded rebuild converges');},
@@ -849,4 +849,40 @@ test('persistent first-seal COMMIT: lexical pump stops once per host start witho
   assert.ok(s.observe().publication,'a new host pump seals and completes bounded rebuild');assert.equal(admissions,4);assert.equal(pump.getStatus().error,null);
   const recovery={...admitted,work,rebuiltRows:sealRows(s),served:s.observe().dto.lexical.state};await pump.close();
   t.diagnostic(JSON.stringify({attempts,recovery}));
+});
+
+for(const boundary of ['publication binding','resident metadata','binding iterator'])test(`opening deadline between prepare and execution: ${boundary}`,t=>{
+  const s=setup(t);
+  if(boundary==='resident metadata')s.storage.admit(2000);else s.open();
+  let expired=false,lateGets=0,lateSteps=0;
+  s.setPrepareHook((statement,text)=>{
+    const matched=boundary==='publication binding'?text.startsWith('SELECT 1 FROM publications p LEFT JOIN validation_records'):
+      boundary==='resident metadata'?text==='SELECT * FROM product_metadata WHERE singleton=1':
+      text==='SELECT substr(record,1,16385) AS record FROM validation_records ORDER BY publication';
+    if(!matched)return statement;
+    // The clock advances only after native prepare completed. For iteration,
+    // advance when next is retrieved, immediately before its first invocation.
+    if(boundary!=='binding iterator'){s.setClock(2000);expired=true;}
+    return new Proxy(statement,{get(target,key){const value=Reflect.get(target,key,target);if(typeof value!=='function')return value;
+      return(...args)=>{
+        if(key==='get'&&s.clock>=2000)lateGets++;
+        const result=Reflect.apply(value,target,args);
+        if(key!=='iterate')return result;
+        let wrapped;wrapped=new Proxy(result,{get(iterator,method){
+          if(method==='next'){s.setClock(2000);expired=true;}
+          const step=Reflect.get(iterator,method,iterator);if(typeof step!=='function')return step;
+          return(...values)=>{
+            if(method==='next'&&s.clock>=2000)lateSteps++;
+            const value=Reflect.apply(step,iterator,values);
+            return value===iterator?wrapped:value;
+          };
+        }});return wrapped;
+      };
+    }});
+  });
+  assert.throws(()=>s.storage.admit(2000),{code:'read_timeout'});
+  t.diagnostic(JSON.stringify({boundary,expired,lateGets,lateSteps}));
+  assert.equal(expired,true,'the targeted native boundary was reached');
+  assert.equal(lateGets,0,'no native get after prepare exhausted the deadline');
+  assert.equal(lateSteps,0,'no native iterator next after expiry');
 });
