@@ -469,7 +469,7 @@ export function createRawSearchAuthority(database, options) {
     const unitStart=performance.now(),unitAt=Math.min(deadlineAt,unitStart+25);
     read(()=>{
       if(versionInside()!==observed)fail('source_changed');
-      try{timed(()=>{
+      timed(()=>{
         while(entries.length<32&&offset+entries.length<rows.length&&performance.now()<unitAt){
           deadline(deadlineAt);
           const row=rows[offset+entries.length],key=row.source.canonical??fingerprint(row.source);
@@ -482,12 +482,7 @@ export function createRawSearchAuthority(database, options) {
           }
           entries.push({row,entry});
         }
-      },unitAt);}catch(error){
-        // A time slice may interrupt the next row. Its incomplete check is
-        // retried in a fresh snapshot; only fully checked rows leave this unit.
-        if(error.code!=='search_deadline')throw error;
-        deadline(deadlineAt);
-      }
+      },deadlineAt);
     },deadlineAt);
     const unitHoldMs=performance.now()-unitStart;
     if(version(deadlineAt)!==observed)fail('source_changed');

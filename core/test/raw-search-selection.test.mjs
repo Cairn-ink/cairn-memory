@@ -49,16 +49,25 @@ test('selection snapshots check at most 32 rows and preserve per-row classificat
   assert.deepEqual(units.map(unit=>unit.rows),[32,32,1]);
   assert.equal(authority.check(rows[0].source).classification.kind,'current-eligible-bare');
 });
-test('selection releases a slow snapshot at 25 operation-clock milliseconds and retries the unfinished row',async t=>{
-  const {authority,rows}=await fixture(t),units=observe(t,{statementMs:1});
+test('selection completes a row costing more than 25 milliseconds and moves past it',async t=>{
+  const {authority,rows}=await fixture(t),units=observe(t,{statementMs:4});
   const result=authority.select(rows.slice(0,8),'current',1100);
   assert.equal(result.eligible.length,8);assert.equal(result.denied,0);
-  assert.ok(units.length>1);assert.ok(units.some(unit=>unit.holdMs===25));
-  assert.ok(units.every(unit=>unit.holdMs<=25));
+  assert.equal(result.timedOut,false);assert.equal(units.length,8);
+  const rowMs=units[0].holdMs;assert.ok(rowMs>25);
+  assert.ok(units.every(unit=>unit.rows===1&&unit.holdMs<=25+rowMs));
+  assert.ok(units.reduce((n,unit)=>n+unit.rows,0)>=8);
 });
 test('a canonical commit inside a selection unit refuses the same rows as individual checks',async t=>{
   const {f,authority,rows}=await fixture(t);
   const units=observe(t,{move:()=>f.db.exec('UPDATE raw_owner_usage SET revision=revision+1')});
   assert.throws(()=>authority.select(rows,'current',1100),{code:'source_changed'});
   assert.equal(units.length,1);
+});
+
+test('selection releases a snapshot at the first row boundary past its time slice',async t=>{
+  const {authority,rows}=await fixture(t),units=observe(t,{statementMs:.25});
+  assert.equal(authority.select(rows.slice(0,32),'current',1100).eligible.length,32);
+  assert.ok(units.length>1);const rowMs=units.reduce((sum,u)=>sum+u.holdMs,0)/32;
+  assert.ok(units.every(u=>u.holdMs<=25+rowMs));
 });
