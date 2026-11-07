@@ -213,11 +213,15 @@ test('5 freshness storage inside select and rank is excluded from host wait', as
     });
     if (Atomics.load(state, 0) === 0) Atomics.wait(state, 0, 0, 10000);
     assert.equal(Atomics.load(state, 0), 1, 'writer is ready');
-    let selected = false, triggered = false;
-    const select = f.port.select;
-    f.port.select = input => { selected = true; return select(input); };
+    let ranking = false, triggered = false;
+    const countTokens = f.port.countTokens;
+    f.port.countTokens = text => {
+      // Rank packing begins after all select return checks have finished.
+      try { if (Array.isArray(JSON.parse(text).input?.candidates)) ranking = true; } catch {}
+      return countTokens(text);
+    };
     const observed = await prepared(() => f.core.recall({ ...request, diagnostics: true }), () => {
-      if (triggered || (method === 'rank' && !selected)) return;
+      if (triggered || (method === 'rank' && !ranking)) return;
       const limit = Error.stackTraceLimit;
       let stack;
       try { Error.stackTraceLimit = 50; stack = new Error().stack; }
@@ -271,11 +275,15 @@ test('5 content-safety guard SQL inside select and rank stays in the engine rema
     });
     if (Atomics.load(state, 0) === 0) Atomics.wait(state, 0, 0, 10000);
     assert.equal(Atomics.load(state, 0), 1, 'writer is ready');
-    let selected = false, triggered = false;
-    const select = f.port.select;
-    f.port.select = input => { selected = true; return select(input); };
+    let ranking = false, triggered = false;
+    const countTokens = f.port.countTokens;
+    f.port.countTokens = text => {
+      // Rank packing begins after all select return checks have finished.
+      try { if (Array.isArray(JSON.parse(text).input?.candidates)) ranking = true; } catch {}
+      return countTokens(text);
+    };
     const observed = await prepared(() => f.core.recall({ ...request, diagnostics: true }), text => {
-      if (triggered || (method === 'rank' && !selected)) return;
+      if (triggered || (method === 'rank' && !ranking)) return;
       const limit = Error.stackTraceLimit;
       let stack;
       try { Error.stackTraceLimit = 50; stack = new Error().stack; }
