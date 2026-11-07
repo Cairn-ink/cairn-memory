@@ -88,3 +88,6 @@ structural completions and ten recalled records, but material semantic errors.
 It is not eight semantic passes; this new context mode was not used in that run.
 Existing results remain unchanged. No automatic identity, rationale linkage,
 state resolution, execution permission or new host compatibility is claimed.
+
+See [core recall diagnostics](fetch-recall.md#optional-core-recall-diagnostics)
+for the optional direct core `diagnostics` input and result.

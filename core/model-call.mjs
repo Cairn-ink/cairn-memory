@@ -18,7 +18,7 @@ export const modelRequestText = (system, input) =>
 
 /** A bounded adapter call. No database transaction may surround this helper. */
 export async function callModel(model, method, system, input,
-  { validateFresh = () => {}, beforeDispatch = () => {}, failureCode = 'recall_failed', deadline } = {}) {
+  { validateFresh = () => {}, beforeDispatch = () => {}, failureCode = 'recall_failed', deadline, onHostWait } = {}) {
   const legacyFreshness = hasLegacyContentReadBoundary();
   const protectedRead = hasContentPortBoundary();
   const reject = (code, reason = code) => { emitDiagnostic(model, method, 'core_call', reason); fail(code); };
@@ -88,9 +88,15 @@ export async function callModel(model, method, system, input,
         providerInvoked = true;
         return assertContentPort({invoke:async()=>{
           try {
-            const result = await (protectedRead
-              ? Reflect.apply(provider,model,[{ ...detached, signal: controller.signal }])
-              : model[method]({ ...detached, signal: controller.signal }));
+            let result;
+            const hostStart = onHostWait ? performance.now() : undefined;
+            try {
+              result = await (protectedRead
+                ? Reflect.apply(provider,model,[{ ...detached, signal: controller.signal }])
+                : model[method]({ ...detached, signal: controller.signal }));
+            } finally {
+              if (onHostWait) onHostWait(performance.now() - hostStart);
+            }
             if (observeAbort()) return { aborted: true };
             let snapshot;
             try {

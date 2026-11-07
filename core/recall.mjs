@@ -73,7 +73,7 @@ function selection(output, allowed, maximum, model, stage) {
 }
 
 export async function recallMemories({ model, readSet, query, limit, map, fetch, finalize, recentReceipts,
-  validateFresh = () => {}, includeQualification = false, contextMode, selectionMode }) {
+  validateFresh = () => {}, includeQualification = false, contextMode, selectionMode, diagnostics }) {
   if (typeof model?.select !== 'function' || typeof model?.rank !== 'function') {
     emitDiagnostic(model, typeof model?.select !== 'function' ? 'select' : 'rank', 'core_call', 'model_not_configured');
     fail('model_not_configured');
@@ -116,7 +116,8 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
     }
     if (packed.omitted && !packed.overflow && packed.input.maps.every((page) => !page.items.length)) continue;
     const output = await callModel(model, 'select', selectPrompt, packed.input,
-      { validateFresh: () => validateFresh([...chosen.values()]) });
+      { validateFresh: () => validateFresh([...chosen.values()]),
+        ...(diagnostics ? { onHostWait: ms => { diagnostics.hostWaitMs += ms; } } : {}) });
     const selected = selection(output, allowed, maxRefs, model, 'select');
     for (let i = 0; i < readSet.length; i++) {
       if (selected.filter((ref) => ref.namespaceIndex === i).length > 12) {
@@ -187,7 +188,8 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
     const shown = packed.included.map((index) => candidates[index]);
     if (shown.length || packed.overflow) {
       const rankOutput = await callModel(model, 'rank', prompt, packed.input,
-        { validateFresh: () => validateFresh(candidates) });
+        { validateFresh: () => validateFresh(candidates),
+          ...(diagnostics ? { onHostWait: ms => { diagnostics.hostWaitMs += ms; } } : {}) });
       ranked = selection(rankOutput, new Map(shown.map((ref) => [key(ref), ref])), limit, model, 'rank');
     }
   }
