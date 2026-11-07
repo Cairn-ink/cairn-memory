@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { createHmac } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
-import { readdirSync } from 'node:fs';
+import { readdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { openRawSearchStorage } from '../raw-search-storage.mjs';
 import { openRawSearch } from '../raw-search-index.mjs';
@@ -127,4 +127,43 @@ test('explicit Raw maintenance requests only work turns with its own quantum',as
   const requests=[],port=broker(),s=await searchFixture(f,{maintenanceTurn:{...port,createTurn(request){requests.push(request);return port.createTurn(request);}}});
   await s.maintain({maxMs:123});assert.ok(requests.length);
   for(const request of requests){assert.equal(request.phase,'work');assert.equal(request.maxMs,123);}
+});
+
+for(const boundary of ['schema','header','commit-1','commit-2'])for(const publicFactory of [false,true])
+test(`fresh sidecar initialization reopens after interruption at ${boundary}; public factory ${publicFactory}`,async t=>{
+  const set=clock(t),ws=createTestWorkspace(t,{prefix:'raw-opening-atomic-'});
+  let options,reopen;
+  if(publicFactory){
+    const f=sourceFixture(t),s=await searchFixture(f);await s.service.close();options=s.options;
+    const path=join(s.directory,readdirSync(s.directory).find(name=>name.endsWith('.sqlite')));renameSync(path,path+'.quarantined');
+    reopen=()=>openRawSearch(options);
+  }else{
+    options={directory:ws.path,identity:{storeId:'synthetic-store',fileIdentity:'1:2',ownerId:'synthetic-owner',readSet:[]},
+      bind:(purpose,value)=>createHmac('sha256','synthetic-secret').update(JSON.stringify([purpose,value])).digest('base64url'),quotaBytes:1024*1024};
+    reopen=()=>openRawSearchStorage(options);
+  }
+  const exec=DatabaseSync.prototype.exec,prepare=DatabaseSync.prototype.prepare;let raw,commits=0,crossed=false;
+  const cross=()=>{crossed=true;set(1101);};
+  DatabaseSync.prototype.exec=function(sql){
+    if(!raw&&sql.startsWith('CREATE TABLE header('))raw=this;
+    const result=exec.call(this,sql);
+    if(this===raw){
+      if(boundary==='schema'&&sql.startsWith('CREATE TABLE product_attestation('))cross();
+      if(sql==='COMMIT'&&boundary==='commit-'+(++commits))cross();
+    }
+    return result;
+  };
+  DatabaseSync.prototype.prepare=function(sql){const statement=prepare.call(this,sql);
+    if(boundary==='header'&&this===raw&&sql.startsWith('INSERT INTO header VALUES')){
+      const run=statement.run;statement.run=function(...args){const value=run.apply(this,args);cross();return value;};
+    }return statement;
+  };
+  try{await assert.rejects(reopen(),{code:publicFactory?'raw_search_unavailable':'search_deadline'});assert.equal(crossed,true);assert.equal(raw.isOpen,false);}
+  finally{DatabaseSync.prototype.exec=exec;DatabaseSync.prototype.prepare=prepare;set(100);}
+  const recovered=await reopen();try{assert.ok(recovered);}finally{await recovered.close();}
+});
+test('an incumbent header without its seal remains refused',async t=>{
+  clock(t);const {options,store,path}=await storageFixture(t);await store.close();
+  const db=new DatabaseSync(path);try{db.exec('DELETE FROM product_attestation');}finally{db.close();}
+  await assert.rejects(openRawSearchStorage(options),{code:'forged_index'});
 });
