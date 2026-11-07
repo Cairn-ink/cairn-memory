@@ -8,6 +8,7 @@
   refuse; existing reads, capture and privacy mutations do not select it.
 - No new context output or automatic Cards are added. See
   [the interface](docs/plans/raw-search-interface.md) and [host seam](docs/plans/raw-search-seam.md).
+
 ## Unreleased — maintenance admission and integrity
 
 - Optional admission capacity covers cold opens while work retains its normal quantum. Each domain prices exhaustion by its own next turn.

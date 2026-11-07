@@ -18,8 +18,10 @@ export function installPhaseMeasurement(){
     };
     if(url.endsWith('/raw-search-index.mjs')){
       wrap('    async function search(value,token)', '    async function searchAttempt','search');
-      replace('database=openReadDatabase(options.path,{contextRead:true,busyTimeoutMs:0});',
-        "database=measured('canonical-open',()=>openReadDatabase(options.path,{contextRead:true,busyTimeoutMs:0}));");
+      replace(`database=openReadDatabase(options.path,{contextRead:true,busyTimeoutMs:0,preflight:openingCheck,
+      nativeObserver:{invoke(_kind,_label,work){openingCheck();return work();},database:native=>rawSearchSqlite(native,openingCheck)}});`,
+        `database=measured('canonical-open',()=>openReadDatabase(options.path,{contextRead:true,busyTimeoutMs:0,preflight:openingCheck,
+      nativeObserver:{invoke(_kind,_label,work){openingCheck();return work();},database:native=>rawSearchSqlite(native,openingCheck)}}));`);
       replace('const result=retrieval.retrieveRaw(eligible,input.query,{vectors,queryVector,check:()=>expired(deadlineAt)});',
         "const result=measured('hierarchy',()=>retrieval.retrieveRaw(eligible,input.query,{vectors,queryVector,check:()=>expired(deadlineAt)}));");
     }else if(url.endsWith('/raw-search-authority.mjs')){
@@ -29,8 +31,8 @@ export function installPhaseMeasurement(){
       wrap('  function validate(', '  function reset(','final-validation');
     }else if(url.endsWith('/raw-search-storage.mjs')){
       wrap('export async function openRawSearchStorage(', '\n__measurement_end__','sidecar-open');
-      wrap('  async function snapshot(', '  function publication(','snapshot');
-      wrap('  function publication(', '  async function stage(','publication-shape');
+      wrap('  function snapshotInside(', '  function publication(','snapshot');
+      wrap('  function publicationInside(', '  async function stage(','publication-shape');
       replace('if (!row || row.signature !== sign(row.data,row.vectors))',"if (!row || row.signature !== measured('authentication',()=>sign(row.data,row.vectors)))");
       replace('unpack(row.data,vectorBytes(row.vectors))',"measured('hint-decode',()=>unpack(row.data,vectorBytes(row.vectors)))");
     }else{

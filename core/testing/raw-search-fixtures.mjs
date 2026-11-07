@@ -1,4 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
+import { createHmac } from 'node:crypto';
+import { sidecarAttestationFile, writeSidecarAttestation } from '../context-product-sidecar-attestation.mjs';
 import { mkdirSync,readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { openRawSearch } from '../raw-search-index.mjs';
@@ -20,6 +22,20 @@ export function rawSearchHost() {
 export const broker = () => ({version:1,createTurn(){let released=false;return {
   enter(){return 'admitted';},release(){if(released)throw Error('duplicate release');released=true;},
 };}});
+// Restore fixtures must pass physical-file admission before exercising stale
+// source denial. Rebind only the outer seal; preserve every stored source hint.
+export function attestRawSearchCopy(f,path) {
+  const identity=f.db.prepare('SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1').get();
+  const db=new DatabaseSync(path);
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    const binding=JSON.parse(db.prepare('SELECT binding FROM header WHERE singleton=1').get().binding);
+    const sealKey=createHmac('sha256',identity.cursor_secret)
+      .update(JSON.stringify(['raw-search-attestation-key-v1',identity.store_id,binding])).digest('base64url');
+    writeSidecarAttestation(db,sealKey,sidecarAttestationFile(path),{name:'raw-search',binding});
+    db.exec('COMMIT');
+  } finally {try {if(db.isTransaction)db.exec('ROLLBACK');}finally{db.close();}}
+}
 export async function searchFixture(f,patch={}) {
   f.db.exec('PRAGMA busy_timeout=5000');
   const host=rawSearchHost(),directory=join(f.workspace.path,'raw-index');mkdirSync(directory,{mode:0o700});

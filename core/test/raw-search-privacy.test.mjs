@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readdirSync,renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { sourceFixture,savedSource,ns,ok,localPlainPort } from '../testing/raw-source-fixtures.mjs';
-import { searchFixture,safetySourceFixture } from '../testing/raw-search-fixtures.mjs';
+import { searchFixture,safetySourceFixture,attestRawSearchCopy } from '../testing/raw-search-fixtures.mjs';
 
 const receipt={client:'synthetic',sessionId:'independent',eventId:'replacement',role:'user',excerpt:'Synthetic replacement.'};
 const model={extract:()=>({items:[{content:'Synthetic copper fact.',kind:'fact',confidence:.8,sourceIndices:[0]}]})};
@@ -267,6 +267,7 @@ test('derived copy restore and upload remain non-serving without canonical valid
   await mutate('fence',mutation(f,source,'fence'));
   renameSync(path,path+'.inactive');renameSync(backup,path);
   // An actual offline copy is restored; its stale rows cannot grant authority.
+  attestRawSearchCopy(f,path);
   await s.reopen();assert.equal((await s.search({query:'retained'})).candidates.length,0);
   assert.equal((await s.service.classify(candidate,{},s.host.token)).kind,'denied');
 });

@@ -6,7 +6,7 @@ import {performance} from 'node:perf_hooks';
 import {readdirSync,lstatSync} from 'node:fs';
 import {join} from 'node:path';
 import {sourceFixture,savedSource,ns,ok,request,splitRaw,resolve,anchor} from '../testing/raw-source-fixtures.mjs';
-import {searchFixture} from '../testing/raw-search-fixtures.mjs';
+import {searchFixture,attestRawSearchCopy} from '../testing/raw-search-fixtures.mjs';
 import {openRawSearch} from '../raw-search-index.mjs';
 import {reserveSharedVectors} from '../context-read-embedder.mjs';
 
@@ -115,6 +115,7 @@ test('G6 no export or hosted backend; restored offline sidecar cannot authorize'
   await s.service.close();const path=join(s.directory,readdirSync(s.directory).find(n=>n.endsWith('.sqlite')));
   const {copySqliteFixture}=await import('../testing/content-safety-s2h-fixture.mjs');copySqliteFixture(path,path+'.backup');
   const mutate=await writer(t,f.path);await mutate('fence',{conversationId:source.conversationId});filesystemChild("import {renameSync} from 'node:fs';const p=process.argv[1];renameSync(p,p+'.old');renameSync(p+'.backup',p);",[path]);
+  attestRawSearchCopy(f,path);
   await s.reopen();assert.equal((await s.search({query:'retained'})).candidates.length,0);
 });
 
