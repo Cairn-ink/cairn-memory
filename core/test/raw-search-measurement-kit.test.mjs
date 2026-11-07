@@ -88,3 +88,24 @@ test('capture phase timeout grows with the requested sample count',async()=>{
   assert.equal(captureTimeoutMs(1),90000);assert.ok(captureTimeoutMs(120)>90000);
   assert.ok(captureTimeoutMs(240)>captureTimeoutMs(120));
 });
+test('phase ledger records each selection snapshot row count and hold on the functional clock',()=>{
+  const url=path=>new URL(path,import.meta.url).href;
+  const script=`const {installPhaseMeasurement}=await import(${JSON.stringify(url('../../tools/testing/raw-search-phase-loader.mjs'))});const hook=installPhaseMeasurement();
+    const {default:test}=await import('node:test');const {default:assert}=await import('node:assert/strict');
+    const {performance}=await import('node:perf_hooks');
+    const {sourceFixture,savedSource}=await import(${JSON.stringify(url('../testing/raw-source-fixtures.mjs'))});
+    const {searchFixture}=await import(${JSON.stringify(url('../testing/raw-search-fixtures.mjs'))});
+    const {openReadDatabase}=await import(${JSON.stringify(url('../read-database.mjs'))});
+    const {createRawSearchAuthority}=await import(${JSON.stringify(url('../raw-search-authority.mjs'))});
+    const {takeSelectionUnits}=await import(${JSON.stringify(url('../../tools/testing/raw-search-phase-ledger.mjs'))});
+    test('unit records',async t=>{const f=sourceFixture(t);await savedSource(f,'Synthetic copper.');const s=await searchFixture(f);
+      const reader=openReadDatabase(f.path,{contextRead:true});t.after(()=>reader.db.close());
+      const a=createRawSearchAuthority(reader,s.options),source=a.inventory().rows[0].source;
+      const own=Object.getOwnPropertyDescriptor(performance,'now');Object.defineProperty(performance,'now',{configurable:true,value:()=>100});
+      try{takeSelectionUnits();a.select(Array.from({length:65},()=>({source})),'current',1100);
+        const units=takeSelectionUnits();assert.deepEqual(units.map(u=>u.rows),[32,32,1]);assert.ok(units.every(u=>u.holdMs===0));
+      }finally{if(own)Object.defineProperty(performance,'now',own);else delete performance.now;hook.deregister();}
+    });`;
+  const child=spawnSync(process.execPath,['--input-type=module','-e',script],{encoding:'utf8',timeout:30000});
+  assert.equal(child.status,0,child.stdout+child.stderr);assert.equal(child.signal,null);
+});
