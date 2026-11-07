@@ -253,7 +253,7 @@ export function createRawSearchAuthority(database, options) {
       const conversationIds=[];
       each(`SELECT client,session_key,id FROM raw_conversations WHERE ${where}
         AND rowid<=${bounds.conversations} ORDER BY client,session_key`,args,row=>append(conversationIds,row.id));
-      conversationIds.sort();
+      conversationIds.sort((a,b)=>Buffer.compare(Buffer.from(a),Buffer.from(b)));
       each(`SELECT c.id AS conversation_id,m.message_id,c.client FROM raw_conversations c
         CROSS JOIN raw_messages m ON m.conversation_id=c.id
         WHERE c.id=? AND ${horizon}
