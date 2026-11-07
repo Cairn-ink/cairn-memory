@@ -1,5 +1,6 @@
 import { openRawCaptureCore } from '../../core/raw-capture.mjs';
 import { rawNamespace as namespace } from '../../core/testing/raw-fixtures.mjs';
+import { openDatabase,transaction } from '../../core/database.mjs';
 const [path]=process.argv.slice(2);
 const raw=openRawCaptureCore({path,model:{contextWindow:8192,countTokens:()=>1,extract:()=>({items:[]})}},
   {mode:'raw-v1',lineage:true,deletion:true,port:{version:'raw-seal-v1',async sealRaw({text}){
@@ -21,6 +22,14 @@ process.on('message',message=>{
     if(failure)throw failure;
     let value={commits};
     if(message.operation==='capture')value=await capture();
+    else if(message.operation==='canonical-commit') {
+      const db=openDatabase(path);
+      try {
+        const changed=transaction(db,()=>db.prepare('UPDATE raw_owner_usage SET revision=revision+1 WHERE owner_id=?').run(namespace.ownerId));
+        if(changed.changes!==1)throw Error('synthetic_commit_missing');
+        commits++;value={commits,canonicalCommits:1,changedRows:changed.changes};
+      }finally{db.close();}
+    }
     else if(message.operation==='cadence') {
       clear();const cadenceMs=message.cadenceMs;
       timer=setInterval(()=>{queue=queue.then(capture).catch(error=>{failure=error;clear();});},cadenceMs);

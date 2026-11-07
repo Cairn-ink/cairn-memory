@@ -102,9 +102,11 @@ function observe() {
   session.on('Debugger.paused',({params})=>{
     try {
       if(current&&params.reason==='exception') {
-        const frame=params.callFrames.find(frame=>(scripts.get(frame.location.scriptId)??'').endsWith('/core/raw-search-authority.mjs'));
+        const frame=params.callFrames.find(frame=>['/core/raw-search-authority.mjs','/core/raw-search-index.mjs']
+          .some(path=>(scripts.get(frame.location.scriptId)??'').endsWith(path)));
         const description=params.data?.description??'';
-        if(frame&&description.includes('MemoryStoreError')) {
+        if(frame&&frame.functionName!=='safeFailure'&&description.includes('MemoryStoreError')&&
+            !(current.exceptions.length&&description.startsWith('MemoryStoreError: raw_search_unavailable'))) {
           const id=frame.location.scriptId;
           if(!sources.has(id))session.post('Debugger.getScriptSource',{scriptId:id},(error,result)=>{if(!error)sources.set(id,result.scriptSource.split('\n'));});
           const line=sources.get(id)?.[frame.location.lineNumber]?.trim()??'';
@@ -114,7 +116,9 @@ function observe() {
     }finally{session.post('Debugger.resume');}
   });
   DatabaseSync.prototype.prepare=function(sql) {
+    const preparing=performance.now();
     const statement=prepare.call(this,sql);
+    const prepareMs=performance.now()-preparing;
     if(current&&sql.startsWith('SELECT s.*,h.sequence'))current.payloadReads++;
     if(!sql.startsWith('SELECT count(*) AS count,json_group_array')&&sql!=='PRAGMA data_version')return statement;
     const get=statement.get;
@@ -128,7 +132,8 @@ function observe() {
             stack:stack.split('\n').slice(2,7).map(line=>line.trim())});
           else {
             const scan=scanName(sql),index=current.next[scan]??0;current.next[scan]=index+1;
-            current.pages.push({scan,index,rows:value.count,ms:performance.now()-started});
+            const executionMs=performance.now()-started;
+            current.pages.push({scan,index,rows:value.count,prepareMs,executionMs,ms:prepareMs+executionMs});
           }
         }
         return value;
@@ -149,6 +154,7 @@ function attribution(trace,code) {
     if(exception.line.includes('fence(expected)!==expected'))return 'real-commitment-change';
     if(exception.line.includes('version()!==observed'))return 'other:version-move-during-eligibility';
     if(exception.function==='candidateEntry')return 'other:expired-or-evicted-candidate';
+    if(exception.line.includes('entry.expires<performance.now()'))return 'other:expired-or-missing-ticket';
     if(exception.line.includes('entry.cache')&&new Set(trace.versions.map(row=>row.value)).size>1)return 'version-move-before-final-snapshot';
   }
   let before;
@@ -202,10 +208,10 @@ export async function measureLineageProfile({profile,count,path,authority,servic
         }
       }
       for(let sample=0;sample<20;sample++) {
-        await writes.call({operation:'capture'});sections.length=0;
+        const committed=await writes.call({operation:'canonical-commit'});assert.equal(committed.canonicalCommits,1);sections.length=0;
         const result=await call('rebuild',()=>authority.fence(expected));
-        if(result.ok&&expected!==undefined)assert.equal(result.value,expected,'unrelated capture changed retained commitment');
-        samples.push({...result,value:undefined,shared:summary(sections),sharedValues:[...sections]});
+        if(result.ok&&expected!==undefined)assert.equal(result.value,expected,'unrelated commit changed retained commitment');
+        samples.push({...result,value:undefined,commit:committed,shared:summary(sections),sharedValues:[...sections]});
         console.log('measurement lineage-rebuild='+JSON.stringify({turns:count,sample,ok:result.ok,ms:result.ms,pages:result.trace.pages.length,shared:summary(sections),cause:result.cause}));
       }
       const pageGroups={};
@@ -237,11 +243,12 @@ export async function measureLineageProfile({profile,count,path,authority,servic
         previousCommit=schedule.commits;
         const start=performance.now();
         for(let sample=0;sample<60;sample++) {
-          const target=start+sample*cadenceMs/3+rand()*cadenceMs/3;
+          const target=Math.max(performance.now(),start+sample*cadenceMs/3)+rand()*cadenceMs/3;
           await pause(Math.max(0,target-performance.now()));
           const state=await writes.call({operation:'state'}),afterCommit=previousCommit!==state.commits;previousCommit=state.commits;
+          const startedOffsetMs=performance.now()-start;
           const result=await call('search',()=>service.search(input,host.token));
-          const row={sample,afterCommit,...result,value:undefined};
+          const row={sample,afterCommit,scheduledOffsetMs:target-start,startedOffsetMs,...result,value:undefined};
           if(result.ok){row.outcome=result.value.coverage.status==='complete'&&result.value.semantic.state==='ready'?'complete-hybrid':'partial';row.coverage=result.value.coverage;row.semantic=result.value.semantic;}
           else row.outcome='error';
           rows.push(row);
