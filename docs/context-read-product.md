@@ -1877,3 +1877,107 @@ its previous estimate (one-observation half-life). Seeds are respectively 100,
 100, 50 and 50 ms. The combined transaction-plus-tail estimate is capped at the
 turn's usable budget after its unchanged reserve. No estimate can refuse every
 start, and normal observations recover from an outlier.
+
+## Lexical admission turn budget (amendment v2.5, 2026-11-07)
+
+The lexical maintenance pump accepts optional `admissionMs`, defaulting to
+`quantum.maxMs`. It budgets an entire admission turn, including cold open,
+admission, delivery and settlement. Work and refresh retain `quantum.maxMs`.
+An explicit value must be a safe integer at least `quantum.maxMs`, no greater
+than `budgets.maxMs` or any projection's maintainer `deadlineMs` (default
+5,000 ms), and no greater than `DISPOSAL_GRACE_MS - 2000` (8,000 ms).
+Invalid values fail with `invalid_input` at pump creation. The budget
+is fixed across renewals of the same pump.
+
+Admission reserves `admissionMs` and the usual quantum item allowance in the
+window ledger before dispatch. Successful admission refunds the item allowance
+and settles time to elapsed usage; uncertain or failed settlement retains the
+full reservation under the existing rules. Admission must fit the remaining
+window quota, window lifetime and renewal authority, including after a broker
+wait. It earns no observation.
+
+The five-second observation cadence still applies. Let `L` be the expanded
+intent lane count, `C` the maximum cold resident replacements in a sweep,
+`S = max(pollMs, quantum.maxMs)` and `A = max(pollMs, admissionMs)`.
+Configuration requires `L*S + C*A + quantum.maxMs <= 5000`; scheduling prices
+each admission slot at `A` and each work slot at `S`. With one projection
+(two intents), one cold slot, a 1,000 ms work quantum and polling at most
+1,000 ms, the largest feasible `admissionMs` is 2,000 ms. A 5,000 ms admission
+budget is infeasible and fails with `invalid_input`. A host on a slower volume
+can opt in within these bounds without extending its work quantum.
+
+## Sidecar integrity attestation (amendment v2.6, 2026-11-07)
+
+Writable admission and read-only opens verify a keyed attestation before using
+an existing cache. Its HMAC key is derived from the store's cursor secret with
+the `sidecar-attestation-v1` domain. The certificate binds device, inode, birth
+identity, the sidecar format, engine profile, and an in-file monotonic stamp.
+Size and modification time are excluded. Every parent logical sidecar write transaction
+increments and signs the stamp before COMMIT, including lexical and vector
+writes, verification resets, publication, garbage collection,
+and explicit reset. A rollback restores the previous matching stamp and seal.
+
+Bounded incremental vacuum retains its existing autocommit boundary. It changes
+page placement and the freelist, leaving logical rows, the schema cookie, file
+identity and seal unchanged. A crash after reclamation and before the next
+logical write therefore leaves a matching seal. The next logical write advances
+the stamp in its existing transaction. Vacuum adds no explicit BEGIN or COMMIT.
+
+Standalone admission of a newly initialized cache has no projection write to
+share: its first parent seal uses one initialization BEGIN/COMMIT pair. This is
+a first-open cost, including after replacement; matched admissions and steady
+maintenance turns add no transactions.
+
+A second one-time exception is the first-open migration of an existing legacy
+WAL cache. Standalone admission with a missing seal row uses 5 BEGINs, 4 COMMITs
+and 1 write BEGIN; a missing seal table uses 6 BEGINs, 5 COMMITs and 1 write BEGIN.
+Both compare with 4 BEGINs, 3 COMMITs and no write BEGIN before attestation.
+These parent counts include canonical and lifecycle reads. Authenticating the
+old bindings inside the sealing writer transaction adds one canonical read pair
+for the missing-table case; it needs no separate sidecar read transaction.
+
+A reader opened after a mismatch is detected never serves the untrusted file;
+a reader opened before an out-of-band seal removal keeps serving until its next
+reopen (content safety by delivery revalidation).
+Invalidating serving handles on rejection is a planned follow-up.
+
+DELETE-mode caches with a missing or invalid seal use the existing excluded
+replacement protocol, then perform the normal bounded, checkpointed rebuild
+before publication. WAL-mode hosts pay main's integrity check once on the first
+open after upgrade; DELETE-mode caches rebuild once. A missing WAL seal means
+no attestation table or no singleton row. A healthy host-configured WAL cache
+runs `quick_check` and `foreign_key_check` inside the first write transaction,
+before the DDL and the seal. A missing-table upgrade retires the old
+schema-bound publication/progress records in 128-row slices in that transaction.
+The aggregate migration cost scales with the number of legacy pointer and
+certificate rows. On a direct refresh it may exceed one turn, including a turn
+that performs no corpus work. Admission and readiness are separate: the
+missing-table upgrade retires the old schema-bound publications, so lexical
+reads are not ready until normal maintenance republishes. Missing-row upgrades
+preserve publications. A bounded multi-transaction migration is a planned
+follow-up.
+A rollback leaves the seal missing, so the next open checks again. An attested
+WAL open runs zero whole-file statements. A present but invalid WAL seal is
+refused under the existing non-DELETE rule, without a whole-file check.
+Under lifecycle exclusion the replacement child checks the parent's exact-row
+SHA-256 verdict again; a changed row or file stamp refuses replacement with
+ESTALE. This attestation verdict needs no whole-file integrity check. Other
+corrupt verdicts retain the existing child integrity checks and foreign-binding
+certificate recheck. Neither the cursor secret nor its derived key reaches the
+child. The child initializes an unsigned empty cache; the parent seals its first
+write transaction against the identity verified on its opened connection. A
+crash before that write leaves an unavailable empty cache. Its next writable
+open replaces it again in DELETE mode; a host-configured WAL cache follows the
+missing-seal check described above. If the first-seal COMMIT keeps failing, each
+admission attempt makes exactly one replacement, fails closed with `storage_error`
+and serves nothing; the maintenance pump stops on that error and does not retry
+by itself, so retries are paced by the host starting the next pump. The admission
+quarantine does not apply to this failure.
+
+Previously every writable cold open ran SQLite `quick_check` and
+`foreign_key_check` over the entire cache. These audited database structure,
+constraints, and referential consistency. The cache is derived data: candidates
+are re-fetched from canonical storage and revalidated at delivery, and existing
+`SQLITE_CORRUPT` classifications still route to repair. The keyed seal permits
+bounded admission without repeating those whole-file statements. Status and
+coverage from unverified files confer no readiness or serving authority.

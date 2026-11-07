@@ -628,5 +628,5 @@ for(const writing of [false,true])test(`Fix2 ${writing?'writer':'reader'} checks
   else assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.reason,'storage_unavailable');
   assert.equal(changed,true);assert.notEqual(lstatSync(path).ino,before.ino);assert.equal(existsSync(path+'-journal'),false);
   t.mock.restoreAll();
-  assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.reason,'validation_invalid');
+  assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.reason,'storage_unavailable','the copied inode has an untrusted seal before certificate validation');
 });

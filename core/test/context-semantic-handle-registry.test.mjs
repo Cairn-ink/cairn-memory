@@ -12,6 +12,7 @@ import { admitMaintenance, maintenanceAdmissionReceipt } from '../context-produc
 import { openContextProductFacade } from '../context-read-facade.mjs';
 import { canonicalProductIdentity, productFile, PRODUCT_SIDECAR_SUFFIX } from '../context-product-sidecar.mjs';
 import { digest } from '../context-product-validation.mjs';
+import { attestCopiedSidecar } from '../testing/context-product-attested-copy-fixture.mjs';
 
 const hostUrl=new URL('./fixtures/context-semantic-handle-host.mjs',import.meta.url).href;
 async function bounded(promise,label) {
@@ -41,6 +42,9 @@ async function fixture(t,{twoStores=false}={}) {
     paths.push(second);
   }
   const side=s.f.path+PRODUCT_SIDECAR_SUFFIX,temporary=side+'.copy';copyFileSync(side,temporary);renameSync(temporary,side);
+  // Trust each copied physical file, retaining its foreign lexical certificates.
+  // Purge can then leave writable semantic views idle before lexical repair.
+  for(const path of paths)attestCopiedSidecar(path);
   s.options.backfillTargets=paths.map(canonicalPath=>({canonicalPath,readSet:[ns],types:['memory'],intents:['current','history']}));
   const coordinator=await bounded(openContextSemanticCoordinator(s.options),'coordinator');s.f.workspace.defer(()=>coordinator.close());
   ok(await bounded(coordinator.setOwnerSemantic({ownerId:ns.ownerId,semantic:true,expectedRevision:0},s.token),'enable'));

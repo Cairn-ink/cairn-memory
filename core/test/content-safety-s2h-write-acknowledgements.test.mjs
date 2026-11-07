@@ -207,6 +207,11 @@ test('r4 terminal rejection and its verified replay exempt only their own held r
 });
 
 test('r4 every literal identity-shaped acknowledgement field and projection occurrence requires classification',()=>{
+  // Admission envelope validation adds literal applicationId (1) and storeId
+  // (2): public schema/store binding fields with closed types, never secrets or
+  // writer acknowledgement identities. The sidecar decision-table comment's
+  // two 'invalid:' labels are counted as key:invalid by this textual census;
+  // neither is an executable field. The acknowledgement guard stays unchanged.
   // Include projections after storage returns, and string keys used by computed
   // objects. A new occurrence of an existing name also requires review.
   // R2 round 2: selected-row namespace validation adds existing owner/project
@@ -259,6 +264,9 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // Foreign-binding repair: the read-only disposal check adds one
   // validation_invalid failure-reason string in context-product-sidecar (6 -> 7).
   // It is not a canonical content identity or a writer acknowledgement field.
+  // Sidecar attestation: three attestation_invalid literals select the private
+  // open refusal, repair classification and child recheck verdict. They are
+  // failure-reason strings, with no writer acknowledgement field or guard change.
   // Card lineage: actorId/actor_id and host_action_id bind trusted Card authorization
   // requests and private audit rows. Card/source/namespace ids in the lineage
   // module, Card storage and offline migration bind retained provenance and
