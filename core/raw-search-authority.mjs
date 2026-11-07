@@ -164,6 +164,13 @@ export function createRawSearchAuthority(database, options) {
   const fencesByValue=new Map();
   const version = () => read(versionInside);
   function buildFence(expectedVersion, bounds) {
+    // Reuse only native statements within this rebuild, never their results.
+    let storeProbe,changeProbe;
+    read(()=>{
+      storeProbe=db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1');
+      changeProbe=db.prepare('PRAGMA data_version');
+    });
+    const versionInside=()=>{storeProbe.get();return changeProbe.get().data_version;};
     bounds??=read(()=>({conversations:db.prepare('SELECT coalesce(max(rowid),0) AS last FROM raw_conversations').get().last,
       messages:db.prepare('SELECT coalesce(max(rowid),0) AS last FROM raw_messages').get().last}));
     let remaining=50000;
@@ -189,7 +196,7 @@ export function createRawSearchAuthority(database, options) {
           ' ORDER BY '+order.join(',')+' LIMIT '+limit;
         const page=read(()=>{
           if(versionInside()!==expectedVersion)fail('source_unavailable');
-          return db.prepare(`SELECT count(*) AS count,json_group_array(json_array(${quoted.join(',')})) AS rows FROM (${bounded})`)
+          return db.prepare(`SELECT count(*) AS count,json_group_array(json_array(${quoted.join(',')})) AS rows,json_extract(json_group_array(json_array(${positions.map(index=>quoted[index]).join(',')})),'$[#-1]') AS cursor FROM (${bounded})`)
             .get(...(batch?[JSON.stringify(batch)]:[]),...args,...(partitions?[partitions[partitionIndex]]:[]),...(after?.slice(partitions?1:0)??[]));
         });
         remaining-=page.count;if(remaining<0)fail('source_budget_exceeded');
@@ -199,7 +206,7 @@ export function createRawSearchAuthority(database, options) {
           if(partitions){partitionIndex++;after=null;continue;}
           break;
         }
-        const last=JSON.parse(page.rows).at(-1);after=positions.map(index=>last[index]);
+        after=JSON.parse(page.cursor);
       }
       return {columns,pages};
     };
@@ -213,12 +220,15 @@ export function createRawSearchAuthority(database, options) {
       const seek=partitions?order.slice(1):order;
       while(true){
         if(partitions&&partitionIndex===partitions.length)break;
-        const page=read(()=>{
+        // Native metadata is already materialized. Cross the snapshot boundary
+        // as a value string, then decode outside SHARED instead of walking
+        // every row's property descriptors in the generic result validator.
+        const page=JSON.parse(read(()=>{
           if(versionInside()!==expectedVersion)fail('source_unavailable');
-          return db.prepare(`SELECT * FROM (${projection}) WHERE `+
+          return JSON.stringify(db.prepare(`SELECT * FROM (${projection}) WHERE `+
             (after?'('+seek.join(',')+')>('+seek.map(()=>'?').join(',')+')':'1')+
-            ' ORDER BY '+order.join(',')+' LIMIT 32').all(...args,...(partitions?[partitions[partitionIndex]]:[]),...(after?.slice(partitions?1:0)??[]));
-        });
+            ' ORDER BY '+order.join(',')+' LIMIT 32').all(...args,...(partitions?[partitions[partitionIndex]]:[]),...(after?.slice(partitions?1:0)??[])));
+        }));
         for(const row of page)visit(row);
         if(page.length<32){
           if(partitions){partitionIndex++;after=null;continue;}
