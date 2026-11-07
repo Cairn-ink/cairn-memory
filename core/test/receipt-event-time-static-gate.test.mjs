@@ -231,7 +231,7 @@ test('static gate rejects restoring a public flag on the layout authority', () =
 // Their full source is pinned, including the namespace uses and resolution fence.
 test('static gate pins the exact unresolved-loader allowlist and its reviewed source', () => {
   assert.deepEqual(moduleLoadingExceptions.map(({ file, line, expression }) => ({ file, line, expression })), [
-    { file: 'core/context-product-worker.mjs', line: 117, expression: 'import(workerData.host.moduleUrl)' },
+    { file: 'core/context-product-worker.mjs', line: 118, expression: 'import(workerData.host.moduleUrl)' },
     { file: 'core/context-semantic-worker.mjs', line: 502, expression: 'import(c.host.moduleUrl)' },
     { file: 'adapters/local-embedder/runtime.mjs', line: 53, expression: "import(pathToFileURL(join(pack.packPath, 'runtime/node_modules/@huggingface/transformers/dist/transformers.node.mjs')).href)" },
     { file: 'integrations/codex/qualification.mjs', line: 83, expression: "createRequire(launcher).resolve(packageName+'/package.json')" },
