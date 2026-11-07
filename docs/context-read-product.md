@@ -66,7 +66,15 @@ A `kind:'service'` issuance cannot open this reader. Service maintenance uses th
 `authorize` must verify its trusted issuance state, allowed method and **entire**
 `request.input`, including fetch fences/deadline, before returning the exact
 requestBinding as its method grant. The request also includes owner/namespaces,
-the parent-stamped requestControl and credentialBindingId. Returning a snapshot
+the parent-stamped requestControl and credentialBindingId. The deeply frozen
+request has an optional top-level `maintenancePhase` directly after `method`:
+`'admission'` for an engine admission turn and `'work'` for an engine work turn.
+Both retain `method:'refreshContextIndex'`. All other requests omit the key,
+including direct refresh, status, serving, semantic maintenance and suppression
+pull requests. The engine derives the phase from its own maintenance method;
+call inputs, options and message properties cannot supply it. `isCurrent` receives
+the same request object as `authorize`. The phase does not change the binding or
+the required grant equality. Returning a snapshot
 without verifying the complete operation binding is not a valid adapter.
 Additional trusted configuration can carry bounded SharedArrayBuffers for
 Worker-local publication checks. No raw bearer or function crosses IPC.

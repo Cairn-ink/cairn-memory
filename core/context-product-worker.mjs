@@ -121,7 +121,7 @@ try {
   phase?.mark('hostImported');
   host = await module.createContextReadHost(Object.freeze({ ...workerData.host.configuration, resourceOwner }));
   if (typeof host?.close === 'function') resourceOwner.register('lease', () => host.close());
-  const authorize = (method,payload,credential) => requestAuthority(host,binding,currentControl)(method,payload,credential);
+  const authorize = (method,payload,credential,maintenancePhase) => requestAuthority(host,binding,currentControl)(method,payload,credential,maintenancePhase);
   if(workerData.semanticConfig) {
     const {semanticClient}=await import('./context-semantic-client.mjs'); within(opening);
     semantic=semanticClient(workerData.semanticPort,workerData.semanticConfig,()=>currentOperation,{semanticOutstanding:()=>semanticTurn?.getStore()?.semanticOutstanding});

@@ -229,7 +229,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     try {
       facade.port.ready();
       const {payload,input}=validate(method,original);
-      access=authorize(method,payload,credential);
+      access=authorize(method,payload,credential,admitting?'admission':pumpWork?'work':undefined);
       const p={...input,ownerCoverage,deadlineAt:Math.min(cutoff,now()+ (input.deadlineMs??input.budget?.maxMs??1000))};
       if(method==='getContextIndexStatus') {
         const knownFailure=storage.prepareObservation();access.check(); return read(()=>{

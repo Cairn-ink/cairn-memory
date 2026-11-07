@@ -20,11 +20,11 @@ export function requestAuthority(host, binding, control) {
   if (!host || ['authorize', 'isCurrent'].some(k => typeof host[k] !== 'function' || types.isAsyncFunction(host[k]))) refuseAuthority('host_port');
   // The separate S2c pull protocol retains its existing authority contract.
   if(!binding.suppression)host=contentAuthorityPort(host,boundedData);
-  return function enter(method, payload, credential) {
+  return function enter(method, payload, credential, maintenancePhase) {
     if (credential === undefined || credential === null) refuseAuthority('credential_missing');
     boundedData(credential, 16384);
     if (credentialDigest(credential) !== binding.credentialDigest) refuseAuthority('credential_digest');
-    const request = deepFreeze({ method, input: payload, ownerId: binding.ownerId, namespaces: binding.namespaces,
+    const request = deepFreeze({ method, ...(maintenancePhase === 'admission' || maintenancePhase === 'work' ? { maintenancePhase } : {}), input: payload, ownerId: binding.ownerId, namespaces: binding.namespaces,
       requestControl: control, credentialBindingId: binding.credentialBindingId,
       ...(binding.suppression ? { suppression: binding.suppression } : {}) });
     let grant, authorizeReturned = false;
