@@ -30,9 +30,10 @@ function setup(t,{build=true,mode='DELETE',batching=false,state=new SharedArrayB
   const f=fixture(t),first=f.admit('attestation first canary'),second=f.admit('attestation second canary');
   const path=f.path+PRODUCT_SIDECAR_SUFFIX,p=selection,access=accessDigest({ownerId:ns.ownerId,namespaces:{readSet:[ns]}});
   const children=[],statements=[],executed=[],commits=[],transactions=new WeakMap(),sideDatabases=new WeakSet();
-  let clock=0,delayChecks=false,checks=0,storage,hook=()=>{},afterExec=()=>{};
+  let clock=0,delayChecks=false,checks=0,storage,hook=()=>{},afterExec=()=>{},onFiles=()=>{};
   const base=nativeObserver(),observer={...base,creation(work){return base.creation(()=>{const report=work();children.push(report);return report;});}};
-  const sqlite=createProductSqlitePolicy({observer,now:()=>clock});sqlite.start(Infinity);
+  const sqlite=createProductSqlitePolicy({observer,now:()=>clock}),files=sqlite.files;
+  sqlite.files=file=>{const check=files(file);return options=>{check(options);if(file===path)onFiles();};};sqlite.start(Infinity);
   const facade=openContextProductFacade(f.path,{sqlite});
   const prepare=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;
   t.mock.method(DatabaseSync.prototype,'prepare',function(text){
@@ -68,7 +69,7 @@ function setup(t,{build=true,mode='DELETE',batching=false,state=new SharedArrayB
   const options={path:f.path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,observer,sqlite,writable:true,sidecarJournalMode:mode,verificationBatching:batching,verificationBatchState:state,attribution,rendezvous,now:()=>clock};
   const s={f,path,p,access,first,second,facade,children,statements,executed,commits,state,
     get storage(){return storage;},get clock(){return clock;},get checks(){return checks;},
-    setHook(fn){hook=fn;},afterExec(fn){afterExec=fn;},setClock(n){clock=n;},delayChecks(){delayChecks=true;},
+    setHook(fn){hook=fn;},afterExec(fn){afterExec=fn;},onFiles(fn){onFiles=fn;},setClock(n){clock=n;},delayChecks(){delayChecks=true;},
     open(write=true){storage?.close();storage=factory({...options,writable:write});return storage;},
     observe(){return storage.observe(p,access);},
     finish(picked=p){for(let i=0;i<100;i++){storage.refresh(picked,access,{maxItems:32,maxMs:1000});const r=storage.observe(picked,access);if(r.publication)return r;}assert.fail('bounded rebuild converges');},
@@ -726,4 +727,18 @@ test('WAL sealing gap: legacy binding authentication shares the retirement trans
   assert.equal(injected,true);assert.equal(s.row(),null,'DDL and seal rolled back with refused retirement');
   assert.equal(other.prepare("SELECT count(*) n FROM validation_records WHERE record='unauthenticated'").get().n,1,'unauthenticated record was never retired');
   assert.equal(replacementCalls(s).length,0);
+});
+
+
+test('reused-handle opening deadline: expired file guard permits zero subsequent statements',t=>{
+  const s=setup(t);s.storage.admit(2000);
+  let expired=false;const statements=[];
+  s.onFiles(()=>{if(!expired){expired=true;s.setClock(2000);s.executed.length=0;s.statements.length=0;}});
+  s.setHook(text=>{if(expired)statements.push(text);});
+  assert.throws(()=>s.storage.admit(2000),{code:'read_timeout'});
+  assert.equal(expired,true);
+  // Lifecycle release and query_only restoration are cleanup, not new work.
+  assert.deepEqual(s.executed.filter(q=>q!=='ROLLBACK'&&!q.startsWith('PRAGMA query_only=')),[],'no BEGIN after cutoff');
+  assert.deepEqual(statements,[],'no query_only read, schema_version or other statement after cutoff');
+  t.diagnostic(JSON.stringify({expired,statements,executed:s.executed}));
 });

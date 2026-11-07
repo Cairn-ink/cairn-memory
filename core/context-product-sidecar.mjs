@@ -360,7 +360,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         if (!metadata || metadata.store_id!==identity.storeId) unavailable('wrong_store');
         checkAdmission?.();attest(admissionDatabase(side,checkAdmission));
         if (metadata.profile!==PRODUCT_PROFILE) unavailable('incompatible');
-      });
+      },checkAdmission);
       guardWritable=sideWritable;
       checkAdmission?.();
       return true;
