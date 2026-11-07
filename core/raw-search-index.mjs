@@ -1,3 +1,4 @@
+import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { rawSearchOptions,searchInput,immutable,same,RAW_SEARCH_VERSION,RAW_SEARCH_LIMITS } from './raw-search-input.mjs';
 import { fail } from './validation.mjs';
 import { performance } from 'node:perf_hooks';
@@ -14,9 +15,9 @@ const safeFailure = error => { fail(publicCodes.has(error?.code) ? error.code : 
 export async function openRawSearch(value) {
   if (value === undefined || value?.enabled === false) return null;
   const options=rawSearchOptions(value);
-  const [{openReadDatabase},{createRawSearchAuthority},{openRawSearchStorage},{createRawSearchMaintenance},retrieval,embedding,{sqliteFileStat},{withContentSuppressionRequest}]=await Promise.all([
+  const [{openReadDatabase},{createRawSearchAuthority},{openRawSearchStorage},{createRawSearchMaintenance},retrieval,embedding,{sqliteFileStat}]=await Promise.all([
     import('./read-database.mjs'),import('./raw-search-authority.mjs'),import('./raw-search-storage.mjs'),
-    import('./raw-search-maintenance.mjs'),import('./raw-search-retrieval.mjs'),import('./context-read-embedder.mjs'),import('./sqlite-journal-probe.mjs'),import('./content-suppression-storage.mjs')]);
+    import('./raw-search-maintenance.mjs'),import('./raw-search-retrieval.mjs'),import('./context-read-embedder.mjs'),import('./sqlite-journal-probe.mjs')]);
   let database,storage;
   try {
     const canonicalFile=()=>{
