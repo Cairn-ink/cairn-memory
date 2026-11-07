@@ -1,3 +1,4 @@
+import { refusalCause } from './context-product-refusal.mjs';
 import { reserveSidecarHandle } from './context-product-handles.mjs';
 import { bindMaintenanceAdmission, attachMaintenanceAdmissionReceipt } from './context-product-admission.mjs';
 import { setTimeout as safetyDelay } from 'node:timers/promises';
@@ -282,6 +283,11 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       else terminalFailure=noteFailure(value,kind,detail,null);
     }
     function workerSecondary(message,stage){const detail=readMaintenanceFailure(message.maintenanceSecondaryFailure);if(detail)noteSecondary(undefined,detail.kind,{...detail,stage});}
+    function workerFailure(message,code){
+      const detail=readMaintenanceFailure(message.maintenanceFailure)??failureFor(code);
+      return detail.kind==='engine'&&detail.engineCode==='authority_required'&&!Object.hasOwn(detail,'refusal')
+        ?{...detail,refusal:refusalCause(message.maintenanceRefusal)}:detail;
+    }
     function failureFor(code){return {kind:codes.has(code)?'engine':'unmapped',engineCode:code};}
     function shutdown(code, parentDeadline, cause) {
       closed = true; terminal ??= code; clearTimer(idle);
@@ -371,7 +377,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       if (!slot.open) registry.finish(slot.record);
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
       if (signalCancelled(slot.signal)) result = productFailure('read_cancelled');
-      if (slot.open && !result.ok) { shutdown(result.error.code,undefined,readMaintenanceFailure(message.maintenanceFailure)??failureFor(result.error.code));workerSecondary(message,'open'); return; }
+      if (slot.open && !result.ok) { shutdown(result.error.code,undefined,workerFailure(message,result.error.code));workerSecondary(message,'open'); return; }
       if (maintenance && !slot.open) {
         if(result.ok&&['admitMaintenance','refreshMaintenance'].includes(slot.method)) {
           const receipt=message.maintenanceAdmission;
@@ -427,7 +433,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         }
       }
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
-      if(maintenance&&!result.ok){const detail=readMaintenanceFailure(message.maintenanceFailure)??failureFor(result.error.code);noteFailure(result,detail.kind,detail,slot);workerSecondary(message,'refresh');}
+      if(maintenance&&!result.ok){const detail=workerFailure(message,result.error.code);noteFailure(result,detail.kind,detail,slot);workerSecondary(message,'refresh');}
       if(maintenance&&!slot.open&&result.ok)callFailure=undefined;
       if (slot.open) phase?.mark('openAccepted');
       else if (slot.method === 'fetchCandidateEvidence') phase?.mark('readAccepted');

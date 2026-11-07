@@ -44,7 +44,8 @@ const exceptions = frozenExceptions.map(entry => {
   if (entry.file !== 'core/context-product-worker.mjs') return entry;
   assert.equal(entry.sha256, '073071759a46698824ffd029a5fe48fbd737513c5c6936ba826b5d413be32bbe',
     'frozen pre-rebase Worker loader pin');
-  return { ...entry, line: 117, sha256: '240f21435db7fabbc70764a6563660aa9e5ceb3ce86f82f69c7449bc836328cc' };
+  // The hunk registers and transports refusal causes; it adds no loader or feature consumer.
+  return { ...entry, line: 120, sha256: '450a1105d9dc2ec7865f4a1261ad205acd5ebc2826ba7622b863bf11ca4b855e' };
 });
 export const moduleLoadingExceptions = exceptions;
 const cache = new Map();

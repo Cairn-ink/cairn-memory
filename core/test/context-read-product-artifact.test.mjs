@@ -42,10 +42,10 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   // S2h-1 storage, S2h-2's boundary, suppression grant grammar and three transaction validators, the gated B3 comparator,
   // the verification commit batch and semantic accounting stay behind the SQLite Worker boundary. Keep the exact closure
   // pin and independently verify the installed edges.
-  // Combined closure: 123 + 6 = 129 (main 128 + the attestation module).
+  // The side-effect-free refusal registry adds one module to both product closures.
   // The private checkpoint wall-cost estimator adds one Worker-only module. Card lineage adds the retained-lineage
   // implementation and exact base/lineage DDL, plus the offline installer's observation/classification dependencies.
-  assert.equal(expected.length, 129, 'private_maintenance_admission_closure_pin');
+  assert.equal(expected.length, 130, 'private_maintenance_admission_closure_pin');
   assert.ok(expected.includes('core/context-product-checkpoint-cost.mjs'));
   for (const file of ['core/card-lineage.mjs', 'core/card-lineage-schema.mjs', 'core/card-lineage-base-schema.mjs',
     'core/content-safety-observations.mjs', 'core/content-safety-classifier.mjs']) assert.ok(expected.includes(file), file);
@@ -95,7 +95,7 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   assert.ok(installed.includes('core/context-product-sqlite.mjs')); // P2d Worker dependency.
 
   const staticFiles = closure(artifact, ['core/context-product-reader.mjs', 'core/context-read-supervisor.mjs'], false);
-  assert.equal(staticFiles.length, 33, 'private admission bridge preserves the SQLite-free parent and engine-only pool');
+  assert.equal(staticFiles.length, 34, 'private admission bridge preserves the SQLite-free parent and engine-only pool');
   t.diagnostic(`runtime/Worker closure cross-check: source=${expected.length}, installed=${installed.length}; static SQLite-free closure=${staticFiles.length}`);
   // Bootstrap code is supplied by the host, copied into the installed tree;
   // it imports no source-checkout module and has no network/provider dependency.
