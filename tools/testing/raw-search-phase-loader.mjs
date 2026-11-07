@@ -1,0 +1,48 @@
+import {registerHooks} from 'node:module';
+
+// Opt-in measurement transforms only; the serving modules have no observer
+// callbacks. Each sample contains phase duration alone, with no source data.
+export function installPhaseMeasurement(){
+  const helper=new URL('./raw-search-phase-ledger.mjs',import.meta.url).href;
+  return registerHooks({load(url,context,next){
+    const result=next(url,context);
+    if(!/\/core\/raw-search-(index|authority|storage|retrieval)\.mjs$/.test(url))return result;
+    let source=typeof result.source==='string'?result.source:Buffer.from(result.source).toString('utf8');source+='\n__measurement_end__';
+    const replace=(before,after)=>{if(source.split(before).length!==2)throw Error('measurement_source_changed');source=source.replace(before,after);};
+    const wrap=(start,next,name)=>{
+      const a=source.indexOf(start),b=source.indexOf(next,a),end=source.lastIndexOf('\n'+start.match(/^ */)[0]+'}',b);
+      if(a<0||b<0||end<a)throw Error('measurement_phase_missing');
+      const brace=source.indexOf('{\n',a)+1;
+      source=source.slice(0,end)+'\n    }finally{sample('+JSON.stringify(name)+',performance.now()-phaseStart);}\n'+source.slice(end);
+      source=source.slice(0,brace)+'\n    const phaseStart=performance.now();try{'+source.slice(brace);
+    };
+    if(url.endsWith('/raw-search-index.mjs')){
+      wrap('    async function search(value,token)', '    async function searchAttempt','search');
+      replace(`database=openReadDatabase(options.path,{contextRead:true,busyTimeoutMs:0,preflight:openingCheck,
+      nativeObserver:{invoke(_kind,_label,work){openingCheck();return work();},database:native=>rawSearchSqlite(native,openingCheck)}});`,
+        `database=measured('canonical-open',()=>openReadDatabase(options.path,{contextRead:true,busyTimeoutMs:0,preflight:openingCheck,
+      nativeObserver:{invoke(_kind,_label,work){openingCheck();return work();},database:native=>rawSearchSqlite(native,openingCheck)}}));`);
+      replace('const result=retrieval.retrieveRaw(eligible,input.query,{vectors,queryVector,check:()=>expired(deadlineAt)});',
+        "const result=measured('hierarchy',()=>retrieval.retrieveRaw(eligible,input.query,{vectors,queryVector,check:()=>expired(deadlineAt)}));");
+    }else if(url.endsWith('/raw-search-authority.mjs')){
+      wrap('  function bindWithin(', '  const sourceIdentity','bounded-hash');
+      wrap('  function buildFence(', '  function fence(','commitment');
+      wrap('  function select(', '  async function open(','selection');
+      wrap('  function validate(', '  function reset(','final-validation');
+    }else if(url.endsWith('/raw-search-storage.mjs')){
+      wrap('export async function openRawSearchStorage(', '\n__measurement_end__','sidecar-open');
+      wrap('  function snapshotInside(', '  function publication(','snapshot');
+      wrap('  function publicationInside(', '  async function stage(','publication-shape');
+      replace('if (!row || row.signature !== sign(row.data,row.vectors))',"if (!row || row.signature !== measured('authentication',()=>sign(row.data,row.vectors)))");
+      replace('unpack(row.data,vectorBytes(row.vectors))',"measured('hint-decode',()=>unpack(row.data,vectorBytes(row.vectors)))");
+    }else{
+      // The vector loader is synchronous and has one terminal return.
+      replace('export function loadRawVectorBlocks(segments,metadata,check=()=>{}) {',
+        'export function loadRawVectorBlocks(segments,metadata,check=()=>{}) {const phaseStart=performance.now();try{');
+      replace('  return {blocks,offsets,positions,dimensions,blockVectors,count};\n}',
+        "  return {blocks,offsets,positions,dimensions,blockVectors,count};\n}finally{sample('vector-load',performance.now()-phaseStart);}}" );
+      source="import {performance} from 'node:perf_hooks';\n"+source;
+    }
+    return {...result,source:'import {sample,measured} from '+JSON.stringify(helper)+';\n'+source.replace('\n__measurement_end__','')};
+  }});
+}

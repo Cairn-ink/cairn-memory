@@ -793,3 +793,16 @@ encryption, restore/erasure and launch gates remain in force.
 See [local Raw V1 completion](raw-local-v1-completion.md) for the four remaining
 workstreams, bounded first packet and acceptance record. This exception does
 not mark any T01–T18, RL-1–RL-3 or product acceptance row as passed.
+
+
+### Optional local Raw search service
+
+The separately selected `raw-search-v1` service implements a derived local
+index and canonical Raw candidate/materialization interface. It does not select
+Raw saving or add context output. Existing capture, read and privacy mutation
+branches remain unchanged when it is absent or disabled. Hosted backend
+selection refuses. See [the interface](raw-search-interface.md) and
+[the host seam](raw-search-seam.md) for plaintext storage, explicit maintenance,
+current/history policy and final canonical validation. This optional service
+supersedes earlier statements that no Raw search implementation exists; it does
+not authorize automatic Cards or an additional context representation.

@@ -659,3 +659,16 @@ today's runtime: implementation summaries identify legacy behavior until RL-2.
 Tool output remains excluded unless chichi decides otherwise. KMS adoption,
 bulk deletion per tool and later plan-specific cap changes are separate work.
 The six accepted rows and the initial 200 MB cap are settled, not open questions.
+
+
+### Optional local Raw search service
+
+The separately selected `raw-search-v1` service implements a derived local
+index and canonical Raw candidate/materialization interface. It does not select
+Raw saving or add context output. Existing capture, read and privacy mutation
+branches remain unchanged when it is absent or disabled. Hosted backend
+selection refuses. See [the interface](raw-search-interface.md) and
+[the host seam](raw-search-seam.md) for plaintext storage, explicit maintenance,
+current/history policy and final canonical validation. This optional service
+supersedes earlier statements that no Raw search implementation exists; it does
+not authorize automatic Cards or an additional context representation.
