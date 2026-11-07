@@ -16,8 +16,8 @@ const schemaSql = [
   'CREATE TABLE product_attestation(singleton INTEGER PRIMARY KEY CHECK(singleton=1),stamp INTEGER NOT NULL CHECK(stamp>=1),record TEXT NOT NULL CHECK(length(record)<=4096)) STRICT',
 ];
 const schema = db => db.prepare('SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY name').all();
-function expectedSchema() {
-  const probe = new DatabaseSync(':memory:');
+function expectedSchema(check) {
+  const probe = rawSearchSqlite(new DatabaseSync(':memory:'),check);
   try { for (const sql of schemaSql) probe.exec(sql); return schema(probe); }
   finally { probe.close(); }
 }
@@ -58,11 +58,11 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
   for (const suffix of ['-wal','-shm']) if (stat(path+suffix)) fail('unsafe_index_file');
   const journal = stat(path+'-journal');
   if (journal) privateFile(path+'-journal');
-  check();
-  const db = rawSearchSqlite(new DatabaseSync(path),check);
   const sealKey = bind('raw-search-attestation-key-v1',binding);
   const sealFormat = {name:'raw-search',binding};
   const sealFile = sidecarAttestationFile(path);
+  check();
+  const db = rawSearchSqlite(new DatabaseSync(path),check);
   let sealing = false;
   let closed = false;
   function ready() {
@@ -88,22 +88,16 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
     if (db.prepare('PRAGMA journal_mode').get().journal_mode !== 'delete') fail('unsafe_index_file');
     const exists = db.prepare("SELECT 1 FROM sqlite_master WHERE name='header'").get();
     if (!exists) transaction(() => { for (const sql of schemaSql) db.exec(sql); });
-    const objects = schema(db), expected = expectedSchema();
-    const legacy = exists && !objects.some(row=>row.name==='product_attestation');
-    if (!same(objects,legacy?expected.filter(row=>row.name!=='product_attestation'):expected)) fail('index_corrupt');
+    const objects = schema(db), expected = expectedSchema(check);
+    if (!same(objects,expected)) fail('index_corrupt');
     const previous = db.prepare('SELECT * FROM header WHERE singleton=1').get();
-    if (!previous) transaction(() => db.prepare('INSERT INTO header VALUES(1,?,0,?,?)')
-      .run(JSON.stringify(binding),emptyCheckpoint(),signHeader(0,emptyCheckpoint())));
+    if (!previous) {
+      if (exists) fail('forged_index');
+      transaction(() => db.prepare('INSERT INTO header VALUES(1,?,0,?,?)')
+        .run(JSON.stringify(binding),emptyCheckpoint(),signHeader(0,emptyCheckpoint())));
+    }
     else {if (!same(JSON.parse(previous.binding),binding)) fail('foreign_index');header();}
-    if (exists && !legacy && !validSidecarAttestation(sealKey,readSidecarAttestation(db,objects),sealFile,sealFormat)) fail('forged_index');
-    // Old DELETE caches contain hints only. Discard their unauthenticated
-    // population once, sealing the reset atomically with its first write.
-    if (legacy) transaction(() => {
-      db.exec(schemaSql.at(-1));
-      db.prepare('DELETE FROM segments').run();
-      writeHeader(previous.sequence+1,emptyCheckpoint());
-      writeSidecarAttestation(db,sealKey,sealFile,sealFormat);
-    });
+    if (exists && !validSidecarAttestation(sealKey,readSidecarAttestation(db,objects),sealFile,sealFormat)) fail('forged_index');
     sealing = true;
     // Reserve rollback-journal pages and framing as part of the owner quota.
     // No second online generation or export is created by this backend.

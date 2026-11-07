@@ -49,27 +49,20 @@ for(const damage of ['record','stamp','copy'])test(`Raw sidecar rejects an inval
   }
   await assert.rejects(openRawSearchStorage(options),{code:'forged_index'});
 });
-test('legacy DELETE hints reset and receive their first seal in the same transaction',async t=>{
+test('legacy DELETE hints require explicit replacement without an unbounded reset',async t=>{
   const {options,store,path}=await storageFixture(t);
   await store.publish(await store.stage({key:'old'}),null);await store.close();
-  const db=new DatabaseSync(path);db.exec('DROP TABLE product_attestation');db.close();
-  const exec=DatabaseSync.prototype.exec,prepare=DatabaseSync.prototype.prepare;let sealed=false,reset=false;
-  DatabaseSync.prototype.exec=function(sql){
-    if(sql==='COMMIT'&&reset)assert.ok(sealed,'reset cannot commit without its seal');
-    return exec.call(this,sql);
-  };
-  DatabaseSync.prototype.prepare=function(sql){const statement=prepare.call(this,sql);
-    if(sql==='DELETE FROM segments'||sql.startsWith('INSERT INTO product_attestation')){
-      const run=statement.run;statement.run=function(...args){
-        assert.ok(this);const result=run.apply(this,args);
-        if(sql==='DELETE FROM segments')reset=true;else sealed=true;return result;
-      };
-    }
-    return statement;
-  };
-  t.after(()=>{DatabaseSync.prototype.exec=exec;DatabaseSync.prototype.prepare=prepare;});
-  const reopened=await openRawSearchStorage(options);t.after(()=>reopened.close());
-  assert.equal(reset,true);assert.equal(sealed,true);assert.equal((await reopened.snapshot()).rows.length,0);
+  const db=new DatabaseSync(path);
+  db.exec("DROP TABLE product_attestation; WITH RECURSIVE n(i) AS (VALUES(2) UNION ALL SELECT i+1 FROM n WHERE i<5000) INSERT INTO segments SELECT i,'legacy-'||i,'{}','legacy',X'',1 FROM n");
+  const before=db.prepare('SELECT count(*) AS n FROM segments').get();
+  const schema=db.prepare('SELECT type,name,sql FROM sqlite_schema ORDER BY name').all();db.close();
+  await assert.rejects(openRawSearchStorage(options),{code:'index_corrupt'});
+  const after=new DatabaseSync(path);
+  try {
+    assert.deepEqual(after.prepare('SELECT count(*) AS n FROM segments').get(),before);
+    assert.equal(before.n,5000);
+    assert.deepEqual(after.prepare('SELECT type,name,sql FROM sqlite_schema ORDER BY name').all(),schema);
+  } finally {after.close();}
 });
 for(const stage of ['prepare','step'])test(`Raw opening deadline stops before the next native ${stage} and closes the handle`,async t=>{
   const {options,store}=await storageFixture(t);await store.close();const set=clock(t);
