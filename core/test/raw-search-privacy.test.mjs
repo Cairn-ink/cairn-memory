@@ -35,7 +35,7 @@ for(const mode of ['DELETE','WAL'])test(`paged inventory refuses a writer commit
   const authority=createRawSearchAuthority(database,s.options),epochs=f.db.prepare('SELECT * FROM namespace_epochs').all();
   const exec=DatabaseSync.prototype.exec,prepare=DatabaseSync.prototype.prepare;let armed=false,moved=false;
   DatabaseSync.prototype.prepare=function(sql){
-    if(this===database.db&&sql.includes('json_group_array')&&sql.includes('FROM raw_conversations WHERE'))armed=true;
+    if(this===database.db&&sql.startsWith('SELECT * FROM (SELECT client,session_key,id FROM raw_conversations WHERE'))armed=true;
     return prepare.call(this,sql);
   };
   DatabaseSync.prototype.exec=function(sql){const value=exec.call(this,sql);
