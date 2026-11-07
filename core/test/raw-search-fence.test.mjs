@@ -196,9 +196,11 @@ test('cold first read declares deadline partial coverage using the functional cl
   const advance=clock(t),prepare=DatabaseSync.prototype.prepare;let pages=0,crossing;
   DatabaseSync.prototype.prepare=function(sql){
     const statement=prepare.call(this,sql);
-    if(sql.startsWith('SELECT * FROM (')){
-      const all=statement.all;
-      statement.all=function(...args){const rows=all.apply(this,args);pages++;
+    const method=sql.startsWith('SELECT * FROM (')?'all':
+      sql.startsWith('SELECT count(*) AS count,json_group_array')?'get':null;
+    if(method){
+      const execute=statement[method];
+      statement[method]=function(...args){const rows=execute.apply(this,args);pages++;
         if(pages===2){crossing=pages;advance(1001);}return rows;};
     }
     return statement;
