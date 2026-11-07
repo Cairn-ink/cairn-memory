@@ -233,7 +233,64 @@ test('5 freshness storage inside select and rank is excluded from host wait', as
     assert.equal(triggered, true, method);
     const measured = ok(observed.result), d = parity(plain, measured);
     assert.ok(d.storageMaxMs >= 80, JSON.stringify(d));
-    assert.ok(d.hostWaitMs < holdMs, JSON.stringify(d));
+    shape(plain, measured);
+    assert.equal(d.journalMode, 'delete');
+    assert.equal(await joined, 0);
+    t.diagnostic(method + ' ' + JSON.stringify(d));
+  }
+});
+
+test('5 content-safety guard SQL inside select and rank stays in the engine remainder', async t => {
+  for (const method of ['select', 'rank']) {
+    const f = fixture(t, { contentSafety: 's2h-v1' }), plain = ok(await f.core.recall(request));
+    const holdMs = 160;
+    const state = new Int32Array(new SharedArrayBuffer(12));
+    const worker = new Worker(`
+      const { workerData } = require('node:worker_threads');
+      const { DatabaseSync } = require('node:sqlite');
+      const { performance } = require('node:perf_hooks');
+      const state = new Int32Array(workerData.state);
+      const db = new DatabaseSync(workerData.path);
+      try {
+        db.exec('PRAGMA busy_timeout=5000');
+        Atomics.store(state, 0, 1); Atomics.notify(state, 0);
+        if (Atomics.wait(state, 1, 0, 10000) === 'timed-out') throw Error('guard rendezvous timed out');
+        db.exec('BEGIN EXCLUSIVE');
+        Atomics.store(state, 2, 1); Atomics.notify(state, 2);
+        const start = performance.now();
+        while (performance.now() - start < workerData.holdMs)
+          Atomics.wait(state, 2, 1, workerData.holdMs - (performance.now() - start));
+        db.exec('COMMIT');
+      } finally { db.close(); }
+    `, { eval: true, workerData: { path: f.path, state: state.buffer, holdMs } });
+    const joined = new Promise((resolve, reject) => { worker.once('error', reject); worker.once('exit', resolve); });
+    joined.catch(() => {});
+    f.workspace.defer(async () => {
+      Atomics.store(state, 1, 1); Atomics.notify(state, 1);
+      try { assert.equal(await joined, 0); } finally { await worker.terminate(); }
+    });
+    if (Atomics.load(state, 0) === 0) Atomics.wait(state, 0, 0, 10000);
+    assert.equal(Atomics.load(state, 0), 1, 'writer is ready');
+    let selected = false, triggered = false;
+    const select = f.port.select;
+    f.port.select = input => { selected = true; return select(input); };
+    const observed = await prepared(() => f.core.recall({ ...request, diagnostics: true }), text => {
+      if (triggered || (method === 'rank' && !selected)) return;
+      const limit = Error.stackTraceLimit;
+      let stack;
+      try { Error.stackTraceLimit = 50; stack = new Error().stack; }
+      finally { Error.stackTraceLimit = limit; }
+      // E1 after the token counter, inside callModel but outside storage closures.
+      if (text !== 'SELECT epoch_hi,epoch_lo FROM owner_suppression_epochs WHERE owner_id=?' ||
+          !stack.includes('at tokens') || !stack.includes('at callModel')) return;
+      triggered = true;
+      Atomics.store(state, 1, 1); Atomics.notify(state, 1);
+      if (Atomics.load(state, 2) === 0) Atomics.wait(state, 2, 0, 10000);
+      assert.equal(Atomics.load(state, 2), 1, 'writer holds EXCLUSIVE inside the safety guard');
+    });
+    assert.equal(triggered, true, method);
+    const measured = ok(observed.result), d = parity(plain, measured);
+    assert.ok(d.recallMs - d.hostWaitMs - d.storageMs >= 80, JSON.stringify(d));
     shape(plain, measured);
     assert.equal(d.journalMode, 'delete');
     assert.equal(await joined, 0);

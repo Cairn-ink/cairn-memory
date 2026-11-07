@@ -350,7 +350,7 @@ The diagnostics value is a frozen plain object with these keys in this order:
 | Key | Meaning |
 | --- | --- |
 | `recallMs` | Wall time from input validation to return of the engine recall function. |
-| `hostWaitMs` | Sum of elapsed times from each `select` or `rank` call until recall resumes after its await, including event-loop time lost to other work while waiting, less storage time within those calls. |
+| `hostWaitMs` | Sum of times from invoking each `select` or `rank` provider until its await resumes, including event-loop delay before resumption. |
 | `storageMs` | Sum of synchronous storage time at the `map`, `fetch`, `validateFresh`, `recentReceipts` and `finalize` closures passed to recall. Includes SQLite busy waits. |
 | `storageCalls` | Number of calls through those storage closures, a non-negative integer. |
 | `storageMaxMs` | Longest single synchronous storage call, including any native wait. |
@@ -358,7 +358,9 @@ The diagnostics value is a frozen plain object with these keys in this order:
 
 All times use `performance.now()` in milliseconds, sum unrounded values, and
 report non-negative numbers rounded to 0.1 ms. Host and storage times do not
-overlap: storage time in model-call freshness checks is excluded from host wait.
+overlap: freshness checks and content-safety guards run outside the provider await.
+Other synchronous engine work, including content-safety guard SQL around model
+calls and packing, appears only in `recallMs - hostWaitMs - storageMs`.
 `recallMs >= hostWaitMs + storageMs` up to rounding. These measurements do not
 set or change timeouts.
 
