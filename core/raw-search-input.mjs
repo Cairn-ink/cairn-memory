@@ -10,8 +10,9 @@ export const RAW_SEARCH_LIMITS = Object.freeze({ turns: 256, work: 50000, depth:
   anchors: 16, sourceBytes: 64000, sourceRows: 1024 });
 export const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 export const binary = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b));
-export const immutable = value => {
-  if (value && typeof value === 'object') { Object.values(value).forEach(immutable); Object.freeze(value); }
+export const immutable = (value,check=()=>{}) => {
+  check();
+  if (value && typeof value === 'object') { for(const child of Object.values(value))immutable(child,check); Object.freeze(value); }
   return value;
 };
 export function searchNamespace(value, ownerId) {

@@ -56,6 +56,26 @@ export function createRawSearchAuthority(database, options) {
   });
   const key = Buffer.from(read(() => db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get()).secret,'hex');
   const bind = (purpose,value) => createHmac('sha256',identity.cursor_secret).update(JSON.stringify([purpose,identity.store_id,value])).digest('base64url');
+  function bindWithin(purpose,value,at=Infinity) {
+    if(at===Infinity)return bind(purpose,value);
+    const hash=createHmac('sha256',identity.cursor_secret);
+    // Engine-owned JSON records only. Preserve JSON.stringify's exact bytes,
+    // checking between values; a projected page string holds at most 32 rows.
+    const write=value=>{
+      deadline(at);
+      if(Array.isArray(value)){
+        hash.update('[');for(let i=0;i<value.length;i++){if(i)hash.update(',');write(value[i]);}hash.update(']');
+      }else if(value&&typeof value==='object'){
+        hash.update('{');let first=true;
+        for(const key of Object.keys(value)){
+          const next=value[key];if(next===undefined||['function','symbol'].includes(typeof next))continue;
+          if(!first)hash.update(',');first=false;hash.update(JSON.stringify(key));hash.update(':');write(next);
+        }
+        hash.update('}');
+      }else hash.update(JSON.stringify(value)??'null');
+    };
+    write([purpose,identity.store_id,value]);deadline(at);return hash.digest('base64url');
+  }
   const sourceIdentity = { storeId: identity.store_id, cursorSecret: identity.cursor_secret };
   // Search refs bind immutable message/part manifests, not a conversation's
   // append counter. Other source readers retain their original revision query.
@@ -370,7 +390,7 @@ export function createRawSearchAuthority(database, options) {
       schema:db.prepare('PRAGMA schema_version').get(),version:db.prepare('PRAGMA user_version').get(),
       application:db.prepare('PRAGMA application_id').get()}));
     // Serialize/hash after each bounded canonical snapshot has released SHARED.
-    const value=bind('raw-search-inventory-fence-v3',[rows,schema,control,identities]);
+    const value=bindWithin('raw-search-inventory-fence-v3',[rows,schema,control,identities],at);
     if(version(at)!==expectedVersion)fail('source_changed');
     const record={version:expectedVersion,value,bounds};
     fencesByValue.set(value,record);
@@ -406,7 +426,7 @@ export function createRawSearchAuthority(database, options) {
     if(fence(expected,at)!==expected)fail('source_unavailable');
     return read(()=>{if(fenceInside(expected)!==expected)fail('source_unavailable');},at);
   }
-  function cacheKeyInside(publication,metadata) {
+  function cacheKeyInside(publication,metadata,at=Infinity) {
     const observed=versionInside();
     const namespaces=options.readSet.map(ns=>{
       const args=boundary(ns);
@@ -419,10 +439,10 @@ export function createRawSearchAuthority(database, options) {
       }
       return [ns,db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...args)??null,
         db.prepare(`SELECT generation FROM raw_exclusion_clocks WHERE ${where}`).get(...args)??null,
-        bind('raw-search-session-fences-v1',fences)];
+        bindWithin('raw-search-session-fences-v1',fences,at)];
     });
-    return bind('raw-search-cache-key-v1',[identity.store_id,options.ownerId,publication.generation,
-      publication.sequence,publication.revision,metadata,contentSuppressionFenceInside(db,options.ownerId),namespaces,observed]);
+    return bindWithin('raw-search-cache-key-v1',[identity.store_id,options.ownerId,publication.generation,
+      publication.sequence,publication.revision,metadata,contentSuppressionFenceInside(db,options.ownerId),namespaces,observed],at);
   }
   // Every key component is read in a single canonical snapshot. The final
   // delivery snapshot repeats this read, closing any scoring/provider wait.
@@ -430,7 +450,7 @@ export function createRawSearchAuthority(database, options) {
     database.assertFile();
     // An optional cache check must not set the shared reader's busy backoff:
     // a failed idle check cannot manufacture an error on a later operation.
-    return readTransaction(db,()=>timed(()=>cacheKeyInside(publication,metadata),at));
+    return readTransaction(db,()=>timed(()=>cacheKeyInside(publication,metadata,at),at));
   };
   function check(source,intent = 'history',at=Infinity) {
     return read(() => {
@@ -461,7 +481,7 @@ export function createRawSearchAuthority(database, options) {
       else eligible.push(row);
     }
     if(version(deadlineAt)!==observed)fail('source_changed');
-    return {eligible,denied,timedOut,version:observed,commit(){for(const [key,entry] of pending)eligibility.set(key,entry);}};
+    return {eligible,denied,timedOut,version:observed,commit(check=()=>{}){for(const [key,entry] of pending){check();eligibility.set(key,entry);}check();}};
   }
   async function open(source,intent = 'history',guard = () => {}) {
     const protectedDispatch = () => { check(source,intent); guard(); check(source,intent); };
@@ -489,7 +509,7 @@ export function createRawSearchAuthority(database, options) {
       for (const entry of entries) {
         if(entry.fence&&fenceInside(entry.fence)!==entry.fence)fail('source_unavailable');
         if(entry.version!==undefined&&versionInside()!==entry.version)throw Object.assign(new MemoryStoreError('source_changed'),{fence:entry.fence});
-        if(entry.cache && cacheKeyInside(entry.cache.publication,entry.cache.metadata)!==entry.cache.key)fail('source_unavailable');
+        if(entry.cache && cacheKeyInside(entry.cache.publication,entry.cache.metadata,at)!==entry.cache.key)fail('source_unavailable');
         // Without a complete commitment, every dependency remains mandatory.
         for (const source of predicates || !entry.fence ? entry.sources : [])
         if (!matches(source,inspectInside(source.ref,entry.intent))) fail('source_unavailable');

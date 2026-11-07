@@ -101,12 +101,12 @@ export async function openRawSearch(value) {
         const selection=authority.select(snapshot.rows,input.intent,deadlineAt);
         const {eligible,denied,timedOut}=selection;
         expired(deadlineAt);
-        const dependencies=eligible.map(row=>row.source);
+        const dependencies=eligible.map(row=>{expired(deadlineAt);return row.source;});
         const canonical=()=>{if(fence)authority.checkFence(fence,deadlineAt);else checkSources(dependencies,input.intent,deadlineAt);};
         const guard=()=>{ready();canonical();access(canonical);};
         let semantic={state:'bm25-only',reason:options.embedder?'partial_coverage':'disabled'},queryVector=null;
         const port=options.embedder;let query=input.queryVector;
-        const chunks=eligible.reduce((n,row)=>n+row.chunks.length,0);
+        const chunks=eligible.reduce((n,row)=>{expired(deadlineAt);return n+row.chunks.length;},0);
         const complete=current&&!denied&&!snapshot.partial&&!timedOut&&eligible.every(row=>same(row.embedder,metadata)&&row.chunks.every(c=>c.vector));
         if(port&&!query&&complete&&eligible.length&&embedding.semanticCapacity(chunks,port).eligible){
           try{
@@ -134,8 +134,8 @@ export async function openRawSearch(value) {
         const sources=fence?result.sources:dependencies;
         const publication=authority.bind('raw-search-publication-v1',[authority.identity,snapshot.sequence]);
         const proof=authority.bind('raw-search-proof-v1',[instance,publication,++serial]);
-        const candidates=result.rows.map(row=>{
-          const sources=row.turn.segments.map(s=>s.source),source=sources[0],ref=source.ref;
+        const candidates=result.rows.map(row=>{expired(deadlineAt);
+          const sources=row.turn.segments.map(s=>{expired(deadlineAt);return s.source;}),source=sources[0],ref=source.ref;
           const historical=sources.some(s=>s.classification.kind==='history-only');
           const bare=sources.some(s=>s.classification.kind==='current-eligible-bare');
           return {id:row.id,namespace:ref.namespace,conversationId:ref.conversationId,messageId:ref.messageId,
@@ -150,7 +150,7 @@ export async function openRawSearch(value) {
         // Work/population counters can describe denied/stale rows. Public coverage
         // reports limits and availability only; operational counts stay internal.
         coverage.scanned=null;coverage.expanded=null;
-        const output=immutable({version:RAW_SEARCH_VERSION,publication,candidates,coverage,semantic});
+        const output=immutable({version:RAW_SEARCH_VERSION,publication,candidates,coverage,semantic},()=>expired(deadlineAt));
         // Corpus statistics, rank competition, readiness and coverage use the
         // eligible snapshot plus its complete commitment. Direct contributors
         // additionally receive full predicates in the final canonical snapshot.
@@ -163,7 +163,7 @@ export async function openRawSearch(value) {
           borrowed=cache.install(cacheProof.key,eligible,vectors,metadata,snapshot.hintBytes,()=>expired(deadlineAt));
         }
         expired(deadlineAt);
-        selection.commit();
+        selection.commit(()=>expired(deadlineAt));
         retain(searches,proof,{dependencies,sources,fence,intent:input.intent,access,candidates},4);
         return output;
       }finally{vectors=null;borrowed?.release();residency?.release();}

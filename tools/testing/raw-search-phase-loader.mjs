@@ -23,6 +23,7 @@ export function installPhaseMeasurement(){
       replace('const result=retrieval.retrieveRaw(eligible,input.query,{vectors,queryVector,check:()=>expired(deadlineAt)});',
         "const result=measured('hierarchy',()=>retrieval.retrieveRaw(eligible,input.query,{vectors,queryVector,check:()=>expired(deadlineAt)}));");
     }else if(url.endsWith('/raw-search-authority.mjs')){
+      wrap('  function bindWithin(', '  const sourceIdentity','bounded-hash');
       wrap('  function buildFence(', '  function fence(','commitment');
       wrap('  function select(', '  async function open(','selection');
       wrap('  function validate(', '  function reset(','final-validation');

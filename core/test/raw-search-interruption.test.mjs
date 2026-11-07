@@ -2,8 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {performance} from 'node:perf_hooks';
+import {Hmac} from 'node:crypto';
+import {openReadDatabase} from '../read-database.mjs';
+import {createRawSearchAuthority} from '../raw-search-authority.mjs';
 import {sourceFixture,savedSource} from '../testing/raw-source-fixtures.mjs';
-import {searchFixture} from '../testing/raw-search-fixtures.mjs';
+import {searchFixture,safetySourceFixture} from '../testing/raw-search-fixtures.mjs';
 import {createFakeEmbedder,reserveSharedVectors,MAX_CACHE_BYTES} from '../context-read-embedder.mjs';
 
 const partial={version:'raw-search-v1',publication:null,candidates:[],
@@ -116,4 +119,26 @@ for(const phase of ['snapshot','selection','final'])test(`expiry in ${phase} rel
   };
   try{assert.deepEqual(await s.search({query:'copper'}),partial);assert.equal(crossed,true);}
   finally{DatabaseSync.prototype.prepare=prepare;}
+});
+test('bounded commitment and cache hashes preserve the original JSON digest',async t=>{
+  clock(t);
+  for(const factory of [sourceFixture,safetySourceFixture]){
+    const f=factory(t,{model:{extract:()=>({items:[{content:'Synthetic copper fact.',kind:'fact',confidence:.8,sourceIndices:[0]}]})}});
+    await savedSource(f,'Synthetic copper "telescope" with Unicode \u00e9.');const s=await searchFixture(f);
+    const reader=openReadDatabase(f.path,{contextRead:true});t.after(()=>reader.db.close());
+    const authority=createRawSearchAuthority(reader,s.options),ordinary=authority.fence();
+    authority.reset();assert.equal(authority.fence(undefined,1100),ordinary);
+    const publication={generation:'synthetic',sequence:1,revision:1},metadata={id:'synthetic',revision:'1',dimensions:2,normalization:'l2'};
+    assert.equal(authority.cacheKey(publication,metadata,1100),authority.cacheKey(publication,metadata));
+  }
+});
+test('expiry while hashing stops within one value and retains no commitment output',async t=>{
+  const {s}=await fixture(t);const advance=clock(t),update=Hmac.prototype.update;let updates=0;
+  Hmac.prototype.update=function(...args){
+    const result=update.apply(this,args);
+    if(new Error().stack.includes('at bindWithin')){updates++;if(updates===2)advance(1001);}
+    return result;
+  };
+  try{assert.deepEqual(await s.search({query:'copper'}),partial);assert.ok(updates>=2&&updates<=3);}
+  finally{Hmac.prototype.update=update;}
 });
