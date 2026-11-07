@@ -107,3 +107,7 @@ On Node 24.15.0, both isolated `npm ci` commands, `npm test`,
 were synthetic; no provider key, real model request or paid run was used.
 Independent Standards/Spec review and primary acceptance remain pending at
 this record point; no branch push or PR was made by the worker.
+
+The direct core recall contract additionally accepts optional boolean
+`diagnostics`, independent of these defaults. See [core recall diagnostics](../fetch-recall.md#optional-core-recall-diagnostics)
+for timing fields, millisecond units and the lazy journal cache. It is not exposed by client tools.

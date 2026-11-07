@@ -150,3 +150,7 @@ database remain; uninstall does not erase memories. Remove the dedicated secret
 through native configuration/your secret manager if no longer needed. Follow
 the installed core's stopped-store backup instructions. Forget is logical
 deletion, not secure disk erasure.
+
+The separate direct `core.recall` API supports optional boolean `diagnostics`.
+It is not a tool argument. See [core recall diagnostics](../../../docs/fetch-recall.md#optional-core-recall-diagnostics)
+for the timing fields, millisecond units and the lazy journal-mode cache per open core.

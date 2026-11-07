@@ -24,7 +24,7 @@ import { isStorageBusy, busyTimeoutOption } from './database.mjs';
 import { ADMISSION_LEASE_MS } from './episode-schema.mjs';
 import { episodeOptions, episodeClient } from './episode-storage.mjs';
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { createMemoryRuntime } from "./runtime.mjs";
+import { createMemoryRuntime, readRecallJournalMode } from "./runtime.mjs";
 import { createCaptureDeadline } from './capture-deadline.mjs';
 import { uniqueIds, memoryGuards, placementProposal } from './placement-input.mjs';
 import { countTokens, modelPortValue } from './model-budget.mjs';
@@ -867,8 +867,12 @@ export function createMemoryCore(input, internal) {
 
   async function recall(input) {
     try {
+      const started = input && Object.hasOwn(input, 'diagnostics') && input.diagnostics === true ? performance.now() : undefined;
       runtime.ready();
-      object(input, ['readSet', 'query', 'limit', 'includeQualification', 'contextMode', 'selectionMode']);
+      object(input, ['readSet', 'query', 'limit', 'includeQualification', 'contextMode', 'selectionMode', 'diagnostics']);
+      const enabled = Object.hasOwn(input, 'diagnostics') ? input.diagnostics : false;
+      if (typeof enabled !== 'boolean') throw new MemoryStoreError('invalid_input');
+      const diagnostics = enabled ? { hostWaitMs: 0, storageMs: 0, storageCalls: 0, storageMaxMs: 0 } : undefined;
       const includeQualification = Object.hasOwn(input, 'includeQualification') ? input.includeQualification : false;
       if (typeof includeQualification !== 'boolean') throw new MemoryStoreError('invalid_input');
       const contextMode = Object.hasOwn(input, 'contextMode') ? input.contextMode : undefined;
@@ -897,9 +901,7 @@ export function createMemoryCore(input, internal) {
         const page = navigation.pages.get(namespaceBinding(namespace));
         return page ? [{ namespace, indexRevision: page.epoch, suppressionEpoch: page.suppressionEpoch }] : [];
       }), includeQualification);
-      return success(await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
-        limit: count, map: (request) => mapPage(request, navigation), fetch, includeQualification, contextMode, selectionMode,
-        validateFresh,
+      const storage = { map: (request) => mapPage(request, navigation), fetch, validateFresh,
         recentReceipts: (ref, limit) => runtime.recentReceipts(namespaces[ref.namespaceIndex], ref, limit),
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
@@ -909,7 +911,30 @@ export function createMemoryCore(input, internal) {
         })), selected, namespaces.map((namespace) => ({ namespace,
           indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch,
           suppressionEpoch: navigation.pages.get(namespaceBinding(namespace)).suppressionEpoch })), includeQualification, contextMode),
-      }));
+      };
+      if (diagnostics) for (const name of Object.keys(storage)) {
+        const call = storage[name];
+        storage[name] = (...args) => {
+          const start = performance.now();
+          try { return call(...args); }
+          finally {
+            const elapsed = performance.now() - start;
+            diagnostics.storageMs += elapsed;
+            diagnostics.storageCalls++;
+            diagnostics.storageMaxMs = Math.max(diagnostics.storageMaxMs, elapsed);
+          }
+        };
+      }
+      const value = await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
+        limit: count, ...storage, includeQualification, contextMode, selectionMode, diagnostics });
+      if (diagnostics) {
+        const journalMode = readRecallJournalMode(runtime);
+        const ms = value => Math.round(Math.max(0, value) * 10) / 10;
+        value.diagnostics = Object.freeze({ recallMs: ms(performance.now() - started),
+          hostWaitMs: ms(diagnostics.hostWaitMs), storageMs: ms(diagnostics.storageMs),
+          storageCalls: diagnostics.storageCalls, storageMaxMs: ms(diagnostics.storageMaxMs), journalMode });
+      }
+      return success(value);
     } catch (error) { return failure(error); }
   }
 

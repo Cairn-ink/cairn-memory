@@ -97,3 +97,7 @@ Legacy qualified recall is unchanged. The artifact prompt hash is verified.
 
 The frozen real eight-case result remains semantic_failures_observed; no real
 model call or rescore occurred in this slice. Exact-head dual review pending.
+
+The direct core recall contract additionally accepts optional boolean
+`diagnostics`, independent of context mode. See [core recall diagnostics](../fetch-recall.md#optional-core-recall-diagnostics)
+for timing fields, millisecond units and the lazy journal cache. It is not exposed by client tools.

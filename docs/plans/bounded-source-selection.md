@@ -48,3 +48,7 @@ sources from query-dependent evidence views and scopes replacement to individual
 relations. Our inference: fixing the prefilter should be evaluated separately
 from fine-grained claim/state interpretation; sending more sources is not itself
 a state-tracking solution. Neither paper's reported scores are Cairn scores.
+
+The direct core recall contract additionally accepts optional boolean
+`diagnostics`, independent of selection mode. See [core recall diagnostics](../fetch-recall.md#optional-core-recall-diagnostics)
+for timing fields, millisecond units and the lazy journal cache. It is not exposed by client tools.

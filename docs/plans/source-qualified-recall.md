@@ -67,3 +67,7 @@ revision-bound rationale/dependency relation. Symmetric contradiction links are
 not that relation. This slice must not derive needs_reconfirmation as established
 state or invent choice B. It preserves the evidence available to the host, and
 does not demonstrate that model-produced qualifications are semantically right.
+
+The direct core recall contract additionally accepts optional boolean
+`diagnostics`, independent of qualification. See [core recall diagnostics](../fetch-recall.md#optional-core-recall-diagnostics)
+for timing fields, millisecond units and the lazy journal cache. It is not exposed by client tools.

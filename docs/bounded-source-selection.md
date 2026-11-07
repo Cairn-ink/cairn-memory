@@ -48,3 +48,8 @@ introduced. This is an opt-in architectural comparison motivated by a recorded
 Chinese prefilter omission, not a measured improvement in model accuracy.
 Scripted tests prove candidate preservation and isolation only. The immutable
 pilot is not rerun; a fresh frozen comparison must evaluate quality and cost.
+
+Direct core recall may additionally set `diagnostics: true` to report elapsed
+milliseconds and storage-call counts without changing selection. It is not a
+client tool argument. See [core recall diagnostics](fetch-recall.md#optional-core-recall-diagnostics),
+including the at-most-once successful journal read per open core.

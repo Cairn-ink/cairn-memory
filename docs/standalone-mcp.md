@@ -628,3 +628,7 @@ Check-config reports `episodeGenerationEnabled: false` and
 origins/end signals, event times and generation controls need the separately
 reviewed trusted producer integration. No hosted HTTP schema/default, version,
 telemetry or named-client compatibility claim changes here.
+
+Direct `core.recall` also accepts optional boolean `diagnostics`; this field is
+not exposed by `recall_memory` or other client tools. See [core recall diagnostics](fetch-recall.md#optional-core-recall-diagnostics) for the frozen timing object,
+millisecond units and lazy journal-mode cache.

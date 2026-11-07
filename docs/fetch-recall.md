@@ -336,3 +336,34 @@ The [S2c acceptance plan](plans/s2-fetch-recall.md) records the original scope;
 the [continuation plan](plans/recall-continuation.md) defines the current extension. Next:
 real provider/tokenizer integration with quality evaluation and a thin MCP host
 over this shared core. Existing [storage/retention limits](local-store.md) apply.
+
+## Optional core recall diagnostics
+
+Only direct `core.recall` calls accept the optional `diagnostics` input.
+Absent or `false` preserves the exact existing result and SQL sequence, with no
+new timer or listener. `true` appends one `diagnostics` key to a successful
+value. Any other value returns `invalid_input`. Failure envelopes are unchanged.
+MCP and other client tools do not expose this field.
+
+The diagnostics value is a frozen plain object with these keys in this order:
+
+| Key | Meaning |
+| --- | --- |
+| `recallMs` | Wall time from entry to return of the engine recall function. |
+| `hostWaitMs` | Sum of elapsed times from each `select` or `rank` call until recall resumes after its await, including event-loop time lost to other work while waiting. |
+| `storageMs` | Sum of synchronous storage time at the `map`, `fetch`, `validateFresh`, `recentReceipts` and `finalize` closures passed to recall. Includes SQLite busy waits. |
+| `storageCalls` | Number of calls through those storage closures, a non-negative integer. |
+| `storageMaxMs` | Longest single synchronous storage call, including any native wait. |
+| `journalMode` | Lowercase `delete`, `truncate`, `persist`, `memory`, `wal`, `off`, `other` or `unknown`. Unrecognized values map to `other`; a failed read reports `unknown`. |
+
+All times use `performance.now()` in milliseconds, sum unrounded values, and
+report non-negative numbers rounded to 0.1 ms. Host waits can include engine
+freshness checks, so host and storage times can overlap; do not add them to
+estimate total time. These measurements do not set or change timeouts.
+
+After a successful opted-in recall, the engine reads `PRAGMA journal_mode`
+lazily on its existing connection, at most once per open core after a successful
+read, and caches the result for that core's lifetime. No connection, file
+descriptor or attachment is added. A throwing read does not change the recall
+outcome and is not cached, allowing a later diagnostics recall to retry. The
+object contains only numbers and one enum string, with no memory content.
