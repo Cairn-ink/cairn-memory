@@ -139,6 +139,7 @@ for(const damage of ['legacy','missing','mac','stamp','identity'])test(`${damage
   else sql(s.path,db=>db.exec(damage==='legacy'?'DROP TABLE product_attestation':damage==='missing'?'DELETE FROM product_attestation':damage==='mac'?"UPDATE product_attestation SET record=replace(record,'mac','bad')":'UPDATE product_attestation SET stamp=stamp+1'));
   s.open(false);const refused=s.observe();assert.equal(refused.dto.lexical.state,'unavailable');assert.equal(refused.publication,null);assert.equal(refused.dto.coverage.status,'unavailable');
   assert.equal(refused.dto.coverage.byType.memory.eligible,null);s.open();s.storage.admit(2000);
+  if(damage==='legacy')assert.equal(s.checks,0,'DELETE missing-table admission runs zero whole-file statements');
   const empty=s.observe();assert.equal(empty.publication,null);assert.notEqual(empty.dto.lexical.state,'ready');assert.equal(empty.dto.coverage.status,'unavailable');
   assert.equal(replacementCalls(s).length,1);assert.equal(wholeChecks(replacementCalls(s)[0]),0);assert.equal(s.valid(),true);
   const after=s.finish();assert.notEqual(after.publication.generation.id,before.generation.id);

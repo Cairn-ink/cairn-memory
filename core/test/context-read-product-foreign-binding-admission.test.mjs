@@ -8,7 +8,7 @@ import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { openMemoryCore } from '../index.mjs';
 import { configured, personal } from '../testing/context-product-owner-fixture.mjs';
 import { admitMaintenance, refreshMaintenance, maintenanceAdmissionReceipt, PRODUCT_SIDECAR_SUFFIX } from '../context-product-admission.mjs';
-import { maintenanceObservation } from '../context-product-reader.mjs';
+import { maintenanceObservation, maintenanceFailureDiagnostic } from '../context-product-reader.mjs';
 import { createMaintenancePumpRuntime, maintenancePumpDiagnostic } from '../context-product-pump.mjs';
 import { randomUUID } from 'node:crypto';
 import { attestCopiedSidecar } from '../testing/context-product-attested-copy-fixture.mjs';
@@ -61,6 +61,7 @@ for(const checkpoint of [false,true])test(`real Worker: foreign ${checkpoint?'ch
 for(const fault of [1,2])test(`real Worker: repaired cache refuses ${fault===1?'a malformed seal':'an invalid stamp'}`,async t=>{
   const {service,control}=await copied(t);control[8]=fault;const h=await service.open();
   const r=await admitMaintenance(h,input,service.token);assert.equal(r.ok,false);assert.equal(r.error.code,'index_unavailable');assert.equal(maintenanceAdmissionReceipt(r),undefined);assert.equal(maintenanceObservation(r),undefined);
+  assert.equal(maintenanceFailureDiagnostic(r)?.reason,'other','seal rejection is attestation_invalid (private diagnostic: other), never wrong_store');
   assert.equal(control[2],0);assert.equal(control[3],0);assert.equal(control[14],2);assert.equal(control[4],2);await h.close();
 });
 for(const checkpoint of [false,true])test(`real Worker: authentication refuses tampered ${checkpoint?'progress':'publication'} before replacement`,async t=>{

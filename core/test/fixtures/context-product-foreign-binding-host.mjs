@@ -63,7 +63,8 @@ export async function createContextReadHost(configuration){
           }
           if(sql==='SELECT m.*,CAST(a.stamp AS TEXT) AS attestation_stamp,typeof(a.stamp) AS attestation_type,a.record AS attestation_record,a.singleton AS attestation_present FROM product_metadata m LEFT JOIN product_attestation a ON a.singleton=1 WHERE m.singleton=1'){
             const n=Atomics.add(c,14,1)+1,fault=Atomics.load(c,8);
-            if(n===2&&fault)return {stamp:fault===1?1:0,record:'synthetic invalid seal'};
+            if(n===2&&fault)return {...Reflect.apply(value,target,args),attestation_stamp:fault===1?'1':'0',
+              attestation_type:'integer',attestation_record:'synthetic invalid seal',attestation_present:1};
           }
           if(sql.startsWith('SELECT substr(record,')){
             Atomics.add(c,5,1);
