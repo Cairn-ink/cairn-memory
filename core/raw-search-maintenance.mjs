@@ -234,7 +234,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
       progress.phase=stopped?'failed':quotaBlocked?'partial':'idle';
       return {...progress,quantum,noProgress,pending:!!pending,...await storage.status()};
     } catch(error) {
-      if(error.code==='source_unavailable'){
+      if(['source_unavailable','source_busy','source_changed'].includes(error.code)){
         // A writer can also move during the bounded inventory snapshots.
         pending=null;progress.phase='idle';return {...progress,quantum,noProgress,pending:false};
       }

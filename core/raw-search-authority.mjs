@@ -378,6 +378,14 @@ export function createRawSearchAuthority(database, options) {
     return record;
   }
   function fence(expected,at=Infinity) {
+    try{return fenceAt(expected,at);}catch(error){
+      // Existing maintenance/direct callers keep their refusal contract.
+      // Searches and ticket operations pass a finite bound and may retry.
+      if(at===Infinity&&error.code==='source_changed')fail('source_unavailable');
+      throw error;
+    }
+  }
+  function fenceAt(expected,at) {
     const current=version(at);
     if(expected!==undefined){
       const record=fencesByValue.get(expected);
