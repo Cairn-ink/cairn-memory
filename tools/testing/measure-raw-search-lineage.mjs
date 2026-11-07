@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
 import { fork } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
+import {sharedOverlapMs} from './raw-search-writer-observer.mjs';
 import { Session } from 'node:inspector';
 import { transaction } from '../../core/database.mjs';
 import { writeContentSuppressionInside } from '../../core/content-suppression-storage.mjs';
@@ -95,12 +96,12 @@ function scanName(sql) {
 // No raw file descriptors, alternate SQLite binding, or runtime hook is used.
 function observe() {
   const prepare=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;
-  let current=null,unit=null;
+  let current=null,unit=null,sharedStart=null;
   DatabaseSync.prototype.exec=function(sql){
-    if(sql==='BEGIN')unit={statements:0,rows:0};
+    if(sql==='BEGIN'){unit={statements:0,rows:0};sharedStart=process.hrtime.bigint();}
     if(unit)unit.statements++;
     try{return exec.call(this,sql);}finally{
-      if((sql==='COMMIT'||sql==='ROLLBACK')&&unit){if(current)current.units.push(unit);unit=null;}
+      if((sql==='COMMIT'||sql==='ROLLBACK')&&unit){if(current){current.units.push(unit);current.intervals.push([String(sharedStart),String(process.hrtime.bigint())]);}unit=null;sharedStart=null;}
     }
   };
   const session=new Session(),scripts=new Map(),sources=new Map();session.connect();
@@ -157,12 +158,14 @@ function observe() {
     }
     return statement;
   };
-  function begin(label) {current={label,units:[],pages:[],versions:[],nativeErrors:[],exceptions:[],next:{},payloadReads:0};return current;}
+  function begin(label) {current={label,intervals:[],units:[],pages:[],versions:[],nativeErrors:[],exceptions:[],next:{},payloadReads:0};return current;}
   function end() {const value=current;current=null;return value;}
   return {begin,end,close(){DatabaseSync.prototype.prepare=prepare;DatabaseSync.prototype.exec=exec;session.post('Debugger.setPauseOnExceptions',{state:'none'});session.disconnect();}};
 }
 
 function attribution(trace,code) {
+  if(trace.exceptions.some(error=>error.description.includes('source_busy')))return 'canonical-busy';
+  if(trace.exceptions.some(error=>error.description.includes('search_deadline')))return 'deadline';
   if(trace.exceptions.some(error=>error.line.includes('entry.cache'))&&new Set(trace.versions.map(row=>row.value)).size>1)return 'version-move-before-final-snapshot';
   const exception=trace.exceptions.at(-1);
   if(exception) {
@@ -208,12 +211,12 @@ async function writer(path) {
   return {call,async close(){try{await call({operation:'stop'});assert.deepEqual(await exited,{code:0,signal:null},stderr);}finally{child.kill();}}};
 }
 
-export async function measureLineageProfile({profile,count,path,authority,service,host,input,sections,lineage}) {
+export async function measureLineageProfile({profile,count,path,authority,service,host,input,sections,sharedIntervals=[],lineage}) {
   const probe=observe(),writes=await writer(path),report={profile,turns:count,lineage};
   const samples=[],warm=[],errors=[];
   async function call(label,work) {
     probe.begin(label);const started=performance.now();
-    try{return {ok:true,value:await work(),ms:performance.now()-started,trace:probe.end()};}
+    try{const value=await work(),ms=performance.now()-started,trace=probe.end();return {ok:true,value,ms,trace,cause:trace.exceptions.length?attribution(trace,'interrupted'):undefined};}
     catch(error){const trace=probe.end();return {ok:false,code:error.code,ms:performance.now()-started,cause:attribution(trace,error.code),trace};}
   }
   try {
@@ -254,7 +257,7 @@ export async function measureLineageProfile({profile,count,path,authority,servic
       let random=0x59140;const rand=()=>{random=(Math.imul(random,1664525)+1013904223)>>>0;return random/2**32;};
       report.cadences=[];
       for(const cadenceMs of [2000,5000]) {
-        const rows=[],prepares=[],revalidations=[];let previousCommit=null;
+        const rows=[],prepares=[],revalidations=[],intervals=[];const intervalStart=sharedIntervals.length;let previousCommit=null;
         let ticket,candidate,ticketAt,candidateAt,expiredCandidatesSkipped=0,expiredTicketsSkipped=0;
         for(let attempt=0;attempt<16;attempt++) {
           const result=await call('setup',()=>service.search(input,host.token));
@@ -274,8 +277,9 @@ export async function measureLineageProfile({profile,count,path,authority,servic
           const startedOffsetMs=performance.now()-start;
           const result=await call('search',()=>service.search(input,host.token));
           const row={sample,afterCommit,scheduledOffsetMs:target-start,startedOffsetMs,...result,value:undefined};
-          if(result.ok){row.outcome=result.value.coverage.status==='complete'&&result.value.semantic.state==='ready'?'complete':result.value.candidates.length?'partial-with-candidates':'empty-partial';row.coverage=result.value.coverage;row.semantic=result.value.semantic;}
+          if(result.ok){row.outcome=result.value.coverage.status==='complete'?'complete':result.value.candidates.length?'partial-with-candidates':'empty-partial';row.coverage=result.value.coverage;row.semantic=result.value.semantic;}
           else row.outcome='error';
+          intervals.push(...result.trace.intervals);
           rows.push(row);
           if(result.ok&&result.value.candidates.length){candidate=result.value.candidates[0];candidateAt=performance.now();}
           if(candidate&&performance.now()-candidateAt<4500) {
@@ -292,14 +296,25 @@ export async function measureLineageProfile({profile,count,path,authority,servic
           console.log('measurement cadence-progress='+JSON.stringify({cadenceMs,sample,outcome:row.outcome,ms:row.ms,cause:row.cause}));
         }
         const stopped=await writes.call({operation:'pause'});
-        report.cadences.push({cadenceMs,seed:schedule.seed,commits:stopped.commits-schedule.commits,searches:rows,
+        const outcomes=Object.fromEntries(['complete','partial-with-candidates','empty-partial','error'].map(name=>[name,rows.filter(row=>row.outcome===name).length]));
+        const causes=values=>values.reduce((counts,row)=>{if(row.cause)counts[row.cause]=(counts[row.cause]??0)+1;return counts;},{});
+        const nativeIntervals=sharedIntervals.slice(intervalStart);
+        const writerCommits=(stopped.writerSamples??[]).map(tx=>({...tx,sharedOverlapMs:sharedOverlapMs(tx.start,tx.end,nativeIntervals),commitSharedOverlapMs:sharedOverlapMs(tx.commitStart,tx.end,nativeIntervals)}));
+        const writerAttribution=Object.fromEntries(['lockWaitMs','commitLockWaitMs','commitAndFsyncMs','checkpointMs','sharedOverlapMs','commitSharedOverlapMs'].map(key=>[key,summary(writerCommits.map(tx=>tx[key]))]));
+        const unavailableRate=(outcomes.error+outcomes['empty-partial'])/rows.length;
+        const refusals=prepares.concat(revalidations),refusalRate=refusals.filter(row=>!row.ok).length/refusals.length;
+        const e2e=summary(rows.map(row=>row.ms));
+        const compact=values=>values.map(({trace,value,...row})=>row);
+        report.cadences.push({cadenceMs,outcomes,unavailableRate,refusalRate,e2e,
+          gate:{unavailable:unavailableRate<=.01,refusals:refusalRate<=.01,e2e:e2e.p95<=1000},
+          attribution:{searches:causes(rows),refusals:causes(refusals.filter(row=>!row.ok))},writerAttribution,writerCommits,seed:schedule.seed,commits:stopped.commits-schedule.commits,searches:compact(rows),
           afterCommit:summary(rows.filter(row=>row.afterCommit).map(row=>row.ms)),
           withoutCommit:summary(rows.filter(row=>!row.afterCommit).map(row=>row.ms)),
           successfulAfterCommit:summary(rows.filter(row=>row.ok&&row.afterCommit).map(row=>row.ms)),
           successfulWithoutCommit:summary(rows.filter(row=>row.ok&&!row.afterCommit).map(row=>row.ms)),
           cache:{hits:rows.filter(row=>row.ok&&!row.trace.payloadReads).length,searches:rows.length,
             rate:rows.filter(row=>row.ok&&!row.trace.payloadReads).length/rows.length},
-          prepares,revalidations,expiredCandidatesSkipped,expiredTicketsSkipped});
+          prepares:compact(prepares),revalidations:compact(revalidations),expiredCandidatesSkipped,expiredTicketsSkipped});
       }
     }
     return report;

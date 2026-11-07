@@ -9,6 +9,11 @@ import { createRawSearchCache } from './raw-search-cache.mjs';
 
 const publicCodes = new Set(['invalid_input','invalid_query','invalid_read_set','authority_required','scope_changed',
   'stale_publication','store_closed','read_in_progress','maintenance_authority_required','raw_search_backend_unavailable']);
+const pageAllowanceMs=100;
+const expired = at => {if(performance.now()>=at)fail('search_deadline');};
+const interrupted = error => ['source_changed','source_busy','search_deadline'].includes(error?.code);
+const emptyPartial = () => immutable({version:RAW_SEARCH_VERSION,publication:null,candidates:[],
+  coverage:{status:'partial',scanned:null,expanded:null,causes:['deadline']},semantic:{state:'unknown',reason:null}});
 const safeFailure = error => { fail(publicCodes.has(error?.code) ? error.code : 'raw_search_unavailable'); };
 
 /** SQLite remains behind selection. Old engine constructors never call here. */
@@ -55,29 +60,49 @@ export async function openRawSearch(value) {
       while(map.size>=limit)map.delete(map.keys().next().value);
       map.set(key,{...entry,expires:performance.now()+5000});
     }
-    const checkSources=(sources,intent)=>{for(const source of sources)authority.check(source,intent);};
+    const checkSources=(sources,intent,at=Infinity)=>{for(const source of sources)authority.check(source,intent,at);};
+    async function retry(work,at,onExhausted) {
+      let moves=0,confirm;
+      while(true)try{expired(at);if(confirm)authority.checkFence(confirm,at);confirm=undefined;return await work(at);}catch(error){
+        if(!interrupted(error))throw error;
+        cache.drop();authority.reset();
+        if(error.code==='search_deadline')return onExhausted();
+        if(error.code==='source_changed'&&moves++>=1)return onExhausted();
+        confirm=error.fence;
+        const wait=error.code==='source_busy'?Math.max(0,authority.resume()-performance.now()):0;
+        if(at-performance.now()<wait+pageAllowanceMs)return onExhausted();
+        if(wait)await new Promise(resolve=>setTimeout(resolve,wait));
+        try{authority.refresh(at);}catch(next){if(!interrupted(next))throw next;}
+      }
+    }
     async function search(value,token) {
+      const at=performance.now()+1000;
+      return retry(deadlineAt=>searchAttempt(value,token,deadlineAt),at,emptyPartial);
+    }
+    async function searchAttempt(value,token,deadlineAt) {
       const input=searchInput(value),access=authority.authorize('rawSearch',input,token);access();
-      const deadlineAt=performance.now()+1000;
+      expired(deadlineAt);
       let cacheProof,borrowed,residency,vectors=null;
       try {
         let state=null;
         if(cacheEnabled)try{
-          const publication=storage.publication();
-          cacheProof={publication,metadata,key:authority.cacheKey(publication,metadata)};
+          const publication=storage.publication({deadlineAt});
+          cacheProof={publication,metadata,key:authority.cacheKey(publication,metadata,deadlineAt)};
           state=publication;borrowed=cache.acquire(cacheProof.key);
-        }catch{cache.drop();cacheProof=undefined;}
-        const snapshot=borrowed?{...state,rows:borrowed.rows}:await storage.search();access();
+        }catch(error){cache.drop();cacheProof=undefined;if(interrupted(error))throw error;}
+        const snapshot=borrowed?{...state,rows:borrowed.rows}:await storage.search({deadlineAt});expired(deadlineAt);access();
         // A concurrent publication between the optional header read and the
         // payload snapshot only defers caching. It adds no new search error.
         if(state&&snapshot.sequence!==state.sequence){cache.drop();cacheProof=undefined;}
         let current=false;
         let fence;
-        try{fence=authority.fence();current=snapshot.checkpoint.coverageComplete&&snapshot.checkpoint.fence===fence;}
+        try{fence=authority.fence(undefined,deadlineAt);current=snapshot.checkpoint.coverageComplete&&snapshot.checkpoint.fence===fence;}
         catch(error){if(error.code!=='source_budget_exceeded')throw error;}
-        const {eligible,denied,timedOut}=authority.select(snapshot.rows,input.intent,deadlineAt);
+        const selection=authority.select(snapshot.rows,input.intent,deadlineAt);
+        const {eligible,denied,timedOut}=selection;
+        expired(deadlineAt);
         const dependencies=eligible.map(row=>row.source);
-        const canonical=()=>{if(fence)authority.checkFence(fence);else checkSources(dependencies,input.intent);};
+        const canonical=()=>{if(fence)authority.checkFence(fence,deadlineAt);else checkSources(dependencies,input.intent,deadlineAt);};
         const guard=()=>{ready();canonical();access(canonical);};
         let semantic={state:'bm25-only',reason:options.embedder?'partial_coverage':'disabled'},queryVector=null;
         const port=options.embedder;let query=input.queryVector;
@@ -98,12 +123,14 @@ export async function openRawSearch(value) {
             if(!borrowed&&cacheProof)borrowed=cache.acquire(cacheProof.key);
             if(!borrowed){residency=embedding.reserveSharedVectors(chunks,port);if(!residency)fail('partial_coverage');}
             queryVector=embedding.validateVector(query.vector,port);
-            vectors=borrowed?borrowed.vectors:retrieval.loadRawVectorBlocks(eligible,port);
+            vectors=borrowed?borrowed.vectors:retrieval.loadRawVectorBlocks(eligible,port,()=>expired(deadlineAt));
             if(!vectors)fail('partial_coverage');
             semantic={state:'ready',reason:null};
-          }catch(error){vectors=null;queryVector=null;semantic={state:'bm25-only',reason:error.code==='partial_coverage'?'partial_coverage':'invalid_vector'};}
+          }catch(error){if(interrupted(error))throw error;vectors=null;queryVector=null;semantic={state:'bm25-only',reason:error.code==='partial_coverage'?'partial_coverage':'invalid_vector'};}
         }
-        const result=retrieval.retrieveRaw(eligible,input.query,{vectors,queryVector});
+        expired(deadlineAt);
+        const result=retrieval.retrieveRaw(eligible,input.query,{vectors,queryVector,check:()=>expired(deadlineAt)});
+        expired(deadlineAt);
         const sources=fence?result.sources:dependencies;
         const publication=authority.bind('raw-search-publication-v1',[authority.identity,snapshot.sequence]);
         const proof=authority.bind('raw-search-proof-v1',[instance,publication,++serial]);
@@ -124,45 +151,52 @@ export async function openRawSearch(value) {
         // reports limits and availability only; operational counts stay internal.
         coverage.scanned=null;coverage.expanded=null;
         const output=immutable({version:RAW_SEARCH_VERSION,publication,candidates,coverage,semantic});
-        retain(searches,proof,{dependencies,sources,fence,intent:input.intent,access,candidates},4);
         // Corpus statistics, rank competition, readiness and coverage use the
         // eligible snapshot plus its complete commitment. Direct contributors
         // additionally receive full predicates in the final canonical snapshot.
-        authority.validate([{sources,fence,cache:cacheProof,intent:input.intent,access,value:output}]);
+        authority.validate([{sources,fence,version:selection.version,cache:cacheProof,intent:input.intent,access,value:output}],deadlineAt);
+        expired(deadlineAt);
         if(cacheProof&&!borrowed&&!denied&&!timedOut&&(vectors||snapshot.partial)){
           // Transfer the operation's reservation synchronously. Admission failure
           // only leaves this operation uncached; it cannot change its result.
           residency?.release();residency=null;
-          borrowed=cache.install(cacheProof.key,eligible,vectors,metadata,snapshot.hintBytes);
+          borrowed=cache.install(cacheProof.key,eligible,vectors,metadata,snapshot.hintBytes,()=>expired(deadlineAt));
         }
+        expired(deadlineAt);
+        selection.commit();
+        retain(searches,proof,{dependencies,sources,fence,intent:input.intent,access,candidates},4);
         return output;
       }finally{vectors=null;borrowed?.release();residency?.release();}
     }
+    const refused=()=>fail('source_unavailable');
+    const classify=(candidate,settings,token)=>retry(at=>classifyAttempt(candidate,settings,token,at),performance.now()+1000,
+      ()=>immutable({kind:'denied',reason:'source-or-authority-unavailable'}));
+    const prepare=(candidate,settings,token)=>retry(at=>prepareAttempt(candidate,settings,token,at),performance.now()+1000,refused);
     function candidateEntry(candidate,intent) {
       const entry=searches.get(candidate?.proof);
       if(!entry||entry.expires<performance.now()||entry.intent!==intent||!entry.candidates.some(row=>same(row,candidate)))fail('stale_publication');
       return entry;
     }
-    async function classify(candidate,{intent='current'}={},token) {
+    async function classifyAttempt(candidate,{intent='current'}={},token,at) {
       if(!['current','history'].includes(intent))fail('invalid_input');
       try {
         const entry=candidateEntry(candidate,intent);
-        const canonical=()=>entry.fence?authority.checkFence(entry.fence):checkSources(entry.dependencies,intent);
+        const canonical=()=>entry.fence?authority.checkFence(entry.fence,at):checkSources(entry.dependencies,intent,at);
         canonical();
         const access=authority.authorize('rawSearchSource',{publication:candidate.publication,intent},token,
           canonical);
         access();
-        return authority.validate([{sources:entry.sources,fence:entry.fence,intent,access,value:candidate.classification}])[0];
-      }catch {return immutable({kind:'denied',reason:'source-or-authority-unavailable'});}
+        return authority.validate([{sources:entry.sources,fence:entry.fence,intent,access,value:candidate.classification}],at)[0];
+      }catch(error){if(interrupted(error))throw error;return immutable({kind:'denied',reason:'source-or-authority-unavailable'});}
     }
-    async function prepare(candidate,{intent='current'}={},token) {
+    async function prepareAttempt(candidate,{intent='current'}={},token,at) {
       if(!['current','history'].includes(intent))fail('invalid_input');
       const entry=candidateEntry(candidate,intent),dependencies=entry.dependencies;
-      const canonical=()=>entry.fence?authority.checkFence(entry.fence):checkSources(dependencies,intent);
+      const canonical=()=>entry.fence?authority.checkFence(entry.fence,at):checkSources(dependencies,intent,at);
       canonical();
       const access=authority.authorize('rawSearchSource',{candidate,intent},token,canonical);
       const guard=()=>{canonical();access(canonical);};guard();
-      const snapshot=await storage.snapshot();guard();
+      const snapshot=await storage.snapshot({deadlineAt:at});guard();
       if(candidate.publication!==authority.bind('raw-search-publication-v1',[authority.identity,snapshot.sequence]))fail('stale_publication');
       const rows=snapshot.rows.filter(row=>candidate.ranges.some(ref=>same(ref,row.source.ref)))
         .sort((a,b)=>a.source.ref.span.start-b.source.ref.span.start);
@@ -180,7 +214,7 @@ export async function openRawSearch(value) {
       const ticket=authority.bind('raw-search-prepared-v1',[candidate.proof,++serial]);
       const handle=Object.freeze({value:output,ticket,validate(){return revalidate([ticket])[0];}});
       retain(prepared,ticket,{sources:entry.sources,fence:entry.fence,intent,access,value:output,handle},RAW_SEARCH_LIMITS.preparations);
-      revalidate([ticket]);return handle;
+      try{revalidate([ticket]);}catch(error){prepared.delete(ticket);throw error;}return handle;
     }
     async function prepareSource(ref,{intent='current'}={},token) {
       if(!['current','history'].includes(intent))fail('invalid_input');
@@ -200,11 +234,21 @@ export async function openRawSearch(value) {
       return withContentSuppressionRequest(()=>revalidateInside(handles),{fresh:true});
     }
     function revalidateInside(handles) {
+      const at=performance.now()+1000;let moves=0,busy=0;
       try {
         ready();if(!Array.isArray(handles)||handles.length>RAW_SEARCH_LIMITS.preparations)fail('invalid_input');
         const entries=handles.map(handle=>{const entry=prepared.get(typeof handle==='string'?handle:handle?.ticket);
           if(!entry||entry.expires<performance.now()||typeof handle!=='string'&&entry.handle!==handle)fail('source_unavailable');return entry;});
-        return authority.validate(entries);
+        while(true)try{return authority.validate(entries,at);}catch(error){
+          if(!interrupted(error))throw error;
+          cache.drop();authority.reset();
+          if(error.code==='search_deadline'||error.code==='source_changed'&&moves++>=1||error.code==='source_busy'&&busy++>=1)throw error;
+          const wait=error.code==='source_busy'?Math.max(0,authority.resume()-performance.now()):0;
+          if(at-performance.now()<wait+pageAllowanceMs)throw error;
+          // This API is synchronous. The bounded backoff owns no read snapshot.
+          if(wait)Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,wait);
+          authority.refresh(at);
+        }
       }catch{fail('raw_search_unavailable');}
     }
     const status=()=>{

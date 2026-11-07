@@ -2,14 +2,14 @@ import { performance } from 'node:perf_hooks';
 import { createHash, createHmac } from 'node:crypto';
 import { readTransaction, isStorageBusy } from './database.mjs';
 import { installedContentLayout } from './content-safety-schema.mjs';
-import { contentSuppressionFenceInside } from './content-suppression-storage.mjs';
+import { contentSuppressionFenceInside,contentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { sourceReadSafety } from './content-safety.mjs';
 import { createCardRawSources } from './card-raw-sources.mjs';
 import { createRawSourceReader } from './raw-source-reader.mjs';
 import { rawSourceRef } from './raw-source-input.mjs';
 import { verifyPrivateGrant } from './private-card-facade.mjs';
 import { contentAuthorityPort } from './content-safety-boundary.mjs';
-import { fail } from './validation.mjs';
+import { fail,MemoryStoreError } from './validation.mjs';
 import { immutable, same, rawSourceHint } from './raw-search-input.mjs';
 import { rawSessionKeys } from './raw-source-roots.mjs';
 
@@ -23,13 +23,29 @@ export function createRawSearchAuthority(database, options) {
   // Engine-owned pure hashing, never a caller port or a raw filesystem read.
   db.function('raw_search_sealed_digest',{deterministic:true},value=>value===null?null:createHash('sha256').update(value).digest('hex'));
   let resumeAt=0;
-  const read = work => {
+  const deadline = at => {if(performance.now()>=at)fail('search_deadline');};
+  // Check before each native statement as well as each canonical snapshot.
+  // Cleanup runs after restoring prepare, so expiry cannot prevent ROLLBACK.
+  function timed(work,at) {
+    deadline(at);if(at===Infinity)return work();
+    const own=Object.getOwnPropertyDescriptor(db,'prepare'),prepare=db.prepare;
+    db.prepare=function(sql){
+      deadline(at);const statement=prepare.call(this,sql);
+      for(const method of ['get','all']){
+        const execute=statement[method];
+        statement[method]=function(...args){deadline(at);return execute.apply(this,args);};
+      }
+      return statement;
+    };
+    try{return work();}finally{if(own)Object.defineProperty(db,'prepare',own);else delete db.prepare;}
+  }
+  const read = (work,at=Infinity) => {
     database.assertFile();
-    if(performance.now()<resumeAt)fail('source_unavailable');
-    try{return readTransaction(db,work);}catch(error){
+    deadline(at);if(performance.now()<resumeAt)fail('source_busy');
+    try{return readTransaction(db,()=>timed(work,at));}catch(error){
       // A pending writer makes a fresh SHARED acquisition busy. Abandon the
       // quantum instead of waiting or repeatedly reacquiring ahead of capture.
-      if(isStorageBusy(error)){resumeAt=performance.now()+25;fail('source_unavailable');}
+      if(isStorageBusy(error)){resumeAt=performance.now()+25;fail('source_busy');}
       throw error;
     }
   };
@@ -162,8 +178,11 @@ export function createRawSearchAuthority(database, options) {
   };
   let cachedFence;
   const fencesByValue=new Map();
-  const version = () => read(versionInside);
-  function buildFence(expectedVersion, bounds) {
+  const authorityRead=read;
+  const version = (at=Infinity) => read(versionInside,at);
+  function buildFence(expectedVersion, bounds,at=Infinity) {
+    const read=work=>authorityRead(work,at);
+    deadline(at);
     // Reuse only native statements within this rebuild, never their results.
     let storeProbe,changeProbe;
     read(()=>{
@@ -195,7 +214,7 @@ export function createRawSearchAuthority(database, options) {
           (after?'('+seek.join(',')+')>('+seek.map(()=>'?').join(',')+')':'1')+
           ' ORDER BY '+order.join(',')+' LIMIT '+limit;
         const page=read(()=>{
-          if(versionInside()!==expectedVersion)fail('source_unavailable');
+          if(versionInside()!==expectedVersion)fail('source_changed');
           return db.prepare(`SELECT count(*) AS count,json_group_array(json_array(${quoted.join(',')})) AS rows,json_extract(json_group_array(json_array(${positions.map(index=>quoted[index]).join(',')})),'$[#-1]') AS cursor FROM (${bounded})`)
             .get(...(batch?[JSON.stringify(batch)]:[]),...args,...(partitions?[partitions[partitionIndex]]:[]),...(after?.slice(partitions?1:0)??[]));
         });
@@ -224,7 +243,7 @@ export function createRawSearchAuthority(database, options) {
         // as a value string, then decode outside SHARED instead of walking
         // every row's property descriptors in the generic result validator.
         const page=JSON.parse(read(()=>{
-          if(versionInside()!==expectedVersion)fail('source_unavailable');
+          if(versionInside()!==expectedVersion)fail('source_changed');
           return JSON.stringify(db.prepare(`SELECT * FROM (${projection}) WHERE `+
             (after?'('+seek.join(',')+')>('+seek.map(()=>'?').join(',')+')':'1')+
             ' ORDER BY '+order.join(',')+' LIMIT 32').all(...args,...(partitions?[partitions[partitionIndex]]:[]),...(after?.slice(partitions?1:0)??[])));
@@ -352,38 +371,44 @@ export function createRawSearchAuthority(database, options) {
       application:db.prepare('PRAGMA application_id').get()}));
     // Serialize/hash after each bounded canonical snapshot has released SHARED.
     const value=bind('raw-search-inventory-fence-v3',[rows,schema,control,identities]);
-    if(version()!==expectedVersion)fail('source_unavailable');
+    if(version(at)!==expectedVersion)fail('source_changed');
     const record={version:expectedVersion,value,bounds};
     fencesByValue.set(value,record);
     while(fencesByValue.size>512)fencesByValue.delete(fencesByValue.keys().next().value);
     return record;
   }
-  function fence(expected) {
-    const current=version();
+  function fence(expected,at=Infinity) {
+    const current=version(at);
     if(expected!==undefined){
       const record=fencesByValue.get(expected);
       if(!record)fail('source_unavailable');
-      return record.version===current?record.value:buildFence(current,record.bounds).value;
+      return record.version===current?record.value:buildFence(current,record.bounds,at).value;
     }
-    if(cachedFence?.version!==current)cachedFence=buildFence(current);
+    if(cachedFence?.version!==current)cachedFence=buildFence(current,undefined,at);
     fencesByValue.set(cachedFence.value,cachedFence);
     return cachedFence.value;
   }
   function fenceInside(expected) {
     const record=fencesByValue.get(expected);
-    if(!record||versionInside()!==record.version)fail('source_unavailable');
+    if(!record)fail('source_unavailable');
+    if(versionInside()!==record.version)throw Object.assign(new MemoryStoreError('source_changed'),{fence:expected});
     return record.value;
   }
-  function checkFence(expected) {
-    if(fence(expected)!==expected)fail('source_unavailable');
-    return read(()=>{if(fenceInside(expected)!==expected)fail('source_unavailable');});
+  function checkFence(expected,at=Infinity) {
+    if(fence(expected,at)!==expected)fail('source_unavailable');
+    return read(()=>{if(fenceInside(expected)!==expected)fail('source_unavailable');},at);
   }
   function cacheKeyInside(publication,metadata) {
     const observed=versionInside();
     const namespaces=options.readSet.map(ns=>{
       const args=boundary(ns);
-      const fences=db.prepare(`SELECT client,session_key FROM raw_session_fences WHERE ${where} ORDER BY client,session_key LIMIT 50001`).all(...args);
-      if(fences.length>50000)fail('source_budget_exceeded');
+      const fences=[];let after;
+      while(true){
+        const page=db.prepare(`SELECT client,session_key FROM raw_session_fences WHERE ${where}`+
+          (after?' AND (client,session_key)>(?,?)':'')+' ORDER BY client,session_key LIMIT 32').all(...args,...(after??[]));
+        fences.push(...page);if(fences.length>50000)fail('source_budget_exceeded');
+        if(page.length<32)break;after=[page.at(-1).client,page.at(-1).session_key];
+      }
       return [ns,db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...args)??null,
         db.prepare(`SELECT generation FROM raw_exclusion_clocks WHERE ${where}`).get(...args)??null,
         bind('raw-search-session-fences-v1',fences)];
@@ -393,24 +418,25 @@ export function createRawSearchAuthority(database, options) {
   }
   // Every key component is read in a single canonical snapshot. The final
   // delivery snapshot repeats this read, closing any scoring/provider wait.
-  const cacheKey = (publication,metadata) => {
+  const cacheKey = (publication,metadata,at=Infinity) => {
     database.assertFile();
     // An optional cache check must not set the shared reader's busy backoff:
     // a failed idle check cannot manufacture an error on a later operation.
-    return readTransaction(db,()=>cacheKeyInside(publication,metadata));
+    return readTransaction(db,()=>timed(()=>cacheKeyInside(publication,metadata),at));
   };
-  function check(source,intent = 'history') {
+  function check(source,intent = 'history',at=Infinity) {
     return read(() => {
       const next = inspectInside(source.ref,intent);
       if (!matches(source,next)) fail('source_unavailable');
       return next;
-    });
+    },at);
   }
   // Eligibility memoization is keyed by this read-only connection's native
   // change counter. It never bypasses per-port checks or final source checks.
   let eligibilityVersion;const eligibility=new Map();
   function select(rows,intent,deadlineAt) {
-    const observed=version();
+    const observed=version(deadlineAt);
+    const pending=new Map();
     if(eligibilityVersion!==observed){eligibility.clear();eligibilityVersion=observed;}
     const eligible=[];let denied=0,timedOut=false;
     for(const row of rows){
@@ -418,16 +444,16 @@ export function createRawSearchAuthority(database, options) {
       const key=row.source.canonical??fingerprint(row.source);
       let entry=eligibility.get(key);
       if(!entry){
-        try{const next=check(row.source);entry={classification:next.classification};}
+        try{const next=check(row.source,'history',deadlineAt);entry={classification:next.classification};}
         catch(error){if(!['source_unavailable','source_excluded','raw_crypto_unavailable'].includes(error.code))throw error;
           entry={denied:true};}
-        if(!entry.denied)eligibility.set(key,entry);
+        if(!entry.denied)pending.set(key,entry);
       }
       if(entry.denied||intent==='current'&&entry.classification.kind==='history-only')denied++;
       else eligible.push(row);
     }
-    if(version()!==observed)fail('source_unavailable');
-    return {eligible,denied,timedOut};
+    if(version(deadlineAt)!==observed)fail('source_changed');
+    return {eligible,denied,timedOut,version:observed,commit(){for(const [key,entry] of pending)eligibility.set(key,entry);}};
   }
   async function open(source,intent = 'history',guard = () => {}) {
     const protectedDispatch = () => { check(source,intent); guard(); check(source,intent); };
@@ -446,28 +472,35 @@ export function createRawSearchAuthority(database, options) {
     if (result.nextCursor || text.length !== source.ref.span.end-source.ref.span.start) fail('source_unavailable');
     return text;
   }
-  function validate(entries) {
+  function validate(entries,at=Infinity) {
     // Refresh commitments without holding one population-sized read snapshot.
-    for(const entry of entries)if(entry.fence)checkFence(entry.fence);
+    for(const entry of entries)if(entry.fence)checkFence(entry.fence,at);
     // Host callbacks precede the final snapshot. Complete commitments cover
     // aggregate-only dependencies; exact output contributors still run the full predicate.
     const inside = (predicates = true) => {
       for (const entry of entries) {
-        if(entry.cache && cacheKeyInside(entry.cache.publication,entry.cache.metadata)!==entry.cache.key)fail('source_unavailable');
         if(entry.fence&&fenceInside(entry.fence)!==entry.fence)fail('source_unavailable');
+        if(entry.version!==undefined&&versionInside()!==entry.version)throw Object.assign(new MemoryStoreError('source_changed'),{fence:entry.fence});
+        if(entry.cache && cacheKeyInside(entry.cache.publication,entry.cache.metadata)!==entry.cache.key)fail('source_unavailable');
         // Without a complete commitment, every dependency remains mandatory.
         for (const source of predicates || !entry.fence ? entry.sources : [])
         if (!matches(source,inspectInside(source.ref,entry.intent))) fail('source_unavailable');
       }
     };
-    const checkAll = () => read(()=>inside(false));
+    const checkAll = () => read(()=>inside(false),at);
     entries.forEach(entry => entry.access(checkAll));
     return read(() => {
       inside();
       return entries.map(entry => entry.value);
-    });
+    },at);
   }
-  return { read,identity:{storeId:identity.store_id,fileIdentity:database.fileIdentity,ownerId:options.ownerId,readSet:options.readSet},
+  function reset() {
+    cachedFence=undefined;eligibility.clear();eligibilityVersion=undefined;
+  }
+  function refresh(at=Infinity) {
+    read(()=>{contentSuppressionRequestInside(db,options.readSet,{refresh:true});},at);
+  }
+  return { reset,refresh,resume:()=>resumeAt,read,identity:{storeId:identity.store_id,fileIdentity:database.fileIdentity,ownerId:options.ownerId,readSet:options.readSet},
     bind,authorize,inventory,check,select,open,validate,fingerprint,fence,checkFence,cacheKey,
     inspect:(ref,intent='history')=>read(()=>inspectInside(ref,intent)) };
 }

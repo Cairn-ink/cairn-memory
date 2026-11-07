@@ -1,3 +1,4 @@
+import {observeCaptureWriter} from './raw-search-writer-observer.mjs';
 import { openRawCaptureCore } from '../../core/raw-capture.mjs';
 import { rawNamespace as namespace } from '../../core/testing/raw-fixtures.mjs';
 import { openDatabase,transaction } from '../../core/database.mjs';
@@ -6,6 +7,7 @@ const raw=openRawCaptureCore({path,model:{contextWindow:8192,countTokens:()=>1,e
   {mode:'raw-v1',lineage:true,deletion:true,port:{version:'raw-seal-v1',async sealRaw({text}){
     return {format:'local-plain-v1',keyVersion:null,sealed:Buffer.from(text)};},async openRaw(){throw Error('unused');}},
     readPolicy:()=>({generation:'synthetic',reason:null})});
+const attribution=observeCaptureWriter();let writerSamples=[];
 let commits=0,timer=null,queue=Promise.resolve(),failure=null,closed=false;
 async function capture() {
   const number=commits,id='cadence-capture-'+number,text='Synthetic unrelated capture '+number;
@@ -13,10 +15,10 @@ async function capture() {
     messages:[{id,role:'user',occurredAt:null,messageOrdinal:number+1,content:text,
       part:{index:0,start:0,totalUnits:text.length,totalBytes:Buffer.byteLength(text)}}]});
   if(!result.ok)throw Error(result.error.code);
-  commits++;return {commits};
+  commits++;writerSamples.push(...attribution.take());return {commits};
 }
 function clear(){if(timer!==null)clearInterval(timer);timer=null;}
-function close(){clear();if(!closed){closed=true;raw.close();}}
+function close(){clear();if(!closed){closed=true;attribution.close();raw.close();}}
 process.on('message',message=>{
   queue=queue.then(async()=>{
     if(failure)throw failure;
@@ -34,7 +36,7 @@ process.on('message',message=>{
       clear();const cadenceMs=message.cadenceMs;
       timer=setInterval(()=>{queue=queue.then(capture).catch(error=>{failure=error;clear();});},cadenceMs);
       value={commits,seed:0x59140};
-    }else if(message.operation==='pause')clear();
+    }else if(message.operation==='pause'){clear();value={commits,writerSamples};writerSamples=[];}
     else if(message.operation==='stop')close();
     process.send({id:message.id,...value});
     if(message.operation==='stop')process.disconnect();

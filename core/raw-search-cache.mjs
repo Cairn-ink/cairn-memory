@@ -37,7 +37,7 @@ export function createRawSearchCache({ enabled, checkKey, now = () => performanc
       if (now() - entry.usedAt >= RAW_SEARCH_CACHE_IDLE_MS || checkKey() !== entry.key) drop();
     } catch { drop(); } // Unavailable authority drops private hints silently.
   }
-  function install(key, rows, vectors, metadata, hintBytes) {
+  function install(key, rows, vectors, metadata, hintBytes,check=()=>{}) {
     if (!enabled || closed) return null;
     drop();
     // Account for the bounded hints and block indexing as well as fp32 payload.
@@ -45,8 +45,11 @@ export function createRawSearchCache({ enabled, checkKey, now = () => performanc
     const overhead = hintBytes * 4 + (vectors?.offsets.byteLength ?? 0) + rows.length * 64;
     const residency = reserveSharedVectors(vectors?.count ?? 0, metadata, overhead);
     if (!residency) return null;
-    entry = { key, rows:rows.map(row => ({ ...row, chunks:row.chunks.map(({vector,...chunk}) =>
-      ({...chunk, ...(vector ? {vector:true} : {})})) })), vectors, residency,
+    let hints;
+    try{hints=rows.map(row => {check();return {...row,chunks:row.chunks.map(({vector,...chunk}) => {
+      check();return {...chunk,...(vector?{vector:true}:{})};})};});}
+    catch(error){residency.release();throw error;}
+    entry = { key, rows:hints, vectors, residency,
       usedAt:now(), borrowers:0, retired:false };
     timer = setTimer(maintain, RAW_SEARCH_CADENCE_MS); timer?.unref?.();
     return borrow(entry);

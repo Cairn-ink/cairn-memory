@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {sharedOverlapMs} from './raw-search-writer-observer.mjs';
 import { performance } from 'node:perf_hooks';
 import { fork } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
@@ -30,13 +31,13 @@ export async function measureRawSearch(t,targets) {
     const {count,cap}=scenario;console.log('measurement phase=seed turns='+count);
     const ws=createTestWorkspace(null,{prefix:'raw-search-measure-'}),path=join(ws.path,'canonical.sqlite'),directory=join(ws.path,'index');
     mkdirSync(directory,{mode:0o700});
-    let db,reader,storage,service;
-    const originalExec=DatabaseSync.prototype.exec,starts=new WeakMap(),configured=new WeakSet(),sections=[],readWaits=[];
+    let db,reader,storage,service,retained=false;
+    const originalExec=DatabaseSync.prototype.exec,starts=new WeakMap(),configured=new WeakSet(),sections=[],readWaits=[],sharedIntervals=[],sharedStarts=new WeakMap();
     DatabaseSync.prototype.exec=function(sql){
       const began=performance.now(),value=originalExec.call(this,sql);
       if(sql==='BEGIN'){
         if(!configured.has(this)){
-          this.function('raw_search_measure_read',value=>{starts.set(this,performance.now());return value;});
+          this.function('raw_search_measure_read',value=>{starts.set(this,performance.now());sharedStarts.set(this,process.hrtime.bigint());return value;});
           configured.add(this);
         }
         // Measurement-only engine-owned probe: BEGIN alone owns no SHARED lock.
@@ -44,7 +45,7 @@ export async function measureRawSearch(t,targets) {
         this.prepare('SELECT raw_search_measure_read(store_id) FROM store_metadata WHERE singleton=1').get();
         readWaits.push(starts.get(this)-began);
       }else if((sql==='COMMIT'||sql==='ROLLBACK')&&starts.has(this)){
-        sections.push(performance.now()-starts.get(this));starts.delete(this);
+        sections.push(performance.now()-starts.get(this));sharedIntervals.push([sharedStarts.get(this),process.hrtime.bigint()]);starts.delete(this);sharedStarts.delete(this);
       }
       return value;
     };
@@ -119,7 +120,7 @@ export async function measureRawSearch(t,targets) {
       const factoryMs=performance.now()-factoryStart;
       const searchInput={query:'copper telescope',queryVector:{input:'copper telescope',embedder:{id:provider.id,revision:provider.revision,dimensions:1536,normalization:'l2'},vector:queryVector}};
       if(profile){
-        const report=await lineageTools.measureLineageProfile({profile,count,path,authority,service,host,input:searchInput,sections,lineage});
+        const report=await lineageTools.measureLineageProfile({profile,count,path,authority,service,host,input:searchInput,sections,sharedIntervals,lineage});
         report.indexedParts=built;
         report.checkpointError=checkpointError;
         report.measurement='synthetic lineage with native statement and exception observation';
@@ -133,6 +134,10 @@ export async function measureRawSearch(t,targets) {
           rebuildErrors:rebuildErrors?.map(row=>({code:row.code,cause:row.cause,ms:row.ms})),
           searchErrors:searchErrors?.map(row=>({code:row.code,cause:row.cause,ms:row.ms})),
           cadences:cadences?.map(row=>({cadenceMs:row.cadenceMs,commits:row.commits,searches:row.searches.length,afterCommit:row.afterCommit,withoutCommit:row.withoutCommit,cache:row.cache}))}));
+        if(process.env.CAIRN_RAW_MEASURE_FIXTURE_OUTPUT){
+          const own=(await import('node:fs')).statSync(ws.path);
+          writeFileSync(process.env.CAIRN_RAW_MEASURE_FIXTURE_OUTPUT,JSON.stringify({path:ws.path,dev:own.dev,inode:own.ino,count,lineage},null,2)+'\n');retained=true;
+        }
         reports.push(report);continue;
       }
       const apiErrors=[],prepareErrors=[],failedApiTimes=[];
@@ -223,7 +228,7 @@ export async function measureRawSearch(t,targets) {
       if(apiErrors.length||coldApiError)report.failures.push('search_unavailable');
       if(prepareErrors.length)report.failures.push('source_prepare_unavailable');
       reports.push(report);console.log('measurement result='+JSON.stringify(report));t.diagnostic(JSON.stringify(report));
-    }finally{DatabaseSync.prototype.exec=originalExec;await service?.close();await storage?.close();reader?.db.close();db?.close();await ws.cleanup();}
+    }finally{DatabaseSync.prototype.exec=originalExec;await service?.close();await storage?.close();reader?.db.close();db?.close();if(!retained)await ws.cleanup();}
   }
   if(!profile)assert.deepEqual(reports.flatMap(report=>report.failures),[],'frozen performance targets');
 }
@@ -268,12 +273,15 @@ async function captureBurst(path,phase,count){
   const finish=async()=>{try{const rows=await done;assert.deepEqual(await exited,{code:0,signal:null},stderr);return rows;}finally{clearTimeout(timer);child.kill();}};
   return {started,finish};
 }
-async function captureContention(path,service,token,targets){
+export async function captureContention(path,service,token,targets){
   const baselineRun=await captureBurst(path,'baseline',targets.captureSamples);await baselineRun.started;const baseline=await baselineRun.finish();
-  const original=DatabaseSync.prototype.exec,active=new WeakMap(),intervals=[];
+  const original=DatabaseSync.prototype.exec,active=new WeakMap(),intervals=[],configured=new WeakSet();
   DatabaseSync.prototype.exec=function(sql){
     const value=original.call(this,sql);
-    if(sql==='BEGIN')active.set(this,process.hrtime.bigint());
+    if(sql==='BEGIN'){
+      if(!configured.has(this)){this.function('raw_search_capture_hold',value=>{active.set(this,process.hrtime.bigint());return value;});configured.add(this);}
+      this.prepare('SELECT raw_search_capture_hold(store_id) FROM store_metadata WHERE singleton=1').get();
+    }
     else if((sql==='COMMIT'||sql==='ROLLBACK')&&active.has(this)){
       intervals.push([active.get(this),process.hrtime.bigint()]);active.delete(this);
     }
@@ -293,7 +301,15 @@ async function captureContention(path,service,token,targets){
     rows=await writing;
   }finally{DatabaseSync.prototype.exec=original;}
   const overlap=rows.filter(row=>intervals.some(([start,end])=>BigInt(row.start)<end&&BigInt(row.end)>start));
-  return {baseline:summary(baseline.map(row=>row.ms)),contended:summary(rows.map(row=>row.ms)),overlap:summary(overlap.map(row=>row.ms)),
+  const annotate=values=>values.flatMap(row=>(row.transactions??[]).map(tx=>({...tx,
+    sharedOverlapMs:sharedOverlapMs(tx.start,tx.end,intervals),
+    commitSharedOverlapMs:sharedOverlapMs(tx.commitStart,tx.end,intervals)})));
+  const baselineCommits=annotate(baseline),contendedCommits=annotate(rows),overlapCommits=contendedCommits.filter(tx=>tx.sharedOverlapMs>0);
+  const components=values=>Object.fromEntries(['lockWaitMs','commitLockWaitMs','commitAndFsyncMs','checkpointMs','sharedOverlapMs','commitSharedOverlapMs']
+    .map(key=>[key,summary(values.map(row=>row[key]))]));
+  return {writerAttribution:{method:'zero-timeout bounded lock retries; successful COMMIT includes fsync; DELETE journal checkpoint is zero',
+    baseline:components(baselineCommits),contended:components(contendedCommits),overlap:components(overlapCommits),
+    commits:{baseline:baselineCommits,contended:contendedCommits}},baseline:summary(baseline.map(row=>row.ms)),contended:summary(rows.map(row=>row.ms)),overlap:summary(overlap.map(row=>row.ms)),
     writerBegin:{baseline:summary(baseline.map(r=>r.beginMs)),contended:summary(rows.map(r=>r.beginMs))},writerCommit:{baseline:summary(baseline.map(r=>r.commitMs)),contended:summary(rows.map(r=>r.commitMs))},sharedSections:summary(intervals.map(([start,end])=>Number(end-start)/1e6)),maintenanceError,maintenanceStatus,maintainCalls};
 }
 

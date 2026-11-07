@@ -193,13 +193,19 @@ test('missing commitment declares partial lexical coverage and checks all depend
 
 test('cold first read declares deadline partial coverage using the functional clock',async t=>{
   const f=sourceFixture(t);await savedSource(f,'copper retained');const s=await searchFixture(f);await s.maintain();await s.reopen();
-  const advance=clock(t),prepare=DatabaseSync.prototype.prepare;let coldLoads=0;
+  const advance=clock(t),prepare=DatabaseSync.prototype.prepare;let pages=0,crossing;
   DatabaseSync.prototype.prepare=function(sql){
-    if(sql.startsWith('SELECT s.*,h.sequence')){coldLoads++;advance(1001);}
-    return prepare.call(this,sql);
+    const statement=prepare.call(this,sql);
+    if(sql.startsWith('SELECT * FROM (')){
+      const all=statement.all;
+      statement.all=function(...args){const rows=all.apply(this,args);pages++;
+        if(pages===2){crossing=pages;advance(1001);}return rows;};
+    }
+    return statement;
   };
   t.after(()=>{DatabaseSync.prototype.prepare=prepare;});
   const result=await s.search({query:'copper'});
-  assert.equal(coldLoads,1);assert.equal(result.coverage.status,'partial');assert.ok(result.coverage.causes.includes('deadline'));
-  assert.equal(result.semantic.state,'bm25-only');assert.equal(result.candidates.length,0);
+  assert.equal(crossing,2);assert.ok(pages<=crossing+1);
+  assert.deepEqual(result,{version:'raw-search-v1',publication:null,candidates:[],
+    coverage:{status:'partial',scanned:null,expanded:null,causes:['deadline']},semantic:{state:'unknown',reason:null}});
 });

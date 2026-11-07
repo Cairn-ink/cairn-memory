@@ -128,7 +128,7 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
   }
   const stagedKey = row => {if(row.signature!==sign(row.data,row.vectors))fail('forged_index');
     const data=JSON.parse(row.data);if((Array.isArray(data)?data[0]:data.key)!==row.key)fail('forged_index');};
-  async function snapshot({ after = 0, limit = RAW_SEARCH_LIMITS.work } = {}) {
+  async function snapshot({ after = 0, limit = RAW_SEARCH_LIMITS.work,deadlineAt=Infinity } = {}) {
     ready();
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > RAW_SEARCH_LIMITS.work) fail('invalid_input');
     // One statement owns the snapshot, including its publication sequence.
@@ -140,6 +140,7 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
     // segments. Closing it also releases its single-statement read snapshot.
     const iterator=statement.iterate(after,limit+1);
     try{while(true){
+      if(performance.now()>=deadlineAt)fail('search_deadline');
       const start=performance.now(),step=iterator.next();timings.sqliteMs+=performance.now()-start;
       if(step.done)break;const row=step.value;
       if(checkpoint===undefined&&(row.header_binding!==JSON.stringify(binding)||row.header_signature!==signHeader(row.sequence,row.checkpoint)))fail('forged_index');
@@ -153,7 +154,7 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
     }}finally{iterator.return();}
     return {sequence,checkpoint,rows,partial,partialReason,hintBytes:bytes,vectorBytes:vectorSize,timings};
   }
-  function publication({shape=true}={}) {
+  function publication({shape=true,deadlineAt=Infinity}={}) {
     ready();
     // Native change detection also invalidates on an out-of-band sidecar write
     // that did not advance the signed publication clock. One sidecar snapshot
@@ -166,6 +167,7 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
         .iterate(RAW_SEARCH_LIMITS.work+1);
       let hintBytes=0,vectorBytes=0,count=0,partial=false,partialReason=null;
       try{for(const row of iterator){
+        if(performance.now()>=deadlineAt)fail('search_deadline');
         if(count===RAW_SEARCH_LIMITS.work||hintBytes+row.hints>RAW_SEARCH_LIMITS.snapshotBytes){
           partial=true;partialReason=count===RAW_SEARCH_LIMITS.work?'inventory_limit':'snapshot_byte_limit';break;
         }

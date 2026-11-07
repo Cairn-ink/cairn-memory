@@ -23,6 +23,25 @@ The selected handle provides:
   rangeClassifications, publication, proof }`, with no prose. Each range is an
   authenticated canonical Raw ref. `proof` is an opaque, service-local binding
   to the complete ranking dependency manifest. Do not modify candidates.
+- A search whose commitment cannot be confirmed within its deadline returns
+  this exact constant result, including after its bounded version retry or
+  exhausted canonical busy backoff:
+
+  ```json
+  {"version":"raw-search-v1","publication":null,"candidates":[],"coverage":{"status":"partial","scanned":null,"expanded":null,"causes":["deadline"]},"semantic":{"state":"unknown","reason":null}}
+  ```
+
+  The single owner-neutral cause also covers contention and version movement;
+  it never identifies another owner's write. No count, identity, score, hint,
+  proof or ticket comes from interrupted work. No interrupted cache, vector
+  reservation or eligibility memo survives. A retry starts the rebuild afresh.
+  Consumers must render this as incomplete and count it as unavailable, never
+  as a successful search with no matches. When the source population bound
+  instead prevents a commitment, the existing full dependency validation path
+  may still return declared partial candidates within the same deadline.
+  Earlier tickets still require confirmation and refuse if it cannot finish.
+  Synchronous ticket validation may spend one bounded, snapshot-free busy
+  backoff before refusing. No read snapshot spans an await or a backoff.
 - Each classification is `{ kind, reason }`. Kinds are `denied`,
   `current-eligible-bare`, `current-eligible-linked`, and `history-only`.
   Demonstrably bare sources have complete privacy checks and no Memory link;

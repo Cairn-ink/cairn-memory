@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { performance } from 'node:perf_hooks';
+import {observeCaptureWriter} from '../../tools/testing/raw-search-writer-observer.mjs';
 import { openMemoryCore } from '../contract.mjs';
 import { openDatabase } from '../database.mjs';
 import { transaction } from '../database.mjs';
@@ -16,6 +17,7 @@ process.once('message',async({operation,input})=>{
         {mode:'raw-v1',lineage:true,deletion:true,port:{version:'raw-seal-v1',async sealRaw({text}){
           return {format:'local-plain-v1',keyVersion:null,sealed:Buffer.from(text)};},async openRaw(){throw Error('unused');}},
         readPolicy:()=>({generation:'synthetic',reason:null})});
+      const previousExec=DatabaseSync.prototype.exec,attribution=observeCaptureWriter();
       try {
         const samples=[];let beginMs=0,commitMs=0;
         const exec=DatabaseSync.prototype.exec;
@@ -28,14 +30,14 @@ process.once('message',async({operation,input})=>{
             messages:[{id,role:'user',occurredAt:null,messageOrdinal:i+1,content:text,
               part:{index:0,start:0,totalUnits:text.length,totalBytes:Buffer.byteLength(text)}}]});
           const end=process.hrtime.bigint();if(!value.ok)throw Error(value.error.code);
-          samples.push({start:String(start),end:String(end),ms:Number(end-start)/1e6,beginMs,commitMs});
+          samples.push({start:String(start),end:String(end),ms:Number(end-start)/1e6,beginMs,commitMs,transactions:attribution.take()});
           if(samples.length%20===0)process.send({progress:{phase:input.phase,samples:samples.length}});
           // Leave a scheduling opportunity between calls; this gap is outside
           // the measured capture latency and gives the real reader a turn.
           if(i+1<input.count)await new Promise(resolve=>setTimeout(resolve,2));
         }
         result={ok:true,value:{samples}};
-      } finally {raw.close();}
+      } finally {attribution.close();DatabaseSync.prototype.exec=previousExec;raw.close();}
     } else if(operation==='fence'||operation==='exclude'||operation==='erase') {
       const db=openDatabase(path);
       try {transaction(db,()=>{
