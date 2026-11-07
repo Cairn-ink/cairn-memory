@@ -6,7 +6,10 @@ import {openReadDatabase} from '../read-database.mjs';
 import {transaction} from '../database.mjs';
 import {writeContentSuppressionInside} from '../content-suppression-storage.mjs';
 import {safetySourceFixture,searchFixture} from '../testing/raw-search-fixtures.mjs';
-import {savedSource,ns} from '../testing/raw-source-fixtures.mjs';
+import {savedSource,ns,cardHost,localPlainPort} from '../testing/raw-source-fixtures.mjs';
+import {eventTimeFixture} from '../testing/receipt-event-time-fixture.mjs';
+import {openRawCaptureCore} from '../raw-capture.mjs';
+import {rationaleModel} from '../testing/rationale-model.mjs';
 import {commitmentReference} from '../testing/raw-search-commitment-reference.mjs';
 
 const groups=['conversations','parts','exclusions','fences','lineage','ancestors','receipts','maps','controls','facts','suppressions','schema','control'];
@@ -23,9 +26,27 @@ function observe(reader){
   const prepare=reader.db.prepare.bind(reader.db),scans=[];let active;
   reader.db.prepare=sql=>{
     const statement=prepare(sql),columns=statement.columns.bind(statement),get=statement.get.bind(statement);
-    statement.columns=()=>{const cols=columns();active={columns:cols.map(c=>c.name),rows:[],sizes:[]};scans.push(active);return cols;};
+    statement.columns=()=>{const cols=columns();active={columns:cols.map(c=>c.name),rows:[],sizes:[],
+      parameters:(sql.match(/\?/g)||[]).length,order:sql.match(/ ORDER BY (.+) LIMIT 50001$/s)[1].split(',').map(name=>name.split('.').at(-1))};scans.push(active);return cols;};
     if(sql.startsWith('SELECT count(*) AS count,json_group_array'))statement.get=(...args)=>{
-      const page=get(...args);active.rows.push(...JSON.parse(page.rows));active.sizes.push(page.count);return page;
+      const page=get(...args),rows=JSON.parse(page.rows);active.rows.push(...rows);active.sizes.push(page.count);
+      if(rows.length&&args.length===active.parameters+active.order.length){
+        // Exercise the actual native pager with a cursor inside this batch.
+        // A predicate accidentally attached to a LEFT JOIN still returns the
+        // earlier rows, even when ordinary batch cursors happen to mask it.
+        const positions=active.order.map(name=>active.columns.indexOf(name));
+        const cursor=positions.map(index=>rows[Math.floor(rows.length/2)][index]);
+        const probe=[...args.slice(0,-cursor.length),...cursor],replayed=JSON.parse(get(...probe).rows);
+        for(const row of replayed){
+          let compared=0;
+          for(let i=0;i<positions.length&&!compared;i++){
+            const value=row[positions[i]],bound=cursor[i];
+            compared=typeof value==='number'?Math.sign(value-bound):Buffer.compare(Buffer.from(value),Buffer.from(bound));
+          }
+          assert.ok(compared>0,'keyset predicate filters projected rows before pagination');
+        }
+      }
+      return page;
     };
     return statement;
   };
@@ -47,8 +68,16 @@ function compare(f,authority,scans){
   }
   return scans;
 }
-for(const large of [false,true])test(`commitment pages equal unpaged projections in order and multiplicity: large ${large}`,async t=>{
-  const f=safetySourceFixture(t,{model:{extract:()=>({items:[{content:'Synthetic copper fact.',kind:'fact',confidence:.8,sourceIndices:[0]}]})}});
+for(const large of [false,true,'event-time'])test(`commitment pages equal unpaged projections in order and multiplicity: large ${large}`,async t=>{
+  const model={extract:()=>({items:[{content:'Synthetic copper fact.',kind:'fact',confidence:.8,sourceIndices:[0]}]})};
+  let f;
+  if(large==='event-time'){
+    const base=await eventTimeFixture(t,33),host=cardHost(),port=localPlainPort(),db=base.connect();
+    const core=openRawCaptureCore({path:base.path,model:{...rationaleModel(),...model},privateCards:host.options},
+      {mode:'raw-v1',sources:true,port,readPolicy:()=>({generation:'synthetic',reason:null})});
+    base.workspace.defer(()=>core.close());base.workspace.defer(()=>db.close());
+    f={...base,db,core,host,port,call:(method,input)=>host.call(core,method,input)};
+  }else f=safetySourceFixture(t,{model});
   const saved=await savedSource(f,'copper retained'),s=await searchFixture(f);
   const reader=openReadDatabase(f.path,{contextRead:true});f.workspace.defer(()=>reader.db.close());
   const authority=createRawSearchAuthority(reader,s.options);
