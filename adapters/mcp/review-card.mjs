@@ -7,6 +7,7 @@ import { openMemoryCore } from '../../core/contract.mjs';
 import { currentDeclaration } from '../../core/card-current-input.mjs';
 import { methodPackageRef } from '../../core/method-package-input.mjs';
 import { identifier } from '../../core/validation.mjs';
+import { userInfo } from 'node:os';
 
 const failure = code => ({ ok: false, error: { code, retryable: false } });
 
@@ -110,7 +111,8 @@ export function reviewConfiguredCard(config, retained) {
         if (!permittedRead && !permittedConfirm && !supplemental) return null;
         const grant = Object.freeze({});
         const { input, ...binding } = request;
-        grants.set(grant, { ...binding, accessGeneration: 1 });
+        grants.set(grant, { ...binding, accessGeneration: 1,
+          ...(request.auditVersion ? {actorId:'local-user:'+userInfo().uid,authorizedAt:new Date().toISOString(),authorizationKind:'operation'} : {}) });
         return grant;
       },
       isCurrent(grant) { return grants.get(grant) ?? null; },

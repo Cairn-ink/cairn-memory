@@ -179,18 +179,41 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,admit=admitM
     ctx.stage=stage;ctx.coordinator=coordinator;check(ctx);
     const result=await Promise.race([Promise.resolve().then(()=>{check(ctx);return work();}),ctx.cancelled]);check(ctx);return result;
   }
-  async function turn(maxMs,work,ticket) {
+  async function turn(maxMs,work,ticket,takeTicket) {
     maxMs=Math.min(maxMs,budgets.maxMs-usedMs);if(maxMs<1)return;
     const control=maintenanceDispatchControl(),ctx={control,ordinal:maintenanceControlState(control).ordinal,number:turnNumber,generation,account,end:dutyEnd(),until:now()+maxMs,stage:'call',failures:new Set()};
-    if(ticket){
-      ctx.ticket=ticket;ctx.semanticOutstanding=new SharedArrayBuffer(8);
-      ctx.join=handle.pumpTurn({semanticOutstanding:ctx.semanticOutstanding});
-      void ctx.join.proof.catch(()=>{ctx.coordinatorFailed=true;});
-      turns.started(ticket);
+    let quantumOwnsTicket=false;
+    function prepare(){
+      if(ticket){
+        ctx.ticket=ticket;ctx.semanticOutstanding=new SharedArrayBuffer(8);
+        ctx.join=handle.pumpTurn({semanticOutstanding:ctx.semanticOutstanding});
+        void ctx.join.proof.catch(()=>{ctx.coordinatorFailed=true;});
+      }
+      turnNumber=add(turnNumber,1);ctx.cancelled=new Promise((_,reject)=>{ctx.cancel=()=>reject(interrupted);});
+      if(ticket)void ctx.cancelled.catch(()=>{}); // Close may reenter during setup.
+      activeTurn=ctx;
+      ctx.watchdog=setTimer(()=>expire(ctx),maxMs);
     }
-    turnNumber=add(turnNumber,1);ctx.cancelled=new Promise((_,reject)=>{ctx.cancel=()=>reject(interrupted);});activeTurn=ctx;
-    ctx.watchdog=setTimer(()=>expire(ctx),maxMs);
-    try{return await work(ctx);}catch(e){if(e!==interrupted){note(e,ctx,ctx.stage);error??=terminalCode(e.code);}}finally{clearTimer(ctx.watchdog);if(ticket)await finalizeTurn(ctx);if(activeTurn===ctx)activeTurn=undefined;}
+    if(!ticket)prepare();
+    try{
+      if(ticket){
+        prepare();
+        turns.started(ticket);
+        // The release guard is active and dispatch setup is complete. This is
+        // the sole handoff from the post-grant owner to quantum settlement.
+        quantumOwnsTicket=takeTicket();
+      }
+      return await work(ctx);
+    }catch(e){
+      if(ticket&&!quantumOwnsTicket)throw e;
+      if(e!==interrupted){note(e,ctx,ctx.stage);error??=terminalCode(e.code);}
+    }finally{
+      try{clearTimer(ctx.watchdog);}
+      finally{
+        try{if(ticket){if(quantumOwnsTicket)await finalizeTurn(ctx);else ctx.join?.detach?.();}}
+        finally{if(activeTurn===ctx)activeTurn=undefined;}
+      }
+    }
   }
   function turnFailure(code){error=terminalCode(code);void stop().catch(()=>{});}
   function releaseTurn(ticket,outcome,reason){
@@ -244,30 +267,46 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,admit=admitM
   async function brokered(index,slot){
     const epoch=residentEpoch,enteredGeneration=generation,controller=new AbortController();
     const pending={controller};pendingAdmission=pending;
-    let result;
+    let result,untilMonoMs;
     try{
       const maxMs=turnMs(),identity=maintenanceAdmissionIdentity((slot.p??projections[0]).options);
       result=await turns.wait({version:1,pumpId:c.id,windowId:window.id,lane:index,family:'semantic',
         kind:slot.kind==='startup'?'status':slot.kind==='validation'?'validation':slot.p.mode,phase:'work',intent:slot.kind==='regular'&&slot.p.mode==='lexical'?slot.p.intent:null,maxMs},
-        {signal:controller.signal,identity,untilMonoMs:Math.min(now()+turnPort.maxWaitMs,dutyEnd()-maxMs)});
+        {signal:controller.signal,identity,untilMonoMs:untilMonoMs=Math.min(now()+turnPort.maxWaitMs,dutyEnd()-maxMs)});
     }catch{result={status:'failed',error:'reader_failed'};}
     if(pendingAdmission===pending)pendingAdmission=undefined;
     if(result.status==='failed'){turnFailure(result.error);return;}
     if(result.status!=='admitted'){retryNotBefore=now()+spacing;return;}
     const ticket=result.ticket;
-    let reason;
-    if(stopped||error)reason='stopped';
-    else if(generation!==enteredGeneration)reason='generation_changed';
-    else if(result.waitExpired)reason='wait_expired';
-    else if(dutyEnd()-now()<turnMs())reason='renewal_expired';
-    else if(exhausted())reason='budget_exhausted';
-    else if(now()<lastTick+spacing)reason='spacing';
-    else if(epoch!==residentEpoch||plan()[0]!==index)reason='lane_changed';
-    if(reason){retryNotBefore=now()+spacing;releaseTurn(ticket,'declined',reason);return;}
-    if(!turns.portUnchanged()){releaseTurn(ticket,'withdrawn');turnFailure('authority_required');return;}
-    try{turns.bindIdentity(ticket,maintenanceAdmissionIdentity((slot.p??projections[0]).options));}
-    catch{releaseTurn(ticket,'withdrawn');turnFailure('reader_failed');return;}
-    return runSelected(index,slot,ticket);
+    let reason,portUnchanged,ownsTicket=true;
+    try{
+      if(stopped||error)reason='stopped';
+      else if(generation!==enteredGeneration)reason='generation_changed';
+      else if(dutyEnd()-now()<turnMs())reason='renewal_expired';
+      else if(exhausted())reason='budget_exhausted';
+      else if(now()<lastTick+spacing)reason='spacing';
+      else if(epoch!==residentEpoch||plan()[0]!==index)reason='lane_changed';
+      const currentIdentity=maintenanceAdmissionIdentity((slot.p??projections[0]).options);
+      if(turns.isPoisoned(currentIdentity)){reason??='stopped';error='reader_failed';}
+      if(!reason){
+        portUnchanged=turns.portUnchanged();
+        if(portUnchanged)turns.bindIdentity(ticket,currentIdentity);
+        // All metadata/port validation precedes this sample. Expiry retains
+        // its decline precedence, including over a changed port.
+        const admittedAt=now();
+        if(result.waitExpired||admittedAt>=untilMonoMs)reason='wait_expired';
+      }
+      if(reason){retryNotBefore=now()+spacing;releaseTurn(ticket,'declined',reason);if(error)turnFailure(error);return;}
+      if(!portUnchanged){releaseTurn(ticket,'withdrawn');turnFailure('authority_required');return;}
+      // Await also catches rejected async setup before the quantum takes the
+      // ticket. Returning its Promise here would end this guard too early.
+      const selectedResult=await runSelected(index,slot,ticket,()=>{ownsTicket=false;return true;});
+      if(ownsTicket)releaseTurn(ticket,'withdrawn');
+      return selectedResult;
+    }catch(e){
+      if(!ownsTicket)throw e;
+      releaseTurn(ticket,'withdrawn');turnFailure('reader_failed');
+    }
   }
   function interval(count){
     const turns=Math.min(budgets.maxItems/q.maxItems,budgets.maxMs/Math.max(q.maxMs,first.maxMs));
@@ -449,7 +488,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,admit=admitM
     }
     return running=runSelected(index,slot);
   }
-  function runSelected(index,slot,ticket){
+  function runSelected(index,slot,ticket,takeTicket){
     lastTick=now();return turn(turnMs(),async ctx=>{
       const current=await control(ctx,'firstCoverage');check(ctx);targetSetDigest=current.targetSetDigest;observeCoverage(current);
       if(slot.kind==='validation'){
@@ -463,7 +502,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,admit=admitM
           startupAt++;cursor=(index+1)%slots.length;
         }
       }else await regular(ctx,slot);
-    },ticket).finally(async()=>{await Promise.allSettled([...openings]);if(turns)return;running=null;if(error){void stop();return;}schedule();});
+    },ticket,takeTicket).finally(async()=>{await Promise.allSettled([...openings]);if(turns)return;running=null;if(error){void stop();return;}schedule();});
   }
   function stop() {
     if(closing)return closing;stopped=true;generation++;pendingAdmission?.controller.abort();activeTurn?.cancel();if(activeTurn?.semanticOutstanding){const state=new Int32Array(activeTurn.semanticOutstanding);if(Atomics.load(state,0)!==0)activeTurn.requireCoordinatorProof=true;Atomics.notify(state,0);}clearTimer(timer);registry.cleanup(record);

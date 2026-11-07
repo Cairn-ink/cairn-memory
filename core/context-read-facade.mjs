@@ -1,3 +1,4 @@
+import { cardLineageItemInside, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade, assertContentPort, contentAuthorityPort } from './content-safety-boundary.mjs';
 import { receiptEventTimeEnabled, cachedContentLayout } from './content-safety-schema.mjs';
@@ -237,7 +238,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       }else memory=db.prepare('SELECT epoch FROM namespace_epochs WHERE owner_id=? AND scope=? AND project_id=?')
         .get(ns.ownerId,ns.scope,ns.projectId??'')?.epoch??1;
       return {memory,...(types.includes('card')?{card:db.prepare('SELECT generation FROM card_epochs WHERE owner_id=? AND scope=? AND project_id=?')
-        .get(ns.ownerId,ns.scope,ns.projectId??'')?.generation??1}:{})};
+        .get(ns.ownerId,ns.scope,ns.projectId??'')?.generation??1,...cardLineageNamespaceInside(db,ns)}:{})};
     });
   }
   function unknownCoverage(input) {
@@ -671,14 +672,14 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             text: type === 'memory' ? item.content : item.title + '\n' + item.body,
             date, sources, sourceAccess: type === 'memory' ? item.provenance.sourceAccess : 'unsupported',
             sourcesComplete: type === 'memory' && item.provenance.coverage.status === 'complete',
-            fence: bind('snapshot-item', item),
+            fence: bind('snapshot-item', cardLineageItemInside(db,item)),
             dependencyCount: item.support?.currentDependency ? item.support.currentDependency.versions?.length ?? 0 : null });
         }
         return { generations, items, unavailable };
       });
       const scope = bind('snapshot-scope', input.readSet);
       const generationsFor = items => prepared.generations.map(value => ({ memory: value.memory,
-        ...(items.some(item => item.type === 'card') ? { card: value.card } : {}) }));
+        ...(items.some(item => item.type === 'card') ? { card: value.card,...(value.lineage?{lineage:value.lineage}:{}) } : {}) }));
       const snapshotValue = items => ({ v: 1, scope, intent: input.intent,
         refs: items.map(({ ref }) => [input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), ref.type,
           ref.memoryId ?? ref.cardId, ref.revision, ...(ref.type === 'card' ? [ref.bodyRevision] : [])]),
@@ -730,7 +731,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             if (['evidence_unavailable', 'revision_conflict'].includes(error.code)) fail('snapshot_stale');
             throw error;
           }
-          if (bind('snapshot-item', current) !== item.fence) fail('snapshot_stale');
+          if (bind('snapshot-item', cardLineageItemInside(db,current)) !== item.fence) fail('snapshot_stale');
         }
         return result;
       });
@@ -765,7 +766,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         if (previous && (!same(previous.generations, generations) || !same(previous.access, access.accessGenerations))) fail('snapshot_stale');
         const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
         const items = refs.map(ref => evidence.itemsInside(ref.namespace, [ref], intent, input.readSet,safetyMemo?{safetyMemo,batchRefs:refs}:options.sources?{legacyEvidence:true}:undefined)[0]);
-        const fences = items.map(item => bind('snapshot-item', item));
+        const fences = items.map(item => bind('snapshot-item', cardLineageItemInside(db,item)));
         if (input.fences?.some((prefix, i) => prefix !== null && !fences[i].startsWith(prefix))) fail('snapshot_stale');
         if (previous && !same(previous.fences, fences)) fail('snapshot_stale');
         return { items, generations, fences };

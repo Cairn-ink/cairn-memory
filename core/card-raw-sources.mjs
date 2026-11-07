@@ -1,6 +1,7 @@
 import { createHash, createHmac } from 'node:crypto';
 import { fail } from './validation.mjs';
 import { rawSourceKey } from './raw-source-input.mjs';
+import { cardLineageRevision, cachedContentLayout } from './content-safety-schema.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const partKey = row => JSON.stringify([row.conversation_id,row.message_id,row.part_index]);
@@ -50,7 +51,7 @@ export function createRawCardInvalidation(db) {
           // every original revision produces at most one effect and update.
           if (!row || !['draft','confirmed'].includes(row.state) || row.revision !== revision) continue;
           const timestamp = new Date().toISOString();
-          db.prepare(`UPDATE private_cards SET revision=revision+1,updated_at=?,
+          db.prepare(cardLineageRevision(cachedContentLayout(db)) ? 'UPDATE private_cards SET revision=revision+1,updated_at=? WHERE id=?' : `UPDATE private_cards SET revision=revision+1,updated_at=?,
             title=CASE WHEN state='draft' THEN NULL ELSE title END,body=CASE WHEN state='draft' THEN NULL ELSE body END,
             state=CASE WHEN state='draft' THEN 'cancelled' ELSE state END WHERE id=?`).run(timestamp,id);
           db.prepare(`INSERT INTO card_effects VALUES(lower(hex(randomblob(16))),?,?,?,?,?,?,?,?,

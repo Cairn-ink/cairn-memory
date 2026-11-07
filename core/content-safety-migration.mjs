@@ -8,6 +8,10 @@ import { safetyPhysicalVersion } from './content-safety-layout.mjs';
 import { validateContextProductLayout } from './context-product-schema.mjs';
 import { writeContentSuppressionInside, suppressionEpoch } from './content-suppression-storage.mjs';
 import { fail, identifier } from './validation.mjs';
+import { cardLineageDDL, authoredInvalidationDDL } from './card-lineage-schema.mjs';
+import { exactCardInside, legacyCardSources, sealCardBodyInside, verifyCardLineageCommitmentsInside } from './card-lineage.mjs';
+import { contentSafetyObservations } from './content-safety-observations.mjs';
+import { classifyCardBodySafetyV1 } from './content-safety-classifier.mjs';
 
 const boundary = row => ({ ownerId: row.owner_id, scope: row.scope, projectId: row.project_id });
 const quote = name => '"' + name.replaceAll('"', '""') + '"';
@@ -142,11 +146,15 @@ export async function migrateContentSafety(input) { return migrateSafety(input, 
 
 /** Latest offline maintenance target; the S2h installer and its cells stay frozen. */
 export async function migrateReceiptEventTime(input) { return migrateSafety(input, true); }
+// This core maintenance API is deliberately absent from installer commands.
+// Installer enablement still requires the local legacy-policy decision.
+export async function migrateCardLineage(input) { return migrateSafety(input, false, true); }
 
-async function migrateSafety({ path, backupPath, expected, quiescence }, eventTime) {
+async function migrateSafety({ path, backupPath, expected, quiescence }, eventTime, lineage = false) {
   if (!quiescence || ['admissionsClosed','writersStopped','readersDrained','oldHandlesClosed'].some(key => quiescence[key] !== true)) fail('invalid_input');
   const storeId = identifier(expected?.storeId), base = expected?.base;
   safetyPhysicalVersion(base);
+  if(lineage && ![23,33].includes(base))fail('unsupported_database');
   const source = offlineFile(path), backup = offlineFile(backupPath);
   if (source.dev === backup.dev && source.ino === backup.ino) fail('invalid_input');
   const inventory = backupInventory(backupPath);
@@ -159,19 +167,74 @@ async function migrateSafety({ path, backupPath, expected, quiescence }, eventTi
       const current = sqliteFileStat(path);
       if (source.dev !== current.dev || source.ino !== current.ino || db.prepare('PRAGMA journal_mode').get().journal_mode !== 'delete') fail('unsafe_database_file');
       const layout = attestContentSafety(db);
-      if ((!eventTime && layout.suppressionRevision || layout.attestedFeatures) || layout.base !== base ||
+      if ((!lineage && (!eventTime && layout.suppressionRevision || layout.attestedFeatures)) || layout.base !== base ||
           db.prepare('PRAGMA application_id').get().application_id !== 0x43414952 ||
           db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id !== storeId) fail('unsupported_database');
       validateContextProductLayout(db, layout); verifyIntegrity(db);
       if (contentSafetyInventory(db) !== inventory) fail('unsupported_database');
+      const observations=lineage?contentSafetyObservations(db,{scanRows:250000,scanBytes:128*1024*1024},()=>{},layout):null;
+      if(lineage && layout.suppressionRevision && db.prepare('SELECT suppression_domain FROM content_safety_control').get()?.suppression_domain!==expected.suppressionDomain)fail('unsupported_database');
       const installed = layout.suppressionRevision ? undefined :
         installContentSafetyInside(db, layout.base, inventory, retainedFacts(db, layout.base));
+      if(lineage)return installCardLineageInside(db,base,inventory,observations);
       if (!eventTime) return installed;
       const physical = installReceiptEventTimeInside(db, base);
       return Object.freeze({ ...(installed ?? { base, storeId, suppressionRevision: 1, cardLineageRevision: 0 }),
         physical, receiptEventTime: true });
     });
   } finally { db.close(); }
+}
+
+function installCardLineageInside(db,base,inventory,snapshot) {
+  const control=db.prepare('SELECT * FROM content_safety_control').get();
+  if(control.card_lineage_revision!==0)fail('unsupported_database');
+  const identity=db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get();
+  // A conflicting owner/action cannot be represented by the complete package.
+  if(db.prepare('SELECT 1 FROM card_operations GROUP BY owner_id,action_id HAVING count(*)>1 LIMIT 1').get())fail('action_conflict');
+  db.exec(`DROP TRIGGER safety_control_insert; DROP TRIGGER safety_control_delete; DROP TRIGGER safety_control_update;
+    ALTER TABLE content_safety_control RENAME TO lineage_control_before;`);
+  const declarations=contentSafetyDDL(base,control.receipt_event_time===1,true);
+  db.exec(declarations.match(/CREATE TABLE content_safety_control[\s\S]*?;/)[0]);
+  db.prepare("INSERT INTO content_safety_control VALUES(1,?,1,0,?,'complete',?,?,?)").run(base,
+    control.receipt_event_time??0,control.suppression_domain,control.migration_id,control.inventory_digest);
+  db.exec('DROP TABLE lineage_control_before');
+  for(const sql of declarations.match(/CREATE TRIGGER safety_control_(?:insert|delete|update)[\s\S]*?END;/g))db.exec(sql);
+  // Allocate draft numbering before installing the body rollback guard.
+  for(const observation of snapshot.observations) {
+    const ns={ownerId:observation.body.identity.ownerId,scope:observation.body.identity.scope,
+      projectId:observation.body.identity.projectId||null};
+    const row=exactCardInside(db,ns,observation.body.identity.key);
+    if(!['draft','confirmed'].includes(row.state))fail('unsupported_database');
+    if(row.state==='confirmed'&&(!Number.isSafeInteger(row.body_revision)||row.body_revision<1))fail('unsupported_database');
+    if(row.state==='draft'&&row.body_revision===null)db.prepare('UPDATE private_cards SET body_revision=1 WHERE id=?').run(row.id);
+    else if(!Number.isSafeInteger(row.body_revision)||row.body_revision<1)fail('unsupported_database');
+  }
+  db.exec(cardLineageDDL);
+  db.exec('DROP TRIGGER card_memory_revision_invalidation');db.exec(authoredInvalidationDDL(base));
+  const counts={complete:0,unknown:0,knownSuppressed:0};
+  for(const observation of snapshot.observations) {
+    const classification=classifyCardBodySafetyV1(observation);
+    counts[classification.status==='known-suppressed'?'knownSuppressed':classification.status]++;
+    const ns={ownerId:observation.body.identity.ownerId,scope:observation.body.identity.scope,projectId:observation.body.identity.projectId||null};
+    sealCardBodyInside(db,{identity,namespace:ns,cardId:observation.body.identity.key,
+      sources:legacyCardSources(identity,observation),newBody:true,legacy:true});
+  }
+  db.prepare('UPDATE content_safety_control SET card_lineage_revision=1,migration_id=?,inventory_digest=? WHERE singleton=1')
+    .run(randomUUID(),inventory);
+  const physical={23:52,33:53}[base];db.exec(`PRAGMA user_version=${physical}`);
+  verifyContentSafetyDDL(db,physical);attestContentSafety(db,physical);validateContextProductLayout(db);
+  verifyIntegrity(db);
+  for(const observation of snapshot.observations) {
+    const target=observation.body.identity,ns={ownerId:target.ownerId,scope:target.scope,projectId:target.projectId||null};
+    const verified=verifyCardLineageCommitmentsInside(db,identity,ns,target.key);
+    if(verified.header.completeness!=='unknown'||verified.header.origin!=='legacy-unknown')fail('unsupported_database');
+  }
+  const population=db.prepare('SELECT count(*) n FROM card_body_provenance').get().n;
+  if(population!==snapshot.observations.length||db.prepare(`SELECT 1 FROM private_cards c WHERE state IN ('draft','confirmed')
+    AND NOT EXISTS(SELECT 1 FROM card_body_provenance p WHERE (p.owner_id,p.scope,p.project_id,p.card_id,p.body_revision)=
+      (c.owner_id,c.scope,c.project_id,c.id,c.body_revision)) LIMIT 1`).get())fail('unsupported_database');
+  return Object.freeze({physical,base,storeId:identity.storeId,suppressionDomain:control.suppression_domain,
+    suppressionRevision:1,cardLineageRevision:1,counts});
 }
 
 /** Internal installer; caller owns the offline migration transaction. */

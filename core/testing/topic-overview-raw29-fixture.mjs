@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import threads, { isMainThread, workerData } from 'node:worker_threads';
+import { syncBuiltinESMExports } from 'node:module';
 import { openMemoryCore, openMemoryReader } from '../index.mjs';
 import { openDatabase } from '../database.mjs';
 import { installPrivateCards, installCardMemorySources } from '../private-card-schema.mjs';
@@ -21,6 +23,45 @@ import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 export { collectOverview } from './topic-overview-fixture.mjs';
 export const namespace = { ownerId: 'raw-overview-owner', scope: 'personal', projectId: null };
 export const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
+
+// Preloaded only in this test's reader Worker. Pause after a real COMMIT, when
+// the snapshot exists but no read lock can obstruct the concurrent capture.
+if (!isMainThread && workerData?.rawOverviewReadBarrier) {
+  const state = new Int32Array(workerData.rawOverviewReadBarrier), exec = DatabaseSync.prototype.exec;
+  DatabaseSync.prototype.exec = function (sql, ...args) {
+    const result = Reflect.apply(exec, this, [sql, ...args]);
+    if (sql === 'COMMIT' && Atomics.compareExchange(state, 0, 1, 2) === 1) {
+      Atomics.notify(state, 0);
+      while (Atomics.load(state, 0) === 2) {
+        if (Atomics.wait(state, 0, 2, 5000) === 'timed-out') throw new Error('overview read barrier timed out');
+      }
+    }
+    return result;
+  };
+}
+
+export function overviewReadBarrier(t) {
+  const state = new Int32Array(new SharedArrayBuffer(4)), NativeWorker = threads.Worker;
+  const replacement = t.mock.method(threads, 'Worker', class extends NativeWorker {
+    constructor(url, options) {
+      // Only the topic overview reader Worker gets the barrier; every other Worker starts unchanged.
+      if (!String(url).endsWith('/topic-overview-worker.mjs')) { super(url, options); return; }
+      super(url, { ...options, workerData: { ...options.workerData, rawOverviewReadBarrier: state.buffer },
+        execArgv: [...(options.execArgv ?? []), '--import', import.meta.url] });
+    }
+  });
+  syncBuiltinESMExports();
+  const release = () => { Atomics.store(state, 0, 3); Atomics.notify(state, 0); };
+  t.after(() => { release(); replacement.mock.restore(); syncBuiltinESMExports(); });
+  return {
+    arm() { Atomics.store(state, 0, 1); },
+    async entered() {
+      await Atomics.waitAsync(state, 0, 1, 4000).value;
+      assert.equal(Atomics.load(state, 0), 2, 'reader committed its snapshot and is paused without a read lock');
+    },
+    release,
+  };
+}
 // Each layout is physically installed, never a schema29 file labelled as legacy.
 export function installOverviewLayout(path, version) {
   const steps = [[20, installPrivateCards], [21, installCardMemorySources], [22, installPrivateEvidence],

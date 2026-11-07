@@ -2,6 +2,7 @@ import { createHash, createHmac } from 'node:crypto';
 import { validateContextProductLayout } from './context-product-schema.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { createCardRawSources } from './card-raw-sources.mjs';
+import { contentSuppressionTargetMatches } from './content-suppression-storage.mjs';
 
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const legacyVersion = row => ['legacy-unresolved-v1', digest(row)];
@@ -76,18 +77,24 @@ function boundedReader(db, limits, check) {
  * result receipts, not body payloads. Any future historical provider needs an
  * explicit layout/observation adapter; unknown physical cells never fall back.
  */
-export function contentSafetyObservations(native, limits, check) {
+export function contentSafetyObservations(native, limits, check, installedLayout) {
   const db = boundedReader(native, limits, check);
-  const schemaBase = db.prepare('PRAGMA user_version').get().user_version;
+  const physical = db.prepare('PRAGMA user_version').get().user_version;
+  const schemaBase = installedLayout?.base ?? physical;
   if (![18, 23, 33].includes(schemaBase) || db.prepare('PRAGMA application_id').get().application_id !== 0x43414952) throw Error();
   const objects = db.prepare('SELECT name,tbl_name FROM sqlite_schema').all();
   const safety = /^(?:content_safety_|content_identity_|content_suppression|owner_suppression_|card_body_|safety_|card_operations_owner_action$)/i;
-  if (objects.some(row => safety.test(row.name) || safety.test(row.tbl_name))) throw Error();
-  validateContextProductLayout(db);
+  if (installedLayout ? physical!==installedLayout.physical || !native.isTransaction : objects.some(row => safety.test(row.name) || safety.test(row.tbl_name))) throw Error();
+  validateContextProductLayout(db,installedLayout);
   const identities = db.prepare('SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1').all();
   if (identities.length !== 1 || !identities[0].store_id || !/^[0-9a-f]{64}$/.test(identities[0].cursor_secret)) throw Error();
   const { store_id: storeId, cursor_secret: cursorSecret } = identities[0];
   const scan = table => db.prepare(`SELECT * FROM ${table}`).all(); // Names below are internal constants.
+  // Only the explicit maintenance caller supplies an attested installed layout.
+  // First-install preflight still has no suppression-table dependency. Charge
+  // the complete installed population to the same observation scan budget.
+  const installedFacts = grouping(installedLayout?.suppressionRevision ? scan('content_suppressions') : [], row =>
+    JSON.stringify([row.owner_id,row.scope,row.project_id,row.kind,row.stable_key]));
   const memories = new Map(scan('memories').map(row => [row.id, row]));
   const receiptRows = scan('receipts'), receipts = new Map(receiptRows.map(row => [row.id, row]));
   const memoryReceipts = grouping(receiptRows, row => row.memory_id);
@@ -187,7 +194,7 @@ export function contentSafetyObservations(native, limits, check) {
     const textBytes = value => {
       if (value === null) return null;
       const bytes = Buffer.from(value);
-      const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
       if (!Buffer.from(text).equals(bytes)) throw Error();
       return bytes.toString('hex');
     };
@@ -332,6 +339,22 @@ export function contentSafetyObservations(native, limits, check) {
             effect.ordinal >= sourceEffect.ordinal || sourceEffect.ordinal - effect.ordinal >= operation.parsed.effectCount) continue;
         const id = noteEdge(operation.target_id, sourceEffect.revision - 1, 'card_operations', operation);
         fact(id, 'purge', 'card_effects', sourceEffect);
+      }
+    }
+    // Known canonical denials outrank missing/unknown legacy coverage. Match
+    // against the bound versions and spans already recovered above; never fill
+    // a missing bound version with today's source revision.
+    for(const {identity:id,state} of [{identity:observation.body.identity},...observation.edges]) {
+      check();
+      const version=JSON.parse(id.version),source=state?.source;
+      const target={kind:id.kind,key:id.key,version:id.version,
+        revision:['memory-revision-v1','note-v1'].includes(version[0])?version[1]:undefined,
+        messageId:source?.messageId,start:source?.span?.start,end:source?.span?.end};
+      const keys=[[id.ownerId,'owner','','owner',''],[id.ownerId,id.scope,id.projectId,'namespace',''],
+        [id.ownerId,id.scope,id.projectId,id.kind,id.key]];
+      for(const key of keys)for(const denial of installedFacts.get(JSON.stringify(key))??[]) {
+        check();
+        if(contentSuppressionTargetMatches(denial,nsFor(card),target))fact(id,denial.reason,'content_suppressions',denial);
       }
     }
     observations.push(observation);
