@@ -63,9 +63,10 @@ throughout a build. It invalidates the in-memory inventory and search-eligibilit
 other-writer commit, including direct facts with no application epoch change.
 That connection-local cache key is never a durable publication authority.
 Search eligibility uses the same per-row classification and denial predicate
-inside units of at most 32 rows and 25 operation-clock milliseconds. Native
-statement and row boundaries check the operation deadline; an unfinished row
-restarts in the next snapshot. Each unit releases its snapshot before checking
+inside units of at most 32 rows. A unit yields at the first row boundary past
+25 operation-clock milliseconds, so its hold is at most 25 ms plus one row.
+Native statement and row boundaries check the operation deadline; the slice
+does not interrupt an unfinished row. Each unit releases its snapshot before checking
 the native version again. Verified entries remain reusable if later work expires;
 a version change drops them before reuse. A complete commitment verified at both
 ends likewise survives a later deadline. Interrupted rebuilds retain nothing.
@@ -98,6 +99,13 @@ Raw is current-eligible as attributed unknown-currentness evidence. Missing
 privacy ancestry denies both intents; unresolved linked currentness is history-only. An exclusion intersecting a retained part conservatively
 omits that part; disjoint retained parts remain independently eligible. Existing
 inspection readers keep their own behavior and bounds.
+
+A suppression epoch change makes every previously published hint for that
+owner unavailable (`stale_index`) until maintenance republishes it, including
+hints outside the suppressed scope. With maintenance unselected or stopped,
+there is no upper bound on this availability loss. With maintenance scheduled,
+recovery requires the denial sweep followed by positive publication (four
+sources per quantum, with a one-second commit cadence).
 
 This seam contains no Card authority, automatic Card work, Memory-first floor,
 context allocator or authored-lineage claim. A later allocator must preserve its

@@ -47,6 +47,13 @@ The selected handle provides:
   Earlier tickets still require confirmation and refuse if it cannot finish.
   Synchronous ticket validation may spend one bounded, snapshot-free busy
   backoff before refusing. No read snapshot spans an await or a backoff.
+A suppression epoch change makes every previously published hint for that
+owner unavailable (`stale_index`) until maintenance republishes it, including
+hints outside the suppressed scope. With maintenance unselected or stopped,
+there is no upper bound on this availability loss. With maintenance scheduled,
+recovery requires the denial sweep followed by positive publication (four
+sources per quantum, with a one-second commit cadence).
+
 - Each classification is `{ kind, reason }`. Kinds are `denied`,
   `current-eligible-bare`, `current-eligible-linked`, and `history-only`.
   Demonstrably bare sources have complete privacy checks and no Memory link;
