@@ -14,9 +14,9 @@ const safeFailure = error => { fail(publicCodes.has(error?.code) ? error.code : 
 export async function openRawSearch(value) {
   if (value === undefined || value?.enabled === false) return null;
   const options=rawSearchOptions(value);
-  const [{openReadDatabase},{createRawSearchAuthority},{openRawSearchStorage},{createRawSearchMaintenance},retrieval,embedding,{sqliteFileStat}]=await Promise.all([
+  const [{openReadDatabase},{createRawSearchAuthority},{openRawSearchStorage},{createRawSearchMaintenance},retrieval,embedding,{sqliteFileStat},{withContentSuppressionRequest}]=await Promise.all([
     import('./read-database.mjs'),import('./raw-search-authority.mjs'),import('./raw-search-storage.mjs'),
-    import('./raw-search-maintenance.mjs'),import('./raw-search-retrieval.mjs'),import('./context-read-embedder.mjs'),import('./sqlite-journal-probe.mjs')]);
+    import('./raw-search-maintenance.mjs'),import('./raw-search-retrieval.mjs'),import('./context-read-embedder.mjs'),import('./sqlite-journal-probe.mjs'),import('./content-suppression-storage.mjs')]);
   let database,storage;
   try {
     const canonicalFile=()=>{
@@ -36,7 +36,7 @@ export async function openRawSearch(value) {
       dimensions:options.embedder.dimensions,normalization:options.embedder.normalization};
     const cacheEnabled=options.policy?.family==='local'&&!!metadata;
     const cache=createRawSearchCache({enabled:cacheEnabled,checkKey:()=>{
-      database.assertFile();return authority.cacheKey(storage.publication({shape:false}),metadata);
+      return withContentSuppressionRequest(()=>{database.assertFile();return authority.cacheKey(storage.publication({shape:false}),metadata);},{fresh:true});
     }});
     const maintenance=createRawSearchMaintenance(storage,authority,options),prepared=new Map(),searches=new Map();
     const dispatch=options.embedder&&contextBudget({budgetConfigured:true,policy:options.policy,embedder:options.embedder});
@@ -46,7 +46,7 @@ export async function openRawSearch(value) {
     const operations=new Set();
     const ready=()=>{if(closed)fail('store_closed');database.assertFile();};
     const tracked=work=>(...args)=>{
-      const operation=(async()=>{try{ready();return await work(...args);}catch(error){safeFailure(error);}})();
+      const operation=withContentSuppressionRequest(async()=>{try{ready();return await work(...args);}catch(error){safeFailure(error);}},{fresh:true});
       operations.add(operation);operation.then(()=>operations.delete(operation),()=>operations.delete(operation));return operation;
     };
     function retain(map,key,entry,limit) {
@@ -196,6 +196,9 @@ export async function openRawSearch(value) {
       revalidate([ticket]);return handle;
     }
     function revalidate(handles) {
+      return withContentSuppressionRequest(()=>revalidateInside(handles),{fresh:true});
+    }
+    function revalidateInside(handles) {
       try {
         ready();if(!Array.isArray(handles)||handles.length>RAW_SEARCH_LIMITS.preparations)fail('invalid_input');
         const entries=handles.map(handle=>{const entry=prepared.get(typeof handle==='string'?handle:handle?.ticket);
@@ -214,9 +217,9 @@ export async function openRawSearch(value) {
       maintain:tracked(async(input,token)=>{const access=authority.authorize('rawSearchMaintenance',{},token);
         cache.maintain();
         await maintenance.maintain(input,access);return status();}),
-      async status(){try{ready();await storage.status();return status();}catch{return {state:'unavailable',eligible:null,indexed:null,embedded:null,coverage:'unknown',error:'raw_search_unavailable'};}},
+      status:()=>withContentSuppressionRequest(async()=>{try{ready();await storage.status();return status();}catch{return {state:'unavailable',eligible:null,indexed:null,embedded:null,coverage:'unknown',error:'raw_search_unavailable'};}},{fresh:true}),
       purge:tracked(async()=>{cache.close();await maintenance.close();await storage.dropOwner();prepared.clear();searches.clear();}),
-      async close(){if(closed)return;closed=true;cache.close();await maintenance.close();await Promise.allSettled([...operations]);prepared.clear();searches.clear();
-        try{await storage.close();}finally{database.db.close();releaseResidency();}}});
+      close:()=>withContentSuppressionRequest(async()=>{if(closed)return;closed=true;cache.close();await maintenance.close();await Promise.allSettled([...operations]);prepared.clear();searches.clear();
+        try{await storage.close();}finally{database.db.close();releaseResidency();}},{fresh:true})});
   }catch(error){await storage?.close();database?.db.close();safeFailure(error);}
 }
