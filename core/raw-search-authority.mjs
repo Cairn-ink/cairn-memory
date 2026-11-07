@@ -500,7 +500,8 @@ export function createRawSearchAuthority(database, options) {
     while(offset<rows.length){
       if(performance.now()>=deadlineAt){timedOut=true;break;}
       const unit=selectUnit(rows,offset,observed,deadlineAt);
-      for(const [key,entry] of unit.pending)pending.set(key,entry);
+      // The unit ended at this version. Later expiry cannot tear these checks.
+      for(const [key,entry] of unit.pending){eligibility.set(key,entry);pending.set(key,entry);}
       for(const {row,entry} of unit.entries){
         if(entry.denied||intent==='current'&&entry.classification.kind==='history-only')denied++;
         else eligible.push(row);
@@ -549,9 +550,9 @@ export function createRawSearchAuthority(database, options) {
       return entries.map(entry => entry.value);
     },at);
   }
-  function reset({keepCommitment=false}={}) {
+  function reset({keepCommitment=false,keepEligibility=false}={}) {
     if(!keepCommitment)cachedFence=undefined;
-    eligibility.clear();eligibilityVersion=undefined;
+    if(!keepEligibility){eligibility.clear();eligibilityVersion=undefined;}
   }
   function refresh(at=Infinity) {
     deadline(at);resetContentSuppressionRequestInside(db);

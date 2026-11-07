@@ -70,7 +70,7 @@ export async function openRawSearch(value) {
       let moves=0,confirm;
       while(true)try{expired(at);if(confirm)authority.checkFence(confirm,at);confirm=undefined;return await work(at);}catch(error){
         if(!interrupted(error))throw error;
-        cache.drop();authority.reset({keepCommitment:error.code==='search_deadline'});
+        cache.drop();authority.reset({keepCommitment:error.code==='search_deadline',keepEligibility:error.code==='search_deadline'});
         if(error.code==='search_deadline')return onExhausted();
         if(error.code==='source_changed'&&moves++>=1)return onExhausted();
         confirm=error.fence;
