@@ -6,7 +6,7 @@ export function installPhaseMeasurement(){
   const helper=new URL('./raw-search-phase-ledger.mjs',import.meta.url).href;
   return registerHooks({load(url,context,next){
     const result=next(url,context);
-    if(!/\/core\/raw-search-(index|authority|storage|retrieval|maintenance)\.mjs$/.test(url))return result;
+    if(!/\/core\/raw-search-(index|authority|storage|retrieval|maintenance|sqlite)\.mjs$/.test(url))return result;
     let source=typeof result.source==='string'?result.source:Buffer.from(result.source).toString('utf8');source+='\n__measurement_end__';
     const replace=(before,after)=>{if(source.split(before).length!==2)throw Error('measurement_source_changed');source=source.replace(before,after);};
     const wrap=(start,next,name,finish='')=>{
@@ -16,7 +16,11 @@ export function installPhaseMeasurement(){
       source=source.slice(0,end)+'\n    }finally{sample('+JSON.stringify(name)+',performance.now()-phaseStart);'+finish+'}\n'+source.slice(end);
       source=source.slice(0,brace)+'\n    const phaseStart=performance.now();try{'+source.slice(brace);
     };
-    if(url.endsWith('/raw-search-index.mjs')){
+    if(url.endsWith('/raw-search-sqlite.mjs')){
+      // Capture at the origin before an opener's foreign catch can rename it.
+      replace("throw Object.assign(new MemoryStoreError('search_deadline'),{reason:'deadline'});",
+        "const error=Object.assign(new MemoryStoreError('search_deadline'),{reason:'deadline'});internalFailure(error);throw error;");
+    }else if(url.endsWith('/raw-search-index.mjs')){
       replace("const safeFailure = error => { fail(","const safeFailure = error => { internalFailure(error); fail(");
       replace("}catch{fail('raw_search_unavailable');}","}catch(error){internalFailure(error);fail('raw_search_unavailable');}finally{operationEnd(at);}");
       replace("catch{return {state:'unavailable'","catch(error){internalFailure(error);return {state:'unavailable'");

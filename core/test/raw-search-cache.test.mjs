@@ -4,6 +4,8 @@ import test from 'node:test';
 test.beforeEach(installRawSearchTestClock);
 import { DatabaseSync } from 'node:sqlite';
 import { Worker } from 'node:worker_threads';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRawSearchCache, RAW_SEARCH_CADENCE_MS, RAW_SEARCH_CACHE_IDLE_MS } from '../raw-search-cache.mjs';
@@ -232,6 +234,8 @@ test('forced Worker termination leaves no blocks for a successor instance',async
   const module=new URL('../raw-search-index.mjs',import.meta.url).href,embedderModule=new URL('../context-read-embedder.mjs',import.meta.url).href;
   const fixtureModule=new URL('../testing/raw-search-fixtures.mjs',import.meta.url).href,sourceModule=new URL('../testing/raw-source-fixtures.mjs',import.meta.url).href;
   const workerSource=`const {parentPort,workerData}=require('node:worker_threads');(async()=>{
+    const {performance}=require('node:perf_hooks');
+    Object.defineProperty(performance,'now',{configurable:true,value:()=>100});
     const {openRawSearch}=await import(workerData.module),{rawSearchHost,broker}=await import(workerData.fixtureModule),{localPlainPort}=await import(workerData.sourceModule);
     const {reserveSharedVectors}=await import(workerData.embedderModule),host=rawSearchHost();
     const metadata=workerData.input.queryVector.embedder;
@@ -249,4 +253,12 @@ test('forced Worker termination leaves no blocks for a successor instance',async
     assert.deepEqual(message,{emptyBefore:true,residentAfter:true});assert.equal(await worker.terminate(),1);
   }
   assertReleased(port);
+});
+test('Worker clocks cover opening and search independently of the parent clock',()=>{
+  const observer=new URL('../testing/raw-search-worker-clock-observer.mjs',import.meta.url).href;
+  const childEnv={...process.env};delete childEnv.NODE_TEST_CONTEXT;
+  const child=spawnSync(process.execPath,['--import='+observer,'--test','--test-reporter=tap','--test-name-pattern=forced Worker termination',
+    '--test-timeout=110000',fileURLToPath(import.meta.url)],{encoding:'utf8',timeout:120000,env:childEnv});
+  assert.equal(child.status,0,child.stdout+child.stderr);assert.equal(child.signal,null);
+  assert.match(child.stdout,/# pass 1\b/);
 });

@@ -13,7 +13,7 @@ import {rawSearchPostings} from '../raw-search-retrieval.mjs';
 test('optional phase transforms load every serving module without opening a store',async()=>{
   const loader=new URL('../../tools/testing/raw-search-phase-loader.mjs',import.meta.url).href;
   const ledger=new URL('../../tools/testing/raw-search-phase-ledger.mjs',import.meta.url).href;
-  const modules=['authority','index','storage','retrieval','maintenance'].map(name=>new URL('../raw-search-'+name+'.mjs',import.meta.url).href);
+  const modules=['authority','index','storage','retrieval','maintenance','sqlite'].map(name=>new URL('../raw-search-'+name+'.mjs',import.meta.url).href);
   const script=`const {installPhaseMeasurement}=await import(${JSON.stringify(loader)});const hook=installPhaseMeasurement();
     try{for(const file of ${JSON.stringify(modules)})await import(file);
       const {takePhases}=await import(${JSON.stringify(ledger)});if(Object.keys(takePhases()).length)throw Error('unexpected_store_work');}
@@ -95,18 +95,27 @@ test('phase ledger records each selection snapshot row count and hold on the fun
   const script=`const {installPhaseMeasurement}=await import(${JSON.stringify(url('../../tools/testing/raw-search-phase-loader.mjs'))});const hook=installPhaseMeasurement();
     const {default:test}=await import('node:test');const {default:assert}=await import('node:assert/strict');
     const {performance}=await import('node:perf_hooks');
+    const {DatabaseSync}=await import('node:sqlite');
     const {sourceFixture,savedSource}=await import(${JSON.stringify(url('../testing/raw-source-fixtures.mjs'))});
     const {searchFixture}=await import(${JSON.stringify(url('../testing/raw-search-fixtures.mjs'))});
     const {openReadDatabase}=await import(${JSON.stringify(url('../read-database.mjs'))});
     const {createRawSearchAuthority}=await import(${JSON.stringify(url('../raw-search-authority.mjs'))});
     const {takeSelectionUnits}=await import(${JSON.stringify(url('../../tools/testing/raw-search-phase-ledger.mjs'))});
-    test('unit records',async t=>{Object.defineProperty(performance,'now',{configurable:true,value:()=>100});const f=sourceFixture(t);await savedSource(f,'Synthetic copper.');const s=await searchFixture(f);
+    test('unit records',async t=>{let now=100;Object.defineProperty(performance,'now',{configurable:true,value:()=>now});const f=sourceFixture(t);await savedSource(f,'Synthetic copper.');const s=await searchFixture(f);
       const reader=openReadDatabase(f.path,{contextRead:true});t.after(()=>reader.db.close());
       const a=createRawSearchAuthority(reader,s.options),source=a.inventory().rows[0].source;
-      const own=Object.getOwnPropertyDescriptor(performance,'now');Object.defineProperty(performance,'now',{configurable:true,value:()=>100});
-      try{a.select([{source}],'current',1100).commit();takeSelectionUnits();a.select(Array.from({length:65},()=>({source})),'current',1100);
+      const prepare=DatabaseSync.prototype.prepare;
+      try{a.select([{source}],'current',1100).commit();const prime=takeSelectionUnits();
+        assert.ok(prime[0].checked>=1);assert.ok(prime[0].rows>=1);
+        a.select(Array.from({length:65},()=>({source})),'current',1100);
         const units=takeSelectionUnits();assert.deepEqual(units.map(u=>u.rows),[32,32,1]);assert.deepEqual(units.map(u=>u.checked),[0,0,0]);assert.ok(units.every(u=>u.holdMs===0));
-      }finally{if(own)Object.defineProperty(performance,'now',own);else delete performance.now;hook.deregister();}
+        a.reset();let crossed=false;
+        DatabaseSync.prototype.prepare=function(sql){const statement=prepare.call(this,sql);
+          if(!crossed&&new Error().stack.includes('at checkInside')){crossed=true;now+=1001;}return statement;};
+        assert.throws(()=>a.select([{source}],'current',1100),{code:'search_deadline',reason:'deadline'});
+        assert.equal(crossed,true);
+        assert.deepEqual(takeSelectionUnits().map(({rows,checked})=>({rows,checked})),[{rows:0,checked:1}]);
+      }finally{DatabaseSync.prototype.prepare=prepare;hook.deregister();}
     });`;
   const child=spawnSync(process.execPath,['--input-type=module','-e',script],{encoding:'utf8',timeout:30000});
   assert.equal(child.status,0,child.stdout+child.stderr);assert.equal(child.signal,null);
@@ -143,6 +152,7 @@ test('measurement hooks retain internal error codes and operation deadline overs
         mode='deadline';crossed=false;const result=await s.search({query:'copper'});
         assert.equal(result.coverage.status,'partial');assert.equal(result.candidates.length,0);
         assert.deepEqual(takeOperationOvershoots(),[7]);
+        assert.ok(takeInternalErrors().includes('search_deadline'));
         assert.throws(()=>s.service.revalidate([{ticket:'synthetic-missing'}]),{code:'raw_search_unavailable'});
         assert.deepEqual(takeInternalErrors(),['source_unavailable']);
         mode='status';assert.equal((await s.service.status()).error,'raw_search_unavailable');
@@ -174,9 +184,36 @@ test('opening deadline cause is recorded before the public factory refusal',()=>
       const prepare=DatabaseSync.prototype.prepare;let crossed=false;
       DatabaseSync.prototype.prepare=function(sql){const stmt=prepare.call(this,sql);
         if(!crossed&&sql==='PRAGMA application_id'){crossed=true;now+=1001;}return stmt;};
-      try{await assert.rejects(openRawSearch(s.options),{code:'raw_search_unavailable'});assert.equal(crossed,true);assert.deepEqual(takeInternalErrors(),['search_deadline']);}
+      try{await assert.rejects(openRawSearch(s.options),{code:'raw_search_unavailable'});assert.equal(crossed,true);
+        const causes=takeInternalErrors();assert.equal(causes[0],'search_deadline');assert.ok(causes.every(code=>code==='search_deadline'));}
       finally{DatabaseSync.prototype.prepare=prepare;hook.deregister();}
       await s.reopen();
+    });`;
+  const child=spawnSync(process.execPath,['--input-type=module','-e',script],{encoding:'utf8',timeout:30000});
+  assert.equal(child.status,0,child.stdout+child.stderr);assert.equal(child.signal,null);
+});
+
+test('preparation deadline cause precedes the opener crypto mapping',()=>{
+  const url=path=>new URL(path,import.meta.url).href;
+  const script=`const {installPhaseMeasurement}=await import(${JSON.stringify(url('../../tools/testing/raw-search-phase-loader.mjs'))});const hook=installPhaseMeasurement();
+    const {default:test}=await import('node:test');const {default:assert}=await import('node:assert/strict');
+    const {performance}=await import('node:perf_hooks');
+    const {sourceFixture,savedSource}=await import(${JSON.stringify(url('../testing/raw-source-fixtures.mjs'))});
+    const {searchFixture}=await import(${JSON.stringify(url('../testing/raw-search-fixtures.mjs'))});
+    const {takeInternalErrors,measurementError}=await import(${JSON.stringify(url('../../tools/testing/raw-search-phase-ledger.mjs'))});
+    test('preparation cause',async t=>{let now=100;Object.defineProperty(performance,'now',{configurable:true,value:()=>now});
+      const f=sourceFixture(t);await savedSource(f,'Synthetic copper telescope.');const s=await searchFixture(f);await s.maintain();
+      assert.ok((await s.search({query:'copper'})).candidates[0]);
+      const open=f.port.openRaw;f.port.openRaw=async value=>{const result=await open(value);now+=1001;return result;};
+      // The authority captures the port function when it opens.
+      await s.reopen();const current=(await s.search({query:'copper'})).candidates[0];assert.ok(current);takeInternalErrors();
+      try{let failure;await assert.rejects(s.prepare(current),error=>{failure=error;return error.code==='raw_search_unavailable';});
+        const result=measurementError(failure);assert.equal(result.code,'raw_search_unavailable');
+        assert.equal(result.internalCode,'search_deadline');assert.equal(result.internalCodes[0],'search_deadline');
+        assert.ok(result.internalCodes.includes('raw_crypto_unavailable'));
+        f.port.openRaw=open;await s.reopen();const fresh=(await s.search({query:'copper'})).candidates[0];
+        assert.ok(await s.prepare(fresh));
+      }finally{hook.deregister();}
     });`;
   const child=spawnSync(process.execPath,['--input-type=module','-e',script],{encoding:'utf8',timeout:30000});
   assert.equal(child.status,0,child.stdout+child.stderr);assert.equal(child.signal,null);
