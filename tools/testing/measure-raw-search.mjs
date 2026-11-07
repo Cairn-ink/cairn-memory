@@ -45,7 +45,7 @@ export async function measureRawFullRead(storage,authority){
 }
 export async function measureRawSearch(t,targets) {
   const profile=process.env.CAIRN_RAW_MEASURE_PROFILE;
-  if(profile&&!['commitment-cost','cadence'].includes(profile))throw Error('invalid_measurement_profile');
+  if(profile&&!['commitment-cost','cadence','fixture-only'].includes(profile))throw Error('invalid_measurement_profile');
   const lineageTools=profile?await import('./measure-raw-search-lineage.mjs'):null;
   const reports=[];
   t.diagnostic(JSON.stringify({hardware:{cpu:cpus()[0].model,cores:cpus().length,memoryBytes:totalmem()},node:process.version,targets}));

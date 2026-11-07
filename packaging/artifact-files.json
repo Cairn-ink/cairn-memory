@@ -365,6 +365,7 @@
   "core/raw-search-retrieval.mjs",
   "core/raw-search-maintenance.mjs",
   "docs/plans/raw-search-interface.md",
+  "docs/plans/raw-search-predicate-plans.md",
   "docs/plans/raw-search-seam.md",
   "core/context-product-checkpoint-cost.mjs",
   "core/card-lineage.mjs",
