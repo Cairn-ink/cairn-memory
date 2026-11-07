@@ -167,53 +167,111 @@ export function createRawSearchAuthority(database, options) {
     bounds??=read(()=>({conversations:db.prepare('SELECT coalesce(max(rowid),0) AS last FROM raw_conversations').get().last,
       messages:db.prepare('SELECT coalesce(max(rowid),0) AS last FROM raw_messages').get().last}));
     let remaining=50000;
-    const scan=(sql,args)=>{
+    // Keyset predicates always belong to the projected rows. Never splice a
+    // predicate into a projection's final JOIN condition.
+    const scan=(sql,args,keys)=>{
       const columns=read(()=>db.prepare(sql).columns().map(column=>column.name));
       const quoted=columns.map(name=>'"'+name.replaceAll('"','""')+'"');
-      const order=sql.match(/ ORDER BY (.+) LIMIT 50001$/s)[1].split(',');
-      const positions=order.map(name=>columns.indexOf(name.split('.').at(-1)));
+      const order=sql.match(/ ORDER BY (.+) LIMIT 50001$/s)[1].split(',').map(name=>name.split('.').at(-1));
+      const positions=order.map(name=>columns.indexOf(name));
       if(positions.some(index=>index<0))fail('storage_error');
-      const pages=[];let after=null;
+      const projection=sql.replace(/ ORDER BY (.+) LIMIT 50001$/s,'');
+      const pages=[];let after=null,offset=0;
       while(true){
         const limit=Math.min(32,remaining+1);
-        const bounded=sql.replace(' ORDER BY ',(after?' AND ('+order.join(',')+')>('+order.map(()=>'?').join(',')+')':'')+' ORDER BY ')
-          .replace('LIMIT 50001','LIMIT '+limit);
+        const batch=keys?.slice(offset,offset+limit);
+        if(batch&&!batch.length){if(!pages.length||JSON.parse(pages.at(-1)).length===32)pages.push('[]');break;}
+        const bounded=`SELECT * FROM (${projection}) WHERE `+
+          (after?'('+order.join(',')+')>('+order.map(()=>'?').join(',')+')':'1')+
+          ' ORDER BY '+order.join(',')+' LIMIT '+limit;
         const page=read(()=>{
           if(versionInside()!==expectedVersion)fail('source_unavailable');
-          // Native JSON materialization avoids thousands of JS row objects
-          // while a canonical SHARED lock is held. All selected values remain.
-          return db.prepare(`SELECT count(*) AS count,json_group_array(json_array(${quoted.join(',')})) AS rows FROM (${bounded})`).get(...args,...after??[]);
+          return db.prepare(`SELECT count(*) AS count,json_group_array(json_array(${quoted.join(',')})) AS rows FROM (${bounded})`)
+            .get(...args,...(batch?[JSON.stringify(batch)]:[]),...after??[]);
         });
         remaining-=page.count;if(remaining<0)fail('source_budget_exceeded');
-        pages.push(page.rows);if(page.count<limit)break;
+        pages.push(page.rows);
+        if(batch){offset+=batch.length;if(!page.count)continue;}
+        else if(page.count<limit)break;
         const last=JSON.parse(page.rows).at(-1);after=positions.map(index=>last[index]);
       }
       return {columns,pages};
     };
+    // Build membership once. Each native read advances an indexed key and
+    // returns at most 32 rows; no namespace-sized CTE runs again on each page.
+    // Only bound identities are retained. Unrelated rows are streamed past.
+    const each=(sql,args,visit)=>{
+      let after=null;
+      const order=sql.match(/ ORDER BY (.+)$/s)[1].split(',');
+      const projection=sql.replace(/ ORDER BY (.+)$/s,'');
+      while(true){
+        const page=read(()=>{
+          if(versionInside()!==expectedVersion)fail('source_unavailable');
+          return db.prepare(`SELECT * FROM (${projection}) WHERE `+
+            (after?'('+order.join(',')+')>('+order.map(()=>'?').join(',')+')':'1')+
+            ' ORDER BY '+order.join(',')+' LIMIT 32').all(...args,...after??[]);
+        });
+        for(const row of page)visit(row);
+        if(page.length<32)break;
+        after=order.map(key=>page.at(-1)[key]);
+      }
+    };
+    const remember=(set,value)=>{set.add(value);if(set.size>50000)fail('source_budget_exceeded');};
+    const append=(list,value)=>{list.push(value);if(list.length>50000)fail('source_budget_exceeded');};
     const rows=options.readSet.map(ns=>{
       const args=boundary(ns), horizon=`c.rowid<=${bounds.conversations} AND m.rowid<=${bounds.messages}`;
       // A proof keeps its original source population. Appending another message
       // cannot change that population's inputs; edits and inbound edges can.
-      const related=`WITH roots AS MATERIALIZED (
-        SELECT c.id AS conversation_id,m.message_id,c.owner_id,c.scope,c.project_id,c.client
-        FROM raw_conversations c JOIN raw_messages m ON m.conversation_id=c.id
-        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND ${horizon}),
-      bound_memories AS MATERIALIZED (
-        SELECT r.memory_id FROM raw_receipt_lineage l CROSS JOIN receipts r ON r.id=l.receipt_id
-        WHERE (l.conversation_id,l.message_id) IN (SELECT conversation_id,message_id FROM roots)
-        UNION SELECT r.memory_id FROM receipts r JOIN memories m ON m.id=r.memory_id
-        WHERE EXISTS(SELECT 1 FROM roots s WHERE s.owner_id=m.owner_id AND s.scope=m.scope AND s.project_id=m.project_id
-          AND s.client=r.client AND s.message_id=r.event_id)),
-      bound_receipts AS MATERIALIZED (
-        SELECT r.id FROM bound_memories b CROSS JOIN receipts r ON r.memory_id=b.memory_id),
-      edges AS MATERIALIZED (
-        SELECT l.* FROM raw_receipt_lineage l WHERE l.receipt_id IN (SELECT id FROM bound_receipts)
-        OR (l.conversation_id,l.message_id) IN (SELECT conversation_id,message_id FROM roots)),
-      bound_scopes AS MATERIALIZED (
-        SELECT owner_id,scope,project_id FROM roots
-        UNION SELECT c.owner_id,c.scope,c.project_id FROM edges l JOIN raw_conversations c ON c.id=l.conversation_id
-        UNION SELECT m.owner_id,m.scope,m.project_id FROM bound_memories b JOIN memories m ON m.id=b.memory_id)
-      `;
+      const roots=new Set(),events=new Set(),scopes=new Set(),owners=new Set([ns.ownerId]);
+      const rootReceipts=new Set(),memories=new Set(),receiptIds=new Set(),endpoints=new Set();
+      const edgeKeys=[],receiptKeys=[],exclusionKeys=[],fenceKeys=[],factKeys=[],epochKeys=[];
+      const pair=(c,m)=>JSON.stringify([c,m]);
+      const scope=(owner,kind,project)=>JSON.stringify([owner,kind,project]);
+      each(`SELECT c.id AS conversation_id,m.message_id,c.client FROM raw_conversations c
+        CROSS JOIN raw_messages m ON m.conversation_id=c.id
+        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND ${horizon}
+        ORDER BY conversation_id,message_id`,args,row=>{
+        remember(roots,pair(row.conversation_id,row.message_id));remember(events,pair(row.client,row.message_id));
+      });
+      if(roots.size)scopes.add(scope(...args));
+      each('SELECT receipt_id,conversation_id,message_id,start,end FROM raw_receipt_lineage ORDER BY receipt_id,conversation_id,message_id,start,end',[],row=>{
+        if(roots.has(pair(row.conversation_id,row.message_id)))remember(rootReceipts,row.receipt_id);
+      });
+      each(`SELECT r.id,r.memory_id,r.client,r.event_id,m.owner_id,m.scope,m.project_id
+        FROM receipts r LEFT JOIN memories m ON m.id=r.memory_id ORDER BY id`,[],row=>{
+        if(rootReceipts.has(row.id)||row.owner_id===ns.ownerId&&row.scope===ns.scope&&row.project_id===args[2]&&events.has(pair(row.client,row.event_id)))
+          remember(memories,row.memory_id);
+      });
+      each('SELECT id,memory_id FROM receipts ORDER BY id',[],row=>{
+        if(memories.has(row.memory_id)){remember(receiptIds,row.id);append(receiptKeys,row.id);}
+      });
+      each(`SELECT l.rowid AS seek,l.receipt_id,l.conversation_id,l.message_id,l.start,l.end,c.owner_id,c.scope,c.project_id
+        FROM raw_receipt_lineage l LEFT JOIN raw_conversations c ON c.id=l.conversation_id
+        ORDER BY receipt_id,conversation_id,message_id,start,end`,[],row=>{
+        if(receiptIds.has(row.receipt_id)||roots.has(pair(row.conversation_id,row.message_id))){
+          append(edgeKeys,row.seek);
+          remember(endpoints,pair(row.conversation_id,row.message_id));
+          if(row.owner_id!==null){remember(scopes,scope(row.owner_id,row.scope,row.project_id));owners.add(row.owner_id);}
+        }
+      });
+      each('SELECT id,owner_id,scope,project_id FROM memories ORDER BY id',[],row=>{
+        if(memories.has(row.id)){remember(scopes,scope(row.owner_id,row.scope,row.project_id));owners.add(row.owner_id);}
+      });
+      each('SELECT rowid AS seek,conversation_id,message_id,start,end FROM raw_source_exclusions ORDER BY conversation_id,message_id,start,end',[],row=>{
+        if(roots.has(pair(row.conversation_id,row.message_id))||endpoints.has(pair(row.conversation_id,row.message_id)))append(exclusionKeys,row.seek);
+      });
+      each('SELECT rowid AS seek,owner_id,scope,project_id,client,session_key FROM raw_session_fences ORDER BY owner_id,scope,project_id,client,session_key',[],row=>{
+        if(scopes.has(scope(row.owner_id,row.scope,row.project_id)))append(fenceKeys,row.seek);
+      });
+      const has=table=>read(()=>db.prepare('SELECT 1 FROM sqlite_master WHERE name=?').get(table));
+      if(has('content_suppressions'))each('SELECT owner_id,fact_id FROM content_suppressions ORDER BY owner_id,fact_id',[],row=>{
+        if(owners.has(row.owner_id))append(factKeys,[row.owner_id,row.fact_id]);
+      });
+      if(has('owner_suppression_epochs'))each('SELECT owner_id FROM owner_suppression_epochs ORDER BY owner_id',[],row=>{
+        if(owners.has(row.owner_id))append(epochKeys,row.owner_id);
+      });
+      const related=`WITH edges AS (SELECT l.* FROM json_each(?) seek
+        CROSS JOIN raw_receipt_lineage l ON l.rowid=seek.value) `;
       const conversations=scan(`SELECT id,owner_id,scope,project_id,client,session_key FROM raw_conversations WHERE ${where}
         AND rowid<=${bounds.conversations} ORDER BY id LIMIT 50001`,args);
       const parts=scan(`SELECT p.conversation_id,p.message_id,p.part_index,p.start,p.end,p.saved,p.digest,
@@ -223,38 +281,35 @@ export function createRawSearchAuthority(database, options) {
         JOIN raw_messages m ON m.conversation_id=p.conversation_id AND m.message_id=p.message_id
         WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND ${horizon}
         ORDER BY p.conversation_id,p.message_id,p.part_index LIMIT 50001`,args);
-      const exclusions=scan(related+`SELECT x.* FROM raw_source_exclusions x WHERE (x.conversation_id,x.message_id) IN (
-        SELECT conversation_id,message_id FROM roots UNION SELECT conversation_id,message_id FROM edges)
-        ORDER BY x.conversation_id,x.message_id,x.start,x.end LIMIT 50001`,args);
-      const fences=scan(related+`SELECT f.* FROM raw_session_fences f
-        WHERE (f.owner_id,f.scope,f.project_id) IN (SELECT owner_id,scope,project_id FROM bound_scopes)
-        ORDER BY f.owner_id,f.scope,f.project_id,f.client,f.session_key LIMIT 50001`,args);
+      const exclusions=scan(`SELECT x.* FROM json_each(?) seek CROSS JOIN raw_source_exclusions x ON x.rowid=seek.value
+        ORDER BY x.conversation_id,x.message_id,x.start,x.end LIMIT 50001`,[],exclusionKeys);
+      const fences=scan(`SELECT f.* FROM json_each(?) seek CROSS JOIN raw_session_fences f ON f.rowid=seek.value
+        ORDER BY f.owner_id,f.scope,f.project_id,f.client,f.session_key LIMIT 50001`,[],fenceKeys);
       const lineage=scan(related+`SELECT l.* FROM edges l
-        ORDER BY l.receipt_id,l.conversation_id,l.message_id,l.start,l.end LIMIT 50001`,args);
-      // Preserve every endpoint, even if the other end is absent, foreign or in
-      // another namespace. Scope belongs to that endpoint, never to the searcher.
+        ORDER BY l.receipt_id,l.conversation_id,l.message_id,l.start,l.end LIMIT 50001`,[],edgeKeys);
+      // Preserve missing, foreign and other-namespace endpoints.
       const ancestors=scan(related+`SELECT l.receipt_id,l.conversation_id,l.message_id,l.start,l.end,
         c.id,c.owner_id,c.scope,c.project_id,c.client,c.session_key,m.role,m.total_units
         FROM edges l LEFT JOIN raw_conversations c ON c.id=l.conversation_id
         LEFT JOIN raw_messages m ON m.conversation_id=l.conversation_id AND m.message_id=l.message_id
-        ORDER BY l.receipt_id,l.conversation_id,l.message_id,l.start,l.end LIMIT 50001`,args);
-      const receipts=scan(related+`SELECT r.*,m.id AS parent_id,m.owner_id,m.scope,m.project_id,
+        ORDER BY l.receipt_id,l.conversation_id,l.message_id,l.start,l.end LIMIT 50001`,[],edgeKeys);
+      const receipts=scan(`SELECT r.*,m.id AS parent_id,m.owner_id,m.scope,m.project_id,
         m.revision,m.currentness,m.review_state,m.deleted,o.kind
-        FROM bound_receipts b CROSS JOIN receipts r ON r.id=b.id
+        FROM json_each(?) seek CROSS JOIN receipts r ON r.id=seek.value
         LEFT JOIN memories m ON m.id=r.memory_id LEFT JOIN raw_receipt_origins o ON o.receipt_id=r.id
-        ORDER BY r.id LIMIT 50001`,args);
+        ORDER BY r.id LIMIT 50001`,[],receiptKeys);
       const maps=scan(`SELECT a.* FROM raw_source_maps a JOIN raw_conversations c ON c.id=a.conversation_id
         JOIN raw_messages m ON m.conversation_id=a.conversation_id AND m.message_id=a.message_id
         WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND ${horizon}
         ORDER BY a.conversation_id,a.message_id,a.source_key,a.start,a.end LIMIT 50001`,args);
       const controls=read(()=>db.prepare("SELECT 1 FROM sqlite_master WHERE name='local_capture_controls'").get())?
         scan(`SELECT client,revision FROM local_capture_controls WHERE ${where} ORDER BY client LIMIT 50001`,args):[];
-      const facts=read(()=>db.prepare("SELECT 1 FROM sqlite_master WHERE name='content_suppressions'").get())?
-        scan(related+`SELECT f.* FROM content_suppressions f WHERE f.owner_id=? OR f.owner_id IN (SELECT owner_id FROM bound_scopes)
-          ORDER BY f.owner_id,f.fact_id LIMIT 50001`,[...args,ns.ownerId]):[];
-      const suppressions=read(()=>db.prepare("SELECT 1 FROM sqlite_master WHERE name='owner_suppression_epochs'").get())?
-        scan(related+`SELECT e.* FROM owner_suppression_epochs e WHERE e.owner_id=? OR e.owner_id IN (SELECT owner_id FROM bound_scopes)
-          ORDER BY e.owner_id LIMIT 50001`,[...args,ns.ownerId]):[];
+      const facts=has('content_suppressions')?
+        scan(`SELECT f.* FROM json_each(?) seek CROSS JOIN content_suppressions f ON f.owner_id=json_extract(seek.value,'$[0]') AND f.fact_id=json_extract(seek.value,'$[1]')
+          ORDER BY f.owner_id,f.fact_id LIMIT 50001`,[],factKeys):[];
+      const suppressions=has('owner_suppression_epochs')?
+        scan(`SELECT e.* FROM json_each(?) seek CROSS JOIN owner_suppression_epochs e ON e.owner_id=seek.value
+          ORDER BY e.owner_id LIMIT 50001`,[],epochKeys):[];
       return {ns,conversations,parts,exclusions,fences,lineage,ancestors,receipts,maps,controls,facts,suppressions,
         exclusion:read(()=>db.prepare(`SELECT generation FROM raw_exclusion_clocks WHERE ${where}`).get(...args))};
     });

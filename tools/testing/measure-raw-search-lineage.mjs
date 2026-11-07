@@ -81,10 +81,10 @@ export function seedMeasurementLineage(db,count) {
 
 function scanName(sql) {
   for(const [marker,name] of [
-    ['SELECT x.*','exclusions'],['SELECT f.* FROM raw_session_fences','session-fences'],
+    ['SELECT x.*','exclusions'],['CROSS JOIN raw_session_fences f','session-fences'],
     ['SELECT l.* FROM edges l','lineage'],['SELECT l.receipt_id,l.conversation_id','ancestors'],
     ['SELECT r.*,m.id AS parent_id','receipts'],['SELECT a.*','maps'],
-    ['SELECT f.* FROM content_suppressions','facts'],['SELECT e.*','suppression-epochs'],
+    ['CROSS JOIN content_suppressions f','facts'],['SELECT e.*','suppression-epochs'],
     ['SELECT type,name,tbl_name,sql','schema'],['SELECT * FROM content_safety_control','control'],
     ['SELECT id,owner_id','conversations'],['SELECT p.conversation_id','parts'],
     ['SELECT client,revision','capture-controls']])if(sql.includes(marker))return name;
@@ -94,8 +94,15 @@ function scanName(sql) {
 // Wrappers observe the native statements and preserve their results/errors.
 // No raw file descriptors, alternate SQLite binding, or runtime hook is used.
 function observe() {
-  const prepare=DatabaseSync.prototype.prepare;
-  let current=null;
+  const prepare=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;
+  let current=null,unit=null;
+  DatabaseSync.prototype.exec=function(sql){
+    if(sql==='BEGIN')unit={statements:0,rows:0};
+    if(unit)unit.statements++;
+    try{return exec.call(this,sql);}finally{
+      if((sql==='COMMIT'||sql==='ROLLBACK')&&unit){if(current)current.units.push(unit);unit=null;}
+    }
+  };
   const session=new Session(),scripts=new Map(),sources=new Map();session.connect();
   session.on('Debugger.scriptParsed',({params})=>scripts.set(params.scriptId,params.url));
   session.post('Debugger.enable');session.post('Debugger.setPauseOnExceptions',{state:'all'});
@@ -124,30 +131,35 @@ function observe() {
     }
     const prepareMs=performance.now()-preparing;
     if(current&&sql.startsWith('SELECT s.*,h.sequence'))current.payloadReads++;
-    if(!sql.startsWith('SELECT count(*) AS count,json_group_array')&&sql!=='PRAGMA data_version')return statement;
-    const get=statement.get;
-    statement.get=function(...args) {
-      const started=performance.now(),stack=sql==='PRAGMA data_version'?new Error().stack:'';
-      try {
-        const value=get.apply(this,args);
-        if(current) {
-          if(sql==='PRAGMA data_version')current.versions.push({value:value.data_version,
-            stage:stack.includes('at fenceInside')?'final-snapshot':stack.includes('at buildFence')?'rebuild':'check',
-            stack:stack.split('\n').slice(2,7).map(line=>line.trim())});
-          else {
-            const scan=scanName(sql),index=current.next[scan]??0;current.next[scan]=index+1;
-            const executionMs=performance.now()-started;
-            current.pages.push({scan,index,rows:value.count,prepareMs,executionMs,ms:prepareMs+executionMs});
+    for(const method of ['get','all']){
+      const execute=statement[method];
+      statement[method]=function(...args){
+        const started=performance.now(),stack=sql==='PRAGMA data_version'?new Error().stack:'';
+        if(unit)unit.statements++;
+        try{
+          const value=execute.apply(this,args);
+          const aggregate=sql.startsWith('SELECT count(*) AS count,json_group_array');
+          if(unit)unit.rows+=aggregate?value.count:method==='all'?value.length:value===undefined?0:1;
+          if(current){
+            if(sql==='PRAGMA data_version')current.versions.push({value:value.data_version,
+              stage:stack.includes('at fenceInside')?'final-snapshot':stack.includes('at buildFence')?'rebuild':'check',
+              stack:stack.split('\n').slice(2,7).map(line=>line.trim())});
+            else if(aggregate||method==='all'&&sql.startsWith('SELECT * FROM (')){
+              const scan=aggregate?scanName(sql):'membership:'+(sql.match(/FROM ([a-z_]+)/)?.[1]??'other');
+              const index=current.next[scan]??0;current.next[scan]=index+1;
+              const executionMs=performance.now()-started;
+              current.pages.push({scan,index,rows:aggregate?value.count:value.length,prepareMs,executionMs,ms:prepareMs+executionMs});
+            }
           }
-        }
-        return value;
-      }catch(error){if(current)current.nativeErrors.push({code:error.code,stack:error.stack});throw error;}
-    };
+          return value;
+        }catch(error){if(current)current.nativeErrors.push({code:error.code,stack:error.stack});throw error;}
+      };
+    }
     return statement;
   };
-  function begin(label) {current={label,pages:[],versions:[],nativeErrors:[],exceptions:[],next:{},payloadReads:0};return current;}
+  function begin(label) {current={label,units:[],pages:[],versions:[],nativeErrors:[],exceptions:[],next:{},payloadReads:0};return current;}
   function end() {const value=current;current=null;return value;}
-  return {begin,end,close(){DatabaseSync.prototype.prepare=prepare;session.post('Debugger.setPauseOnExceptions',{state:'none'});session.disconnect();}};
+  return {begin,end,close(){DatabaseSync.prototype.prepare=prepare;DatabaseSync.prototype.exec=exec;session.post('Debugger.setPauseOnExceptions',{state:'none'});session.disconnect();}};
 }
 
 function attribution(trace,code) {
@@ -227,6 +239,9 @@ export async function measureLineageProfile({profile,count,path,authority,servic
       report.rebuildAttempts=summary(samples.map(value=>value.ms));
       report.rebuildErrors=samples.filter(value=>!value.ok);
       report.shared=summary(samples.flatMap(sample=>sample.sharedValues));
+      report.units={limit:{statements:32,rows:4096},
+        statements:summary(samples.flatMap(sample=>sample.trace.units.map(unit=>unit.statements))),
+        rows:summary(samples.flatMap(sample=>sample.trace.units.map(unit=>unit.rows)))};
       report.sharedSections=samples.map(sample=>sample.shared);
       report.pages=samples.map(sample=>sample.trace.pages);
       report.pageTimeByIndex=Object.fromEntries(Object.entries(pageGroups).map(([key,values])=>[key,summary(values)]));

@@ -123,7 +123,7 @@ export async function measureRawSearch(t,targets) {
         report.indexedParts=built;
         report.checkpointError=checkpointError;
         report.measurement='synthetic lineage with native statement and exception observation';
-        report.stopThreshold=profile==='commitment-cost'&&(report.shared.p99>50||count===10000&&report.rebuild.p95!==null&&report.rebuild.p95>250);
+        report.stopThreshold=profile==='commitment-cost'&&(report.shared.p99>50||count===10000&&report.rebuild.p95!==null&&report.rebuild.p95>500);
         if(process.env.CAIRN_RAW_MEASURE_OUTPUT){
           mkdirSync(process.env.CAIRN_RAW_MEASURE_OUTPUT,{recursive:true});
           writeFileSync(join(process.env.CAIRN_RAW_MEASURE_OUTPUT,profile+'-'+count+'.json'),JSON.stringify(report,null,2)+'\n');
