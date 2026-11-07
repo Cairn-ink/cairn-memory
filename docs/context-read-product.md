@@ -1849,7 +1849,36 @@ No-progress state appears only as `noProgress: {lane, count}`.
 `admission_no_progress` remains the private failure cause; private failure
 records and the failure vocabulary are unchanged.
 
-## Lexical admission turn budget (amendment v2.4, 2026-11-07)
+## Lexical checkpoint admission (amendment v2.4, 2026-11-06)
+
+Lexical work turns price the complete next checkpoint transaction before
+starting it: begin, bounded page or reset work, freshness checks, signed save
+and commit, followed by the final fresh canonical observation and delivery
+tail. Handle-local wall-cost high-water marks start with conservative defaults;
+a transaction that cannot fit with that tail yields the turn with its existing
+progress. Selection, generation setup, verification, publication and cleanup
+writes use the same admission gate. The final snapshot and publication proof
+still run after a yield.
+
+The host quantum and its existing reserve are unchanged. An unseen, indivisible
+commit that alone takes longer than the quantum can still overrun it; pricing
+cannot interrupt a native commit. SQLite durability, signed checkpoint semantics
+and failure reservations remain unchanged.
+
+Fix round 1: pricing may decline only additional checkpoint transactions in a
+work turn. The first work transaction (page/comparison, verification, publication
+or cleanup) is always admitted under the existing rules, even when its estimate
+cannot fit; setup-only transactions, including selection retention and generation
+initialization, do not consume its admission. An indivisible
+slow first commit can therefore overrun exactly as before. For each complete
+transaction, remaining transaction, commit and doubled observation-tail sample,
+the handle-local estimate is the maximum of its seed, the new sample and half
+its previous estimate (one-observation half-life). Seeds are respectively 100,
+100, 50 and 50 ms. The combined transaction-plus-tail estimate is capped at the
+turn's usable budget after its unchanged reserve. No estimate can refuse every
+start, and normal observations recover from an outlier.
+
+## Lexical admission turn budget (amendment v2.5, 2026-11-07)
 
 The lexical maintenance pump accepts optional `admissionMs`, defaulting to
 `quantum.maxMs`. It budgets an entire admission turn, including cold open,
@@ -1877,7 +1906,7 @@ each admission slot at `A` and each work slot at `S`. With one projection
 budget is infeasible and fails with `invalid_input`. A host on a slower volume
 can opt in within these bounds without extending its work quantum.
 
-## Sidecar integrity attestation (amendment v2.5, 2026-11-07)
+## Sidecar integrity attestation (amendment v2.6, 2026-11-07)
 
 Writable admission and read-only opens verify a keyed attestation before using
 an existing cache. Its HMAC key is derived from the store's cursor secret with

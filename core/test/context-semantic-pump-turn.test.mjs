@@ -233,7 +233,9 @@ test('absent port native DTOs, SQL counts, allocations and messages match archiv
   const delta=[0,0,-4,0,16,0,16],expected=structuredClone(baseline.evidence.native);
   expected.statements=expected.statements.map((row,i)=>({...row,begun:row.begun+delta[i],completed:row.completed+delta[i]}));
   assert.deepEqual(native.statements,expected.statements,'absent-port SQL statement differential from archived main plus exact seal accounting');
-  assert.equal(JSON.stringify(native),JSON.stringify(expected),'absent-port byte differential: allocations, messages, DTOs and status');
+  assert.equal(expected.allocations[8],4096,'archived first-reader domain allocation');
+  expected.allocations.splice(8,1);
+  assert.equal(JSON.stringify(native),JSON.stringify(expected),'absent-port byte differential: shared domain, allocations, messages, DTOs and status');
   if(process.env.C2_ABSENCE_OUTPUT){const path=process.env.C2_ABSENCE_OUTPUT;let evidence={};try{evidence=JSON.parse(readFileSync(path,'utf8'));}catch{}writeFileSync(path,JSON.stringify({...evidence,native},null,2)+'\n');}
 });
 

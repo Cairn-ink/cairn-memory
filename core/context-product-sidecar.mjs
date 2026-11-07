@@ -1,5 +1,6 @@
 import { sidecarAttestationFile, readAttestedSidecarMetadata, sidecarAttestationDigest, validSidecarAttestation, writeSidecarAttestation } from './context-product-sidecar-attestation.mjs';
 import { reserveSidecarHandle, sidecarHandleGuard } from './context-product-handles.mjs';
+import { hasCardLineage, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { admissionRequired, PRODUCT_SIDECAR_SUFFIX } from './context-product-admission.mjs';
 import { cachedContentSuppressionRequestInside, contentSuppressionRequestInside, withMemoryCandidateBatchInside, withContentSuppressionReadInside, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { bindContentSafetyConnection, cachedContentLayout } from './content-safety-schema.mjs';
@@ -19,6 +20,7 @@ import { PRODUCT_PROFILE } from './context-product-control.mjs';
 import { contextReadSet } from './context-read-input.mjs';
 import { canonicalJson, digest, projectionDigest, signedRecord, verifiedRecord } from './context-product-validation.mjs';
 import { maintenanceQuantum } from './context-product-quantum.mjs';
+import { checkpointCost } from './context-product-checkpoint-cost.mjs';
 import { ManifestHash } from './context-product-manifest.mjs';
 import { fail } from './validation.mjs';
 import { VECTOR_DDL } from './context-product-vectors.mjs';
@@ -172,7 +174,8 @@ export function canonicalProductFences(db, p) {
       memory=row.epoch??1;
     }else memory=db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch??1;
     canonical.push({ memory,
-      ...(p.types.includes('card') ? { card: db.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1 } : {}) });
+      ...(p.types.includes('card') ? { card: db.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1,
+        ...cardLineageNamespaceInside(db,ns) } : {}) });
     dependency.push(p.types.includes('card') ? cardDependencyFence(db, ns, p.readSet) : {});
   }
   return { canonicalFenceDigest: digest(canonical), dependencyFenceDigest: digest(dependency) };
@@ -195,6 +198,12 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   const handleRegistry=()=>handles??=sidecarHandleGuard(localHandle=reserveSidecarHandle(Object.values(productFile(path)).join(':')));
   const compare=memoryComparison?memoryComparison.createMemoryComparator():null;
   let comparisonBase=null, reuseOnlyWork=false;
+  const costs=checkpointCost(now), checkpointYield=Symbol('checkpoint yield');
+  let workQuantum=null, checkpointStarted, observationStarted, checkpointAttempted=false;
+  // Pricing only limits later work transactions in this turn. The first
+  // retains the base engine's admission, even after a slow commit. Setup-only
+  // writes (selection retention and generation initialization) cannot consume it.
+  const admitCheckpoint=(started=checkpointStarted)=>!workQuantum || !checkpointAttempted || costs.admit(workQuantum,started);
   let sideFormat, side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, unattestedIdentity=null, legacySealTable=false, guardDepth=0, discardAfterGuard=false, guardWritable=false;
   function failed(error, wasWritable) {
     if(wasWritable || error.reason==='storage_unavailable' ||
@@ -269,19 +278,27 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     catch (error) {attribution?.captureFailure(error); if(sqlite)sqlite.openingFailure(error);throw error; }
   };
   function close() { discardAfterGuard=true;if (side?.isOpen) side.close(); handles?.closed(); side = null; metadata = null; sideFiles = null; legacySealTable=false;discardAfterGuard=false; }
-  function write(work, kind='setup', beforeCommit) {
+  function write(work, kind='setup', beforeCommit, checkpoint=true) {
+    // Setup-only callers opt out explicitly; ambiguous writes count as work.
+    // All lexical write starts share this gate, including setup, GC and the
+    // qualified verification fallback. A denied start leaves signed work intact.
+    if(!admitCheckpoint())throw checkpointYield;
+    const started=checkpointStarted??now();checkpointStarted=undefined;
     // A caught verification rollback can continue within this refresh. Reopen
     // and check integrity before its fallback or any other transaction writes.
     if(discardAfterGuard)connection(true);
     const wasWritable=sideWritable===true;
     sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});
-    const beginning=attribution?.start('begin');
+    if(!admitCheckpoint(started))throw checkpointYield;
+    if(workQuantum && checkpoint)checkpointAttempted=true;
+    const began=now(),beginning=attribution?.start('begin');
     try {attribution?.checkpoint('begin');side.exec('BEGIN IMMEDIATE');}catch(error){failed(error,wasWritable);attribution?.captureFailure(error);throw error;}finally{attribution?.end(beginning);}
     try {
       verifyOpened();if(legacySealTable)side.exec(expectedSchema.find(row=>row.name==='product_attestation').sql);const result=work();rendezvous('batch');beforeCommit?.();
       writeSidecarAttestation(side,identity.cursorSecret,sidecarAttestationFile(sidePath),PRODUCT_SIDECAR_FORMAT);
-      const committing=attribution?.start('commit');
-      try {attribution?.checkpoint('commit');attribution?.add(kind+'CommitAttempts',1);side.exec('COMMIT');legacySealTable=false;attribution?.add(kind+'Commits',1);}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.end(committing);}
+      const commitStarted=now(),committing=attribution?.start('commit');
+      try {attribution?.checkpoint('commit');attribution?.add(kind+'CommitAttempts',1);side.exec('COMMIT');legacySealTable=false;attribution?.add(kind+'Commits',1);}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.end(committing);if(workQuantum)costs.commit(now()-commitStarted);}
+      if(workQuantum){const ended=now();costs.transaction(ended-started,ended-began);}
       return result;
     }
     catch (e) {failed(e,wasWritable);attribution?.captureFailure(e);
@@ -436,7 +453,11 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         if(legacyWalMissing&&missingSealTable)for(const table of ['vector_publications','vector_work','vector_validation_records','publications','work','validation_records','progress_records']){
           for(;;){check();const result=side.prepare(`DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} LIMIT 128)`).run();if(!result.changes)break;}
         }
-      },'setup',check);}finally{if(side?.isOpen)side=writing;}unattestedIdentity=null;
+      },'setup',check,false);}catch(error){
+        // A mid-turn reconnect may yield before sealing. Discard its unsealed
+        // handle so the next opening checks the missing seal once again.
+        if(error===checkpointYield)close();throw error;
+      }finally{if(side?.isOpen)side=writing;}unattestedIdentity=null;
     }
     return true;
   }
@@ -764,7 +785,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         side.prepare('DELETE FROM vector_work WHERE projection=?').run(old.projection);
         side.prepare('DELETE FROM selections WHERE projection=?').run(old.projection);
       }
-    });
+    },'setup',undefined,false);
   }
   function vectorCandidate(owner,lexicalGeneration) {
     return side.prepare(`SELECT storage_id,id FROM vector_generations v WHERE owner=? AND ${lexicalGeneration!==undefined?'lexical_generation=?':`
@@ -793,7 +814,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   }
   function collect(quantum,owner,maximum=128) {
     let slices=0;
-    while(quantum.admit('gc') && slices++<maximum) {
+    while(admitCheckpoint() && quantum.admit('gc') && slices++<maximum) {
       // A read-only hint avoids empty write transactions. Repeat both
       // lexical and vector retirement decisions under BEGIN IMMEDIATE.
       const lexicalCandidate=side.prepare(`SELECT 1 FROM generations g WHERE g.owner=? AND
@@ -822,7 +843,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       },'gc');if(found)rendezvous('gc');},'gc');
       if(!found)break;
     }
-    if(quantum.admit('gc'))quantum.measure(()=>{
+    if(admitCheckpoint() && quantum.admit('gc'))quantum.measure(()=>{
       if(discardAfterGuard)connection(true);
       const wasWritable=sideWritable===true;
       // Reclamation changes page placement, not logical rows, schema or any
@@ -962,6 +983,13 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     if (!writable) fail('invalid_input');
     const m = { transformed:0,canonicalRows:0,metadataBytes:0,textRows:0,textBytes:0,supportLookups:0,supportBytes:0,verifiedRows:0,
       reused:0,replaced:0,removed:0,copied:0,tokenized:0,retargets:0,verificationRestarts:0,verificationKept:0 };
+    workQuantum=quantum;
+    checkpointAttempted=false;costs.turn(quantum);
+    try {return refreshWork(p,access,budget,quantum,m);}
+    catch(error){if(error!==checkpointYield)throw error;attribution?.resetFailure();return m;}
+    finally {workQuantum=null;checkpointStarted=undefined;}
+  }
+  function refreshWork(p,access,budget,quantum,m) {
     if(reuseOnlyWork) {
       try {connection(true);}catch(error) {
         if(error===admissionRequired)throw error;
@@ -1006,7 +1034,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         side.prepare('INSERT INTO generations(id,owner,projection,incarnation,sequence,base_sequence,checkpoint,kind,fences,access,phase,last_key,base_id,verify,manifest,published,seed) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)').run(g.id,p.readSet[0].ownerId,g.projection,g.incarnation,g.sequence,g.base_sequence,0,g.kind,g.fences,g.access,0,'',g.base_id,JSON.stringify(g.verify),null,g.seed);
         g.storage_id=side.prepare('SELECT storage_id FROM generations WHERE id=?').get(g.id).storage_id;
         side.prepare("INSERT INTO statistics(generation,term_id,term,df,n,total_length) VALUES(?,0,'',0,0,0)").run(g.storage_id); save(g,t);
-      });
+      },'setup',undefined,false);
     } else {
       g.verify=JSON.parse(g.verify);
       if(mergeOrder && workStatus.retargetable===g.id) {
@@ -1017,7 +1045,8 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       }
     }
     g.streams = streams(p);
-    while (quantum.admit('scan') && quantum.admit('item') && g.phase < g.streams.length && m.transformed<budget.maxItems) {
+    while (admitCheckpoint() && quantum.admit('scan') && quantum.admit('item') && g.phase < g.streams.length && m.transformed<budget.maxItems) {
+      checkpointStarted=now();
       if (!fresh(t,p,access)) return m;
       const stream = g.streams[g.phase], maximum = stream.type === 'card' ? 1 : 128;
       const { rows, exhausted } = quantum.measure(()=>{
@@ -1066,6 +1095,10 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
               if(exactDocument(base,row)) {tokens={length:base.token_length};source=g.base_id;}
               else {
                 const text=row.eligible ? canonicalRead(()=>{
+                  if(stream.type==='card'&&hasCardLineage(canonical)) {
+                    const current=canonical.prepare(`SELECT id,revision,body_revision,state FROM private_cards WHERE ${where} AND id=?`).get(...boundary(stream.ns),row.id);
+                    if(!current||!contextCardEligible(canonical,identity,features,stream.ns,current,p.intent,{readSet:p.readSet}))unavailable('stale_index');
+                  }
                   attribution?.step();
                   let found;
                   try {found=canonical.prepare(stream.type==='memory'
@@ -1108,7 +1141,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       },'comparison'); } catch(e) {attribution?.captureFailure(e); if(e===fenceChanged)return m;throw e; }
       rendezvous('checkpoint');
     }
-    const verificationAdmitted=()=>g.phase>=g.streams.length && g.verify.phase<3 && quantum.admit('verify-scan') && quantum.admit('verification') &&
+    const verificationAdmitted=()=>admitCheckpoint() && g.phase>=g.streams.length && g.verify.phase<3 && quantum.admit('verify-scan') && quantum.admit('verification') &&
       (g.verify.phase!==1 || g.verify.resetDone || quantum.admit('verification-reset'));
     const batching=verificationBatching && verificationBatch({now,quantum,state:verificationBatchState});
     const legacyVerification=()=>{
@@ -1129,6 +1162,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       g=copy;batching.observe(finalized);return true;
     };
     while (verificationAdmitted()) {
+      checkpointStarted=now();
       if (!fresh(t,p,access)) return m;
       if(!batching) {
         write(() => { verifyPage(g,p,m,quantum); g.checkpoint++; save(g,t); },'verification');
@@ -1178,8 +1212,9 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       }
       rendezvous('verification');
     }
-    if (g.phase>=g.streams.length && g.verify.phase===3 && quantum.admit('publication') && fresh(t,p,access)) {
-      quantum.measure(()=>{
+    if (g.phase>=g.streams.length && g.verify.phase===3 && admitCheckpoint() && quantum.admit('publication')) {
+      checkpointStarted=now();
+      if(fresh(t,p,access))quantum.measure(()=>{
         if(!side.prepare("SELECT 1 FROM statistics WHERE generation=? AND term=''").get(g.storage_id))unavailable('corrupt');
         const publicationId=randomUUID(), manifestDigest=new ManifestHash(g.verify.hash).digest();
         // Last pre-commit canonical snapshot ends here. The independent writer
@@ -1206,12 +1241,13 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     return m;
   }
   const suppressionProofs=new WeakMap();
+  const lineageCards=p=>hasCardLineage(canonical)&&p.types.includes('card');
   function suppressionMemo(p) {
     if(!cachedContentLayout(canonical)?.suppressionRevision||!cachedContentSuppressionRequestInside(canonical,p.readSet[0].ownerId))return null;
     return contentSuppressionRequestInside(canonical,p.readSet);
   }
   function suppressionView(p,publication,memo,document) {
-    if(memo.epoch==='0:0'||memo.facts?.length===0)return null;
+    if(!lineageCards(p)&& (memo.epoch==='0:0'||memo.facts?.length===0))return null;
     const ss=streams(p),denied=new Set();
     const counts={...publication.counts,byType:Object.fromEntries(p.types.map(type=>[type,{...publication.counts.byType[type]}]))};
     let unknown=!memo.facts || memo.layout.rawLineage || p.types.includes('card') || memo.facts.some(f=>!['memory','owner','namespace','receipt'].includes(f.kind));
@@ -1228,16 +1264,17 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       }
     }
     if(unknown)for(const type of p.types)counts.byType[type]={eligible:null,indexed:null};
+    if(hasCardLineage(canonical)&&p.types.includes('card'))counts.totalTokenLength=null;
     return {denied,counts,unknown,canonicalRequired:p.rawLineagePresent!==false,checkEach:!memo.facts || p.types.includes('card') || memo.facts.some(f=>f.kind==='raw'),filtered:unknown||denied.size>0};
   }
   function suppressionRequest(p,publication,work) {
     if(!publication || !cachedContentLayout(canonical)?.suppressionRevision ||
-      contentSuppressionRequestFenceInside(canonical,p.readSet[0].ownerId)==='0:0')return work(null);
+      !lineageCards(p)&&contentSuppressionRequestFenceInside(canonical,p.readSet[0].ownerId)==='0:0')return work(null);
     const memo=suppressionMemo(p),proof=memo&&suppressionProofs.get(memo)?.get(publication);
-    if(memo?.facts?.length===0)return work(null);
+    if(!lineageCards(p)&&memo?.facts?.length===0)return work(null);
     if(proof)return work(proof.visible);
     const inspect=()=>withContentSuppressionReadInside(canonical,p.readSet,memo=>{
-      if(memo.facts?.length===0)return work(null);
+      if(!lineageCards(p)&&memo.facts?.length===0)return work(null);
       const generation=storageKey(publication.generation.id);
       return work(suppressionView(p,publication,memo,(stream,key)=>side.prepare(
         'SELECT doc,revision,body_revision,eligible,token_length FROM documents WHERE generation=? AND stream=? AND id=?').get(generation,stream,key)));
@@ -1246,9 +1283,9 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   }
   function visibleCounts(p,publication) {
     if(!publication||!cachedContentLayout(canonical)?.suppressionRevision||
-      contentSuppressionRequestFenceInside(canonical,p.readSet[0].ownerId)==='0:0')return null;
+      !lineageCards(p)&&contentSuppressionRequestFenceInside(canonical,p.readSet[0].ownerId)==='0:0')return null;
     const memo=suppressionMemo(p),proof=memo&&suppressionProofs.get(memo)?.get(publication);
-    if(memo?.facts?.length===0)return null;
+    if(!lineageCards(p)&&memo?.facts?.length===0)return null;
     if(proof)return proof.visible?.counts??null;
     return read(()=>suppressionRequest(p,publication,visible=>visible?.counts??null));
   }
@@ -1276,7 +1313,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
           if(!document?.eligible)continue;
           const stream=ss[document.stream],ref={type:stream.type,namespace:stream.ns,[stream.type==='memory'?'memoryId':'cardId']:document.id,
             revision:document.revision,...(stream.type==='card'?{bodyRevision:document.body_revision}:{})};
-          if(stream.type==='card'&&visible.checkEach&&contentSuppressionMayMatchInside(canonical,stream.ns,{kind:'card',key:document.id})){
+          if(stream.type==='card'&&visible.checkEach&&(hasCardLineage(canonical)||contentSuppressionMayMatchInside(canonical,stream.ns,{kind:'card',key:document.id}))){
             if(!cardCandidateAllowed(ref,p))continue;
             checked.add(ref);
           }
@@ -1372,7 +1409,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       if(verificationBatching)quantum.batchStart=started;
       reuseOnlyWork=reuseOnly;
       try {return guarded(()=>refresh(p,access,budget,quantum),true);}
-      finally {reuseOnlyWork=false;}
+      finally {reuseOnlyWork=false;observationStarted=now();}
     },
     compare:(p,access,budget,quantum)=>{
       if(!compare)return null;
@@ -1383,6 +1420,14 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       });
     },
     lexical:(p,...args)=>{p=projection(p);return guarded(()=>lexical(p,...args));},
+    // Start after refresh, finish outside the index's safety delivery envelope:
+    // canonical acquisition, authorization, DTO preparation and delivery proofs.
+    // The unchanged quantum reserve also leaves room for Worker/parent delivery.
+    measureObservation(work) {
+      try {return work();}finally {
+        if(observationStarted!==undefined){costs.tail(now()-observationStarted);observationStarted=undefined;}
+      }
+    },
     prepareObservation() {
     try {return guarded(()=>{ connection(false);return null; }); }
     catch(e) {attribution?.captureFailure(e);

@@ -42,7 +42,13 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   // S2h-1 storage, S2h-2's boundary, suppression grant grammar and three transaction validators, the gated B3 comparator,
   // the verification commit batch and semantic accounting stay behind the SQLite Worker boundary. Keep the exact closure
   // pin and independently verify the installed edges.
-  assert.equal(expected.length, 123, 'private_maintenance_admission_closure_pin');
+  // Combined closure: 123 + 6 = 129 (main 128 + the attestation module).
+  // The private checkpoint wall-cost estimator adds one Worker-only module. Card lineage adds the retained-lineage
+  // implementation and exact base/lineage DDL, plus the offline installer's observation/classification dependencies.
+  assert.equal(expected.length, 129, 'private_maintenance_admission_closure_pin');
+  assert.ok(expected.includes('core/context-product-checkpoint-cost.mjs'));
+  for (const file of ['core/card-lineage.mjs', 'core/card-lineage-schema.mjs', 'core/card-lineage-base-schema.mjs',
+    'core/content-safety-observations.mjs', 'core/content-safety-classifier.mjs']) assert.ok(expected.includes(file), file);
   assert.ok(expected.includes('core/context-maintenance-turn.mjs'));
   assert.ok(expected.includes('core/context-product-admission.mjs'));
   assert.ok(expected.includes('core/context-product-handles.mjs'));

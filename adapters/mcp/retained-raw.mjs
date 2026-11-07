@@ -23,7 +23,7 @@ export async function prepareRetainedRawServer(value) {
     // Keep database refusal inside the existing MCP construction boundary.
     const pin = await inspectExistingStorePin(profile.path, profile.storeId);
     profile.check();
-    const cards = createScopedCardAccess(profile.namespace, { rawSources: true });
+    const cards = createScopedCardAccess(profile.namespace, { rawSources: true, actorId:'local-mcp-service' });
     let core;
     try {
       core = openMemoryCore({ path: profile.path, existingStore: pin,

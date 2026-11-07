@@ -3,7 +3,7 @@ import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheIn
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
 import { SAFETY_SCHEMA_VERSIONS, resolveContentLayout, assertContentFeatures } from './content-safety-layout.mjs';
-import { attestContentSafety, checkInstalledContentSafety } from './content-safety-schema.mjs';
+import { attestContentSafety, checkInstalledContentSafety, registerContentReadSnapshot } from './content-safety-schema.mjs';
 import { validateContextProductLayout } from './context-product-schema.mjs';
 import { installCardCurrentDependencies, validateCardCurrentDependencies, assertNoCardCurrentDependencies } from './card-current-schema.mjs';
 import { installRoleProfiles, validateRoleProfiles, assertNoRoleProfiles } from './role-profile-schema.mjs';
@@ -342,6 +342,7 @@ export function readTransaction(db, work, acquisition) {
   if (failed) throw error;
   return value;
 }
+registerContentReadSnapshot((db,work)=>readTransaction(db,()=>{checkInstalledContentSafety(db);return work();}));
 
 // Reviewed read-only mode: keep transaction fences and statement counts, acquiring
 // SHARED on the first SELECT. Writers must retain BEGIN IMMEDIATE.
@@ -364,7 +365,7 @@ export function transaction(db, work, check, { deferred = false } = {}) {
       db.exec("COMMIT");
       return result;
     } catch (error) {
-      db.exec("ROLLBACK");
+      if(db.isTransaction)db.exec("ROLLBACK");
       if (error?.code === 'ERR_SQLITE_ERROR' && error.message === 'card_dependency_limit_reached') {
         fail('dependency_limit_reached');
       }

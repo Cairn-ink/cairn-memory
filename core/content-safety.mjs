@@ -4,6 +4,7 @@ import { createHash, createHmac } from 'node:crypto';
 import { createCardRawSources } from './card-raw-sources.mjs';
 import { createRawLineageStorage } from './raw-lineage-storage.mjs';
 import { sourceRef } from './private-card-input.mjs';
+import { hasCardLineage, loadCardBodyContributorsInside } from './card-lineage.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
@@ -279,6 +280,18 @@ function canonicalContentReadSafety(db, { identity, namespace: ns, ref, method =
   const policy = policies[contentReadPurpose(method, row)];
   if (!policy.admits(row, type, intent, method)) return denied('ineligible');
   if (type === 'card') {
+    if (hasCardLineage(db)) {
+      try {
+        const lineage = loadCardBodyContributorsInside(db,identity,ns,row.id,{
+          current:Boolean(policy.current?.(intent)),
+          validateSource:source=>sourceReadSafety(db,{identity,namespace:ns,ref:source,memo}).allowed });
+        if (memo) (memo.cardBodies ??= new Map()).set(row.id,lineage);
+      } catch (error) {
+        if (['source_unavailable','source_excluded','raw_crypto_unavailable','source_budget_exceeded','invalid_input','revision_conflict'].includes(error.code) || error instanceof SyntaxError) return denied('ineligible');
+        throw error;
+      }
+      if (factObservation) factObservation.ancestryChecked = true;
+    } else {
     let contributors;
     try { contributors = cardContributorsInside(db, row.id, memo); }
     catch (error) { if (error instanceof SyntaxError) return denied('identity_mismatch'); throw error; }
@@ -293,6 +306,7 @@ function canonicalContentReadSafety(db, { identity, namespace: ns, ref, method =
     // and its fact stage in this snapshot. The Card fact stage needs only its
     // own identity; repeating contributor SQL would revalidate the same proof.
     if (factObservation) factObservation.ancestryChecked = true;
+    }
   }
   if (type === 'card' && policy.current?.(intent) && !currentCardEligible?.()) return denied('ineligible');
   return allowed;
