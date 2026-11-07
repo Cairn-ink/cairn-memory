@@ -1,4 +1,6 @@
+import {installRawSearchTestClock,rawSearchTestWait} from '../testing/raw-search-clock.mjs';
 import test from 'node:test';
+test.beforeEach(installRawSearchTestClock);
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {performance} from 'node:perf_hooks';
@@ -37,7 +39,7 @@ for(const noFence of [false,true])test(`a fresh query cannot inherit pre-fact el
       assert.equal(f.db.prepare('SELECT count(*) n FROM content_suppressions').get().n,1);
       // A different reader has no inherited epoch-zero memo. It legitimately
       // republishes alpha at epoch one while the ancestor is not yet linked.
-      await new Promise(resolve=>setTimeout(resolve,1010));
+      await rawSearchTestWait(1010);
       await sibling.maintain({maxItems:128,maxMs:5000},primary.host.token);
       const before=await sibling.search({query:'copper neutral'},primary.host.token);
       const a=before.candidates.find(c=>c.conversationId===alpha.conversationId);assert.ok(a);

@@ -1,4 +1,6 @@
+import {installRawSearchTestClock} from '../testing/raw-search-clock.mjs';
 import test from 'node:test';
+test.beforeEach(installRawSearchTestClock);
 import assert from 'node:assert/strict';
 import { safetySourceFixture,searchFixture } from '../testing/raw-search-fixtures.mjs';
 import { savedSource,ns } from '../testing/raw-source-fixtures.mjs';

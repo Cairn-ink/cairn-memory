@@ -1,4 +1,6 @@
+import {installRawSearchTestClock} from '../testing/raw-search-clock.mjs';
 import test from 'node:test';
+test.beforeEach(installRawSearchTestClock);
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {performance} from 'node:perf_hooks';

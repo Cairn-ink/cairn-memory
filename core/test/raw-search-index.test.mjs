@@ -1,5 +1,7 @@
+import {installRawSearchTestClock} from '../testing/raw-search-clock.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
+test.beforeEach(installRawSearchTestClock);
 import { rawSearchChunks,rawSearchPostings,retrieveRaw,rawSearchRrf } from '../raw-search-retrieval.mjs';
 import { createBM25 } from '../context-read-bm25.mjs';
 import { sourceFixture,savedSource } from '../testing/raw-source-fixtures.mjs';

@@ -1,3 +1,4 @@
+import {rawSearchTestWait} from './raw-search-clock.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { createHmac } from 'node:crypto';
 import { sidecarAttestationFile, writeSidecarAttestation } from '../context-product-sidecar-attestation.mjs';
@@ -52,7 +53,7 @@ export async function searchFixture(f,patch={}) {
     maintain:input=>service.maintain(input,host.token),
     search:(input={query:'synthetic'})=>service.search(input,host.token),
     prepare:(candidate,intent='current')=>service.prepare(candidate,{intent},host.token),
-    async tick(input){await new Promise(resolve=>setTimeout(resolve,1010));return service.maintain(input,host.token);}};
+    async tick(input){await rawSearchTestWait(1010);return service.maintain(input,host.token);}};
 }
 
 // New-file safety layout, with no migration or operational data.

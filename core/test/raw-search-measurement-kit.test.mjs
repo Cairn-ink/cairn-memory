@@ -1,4 +1,6 @@
+import {installRawSearchTestClock} from '../testing/raw-search-clock.mjs';
 import test from 'node:test';
+test.beforeEach(installRawSearchTestClock);
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {spawnSync} from 'node:child_process';
@@ -98,7 +100,7 @@ test('phase ledger records each selection snapshot row count and hold on the fun
     const {openReadDatabase}=await import(${JSON.stringify(url('../read-database.mjs'))});
     const {createRawSearchAuthority}=await import(${JSON.stringify(url('../raw-search-authority.mjs'))});
     const {takeSelectionUnits}=await import(${JSON.stringify(url('../../tools/testing/raw-search-phase-ledger.mjs'))});
-    test('unit records',async t=>{const f=sourceFixture(t);await savedSource(f,'Synthetic copper.');const s=await searchFixture(f);
+    test('unit records',async t=>{Object.defineProperty(performance,'now',{configurable:true,value:()=>100});const f=sourceFixture(t);await savedSource(f,'Synthetic copper.');const s=await searchFixture(f);
       const reader=openReadDatabase(f.path,{contextRead:true});t.after(()=>reader.db.close());
       const a=createRawSearchAuthority(reader,s.options),source=a.inventory().rows[0].source;
       const own=Object.getOwnPropertyDescriptor(performance,'now');Object.defineProperty(performance,'now',{configurable:true,value:()=>100});
