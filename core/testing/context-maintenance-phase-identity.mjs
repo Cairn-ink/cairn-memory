@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { register } from 'node:module';
+register('./context-maintenance-phase-loader.mjs', import.meta.url, {data:{identity:true, fresh:process.argv[2] === 'fresh'}});
+const {refuseAuthority} = await import('../context-product-refusal.mjs');
+const {requestAuthority} = await import('../context-product-authority.mjs');
+const {credentialDigest} = await import('../context-product-control.mjs');
+const capture = fn => {try {fn();} catch(error) {return error;} assert.fail('missing refusal');};
+const direct = capture(() => refuseAuthority('method_gate'));
+if (process.argv[3] !== 'wrapper') assert.equal(direct, globalThis[Symbol.for('phase-fail-object')], 'direct refusal must throw the fail object');
+const token = {}, binding = {credentialDigest:credentialDigest(token)};
+const wrapped = capture(() => requestAuthority({authorize:() => binding, isCurrent:() => true}, binding, {})('status', {}, null));
+assert.equal(wrapped, globalThis[Symbol.for('phase-fail-object')], 'authority wrapper must throw the fail object');
+console.log(JSON.stringify({direct:true, wrapper:true}));
