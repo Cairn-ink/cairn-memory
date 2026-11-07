@@ -2,7 +2,7 @@ import { performance } from 'node:perf_hooks';
 import { createHash, createHmac } from 'node:crypto';
 import { readTransaction, isStorageBusy } from './database.mjs';
 import { installedContentLayout } from './content-safety-schema.mjs';
-import { contentSuppressionFenceInside,contentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { contentSuppressionFenceInside,resetContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { sourceReadSafety } from './content-safety.mjs';
 import { createCardRawSources } from './card-raw-sources.mjs';
 import { createRawSourceReader } from './raw-source-reader.mjs';
@@ -526,7 +526,7 @@ export function createRawSearchAuthority(database, options) {
     cachedFence=undefined;eligibility.clear();eligibilityVersion=undefined;
   }
   function refresh(at=Infinity) {
-    read(()=>{contentSuppressionRequestInside(db,options.readSet,{refresh:true});},at);
+    deadline(at);resetContentSuppressionRequestInside(db);
   }
   return { reset,refresh,resume:()=>resumeAt,read,identity:{storeId:identity.store_id,fileIdentity:database.fileIdentity,ownerId:options.ownerId,readSet:options.readSet},
     bind,authorize,inventory,check,select,open,validate,fingerprint,fence,checkFence,cacheKey,

@@ -5,7 +5,8 @@ import {performance} from 'node:perf_hooks';
 import {Hmac} from 'node:crypto';
 import {openReadDatabase} from '../read-database.mjs';
 import {createRawSearchAuthority} from '../raw-search-authority.mjs';
-import {sourceFixture,savedSource} from '../testing/raw-source-fixtures.mjs';
+import {sourceFixture,savedSource,ns} from '../testing/raw-source-fixtures.mjs';
+import {cachedContentSuppressionRequestInside} from '../content-suppression-storage.mjs';
 import {searchFixture,safetySourceFixture} from '../testing/raw-search-fixtures.mjs';
 import {createFakeEmbedder,reserveSharedVectors,MAX_CACHE_BYTES} from '../context-read-embedder.mjs';
 
@@ -17,8 +18,8 @@ function clock(t){
   t.after(()=>{if(own)Object.defineProperty(performance,'now',own);else delete performance.now;});
   return ms=>{now+=ms;};
 }
-async function fixture(t,embedded=false){
-  const f=sourceFixture(t);await savedSource(f,'Synthetic copper telescope.');
+async function fixture(t,embedded=false,modern=false){
+  const f=(modern?safetySourceFixture:sourceFixture)(t);await savedSource(f,'Synthetic copper telescope.');
   const port=embedded?createFakeEmbedder():undefined;
   const s=await searchFixture(f,port?{embedder:port,policy:{family:'local',maxBatchDocuments:1,maxRequests:50,maxConcurrent:1,maxUsd:0}}:{});
   await s.maintain();if(port){await s.tick({embeddings:true});await s.tick();}
@@ -141,4 +142,17 @@ test('expiry while hashing stops within one value and retains no commitment outp
   };
   try{assert.deepEqual(await s.search({query:'copper'}),partial);assert.ok(updates>=2&&updates<=3);}
   finally{Hmac.prototype.update=update;}
+});
+test('a retry discards denial memos before rebuilding in the same request',async t=>{
+  const {f,s}=await fixture(t,false,true);clock(t);
+  const change=moves(t,f,{final:true}),prepare=DatabaseSync.prototype.prepare,states=[];
+  DatabaseSync.prototype.prepare=function(sql){
+    if(sql.startsWith('SELECT * FROM (SELECT client,session_key,id FROM raw_conversations WHERE'))
+      states.push(Boolean(cachedContentSuppressionRequestInside(this,ns.ownerId)));
+    return prepare.call(this,sql);
+  };
+  try{
+    assert.equal((await s.search({query:'copper'})).candidates.length,1);assert.equal(change.count,1);
+    assert.ok(states.length>=2);assert.deepEqual(states,states.map(()=>false));
+  }finally{change.restore();}
 });
