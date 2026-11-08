@@ -73,9 +73,15 @@ The handle provides the following unchanged methods and result fields:
   derived owner rows and vacuums. `close()` joins active work and disposes connections.
 
 Classifications are `{kind, reason}`: `denied`, `current-eligible-bare`,
-`current-eligible-linked` or `history-only`. Bare Raw has complete privacy ancestry
-and no Memory link; render it as attributed past conversation evidence whose
-currentness is unknown. Retired links, current/history overlaps and unresolved
+`current-eligible-linked` or `history-only`. Engine-interpreted bare Raw has complete
+privacy ancestry and no Memory link. Host registration instead uses reason
+`host-session-ancestry`: the engine cannot see which Memories derive from the
+message, and the host must fence every source session before acknowledging any
+Memory forget or correction, on every forget path. Do not enable host Raw search
+for an owner until that fencing is live. See the
+[host registration contract](raw-layer-contract.md#host-interpreted-registration-addendum).
+Render bare Raw as attributed past conversation evidence whose currentness is
+unknown. Retired links, current/history overlaps and unresolved
 linked currentness are history-only. Missing privacy ancestry denies both intents.
 Each range retains its own classification. Exclusions and terminal session fences
 deny both intents. Canonical manifest refs bind immutable message/part content;
