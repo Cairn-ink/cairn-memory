@@ -659,3 +659,29 @@ today's runtime: implementation summaries identify legacy behavior until RL-2.
 Tool output remains excluded unless chichi decides otherwise. KMS adoption,
 bulk deletion per tool and later plan-specific cap changes are separate work.
 The six accepted rows and the initial 200 MB cap are settled, not open questions.
+
+## Host-interpreted registration (addendum)
+
+`rawConversations.interpretation` accepts `'engine'` (the default) or `'host'`.
+Omission and explicit `'engine'` retain existing behavior. A host that interprets
+conversation text elsewhere can select `'host'`: `captureRaw` registers every
+valid batch through the registration-only transaction and returns the existing
+empty interpretation outcome. It never calls engine capture or a model port,
+writes staging, reserves admission, or observes an episode. This qualifies the
+earlier sentence, “Only index zero produces ordinary capture input, through
+existing normalization and source-bound limits (at most 4,000 units per message,
+20,000 per batch and existing provider budgets).” That sentence applies to
+engine interpretation only.
+
+Host mode preserves request validation, trusted `readPolicy` authority,
+pause/project/deleted-session/session fences, owner caps and raw reservations,
+sealing and its `raw_crypto_unavailable` failure without registration, exact
+part/event identity, recorded retry dispositions, message ledgers and usage.
+Quota and policy skips still register their dispositions, without interpretation
+or eviction. The mode is bound to event identity: changing it on the same event
+fails `event_payload_conflict`, including for empty projections.
+
+A host-interpreted archive has no engine-derived source maps. Receipt lineage
+therefore uses the existing no-maps path, with whole-message precision. This
+option does not run or integrate a host's interpretation pipeline; the host owns
+that work. Local installation and local capture continue to use engine mode.
