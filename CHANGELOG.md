@@ -11,6 +11,8 @@
 
 ## Unreleased — maintenance admission and integrity
 
+- Check opening deadlines before lifecycle locking and canonical read transaction setup.
+
 - Optional admission capacity covers cold opens while work retains its normal quantum. Each domain prices exhaustion by its own next turn.
 - WAL-mode hosts pay main's integrity check once on the first open after upgrade; DELETE-mode caches rebuild once. Steady maintenance adds no BEGIN or COMMIT.
 - A reader opened after a mismatch is detected never serves the untrusted file; a reader opened before an out-of-band seal removal keeps serving until its next reopen (content safety by delivery revalidation). Invalidating serving handles on rejection is a planned follow-up.

@@ -191,7 +191,12 @@ export function canonicalProductIdentity(path, db) {
 export function productSidecar({ path, db: canonicalDatabase, identity, features, observer, sqlite, sidecarJournalMode = 'DELETE', writable = false,
   sidecarHandles, now = () => performance.now(), rendezvous = () => {}, attribution, memoryComparison = null, comparisonOptions = {}, verificationBatching = false, verificationBatchState = verificationBatching ? new SharedArrayBuffer(8) : null }) {
   const canonical=canonicalDatabase;
-  const canonicalRead=work=>attribution ? attribution.transaction(canonicalDatabase,work,readTransaction) : readTransaction(canonicalDatabase,work);
+  const canonicalRead=(work,checkAdmission)=>{
+    const run=checkAdmission ? (db,work,acquisition)=>readTransaction(db,work,{
+      checkAdmission,readReady:()=>acquisition?.readReady()
+    }) : readTransaction;
+    return attribution ? attribution.transaction(canonicalDatabase,work,run) : run(canonicalDatabase,work);
+  };
   features={...features,reviews:features.cards,receipts:features.cards};
   const sidePath = path + PRODUCT_SIDECAR_SUFFIX;
   let localHandle,handles=sidecarHandles&&sidecarHandleGuard(sidecarHandles);
@@ -211,25 +216,31 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   }
   const lockPath=sidePath+'.lifecycle-lock.sqlite';
   const stamp=()=>{const s=sqliteFileStat(sidePath);return [s.dev,s.ino,s.size,s.mtimeNs,s.ctimeNs].join(':');};
-  function acquire(createLock=false) {
+  function acquire(createLock=false,checkAdmission) {
+    checkAdmission?.();
     if (!lifecycle) {
       if (!productFile(lockPath,true)) {
         if (!createLock) unavailable('storage_unavailable');
-        try { createExclusiveSqliteFile(lockPath); } catch(e) {attribution?.captureFailure(e); if(e.code!=='EEXIST')throw e; }
+        try { checkAdmission?.();createExclusiveSqliteFile(lockPath); } catch(e) {attribution?.captureFailure(e); if(e.code!=='EEXIST')throw e; }
       }
       lockIdentity=productFile(lockPath);
       const open=()=>new DatabaseSync(lockPath,{readOnly:true});
+      checkAdmission?.();
       const native=observer ? observer.invoke('open','connection',open) : open();
       // sqlite.open owns disposal on refusal; publish only an admitted handle.
-      lifecycle=sqlite ? sqlite.open(native,lockPath).db : observer ? observer.database(native) : native;
+      lifecycle=sqlite ? sqlite.open(native,lockPath,checkAdmission).db : observer ? observer.database(native) : native;
     }
+    checkAdmission?.();
     lifecycle.exec('BEGIN');
     // A deferred BEGIN alone has no OS lock. This query pins the shared lock.
-    lifecycle.prepare('PRAGMA schema_version').get();
+    checkAdmission?.();
+    const schemaVersion=lifecycle.prepare('PRAGMA schema_version');
+    checkAdmission?.();
+    schemaVersion.get();
     if(!same(lockIdentity,productFile(lockPath,true))){release();lifecycle.close();lifecycle=null;unavailable('storage_unavailable');}
   }
   function release() { if(lifecycle?.isTransaction)lifecycle.exec('ROLLBACK'); }
-  function guarded(work,createLock=false) {
+  function guarded(work,createLock=false,checkAdmission) {
     if (closed) fail('store_closed');
     if(guardDepth)return work();
     guardWritable=!!(side && sideWritable);
@@ -240,7 +251,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
           // without first taking its lifecycle lock.
           observedMissing=true;try{return work();}finally{observedMissing=false;}
         }
-        return cleaned(()=>{acquire(createLock);guardDepth++;return work();},()=>{guardDepth=0;release();});
+        return cleaned(()=>{acquire(createLock,checkAdmission);guardDepth++;return work();},()=>{guardDepth=0;release();});
       } catch(error) {failed(error,guardWritable);throw error;}
     },()=>{
       // Only this guarded operation may bootstrap its newly published file.
@@ -267,10 +278,10 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   }
   function read(work,checkAdmission) {
     const wasWritable=sideWritable===true,reader=admissionDatabase(side,checkAdmission);
-    try { sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});return readTransaction(reader,()=>{
+    try { sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});return readTransaction(side,()=>{
       reader.prepare('PRAGMA schema_version').get();
       verifyOpened();rendezvous('snapshot');return work();
-    }); } catch(e) {failed(e,wasWritable);attribution?.captureFailure(e); if(e.reason==='storage_unavailable')try{close();}catch{}throw e; }
+    },{checkAdmission}); } catch(e) {failed(e,wasWritable);attribution?.captureFailure(e); if(e.reason==='storage_unavailable')try{close();}catch{}throw e; }
   }
   const openNative = (write = false) => {
     try { return observer ? observer.invoke('open','connection', () => new DatabaseSync(sidePath, { readOnly: !write }))
@@ -377,7 +388,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       // It owns the exclusive lifecycle lock, so release our shared lock first.
       release();
       cleaned(()=>{try { checkAdmission?.();publish(null,initialization()); }
-        catch(e) {attribution?.captureFailure(e); if(e.code!=='EEXIST')throw e; }},()=>acquire());
+        catch(e) {attribution?.captureFailure(e); if(e.code!=='EEXIST')throw e; }},()=>acquire(false,checkAdmission));
       checkAdmission?.();
     } else if (!sqlite) {
       const mode = probeRollbackJournal(sidePath, observer ? { observe: observer.journalProbe } : {});
@@ -399,7 +410,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       admitted=candidate;candidate=admissionDatabase(candidate,checkAdmission);
       candidate.exec(sqlite ? 'PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF;' : 'PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=0;');
       files?.({betweenSnapshots:sideMode==='DELETE'});
-      readTransaction(candidate,()=>{
+      readTransaction(admitted,()=>{
         candidate.prepare('PRAGMA schema_version').get();files?.();
         if(!same(admittedIdentity,productFile(sidePath)))unavailable('storage_unavailable');
         rendezvous('snapshot');
@@ -432,7 +443,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
             bootstrap=true;legacyWalMissing=true;
           } else throw Object.assign(Error('index_unavailable'),{code:'index_unavailable',reason:'attestation_invalid',expectedAttestation:sidecarAttestationDigest(seal)});
         }
-      });
+      },{checkAdmission});
       checkAdmission?.();candidate=admitted;
     } catch(error) {attribution?.captureFailure(error);try{if(candidate?.isOpen)candidate.close();}catch{}
       if(candidate?.isOpen)side=candidate;else handles.closed();throw error;}
@@ -918,7 +929,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   function admissionBindings(checkAdmission, insideWrite=false) {
     // Authenticate before interpreting identity metadata, including retained
     // certificates without live pointers. Never scan corpus rows here.
-    const canonicalIdentity=canonicalRead(()=>canonicalProductIdentity(path,admissionDatabase(canonical,checkAdmission)));
+    const canonicalIdentity=canonicalRead(()=>canonicalProductIdentity(path,admissionDatabase(canonical,checkAdmission)),checkAdmission);
     checkAdmission();
     const inspect=()=>{
       const reader=admissionDatabase(side,checkAdmission),cacheIdentity=sideIdentity(reader);
@@ -954,8 +965,8 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   function admit(...args) {
     try {return admitInside(...args);}finally{unattestedIdentity=null;}
   }
-  function admitInside(checkBindings=false,cutoff=Infinity) {
-    const checkAdmission=()=>{if(cutoff!==Infinity&&now()>=cutoff)fail('read_timeout');};
+  const admissionCheck=(cutoff=Infinity)=>()=>{if(cutoff!==Infinity&&now()>=cutoff)fail('read_timeout');};
+  function admitInside(checkBindings=false,cutoff=Infinity,checkAdmission=admissionCheck(cutoff)) {
     checkAdmission();
     // Retain the identity whose validation failed. A different selection may
     // repair the cache before this maintainer reaches its own repair branch.
@@ -977,7 +988,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       if(!repairIdentity || !same(old,repairIdentity))unavailable('storage_unavailable');
       try {
         release();
-        cleaned(()=>handleRegistry().replace(()=>{checkAdmission();return publish(old.device+':'+old.inode,{...initialization(),expectedStamp:repairStamp,...(e.reason==='attestation_invalid'?{expectedAttestation:e.expectedAttestation}:{}),...(foreignBindingDigest?{foreignBindingDigest}:{})});},()=>{throw admissionRequired;}),()=>acquire());
+        cleaned(()=>handleRegistry().replace(()=>{checkAdmission();return publish(old.device+':'+old.inode,{...initialization(),expectedStamp:repairStamp,...(e.reason==='attestation_invalid'?{expectedAttestation:e.expectedAttestation}:{}),...(foreignBindingDigest?{foreignBindingDigest}:{})});},()=>{throw admissionRequired;}),()=>acquire(false,checkAdmission));
       } catch(e) {attribution?.captureFailure(e);
         if(['ESTALE','EEXIST','EBUSY'].includes(e.code))unavailable('storage_unavailable');
         throw e;
@@ -1408,7 +1419,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       try {return guarded(()=>observe(p,...args));}
       catch(e) {attribution?.captureFailure(e);if(e.code==='index_unavailable')return invalid(p,e.reason);throw e;}
     },
-    admit:cutoff=>{if(!writable)fail('invalid_input');return guarded(()=>admit(true,cutoff),true);},
+    admit:cutoff=>{if(!writable)fail('invalid_input');const check=admissionCheck(cutoff);const result=guarded(()=>admit(true,cutoff,check),true,check);check();return result;},
     refresh:(p,access,budget,reuseOnly=false)=>{
       const started=now();p=projection(p);
       const cutoff=Math.min(p.deadlineAt ?? Infinity,started+budget.maxMs);
