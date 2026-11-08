@@ -1,5 +1,13 @@
 # Claude recall hook: complete inside the host window
 
+Current contract: prompt recall has a 3,500 ms application cap measured from the
+process time origin, including startup/imports, inside a 4 s host timeout. Its
+2,500 ms fetch deadline starts at the first fetch and is shared by fallback.
+Cancellation, silent expiry and lock cleanup remain required. The old deadlines
+and measured timings below describe the historical repair, not the current
+configuration. The current harness observes the timer without assuming its delay
+and verifies both the fetch deadline and the process-clock cap.
+
 Historical record: authorized isolated diagnosis and bounded repair, based on
 `cd6d1ad3`. All timing, hash, inventory and matrix evidence below belongs to that
 historical repair based on that commit and does not establish acceptance after

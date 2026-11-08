@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — hosted recall deadline
+
+- Allow 2,500 ms from the first recall fetch. Prompt hooks have a 3,500 ms
+  process-clock cap inside a 4 s host timeout, preserving a 500 ms margin and
+  silent cancellation. Startup, imports and local waits count against the cap.
+  Earlier release entries retain their historical deadline values.
+
 ## Unreleased — maintenance admission and integrity
 
 - Optional admission capacity covers cold opens while work retains its normal quantum. Each domain prices exhaustion by its own next turn.

@@ -41,7 +41,7 @@ export async function readHookInput(stream,{limit=65536,deadlineMs=750}={}) {
  */
 export async function handleHook(input,{clientOptions,targetId,launch,qualifiedCreatorVersion,qualifyCreator,now=Date.now}={}) {
   const start=now();
-  const budget=['SessionStart','UserPromptSubmit'].includes(input?.hook_event_name)?2500:750;
+  const budget=input?.hook_event_name==='UserPromptSubmit'?3500:input?.hook_event_name==='SessionStart'?2500:750;
   let expired=false,timer;
   const unavailable={output:['Stop','PreCompact','SessionEnd'].includes(input?.hook_event_name)?'{}':'',status:'capture_unavailable'};
   try {

@@ -123,7 +123,8 @@ does not establish shared memory with those products.
    call cap instead of plan-window guards. Daily defaults require calibration;
    absent a finite cap, report automatic model processing unavailable. Core recall
    selects and ranks through model ports; cold host-CLI startup is not expected
-   to fit the 2 s `UserPromptSubmit` request budget. The maintainer-approved
+   to fit the 2.5 s `UserPromptSubmit` fetch budget within its 3.5 s process cap
+   and 4 s host timeout. The maintainer-approved
    direction is generation-free per-prompt search within that budget, as in the
    [Claude-Mem comparison and core proposal boundary](codex-client.md#model-access-billing-and-runtime-guards).
    At `7d03554`, `CLAUDE_MEM_SEMANTIC_INJECT` defaults to `'false'`; enabling it
