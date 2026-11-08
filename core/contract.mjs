@@ -221,7 +221,7 @@ function openWithRoleContext(input, roleContext) {
   if (!descriptor && raw === false) return buildCore(base);
   if (!descriptor) return composeRawCore(buildCore, base, defaultRawOptions(), {
     sources: Boolean(base.privateCards), lineage: true, deletion: true, localControls: true,
-    captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch),
+    captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch), searchEmbedding: roleContext,
   });
   if (!Object.hasOwn(descriptor, 'value')) throw new MemoryStoreError('invalid_input');
   ownData(input, OPEN_OPTIONS);
@@ -232,7 +232,7 @@ function openWithRoleContext(input, roleContext) {
   const coreOptions = Object.create(Object.getPrototypeOf(input), fields);
   return composeRawCore(buildCore, coreOptions, options, {
     sources: Boolean(coreOptions.privateCards), lineage: true, deletion: true, localControls: true,
-    captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch),
+    captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch), searchEmbedding: roleContext,
   });
 }
 

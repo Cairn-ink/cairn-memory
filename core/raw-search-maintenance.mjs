@@ -75,7 +75,9 @@ export function createRawSearchMaintenance(storage,authority,options) {
     const attempts=same(row.embedder,provider)?row.retry?.attempts??0:0;
     if (attempts>=3) return;
     let reserved=null;
-    const controller=new AbortController(),deadlineAt=performance.now()+maxMs;
+    // Provider I/O owns no broker ticket or SQLite lock. Keep its timeout
+    // independent of the bounded local-work quantum.
+    const controller=new AbortController(),deadlineAt=performance.now()+30000;
     controllers.add(controller);
     let vectors,error,invoked=false;
     try {
