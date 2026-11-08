@@ -19,6 +19,29 @@ import { createRawSourceRoots } from '../raw-source-roots.mjs';
 import { fixture as rawFixture, ns as rawNs, request as rawRequest, splitRaw, localPlainPort } from '../testing/raw-capture-fixtures.mjs';
 import { consumer, empty, episodeInput as legacyEpisodeInput, internal, legacyKeep, opposite, runtimeFor } from '../testing/raw-deletion-review-fixtures.mjs';
 
+async function seedUnrelated(core, db, namespace) {
+  const key = { namespace, client: 'synthetic', eventId: 'unrelated-claim',
+    payloadDigest: createHash('sha256').update('synthetic-unrelated').digest('hex') };
+  const claim = ok(core.claimAdmission({ ...key, leaseMs: 1000 }));
+  const admitted = ok(await core.finishAdmission({ ...key, token: claim.token, items: [{
+    content: 'Synthetic unrelated ordinary support.', kind: 'fact', confidence: .8,
+    receipts: [{ client: 'synthetic', sessionId: 'unrelated-session', eventId: 'unrelated-message',
+      role: 'user', excerpt: 'Synthetic unrelated ordinary support.' }] }] }));
+  const id = admitted.memories[0].id, before = ok(core.get({ namespace, memoryId: id }));
+  const receipts = db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY id').all(id);
+  assert.equal(receipts.length, 1);
+  assert.equal(db.prepare('SELECT kind FROM raw_receipt_origins WHERE receipt_id=?').get(receipts[0].id).kind, 'unknown');
+  assert.equal(db.prepare('SELECT count(*) n FROM raw_receipt_lineage WHERE receipt_id=?').get(receipts[0].id).n, 0);
+  assert.equal(db.prepare('SELECT count(*) n FROM episode_memory_links WHERE memory_id=?').get(id).n, 0);
+  const fingerprint = db.prepare('SELECT fingerprint FROM memories WHERE id=?').get(id).fingerprint;
+  return () => {
+    assert.deepEqual(ok(core.get({ namespace, memoryId: id })), before);
+    assert.deepEqual(db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY id').all(id), receipts);
+    assert.equal(db.prepare('SELECT kind FROM raw_receipt_origins WHERE receipt_id=?').get(receipts[0].id).kind, 'unknown');
+    assert.equal(db.prepare('SELECT count(*) n FROM suppressed WHERE fingerprint=?').get(fingerprint).n, 0);
+  };
+}
+
 const fullOptions = Object.freeze({ privateCards: true, rawConversations: true, rawCapture: true,
   rawLineage: true, rawDeletion: true, rawSources: true, localControls: true, methodPackages: true,
   assets: true, roleProfiles: true, currentDependencies: true });
@@ -37,6 +60,17 @@ function rows(db, tables) {
 function inspect(path, work) {
   const db = new DatabaseSync(path, { readOnly: true });
   try { return work(db); } finally { db.close(); }
+}
+// These fixtures were admitted before origin recording existed.
+function unrecordedUnrelated(core, path, memoryId) {
+  const before = ok(core.get({ namespace: ns, memoryId }));
+  assert.ok(before.receipts.length > 0);
+  inspect(path, db => {
+    assert.equal(db.prepare('SELECT count(*) n FROM episode_memory_links WHERE memory_id=?').get(memoryId).n, 0);
+    if (db.prepare("SELECT 1 FROM sqlite_schema WHERE name='raw_receipt_origins'").get())
+      assert.equal(db.prepare('SELECT count(*) n FROM raw_receipt_origins o JOIN receipts r ON r.id=o.receipt_id WHERE r.memory_id=?').get(memoryId).n, 0);
+  });
+  return () => assert.deepEqual(ok(core.get({ namespace: ns, memoryId })), before);
 }
 const version = path => inspect(path, db => db.prepare('PRAGMA user_version').get().user_version);
 const request = f => ({ path: f.path, backupPath: f.backupPath,
@@ -316,7 +350,9 @@ async function hostSequence(path, f) {
     await call('capture', { namespace: ns, client: 'synthetic', sessionId: 'host-capture', eventId: 'host-capture',
       messages: [{ id: 'host-message', role: 'user', content: 'Synthetic host captured fact.' }] });
     const latest = await call('getEpisode', { namespace: ns, episodeId });
+    const assertUnrelated = unrecordedUnrelated(core, path, memory.id);
     await call('forgetEpisode', { namespace: ns, episodeId, expectedRevision: latest.episode.revision });
+    assertUnrelated();
     await call('getEpisode', { namespace: ns, episodeId }, 'episode_not_found');
     await call('get', { namespace: other, memoryId: f.memories[1].id });
     return results;
@@ -426,8 +462,10 @@ async function physicalFixture(t, physical) {
 for (const physical of [18, 51, 53]) test(`legacy episode deletion at ${physical} forgets linked Memory with unrecorded support`, async t => {
   const f = await physicalFixture(t, physical), core = openMemoryCore({ path: f.path, model: rationaleModel() });
   try {
+    const assertUnrelated = unrecordedUnrelated(core, f.path, f.memories[0].id);
     const episode = ok(core.listEpisodes({ namespace: ns, since: '1901-02-01T00:00:00.000Z', until: '1901-03-01T00:00:00.000Z' })).items[0];
     assert.deepEqual(ok(core.forgetEpisode({ namespace: ns, episodeId: episode.id, expectedRevision: episode.revision })), { forgotten: true });
+    assertUnrelated();
     assert.equal(core.get({ namespace: ns, memoryId: f.linked.id }).error?.code, 'memory_not_found');
     assert.equal(core.getEpisode({ namespace: ns, episodeId: episode.id }).error?.code, 'episode_not_found');
     assert.equal(ok(core.list({ namespace: ns })).memories.some(item => item.id === f.linked.id), false);
@@ -467,7 +505,9 @@ for (const origin of ['independent', 'unknown']) test(`recorded ${origin} suppor
       if (origin === 'unknown') db.prepare("UPDATE raw_receipt_origins SET kind='unknown' WHERE receipt_id=?").run(r.id);
     } finally { db.close(); }
     const episode = ok(core.listEpisodes({ namespace: ns, since: '1901-02-01T00:00:00.000Z', until: '1901-03-01T00:00:00.000Z' })).items[0];
+    const assertUnrelated = unrecordedUnrelated(core, f.path, f.memories[0].id);
     ok(core.forgetEpisode({ namespace: ns, episodeId: episode.id, expectedRevision: episode.revision }));
+    assertUnrelated();
     if (origin === 'independent') {
       const retained = ok(core.get({ namespace: ns, memoryId: f.linked.id }));
       assert.equal(retained.receipts.length, 1); assert.equal(retained.receipts[0].eventId, 'recorded-support');
@@ -485,6 +525,7 @@ for (const client of ['claude-code', 'codex']) test(`unresolved legacy keep is e
   const core = openRawCaptureCore({ path: f.path, model: { ...f.model, extract: empty } }, {
     mode: 'raw-v1', deletion: true, port: localPlainPort(), readPolicy: () => ({ generation: 'synthetic', reason: null }) });
   f.workspace.defer(() => core.close());
+  const assertUnrelated = await seedUnrelated(core, f.db, rawNs);
   const authority = createRawSourceRoots(f.db).receipt(internal,
     f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(keptId));
   assert.equal(authority.legacyKeep, true); assert.equal(authority.unknown, true);
@@ -505,9 +546,14 @@ for (const client of ['claude-code', 'codex']) test(`unresolved legacy keep is e
   const ordinaryReceipt = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(ordinary.id);
   assert.equal(f.db.prepare('SELECT kind FROM raw_receipt_origins WHERE receipt_id=?').get(ordinaryReceipt.id).kind, 'unknown');
   assert.equal(createRawSourceRoots(f.db).receipt(internal, ordinaryReceipt).legacyKeep, undefined);
+  // The unknown receipt is dependent only after this Memory gains a target root.
+  assert.equal(ok(core.admit({ namespace: rawNs, memory: { content: ordinary.content, kind: ordinary.kind },
+    receipts: [{ client, sessionId: 'unrelated', eventId: 'unrelated-message', role: 'user',
+      excerpt: 'Synthetic unrelated retained source.' }] })).memory.id, ordinary.id);
   const deletion = { namespace: rawNs, conversationId: saved.raw.conversationId,
     expectedRevision: ok(await core.getConversation({ namespace: rawNs, conversationId: saved.raw.conversationId })).conversation.revision };
-  assert.equal(ok(core.previewDeleteConversation(deletion)).forgottenMemories, 1);
+  const preview = ok(core.previewDeleteConversation(deletion));
+  assert.equal(preview.forgottenMemories, 1); assert.equal(preview.removedReceipts, 2);
   assert.equal(ok(core.deleteConversation({ ...deletion, actionId: 'ordinary-delete' })).forgottenMemories, 1);
   assert.equal(core.get({ namespace: rawNs, memoryId: ordinary.id }).error?.code, 'memory_not_found');
   assert.equal(f.db.prepare('SELECT deleted FROM memories WHERE id=?').get(ordinary.id).deleted, 1);
@@ -526,6 +572,7 @@ for (const client of ['claude-code', 'codex']) test(`unresolved legacy keep is e
   assert.equal(core.previewDeleteConversation(secondKey).error?.code, 'raw_lineage_unavailable');
   assert.equal(core.deleteConversation({ ...secondKey, actionId: 'legacy-remaining' }).error?.code, 'raw_lineage_unavailable');
   assert.equal(f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(keptId).n, 2);
+  assertUnrelated();
 });
 
 test('host admissions at 53 without Raw record ordinary receipts as unknown and explicit receipts as independent', async t => {
@@ -543,3 +590,38 @@ test('host admissions at 53 without Raw record ordinary receipts as unknown and 
     });
   } finally { core.close(); }
 });
+
+for (const client of ['claude-code', 'codex']) for (const origin of ['unknown', 'absent'])
+  test(`conversation deletion preserves unrelated ordinary ${origin} support: ${client}`, async t => {
+    let captures = 0;
+    const f = rawFixture(t, { lineage: true, model: { extract: () => ({ items: [{
+      content: captures++ === 0 ? 'Synthetic unrelated ordinary fact.' : 'Synthetic target conversation fact.',
+      kind: 'fact', confidence: .8, sourceIndices: [0] }] }) } });
+    const captured = ok(await f.core.capture({ namespace: rawNs, client, sessionId: 'unrelated', eventId: 'ordinary-capture',
+      messages: [{ id: 'ordinary-message', role: 'user', content: 'Synthetic unrelated ordinary source.' }] }));
+    const unrelatedId = captured.admission.memories[0].id;
+    const unrelatedReceipt = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(unrelatedId);
+    assert.equal(f.db.prepare('SELECT kind FROM raw_receipt_origins WHERE receipt_id=?').get(unrelatedReceipt.id).kind, 'unknown');
+    if (origin === 'absent') f.db.prepare('DELETE FROM raw_receipt_origins WHERE receipt_id=?').run(unrelatedReceipt.id);
+    const selected = openRawCaptureCore({ path: f.path, model: f.model }, { mode: 'raw-v1', deletion: true,
+      port: localPlainPort(), readPolicy: () => ({ generation: 'synthetic', reason: null }) });
+    f.workspace.defer(() => selected.close());
+    const source = ok(await selected.captureRaw(rawRequest(splitRaw('Synthetic target source.')[0], { client, sessionId: 'target' })));
+    const targetId = ok(source.interpretation).admission.memories[0].id;
+    assert.equal(f.db.prepare('SELECT o.kind FROM raw_receipt_origins o JOIN receipts r ON r.id=o.receipt_id WHERE r.memory_id=?').get(targetId).kind, 'derived');
+    const authority = createRawSourceRoots(f.db).receipt(internal, unrelatedReceipt);
+    assert.equal(authority.unknown, true); assert.deepEqual(authority.roots, []);
+    const before = ok(selected.get({ namespace: rawNs, memoryId: unrelatedId }));
+    const input = { namespace: rawNs, conversationId: source.raw.conversationId,
+      expectedRevision: ok(await selected.getConversation({ namespace: rawNs, conversationId: source.raw.conversationId })).conversation.revision };
+    const preview = ok(selected.previewDeleteConversation(input));
+    assert.equal(preview.forgottenMemories, 1); assert.equal(preview.removedReceipts, 1);
+    const removed = ok(selected.deleteConversation({ ...input, actionId: 'delete-target' }));
+    assert.equal(removed.forgottenMemories, 1); assert.equal(removed.removedReceipts, 1);
+    assert.equal(selected.get({ namespace: rawNs, memoryId: targetId }).error?.code, 'memory_not_found');
+    assert.deepEqual(ok(selected.get({ namespace: rawNs, memoryId: unrelatedId })), before);
+    const fingerprint = f.db.prepare('SELECT fingerprint FROM memories WHERE id=?').get(unrelatedId).fingerprint;
+    assert.equal(f.db.prepare('SELECT count(*) n FROM suppressed WHERE fingerprint=?').get(fingerprint).n, 0);
+    const effects = ok(selected.listRawEffects({ namespace: rawNs })).effects;
+    assert.equal(effects.some(effect => effect.entity.id === unrelatedId), false);
+  });

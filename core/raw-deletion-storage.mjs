@@ -65,7 +65,9 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
       const evidence = new Map(receipts.map(receipt => [receipt.id, roots.receipt(ns, receipt)]));
       for (const value of evidence.values()) if (value.legacyKeep && value.unknown &&
           (value.possibleRoots === null || value.possibleRoots.some(candidate => same(candidate, root)))) fail('raw_lineage_unavailable');
-      // Ordinary unclassified support cannot prove independence from this conversation.
+      // Only a proven receipt root brings a Memory into this deletion's scope.
+      if (![...evidence.values()].some(value => value.roots.some(candidate => same(candidate, root)))) continue;
+      // Within this Memory, ordinary unclassified support cannot prove independence.
       // Legacy keeps retain their existing proof requirement and refusal above;
       // deletion treats only ordinary absent/unknown provenance as dependent support.
       const removed = receipts.filter(receipt => evidence.get(receipt.id).unknown && !evidence.get(receipt.id).legacyKeep ||

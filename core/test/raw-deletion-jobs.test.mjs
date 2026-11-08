@@ -15,9 +15,33 @@ const key = async (f, id, actionId = 'delete') => ({ namespace: ns, conversation
 const legacy = (client, sessionId, eventId, id = 'message') => ({ namespace: ns, client, sessionId, eventId,
   messages: [{ id, role: 'user', content: 'Synthetic retained source.' }] });
 
+async function seedUnrelated(core, db, namespace) {
+  const key = { namespace, client: 'synthetic', eventId: 'unrelated-claim',
+    payloadDigest: createHash('sha256').update('synthetic-unrelated').digest('hex') };
+  const claim = ok(core.claimAdmission({ ...key, leaseMs: 1000 }));
+  const admitted = ok(await core.finishAdmission({ ...key, token: claim.token, items: [{
+    content: 'Synthetic unrelated ordinary support.', kind: 'fact', confidence: .8,
+    receipts: [{ client: 'synthetic', sessionId: 'unrelated-session', eventId: 'unrelated-message',
+      role: 'user', excerpt: 'Synthetic unrelated ordinary support.' }] }] }));
+  const id = admitted.memories[0].id, before = ok(core.get({ namespace, memoryId: id }));
+  const receipts = db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY id').all(id);
+  assert.equal(receipts.length, 1);
+  assert.equal(db.prepare('SELECT kind FROM raw_receipt_origins WHERE receipt_id=?').get(receipts[0].id).kind, 'unknown');
+  assert.equal(db.prepare('SELECT count(*) n FROM raw_receipt_lineage WHERE receipt_id=?').get(receipts[0].id).n, 0);
+  assert.equal(db.prepare('SELECT count(*) n FROM episode_memory_links WHERE memory_id=?').get(id).n, 0);
+  const fingerprint = db.prepare('SELECT fingerprint FROM memories WHERE id=?').get(id).fingerprint;
+  return () => {
+    assert.deepEqual(ok(core.get({ namespace, memoryId: id })), before);
+    assert.deepEqual(db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY id').all(id), receipts);
+    assert.equal(db.prepare('SELECT kind FROM raw_receipt_origins WHERE receipt_id=?').get(receipts[0].id).kind, 'unknown');
+    assert.equal(db.prepare('SELECT count(*) n FROM suppressed WHERE fingerprint=?').get(fingerprint).n, 0);
+  };
+}
+
 for (const client of ['claude-code', 'codex']) {
   for (const kind of ['staged', 'ordered']) test(`P3b-08 ${client}: ${kind} actual claim binds session and closed retry cannot dispatch`, async t => {
     const f = fixture(t, { deletion: true, model: { extract: empty } });
+    const assertUnrelated = await seedUnrelated(f.core, f.db, ns);
     const first = ok(await f.core.captureRaw(request(splitRaw('Synthetic retained source.')[0], { client, sessionId: 'A' })));
     let remove = true, calls = 0;
     const writer = openMemoryCore({ path: f.path, ...(kind === 'staged' ? {
@@ -36,7 +60,8 @@ for (const client of ['claude-code', 'codex']) {
     const stage = f.db.prepare("SELECT * FROM staged_capture_evidence WHERE event_id='pending-job'").get();
     if (kind === 'staged') { assert.equal(stage.state, 'forgotten'); assert.equal(stage.payload, null); assert.equal(stage.payload_bytes, 0); }
     error(await writer.capture(input), 'conversation_deleted'); assert.equal(calls, 1);
-    assert.equal(f.db.prepare('SELECT count(*) n FROM memories WHERE deleted=0').get().n, 0);
+    assert.equal(f.db.prepare('SELECT count(*) n FROM memories WHERE deleted=0').get().n, 1);
+    assertUnrelated();
   });
 
   test(`P3b-08 ${client}: actual keep binds original sources and deletion during extraction closes its action`, async t => {
@@ -50,6 +75,7 @@ for (const client of ['claude-code', 'codex']) {
       }
       return empty();
     } } });
+    const assertUnrelated = await seedUnrelated(f.core, f.db, ns);
     const first = ok(await f.core.captureRaw(request(splitRaw('Synthetic retained source.')[0], { client }, 'episode')));
     conversation = first.raw.conversationId;
     const episode = ok(f.core.getEpisode({ namespace: ns, episodeId: ok(first.interpretation).episode.id })).episode;
@@ -60,6 +86,7 @@ for (const client of ['claude-code', 'codex']) {
     assert.equal(action.token, null); assert.equal(action.lease_expires_at, null);
     assert.equal(count(f.db, 'raw_job_sources'), 0); assert.equal(count(f.db, 'raw_closed_jobs'), 1);
     assert.equal(count(f.db, 'episode_sources'), 0);
+    assertUnrelated();
   });
 
   test(`P3b-02/08 ${client}: expired retained pre-upgrade staging refuses before any deletion`, async t => {
@@ -70,6 +97,7 @@ for (const client of ['claude-code', 'codex']) {
     const selected = openRawCaptureCore({ path: f.path, model: { ...f.model, extract: empty } }, {
       mode: 'raw-v1', deletion: true, port: localPlainPort(), readPolicy: () => ({ generation: 'synthetic', reason: null }) });
     f.workspace.defer(() => selected.close());
+    const assertUnrelated = await seedUnrelated(selected, f.db, ns);
     const first = ok(await selected.captureRaw(request(splitRaw('Synthetic target source.')[0], { client, sessionId: 'A' })));
     // Advance expiry after registration; a new capture legitimately touches and
     // purges expired staging, whereas preview/delete themselves must not.
@@ -88,6 +116,7 @@ for (const client of ['claude-code', 'codex']) {
     const other = ok(await selected.captureRaw(request(splitRaw('Other client source.')[0], { client: otherClient, sessionId: 'B' })));
     ok(selected.deleteConversation({ namespace: ns, conversationId: other.raw.conversationId, actionId: 'other',
       expectedRevision: ok(await selected.getConversation({ namespace: ns, conversationId: other.raw.conversationId })).conversation.revision }));
+    assertUnrelated();
   });
 
   for (const barrier of ['project', 'client']) test(`P3b-09 ${client}: option-off ${barrier} closure preserves other roots and never backfills`, async t => {
@@ -119,18 +148,22 @@ for (const client of ['claude-code', 'codex']) {
 
   for (const state of ['skipped', 'incomplete']) test(`P3b-05/11 ${client}: ${state} usage is released once without fabricated Memory`, async t => {
     const f = fixture(t, { deletion: true, ...(state === 'skipped' ? { capBytes: 1 } : {}), model: { extract: empty } });
+    const assertUnrelated = await seedUnrelated(f.core, f.db, ns);
     const first = ok(await f.core.captureRaw(request(splitRaw('x'.repeat(8000))[0], { client })));
     assert.equal(first.raw.parts[0].saved, state !== 'skipped');
     const before = usage(f.core); assert.equal(before.reservedBytes, state === 'skipped' ? 0 : 4000);
     const input = await key(f, first.raw.conversationId), result = ok(f.core.deleteConversation(input));
     assert.equal(result.forgottenMemories, 0); assert.equal(result.removedReceipts, 0);
     assert.equal(usage(f.core).savedBytes, 0); assert.equal(usage(f.core).reservedBytes, 0);
+    assertUnrelated();
     f.reopen(); assert.deepEqual(ok(f.core.deleteConversation(input)), result); assert.equal(usage(f.core).savedBytes, 0);
+    assert.equal(ok(f.core.list({ namespace: ns })).memories.length, 1);
   });
 }
 
 for (const kind of ['ordinary', 'episode', 'raw']) test(`P3b-03 ${kind} source-root proof changes invalidate CAS without a new receipt`, async t => {
   const f = fixture(t, { lineage: true, model: { extract: item } });
+  const assertUnrelated = await seedUnrelated(f.core, f.db, ns);
   const old = legacy('codex', 'B', 'legacy-B'); ok(await f.core.capture(old));
   const selected = openRawCaptureCore({ path: f.path, model: f.model }, { mode: 'raw-v1', deletion: true,
     port: localPlainPort(), readPolicy: () => ({ generation: 'synthetic', reason: null }) });
@@ -154,10 +187,14 @@ for (const kind of ['ordinary', 'episode', 'raw']) test(`P3b-03 ${kind} source-r
   assert.equal(count(f.db, 'raw_parts'), parts + (kind === 'raw' ? 1 : 0));
   assert.deepEqual(f.db.prepare('SELECT * FROM receipts ORDER BY id').all(), receipts);
   error(selected.previewDeleteConversation(input), 'revision_conflict');
+  ok(selected.deleteConversation({ ...input, actionId: 'delete-current',
+    expectedRevision: ok(await selected.getConversation({ namespace: ns, conversationId: source.raw.conversationId })).conversation.revision }));
+  assertUnrelated();
 });
 
 for (const client of ['claude-code', 'codex']) test(`P3b-07/08 ${client}: source-only cross-client consumer and pending keep close by original root`, async t => {
   const f = fixture(t, { kind: 'episode', deletion: true, model: { extract: empty } });
+  const assertUnrelated = await seedUnrelated(f.core, f.db, ns);
   const first = ok(await f.core.captureRaw(request(splitRaw('Synthetic original episode source.')[0], { client, sessionId: 'A' }, 'episode')));
   const origin = ok(first.interpretation).episode.id;
   const passage = f.db.prepare('SELECT id FROM episode_sources WHERE episode_id=?').get(origin);
@@ -188,7 +225,7 @@ for (const client of ['claude-code', 'codex']) test(`P3b-07/08 ${client}: source
   // The real commit prunes uncited passages; this keep retains only A even
   // though its action belongs to the other client's B episode.
   assert.equal(bindings.length, 1); assert.equal(bindings[0].source_client, client);
-  assert.equal(count(f.db, 'memories'), 0); assert.equal(count(f.db, 'episode_memory_links'), 0);
+  assert.equal(count(f.db, 'memories'), 1); assert.equal(count(f.db, 'episode_memory_links'), 0);
   const result = ok(f.core.deleteConversation(await key(f, first.raw.conversationId)));
   assert.equal(result.invalidatedEpisodes, 2); assert.equal(result.forgottenMemories, 0);
   const consumer = f.db.prepare('SELECT * FROM session_episodes WHERE id=?').get(detail.id);
@@ -198,4 +235,5 @@ for (const client of ['claude-code', 'codex']) test(`P3b-07/08 ${client}: source
   assert.equal(f.db.prepare('SELECT keep_state FROM episode_keep_actions WHERE event_id=?').get(kept.key.eventId).keep_state, 'failed');
   assert.equal(f.db.prepare('SELECT count(*) n FROM raw_job_sources WHERE event_id=?').get(kept.key.eventId).n, 0);
   error(await f.core.keepEpisode({ namespace: ns, ...action }), 'capture_evidence_closed');
+  assertUnrelated();
 });
