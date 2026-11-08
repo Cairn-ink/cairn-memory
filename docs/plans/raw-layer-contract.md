@@ -680,6 +680,8 @@ part/event identity, recorded retry dispositions, message ledgers and usage.
 Quota and policy skips still register their dispositions, without interpretation
 or eviction. The mode is bound to event identity: changing it on the same event
 fails `event_payload_conflict`, including for empty projections.
+Switching a store from host to engine mode never interprets messages already
+archived in host mode (they already have a stored part 0), and nothing is backfilled.
 
 A host-interpreted archive has no engine-derived source maps. Receipt lineage
 therefore uses the existing no-maps path, with whole-message precision. This

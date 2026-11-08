@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { openMemoryCore } from '../contract.mjs';
+import { createRawCaptureStorage } from '../raw-capture-storage.mjs';
 import { createRawLineageStorage } from '../raw-lineage-storage.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { rationaleModel } from '../testing/rationale-model.mjs';
@@ -16,13 +17,29 @@ const rawOptions = patch => ({ mode: 'raw-v1', capBytes: 200000000, port: localP
 const denied = (result, code) => assert.deepEqual(result, { ok: false, error: { code, retryable: false } });
 const empty = { ok: true, value: { status: 'not-run', reason: 'no-eligible-first-part' } };
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-function hostFixture(t, { kind = 'ordinary', raw = {}, coreOptions = {}, model = {} } = {}) {
+// Frozen engine bindings recorded before host interpretation was introduced.
+const engineBindings = {
+  ordinary: {
+    unmanaged: 'b0af8fff1a56bf166c5dfb54608bf0b4a94d70fc6534a0905b2826899ff5831b',
+    managed: '46111850552974b4fb29925a1a6a12caef2f3fb9dc4207193db9efadf89100d2',
+  },
+  staged: {
+    unmanaged: '24ee851aa8fdc8326d5f0e9c501951a3856ad78f1df85abfbd76540a5aea4b04',
+    managed: '73c68e5cbac1bdfb16d5590119c207da78854b4f07a4b300d3969bf7d144e246',
+  },
+  episode: {
+    unmanaged: '5514778d99fbc5306b5331873b2d69186a79f9c5f8990acd760ff1876b668f63',
+    managed: '6dedcd0f0c78de473cd1814c0f71768fd014df0a80930239332f683cdb4c3ce7',
+  },
+};
+function hostFixture(t, { kind = 'ordinary', raw = {}, coreOptions = {}, model = {}, omitInterpretation = false } = {}) {
   const workspace = createTestWorkspace(t, { prefix: 'raw-host-' }), path = join(workspace.path, 'store.sqlite');
   const calls = [], base = { ...rationaleModel(), interpretEpisode: interpretation, ...model };
   const portModel = Object.fromEntries(Object.entries(base).map(([name, value]) => [name,
     typeof value === 'function' ? (...args) => { calls.push(name); return value(...args); } : value]));
   let core;
   const options = rawOptions(raw);
+  if (omitInterpretation) delete options.interpretation;
   const reopen = (patch = {}) => {
     core?.close();
     core = openMemoryCore({ path, model: portModel, ...config(kind), ...coreOptions,
@@ -32,6 +49,16 @@ function hostFixture(t, { kind = 'ordinary', raw = {}, coreOptions = {}, model =
   reopen(); workspace.defer(() => core.close());
   const db = new DatabaseSync(path); db.exec('PRAGMA foreign_keys=ON'); workspace.defer(() => db.close());
   return { path, db, calls, reopen, get core() { return core; } };
+}
+function grantAuthority(f, client) {
+  const current = ok(f.core.getLocalCaptureControl({ namespace: ns, client }));
+  const granted = ok(f.core.setLocalCaptureControl({ namespace: ns, client, targetId: 'synthetic-target',
+    expectedStoreId: current.storeId, expectedRevision: current.revision,
+    automaticCaptureEnabled: true, rawNoticeVersion: 'local-plain-v1' }));
+  return { version: 'local-capture-authority-v1', targetId: granted.targetId, storeId: granted.storeId,
+    namespace: { ...ns, projectId: ns.projectId ?? '' }, client,
+    expectedControlRevision: granted.revision, expectedConsentGeneration: granted.consentGeneration,
+    expectedNamespaceGeneration: 'initial', expectedRawRevision: 0 };
 }
 const noInterpretation = f => {
   assert.deepEqual(f.calls, []);
@@ -53,6 +80,7 @@ for (const kind of ['ordinary', 'staged', 'episode']) test(`host ${kind}: eligib
   for (const table of ['raw_parts', 'raw_messages']) assert.equal(count(f.db, table), 2);
   assert.equal(count(f.db, 'raw_events'), 1); assert.equal(count(f.db, 'raw_capture_events'), 1);
   const binding = f.db.prepare('SELECT * FROM raw_capture_events').get();
+  assert.equal(binding.binding_digest, hash(['raw-capture-host-v1', engineBindings[kind].unmanaged]));
   const identity = [binding.session_key, source.eventId, JSON.parse(binding.first_message_ids), binding.binding_digest];
   assert.equal(binding.projection_digest, hash(['raw-capture-host-empty-v1', ...identity]));
   assert.notEqual(binding.projection_digest, hash(['raw-capture-empty-v1', ...identity]));
@@ -135,13 +163,43 @@ for (const duringSeal of [false, true]) test(`host deleted episode ${duringSeal 
   const row = f.db.prepare('SELECT id,revision FROM session_episodes').get();
   const remove = () => ok(f.core.forgetEpisode({ namespace: ns, episodeId: row.id, expectedRevision: row.revision }));
   const port = localPlainPort(), seal = port.sealRaw;
-  if (duringSeal) port.sealRaw = async value => { remove(); return seal(value); }; else remove();
+  let before, events;
+  if (duringSeal) port.sealRaw = async value => {
+    remove();
+    before = usage(host); events = count(f.db, 'raw_events');
+    return seal(value);
+  }; else remove();
   const host = openMemoryCore({ path: f.path, model: f.model, rawConversations: rawOptions({ port }) });
   f.workspace.defer(() => host.close());
-  const before = usage(host), calls = f.calls.length, events = count(f.db, 'raw_events');
-  denied(await host.captureRaw(request(splitRaw('Synthetic late source', { id: 'late', ordinal: 2 })[0])), 'conversation_deleted');
+  before = usage(host); events = count(f.db, 'raw_events');
+  const calls = f.calls.length, late = request(splitRaw('Synthetic late source', { id: 'late', ordinal: 2 })[0]);
+  denied(await host.captureRaw(late), 'conversation_deleted');
   assert.equal(count(f.db, 'raw_events'), events); assert.equal(f.calls.length, calls);
   assert.deepEqual(usage(host), before);
+  if (duringSeal) for (const table of ['raw_events', 'raw_capture_events', 'raw_parts'])
+    assert.equal(f.db.prepare(`SELECT count(*) n FROM ${table} WHERE event_id=?`).get(late.eventId).n, 0, table);
+});
+
+test('managed host preparation refuses authority revoked during its final seal', async t => {
+  const f = hostFixture(t), source = request(splitRaw('Synthetic managed source')[0]);
+  const localAuthority = grantAuthority(f, source.client), port = localPlainPort(), seal = port.sealRaw;
+  let seals = 0;
+  port.sealRaw = async value => {
+    seals++;
+    ok(f.core.setLocalCaptureControl({ namespace: ns, client: source.client, targetId: localAuthority.targetId,
+      expectedStoreId: localAuthority.storeId, expectedRevision: localAuthority.expectedControlRevision,
+      automaticCaptureEnabled: false, rawNoticeVersion: 'local-plain-v1' }));
+    return seal(value);
+  };
+  const storage = createRawCaptureStorage({ db: f.db, profile: {}, ...rawOptions({ port, localAuthority }) });
+  const before = usage(f.core);
+  // Test prepare itself: a later commit guard must not mask this recheck.
+  await assert.rejects(storage.prepare(source), { code: 'capture_disabled' });
+  assert.equal(seals, 1);
+  for (const table of ['raw_events', 'raw_capture_events', 'raw_parts', 'raw_owner_usage'])
+    assert.equal(count(f.db, table), 0, table);
+  assert.deepEqual(usage(f.core), before);
+  noInterpretation(f);
 });
 
 for (const reason of ['tool_off', 'notice_required', 'raw_disabled', 'quota_reached']) test(`host trusted ${reason} disposition skips sealing and interpretation`, async t => {
@@ -195,9 +253,9 @@ test('interpretation is a strict own data option, validated before opening SQLit
   assert.equal(getters, 0);
 });
 
-// Pin the unchanged internal raw-capture fixture path against both public defaults.
+// Compare the internal raw-capture fixture path against both public defaults.
 // A fixed identity secret and clock make all relevant persisted rows comparable.
-test('omitted and engine match the existing raw capture fixture rows and outcomes', async t => {
+test('omitted and engine match the current ordinary raw capture fixture rows and outcomes', async t => {
   t.mock.timers.enable({ apis: ['Date'], now: 1730000000000 });
   const baseline = fixture(t, { lineage: true, deletion: true, model: { extract: () => ({ items: [] }) } });
   const tables = ['raw_conversations', 'raw_messages', 'raw_parts', 'raw_events', 'raw_capture_events', 'raw_owner_usage',
@@ -218,6 +276,30 @@ test('omitted and engine match the existing raw capture fixture rows and outcome
     assert.deepEqual(dump(f.db), dump(baseline.db));
     assert.ok(f.calls.some(call => call.method === 'extract'));
     const binding = f.db.prepare('SELECT binding_digest FROM raw_capture_events').get().binding_digest;
-    assert.equal(binding, hash(['raw-capture-v1', {}, {}]));
+    assert.equal(binding, engineBindings.ordinary.unmanaged);
+  }
+});
+
+test('omitted and engine retain frozen engine bindings for every profile and authority mode', async t => {
+  for (const kind of ['ordinary', 'staged', 'episode']) for (const managed of [false, true]) {
+    for (const mode of [undefined, 'engine']) {
+      const raw = rawOptions(); delete raw.interpretation;
+      if (mode) raw.interpretation = mode;
+      const f = hostFixture(t, { kind, raw, omitInterpretation: mode === undefined });
+      const source = request(splitRaw('Synthetic binding source')[0], {}, kind);
+      if (managed) {
+        // Fixed synthetic identities used to record the frozen managed bindings.
+        f.db.prepare('UPDATE store_metadata SET store_id=?').run('00000000-0000-4000-8000-000000000000');
+        f.reopen();
+        const localAuthority = grantAuthority(f, source.client);
+        localAuthority.expectedConsentGeneration = '00000000-0000-4000-8000-000000000002';
+        f.db.prepare('UPDATE local_capture_controls SET consent_generation=?').run(localAuthority.expectedConsentGeneration);
+        f.reopen({ localAuthority });
+      }
+      ok(await f.core.captureRaw(source));
+      const binding = f.db.prepare('SELECT binding_digest FROM raw_capture_events WHERE event_id=?').get(source.eventId);
+      assert.equal(binding.binding_digest, engineBindings[kind][managed ? 'managed' : 'unmanaged'],
+        `${kind}/${managed ? 'managed' : 'unmanaged'}/${mode ?? 'omitted'}`);
+    }
   }
 });

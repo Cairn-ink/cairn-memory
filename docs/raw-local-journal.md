@@ -161,7 +161,7 @@ unverified; neither result authorizes an authentication/network workaround.
 ## Explicit public constructor (P4b-B1)
 
 `openMemoryCore({path, model?, privateCards?, rawConversations})` accepts the
-closed option `{mode:'raw-v1'|'off', port?, capBytes?, configureCap?, readPolicy, localAuthority?}`. Omission
+closed option `{mode:'raw-v1'|'off', port?, capBytes?, configureCap?, readPolicy, localAuthority?, interpretation?}`. Omission
 keeps the ordinary facade. Explicit undefined/null, unknown properties, symbols
 and accessors refuse before opening or migrating SQLite. Enabled mode requires
 an explicit positive safe-integer cap and a `raw-seal-v1` port with both
