@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — default recall recency scan
+
+- Use one newest-first keyset scan for body and source recall: a 1,024-row
+  floor, fixed 400 ms budget and 20,000-row cap, retaining the best 1,024 by
+  query overlap then ID. Remove the candidate-policy constructor option.
+- Release deferred read locks between bounded pages, restart once after an
+  epoch change, and bind the scan boundary into signed continuation cursors.
+  Budget exhaustion remains ordinary incomplete coverage. See
+  [defaults](docs/defaults.md). Earlier prefix/opt-in entries are historical.
+
 ## Unreleased — optional local Raw index
 
 - Add a separately selected local Raw search and maintenance service. It uses

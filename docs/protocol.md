@@ -780,14 +780,14 @@ It reads receipts in stable opaque-ID order, which is not event chronology, and
 uses the greatest distinct literal query-token overlap across the generated body
 and those four excerpts. A receipt supplies the existing 120-code-point select
 preview only when it scores strictly above the body; the first stable-ID receipt
-wins a receipt tie, while a body tie keeps the body preview. The default scans
-at most 1,024 current physical memories per namespace and scores at most 4,096
-excerpts of at most 800 UTF-16 units. An embedded trusted caller may opt into
-`openMemoryCore({ sourceCandidatePolicy: 'bounded-keyset-v1' })` for explicit
-source-context recall only. It keyset-scans at most 20,000 current physical rows
-per authorized namespace in pages of at most 256, checks one ID-only sentinel,
-and retains the top 1,024 by the same score and ID order. Projection-excluded
-rows consume the physical bound without exposing text or receipts to scoring.
+wins a receipt tie, while a body tie keeps the body preview. All recall modes scan nondeleted physical rows newest first on the existing
+`namespace_memories` index, with a 1,024-row floor, a fixed 400 ms monotonic
+budget and a 20,000-row cap. Deferred keyset pages visit at most 256 rows or
+25 ms before releasing SHARED. Currentness, review state and active-generation
+membership are residual eligibility checks; rejected rows still consume time
+and rows. The best 1,024 candidates are retained by overlap then ID. Body-only
+recall scores no receipts; source modes score up to four excerpts of at most
+800 UTF-16 units per eligible memory. There is no candidate-policy option.
 The selector sees only a winning 120-code-point
 preview for each candidate actually packed into the existing at-most-100-item,
 4,000-token pages over at most two rounds, not all four excerpts, receipt IDs or
@@ -807,12 +807,16 @@ receipt five or later cannot help that memory reach selection. Existing epoch,
 revision and final-snapshot checks prevent stale later use and finalization;
 they cannot retract a preview after a model request has already begun.
 
-The opt-in policy additionally binds its 20,000-row cap, 256-row page and
-1,024-candidate top bound in private recall cursors. A physical cap with another
-current row or any eligible candidate discarded by top-K retention is explicitly
-incomplete; it never triggers complete-map source ranking. This constructor
-policy adds no public map, MCP, HTTP, Hermes or persisted schema field and
-provides no semantic-accuracy guarantee.
+The `literal-recency-keyset-overlap-v3` policy binds the cap, page size and
+top bound in private recall cursors, together with a signed scan boundary
+(visited rows, last recency key and stop cause). A continuation rebuilds exactly
+that prefix without the time budget and rejects changed epochs. Older policy
+cursors fail validation. One epoch change restarts from newest with a fresh
+floor and the original budget clock. The returned pass's namespace and
+suppression epochs are rechecked during final short placement reads.
+Budget/cap exhaustion or top-K pruning sets `scanExhausted:false` and ordinary
+incomplete coverage; it never adds an error, partial reason or retry status.
+No public map, MCP, HTTP, Hermes or persisted schema field is added.
 
 Complete retained sources must fit the existing budgets or fail; no context
 expansion, dropped conditions or inferred authority is allowed. Inspection can

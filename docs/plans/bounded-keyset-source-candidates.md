@@ -1,5 +1,15 @@
 # Opt-in bounded source candidate discovery
 
+> Candidate discovery in this plan is superseded by the default recency keyset
+> scan in [defaults](../defaults.md): 1,024-row floor, fixed 400 ms budget,
+> 20,000-row cap and score/ID top-1,024 retention for all recall modes.
+> The former candidate-policy constructor option is removed. Historical
+> observations and other contracts below remain records of their original version.
+
+The current standalone resource helper is `scripts/measure-recall-recency.mjs`.
+It accepts one synthetic namespace size and reports cold/warm body-only scan
+and recall timings, rows visited, exhaustion and longest deferred page hold.
+
 Fixed base `6d67cf0c8cf67adddcc74622e9c805d632ed7769` (accepted PR #238).
 Branch `feat/bounded-keyset-source-candidates`, independent of the mixed budget
 guard. Primary contract frozen before implementation. This is a product retrieval candidate,

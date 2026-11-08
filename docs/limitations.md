@@ -796,7 +796,7 @@ upgrade or clean-development-audit claim is included in this slice.
 
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
-default 1,024-ID candidate prefix can miss a retained target among 1,025
+historical default 1,024-ID candidate prefix could miss a retained target among 1,025
 captured memories; explicit bounded keyset routing can carry that target into
 the packed answer request, while coverage remains `budget_exhausted`. These
 mechanical observations do not establish real-model extraction, semantic
@@ -1179,7 +1179,8 @@ the first 1,024 scanned IDs was not visible in two map pages and recall reported
 `budget_exhausted`. After one different low-ID memory was forgotten, the same
 target became visible and returned with 1,024 current rows. This demonstrates
 a scan-prefix boundary, not a diagnosis of past wrong answers. A positive
-beyond-prefix regression is needed before changing candidate retrieval.
+beyond-prefix regression now covers the default recency keyset scanner; the
+original observation remains historical evidence.
 
 The optional [Python reference sidecar](official-reference-rendering.md)
 preserves number/array rendering from original JSON for official-style judging.
@@ -1421,8 +1422,8 @@ still returned if some other feature selects that memory. Stable receipt-ID
 order is deterministic, not chronological.
 
 Internally, explicit source mode reads and scores up to four retained excerpts
-of 800 UTF-16 units per eligible memory within the existing 1,024-current-memory
-scan. The supplied selector receives only the winning 120-code-point preview for
+of 800 UTF-16 units per eligible memory within the default recency keyset scan
+(1,024-row floor, 400 ms budget and 20,000 physical-row cap). The supplied selector receives only the winning 120-code-point preview for
 each candidate packed into the existing at-most-100-item, 4,000-token page over
 at most two rounds, not those four full excerpts, receipt IDs or source metadata.
 Each candidate receipt must first pass the same authoritative stored identity,
@@ -1434,17 +1435,17 @@ public maps and the classification topic catalog remain unchanged. Existing
 freshness checks stop later use or finalization after a valid mutation, but data
 already sent in a begun model request cannot be withdrawn retroactively.
 
-An embedded caller can explicitly select the experimental
-`sourceCandidatePolicy: 'bounded-keyset-v1'` constructor option. Only explicit
-source-context recall then scans up to 20,000 current physical memories per
-authorized namespace in 256-row keyset pages, retaining at most the 1,024
-highest literal scores. A physical cap with more current rows, or pruning at
-1,024 candidates, remains incomplete even when the retained candidate pages
-are consumed. This widens which retained source previews may reach the selector
-within the same read authority; it does not widen the final source DTO, model
-budgets or public host default. It is still a literal heuristic with the same
-first-four-receipt, Unicode-run/CJK and semantic limitations above. The scan
-bound is an engineering envelope, not a latency or answer-quality SLA.
+All recall modes now share newest-first candidate discovery. The former
+experimental `sourceCandidatePolicy` constructor option has been removed.
+The scan visits at least 1,024 physical nondeleted rows, then stops at its fixed
+400 ms monotonic budget, 20,000-row cap, or the end. Pages use deferred
+transactions bounded by 256 rows or 25 ms. Historical, awaiting and
+projection-rejected rows still consume rows and time. The best 1,024 candidates
+are retained by literal overlap then ID, independent of recency. Budget/cap
+exhaustion and pruning are incomplete coverage, without a retryable error.
+This widens the searchable prefix within the same authority; it does not change
+source DTOs, model budgets or first-four-receipt/Unicode-run/CJK limitations.
+The budget is an engineering bound, not a latency or answer-quality SLA.
 
 Synthetic actual-core tests demonstrate bounded page visibility, including one
 offline run with the pinned local tokenizer. A post-hoc development replay over

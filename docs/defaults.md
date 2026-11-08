@@ -16,6 +16,33 @@ do not install a transcript hook, start capturing a conversation, or enable host
 Only messages actually submitted to capture enter Raw. The separately selected
 retained-profile server is a read-only host with its own authority boundaries.
 
+Legacy `recall()` now scans each authorized namespace newest first, using
+`updated_at DESC, id ASC` on the existing `namespace_memories` index. All recall
+modes use this default; there is no candidate-policy constructor option.
+`QUERY_SCAN_BUDGET_MS` in `core/query-candidates.mjs` is fixed at **400 ms**.
+The scanner always visits at least 1,024 physical nondeleted rows, then stops
+at the monotonic budget, 20,000 rows, or the end. Historical, awaiting and
+projection-rejected rows consume the allowance but never contribute text.
+Recency determines traversal; literal overlap and then ID determine the best
+1,024 retained candidates. Body-only recall reads no scoring receipts; source
+modes still examine only the first four stable-ID receipts per eligible memory.
+
+Each deferred read page releases its lock after at most 256 rows or 25 ms
+(checked between rows). One epoch change restarts the scan with the original
+budget clock and a fresh floor; repeated changes leave incomplete coverage.
+On a second change, only the visited prefix, bounded by its last key and row
+count, is revalidated under the new epochs
+before incomplete delivery; further movement fails the existing freshness check.
+Placement reads also use short, epoch-checked deferred snapshots.
+`scanExhausted:false` means a budget, row cap, interrupted pass or top-candidate
+pruning left coverage incomplete. It is an ordinary incomplete result, with
+`exhausted:false` on private map pages and the existing recall coverage values;
+it adds no error, retry status or response field. Signed recall cursors bind
+the visited-row count, last recency key and stop cause. Continuations replay
+that exact boundary without the time budget and reject a changed epoch.
+From a source checkout, run `npm run measure:recall-recency -- N`
+for one namespace size at a time.
+
 | Capability | What it does | Default | Cost | Programmatic option / CLI switch |
 | --- | --- | --- | --- | --- |
 | Raw retention | Saves submitted capture messages through the Raw journal, with lineage and existing exclusion/forgetting controls | On in MCP and the installer; off in the library | Local plaintext disk, default 200,000,000-byte owner cap; no extra model call | MCP `raw:false` / `--no-raw` disables retention. Library callers enable it with `raw:true`; omit or use `raw:false` to disable. For a custom cap, sealing port or policy, use `rawConversations:{mode:'raw-v1',capBytes,port,readPolicy}`. `mode:'off'` disables saving while retaining management APIs. |

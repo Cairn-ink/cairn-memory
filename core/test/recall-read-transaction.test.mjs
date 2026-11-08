@@ -12,7 +12,7 @@ import { createMockRecallModel } from '../testing/mock-recall-model.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { createHash } from 'node:crypto';
 import { boundedText, fingerprint } from '../validation.mjs';
-import { createQueryScore, BOUNDED_KEYSET_SOURCE_CANDIDATES } from '../query-candidates.mjs';
+import { createQueryScore, QUERY_CANDIDATES } from '../query-candidates.mjs';
 import { withContentSuppressionRequest, writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
 
@@ -163,7 +163,7 @@ function productionSources() {
 
 const deferredReaders = [
   ['core/moc-storage.mjs', 'queryCandidateRows', '  function queryCandidateRows(', '\n  function mapRows',
-    '}, undefined, { deferred: sourceCandidatePolicy !== BOUNDED_KEYSET_SOURCE_CANDIDATES.version });'],
+    'transaction(db, work, undefined, { deferred: true })'],
   ['core/moc-storage.mjs', 'suppressionFence', '    suppressionFence(ns)', '\n    assertEpoch(',
     '? transaction(db, () => suppressionEpochInside(ns), undefined, { deferred: true }) : null; },'],
   ['core/moc-storage.mjs', 'assertEpoch', '    assertEpoch(ns, expected, suppressionEpoch)', '\n}',
@@ -201,7 +201,8 @@ function assertDeferredAllowlist(sources) {
     assert.ok(end > start, 'read helper boundary: ' + name);
     const region = source.slice(start, end), index = region.indexOf(option);
     assert.ok(index >= 0 && region.indexOf(option, index + 1) < 0, 'exact deferred call: ' + file + ':' + name);
-    assert.match(region, /\breturn transaction\(db,|\? transaction\(db,/, 'read helper directly calls transaction');
+    assert.match(region, name === 'queryCandidateRows' ? /transaction\(db, work, undefined, \{ deferred: true \}\)/
+      : /\breturn transaction\(db,|\? transaction\(db,/, 'read helper directly calls transaction');
     permit(file, start + index + option.indexOf('deferred'));
     sites.push(file + ':' + name);
   }
@@ -461,7 +462,7 @@ process.send('done');
 `;
 
 test('a real capture holding RESERVED commits before a maximum bounded-keyset scan', async t => {
-  const f = fixture(t), count = BOUNDED_KEYSET_SOURCE_CANDIDATES.scan;
+  const f = fixture(t), count = QUERY_CANDIDATES.scan;
   assert.equal(count, 20000);
   const body = ('Ω Σ '.repeat(1000)).slice(0, 3970), excerpt = ('Ω Σ '.repeat(200)).slice(0, 799);
   // Canonical normalized maximal-size inputs reproduce the review's slow scan
@@ -528,7 +529,7 @@ test('a real capture holding RESERVED commits before a maximum bounded-keyset sc
   });
   let scored = 0;
   const score = createQueryScore('ω σ'), start = performance.now();
-  const page = f.runtime.queryCandidateRows(ns, { sourceCandidatePolicy: 'bounded-keyset-v1', sourceReceiptLimit: 4,
+  const page = f.runtime.queryCandidateRows(ns, { sourceReceiptLimit: 4,
     score: text => { scored++; return score(text); }, memoryLabel: () => 'Synthetic keyset label' });
   const scanMs = performance.now() - start;
   execMock.mock.restore(); prepareMock.mock.restore();
@@ -539,9 +540,9 @@ test('a real capture holding RESERVED commits before a maximum bounded-keyset sc
   assert.equal(outcome.result.ok, true, JSON.stringify(outcome));
   assert.equal(outcome.persisted, 1);
   assert.equal(outcome.commitError, undefined);
-  assert.equal(acquisition, 'BEGIN IMMEDIATE');
-  assert.ok(scored >= count * 5, 'maximum body and four-receipt scan did not run');
-  assert.equal(page.rows.length, BOUNDED_KEYSET_SOURCE_CANDIDATES.top);
+  assert.equal(acquisition, 'BEGIN');
+  assert.ok(scored >= QUERY_CANDIDATES.floor * 5, 'body and four-receipt scan floor did not run');
+  assert.equal(page.rows.length, QUERY_CANDIDATES.top);
   child.send('close');
   const [code, signal] = await ended;
   assert.equal(signal, null, stderr); assert.equal(code, 0, stderr);

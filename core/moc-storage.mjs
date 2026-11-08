@@ -1,11 +1,12 @@
+import { performance } from 'node:perf_hooks';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety, receiptReadSafety, createContentReadMemo } from './content-safety.mjs';
-import { contentSuppressionRequestFenceInside, contentSuppressionReasonInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { contentSuppressionRequestFenceInside, contentSuppressionReasonInside, cachedContentSuppressionRequestInside,
+  contentSuppressionFenceInside, withContentSuppressionRequest, resetContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { randomUUID } from "node:crypto";
 import { transaction } from "./database.mjs";
 import { fail } from "./validation.mjs";
-import { QUERY_SCAN_LIMIT, SOURCE_QUERY_RECEIPT_LIMIT,
-  BOUNDED_KEYSET_SOURCE_CANDIDATES } from './query-candidates.mjs';
+import { QUERY_SCAN_BUDGET_MS, SOURCE_QUERY_RECEIPT_LIMIT, QUERY_CANDIDATES } from './query-candidates.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 
 const namespaceWhere = "owner_id = ? AND scope = ? AND project_id = ?";
@@ -379,33 +380,39 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     THEN moc.title ELSE NULL END`;
 
   function queryCandidateRows(ns, { score, memoryLabel, sourceReceiptLimit = 0,
-    sourceCandidatePolicy = null }) {
-    // The opt-in scan can outlive a writer's busy timeout in DELETE mode.
-    // Serialize it behind RESERVED exactly as before; ordinary recall reads
-    // remain deferred so they can proceed alongside an uncommitted writer.
-    return transaction(db, () => {
-      // Only the two per-candidate discovery probes use this transaction-local
-      // cache. Key by the exact projected SQL; never share across connections.
-      const discoveryStatements = new Map();
-      const discoveryPrepare = sql => {
+    scanBoundary, expectedEpoch, expectedSuppressionEpoch }) {
+    const { scan, page, top, floor, pageMs } = QUERY_CANDIDATES;
+    if (![0, SOURCE_QUERY_RECEIPT_LIMIT].includes(sourceReceiptLimit)) fail('invalid_input');
+    const replay = scanBoundary !== undefined;
+    if (replay && (!scanBoundary || Object.keys(scanBoundary).sort().join(',') !== 'last,rows,stop' ||
+        !Number.isSafeInteger(scanBoundary.rows) || scanBoundary.rows < 0 || scanBoundary.rows > scan ||
+        !['end', 'budget', 'cap', 'changed'].includes(scanBoundary.stop) ||
+        (scanBoundary.rows === 0 ? scanBoundary.last !== null :
+          !scanBoundary.last || Object.keys(scanBoundary.last).sort().join(',') !== 'id,updatedAt' ||
+          typeof scanBoundary.last.id !== 'string' || typeof scanBoundary.last.updatedAt !== 'string') ||
+        !Number.isSafeInteger(expectedEpoch))) fail('invalid_cursor');
+    // A scan owns these reset-on-get statements; no cursor or SHARED lock
+    // survives a page's COMMIT. The final placement pages use the same cache.
+    const discoveryStatements = new Map();
+    const discoveryPrepare = sql => {
         sql = projectSQL(sql);
         if (!discoveryStatements.has(sql)) discoveryStatements.set(sql, db.prepare(sql));
         return discoveryStatements.get(sql);
       };
-      let primaryError = false;
-      try {
-      if (![0, SOURCE_QUERY_RECEIPT_LIMIT].includes(sourceReceiptLimit)) fail('invalid_input');
-      const keyset = sourceCandidatePolicy === BOUNDED_KEYSET_SOURCE_CANDIDATES.version;
-      if (sourceCandidatePolicy !== null && (!keyset || sourceReceiptLimit !== SOURCE_QUERY_RECEIPT_LIMIT)) {
-        fail('invalid_input');
-      }
-      assertIndexAvailable(ns);
-      const currentEpoch = epoch(ns), safety = Boolean(cachedContentLayout(db)?.suppressionRevision);
-      const extra = safety ? ',owner_id,scope,project_id,review_state' + readAncestry('memories') : '';
-      const readMemo = safety ? createContentReadMemo(db) : undefined;
-      // The existing partial index excludes history/tombstones before traversal.
-      // Require that access path: a missing index must not trigger a full scan.
-      // Projection-rejected current rows still consume the bounded allowance.
+    let primaryError = false;
+    const started = performance.now();
+    let currentEpoch, currentSuppressionEpoch, readMemo;
+    let last = null, visited = 0, more = true, pruned = false, stop;
+    let restarts = 0, terminalRows, terminalThrough;
+    const eligible = [];
+    const safety = Boolean(cachedContentLayout(db)?.suppressionRevision);
+    const extra = safety ? ',owner_id,scope,project_id,review_state' + readAncestry('memories') : '';
+    // Sample the actual owner epoch, not the outer request's provisional memo.
+    const epochs = () => [epoch(ns), safety ? contentSuppressionFenceInside(db, ns.ownerId) : null];
+    const sameEpochs = pair => pair[0] === currentEpoch && pair[1] === currentSuppressionEpoch;
+    const readPage = work => withContentSuppressionRequest(() =>
+      transaction(db, work, undefined, { deferred: true }), { fresh: true });
+    try {
       // A conservative canonical proof of the ordinary-receipt branch. Fold
       // it into the receipt read already required for scoring; any possible Raw
       // root, derived origin, keep link or session fence uses full S1 instead.
@@ -423,7 +430,6 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         `SELECT r.*${receiptAncestry} FROM receipts r INDEXED BY capture_memory_receipts
           WHERE r.memory_id = ? ORDER BY r.id LIMIT ?` :
         `SELECT * FROM receipts INDEXED BY capture_memory_receipts WHERE memory_id = ? ORDER BY id LIMIT ?`);
-      const eligible = [];
       const scoreMemory = (memory) => {
         const bodyScore = score(memory.content);
         let candidateScore = bodyScore;
@@ -450,106 +456,159 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       };
       const compare = (left, right) => right.score - left.score ||
         (left.memory.id < right.memory.id ? -1 : left.memory.id > right.memory.id ? 1 : 0);
-      let scanExhausted;
-      if (keyset) {
-        const { scan, page, top } = BOUNDED_KEYSET_SOURCE_CANDIDATES;
-        const physicalPage = db.prepare(`SELECT id, revision FROM memories
-          INDEXED BY capture_current_memories WHERE ${namespaceWhere}
-            AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' AND id > ? ORDER BY id LIMIT ?`);
-        const sentinel = db.prepare(`SELECT id FROM memories INDEXED BY capture_current_memories
-          WHERE ${namespaceWhere} AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' AND id > ?
-          ORDER BY id LIMIT 1`);
-        const projected = projectPrepare(`SELECT id, revision, content${safety ? ',deleted,currentness' + extra : ''} FROM memories
-          WHERE ${namespaceWhere} AND id = ? AND revision = ?
-            AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current'`);
-        let lastId = '';
-        let visited = 0;
-        let more = false;
-        let pruned = false;
-        while (visited < scan) {
-          const limit = Math.min(page, scan - visited);
-          const batch = physicalPage.all(...boundary(ns), lastId, limit);
-          if (batch.length === 0) break;
-          for (const physical of batch) {
-            visited += 1;
-            lastId = physical.id;
-            // The physical page has IDs only: excluded revisions never expose
-            // content to the scorer or cause a receipt read.
-            const memory = projected.get(...boundary(ns), physical.id, physical.revision);
-            if (!memory || safety && !safeMemory(ns, memory, true)) continue;
-            const candidate = scoreMemory(memory);
-            if (eligible.length === top && compare(candidate, eligible.at(-1)) >= 0) {
-              pruned = true;
-              continue;
-            }
-            let low = 0;
-            let high = eligible.length;
-            while (low < high) {
-              const middle = (low + high) >>> 1;
-              if (compare(candidate, eligible[middle]) < 0) high = middle;
-              else low = middle + 1;
-            }
-            eligible.splice(low, 0, candidate);
-            if (eligible.length > top) { eligible.pop(); pruned = true; }
+      const physicalSQL = `SELECT id, revision, updated_at FROM memories
+        INDEXED BY namespace_memories WHERE ${namespaceWhere} AND deleted = 0`;
+      const afterSQL = ' AND updated_at <= ? AND (updated_at < ? OR (updated_at = ? AND id > ?))';
+      const throughSQL = ' AND updated_at >= ? AND (updated_at > ? OR (updated_at = ? AND id <= ?))';
+      const orderSQL = ' ORDER BY updated_at DESC, id ASC LIMIT ?';
+      const firstPage = db.prepare(physicalSQL + orderSQL);
+      const nextPage = db.prepare(physicalSQL + afterSQL + orderSQL);
+      let throughFirstPage, throughNextPage;
+      const physicalRows = (position, limit) => {
+        let statement = position ? nextPage : firstPage;
+        const parameters = boundary(ns);
+        if (terminalThrough) {
+          statement = position
+            ? throughNextPage ??= db.prepare(physicalSQL + throughSQL + afterSQL + orderSQL)
+            : throughFirstPage ??= db.prepare(physicalSQL + throughSQL + orderSQL);
+          parameters.push(terminalThrough.updatedAt, terminalThrough.updatedAt, terminalThrough.updatedAt, terminalThrough.id);
+        }
+        if (position) parameters.push(position.updatedAt, position.updatedAt, position.updatedAt, position.id);
+        return statement.all(...parameters, limit);
+      };
+      const projected = projectPrepare(`SELECT id, revision, content${safety ? ',deleted,currentness' + extra : ''}
+        FROM memories WHERE ${namespaceWhere} AND id = ? AND revision = ?
+          AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current'`);
+      const retain = candidate => {
+        if (eligible.length === top && compare(candidate, eligible.at(-1)) >= 0) { pruned = true; return; }
+        let low = 0, high = eligible.length;
+        while (low < high) {
+          const middle = (low + high) >>> 1;
+          if (compare(candidate, eligible[middle]) < 0) high = middle;
+          else low = middle + 1;
+        }
+        eligible.splice(low, 0, candidate);
+        if (eligible.length > top) { eligible.pop(); pruned = true; }
+      };
+      while (!stop) {
+        let changed = false;
+        readPage(() => {
+          const pageStarted = performance.now();
+          assertIndexAvailable(ns);
+          const observed = epochs();
+          if (replay && (observed[0] !== expectedEpoch ||
+              expectedSuppressionEpoch !== undefined && observed[1] !== expectedSuppressionEpoch)) fail('cursor_stale');
+          if (currentEpoch === undefined) [currentEpoch, currentSuppressionEpoch] = observed;
+          else if (!sameEpochs(observed)) {
+            if (terminalRows !== undefined) fail('index_revision_conflict');
+            changed = true;
+            return;
           }
-          if (batch.length < limit) break;
+          readMemo = safety ? createContentReadMemo(db) : undefined;
+          const remaining = (replay ? scanBoundary.rows : terminalRows ?? scan) - visited;
+          const limit = Math.min(page, remaining);
+          const batch = limit ? physicalRows(last, limit) : [];
+          let consumed = 0;
+          for (const physical of batch) {
+            // Residual filters and projection denials consume rows and time.
+            if (!replay && terminalRows === undefined && visited >= floor &&
+                performance.now() - started >= QUERY_SCAN_BUDGET_MS) {
+              stop = 'budget'; break;
+            }
+            visited++; consumed++;
+            last = { updatedAt: physical.updated_at, id: physical.id };
+            // Physical pages never read content. Probe active-generation
+            // membership before the projected, current/review-filtered read.
+            if (discoveryPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
+              AND revision = ?`).get(...boundary(ns), physical.id, physical.revision)) {
+              const memory = projected.get(...boundary(ns), physical.id, physical.revision);
+              if (memory && (!safety || safeMemory(ns, memory, true))) retain(scoreMemory(memory));
+            }
+            if (performance.now() - pageStarted >= pageMs) break;
+          }
+          // A full/partly consumed page continues in a new snapshot. Only the
+          // hard cap needs an ID/key-only sentinel (its final page is <256).
+          // Replay already has the signed stop cause at an unchanged epoch.
+          more = !(consumed === batch.length && batch.length < limit);
+          if (replay && visited === scanBoundary.rows) {
+            stop = scanBoundary.stop;
+            more = stop !== 'end';
+          }
+          else if (terminalRows !== undefined && (visited === terminalRows || !more)) stop = 'changed';
+          else if (!more) stop = 'end';
+          else if (!replay && visited === scan) {
+            more = physicalRows(last, 1).length !== 0;
+            stop = more ? 'cap' : 'end';
+          }
+          if (!sameEpochs(epochs())) fail('index_revision_conflict');
+        });
+        if (changed) {
+          if (replay) fail('cursor_stale');
+          resetContentSuppressionRequestInside(db);
+          if (++restarts > 1) {
+            // Stop discovery at this pass's visited-row boundary. Revalidate
+            // that prefix under the new epochs so removed/suppressed text is
+            // discarded and the returned boundary can be replayed exactly.
+            // This bounded reconciliation ignores time, like cursor replay;
+            // any further movement fails the final freshness fence.
+            terminalRows = visited;
+            terminalThrough = last;
+          }
+          eligible.length = 0; visited = 0; last = null; more = true; pruned = false;
+          currentEpoch = undefined;
         }
-        if (visited === scan) more = Boolean(sentinel.get(...boundary(ns), lastId));
-        // Scorers are private, but their callbacks must not turn a stale page
-        // into a plausible current result before the model/cursor checks.
-        if (epoch(ns) !== currentEpoch) fail('index_revision_conflict');
-        scanExhausted = !more && !pruned;
-        for (const candidate of eligible) {
-          candidate.sourceLabel = candidate.winningExcerpt === undefined
-            ? undefined : memoryLabel(candidate.winningExcerpt);
-        }
-      } else {
-        const scanned = db.prepare(`SELECT id, revision, content, deleted, currentness${extra} FROM memories
-          INDEXED BY capture_current_memories WHERE ${namespaceWhere}
-            AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?`)
-          .all(...boundary(ns), QUERY_SCAN_LIMIT + 1);
-        for (const memory of scanned.slice(0, QUERY_SCAN_LIMIT)) {
-          if (memory.deleted || memory.currentness !== 'current' || safety && !safeMemory(ns, memory, true)) continue;
-          // Respect active-generation membership, never bypass its read authority.
-          if (!discoveryPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
-            AND revision = ?`).get(...boundary(ns), memory.id, memory.revision)) continue;
-          const candidate = scoreMemory(memory);
-          eligible.push({ ...candidate, sourceLabel: candidate.winningExcerpt === undefined
-            ? undefined : memoryLabel(candidate.winningExcerpt) });
-        }
-        scanExhausted = scanned.length <= QUERY_SCAN_LIMIT;
       }
-      eligible.sort(compare);
-      const rows = eligible.map(({ memory, sourceLabel }) => {
-        const placement = discoveryPrepare(`SELECT r.* FROM moc_memory_refs r
-          JOIN mocs parent ON parent.id = r.moc_id
-          WHERE r.memory_id = ? AND r.memory_revision = ? AND ${qualifiedNamespace('parent')}
-            AND parent.level = 1 AND parent.revision = r.moc_revision
-          ORDER BY parent.canonical_title, parent.id LIMIT 1`)
-          .get(memory.id, memory.revision, ...boundary(ns));
-        return { item: placement
-          ? { type: 'ref', ref: memoryRef(placement), label: sourceLabel ?? memoryLabel(memory.content) }
-          : { type: 'unfiled', ref: { memoryId: memory.id, revision: memory.revision },
-            label: sourceLabel ?? memoryLabel(memory.content) } };
+      const boundaryResult = { rows: visited, last, stop };
+      if (replay && JSON.stringify(boundaryResult) !== JSON.stringify(scanBoundary)) fail('cursor_stale');
+      for (const candidate of eligible) {
+        candidate.sourceLabel = candidate.winningExcerpt === undefined
+          ? undefined : memoryLabel(candidate.winningExcerpt);
+      }
+      const rows = [];
+      // Bounded placement pages close their read snapshots too. Recheck the
+      // returned pass's epochs before each page and once at final delivery.
+      for (let offset = 0; offset < eligible.length;) {
+        readPage(() => {
+          assertIndexAvailable(ns);
+          if (!sameEpochs(epochs())) fail('index_revision_conflict');
+          const pageStarted = performance.now();
+          for (let count = 0; offset < eligible.length && count < page; count++) {
+            const { memory, sourceLabel } = eligible[offset++];
+            const placement = discoveryPrepare(`SELECT r.* FROM moc_memory_refs r
+              JOIN mocs parent ON parent.id = r.moc_id
+              WHERE r.memory_id = ? AND r.memory_revision = ? AND ${qualifiedNamespace('parent')}
+                AND parent.level = 1 AND parent.revision = r.moc_revision
+              ORDER BY parent.canonical_title, parent.id LIMIT 1`)
+              .get(memory.id, memory.revision, ...boundary(ns));
+            rows.push({ item: placement
+              ? { type: 'ref', ref: memoryRef(placement), label: sourceLabel ?? memoryLabel(memory.content) }
+              : { type: 'unfiled', ref: { memoryId: memory.id, revision: memory.revision },
+                label: sourceLabel ?? memoryLabel(memory.content) } });
+            if (performance.now() - pageStarted >= pageMs) break;
+          }
+          if (!sameEpochs(epochs())) fail('index_revision_conflict');
+        });
+      }
+      readPage(() => {
+        assertIndexAvailable(ns);
+        if (!sameEpochs(epochs())) fail('index_revision_conflict');
       });
-      return { rows, epoch: currentEpoch, scanExhausted, suppressionEpoch: suppressionEpochInside(ns) };
-      } catch (error) {
-        primaryError = true;
-        throw error;
-      } finally {
-        // Close where supported; otherwise get() has reset each statement
-        // (never iterate()), and clearing references releases it to GC.
-        const closeErrors = [];
-        for (const statement of discoveryStatements.values()) {
-          try {
-            if (typeof statement.close === 'function') statement.close();
-            else if (typeof statement[Symbol.dispose] === 'function') statement[Symbol.dispose]();
-          } catch (error) { closeErrors.push(error); }
-        }
-        discoveryStatements.clear();
-        if (!primaryError && closeErrors.length) throw closeErrors[0];
+      return { rows, epoch: currentEpoch, suppressionEpoch: currentSuppressionEpoch,
+        scanExhausted: stop !== 'changed' && !more && !pruned, scanBoundary: boundaryResult };
+    } catch (error) {
+      primaryError = true;
+      throw error;
+    } finally {
+      const closeErrors = [];
+      for (const statement of discoveryStatements.values()) {
+        try {
+          if (typeof statement.close === 'function') statement.close();
+          else if (typeof statement[Symbol.dispose] === 'function') statement[Symbol.dispose]();
+        } catch (error) { closeErrors.push(error); }
       }
-    }, undefined, { deferred: sourceCandidatePolicy !== BOUNDED_KEYSET_SOURCE_CANDIDATES.version });
+      discoveryStatements.clear();
+      if (!primaryError && closeErrors.length) throw closeErrors[0];
+    }
   }
 
   function mapRows(ns, { purpose, parentRef, limit, offset, expectedEpoch, expectedSuppressionEpoch, memoryLabel = label,

@@ -4,11 +4,14 @@
 authorized namespace. Each selection round accepts only memory references
 visible in that round; a model cannot select another namespace or invent IDs.
 Candidates repeated through multiple parents/pages are fetched once.
-Candidates are distinct memories scored before packing by full-body literal query
-token overlap, then stable ID, from one namespace scan of at most 1,024 current,
-nondeleted rows plus a current sentinel. The existing `capture_current_memories`
-partial index excludes history/tombstones before traversal; those records no
-longer consume the allowance. Projection-rejected current rows still do. Valid
+Candidates are distinct memories scored before packing by full-body literal
+query overlap, then stable ID. Every recall mode scans newest first with the
+existing `namespace_memories` index and `updated_at DESC, id ASC` keyset.
+A 1,024-row floor precedes the fixed 400 ms budget; the hard cap is 20,000
+physical nondeleted rows. History, awaiting review and projection denials count
+toward that work without contributing text. At most 1,024 candidates survive
+score/ID ordering. Deferred pages release SHARED after at most 256 rows or
+25 ms, checked per row. Valid
 existing placement refs are preserved; memories without one use the public map's unfiled
 fallback. Group headers and hierarchy edges are omitted from this private input,
 reducing group context; public maps and classification are unchanged.
@@ -28,11 +31,15 @@ An unscanned sentinel also keeps `mapExhausted:false`, including successful or
 empty recall. Once all candidates within the scan allowance have been paged,
 `nextCursor:null` ends traversal without claiming complete coverage. Private
 authenticated cursors bind namespace, epoch, query
-digest, both navigation policies, the 1,024-row allowance and candidate offset.
-The candidate-policy binding is now `literal-current-memory-overlap-v2`; older
-policy cursors cannot silently continue with the new allowance. A missing partial
-index fails closed without an unbounded scan or new migration. This policy change
-does not reclassify frozen v1 evidence as a v2 quality result.
+digest, navigation policies, the cap/top/page bounds and candidate offset.
+The signed scan boundary includes rows visited, last recency key and stop cause;
+a continuation rescans exactly that prefix without applying a fresh time budget,
+and a changed namespace or suppression epoch yields `cursor_stale`.
+The candidate-policy binding is `literal-recency-keyset-overlap-v3`; older
+cursors fail once instead of silently paging a different list. A missing
+recency index fails closed without a full scan or migration. One epoch change
+restarts the pass with its floor and the original scan clock; a repeated change
+leaves incomplete coverage. Budget exhaustion is ordinary incompleteness.
 
 Each map/fetch response retains its 4,000 counted-token ceiling. Every model call
 still has the stricter 6,000 input / 1,024 output limits and existing deadline.

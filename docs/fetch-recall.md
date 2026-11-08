@@ -123,14 +123,16 @@ fetched candidates. Empty arrays are valid. Forged IDs, revisions, extra fields
 and group IDs fail validation. All query/content/receipt/label text is untrusted
 data. Structural validation does not prove that a model judges relevance well.
 
-Recall's private `literal-current-memory-overlap-v2` candidate policy first scans
-at most 1,024 current, nondeleted memory rows plus one current sentinel in
-exact-namespace ID order using the existing `capture_current_memories` partial
-index. Deleted and historical rows are absent from that index and do not consume
-the allowance. Current rows rejected by the active index projection still consume
-it; only projected current records can become candidates. The scan requires this
-index and fails closed if it is missing, without a full-scan fallback. No schema
-migration is added. The snapshot is reused across both pages in one recall.
+Recall's private `literal-recency-keyset-overlap-v3` policy scans authorized
+nondeleted rows newest first (`updated_at DESC, id ASC`) using the existing
+`namespace_memories` index. All recall modes share a 1,024-row floor, fixed
+400 ms monotonic budget and 20,000-row cap. Historical, awaiting and
+projection-rejected rows consume rows and time without contributing content.
+Only projected current records become candidates. Each deferred page releases
+SHARED after at most 256 rows or 25 ms, checked between rows. One epoch change
+restarts the pass; repeated changes leave coverage incomplete. The scanner
+requires the existing index, with no migration or full-scan fallback.
+The snapshot is reused across both pages in one recall.
 Full bodies are scored by the number of distinct
 literal query tokens they contain, then sorted by descending score and stable ID.
 Zero-overlap records remain eligible: absence of a literal match does not prove
@@ -310,20 +312,15 @@ one page.
 At that terminal ceiling the private page has no next cursor; recall stops without
 repeating the scan or making an empty continuation call.
 
-The indexed query returns at most 1,025 current, nondeleted rows. At most 1,024
-projected bodies are scored, each bounded by the existing 4,000 UTF-16-unit input limit: at most
-4,096,000 UTF-16 units or 12,288,000 UTF-8 bytes in total. The sentinel body is
-returned but not scored. These are returned-row and JavaScript scoring bounds,
-not bounds on SQLite page I/O. Index membership and canonical placement lookups
-add auxiliary projection work; they are not included in the current-row allowance.
-No latency claim follows from these ceilings.
-On a fresh synthetic schema, `EXPLAIN QUERY PLAN` for the exact scan reports
-`SEARCH memories USING INDEX capture_current_memories (owner_id=? AND scope=? AND project_id=?)`
-with no temporary ordering B-tree. That verifies the scan access path, not total
-page reads or the cost of auxiliary projection lookups.
-Targets beyond the first 1,024 current rows, crowded score ties and literal
-paraphrase/CJK misses remain limitations. These offline index and reachability
-checks establish neither model-quality gains nor measured latency improvements.
+Physical keyset pages contain only IDs, revisions and recency keys; content
+is read through the active projection only after membership and current/review
+checks. At most 20,000 bodies of the existing 4,000 UTF-16-unit maximum can be
+scored per pass, retaining the best 1,024 by overlap then ID. Source modes keep
+the first-four-receipt bound. An ID/key-only existence probe never scores text.
+These are returned-row and JavaScript scoring bounds, not SQLite page I/O or
+latency guarantees. `EXPLAIN QUERY PLAN` uses `namespace_memories` without a
+temporary ordering B-tree on supported layouts. Targets outside the timed
+prefix, crowded score ties and literal paraphrase/CJK misses remain limitations.
 See [recall continuation](recall-continuation.md) for exact budgets and coverage.
 
 Run `npm run demo:recall` from a source checkout on Node >=22.16. The bundled

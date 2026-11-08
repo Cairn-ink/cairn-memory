@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { installRecallScanClock } from '../testing/recall-scan-clock.mjs';
 import { DatabaseSync } from 'node:sqlite';
 
 import { openMemoryCore } from '../contract.mjs';
@@ -23,7 +24,7 @@ const syntheticId = index => `synthetic-${String(index).padStart(6, '0')}`;
 const queryRows = (runtime, query, observe = () => {}, patch = {}) => runtime.queryCandidateRows(
   { ...namespace, projectId: '' }, { score: text => { observe(text); return createQueryScore(query)(text); },
     memoryLabel: text => [...text].slice(0, 120).join(''), sourceReceiptLimit: 4,
-    sourceCandidatePolicy: 'bounded-keyset-v1', ...patch });
+    ...patch });
 // Direct SQL seeds only deterministic scan-boundary controls in a fresh test DB;
 // the real public admission and capture regressions below use their public ports.
 function seedPhysical(db, count, ownerId = namespace.ownerId, content = index => `plain row ${index}`,
@@ -69,9 +70,9 @@ function model() {
   };
 }
 
-test('K1 constructor rejects malformed own policy before storage/model access', () => {
+test('K1 constructor rejects removed candidate policy before storage/model access', () => {
   const path = join(tmpdir(), 'nonexistent-keyset-constructor', 'memory.sqlite');
-  for (const sourceCandidatePolicy of [null, undefined, '', 'bounded-keyset-v2', 1, {}]) {
+  for (const sourceCandidatePolicy of [null, undefined, '', 'bounded-keyset-v1', 'bounded-keyset-v2', 1, {}]) {
     assert.throws(() => openMemoryCore({ path, sourceCandidatePolicy }),
       error => error?.code === 'invalid_input');
   }
@@ -81,7 +82,8 @@ test('K1 constructor rejects malformed own policy before storage/model access', 
   assert.equal(getterCalls, 0);
 });
 
-test('K7 public-admit source beyond the 1024 current-ID prefix is opt-in reachable', async t => {
+test('K7 public-admit source beyond the 1024 current-ID prefix is reachable by default', async t => {
+  installRecallScanClock(t);
   const directory = mkdtempSync(join(tmpdir(), 'cairn-keyset-public-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const path = join(directory, 'memory.sqlite');
@@ -100,7 +102,7 @@ test('K7 public-admit source beyond the 1024 current-ID prefix is opt-in reachab
   const query = target.text.split(' ')[0];
   assert.equal(value(old.get({ namespace, memoryId: target.id })).receipts[0].excerpt, target.text);
   const input = { readSet: [namespace], query, contextMode: 'source-evidence', limit: 1 };
-  assert.ok(!value(await old.recall(input)).memories.some(item => item.memory.id === target.id));
+  assert.ok(value(await old.recall(input)).memories.some(item => item.memory.id === target.id));
   const selectionFrames = [];
   const expandedModel = model();
   const select = expandedModel.select;
@@ -108,8 +110,7 @@ test('K7 public-admit source beyond the 1024 current-ID prefix is opt-in reachab
     selectionFrames.push(request.input.maps.flatMap(page => page.items));
     return select(request);
   };
-  const expanded = openMemoryCore({ path, model: expandedModel,
-    sourceCandidatePolicy: 'bounded-keyset-v1' });
+  const expanded = openMemoryCore({ path, model: expandedModel });
   t.after(() => expanded.close());
   const result = value(await expanded.recall(input));
   assert.ok(selectionFrames.flat().some(item => item.type === 'unfiled' &&
@@ -130,7 +131,7 @@ test('K7 public-admit source beyond the 1024 current-ID prefix is opt-in reachab
       sourceReceiptLimit: 4 };
     const ns = { ...namespace, projectId: '' };
     const original = runtime.queryCandidateRows(ns, arguments_);
-    const keyset = runtime.queryCandidateRows(ns, { ...arguments_, sourceCandidatePolicy: 'bounded-keyset-v1' });
+    const keyset = runtime.queryCandidateRows(ns, { ...arguments_ });
     assert.deepEqual(keyset.rows, original.rows);
     assert.equal(keyset.scanExhausted, original.scanExhausted);
   } finally { runtime.close(); }
@@ -159,6 +160,7 @@ test('K7 public-admit source beyond the 1024 current-ID prefix is opt-in reachab
 });
 
 test('K3–K6 keyset scans indexed physical IDs, keeps top 1024, and reports pruning', t => {
+  installRecallScanClock(t);
   const directory = mkdtempSync(join(tmpdir(), 'cairn-keyset-boundary-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const path = join(directory, 'memory.sqlite');
@@ -182,14 +184,15 @@ test('K3–K6 keyset scans indexed physical IDs, keeps top 1024, and reports pru
   assert.equal(page.scanExhausted, false);
   assert.ok(!page.rows.some(row => row.item.ref.memoryId === syntheticId(1024)));
   const plan = db.prepare(`EXPLAIN QUERY PLAN SELECT id,revision FROM memories
-    INDEXED BY capture_current_memories WHERE owner_id=? AND scope=? AND project_id=?
-      AND deleted=0 AND currentness='current' AND id>? ORDER BY id LIMIT ?`)
+    INDEXED BY namespace_memories WHERE owner_id=? AND scope=? AND project_id=?
+      AND deleted=0 AND id>? ORDER BY updated_at DESC,id ASC LIMIT ?`)
     .all(namespace.ownerId, 'personal', '', '', 256);
-  assert.ok(plan.some(row => row.detail.includes('SEARCH memories USING INDEX capture_current_memories')));
+  assert.ok(plan.some(row => row.detail.includes('SEARCH memories USING INDEX namespace_memories')));
   assert.ok(plan.every(row => !row.detail.includes('TEMP B-TREE')));
 });
 
 test('K6 above-prefix results equal a complete same-policy authorized-prefix oracle', t => {
+  installRecallScanClock(t);
   const directory = mkdtempSync(join(tmpdir(), 'cairn-keyset-oracle-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const path = join(directory, 'memory.sqlite');
@@ -211,7 +214,7 @@ test('K6 above-prefix results equal a complete same-policy authorized-prefix ora
   // independently score body and the first four stable receipts, then sort and truncate.
   const physical = db.prepare(`SELECT id,content FROM memories
     WHERE owner_id=? AND scope='personal' AND project_id='' AND deleted=0
-      AND currentness='current' ORDER BY id LIMIT 20000`).all(namespace.ownerId);
+      AND currentness='current' ORDER BY updated_at DESC,id ASC LIMIT 20000`).all(namespace.ownerId);
   assert.equal(physical.length, 1131);
   const source = db.prepare('SELECT excerpt FROM receipts WHERE memory_id=? ORDER BY id LIMIT 4');
   const oracle = physical.map(row => {
@@ -226,8 +229,7 @@ test('K6 above-prefix results equal a complete same-policy authorized-prefix ora
   }).sort((left, right) => right.score - left.score || left.id.localeCompare(right.id))
     .slice(0, 1024);
   const actual = runtime.queryCandidateRows({ ...namespace, projectId: '' }, {
-    score, memoryLabel: preview, sourceReceiptLimit: 4,
-    sourceCandidatePolicy: 'bounded-keyset-v1',
+    score, memoryLabel: preview, sourceReceiptLimit: 4
   });
   assert.deepEqual(actual.rows.map(row => ({ id: row.item.ref.memoryId, label: row.item.label })),
     oracle.map(({ id, label }) => ({ id, label })));
@@ -235,6 +237,7 @@ test('K6 above-prefix results equal a complete same-policy authorized-prefix ora
 });
 
 test('K8 public capture links a beyond-prefix original receipt to sourced recall', async t => {
+  installRecallScanClock(t);
   const directory = mkdtempSync(join(tmpdir(), 'cairn-keyset-capture-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const path = join(directory, 'memory.sqlite');
@@ -244,7 +247,7 @@ test('K8 public capture links a beyond-prefix original receipt to sourced recall
     })) }),
     classify: async () => { throw new Error('synthetic_classification_unavailable'); },
   };
-  const core = openMemoryCore({ path, model: scripted, sourceCandidatePolicy: 'bounded-keyset-v1' });
+  const core = openMemoryCore({ path, model: scripted });
   t.after(() => core.close());
   const captured = [];
   for (let batch = 0; batch < 410; batch += 1) {
@@ -272,11 +275,12 @@ test('K8 public capture links a beyond-prefix original receipt to sourced recall
   assert.equal(result.memories[0]?.receipts[0]?.excerpt, target.source);
 });
 
-test('K9 opt-in source mode preserves exact namespaces and public lifecycle exclusion', async t => {
+test('K9 default source mode preserves exact namespaces and public lifecycle exclusion', async t => {
+  installRecallScanClock(t);
   const directory = mkdtempSync(join(tmpdir(), 'cairn-keyset-lifecycle-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const path = join(directory, 'memory.sqlite');
-  const core = openMemoryCore({ path, model: model(), sourceCandidatePolicy: 'bounded-keyset-v1' });
+  const core = openMemoryCore({ path, model: model() });
   t.after(() => core.close());
   const project = { ...namespace, scope: 'project', projectId: 'project' };
   const foreign = { ...namespace, ownerId: 'foreign-keyset' };
@@ -309,8 +313,7 @@ test('K9 opt-in source mode preserves exact namespaces and public lifecycle excl
   assert.deepEqual(value(await recall('oldsource')).memories, []);
   assert.equal(value(await recall('newsource')).memories[0].memory.id, successor.id);
   assert.equal(value(core.get({ namespace, memoryId: predecessor.id })).memory.state, 'historical');
-  const reopened = openMemoryCore({ path, model: model(),
-    sourceCandidatePolicy: 'bounded-keyset-v1' });
+  const reopened = openMemoryCore({ path, model: model() });
   try {
     assert.equal(value(await reopened.recall({ readSet: [namespace], query: 'newsource',
       contextMode: 'source-evidence', limit: 1 })).memories[0].memory.id, successor.id);
@@ -318,13 +321,13 @@ test('K9 opt-in source mode preserves exact namespaces and public lifecycle excl
 });
 
 test('K9 source correction during count/select/rank fails closed on stale snapshot', async t => {
+  installRecallScanClock(t);
   for (const phase of ['count', 'select', 'rank']) {
     const directory = mkdtempSync(join(tmpdir(), 'cairn-keyset-freshness-'));
     t.after(() => rmSync(directory, { recursive: true, force: true }));
     const path = join(directory, 'memory.sqlite');
     const scripted = model();
-    const core = openMemoryCore({ path, model: scripted,
-      sourceCandidatePolicy: 'bounded-keyset-v1' });
+    const core = openMemoryCore({ path, model: scripted });
     t.after(() => core.close());
     const saved = admit(core, namespace, 'plain generated interpretation',
       'violet keystone retained source', `freshness-${phase}`);
@@ -366,6 +369,7 @@ test('K9 source correction during count/select/rank fails closed on stale snapsh
 });
 
 test('K9 first-four source validation and active projection remain fail-closed', async t => {
+  installRecallScanClock(t);
   const directory = mkdtempSync(join(tmpdir(), 'cairn-keyset-projection-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const path = join(directory, 'memory.sqlite');
@@ -373,7 +377,7 @@ test('K9 first-four source validation and active projection remain fail-closed',
   const scripted = model();
   const select = scripted.select;
   scripted.select = async request => { selections += 1; return select(request); };
-  const core = openMemoryCore({ path, model: scripted, sourceCandidatePolicy: 'bounded-keyset-v1' });
+  const core = openMemoryCore({ path, model: scripted });
   const db = new DatabaseSync(path);
   t.after(() => { db.close(); core.close(); });
   const target = admit(core, namespace, 'plain body', 'plain source', 'first');
@@ -411,7 +415,8 @@ test('K9 first-four source validation and active projection remain fail-closed',
     contextMode: 'source-evidence' })).memories, []);
 });
 
-test('K5 private recall cursors bind the opt-in policy and source mode', async t => {
+test('K5 private recall cursors bind the unified policy and source mode', async t => {
+  installRecallScanClock(t);
   const directory = mkdtempSync(join(tmpdir(), 'cairn-keyset-cursor-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const path = join(directory, 'memory.sqlite');
@@ -425,8 +430,7 @@ test('K5 private recall cursors bind the opt-in policy and source mode', async t
     return 1;
   };
   const old = openMemoryCore({ path, model: scripted });
-  const expanded = openMemoryCore({ path, model: scripted,
-    sourceCandidatePolicy: 'bounded-keyset-v1' });
+  const expanded = openMemoryCore({ path, model: scripted });
   const db = new DatabaseSync(path);
   t.after(() => { db.close(); expanded.close(); old.close(); });
   seedPhysical(db, 201);
@@ -436,17 +440,17 @@ test('K5 private recall cursors bind the opt-in policy and source mode', async t
   captured.length = 0;
   value(await expanded.recall(input));
   const newBinding = captured[0];
-  assert.equal(oldBinding.policy, 'literal-current-memory-overlap-v2');
-  assert.equal(oldBinding.scan, 1024);
-  assert.equal(newBinding.policy, 'bounded-keyset-v1');
+  assert.equal(oldBinding.policy, 'literal-recency-keyset-overlap-v3');
+  assert.equal(oldBinding.scan, 20000);
+  assert.equal(newBinding.policy, 'literal-recency-keyset-overlap-v3');
   assert.deepEqual([newBinding.scan, newBinding.physicalPage, newBinding.top,
     newBinding.sourceReceiptLimit], [20_000, 256, 1_024, 4]);
   assert.equal(oldBinding.sourceMode, newBinding.sourceMode);
-  assert.notDeepEqual(newBinding, oldBinding);
+  assert.deepEqual(newBinding, oldBinding);
   captured.length = 0;
   value(await expanded.recall({ ...input, contextMode: 'rationale-evidence' }));
   assert.equal(captured[0].sourceMode, 'rationale-evidence');
   captured.length = 0;
   value(await expanded.recall({ readSet: [namespace], query: 'absent' }));
-  assert.equal(captured[0].policy, oldBinding.policy); // Body-only remains the old path.
+  assert.equal(captured[0].policy, oldBinding.policy); // Every mode uses the same candidate policy.
 });

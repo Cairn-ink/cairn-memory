@@ -1,5 +1,11 @@
 # Controlled mixed comparison — prospective integration contract
 
+> Candidate discovery in this plan is superseded by the default recency keyset
+> scan in [defaults](../defaults.md): 1,024-row floor, fixed 400 ms budget,
+> 20,000-row cap and score/ID top-1,024 retention for all recall modes.
+> The former candidate-policy constructor option is removed. Historical
+> observations and other contracts below remain records of their original version.
+
 DRI source-only decisions, 2026-09-27. This is NOT a paid launcher, corpus
 preparation authorization or final experiment freeze. Implementation dispatch
 waits for accepted Y16 and R10 and an explicit integrated base SHA. No old
