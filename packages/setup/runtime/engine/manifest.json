@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "afd1ef8fb8e3607a6939efc90bf6fa20c4e459962d832c7ba235495692ca656e",
-  "bytes": 1290666,
+  "sha256": "abe0336fecfe87e5a9dbfcc55ec66981ec9e67611a418bbc6af0cbd0ea261fee",
+  "bytes": 1290674,
   "files": [
     "LICENSE",
     "README.md",
@@ -446,7 +446,7 @@
     "core/automatic-rationale.mjs": "a77e226392454e8e4caf5f23a04914a9d08f8299fcea76da9a79b47ed3cb4653",
     "core/capture-input.mjs": "f39976d5497c05dc235bdc18d790a5dd2d705244b5090c01cc9bca89c294aa8d",
     "core/capture-source-safety.mjs": "0231fb212ab609715c85f3b61bbc83d1b4e7b6a77707627bda124e881a9fc7d8",
-    "core/capture.mjs": "f89d1d90e81f685b3c8332de6c6783daa80bbe618c78e06da22405e523ce93d5",
+    "core/capture.mjs": "332964f351ab930de708192b92ba062f0ad62e421ae99fd4d68eaa486bd61f70",
     "core/source-windows.mjs": "18c445917963f2db7fde0f4e529f8764323658d10490113dee6cdd6ba15c4b39",
     "core/capture-deadline.mjs": "bfbe34a71708c1e7de3833b03cdee4dc2d4f6015bf0f9177c2dcbdbb5a7d7ca1",
     "core/claim-qualification-input.mjs": "19ca597b0648b92544b33542bbd35a190478ad03362ef970fe877e2cedfafbfc",
