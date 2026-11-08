@@ -24,6 +24,8 @@ class FakeCloud:
         self.credential_delay = 0
         self.recall_status = 200
         self.recall_delay = 0
+        self.recall_release = threading.Event()
+        self.recall_release.set()
         self.recall_value = {"memories": [{"id": str(uuid.uuid4()), "content": "Synthetic note: prefer small examples.",
                                             "kind": "preference"}]}
         self.partial = False
@@ -127,6 +129,7 @@ def cloud():
             if self.path == "/api/memory/recall":
                 delay, status, value, partial, invalid = (state.recall_delay, state.recall_status,
                     state.recall_value, state.partial, state.invalid_json)
+                state.recall_release.wait()
                 time.sleep(delay)
                 self.respond(status, b"invalid json" if invalid else value, partial=partial)
                 with state.lock:
@@ -169,6 +172,7 @@ def cloud():
     thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
     thread.start()
     yield state
+    state.recall_release.set()
     state.stop_streams.set()
     server.shutdown()
     server.server_close()

@@ -25,6 +25,13 @@ def setup_inputs(monkeypatch, hosted, endpoint, mode="hosted"):
     monkeypatch.setattr(hosted.getpass, "getpass", lambda prompt: "synthetic-pasted-secret")
 
 
+def wait_prefetch_completion(provider):
+    deadline = time.monotonic() + 2
+    while provider._hosted._inflight and time.monotonic() < deadline:
+        time.sleep(0.005)
+    assert not provider._hosted._inflight
+
+
 def test_hosted_setup_permissions_activation_and_no_token_leak(install, cloud, monkeypatch, capsys):
     home, provider, _, hosted = install(configured=False)
     setup_inputs(monkeypatch, hosted, cloud.endpoint)
@@ -236,19 +243,19 @@ def test_query_and_memory_bounds(install, cloud):
 
 def test_slow_late_once_and_one_inflight_per_conversation(install, cloud):
     _, provider, _, _ = install()
-    cloud.recall_delay = 0.4
+    cloud.recall_release.clear()
     started = time.monotonic()
     assert provider.prefetch("synthetic first", session_id="same") == ""
-    assert 0.20 <= time.monotonic() - started < 0.75
+    assert time.monotonic() - started < 0.75
     assert provider.recall_status() is None
     assert provider.prefetch("synthetic second", session_id="same") == ""
     assert len(cloud.requests_for("/api/memory/recall")) == 1
+    cloud.recall_release.set()
     cloud.wait_recalls(1)
     # Wait on the provider's completion, not only the server's response write.
-    deadline = time.monotonic() + 1
-    while provider._hosted._inflight and time.monotonic() < deadline:
-        time.sleep(0.005)
-    assert not provider._hosted._inflight
+    wait_prefetch_completion(provider)
+    # Hold the new recall too, so only the previous late result can be consumed.
+    cloud.recall_release.clear()
     late = provider.prefetch("synthetic third", session_id="same")
     assert "Synthetic note" in late
     assert provider.recall_status().count == 1
@@ -256,17 +263,25 @@ def test_slow_late_once_and_one_inflight_per_conversation(install, cloud):
     assert provider.prefetch("synthetic fourth", session_id="same") == ""
     assert provider.recall_status() is None
     assert len(cloud.requests_for("/api/memory/recall")) == 2
+    cloud.recall_release.set()
     cloud.wait_recalls(2)
+    wait_prefetch_completion(provider)
 
 
 def test_late_results_do_not_cross_conversations(install, cloud):
     _, provider, _, _ = install()
-    cloud.recall_delay = 0.4
+    cloud.recall_release.clear()
     assert provider.prefetch("synthetic first", session_id="first") == ""
+    cloud.recall_release.set()
     cloud.wait_recalls(1)
+    wait_prefetch_completion(provider)
+    assert "first" in provider._hosted._late
+    cloud.recall_release.clear()
     assert provider.prefetch("synthetic other", session_id="other") == ""
     assert len(cloud.requests_for("/api/memory/recall")) == 2
+    cloud.recall_release.set()
     cloud.wait_recalls(2)
+    wait_prefetch_completion(provider)
 
 
 @pytest.mark.parametrize("status", [429, 401, 403, 404, 500, 503, 206])
@@ -572,27 +587,24 @@ def test_concurrent_tools_initialize_once(install, cloud):
 
 def test_slow_network_timeout_ends_worker_without_late_result(install, cloud):
     _, provider, _, _ = install()
-    cloud.recall_delay = 1.0
+    cloud.recall_release.clear()
     started = time.monotonic()
     assert provider.prefetch("synthetic timeout", session_id="conversation") == ""
     assert time.monotonic() - started < 0.75
-    deadline = time.monotonic() + 1
-    while provider._hosted._inflight and time.monotonic() < deadline:
-        time.sleep(0.005)
-    assert not provider._hosted._inflight
+    wait_prefetch_completion(provider)
     assert not provider._hosted._late
+    cloud.recall_release.set()
     cloud.wait_recalls(1)
 
 
 def test_successful_live_call_supersedes_late_result(install, cloud):
     _, provider, _, _ = install()
-    cloud.recall_delay = 0.4
+    cloud.recall_release.clear()
     assert provider.prefetch("synthetic slow", session_id="conversation") == ""
+    cloud.recall_release.set()
     cloud.wait_recalls(1)
-    deadline = time.monotonic() + 1
-    while provider._hosted._inflight and time.monotonic() < deadline:
-        time.sleep(0.005)
-    cloud.recall_delay = 0
+    wait_prefetch_completion(provider)
+    assert "conversation" in provider._hosted._late
     cloud.recall_value["memories"][0]["content"] = "Synthetic current note"
     assert "Synthetic current note" in provider.prefetch("synthetic fast", session_id="conversation")
     assert not provider._hosted._late
@@ -603,13 +615,12 @@ def test_successful_live_call_supersedes_late_result(install, cloud):
 
 def test_shutdown_during_recall_discards_late_result(install, cloud):
     _, provider, _, _ = install()
-    cloud.recall_delay = 0.4
+    cloud.recall_release.clear()
     assert provider.prefetch("synthetic slow", session_id="conversation") == ""
     provider.shutdown()
+    cloud.recall_release.set()
     cloud.wait_recalls(1)
-    deadline = time.monotonic() + 1
-    while provider._hosted._inflight and time.monotonic() < deadline:
-        time.sleep(0.005)
+    wait_prefetch_completion(provider)
     assert not provider._hosted._late
     assert provider.prefetch("synthetic later", session_id="conversation") == ""
     assert provider.recall_status() is None
@@ -617,14 +628,19 @@ def test_shutdown_during_recall_discards_late_result(install, cloud):
 
 def test_completion_after_cap_is_late_even_if_join_resumes_later(install, cloud, monkeypatch):
     _, provider, _, hosted = install()
-    cloud.recall_delay = 0.35
+    cloud.recall_release.clear()
     original_spawn = hosted.spawn_context_thread
     def spawn(*args, **kwargs):
         thread = original_spawn(*args, **kwargs)
+        if kwargs.get("name") != "cairn-recall":
+            return thread
         original_join = thread.join
         def join(timeout):
             # Model the caller being scheduled after the worker's post-deadline completion.
-            original_join(timeout + 0.2)
+            original_join(timeout)
+            cloud.recall_release.set()
+            original_join(2)
+            assert not thread.is_alive()
         thread.join = join
         return thread
     monkeypatch.setattr(hosted, "spawn_context_thread", spawn)

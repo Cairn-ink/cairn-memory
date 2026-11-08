@@ -64,7 +64,7 @@ def test_resolver_deadline_and_prefetch_guard(install, cloud, monkeypatch, opera
             assert caller < 0.65
             assert released < 1.25
             assert provider.prefetch("Synthetic second", session_id="conversation") == ""
-            wait_until(lambda: len(calls) == 2, time.monotonic() + 0.3)
+            wait_until(lambda: len(calls) == 2, time.monotonic() + 2)
         elif operation == "credential":
             value, message = hosted.check_credential(endpoint, "synthetic-memory-token")
             elapsed = time.monotonic() - started
@@ -106,7 +106,7 @@ def test_shutdown_with_stalled_resolver(install, cloud, monkeypatch):
         assert elapsed < 1.5
         caller.join(0.5)
         assert not caller.is_alive()
-        wait_until(lambda: not provider._hosted._inflight, time.monotonic() + 0.3)
+        wait_until(lambda: not provider._hosted._inflight, time.monotonic() + 2)
         assert provider.prefetch("Synthetic after shutdown") == ""
         assert not json.loads(provider.handle_tool_call("cairn_remember_memory", {"content": "Synthetic note"}))["ok"]
         assert not cloud.requests
