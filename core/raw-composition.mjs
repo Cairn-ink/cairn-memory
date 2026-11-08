@@ -13,7 +13,7 @@ const failure = error => {
 const invoke = work => { try { return success(work()); } catch (error) { return failure(error); } };
 
 // Receive the builder to avoid a contract -> composition -> contract cycle.
-export function composeRawCore(buildCore, input, rawOptions, { sources, lineage, deletion, localControls = false, captureDefault = false, searchDefault = false, searchManager, searchEmbedding }) {
+export function composeRawCore(buildCore, input, rawOptions, { sources, lineage, deletion, localControls = false, rawTextReaders = true, captureDefault = false, searchDefault = false, searchManager, searchEmbedding }) {
   const profile = structuredClone(Object.fromEntries(['captureQualification','captureSourcePolicy',
     'captureEvidence','captureRationale','sessionEpisodes','captureQualifiedDuplicates'].filter(key => Object.hasOwn(input, key)).map(key => [key,input[key]])));
   let storage, capture, runtime;
@@ -31,7 +31,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
   return contentSafetyFacade({ ...core,
     ...(search ? search.methods : {}),
     close() {
-      // Stop scheduling synchronously; join all owned work before resolving close.
+      // Stop scheduling synchronously; native close bounds provider settlement.
       const stopped = search?.close();
       const result = core.close();
       return stopped ? Promise.resolve(stopped).then(() => result) : result;
@@ -40,6 +40,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
       try {
         runtime.ready();
         const registration = await storage.prepareCapture(request);
+        if (!registration) return await capture(request);
         let result;
         result = await capture(registration.input, registration);
         // Raw retention also works with no extraction provider or failed preflight.
@@ -70,7 +71,9 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
         return raw ? success({ raw, interpretation }) : interpretation;
       } catch (error) { return failure(error); }
     },
-    getConversation: async input => { try { runtime.ready(); return success(await storage.getConversation(input)); } catch (error) { return failure(error); } },
+    ...(rawTextReaders ? {
+      getConversation: async input => { try { runtime.ready(); return success(await storage.getConversation(input)); } catch (error) { return failure(error); } },
+    } : {}),
     listRawConversations: input => invoke(() => { runtime.ready(); return storage.listRawConversations(input); }),
     getRawUsage: input => invoke(() => { runtime.ready(); return storage.getRawUsage(input); }),
     getRawCaptureControl: input => invoke(() => { runtime.ready(); return storage.getRawCaptureControl(input); }),

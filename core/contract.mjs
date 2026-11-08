@@ -220,7 +220,8 @@ function openWithRoleContext(input, roleContext) {
   const { raw, rawSearch, ...base } = local;
   if (!descriptor && raw === false) return buildCore(base);
   if (!descriptor) return composeRawCore(buildCore, base, defaultRawOptions(), {
-    sources: Boolean(base.privateCards), lineage: true, deletion: true, localControls: true,
+    sources: false, lineage: true, deletion: true, localControls: true,
+    rawTextReaders: false,
     captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch), searchEmbedding: roleContext,
   });
   if (!Object.hasOwn(descriptor, 'value')) throw new MemoryStoreError('invalid_input');

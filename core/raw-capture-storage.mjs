@@ -224,6 +224,8 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     rawNamespace(request.namespace);
     const receivedAt = new Date().toISOString();
     const snapshot = captureSnapshot(request, profile.captureQualification, profile.captureSourcePolicy, true, receivedAt);
+    // The inherited Raw layout supports two clients; other captures stay Memory-only.
+    if (!['claude-code', 'codex'].includes(snapshot.client)) return null;
     const namespace = rawNamespace(snapshot.namespace);
     const session = journal.sessionKey(namespace, snapshot.client, snapshot.sessionId);
     const conversation = db.prepare(`SELECT id FROM raw_conversations WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=?`)

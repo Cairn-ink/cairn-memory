@@ -94,7 +94,6 @@
   "core/raw-composition.mjs",
   "core/local-defaults.mjs",
   "core/local-raw-search.mjs",
-  "core/raw-client-migration.mjs",
   "core/raw-capture-storage.mjs",
   "core/raw-journal.mjs",
   "core/raw-reads.mjs",

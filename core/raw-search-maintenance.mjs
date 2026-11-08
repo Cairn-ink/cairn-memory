@@ -248,5 +248,10 @@ export function createRawSearchMaintenance(storage,authority,options) {
     active=run(input,currentAccess).finally(()=>{active=null;});return active;
   },status:()=>({...progress,quantum,noProgress,pending:!!pending}),
   async close(){closed=true;for(const controller of controllers)controller.abort();await active?.catch(()=>{});
-    await Promise.allSettled([...providers]);pending=null;} };
+    // Providers may ignore abort. Their existing observers retain rejection
+    // handling and budget settlement; closed guards forbid late publication.
+    let timer;
+    try { await Promise.race([Promise.allSettled([...providers]),
+      new Promise(resolve=>{timer=setTimeout(resolve,2000);})]); }
+    finally {clearTimeout(timer);pending=null;} } };
 }
