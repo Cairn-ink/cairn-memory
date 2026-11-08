@@ -24,7 +24,7 @@ const error = (result, code) => { assert.equal(result.ok, false); assert.equal(r
 const evidence = async (host, batchId = 'batch') => ok(await call(host, 'inspect_capture_evidence', { batchId })).evidence;
 async function host(t, path, { flags = staging, fake = true, project, ownerId = owner, fail = false, forbid = false, release } = {}) {
   const transport = new StdioClientTransport({ command: process.execPath,
-    args: [fake ? fixture : cli, '--db', path, '--owner', ownerId, ...(project ? ['--project', project] : []), ...flags],
+    args: [fake ? fixture : cli, '--db', path, '--owner', ownerId, ...(project ? ['--project', project] : []), '--no-raw', ...flags],
     env: { OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1', SYNTHETIC_FAIL_QUALIFICATION: fail ? '1' : '0',
       SYNTHETIC_FORBID_MODEL: forbid ? '1' : '0', ...(release ? { SYNTHETIC_RELEASE_FILE: release } : {}) }, stderr: 'pipe' });
   let stderr = '';

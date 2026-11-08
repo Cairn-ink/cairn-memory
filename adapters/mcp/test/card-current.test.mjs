@@ -15,7 +15,7 @@ test('C26 closed host-fixed configuration and approval-only MCP schemas; check-c
  const scripts=JSON.parse(readFileSync(new URL('../../../package.json',import.meta.url))).scripts;assert.equal(Object.hasOwn(scripts,'measure:card-dependencies'),false);assert.ok(scripts['measure:card-current-dependencies']);
  const base=['--db','/synthetic/card-current.sqlite','--owner','owner'];assert.equal(parseConfiguration([...base,...flags]).privateCardCurrentDependencies,'local-v1');
  for(const tail of [flags.slice(4),flags.slice(2),[...flags,'--private-card-current-dependencies','local-v1'],[...flags.slice(0,-1),'bad']])assert.throws(()=>parseConfiguration([...base,...tail]));
- const logs=[];t.mock.method(console,'log',text=>logs.push(JSON.parse(text)));await start(['--check-config',...base,...flags],Object.defineProperty({},'OPENAI_API_KEY',{get(){assert.fail('key read');}}));
+ const logs=[];t.mock.method(console,'log',text=>logs.push(JSON.parse(text)));await start(['--check-config',...base,'--no-context-read',...flags],Object.defineProperty({},'OPENAI_API_KEY',{get(){assert.fail('key read');}}));
  assert.equal(logs[0].privateCardCurrentDependencies,'local-v1');assert.equal(logs[0].databaseOpened,false);assert.equal(existsSync(base[1]),false);
  const tools=new Map();registerCardCurrentTools((name,description,schema,action)=>tools.set(name,{schema,action}));assert.equal(tools.size,2);
  const input={actionId:'review',cardId:'card',expectedRevision:2,expectedDependencyRevision:null,roleId:'finance',packages:[{type:'method-package',namespace:ns,packageId:'package'}]};

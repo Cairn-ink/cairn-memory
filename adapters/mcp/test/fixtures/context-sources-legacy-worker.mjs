@@ -1,4 +1,4 @@
-// Runs unchanged against a separate 94c1076f tree and the candidate tree.
+// Exercises the current tree against the frozen 94c1076f wire oracle.
 import crypto from 'node:crypto';
 import { syncBuiltinESMExports } from 'node:module';
 import { performance } from 'node:perf_hooks';
@@ -49,7 +49,7 @@ result.semanticRefusal = await core.findCandidates({ ...query, semantic: true },
 result.limitRefusal = await core.findCandidates({ ...query, limit: 25 }, token);
 result.deadlineRefusal = await core.findCandidates({ ...query, deadlineMs: 5001 }, token);
 result.invalidCursor = await core.findCandidates({ ...query, cursor: 'invalid' }, token);
-result.assembly = await core.contextRead(query, token);
+result.assembly = await core.contextRead({ ...query, representation: 'representation-v2', raw: false, budget: { maxTokens: 1500, maxItems: 12 } }, token);
 result.fetch = core.fetchCandidateEvidence({ readSet: [ns], refs: result.first.value.items.map(item => item.ref), intent: 'current' }, token);
 core.close();
 const hosted = openMemoryCore({ path, raw:false, contextRead: { version: 'context-read-v1', authority, counter, policy: { family: 'hosted' } } });
@@ -63,7 +63,7 @@ for (const enabled of [false, true]) {
   const key = enabled ? 'contextHost' : 'defaultHost'; result[key] = { tools: await client.listTools() };
   if (enabled) {
     result[key].sourceRefusal = await client.callTool({ name: 'find_memory_candidates', arguments: { query: 'needle', types: ['memory'], intent: 'current', sources: [] } });
-    const assembled = await client.callTool({ name: 'read_memory_context', arguments: { query: 'needle', types: ['memory'], intent: 'current', maxItems: 1 } });
+    const assembled = await client.callTool({ name: 'read_memory_context', arguments: { query: 'needle', types: ['memory'], intent: 'current', representation: 'representation-v2', maxTokens: 1500, maxItems: 1 } });
     result[key].assembly = assembled;
     const refs = JSON.parse(assembled.content[0].text).value.items.map(item => item.ref);
     result[key].compactFetch = await client.callTool({ name: 'fetch_memory_candidate_evidence', arguments: { refs, intent: 'current' } });
