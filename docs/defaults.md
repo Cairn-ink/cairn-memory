@@ -16,11 +16,11 @@ retained-profile server is a read-only host with its own authority boundaries.
 | Capability | What it does | Default | Cost | Programmatic option / CLI switch |
 | --- | --- | --- | --- | --- |
 | Raw retention | Saves submitted capture messages through the Raw journal, with lineage and existing exclusion/forgetting controls | On | Local plaintext disk, default 200,000,000-byte owner cap; no extra model call | `raw:false` / `--no-raw`; omit to enable. For a custom cap, sealing port or policy, use `rawConversations:{mode:'raw-v1',capBytes,port,readPolicy}`. `mode:'off'` disables saving while retaining management APIs. |
-| Raw search | Searches retained Raw using a separate derived index and canonical authorization checks | On when Raw retention is enabled | Local plaintext postings and metadata, up to 512 MiB per index; lexical indexing makes no model call | `rawSearch:false` / `--no-raw-search`; omit to enable. Turning Raw off prevents new saving; existing retained data is not erased. |
+| Raw search | Searches retained Raw with BM25 plus semantic similarity fused by RRF when a provider is configured, using a separate derived index and canonical authorization checks | On when Raw retention is enabled; BM25 only without a provider or while vector coverage is partial | Local plaintext postings, metadata and vectors, up to 512 MiB per index; semantic queries and background Raw embedding use the shared embedding budget | `rawSearch:false` / `--no-raw-search`; omit to enable. Turning Raw off prevents new saving; existing retained data is not erased. |
 | Raw maintenance | Builds and refreshes the index after captures, with bounded background work | On with Raw search | One non-overlapping quantum per second, up to 16 rows / 25 ms; existing one-second publication cadence still applies | Follows `rawSearch` / `--no-raw-search`. `close()` stops scheduling and joins work. Capture never waits for index publication. |
 | contextRead tools | Finds candidates, refetches evidence and assembles bounded memory context | On in MCP | Local reads and tokenizer work; no language-model call | MCP option `contextRead:false` / `--no-context-read`; enable with `contextRead:'context-read-v1'` / `--context-read context-read-v1`. Core hosts supply `contextRead:{version:'context-read-v1',authority,counter,...}` to bind their own read authority. |
 | Three-layer read | Returns Memory plus eligible Raw excerpts with dates | On for the default contextRead presentation | Local reads and a 6,000-token / 24-item response budget; no model call | Follows contextRead; `--no-context-read` removes the tools. There is no separate presentation CLI flag. |
-| Semantic search | Adds embedding similarity to lexical candidate search | On in MCP when `OPENAI_API_KEY` is configured; otherwise BM25 only | Query and background document embedding calls. Automatic OpenAI configuration: `text-embedding-3-small`, 1,536 dimensions, at most 1,000 requests and US$1 estimated embedding spend per server process, concurrency 1 | `contextSemantic:false` / `--no-context-semantic`; each read can also set `semantic:false`. Core hosts supply `contextRead.embedder` and `policy`; MCP hosts supply `contextEmbedding`. Explicit provider CLI groups override automatic settings. |
+| Semantic search | Adds embedding similarity to lexical candidate search | On in MCP when `OPENAI_API_KEY` is configured; otherwise BM25 only | Query and background document embedding calls. Automatic OpenAI configuration: `text-embedding-3-small`, 1,536 dimensions, US$1 estimated embedding spend per server process shared by Memory and Raw, concurrency 1; no practical automatic request ceiling | `contextSemantic:false` / `--no-context-semantic`; each read can also set `semantic:false`. Core hosts supply `contextRead.embedder` and `policy`; MCP hosts supply `contextEmbedding`. Explicit provider CLI groups override automatic settings. |
 | Dated reads | Labels evidence with its event date rather than relying only on generated summaries | On for the default contextRead presentation | Local timestamp reads; no provider calls | Follows contextRead; core callers can select `representation:'representation-v2'` for the legacy undated representation. No separate CLI flag. |
 | Event time | Uses the capture receive time for messages without `occurredAt`; an explicit canonical UTC instant wins | On | Timestamp metadata only | Set message `occurredAt` to override. There is no separate CLI switch. The Raw schema has no derived-time marker, so no marker migration is introduced. Existing unknown historical times are not backfilled. |
 | Ordered reconciliation | Reconciles successive captures in a caller-declared causal stream | Off | One additional model call per capture that requires reconciliation | Caller supplies `causal:{streamId,sequence}` to `capture()`; omit to disable. MCP has no causal-sequence flag or argument. |
@@ -54,8 +54,24 @@ Raw must never be delivered; owner and namespace boundaries apply to both Raw
 and Memory. Turning a feature off stops future work and does not erase retained
 files or backups.
 
-The embedding limits cover a single server process and its configured embedding
-budget; they are not an account-wide spending cap. Without a key, startup and
+The embedding budget is process-local, shared by Raw document refresh, Memory
+refresh and query embeddings for the same provider ID and revision. It is not
+persisted and does not reset each day; restarting the server creates a fresh
+allowance. Reopening a store in the same process does not reset it. It is not an
+account-wide spending cap. Automatic configuration keeps the US$1 estimated
+spend cap and uses `Number.MAX_SAFE_INTEGER` for the request ceiling, replacing
+the previous 1,000-request limit so ordinary daily capture does not exhaust a
+small lifetime request allowance. Explicit provider request and dollar limits
+remain supported.
+
+At a request or dollar limit, further provider dispatch is refused with
+`budget_denied`; existing data remains available through BM25. Raw semantic
+search requires current vectors for every scoped row and uses BM25 during
+catch-up. `getRawSearchStatus({namespace})` exposes the last search's semantic
+state/reason and the embedding limits, their process scope and their shared
+Memory budget. Read diagnostics identify budget refusal when query embedding
+is denied. Raw and Memory can embed the same source separately; both document
+calls and semantic query calls count toward the shared cap. Without a key, startup and
 BM25 reads need no provider and make no embedding calls. The installer does not
 copy credentials into registrations or generated files. `--check-config` makes
 no provider request and does not open the database.

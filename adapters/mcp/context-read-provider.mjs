@@ -5,7 +5,7 @@ import { LOCAL_OPERATIONAL_CODES } from '../../core/context-read-local-status.mj
 import { createOpenAIEmbedder, estimateEmbeddingUsd, embeddingPrice } from '../openai/embedding.mjs';
 
 export const DEFAULT_CONTEXT_PROVIDER = Object.freeze({ provider: 'openai', model: 'text-embedding-3-small',
-  dimensions: 1536, maxRequests: 1000, maxUsd: 1 });
+  dimensions: 1536, maxRequests: Number.MAX_SAFE_INTEGER, maxUsd: 1 });
 
 /** The adapter alone reads credentials; absent credentials select local BM25. */
 export function createContextEmbedding(configuration, env = process.env) {

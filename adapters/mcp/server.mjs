@@ -173,7 +173,8 @@ export function createCairnServer(options = {}) {
   // The dated reader's optional Raw port is supplied by this owner boundary.
   // Older readers retain their existing grammar until that reader is installed.
   const rawSearch = context && options.raw !== false && options.rawSearch !== false && supportsRawContext()
-    ? createLocalRawSearch(path, defaultRawOptions().port) : null;
+    ? createLocalRawSearch(path, defaultRawOptions().port,
+      options.contextSemantic === false ? undefined : options.contextEmbedding) : null;
   const rawPort = rawSearch?.contextPort(context.readSet);
   const core = openMemoryCore({ path, model, ...(options.raw === false ? { raw: false } : {}), ...(options.rawSearch === false ? { rawSearch: false } : {}), ...(context?{contextRead:{...context.configuration,...(options.contextSemantic === false ? {} : options.contextEmbedding),counter:contextCounter,...(rawPort ? {rawSearch:rawPort} : {}),...(sources ? { sources } : {})}}:{}),
     ...(roles ? { roleProfiles: roles.configuration } : {}),
