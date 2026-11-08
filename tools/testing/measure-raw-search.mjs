@@ -1,6 +1,5 @@
 import {errorSummary} from './raw-search-window-summary.mjs';
 import {measurementError,takeInternalErrors,takeOperationOvershoots,takeInternalErrorCounts} from './raw-search-phase-ledger.mjs';
-import {seedSessionFences,sessionFenceCount} from './raw-search-session-fences.mjs';
 import assert from 'node:assert/strict';
 import {sharedOverlapMs} from './raw-search-writer-observer.mjs';
 import { performance } from 'node:perf_hooks';
@@ -17,6 +16,8 @@ import { localPlainPort,rawNamespace as ns } from '../../core/testing/raw-fixtur
 import { createTestWorkspace } from './workspace.mjs';
 
 if(process.env.CAIRN_MEASURE_RAW_SEARCH==='1')(await import('./raw-search-phase-loader.mjs')).installPhaseMeasurement();
+// The seeding helper reaches the serving graph; load it after instrumentation.
+const {seedSessionFences,sessionFenceCount}=await import('./raw-search-session-fences.mjs');
 const [{createRawSearchAuthority},{openRawSearchStorage},{rawSearchChunks,rawSearchPostings,retrieveRaw,loadRawVectorBlocks,scoreRawVectorBlocks},
   {openRawSearch},{rawSearchHost,broker}]=await Promise.all([
   import('../../core/raw-search-authority.mjs'),import('../../core/raw-search-storage.mjs'),import('../../core/raw-search-retrieval.mjs'),

@@ -40,7 +40,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
       try {
         runtime.ready();
         const registration = await storage.prepareCapture(request);
-        if (!registration) return await capture(request);
+        if (!registration) return await core.capture(request);
         let result;
         result = await capture(registration.input, registration);
         // Raw retention also works with no extraction provider or failed preflight.

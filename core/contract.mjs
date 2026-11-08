@@ -214,6 +214,9 @@ function openWithRoleContext(input, roleContext) {
   let descriptor;
   try { descriptor = Object.getOwnPropertyDescriptor(input, 'rawConversations'); }
   catch { throw new MemoryStoreError('invalid_input'); }
+  // Preserve the base constructor's inherited-option semantics when no Raw
+  // wrapper was selected. Raw profiles still require strict own data.
+  if (!descriptor && !('raw' in input) && !('rawSearch' in input)) return buildCore(input);
   const local = ownData(input, OPEN_OPTIONS);
   if (Object.hasOwn(local, 'raw') && typeof local.raw !== 'boolean' ||
       Object.hasOwn(local, 'rawSearch') && typeof local.rawSearch !== 'boolean' ||

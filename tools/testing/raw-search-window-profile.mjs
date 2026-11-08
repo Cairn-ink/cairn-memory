@@ -1,4 +1,3 @@
-import {seedSessionFences,sessionFenceCount} from './raw-search-session-fences.mjs';
 import {searchOutcome,outcomeSummary,selectionSummary} from './raw-search-window-summary.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,statSync} from 'node:fs';
@@ -20,6 +19,8 @@ const targetLiteral=frozen.match(/RAW_SEARCH_TARGETS=Object\.freeze\((\{[\s\S]*?
 const targets=runInNewContext('('+targetLiteral[1]+')');
 const phases=['cold','commitment-cost','cadence'].includes(profile);
 (await load('tools/testing/raw-search-phase-loader.mjs')).installPhaseMeasurement();
+// The seeding helper reaches the serving graph; load it after instrumentation.
+const {seedSessionFences,sessionFenceCount}=await import('./raw-search-session-fences.mjs');
 const {takePhases,takeSelectionUnits,measurementError,takeInternalErrors,takeOperationOvershoots,takeInternalErrorCounts}=await load('tools/testing/raw-search-phase-ledger.mjs');
 const {createRawSearchAuthority}=await load('core/raw-search-authority.mjs');
 const {openReadDatabase}=await load('core/read-database.mjs');
