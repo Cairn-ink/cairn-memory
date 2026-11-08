@@ -16,7 +16,7 @@ import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 test.beforeEach(installRawSearchTestClock);
 const ns = { ownerId:'synthetic-owner', scope:'personal', projectId:null };
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
-const input = (n, namespace = ns, content = 'cobalt telescope') => ({ namespace, client:'synthetic',
+const input = (n, namespace = ns, content = 'cobalt telescope') => ({ namespace, client:'codex',
   sessionId:'session', eventId:'event-'+n, messages:[{id:'message-'+n,role:'user',content}] });
 const policy = patch => ({family:'hosted',maxRequests:10000,maxUsd:1,maxConcurrent:1,estimateUsd:()=>0,...patch});
 function embedding(patch = {}) {

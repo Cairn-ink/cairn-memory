@@ -1326,7 +1326,7 @@ export const lineageBaseDeclarations = {
     {
       "type": "table",
       "name": "raw_conversations",
-      "sql": "CREATE TABLE raw_conversations (\n      id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, scope TEXT NOT NULL,\n      project_id TEXT NOT NULL, client TEXT NOT NULL CHECK(length(client) BETWEEN 1 AND 200),\n      session_key TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0),\n      first_received_at TEXT NOT NULL, last_received_at TEXT NOT NULL,\n      CHECK((scope='personal' AND project_id='') OR (scope='project' AND length(project_id)>0)),\n      UNIQUE(owner_id,scope,project_id,client,session_key)\n    ) STRICT"
+      "sql": "CREATE TABLE raw_conversations (\n      id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, scope TEXT NOT NULL,\n      project_id TEXT NOT NULL, client TEXT NOT NULL CHECK(client IN ('claude-code','codex')),\n      session_key TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0),\n      first_received_at TEXT NOT NULL, last_received_at TEXT NOT NULL,\n      CHECK((scope='personal' AND project_id='') OR (scope='project' AND length(project_id)>0)),\n      UNIQUE(owner_id,scope,project_id,client,session_key)\n    ) STRICT"
     },
     {
       "type": "table",

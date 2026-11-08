@@ -14,7 +14,7 @@ import { openMemoryCore } from '../index.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 
 const ns = { ownerId: 'synthetic-owner', scope: 'personal', projectId: null };
-const request = (n, patch = {}) => ({ namespace: ns, client: 'synthetic-client', sessionId: 'session', eventId: 'batch-' + n,
+const request = (n, patch = {}) => ({ namespace: ns, client: 'codex', sessionId: 'session', eventId: 'batch-' + n,
   messages: [{ id: 'message-' + n, role: 'user', content: 'Synthetic cobalt telescope ' + n, ...patch }] });
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
 function fixture(t, options = {}) {
@@ -70,7 +70,7 @@ test('default maintenance publishes captures in bounded quanta without capture w
   assert.equal(other.candidates.length, 0);
 });
 
-test('legacy Raw metadata upgrades for arbitrary capture clients without losing existing sources', async t => {
+test('legacy Raw metadata keeps its frozen client constraint and existing sources', async t => {
   const workspace = createTestWorkspace(t), path = join(workspace.path, 'legacy.sqlite');
   const old = openOldDatabase(path, { rawCapture: true, rawLineage: true, rawDeletion: true });
   const journal = createRawJournal({ db:old, ...defaultRawOptions() });
@@ -81,7 +81,7 @@ test('legacy Raw metadata upgrades for arbitrary capture clients without losing 
   workspace.defer(() => core.close());
   ok(await core.capture(request(1)));
   const db = new DatabaseSync(path); workspace.defer(() => db.close());
-  assert.equal(db.prepare("SELECT count(*) n FROM raw_conversations WHERE client='synthetic-client'").get().n, 1);
+  assert.equal(db.prepare("SELECT count(*) n FROM raw_conversations WHERE client='codex'").get().n, 1);
   assert.equal(db.prepare("SELECT count(*) n FROM raw_parts WHERE saved=1").get().n, 2);
   assert.ok(db.prepare("SELECT sealed FROM raw_parts WHERE message_id='message'").get().sealed.length > 0);
   assert.equal(db.prepare('PRAGMA foreign_key_check').get(), undefined);

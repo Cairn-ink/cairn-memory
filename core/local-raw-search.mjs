@@ -151,11 +151,13 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
       if (closing) return closing;
       closed = true; clearTimeout(timer); timer = null;
       return closing = (async () => {
-        await running;
-        await Promise.allSettled([...entries.values()].map(async entry => {
+        // Start native cancellation before joining a scheduled provider wait.
+        const stopped = [...entries.values()].map(async entry => {
+          const current = Promise.allSettled([entry.service?.close(), entry.lexical?.service?.close()]);
           await entry.opening?.catch(() => {}); await entry.lexical?.opening?.catch(() => {});
-          await Promise.allSettled([entry.service?.close(), entry.lexical?.service?.close()]);
-        }));
+          await current;
+        });
+        await Promise.allSettled([running, ...stopped]);
         entries.clear();
       })();
     },

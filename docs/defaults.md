@@ -46,6 +46,8 @@ retained-profile server is a read-only host with its own authority boundaries.
 | Attested content-safety layout | Enables the separately versioned content-safety schema and suppression facts | Off for new stores unless explicitly selected; installed protections remain enforced | Local schema/fact metadata; no provider call | Core `contentSafety:'s2h-v1'` for supported new stores; existing stores use the explicit offline safety migration. There is no default-on migration CLI flag. |
 | Automatic transcript hooks | Submits selected conversation messages without an explicit MCP capture call | Off in the standalone MCP server | When separately installed: Raw disk plus configured capture model calls | No MCP flag installs hooks. Use the separate documented local/client setup and its enable/disable controls. |
 
+Default Raw retention supports `claude-code` and `codex`; other clients capture Memory as before without retaining Raw.
+
 Raw and its derived index are local plaintext by default, including vocabulary,
 metadata and any vectors in sidecars. A custom Raw sealing port changes Raw
 storage, not the plaintext nature of the local search index. Keep the database,
