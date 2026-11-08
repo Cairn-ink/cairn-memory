@@ -78,8 +78,18 @@ function label(sql) {
  * Native waiting stays inside SQLite. No retry of a traversal or transaction;
  * a native BUSY keeps its original stage/code. */
 export function createTopicSqlitePolicy({ diagnostics = false, now = () => performance.now(), state } = {}) {
-  let until = -Infinity;
+  let until = -Infinity, checkAdmission, cleaning = false;
   return {
+    admission(check, work) {
+      const previous = checkAdmission;
+      checkAdmission = check;
+      try { return work(); } finally { checkAdmission = previous; }
+    },
+    cleanup(work) {
+      const previous = cleaning;
+      cleaning = true;
+      try { return work(); } finally { cleaning = previous; }
+    },
     start(deadlineAt) {
       // One absolute cutoff: reserve four normal 5ms quanta for cleanup/reply.
       // Worker startup already consumed the host's absolute request deadline.
@@ -96,6 +106,9 @@ export function createTopicSqlitePolicy({ diagnostics = false, now = () => perfo
             try { native.exec('PRAGMA busy_timeout=' + remaining); }
             catch (error) { throw recordSqliteFailure(error, 'configure', 'reader_configuration'); }
             installed = remaining;
+            // Configuration is a native call too. It can consume the opening
+            // budget before the requested operation reaches native dispatch.
+            if (!cleaning && stage !== 'rollback' && method !== 'return' && method !== Symbol.dispose) checkAdmission?.();
           }
         }
         try {

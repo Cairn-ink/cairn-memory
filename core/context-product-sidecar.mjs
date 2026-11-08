@@ -193,7 +193,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   const canonical=canonicalDatabase;
   const canonicalRead=(work,checkAdmission)=>{
     const run=checkAdmission ? (db,work,acquisition)=>readTransaction(db,work,{
-      checkAdmission,readReady:()=>acquisition?.readReady()
+      checkAdmission,cleanup:sqlite?.cleanup,readReady:()=>acquisition?.readReady()
     }) : readTransaction;
     return attribution ? attribution.transaction(canonicalDatabase,work,run) : run(canonicalDatabase,work);
   };
@@ -281,7 +281,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     try { sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});return readTransaction(side,()=>{
       reader.prepare('PRAGMA schema_version').get();
       verifyOpened();rendezvous('snapshot');return work();
-    },{checkAdmission}); } catch(e) {failed(e,wasWritable);attribution?.captureFailure(e); if(e.reason==='storage_unavailable')try{close();}catch{}throw e; }
+    },{checkAdmission,cleanup:sqlite?.cleanup}); } catch(e) {failed(e,wasWritable);attribution?.captureFailure(e); if(e.reason==='storage_unavailable')try{close();}catch{}throw e; }
   }
   const openNative = (write = false) => {
     try { return observer ? observer.invoke('open','connection', () => new DatabaseSync(sidePath, { readOnly: !write }))
@@ -443,7 +443,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
             bootstrap=true;legacyWalMissing=true;
           } else throw Object.assign(Error('index_unavailable'),{code:'index_unavailable',reason:'attestation_invalid',expectedAttestation:sidecarAttestationDigest(seal)});
         }
-      },{checkAdmission});
+      },{checkAdmission,cleanup:sqlite?.cleanup});
       checkAdmission?.();candidate=admitted;
     } catch(error) {attribution?.captureFailure(error);try{if(candidate?.isOpen)candidate.close();}catch{}
       if(candidate?.isOpen)side=candidate;else handles.closed();throw error;}
@@ -1419,7 +1419,14 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       try {return guarded(()=>observe(p,...args));}
       catch(e) {attribution?.captureFailure(e);if(e.code==='index_unavailable')return invalid(p,e.reason);throw e;}
     },
-    admit:cutoff=>{if(!writable)fail('invalid_input');const check=admissionCheck(cutoff);const result=guarded(()=>admit(true,cutoff,check),true,check);check();return result;},
+    admit:cutoff=>{
+      if(!writable)fail('invalid_input');
+      const check=admissionCheck(cutoff),work=()=>{
+        const result=guarded(()=>admit(true,cutoff,check),true,check);check();return result;
+      };
+      // The policy outlives this admission; never retain its cutoff afterwards.
+      return sqlite?.admission ? sqlite.admission(check,work) : work();
+    },
     refresh:(p,access,budget,reuseOnly=false)=>{
       const started=now();p=projection(p);
       const cutoff=Math.min(p.deadlineAt ?? Infinity,started+budget.maxMs);

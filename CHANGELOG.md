@@ -11,7 +11,7 @@
 
 ## Unreleased — maintenance admission and integrity
 
-- Check opening deadlines before lifecycle locking and canonical read transaction setup.
+- Check opening deadlines before lifecycle locking, canonical read transaction setup, and native dispatch after WAL wait configuration.
 
 - Optional admission capacity covers cold opens while work retains its normal quantum. Each domain prices exhaustion by its own next turn.
 - WAL-mode hosts pay main's integrity check once on the first open after upgrade; DELETE-mode caches rebuild once. Steady maintenance adds no BEGIN or COMMIT.

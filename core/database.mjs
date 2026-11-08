@@ -352,7 +352,10 @@ export function readTransaction(db, work, acquisition) {
       try { db.exec('ROLLBACK'); } catch (failure) { cleanupError = failure; cleanupFailed = true; }
     }
     if (saved !== undefined) {
-      try { db.exec('PRAGMA query_only=' + (saved ? 'ON' : 'OFF')); }
+      try {
+        const restore = () => db.exec('PRAGMA query_only=' + (saved ? 'ON' : 'OFF'));
+        if (acquisition?.cleanup) acquisition.cleanup(restore); else restore();
+      }
       catch (failure) { if (!cleanupFailed) cleanupError = failure; cleanupFailed = true; }
     }
     if (cleanupFailed || unsafeResult) {
