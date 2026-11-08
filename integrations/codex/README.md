@@ -6,7 +6,7 @@ browser memory-scoped credential, adopted/shared project identity and endpoint
 policy. Publication is a separate release step. See [setup, qualification and gates](../../docs/codex-setup.md).
 
 `entry.mjs` owns exit-0/no-log automatic failures and process deadlines:
-750 ms for Stop/PreCompact, 2 s for session startup, 3.5 s for prompt submission,
+750 ms for Stop/PreCompact, 2 s for session startup, 3.0 s for prompt submission,
 and 62.5 s for a detached worker. Prompt recall has a 2.5 s fetch deadline inside
 a 4 s host timeout; startup and imports count against its process-clock cap.
 It dynamically imports the runtime so missing/corrupt modules also fail quietly.
@@ -51,7 +51,7 @@ starts again at its next hook. Codex never writes control.json.
 
 The UserPromptSubmit recall port redacts/bounds queries, hashes the host session
 identity, rechecks hosted/local generations before dispatch and injection, and
-uses one 3.5 s process-clock signal and a 2.5 s fetch deadline. `context.mjs` quotes bounded complete entries/receipts under
+uses one 3.0 s process-clock signal and a 2.5 s fetch deadline. `context.mjs` quotes bounded complete entries/receipts under
 a fixed trusted untrusted-data preamble and rejects execution/authority attempts.
 The installed context gate follows the actual running host’s binary-identity format verdict,
 using the delivery format covered by the A7 pinned-host adversarial evaluation

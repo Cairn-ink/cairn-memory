@@ -2,9 +2,11 @@
 
 ## Unreleased — hosted recall deadline
 
-- Allow 2,500 ms from the first recall fetch. Prompt hooks have a 3,500 ms
-  process-clock cap inside a 4 s host timeout, preserving a 500 ms margin and
-  silent cancellation. Startup, imports and local waits count against the cap.
+- Allow 2,500 ms from the first recall fetch on both hosts. Codex prompt hooks
+  have a 3,000 ms process-clock cap; Claude Code plugin prompt hooks keep their
+  3,500 ms process-clock cap. Both use a 4 s host timeout, preserving at least
+  500 ms of margin and silent cancellation. Startup, imports and local waits
+  count against each cap.
   Earlier release entries retain their historical deadline values.
 
 ## Unreleased — maintenance admission and integrity

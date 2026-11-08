@@ -70,7 +70,7 @@ test('configured host timeouts reserve at least 500 ms after each recall cap', a
   assert.equal(timeout, 4); assert.ok(timeout * 1000 - cap >= 500, 'plugin_margin');
 });
 
-test('installed host handler, launcher and configuration retain the required margin', async () => {
+test('host handler retains the prompt, startup and capture budgets', async () => {
   const timers = [], original = globalThis.setTimeout;
   globalThis.setTimeout = (callback, ms, ...args) => {
     timers.push(ms); return original(callback, ms, ...args);
@@ -79,19 +79,27 @@ test('installed host handler, launcher and configuration retain the required mar
     for (const event of ['UserPromptSubmit', 'SessionStart', 'Stop', 'PreCompact'])
       await handleHook({ hook_event_name: event });
   } finally { globalThis.setTimeout = original; }
-  assert.deepEqual(timers, [3500, 2500, 750, 750], 'event_budgets');
+  assert.deepEqual(timers, [3000, 2500, 750, 750], 'event_budgets');
+});
+
+test('installed prompt launcher and configuration retain the required margin', async () => {
   const merged = JSON.parse(mergeHooks('', 'synthetic-installation', {
     home: 'synthetic-home', node: process.execPath, runtime: 'synthetic-runtime',
   }, undefined, true));
   const timeouts = Object.fromEntries(Object.entries(merged.hooks).map(([event, groups]) =>
     [event, groups[0].hooks[0].timeout]));
   assert.deepEqual(timeouts, { SessionStart: 3, UserPromptSubmit: 4, Stop: 1, PreCompact: 1 });
-  assert.ok(timeouts.UserPromptSubmit * 1000 - timers[0] >= 500, 'installed_margin');
   const entry = await source('../../../integrations/codex/entry.mjs');
   const budget = entry.match(/const budget = (.+);/)?.[1];
   assert.ok(budget, 'launcher_budget_expression');
   const launcherBudget = Function('event', 'capture', `return ${budget}`);
-  assert.equal(launcherBudget('UserPromptSubmit', false), 3500, 'installed_process_cap');
+  const cap = launcherBudget('UserPromptSubmit', false);
+  assert.equal(cap, 3000, 'installed_process_cap');
+  assert.equal(timeouts.UserPromptSubmit * 1000 - cap, 1000, 'installed_margin');
+  assert.ok(timeouts.UserPromptSubmit * 1000 - cap >= 500);
+  const remaining = entry.match(/Math.max\(1,(budget - process.uptime\(\)\*1000 - 50)\)/)?.[1];
+  assert.ok(remaining, 'launcher_process_clock_expression');
+  assert.equal(Function('budget', 'process', `return ${remaining}`)(3000, { uptime: () => 0.725 }), 2225);
   assert.equal(launcherBudget('SessionStart', false), 2000, 'startup_unchanged');
   assert.equal(launcherBudget('Stop', true), 750, 'capture_unchanged');
   const lifecycle = await source('../../../integrations/codex/hosted-lifecycle.mjs');

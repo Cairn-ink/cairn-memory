@@ -426,7 +426,7 @@ can be enabled only after the authority gate below and the sibling contract sett
 | Event | Action and timeout | Failure / must never do |
 | --- | --- | --- |
 | `SessionStart` | Establish needed pause EOF boundary using metadata/one-byte tail check; optionally call `readSessionContext`. Request <=2 s, total 2.5 s, hook timeout 3 s. | No context on failure, exit 0. Never upload history, infer habits, or block startup. |
-| `UserPromptSubmit` | Redact prompt before a code-point-safe 4,000-unit query bound; recall project + personal memories, limit 6; vetted context injection only. Request <=2.5 s from fetch, total 3.5 s from the process time origin, hook timeout 4 s. | No context on failure, exit 0. Never send raw prompt, read transcript for recall or issue blocking output. |
+| `UserPromptSubmit` | Redact prompt before a code-point-safe 4,000-unit query bound; recall project + personal memories, limit 6; vetted context injection only. Request <=2.5 s from fetch, total 3.0 s from the process time origin, hook timeout 4 s. | No context on failure, exit 0. Never send raw prompt, read transcript for recall or issue blocking output. |
 | `Stop` | Direct-pipe incremental capture launch; <=750 ms internally, hook timeout 1 s; output `{}`. | Drop failed launch, retry eligible bytes later. Never use `last_assistant_message`, signal session end, wait for capture, or request continuation. |
 | `PreCompact` | Same launch/budgets; freeze pre-compaction byte end if safely available. | Record a content-free gap on a lost/replaced range. Never delay compaction or ingest its generated summary. |
 | `SessionEnd` | Bounded launcher for final capture then optional `signalSessionEnd`; <=750 ms internally, hook timeout 1 s. | Best effort; no blocking. Never invent sibling fields or declare complete capture when bytes remain. |
@@ -1910,7 +1910,7 @@ under suite contention before its child started. The fixture now gives setup
 5 s while retaining the 30 ms request timeout, asserts exactly one child start,
 and checks that unknown termination retains the permit and advances no bytes.
 The handler also bounds binding/key/preparation/launch together (750 ms capture,
-2.5 s session startup and 3.5 s prompt submission), fences late launch, and tests a real exit-0 hook
+2.5 s session startup and 3.0 s prompt submission), fences late launch, and tests a real exit-0 hook
 process while a live identity publication lock remains held. Installed callers
 must flush and exit after the bounded result, without waiting for late identity
 completion. No Claude capture/bundle runtime bytes changed.
