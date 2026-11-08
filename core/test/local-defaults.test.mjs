@@ -11,6 +11,8 @@ import { createLocalRawSearch, localRawSearchManager } from '../local-raw-search
 import { defaultRawOptions } from '../local-defaults.mjs';
 import { rawRequest, splitRaw } from '../testing/raw-fixtures.mjs';
 import { openMemoryCore } from '../index.mjs';
+import { createMemoryCore } from '../contract.mjs';
+import { composeRawCore } from '../raw-composition.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 
 const ns = { ownerId: 'synthetic-owner', scope: 'personal', projectId: null };
@@ -68,6 +70,25 @@ test('default maintenance publishes captures in bounded quanta without capture w
   assert.equal(found.candidates.length, 6, JSON.stringify(found));
   const other = ok(await core.searchRaw({ namespace: { ...ns, ownerId: 'other-owner' }, query: 'cobalt telescope' }));
   assert.equal(other.candidates.length, 0);
+});
+
+for (const interpretation of ['host', 'engine']) test(`captureRaw schedules local search after registration (${interpretation})`, async t => {
+  const workspace = createTestWorkspace(t), path = join(workspace.path, 'memory.sqlite');
+  const scheduled = [];
+  const searchManager = { methods: {}, close() {}, schedule(namespace) {
+    scheduled.push({ namespace: structuredClone(namespace),
+      savedParts: db.prepare('SELECT count(*) n FROM raw_parts WHERE saved=1').get().n,
+      events: db.prepare('SELECT count(*) n FROM raw_events').get().n });
+  } };
+  const core = composeRawCore(createMemoryCore, { path, model: rationaleModel() },
+    { ...defaultRawOptions(), interpretation },
+    { captureDefault: true, searchDefault: true, searchManager });
+  workspace.defer(() => core.close());
+  const db = new DatabaseSync(path); workspace.defer(() => db.close());
+  assert.deepEqual(scheduled, []);
+  const result = ok(await core.captureRaw(rawRequest(splitRaw('Synthetic scheduled source')[0], { namespace: ns })));
+  assert.equal(result.raw.parts[0].saved, true);
+  assert.deepEqual(scheduled, [{ namespace: ns, savedParts: 1, events: 1 }]);
 });
 
 test('legacy Raw metadata keeps its frozen client constraint and existing sources', async t => {
