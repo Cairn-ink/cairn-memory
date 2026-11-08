@@ -13,8 +13,7 @@ export function rawNamespace(input) {
 }
 
 export function rawClient(value) {
-  if (!RAW_CLIENTS.includes(value)) fail('invalid_input');
-  return value;
+  return identifier(value);
 }
 
 export function rawInstant(value) {

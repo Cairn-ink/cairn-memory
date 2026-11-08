@@ -2,13 +2,11 @@
 
 `openRawSearch` is the only new export from `core/index.mjs`. Its asynchronous
 factory and complete handle contract are frozen in
-[raw-search-interface.md](raw-search-interface.md). Existing engine constructors,
-methods, options, results, errors, capabilities, tool schemas and transports
-retain their signatures. No new context representation or output is installed.
+[raw-search-interface.md](raw-search-interface.md). The local constructor now selects this seam automatically; see
+[local defaults](../defaults.md) for capture wiring, background maintenance and switches. No new context representation or output is installed.
 
 Absent selection and `{ enabled: false }` return `null` before configuration,
-SQLite imports, clocks, ports, files or maintenance. Existing constructors do
-not call the factory. No canonical schema, trigger, capture callback, outbox or
+SQLite imports, clocks, ports, files or maintenance. Local constructors select the factory when Raw search is enabled. No canonical schema, trigger, capture callback, outbox or
 privacy-mutation statement was added. A separately selected maintainer is an
 on-path service even when context reads remain disabled.
 
@@ -16,7 +14,7 @@ The local service accepts the existing private-read authority protocol with
 dedicated Raw methods, the existing Raw opening port, and the existing
 maintenance-turn broker protocol. Broker requests use the lexical family and
 `pumpId: 'raw-search'`. Hosts must include this lane in their existing physical
-store cadence/fairness authority. There is no additional index timer or pump. Calls
+store cadence/fairness authority. The default local host owns a bounded one-second maintenance timer. Calls
 are explicit, bounded and joined by `close`; public status exposes unknown counts and fixed errors; internal maintenance
 state tracks actual progress and retries. The host owns recurring supervision.
 

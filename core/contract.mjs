@@ -10,6 +10,8 @@ import { methodPackageOptions } from './method-package-input.mjs';
 import { createMethodPackageFacade } from './method-package-facade.mjs';
 import { openContextCore } from './context-read-facade.mjs';
 import { decisionReviewOption } from './confirmation-storage.mjs';
+import { localRawSearchManager } from './local-raw-search.mjs';
+import { defaultRawOptions } from './local-defaults.mjs';
 import { rawOptions } from './raw-options.mjs';
 import { storeFenceOption } from './store-fence.mjs';
 import { existingStoreOption } from './existing-store.mjs';
@@ -53,7 +55,7 @@ import {
 const CORE_OPTIONS = Object.freeze(['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy',
   'captureRationale','captureEvidence','captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes',
   'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence','contentSafety','busyTimeoutMs']);
-const OPEN_OPTIONS = Object.freeze([...CORE_OPTIONS, 'rawConversations']);
+const OPEN_OPTIONS = Object.freeze([...CORE_OPTIONS, 'rawConversations', 'raw', 'rawSearch']);
 
 const keepAdmissionKey = Symbol('keepAdmissionKey');
 
@@ -211,15 +213,26 @@ function openWithRoleContext(input, roleContext) {
   let descriptor;
   try { descriptor = Object.getOwnPropertyDescriptor(input, 'rawConversations'); }
   catch { throw new MemoryStoreError('invalid_input'); }
-  if (!descriptor) return buildCore(input);
+  const local = ownData(input, OPEN_OPTIONS);
+  if (Object.hasOwn(local, 'raw') && typeof local.raw !== 'boolean' ||
+      Object.hasOwn(local, 'rawSearch') && typeof local.rawSearch !== 'boolean' ||
+      descriptor && Object.hasOwn(local, 'raw')) fail('invalid_input');
+  const { raw, rawSearch, ...base } = local;
+  if (!descriptor && raw === false) return buildCore(base);
+  if (!descriptor) return composeRawCore(buildCore, base, defaultRawOptions(), {
+    sources: Boolean(base.privateCards), lineage: true, deletion: true, localControls: true,
+    captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch),
+  });
   if (!Object.hasOwn(descriptor, 'value')) throw new MemoryStoreError('invalid_input');
   ownData(input, OPEN_OPTIONS);
   const options = rawOptions(descriptor.value);
   const fields = Object.getOwnPropertyDescriptors(input);
   delete fields.rawConversations;
+  delete fields.rawSearch;
   const coreOptions = Object.create(Object.getPrototypeOf(input), fields);
   return composeRawCore(buildCore, coreOptions, options, {
     sources: Boolean(coreOptions.privateCards), lineage: true, deletion: true, localControls: true,
+    captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch),
   });
 }
 

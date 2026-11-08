@@ -6,11 +6,11 @@ export const contextNamespace = Object.freeze({ ownerId: 'synthetic-context-owne
 export const contextProviderArgs = ['--context-embedder','openai','--context-embed-model','text-embedding-3-small',
   '--context-embed-dimensions','8','--context-embed-max-requests','20','--context-embed-max-usd','.1'];
 export async function contextHost(workspace, path, { entry = fileURLToPath(new URL('../cli.mjs', import.meta.url)),
-  enabled = true, owner = contextNamespace.ownerId, project, personal = false, provider = false, key = provider, preload } = {}) {
+  enabled = true, owner = contextNamespace.ownerId, project, personal = false, provider = false, key = provider, semantic = false, preload } = {}) {
   const imports = preload ? ['--import',preload] : ['--import','data:text/javascript,globalThis.fetch=()=>{process.exit(91)}'];
   const transport = new StdioClientTransport({ command:'/usr/bin/python3', args:[fileURLToPath(new URL('./fixtures/method-stdio-relay.py',import.meta.url)),
     workspace.path,process.execPath,...imports,entry,'--db',path,'--owner',owner,...(project?['--project',project]:[]),
-    ...(enabled?['--context-read','context-read-v1']:[]),...(personal?['--context-read-personal']:[]),...(provider?contextProviderArgs:[])],
+    ...(enabled===null?[]:enabled?['--context-read','context-read-v1']:['--no-context-read']),...(personal?['--context-read-personal']:[]),...(provider?contextProviderArgs:[]),...(!provider&&!semantic?['--no-context-semantic']:[])],
     env:{OPENAI_API_KEY:key?'synthetic-not-a-key':'',NODE_NO_WARNINGS:'1',NODE_DISABLE_COMPILE_CACHE:'1'},stderr:'pipe' });
   let stderr=''; transport.stderr.on('data',chunk=>{stderr+=chunk;});
   // Observe the pinned SDK's real relay child, including graceful EOF status.

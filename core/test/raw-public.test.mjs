@@ -85,10 +85,14 @@ test('B1-01 malformed ports and own/inherited port accessors never execute or cr
   assert.equal(existsSync(path),false);
 });
 
-test('B1-01 omission stays ordinary; explicit null-prototype off configuration is valid',t => {
+test('B1-01 omission enables Raw; raw:false stays ordinary; explicit null-prototype off is valid',t => {
   const workspace = createTestWorkspace(t,{ prefix:'raw-public-default-' });
   const core = openMemoryCore({ path:join(workspace.path,'ordinary.sqlite') }); workspace.defer(() => core.close());
-  for (const method of ['captureRaw','getConversation','getRawUsage','deleteConversation','resolveSourceReferences']) assert.equal(core[method],undefined);
+  for (const method of ['captureRaw','getConversation','getRawUsage','deleteConversation']) assert.equal(typeof core[method],'function');
+  assert.equal(core.resolveSourceReferences,undefined);
+  const disabled = openMemoryCore({ path:join(workspace.path,'disabled.sqlite'),raw:false });
+  workspace.defer(() => disabled.close());
+  for (const method of ['captureRaw','getConversation','getRawUsage','deleteConversation','resolveSourceReferences']) assert.equal(disabled[method],undefined);
   const off = openMemoryCore({ path:join(workspace.path,'off.sqlite'),rawConversations:Object.assign(Object.create(null),{ mode:'off',readPolicy:policy }) });
   workspace.defer(() => off.close());
   assert.equal(typeof off.captureRaw,'function'); assert.equal(typeof off.deleteConversation,'function'); assert.equal(off.getCard,undefined);

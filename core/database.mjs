@@ -1,4 +1,5 @@
 import './content-write-safety.mjs';
+import { migrateRawClients } from './raw-client-migration.mjs';
 import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheInside } from './content-suppression-storage.mjs';
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
@@ -741,6 +742,7 @@ export function openDatabase(path, options = {}) {
       }
       }
       initialize();
+      if (rawCapture) migrateRawClients(db);
       if (methodPackages || assets || roleProfiles || currentDependencies) migrateMethodPrerequisites(db);
       if ((assets || roleProfiles || currentDependencies) && db.prepare('PRAGMA user_version').get().user_version < 31) {
         installAssets(db);

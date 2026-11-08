@@ -1,15 +1,16 @@
 # Local Raw journal, capture, lineage, deletion and sources
 
-These are the local mechanisms in
-[the V1 plan](plans/raw-local-v1-completion.md), not completed installed-client/hosted
-Raw V1. They are default-off and authorized only for pure-local synthetic
-development and tests. P2 joins the existing bounded capture engine; P3c adds
-explicit Raw references and authored Cards through the same private engine.
-The explicit public constructor and private artifact now compose those same
-mechanisms. The separate opt-in retained profile now exposes bounded MCP
-inspection and authored Raw-backed Cards, as described below; the constructor
-alone adds no MCP tool, client hook, hosted encryption or production enablement.
-Ordinary public capture keeps its existing wire contract.
+The local constructor and ordinary MCP server retain submitted captures as Raw
+by default, using the existing journal, lineage and exclusion controls. This is
+local plaintext retention with a default 200,000,000-byte owner cap. Disable it
+with `raw:false` or `--no-raw`; use `rawConversations` for a custom sealing port,
+cap or policy. The engine maintains lexical Raw search in bounded background
+turns. Messages without an event time receive the capture time; explicit
+`occurredAt` wins. See [all defaults and costs](defaults.md).
+
+Submitting a capture does not install transcript hooks or grant permission to
+execute remembered instructions. The separate retained-profile MCP path provides
+bounded inspection and authored Raw-backed Cards under its existing authority.
 
 ## Explicit standalone foreground setup preview
 
@@ -162,7 +163,7 @@ unverified; neither result authorizes an authentication/network workaround.
 
 `openMemoryCore({path, model?, privateCards?, rawConversations})` accepts the
 closed option `{mode:'raw-v1'|'off', port?, capBytes?, configureCap?, readPolicy, localAuthority?}`. Omission
-keeps the ordinary facade. Explicit undefined/null, unknown properties, symbols
+enables local Raw retention and ordinary-capture wiring; `raw:false` keeps the Raw-free facade. Explicit undefined/null, unknown properties, symbols
 and accessors refuse before opening or migrating SQLite. Enabled mode requires
 an explicit positive safe-integer cap and a `raw-seal-v1` port with both
 `sealRaw` and `openRaw`. Off mode may omit cap/port; an explicitly undefined

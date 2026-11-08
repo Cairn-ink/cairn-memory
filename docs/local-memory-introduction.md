@@ -21,8 +21,9 @@ at `~/.cairn-memory/data/memory.sqlite` (or an absolute `CAIRN_MEMORY_HOME`
 root). For an external database, use `setup --local --db <absolute path>` on
 the first installation. Initial engine installation needs npm registry access
 or a populated cache.
-It exposes the five explicit memory tools, with no automatic capture or recall
-and no engine opt-ins enabled. Without a model key, semantic recall returns
+It exposes the explicit memory tools and the preferred contextRead tools.
+Raw retention and background Raw search are enabled for submitted captures;
+no automatic conversation capture is installed. See [defaults](defaults.md). Without a model key, semantic recall returns
 `model_not_configured`; if the tool environment has `OPENAI_API_KEY`, the engine
 uses it and sends selected text to the provider. Setup reads a bounded Claude
 registration configuration file and extracts only the named MCP registration

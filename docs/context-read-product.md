@@ -12,7 +12,7 @@ v18/v20–v33 and Cards on v23–v33. P2b adds lexical candidates,
 representation-v2 assembly, index status and explicit service maintenance.
 P2c extends that path to one owner with up to 32 selected namespaces: at most
 one personal namespace and 31 projects. Reader requests use certified product
-indexes only. Defaults remain lexical and construct no provider. P2e adds
+indexes only. This separately selected product profile remains lexical and constructs no provider. Ordinary local MCP instead enables semantic search when its adapter has a key; see [local defaults](defaults.md). P2e adds
 explicit hosted semantic configuration, described below. P2d adds explicitly opted-in WAL handling for the same owner-wide
 selection, subject to deployment qualification below. The legacy profile and
 sidecar remain unchanged.

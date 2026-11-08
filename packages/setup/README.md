@@ -173,7 +173,9 @@ project/local
 scope can shadow user scope, which setup does not detect. Linux/WSL are
 tested;
 macOS uses the same path but is untested; native Windows local setup is refused
-(use WSL). Engine opt-in features are not enabled by setup.
+(use WSL). The engine enables Raw retention for submitted captures, background Raw search
+and the preferred contextRead tools by default. It uses BM25 without a key;
+`OPENAI_API_KEY` enables bounded embeddings. See [defaults and off switches](../../docs/defaults.md).
 
 這兩個工具之間不能混用本機與雲端；遇到衝突或讀不到設定時，安裝器不改動設定。
 從雲端切換時，依畫面指令順序操作，只移除實際存在的項目：

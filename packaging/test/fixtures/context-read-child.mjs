@@ -7,7 +7,7 @@ const access=createContextReadAccess(namespace);let core,calls=0;
 const ok=result=>{if(!result.ok)throw Error(JSON.stringify(result));return result.value;};
 try {
   if(job.mode==='capture') {
-    core=openMemoryCore({path,model:{contextWindow:8192,countTokens:()=>1,extract:({input})=>{
+    core=openMemoryCore({path,...(job.raw===false?{raw:false}:{}),model:{contextWindow:8192,countTokens:()=>1,extract:({input})=>{
       calls++;return {items:[{content:input.messages[0].content,kind:'fact',confidence:.8,sourceIndices:[0]}]};
     }}});
     for(const [i,text] of job.texts.entries())ok(await core.capture({namespace,client:'synthetic',sessionId:'installed-context',eventId:'capture-'+i,
@@ -26,7 +26,7 @@ try {
       query,semantic:true,limit:24,deadlineMs:5000},token)));
     console.log(JSON.stringify({ok:true,value:results}));
   } else {
-    core=job.mode==='read-only'?openContextReader({path,contextRead:access.configuration}):openMemoryCore({path,
+    core=job.mode==='read-only'?openContextReader({path,contextRead:access.configuration}):openMemoryCore({path,...(job.raw===false?{raw:false}:{}),
       ...(job.mode==='managed'?{existingStore:{version:'schema30-existing-v1',storeId:job.storeId}}:{}),contextRead:access.configuration});
     const input={readSet:access.readSet,query:'SQLite',types:['memory'],intent:'current',deadlineMs:5000};
     const result=await access.call(core,'findCandidates',input);

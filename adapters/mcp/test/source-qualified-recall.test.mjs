@@ -82,7 +82,7 @@ function assertSupport({ result, rank }, expected, enabled) {
 for (const mode of ['source-bound-v1', 'source-bound-v2']) {
   test(`R5/R7 actual SDK ${mode} defaults qualified recall on, explicit false preserves legacy`, options, async t => {
     const { path, qualifications } = seed(); const hosted = await host(t, path, mode);
-    assert.equal((await hosted.client.listTools()).tools.length, 6);
+    assert.equal((await hosted.client.listTools()).tools.length, 9);
     assertSupport(await recall(hosted), qualifications, true);
     assertSupport(await recall(hosted, { includeQualification: false }), qualifications, false);
     assertSupport(await recall(hosted, { includeQualification: true }), qualifications, true);
@@ -92,7 +92,7 @@ test('R5/R7 unconfigured cold SDK recall retains absent shape; explicit true inc
   const { path, qualifications } = seed(); const first = await host(t, path, 'source-bound-v2');
   const warm = await recall(first); await first.client.close();
   const cold = await host(t, path);
-  assert.equal((await cold.client.listTools()).tools.length, 5);
+  assert.equal((await cold.client.listTools()).tools.length, 8);
   assertSupport(await recall(cold), qualifications, false);
   const qualified = await recall(cold, { includeQualification: true });
   assertSupport(qualified, qualifications, true);

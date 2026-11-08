@@ -123,7 +123,7 @@ test('H01–H07 actual installed method CLI, terminal approval, MCP and closure'
   await t.test('H01/H07 default DTOs and tools stay unchanged; opt-in adds nine read tools; all runtime helpers ship',async()=>{
     const plain=await host(workspace,f.path,{command:f.entry,enabled:false}),selected=await host(workspace,f.path,{command:f.entry});
     const ordinary=(await plain.client.listTools()).tools,tools=(await selected.client.listTools()).tools;
-    assert.equal(ordinary.length,5);assert.equal(tools.length,14);
+    assert.equal(ordinary.length,8);assert.equal(tools.length,17);
     assert.deepEqual(tools.filter(tool=>ordinary.some(item=>item.name===tool.name)),ordinary);
     const names=tools.filter(tool=>!ordinary.some(item=>item.name===tool.name)).map(tool=>tool.name).sort();
     assert.deepEqual(names,['compare_method_versions','get_method_version','list_method_binding_events','list_method_manifest',

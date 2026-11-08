@@ -53,7 +53,7 @@ test('P1/P2 strict constructor setting rejects before opening and stdio discover
   }
   for (const enabled of [false, true]) {
     const h = await host(t, database(), { enabled, fake: false }); const tools = (await h.client.listTools()).tools;
-    assert.equal(tools.length, enabled ? 6 : 5);
+    assert.equal(tools.length, enabled ? 9 : 8);
     for (const tool of tools) assert.equal(tool.inputSchema.additionalProperties, false);
     if (enabled) {
       const tool = tools.find((tool) => tool.name === 'capture_memory'); assert.equal(tool.annotations.openWorldHint, true);
@@ -193,10 +193,10 @@ test('P3 incompatible submitted captures stay active without binding; a new-batc
   assert.deepEqual(material(path), before);
 });
 
-test('P6 Unicode-escaped core-sized capture exceeding 64 KiB wire cap closes without payload reflection or storage', options, async (t) => {
+test('P6 explicit context-off transport rejects a Unicode-escaped capture over 64 KiB without reflection or storage', options, async (t) => {
   const path = database();
   const child = spawn(process.execPath, [cli, '--db', path, '--owner', namespace.ownerId,
-    '--capture-qualification', 'source-bound-v1'], { env: { OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1' }, stdio: 'pipe' });
+    '--capture-qualification', 'source-bound-v1', '--no-context-read'], { env: { OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1' }, stdio: 'pipe' });
   t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); });
   let stdout = ''; let stderr = '';
   child.stdout.on('data', (chunk) => { stdout += chunk.toString(); });

@@ -7,7 +7,7 @@
 
 # Cairn Memory
 
-[English README](README.md) · **繁體中文**
+[English README](README.md) · **繁體中文** · [預設功能、成本與開關](docs/defaults.md)
 
 **保存跨次 AI 工作的重要背景，需求改變時也能修改。**
 

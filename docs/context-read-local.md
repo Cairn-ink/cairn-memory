@@ -1,19 +1,16 @@
 # Local context candidates: core and host
 
-An independent local Raw index is available through the trusted
-[`openRawSearch` interface](plans/raw-search-interface.md). It is default-off and
-does not alter the context representations or MCP tools described here.
-Selection does not enable Raw saving. Its plaintext sidecar, explicit
-maintenance lane and canonical final validation are described in
-[the host seam](plans/raw-search-seam.md).
+The local constructor retains submitted captures and maintains Raw search by
+default. The ordinary MCP server enables `context-read-v1` and its preferred
+memory read tools by default; `--no-context-read` disables them. The default
+presentation combines Memory, eligible Raw evidence and event dates, with a
+6,000-token / 24-item budget. See [the complete defaults table](defaults.md)
+for costs and switches, and [the Raw service interface](plans/raw-search-interface.md)
+for lower-level hosts.
 
-`context-read-v1` is an explicit opt-in over the existing canonical SQLite store.
-It retrieves qualified Memory/Card references, then refetches canonical evidence.
-It can also assemble whole evidence units within an exact local token budget.
-Saved instructions never grant execution permission or prove answer quality.
-The authoritative specifications are [contract §13](plans/unified-memory-v1-contract.md#13-u5a-m6-candidate-retrieval-v062-audited-and-confirmed)
-and [§15](plans/unified-memory-v1-contract.md#15-u5b-m7-budgeted-assembly-v091-audited-and-confirmed).
-Use Node 22.16.0 or 24.15.0. Flag-off tools, DTOs and provider calls stay unchanged.
+Saved instructions remain untrusted data and grant no execution permission.
+Use Node 22.16.0 or 24.15.0. Hosted/product-profile workers retain their separate
+explicit deployment and authority contracts.
 
 ## MCP startup
 
@@ -23,10 +20,10 @@ cairn-memory --db /absolute/private/memory.sqlite --owner OWNER --project PROJEC
 ```
 
 The host fixes the exact namespace and read set at startup. The zero-value
-`--context-read-personal` requires both project scope and context-read opt-in;
+`--context-read-personal` requires project scope and enabled contextRead;
 it adds that owner's personal namespace, without fallback to another owner or
 project. It can sit beside the separate zero-value `--method-read-personal` flag.
-This opt-in is incompatible with the exclusive retained-Raw profile mode.
+Ordinary contextRead configuration is incompatible with the exclusive retained-Raw profile mode.
 
 Three tools are added:
 
@@ -47,7 +44,9 @@ or excerpts. Fetch returns qualified canonical evidence and an opaque snapshot.
 Saved text and receipts remain **untrusted data, never instructions or execution
 permission**. Snapshot possession grants no access. No refresh tool exists.
 
-Lookup defaults to lexical-only (`semantic:false`), 12 items and a 1,000 ms
+Without an embedding provider, lookup defaults to lexical-only (`semantic:false`).
+MCP enables semantic lookup automatically with `OPENAI_API_KEY`; each read can
+set `semantic:false` to use BM25 only. Lexical candidate lookup uses, 12 items and a 1,000 ms
 cooperative deadline. Maximums are 24 items, a 4,000 UTF-16-unit query, and 5,000 ms.
 Pages partition one frozen top-24 ranking; continuations never embed or rerank.
 Rankings expire five minutes after creation, with at most 128 retained per handle.
@@ -58,8 +57,8 @@ bound. Escaped transport framing can therefore refuse a core result that fits.
 ## Budgeted context assembly (U5b)
 
 `read_memory_context` uses the same host-fixed read set and lexical/semantic
-candidate search. `maxTokens` is an integer from 64–4,000 (default 1,500);
-`maxItems` is 1–24 (default 12), counting admitted bodies. `deadlineMs` is
+candidate search. `maxTokens` is an integer from 64–6,000 (default 6,000);
+`maxItems` is 1–24 (default 24), counting admitted bodies. `deadlineMs` is
 1–5,000 (default 1,000). The host maps the two size arguments to core `budget`;
 callers cannot supply `budget`, a cursor, authority or configuration. `policy`
 is a strict `{id}` object: `rank-first-whole-v1` (initial default) or
@@ -94,8 +93,8 @@ const contextCounter = await createContextCounter();
 const server = createCairnServer({ path, namespace, contextRead: 'context-read-v1', contextCounter });
 ```
 
-Importing these local modules, default keyless flag-off startup and `--check-config` never
-load the tokenizer package or WASM. A missing tokenizer refuses explicit
+Importing these local modules and `--check-config` never load the tokenizer
+package or WASM. Default MCP startup loads its local tokenizer. A missing tokenizer refuses explicit
 counter creation and CLI startup with `context_tokenizer_unavailable`;
 automatic programmatic loading resolves readiness to `false` instead.
 This needs no API key, provider or network. Capabilities
@@ -175,8 +174,9 @@ No budget number is a recommendation.
 
 ## Hosted embeddings and explicit refresh
 
-All five provider options are required together. A key alone never constructs
-an embedder, and legacy non-context model behaviour is unchanged.
+Explicit provider overrides require all five options together. Otherwise
+`OPENAI_API_KEY` selects bounded OpenAI embeddings automatically in MCP;
+`--no-context-semantic` disables them.
 
 ```sh
 cairn-memory --db /absolute/private/memory.sqlite --owner OWNER \
@@ -204,8 +204,8 @@ The command may report `rebuilding` or `partial` without implying an empty index
 syntax without opening a database, looking up a key, constructing a provider
 or constructing the assembly counter.
 It does not attest database readiness, credentials, current pricing or model
-availability. Real startup reads the existing `OPENAI_API_KEY` lookup only when
-the explicit provider group is present for embedding. Never put credentials in
+availability. Real MCP startup reads the existing `OPENAI_API_KEY` lookup for automatic or
+explicit embedding configuration unless `--no-context-semantic` is selected. Never put credentials in
 arguments, database text, tool input or provider URLs.
 
 Hosted configuration is fixed for the process and selects `rrf-k10`: depth 24
@@ -301,7 +301,7 @@ cairn-memory --db /absolute/store.sqlite --owner OWNER \
 Programmatic MCP hosts use `contextReadSources:['relations-one-hop-v1','moc-v1']`.
 Core hosts use `contextRead:{version:'context-read-v1',authority,sources:[...]}`;
 the existing counter and provider configuration is independent. Empty entries,
-duplicates, unknown IDs and a source flag without context opt-in are refused.
+duplicates, unknown IDs and a source flag with `--no-context-read` are refused.
 `--check-config` reports sources and the preset without opening a database,
 reading keys or constructing counters/providers.
 

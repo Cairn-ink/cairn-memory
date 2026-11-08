@@ -27,7 +27,7 @@ export function installRawJournal(db) {
   db.exec(`
     CREATE TABLE raw_conversations (
       id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, scope TEXT NOT NULL,
-      project_id TEXT NOT NULL, client TEXT NOT NULL CHECK(client IN ('claude-code','codex')),
+      project_id TEXT NOT NULL, client TEXT NOT NULL CHECK(length(client) BETWEEN 1 AND 200),
       session_key TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0),
       first_received_at TEXT NOT NULL, last_received_at TEXT NOT NULL,
       CHECK((scope='personal' AND project_id='') OR (scope='project' AND length(project_id)>0)),
