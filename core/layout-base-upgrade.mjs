@@ -20,6 +20,8 @@ import { installAssets, validateAssets, assertNoAssets } from './asset-schema.mj
 import { installRoleProfiles, validateRoleProfiles, assertNoRoleProfiles } from './role-profile-schema.mjs';
 import { installCardCurrentDependencies, validateCardCurrentDependencies, assertNoCardCurrentDependencies } from './card-current-schema.mjs';
 
+export { contentSafetyInventory };
+
 const flags = ['admissionsClosed', 'writersStopped', 'readersDrained', 'oldHandlesClosed'];
 const quote = name => '"' + name.replaceAll('"', '""') + '"';
 
@@ -37,7 +39,7 @@ function offlineFile(path) {
 function backupInventory(path) {
   // Only the child opens the backup; the parent never opens raw database fds.
   const script = `const { DatabaseSync } = await import('node:sqlite');
-import { contentSafetyInventory } from ${JSON.stringify(new URL('./content-safety-migration.mjs', import.meta.url).href)};
+import { contentSafetyInventory } from ${JSON.stringify(import.meta.url)};
 const db = new DatabaseSync(process.argv[1], { readOnly: true });
 try { db.exec('PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; BEGIN');
 if (db.prepare('PRAGMA integrity_check').get().integrity_check !== 'ok' || db.prepare('PRAGMA foreign_key_check').all().length) throw Error('invalid_backup');

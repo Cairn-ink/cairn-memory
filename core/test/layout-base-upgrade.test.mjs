@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { existsSync, linkSync, chmodSync, symlinkSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
@@ -8,7 +10,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { upgradeLayoutBase } from '../layout-base-upgrade.mjs';
 import { openDatabase } from '../database.mjs';
 import { openMemoryCore } from '../index.mjs';
-import { migrateReceiptEventTime } from '../content-safety-migration.mjs';
+import { contentSafetyInventory, migrateReceiptEventTime } from '../content-safety-migration.mjs';
 import { resolveContentLayout, assertContentFeatures, contentSafetyPin } from '../content-safety-layout.mjs';
 import { safetyFixture, copySqliteFixture, readSqliteFixture, quiescence, ok, receipt } from '../testing/content-safety-s2h-fixture.mjs';
 import { ns, options as episodeOptions, digest } from '../testing/episode-helpers.mjs';
@@ -111,6 +113,32 @@ async function fixture(t, variant = 'empty') {
   copySqliteFixture(f.path, f.backupPath);
   return { ...f, memories, linked };
 }
+
+test('backup inventory self-import matches the in-process inventory for the same backup', async t => {
+  const f = await fixture(t), before = fileHash(f.backupPath);
+  const expected = inspect(f.backupPath, db => contentSafetyInventory(db));
+  const spawnSync = childProcess.spawnSync, results = [];
+  childProcess.spawnSync = function(executable, args, options) {
+    const result = spawnSync(executable, args, options);
+    results.push({ executable, args, options, result });
+    return result;
+  };
+  syncBuiltinESMExports();
+  try { await upgradeLayoutBase(request(f)); }
+  finally { childProcess.spawnSync = spawnSync; syncBuiltinESMExports(); }
+  assert.equal(results.length, 1);
+  const child = results[0];
+  assert.equal(child.executable, process.execPath);
+  assert.deepEqual(child.args.slice(0, 2), ['--input-type=module', '-e']);
+  assert.ok(child.args[2].includes(`import { contentSafetyInventory } from ${JSON.stringify(new URL('../layout-base-upgrade.mjs', import.meta.url).href)};`));
+  assert.equal(child.args[3], f.backupPath);
+  assert.deepEqual(child.options, { encoding: 'utf8', timeout: 30000, maxBuffer: 4096 });
+  assert.equal(child.result.status, 0);
+  assert.equal(child.result.error, undefined);
+  assert.equal(child.result.stdout, expected + '\n');
+  assert.equal(fileHash(f.backupPath), before);
+  assert.equal(version(f.path), 33);
+});
 
 test('T1 explicit upgrade matches the full opener schema, version steps and every table', async t => {
   const f = await fixture(t), a = join(f.workspace.path, 'implicit.sqlite');

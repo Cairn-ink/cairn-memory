@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "9072696ca51a0f2752d6b15294b58a1b7c6288e1fbebdd1c509f8c6e3db41b6e",
-  "bytes": 1293867,
+  "sha256": "32b43c8f01cb9606c4f643de526e340afd0abfdc951cafee7357a5468e4f24dc",
+  "bytes": 1293868,
   "files": [
     "LICENSE",
     "README.md",
@@ -741,7 +741,7 @@
     "adapters/mcp/safety-migrate-command.mjs": "e63ed654f3c052f3bc026faeee5b7d0868786feaf94bb93c2fccc311d793a38f",
     "core/content-safety-layout.mjs": "fb9d00957c5a224b1a414c2c5baa5726fa39ea2323331a9f7e325f4a9e3f3655",
     "core/content-safety-migration.mjs": "cfa4de31c06a67b0677faa77287fe5c353c670cbf3320855c6414200892cd0cf",
-    "core/layout-base-upgrade.mjs": "1b99049f31a8941a37683da17cdf50be1d539769489b76d2f134423af5c9434b",
+    "core/layout-base-upgrade.mjs": "fa2f4fc819f9b8e3400e1402ac1231d08f870fbd905001f8e9dbc131ea998938",
     "core/content-safety-schema.mjs": "461210f6a71b902ded6aaca22572af53bad060953306f4bf235a7b9375d668c2",
     "core/content-suppression-storage.mjs": "9578c16663871f6c8cdf51b09c304483cd4cbe7d0726a5f1a88b7fd44117f878",
     "core/content-suppression-input.mjs": "d22fe3b5ca43a0ce44d5e019fe4da9e09b456834281480b1ce1b23ec0b0d29cd",

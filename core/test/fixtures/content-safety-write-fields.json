@@ -1634,5 +1634,8 @@
   "core/local-raw-search.mjs": {
     "key:ownerId": 1,
     "key:projectId": 1
+  },
+  "core/layout-base-upgrade.mjs": {
+    "literal:storeId": 1
   }
 }

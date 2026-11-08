@@ -212,6 +212,10 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // writer acknowledgement identities. The sidecar decision-table comment's
   // two 'invalid:' labels are counted as key:invalid by this textual census;
   // neither is an executable field. The acknowledgement guard stays unchanged.
+  // Offline layout upgrade adds literal:storeId (1): a public store-binding
+  // field with a closed identifier type, never a secret or a writer
+  // acknowledgement identity. Property access and the returned shorthand
+  // reuse that validated binding; neither adds a textual census occurrence.
   // Include projections after storage returns, and string keys used by computed
   // objects. A new occurrence of an existing name also requires review.
   // R2 round 2: selected-row namespace validation adds existing owner/project
