@@ -36,7 +36,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
       const result = core.close();
       return stopped ? Promise.resolve(stopped).then(() => result) : result;
     },
-    ...(captureDefault ? { async capture(request) {
+    ...(captureDefault && rawOptions.interpretation !== 'host' ? { async capture(request) {
       try {
         runtime.ready();
         const registration = await storage.prepareCapture(request);
@@ -55,12 +55,12 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
         const registration = await storage.prepare(request);
         let interpretation;
         try {
-          if (registration.hasProjection && registration.replay) interpretation = success(registration.observeReplay());
-          else if (registration.hasProjection) interpretation = await capture(registration.input, registration);
-          else {
+          if (rawOptions.interpretation === 'host' || !registration.hasProjection) {
             registration.commitOnly();
             interpretation = success(registration.emptyOutcome());
           }
+          else if (registration.replay) interpretation = success(registration.observeReplay());
+          else interpretation = await capture(registration.input, registration);
         } catch (error) { interpretation = failure(error); }
         if (!interpretation.ok) {
           const observation = registration.observeFailedInterpretation();
