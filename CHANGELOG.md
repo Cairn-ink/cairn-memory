@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased — hosted recall deadline
+## 0.3.4 — 2026-11-09: hosted recall deadline
+
+Plugin and marketplace 0.3.4. Protocol stays 0.3.0. The installer version is not
+bumped here; the Codex prompt changes reach installs through the next installer
+release.
 
 - Allow 2,500 ms from the first recall fetch on both hosts. Codex prompt hooks
   have a 3,000 ms process-clock cap; Claude Code plugin prompt hooks keep their
