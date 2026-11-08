@@ -138,7 +138,8 @@ for (const kind of ['ordinary', 'episode', 'raw']) test(`P3b-03 ${kind} source-r
   const source = ok(await selected.captureRaw(request(splitRaw('Synthetic retained source.')[0], { client: 'codex', sessionId: 'A' })));
   const input = { namespace: ns, conversationId: source.raw.conversationId,
     expectedRevision: ok(await selected.getConversation({ namespace: ns, conversationId: source.raw.conversationId })).conversation.revision };
-  error(selected.previewDeleteConversation(input), 'raw_lineage_unavailable');
+  const preview = ok(selected.previewDeleteConversation(input));
+  assert.equal(preview.forgottenMemories, 1); assert.equal(preview.removedReceipts, 2);
   const parts = count(f.db, 'raw_parts'), receipts = f.db.prepare('SELECT * FROM receipts ORDER BY id').all();
   const writer = kind === 'ordinary' ? selected : kind === 'raw'
     ? openRawCaptureCore({ path: f.path, model: { ...f.model, extract: empty } }, { mode: 'raw-v1', port: localPlainPort(),

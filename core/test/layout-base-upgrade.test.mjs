@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, linkSync, chmodSync, symlinkSync } from 'node:fs';
+import { existsSync, linkSync, chmodSync, symlinkSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { DatabaseSync } from 'node:sqlite';
@@ -14,6 +14,10 @@ import { safetyFixture, copySqliteFixture, readSqliteFixture, quiescence, ok, re
 import { ns, options as episodeOptions, digest } from '../testing/episode-helpers.mjs';
 import { model, input as episodeInput, interpretation } from '../testing/episode-capture-helpers.mjs';
 import { rationaleModel } from '../testing/rationale-model.mjs';
+import { openRawCaptureCore } from '../raw-capture.mjs';
+import { createRawSourceRoots } from '../raw-source-roots.mjs';
+import { fixture as rawFixture, ns as rawNs, request as rawRequest, splitRaw, localPlainPort } from '../testing/raw-capture-fixtures.mjs';
+import { consumer, empty, episodeInput as legacyEpisodeInput, internal, legacyKeep, opposite, runtimeFor } from '../testing/raw-deletion-review-fixtures.mjs';
 
 const fullOptions = Object.freeze({ privateCards: true, rawConversations: true, rawCapture: true,
   rawLineage: true, rawDeletion: true, rawSources: true, localControls: true, methodPackages: true,
@@ -38,9 +42,9 @@ const version = path => inspect(path, db => db.prepare('PRAGMA user_version').ge
 const request = f => ({ path: f.path, backupPath: f.backupPath,
   expected: { storeId: f.storeId, fromBase: 18, toBase: 33 }, quiescence });
 
-async function fixture(t) {
+async function fixture(t, variant = 'empty') {
   const f = safetyFixture(t);
-  const port = model({ interpretEpisode(request) {
+  const port = model({ ...(variant === 'empty' ? {} : { extract: rationaleModel().extract }), interpretEpisode(request) {
     const result = interpretation(request);
     return { ...result, nextStep: { ...result.gist, value: 'Review synthetic evidence' } };
   } });
@@ -60,11 +64,21 @@ async function fixture(t) {
     for (const table of ['memories', 'receipts', 'session_episodes', 'episode_controls'])
       assert.ok(db.prepare(`SELECT count(*) n FROM ${table}`).get().n >= 2, table);
   });
+  let linked;
+  if (variant === 'legacy-support') {
+    linked = inspect(f.path, db => db.prepare("SELECT m.* FROM memories m JOIN episode_memory_links l ON l.memory_id=m.id WHERE m.owner_id=? LIMIT 1").get(ns.ownerId));
+    assert.ok(linked);
+    const core = openMemoryCore({ path: f.path, model: rationaleModel() });
+    try {
+      assert.equal(ok(core.admit({ namespace: ns, memory: { content: linked.content, kind: linked.kind },
+        receipts: [receipt('legacy-support', 'Synthetic independent retained support')] })).memory.id, linked.id);
+    } finally { core.close(); }
+  }
   copySqliteFixture(f.path, f.backupPath);
-  return { ...f, memories };
+  return { ...f, memories, linked };
 }
 
-test('T1 explicit upgrade matches the full opener schema, version steps and every legacy row', async t => {
+test('T1 explicit upgrade matches the full opener schema, version steps and every table', async t => {
   const f = await fixture(t), a = join(f.workspace.path, 'implicit.sqlite');
   copySqliteFixture(f.path, a);
   const tables = inspect(f.path, db => db.prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name").all().map(r => r.name));
@@ -83,9 +97,21 @@ test('T1 explicit upgrade matches the full opener schema, version steps and ever
   assert.deepEqual(traces[1], traces[0]);
   assert.deepEqual(traces[1], [23,24,25,26,27,28,29,29,30,31,32,33]);
   const snapshot = path => inspect(path, db => ({ schema: schema(db),
-    version: db.prepare('PRAGMA user_version').get(), app: db.prepare('PRAGMA application_id').get(), rows: rows(db, tables) }));
+    version: db.prepare('PRAGMA user_version').get(), app: db.prepare('PRAGMA application_id').get(), rows: rows(db, db.prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name").all().map(r => r.name)) }));
   assert.deepEqual(snapshot(f.path), snapshot(a));
-  assert.deepEqual(snapshot(f.path).rows, before);
+  assert.deepEqual(inspect(f.path, db => rows(db, tables)), before);
+  const newTables = Object.keys(snapshot(f.path).rows).filter(name => !tables.includes(name));
+  assert.equal(newTables.length, 67);
+  for (const path of [f.path, a]) {
+    const allRows = snapshot(path).rows;
+    for (const name of newTables) assert.deepEqual(allRows[name], [], name);
+  }
+  // Prove that the exact same comparator sees a valid seed in a new table.
+  const db = new DatabaseSync(a);
+  try { db.exec("INSERT INTO raw_owner_usage(owner_id,cap_bytes) VALUES('synthetic-seed',1000)"); }
+  finally { db.close(); }
+  assert.throws(() => assert.deepEqual(snapshot(f.path), snapshot(a)), assert.AssertionError);
+  t.diagnostic(`Compared ${tables.length} legacy tables and ${newTables.length} empty new tables on both paths; injected seed detected.`);
   assert.equal(version(f.path), 33);
   assert.deepEqual(result, { storeId: f.storeId, fromBase: 18, toBase: 33,
     counts: Object.fromEntries(tables.map(name => [name, before[name].length])) });
@@ -187,27 +213,47 @@ test('T4 explicit upgrade composes with event-time maintenance and existing-only
   openDatabase(f.path, { existingStore: contentSafetyPin(layout, f.storeId), rawSources: true }).close();
 });
 
-// Preserve all result fields. Only generated identities/clocks (including signed
-// cursor payloads) are normalized; error codes and semantic values stay exact.
+// Rules name the method and DTO path that creates each value. Preexisting
+// identities, source fields and signed cursors remain byte-for-byte comparable.
+// Both branches copy the same cursor secret, so no signature exclusion is needed.
 function normalizer() {
-  const entities = new Map(), generations = new Map();
-  const identity = (value, key) => {
-    const ids = key === 'generation' ? generations : entities;
-    if (!ids.has(value)) ids.set(value, `generated-${key === 'generation' ? 'generation-' : ''}${ids.size + 1}`);
-    return ids.get(value);
+  const identities = new Map();
+  const generated = value => {
+    assert.match(value, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    if (!identities.has(value)) identities.set(value, `generated-${identities.size + 1}`);
+    return identities.get(value);
   };
-  function normalize(value, key = '') {
-    if (Array.isArray(value)) return value.map(item => normalize(item));
-    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, normalize(v, k)]));
-    if (typeof value !== 'string') return value;
-    if (/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value) && !value.startsWith('1901-')) return 'generated-time';
-    if (/Cursor$/.test(key)) {
-      const payload = value.split('.')[0];
-      return normalize(JSON.parse(Buffer.from(payload, 'base64url').toString()));
-    }
-    return value.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, match => identity(match, key));
-  }
-  return normalize;
+  const clock = value => {
+    assert.equal(new Date(value).toISOString(), value); return 'generated-time';
+  };
+  return transcript => {
+    if (!Array.isArray(transcript)) return structuredClone(transcript);
+    return transcript.map(step => {
+      const copy = structuredClone(step), { method } = copy, value = copy.result.value;
+      if (!value) return copy;
+      const memory = (dto, clocks = false) => {
+        dto.id = generated(dto.id);
+        if (clocks) for (const field of ['createdAt', 'updatedAt']) dto[field] = clock(dto[field]);
+      };
+      if (method === 'admit') memory(value.memory);
+      if (method === 'correct') memory(value.memory, true);
+      if (method === 'finishAdmission') value.memories.forEach(dto => memory(dto));
+      if (method === 'capture') {
+        value.admission.memories.forEach(dto => memory(dto));
+        for (const ref of value.classification.memoryRevisions) {
+          assert.ok(identities.has(ref.memoryId)); ref.memoryId = identities.get(ref.memoryId);
+        }
+      }
+      if (method === 'inspectAdmission' && value.members) for (const member of value.members)
+        if (member.memoryId && identities.has(member.memoryId)) member.memoryId = identities.get(member.memoryId);
+      if (['setCapturePaused', 'setProjectCapture'].includes(method)) value.generation = generated(value.generation);
+      if (method === 'claimAdmission') value.token = generated(value.token);
+      // A later get returns that same changed clock; the original get stays exact.
+      if (method === 'getEpisode' && value.episode.nextStep?.status === 'closed')
+        value.episode.updatedAt = clock(value.episode.updatedAt);
+      return copy;
+    });
+  };
 }
 
 async function hostSequence(path, f) {
@@ -216,7 +262,7 @@ async function hostSequence(path, f) {
   const call = async (method, input, expectedCode) => {
     // A host opens a separate episode-mode request core for these two setters.
     const requestCore = method === 'setCapturePaused' || method === 'setProjectCapture'
-      ? openMemoryCore({ path, model, sessionEpisodes: { mode: 'episode-v1' } }) : null;
+      ? openMemoryCore({ path, model, captureQualification: 'source-bound-v2', captureEvidence: 'staged-v1', sessionEpisodes: { mode: 'episode-v1' } }) : null;
     let result;
     try { result = await (requestCore ?? core)[method](input); }
     finally { requestCore?.close(); }
@@ -230,7 +276,7 @@ async function hostSequence(path, f) {
     await call('recall', { readSet: [ns], query: 'Synthetic offline preference' });
     await call('list', { namespace: ns });
     const detail = await call('get', { namespace: ns, memoryId: memory.id, receiptLimit: 1, includeAwaiting: false });
-    assert.ok(detail.nextReceiptCursor);
+    assert.match(detail.nextReceiptCursor, /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/);
     await call('get', { namespace: ns, memoryId: memory.id, receiptLimit: 1, receiptCursor: detail.nextReceiptCursor });
     await call('get', { namespace: ns, memoryId: memory.id, includeAwaiting: true }, 'invalid_input');
     await call('map', { namespace: ns });
@@ -277,12 +323,14 @@ async function hostSequence(path, f) {
   } finally { core.close(); }
 }
 
-test('T5 host request facades are invariant between safety base 18 and upgraded safety base 33', async t => {
-  const f = await fixture(t), a = join(f.workspace.path, 'base18.sqlite'); copySqliteFixture(f.path, a);
+for (const variant of ['empty', 'linked', 'legacy-support']) test(`T5 ${variant}: host request facades are invariant between safety base 18 and upgraded safety base 33`, async t => {
+  const f = await fixture(t, variant), a = join(f.workspace.path, 'base18.sqlite'); copySqliteFixture(f.path, a);
   await migrateReceiptEventTime({ path: a, backupPath: f.backupPath, expected: { storeId: f.storeId, base: 18 }, quiescence });
   await upgradeLayoutBase(request(f)); copySqliteFixture(f.path, f.backupPath);
   await migrateReceiptEventTime({ path: f.path, backupPath: f.backupPath, expected: { storeId: f.storeId, base: 33 }, quiescence });
-  const left = normalizer()(await hostSequence(a, f)), right = normalizer()(await hostSequence(f.path, f));
+  const leftRaw = await hostSequence(a, f), rightRaw = await hostSequence(f.path, f);
+  assert.equal(leftRaw.length, 32); assert.equal(rightRaw.length, 32);
+  const left = normalizer()(leftRaw), right = normalizer()(rightRaw);
   assert.equal(version(a), 51); assert.equal(version(f.path), 53);
   t.diagnostic('getCaptureControlAsync is absent from the openMemoryCore facade; all other requested methods were exercised.');
   const differences = right.flatMap((step, i) => isDeepStrictEqual(step, left[i]) ? [] : [{ step: i, method: step.method, base18: left[i].result, base33: step.result }]);
@@ -315,4 +363,183 @@ test('T5b documented default-facade difference: capture setters succeed on Raw-c
       }
     } finally { core.close(); }
   }
+});
+
+
+// Replacing the pathname at the dynamic-import yield must be caught after BEGIN.
+test('T2 inode replacement after the initial guards refuses both coherent copies', async t => {
+  const f = await fixture(t), retired = f.path + '.retired', replacement = f.path + '.replacement';
+  copySqliteFixture(f.path, replacement);
+  const before = fileHash(f.path), backup = fileHash(f.backupPath);
+  const pending = upgradeLayoutBase(request(f));
+  renameSync(f.path, retired); renameSync(replacement, f.path);
+  await assert.rejects(pending, { code: 'unsupported_database' });
+  for (const path of [f.path, retired]) {
+    assert.equal(version(path), 18); assert.equal(fileHash(path), before);
+  }
+  assert.equal(fileHash(f.backupPath), backup);
+});
+
+test('T3 failure after the final installer and before COMMIT preserves exact bytes', async t => {
+  const f = await fixture(t), before = fileHash(f.path), backup = fileHash(f.backupPath);
+  const prepare = DatabaseSync.prototype.prepare; let injected = false;
+  DatabaseSync.prototype.prepare = function(sql) {
+    if (sql === 'PRAGMA integrity_check' &&
+        prepare.call(this, 'PRAGMA user_version').get().user_version === 33 &&
+        prepare.call(this, 'PRAGMA database_list').get().file === f.path) {
+      assert.ok(prepare.call(this, "SELECT 1 FROM sqlite_schema WHERE name='card_current_dependencies'").get());
+      injected = true; throw Error('synthetic-final-integrity-failure');
+    }
+    return prepare.call(this, sql);
+  };
+  try { await assert.rejects(upgradeLayoutBase(request(f)), { code: 'unsupported_database' }); }
+  finally { DatabaseSync.prototype.prepare = prepare; }
+  assert.equal(injected, true); assert.equal(version(f.path), 18);
+  assert.equal(fileHash(f.path), before); assert.equal(fileHash(f.backupPath), backup);
+});
+
+test('T5 normalization preserves preexisting IDs, source content, source clocks and unvalidated signatures', async t => {
+  const a = '11111111-1111-1111-1111-111111111111', b = '22222222-2222-2222-2222-222222222222';
+  const body = Buffer.from('{"revision":1}').toString('base64url');
+  const pairs = [
+    [{ memory: { id: a, content: 'Synthetic same content' } }, { memory: { id: b, content: 'Synthetic same content' } }],
+    [{ content: 'ref ' + a }, { content: 'ref ' + b }],
+    [{ occurredAt: '2020-01-01T00:00:00.000Z' }, { occurredAt: '2021-01-01T00:00:00.000Z' }],
+    [{ nextReceiptCursor: body + '.valid' }, { nextReceiptCursor: body + '.invalid' }],
+  ];
+  for (const [index, [left, right]] of pairs.entries()) await t.test(
+    ['preexisting identity', 'UUID in user content', 'source timestamp', 'cursor signature'][index], () => {
+      assert.notDeepEqual(normalizer()(left), normalizer()(right));
+      const transcript = value => [{ method: 'get', result: { ok: true, value } }];
+      assert.notDeepEqual(normalizer()(transcript(left)), normalizer()(transcript(right)));
+    });
+});
+
+async function physicalFixture(t, physical) {
+  const f = await fixture(t, 'legacy-support');
+  if (physical === 53) { await upgradeLayoutBase(request(f)); copySqliteFixture(f.path, f.backupPath); }
+  if (physical !== 18) await migrateReceiptEventTime({ path: f.path, backupPath: f.backupPath,
+    expected: { storeId: f.storeId, base: physical === 53 ? 33 : 18 }, quiescence });
+  assert.equal(version(f.path), physical); return f;
+}
+
+for (const physical of [18, 51, 53]) test(`legacy episode deletion at ${physical} forgets linked Memory with unrecorded support`, async t => {
+  const f = await physicalFixture(t, physical), core = openMemoryCore({ path: f.path, model: rationaleModel() });
+  try {
+    const episode = ok(core.listEpisodes({ namespace: ns, since: '1901-02-01T00:00:00.000Z', until: '1901-03-01T00:00:00.000Z' })).items[0];
+    assert.deepEqual(ok(core.forgetEpisode({ namespace: ns, episodeId: episode.id, expectedRevision: episode.revision })), { forgotten: true });
+    assert.equal(core.get({ namespace: ns, memoryId: f.linked.id }).error?.code, 'memory_not_found');
+    assert.equal(core.getEpisode({ namespace: ns, episodeId: episode.id }).error?.code, 'episode_not_found');
+    assert.equal(ok(core.list({ namespace: ns })).memories.some(item => item.id === f.linked.id), false);
+    for (const result of [core.map({ namespace: ns }), core.sessionStartContext({ namespace: ns })])
+      assert.equal(JSON.stringify(ok(result)).includes(f.linked.content), false);
+    assert.equal(JSON.stringify(ok(await core.recall({ readSet: [ns], query: f.linked.content }))).includes(f.linked.content), false);
+    if (physical === 53) {
+      const raw = openMemoryCore({ path: f.path, rawConversations: { mode: 'off',
+        readPolicy: () => ({ generation: 'synthetic', reason: null }) } });
+      try {
+        assert.deepEqual(ok(raw.listRawConversations({ namespace: ns, client: 'codex' })).conversations, []);
+        const view = ok(await raw.getConversation({ namespace: ns, conversationId: episode.id }));
+        assert.equal(view.conversation, null); assert.deepEqual(view.messages, []);
+      } finally { raw.close(); }
+    }
+    inspect(f.path, db => {
+      assert.equal(db.prepare('SELECT deleted FROM memories WHERE id=?').get(f.linked.id).deleted, 1);
+      assert.ok(db.prepare('SELECT 1 FROM suppressed WHERE fingerprint=? AND owner_id=?').get(f.linked.fingerprint, ns.ownerId));
+      assert.equal(db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(f.linked.id).n, 0);
+      if (physical !== 18) assert.ok(db.prepare("SELECT 1 FROM content_suppressions WHERE kind='memory' AND stable_key=?").get(f.linked.id));
+      if (physical === 53) for (const table of ['raw_conversations','raw_messages','raw_parts'])
+        assert.equal(db.prepare(`SELECT count(*) n FROM ${table}`).get().n, 0);
+    });
+  } finally { core.close(); }
+});
+
+for (const origin of ['independent', 'unknown']) test(`recorded ${origin} support at 53 has conservative deletion behavior`, async t => {
+  const f = await physicalFixture(t, 53);
+  // Exercise the post-upgrade public admission, then optionally mark its recorded origin unknown.
+  const core = openMemoryCore({ path: f.path, model: rationaleModel() });
+  try {
+    ok(core.admit({ namespace: ns, memory: { content: f.linked.content, kind: f.linked.kind }, receipts: [receipt('recorded-support')] }));
+    const db = f.connect();
+    try {
+      const r = db.prepare("SELECT id FROM receipts WHERE memory_id=? AND event_id='recorded-support'").get(f.linked.id);
+      assert.equal(db.prepare('SELECT kind FROM raw_receipt_origins WHERE receipt_id=?').get(r.id).kind, 'independent');
+      if (origin === 'unknown') db.prepare("UPDATE raw_receipt_origins SET kind='unknown' WHERE receipt_id=?").run(r.id);
+    } finally { db.close(); }
+    const episode = ok(core.listEpisodes({ namespace: ns, since: '1901-02-01T00:00:00.000Z', until: '1901-03-01T00:00:00.000Z' })).items[0];
+    ok(core.forgetEpisode({ namespace: ns, episodeId: episode.id, expectedRevision: episode.revision }));
+    if (origin === 'independent') {
+      const retained = ok(core.get({ namespace: ns, memoryId: f.linked.id }));
+      assert.equal(retained.receipts.length, 1); assert.equal(retained.receipts[0].eventId, 'recorded-support');
+    } else assert.equal(core.get({ namespace: ns, memoryId: f.linked.id }).error?.code, 'memory_not_found');
+  } finally { core.close(); }
+});
+
+for (const client of ['claude-code', 'codex']) test(`unresolved legacy keep is exempt while ordinary unknown support is forgotten: ${client}`, async t => {
+  const f = rawFixture(t, { kind: 'episode', model: { extract: empty } });
+  const origins = [];
+  for (const session of ['A', 'D']) origins.push(ok(await f.core.capture(legacyEpisodeInput(client, session))).episode.id);
+  const sourceIds = origins.map(id => f.db.prepare('SELECT id FROM episode_sources WHERE episode_id=?').get(id).id);
+  const runtime = runtimeFor(f), inherited = consumer(f, runtime, { client: opposite(client), sourceIds });
+  const kept = await legacyKeep(f, runtime, inherited.id), keptId = kept.admission.memories[0].id;
+  const core = openRawCaptureCore({ path: f.path, model: { ...f.model, extract: empty } }, {
+    mode: 'raw-v1', deletion: true, port: localPlainPort(), readPolicy: () => ({ generation: 'synthetic', reason: null }) });
+  f.workspace.defer(() => core.close());
+  const authority = createRawSourceRoots(f.db).receipt(internal,
+    f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(keptId));
+  assert.equal(authority.legacyKeep, true); assert.equal(authority.unknown, true);
+  const origin = ok(core.getEpisode({ namespace: rawNs, episodeId: origins[0] })).episode;
+  assert.equal(core.forgetEpisode({ namespace: rawNs, episodeId: origin.id, expectedRevision: origin.revision }).error?.code,
+    'raw_lineage_unavailable');
+  const saved = ok(await core.captureRaw(rawRequest(splitRaw('Synthetic unrelated retained source.', { id: 'unrelated-message' })[0],
+    { namespace: rawNs, client, sessionId: 'unrelated', eventId: 'raw-unrelated' })));
+  const memory = ok(core.get({ namespace: rawNs, memoryId: keptId })).memory;
+  // Memory exclusion retains the same unresolved-keep refusal while Raw exists.
+  assert.equal(core.forget({ namespace: rawNs, memoryId: keptId, expectedRevision: memory.revision }).error?.code,
+    'raw_lineage_unavailable');
+  const key = { namespace: rawNs, client: 'synthetic', eventId: 'ordinary-claim', payloadDigest: digest('ordinary-claim') };
+  const claim = ok(core.claimAdmission({ ...key, leaseMs: 1000 }));
+  const admitted = ok(await core.finishAdmission({ ...key, token: claim.token, items: [{ content: 'Synthetic ordinary unknown fact',
+    kind: 'fact', confidence: .8, receipts: [receipt('ordinary-unknown')] }] }));
+  const ordinary = f.db.prepare('SELECT * FROM memories WHERE id=?').get(admitted.memories[0].id);
+  const ordinaryReceipt = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(ordinary.id);
+  assert.equal(f.db.prepare('SELECT kind FROM raw_receipt_origins WHERE receipt_id=?').get(ordinaryReceipt.id).kind, 'unknown');
+  assert.equal(createRawSourceRoots(f.db).receipt(internal, ordinaryReceipt).legacyKeep, undefined);
+  const deletion = { namespace: rawNs, conversationId: saved.raw.conversationId,
+    expectedRevision: ok(await core.getConversation({ namespace: rawNs, conversationId: saved.raw.conversationId })).conversation.revision };
+  assert.equal(ok(core.previewDeleteConversation(deletion)).forgottenMemories, 1);
+  assert.equal(ok(core.deleteConversation({ ...deletion, actionId: 'ordinary-delete' })).forgottenMemories, 1);
+  assert.equal(core.get({ namespace: rawNs, memoryId: ordinary.id }).error?.code, 'memory_not_found');
+  assert.equal(f.db.prepare('SELECT deleted FROM memories WHERE id=?').get(ordinary.id).deleted, 1);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(ordinary.id).n, 0);
+  assert.ok(f.db.prepare('SELECT 1 FROM suppressed WHERE fingerprint=? AND owner_id=?').get(ordinary.fingerprint, rawNs.ownerId));
+  ok(core.get({ namespace: rawNs, memoryId: keptId }));
+  assert.equal(f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(keptId).n, 1);
+  // Selecting a different receipt of this Memory must retain the old remaining-keep guard too.
+  const second = ok(await core.captureRaw(rawRequest(splitRaw('Synthetic second unrelated source.', { id: 'second-message' })[0],
+    { namespace: rawNs, client, sessionId: 'second-unrelated', eventId: 'raw-second' })));
+  assert.equal(ok(core.admit({ namespace: rawNs, memory: { content: memory.content, kind: memory.kind },
+    receipts: [{ client, sessionId: 'second-unrelated', eventId: 'second-message', role: 'user',
+      excerpt: 'Synthetic second unrelated source.' }] })).memory.id, keptId);
+  const secondKey = { namespace: rawNs, conversationId: second.raw.conversationId,
+    expectedRevision: ok(await core.getConversation({ namespace: rawNs, conversationId: second.raw.conversationId })).conversation.revision };
+  assert.equal(core.previewDeleteConversation(secondKey).error?.code, 'raw_lineage_unavailable');
+  assert.equal(core.deleteConversation({ ...secondKey, actionId: 'legacy-remaining' }).error?.code, 'raw_lineage_unavailable');
+  assert.equal(f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(keptId).n, 2);
+});
+
+test('host admissions at 53 without Raw record ordinary receipts as unknown and explicit receipts as independent', async t => {
+  const f = await physicalFixture(t, 53), core = openMemoryCore({ path: f.path, model: rationaleModel() });
+  try {
+    const key = { namespace: ns, client: 'synthetic', eventId: 'origin-claim', payloadDigest: digest('origin-claim') };
+    const claim = ok(core.claimAdmission({ ...key, leaseMs: 1000 }));
+    ok(await core.finishAdmission({ ...key, token: claim.token, items: [{ content: 'Synthetic ordinary admitted fact', kind: 'fact',
+      confidence: .8, receipts: [receipt('ordinary-origin')] }] }));
+    ok(core.admit({ namespace: ns, memory: { content: 'Synthetic explicit admitted fact', kind: 'fact' }, receipts: [receipt('explicit-origin')] }));
+    inspect(f.path, db => {
+      assert.equal(db.prepare('SELECT count(*) n FROM raw_conversations').get().n, 0);
+      assert.deepEqual(db.prepare("SELECT r.event_id,o.kind FROM receipts r JOIN raw_receipt_origins o ON o.receipt_id=r.id WHERE r.event_id IN ('ordinary-origin','explicit-origin') ORDER BY r.event_id").all().map(r => [r.event_id,r.kind]),
+        [['explicit-origin','independent'],['ordinary-origin','unknown']]);
+    });
+  } finally { core.close(); }
 });
