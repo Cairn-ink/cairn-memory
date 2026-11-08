@@ -22,7 +22,11 @@ export async function currentHost(configPath,{detect=detectRunningHost,launch=la
   if(!host)return {status:'pending'};
   await observe(configPath,host);
   const verdict=await cachedQualification(configPath,host);
-  if(verdict.status==='pending')await scheduleQualification(configPath,host,launch);
+  if(verdict.status==='pending') {
+    // Pending hooks need their private cache before background scheduling.
+    if(observe!==observeHost)await observeHost(configPath,host);
+    await scheduleQualification(configPath,host,launch);
+  }
   return {...verdict,host};
 }
 function launchQualification(configPath,host) {

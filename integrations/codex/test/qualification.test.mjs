@@ -322,3 +322,14 @@ test('identical observed host bytes skip publication; a changed host is still pu
   assert.equal(writes.filter(event => event.kind === 'write').length, 1);
   assert.deepEqual(await observedHosts(f.configPath), [changed]);
 });
+
+test('deferred host evidence still schedules the first qualification with a missing cache', async t => {
+  const f = await fixture(t);
+  let launched = 0;
+  const options = { detect: async () => f.host, observe: async () => {}, launch: async () => { launched++; } };
+  assert.equal((await currentHost(f.configPath, options)).status, 'pending');
+  assert.equal(launched, 1, 'first_qualification_is_scheduled');
+  assert.deepEqual(await observedHosts(f.configPath), [f.host]);
+  assert.equal((await currentHost(f.configPath, options)).status, 'pending');
+  assert.equal(launched, 1, 'live_pending_qualification_is_not_duplicated');
+});
