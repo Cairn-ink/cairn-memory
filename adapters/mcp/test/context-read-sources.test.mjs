@@ -23,11 +23,18 @@ test('C06 pinned independent 94c1076f wire fixtures, controlled identity/clock/e
   assert.equal(result.error, undefined); assert.equal(result.signal, null); assert.equal(result.status, 0, readFileSync(join(workspace.path, 'err'), 'utf8'));
   const historical = readFileSync(new URL('../../../core/test/fixtures/context-read/u5c2-legacy-wire.json', import.meta.url), 'utf8');
   const expected = JSON.parse(historical);
-  // Preserve the historical bytes; permit only PR 2's three reviewed additions.
+  // Preserve historical bytes except documented defaults and the dated option.
   const insertAfter = (object, key, addition) => Object.fromEntries(Object.entries(object)
     .flatMap(entry => entry[0] === key ? [entry, ...Object.entries(addition)] : [entry]));
-  for (const key of ['capabilities', 'hostedCapabilities']) expected[key].value.assembly =
-    insertAfter(expected[key].value.assembly, 'representation', { representations: ['representation-v2', 'representation-v2-dated'] });
+  for (const key of ['capabilities', 'hostedCapabilities']) {
+    const capabilities = expected[key].value;
+    capabilities.assembly = insertAfter(capabilities.assembly, 'representation', {
+      raw: { default: true, configured: false }, representations: ['representation-v2', 'representation-v2-dated'],
+    });
+    capabilities.assembly.representation = 'representation-v2-dated';
+    Object.assign(capabilities.assembly.limits, { defaultMaxTokens: 6000, maxTokens: 6000, defaultMaxItems: 24 });
+    capabilities.unsupported = capabilities.unsupported.filter(feature => feature !== 'raw-search');
+  }
   const schema = expected.contextHost.tools.tools[2].inputSchema;
   schema.properties = insertAfter(schema.properties, 'policy', {
     representation: { type: 'string', enum: ['representation-v2', 'representation-v2-dated'] },
@@ -40,6 +47,12 @@ test('C06 pinned independent 94c1076f wire fixtures, controlled identity/clock/e
       .replace('Assemble whole canonical bodies and sources within an exact local token budget. Semantic defaults to false; explicit semantic true', 'Preferred memory read: assemble dated Memory and Raw sources within an exact local token budget. Semantic defaults on with a configured embedding provider; semantic false selects BM25 only. Semantic lookup');
     if (tool.name === 'read_memory_context') tool.inputSchema.properties.maxTokens.maximum = 6000;
   }
+  // The MCP legacy representation retains the new default Raw coverage status;
+  // this host has explicitly disabled Raw and cannot supply its search port.
+  expected.assembly.value.diagnostics = insertAfter(expected.assembly.value.diagnostics, 'trace', { coverage: { raw: 'unavailable' } });
+  const diagnostics = expected.contextHost.assembly._meta['ink.cairn/context-read-diagnostics'];
+  expected.contextHost.assembly._meta['ink.cairn/context-read-diagnostics'] =
+    insertAfter(diagnostics, 'trace', { coverage: { raw: 'unavailable' } });
   const compare = actual => assert.equal(actual, JSON.stringify(expected, null, 2) + '\n');
   const actual = readFileSync(report, 'utf8');
   compare(actual);

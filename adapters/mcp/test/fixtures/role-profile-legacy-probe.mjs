@@ -7,7 +7,7 @@ import { restoreHistoricalStore } from '../../../../core/testing/method-package-
 
 // Run against either the pinned pre-v32 closure or the current installed tree.
 // Empty success DTOs and refusals avoid random IDs/timestamps in the byte fixture.
-export async function roleLegacyProbe(root, directory) {
+export async function roleLegacyProbe(root, directory, { legacyModes = false } = {}) {
   const { createCairnServer } = await import(pathToFileURL(join(root,'adapters/mcp/server.mjs')));
   const { start, parseConfiguration } = await import(pathToFileURL(join(root,'adapters/mcp/cli.mjs')));
   const { openMemoryCore } = await import(pathToFileURL(join(root,'core/contract.mjs')));
@@ -17,7 +17,7 @@ export async function roleLegacyProbe(root, directory) {
   for(const [mode,options] of Object.entries({plain:{},methods:{methodPackages:'local-v1'},context:{contextRead:'context-read-v1',contextCounter:counter},
     combined:{methodPackages:'local-v1',contextRead:'context-read-v1',contextCounter:counter},assets:{assets:'local-v1'}})) {
     const path=join(directory,mode+'.sqlite'),fixture=restoreHistoricalStore(path,'compatibility').expected;
-    const server=createCairnServer({path,namespace:ns,...options});
+    const server=createCairnServer({path,namespace:ns,...(legacyModes?{raw:false,contextRead:false}:{}),...options});
     const client=new Client({name:'legacy-fixture',version:'1'}),[a,b]=InMemoryTransport.createLinkedPair();
     try {
       await server.connect(a);await client.connect(b);
@@ -33,16 +33,17 @@ export async function roleLegacyProbe(root, directory) {
       const populatedDTOs=[];for(const [name,arguments_]of dtoCalls)populatedDTOs.push(JSON.stringify(await client.callTool({name,arguments:arguments_})));
       result[mode]={tools:JSON.stringify(tools),inspect:JSON.stringify(inspect),missing:JSON.stringify(missing),invalid:JSON.stringify(invalid),extra:JSON.stringify(extra),populatedDTOs};
     } finally {await client.close();await server.close();}
-    const core=openMemoryCore({path});
+    const core=openMemoryCore({path,...(legacyModes?{raw:false}:{})});
     try {result[mode].core=JSON.stringify({keys:Object.keys(core),list:core.list({namespace:ns}),historyList:core.list({namespace:ns,states:['active','historical']}),get:core.get({namespace:ns,memoryId:fixture.id}),qualified:core.get({namespace:ns,memoryId:fixture.id,includeQualification:true}),missing:core.get({namespace:ns,memoryId:'absent'})});}finally{core.close();}
     const db=new DatabaseSync(path);try{result[mode].version=db.prepare('PRAGMA user_version').get().user_version;
       result[mode].schema=JSON.stringify(db.prepare("SELECT type,name,tbl_name,sql FROM sqlite_master ORDER BY type,name").all());}finally{db.close();}
   }
   const logs=[],log=console.log;console.log=(...args)=>logs.push(args.join(' '));
   const args=['--db','/synthetic/legacy.sqlite','--owner','synthetic-legacy'];
-  try {await start(['--help'],{});await start(['--check-config',...args],{});
-    await start(['--check-config',...args,'--method-packages','local-v1'],{});
+  const legacyFlags=legacyModes?['--no-raw','--no-context-read']:[];
+  try {await start(['--help'],{});await start(['--check-config',...args,...legacyFlags],{});
+    await start(['--check-config',...args,...legacyFlags,'--method-packages','local-v1'],{});
     await start(['--check-config',...args,'--context-read','context-read-v1'],{});
   } finally {console.log=log;}
-  result.cli={stdout:logs,parse:JSON.stringify(parseConfiguration(args))};return result;
+  result.cli={stdout:logs,parse:JSON.stringify(parseConfiguration([...args,...legacyFlags]))};return result;
 }

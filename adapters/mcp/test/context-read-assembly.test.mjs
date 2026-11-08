@@ -120,7 +120,7 @@ test('A11 actual MCP text equals core meteredText; diagnostics stay only in clie
   const memory = admit(core), secret = 'sk-' + 'S'.repeat(32), sanitized = admit(core, 'assembly secret ' + secret);
   const caps = ok(core.getContextReadCapabilities());
   assert.ok(caps.methods.includes('contextRead')); assert.ok(!caps.unsupported.includes('assembly'));
-  assert.deepEqual(caps.assembly, { representation: 'representation-v2', representations: [...ASSEMBLY_REPRESENTATIONS], defaults: ASSEMBLY_DEFAULTS, policies: [...ASSEMBLY_POLICIES],
+  assert.deepEqual(caps.assembly, { representation: 'representation-v2-dated', raw: { default: true, configured: false }, representations: [...ASSEMBLY_REPRESENTATIONS], defaults: ASSEMBLY_DEFAULTS, policies: [...ASSEMBLY_POLICIES],
     defaultPolicy: 'rank-first-whole-v1', counter: { id: 'tiktoken-o200k_base' }, limits: { ...ASSEMBLY_LIMITS } });
   let envelope, supplied;
   const wrapped = { ...core, async contextRead(input, token) { supplied = input; envelope = await core.contextRead(input, token); return envelope; } };
@@ -175,7 +175,7 @@ test('A11 explicit programmatic counter is immediately ready and independent of 
     const value = ok(JSON.parse(response.content[0].text));
     assert.equal(response._meta[metaKey].counter.id, 'tiktoken-o200k_base'); assert.equal(response._meta[metaKey].policy.id, 'rank-first-whole-v1');
     assert.equal(response._meta[metaKey].budget.used, countOpenAITokens(response.content[0].text));
-    assert.equal(response._meta[metaKey].budget.maxTokens, 1500); assert.equal(response._meta[metaKey].budget.maxItems, 12);
+    assert.equal(response._meta[metaKey].budget.maxTokens, 6000); assert.equal(response._meta[metaKey].budget.maxItems, 24);
     assert.equal(value.items.length, 1);
   }
 });
@@ -213,7 +213,7 @@ test('A01/A11 original programmatic call shape preserves §13 while loading; ass
       assert.equal(assembled.ok,true);assert.equal(response._meta[${JSON.stringify(metaKey)}].counter.id,'tiktoken-o200k_base');
       assert.equal(assembled.value.items.length,1);assert.equal(assembled.value.items[0].body,inspected.value.memory.content);
       assert.equal(assembled.value.items[0].ref.id,saved.value.memory.id);
-      assert.ok(response._meta[${JSON.stringify(metaKey)}].budget.used<=1500);assert.equal(globalThis.counterStarts,1);
+      assert.ok(response._meta[${JSON.stringify(metaKey)}].budget.used<=6000);assert.equal(globalThis.counterStarts,1);
     }finally{release();await client.close();await server.close();}
     console.log('programmatic-readiness-verified');`;
   assert.equal(runModule(workspace, 'readiness', source), 'programmatic-readiness-verified');
@@ -317,7 +317,7 @@ test('A11 actual core refuses oversized assembly independently of the counter', 
   const f = assemblyFixture(t, { counter: { id: 'synthetic-all-fit', countTokens: () => 0 } });
   f.seed(sample.items.map(item => ({ ...item, receipts: item.receipts.map((source, i) => ({ ...source,
     excerpt: String(i).padStart(2, '0') + '界'.repeat(790) })) })));
-  const result = await f.call('contextRead', assemblyQuery({ budget: { maxTokens: 4000, maxItems: 24 } }));
+  const result = await f.call('contextRead', assemblyQuery({ representation: 'representation-v2', budget: { maxTokens: 4000, maxItems: 24 } }));
   assert.equal(result.error.code, 'context_item_too_large');
   assert.deepEqual(contextToolResponse(result, { assembly: true }), contextToolResponse(result));
 });
