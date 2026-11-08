@@ -28,6 +28,7 @@ export async function readRawChannel(rawSearch, input, token, deadlineAt) {
     try {
       const result = await port(() => rawSearch.search({ query: input.query, intent: 'current' }, token));
       if (expired()) return unavailable('partial');
+      if (result.coverage?.status === 'unsupported_store') return unavailable('unsupported_store');
       // Partial retrieval is deliberately a Memory-only fallback, not a claim
       // that the available prefix represents the complete Raw channel.
       if (result.coverage?.status !== 'complete') return unavailable('partial');

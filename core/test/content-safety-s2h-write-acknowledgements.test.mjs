@@ -284,6 +284,10 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // Dated Memory + Raw assembly: source-turn/session ids and inline Raw refs
   // are private read projections. No writer acknowledgement or native guard
   // changes; delivery validates canonical Memory and prepared Raw separately.
+  // Local Raw search projects only the fixed owner's namespace into its private
+  // manager. Ordinary Raw capture reconstructs existing message/event/session
+  // identities before journal registration. Pin these existing projections;
+  // neither adds acknowledgement fields or changes the native write guard.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};

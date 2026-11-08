@@ -1,7 +1,11 @@
 # Local Raw journal, capture, lineage, deletion and sources
 
-The local constructor and ordinary MCP server retain submitted captures as Raw
-by default, using the existing journal, lineage and exclusion controls. This is
+The ordinary local MCP server and installer enable Raw retention, Raw search,
+dated three-layer contextRead and its tools by default, using the existing
+journal, lineage and exclusion controls. Library `openMemoryCore({path})` keeps
+Raw off; pass `raw:true` to select local retention and search. Stores whose
+attested layout cannot hold Raw open Memory-only with `unsupported_store` Raw
+search status and contextRead coverage. Other database errors still fail. This is
 local plaintext retention with a default 200,000,000-byte owner cap. Disable it
 with `raw:false` or `--no-raw`; use `rawConversations` for a custom sealing port,
 cap or policy. The engine maintains lexical Raw search in bounded background
@@ -162,9 +166,11 @@ unverified; neither result authorizes an authentication/network workaround.
 ## Explicit public constructor (P4b-B1)
 
 `openMemoryCore({path, model?, privateCards?, rawConversations})` accepts the
-closed option `{mode:'raw-v1'|'off', port?, capBytes?, configureCap?, readPolicy, localAuthority?}`. Omission
-enables local Raw retention and ordinary-capture wiring; `raw:false` keeps the Raw-free facade. Explicit undefined/null, unknown properties, symbols
-and accessors refuse before opening or migrating SQLite. Enabled mode requires
+closed option `{mode:'raw-v1'|'off', port?, capBytes?, configureCap?, readPolicy, localAuthority?}`.
+Omission keeps the library Raw-free, as does `raw:false`. `raw:true` selects local
+Raw retention and ordinary-capture wiring; explicit journal options keep their
+existing behavior, including capability refusals. Explicit undefined/null,
+unknown properties, symbols and accessors refuse before opening or migrating SQLite. Enabled mode requires
 an explicit positive safe-integer cap and a `raw-seal-v1` port with both
 `sealRaw` and `openRaw`. Off mode may omit cap/port; an explicitly undefined
 cap/port is invalid. Omitting the cap when reopening preserves durable usage/cap.

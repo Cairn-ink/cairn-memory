@@ -63,7 +63,7 @@ async function read(client) {
 test('default keyless MCP reads dated captured Memory and Raw, forgets and isolates identical text across namespaces', { timeout: 120000 }, async t => {
   t.mock.method(globalThis, 'fetch', () => assert.fail('synthetic default path must never use the network'));
   const workspace = createTestWorkspace(t), path = join(workspace.path, 'preferences.sqlite');
-  const core = openMemoryCore({ path, model: rationaleModel() });
+  const core = openMemoryCore({ path, raw: true, model: rationaleModel() });
   workspace.defer(() => core.close());
   const firstMemories = [];
   for (const message of [day1, day3]) {

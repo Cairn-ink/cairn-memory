@@ -27,7 +27,7 @@ function embedding(patch = {}) {
 }
 function fixture(t, provider, model = {contextWindow:8192,extract:async()=>({items:[]}),countTokens:()=>1}) {
   const workspace = createTestWorkspace(t), path = join(workspace.path,'memory.sqlite');
-  const core = openMemoryCore({path,model,rawSearch:false});
+  const core = openMemoryCore({raw:true,path,model,rawSearch:false});
   const manager = createLocalRawSearch(path,defaultRawOptions().port,provider);
   workspace.defer(async()=>{await manager.close();await core.close();});
   return {core,path,manager,search:request=>manager.methods.searchRaw({namespace:ns,...request}),
@@ -44,7 +44,7 @@ async function ready(f, max = 16) {
 
 test('openMemoryCore forwards its configured context embedder to the default Raw lane',async t=>{
   const workspace=createTestWorkspace(t),path=join(workspace.path,'constructor.sqlite'),provider=embedding();
-  const core=openMemoryCore({path,contextRead:{version:'context-read-v1',
+  const core=openMemoryCore({raw:true,path,contextRead:{version:'context-read-v1',
     authority:{authorize(){return null;},isCurrent(){return null;}},embedder:provider.embedder,policy:provider.policy}});
   workspace.defer(()=>core.close());
   // Raw retention remains useful without an extraction provider.
@@ -55,7 +55,7 @@ test('openMemoryCore forwards its configured context embedder to the default Raw
 
 test('rawSearch:false retains its meaning with a configured context provider',async t=>{
   const workspace=createTestWorkspace(t),provider=embedding();
-  const core=openMemoryCore({path:join(workspace.path,'off.sqlite'),rawSearch:false,
+  const core=openMemoryCore({raw:true,path:join(workspace.path,'off.sqlite'),rawSearch:false,
     contextRead:{version:'context-read-v1',authority:{authorize(){return null;},isCurrent(){return null;}},
       embedder:provider.embedder,policy:provider.policy}});
   workspace.defer(()=>core.close());
@@ -91,7 +91,7 @@ test('no provider is quiet BM25 and local free policy is accepted',async t=>{
 
 for(const contentSafety of [undefined,'s2h-v1'])test(`best vector is withheld after forgetting; namespace and owner isolation (${contentSafety??'legacy'})`,async t=>{
   const workspace=createTestWorkspace(t),path=join(workspace.path,'safety.sqlite'),provider=embedding();
-  const core=openMemoryCore({path,rawSearch:false,model:rationaleModel(),...(contentSafety?{contentSafety}:{})});
+  const core=openMemoryCore({raw:true,path,rawSearch:false,model:rationaleModel(),...(contentSafety?{contentSafety}:{})});
   const manager=createLocalRawSearch(path,defaultRawOptions().port,provider);
   workspace.defer(async()=>{await manager.close();await core.close();});
   const captured=ok(await core.capture(input(1)));

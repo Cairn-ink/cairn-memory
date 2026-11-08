@@ -17,7 +17,7 @@ test.beforeEach(installRawSearchTestClock);
 for (const contentSafety of [undefined,'s2h-v1']) for (const denial of ['forget','excluded','fenced']) {
   test(`default outputs withhold ${denial} (${contentSafety??'legacy'})`,async t=>{
     const workspace=createTestWorkspace(t),path=join(workspace.path,'memory.sqlite');
-    const core=openMemoryCore({path,model:rationaleModel(),...(contentSafety?{contentSafety}:{})});
+    const core=openMemoryCore({raw:true,path,model:rationaleModel(),...(contentSafety?{contentSafety}:{})});
     workspace.defer(()=>core.close());
     const db=new DatabaseSync(path);workspace.defer(()=>db.close());
     const captured=ok(await core.capture(request));
@@ -67,7 +67,7 @@ test('default MCP tools expose no unchecked conversation reader',async t=>{
 });
 test('default Card source facade cannot open retained Raw text',async t=>{
   const workspace=createTestWorkspace(t),host=cardHost();
-  const core=openMemoryCore({path:join(workspace.path,'cards.sqlite'),privateCards:host.options});
+  const core=openMemoryCore({raw:true,path:join(workspace.path,'cards.sqlite'),privateCards:host.options});
   workspace.defer(()=>core.close());
   const capabilities=ok(core.getPrivateCardCapabilities());
   assert.equal(capabilities.raw,false);

@@ -32,7 +32,7 @@ test('default openMemoryCore close settles without waiting forever on Raw provid
   const embedder={...base,id:'synthetic-default-hung-provider',async embed(texts,controls){
     controls.signal.addEventListener('abort',()=>{aborted=true;},{once:true});started();await gate;return base.embed(texts);
   }};
-  const core=openMemoryCore({path,contextRead:{version:'context-read-v1',authority:{authorize(){return null;},isCurrent(){return null;}},embedder,
+  const core=openMemoryCore({raw:true,path,contextRead:{version:'context-read-v1',authority:{authorize(){return null;},isCurrent(){return null;}},embedder,
     policy:{family:'hosted',maxRequests:10,maxConcurrent:1,maxUsd:1,estimateUsd:()=>0}}});
   const ns={ownerId:'synthetic-owner',scope:'personal',projectId:null};
   let active;

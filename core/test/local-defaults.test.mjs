@@ -19,13 +19,13 @@ const request = (n, patch = {}) => ({ namespace: ns, client: 'codex', sessionId:
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
 function fixture(t, options = {}) {
   const workspace = createTestWorkspace(t), path = join(workspace.path, 'memory.sqlite');
-  const core = openMemoryCore({ path, model: { contextWindow:8192, extract: async () => ({ items: [] }), countTokens: () => 1 }, ...options });
+  const core = openMemoryCore({ raw: true, path, model: { contextWindow:8192, extract: async () => ({ items: [] }), countTokens: () => 1 }, ...options });
   workspace.defer(() => core.close());
   const db = new DatabaseSync(path); workspace.defer(() => db.close());
   return { core, db, path };
 }
 
-test('default captures retain Raw, derive receive time, preserve explicit event time and replay', async t => {
+test('raw:true captures retain Raw, derive receive time, preserve explicit event time and replay', async t => {
   const { core, db } = fixture(t);
   const before = new Date().toISOString();
   ok(await core.capture(request(1)));
@@ -77,7 +77,7 @@ test('legacy Raw metadata keeps its frozen client constraint and existing source
   const token = await journal.prepareRegistration(rawRequest(splitRaw('Synthetic earlier retained source.')[0]));
   oldTransaction(old, () => journal.commitRegistration(token));
   old.close();
-  const core = openMemoryCore({ path, model: { contextWindow:8192, extract: () => ({ items: [] }), countTokens: () => 1 } });
+  const core = openMemoryCore({ raw: true, path, model: { contextWindow:8192, extract: () => ({ items: [] }), countTokens: () => 1 } });
   workspace.defer(() => core.close());
   ok(await core.capture(request(1)));
   const db = new DatabaseSync(path); workspace.defer(() => db.close());
@@ -137,4 +137,17 @@ test('context Raw port shares maintenance and validates one fixed personal/proje
   assert.throws(() => port.revalidate([handle]));
   await manager.close();
   assert.throws(() => port.revalidate([handle]), { code:'store_closed' });
+});
+
+for (const raw of [undefined, false]) test(`library default is Raw-free (${raw ?? 'omitted'})`, async t => {
+  const workspace = createTestWorkspace(t), path = join(workspace.path, 'library.sqlite');
+  const core = openMemoryCore({ path, model:rationaleModel(), ...(raw === undefined ? {} : { raw }) });
+  workspace.defer(() => core.close());
+  ok(await core.capture(request(1)));
+  assert.equal(core.captureRaw, undefined);
+  assert.equal(core.searchRaw, undefined);
+  const db = new DatabaseSync(path); workspace.defer(() => db.close());
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 18);
+  assert.equal(db.prepare("SELECT count(*) n FROM sqlite_schema WHERE name LIKE 'raw_%'").get().n, 0);
+  assert.equal(db.prepare('SELECT count(*) n FROM memories').get().n, 1);
 });

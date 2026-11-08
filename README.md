@@ -216,9 +216,13 @@ rather than the generic MCP settings above.
 | `correct_memory` | Replace content at the revision you inspected |
 | `forget_memory` | Logically delete at the revision you inspected |
 
-The local engine retains submitted captures as Raw and maintains Raw search by default.
-The MCP server enables contextRead by default; with `OPENAI_API_KEY`, it also
-enables bounded embeddings. Without a key, contextRead uses BM25. See
+The local MCP server and installer enable Raw retention for submitted captures,
+Raw search, dated three-layer contextRead and its tools by default. Library
+`openMemoryCore` keeps Raw off unless `raw:true` is supplied. Stores whose
+attested layout cannot hold Raw run Memory-only. Use `--no-raw`,
+`--no-raw-search` or `--no-context-read` to turn off those server defaults.
+With `OPENAI_API_KEY`, the server also enables bounded embeddings. Without a
+key, contextRead uses BM25. See
 [all defaults, costs and off switches](docs/defaults.md).
 
 The default local server exposes explicit tools. For opt-in submitted-message

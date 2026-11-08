@@ -10,7 +10,8 @@ import { methodPackageOptions } from './method-package-input.mjs';
 import { createMethodPackageFacade } from './method-package-facade.mjs';
 import { openContextCore } from './context-read-facade.mjs';
 import { decisionReviewOption } from './confirmation-storage.mjs';
-import { localRawSearchManager } from './local-raw-search.mjs';
+import { createLocalRawSearch, localRawSearchManager } from './local-raw-search.mjs';
+import { isRawCapabilityRefusal } from './content-safety-layout.mjs';
 import { defaultRawOptions } from './local-defaults.mjs';
 import { rawOptions } from './raw-options.mjs';
 import { storeFenceOption } from './store-fence.mjs';
@@ -218,12 +219,27 @@ function openWithRoleContext(input, roleContext) {
       Object.hasOwn(local, 'rawSearch') && typeof local.rawSearch !== 'boolean' ||
       descriptor && Object.hasOwn(local, 'raw')) fail('invalid_input');
   const { raw, rawSearch, ...base } = local;
-  if (!descriptor && raw === false) return buildCore(base);
-  if (!descriptor) return composeRawCore(buildCore, base, defaultRawOptions(), {
-    sources: false, lineage: true, deletion: true, localControls: true,
-    rawTextReaders: false,
-    captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch), searchEmbedding: roleContext,
-  });
+  if (!descriptor && raw !== true) return buildCore(base);
+  if (!descriptor) {
+    try { return composeRawCore(buildCore, base, defaultRawOptions(), {
+      sources: false, lineage: true, deletion: true, localControls: true,
+      rawTextReaders: false,
+      captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch), searchEmbedding: roleContext,
+    }); } catch (error) {
+      // Only the local Raw selection may degrade. Explicit journal profiles and
+      // every other database refusal retain their existing construction errors.
+      if (!isRawCapabilityRefusal(error)) throw error;
+      // openDatabase has already rolled back and closed the rejected handle.
+      const core = buildCore(base);
+      const search = localRawSearchManager(roleContext?.rawSearch) ?? createLocalRawSearch(base.path, defaultRawOptions().port);
+      search.unsupportedStore();
+      return Object.freeze({ ...core, ...(rawSearch === false
+        ? { getRawSearchStatus: search.methods.getRawSearchStatus } : search.methods), close() {
+        const stopped = search.close(), result = core.close();
+        return Promise.resolve(stopped).then(() => result);
+      } });
+    }
+  }
   if (!Object.hasOwn(descriptor, 'value')) throw new MemoryStoreError('invalid_input');
   ownData(input, OPEN_OPTIONS);
   const options = rawOptions(descriptor.value);

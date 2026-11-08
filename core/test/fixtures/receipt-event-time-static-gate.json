@@ -4,7 +4,7 @@
     "start": null,
     "end": null,
     "purpose": "finite family mapping; no feature inferred from the integer",
-    "sha256": "882b2d183de2d97bcd83650d901ec9f8c21a43e048d1ef92def9b6006fc8fe85"
+    "sha256": "fb9d00957c5a224b1a414c2c5baa5726fa39ea2323331a9f7e325f4a9e3f3655"
   },
   {
     "file": "core/content-safety-schema.mjs",

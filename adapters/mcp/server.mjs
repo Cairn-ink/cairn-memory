@@ -176,7 +176,7 @@ export function createCairnServer(options = {}) {
     ? createLocalRawSearch(path, defaultRawOptions().port,
       options.contextSemantic === false ? undefined : options.contextEmbedding) : null;
   const rawPort = rawSearch?.contextPort(context.readSet);
-  const core = openMemoryCore({ path, model, ...(options.raw === false ? { raw: false } : {}), ...(options.rawSearch === false ? { rawSearch: false } : {}), ...(context?{contextRead:{...context.configuration,...(options.contextSemantic === false ? {} : options.contextEmbedding),counter:contextCounter,...(rawPort ? {rawSearch:rawPort} : {}),...(sources ? { sources } : {})}}:{}),
+  const core = openMemoryCore({ path, model, raw: options.raw !== false, ...(options.rawSearch === false ? { rawSearch: false } : {}), ...(context?{contextRead:{...context.configuration,...(options.contextSemantic === false ? {} : options.contextEmbedding),counter:contextCounter,...(rawPort ? {rawSearch:rawPort} : {}),...(sources ? { sources } : {})}}:{}),
     ...(roles ? { roleProfiles: roles.configuration } : {}),
     ...(assets?{assets:roles ? roleProfileAssetConfiguration(assets, roles) : assets.configuration}:{}),
     ...(methods?{methodPackages:methods.configuration}:{}), ...(cards ? { privateCards: cards.configuration } : {}),

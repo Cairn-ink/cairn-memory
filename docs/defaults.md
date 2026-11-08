@@ -7,22 +7,25 @@ recall tools. Prefer these contextRead tools for memory reads. The default dated
 combines Memory with eligible Raw evidence; its default budget is
 6,000 local tokens and 24 items.
 
-These defaults apply to `openMemoryCore` and the ordinary local MCP server,
-including the engine registered by `setup --local`. They do not install a
-transcript hook, start capturing a conversation, or enable hosted processing.
+These defaults apply to the ordinary local MCP server, including the engine
+registered by `setup --local`. Library `openMemoryCore({path})` keeps Raw off;
+select `raw:true` for the local Raw composition and its default search lane.
+Omission and `raw:false` both keep library construction Raw-free. Library
+contextRead still requires an explicit authority configuration. These defaults
+do not install a transcript hook, start capturing a conversation, or enable hosted processing.
 Only messages actually submitted to capture enter Raw. The separately selected
 retained-profile server is a read-only host with its own authority boundaries.
 
 | Capability | What it does | Default | Cost | Programmatic option / CLI switch |
 | --- | --- | --- | --- | --- |
-| Raw retention | Saves submitted capture messages through the Raw journal, with lineage and existing exclusion/forgetting controls | On | Local plaintext disk, default 200,000,000-byte owner cap; no extra model call | `raw:false` / `--no-raw`; omit to enable. For a custom cap, sealing port or policy, use `rawConversations:{mode:'raw-v1',capBytes,port,readPolicy}`. `mode:'off'` disables saving while retaining management APIs. |
+| Raw retention | Saves submitted capture messages through the Raw journal, with lineage and existing exclusion/forgetting controls | On in MCP and the installer; off in the library | Local plaintext disk, default 200,000,000-byte owner cap; no extra model call | MCP `raw:false` / `--no-raw` disables retention. Library callers enable it with `raw:true`; omit or use `raw:false` to disable. For a custom cap, sealing port or policy, use `rawConversations:{mode:'raw-v1',capBytes,port,readPolicy}`. `mode:'off'` disables saving while retaining management APIs. |
 | Raw search | Searches retained Raw with BM25 plus semantic similarity fused by RRF when a provider is configured, using a separate derived index and canonical authorization checks | On when Raw retention is enabled; BM25 only without a provider or while vector coverage is partial | Local plaintext postings, metadata and vectors, up to 512 MiB per index; semantic queries and background Raw embedding use the shared embedding budget | `rawSearch:false` / `--no-raw-search`; omit to enable. Turning Raw off prevents new saving; existing retained data is not erased. |
 | Raw maintenance | Builds and refreshes the index after captures, with bounded background work | On with Raw search | One non-overlapping quantum per second, up to 16 rows / 25 ms; existing one-second publication cadence still applies | Follows `rawSearch` / `--no-raw-search`. `close()` stops scheduling and joins work. Capture never waits for index publication. |
 | contextRead tools | Finds candidates, refetches evidence and assembles bounded memory context | On in MCP | Local reads and tokenizer work; no language-model call | MCP option `contextRead:false` / `--no-context-read`; enable with `contextRead:'context-read-v1'` / `--context-read context-read-v1`. Core hosts supply `contextRead:{version:'context-read-v1',authority,counter,...}` to bind their own read authority. |
 | Three-layer read | Returns Memory plus eligible Raw excerpts with dates | On for the default contextRead presentation | Local reads and a 6,000-token / 24-item response budget; no model call | Follows contextRead; `--no-context-read` removes the tools. There is no separate presentation CLI flag. |
 | Semantic search | Adds embedding similarity to lexical candidate search | On in MCP when `OPENAI_API_KEY` is configured; otherwise BM25 only | Query and background document embedding calls. Automatic OpenAI configuration: `text-embedding-3-small`, 1,536 dimensions, US$1 estimated embedding spend per server process shared by Memory and Raw, concurrency 1; no practical automatic request ceiling | `contextSemantic:false` / `--no-context-semantic`; each read can also set `semantic:false`. Core hosts supply `contextRead.embedder` and `policy`; MCP hosts supply `contextEmbedding`. Explicit provider CLI groups override automatic settings. |
 | Dated reads | Labels evidence with its event date rather than relying only on generated summaries | On for the default contextRead presentation | Local timestamp reads; no provider calls | Follows contextRead; core callers can select `representation:'representation-v2'` for the legacy undated representation. No separate CLI flag. |
-| Event time | Uses the capture receive time for messages without `occurredAt`; an explicit canonical UTC instant wins | On | Timestamp metadata only | Set message `occurredAt` to override. There is no separate CLI switch. The Raw schema has no derived-time marker, so no marker migration is introduced. Existing unknown historical times are not backfilled. |
+| Event time | Uses the capture receive time for messages without `occurredAt`; an explicit canonical UTC instant wins | On for ordinary capture and Raw capture | Timestamp metadata only | Set message `occurredAt` to override. There is no separate CLI switch. The Raw schema has no derived-time marker, so no marker migration is introduced. Existing unknown historical times are not backfilled. |
 | Ordered reconciliation | Reconciles successive captures in a caller-declared causal stream | Off | One additional model call per capture that requires reconciliation | Caller supplies `causal:{streamId,sequence}` to `capture()`; omit to disable. MCP has no causal-sequence flag or argument. |
 | Relation read sources | Adds eligible one-hop relations as retrieval sources | Off | Bounded local graph reads; no extra model call during reads | Core `contextRead.sources:['relations-one-hop-v1']`; MCP `contextReadSources:['relations-one-hop-v1']` / `--context-read-sources relations-one-hop-v1`. Omit to disable. |
 | MOC read sources | Uses maps of content to find evidence | Off | Bounded local organization reads; no extra model call during reads | Core `contextRead.sources:['moc-v1']`; MCP `contextReadSources:['moc-v1']` / `--context-read-sources moc-v1`. Omit to disable. Both source IDs may be selected together. |
@@ -45,6 +48,14 @@ retained-profile server is a read-only host with its own authority boundaries.
 | Memory decision review | Holds selected inferred decisions for explicit review | Off | Local review metadata; existing capture model work | Core `decisionReview:'required-v1'`; omit to disable new review holds. There is no MCP startup flag. |
 | Attested content-safety layout | Enables the separately versioned content-safety schema and suppression facts | Off for new stores unless explicitly selected; installed protections remain enforced | Local schema/fact metadata; no provider call | Core `contentSafety:'s2h-v1'` for supported new stores; existing stores use the explicit offline safety migration. There is no default-on migration CLI flag. |
 | Automatic transcript hooks | Submits selected conversation messages without an explicit MCP capture call | Off in the standalone MCP server | When separately installed: Raw disk plus configured capture model calls | No MCP flag installs hooks. Use the separate documented local/client setup and its enable/disable controls. |
+
+If an existing attested layout cannot hold the Raw capabilities, `raw:true`
+opens Memory-only and reports `raw:'unsupported_store'` in Raw search status;
+contextRead diagnostics report the same Raw coverage reason. The failed Raw
+attempt closes its handle and rolls back before reopening. Corrupt, foreign or
+otherwise unsupported databases still fail; explicit `rawConversations`
+profiles retain their existing refusal behavior. No Raw index is started for
+these Memory-only stores.
 
 Default Raw retention supports `claude-code` and `codex`; other clients capture Memory as before without retaining Raw.
 

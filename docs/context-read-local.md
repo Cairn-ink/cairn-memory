@@ -7,10 +7,12 @@ optional semantic fusion. When a trusted host supplies an already-open
 retrieves current Raw evidence. Without that service, the read uses the dated
 Memory-only path. Reading does not enable saving or maintain either index.
 
-The local constructor retains submitted captures and maintains Raw search by
-default. The ordinary MCP server enables `context-read-v1` and its preferred
-memory read tools by default; `--no-context-read` disables them. The default
-presentation combines Memory, eligible Raw evidence and event dates, with a
+The ordinary local MCP server and installer retain submitted captures, maintain
+Raw search, and enable `context-read-v1` and its preferred memory read tools by
+default. Library `openMemoryCore` keeps Raw off unless `raw:true` is supplied.
+Stores whose attested layout cannot hold Raw open Memory-only and report
+`unsupported_store` in Raw coverage diagnostics. `--no-context-read` disables
+the contextRead tools. The default presentation combines Memory, eligible Raw evidence and event dates, with a
 6,000-token / 24-item budget. See [the complete defaults table](defaults.md)
 for costs and switches, and [the Raw service interface](plans/raw-search-interface.md)
 for lower-level hosts.

@@ -29,7 +29,7 @@ function sidecarSnapshot(path) {
 for (const scheduled of [false,true]) for (const lateFailure of [false,true]) test('local lane close detaches '+(scheduled?'scheduled':'explicit')+' provider (late '+(lateFailure?'rejection':'result')+')',async t=>{
   installRawSearchTestClock(t);
   const workspace=createTestWorkspace(t),path=join(workspace.path,'memory.sqlite');
-  const core=openMemoryCore({path,rawSearch:false});
+  const core=openMemoryCore({raw:true,path,rawSearch:false});
   const ns={ownerId:'synthetic-owner',scope:'personal',projectId:null};
   await core.capture({namespace:ns,client:'codex',sessionId:'session',eventId:'event',messages:[{id:'message',role:'user',content:'synthetic cobalt telescope'}]});
   let started,release,aborted=false,completed=0;

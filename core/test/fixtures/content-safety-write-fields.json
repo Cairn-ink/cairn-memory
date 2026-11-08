@@ -560,14 +560,14 @@
     "literal:sessionId": 1
   },
   "core/raw-capture-storage.mjs": {
-    "key:eventId": 2,
-    "key:id": 2,
+    "key:eventId": 3,
+    "key:id": 3,
     "key:ownerId": 1,
     "key:projectId": 1,
-    "key:sessionId": 2,
+    "key:sessionId": 3,
     "key:streamId": 1,
-    "literal:eventId": 1,
-    "literal:sessionId": 2,
+    "literal:eventId": 2,
+    "literal:sessionId": 3,
     "literal:streamId": 1
   },
   "core/raw-journal.mjs": {
@@ -1630,5 +1630,9 @@
     "literal:projectId": 4,
     "literal:roleId": 2,
     "literal:versionId": 2
+  },
+  "core/local-raw-search.mjs": {
+    "key:ownerId": 1,
+    "key:projectId": 1
   }
 }

@@ -17,13 +17,13 @@ test('default core and MCP reopen the original attested base-33 lineage package'
   assert.deepEqual({...db.prepare('SELECT base_layout,card_lineage_revision FROM content_safety_control').get()}, {base_layout:33,card_lineage_revision:1});
   assert.ok(db.prepare("SELECT sql FROM sqlite_schema WHERE name='raw_conversations'").get().sql.includes("CHECK(client IN ('claude-code','codex'))"));
   db.close();
-  const core = openMemoryCore({path}); await core.close();
+  const core = openMemoryCore({raw:true,path}); await core.close();
   const server = createCairnServer({path,namespace});
   try { assert.equal(await server.contextCounterReady,true); } finally { await server.close(); }
 });
 for (const contentSafety of [undefined,'s2h-v1']) test(`default retains supported clients and keeps other captures Memory-only (${contentSafety??'legacy'})`, async t => {
   const workspace = createTestWorkspace(t), path = join(workspace.path,'fresh.sqlite');
-  const core = openMemoryCore({path,model:rationaleModel(),...(contentSafety?{contentSafety}:{})});
+  const core = openMemoryCore({raw:true,path,model:rationaleModel(),...(contentSafety?{contentSafety}:{})});
   workspace.defer(()=>core.close());
   const db = new DatabaseSync(path); workspace.defer(()=>db.close());
   for (const client of ['claude-code','codex','synthetic-other']) {

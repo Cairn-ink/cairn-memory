@@ -16,7 +16,9 @@ export const localRawSearchManager = port => owners.get(port) ?? null;
 export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
   const embeddingPolicy = embedder ? rawEmbeddingPolicy(policy) : null;
   const entries = new Map();
-  let timer, running, closing, closed = false, next = 0;
+  let timer, running, closing, closed = false, unsupported = false, next = 0;
+  const unsupportedStatus = () => ({ state: 'unavailable', raw: 'unsupported_store', coverage: 'unknown' });
+  const unsupportedSearch = () => ({ candidates: [], coverage: { status: 'unsupported_store' } });
   const maintenanceTurn = { version: 1, maxWaitMs: 25, createTurn() {
     return { enter: () => closed ? 'defer' : 'admitted', release() {} };
   } };
@@ -62,7 +64,7 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
     return entry.opening;
   }
   function arm(delay = 1000) {
-    if (closed || timer || running || path === ':memory:' || !entries.size) return;
+    if (closed || unsupported || timer || running || path === ':memory:' || !entries.size) return;
     timer = setTimeout(() => {
       timer = null;
       running = tick().finally(() => { running = null; arm(); });
@@ -106,6 +108,7 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
     try {
       object(input, ['namespace', ...(method === 'search' ? ['query', 'intent', 'semantic'] : [])]);
       const { namespace, ...request } = input, entry = entryFor([namespace]);
+      if (unsupported) return success(method === 'search' ? unsupportedSearch() : unsupportedStatus());
       arm();
       const service = await serviceFor(entry);
       return success(await (method === 'status' ? service.status().then(status => ({ ...status,
@@ -116,6 +119,7 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
     } catch (error) { return failure(error); }
   }
   const manager = {
+    unsupportedStore() { unsupported = true; clearTimeout(timer); timer = null; },
     schedule(namespace) {
       const ns = normalize(namespace);
       if (![...entries.values()].some(entry => entry.readSet.some(value => same(value, ns)))) entryFor([ns]);
@@ -126,7 +130,11 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
     contextPort(readSet) {
       const entry = entryFor(readSet), handles = new WeakMap();
       const port = Object.freeze({
-        async search(input) { arm(0); return search(entry, await serviceFor(entry), input); },
+        async search(input) {
+          if (closed) fail('store_closed');
+          if (unsupported) return unsupportedSearch();
+          arm(0); return search(entry, await serviceFor(entry), input);
+        },
         async prepare(candidate, settings) {
           if (!entry.readSet.some(ns => same(ns, candidate?.namespace))) fail('authority_required');
           const service = entry.readers.get(candidate?.proof);
