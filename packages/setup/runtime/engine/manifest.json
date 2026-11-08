@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "0a3e0a7a4b517a646952d2da76ca4d7701d8e9dc228926bcf732112cb40d7d5b",
-  "bytes": 1291565,
+  "sha256": "9b00db28ea1c03128cd77fe5faa1ab961324d534abb5f8577cf782983ae84ae1",
+  "bytes": 1294717,
   "files": [
     "LICENSE",
     "README.md",
@@ -187,6 +187,7 @@
     "core/index.mjs",
     "core/isolated-file-read-child.mjs",
     "core/isolated-file-read.mjs",
+    "core/layout-base-upgrade.mjs",
     "core/local-authority-guard.mjs",
     "core/local-authority-input.mjs",
     "core/local-authority-schema.mjs",
@@ -330,6 +331,7 @@
     "docs/plans/context-read-p2c-impl.md",
     "docs/plans/context-read-p2d-impl.md",
     "docs/plans/context-read-p2e-impl.md",
+    "docs/plans/layout-base-upgrade.md",
     "docs/plans/raw-search-interface.md",
     "docs/plans/raw-search-predicate-plans.md",
     "docs/plans/raw-search-seam.md",
@@ -481,7 +483,7 @@
     "core/raw-source-schema.mjs": "eae8eb62c420a68f721ccc8d072f850a6f1c181ac26d010dfd2f7173126ae705",
     "core/raw-source-input.mjs": "e25f414941c0c22d933b1a888f53fefd0dbc4682989e311b08c74c36a2d1f300",
     "core/card-raw-sources.mjs": "aac5276812addd43e9bc28e1e063029bc39f941835ac60699e81d97dae66dac5",
-    "core/raw-deletion-storage.mjs": "e304a90f560e1d64d0c2cc46eabbdfded0c443f3938e4227aebe3f62f8cd4bd2",
+    "core/raw-deletion-storage.mjs": "7f2fd12f44e7f7b4a8999c0bef38dff845e651978a43174c2cdc022862b516cb",
     "core/raw-source-roots.mjs": "b0e2b20eda13514fbedcd968848328f1d9daff8c3900fc939a3dff400faa8559",
     "core/raw-input.mjs": "7a7588ef778f3c827dae4ba958e8ccd976b3b76757f3e3f8f0f4a2a90eff0dcc",
     "core/raw-options.mjs": "f257a48be9abecd8a4a2ba36eba74c865f7ba2afc2578cd52f40cbe1a0fa48d5",
@@ -739,6 +741,7 @@
     "adapters/mcp/safety-migrate-command.mjs": "e63ed654f3c052f3bc026faeee5b7d0868786feaf94bb93c2fccc311d793a38f",
     "core/content-safety-layout.mjs": "fb9d00957c5a224b1a414c2c5baa5726fa39ea2323331a9f7e325f4a9e3f3655",
     "core/content-safety-migration.mjs": "cfa4de31c06a67b0677faa77287fe5c353c670cbf3320855c6414200892cd0cf",
+    "core/layout-base-upgrade.mjs": "fa2f4fc819f9b8e3400e1402ac1231d08f870fbd905001f8e9dbc131ea998938",
     "core/content-safety-schema.mjs": "461210f6a71b902ded6aaca22572af53bad060953306f4bf235a7b9375d668c2",
     "core/content-suppression-storage.mjs": "9578c16663871f6c8cdf51b09c304483cd4cbe7d0726a5f1a88b7fd44117f878",
     "core/content-suppression-input.mjs": "d22fe3b5ca43a0ce44d5e019fe4da9e09b456834281480b1ce1b23ec0b0d29cd",
@@ -771,13 +774,14 @@
     "core/card-lineage-base-schema.mjs": "7f2fbb15821435ff93e574a5354d83f2e122a97d63062052f2e67d4f76d742cc",
     "docs/plans/card-lineage-v1.md": "9be4f581e56878cf2c38b962cf5e1c414c94c6da00b90a78d70fddc62a1a01c2",
     "SEAM.md": "14162f7d4dd51badd1073f4dec4e855e77da3abcec184073532a4ab256339a88",
+    "docs/plans/layout-base-upgrade.md": "b2b79a2e9940bfc8ccc2eba1a85747847978a31643e50d03d27b29223b49d783",
     "bin/cairn-memory.mjs": "7c24872a106de8d06c0a66499002f46aa8894b588b005ac9d39a50df4e586981",
     "README.md": "c69cc385f74cfc658b2e3a00dd842ea84fe595a6ecdf9f9cda9b16049b6dc588",
     "THIRD_PARTY_NOTICES.md": "f53d69106bd47f5c23acf119a83d3adc61ddcdcaf4ec908a1cf4f6cee9e4f23c",
     "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b"
   },
   "generatedHashes": {
-    "package.json": "95a9ffc47ec8cf6cbe7112a6c7d5d649969b566f446efa6243123524c31079dd",
+    "package.json": "4f8fdac2f17c8e78cc986fefe7cd41ed97ddbf775c1cbe68a603457fba5a418c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8"
   }
 }

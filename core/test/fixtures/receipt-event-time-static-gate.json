@@ -89,5 +89,12 @@
     "end": "  function selectedReceiptRef(",
     "purpose": "private evidence storage: memo receipt projection sink",
     "sha256": "866203b0a2ec5885a575988e9da3199572e5fce077068961819e4a1d028042f6"
+  },
+  {
+    "file": "core/layout-base-upgrade.mjs",
+    "start": "        const layout = attestContentSafety(db);",
+    "end": "        validateContextProductLayout(db, layout);",
+    "purpose": "metadata/validator refusal guard: offline base upgrade requires an unfeatured base-18 store; no behavioural feature consumer",
+    "sha256": "f83f06feb0626ff29fd25f5c2776e9c903acd16b6558d0e1a01dcc55eb7bf138"
   }
 ]
