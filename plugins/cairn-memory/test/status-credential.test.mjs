@@ -368,3 +368,14 @@ test('a recall decision without a request still refreshes configuration diagnost
   assert.equal(state.auth, null);
   assert.ok(Date.now() - Date.parse(state.observed_at) < 300000);
 });
+
+for (const outage of [false, true]) test(`auth observation time precedes deferred configuration durability (outage=${outage})`, async t => {
+  const f = await fixture(t);
+  const result = await f.hook('recall', { CAIRN_STATUS_FIXTURE_SYNC_CLOCK: 'true',
+    CAIRN_STATUS_FIXTURE_OUTAGE: String(outage) });
+  assert.deepEqual(result, { exitCode: 0, stdout: '', stderr: '' });
+  assert.equal(f.requests.length, 1);
+  const state = await readCredentialState(f.root);
+  assert.equal(state.auth.outcome, outage ? 'unreachable' : 'ok');
+  assert.equal(state.auth.at, f.requests[0].at, 'auth_time_is_response_observation_time');
+});

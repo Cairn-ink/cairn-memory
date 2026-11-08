@@ -119,14 +119,14 @@ async function dispatchActive(generation, start, signal) {
     return Promise.resolve(operation).then(async (response) => {
       const outcome = [401, 403].includes(response.status) ? "rejected" :
         response.ok ? "ok" : response.status === 429 ? "server-busy" : "server-error";
+      const at = new Date().toISOString();
       await publishRecallConfiguration();
-      await recordCredentialAuth(credentialDir, { endpoint, observedAt, outcome,
-        at: new Date().toISOString() }, { signal }).catch(() => {});
+      await recordCredentialAuth(credentialDir, { endpoint, observedAt, outcome, at }, { signal }).catch(() => {});
       return response;
     }, async (error) => {
+      const at = new Date().toISOString();
       await publishRecallConfiguration();
-      await recordCredentialAuth(credentialDir, { endpoint, observedAt, outcome: "unreachable",
-        at: new Date().toISOString() }, { signal }).catch(() => {});
+      await recordCredentialAuth(credentialDir, { endpoint, observedAt, outcome: "unreachable", at }, { signal }).catch(() => {});
       throw error;
     });
   }, { signal });
