@@ -123,6 +123,29 @@ test('host multipart reservations, continuation and overlap retain identity and 
   noInterpretation(f);
 });
 
+test('host exact replay across pause and resume returns its recorded disposition without new work', async t => {
+  const f = hostFixture(t), source = request(splitRaw('Synthetic replay source')[0]);
+  const original = await f.core.captureRaw(source);
+  ok(original);
+  const generation = f.db.prepare('SELECT capture_generation FROM raw_capture_events').get().capture_generation;
+  const snapshot = () => ({
+    rows: Object.fromEntries(['raw_events', 'raw_parts', 'raw_capture_events', 'raw_messages',
+      'raw_conversations', 'raw_owner_usage'].map(table => [table, f.db.prepare(`SELECT * FROM ${table}`).all()])),
+    usage: usage(f.core), calls: [...f.calls],
+  });
+  const before = snapshot();
+  const paused = ok(f.core.setCapturePaused({ namespace: ns, expectedGeneration: generation, paused: true }));
+  assert.notEqual(paused.generation, generation);
+  denied(await f.core.captureRaw(source), 'capture_disabled');
+  assert.deepEqual(snapshot(), before);
+  const resumed = ok(f.core.setCapturePaused({ namespace: ns, expectedGeneration: paused.generation, paused: false }));
+  assert.notEqual(resumed.generation, paused.generation);
+  assert.notEqual(resumed.generation, generation);
+  assert.deepEqual(await f.core.captureRaw(source), original);
+  assert.deepEqual(snapshot(), before);
+  noInterpretation(f);
+});
+
 for (const initial of ['host', 'engine']) test(`event mode binding refuses ${initial} to other mode, including empty projections`, async t => {
   for (const text of ['Synthetic eligible source', '   ']) {
     const f = hostFixture(t, { raw: { interpretation: initial }, model: { extract: () => ({ items: [] }) } });
