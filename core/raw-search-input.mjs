@@ -26,7 +26,7 @@ export function searchNamespace(value, ownerId) {
 export function rawSearchOptions(value) {
   const options = ownData(value, ['version','enabled','backend','path','directory','ownerId','readSet',
     'authority','crypto','maintenanceTurn','embedder','policy','quotaBytes']);
-  if (options.version !== RAW_SEARCH_VERSION || options.enabled !== true) fail('invalid_input');
+  if (options.version !== RAW_SEARCH_VERSION || options.enabled !== undefined && options.enabled !== true) fail('invalid_input');
   if (options.backend !== 'local') fail('raw_search_backend_unavailable');
   identifier(options.ownerId);
   for (const key of ['path','directory']) if (typeof options[key] !== 'string' ||

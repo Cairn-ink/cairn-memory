@@ -1,5 +1,7 @@
 # Raw search predicate plans
 
+Historical predicate-plan observations: search now ranks before applying these predicates to returned candidates. The old full-store selection and eligibility memo have been removed. See [the interface](raw-search-interface.md) for default-on configuration and the current safety contract.
+
 The synthetic 1,000- and 10,000-turn fixtures use the measurement seeder and its receipt, ancestry and suppression density. The predicate-plan tool runs on a functional clock. These are plan and call-count observations; timing gates remain unqualified. No predicate query is changed.
 
 | Predicate path | 1K prepares | 10K prepares | Header prepares |

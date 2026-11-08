@@ -24,7 +24,7 @@ try{
   }
   assert.ok(samples.size>=2,'both bare and linked predicates required');
   const native=reader.db.prepare,rows=[];
-  for(const [kind,source] of samples)for(const method of ['inspect','check','select','select32']){
+  for(const [kind,source] of samples)for(const method of ['inspect','check','check32']){
     const statements=[];let prepareCalls=0;
     reader.db.prepare=function(sql){
       const statement=native.call(this,sql),stack=new Error().stack;
@@ -39,9 +39,9 @@ try{
       }
       return statement;
     };
-    try{withContentSuppressionRequest(()=>{if(method==='inspect')authority.inspect(source.ref);else if(method==='check')authority.check(source);else {authority.reset();authority.select((method==='select32'?population.slice(0,32):[source]).map(source=>({source})),'current',1100);}},{fresh:true});}
+    try{withContentSuppressionRequest(()=>{if(method==='inspect')authority.inspect(source.ref);else if(method==='check')authority.check(source);else for(const row of population.slice(0,32))authority.check(row,'current',1100);},{fresh:true});}
     finally{reader.db.prepare=native;}
-    rows.push({kind,method,checkedRows:method==='select32'?32:1,prepareCalls,statementCount:statements.length,headerPrepares:statements.filter(row=>row.header).length,statements});
+    rows.push({kind,method,checkedRows:method==='check32'?32:1,prepareCalls,statementCount:statements.length,headerPrepares:statements.filter(row=>row.header).length,statements});
   }
   writeFileSync(output,JSON.stringify({turns:record.count,rows},null,2)+'\n');
   console.log(JSON.stringify({turns:record.count,rows:rows.map(({statements,...row})=>row)}));

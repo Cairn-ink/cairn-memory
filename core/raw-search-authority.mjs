@@ -43,7 +43,7 @@ export function createRawSearchAuthority(database, options) {
   const read = (work,at=Infinity) => {
     database.assertFile();
     deadline(at);if(performance.now()<resumeAt)fail('source_busy');
-    try{return readTransaction(db,()=>timed(work,at));}catch(error){
+    try{return readTransaction(db,()=>{resetContentSuppressionRequestInside(db);return timed(work,at);});}catch(error){
       // A pending writer makes a fresh SHARED acquisition busy. Abandon the
       // quantum instead of waiting or repeatedly reacquiring ahead of capture.
       if(isStorageBusy(error)){resumeAt=performance.now()+25;fail('source_busy');}
@@ -171,7 +171,13 @@ export function createRawSearchAuthority(database, options) {
     const ref = sources.refFor(ns,anchor,view);
     return inspectInside(ref);
   }
-  const matches=(source,next)=>same(source,source.canonical?rawSourceHint(next,bind):next);
+  // The ref authenticates the exact canonical manifest. Mutable denial epochs
+  // and unrelated lineage changes need not invalidate an otherwise allowed
+  // hint; inspectInside has just applied the complete current predicate.
+  const projection=source=>{
+    const {canonical,...hint}=rawSourceHint(source,bind);return hint;
+  };
+  const matches=(source,next)=>same(projection(source),projection(next));
   function inventory(after = ['', '', -1], limit = 16) {
     // Global owner keyset also catches old writers and capture-only fences.
     const rows = read(()=>db.prepare(`SELECT p.conversation_id,p.message_id,p.part_index,p.start,p.end,c.scope,c.project_id
@@ -427,31 +433,11 @@ export function createRawSearchAuthority(database, options) {
     if(fence(expected,at)!==expected)fail('source_unavailable');
     return read(()=>{if(fenceInside(expected)!==expected)fail('source_unavailable');},at);
   }
-  function cacheKeyInside(publication,metadata,at=Infinity) {
-    const observed=versionInside();
-    const namespaces=options.readSet.map(ns=>{
-      const args=boundary(ns);
-      const fences=[];let after;
-      while(true){
-        const page=db.prepare(`SELECT client,session_key FROM raw_session_fences WHERE ${where}`+
-          (after?' AND (client,session_key)>(?,?)':'')+' ORDER BY client,session_key LIMIT 32').all(...args,...(after??[]));
-        fences.push(...page);if(fences.length>50000)fail('source_budget_exceeded');
-        if(page.length<32)break;after=[page.at(-1).client,page.at(-1).session_key];
-      }
-      return [ns,db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...args)??null,
-        db.prepare(`SELECT generation FROM raw_exclusion_clocks WHERE ${where}`).get(...args)??null,
-        bindWithin('raw-search-session-fences-v1',fences,at)];
-    });
-    return bindWithin('raw-search-cache-key-v1',[identity.store_id,options.ownerId,publication.generation,
-      publication.sequence,publication.revision,metadata,contentSuppressionFenceInside(db,options.ownerId),namespaces,observed],at);
-  }
-  // Every key component is read in a single canonical snapshot. The final
-  // delivery snapshot repeats this read, closing any scoring/provider wait.
+  // Immutable signed publication data may outlive canonical changes. Every
+  // returned source is checked afresh, so cache keys need no canonical census.
   const cacheKey = (publication,metadata,at=Infinity) => {
-    database.assertFile();
-    // An optional cache check must not set the shared reader's busy backoff:
-    // a failed idle check cannot manufacture an error on a later operation.
-    return readTransaction(db,()=>timed(()=>cacheKeyInside(publication,metadata,at),at));
+    deadline(at);
+    return bindWithin('raw-search-cache-key-v2',[identity.store_id,options.ownerId,options.readSet,publication.generation,publication.sequence,publication.revision,metadata],at);
   };
   function checkInside(source,intent) {
     const next=inspectInside(source.ref,intent);
@@ -460,52 +446,6 @@ export function createRawSearchAuthority(database, options) {
   }
   function check(source,intent = 'history',at=Infinity) {
     return read(()=>checkInside(source,intent),at);
-  }
-  // Eligibility memoization is keyed by this read-only connection's native
-  // change counter. It never bypasses per-port checks or final source checks.
-  let eligibilityVersion;const eligibility=new Map();
-  function selectUnit(rows,offset,observed,deadlineAt) {
-    const pending=new Map(),entries=[];
-    const unitStart=performance.now(),unitAt=Math.min(deadlineAt,unitStart+25);
-    read(()=>{
-      if(versionInside()!==observed)fail('source_changed');
-      timed(()=>{
-        while(entries.length<32&&offset+entries.length<rows.length&&performance.now()<unitAt){
-          deadline(deadlineAt);
-          const row=rows[offset+entries.length],key=row.source.canonical??fingerprint(row.source);
-          let entry=eligibility.get(key);
-          if(!entry){
-            try{const next=checkInside(row.source,'history');entry={classification:next.classification};}
-            catch(error){if(!['source_unavailable','source_excluded','raw_crypto_unavailable'].includes(error.code))throw error;
-              entry={denied:true};}
-            if(!entry.denied)pending.set(key,entry);
-          }
-          entries.push({row,entry});
-        }
-      },deadlineAt);
-    },deadlineAt);
-    const unitHoldMs=performance.now()-unitStart;
-    if(version(deadlineAt)!==observed)fail('source_changed');
-    return {entries,pending,unitHoldMs};
-  }
-  function select(rows,intent,deadlineAt) {
-    const observed=version(deadlineAt);
-    const pending=new Map();
-    if(eligibilityVersion!==observed){eligibility.clear();eligibilityVersion=observed;}
-    const eligible=[];let denied=0,timedOut=false,offset=0;
-    while(offset<rows.length){
-      if(performance.now()>=deadlineAt){timedOut=true;break;}
-      const unit=selectUnit(rows,offset,observed,deadlineAt);
-      // The unit ended at this version. Later expiry cannot tear these checks.
-      for(const [key,entry] of unit.pending){eligibility.set(key,entry);pending.set(key,entry);}
-      for(const {row,entry} of unit.entries){
-        if(entry.denied||intent==='current'&&entry.classification.kind==='history-only')denied++;
-        else eligible.push(row);
-      }
-      offset+=unit.entries.length;
-    }
-    if(version(deadlineAt)!==observed)fail('source_changed');
-    return {eligible,denied,timedOut,version:observed,commit(check=()=>{}){for(const [key,entry] of pending){check();eligibility.set(key,entry);}check();}};
   }
   async function open(source,intent = 'history',guard = () => {}) {
     const protectedDispatch = () => { check(source,intent); guard(); check(source,intent); };
@@ -524,36 +464,29 @@ export function createRawSearchAuthority(database, options) {
     if (result.nextCursor || text.length !== source.ref.span.end-source.ref.span.start) fail('source_unavailable');
     return text;
   }
-  function validate(entries,at=Infinity) {
-    // Refresh commitments without holding one population-sized read snapshot.
-    for(const entry of entries)if(entry.fence)checkFence(entry.fence,at);
-    // Host callbacks precede the final snapshot. Complete commitments cover
-    // aggregate-only dependencies; exact output contributors still run the full predicate.
-    const inside = (predicates = true) => {
-      for (const entry of entries) {
-        if(entry.fence&&fenceInside(entry.fence)!==entry.fence)fail('source_unavailable');
-        if(entry.version!==undefined&&versionInside()!==entry.version)throw Object.assign(new MemoryStoreError('source_changed'),{fence:entry.fence});
-        if(entry.cache && cacheKeyInside(entry.cache.publication,entry.cache.metadata,at)!==entry.cache.key)fail('source_unavailable');
-        // Without a complete commitment, every dependency remains mandatory.
-        for (const source of predicates || !entry.fence ? entry.sources : [])
-        if (!matches(source,inspectInside(source.ref,entry.intent))) fail('source_unavailable');
-      }
+  function validate(entries,at=Infinity,{dropDenied=false}={}) {
+    if(dropDenied){
+      entries.forEach(entry=>entry.access());
+      return read(()=>entries.flatMap(entry=>{
+        try{for(const source of entry.sources)checkInside(source,entry.intent);return [entry.value];}
+        catch(error){if(!['source_unavailable','source_excluded','raw_crypto_unavailable','source_budget_exceeded'].includes(error.code))throw error;return [];}
+      }),at);
+    }
+    const inside=()=>{
+      for(const entry of entries)for(const source of entry.sources)checkInside(source,entry.intent);
     };
-    const checkAll = () => read(()=>inside(false),at);
-    entries.forEach(entry => entry.access(checkAll));
-    return read(() => {
-      inside();
-      return entries.map(entry => entry.value);
-    },at);
+    // Each callback sees only its own freshly checked sources. The final
+    // snapshot checks the full batch once after all callbacks have finished.
+    for(const entry of entries)entry.access(()=>read(()=>{
+      for(const source of entry.sources)checkInside(source,entry.intent);
+    },at));
+    return read(()=>{inside();return entries.map(entry=>entry.value);},at);
   }
-  function reset({keepCommitment=false,keepEligibility=false}={}) {
-    if(!keepCommitment)cachedFence=undefined;
-    if(!keepEligibility){eligibility.clear();eligibilityVersion=undefined;}
-  }
+  function reset() {cachedFence=undefined;}
   function refresh(at=Infinity) {
     deadline(at);resetContentSuppressionRequestInside(db);
   }
   return { reset,refresh,resume:()=>resumeAt,read,identity:{storeId:identity.store_id,fileIdentity:database.fileIdentity,ownerId:options.ownerId,readSet:options.readSet},
-    bind,authorize,inventory,check,select,open,validate,fingerprint,fence,checkFence,cacheKey,
+    bind,authorize,inventory,check,open,validate,fingerprint,fence,checkFence,cacheKey,
     inspect:(ref,intent='history')=>read(()=>inspectInside(ref,intent)) };
 }

@@ -32,16 +32,9 @@ export function installPhaseMeasurement(){
       nativeObserver:{invoke(_kind,_label,work){openingCheck();return work();},database:native=>rawSearchSqlite(native,openingCheck)}});`,
         `database=measured('canonical-open',()=>openReadDatabase(options.path,{contextRead:true,busyTimeoutMs:0,preflight:openingCheck,
       nativeObserver:{invoke(_kind,_label,work){openingCheck();return work();},database:native=>rawSearchSqlite(native,openingCheck)}}));`);
-      replace('const result=retrieval.retrieveRaw(eligible,input.query,{vectors,queryVector,check:()=>expired(deadlineAt)});',
-        "const result=measured('hierarchy',()=>retrieval.retrieveRaw(eligible,input.query,{vectors,queryVector,check:()=>expired(deadlineAt)}));");
     }else if(url.endsWith('/raw-search-authority.mjs')){
       wrap('  function bindWithin(', '  const sourceIdentity','bounded-hash');
       wrap('  function buildFence(', '  function fence(','commitment');
-      replace('const pending=new Map(),entries=[];','const pending=new Map(),entries=[];let checked=0;');
-      replace("try{const next=checkInside(row.source,'history');", "try{checked++;const next=checkInside(row.source,'history');");
-      replace('    read(()=>{\n      if(versionInside()!==observed)', '    try{read(()=>{\n      if(versionInside()!==observed)');
-      replace('    },deadlineAt);\n    const unitHoldMs', '    },deadlineAt);}finally{selectionUnit(entries.length,performance.now()-unitStart,checked); }\n    const unitHoldMs');
-      wrap('  function select(', '  async function open(','selection');
       wrap('  function validate(', '  function reset(','final-validation');
     }else if(url.endsWith('/raw-search-storage.mjs')){
       wrap('export async function openRawSearchStorage(', '\n__measurement_end__','sidecar-open');
@@ -53,6 +46,7 @@ export function installPhaseMeasurement(){
       replace("const refusal = error => ['budget_denied','timeout','rate_limited','dimension_mismatch','invalid_vector'].includes(error?.code) ? error.code : 'provider_error';",
         "const refusal = error => {internalFailure(error);return ['budget_denied','timeout','rate_limited','dimension_mismatch','invalid_vector'].includes(error?.code) ? error.code : 'provider_error';};");
     }else{
+      wrap('export function retrieveRaw(', 'export function loadRawVectorBlocks(', 'hierarchy');
       // The vector loader is synchronous and has one terminal return.
       replace('export function loadRawVectorBlocks(segments,metadata,check=()=>{}) {',
         'export function loadRawVectorBlocks(segments,metadata,check=()=>{}) {const phaseStart=performance.now();try{');
