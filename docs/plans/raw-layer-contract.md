@@ -660,6 +660,46 @@ Tool output remains excluded unless chichi decides otherwise. KMS adoption,
 bulk deletion per tool and later plan-specific cap changes are separate work.
 The six accepted rows and the initial 200 MB cap are settled, not open questions.
 
+## Host-interpreted registration (addendum)
+
+`rawConversations.interpretation` accepts `'engine'` (the default) or `'host'`.
+Omission and explicit `'engine'` retain existing behavior. A host that interprets
+conversation text elsewhere can select `'host'`: `captureRaw` registers every
+valid batch through the registration-only transaction and returns the existing
+empty interpretation outcome. It never calls engine capture or a model port,
+writes staging, reserves admission, or observes an episode. This qualifies the
+earlier sentence, “Only index zero produces ordinary capture input, through
+existing normalization and source-bound limits (at most 4,000 units per message,
+20,000 per batch and existing provider budgets).” That sentence applies to
+engine interpretation only.
+
+On host-interpretation profiles, ordinary `capture()` performs inherited Memory
+capture without Raw registration, and hosts archive Raw only through `captureRaw()`.
+
+Host mode preserves request validation, trusted `readPolicy` authority,
+pause/project/deleted-session/session fences, owner caps and raw reservations,
+sealing and its `raw_crypto_unavailable` failure without registration, exact
+part/event identity, recorded retry dispositions, message ledgers and usage.
+Quota and policy skips still register their dispositions, without interpretation
+or eviction. The mode is bound to event identity: changing it on the same event
+fails `event_payload_conflict`, including for empty projections.
+Switching a store from host to engine mode never interprets messages already
+archived in host mode (they already have a stored part 0), and nothing is backfilled.
+
+After a pause and resume, an exact retry of an old host event returns its
+recorded Raw disposition. This is an idempotent replay: nothing new is stored,
+and the fences in force at retry time still refuse new work. The same retry
+while capture is paused refuses with `capture_disabled` and stores nothing.
+
+A host-interpreted archive has no engine-derived source maps. Receipt lineage
+therefore uses the existing no-maps path, with whole-message precision. This
+option does not run or integrate a host's interpretation pipeline; the host owns
+that work. Local installation and local capture continue to use engine mode.
+
+Existing journal commit lineage bookkeeping (`touchRoots` in
+`core/raw-source-roots.mjs`) can bump an existing session episode's revision
+when an earlier receipt becomes attributable to a host-registered message.
+This creates no episode, event or model call. This existing behavior stays.
 
 ### Optional local Raw search service
 

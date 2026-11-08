@@ -1,8 +1,14 @@
 # Changelog
 
-## Unreleased — hosted recall deadline
+## Unreleased — hosted recall pre-fetch durability
 
 - Remove redundant durable publications before hosted recall while preserving pause barriers and diagnostic freshness.
+
+## 0.3.4 — 2026-11-09: hosted recall deadline
+
+Plugin and marketplace 0.3.4. Protocol stays 0.3.0. The installer version is not
+bumped here; the Codex prompt changes reach installs through the next installer
+release.
 
 - Allow 2,500 ms from the first recall fetch on both hosts. Codex prompt hooks
   have a 3,000 ms process-clock cap; Claude Code plugin prompt hooks keep their
@@ -21,6 +27,8 @@
   [the interface](docs/plans/raw-search-interface.md) and [host seam](docs/plans/raw-search-seam.md).
 
 ## Unreleased — maintenance admission and integrity
+
+- Check opening deadlines before lifecycle locking, canonical read transaction setup, and native dispatch after WAL wait configuration.
 
 - Optional admission capacity covers cold opens while work retains its normal quantum. Each domain prices exhaustion by its own next turn.
 - WAL-mode hosts pay main's integrity check once on the first open after upgrade; DELETE-mode caches rebuild once. Steady maintenance adds no BEGIN or COMMIT.
