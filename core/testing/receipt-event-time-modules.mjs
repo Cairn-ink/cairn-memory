@@ -19,6 +19,13 @@ const frozenExceptions = JSON.parse(readFileSync(new URL('../test/fixtures/recei
 // change no loader or feature consumer. The private sidecar-handle registry
 // adds an identity-ack field and passes it to storage; loaders stay unchanged.
 const exceptions = frozenExceptions.map(entry => {
+  // Only the observed-host publication gains locked byte equality. The existing
+  // package-metadata resolution expression and its namespace use are unchanged.
+  if (entry.file === 'integrations/codex/qualification.mjs') {
+    assert.equal(entry.sha256, '9c37710cfffa802fbc42286c6e9bf8c3bf8bdf3d4c34a0c163d672868714cdac',
+      'frozen host metadata loader pin');
+    return { ...entry, line: 84, sha256: '511eeb9accdeac644690377e712ef4226ea7b5ee2b4fd41f36faa8777014dba4' };
+  }
   // The journal-mode probe checks the opening deadline before preparing and
   // executing its statement. This hunk adds no loader and no feature consumer.
   if (entry.file === 'core/topic-reader-sqlite.mjs') {

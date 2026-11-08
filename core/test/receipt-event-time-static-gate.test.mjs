@@ -234,7 +234,7 @@ test('static gate pins the exact unresolved-loader allowlist and its reviewed so
     { file: 'core/context-product-worker.mjs', line: 120, expression: 'import(workerData.host.moduleUrl)' },
     { file: 'core/context-semantic-worker.mjs', line: 502, expression: 'import(c.host.moduleUrl)' },
     { file: 'adapters/local-embedder/runtime.mjs', line: 53, expression: "import(pathToFileURL(join(pack.packPath, 'runtime/node_modules/@huggingface/transformers/dist/transformers.node.mjs')).href)" },
-    { file: 'integrations/codex/qualification.mjs', line: 83, expression: "createRequire(launcher).resolve(packageName+'/package.json')" },
+    { file: 'integrations/codex/qualification.mjs', line: 84, expression: "createRequire(launcher).resolve(packageName+'/package.json')" },
     { file: 'core/context-product-telemetry.mjs', line: 195, expression: 'Reflect.construct(object.constructor, args)' },
     { file: 'core/context-product-sqlite.mjs', line: 106, expression: "if (key === 'constructor') return object.constructor;" },
     { file: 'core/topic-reader-sqlite.mjs', line: 114, expression: "if (key === 'constructor') return object.constructor;" },
