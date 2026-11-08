@@ -356,3 +356,15 @@ test("SessionStart with an invalid replacement endpoint clears auth and reports 
   assert.doesNotMatch(await readFile(join(f.root, "credential-state.json"), "utf8"), echoed);
   await assertNoTokenFiles(f);
 });
+
+test('a recall decision without a request still refreshes configuration diagnostics', async t => {
+  const f = await fixture(t);
+  const result = await f.hook('recall', {}, { prompt: '' });
+  assert.deepEqual(result, { exitCode: 0, stdout: '', stderr: '' });
+  assert.equal(f.requests.length, 0);
+  const state = await readCredentialState(f.root);
+  assert.equal(state.configured, true);
+  assert.equal(state.endpoint, f.endpoint);
+  assert.equal(state.auth, null);
+  assert.ok(Date.now() - Date.parse(state.observed_at) < 300000);
+});

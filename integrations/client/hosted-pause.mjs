@@ -23,15 +23,43 @@ export async function hostedPauseStatus(config) {
       stale: Date.now() - Date.parse(value.observedAt) > 300000 };
   } catch { return { state: 'observation unreadable' }; }
 }
-export async function observeHostedPause(config, token, signal) {
+// Only diagnostics read this file. Timestamp the observation, not its delayed
+// publication, and never let an older success erase a newer failure.
+async function publishStatus(config, state, observedAt) {
+  await stateLock(statusPath(config) + '.lock', async () => {
+    const previous = await hostedPauseStatus(config);
+    if (previous.observedAt > observedAt ||
+        (previous.observedAt === observedAt && previous.state === 'unavailable' && state === 'available')) return;
+    await privateWrite(statusPath(config), JSON.stringify({version:1,state,observedAt}));
+  }).catch(() => {});
+}
+export async function observeHostedPause(config, token, signal, { available } = {}) {
   try {
     const remote = await observe(config, token, signal);
-    await privateWrite(statusPath(config), JSON.stringify({version:1,state:'available',observedAt:new Date().toISOString()})).catch(() => {});
+    const observedAt = new Date().toISOString();
+    if (available) available(observedAt);
+    else await publishStatus(config, 'available', observedAt);
     return remote;
   } catch (error) {
-    await privateWrite(statusPath(config), JSON.stringify({version:1,state:'unavailable',observedAt:new Date().toISOString()})).catch(() => {});
+    await publishStatus(config, 'unavailable', new Date().toISOString());
     throw error;
   }
+}
+// Recall can coalesce successful diagnostics after its fetch/decision. Privacy
+// barriers stay inside observe(), and failures are always published immediately.
+export function deferHostedPauseStatus(config, token, signal) {
+  let pending;
+  return {
+    async observe() {
+      try {
+        return await observeHostedPause(config, token, signal, { available: at => { pending = at; } });
+      } catch (error) { pending = undefined; throw error; }
+    },
+    async publish() {
+      if (pending && !signal?.aborted) await publishStatus(config, 'available', pending);
+      pending = undefined;
+    },
+  };
 }
 async function observe(config, token, signal) {
   signal?.throwIfAborted();
