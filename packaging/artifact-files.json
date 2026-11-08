@@ -342,6 +342,7 @@
   "adapters/mcp/safety-migrate-command.mjs",
   "core/content-safety-layout.mjs",
   "core/content-safety-migration.mjs",
+  "core/layout-base-upgrade.mjs",
   "core/content-safety-schema.mjs",
   "core/content-suppression-storage.mjs",
   "core/content-suppression-input.mjs",
@@ -361,5 +362,6 @@
   "core/card-lineage-schema.mjs",
   "core/card-lineage-base-schema.mjs",
   "docs/plans/card-lineage-v1.md",
-  "SEAM.md"
+  "SEAM.md",
+  "docs/plans/layout-base-upgrade.md"
 ]

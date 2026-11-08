@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "77df70dcef1aa4618f5500bbbaa3bde7c2d56a427047793c663f6dba6371bfbc",
-  "bytes": 1229842,
+  "sha256": "83275a56bc7772c1914a91d57ef9470fbe2abe7c2bc88dac5c65270fb239d4a5",
+  "bytes": 1232787,
   "files": [
     "LICENSE",
     "README.md",
@@ -186,6 +186,7 @@
     "core/index.mjs",
     "core/isolated-file-read-child.mjs",
     "core/isolated-file-read.mjs",
+    "core/layout-base-upgrade.mjs",
     "core/local-authority-guard.mjs",
     "core/local-authority-input.mjs",
     "core/local-authority-schema.mjs",
@@ -318,6 +319,7 @@
     "docs/plans/context-read-p2c-impl.md",
     "docs/plans/context-read-p2d-impl.md",
     "docs/plans/context-read-p2e-impl.md",
+    "docs/plans/layout-base-upgrade.md",
     "docs/plans/topic-overview-member-pages.md",
     "docs/plans/topic-reader-wal-fix.md",
     "docs/raw-local-journal.md",
@@ -721,6 +723,7 @@
     "adapters/mcp/safety-migrate-command.mjs": "e63ed654f3c052f3bc026faeee5b7d0868786feaf94bb93c2fccc311d793a38f",
     "core/content-safety-layout.mjs": "882b2d183de2d97bcd83650d901ec9f8c21a43e048d1ef92def9b6006fc8fe85",
     "core/content-safety-migration.mjs": "cfa4de31c06a67b0677faa77287fe5c353c670cbf3320855c6414200892cd0cf",
+    "core/layout-base-upgrade.mjs": "1b99049f31a8941a37683da17cdf50be1d539769489b76d2f134423af5c9434b",
     "core/content-safety-schema.mjs": "461210f6a71b902ded6aaca22572af53bad060953306f4bf235a7b9375d668c2",
     "core/content-suppression-storage.mjs": "9b809fa37126188bb6f45a50ab0045f41803ba771c31a59c3f2b58e7b36b22a3",
     "core/content-suppression-input.mjs": "d22fe3b5ca43a0ce44d5e019fe4da9e09b456834281480b1ce1b23ec0b0d29cd",
@@ -741,13 +744,14 @@
     "core/card-lineage-base-schema.mjs": "7f2fbb15821435ff93e574a5354d83f2e122a97d63062052f2e67d4f76d742cc",
     "docs/plans/card-lineage-v1.md": "9be4f581e56878cf2c38b962cf5e1c414c94c6da00b90a78d70fddc62a1a01c2",
     "SEAM.md": "14162f7d4dd51badd1073f4dec4e855e77da3abcec184073532a4ab256339a88",
+    "docs/plans/layout-base-upgrade.md": "b2b79a2e9940bfc8ccc2eba1a85747847978a31643e50d03d27b29223b49d783",
     "bin/cairn-memory.mjs": "7c24872a106de8d06c0a66499002f46aa8894b588b005ac9d39a50df4e586981",
     "README.md": "dcfd6be7a1a90d7016dbce352dbd06516443d6760e0dbfd74e6049632ec36891",
     "THIRD_PARTY_NOTICES.md": "f53d69106bd47f5c23acf119a83d3adc61ddcdcaf4ec908a1cf4f6cee9e4f23c",
     "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b"
   },
   "generatedHashes": {
-    "package.json": "cc53768e1124864b77f9df87c142190a53c5ecde9bdbae5e27c773d576f657cb",
+    "package.json": "dfa45b8b06a809c85770a5337ef64b42a9d04fb88e9ae1a2992bcb3deda3a776",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8"
   }
 }
