@@ -82,7 +82,7 @@ test('R01/R03/R12/R13 actual artifact: captured sources, fresh lexical MCP, open
   assert.deepEqual(JSON.parse(refusal.stdout),{ok:false,error:{code:'database_not_found',retryable:false}});
   assert.ok(!readdirSync(workspace.path).includes('never-create'));
   const minimal=join(workspace.path,'memory-only.sqlite');
-  ok(await run(workspace,[fixture,f.root,minimal,JSON.stringify({mode:'capture',texts:['SQLite memory-only synthetic']})]));
+  ok(await run(workspace,[fixture,f.root,minimal,JSON.stringify({mode:'capture',raw:false,texts:['SQLite memory-only synthetic']})]));
   const minimalDb=new DatabaseSync(minimal,{readOnly:true});
   try {
     assert.equal(minimalDb.prepare('PRAGMA user_version').get().user_version,18);
@@ -90,7 +90,7 @@ test('R01/R03/R12/R13 actual artifact: captured sources, fresh lexical MCP, open
     const absent=await observeDatabaseFiles({path:minimal,workspace},async()=>{
       assert.equal((await run(workspace,[fixture,f.root,minimal,JSON.stringify({mode:'read-only'})])).error.code,'index_unavailable');
     });assert.deepEqual(absent.events,[]);
-    ok(await run(workspace,[fixture,f.root,minimal,JSON.stringify({mode:'ordinary'})]));
+    ok(await run(workspace,[fixture,f.root,minimal,JSON.stringify({mode:'ordinary',raw:false})]));
     const existing=await observeDatabaseFiles({path:minimal,workspace},async()=>{
       assert.equal(ok(await run(workspace,[fixture,f.root,minimal,JSON.stringify({mode:'read-only'})])).items.length,1);
     });assert.deepEqual(existing.events,[]);

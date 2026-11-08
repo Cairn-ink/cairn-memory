@@ -1,3 +1,6 @@
+import { refuseAuthority, authorityRefusal, refusalCause } from './context-product-refusal.mjs';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { types } from 'node:util';
 import { maintenanceErrorName, maintenanceFailureCode, maintenanceIndexFailure } from './context-product-attribution.mjs';
 import { createMaintenanceAttribution } from './context-product-attribution.mjs';
 import { performance } from 'node:perf_hooks';
@@ -15,8 +18,10 @@ const workerFirst = validOpenDiagnosticBuffer(workerData.openPhases) ? process.h
 const phase = openDiagnosticClock(workerData.openPhases);
 phase?.mark('workerFirst', workerFirst);
 const { request, operation: opening, binding } = workerData;
+let sidecarHandles;
 let facade, index, host, active = false, disposing, currentControl = request;
-let semantic,currentOperation=opening,booting=true,closing=false,rejectPermission,exiting;
+let semanticTurn;
+let semantic,semanticOutstanding,currentOperation=opening,booting=true,closing=false,rejectPermission,exiting;
 const owned = [], resources = new Int32Array(workerData.resources);
 const resourceOwner = Object.freeze({
   register(kind, close) {
@@ -36,6 +41,7 @@ const startSqlite = op => sqlite?.start(Number(mono(op.operationCutoffMonoNs)) /
 // Keep the initiating call and the first disposal failure independent.
 let failureDetail,secondaryFailureDetail,disposalFailureDetail;
 const noteFailure=(kind,engineCode,error,disposal=false,secondary=false,step=attribution?.stepKind??0)=>{if(!workerData.maintenance)return;const detail={kind,...(kind==='engine'||kind==='unmapped'?{engineCode:maintenanceFailureCode(engineCode)}:{}),
+  ...(kind==='engine'&&engineCode==='authority_required'?{refusal:refusalCause(authorityRefusal(error))}:{}),
   ...(kind==='engine'&&engineCode==='index_unavailable'?maintenanceIndexFailure(error)??{reason:'other'}:{}),
   ...(kind==='protocol'?{protocolKind:'frame_conflict'}:{}),...(kind==='exception'?{errorName:maintenanceErrorName(error),step}:{})};if(secondary)secondaryFailureDetail??=detail;else if(disposal)disposalFailureDetail??=detail;else failureDetail??=detail;};
 const nativeFailure = (error, disposal = false, secondary = false, step) => {
@@ -49,8 +55,9 @@ const within = op => { if (closing) fail('store_closed'); if (process.hrtime.big
 function result(operation, result, extra = {}) {
   const secondary=!result.ok&&attribution?.takeSecondaryFailure();
   if(secondary)try{nativeFailure(secondary.error,false,true,secondary.step);}catch{noteFailure('exception',undefined,secondary.error,false,true,secondary.step);}
+  const maintenanceRefusal=workerData.maintenance&&!result.ok?refusalCause(attribution?.refusal):undefined;
   const failure=workerData.maintenance&&!result.ok&&!(closing&&result.error?.code==='store_closed')?(attribution?.failure()??failureDetail):undefined;
-  parentPort.postMessage({ operation, result, ...extra,...(failure?{maintenanceFailure:failure}:{}),...(!result.ok&&secondaryFailureDetail?{maintenanceSecondaryFailure:secondaryFailureDetail}:{}) });
+  parentPort.postMessage({ operation, result, ...extra,...(failure?{maintenanceFailure:failure}:{}),...(maintenanceRefusal===undefined?{}:{maintenanceRefusal}),...(!result.ok&&secondaryFailureDetail?{maintenanceSecondaryFailure:secondaryFailureDetail}:{}) });
 }
 function dispose() {
   return disposing ??= (async () => {
@@ -87,7 +94,7 @@ function capabilities() {
     namespaceSelection: 'recent-projects-v1', readyOnly: true, maintenance: Boolean(workerData.maintenance), assembly: index.assembly,
     channels: { lexical: { enabled: true }, semantic: { configured: false, enabled: false } },
     schemas: { memory: [18, ...Array.from({ length: 14 }, (_, i) => i + 20)], card: Array.from({ length: 11 }, (_, i) => i + 23) },
-    ...(workerData.wal ? { journals: ['DELETE','WAL'], sidecarJournals: ['DELETE','WAL'], wal: {available:true} } : { journals: ['DELETE'], sidecarJournals: ['DELETE'], wal: {available:false,reason:'deferred_to_p2d'} }), unsupported: ['semantic', 'relations', 'moc', 'raw-search'] } };
+    ...(workerData.wal ? { journals: ['DELETE','WAL'], sidecarJournals: ['DELETE','WAL'], wal: {available:true} } : { journals: ['DELETE'], sidecarJournals: ['DELETE'], wal: {available:false,reason:'deferred_to_p2d'} }), unsupported: ['semantic', 'relations', 'moc'] } };
 }
 try {
   startSqlite(opening);
@@ -102,7 +109,7 @@ try {
   const permission = new Promise((resolve, reject) => { rejectPermission = reject; parentPort.once('message', message => {
     try {
       if (message.kind !== 'identity-ack'){if(!closing)noteFailure('protocol');fail('reader_failed');}
-      verifyRecords(request, message.operation, request, opening); resolve();
+      verifyRecords(request, message.operation, request, opening); sidecarHandles=message.sidecarHandles; resolve();
     } catch (error) { reject(error); }
   }); });
   phase?.mark('identitySent');
@@ -114,10 +121,10 @@ try {
   phase?.mark('hostImported');
   host = await module.createContextReadHost(Object.freeze({ ...workerData.host.configuration, resourceOwner }));
   if (typeof host?.close === 'function') resourceOwner.register('lease', () => host.close());
-  const authorize = (method,payload,credential) => requestAuthority(host,binding,currentControl)(method,payload,credential);
+  const authorize = (method,payload,credential,maintenancePhase) => requestAuthority(host,binding,currentControl)(method,payload,credential,maintenancePhase);
   if(workerData.semanticConfig) {
     const {semanticClient}=await import('./context-semantic-client.mjs'); within(opening);
-    semantic=semanticClient(workerData.semanticPort,workerData.semanticConfig,()=>currentOperation);
+    semantic=semanticClient(workerData.semanticPort,workerData.semanticConfig,()=>currentOperation,{semanticOutstanding:()=>semanticTurn?.getStore()?.semanticOutstanding});
   }
   within(opening);
   phase?.mark('hostCreated');
@@ -130,8 +137,8 @@ try {
   phase?.mark('indexImported');
   let comparison=null;
   if(workerData.memoryComparison===true){comparison=await import('./context-product-comparison.mjs');within(opening);}
-  index = openProductIndex({path:workerData.path,facade,authorize,ownerCoverage:workerData.ownerCoverage,observer,sqlite,sidecarJournalMode:workerData.sidecarJournalMode,maintenance:workerData.maintenance,counter:host.counter,semantic,operation:()=>currentOperation,attribution,
-    storageOptions:{memoryComparison:comparison,verificationBatching:workerData.verificationBatching===true,verificationBatchState:workerData.verificationBatchState}});
+  index = openProductIndex({path:workerData.path,facade,authorize,ownerCoverage:workerData.ownerCoverage,observer,sqlite,sidecarJournalMode:workerData.sidecarJournalMode,maintenance:workerData.maintenance,counter:host.counter,rawSearch:host.rawSearch,semantic,operation:()=>currentOperation,attribution,
+    storageOptions:{sidecarHandles,memoryComparison:comparison,verificationBatching:workerData.verificationBatching===true,verificationBatchState:workerData.verificationBatchState}});
   phase?.mark('indexOpened');
   within(opening);
   // The opening telemetry remains unsealed until connection disposal.
@@ -156,10 +163,14 @@ parentPort.on('message', async message => {
   observer.select(frame);
   try {
     const callRequest = workerData.maintenance ? message.request : request;
-    if (workerData.maintenance && (callRequest.clockDomainId !== request.clockDomainId || callRequest.credentialBindingId !== binding.credentialBindingId || callRequest.credentialExpiresUtcMs !== binding.credentialExpiresUtcMs)) fail('authority_required');
+    if (workerData.maintenance && (callRequest.clockDomainId !== request.clockDomainId || callRequest.credentialBindingId !== binding.credentialBindingId || callRequest.credentialExpiresUtcMs !== binding.credentialExpiresUtcMs)) refuseAuthority('request_binding');
     verifyRecords(message.request, operation, callRequest, operationRecord(callRequest, mono(operation.enteredMonoNs),
       deadline(['refreshContextIndex','refreshMaintenance','admitMaintenance'].includes(message.method) ? message.input?.budget?.maxMs : message.input?.deadlineMs), opening.workerEpoch, operation.operationId));
-    if (operation.workerEpoch !== opening.workerEpoch) fail('authority_required');
+    if (operation.workerEpoch !== opening.workerEpoch) refuseAuthority('worker_epoch');
+    if(Object.hasOwn(message,'semanticOutstanding')){
+      if(!workerData.maintenance||!semantic||!types.isSharedArrayBuffer(message.semanticOutstanding)||message.semanticOutstanding.byteLength!==8)refuseAuthority('semantic_outstanding');
+      semanticTurn??=new AsyncLocalStorage();semanticOutstanding=message.semanticOutstanding;
+    }else semanticOutstanding=undefined;
     currentControl = callRequest;
     currentOperation=operation;
     startSqlite(operation);
@@ -179,16 +190,17 @@ parentPort.on('message', async message => {
       }
     }
     else if (message.method === 'fetchCandidateEvidence') {
-      if (workerData.maintenance) fail('authority_required');
+      if (workerData.maintenance) refuseAuthority('method_gate');
       const payload = boundedData(message.input), { deadlineMs, ...fetchInput } = payload;
       deadline(deadlineMs);
       response = facade.fetchCandidateEvidence(fetchInput, message.credential, payload);
       phase?.mark('readFinished');
     } else {
-      if(['admitMaintenance','refreshMaintenance'].includes(message.method)&&!workerData.maintenance)fail('authority_required');
-      if (workerData.maintenance && !['getContextIndexStatus','refreshContextIndex','admitMaintenance','refreshMaintenance'].includes(message.method)) fail('authority_required');
-      response = await index.run(message.method, boundedData(message.input), message.credential,
+      if(['admitMaintenance','refreshMaintenance'].includes(message.method)&&!workerData.maintenance)refuseAuthority('method_gate');
+      if (workerData.maintenance && !['getContextIndexStatus','refreshContextIndex','admitMaintenance','refreshMaintenance'].includes(message.method)) refuseAuthority('method_gate');
+      const run=()=>index.run(message.method, boundedData(message.input), message.credential,
         performance.now() + Number(mono(operation.operationCutoffMonoNs)-process.hrtime.bigint())/1e6, observation);
+      response = await (semanticOutstanding===undefined?run():semanticTurn.run({semanticOutstanding},run));
     }
     if(!response.ok)try{index?.discard();}catch(error){nativeFailure(error,false,true);}
     if(attribution) {
@@ -209,5 +221,5 @@ parentPort.on('message', async message => {
   } catch (error) {attribution?.captureFailure(error);attribution?.selectFailure(error);
     try{index?.discard();}catch(cleanupError){nativeFailure(cleanupError,false,true);}
     sealNative(frame); result(operation, nativeFailure(error)); }
-  finally { active = false; if (closing) await exitWhenIdle(); }
+  finally { semanticOutstanding=undefined; active = false; if (closing) await exitWhenIdle(); }
 });

@@ -1,3 +1,5 @@
+import { costFamilyPhysical } from './content-safety-cost-families.mjs';
+export { costGateFamilies, costFamilyPhysical, costFamilyLabel, costFamilyFixture } from './content-safety-cost-families.mjs';
 import { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { safetyFixture, ns } from './content-safety-s2h-fixture.mjs';
@@ -38,8 +40,8 @@ export async function familyCostParity(t, base, prepare, { factNamespace = ns } 
   for (const facts of [0, 5]) {
     const pair = [];
     for (const [kind, fixture, physical] of [
-      ['safety', safetyFixture, { 23: 38, 33: 48 }[base]],
-      ['family', eventTimeSafetyFixture, { 23: 52, 33: 53 }[base]],
+      ['safety', safetyFixture, costFamilyPhysical(base, 'safety')],
+      ['family', eventTimeSafetyFixture, costFamilyPhysical(base, 'event-time')],
     ]) {
       const f = fixture(t, base); await f.migrate();
       const db = f.connect(); t.after(() => db.close());
@@ -67,3 +69,7 @@ export async function familyCostParity(t, base, prepare, { factNamespace = ns } 
     [['safety', 0], ['family', 0], ['safety', 5], ['family', 5]], 'gate B: four measured cells, two exact comparisons');
   t.diagnostic('FAMILY_COST_PARITY ' + JSON.stringify(rows));
 }
+
+// The permanent unmigrated probe has its own frozen completed-cell inventory.
+export const costMatrixGate = (gate, expected) => process.env.CAIRN_S2H_UNMIGRATED_ONLY === '1'
+  ? () => {} : familyGate(gate, expected);

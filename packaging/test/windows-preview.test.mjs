@@ -53,7 +53,7 @@ test('native Windows source installation and six-stage keyless SDK lifecycle', {
   assert.equal(walkthrough.status, 'passed');
   assert.equal(walkthrough.withRecall, false);
   assert.deepEqual(walkthrough.stages, [
-    'five_tools', 'remember_and_inspect', 'restart_and_inspect',
+    'memory_tools', 'remember_and_inspect', 'restart_and_inspect',
     'correct_and_reject_stale', 'model_disabled', 'forget_and_empty_inspect',
   ].map(stage => ({ stage, status: 'passed' })));
   t.diagnostic(JSON.stringify({ platform: process.platform, architecture: process.arch,

@@ -123,6 +123,13 @@ function servingFacts(db, ns) {
 export const withContentSuppressionRequest = (work, { fresh = false } = {}) => requestAccount.getStore() && !fresh
   ? work() : requestAccount.run({ selected: new Map(), facts: new Map(), reads: new Map() }, work);
 
+// An abandoned operation attempt must not seed the next snapshot's denial
+// memo. Keep its request account, but load this connection's facts on demand.
+export function resetContentSuppressionRequestInside(db) {
+  const account=requestAccount.getStore(),native=contentSafetyConnection(db);
+  account?.selected.delete(native);account?.facts.delete(native);account?.reads.delete(native);
+}
+
 // A serving request may span canonical snapshots. Its denial set is provisional
 // until the independent delivery fence agrees. No state survives the request.
 export const hasContentSuppressionRequestInside = db => Boolean(requestAccount.getStore()) &&
@@ -259,6 +266,48 @@ export function contentSuppressionTargetMatches(fact, ns, target) {
   return fact.owner_id===ns.ownerId && (fact.scope==='owner'||fact.scope===ns.scope&&fact.project_id===(ns.projectId??'')) &&
     (['owner','namespace'].includes(fact.match_mode)||fact.kind===target.kind&&fact.stable_key===target.key) && factMatch(fact,target)===true;
 }
+// This batch belongs to one synchronous lexical filter in its existing
+// canonical snapshot. Only the SQL row enumeration is shared; S1 and the
+// suppression matcher below still decide every candidate independently.
+const candidateBatches = new AsyncLocalStorage();
+export function withMemoryCandidateBatchInside(db, refs, work) {
+  if (!refs.length) return work([]);
+  const layout = cachedContentLayout(db);
+  const columns = factColumns.split(',');
+  const ancestorColumns = ['ancestry','ancestor_owner','ancestor_scope','ancestor_project','message_id','start','end'];
+  let facts = `SELECT ${factColumns}${noAncestor} FROM content_suppressions INDEXED BY content_suppression_target
+    WHERE (owner_id,scope,project_id,kind,stable_key,incarnation)=(c.owner_id,'owner','','owner','','')
+    UNION ALL SELECT ${factColumns}${noAncestor} FROM content_suppressions INDEXED BY content_suppression_target
+    WHERE (owner_id,scope,project_id,kind,stable_key,incarnation)=(c.owner_id,c.scope,c.project_id,'namespace','','')
+    UNION ALL SELECT ${factColumns}${noAncestor} FROM content_suppressions INDEXED BY content_suppression_target
+    WHERE (owner_id,scope,project_id,kind,stable_key,incarnation)=(c.owner_id,c.scope,c.project_id,'memory',c.id,c.id)`;
+  if (layout.rawLineage) facts += ` UNION ALL SELECT ${columns.map(column=>'f.'+column).join(',')},1,
+    ac.owner_id,ac.scope,ac.project_id,l.message_id,l.start,l.end
+    FROM raw_receipt_lineage l JOIN receipts r ON r.id=l.receipt_id
+    LEFT JOIN raw_conversations ac ON ac.id=l.conversation_id
+    LEFT JOIN content_suppressions f INDEXED BY content_suppression_target
+      ON (f.owner_id,f.scope,f.project_id,f.kind,f.stable_key,f.incarnation)=(c.owner_id,c.scope,c.project_id,'raw',l.conversation_id,l.conversation_id)
+    WHERE r.memory_id=c.id`;
+  const ancestry = layout.rawLineage ? `EXISTS(SELECT 1 FROM receipts ar
+    JOIN raw_receipt_lineage al ON al.receipt_id=ar.id
+    LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id
+    WHERE ar.memory_id=m.id AND (ac.owner_id IS NOT m.owner_id
+      OR ac.scope IS NOT m.scope OR ac.project_id IS NOT m.project_id))` : '0';
+  // One JSON parameter avoids a parameter/chunk limit. Ranked product reads
+  // have at most 24 candidates; checkEach can also batch the full posting set.
+  const rows = db.prepare(`WITH candidates AS (
+    SELECT CAST(key AS INTEGER) position,json_extract(value,'$[0]') owner_id,
+      json_extract(value,'$[1]') scope,json_extract(value,'$[2]') project_id,
+      json_extract(value,'$[3]') id FROM json_each(?)
+    ) SELECT c.position,m.id,m.owner_id,m.scope,m.project_id,m.revision,m.deleted,m.currentness,m.review_state,
+      ${ancestry} AS invalid_raw_ancestry,
+      (SELECT json_group_array(json_object(${[...columns,...ancestorColumns].map(column=>"'"+column+"',"+column).join(',')}))
+        FROM (${facts} ORDER BY ancestry,epoch_hi,epoch_lo,fact_id)) AS suppression_rows
+    FROM candidates c LEFT JOIN memories m ON (m.owner_id,m.scope,m.project_id,m.id)=(c.owner_id,c.scope,c.project_id,c.id)
+    ORDER BY c.position`).all(JSON.stringify(refs.map(ref=>[...boundary(ref.namespace),ref.memoryId])));
+  const byTarget = new Map(rows.map((row,i)=>[JSON.stringify([...boundary(refs[i].namespace),refs[i].memoryId]),JSON.parse(row.suppression_rows)]));
+  return candidateBatches.run({native:contentSafetyConnection(db),byTarget},()=>work(rows));
+}
 function* matchingContentSuppressionsInside(db, ns, target, layout, ordered = false) {
   if (!layout.suppressionRevision) return;
   const { kind, key } = target;
@@ -297,8 +346,10 @@ function* matchingContentSuppressionsInside(db, ns, target, layout, ordered = fa
     values.push(...boundary(ns),key);
   }
   sql += ordered ? ' ORDER BY epoch_hi,epoch_lo,fact_id' : ' ORDER BY ancestry,epoch_hi,epoch_lo,fact_id';
-  const statement = db.prepare(sql);
-  const rows = typeof statement.iterate === 'function' ? statement.iterate(...values) : statement.all(...values);
+  const batch = !ordered && kind === 'memory' ? candidateBatches.getStore() : null;
+  const batched = batch?.native === contentSafetyConnection(db) ? batch.byTarget.get(JSON.stringify([...boundary(ns),key])) : undefined;
+  const statement = batched === undefined ? db.prepare(sql) : null;
+  const rows = batched ?? (typeof statement.iterate === 'function' ? statement.iterate(...values) : statement.all(...values));
   for (const fact of rows) {
     if (fact.ancestry && (fact.ancestor_owner !== ns.ownerId || fact.ancestor_scope !== ns.scope || fact.ancestor_project !== (ns.projectId ?? ''))) {
       yield ineligibleFact; continue;

@@ -1,3 +1,4 @@
+import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
 import { contentWriteMethodClass } from './content-write-context.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { contentSafetyFacade } from './content-safety-boundary.mjs';
@@ -9,6 +10,9 @@ import { methodPackageOptions } from './method-package-input.mjs';
 import { createMethodPackageFacade } from './method-package-facade.mjs';
 import { openContextCore } from './context-read-facade.mjs';
 import { decisionReviewOption } from './confirmation-storage.mjs';
+import { createLocalRawSearch, localRawSearchManager } from './local-raw-search.mjs';
+import { isRawCapabilityRefusal } from './content-safety-layout.mjs';
+import { defaultRawOptions } from './local-defaults.mjs';
 import { rawOptions } from './raw-options.mjs';
 import { storeFenceOption } from './store-fence.mjs';
 import { existingStoreOption } from './existing-store.mjs';
@@ -19,11 +23,11 @@ import { privateCardOptions } from './private-card-input.mjs';
 import { createPrivateCardFacade } from './private-card-facade.mjs';
 import { contextInput, assembleSessionContext } from './session-context.mjs';
 import { rangeInput, rangeOrder, validateRangeAnchor, rangePage, envelopeText } from './episode-reads.mjs';
-import { isStorageBusy } from './database.mjs';
+import { isStorageBusy, busyTimeoutOption } from './database.mjs';
 import { ADMISSION_LEASE_MS } from './episode-schema.mjs';
 import { episodeOptions, episodeClient } from './episode-storage.mjs';
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { createMemoryRuntime } from "./runtime.mjs";
+import { createMemoryRuntime, readRecallJournalMode } from "./runtime.mjs";
 import { createCaptureDeadline } from './capture-deadline.mjs';
 import { uniqueIds, memoryGuards, placementProposal } from './placement-input.mjs';
 import { countTokens, modelPortValue } from './model-budget.mjs';
@@ -51,8 +55,8 @@ import {
 // only their own option; all other legal options reach the retained validator.
 const CORE_OPTIONS = Object.freeze(['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy',
   'captureRationale','captureEvidence','captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes',
-  'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence','contentSafety']);
-const OPEN_OPTIONS = Object.freeze([...CORE_OPTIONS, 'rawConversations']);
+  'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence','contentSafety','busyTimeoutMs']);
+const OPEN_OPTIONS = Object.freeze([...CORE_OPTIONS, 'rawConversations', 'raw', 'rawSearch']);
 
 const keepAdmissionKey = Symbol('keepAdmissionKey');
 
@@ -190,6 +194,7 @@ export function openMemoryCore(input) { return openWithRoleContext(input); }
 function openWithRoleContext(input, roleContext) {
   const buildCore = (value, internal) => createMemoryCore(value, { ...internal, roleContext });
   if (input && typeof input === 'object' && types.isProxy(input)) throw new MemoryStoreError('invalid_input');
+  busyTimeoutOption(input);
   // Strip only this opt-in before applying the retained constructor validation.
   if (input && typeof input === 'object' && 'contextRead' in input) {
     const { contextRead, ...base } = ownData(input, [...OPEN_OPTIONS, 'contextRead']);
@@ -209,15 +214,45 @@ function openWithRoleContext(input, roleContext) {
   let descriptor;
   try { descriptor = Object.getOwnPropertyDescriptor(input, 'rawConversations'); }
   catch { throw new MemoryStoreError('invalid_input'); }
-  if (!descriptor) return buildCore(input);
+  // Preserve the base constructor's inherited-option semantics when no Raw
+  // wrapper was selected. Raw profiles still require strict own data.
+  if (!descriptor && !('raw' in input) && !('rawSearch' in input)) return buildCore(input);
+  const local = ownData(input, OPEN_OPTIONS);
+  if (Object.hasOwn(local, 'raw') && typeof local.raw !== 'boolean' ||
+      Object.hasOwn(local, 'rawSearch') && typeof local.rawSearch !== 'boolean' ||
+      descriptor && Object.hasOwn(local, 'raw')) fail('invalid_input');
+  const { raw, rawSearch, ...base } = local;
+  if (!descriptor && raw !== true) return buildCore(base);
+  if (!descriptor) {
+    try { return composeRawCore(buildCore, base, defaultRawOptions(), {
+      sources: false, lineage: true, deletion: true, localControls: true,
+      rawTextReaders: false,
+      captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch), searchEmbedding: roleContext,
+    }); } catch (error) {
+      // Only the local Raw selection may degrade. Explicit journal profiles and
+      // every other database refusal retain their existing construction errors.
+      if (!isRawCapabilityRefusal(error)) throw error;
+      // openDatabase has already rolled back and closed the rejected handle.
+      const core = buildCore(base);
+      const search = localRawSearchManager(roleContext?.rawSearch) ?? createLocalRawSearch(base.path, defaultRawOptions().port);
+      search.unsupportedStore();
+      return Object.freeze({ ...core, ...(rawSearch === false
+        ? { getRawSearchStatus: search.methods.getRawSearchStatus } : search.methods), close() {
+        const stopped = search.close(), result = core.close();
+        return Promise.resolve(stopped).then(() => result);
+      } });
+    }
+  }
   if (!Object.hasOwn(descriptor, 'value')) throw new MemoryStoreError('invalid_input');
   ownData(input, OPEN_OPTIONS);
   const options = rawOptions(descriptor.value);
   const fields = Object.getOwnPropertyDescriptors(input);
   delete fields.rawConversations;
+  delete fields.rawSearch;
   const coreOptions = Object.create(Object.getPrototypeOf(input), fields);
   return composeRawCore(buildCore, coreOptions, options, {
     sources: Boolean(coreOptions.privateCards), lineage: true, deletion: true, localControls: true,
+    captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch), searchEmbedding: roleContext,
   });
 }
 
@@ -225,6 +260,7 @@ function openWithRoleContext(input, roleContext) {
 export function createMemoryCore(input, internal) {
   const captureQualifiedDuplicates = qualifiedDuplicatesOption(input);
   object(input, CORE_OPTIONS);
+  const busyTimeoutMs = busyTimeoutOption(input);
   const privateCards = privateCardOptions(input.privateCards);
   const methodPackages = methodPackageOptions(input.methodPackages);
   if (privateCards?.currentDependencies && !methodPackages) fail('invalid_input');
@@ -272,6 +308,7 @@ export function createMemoryCore(input, internal) {
   if (model?.onDiagnostic !== undefined && typeof model.onDiagnostic !== 'function') throw new MemoryStoreError('invalid_input');
   if (input.contentSafety !== undefined && input.contentSafety !== 's2h-v1') fail('invalid_input');
   const runtime = (internal?.createRuntime ?? createMemoryRuntime)({ path: input.path,
+    ...(busyTimeoutMs !== undefined ? { busyTimeoutMs } : {}),
     ...(input.contentSafety !== undefined ? { contentSafety: input.contentSafety } : {}),
     ...(input.existingStore ? { existingStore: input.existingStore } : {}),
     ...(input.storeFence ? { storeFence: input.storeFence } : {}),
@@ -775,8 +812,7 @@ export function createMemoryCore(input, internal) {
         countTokens(model, '');
       }
       const capacity = Math.min(count, page.rows.length);
-      for (let take = capacity; take >= 0; take--) {
-        if (take === 0 && page.rows.length > 0) throw new MemoryStoreError('context_item_too_large');
+      const probe = (take) => {
         const selected = page.rows.slice(0, take);
         const pageEnded = take === page.rows.length;
         const exhausted = pageEnded && page.scanExhausted !== false;
@@ -785,10 +821,31 @@ export function createMemoryCore(input, internal) {
           exhausted, truncatedBy: exhausted ? null : take < capacity ? 'token_budget' : 'page_limit',
           indexRevision: page.epoch,
           invalidRefs: selected.filter((row) => row.invalidRef).map((row) => row.invalidRef) };
-        if (countTokens(model, JSON.stringify(success(value))) <= budget) {
-          runtime.assertEpoch(ns, page.epoch, page.suppressionEpoch);
-          return value;
+        return countTokens(model, JSON.stringify(success(value))) <= budget ? value : null;
+      };
+      // The full page can lose its cursor/change flags, so probe it separately.
+      // Only [1, capacity - 1] has the uniform token-budget envelope shape.
+      let fitted = probe(capacity);
+      // Keep a one-row budget miss to two counts before searching lower fits.
+      if (!fitted && capacity > 1) fitted = probe(capacity - 1);
+      if (!fitted) {
+        let low = 1;
+        let high = capacity - 2;
+        while (low <= high) {
+          const take = low + Math.floor((high - low) / 2);
+          const value = probe(take);
+          if (value) {
+            fitted = value;
+            low = take + 1;
+          } else {
+            high = take - 1;
+          }
         }
+      }
+      if (fitted) {
+        // Return the very object whose whole success envelope was counted.
+        runtime.assertEpoch(ns, page.epoch, page.suppressionEpoch);
+        return fitted;
       }
       throw new MemoryStoreError('context_item_too_large');
     });
@@ -844,7 +901,11 @@ export function createMemoryCore(input, internal) {
   async function recall(input) {
     try {
       runtime.ready();
-      object(input, ['readSet', 'query', 'limit', 'includeQualification', 'contextMode', 'selectionMode']);
+      object(input, ['readSet', 'query', 'limit', 'includeQualification', 'contextMode', 'selectionMode', 'diagnostics']);
+      const enabled = Object.hasOwn(input, 'diagnostics') ? input.diagnostics : false;
+      const started = enabled === true ? performance.now() : undefined;
+      if (typeof enabled !== 'boolean') throw new MemoryStoreError('invalid_input');
+      const diagnostics = enabled ? { hostWaitMs: 0, storageMs: 0, storageCalls: 0, storageMaxMs: 0, storageMaxCall: null } : undefined;
       const includeQualification = Object.hasOwn(input, 'includeQualification') ? input.includeQualification : false;
       if (typeof includeQualification !== 'boolean') throw new MemoryStoreError('invalid_input');
       const contextMode = Object.hasOwn(input, 'contextMode') ? input.contextMode : undefined;
@@ -873,9 +934,7 @@ export function createMemoryCore(input, internal) {
         const page = navigation.pages.get(namespaceBinding(namespace));
         return page ? [{ namespace, indexRevision: page.epoch, suppressionEpoch: page.suppressionEpoch }] : [];
       }), includeQualification);
-      return success(await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
-        limit: count, map: (request) => mapPage(request, navigation), fetch, includeQualification, contextMode, selectionMode,
-        validateFresh,
+      const storage = { map: (request) => mapPage(request, navigation), fetch, validateFresh,
         recentReceipts: (ref, limit) => runtime.recentReceipts(namespaces[ref.namespaceIndex], ref, limit),
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
@@ -885,7 +944,34 @@ export function createMemoryCore(input, internal) {
         })), selected, namespaces.map((namespace) => ({ namespace,
           indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch,
           suppressionEpoch: navigation.pages.get(namespaceBinding(namespace)).suppressionEpoch })), includeQualification, contextMode),
-      }));
+      };
+      if (diagnostics) for (const name of Object.keys(storage)) {
+        const call = storage[name];
+        storage[name] = (...args) => {
+          const start = performance.now();
+          try { return call(...args); }
+          finally {
+            const elapsed = performance.now() - start;
+            diagnostics.storageMs += elapsed;
+            diagnostics.storageCalls++;
+            if (diagnostics.storageCalls === 1 || elapsed > diagnostics.storageMaxMs) {
+              diagnostics.storageMaxMs = elapsed;
+              diagnostics.storageMaxCall = name;
+            }
+          }
+        };
+      }
+      const value = await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
+        limit: count, ...storage, includeQualification, contextMode, selectionMode, diagnostics });
+      if (diagnostics) {
+        const journalMode = readRecallJournalMode(runtime);
+        const ms = value => Math.round(Math.max(0, value) * 10) / 10;
+        value.diagnostics = Object.freeze({ recallMs: ms(performance.now() - started),
+          hostWaitMs: ms(diagnostics.hostWaitMs), storageMs: ms(diagnostics.storageMs),
+          storageCalls: diagnostics.storageCalls, storageMaxMs: ms(diagnostics.storageMaxMs),
+          storageMaxCall: diagnostics.storageMaxCall, journalMode });
+      }
+      return success(value);
     } catch (error) { return failure(error); }
   }
 
@@ -970,12 +1056,18 @@ export function createMemoryCore(input, internal) {
         deadline, input: { ...input, namespace },
         operations: { filterCaptureSources: sources => runtime.filterCaptureSources(ns, sources),
           assertCaptureSources: sources => runtime.assertCaptureSources(ns, sources),
+          // Preserve private pre-dispatch busy provenance across this internal
+          // operation, including the runtime facade's entry/delivery checks.
+          beginCaptureDispatch: value => {
+            try { return runtime.assertCaptureEvidence(ns, { ...value, [captureDispatch]: true }, deadline); }
+            catch (error) { if (isStorageBusy(error)) throw captureSourceBusy(); throw error; }
+          },
           claimAdmission: (value, sources) => invoke(() => runtime.claimCapturedAdmission(ns, {
           ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS,
         }, deadline, rawRegistration, sources)),
           finishAdmission: value => finishAdmissionValidated(captureKey(value), true, deadline,
             keepInput || sessionEpisodes ? undefined : captureQualifiedDuplicates),
-          abandonAdmission: (value, retryable) => sessionEpisodes && retryable
+          abandonAdmission: (value, retryable) => retryable
             ? invoke(() => runtime.abandonAdmission(ns, { ...admissionKey(captureKey(value)),
               token: contractId(value.token), retryable: true }))
             : abandonAdmission(captureKey(value)), get, map, isAwaiting: id => runtime.isAwaiting(ns, id),

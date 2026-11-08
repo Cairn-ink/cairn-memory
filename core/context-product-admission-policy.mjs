@@ -6,7 +6,7 @@ import { fail } from './validation.mjs';
 // Admission knowledge is process memory only. Never evict a held/quarantined
 // domain to admit another one. The cap bounds both keys and numeric cells.
 const key=Symbol.for('context-read-product/admission-domains');
-const domains=()=>globalThis[key]??={locations:new Map(),physical:new Map(),capacityCount:0};
+const domains=()=>globalThis[key]??={locations:new Map(),physical:new Map(),capacityCount:0,progressCount:0};
 // Outstanding turns can retain a state across several identity merges. Forward
 // both ownership and retry profiles; old references must reach the current cell.
 function current(value) {
@@ -31,7 +31,7 @@ function retireCleanDomain(protectedDomain) {
   // Other pump lookups only read state.
   // Exclude the domain whose binding/capacity insertion is still in progress.
   for(const domain of new Set(all.locations.values())){
-    if(domain===protectedDomain||domain.busy||domain.pending||domain.quarantined||
+    if(domain===protectedDomain||domain.busy||domain.pending||domain.quarantined||domain.noProgress.size||
       [...domain.capacities.values()].some(state=>state.held||state.attempts!==0||state.until!==0))continue;
     // No await: remove every alias and numeric cell before another lookup.
     for(const map of [all.locations,all.physical])for(const [key,value] of map)if(value===domain)map.delete(key);
@@ -75,6 +75,11 @@ function mergeDomain(target,source) {
   target.busy ||= source.busy;target.pending ||= source.pending;target.quarantined ||= source.quarantined;
   target.busyCount+=source.busyCount;source.busyCount=0;
   target.maxAttempts=Math.max(target.maxAttempts,source.maxAttempts);
+  for(const [lane,count] of source.noProgress){
+    if(target.noProgress.has(lane))all.progressCount--;
+    target.noProgress.set(lane,Math.max(count,target.noProgress.get(lane)??0));
+  }
+  source.noProgress.clear();
   for(const [q,state] of source.capacities){
     const existing=target.capacities.get(q);
     if(existing){existing.attempts=Math.max(existing.attempts,state.attempts);existing.until=Math.max(existing.until,state.until);existing.held ||= state.held;state.profile.mergedInto=existing.profile;all.capacityCount--;}
@@ -86,7 +91,7 @@ function mergeDomain(target,source) {
 export function maintenanceAdmissionDomain(identity,maxMs) {
   const {locations,physical}=domains(),epoch=identity.cache;
   let domain=physical.get(identity.physical)??locations.get(identity.key);
-  if(!domain)domain={epoch,capacities:new Map(),maxAttempts:0,quarantined:false,pending:false,busy:false,busyCount:0};
+  if(!domain)domain={epoch,capacities:new Map(),noProgress:new Map(),maxAttempts:0,quarantined:false,pending:false,busy:false,busyCount:0};
   bindIdentity(identity,domain);
   // A failed proof cannot be cleared by capacity or cache changes. A pending
   // attempt also survives the creation of its first cache file.
@@ -115,6 +120,21 @@ export function failMaintenanceAdmission(state,now,confirmed) {
 export const maintenanceAdmissionStatus=state=>Object.freeze({cause:'open_exceeds_quantum',attempts:state.quarantined?Math.max(state.attempts,state.domain.maxAttempts):state.attempts,
   state:state.quarantined?'quarantined':state.held?'held':state.pending?'disposing':'backoff',retryAtMonoMs:state.until});
 
+// Physical-domain, lane-specific evidence outlives pump IDs, windows and Q.
+// Cache epochs recharge open cost only; they never erase no-progress evidence.
+export function maintenanceAdmissionProgress(state,lane,required) {
+  const counts=state.domain.noProgress,all=domains();
+  if(required===false){if(counts.delete(lane))all.progressCount--;return 0;}
+  if(required===true){
+    if(!counts.has(lane)){
+      if(all.progressCount>=1024)fail('read_in_progress');
+      all.progressCount++;
+    }
+    counts.set(lane,Math.min(3,(counts.get(lane)??0)+1));
+  }
+  return counts.get(lane)??0;
+}
+
 // Maximum fresh opens in any rotation of a complete sweep, starting cold.
 // Cache-incompatible selections can replace the same writer more than once.
 export function maintenanceAdmissionSlots(residents,writers,initial=new Map()) {
@@ -130,4 +150,4 @@ export function maintenanceAdmissionSlots(residents,writers,initial=new Map()) {
   return maximum;
 }
 
-export const maintenanceAdmissionFits=(lanes,coldSlots,spacing,maxMs)=>lanes*spacing+maxMs<=5000&&(lanes+coldSlots)*spacing+maxMs<=5000;
+export const maintenanceAdmissionFits=(lanes,coldSlots,spacing,maxMs,admissionMs=maxMs)=>lanes*spacing+maxMs<=5000&&lanes*spacing+coldSlots*Math.max(spacing,admissionMs)+maxMs<=5000;

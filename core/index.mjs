@@ -1,6 +1,13 @@
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { contentSafetyFacade } from './content-safety-boundary.mjs';
 import { createMemoryRuntime } from "./runtime.mjs";
+// This entry already loads the SQLite engine. Register the optional Raw
+// implementation in its installed module closure; evaluation opens no files.
+// The separately imported Raw factory keeps its selection-gated dependencies.
+import './raw-search-authority.mjs';
+import './raw-search-storage.mjs';
+import './raw-search-maintenance.mjs';
+import './raw-search-retrieval.mjs';
 import {
   fail, identifier, limit, memoryInput, namespace, object, revision,
 } from "./validation.mjs";
@@ -9,6 +16,7 @@ export { MemoryStoreError, normalizeBoundedText, normalizedTextLength } from "./
 export { openMemoryCore } from "./contract.mjs";
 export { openMemoryReader } from './memory-reader.mjs';
 export { openContextReader } from './context-reader.mjs';
+export { openRawSearch } from './raw-search-index.mjs';
 export { openContentSuppressionReader } from './content-suppression-reader.mjs';
 export { openContextProductReader, openContextIndexMaintainer } from './context-product-reader.mjs';
 export { createContextReadSupervisor, createContextReaderPool } from './context-read-supervisor.mjs';
@@ -19,7 +27,7 @@ export { CONTEXT_SOURCES, SOURCE_LIMITS } from './context-read-input.mjs';
 
 /** Embedded storage only. The caller, not this library, authenticates owners. */
 export function openMemoryStore(input) {
-  object(input, ["path", "sessionEpisodes", "contentSafety"]);
+  object(input, ["path", "sessionEpisodes", "contentSafety", "busyTimeoutMs"]);
   const runtime = createMemoryRuntime(input);
 
   function bindScope(input) {

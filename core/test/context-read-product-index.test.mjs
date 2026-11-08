@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { admissionRequired } from '../context-product-admission.mjs';
 import { Worker } from 'node:worker_threads';
 import { createProductReaderRuntime } from '../context-product-reader.mjs';
 import assert from 'node:assert/strict';
@@ -559,12 +560,15 @@ for(const [step,marker] of repairKillSteps.entries())test('Fix2 killed repair st
   assert.equal(readdirSync(f.workspace.path).some(name=>name.includes('.cairn-create-')),false);
 });
 
-test('Fix2 an idle reader reopens the successor after another maintainer repairs',t=>{
+test('Fix2 repair waits for an idle reader to dispose before reopening the successor',t=>{
   const f=fixture(t);f.admit('idle reader');const a=local(f),b=local(f);t.after(()=>{a.close();b.close();});
   a.storage.refresh(a.p,a.access,{maxItems:1024,maxMs:5000});
   assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.state,'ready');
   const path=f.path+PRODUCT_SIDECAR_SUFFIX,before=lstatSync(path),d=new DatabaseSync(path);
   d.exec("UPDATE product_metadata SET store_id='damaged'");d.close();
+  assert.throws(()=>b.storage.refresh(b.p,b.access,{maxItems:1024,maxMs:5000}),error=>error===admissionRequired);
+  assert.equal(lstatSync(path).ino,before.ino,'retained idle connection prevents replacement');
+  assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.reason,'wrong_store');
   b.storage.refresh(b.p,b.access,{maxItems:1024,maxMs:5000});assert.notEqual(lstatSync(path).ino,before.ino);
   assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.state,'ready');
 });
@@ -624,5 +628,5 @@ for(const writing of [false,true])test(`Fix2 ${writing?'writer':'reader'} checks
   else assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.reason,'storage_unavailable');
   assert.equal(changed,true);assert.notEqual(lstatSync(path).ino,before.ino);assert.equal(existsSync(path+'-journal'),false);
   t.mock.restoreAll();
-  assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.reason,'validation_invalid');
+  assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.reason,'storage_unavailable','the copied inode has an untrusted seal before certificate validation');
 });

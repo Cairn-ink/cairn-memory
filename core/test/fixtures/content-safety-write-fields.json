@@ -4,11 +4,12 @@
     "literal:id": 3
   },
   "core/content-write-safety.mjs": {
+    "key:cardId": 1,
     "key:eventId": 1,
     "key:memoryId": 1,
-    "key:messageId": 6,
-    "key:ownerId": 2,
-    "key:projectId": 6,
+    "key:messageId": 7,
+    "key:ownerId": 3,
+    "key:projectId": 8,
     "key:sessionId": 1,
     "key:sourceId": 1,
     "literal:card_id": 2,
@@ -21,7 +22,7 @@
     "literal:entityId": 2,
     "literal:from_id": 1,
     "literal:fromId": 1,
-    "literal:id": 3,
+    "literal:id": 4,
     "literal:keep_source_ids": 1,
     "literal:leftMemoryId": 1,
     "literal:memory_id": 2,
@@ -97,7 +98,7 @@
     "key:episodeId": 7,
     "key:event_id": 1,
     "key:eventId": 19,
-    "key:id": 9,
+    "key:id": 10,
     "key:keepActionId": 1,
     "key:memory_id": 1,
     "key:memoryId": 2,
@@ -106,7 +107,9 @@
     "key:messageIds": 1,
     "key:origin_episode_id": 1,
     "key:originEpisodeId": 1,
+    "key:owner_id": 1,
     "key:ownerId": 3,
+    "key:project_id": 1,
     "key:projectId": 2,
     "key:receiptIds": 1,
     "key:sessionId": 5,
@@ -124,7 +127,8 @@
   "core/episode-reads.mjs": {
     "key:id": 9,
     "key:memoryId": 2,
-    "literal:id": 2,
+    "literal:episodeId": 1,
+    "literal:id": 3,
     "literal:memoryId": 1
   },
   "core/session-context.mjs": {
@@ -259,7 +263,8 @@
   "core/private-card-storage.mjs": {
     "key:actionId": 3,
     "key:affectedIds": 1,
-    "key:cardId": 1,
+    "key:card_id": 1,
+    "key:cardId": 2,
     "key:effectId": 1,
     "key:id": 6,
     "key:leaseId": 1,
@@ -276,8 +281,10 @@
   },
   "core/private-card-facade.mjs": {
     "key:actionId": 1,
+    "key:actorId": 1,
     "key:targetId": 1,
     "literal:actionId": 1,
+    "literal:actorId": 1,
     "literal:targetId": 1
   },
   "core/card-receipt-sources.mjs": {
@@ -294,10 +301,13 @@
   },
   "core/private-evidence-storage.mjs": {
     "key:cardId": 3,
-    "key:memoryId": 4,
-    "key:receiptId": 1,
+    "key:memoryId": 5,
+    "key:receiptId": 2,
     "key:triggerMemoryRefs": 1,
-    "literal:id": 1
+    "literal:event_id": 2,
+    "literal:id": 3,
+    "literal:memory_id": 2,
+    "literal:session_id": 2
   },
   "core/private-organization-input.mjs": {
     "key:cardId": 1,
@@ -378,6 +388,11 @@
   "core/context-read-assembly.mjs": {
     "key:id": 3
   },
+  "core/context-read-three-layer.mjs": {
+    "key:conversationId": 2,
+    "key:id": 7,
+    "key:messageId": 2
+  },
   "core/context-read-budget.mjs": {
     "key:id": 1
   },
@@ -387,9 +402,12 @@
   },
   "core/context-read-facade.mjs": {
     "key:actionId": 1,
+    "key:batchRefs": 5,
     "key:id": 2,
+    "key:sessionIds": 1,
     "key:storeId": 6,
     "key:targetId": 1,
+    "key:turnIds": 1,
     "literal:cardId": 1,
     "literal:hybrid": 3,
     "literal:memoryId": 1
@@ -407,10 +425,12 @@
     "key:cardId": 2,
     "key:id": 8,
     "key:ids": 1,
-    "key:memoryId": 3,
+    "key:memoryId": 1,
     "key:storeId": 1,
     "literal:gid": 1,
-    "literal:id": 1,
+    "literal:id": 4,
+    "literal:owner_id": 1,
+    "literal:project_id": 1,
     "literal:uid": 1
   },
   "core/contract.mjs": {
@@ -475,8 +495,10 @@
     "literal:storeId": 2
   },
   "core/sqlite-journal-probe.mjs": {
+    "literal:applicationId": 1,
     "literal:application_id": 1,
     "literal:gid": 1,
+    "literal:storeId": 2,
     "literal:uid": 3
   },
   "core/isolated-file-read-child.mjs": {
@@ -485,9 +507,16 @@
   "core/raw-lineage-storage.mjs": {
     "key:actionId": 1,
     "key:conversationId": 1,
-    "key:eventId": 5,
-    "key:messageId": 3,
-    "key:sessionId": 5
+    "key:eventId": 7,
+    "key:id": 1,
+    "key:messageId": 7,
+    "key:sessionId": 7,
+    "literal:conversation_id": 2,
+    "literal:id": 5,
+    "literal:memory_id": 2,
+    "literal:message_id": 3,
+    "literal:owner_id": 3,
+    "literal:project_id": 3
   },
   "core/raw-source-input.mjs": {
     "key:conversationId": 2,
@@ -531,14 +560,14 @@
     "literal:sessionId": 1
   },
   "core/raw-capture-storage.mjs": {
-    "key:eventId": 2,
-    "key:id": 2,
+    "key:eventId": 3,
+    "key:id": 3,
     "key:ownerId": 1,
     "key:projectId": 1,
-    "key:sessionId": 2,
+    "key:sessionId": 3,
     "key:streamId": 1,
-    "literal:eventId": 1,
-    "literal:sessionId": 2,
+    "literal:eventId": 2,
+    "literal:sessionId": 3,
     "literal:streamId": 1
   },
   "core/raw-journal.mjs": {
@@ -771,6 +800,7 @@
   },
   "adapters/mcp/server.mjs": {
     "key:actionId": 7,
+    "key:actorId": 1,
     "key:batchId": 4,
     "key:cardId": 5,
     "key:conversationId": 3,
@@ -798,6 +828,7 @@
   },
   "adapters/mcp/review-card.mjs": {
     "key:actionId": 1,
+    "key:actorId": 1,
     "key:cardId": 3,
     "key:invalid": 1,
     "key:ownerId": 2,
@@ -810,6 +841,7 @@
     "literal:storeId": 1
   },
   "adapters/mcp/retained-raw.mjs": {
+    "key:actorId": 1,
     "key:captureSessionId": 1,
     "key:cardId": 2,
     "key:sessionId": 1
@@ -1345,12 +1377,15 @@
     "key:applicationId": 2,
     "key:base_id": 1,
     "key:id": 9,
+    "key:invalid": 2,
     "key:storeId": 4,
+    "literal:attestation_invalid": 3,
     "literal:cardId": 2,
     "literal:comparison_base_invalid": 1,
+    "literal:id": 1,
     "literal:memoryId": 2,
     "literal:term_id": 1,
-    "literal:validation_invalid": 6
+    "literal:validation_invalid": 7
   },
   "core/context-product-verification-batch.mjs": {
     "literal:term_id": 1
@@ -1373,15 +1408,22 @@
   "core/context-product-index.mjs": {
     "key:catalogId": 1,
     "key:id": 4,
-    "key:ownerId": 1,
-    "key:storeId": 3,
+    "key:ownerId": 2,
+    "key:sessionIds": 1,
+    "key:storeId": 4,
+    "key:turnIds": 1,
     "literal:hybrid": 1,
     "literal:validation_invalid": 5
   },
   "core/context-product-pump.mjs": {
     "key:id": 1,
-    "key:windowId": 1,
+    "key:pumpId": 1,
+    "key:windowId": 2,
     "literal:id": 3
+  },
+  "core/context-maintenance-turn.mjs": {
+    "literal:pumpId": 2,
+    "literal:windowId": 2
   },
   "core/context-product-selection.mjs": {
     "literal:ownerId": 1,
@@ -1401,10 +1443,14 @@
     "literal:memoryId": 1,
     "literal:validation_invalid": 1
   },
+  "core/context-semantic-client.mjs": {
+    "key:operationId": 1
+  },
   "core/context-semantic-coordinator.mjs": {
     "key:cleanupId": 2,
     "key:credentialBindingId": 2,
     "key:handleId": 2,
+    "key:id": 3,
     "key:ownerId": 2,
     "key:requestId": 2
   },
@@ -1421,17 +1467,22 @@
   "core/context-semantic-pump.mjs": {
     "key:bindingId": 1,
     "key:id": 3,
-    "key:ownerId": 1,
-    "key:windowId": 2,
+    "key:ownerId": 2,
+    "key:pumpId": 1,
+    "key:windowId": 3,
     "literal:id": 1
   },
   "core/context-semantic-worker.mjs": {
+    "key:accountingDomainId": 1,
     "key:authorityId": 2,
     "key:bindingId": 1,
     "key:credentialBindingId": 1,
-    "key:id": 7,
+    "key:id": 8,
+    "key:ledgerId": 1,
     "key:windowId": 3,
-    "literal:ownerId": 1,
+    "literal:accountingDomainId": 1,
+    "literal:ledgerId": 1,
+    "literal:ownerId": 2,
     "literal:validation_invalid": 1
   },
   "core/context-vector-validation.mjs": {
@@ -1445,10 +1496,11 @@
   },
   "core/content-safety-migration.mjs": {
     "key:actionId": 2,
+    "key:cardId": 1,
     "key:messageId": 1,
-    "key:ownerId": 1,
-    "key:projectId": 1,
-    "key:storeId": 1
+    "key:ownerId": 4,
+    "key:projectId": 4,
+    "key:storeId": 2
   },
   "core/content-safety-schema.mjs": {
     "key:applicationId": 1,
@@ -1458,6 +1510,7 @@
     "key:messageId": 1,
     "key:projectId": 1,
     "literal:action_id": 1,
+    "literal:message_id": 1,
     "literal:owner_id": 1,
     "literal:project_id": 1
   },
@@ -1489,11 +1542,15 @@
     "literal:id": 1
   },
   "core/content-safety-boundary.mjs": {
+    "key:cardId": 1,
     "key:memoryId": 1,
     "key:messageId": 2,
-    "key:projectId": 2,
+    "key:projectId": 3,
+    "literal:actionId": 1,
+    "literal:affectedIds": 1,
     "literal:cardId": 1,
     "literal:conversationId": 1,
+    "literal:effectId": 1,
     "literal:memoryId": 1,
     "literal:receiptId": 1,
     "literal:receiptIds": 1
@@ -1508,12 +1565,74 @@
   },
   "core/content-safety-observations.mjs": {
     "key:conversationId": 1,
-    "key:messageId": 3,
+    "key:messageId": 4,
     "key:owner_id": 1,
     "key:ownerId": 2,
     "key:project_id": 1,
     "key:projectId": 2,
     "key:store_id": 1,
     "key:target_id": 1
+  },
+  "core/raw-search-input.mjs": {
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "literal:ownerId": 2,
+    "literal:projectId": 1
+  },
+  "core/raw-search-authority.mjs": {
+    "key:actionId": 1,
+    "key:conversationId": 2,
+    "key:memoryId": 2,
+    "key:messageId": 2,
+    "key:ownerId": 2,
+    "key:projectId": 1,
+    "key:receiptId": 2,
+    "key:storeId": 2,
+    "key:targetId": 1
+  },
+  "core/raw-search-index.mjs": {
+    "key:centerId": 1,
+    "key:conversationId": 3,
+    "key:id": 2,
+    "key:messageId": 3
+  },
+  "core/raw-search-retrieval.mjs": {
+    "key:centerId": 1,
+    "key:id": 4
+  },
+  "core/raw-search-maintenance.mjs": {
+    "key:id": 1,
+    "key:pumpId": 1,
+    "key:windowId": 1
+  },
+  "core/card-lineage.mjs": {
+    "key:actor_id": 1,
+    "key:card_id": 2,
+    "key:conversationId": 2,
+    "key:host_action_id": 2,
+    "key:memoryId": 1,
+    "key:messageId": 3,
+    "key:owner_id": 2,
+    "key:ownerId": 3,
+    "key:project_id": 1,
+    "key:projectId": 3,
+    "key:receiptId": 1,
+    "key:sourceId": 1,
+    "literal:event_id": 1,
+    "literal:session_id": 1
+  },
+  "core/card-lineage-schema.mjs": {
+    "literal:safety_header_invalid": 1
+  },
+  "core/card-lineage-base-schema.mjs": {
+    "literal:ownerId": 4,
+    "literal:packageId": 4,
+    "literal:projectId": 4,
+    "literal:roleId": 2,
+    "literal:versionId": 2
+  },
+  "core/local-raw-search.mjs": {
+    "key:ownerId": 1,
+    "key:projectId": 1
   }
 }

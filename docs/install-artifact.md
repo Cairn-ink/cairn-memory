@@ -68,14 +68,15 @@ same-schema upgrade, uninstall and troubleshooting. Initialize a dedicated local
 installation project first and use `--prefix .`, so npm cannot walk up to an
 unrelated ancestor project. Keep the memory database outside node_modules.
 
-## Explicit programmatic Raw opt-in
+## Programmatic Raw defaults
 
 The private archive includes the public `openMemoryCore({rawConversations})`
 composition and its actual import/asset closure. The internal `raw-capture.mjs`
 compatibility factory stays uninstalled. See the [constructor contract and
 threat boundary](raw-local-journal.md#explicit-public-constructor-p4b-b1).
-Omission preserves the existing ordinary facade; existing MCP startup, CLI
-configuration and installed hooks do not enable Raw automatically.
+Omission enables Raw retention for submitted captures and background Raw search
+maintenance. `raw:false` / `--no-raw` disables retention. MCP contextRead is on
+by default. These defaults do not install capture hooks; see [all defaults](defaults.md).
 
 Synthetic installed tests run both client identities through fresh-process
 first-part replay, exact multipart reads, a bare Raw-backed explicitly authored

@@ -1,8 +1,9 @@
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety } from './content-safety.mjs';
-import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
+import { cachedContentSuppressionRequestInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { transaction } from './database.mjs';
-import { episodeClient, episodeMetadata, instant } from './episode-storage.mjs';
+import { episodeClient, episodeMetadata, episodeReadRow, instant } from './episode-storage.mjs';
+import { episodeSourceEvidenceCTE, episodeSourceEvidenceSQL, episodeSourceKeys } from './raw-lineage-storage.mjs';
 import { fail, object, denseArray, identifier } from './validation.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId];
@@ -81,17 +82,82 @@ export function memoryMetadata(row, decisionReview = false) {
     state: row.currentness === 'current' ? 'active' : 'historical', filingStatus: row.filing_status,
     createdAt: row.created_at, updatedAt: row.updated_at };
 }
-export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRead }) {
+// Two existing SELECTs share only engine-owned data inside one synchronous snapshot.
+// Nothing here opens a file descriptor or survives a caller boundary.
+export function createEpisodeReadProjection({ db, epoch }) {
+  return function begin(ns, query, expectedEpoch) {
+    const layout = cachedContentLayout(db);
+    if (!layout?.suppressionRevision) return { epoch: epoch(ns), query };
+    if (!db.isTransaction) fail('storage_error');
+    const proof = cachedContentSuppressionRequestInside(db, ns.ownerId);
+    const fence = db.prepare(`WITH candidates AS MATERIALIZED (${query.sql}),
+      headers AS MATERIALIZED (
+        SELECT c.id episode_id,s.id,s.role,s.text,o.client,o.session_key
+        FROM candidates c CROSS JOIN episode_sources s INDEXED BY episode_source_page ON s.episode_id=c.id
+        LEFT JOIN session_episodes o ON o.id=s.origin_episode_id LIMIT 817),
+      header_size AS MATERIALIZED (SELECT count(*) rows,
+        coalesce(sum(length(CAST(id AS BLOB))+length(CAST(text AS BLOB))+
+          coalesce(length(CAST(client AS BLOB)),0)+coalesce(length(CAST(session_key AS BLOB)),0)+128),0) bytes
+        FROM headers),
+      header_json AS MATERIALIZED (SELECT *,json_object('id',id,'client',client,'session',session_key,'role',role,'text',text) payload
+        FROM headers WHERE (SELECT rows<=816 AND bytes<=4194304 FROM header_size))
+      SELECT n.epoch,coalesce(f.epoch_hi,0) epoch_hi,coalesce(f.epoch_lo,0) epoch_lo,
+        ${layout.rawLineage ? '(SELECT secret FROM episode_identity WHERE singleton=1)' : 'NULL'} AS identity_secret,
+        CASE WHEN ? IS NULL OR ?=coalesce(n.epoch,1) THEN
+          CASE WHEN (SELECT rows>816 OR bytes>4194304 FROM header_size)
+            OR EXISTS(SELECT 1 FROM headers GROUP BY episode_id HAVING count(*)>16)
+            OR (SELECT coalesce(sum(length(CAST(payload AS BLOB))+64),0) FROM header_json)>4194304 THEN NULL ELSE
+            (SELECT json_group_array(json_object('episodeId',c.id,'sources',json((
+              SELECT json_group_array(json(payload)) FROM header_json h WHERE h.episode_id=c.id)))) FROM candidates c)
+          END
+        END AS source_headers
+      FROM (SELECT 1) anchor LEFT JOIN namespace_epochs n ON n.owner_id=? AND n.scope=? AND n.project_id=?
+      LEFT JOIN owner_suppression_epochs f ON f.owner_id=?`)
+      .get(...query.params, expectedEpoch ?? null, expectedEpoch ?? null, ...boundary(ns), ns.ownerId);
+    if (proof && `${fence.epoch_hi}:${fence.epoch_lo}` !== proof.epoch) fail('evidence_unavailable');
+    const current = fence.epoch ?? 1;
+    // Do not decode later malformed evidence until the cursor fence agrees.
+    if (expectedEpoch !== undefined && current !== expectedEpoch) return { epoch: current };
+    // The caller retains its existing namespace-denial behavior (list refuses,
+    // nextSteps filters). Do not let malformed later source evidence win.
+    if (contentSuppressionReasonInside(db, ns)) return { epoch: current, query };
+    if (fence.source_headers === null) fail('episode_sources_unavailable');
+    const budget = { remaining: 4096, bytesRemaining: 4*1024*1024 };
+    budget.bytesRemaining -= Buffer.byteLength(fence.source_headers, 'utf8');
+    if (budget.bytesRemaining < 0) fail('episode_sources_unavailable');
+    const headers = JSON.parse(fence.source_headers);
+    if (headers.length > 51 || headers.some(row => row.sources.length > 16)) fail('episode_sources_unavailable');
+    const keys = episodeSourceKeys(ns, headers, layout.rawLineage ? fence.identity_secret : undefined);
+    const serializedKeys = JSON.stringify(keys);
+    budget.bytesRemaining -= Buffer.byteLength(serializedKeys, 'utf8') +
+      (typeof fence.identity_secret === 'string' ? Buffer.byteLength(fence.identity_secret, 'utf8') : 0);
+    if (budget.bytesRemaining < 0) fail('episode_sources_unavailable');
+    return { epoch: current, budget, query: {
+      sql: `WITH candidates AS MATERIALIZED (${query.sql}), source_keys AS MATERIALIZED (SELECT value FROM json_each(?)),
+        ${episodeSourceEvidenceCTE(layout.rawLineage)}
+        SELECT c.*,${episodeSourceEvidenceSQL()} AS episode_read_proof,
+          (SELECT value FROM proof_incomplete) AS episode_read_incomplete,
+          (SELECT overflow FROM proof_state) AS episode_read_overflow,
+          (SELECT json_object('rows',rows,'memories',memories,'receipts',receipts,'ancestryInput',ancestry_input,
+            'sources',sources,'parents',parents,'ancestry',ancestry,'roots',roots,'maps',maps) FROM proof_state) AS episode_read_stats
+        FROM candidates c`,
+      params: [...query.params, serializedKeys, budget.bytesRemaining] } };
+  };
+}
+export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRead, episodeProjection }) {
   return function read(ns, operation, filter, cursor) {
+    // Reviewed read-only pages can share a snapshot with a RESERVED writer.
     return transaction(db, () => {
-      const current = epoch(ns);
+      const original = rangeQuery(ns,operation,filter,cursor?.a);
+      const projected = operation === 'listEpisodes' ? episodeProjection(ns, original, cursor?.e) : { epoch: epoch(ns), query: original };
+      const current = projected.epoch;
       if (cursor && cursor.e !== current) fail('cursor_stale');
-      const query = rangeQuery(ns,operation,filter,cursor?.a);
-      const rows = db.prepare(query.sql).all(...query.params);
+      const query = projected.query, rows = db.prepare(query.sql).all(...query.params);
       if (contentSuppressionReasonInside(db, ns)) fail('revision_conflict');
       return { epoch: current, rows: rows.map(row => {
         if (operation === 'listEpisodes') {
-          assertEpisodeRead?.(ns, row);
+          assertEpisodeRead?.(ns, row, projected.budget);
+          row = episodeReadRow(row);
           const item = episodeMetadata(ns,row);
           return { item, key: { time: filter.timeBasis === 'event' ? item.eventEnd : item.firstReceivedAt, id: row.id } };
         }
@@ -103,7 +169,7 @@ export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRea
           id: row.receipt_id, createdAt: row.receipt_time, client: row.receipt_client } } : {}) },
           key: receipt ? { time: row.receipt_time, id: row.receipt_id, memoryId: row.id } : { time: row.updated_at, id: row.id } };
       }) };
-    });
+    }, undefined, { deferred: true });
   };
 }
 export function rangePage(page, filter, binding, encodeCursor, operation) {

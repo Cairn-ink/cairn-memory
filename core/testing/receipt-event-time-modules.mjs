@@ -16,12 +16,37 @@ const frozenExceptions = JSON.parse(readFileSync(new URL('../test/fixtures/recei
 // consumer. Pin the complete merged source, retaining the original pin too.
 // This package's three hunks extend the maintenance method allowlist and
 // deadline handling and pass a private admission diagnostic through. They
-// change no loader or feature consumer.
+// change no loader or feature consumer. The private sidecar-handle registry
+// adds an identity-ack field and passes it to storage; loaders stay unchanged.
 const exceptions = frozenExceptions.map(entry => {
+  // The journal-mode probe checks the opening deadline before preparing and
+  // executing its statement. This hunk adds no loader and no feature consumer.
+  if (entry.file === 'core/topic-reader-sqlite.mjs') {
+    assert.equal(entry.sha256, '78547baf2b9eea0572ad69e8be2ef0bb2e8dcc8314aa4e58fc0b4dda87ce679f',
+      'frozen journal-mode probe loader pin');
+    return { ...entry, sha256: 'b284cf9ae1e2a307639e362940d59a08e238219342190a3701aae7f7c17fe51c' };
+  }
+  // Opening-deadline checks run before SQLite configuration and journal-mode
+  // statements. These hunks add no loader and no feature consumer.
+  if (entry.file === 'core/context-product-sqlite.mjs') {
+    assert.equal(entry.sha256, '03d69f0bdb2e5e8acd1b6e08e566d3333bfbc9e22fdfac97514aa8023618c207',
+      'frozen SQLite policy loader pin');
+    return { ...entry, sha256: 'e5c700237258e5e077c03aa49a7ba509f805cfdf0df4dba29a1265ec21b515c1' };
+  }
+  // Parent handle reservation, target preparation and close/exit cleanup keep
+  // the host loader and synchronous transmission/final validation unchanged.
+  // Keep the frozen PR 1 pin, then bind the complete integrated Worker bytes.
+  if (entry.file === 'core/context-semantic-worker.mjs') {
+    assert.equal(entry.sha256, 'ef2961fcb0114b9d9062084d57babea2adfad4d0753619c500728ca657da5fa5',
+      'frozen semantic Worker loader pin');
+    return { ...entry, line: 502, sha256: '184156b8181e5e9efabc107045fb7d50f52058b58a010570f487dd7ce36949fe' };
+  }
   if (entry.file !== 'core/context-product-worker.mjs') return entry;
   assert.equal(entry.sha256, '073071759a46698824ffd029a5fe48fbd737513c5c6936ba826b5d413be32bbe',
     'frozen pre-rebase Worker loader pin');
-  return { ...entry, sha256: '14844bf1e4c8a61a1812451f27cc92c6aed37216306e780408e5dfa5db8afdc1' };
+  // Passing the optional maintenance phase, and registering/transporting
+  // refusal causes plus the trusted Raw host port, add no loader or feature consumer.
+  return { ...entry, line: 120, sha256: '260b9489a7ce615f27ac2d84a8eb80356f0d9f6915636d58fc38e29816330565' };
 });
 export const moduleLoadingExceptions = exceptions;
 const cache = new Map();

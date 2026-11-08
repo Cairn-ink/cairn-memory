@@ -42,6 +42,31 @@ test('C05 reviewed help additions remove only exact §20 and safety lines at the
   compareHelp(reviewedHelp());
 });
 
+test('default help changes are exact and preserve every pinned safety line', () => {
+  const defaults = 'Defaults: Raw retention and Raw search maintenance are on (--no-raw disables retention).\n' +
+    'Preferred memory reads: find_memory_candidates and read_memory_context (contextRead is on).\n' +
+    '--no-context-read removes these tools; --no-context-semantic keeps reads BM25-only.\n' +
+    'OPENAI_API_KEY automatically selects bounded OpenAI embeddings when present.\n' +
+    'See docs/defaults.md for costs, options and every default.\n\n';
+  const original = reviewedHelp();
+  const current = original.replace('\n\nUsage:', '\n\n' + defaults + 'Usage:')
+    .replace('--context-read context-read-v1 [--context-read-personal]', '[--context-read context-read-v1 | --no-context-read] [--context-read-personal]')
+    .replace('fetch_memory_candidate_evidence only. Read sets are fixed at startup; personal\n' +
+      'reads require project scope and --context-read-personal. Semantic defaults to false.\n' +
+      'Only explicit context refresh embeds documents. All five provider options are\n' +
+      'required together; a key alone never constructs an embedder. Hosted uses rrf-k10.',
+      'fetch_memory_candidate_evidence and read_memory_context by default. Read sets are fixed at startup; personal\n' +
+      'reads require project scope and --context-read-personal. Semantic defaults on with OPENAI_API_KEY; otherwise reads use BM25.\n' +
+      'Background turns refresh configured embeddings. Explicit provider overrides\n' +
+      'require all five provider options together. Hosted uses rrf-k10.');
+  compareHelp(current);
+  for (const changed of [current.replace('--no-context-read', '--context-read-off'), current.replace('bounded OpenAI', 'unbounded OpenAI'),
+    current.replace(defaults, defaults + defaults), defaults + current.replace(defaults, ''),
+    current.replace('drained readers and closed old handles.', 'closed old handles.')]) {
+    if (changed !== current) assert.throws(() => compareHelp(changed));
+  }
+});
+
 test('C05 an unlisted help change still fails the pinned byte comparison', () => {
   const actual = reviewedHelp(), block = allowlist.additions[0].lines.join('\n') + '\n';
   const safety = allowlist.additions[1].lines.join('\n') + '\n';

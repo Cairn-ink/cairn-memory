@@ -115,8 +115,8 @@ export function sourceRef(value, ns, raw = false) {
   return { type: 'submitted-note', namespace: scope, sourceId: value.sourceId,
     revision: value.revision, contentIdentity: value.contentIdentity, completeness: 'provided-note' };
 }
-export function refs(value, ns, raw = false) {
-  const result = denseArray(value, 1, 16).map(ref => sourceRef(ref, ns, raw));
+export function refs(value, ns, raw = false, allowEmpty = false) {
+  const result = denseArray(value, allowEmpty ? 0 : 1, 16).map(ref => sourceRef(ref, ns, raw));
   if (new Set(result.map(ref => `${ref.type}:${ref.type === 'raw' ? rawSourceKey(ref) : ref.sourceId ?? ref.receiptId}`)).size !== result.length) fail('invalid_input');
   return result;
 }
@@ -133,7 +133,7 @@ export function pageLimit(value = 20) {
   if (!Number.isSafeInteger(value) || value < 1 || value > 50) fail('invalid_input');
   return value;
 }
-export function validateCardCall(method, input, raw = false, currentDependencies = false) {
+export function validateCardCall(method, input, raw = false, currentDependencies = false, lineage = false) {
   const ns = cardNamespace(input.namespace);
   if (currentDependencies && CARD_CURRENT_METHODS.includes(method)) { currentCall(input, ns); return ns; }
   if (method === 'resolveSourceReferences' && raw) {
@@ -194,7 +194,7 @@ export function validateCardCall(method, input, raw = false, currentDependencies
   }
   if (method === 'editCardDraft' || method === 'editKnowledgeCard') {
     identifier(input.cardId); cardText(input.title, 200); cardText(input.body, 20_000);
-    refs(input.bindings, ns, raw);
+    refs(input.bindings, ns, raw, lineage);
     if (method === 'editKnowledgeCard' && !APPLICABILITY.includes(input.applicability)) fail('invalid_input');
   }
   for (const methodName of ['confirmCardDraft', 'cancelCardDraft', 'deleteKnowledgeCard']) {

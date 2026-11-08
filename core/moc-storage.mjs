@@ -355,7 +355,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         return memoryDto(memory, true);
       });
       return { memories, indexRevision: expectedIndex, suppressionEpoch: suppressionEpochInside(ns) };
-    });
+    }, undefined, { deferred: true });
   }
 
   function placementRefs(ns, memoryId) {
@@ -384,6 +384,16 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     // Serialize it behind RESERVED exactly as before; ordinary recall reads
     // remain deferred so they can proceed alongside an uncommitted writer.
     return transaction(db, () => {
+      // Only the two per-candidate discovery probes use this transaction-local
+      // cache. Key by the exact projected SQL; never share across connections.
+      const discoveryStatements = new Map();
+      const discoveryPrepare = sql => {
+        sql = projectSQL(sql);
+        if (!discoveryStatements.has(sql)) discoveryStatements.set(sql, db.prepare(sql));
+        return discoveryStatements.get(sql);
+      };
+      let primaryError = false;
+      try {
       if (![0, SOURCE_QUERY_RECEIPT_LIMIT].includes(sourceReceiptLimit)) fail('invalid_input');
       const keyset = sourceCandidatePolicy === BOUNDED_KEYSET_SOURCE_CANDIDATES.version;
       if (sourceCandidatePolicy !== null && (!keyset || sourceReceiptLimit !== SOURCE_QUERY_RECEIPT_LIMIT)) {
@@ -501,7 +511,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         for (const memory of scanned.slice(0, QUERY_SCAN_LIMIT)) {
           if (memory.deleted || memory.currentness !== 'current' || safety && !safeMemory(ns, memory, true)) continue;
           // Respect active-generation membership, never bypass its read authority.
-          if (!projectPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
+          if (!discoveryPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
             AND revision = ?`).get(...boundary(ns), memory.id, memory.revision)) continue;
           const candidate = scoreMemory(memory);
           eligible.push({ ...candidate, sourceLabel: candidate.winningExcerpt === undefined
@@ -511,7 +521,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       }
       eligible.sort(compare);
       const rows = eligible.map(({ memory, sourceLabel }) => {
-        const placement = projectPrepare(`SELECT r.* FROM moc_memory_refs r
+        const placement = discoveryPrepare(`SELECT r.* FROM moc_memory_refs r
           JOIN mocs parent ON parent.id = r.moc_id
           WHERE r.memory_id = ? AND r.memory_revision = ? AND ${qualifiedNamespace('parent')}
             AND parent.level = 1 AND parent.revision = r.moc_revision
@@ -523,6 +533,22 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
             label: sourceLabel ?? memoryLabel(memory.content) } };
       });
       return { rows, epoch: currentEpoch, scanExhausted, suppressionEpoch: suppressionEpochInside(ns) };
+      } catch (error) {
+        primaryError = true;
+        throw error;
+      } finally {
+        // Close where supported; otherwise get() has reset each statement
+        // (never iterate()), and clearing references releases it to GC.
+        const closeErrors = [];
+        for (const statement of discoveryStatements.values()) {
+          try {
+            if (typeof statement.close === 'function') statement.close();
+            else if (typeof statement[Symbol.dispose] === 'function') statement[Symbol.dispose]();
+          } catch (error) { closeErrors.push(error); }
+        }
+        discoveryStatements.clear();
+        if (!primaryError && closeErrors.length) throw closeErrors[0];
+      }
     }, undefined, { deferred: sourceCandidatePolicy !== BOUNDED_KEYSET_SOURCE_CANDIDATES.version });
   }
 
@@ -556,7 +582,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
           LIMIT ? OFFSET ?`).all(...boundary(ns), count, offset);
       } else if (!parentRef) {
         const recall = purpose === "recall" ? 1 : 0;
-        const sql = `WITH candidates AS (
+        const candidates = `WITH candidates AS (
           SELECT 'moc' row_kind, moc.level sort_level, COALESCE(${titleExpression}, '') sort_title,
             moc.id sort_id, '' sort_ref, moc.id moc_id, NULL parent_id, NULL parent_revision,
             NULL child_id, NULL child_revision, NULL child_type, NULL reason, NULL content
@@ -622,13 +648,13 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
               WHEN parent.level != 1 THEN 'invalid_level'
               WHEN memory.deleted = 1 OR ref.moc_revision != parent.revision
                 OR ref.memory_revision != memory.revision THEN 'stale'
-              ELSE NULL END, memory.content
+              ELSE NULL END, NULL
           FROM moc_memory_refs ref LEFT JOIN mocs parent ON parent.id = ref.moc_id
             LEFT JOIN memories memory ON memory.id = ref.memory_id
           WHERE ${qualifiedNamespace("parent")}
           UNION ALL
           SELECT 'unfiled', 3, '', memory.id, '', NULL, NULL, NULL, memory.id,
-            memory.revision, 'memory', NULL, memory.content
+            memory.revision, 'memory', NULL, NULL
           FROM memories memory WHERE ${qualifiedNamespace("memory")} AND memory.deleted = 0
             AND (memory.filing_status = 'unfiled' OR NOT EXISTS (
               SELECT 1 FROM moc_memory_refs valid_ref JOIN mocs valid_parent ON valid_parent.id = valid_ref.moc_id
@@ -638,7 +664,42 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
                 AND valid_ref.memory_revision = memory.revision))
         ) SELECT * FROM candidates ORDER BY sort_level, sort_title, sort_id, sort_ref
           LIMIT ? OFFSET ?`;
-        rows = memoryPage(sql).all(...boundary(ns), recall, ...boundary(ns), recall,
+        // Share body-free, generation-aware metadata across the UNION arms and
+        // correlated title/visibility checks. Keep foreign endpoints and title
+        // sources: they distinguish missing, stale and cross-namespace refs.
+        // These columns exist before the default layout and in every later
+        // readable layout; no safety-layout-only column is needed here.
+        const sharedCandidates = projectSQL(candidates)
+          .replaceAll('index_read_memories', 'map_memories')
+          .replaceAll('index_read_mocs', 'map_mocs')
+          .replaceAll('index_read_memory_refs', 'map_refs')
+          .replaceAll('index_read_edges', 'map_edges');
+        const sql = `WITH map_namespace(owner_id, scope, project_id) AS (VALUES (?, ?, ?)),
+          map_edges AS MATERIALIZED (
+            SELECT * FROM index_read_edges WHERE parent_id IN (
+              SELECT id FROM index_read_mocs
+              WHERE (owner_id, scope, project_id) IN (SELECT * FROM map_namespace))),
+          map_mocs AS MATERIALIZED (
+            SELECT id, owner_id, scope, project_id, level, title, revision FROM index_read_mocs
+            WHERE (owner_id, scope, project_id) IN (SELECT * FROM map_namespace)
+              OR id IN (SELECT child_id FROM map_edges)),
+          map_refs AS MATERIALIZED (
+            SELECT * FROM index_read_memory_refs WHERE moc_id IN (SELECT id FROM map_mocs)),
+          map_memories AS MATERIALIZED (
+            SELECT id, owner_id, scope, project_id, deleted, currentness, revision, filing_status
+            FROM index_read_memories
+            WHERE (owner_id, scope, project_id) IN (SELECT * FROM map_namespace)
+              OR id IN (SELECT memory_id FROM map_refs)
+              OR id IN (SELECT memory_id FROM moc_title_sources
+                WHERE moc_id IN (SELECT id FROM map_mocs)))
+          SELECT page.row_kind, page.sort_level, page.sort_title, page.sort_id, page.sort_ref,
+            page.moc_id, page.parent_id, page.parent_revision, page.child_id, page.child_revision,
+            page.child_type, page.reason, CASE WHEN page.child_type = 'memory' THEN
+            (SELECT memory.content FROM index_read_memories memory WHERE memory.id = page.child_id)
+            ELSE NULL END AS content
+          FROM (${sharedCandidates}) page
+          ORDER BY page.sort_level, page.sort_title, page.sort_id, page.sort_ref`;
+        rows = memoryPage(sql).all(...boundary(ns), ...boundary(ns), recall, ...boundary(ns), recall,
           ...boundary(ns), ...boundary(ns), count, offset);
       } else {
         const parent = projectPrepare(`SELECT * FROM mocs WHERE ${namespaceWhere} AND id = ?`)

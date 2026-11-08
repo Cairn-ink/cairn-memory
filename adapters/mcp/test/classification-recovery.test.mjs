@@ -111,11 +111,11 @@ test('opt-in inventory, strict config and syntax-only keyless check', async (t) 
   errorCode(await call(stdio, 'classify_unfiled_memories', { refs: [ref(cliMemory)] }), 'model_not_configured');
   await stdio.close();
   const plain = await host(t, path, { options: {} });
-  assert.equal((await plain.client.listTools()).tools.length, 5);
+  assert.equal((await plain.client.listTools()).tools.length, 8);
   await plain.close();
   const recovery = await host(t, path);
   const tools = (await recovery.client.listTools()).tools;
-  assert.equal(tools.length, 7);
+  assert.equal(tools.length, 10);
   const tool = tools.find((entry) => entry.name === 'classify_unfiled_memories');
   assert.ok(tool); assert.equal(tool.annotations.readOnlyHint, false);
   assert.equal(tool.annotations.openWorldHint, true);

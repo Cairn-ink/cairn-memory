@@ -131,7 +131,7 @@ test('fresh installation protects ancestor, proves source identity and supports 
     return JSON.parse(response.content[0].text);
   }
   const first = await connect();
-  assert.equal((await first.listTools()).tools.length, 5);
+  assert.equal((await first.listTools()).tools.length, 8);
   const saved = await call(first, 'remember_memory', { content: 'Synthetic installer restart marker.' });
   assert.equal(saved.ok, true);
   const memory = saved.value.memory;

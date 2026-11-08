@@ -75,7 +75,7 @@ test('P1/P4/P7 SDK v2 short window is empty; v1 capture and unconfigured remembe
       const duplicate = ok(await call(hosted.client, 'capture_memory', input));
       assert.equal(duplicate.duplicate, true); assert.equal(Object.hasOwn(duplicate, 'retainedSourceWindow'), false);
     }
-    assert.equal((await hosted.client.listTools()).tools.length, mode ? 6 : 5);
+    assert.equal((await hosted.client.listTools()).tools.length, mode ? 9 : 8);
     await hosted.client.close();
   }
 });

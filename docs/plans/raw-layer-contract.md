@@ -42,6 +42,14 @@ work. Recall continues to use memories and episodes. Website workspace records
 keep their existing collection/limits. MCP chat histories, URLs and meeting notes
 are outside this capture contract; ChatGPT export import is RL-8.
 
+> **Superseded in part by an owner decision (2026-11-05):** full Raw text is to be
+> searchable. Reads use Memory as the entry point and Raw for deeper evidence: a
+> Memory hit may bring its Raw passages, and Raw hits may cover what Memories miss.
+> Forget, suppression and deletion rules apply to Raw search without exception.
+> The replacement contract (indexing, limits, encryption, migration) is pending
+> design review. Until it lands, no Raw search is implemented and current
+> behavior is unchanged.
+
 RL-1 code waits for RL-0, G1 (production backups running and a staging restore)
 and G2 (completed H6 cutover). RL-2/RL-3 follow RL-1. RL-4 additionally waits for
 RL-1–RL-3 and H6-T's pinned-core adoption. Launch waits for RL-5's H6-E inventory,
@@ -53,7 +61,7 @@ before notice or across pause/resume barriers.
 
 The owner subsequently approved pure-local, synthetic-data Raw development,
 tests and PRs before the G1/G2 evidence is complete. This supersedes **only**
-the preceding pre-code dependency for that bounded work. Raw stays default-off;
+the preceding pre-code dependency for that bounded work. Local Raw retention is now default-on for submitted captures ([defaults](../defaults.md));
 no real-user transcript retention, production database migration, publication,
 deployment or flag activation is authorized by this exception. G1/G2, H6,
 encryption, privacy/notice and production launch gates remain unchanged and
@@ -144,7 +152,7 @@ refusals keep pending bytes and cursor unchanged; raw-cap exhaustion is not that
 
 The constructor adds `rawConversations:{mode:'raw-v1',port,capBytes:200000000}`;
 `mode:'off'` can supply the same port/cap for reads without enabling new saving.
-Omission disables new raw saving. It is off by default in the public core and on
+Omission now enables local Raw saving; `raw:false` disables it. It is on by default in the public core and on
 in one-brain configuration. No staging/episode option implicitly turns it on.
 Enabled mode requires a valid port and positive safe-integer cap. Raw registration
 does not require successful staging or episode interpretation. Existing stored
@@ -366,6 +374,14 @@ Reservations are shown separately, so an incomplete upload cannot hide capacity.
 Local setup status and hosted 設定 › 方案 consume this read. Core counts bytes;
 plan selection/billing belongs to the host. Missing owner usage returns zeros and
 the configured cap; the read itself creates no row. No raw search is added.
+
+> **Superseded in part by an owner decision (2026-11-05):** full Raw text is to be
+> searchable. Reads use Memory as the entry point and Raw for deeper evidence: a
+> Memory hit may bring its Raw passages, and Raw hits may cover what Memories miss.
+> Forget, suppression and deletion rules apply to Raw search without exception.
+> The replacement contract (indexing, limits, encryption, migration) is pending
+> design review. Until it lands, no Raw search is implemented and current
+> behavior is unchanged.
 
 ## Per-tool control and notice (D8/D9)
 
@@ -624,7 +640,7 @@ today's runtime: implementation summaries identify legacy behavior until RL-2.
 | `docs/plans/session-episodes.md:348–350` | “Forget all live and historical memories with admission lineage from it using normal suppression, including multi-source deduplicated memories.” | D5 deletes raw and only forgets source-only memories; remove this conversation's receipts from others. |
 | `docs/plans/session-episodes.md:352` | “Preserve existing namespace-wide staged purge when memory forgetting invokes it.” | Staging only; add D6 exclusion while raw stays. |
 | `docs/plans/session-episodes.md:380` | “Keep cannot recover omitted/expired text.” | Keep can use saved raw after integration, under existing budgets/suppression; absence still cannot be recovered. |
-| `docs/plans/session-episodes.md:1086–1088` | “the one-brain client must disclose durable selected-passage retention when enabling capture” / “Existing staging opt-in must not silently acquire permanent retention.” | Disclose full conversations and switch; preserve separate raw opt-in boundary. |
+| `docs/plans/session-episodes.md:1086–1088` | “the one-brain client must disclose durable selected-passage retention when enabling capture” / “Existing staging opt-in must not silently acquire permanent retention.” | Disclose retained submitted messages and `raw:false` / `--no-raw`; the original opt-in retention boundary is superseded by current local defaults. |
 | `docs/plans/session-episodes.md:1101–1102` | “additional unsupported clients, complete archives/backfill, cross-store identity” | Raw complete archive in scope; no automatic backfill; later explicit import remains RL-8. |
 | `docs/staged-capture-evidence.md:53–55` | “This is not the original byte stream or a complete transcript archive.” | Still true of staging; point to raw archive. |
 | `docs/staged-capture-evidence.md:61–62` | “Fixed24-hour expiry starts with the original claim and is not renewed by replay or inspection.” | Keep; independently saved raw survives expiry. |
@@ -643,3 +659,16 @@ today's runtime: implementation summaries identify legacy behavior until RL-2.
 Tool output remains excluded unless chichi decides otherwise. KMS adoption,
 bulk deletion per tool and later plan-specific cap changes are separate work.
 The six accepted rows and the initial 200 MB cap are settled, not open questions.
+
+
+### Optional local Raw search service
+
+The separately selected `raw-search-v1` service implements a derived local
+index and canonical Raw candidate/materialization interface. It does not select
+Raw saving or add context output. Existing capture, read and privacy mutation
+branches remain unchanged when it is absent or disabled. Hosted backend
+selection refuses. See [the interface](raw-search-interface.md) and
+[the host seam](raw-search-seam.md) for plaintext storage, explicit maintenance,
+current/history policy and final canonical validation. This optional service
+supersedes earlier statements that no Raw search implementation exists; it does
+not authorize automatic Cards or an additional context representation.

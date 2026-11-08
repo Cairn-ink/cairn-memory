@@ -8,13 +8,15 @@ export async function createContextReadHost(configuration) {
   DatabaseSync.prototype.prepare=function(sql){
     handles.add(this);const stmt=Reflect.apply(prepare,this,[sql]);
     const slot=sql==='PRAGMA quick_check'?0:sql==='PRAGMA foreign_key_check'?1:
-      /\bFROM (?:memories|documents|postings|statistics|generations|work|publications|progress_records|validation_records|selections)\b/i.test(sql)?2:-1;
+      !sql.startsWith('SELECT substr(record,')&&!/^SELECT 1 FROM (?:publications p|work w) LEFT JOIN/.test(sql)&&/\bFROM (?:memories|documents|postings|statistics|generations|work|publications|progress_records|validation_records|selections)\b/i.test(sql)?2:-1;
     return new Proxy(stmt,{get(target,key){const value=Reflect.get(target,key,target);if(typeof value!=='function')return value;
       return (...args)=>{
         if(['get','all','iterate','run'].includes(key)){
           if(slot>=0)Atomics.add(c,slot,1);
-          if(slot===0&&Atomics.compareExchange(c,7,1,2)===1){Atomics.notify(c,7);while(Atomics.load(c,7)===2)Atomics.wait(c,7,2);}
-          if(slot===0&&Atomics.load(c,5))void testClock.advance(Atomics.exchange(c,5,0),{waitForWorkers:false});
+          const attestation=sql==='SELECT m.*,CAST(a.stamp AS TEXT) AS attestation_stamp,typeof(a.stamp) AS attestation_type,a.record AS attestation_record,a.singleton AS attestation_present FROM product_metadata m LEFT JOIN product_attestation a ON a.singleton=1 WHERE m.singleton=1';
+          if(attestation)Atomics.add(c,8,1);
+          if(attestation&&Atomics.compareExchange(c,7,1,2)===1){Atomics.notify(c,7);while(Atomics.load(c,7)===2)Atomics.wait(c,7,2);}
+          if(attestation&&Atomics.load(c,5))void testClock.advance(Atomics.exchange(c,5,0),{waitForWorkers:false});
         }
         return Reflect.apply(value,target,args);
       };}});

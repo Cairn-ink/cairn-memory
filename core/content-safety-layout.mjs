@@ -1,4 +1,5 @@
-import { fail } from './validation.mjs';
+import { fail, MemoryStoreError } from './validation.mjs';
+import { cardLineageRevision } from './content-safety-schema.mjs';
 
 // Deliberately finite: legacy cells and per-base attested-feature families.
 // The integer selects a family, never an installed feature or future revision.
@@ -18,16 +19,25 @@ export function safetyPhysicalVersion(base) {
   for (const [physical, layout] of cells) if (base === layout) return physical;
   fail('unsupported_database');
 }
+export const supportsCardLineage = layout => layout.attestedFeatures && [23,33].includes(layout.base);
+const rawCapabilityRefusals = new WeakSet();
+export const isRawCapabilityRefusal = error => rawCapabilityRefusals.has(error);
 export function assertContentFeatures(layout, options) {
   for (const [option, capability] of Object.entries({ privateCards: 'cards', rawConversations: 'raw',
     rawCapture: 'rawCapture', rawLineage: 'rawLineage', rawDeletion: 'rawDeletion', rawSources: 'rawSources',
     localControls: 'localControls', methodPackages: 'methods', assets: 'assets', roleProfiles: 'roles',
     currentDependencies: 'currentDependencies' })) {
-    if (options[option] && !layout[capability]) fail('unsupported_database');
+    if (options[option] && !layout[capability]) {
+      const error = new MemoryStoreError('unsupported_database');
+      if (['raw', 'rawCapture', 'rawLineage', 'rawDeletion', 'rawSources', 'localControls'].includes(capability)) {
+        rawCapabilityRefusals.add(error);
+      }
+      throw error;
+    }
   }
 }
 export function contentSafetyPin(layout, storeId) {
   return layout.suppressionRevision ? Object.freeze({ version: 'content-safety-existing-v1', storeId,
-    physical: layout.physical, base: layout.base, suppressionRevision: 1, cardLineageRevision: 0 }) :
+    physical: layout.physical, base: layout.base, suppressionRevision: 1, cardLineageRevision: cardLineageRevision(layout) }) :
     Object.freeze({ version: 'schema29-existing-v1', storeId });
 }

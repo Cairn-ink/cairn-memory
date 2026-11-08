@@ -1,0 +1,653 @@
+{
+  "baseline": "cdd89676",
+  "rows": [
+    {
+      "physical": 18,
+      "n": 12,
+      "variant": "current-first",
+      "old": 560,
+      "oldBegin": 39,
+      "oldCommit": 36,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 18,
+      "n": 12,
+      "variant": "current-repeat",
+      "old": 105,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 18,
+      "n": 12,
+      "variant": "history-first",
+      "old": 555,
+      "oldBegin": 39,
+      "oldCommit": 36,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 18,
+      "n": 12,
+      "variant": "history-repeat",
+      "old": 105,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 18,
+      "n": 24,
+      "variant": "current-first",
+      "old": 860,
+      "oldBegin": 51,
+      "oldCommit": 48,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 18,
+      "n": 24,
+      "variant": "current-repeat",
+      "old": 105,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 18,
+      "n": 24,
+      "variant": "history-first",
+      "old": 855,
+      "oldBegin": 51,
+      "oldCommit": 48,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 18,
+      "n": 24,
+      "variant": "history-repeat",
+      "old": 105,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 23,
+      "n": 12,
+      "variant": "current-first",
+      "old": 560,
+      "oldBegin": 39,
+      "oldCommit": 36,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 23,
+      "n": 12,
+      "variant": "current-repeat",
+      "old": 105,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 23,
+      "n": 12,
+      "variant": "history-first",
+      "old": 555,
+      "oldBegin": 39,
+      "oldCommit": 36,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 23,
+      "n": 12,
+      "variant": "history-repeat",
+      "old": 105,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 23,
+      "n": 24,
+      "variant": "current-first",
+      "old": 860,
+      "oldBegin": 51,
+      "oldCommit": 48,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 23,
+      "n": 24,
+      "variant": "current-repeat",
+      "old": 105,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 23,
+      "n": 24,
+      "variant": "history-first",
+      "old": 855,
+      "oldBegin": 51,
+      "oldCommit": 48,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 23,
+      "n": 24,
+      "variant": "history-repeat",
+      "old": 105,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 33,
+      "n": 12,
+      "variant": "current-first",
+      "old": 560,
+      "oldBegin": 39,
+      "oldCommit": 36,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 33,
+      "n": 12,
+      "variant": "current-repeat",
+      "old": 105,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 33,
+      "n": 12,
+      "variant": "history-first",
+      "old": 555,
+      "oldBegin": 39,
+      "oldCommit": 36,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 33,
+      "n": 12,
+      "variant": "history-repeat",
+      "old": 105,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 33,
+      "n": 24,
+      "variant": "current-first",
+      "old": 860,
+      "oldBegin": 51,
+      "oldCommit": 48,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 33,
+      "n": 24,
+      "variant": "current-repeat",
+      "old": 105,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 33,
+      "n": 24,
+      "variant": "history-first",
+      "old": 855,
+      "oldBegin": 51,
+      "oldCommit": 48,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 33,
+      "n": 24,
+      "variant": "history-repeat",
+      "old": 105,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 34,
+      "n": 12,
+      "variant": "current-first",
+      "old": 564,
+      "oldBegin": 39,
+      "oldCommit": 36,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 34,
+      "n": 12,
+      "variant": "current-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 34,
+      "n": 12,
+      "variant": "history-first",
+      "old": 559,
+      "oldBegin": 39,
+      "oldCommit": 36,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 34,
+      "n": 12,
+      "variant": "history-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 34,
+      "n": 24,
+      "variant": "current-first",
+      "old": 864,
+      "oldBegin": 51,
+      "oldCommit": 48,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 34,
+      "n": 24,
+      "variant": "current-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 34,
+      "n": 24,
+      "variant": "history-first",
+      "old": 859,
+      "oldBegin": 51,
+      "oldCommit": 48,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 34,
+      "n": 24,
+      "variant": "history-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 38,
+      "n": 12,
+      "variant": "current-first",
+      "old": 564,
+      "oldBegin": 39,
+      "oldCommit": 36,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 38,
+      "n": 12,
+      "variant": "current-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 38,
+      "n": 12,
+      "variant": "history-first",
+      "old": 559,
+      "oldBegin": 39,
+      "oldCommit": 36,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 38,
+      "n": 12,
+      "variant": "history-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 38,
+      "n": 24,
+      "variant": "current-first",
+      "old": 864,
+      "oldBegin": 51,
+      "oldCommit": 48,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 38,
+      "n": 24,
+      "variant": "current-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 38,
+      "n": 24,
+      "variant": "history-first",
+      "old": 859,
+      "oldBegin": 51,
+      "oldCommit": 48,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 38,
+      "n": 24,
+      "variant": "history-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 48,
+      "n": 12,
+      "variant": "current-first",
+      "old": 564,
+      "oldBegin": 39,
+      "oldCommit": 36,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 48,
+      "n": 12,
+      "variant": "current-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 48,
+      "n": 12,
+      "variant": "history-first",
+      "old": 559,
+      "oldBegin": 39,
+      "oldCommit": 36,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 48,
+      "n": 12,
+      "variant": "history-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 48,
+      "n": 24,
+      "variant": "current-first",
+      "old": 864,
+      "oldBegin": 51,
+      "oldCommit": 48,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 48,
+      "n": 24,
+      "variant": "current-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 48,
+      "n": 24,
+      "variant": "history-first",
+      "old": 859,
+      "oldBegin": 51,
+      "oldCommit": 48,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 48,
+      "n": 24,
+      "variant": "history-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 51,
+      "n": 12,
+      "variant": "current-first",
+      "old": 564,
+      "oldBegin": 39,
+      "oldCommit": 36,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 51,
+      "n": 12,
+      "variant": "current-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 51,
+      "n": 12,
+      "variant": "history-first",
+      "old": 559,
+      "oldBegin": 39,
+      "oldCommit": 36,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 51,
+      "n": 12,
+      "variant": "history-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 51,
+      "n": 24,
+      "variant": "current-first",
+      "old": 864,
+      "oldBegin": 51,
+      "oldCommit": 48,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 51,
+      "n": 24,
+      "variant": "current-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 51,
+      "n": 24,
+      "variant": "history-first",
+      "old": 859,
+      "oldBegin": 51,
+      "oldCommit": 48,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 51,
+      "n": 24,
+      "variant": "history-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 52,
+      "n": 12,
+      "variant": "current-first",
+      "old": 564,
+      "oldBegin": 39,
+      "oldCommit": 36,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 52,
+      "n": 12,
+      "variant": "current-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 52,
+      "n": 12,
+      "variant": "history-first",
+      "old": 559,
+      "oldBegin": 39,
+      "oldCommit": 36,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 52,
+      "n": 12,
+      "variant": "history-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 52,
+      "n": 24,
+      "variant": "current-first",
+      "old": 864,
+      "oldBegin": 51,
+      "oldCommit": 48,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 52,
+      "n": 24,
+      "variant": "current-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 52,
+      "n": 24,
+      "variant": "history-first",
+      "old": 859,
+      "oldBegin": 51,
+      "oldCommit": 48,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 52,
+      "n": 24,
+      "variant": "history-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 53,
+      "n": 12,
+      "variant": "current-first",
+      "old": 564,
+      "oldBegin": 39,
+      "oldCommit": 36,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 53,
+      "n": 12,
+      "variant": "current-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 53,
+      "n": 12,
+      "variant": "history-first",
+      "old": 559,
+      "oldBegin": 39,
+      "oldCommit": 36,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 53,
+      "n": 12,
+      "variant": "history-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 53,
+      "n": 24,
+      "variant": "current-first",
+      "old": 864,
+      "oldBegin": 51,
+      "oldCommit": 48,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 53,
+      "n": 24,
+      "variant": "current-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    },
+    {
+      "physical": 53,
+      "n": 24,
+      "variant": "history-first",
+      "old": 859,
+      "oldBegin": 51,
+      "oldCommit": 48,
+      "oldWriteBegin": 7
+    },
+    {
+      "physical": 53,
+      "n": 24,
+      "variant": "history-repeat",
+      "old": 109,
+      "oldBegin": 10,
+      "oldCommit": 7,
+      "oldWriteBegin": 0
+    }
+  ]
+}

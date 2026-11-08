@@ -19,10 +19,14 @@ DatabaseSync.prototype.exec=function(sql) {
     const side=this.prepare('PRAGMA application_id').get().application_id===0x43525032;
     if(side&&point!=='native')exec.call(this,'PRAGMA cache_size=1; PRAGMA cache_spill=1; PRAGMA wal_autocheckpoint=0;');
     const result=exec.call(this,sql);
-    if(side){writes.add(this);cacheSize=this.prepare('PRAGMA cache_size').get().cache_size;}return result;
+    if(side){writes.add(this);chunks=0;cacheSize=this.prepare('PRAGMA cache_size').get().cache_size;}return result;
   }
   if(sql!=='COMMIT'||!writes.has(this))return exec.call(this,sql);
   writes.delete(this);
+  // Target the verification transaction, rather than an earlier setup/GC
+  // commit. The parent still requires two admitted chunks and checks the exact
+  // independently computed old-or-new prefix after the kill.
+  if(chunks===0&&point!=='preparation')return exec.call(this,sql);
   if(point==='native')process.stdout.write('native-commit '+process.pid+' '+chunks+'\n');
   if(point==='before'){process.send({barrier:point,chunks,cacheSize,pid:process.pid});process.kill(process.pid,'SIGSTOP');}
   const result=exec.call(this,sql);

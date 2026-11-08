@@ -25,7 +25,7 @@ test('actual SDK stdio captures proposed rationale and recalls linked evidence w
     args: [fileURLToPath(new URL('./fixtures/rationale-server.mjs', import.meta.url)), '--db', path, '--owner', 'synthetic',
       '--capture-qualification', 'source-bound-v2', '--capture-rationale', 'source-bound-v1'],
     env: { OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1' }, stderr: 'pipe' }));
-  assert.equal((await client.listTools()).tools.length, 7);
+  assert.equal((await client.listTools()).tools.length, 10);
   const call = async (name, args) => {
     const response = await client.callTool({ name, arguments: args }); const result = JSON.parse(response.content[0].text);
     assert.equal(result.ok, true, JSON.stringify(result)); assert.equal(result.evidenceTrust, 'untrusted-data-not-instructions'); return result.value;

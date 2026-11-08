@@ -52,12 +52,12 @@ test('H02 real stdio is default-off, bounded and never accepts serialized author
   const workspace = createTestWorkspace(t, { prefix: 'cairn-mcp-cards-' });
   const path = join(workspace.path, 'memory.sqlite');
   const plain = await host(workspace, path, { enabled: false });
-  assert.equal((await plain.client.listTools()).tools.length, 5);
+  assert.equal((await plain.client.listTools()).tools.length, 8);
   await plain.client.close();
   const active = await host(workspace, path);
   const tools = (await active.client.listTools()).tools;
-  assert.equal(tools.length, 22);
-  const cardTools = tools.filter(tool => !['remember_memory', 'recall_memory', 'inspect_memory', 'correct_memory', 'forget_memory'].includes(tool.name));
+  assert.equal(tools.length, 25);
+  const cardTools = tools.filter(tool => !['remember_memory', 'recall_memory', 'inspect_memory', 'correct_memory', 'forget_memory', 'find_memory_candidates', 'fetch_memory_candidate_evidence', 'read_memory_context'].includes(tool.name));
   assert.equal(cardTools.length, 17);
   for (const tool of cardTools) {
     assert.equal(tool.inputSchema.additionalProperties, false);

@@ -25,6 +25,8 @@ function assertAdmissionIndexes(all){
   const located=new Set(all.locations.values()),physical=new Set(all.physical.values());
   assert.ok([...physical].every(domain=>located.has(domain)),'physical aliases have a location');
   assert.equal(all.capacityCount,[...located].reduce((n,domain)=>n+domain.capacities.size,0));
+  assert.equal(all.progressCount,[...located].reduce((n,domain)=>n+domain.noProgress.size,0));
+  assert.ok(all.progressCount<=1024);
   assert.ok(all.locations.size<=1024);assert.ok(all.capacityCount<=1024);
   for(const domain of located)for(const state of domain.capacities.values())assert.equal(state.domain,domain);
 }
@@ -99,14 +101,16 @@ test('uncertain admission receipt retains the full reservation without inventing
   assert.equal(maintenancePumpDiagnostic(p.getStatus()).observation,null);await p.close();
 });
 
-test('resident sidecar discard yields before any fresh admission, retains pending lane, then works',async t=>{
+test('resident sidecar discard yields before any fresh admission, advances fairly, then works',async t=>{
   const s=model(t),p=s.renew(s.config);t.after(()=>p.close());
   await s.next();await s.next();s.handles[0].fresh=true;
   await s.next();assert.equal(s.events.at(-1).kind,'work');assert.equal(s.events.at(-1).intent,'history');
   const previous=maintenancePumpDiagnostic(p.getStatus()).observation;
-  await s.next();assert.equal(s.events.at(-1).kind,'admission');assert.equal(s.events.at(-1).intent,'history');
+  await s.next();assert.equal(s.events.at(-1).kind,'admission');assert.equal(s.events.at(-1).intent,'current');
   assert.deepEqual(maintenancePumpDiagnostic(p.getStatus()).observation,previous);
-  await s.next();assert.equal(s.events.at(-1).kind,'work');assert.equal(s.events.at(-1).intent,'history');
+  await s.next();assert.equal(s.events.at(-1).kind,'work');assert.equal(s.events.at(-1).intent,'current');
+  await s.next();assert.equal(s.events.at(-1).intent,'history');
+  assert.equal(maintenancePumpDiagnostic(p.getStatus()).admission[1],null,'accepted history observation resets its count');
   assert.equal(s.handles.length,1);
 });
 
@@ -262,7 +266,7 @@ test('renewal during admission settles original window and preserves old and new
 test('real Worker: lazy construction, admission checks once, no work/observation, released transactions and fresh next-turn snapshot',async t=>{
   assert.equal(typeof protocol.admitMaintenance,'function','private admission dispatch exists');
   const f=fixture(t);f.admit('first admission evidence');
-  const service=configured(t,f.path,[ns],{service:true}),control=new Int32Array(new SharedArrayBuffer(32));
+  const service=configured(t,f.path,[ns],{service:true}),control=new Int32Array(new SharedArrayBuffer(36));
   service.options.host={moduleUrl:new URL('./fixtures/context-product-admission-host.mjs',import.meta.url).href,
     configuration:{...service.options.host.configuration,admissionControl:control.buffer}};
   const h=await openContextIndexMaintainer(service.options);t.after(()=>h.close());
@@ -271,25 +275,25 @@ test('real Worker: lazy construction, admission checks once, no work/observation
   Atomics.store(control,3,1);const admitted=await protocol.admitMaintenance(h,input,service.token);
   ok(admitted);assert.equal(protocol.maintenanceAdmissionReceipt(admitted),'admitted');
   assert.equal(maintenanceObservation(admitted),undefined);assert.equal(maintenancePhaseDiagnostic(admitted).epochObservationMs,undefined);
-  assert.deepEqual([...control].slice(0,3),[1,1,0],'both checks once and no corpus/maintenance reads');assert.equal(control[6],0,'no retained transaction at final authority');
+  assert.deepEqual([...control].slice(0,3),[0,0,0],'attested admission skips whole-file checks and corpus reads');assert.equal(control[6],0,'no retained transaction at final authority');assert.equal(control[8],1,'one seal read during admission');
   Atomics.store(control,3,0);f.admit('canonical write between admission and work');await testClock.advance(10);
   const result=await protocol.refreshMaintenance(h,input,service.token);ok(result);
-  assert.equal(maintenanceObservation(result),testClock.now());assert.deepEqual([...control].slice(0,2),[1,1]);
+  assert.equal(maintenanceObservation(result),testClock.now());assert.equal(control[8],1,'work retains the attested handle');assert.deepEqual([...control].slice(0,2),[0,0]);
   assert.ok(control[2]>0,'work starts only on the later call');
   // A public failed writable operation must still discard under the existing rule.
   f.admit('force another writable batch');Atomics.store(control,4,1);
   assert.equal((await h.refreshContextIndex(input,service.token)).error.code,'storage_error');
   const yielded=await protocol.refreshMaintenance(h,input,service.token);
-  assert.equal(protocol.maintenanceAdmissionReceipt(yielded),'required');assert.deepEqual([...control].slice(0,2),[1,1]);
-  ok(await protocol.admitMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,2),[2,2]);
-  ok(await protocol.refreshMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,2),[2,2]);
+  assert.equal(protocol.maintenanceAdmissionReceipt(yielded),'required');assert.deepEqual([...control].slice(0,2),[0,0]);
+  ok(await protocol.admitMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,2),[0,0]);assert.equal(control[8],2,'retry attests a fresh handle');
+  ok(await protocol.refreshMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,2),[0,0]);
   service.view[0]=0;assert.equal((await protocol.admitMaintenance(h,input,service.token)).error.code,'authority_required');
   const publicEntry=await import('../index.mjs');assert.equal(publicEntry.admitMaintenance,undefined);
 });
 
 for(const live of [false,true])test(`real Worker: ${live?'live stall':'overrun'} admission timeout is private, fully charged and confirmed before retry`,async t=>{
   const f=fixture(t);f.admit('native admission cutoff');const service=configured(t,f.path,[ns],{service:true});
-  const control=new Int32Array(new SharedArrayBuffer(32));if(live)control[7]=1;else control[5]=1001;
+  const control=new Int32Array(new SharedArrayBuffer(36));if(live)control[7]=1;else control[5]=1001;
   service.options.host={moduleUrl:new URL('./fixtures/context-product-admission-host.mjs',import.meta.url).href,
     configuration:{...service.options.host.configuration,admissionControl:control.buffer}};
   let serial=0;const timers=new Map();
@@ -300,10 +304,10 @@ for(const live of [false,true])test(`real Worker: ${live?'live stall':'overrun'}
   const p=renew(config);t.after(()=>p.close());const [id,timer]=[...timers][0];timers.delete(id);await testClock.advance(timer.at-testClock.now());const pending=timer.fn();
   if(live){
     try {
-      await Promise.resolve(Atomics.waitAsync(control,7,1).value);assert.equal(control[7],2,'integrity check is still live');
+      await Promise.resolve(Atomics.waitAsync(control,7,1).value);assert.equal(control[7],2,'seal read is still live');
       await testClock.advance(1000,{waitForWorkers:false});
       for(const [key,value] of [...timers])if(value.at<=testClock.now()){timers.delete(key);value.fn();}
-      assert.equal(maintenancePumpPhaseDiagnostic(p.getStatus()).projections[0].lastStall.kind,12,'live integrity work is attributed to admission');
+      assert.equal(maintenancePumpPhaseDiagnostic(p.getStatus()).projections[0].lastStall.kind,12,'live seal reading is attributed to admission');
     } finally {Atomics.store(control,7,0);Atomics.notify(control,7);}
   }
   await pending;
@@ -315,24 +319,24 @@ for(const live of [false,true])test(`real Worker: ${live?'live stall':'overrun'}
 test('real Worker: read-only upgrade and repair both yield before fresh writable admission',async t=>{
   assert.equal(typeof protocol.admitMaintenance,'function','private admission dispatch exists');
   const f=fixture(t);f.admit('upgrade and repair admission');const service=configured(t,f.path,[ns],{service:true});
-  const control=new Int32Array(new SharedArrayBuffer(32));
+  const control=new Int32Array(new SharedArrayBuffer(36));
   service.options.host={moduleUrl:new URL('./fixtures/context-product-admission-host.mjs',import.meta.url).href,
     configuration:{...service.options.host.configuration,admissionControl:control.buffer}};
   const h=await openContextIndexMaintainer(service.options);t.after(()=>h.close());
   const input={readSet:[ns],types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:32,maxMs:1000}};
   ok(await h.getContextIndexStatus({readSet:[ns],types:['memory'],intent:'current',deadlineMs:1000},service.token));
   assert.equal(protocol.maintenanceAdmissionReceipt(await protocol.refreshMaintenance(h,input,service.token)),'required');
-  assert.deepEqual([...control].slice(0,2),[0,0],'upgrade cannot hide integrity checks in work');
-  ok(await protocol.admitMaintenance(h,input,service.token));ok(await protocol.refreshMaintenance(h,input,service.token));
-  assert.deepEqual([...control].slice(0,2),[1,1]);
+  assert.deepEqual([...control].slice(0,2),[0,0],'upgrade cannot open the sidecar inside work');
+  ok(await protocol.admitMaintenance(h,input,service.token));assert.equal(control[8],1);ok(await protocol.refreshMaintenance(h,input,service.token));
+  assert.deepEqual([...control].slice(0,2),[0,0]);
   const db=new DatabaseSync(f.path+protocol.PRODUCT_SIDECAR_SUFFIX);
   try {db.prepare('UPDATE product_metadata SET profile=?').run('synthetic-invalid-profile');}finally{db.close();}
   Atomics.store(control,2,0);
   const yielded=await protocol.refreshMaintenance(h,input,service.token);
   assert.equal(protocol.maintenanceAdmissionReceipt(yielded),'required');assert.equal(maintenanceObservation(yielded),undefined);
-  assert.deepEqual([...control].slice(0,3),[1,1,0],'repair cannot open or scan inside work');
-  ok(await protocol.admitMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,3),[2,2,0]);
-  ok(await protocol.refreshMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,2),[2,2]);
+  assert.deepEqual([...control].slice(0,3),[0,0,0],'repair cannot open or scan inside work');
+  ok(await protocol.admitMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,3),[0,0,0]);assert.equal(control[8],3,'repair reads the incumbent metadata/seal join and attests the successor');
+  ok(await protocol.refreshMaintenance(h,input,service.token));assert.deepEqual([...control].slice(0,2),[0,0]);
 });
 
 test('a work cutoff remains terminal and receives no admission retry authority',async t=>{
@@ -670,4 +674,142 @@ test('physical admission identity distinguishes recycled inodes without rechargi
   birth=2n;const replacement=policy.maintenanceAdmissionIdentity(options,stat);
   assert.notEqual(replacement.key,first.key);assert.notEqual(replacement.physical,first.physical);
   assert.equal(policy.maintenanceAdmissionDomain(replacement,1000).attempts,0,'recycled inode is a new physical cache');
+});
+
+
+function requiredResult(){const r={ok:true,value:null};protocol.attachMaintenanceAdmissionReceipt(r,'required');return r;}
+function cycling(t){
+  const s=model(t,{openMs:0,admitMs:0}),original=s.deps.work,originalReceipt=s.deps.receiptOf;
+  s.deps.receiptOf=r=>protocol.maintenanceAdmissionReceipt(r)??originalReceipt(r);
+  s.deps.work=async(h,input)=>input.intent==='current'?requiredResult():original(h,input);
+  s.runtime=createMaintenancePumpRuntime(s.deps);return s;
+}
+
+test('required cycles fail at three, expose their lane/count early and let history work',async t=>{
+  const s=cycling(t),p=s.runtime(s.config);t.after(()=>p.close());
+  let history=0;
+  for(let n=0;n<20&&p.getStatus().state==='active';n++){
+    await s.next();const status=p.getStatus(),d=maintenancePumpDiagnostic(status);
+    if(d.observation?.projection===1)history++;
+    if(d.admission[0]?.noProgress?.count===1){
+      assert.deepEqual(d.admission[0],{noProgress:{lane:0,count:1}});
+      assert.equal(status.state,'active');assert.equal(status.error,null);
+    }
+  }
+  const status=await p.completion,d=maintenancePumpDiagnostic(status);
+  assert.equal(status.state,'failed');assert.equal(status.error,'reader_failed');
+  assert.equal(d.lastFailure.cause,'admission_no_progress');assert.equal(d.lastFailure.lane,0);assert.equal(d.lastFailure.count,3);
+  assert.equal(d.failureCounts.admission_no_progress,1);assert.deepEqual(d.admission[0].noProgress,{lane:0,count:3});
+  assert.ok(history>=2,'history must earn observations between current yields');
+  assert.ok(s.events.filter(e=>e.kind==='work'&&e.intent==='history').length>=2);
+});
+
+test('required evidence survives renewal, a new pump ID, capacity/cache epochs and aliases',async t=>{
+  const s=cycling(t),identity={key:randomUUID(),physical:randomUUID(),cache:'first'};
+  s.deps.admissionIdentity=()=>identity;s.runtime=createMaintenancePumpRuntime(s.deps);
+  let p=s.runtime(s.config);await s.next();await s.next();
+  assert.deepEqual(maintenancePumpDiagnostic(p.getStatus()).admission[0].noProgress,{lane:0,count:1});
+  assert.equal(s.runtime(s.config),p);assert.deepEqual(maintenancePumpDiagnostic(p.getStatus()).admission[0].noProgress,{lane:0,count:1});
+  await p.close();identity.cache='changed';identity.key=randomUUID();
+  p=s.runtime({...s.config,id:randomUUID(),quantum:{maxItems:32,maxMs:1250}});t.after(()=>p.close());
+  assert.deepEqual(maintenancePumpDiagnostic(p.getStatus()).admission[0].noProgress,{lane:0,count:1});
+  for(let n=0;n<20&&p.getStatus().state==='active';n++)await s.next();
+  assert.equal((await p.completion).error,'reader_failed');
+  assert.equal(maintenancePumpDiagnostic(p.getStatus()).lastFailure.count,3);
+  await p.close();
+  const next=s.runtime({...s.config,id:randomUUID()});t.after(()=>next.close());
+  assert.deepEqual(maintenancePumpDiagnostic(next.getStatus()).admission[0].noProgress,{lane:0,count:3});
+  const opens=s.handles.length;await s.next();
+  assert.equal((await next.completion).state,'failed');assert.equal(s.handles.length,opens,'terminal evidence prevents another admission');
+});
+
+test('accepted observing work resets required evidence; successful admission alone does not',async t=>{
+  const s=cycling(t),original=s.deps.work;let cycle=true;
+  // History uses the original model work; current can be made genuinely observing.
+  s.deps.work=async(h,input)=>cycle&&input.intent==='current'?requiredResult():
+    original(h,{...input,intent:'history'});
+  const p=createMaintenancePumpRuntime(s.deps)({...s.config,renewalMs:60000});t.after(()=>p.close());
+  for(let repeat=0;repeat<4;repeat++){
+    cycle=true;
+    for(let n=0;n<8&&maintenancePumpDiagnostic(p.getStatus()).admission[0]===null;n++)await s.next();
+    assert.deepEqual(maintenancePumpDiagnostic(p.getStatus()).admission[0].noProgress,{lane:0,count:1});
+    await s.next();assert.equal(s.events.at(-1).kind,'admission');
+    assert.deepEqual(maintenancePumpDiagnostic(p.getStatus()).admission[0].noProgress,{lane:0,count:1},'admission cannot erase evidence');
+    cycle=false;
+    for(let n=0;n<8&&maintenancePumpDiagnostic(p.getStatus()).admission[0]!==null;n++)await s.next();
+    assert.equal(maintenancePumpDiagnostic(p.getStatus()).admission[0],null);
+    assert.equal(p.getStatus().state,'active');
+  }
+});
+
+test('physical-domain merges and pressure preserve outstanding required evidence',async()=>isolatedAdmissionDomains(all=>{
+  const a=admissionIdentity(),b=admissionIdentity(),left=policy.maintenanceAdmissionDomain(a,1000),right=policy.maintenanceAdmissionDomain(b,1250);
+  policy.maintenanceAdmissionProgress(left,'current',true);policy.maintenanceAdmissionProgress(right,'history',true);
+  const merged=policy.maintenanceAdmissionDomain({...b,key:a.key},1000);
+  assert.equal(policy.maintenanceAdmissionProgress(merged,'current'),1);assert.equal(policy.maintenanceAdmissionProgress(left,'history'),1);
+  for(let n=0;n<1100;n++)policy.maintenanceAdmissionDomain(admissionIdentity(),1000);
+  assert.equal(policy.maintenanceAdmissionProgress(policy.maintenanceAdmissionDomain(a,1000),'current'),1);
+  assertAdmissionIndexes(all());
+}));
+
+test('a required work result reacquires indexed evidence after clean domain retirement',async t=>isolatedAdmissionDomains(async()=>{
+  const s=cycling(t),identity=admissionIdentity();s.deps.admissionIdentity=()=>identity;
+  let entered,release;const started=new Promise(resolve=>{entered=resolve;});
+  s.deps.work=async()=>{entered();await new Promise(resolve=>{release=resolve;});return requiredResult();};
+  const p=createMaintenancePumpRuntime(s.deps)(s.config);t.after(()=>p.close());await s.next();
+  const old=policy.maintenanceAdmissionDomain(identity,1000),pending=s.next();await started;
+  try{for(let n=0;n<1100;n++)policy.maintenanceAdmissionDomain(admissionIdentity(),1000);assert.equal(old.domain.capacities.size,0);}
+  finally{release();await pending;}
+  assert.deepEqual(maintenancePumpDiagnostic(p.getStatus()).admission[0].noProgress,{lane:0,count:1});
+  assert.deepEqual([...policy.maintenanceAdmissionDomain(identity,1000).domain.noProgress.values()],[1]);
+}));
+
+test('the no-progress private failure kind is appended without renumbering earlier causes',async()=>{
+  const {maintenanceFailureKinds,maintenanceFailureRecord}=await import('../context-product-attribution.mjs');
+  assert.deepEqual(maintenanceFailureKinds.slice(0,18),['none','worker_heap_limit','worker_exit','worker_error','protocol','unmapped','exception','observation_timing','engine','spawn','dispatch','call_error','identity','worker_state','cleanup','disposal_proof','open_exceeds_quantum','maintainer_identity_unrecognized']);
+  assert.equal(maintenanceFailureKinds[18],'admission_no_progress');
+  assert.deepEqual(maintenanceFailureRecord('admission_no_progress',{count:3}),{cause:'admission_no_progress',count:3});
+});
+
+test('no-progress cells are process-bounded and merges and accepted work release capacity',async()=>isolatedAdmissionDomains(all=>{
+  const a=admissionIdentity(),b=admissionIdentity(),left=policy.maintenanceAdmissionDomain(a,1000),right=policy.maintenanceAdmissionDomain(b,1000);
+  policy.maintenanceAdmissionProgress(left,'shared',true);policy.maintenanceAdmissionProgress(right,'shared',true);
+  assert.equal(all().progressCount,2);
+  const merged=policy.maintenanceAdmissionDomain({...b,key:a.key},1000);assert.equal(all().progressCount,1);
+  for(let n=0;n<1023;n++)policy.maintenanceAdmissionProgress(merged,String(n),true);
+  assert.equal(all().progressCount,1024);
+  assert.throws(()=>policy.maintenanceAdmissionProgress(merged,'overflow',true),{code:'read_in_progress'});
+  policy.maintenanceAdmissionProgress(merged,'shared',false);assert.equal(all().progressCount,1023);
+  policy.maintenanceAdmissionProgress(merged,'overflow',true);assert.equal(all().progressCount,1024);
+  assertAdmissionIndexes(all());
+}));
+
+test('admission diagnostic keeps retry cause and fields beside no-progress evidence',async t=>{
+  const s=cycling(t),admit=s.deps.admit;let admissions=0;
+  s.deps.admit=async(...args)=>{
+    const result=await admit(...args);
+    if(++admissions===2)s.spend(1001);
+    return result;
+  };
+  const p=createMaintenancePumpRuntime(s.deps)(s.config);t.after(()=>p.close());
+  await s.next();await s.next(); // Current yields required; history next re-admits.
+  await s.next(); // The second admission exceeds its quantum and enters backoff.
+  const d=maintenancePumpDiagnostic(p.getStatus()),entry=d.admission[0];
+  assert.equal(entry.cause,'open_exceeds_quantum');
+  assert.equal(entry.attempts,1);assert.equal(entry.state,'backoff');
+  assert.equal(entry.retryAtMonoMs,s.now()+5000);
+  assert.deepEqual(entry.noProgress,{lane:0,count:1});
+  assert.deepEqual(entry,{cause:'open_exceeds_quantum',attempts:1,state:'backoff',retryAtMonoMs:s.now()+5000,noProgress:{lane:0,count:1}});
+  assert.equal(Object.isFrozen(entry),true);assert.equal(Object.isFrozen(entry.noProgress),true);
+  assert.deepEqual(d.admission[1],{cause:'open_exceeds_quantum',attempts:1,state:'backoff',retryAtMonoMs:s.now()+5000},'retry-only lane keeps its exact status');
+});
+
+test('admission diagnostic without a retry contains only frozen no-progress evidence',async t=>{
+  const s=cycling(t),p=s.runtime(s.config);t.after(()=>p.close());
+  assert.deepEqual(maintenancePumpDiagnostic(p.getStatus()).admission,[null,null]);
+  await s.next();await s.next();
+  const entry=maintenancePumpDiagnostic(p.getStatus()).admission[0];
+  assert.deepEqual(entry,{noProgress:{lane:0,count:1}});
+  assert.equal(Object.hasOwn(entry,'cause'),false);
+  assert.equal(Object.isFrozen(entry),true);assert.equal(Object.isFrozen(entry.noProgress),true);
 });

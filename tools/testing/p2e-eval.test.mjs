@@ -189,7 +189,7 @@ test('analysis macro weights primary strata equally, independent of their query 
 });
 test('runner uses actual public product capabilities and returns blocked_dependency without a provider', async () => {
   const report = await main(['--provider','fake'], {});
-  assert.equal(report.status, 'blocked_dependency'); assert.equal(report.probe.capabilities.execution, 'worker');
+  assert.equal(report.status, 'blocked_dependency', `refused: ${report.error}`); assert.equal(report.probe.capabilities.execution, 'worker');
   // P2e exports the API; the unchanged sealed run still has no host binding.
   assert.equal(report.probe.reason, 'sealed_public_engine_host_binding_required');
   assert.ok(report.probe.capabilities.unsupported.includes('semantic'));

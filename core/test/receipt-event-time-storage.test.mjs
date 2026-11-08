@@ -137,7 +137,7 @@ for (const base of [18,23,33]) test(`event-time capabilities v${base} report onl
   ok(await trusted.call(core,'refreshContextIndex',{...projection,budget:{maxItems:1024,maxMs:5000}}));
   for (const result of [core.sourceSnapshot({readSet:[ns],limit:12}),
     await trusted.call(core,'findCandidates',{...projection,query:'Synthetic',limit:4}),
-    await trusted.call(core,'contextRead',{...projection,query:'Synthetic',budget:{maxTokens:2000,maxItems:4}})]) {
+    await trusted.call(core,'contextRead',{...projection,representation:'representation-v2',query:'Synthetic',budget:{maxTokens:2000,maxItems:4}})]) {
     ok(result); assert.doesNotMatch(JSON.stringify(result),/occurred_at|occurredAt|2001-02-03/);
   }
   await prebuild(configured(t,f.path,[ns],{service:true}),['memory']);

@@ -42,8 +42,19 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   // S2h-1 storage, S2h-2's boundary, suppression grant grammar and three transaction validators, the gated B3 comparator,
   // the verification commit batch and semantic accounting stay behind the SQLite Worker boundary. Keep the exact closure
   // pin and independently verify the installed edges.
-  assert.equal(expected.length, 120, 'private_maintenance_admission_closure_pin');
+  // The side-effect-free refusal registry adds one module to both product closures.
+  // The private checkpoint wall-cost estimator adds one Worker-only module. Card lineage adds the retained-lineage
+  // implementation and exact base/lineage DDL, plus the offline installer's observation/classification dependencies.
+  // Include three-layer assembly and the private sidecar attestation module.
+  assert.equal(expected.length, 131, 'private_maintenance_admission_closure_pin');
+  assert.ok(expected.includes('core/context-product-checkpoint-cost.mjs'));
+  assert.ok(expected.includes('core/context-read-three-layer.mjs'));
+  for (const file of ['core/card-lineage.mjs', 'core/card-lineage-schema.mjs', 'core/card-lineage-base-schema.mjs',
+    'core/content-safety-observations.mjs', 'core/content-safety-classifier.mjs']) assert.ok(expected.includes(file), file);
+  assert.ok(expected.includes('core/context-maintenance-turn.mjs'));
   assert.ok(expected.includes('core/context-product-admission.mjs'));
+  assert.ok(expected.includes('core/context-product-handles.mjs'));
+  assert.ok(expected.includes('core/context-product-sidecar-attestation.mjs'));
   assert.ok(expected.includes('core/context-product-admission-policy.mjs'));
   assert.ok(expected.includes('core/context-semantic-accounting.mjs'), 'semantic_accounting_is_in_installed_worker_closure');
   assert.ok(expected.includes('core/context-product-comparison.mjs'));
@@ -86,7 +97,7 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   assert.ok(installed.includes('core/context-product-sqlite.mjs')); // P2d Worker dependency.
 
   const staticFiles = closure(artifact, ['core/context-product-reader.mjs', 'core/context-read-supervisor.mjs'], false);
-  assert.equal(staticFiles.length, 32, 'private admission bridge preserves the SQLite-free parent and engine-only pool');
+  assert.equal(staticFiles.length, 34, 'private admission bridge preserves the SQLite-free parent and engine-only pool');
   t.diagnostic(`runtime/Worker closure cross-check: source=${expected.length}, installed=${installed.length}; static SQLite-free closure=${staticFiles.length}`);
   // Bootstrap code is supplied by the host, copied into the installed tree;
   // it imports no source-checkout module and has no network/provider dependency.

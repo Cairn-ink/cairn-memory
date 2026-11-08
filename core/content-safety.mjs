@@ -4,6 +4,7 @@ import { createHash, createHmac } from 'node:crypto';
 import { createCardRawSources } from './card-raw-sources.mjs';
 import { createRawLineageStorage } from './raw-lineage-storage.mjs';
 import { sourceRef } from './private-card-input.mjs';
+import { hasCardLineage, loadCardBodyContributorsInside } from './card-lineage.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
@@ -167,7 +168,7 @@ function sourceSuppression(db, ns, ref, rawTargets, ancestryChecked) {
 
 /** Canonical only: caller owns authorization and the existing transaction/snapshot.
  * Reasons are internal and must never be serialized or used as public errors. */
-export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = false, rawBudget, memo }) {
+export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = false, rawBudget, memo, rawMutableRevision = true }) {
   const decision = ref?.type === 'raw' ? ['raw', boundary(ns ?? {}), ref.conversationId, ref.messageId,
     ref.span?.start, ref.span?.end, ref.span?.precision] :
     [ref?.type, boundary(ns ?? {}), ref?.receiptId ?? ref?.sourceId];
@@ -234,7 +235,7 @@ export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = fa
           db.prepare(`SELECT 1 FROM raw_deletion_effects WHERE ${where} AND entity_type='conversation' AND entity_id=? LIMIT 1`).get(...boundary(ns), ref.conversationId);
         return denied(deleted ? 'purge' : 'missing');
       }
-      try { return remember(allowed, createCardRawSources(db, identity).resolve(ns, ref, rawBudget)); }
+      try { return remember(allowed, createCardRawSources(db, identity, { mutableRevision: rawMutableRevision }).resolve(ns, ref, rawBudget)); }
       catch (error) {
         if (error.code === 'source_excluded') return denied('purge');
         if (['source_unavailable', 'raw_crypto_unavailable', 'revision_conflict'].includes(error.code)) return denied('identity_mismatch');
@@ -246,7 +247,7 @@ export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = fa
 }
 
 function canonicalContentReadSafety(db, { identity, namespace: ns, ref, method = 'retrieval', intent = 'current',
-  currentCardEligible, rawRows, expectedMemoryIdentity, receipts = [], memo, factObservation, selectedMemory }) {
+  currentCardEligible, rawRows, expectedMemoryIdentity, receipts = [], memo, factObservation, selectedMemory, selectedReceipts }) {
   db = memo?.db ?? db;
   if (!ref || !sameNamespace(ns, ref.namespace)) return denied('ineligible');
   const type = ref.type;
@@ -263,8 +264,11 @@ function canonicalContentReadSafety(db, { identity, namespace: ns, ref, method =
   if (ref.revision !== row.revision || type === 'card' && ref.bodyRevision !== row.body_revision)
     return denied(type === 'memory' ? memorySuppression(db, ns, row, ref.revision) ?? 'identity_mismatch' : 'identity_mismatch');
   if (type === 'memory' && expectedMemoryIdentity && memoryContentIdentity(row) !== expectedMemoryIdentity) return denied('identity_mismatch');
-  const receiptRows = receipts.length ? new Map(db.prepare(`SELECT * FROM receipts WHERE memory_id=?
-    AND id IN (${receipts.map(() => '?').join(',')})`).all(row.id, ...receipts.map(receipt => receipt.id)).map(receipt => [receipt.id, receipt])) : new Map();
+  // Only an existing canonical batch SELECT in this synchronous snapshot may
+  // supply receipt rows, just as selectedMemory supplies its parent row.
+  const receiptRows = receipts.length ? new Map((selectedMemory && memo && db.isTransaction && selectedReceipts ?
+    selectedReceipts.filter(receipt=>receipt.memory_id===row.id) : db.prepare(`SELECT * FROM receipts WHERE memory_id=?
+    AND id IN (${receipts.map(() => '?').join(',')})`).all(row.id, ...receipts.map(receipt => receipt.id))).map(receipt => [receipt.id, receipt])) : new Map();
   for (const receipt of receipts) {
     const current = receiptRows.get(receipt.id);
     if (!current) return denied('missing');
@@ -276,6 +280,18 @@ function canonicalContentReadSafety(db, { identity, namespace: ns, ref, method =
   const policy = policies[contentReadPurpose(method, row)];
   if (!policy.admits(row, type, intent, method)) return denied('ineligible');
   if (type === 'card') {
+    if (hasCardLineage(db)) {
+      try {
+        const lineage = loadCardBodyContributorsInside(db,identity,ns,row.id,{
+          current:Boolean(policy.current?.(intent)),
+          validateSource:source=>sourceReadSafety(db,{identity,namespace:ns,ref:source,memo}).allowed });
+        if (memo) (memo.cardBodies ??= new Map()).set(row.id,lineage);
+      } catch (error) {
+        if (['source_unavailable','source_excluded','raw_crypto_unavailable','source_budget_exceeded','invalid_input','revision_conflict'].includes(error.code) || error instanceof SyntaxError) return denied('ineligible');
+        throw error;
+      }
+      if (factObservation) factObservation.ancestryChecked = true;
+    } else {
     let contributors;
     try { contributors = cardContributorsInside(db, row.id, memo); }
     catch (error) { if (error instanceof SyntaxError) return denied('identity_mismatch'); throw error; }
@@ -290,6 +306,7 @@ function canonicalContentReadSafety(db, { identity, namespace: ns, ref, method =
     // and its fact stage in this snapshot. The Card fact stage needs only its
     // own identity; repeating contributor SQL would revalidate the same proof.
     if (factObservation) factObservation.ancestryChecked = true;
+    }
   }
   if (type === 'card' && policy.current?.(intent) && !currentCardEligible?.()) return denied('ineligible');
   return allowed;

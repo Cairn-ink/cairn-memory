@@ -290,7 +290,7 @@ test('installed v2 MCP launcher captures and cold-replays without granting a pai
     await active.connect(transport); return active;
   };
   let client = await start();
-  assert.equal((await client.listTools()).tools.length, 6);
+  assert.equal((await client.listTools()).tools.length, 9);
   const batches = ['上午請用清單。', '下午請用段落。'].map((content, index) => ({
     batchId: 'v2-installed-' + index, messages: [{ role: 'user', content }],
   }));
@@ -369,7 +369,7 @@ test('installed MCP captures qualified submitted text and reopens without new pr
   };
   let client = await start();
   const tools = (await client.listTools()).tools;
-  assert.equal(tools.length, 6);
+  assert.equal(tools.length, 9);
   assert.equal(tools.find(tool => tool.name === 'capture_memory').annotations.openWorldHint, true);
   const request = { batchId: 'installed-submitted-batch', messages: [{ role: 'user', content: '我偏好紫色的電車 🚋。' }] };
   const captured = ok(await call(client, 'capture_memory', request));
@@ -782,7 +782,7 @@ test('installed executable completes actual SDK stdio lifecycle, restart and sco
   const path = join(temporary(t, 'cairn-installed-data-'), 'memory.sqlite');
   const first = await connect(t, installation, path, { project: 'harbor' });
   assert.deepEqual((await first.listTools()).tools.map((tool) => tool.name).sort(),
-    ['correct_memory', 'forget_memory', 'inspect_memory', 'recall_memory', 'remember_memory']);
+    ['correct_memory', 'fetch_memory_candidate_evidence', 'find_memory_candidates', 'forget_memory', 'inspect_memory', 'read_memory_context', 'recall_memory', 'remember_memory']);
   const content = 'Synthetic Harbor review happens Tuesday.';
   const saved = ok(await call(first, 'remember_memory', { content })).memory;
   assert.equal(ok(await call(first, 'inspect_memory', { memoryId: saved.id })).receipts[0].excerpt, content);

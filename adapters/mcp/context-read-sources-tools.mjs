@@ -4,11 +4,11 @@ import { contextToolResponse } from './context-read-transport.mjs';
 
 /** Compose the legacy registration. Only opted-in search/assembly schemas gain
  * narrowing; full/compact/snapshot fetch parsing remains the original code. */
-export function registerContextReadSourcesTools(tool, core, access, enabled) {
+export function registerContextReadSourcesTools(tool, core, access, enabled, defaults = {}) {
   const sources = z.array(z.enum(enabled)).max(enabled.length).refine(ids => new Set(ids).size === ids.length).optional();
   registerContextReadTools((name, description, schema, action, readOnly) => tool(name, description,
     ['find_memory_candidates', 'read_memory_context'].includes(name) ? schema.extend({ sources }) : schema,
-    action, readOnly), core, access);
+    action, readOnly), core, access, defaults);
 }
 
 // Source diagnostics are host metadata. Candidate identities, via and moc rank

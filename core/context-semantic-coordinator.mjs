@@ -11,8 +11,9 @@ import { SEMANTIC_VERSION, hostedSelection, ledgerIdentity, caps, priceTable, ba
 import { deadline } from './context-product-control.mjs';
 import { productFailure, signalAborted, signalCancelled, DISPOSAL_GRACE_MS } from './context-product-reader.mjs';
 import { fail } from './validation.mjs';
-import { semanticClient } from './context-semantic-client.mjs';
+import { semanticClient, semanticOutstandingStart } from './context-semantic-client.mjs';
 import { addAbortListener } from 'node:events';
+import { reserveSidecarHandle } from './context-product-handles.mjs';
 
 // The 980-ms SQLite bound covers lock waiting, not native statement execution.
 // This allowance bounds failed-proof delivery; native work may still outlive it.
@@ -63,7 +64,7 @@ export async function openContextSemanticCoordinator(original,controls={}) {
   const resources=new SharedArrayBuffer(16),resource=registry.register(owner,{path:c.ledgerPath,domain:resourceDomain,resources});
   if(policyConflict){registry.finish(resource);throw Object.assign(Error('index_unavailable'),{code:'index_unavailable',cleanupId:resource.id});}
   policyRegistry.set(policyKey,policyLedger);
-  const pending=new Map();let worker,exited=false,closed=false,closing,opened=false,readyResolve,readyReject,providerIdentity;
+  const pending=new Map(),sidecarHandles=new Map();let worker,exited=false,closed=false,closing,opened=false,readyResolve,readyReject,providerIdentity;
   const ready=new Promise((r,j)=>{readyResolve=r;readyReject=j;});
   all.set(key,resource);
   function reject(code,finished=false) {
@@ -139,8 +140,23 @@ export async function openContextSemanticCoordinator(original,controls={}) {
     worker=new Worker(new URL('./context-semantic-worker.mjs',import.meta.url),{workerData:{...data,resources},env,execArgv:[],stdout:true,stderr:true,resourceLimits:{maxOldGenerationSizeMb:192}});
     worker.stdout.resume();worker.stderr.resume();
     worker.on('error',()=>reject('reader_failed'));
-    worker.on('exit',code=>{exited=true;if(!closed){closed=true;registry.cleanup(resource);registry.finish(resource,true);all.delete(key);reject('reader_failed',true);}});
+    worker.on('exit',code=>{
+      exited=true;
+      // A close timeout or terminate() request is not termination proof. Only
+      // the actual exit permits reclaiming slots on this Worker's behalf.
+      for(const handle of sidecarHandles.values())handle.release();sidecarHandles.clear();
+      if(!closed){closed=true;registry.cleanup(resource);registry.finish(resource,true);all.delete(key);reject('reader_failed',true);}
+    });
     worker.on('message',message=>{
+      if(message.kind==='sidecar-reserve') {
+        if(closed){worker.postMessage({kind:'sidecar-reserved',id:message.id});return;}
+        try {
+          if(typeof message.id!=='string'||message.id.length>100||typeof message.identity!=='string'||!/^\d+:\d+$/.test(message.identity)||sidecarHandles.has(message.id))fail('reader_failed');
+          const handle=reserveSidecarHandle(message.identity);sidecarHandles.set(message.id,handle);
+          worker.postMessage({kind:'sidecar-reserved',id:message.id,sidecarHandles:{buffer:handle.buffer,slot:handle.slot}});
+        }catch{worker.postMessage({kind:'sidecar-reserved',id:message.id});}
+        return;
+      }
       if(message.kind==='identity') {
         try {
           if(typeof message.identity!=='string'||!/^\d+:\d+$/.test(message.identity)||JSON.stringify(message.operation)!==JSON.stringify(firstOperation))fail('reader_failed');
@@ -194,9 +210,42 @@ export async function openContextSemanticCoordinator(original,controls={}) {
   const attachment=metadata=>{if(closed)fail('store_closed');const {port1,port2}=new MessageChannel();worker.postMessage({kind:'attach',port:port1,metadata},[port1]);return port2;};
   handles.set(api,{closed:()=>closed,ownerId:binding.ownerId,selection:provider,ownerState,providerIdentity,configuration:{...identity},targets,
     validatePumpCredential(credential){if(!binding.methods.includes('validateOwnerSemanticCoverage')||credentialDigest(credential)!==binding.credentialDigest)fail('authority_required');},
-    pumpCall(method,input,duration=5000){
+    pumpCall(method,input,duration=5000,internal){
       if(!pumpPort)pumpPort=semanticClient(attachment({ownerId:binding.ownerId,pump:true}),{ownerState,writer:'0'},()=>pumpOperation);
-      const r=request();pumpOperation=operationRecord(r,process.hrtime.bigint(),duration,1);return pumpPort.call(method,input);
+      const r=request();pumpOperation=operationRecord(r,process.hrtime.bigint(),duration,1);return internal===undefined?pumpPort.call(method,input):pumpPort.call(method,input,undefined,internal);
+    },
+    // Engine-only turn handle: public call/control and its allowlist stay intact.
+    pumpTurn({semanticOutstanding}) {
+      const delivery=resource.delivery;let failedExit=exited&&!closing;
+      const onExit=code=>{failedExit=!closing||code!==0;};worker.once('exit',onExit);
+      const detach=()=>worker.off('exit',onExit);
+      // A normal host close is authoritative even if a call lost its final
+      // notification. Unexpected exit is never a successful disposal proof.
+      const proof=delivery.then(value=>{if(failedExit)fail('reader_failed');return value;}).finally(detach);void proof.catch(()=>{});
+      return {proof,detach,
+        validate(input,credential,control={}){
+          const at=process.hrtime.bigint();
+          try{
+            if(closed)return Promise.resolve(productFailure('store_closed'));
+            const method='validateOwnerSemanticCoverage',value=semanticOperationInput(method,input);
+            if(!binding.methods.includes(method)||credential===undefined||credentialDigest(credential)!==binding.credentialDigest)fail('authority_required');
+            const token=boundedData(credential,16384),{signal}=ownData(control,['signal']);
+            if(signalAborted(signal))return Promise.resolve(productFailure('read_cancelled'));
+            const r=request(at),operation=operationRecord(r,at,deadline(value.budget?.maxMs??5000),1),id=randomUUID();
+            const record=registry.register(owner,{path:c.ledgerPath,domain:resourceDomain,parent:resource});
+            return new Promise(resolve=>{
+              const p={resolve,record,operation,signal};pending.set(id,p);let counted;
+              try{
+                const cancelled=()=>{resolve(productFailure('read_cancelled'));worker.postMessage({kind:'cancel',id});};
+                signal?.addEventListener('abort',cancelled,{once:true});p.detach=()=>signal?.removeEventListener('abort',cancelled);
+                counted=semanticOutstandingStart(semanticOutstanding);
+                p.timer=setTimeout(()=>{resolve(productFailure('read_timeout'));worker.postMessage({kind:'cancel',id});},Math.max(0,Number(mono(operation.operationCutoffMonoNs)-process.hrtime.bigint())/1e6));
+                worker.postMessage({kind:'call',id,method,input:value,credential:token,request:r,operation,semanticOutstanding});
+              }catch(error){if(counted){Atomics.sub(counted,0,1);Atomics.notify(counted,0);}clearTimeout(p.timer);p.detach?.();pending.delete(id);registry.finish(record);resolve(productFailure(error.code));}
+            });
+          }catch(error){return Promise.resolve(productFailure(error.code));}
+        },
+      };
     },
     cancel(operationId){try{worker.postMessage({kind:'cancel-operation',operationId});}catch{}},
     attach:attachment});

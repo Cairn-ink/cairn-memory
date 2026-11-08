@@ -13,6 +13,21 @@
 - Prepared and unpublished; existing hosted Codex users will need to rerun
   setup after publication to install the notice and capture diagnostics.
 
+## Unreleased — optional local Raw index
+
+- Add a separately selected local Raw search and maintenance service. It uses
+  canonical source authority, a per-owner plaintext SQLite sidecar, bounded
+  lexical/semantic retrieval and explicit progress/disposal. Hosted backends
+  refuse; existing reads, capture and privacy mutations do not select it.
+- No new context output or automatic Cards are added. See
+  [the interface](docs/plans/raw-search-interface.md) and [host seam](docs/plans/raw-search-seam.md).
+
+## Unreleased — maintenance admission and integrity
+
+- Optional admission capacity covers cold opens while work retains its normal quantum. Each domain prices exhaustion by its own next turn.
+- WAL-mode hosts pay main's integrity check once on the first open after upgrade; DELETE-mode caches rebuild once. Steady maintenance adds no BEGIN or COMMIT.
+- A reader opened after a mismatch is detected never serves the untrusted file; a reader opened before an out-of-band seal removal keeps serving until its next reopen (content safety by delivery revalidation). Invalidating serving handles on rejection is a planned follow-up.
+
 ## Unreleased — semantic provider key channel
 
 - Admit only `CAIRN_CONTEXT_SEMANTIC_OPENAI_API_KEY`, when non-empty, to the
@@ -470,7 +485,7 @@ unchanged.
 
 ## Unreleased — explicit local Raw constructor
 
-- Add default-off `openMemoryCore({rawConversations})` using the existing shared
+- Initially add opt-in `openMemoryCore({rawConversations})` (superseded by [current local defaults](docs/defaults.md)) using the existing shared
   Raw/Memory/Card engine, with strict pre-open configuration, retained-read off
   mode, lineage and revision-bound deletion. Raw source/Card operations still
   require existing private-Card authority; no automatic Card creation.
@@ -481,7 +496,7 @@ unchanged.
 
 ## Unreleased — internal local Raw journal foundation
 
-- Add a default-off, model-free internal Raw journal in the existing SQLite
+- Initially add an opt-in, model-free internal Raw journal (now used by [default local capture](docs/defaults.md)) in the existing SQLite
   store: exact paged parts, immutable keyed replay identities, whole-message
   owner reservations, usage snapshots and asynchronous seal/open fences.
   Explicit internal opt-in upgrades compatible synthetic stores additively to

@@ -69,9 +69,9 @@ export async function runWalkthrough({ executable, withRecall = false }, env = p
   try {
     const lifecycle = async () => {
       await connect();
-      stage = 'five_tools';
+      stage = 'memory_tools';
       assert.deepEqual((await client.listTools({}, { timeout: 15000 })).tools.map(t => t.name).sort(),
-        ['correct_memory', 'forget_memory', 'inspect_memory', 'recall_memory', 'remember_memory']);
+        ['correct_memory', 'fetch_memory_candidate_evidence', 'find_memory_candidates', 'forget_memory', 'inspect_memory', 'read_memory_context', 'recall_memory', 'remember_memory']);
       pass();
       stage = 'remember_and_inspect';
       const saved = ok(await call('remember_memory', { content: initial, kind: 'fact' })).memory;

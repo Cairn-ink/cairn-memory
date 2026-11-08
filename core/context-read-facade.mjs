@@ -1,6 +1,8 @@
-import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { cardLineageItemInside, cardLineageNamespaceInside } from './card-lineage.mjs';
+import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade, assertContentPort, contentAuthorityPort } from './content-safety-boundary.mjs';
 import { receiptEventTimeEnabled, cachedContentLayout } from './content-safety-schema.mjs';
+import { createContentReadMemo } from './content-safety.mjs';
 import { resolveContentLayout } from './content-safety-layout.mjs';
 import { sampleLocalStatus } from './context-read-local-status.mjs';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -8,7 +10,7 @@ import { isAbsolute, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { validateContextProductLayout } from './context-product-schema.mjs';
 import { openReadDatabase } from './read-database.mjs';
-import { readTransaction, isConnectionDiscarded, isStorageBusy } from './database.mjs';
+import { readTransaction, isConnectionDiscarded, isStorageBusy, busyTimeoutOption } from './database.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { deepFreeze } from './private-card-input.mjs';
 import { verifyPrivateGrant } from './private-card-facade.mjs';
@@ -24,7 +26,8 @@ import { fuseCandidates, RRF_PRESETS } from './context-read-fusion.mjs';
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION } from './context-read-tokenize.mjs';
 import { validateVector } from './context-read-embedder.mjs';
 import { contextBudget } from './context-read-budget.mjs';
-import { assembleContext, receiptEventDate, completeResponseBytes } from './context-read-assembly.mjs';
+import { receiptEventDate, completeResponseBytes } from './context-read-assembly.mjs';
+import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from './context-read-three-layer.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { CONTEXT_VERSION, CONTEXT_METHODS, CONTEXT_LIMITS, SOURCE_LIMITS, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_DEFAULTS, DEFAULT_ASSEMBLY_POLICY,
   contextOptions, contextInput, contextRefs, namespaceKey } from './context-read-input.mjs';
@@ -63,24 +66,28 @@ function metadata(port) {
 }
 
 export function openContextCore(baseOptions, contextRead, openBase) {
+  const busyTimeoutMs = busyTimeoutOption(baseOptions);
+  const busyOptions = busyTimeoutMs === undefined ? {} : { busyTimeoutMs };
   const options = contextOptions(contextRead), readOnly = Boolean(baseOptions.existingStore);
   // Managed-existing construction uses the retained managed opener, with its
   // journal refusal performed before that opener can touch either database.
   if (readOnly) {
-    const probe = openReadDatabase(baseOptions.path, { contextRead: true,
+    const probe = openReadDatabase(baseOptions.path, { contextRead: true, ...busyOptions,
       preflight: () => assertContextReadReadOnlyAuxiliaries(baseOptions.path) });
     probe.db.close();
   }
   const base = openBase(baseOptions);
   try {
-    const context = createContextFacade(baseOptions.path === ':memory:' ? ':memory:' : resolve(baseOptions.path), options, { readOnly });
+    const context = createContextFacade(baseOptions.path === ':memory:' ? ':memory:' : resolve(baseOptions.path), options, { readOnly, ...busyOptions });
     return Object.freeze({ ...base, ...context.methods, close() { context.close(); return base.close(); } });
   } catch (error) { try { base.close(); } catch { /* Preserve the initialization refusal. */ } throw error; }
 }
 export function openContextReader(value) {
-  const input = ownData(value, ['path', 'contextRead']);
+  const input = ownData(value, ['path', 'contextRead', 'busyTimeoutMs']);
+  const busyTimeoutMs = busyTimeoutOption(input);
+  const busyOptions = busyTimeoutMs === undefined ? {} : { busyTimeoutMs };
   if (typeof input.path !== 'string' || !isAbsolute(input.path) || input.path.includes('\0')) fail('invalid_path');
-  const options = contextOptions(input.contextRead), context = createContextFacade(input.path, options, { readOnly: true });
+  const options = contextOptions(input.contextRead), context = createContextFacade(input.path, options, { readOnly: true, ...busyOptions });
   return Object.freeze({ ...context.methods, close() { context.close(); return success(null); } });
 }
 
@@ -93,10 +100,10 @@ export function openContextProductFacade(path, product) {
     capabilities: context.productCapabilities, fileIdentity: context.fileIdentity, port: context.productPort };
 }
 
-function createContextFacade(path, options, { readOnly }) {
+function createContextFacade(path, options, { readOnly, ...busyOptions }) {
   let database;
   try {
-    if (path !== ':memory:') database = openReadDatabase(path, { contextRead: true,
+    if (path !== ':memory:') database = openReadDatabase(path, { contextRead: true, ...busyOptions,
       nativeObserver: options.product?.observer,
       productSqlite: options.product?.sqlite,
       validateProduct: options.product ? validateContextProductLayout : undefined,
@@ -232,7 +239,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       }else memory=db.prepare('SELECT epoch FROM namespace_epochs WHERE owner_id=? AND scope=? AND project_id=?')
         .get(ns.ownerId,ns.scope,ns.projectId??'')?.epoch??1;
       return {memory,...(types.includes('card')?{card:db.prepare('SELECT generation FROM card_epochs WHERE owner_id=? AND scope=? AND project_id=?')
-        .get(ns.ownerId,ns.scope,ns.projectId??'')?.generation??1}:{})};
+        .get(ns.ownerId,ns.scope,ns.projectId??'')?.generation??1,...cardLineageNamespaceInside(db,ns)}:{})};
     });
   }
   function unknownCoverage(input) {
@@ -303,7 +310,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   function deliverPage(input, ranking, position, limit) {
     return read(() => {
       const result = page(ranking, position, limit);
-      for (const candidate of result.items) evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet);
+      const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
+      for (const candidate of result.items) evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet,
+        safetyMemo?{safetyMemo,batchRefs:result.items.map(candidate=>candidate.ref)}:options.sources?{legacyEvidence:true}:undefined);
       if (!options.sources) return result;
       assertSourcesInside(input, ranking.sourceState, 'cursor_stale');
       const budget = sourceBudget(Infinity);
@@ -447,14 +456,18 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       const proof=cachedContentSuppressionRequestInside(db,input.readSet[0].ownerId);
       const noFacts=proof?.facts?.length===0&&input.readSet.every(ns=>proof.readSet.some(selected=>
         selected.scope==='owner'||selected.scope===ns.scope&&(selected.projectId??'')===(ns.projectId??'')));
-      // The existing freshness transaction already proves canonical ancestry.
-      // Only a possibly matching fact needs the additional evidence predicate,
+      // Final delivered evidence retains its canonical ancestry decision.
+      // Only a possibly matching fact needs this additional evidence predicate,
       // and it runs inside that transaction rather than opening another one.
       storage.assertState(projection,current,{validate:()=>{
-        if(cachedContentLayout(db)?.suppressionRevision&&!noFacts&&candidateItems.length)candidateItems=candidateItems.filter(candidate=>{
-          try {evidence.itemsInside(candidate.ref.namespace,[candidate.ref],input.intent,input.readSet);return true;}
-          catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
-        });
+        if(cachedContentLayout(db)?.suppressionRevision&&!noFacts&&candidateItems.length){
+          const safetyMemo=createContentReadMemo(db);
+          candidateItems=candidateItems.filter(candidate=>{
+            if(!contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId}))return true;
+            try {evidence.itemsInside(candidate.ref.namespace,[candidate.ref],input.intent,input.readSet,{safetyMemo,batchRefs:candidateItems.map(candidate=>candidate.ref)});return true;}
+            catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
+          });
+        }
       }});
       if (sourceState) {
         access.check();
@@ -587,8 +600,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   const cards = info.cards ? createPrivateCardStorage({ db, identity, ready, rawSources: info.raw }) : null;
   const receipt = memoryOnly ? null : createCardReceiptSources(db, (purpose, value) =>
     createHmac('sha256', info.cursorSecret).update(JSON.stringify([purpose, [info.storeId, value]])).digest('base64url'));
+  // context-read facade: memo receipt projection
   const evidence = memoryOnly ? null : createPrivateEvidenceStorage({ db, identity,
+    memoReceiptEventTime: receiptEventTimeEnabled(cachedContentLayout(db)),
     cardDetailInside: (ns, id, readSet, options) => cards.cardDetailInside(ns, id, readSet, options), receiptRefInside: (ns, memory, row) => receipt.refInside(ns, memory, row) });
+  // context-read facade: end memo receipt projection
   async function contextRead(original, token) {
     let candidates;
     try {
@@ -603,6 +619,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         return deepFreeze({ ...searched, error: { ...searched.error,
           ...(searched.error.details ? { details: { candidates: searched.error.details } } : {}) } });
       }
+      const rawChannel = options.rawSearch && input.raw
+        ? await readRawChannel(options.rawSearch, input, token, deadlineAt) : { items: [], coverage: 'unavailable' };
+      if (options.rawSearch && input.raw) access.check();
       candidates = searched.horizon;
       searched.check(); // The horizon's search fences also cross the outer await.
       let deadline = performance.now() >= deadlineAt;
@@ -618,6 +637,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           return { generations: [], items: [], unavailable: candidates.items.length };
         }
         const generations = canonicalFence(input.readSet, input.types), items = [];
+        const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
         if (searched.sourceState) assertSourcesInside(input, searched.sourceState, 'snapshot_stale');
         let unavailable = 0;
         const witnessBudget = searched.sourceState ? sourceBudget(dependencyAware ? deadlineAt : Infinity) : null;
@@ -633,7 +653,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
               catch (error) { if (error.code === 'evidence_unavailable') { unavailable++; continue; } throw error; }
             }
             if (dependencyAware && performance.now() >= deadlineAt) { deadline = true; unavailable++; continue; }
-            item = evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet, { deadlineAt: dependencyAware ? deadlineAt : Infinity })[0];
+            item = evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet, { deadlineAt: dependencyAware ? deadlineAt : Infinity, legacyEvidence:Boolean(options.sources), ...(safetyMemo?{safetyMemo,batchRefs:candidates.items.map(candidate=>candidate.ref)}:{}) })[0];
             if (dependencyAware && performance.now() >= deadlineAt) { deadline = true; unavailable++; continue; }
           }
           catch (error) {
@@ -642,7 +662,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           }
           const { type, ref, state, origin } = item;
           const sourceRows = type === 'memory' && item.provenance.sourceAccess === 'available' ?
-            db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)) : [];
+            (safetyMemo?.evidenceReceipts?.get(JSON.stringify([[ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId??''],ref.memoryId]))?.slice(0,16) ??
+              db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId)).filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)) : [];
           const date = receiptEventDate(sourceRows);
           const sources = sourceRows.map((row, index) => {
             const { role, excerpt } = validateSourceReceipt(ref.memoryId, row, source =>
@@ -653,16 +674,18 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             metadata: type === 'memory' ? { state, reviewState: item.reviewState, filing: item.filing,
               kind: item.kind, origin, confidence: item.confidence } : { state, support: item.support, origin },
             text: type === 'memory' ? item.content : item.title + '\n' + item.body,
+            turnIds: citedRawTurns(db, ref.namespace, sourceRows, rawChannel),
+            sessionIds: sourceRows.map(row => JSON.stringify(['receipt', namespaceKey(ref.namespace), row.client, row.session_id])),
             date, sources, sourceAccess: type === 'memory' ? item.provenance.sourceAccess : 'unsupported',
             sourcesComplete: type === 'memory' && item.provenance.coverage.status === 'complete',
-            fence: bind('snapshot-item', item),
+            fence: bind('snapshot-item', cardLineageItemInside(db,item)),
             dependencyCount: item.support?.currentDependency ? item.support.currentDependency.versions?.length ?? 0 : null });
         }
         return { generations, items, unavailable };
       });
       const scope = bind('snapshot-scope', input.readSet);
       const generationsFor = items => prepared.generations.map(value => ({ memory: value.memory,
-        ...(items.some(item => item.type === 'card') ? { card: value.card } : {}) }));
+        ...(items.some(item => item.type === 'card') ? { card: value.card,...(value.lineage?{lineage:value.lineage}:{}) } : {}) }));
       const snapshotValue = items => ({ v: 1, scope, intent: input.intent,
         refs: items.map(({ ref }) => [input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), ref.type,
           ref.memoryId ?? ref.cardId, ref.revision, ...(ref.type === 'card' ? [ref.bodyRevision] : [])]),
@@ -679,22 +702,31 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       // Sample host status once. Dated trials and final delivery must use the
       // same candidate trace; the v2 sampling point remains after assembly.
       const datedCandidates = input.representation === 'representation-v2-dated' ? candidateDetails() : null;
-      const { selected: delivered, ...assembled } = assembleContext({ prepared: prepared.items, counter: options.counter, policy: input.policy,
+      const assemble = raw => assembleThreeLayerContext({ prepared: prepared.items, counter: options.counter, policy: input.policy,
+        query: input.query, readSet: input.readSet,
         budget: input.budget, representation: input.representation, deadlineAt,
         responseBytes: datedCandidates ? ({ meteredBytes, diagnostics, selected }) => completeResponseBytes(success({ metered: null, snapshot: null,
           diagnostics: { ...diagnostics, omitted: { ...diagnostics.omitted, unavailable: prepared.unavailable },
-            trace: { ...diagnostics.trace, ...dependencyReserve(selected) }, candidates: datedCandidates } }),
+            trace: { ...diagnostics.trace, ...dependencyReserve(selected) }, candidates: datedCandidates ?? candidateDetails() } }),
           meteredBytes, selected.length ? snapshotValue(selected) : null) <= CONTEXT_LIMITS.responseBytes : undefined,
-        snapshotOf: items => encode('snapshot', snapshotValue(items), 16384) });
-      const diagnostics = assembled.diagnostics;
-      diagnostics.omitted.unavailable = prepared.unavailable;
-      // Reserve one complete final pass for admitted declarations. These are
-      // upper bounds; source/lifecycle/ownership work keeps its existing charge.
-      Object.assign(diagnostics.trace, dependencyReserve(delivered));
-      diagnostics.candidates = datedCandidates ?? candidateDetails();
-      diagnostics.stops.deadline ||= deadline;
+        snapshotOf: items => encode('snapshot', snapshotValue(items), 16384) }, raw);
+      let { selected: delivered, validateRaw, ...assembled } = assemble(rawChannel);
+      const decorate = () => {
+        const diagnostics = assembled.diagnostics;
+        diagnostics.omitted.unavailable = prepared.unavailable;
+        Object.assign(diagnostics.trace, dependencyReserve(delivered));
+        diagnostics.candidates = datedCandidates ?? candidateDetails();
+        diagnostics.stops.deadline ||= deadline || performance.now() >= deadlineAt;
+      };
+      decorate();
       access.check();
-      diagnostics.stops.deadline ||= performance.now() >= deadlineAt;
+      // Counting and authority callbacks have finished. A failed final Raw
+      // validation discards the whole Raw projection, including diagnostics.
+      if (!validateRaw()) {
+        ({ selected: delivered, validateRaw, ...assembled } = assemble({ items: [], coverage: 'partial' }));
+        decorate(); access.check();
+      }
+      assembled.diagnostics.stops.deadline ||= performance.now() >= deadlineAt;
       const result = deepFreeze(success(assembled));
       if (bytes(result) > CONTEXT_LIMITS.responseBytes) fail('context_item_too_large');
       // No host callback, count or await follows this authoritative read.
@@ -706,14 +738,15 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             witnessInside(input, path, 'snapshot_stale', witnessBudget);
         }
         if (delivered.length && !same(canonicalFence(input.readSet, [...new Set(delivered.map(item => item.type))]), generationsFor(delivered))) fail('snapshot_stale');
+        const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
         for (const item of delivered) {
           let current;
-          try { current = evidence.itemsInside(item.ref.namespace, [item.ref], input.intent, input.readSet)[0]; }
+          try { current = evidence.itemsInside(item.ref.namespace, [item.ref], input.intent, input.readSet,safetyMemo?{safetyMemo,batchRefs:delivered.map(item=>item.ref)}:options.sources?{legacyEvidence:true}:undefined)[0]; }
           catch (error) {
             if (['evidence_unavailable', 'revision_conflict'].includes(error.code)) fail('snapshot_stale');
             throw error;
           }
-          if (bind('snapshot-item', current) !== item.fence) fail('snapshot_stale');
+          if (bind('snapshot-item', cardLineageItemInside(db,current)) !== item.fence) fail('snapshot_stale');
         }
         return result;
       });
@@ -746,8 +779,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       function fetchInside() {
         const generations = canonicalFence(input.readSet, types);
         if (previous && (!same(previous.generations, generations) || !same(previous.access, access.accessGenerations))) fail('snapshot_stale');
-        const items = refs.map(ref => evidence.itemsInside(ref.namespace, [ref], intent, input.readSet)[0]);
-        const fences = items.map(item => bind('snapshot-item', item));
+        const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
+        const items = refs.map(ref => evidence.itemsInside(ref.namespace, [ref], intent, input.readSet,safetyMemo?{safetyMemo,batchRefs:refs}:options.sources?{legacyEvidence:true}:undefined)[0]);
+        const fences = items.map(item => bind('snapshot-item', cardLineageItemInside(db,item)));
         if (input.fences?.some((prefix, i) => prefix !== null && !fences[i].startsWith(prefix))) fail('snapshot_stale');
         if (previous && !same(previous.fences, fences)) fail('snapshot_stale');
         return { items, generations, fences };
@@ -776,10 +810,10 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     return success(structuredClone({ version: CONTEXT_VERSION, methods: [...CONTEXT_METHODS], receiptEventTime: receiptEventTimeEnabled(cachedContentLayout(db)), types: [...supportedTypes], intents: ['current', 'history'],
       channels: { lexical: { enabled: true }, semantic: { configured: Boolean(options.embedder), budgetConfigured: Boolean(dispatch) } },
       ...configuration, limits: { ...CONTEXT_LIMITS, ...(options.sources ? { horizon: 32, sources: SOURCE_LIMITS } : {}) }, maintenance: !readOnly && !memoryOnly,
-      assembly: { representation: 'representation-v2', representations: [...ASSEMBLY_REPRESENTATIONS], defaults: ASSEMBLY_DEFAULTS, policies: [...ASSEMBLY_POLICIES], defaultPolicy: DEFAULT_ASSEMBLY_POLICY,
+      assembly: { representation: 'representation-v2-dated', raw: { default: true, configured: Boolean(options.rawSearch) }, representations: [...ASSEMBLY_REPRESENTATIONS], defaults: ASSEMBLY_DEFAULTS, policies: [...ASSEMBLY_POLICIES], defaultPolicy: DEFAULT_ASSEMBLY_POLICY,
         counter: options.counter ? { id: options.counter.id } : null, limits: { ...ASSEMBLY_LIMITS, ...(options.sources ? { candidates: 32, counterCalls: 1634 } : {}) } },
       unsupported: ['role-profiles', ...(!options.sources?.includes('relations-one-hop-v1') ? ['relations'] : []),
-        ...(!options.sources?.includes('moc-v1') ? ['moc'] : []), 'raw-search', 'partial-semantic-search'] }));
+        ...(!options.sources?.includes('moc-v1') ? ['moc'] : []), 'partial-semantic-search'] }));
   }, findCandidates, refreshContextIndex, fetchCandidateEvidence, contextRead }, { check: (scopes,{delivery}) => { ready();
         if (!delivery && scopes.length && cachedContentLayout(db)?.suppressionRevision && hasContentSuppressionRequestInside(db) && !db.isTransaction) {
           contentSuppressionRequestInside(db,scopes,{defer:true}); return;

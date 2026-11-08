@@ -275,7 +275,7 @@ test('A01/A07/A09 capabilities, optional counter, strict input, payload binding 
   assert.deepEqual(absent.error.details, { counter: 'absent' });
   ok(await bare.call('findCandidates', query()));
   for (const patch of [{ cursor: 'no' }, { policy: 'coverage-first-v1' }, { policy: {} }, { policy: { id: 'other' } },
-    { policy: { id: 'rank-first-whole-v1', extra: true } }, { budget: { maxTokens: 63 } }, { budget: { maxTokens: 4001 } },
+    { policy: { id: 'rank-first-whole-v1', extra: true } }, { budget: { maxTokens: 63 } }, { budget: { maxTokens: 6001 } },
     { budget: { maxItems: 0 } }, { budget: { maxItems: 25 } }, { budget: { maxMs: 1 } }, { query: '\0' }, { semantic: 1 }, { intent: 'guess' }]) {
     denied(await f.call('contextRead', assemblyQuery(patch)), 'invalid_input');
   }
@@ -445,7 +445,7 @@ test('A08 internal search propagates candidate diagnostics and semantic degradat
 test('A03 complete core byte bound is independent of an all-fit token counter', async t => {
   const f = assemblyFixture(t, { counter: { id: 'zero', countTokens: () => 0 } });
   f.seed(sample.items.map(item => ({ ...item, receipts: item.receipts.map((source, i) => ({ ...source, excerpt: String(i).padStart(2, '0') + '界'.repeat(790) })) })));
-  denied(await f.call('contextRead', assemblyQuery({ budget: { maxTokens: 4000, maxItems: 24 } })), 'context_item_too_large');
+  denied(await f.call('contextRead', assemblyQuery({ representation: 'representation-v2', budget: { maxTokens: 4000, maxItems: 24 } })), 'context_item_too_large');
 });
 
 test('A10 read-only and managed-existing assembly creates no transient files or DDL; memory stores refuse index access', async t => {
@@ -463,7 +463,7 @@ test('A10 read-only and managed-existing assembly creates no transient files or 
       const actual = ok(await f.trusted.call(core, 'contextRead', input));
       assert.deepEqual(actual.metered, expected.metered);
       assert.deepEqual(actual.diagnostics.items, expected.diagnostics.items);
-      assert.equal(actual.snapshot, expected.snapshot); invariant(actual, counter, 1500);
+      assert.equal(actual.snapshot, expected.snapshot); invariant(actual, counter, 6000);
       denied(await f.trusted.call(core, 'refreshContextIndex', refresh()), 'invalid_input');
     }
   });
@@ -626,7 +626,7 @@ test('A14 snapshot encoding happens once after counts, never for empty selection
     }
     return original(value, ...args);
   });
-  try { denied(await f.call('contextRead', assemblyQuery({ budget: { maxTokens: 4000, maxItems: 24 } })), 'context_item_too_large'); }
+  try { denied(await f.call('contextRead', assemblyQuery({ representation: 'representation-v2', budget: { maxTokens: 4000, maxItems: 24 } })), 'context_item_too_large'); }
   finally { mock.mock.restore(); }
   assert.equal(encodings, 1, 'bound applies to the only final snapshot encoding');
 });

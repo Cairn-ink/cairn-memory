@@ -62,15 +62,15 @@ export function createProductSqlitePolicy({ observer, now = () => Number(process
         ['EACCES','EPERM','EROFS','ENOSPC','ENOTSUP','EOPNOTSUPP'].includes(error?.code))unavailable();
       openingFailure(error);
     },
-    open(native, path) {
+    open(native, path, checkAdmission) {
       const observed = observer ? observer.database(native) : native;
       // Configuration cannot take a storage lock. The mode query is the first
       // storage statement, including on brand-new/checkpointed WAL databases.
       let mode, check;
       try {
         check = productSqliteFiles(path);
-        observed.exec('PRAGMA busy_timeout=0');
-        mode = topicJournalMode(observed, path, policy);
+        checkAdmission?.();observed.exec('PRAGMA busy_timeout=0');
+        mode = topicJournalMode(observed, path, policy, {checkAdmission});
         check({ afterProbe: true });
         if (!['DELETE', 'WAL'].includes(mode)) unavailable();
       } catch (error) {

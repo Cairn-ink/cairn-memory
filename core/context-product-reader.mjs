@@ -1,3 +1,5 @@
+import { refusalCause } from './context-product-refusal.mjs';
+import { reserveSidecarHandle } from './context-product-handles.mjs';
 import { bindMaintenanceAdmission, attachMaintenanceAdmissionReceipt } from './context-product-admission.mjs';
 import { setTimeout as safetyDelay } from 'node:timers/promises';
 import { hrtime } from 'node:process';
@@ -188,6 +190,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     if (!maintenance && (!types.isSharedArrayBuffer(reservation) || Reflect.apply(sharedLength, reservation, []) !== 4 ||
         Atomics.compareExchange(new Int32Array(reservation), 0, 0, 1) !== 0)) fail('authority_required');
     const resource = registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, request: maintenance ? undefined : request, frame, resources }, true);
+    let sidecarHandle;
     let closed = false, terminal, idle, closePromise, ready = false, releaseWriter, writerReleased = false, cutoffCapability, forcedCleanup = false, disposalWorkerError = false;
     const epoch = 1;
     // Timeout delivery remains prompt; disposal owns a separate bounded grace.
@@ -238,6 +241,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       registry.cleanup(resource, terminal);
       termination.then(() => {
         releaseSemanticWriter();
+        sidecarHandle?.release();
         registry.finish(resource); if (resource.state === 'complete') releaseWriter?.();
         const slot = lifecycle.pending;
         if (slot?.record && slot.record !== resource) registry.finish(slot.record);
@@ -279,6 +283,11 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       else terminalFailure=noteFailure(value,kind,detail,null);
     }
     function workerSecondary(message,stage){const detail=readMaintenanceFailure(message.maintenanceSecondaryFailure);if(detail)noteSecondary(undefined,detail.kind,{...detail,stage});}
+    function workerFailure(message,code){
+      const detail=readMaintenanceFailure(message.maintenanceFailure)??failureFor(code);
+      return detail.kind==='engine'&&detail.engineCode==='authority_required'&&!Object.hasOwn(detail,'refusal')
+        ?{...detail,refusal:refusalCause(message.maintenanceRefusal)}:detail;
+    }
     function failureFor(code){return {kind:codes.has(code)?'engine':'unmapped',engineCode:code};}
     function shutdown(code, parentDeadline, cause) {
       closed = true; terminal ??= code; clearTimer(idle);
@@ -340,7 +349,8 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
             const release = claimMaintenanceWriter(message.fileIdentity,readSet);
             releaseWriter = () => { release(); writerReleased = true; };
           }
-          instance.postMessage({ kind: 'identity-ack', operation: slot.operation });
+          sidecarHandle=reserveSidecarHandle(message.fileIdentity);
+          instance.postMessage({ kind: 'identity-ack', operation: slot.operation, sidecarHandles: {buffer:sidecarHandle.buffer,slot:sidecarHandle.slot} });
         } catch (error) { shutdown(error.code ?? 'reader_failed',undefined,{kind:'identity'}); }
         return;
       }
@@ -367,11 +377,11 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       if (!slot.open) registry.finish(slot.record);
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
       if (signalCancelled(slot.signal)) result = productFailure('read_cancelled');
-      if (slot.open && !result.ok) { shutdown(result.error.code,undefined,readMaintenanceFailure(message.maintenanceFailure)??failureFor(result.error.code));workerSecondary(message,'open'); return; }
+      if (slot.open && !result.ok) { shutdown(result.error.code,undefined,workerFailure(message,result.error.code));workerSecondary(message,'open'); return; }
       if (maintenance && !slot.open) {
         if(result.ok&&['admitMaintenance','refreshMaintenance'].includes(slot.method)) {
           const receipt=message.maintenanceAdmission;
-          if(slot.method==='admitMaintenance'&&receipt!=='admitted'||receipt!==undefined&&!['admitted','required'].includes(receipt)||receipt==='admitted'&&slot.method!=='admitMaintenance'||receipt&&(message.observedAtMonoMs!==undefined||result.value!==null)||receipt==='required'&&slot.method!=='refreshMaintenance') {shutdown('reader_failed',undefined,{kind:'protocol',protocolKind:'result_shape'});return;}
+          if(slot.method==='admitMaintenance'&&!['admitted','required'].includes(receipt)||receipt!==undefined&&!['admitted','required'].includes(receipt)||receipt==='admitted'&&slot.method!=='admitMaintenance'||receipt&&(message.observedAtMonoMs!==undefined||result.value!==null)) {shutdown('reader_failed',undefined,{kind:'protocol',protocolKind:'result_shape'});return;}
           if(receipt)attachMaintenanceAdmissionReceipt(result,receipt);
         }
         if(result.ok && message.observedAtMonoMs !== undefined) {
@@ -423,14 +433,14 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         }
       }
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
-      if(maintenance&&!result.ok){const detail=readMaintenanceFailure(message.maintenanceFailure)??failureFor(result.error.code);noteFailure(result,detail.kind,detail,slot);workerSecondary(message,'refresh');}
+      if(maintenance&&!result.ok){const detail=workerFailure(message,result.error.code);noteFailure(result,detail.kind,detail,slot);workerSecondary(message,'refresh');}
       if(maintenance&&!slot.open&&result.ok)callFailure=undefined;
       if (slot.open) phase?.mark('openAccepted');
       else if (slot.method === 'fetchCandidateEvidence') phase?.mark('readAccepted');
       settle(slot, result);
       armIdle();
     }
-    function dispatch(method, payload, credential, control, entered, opening = false) {
+    function dispatch(method, payload, credential, control, entered, opening = false, semanticOutstanding) {
       if (closed){const result=productFailure(terminal === 'read_timeout' || terminal === 'read_cancelled' ? 'store_closed' : terminal ?? 'store_closed');if(maintenance&&terminalFailure){maintenanceFailures.set(result,terminalFailure);maintenanceReaderFailures.set(result,failureState);}return Promise.resolve(result);}
       let input, token, signal, duration;
       try {
@@ -459,7 +469,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       const operation = opening ? first : operationRecord(callRequest, entered, duration, epoch);
       const callFrame = opening ? frame : options.diagnostics ? nativeTelemetry(operation.operationId, epoch) : null;
       const ordinal=maintenance ? opening ? firstOrdinal : claimMaintenanceOrdinal(control) : undefined;
-      const outbound = opening ? openingData : { method, input, credential: token, request: callRequest, operation, frame: callFrame };
+      const outbound = opening ? openingData : { method, input, credential: token, request: callRequest, operation, frame: callFrame,...(semanticOutstanding===undefined?{}:{semanticOutstanding}) };
       if(maintenance){
         const {maintenanceMarker:internalMarker,semanticPort,openPhases,memoryComparison:internalComparison,verificationBatching:internalBatching,verificationBatchState:internalBatchState,...data}=outbound;operationMessage(data);
         outbound.maintenanceOrdinal=ordinal;bindMaintenanceControl(control,marker);prepareMaintenanceMarker(marker,ordinal,entered);
@@ -597,13 +607,24 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       ...(maintenance ? { refreshContextIndex: (input, credential, control) => call('refreshContextIndex', input, credential, control) } : {}),
       close() { return dispose('store_closed'); },
     });
-    if(maintenance&&!semantic)bindMaintenanceAdmission(handle,call);
+    if(maintenance)bindMaintenanceAdmission(handle,semantic?(method,input,credential,control)=>{
+      const turn=semanticMaintenanceTurns.get(control);
+      return turn?dispatch(turn.method,input,credential,control,now(),false,turn.semanticOutstanding):call(method,input,credential,control);
+    }:call);
     disposals.set(handle.close, dispose);
     const holdDiagnostic = registryHolds.get(opened); if (holdDiagnostic) registryHolds.set(handle, holdDiagnostic);
     if (phaseBuffer) openPhases.set(handle, phaseBuffer);
     if(maintenance){maintenanceMarkers.set(handle,marker);maintenanceReaderFailures.set(handle,failureState);}
     return handle;
   };
+}
+// Turn metadata is scoped to the engine's dispatch control, never a handle
+// identity. The established admission bridges alone unwrap host maintainers.
+const semanticMaintenanceTurns=new WeakMap();
+export async function semanticMaintenanceRequest(handle,method,input,credential,control,{semanticOutstanding,dispatch}) {
+  semanticMaintenanceTurns.set(control,{method,semanticOutstanding});
+  try{return await dispatch(handle,input,credential,control);}
+  finally{semanticMaintenanceTurns.delete(control);}
 }
 export const openContextProductReader = createProductReaderRuntime();
 

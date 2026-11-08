@@ -11,6 +11,7 @@ import { createProductSqlitePolicy } from '../context-product-sqlite.mjs';
 import { accessDigest, digest, signedRecord } from '../context-product-validation.mjs';
 import { createMaintenanceAttribution } from '../context-product-attribution.mjs';
 import { termFrequencies } from '../context-read-tokenize.mjs';
+import { attestCopiedSidecar } from '../testing/context-product-attested-copy-fixture.mjs';
 
 let oracleSequence=0;
 const ids=['\uE000','\u{10000}'];
@@ -145,7 +146,7 @@ test(`F1 ${encoding} ${build}: independent Unicode Card/Memory membership and ba
 for(const encoding of ['UTF-16le','UTF-16be'])test(`F1 UTF-8 canonical / ${encoding} sidecar uses append-only fallback`,async t=>{
   const seeded=seed(t),{f}=seeded;unicode(f.path,seeded);
   const a=local(t,f.path);a.step('opened');a.closeStorage();
-  const target=f.path+PRODUCT_SIDECAR_SUFFIX,converted=target+'-converted';reencode(target,converted,encoding);renameSync(converted,target);a.reopen();
+  const target=f.path+PRODUCT_SIDECAR_SUFFIX,converted=target+'-converted';reencode(target,converted,encoding);renameSync(converted,target);attestCopiedSidecar(f.path);a.reopen();
   const result=a.finish();await equivalent(t,a,result,encoding+' sidecar');
   bump(f.path);const old=a.prepare().g.id;bump(f.path);const next=a.finish();
   assert.notEqual(next.publication.generation.id,old,'UTF-16 sidecar cannot retarget work');
@@ -331,7 +332,7 @@ for(const encoding of ['UTF-16le','UTF-16be'])test(`F5 UTF-8 canonical / ${encod
   const f=fixture(t,{cards:true}),memory=f.admit('cacheuniqueterm',four[0]),special='x'+String.fromCodePoint(0xfffe);
   unicode(f.path,{memories:[memory],cards:[]},[special]);const a=local(t,f.path);a.p.types=['memory'];
   a.step('opened');a.closeStorage();
-  const target=f.path+PRODUCT_SIDECAR_SUFFIX,converted=target+'-converted';reencode(target,converted,encoding);renameSync(converted,target);a.reopen();
+  const target=f.path+PRODUCT_SIDECAR_SUFFIX,converted=target+'-converted';reencode(target,converted,encoding);renameSync(converted,target);attestCopiedSidecar(f.path);a.reopen();
   let result;
   try {result=a.finish();}catch(e){assert.equal(e.code,'index_unavailable');assert.equal(e.reason,'corrupt');}
   if(!result){

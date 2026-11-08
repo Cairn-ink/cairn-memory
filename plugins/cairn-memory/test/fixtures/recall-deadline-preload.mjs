@@ -71,7 +71,7 @@ globalThis.fetch = async (url, options) => {
     notify('recall-fetch', { attempt: number, sameSignal: options.signal === firstSignal,
       hasSession: Object.hasOwn(body, 'session_id'), sameLegacyPayload: JSON.stringify(legacy) === firstLegacyPayload });
     const mode = process.env.CAIRN_TEST_RECALL_REPLY;
-    const milliseconds = mode === 'old-schema' ? number === 1 ? 1300 : 900 : Number(process.env.CAIRN_TEST_RECALL_DELAY);
+    const milliseconds = mode === 'old-schema' ? number === 1 ? 50 : 5000 : Number(process.env.CAIRN_TEST_RECALL_DELAY);
     try {
       await acknowledgement;
       await delay(milliseconds, undefined, { signal: options.signal });

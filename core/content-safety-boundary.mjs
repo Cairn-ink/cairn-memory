@@ -3,9 +3,10 @@ import { withContentWriteOperation, contentWriteMethodClass, contentWriteBoundar
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { contentReadSafety, sourceReadSafety } from './content-safety.mjs';
 import { types } from 'node:util';
-import { cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
+import { cachedContentLayout, installedContentLayout, withCanonicalContentSnapshot } from './content-safety-schema.mjs';
 import { contentSuppressionFenceInside, contentSuppressionReasonInside, contentSuppressionMayMatchInside, contentSuppressionRequestFenceInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside, contentSuppressionRequestInside, withoutContentSuppressionReadCacheInside, withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { fail, MemoryStoreError } from './validation.mjs';
+import { hasCardLineage } from './card-lineage.mjs';
 // This boundary is in the CLI's static import closure. Keep error framing free
 // of the database module so help/configuration never links node:sqlite.
 const isStorageBusy = error => error?.code === 'ERR_SQLITE_ERROR' &&
@@ -211,6 +212,8 @@ export function contentSafetyFacade(api, { check, noOwner = [], failure, select 
 // Preserve the entry fence through awaits; do not dispatch retained text again
 // after any fact advanced. Legacy stores acquire no additional SQL statements.
 const contentPorts = new AsyncLocalStorage();
+// Internal Worker bridge: no facade entry, storage access or validation re-entry.
+export const withContentPortBoundary = (guard, work) => guard ? contentPorts.run(guard,work) : work();
 export const hasContentPortBoundary = () => Boolean(contentPorts.getStore());
 // Only an attested legacy facade may use its original model freshness order.
 // A standalone helper call has no such proof and keeps the pre-counter check.
@@ -377,10 +380,19 @@ export function contentReceiptCount(db, namespace, memory, total) {
  * inventing a missing revision or rebinding them to the current version. */
 export function assertContentOutput(db, identity, value, scopes = [], { factsOnly = false } = {}) {
   if (!(cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision) return;
+  if(hasCardLineage(db)&&!db.isTransaction)return withCanonicalContentSnapshot(db,()=>assertContentOutput(db,identity,value,scopes,{factsOnly}));
   const fallback = scopes.filter(ns=>['personal','project'].includes(ns.scope));
   const seen = new Set();
   const fact = (namespace,kind,key,revision,extra={}) => {
     if(typeof key!=='string'||!namespace)return;
+    if(kind==='card'&&!factsOnly&&hasCardLineage(db)) {
+      const row=db.prepare('SELECT id,revision,body_revision FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND id=?')
+        .get(namespace.ownerId,namespace.scope,namespace.projectId??'',key);
+      const ns={...namespace,projectId:namespace.projectId||null};
+      if(!row||!contentReadSafety(db,{identity,namespace:ns,method:'getCard',intent:'history',
+        ref:{type:'card',namespace:ns,cardId:key,revision:row.revision,bodyRevision:row.body_revision}}).allowed)fail('evidence_unavailable');
+      return;
+    }
     const state = cachedContentSuppressionRequestInside(db, namespace.ownerId);
     if (state?.completed?.has(JSON.stringify([namespace.ownerId,namespace.scope,namespace.projectId??'',kind,key,revision]))) return;
     const tag={memory:'memory-revision-v1','submitted-note':'note-v1'}[kind];
@@ -395,6 +407,15 @@ export function assertContentOutput(db, identity, value, scopes = [], { factsOnl
     if(!node||typeof node!=='object'||ArrayBuffer.isView(node)||seen.has(node))return;
     seen.add(node);
     const namespace=node.namespace??inherited;
+    if(namespace&&hasCardLineage(db)&&node.effectId&&node.entity&&
+      Object.keys(node).every(key=>['effectId','namespace','kind','entity','revision','actionId','affectedIds','cursor','ordinal'].includes(key))) {
+      const audit=db.prepare('SELECT * FROM card_effects WHERE effect_id=? AND owner_id=? AND scope=? AND project_id=?')
+        .get(node.effectId,namespace.ownerId,namespace.scope,namespace.projectId??'');
+      if(!audit||node.entity.type!==audit.entity_type||node.entity.id!==audit.entity_id||node.revision!==audit.revision||
+        node.kind!==audit.kind||node.actionId!==audit.action_id||Object.keys(node.entity).sort().join()!=='id,type'||
+        node.affectedIds?.length||node.cursor!==null||node.ordinal!==audit.ordinal)fail('evidence_unavailable');
+      return;
+    }
     if(namespace&&['memory','card'].includes(node.type)&&node[node.type==='memory'?'memoryId':'cardId']) {
       // Metadata can intentionally retain an older canonical revision (for
       // example a confirmed Card's superseded contributor). Do not turn a

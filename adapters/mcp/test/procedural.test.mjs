@@ -70,7 +70,7 @@ test('tag-only changes guard independent revisions and preserve memory content, 
   const f = workspace(t), h = await episodeHost(t, f.path, { home: f.home });
   const content = 'Synthetic standing instruction';
   const memory = ok(await call(h, 'remember_memory', { content, kind: 'instruction' })).memory;
-  const core = openMemoryCore({ path: f.path });
+  const core = openMemoryCore({ path: f.path, raw: false });
   try { ok(core.admit({ namespace, memory: { content: 'Synthetic conflicting instruction', kind: 'instruction' },
     receipts: [{ client: 'synthetic', sessionId: 'explicit-test', eventId: 'conflicting', role: 'user', excerpt: 'Synthetic conflicting instruction' }],
     conflictHints: [{ memoryId: memory.id, expectedRevision: memory.revision, relation: 'contradicts' }] })); }

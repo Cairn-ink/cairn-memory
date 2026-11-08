@@ -113,7 +113,7 @@ export async function seedStore(path, schema, { memories = PROTOCOL.memories, mo
   const { installOverviewLayout } = await import('../../core/testing/topic-overview-raw29-fixture.mjs');
   const { openMemoryCore } = await import('../../core/contract.mjs');
   installOverviewLayout(path, schema);
-  const core = openMemoryCore({ path });
+  const core = openMemoryCore({ path, raw: false });
   try {
     for (let n = 0; n < namespaces.length; n++) {
       const namespace = namespaces[n], saved = [];
@@ -194,7 +194,7 @@ export function createCandidate(directory) {
     ['read-database.mjs', [
       ["import { assertNoCardCurrentDependencies }", "import { performance } from 'node:perf_hooks';\nimport { measurementDatabase } from './measurement-database.mjs';\nimport { assertNoCardCurrentDependencies }"],
       ['if (!nativeObserver && topicPolicy) db = topicPolicy.database(native, wal);', 'native = measurementDatabase(native, performance);\n    if (!nativeObserver) db = topicPolicy ? topicPolicy.database(native, wal) : native;'],
-      [' PRAGMA busy_timeout=${contextRead && !nativeObserver ? 5000 : 0};', ''],
+      [' PRAGMA busy_timeout=${timeout};', ''],
     ]],
   ];
   const hashes = [];
@@ -236,7 +236,7 @@ export function measurementDatabase(native, performance) {
 
 export async function openWriter(path, writer) {
   const { openMemoryCore } = await import('../../core/contract.mjs');
-  if (writer !== 'raw') return openMemoryCore({ path });
+  if (writer !== 'raw') return openMemoryCore({ path, raw: false });
   const { localPlainPort, splitRaw } = await import('../../core/testing/raw-fixtures.mjs');
   const { cardHost } = await import('../../core/testing/raw-source-fixtures.mjs');
   const { rationaleModel } = await import('../../core/testing/rationale-model.mjs');

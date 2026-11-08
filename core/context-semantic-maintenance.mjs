@@ -1,4 +1,5 @@
 import { contentSuppressionFenceInside } from './content-suppression-storage.mjs';
+import { cachedContentLayout } from './content-safety-schema.mjs';
 import { createHmac } from 'node:crypto';
 import { openContextProductFacade } from './context-read-facade.mjs';
 import { productSidecar, canonicalProductIdentity, productFile, PRODUCT_SIDECAR_SUFFIX } from './context-product-sidecar.mjs';
@@ -9,15 +10,42 @@ import { safePath } from './context-semantic-input.mjs';
 import { fail } from './validation.mjs';
 
 const same=(a,b)=>canonicalJson(a)===canonicalJson(b);
-export function semanticMaintenance({c,sqlite,identity,secretState}) {
-  const paths=new Map(),views=new Map();
+export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandles}) {
+  const paths=new Map(),views=new Map(),preparing=new Map();let closed=false;
   const coverage=readSet=>({policy:'recent-projects-v1',selectionRevision:'semantic-service',requestedNamespaces:readSet.length,selectedNamespaces:readSet.length,omittedNamespaces:0});
-  function open(path,writable=false,journalMode=c.host.configuration.semanticSidecarJournalMode??'DELETE') {
-    const key=JSON.stringify([path,writable,journalMode]);let view=views.get(key);if(view)return view;
-    const facade=openContextProductFacade(path,{sqlite});
+  const viewKey=(path,writable,journalMode)=>JSON.stringify([path,writable,journalMode]);
+  async function prepare(path,writable=false,journalMode=c.host.configuration.semanticSidecarJournalMode??'DELETE') {
+    if(closed)fail('store_closed');
+    const key=viewKey(path,writable,journalMode);
+    if(views.has(key))return;
+    if(!preparing.has(key)) {
+      const pending=(async()=>{
+        // Each connection needs its own slot, including two views of one store.
+        // Bind to the opened facade, as the product reader does, rather than
+        // a path stat that could become stale during the parent round-trip.
+        if(!reserveHandles){open(path,writable,journalMode);return;}
+        const facade=openContextProductFacade(path,{sqlite});let sidecarHandles;
+        try{sidecarHandles=await reserveHandles(facade.fileIdentity);if(closed)fail('store_closed');}
+        catch(error){facade.close();throw error;}
+        open(path,writable,journalMode,{facade,sidecarHandles});
+      })();
+      preparing.set(key,pending);
+      void pending.finally(()=>preparing.delete(key)).catch(()=>{});
+    }
+    await preparing.get(key);
+  }
+  async function prepareTargets(configured) {
+    for(const target of configured)await prepare(target.canonicalPath);
+    return targets(configured);
+  }
+  function open(path,writable=false,journalMode=c.host.configuration.semanticSidecarJournalMode??'DELETE',prepared) {
+    if(closed)fail('store_closed');
+    const key=viewKey(path,writable,journalMode);let view=views.get(key);if(view)return view;
+    if(reserveHandles&&!prepared)fail('reader_failed');
+    const facade=prepared?.facade??openContextProductFacade(path,{sqlite});
     try {
       const storage=productSidecar({path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,sqlite,writable,
-        sidecarJournalMode:journalMode});
+        sidecarJournalMode:journalMode,...(prepared?{sidecarHandles:prepared.sidecarHandles}:{})});
       view={path,facade,storage,vectors:productVectors({storage,facade})};views.set(key,view);return view;
     }catch(error){facade.close();throw error;}
   }
@@ -57,7 +85,7 @@ export function semanticMaintenance({c,sqlite,identity,secretState}) {
     if(input.expectedTargetDigest!==s.targetSetDigest)fail('revision_conflict');
     if(!s.targets)fail('revision_conflict');
     if(s.firstCoverageComplete){const value={status:'complete',firstCoverage:coverageStatus(s)};final();return {ok:true,value};}
-    targets(c.backfillTargets);
+    await prepareTargets(c.backfillTargets);
     const cutoff=mono(operation.operationCutoffMonoNs),hasTime=()=>process.hrtime.bigint()+20000000n<cutoff;
     let visited=0,invalid=false;
     const receipts=Object.assign(Object.create(null),s.receipts);
@@ -100,9 +128,10 @@ export function semanticMaintenance({c,sqlite,identity,secretState}) {
     recovery.sealed=sealed;
     return {ok:true,value:{status:'complete',firstCoverage:coverageStatus(next)}};
   }
-  function catalog(input,metadata) {
+  async function catalog(input,metadata) {
     safePath(input.canonicalPath);
     if(input.canonicalPath!==metadata.path||input.ownerId!==metadata.ownerId)fail('authority_required');
+    await prepare(input.canonicalPath);
     const v=open(input.canonicalPath),physical=v.facade.port.read(()=>canonicalProductIdentity(v.path,v.facade.port.db)),sidecar=productFile(v.path+PRODUCT_SIDECAR_SUFFIX);
     if(v.facade.port.identity.storeId!==input.storeId||!same(physical,input.canonicalIdentity)||!same(sidecar,input.sidecarIdentity)||input.catalogId!==digest({storeId:input.storeId,canonicalIdentity:physical,sidecarIdentity:sidecar}))fail('index_unavailable');
   }
@@ -119,6 +148,7 @@ export function semanticMaintenance({c,sqlite,identity,secretState}) {
         await change(n=>{n.catalog[id].purge={epoch,deleted:entry.purge?.deleted??0,complete:true};});continue;
       }
       if(!same(productFile(sidePath),entry.sidecarIdentity)){complete=false;break;}
+      await prepare(entry.canonicalPath,true,entry.sidecarJournalMode);
       const v=open(entry.canonicalPath,true,entry.sidecarJournalMode),secret=v.facade.port.identity.cursorSecret;
       const sign=body=>createHmac('sha256',secret).update('context-read-product-v1.1/vector-purge\0'+canonicalJson(body)).digest('base64url');
       const progress=v.storage.vectors(db=>{
@@ -163,17 +193,42 @@ export function semanticMaintenance({c,sqlite,identity,secretState}) {
     if(!p||!same(p.readSet,metadata.readSet)||p.readSet[0].ownerId!==state.ownerId||input.kind==='refresh'&&!metadata.maintenance)fail('authority_required');
     const v=open(metadata.path);
     v.facade.port.read(()=>{
-      if(input.kind==='refresh') {
-        const epoch=contentSuppressionFenceInside(v.facade.port.db,state.ownerId);
-        if(epoch!==null && p.suppressionEpoch!==epoch || epoch===null && p.suppressionEpoch!=null)fail('evidence_unavailable');
-      }
+      const layout=cachedContentLayout(v.facade.port.db);
+      if(!layout)fail('evidence_unavailable');
+      if(layout.suppressionRevision ? typeof p.suppressionEpoch!=='string' : p.suppressionEpoch!=null)fail('evidence_unavailable');
+      // canonicalProductFences compares the captured epoch in the existing
+      // namespace fence SELECT, for both query and refresh transmissions.
       const observed=v.storage.observe({...p,ownerCoverage:coverage(p.readSet)},p.accessDigest);
-      if(observed.dto.lexical.state!=='ready'||digest(observed.publication)!==p.lexicalValidationDigest)fail('index_unavailable');
+      if(observed.dto.lexical.state!=='ready') {
+        // A missing sidecar can return before its namespace fence query. Keep
+        // the original refresh failure-path check and its denial precedence;
+        // ready observations already compare the epoch in their existing SQL.
+        if(input.kind==='refresh'&&layout.suppressionRevision&&contentSuppressionFenceInside(v.facade.port.db,state.ownerId)!==p.suppressionEpoch)fail('evidence_unavailable');
+        fail('index_unavailable');
+      }
+      if(digest(observed.publication)!==p.lexicalValidationDigest)fail('index_unavailable');
       if(input.kind==='query') {
         const vector=v.vectors.observe(p,observed.publication,{identity:identity(),policy:state.policy});
         if(vector.status!=='complete'||digest(vector.record)!==p.vectorValidationDigest)fail('index_unavailable');
       }
     });
   }
-  return {targets,validate,catalog,purge,transmission,close(){for(const v of views.values()){v.storage.close();v.facade.close();}views.clear();}};
+  function portGuard(message,metadata) {
+    if(!message.contentFence)return undefined;
+    const f=message.contentFence,v=open(metadata.path),db=v.facade.port.db,layout=cachedContentLayout(db);
+    if(!layout||!layout.suppressionRevision||f.operationId!==message.operation.operationId||f.ownerId!==metadata.ownerId||
+      f.storeId!==v.facade.port.identity.storeId||f.canonicalPath!==metadata.path||!same(f.readSet,metadata.readSet)||typeof f.suppressionEpoch!=='string'||!/^\d+:\d+$/.test(f.suppressionEpoch)||
+      message.method==='embed'&&message.input?.projection?.suppressionEpoch!==f.suppressionEpoch)fail('evidence_unavailable');
+    return ({before=false}={})=>{
+      if(before)return;
+      if(db.isOpen===false||db.isTransaction)fail('evidence_unavailable');
+      const row=db.prepare('SELECT epoch_hi,epoch_lo FROM owner_suppression_epochs WHERE owner_id=?').get(f.ownerId);
+      if((row?`${row.epoch_hi}:${row.epoch_lo}`:'0:0')!==f.suppressionEpoch)fail('evidence_unavailable');
+    };
+  }
+  return {prepare,prepareTargets,targets,validate,catalog,purge,transmission,portGuard,close(){
+    closed=true;let failure;
+    for(const v of views.values())for(const close of [()=>v.storage.close(),()=>v.facade.close()])try{close();}catch(error){failure??=error;}
+    views.clear();if(failure)throw failure;
+  }};
 }

@@ -1,13 +1,19 @@
 # Product adapter: P2a–P2e
 
+The product read defaults to dated Memory + Raw assembly, at 6,000 tokens and
+24 packed items. A trusted Worker host can supply an already-open local
+[`openRawSearch` service](plans/raw-search-interface.md) as `host.rawSearch`.
+An absent or unavailable service falls back to dated Memory-only assembly.
+Hosted Raw selection still requires its own backend/accounting integration.
+
 Select `profile:'context-read-product-v1.1'` and `version:'context-read-v1'`
 with `openContextProductReader` from the core entry. P2a releases capabilities
 and canonical exact evidence fetch for DELETE stores: Memories on physical
 v18/v20–v33 and Cards on v23–v33. P2b adds lexical candidates,
-representation-v2 assembly, index status and explicit service maintenance.
+dated assembly, index status and explicit service maintenance.
 P2c extends that path to one owner with up to 32 selected namespaces: at most
 one personal namespace and 31 projects. Reader requests use certified product
-indexes only. Defaults remain lexical and construct no provider. P2e adds
+indexes only. This separately selected product profile remains lexical and constructs no provider. Ordinary local MCP instead enables semantic search when its adapter has a key; see [local defaults](defaults.md). P2e adds
 explicit hosted semantic configuration, described below. P2d adds explicitly opted-in WAL handling for the same owner-wide
 selection, subject to deployment qualification below. The legacy profile and
 sidecar remain unchanged.
@@ -66,7 +72,15 @@ A `kind:'service'` issuance cannot open this reader. Service maintenance uses th
 `authorize` must verify its trusted issuance state, allowed method and **entire**
 `request.input`, including fetch fences/deadline, before returning the exact
 requestBinding as its method grant. The request also includes owner/namespaces,
-the parent-stamped requestControl and credentialBindingId. Returning a snapshot
+the parent-stamped requestControl and credentialBindingId. The deeply frozen
+request has an optional top-level `maintenancePhase` directly after `method`:
+`'admission'` for an engine admission turn and `'work'` for an engine work turn.
+Both retain `method:'refreshContextIndex'`. All other requests omit the key,
+including direct refresh, status, serving, semantic maintenance and suppression
+pull requests. The engine derives the phase from its own maintenance method;
+call inputs, options and message properties cannot supply it. `isCurrent` receives
+the same request object as `authorize`. The phase does not change the binding or
+the required grant equality. Returning a snapshot
 without verifying the complete operation binding is not a valid adapter.
 Additional trusted configuration can carry bounded SharedArrayBuffers for
 Worker-local publication checks. No raw bearer or function crosses IPC.
@@ -486,6 +500,16 @@ turn before fresh writable opening: ordinary pump work yields before a hidden
 writable admission, including a fallback after a caught writable failure.
 The existing failure-mode disposal rule above is unchanged.
 
+**Amendment v3: lexical pre-quantum turns (turn contract v1, 2026-11).**
+This amendment implements the lexical portions of the
+[maintenance turn contract](plans/context-read-maintenance-turn.md), only for
+`renewContextMaintenancePump` without `semanticConfig`. The semantic pump is
+not yet covered. An optional host scheduling ticket precedes each open-only
+admission turn and each later work turn. The broker wait is outside the charged
+quantum, reservation, watchdog, resident drain/open and writable admission.
+Healthy resident idleness holds no ticket. Standalone maintainers and the
+existing dynamic authority and storage checks retain their behavior.
+
 A successful `rebuilding` or `partial` response is durable progress: schedule
 another explicit quantum with the same service binding and projection. Stop
 the initial prebuild loop only at `complete` for each intent. Time admission
@@ -650,6 +674,60 @@ const terminalObservation = await pump.completion;
 await pump.close();
 ```
 
+**Amendment v3: lexical admission port.** Supply the optional top-level
+`preQuantum` port, separate from `host.configuration`:
+
+```js
+preQuantum: {
+  version: 1,
+  maxWaitMs: 1000, // integer 1..5000, independent of the quantum
+  createTurn(request) {
+    return {
+      enter({signal, untilMonoMs}) { /* "admitted" | "defer", or native Promise */ },
+      release(outcome, reason) { /* synchronous, idempotent, no throw */ }
+    };
+  }
+}
+```
+
+**Amendment v3: optional wait budget.** Omitting `maxWaitMs` uses 2,000 ms.
+When present, it must be a data property containing an integer from 1 through
+5,000; an accessor or an explicit `undefined` refuses `invalid_input`. Presence
+uses the same descriptor-chain capture as the other port fields.
+
+Validation captures data descriptors and method receivers without invoking
+accessors or Proxy traps. Invalid activation refuses `invalid_input`; adding,
+removing or replacing the port object on an existing pump refuses renewal with
+`invalid_input` before any state change. Every renewal uses the same object.
+Each ticket must be a plain non-Proxy object with own data-function `enter`
+and `release` properties; both are captured before entry. A non-native thenable
+is never awaited. A frozen request contains only primitive `version:1`,
+`pumpId`, `windowId`, integer projection `lane`, `family:'lexical'`,
+`kind:'lexical'`, `phase:'admission'|'work'`, lane `intent` and `maxMs:Q`.
+It carries no owner identity, credential, path, query or error payload.
+
+After pure eligibility and lane selection, the engine latches a pending request
+and waits before stamping the quantum start or advancing the lane. The wait
+ends at `min(now+maxWaitMs, min(windowEnd,renewedUntil)-Q)`. On a grant, it
+synchronously rechecks stop/error, admission generation, full authority/window
+horizon, quota and floors, minimum spacing, lane and resident epoch, and the
+sidecar's open-only hold/quarantine. All amounts come from current state.
+A failed check releases `declined` with one closed reason: `stopped`,
+`renewal_expired`, `generation_changed`, `budget_exhausted`, `spacing`,
+`lane_changed` or `admission_held`. Dynamic authorization and currentness,
+ledger binding, price, budgets, purge and enablement checks stay inside the turn.
+
+**Amendment v3: wait-expiry decline.** This package extends the turn contract's
+§6 closed lexical decline reasons with `wait_expired`: the broker granted after
+the engine's wait deadline. A grant racing that deadline remains owned and is
+released with `release('declined', 'wait_expired')`, starting nothing. Existing
+pump-state checks run first and retain their reasons. The decline adds no
+deferral or failure, leaves public status `active` with `error:null`, and retries
+through the existing retry-not-before time at normal spacing. Decline reasons
+stay informational for the host. A broker may keep an owner's position (for
+example its ring slot) across `wait_expired`, so a late owner retries without
+losing its place.
+
 The host chooses all quotas, renewal and selection metadata; the engine
 supplies no assumed production budgets. `id` and window ID are nonempty strings
 of at most 200 units. `endsAtMonoMs` is a safe integer in the process hrtime
@@ -693,6 +771,51 @@ Continuous window handoff retains admitted handles and deadlines. An opening
 failure earns no observation; actual missed duties remain visible. The extra
 slot commonly delays first work by one spacing interval, with no commit-to-ready
 latency guarantee at window or authority boundaries.
+
+**Amendment v3: waiting, cadence and handoff.** Close, supervisor stop,
+accepted same-window renewal or window handoff, authority/window cutoff and the
+wait deadline abort the queued ticket. Rejected renewal does not cancel it.
+A queued cancellation or `defer` releases `withdrawn` exactly once, with no
+quantum, reservation, charge/refund, failure, ordinal, sample, observation,
+cursor advance or pending-usage acknowledgement. Withdrawal is final; a late
+grant is ignored without another callback. A grant already observed in the
+abort race remains owned until declined or settled. Late results dispatch
+nothing. Deferral alone keeps public status `active` with `error:null` and
+completion pending; real stop, expiry or exhaustion keeps its existing outcome.
+A separate retry-not-before clock preserves normal pacing without overdue
+zero-delay spin. The selected lane remains pending.
+
+While waiting, the turn holds only its pump's lifetime supervisor live record
+(and any already-resident maintainer), with no lock, transaction, reservation
+or new open, so a longer wait delays only that owner's own turn.
+
+Cadence is checked before admission, after waiting/deferral/cancellation,
+before accepted renewal replaces duty, and at settlement. Waiting earns no
+observation, clears no missed flag, resets no duty and extends no authority or
+window. Each real overdue observation interval counts once. Prompt window
+succession retains the resident; cancelling its old queued request forces no
+reopen. An inactive succession increments the resident epoch, but predecessor
+drain and successor open wait for the next granted turn. Renewal does not abort
+executing work merely to cancel a queue wait.
+
+Warm and cold admission arithmetic remains unchanged. For observation duty,
+broker waits add to the cold bound: `sum(waits)+(N+C)*S+Q<=5000`. One selection
+at Q=S=1000 has N=2 and C=1, leaving 1000 ms of conservative wait headroom per
+sweep. Deployment scheduling and disposal capacity require separate
+qualification; waiting can cause honest cadence misses without pump failure.
+
+At the 2,000-ms default, one lexical sweep's worst case is
+`Σ waits + (N+C)·S + Q` against the 5,000-ms duty. With one pump per owner,
+two lanes and one resident, N=2, C=1 and Q=S=1,000: two full warm waits give
+`4,000+2,000+1,000=7,000 ms`; three full cold waits give
+`6,000+3,000+1,000=10,000 ms`. Thus even one owner has no worst-case duty
+guarantee if every wait consumes the default. For owners sharing one core under
+a one-quantum-at-a-time broker, three owners can each wait 2,000 ms behind two
+full 1,000-ms turns; their six warm lexical work turns alone take 6,000 ms,
+so at three owners the 5,000-ms duty is knowingly missed under full occupancy.
+Cold admission adds three more turns (9,000 ms total); even two cold owners
+need six turns (6,000 ms). These are capacity facts, not contract violations
+(§7); shorter waits and turns can support more owners.
 
 Dispatches are paced using the configured minute allowance and full quantum
 sizes, with `S` as the minimum admission spacing. Each projection's next read
@@ -817,6 +940,79 @@ is distinct from incremental work and COMMIT; failure stages also admit
 `admission`. Older private consumers may
 treat unknown kinds as unavailable. Dispatch, RPC, delivery and settlement
 intervals overlap and must not be added as an elapsed breakdown.
+
+**Amendment v2.1: pump factory host seams.** The internal
+`createMaintenancePumpRuntime` factory accepts the dependency options below.
+These do not add public renewal options.
+
+| Dependency option | Contract | Purpose |
+| --- | --- | --- |
+| `open` | Supported host seam | Open the maintainer for a reserved turn. |
+| `admit` | Supported host seam | Dispatch non-observing lexical admission. |
+| `work` | Supported host seam | Dispatch lexical refresh work. |
+| `observedAt` | Supported host seam | Read the native observation timestamp from the work result. |
+| `stallOf` | Supported host seam | Read private stall diagnostics from a handle, control or result. |
+| `setTimer` | Supported host seam | Schedule pump turns and watchdogs. |
+| `clearTimer` | Supported host seam | Cancel the corresponding scheduled timer. |
+| `now` | Supported host seam | Supply monotonic milliseconds in the observation clock domain. |
+| `receiptOf` | Test-only | Inject private admission receipts. |
+| `admissionIdentity` | Test-only | Inject admission-domain identities. |
+| `phasesOf` | Test-only | Inject private phase diagnostics. |
+| `cutoffQualified` | Test-only | Exercise gated cutoff recovery. |
+
+The default `admit` and `work` look up private dispatch by the engine's native
+maintainer identity. The default `open` returns that native handle. A host that
+returns a wrapper must inject **both** `admit` and `work` and unwrap to the native
+maintainer in each bridge. Both injected bridges are trusted to do so. If only
+one is injected, the remaining default still requires a native handle: a
+non-native handle is rejected on the first open before either dispatch runs.
+Preserve lazy close descriptors and the original close function's identity so
+the existing disposal and timeout-disposal rules continue to apply.
+
+Lexical pump turns call `admit` and `work`, not `refreshContextIndex`. A host
+observes refresh input (including `intent` and `readSet`) and results through
+`work`, then reads observation timing through `observedAt`. Pass the same result
+object through both seams to retain its native observation metadata. Admission
+earns no observation. The semantic pump does not use these dispatch seams.
+
+When either dispatch remains default and `open` returns a non-native maintainer,
+the lexical pump fails terminally on its first open with public
+`error:'invalid_input'` and private cause `maintainer_identity_unrecognized`.
+This cause is appended to the private failure vocabulary; existing failure and
+stall numbers remain unchanged. The opened handle follows existing disposal
+rules, with no admission retry, hold or backoff, and no subsequent open or
+observation. Only the existing opening reservation is charged. No public code,
+state or option is added.
+
+**Amendment v2.1 addendum: semantic turn dispatch.** With a `preQuantum` port,
+the semantic pump now honours the same `admit` and `work` host bridges for
+turn-bearing reader dispatch. Status uses `admit`; refresh uses `work`. Native
+maintainers accept default dispatch. A host wrapper requires **both** trusted
+bridges, each unwrapping to its native maintainer through the host's mapping.
+If either bridge remains default, an unrecognised wrapper fails on the first
+open, before dispatch, with public `invalid_input` and private
+`maintainer_identity_unrecognized`, exactly as in the lexical pump. Preserve
+the lazy original close descriptor for the existing disposal proof. Without a
+port the semantic pump retains its existing public-method dispatch.
+
+**Amendment v3: private turn diagnostics.** The lexical private diagnostic
+adds saturating `deferredTurns`, `turnWaitMs` (including a pending wait),
+`declinedTurns` keyed by the seven closed reasons, `turnPhase` (`idle`,
+`waiting`, `running`, `settling`, `poisoned`), `missedObservations` and
+`admissionHold:{held,attempts}`. These have fixed cells and no growing history.
+The existing public status/completion DTO and cadence-miss meaning are unchanged.
+Waiting stays outside quantum histograms, ledger elapsed time and stall markers.
+Consumers may treat unfamiliar diagnostic fields as unavailable.
+
+**Amendment v3: wait-expiry diagnostics.** `declinedTurns` also includes the
+fixed `wait_expired` cell. Saturating `admittedTurns` counts granted turns that
+pass the local recheck and start, including open-only admissions; declined
+grants do not increment it. The stall signature is
+`declinedTurns.wait_expired` rising while admitted turns stay flat. A lexical
+lane's gap over 5,000 ms still increments `missedObservations` and the existing
+`cadenceMisses` once until a real observation. Repeated expired grants never
+call the injected `observedAt`, so the host's freshness signal goes stale while
+public status stays `active` with `error:null`.
 
 Maintenance failures also have private latest-value diagnostics. Log
 `maintenanceFailureDiagnostic(resultOrOpeningError)` and
@@ -947,6 +1143,68 @@ the same process. Process replacement loses this memory; a host must preserve
 its conservative admission hold with its own ledger rather than recharge retries
 through process restarts.
 
+**Amendment v3: settlement, release and poison.** A granted ticket is held
+through observation, original-ledger settlement and bookkeeping, or through the
+open-only zero-work settlement. Failure/timeout/stop joins shutdown disposal
+before `release('settled')`. Replacement holds the same grant across predecessor
+drain, successor open and writable admission. Late opens and opening-error
+cleanup IDs remain owned through their disposal join. A cutoff response,
+termination request or proof deadline is not proof. The production lexical
+recovery gate remains disabled; internal qualified test paths use this same
+release barrier. A healthy cached resident need not be disposed after success.
+
+A factory throw, malformed ticket or changed port shape is terminal
+`authority_required`; no malformed ticket is invoked or released. Entry throw,
+rejection or malformed outcome is also terminal `authority_required` and calls
+the captured `release('withdrawn')` once. A changed port with a validated ticket
+still uses its captured release after the applicable settlement/disposal join.
+Caller error codes, names and text are never inspected or propagated. Each
+release attempt is recorded before invocation. A release throw takes terminal
+`reader_failed` precedence and poisons the claim; no second attempt occurs.
+Failed or unproven required disposal withholds release and poisons the claim.
+
+Native Promise entry uses the captured `Promise.prototype.then`, bypassing a
+throwing `then` accessor. Constructor or species lookup can still throw; the
+engine fails with `authority_required` and one withdrawal, without further
+accessor calls on the returned value or another adoption attempt. No rejecting
+wrapper is created. A host whose `enter` returns a rejected Promise with a
+throwing `constructor` leaves its own rejection unhandled, which the engine
+cannot observe; default Node rejection handling can terminate the process.
+The same residual applies if species lookup throws before handlers attach.
+[ECMAScript `then`](https://tc39.es/ecma262/2025/multipage/control-abstraction-objects.html#sec-promise.prototype.then)
+steps 3–5 perform species lookup before handler attachment;
+[`SpeciesConstructor`](https://tc39.es/ecma262/2025/multipage/abstract-operations.html#sec-speciesconstructor)
+steps 1 and 4 read constructor and species. `Promise.resolve` and
+[`await`](https://tc39.es/ecma262/2025/multipage/control-abstraction-objects.html#await)
+(step 2) both use
+[`PromiseResolve`](https://tc39.es/ecma262/2025/multipage/control-abstraction-objects.html#sec-promise-resolve),
+whose step 1.a reads a native Promise's constructor;
+combinators call the resolver and then invoke `then`. These provide no general
+way to attach a rejection handler without constructor or `then` lookups.
+Resolving a fresh wrapper with that value instead reads its `then` property
+([Promise Resolve Functions](https://tc39.es/ecma262/2025/multipage/control-abstraction-objects.html#sec-promise-resolve-functions),
+step 9); it does not bypass these lookups. A frozen
+Promise can also prevent replacing its constructor. `PerformPromiseThen` is
+an internal abstract operation, not an ordinary JavaScript API.
+
+Poison is held in the JavaScript realm that loaded the engine (the main thread
+or one Worker), like the reader supervisor's quarantine and the open-only
+admission state. It is keyed by the port object and the physical sidecar
+identity used by open-only admission, retaining location identity for missing
+files and physical aliases as they become known. A host must keep all lexical
+pumps for one sidecar in one realm; each pump uses the port of the realm that
+calls its renewal, as specified in the turn contract. Admission-domain
+retirement, quota/capacity changes, new windows and new pump IDs cannot clear
+poison. There is no eviction, TTL, renewal or reset API. Restarting that realm,
+or the process, clears poison. A host that sees `turnPhase:'poisoned'` should
+restart the process. "Process memory" in the open-only package's Amendment v2
+means this same realm scope.
+A host must not hand an owner's sidecar to another realm while the first
+realm's claim or fences are still live. It may hand it over only after the
+original cleanup has completed, or by restarting.
+Cross-process exclusion remains host-owned; a grant does not replace its
+existing physical gate or change collision refusals.
+
 A genuine quantum cutoff reports `failed` with `read_timeout`, stops scheduling
 and drains. Missing or invalid internal observation timing reports
 `reader_failed`; authority, storage, corruption and lifecycle failures also
@@ -1009,6 +1267,15 @@ Failure, interruption or uncertain settlement retains the full reservation.
 The admission RPC receives only the remaining original cutoff; the following
 work turn reserves its own full quantum. No fresh Q starts inside an admission
 turn. The semantic-pump contract below is outside this lexical amendment.
+
+**Amendment v3: lexical charging boundary.** Broker waiting, withdrawal,
+deferral and post-grant decline consume no quantum allowance or quota. A grant
+that passes the recheck starts a fresh full Q and the existing full reservation
+before drain/open. Open-only and work turns each get their own ticket and
+quantum. Zero-work settlement, original-window refunds, renewed cumulative
+floors and conservative full charges for uncertain work remain as above. No
+quantum policy, reserve arithmetic or disposal rule changes. This amendment
+makes no semantic-pump turn or settlement guarantee.
 
 A pump with `semanticConfig`, including `modes:['lexical']`, applies the same
 five-second canonical selection/intent observation duty to lexical refreshes. Its private
@@ -1506,7 +1773,8 @@ separate performance-track decision.
 
 Select dates per call with the top-level field
 `contextRead({ ...input, representation: 'representation-v2-dated' }, credential)`.
-The default remains `representation-v2`; unknown ids refuse `invalid_input`.
+The default is `representation-v2-dated`; explicitly request `representation-v2`
+for the earlier undated Memory projection. Unknown ids refuse `invalid_input`.
 `assembly.representations` advertises both ids, and assembly diagnostics report
 the selected id. Candidate/index diagnostics and stored `candidate-text-v1`
 content are unchanged.
@@ -1520,7 +1788,7 @@ window never supplies the date. Source-access denials and Card omissions apply
 unchanged; Cards do not receive dates.
 Items are emitted in date order, earliest first; undated items follow in
 relevance order. Date ties keep relevance order, and `rank` is relevance.
-Selection still visits items and sources in relevance order. Every trial must
+Memory-only selection still visits items and sources in relevance order. Every trial must
 fit both the token budget in emitted date order and a reader-supplied upper
 bound on the complete 65,536-byte response, including snapshots and diagnostics.
 A trial over either budget is omitted and sets `stops.budget`; near-limit reads
@@ -1534,3 +1802,244 @@ the receipt event-time column omit the key and still report the dated id.
 Selection adds no SQL, fence input or counter visit; the 16-receipt bound is
 unchanged. Storage migration is separate. See contract §15.9 for the lifecycle
 safety guarantee and the existing window limitation above 16 receipts.
+## Lexical admission and physical binding (amendment v2.2, 2026-11-05)
+
+Private lexical admission authenticates the stored publication and progress
+certificates against the current physical identities of the canonical store
+and sidecar. A copied or relocated cache with foreign bindings is replaced
+through the existing lifecycle-checked replacement protocol. Admission reopens
+the fresh, empty cache and completes its integrity checks before returning
+`admitted`. Copied publications are never rebound or re-signed. Admission earns
+no observation; later ordinary work turns rebuild the corpus and reuse an
+admitted writable connection. All authority, companion, journal, lifecycle-lock
+and original-cutoff checks still apply. A repair that cannot complete safely
+within that cutoff fails explicitly. Unproven disposal remains quarantined
+and cannot authorize a replacement.
+
+Replacement drops all derived state in the shared sidecar, including vectors.
+Re-embedding takes time and, with a hosted embedding service, incurs embedding
+spend. Canonical content is retained.
+
+The lexical pump counts admission-to-`required` cycles without an accepted
+observing work turn, separately for each lane in the physical admission domain.
+This process-memory count survives renewals, quota windows, capacity changes
+and new pump IDs. Successful admission alone does not reset it; an accepted
+observation for that lane does. After a `required` yield the cursor advances
+fairly so other lanes continue receiving turns.
+
+At three cycles the pump settles with public `state:'failed'` and
+`error:'reader_failed'`. Its private failure cause is `admission_no_progress`,
+with the zero-based `lane` and cycle `count` (three at failure). Before the
+terminal failure, `maintenancePumpDiagnostic(status).admission[lane]` exposes
+that same cause, lane and current count. Existing private disposal and admission
+retry state remains present when applicable. The public status shape, options
+and error vocabulary remain unchanged.
+
+The `admission_no_progress` terminal state is held in process memory per canonical
+store location and lane. A new pump for that store and lane in the same process
+fails at its first dispatch with the same public `state:'failed'`,
+`error:'reader_failed'` and private cause `admission_no_progress`; replacing or
+discarding the sidecar in the running process does not clear it. Hosts must treat
+this as terminal and must not reopen it in-process. To recover, restart the
+process. If the failure recurs after a restart, stop every process holding the
+store, close admissions, stop clients and maintenance, await all supervisor
+drains, and use the host's explicit cache discard procedure to delete the
+quiescent product sidecar together with its `-journal`, `-wal` and `-shm`
+companions. Keep canonical storage and the lifecycle lock intact, then start
+again with independently authorized maintenance and complete both intents before
+exposing search. This costs a full lexical rebuild plus re-embedding of vectors:
+time and, with a hosted embedding service, embedding spend. Never unlink a live
+sidecar or its companions.
+
+Replacement waits until no other connection for that store is open in the
+process; each refusal counts as a no-progress admission cycle until those
+handles close. The lifecycle lock excludes other processes’ active operations.
+
+
+## Admission diagnostic shape (amendment v2.3, 2026-11-06)
+
+`maintenancePumpDiagnostic(status).admission[lane]` keeps the admission retry
+status unchanged at its top level when present, including its `cause`.
+No-progress state appears only as `noProgress: {lane, count}`.
+`admission_no_progress` remains the private failure cause; private failure
+records and the failure vocabulary are unchanged.
+
+## Lexical checkpoint admission (amendment v2.4, 2026-11-06)
+
+Lexical work turns price the complete next checkpoint transaction before
+starting it: begin, bounded page or reset work, freshness checks, signed save
+and commit, followed by the final fresh canonical observation and delivery
+tail. Handle-local wall-cost high-water marks start with conservative defaults;
+a transaction that cannot fit with that tail yields the turn with its existing
+progress. Selection, generation setup, verification, publication and cleanup
+writes use the same admission gate. The final snapshot and publication proof
+still run after a yield.
+
+The host quantum and its existing reserve are unchanged. An unseen, indivisible
+commit that alone takes longer than the quantum can still overrun it; pricing
+cannot interrupt a native commit. SQLite durability, signed checkpoint semantics
+and failure reservations remain unchanged.
+
+Fix round 1: pricing may decline only additional checkpoint transactions in a
+work turn. The first work transaction (page/comparison, verification, publication
+or cleanup) is always admitted under the existing rules, even when its estimate
+cannot fit; setup-only transactions, including selection retention and generation
+initialization, do not consume its admission. An indivisible
+slow first commit can therefore overrun exactly as before. For each complete
+transaction, remaining transaction, commit and doubled observation-tail sample,
+the handle-local estimate is the maximum of its seed, the new sample and half
+its previous estimate (one-observation half-life). Seeds are respectively 100,
+100, 50 and 50 ms. The combined transaction-plus-tail estimate is capped at the
+turn's usable budget after its unchanged reserve. No estimate can refuse every
+start, and normal observations recover from an outlier.
+
+## Lexical admission turn budget (amendment v2.5, 2026-11-07)
+
+The lexical maintenance pump accepts optional `admissionMs`, defaulting to
+`quantum.maxMs`. It budgets an entire admission turn, including cold open,
+admission, delivery and settlement. Work and refresh retain `quantum.maxMs`.
+An explicit value must be a safe integer at least `quantum.maxMs`, no greater
+than `budgets.maxMs` or any projection's maintainer `deadlineMs` (default
+5,000 ms), and no greater than `DISPOSAL_GRACE_MS - 2000` (8,000 ms).
+Invalid values fail with `invalid_input` at pump creation. The budget
+is fixed across renewals of the same pump.
+
+Admission reserves `admissionMs` and the usual quantum item allowance in the
+window ledger before dispatch. Successful admission refunds the item allowance
+and settles time to elapsed usage; uncertain or failed settlement retains the
+full reservation under the existing rules. Admission must fit the remaining
+window quota, window lifetime and renewal authority, including after a broker
+wait. It earns no observation.
+
+The five-second observation cadence still applies. Let `L` be the expanded
+intent lane count, `C` the maximum cold resident replacements in a sweep,
+`S = max(pollMs, quantum.maxMs)` and `A = max(pollMs, admissionMs)`.
+Configuration requires `L*S + C*A + quantum.maxMs <= 5000`; scheduling prices
+each admission slot at `A` and each work slot at `S`. With one projection
+(two intents), one cold slot, a 1,000 ms work quantum and polling at most
+1,000 ms, the largest feasible `admissionMs` is 2,000 ms. A 5,000 ms admission
+budget is infeasible and fails with `invalid_input`. A host on a slower volume
+can opt in within these bounds without extending its work quantum.
+
+## Sidecar integrity attestation (amendment v2.6, 2026-11-07)
+
+Writable admission and read-only opens verify a keyed attestation before using
+an existing cache. Its HMAC key is derived from the store's cursor secret with
+the `sidecar-attestation-v1` domain. The certificate binds device, inode, birth
+identity, the sidecar format, engine profile, and an in-file monotonic stamp.
+Size and modification time are excluded. Every parent logical sidecar write transaction
+increments and signs the stamp before COMMIT, including lexical and vector
+writes, verification resets, publication, garbage collection,
+and explicit reset. A rollback restores the previous matching stamp and seal.
+
+Bounded incremental vacuum retains its existing autocommit boundary. It changes
+page placement and the freelist, leaving logical rows, the schema cookie, file
+identity and seal unchanged. A crash after reclamation and before the next
+logical write therefore leaves a matching seal. The next logical write advances
+the stamp in its existing transaction. Vacuum adds no explicit BEGIN or COMMIT.
+
+Standalone admission of a newly initialized cache has no projection write to
+share: its first parent seal uses one initialization BEGIN/COMMIT pair. This is
+a first-open cost, including after replacement; matched admissions and steady
+maintenance turns add no transactions.
+
+A second one-time exception is the first-open migration of an existing legacy
+WAL cache. Standalone admission with a missing seal row uses 5 BEGINs, 4 COMMITs
+and 1 write BEGIN; a missing seal table uses 6 BEGINs, 5 COMMITs and 1 write BEGIN.
+Both compare with 4 BEGINs, 3 COMMITs and no write BEGIN before attestation.
+These parent counts include canonical and lifecycle reads. Authenticating the
+old bindings inside the sealing writer transaction adds one canonical read pair
+for the missing-table case; it needs no separate sidecar read transaction.
+
+A reader opened after a mismatch is detected never serves the untrusted file;
+a reader opened before an out-of-band seal removal keeps serving until its next
+reopen (content safety by delivery revalidation).
+Invalidating serving handles on rejection is a planned follow-up.
+
+DELETE-mode caches with a missing or invalid seal use the existing excluded
+replacement protocol, then perform the normal bounded, checkpointed rebuild
+before publication. WAL-mode hosts pay main's integrity check once on the first
+open after upgrade; DELETE-mode caches rebuild once. A missing WAL seal means
+no attestation table or no singleton row. A healthy host-configured WAL cache
+runs `quick_check` and `foreign_key_check` inside the first write transaction,
+before the DDL and the seal. A missing-table upgrade retires the old
+schema-bound publication/progress records in 128-row slices in that transaction.
+The aggregate migration cost scales with the number of legacy pointer and
+certificate rows. On a direct refresh it may exceed one turn, including a turn
+that performs no corpus work. Admission and readiness are separate: the
+missing-table upgrade retires the old schema-bound publications, so lexical
+reads are not ready until normal maintenance republishes. Missing-row upgrades
+preserve publications. A bounded multi-transaction migration is a planned
+follow-up.
+A rollback leaves the seal missing, so the next open checks again. An attested
+WAL open runs zero whole-file statements. A present but invalid WAL seal is
+refused under the existing non-DELETE rule, without a whole-file check.
+Under lifecycle exclusion the replacement child checks the parent's exact-row
+SHA-256 verdict again; a changed row or file stamp refuses replacement with
+ESTALE. This attestation verdict needs no whole-file integrity check. Other
+corrupt verdicts retain the existing child integrity checks and foreign-binding
+certificate recheck. Neither the cursor secret nor its derived key reaches the
+child. The child initializes an unsigned empty cache; the parent seals its first
+write transaction against the identity verified on its opened connection. A
+crash before that write leaves an unavailable empty cache. Its next writable
+open replaces it again in DELETE mode; a host-configured WAL cache follows the
+missing-seal check described above. If the first-seal COMMIT keeps failing, each
+admission attempt makes exactly one replacement, fails closed with `storage_error`
+and serves nothing; the maintenance pump stops on that error and does not retry
+by itself, so retries are paced by the host starting the next pump. The admission
+quarantine does not apply to this failure.
+
+Previously every writable cold open ran SQLite `quick_check` and
+`foreign_key_check` over the entire cache. These audited database structure,
+constraints, and referential consistency. The cache is derived data: candidates
+are re-fetched from canonical storage and revalidated at delivery, and existing
+`SQLITE_CORRUPT` classifications still route to repair. The keyed seal permits
+bounded admission without repeating those whole-file statements. Status and
+coverage from unverified files confer no readiness or serving authority.
+
+
+## Default three-layer read
+
+The engine's assembly defaults are `budget:{maxTokens:6000,maxItems:24}` and
+`representation:'representation-v2-dated'`. The token ceiling is 6,000, the item
+ceiling is 24, and the complete response remains capped at 65,536 UTF-8 bytes.
+Smaller host budgets are supported. `raw:false` on `contextRead` explicitly
+selects Memory-only assembly. `findCandidates` and exact evidence fetch keep
+their existing interfaces and retrieval behavior.
+
+`createContextReadHost` may return `rawSearch` with `search`, `prepare` and
+synchronous batch `revalidate`. The service stays inside the Worker; functions
+and raw credentials do not cross IPC. The host binds any separate Raw credential
+in these methods and registers its disposer through the existing resource owner
+or `host.close`. The engine neither opens nor maintains this service. A direct
+`openProductIndex` host can supply the same `rawSearch` port. See the
+[local assembly contract](context-read-local.md#default-memory--raw-assembly)
+for the wrapper, scoring formula and wire fields.
+
+Memory uses its existing retrieval and hybrid fusion. Raw searches the same
+query with current intent, BM25 and ready semantic vectors (k=10 RRF). Prepared
+Raw becomes an exact query-matched excerpt capped at 200 tokens, including text
+beyond the receipt prefix of long assistant messages. Conversation/message refs,
+role, original offsets and `occurredAt` accompany the excerpt. Memory citations
+coalesce matching source turns into one packed item. The cost-aware greedy fill
+uses lexical relevance, the Memory rank prior, cost, session/turn breadth and
+redundancy. The legacy `policy` governs Memory-only assembly; the Raw-inclusive
+read uses cost-aware whole units. No Document Card candidates are admitted by
+the new hook. Expanded relation/MOC previews above 24 Memory candidates keep
+Memory-only packing until the snapshot reference ceiling can be extended.
+
+Dated output orders units earliest first, with undated units afterward. Raw
+attached to Memory is dated inside `evidence`; identical body text uses
+`sameAsBody`. The coalesced item's date is the earliest of its evidence dates.
+Saved text remains untrusted data. Signed snapshots cover the selected canonical
+Memories/Cards; Raw evidence is inline and does not expand snapshot fetch.
+
+`diagnostics.coverage.raw` reports `included`, `unavailable` or `partial`.
+Unavailable, incomplete or timed-out Raw uses the exact existing Memory-only
+assembly. Raw work has a subdeadline reserving Memory assembly time. All admitted
+Raw handles are batch-revalidated after host counting/authority callbacks,
+before canonical final delivery. Failed validation discards Raw and rebuilds
+Memory-only output without holding a SQLite transaction across an asynchronous
+operation. The semantic publication gate still covers synchronous assembly and
+final validation; Raw preparation happens before entering it. Hosts own late
+underlying operations and must bound synchronous service calls.

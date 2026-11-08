@@ -47,14 +47,14 @@ cross-platform compatibility remains limited to recorded tests.
 
 ## Opt in to submitted source capture
 
-For a fresh installation with the sixth `capture_memory` tool, use:
+For a fresh installation with the additional `capture_memory` tool, use:
 
 ```sh
 npm run install:preview -- --directory /absolute/new/cairn-qualified --owner local-user --capture-qualification source-bound-v2
 ```
 
-The installer also accepts `source-bound-v1`; omission preserves the five-tool
-configuration. The private receipt records the selected mode and includes it in
+The installer also accepts `source-bound-v1`; omission keeps the eight-tool default configuration, including the three
+preferred contextRead tools. See [defaults and off switches](../docs/defaults.md). The private receipt records the selected mode and includes it in
 `stdio.args`. Copy the generated command and arguments unchanged into a local
 MCP client. Supply `OPENAI_API_KEY` separately through that client's secret
 environment for the server process; the installer never reads or stores it.
@@ -175,8 +175,8 @@ for discovery is supported. Then configure the installed executable:
 Do not combine this exclusive option with ordinary database/owner/model/capture
 flags. Its syntax/runtime check reads no profile, database or API key. Actual
 MCP negotiation validates readiness; an empty-stdin exit is not such a probe.
-Default startup remains five tools, ordinary private Cards remain 22, and this
-profile exposes 25. Public discovery/read/resolve supplies actual Raw references
+Default startup exposes eight tools; ordinary private Cards expose 25 with
+contextRead enabled. This exclusive retained profile exposes 25 tools. Public discovery/read/resolve supplies actual Raw references
 for explicit authored drafts without a fake Memory. MCP confirmation refuses;
 the separate `review-card --retained-raw-profile ...` controlling-TTY command
 reinspects and confirms only the exact displayed revision and bindings.

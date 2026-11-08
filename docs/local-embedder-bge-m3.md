@@ -1,7 +1,7 @@
 # Optional local bge-m3 embedding
 
-Local embedding is an explicit opt-in for `context-read-v1`. No embedder is
-selected by default. OpenAI's adapter default remains `text-embedding-3-small`
+Local embedding is an explicit opt-in for `context-read-v1`. Without a key, reads use BM25. With `OPENAI_API_KEY`, MCP automatically selects
+bounded OpenAI embeddings; use `--no-context-semantic` to disable them. OpenAI's adapter default remains `text-embedding-3-small`
 with 1536 dimensions. A key, pack path or installed pack never selects a provider.
 Local embedding keeps embedding text on this machine; other configured model
 operations may still use hosted services.

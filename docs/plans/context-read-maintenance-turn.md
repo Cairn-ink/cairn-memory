@@ -243,3 +243,103 @@ Neither pump removes these. A multi-owner deployment check should watch them.
 3. **Lexical open-only admission turn:** `phase:"admission"` with `kind:"lexical"`. The broker queues admission and work tickets the same way.
 4. **Shared helper: agreed.** A small module for port validation and the ticket lifecycle. It covers validation, the `createTurn`/`enter` race against the engine signal, the exactly-once release ledger, poisoning and the counters. It lands with the lexical seam; the semantic seam reuses it. Cadence stays per pump.
 5. **Semantic implementation scope** (stacks after the lexical seam). It covers the finalizer/settlement join (§5), a separate admission controller and retry clock (§3), and the private counters (§8), all reusing the shared helper.
+
+## §5 clarification v2 — semantic turn settlement join
+
+This clarification supersedes the proposed semantic settlement description in
+§5. A semantic pump with a `preQuantum` port allocates one internal 8-byte shared
+buffer for each granted turn. Word 0 counts outstanding calls; word 1 seals the
+turn. The buffer follows direct pump calls, the reader's internal refresh
+request (only its semantic embed calls), and the coordinator's internal
+validation handle. It never enters a public DTO or public coordinator control.
+Without a port the engine allocates no turn buffer, sends no settlement field,
+and keeps the existing calls, SQL, timers and public status.
+
+Every caller increments before posting and rolls back synchronously if posting
+throws. Seal and increment share an atomic lock: word 1 is 0 while open, -1
+only during the short increment critical section, 1 when sealed, and 2 for a
+latched protocol violation. A sealed turn refuses further increments without
+counting them. The violation wakes the finalizer, fails loudly and poisons the
+claim, including a violation observed after its single release attempt.
+
+The Worker validates the buffer before use and decrements and notifies only
+after the handler, its provider children and their ledger-mutation attempts
+have finished. A failed settlement retained in `pendingSettlements` counts as
+done: the existing next-admission drain still owns that debt. Retention does
+not justify another provider dispatch or alter the refusal latch or debt bound.
+
+After the selected turn's top-level operation has returned, including its
+reserve/finish and coverage controls, the finalizer seals the buffer and joins
+outstanding calls through `Atomics.waitAsync`. A successful partial reader DTO
+after a caught embed timeout is not a settlement proof. The atomic wait has a
+5000-ms engine limit measured by a real monotonic clock, independent of the
+operation clock; lock contention is bounded too. Required reader disposals and
+late openings are joined before release. Healthy resident readers remain cached.
+
+An unsettled turn at pump close, or one whose bounded wait expires, retains
+its grant for the host coordinator's disposal proof. Pump close does not close
+that coordinator and does not await the host's later action. The finalizer's
+registered proof continuation survives pump completion. Successful proof can
+release once; a failed proof or a protocol violation poisons and withholds the
+grant. A Worker crash cannot supply a successful proof for a still-outstanding
+call. The shared ticket ledger records a release attempt before invoking the
+host and prevents duplicate release under settlement, timeout and close races.
+
+Admission waits preserve real observation horizons. They add no reservation,
+work time, failure record or dispatch ordinal, and do not move the startup or
+slot cursor. A separate retry-not-before time prevents overdue lookahead from
+spinning. Real wall-clock observation gaps remain visible under §7; waiting
+never resets duty, extends authority, or earns observation credit. Turn counters
+and wait time appear only in the private diagnostic snapshot.
+
+## Clarification v3 — poison scope, admission deadline and settlement accounting
+
+This append-only clarification supersedes the stated parts of §4, §6, the
+availability note and the §5 clarification v2 where they conflict. The earlier
+text stays unchanged.
+
+**Turn exclusivity and poison.** A granted turn remains exclusive across both
+realms until engine settlement and every required disposal proof permit release.
+Uncertain ownership is never reclaimed by timeout. Failed disposal withholds the
+permit (it is never released) until process restart. The engine's poison record
+is realm-local, and a realm rebuild clears it, but a rebuild never releases a
+withheld permit.
+
+A sealed-turn operation attempted after a completed release is rejected before
+posting. It requires poison in the originating realm and host quarantine of that
+physical domain and its successors in that realm: stop or cancel affected pumps
+and queued tickets, block renewal and replacement-pump bypass, keep accounting
+floors and late-violation watches, and obtain reader and coordinator cleanup
+proof before owner handoff. Failed cleanup closes core admission and requires
+process recovery. It need not synchronously stop the opposite realm.
+
+The availability note's "a poisoned claim blocks the whole core" holds only
+while the host still holds that claim's permit. After a successful release the
+engine does not notify the broker or retract the release; containment is then
+the host quarantine above.
+
+**Admission deadline.** `untilMonoMs` is an admission deadline in the process
+hrtime monotonic domain. The logical issue time is the host's clock sample
+immediately preceding the successful permit CAS. A grant is timely if and only if
+that time is strictly less than `untilMonoMs`; equality is expired. No atomic
+clock-and-CAS is claimed. Where the deadline crosses an encoding with less than
+nanosecond precision, `untilMonoMs` is rounded down and the sampled time up, so
+rounding can only make a grant expire earlier.
+
+Before starting a quantum, the engine freshly samples the same clock after the
+admission await. If the deadline has expired, it declines the owned grant with
+`wait_expired` and starts no quantum. An accepted quantum then uses its quantum,
+authority and window deadlines; admission expiry never prohibits required
+settlement or disposal.
+
+**Settlement accounting.** The §5 clarification v2 settlement join covers the
+counted calls: direct pump calls, the reader's semantic embed calls and the
+coordinator's internal validation. The reader's snapshot, catalog and hint
+metadata handlers are not counted; their ledger effects remain protected by the
+owner lock and the ledger's own guarded transactions, not by the turn join. A
+failed settlement retained for the next-admission drain counts as settled for the
+join, as v2 states.
+
+**Violation observation.** The post-release violation waiter is one-shot. It
+wakes on a violation or on coordinator disposal and is not rearmed; a turn's
+violation is observed at most once.

@@ -1,0 +1,1226 @@
+{
+  "revision": "fd5c59ef8e67cc58bb855a95f8910c668150bfa3",
+  "node": "v22.16.0",
+  "record": {
+    "calls": [
+      [
+        "submitSourceNote",
+        {
+          "ok": true,
+          "value": {
+            "source": {
+              "type": "submitted-note",
+              "namespace": {
+                "ownerId": "synthetic-u5a",
+                "scope": "project",
+                "projectId": "test"
+              },
+              "sourceId": "00000000-0000-4000-8000-000000000002",
+              "revision": 1,
+              "contentIdentity": "IP37sjLz17sYPM2sqSuulLHIbr5G5yVpVm5C4u0zPpI",
+              "completeness": "provided-note"
+            }
+          }
+        }
+      ],
+      [
+        "createCardDraft",
+        {
+          "ok": true,
+          "value": {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "revision": 1,
+            "state": "draft",
+            "bodyRevision": null,
+            "effectCount": 0
+          }
+        }
+      ],
+      [
+        "getCard",
+        {
+          "ok": true,
+          "value": {
+            "card": {
+              "id": "00000000-0000-4000-8000-000000000003",
+              "namespace": {
+                "ownerId": "synthetic-u5a",
+                "scope": "project",
+                "projectId": "test"
+              },
+              "revision": 1,
+              "state": "draft",
+              "bodyRevision": null,
+              "origin": "authored",
+              "support": {
+                "status": "eligible",
+                "applicability": "unknown",
+                "reasons": [
+                  "unassessed"
+                ],
+                "applicabilityReviewedRevision": null,
+                "checkedAt": "2026-01-01T00:00:00.000Z"
+              },
+              "createdAt": "2026-01-01T00:00:00.000Z",
+              "updatedAt": "2026-01-01T00:00:00.000Z",
+              "confirmedAt": null,
+              "title": "Synthetic title",
+              "body": "Synthetic body bytes.",
+              "bindings": [
+                {
+                  "id": "00000000-0000-4000-8000-000000000002",
+                  "source": {
+                    "type": "submitted-note",
+                    "namespace": {
+                      "ownerId": "synthetic-u5a",
+                      "scope": "project",
+                      "projectId": "test"
+                    },
+                    "sourceId": "00000000-0000-4000-8000-000000000002",
+                    "revision": 1,
+                    "contentIdentity": "IP37sjLz17sYPM2sqSuulLHIbr5G5yVpVm5C4u0zPpI",
+                    "completeness": "provided-note"
+                  },
+                  "dependency": "source-only",
+                  "memoryRef": null,
+                  "receiptId": null,
+                  "role": "required",
+                  "attribution": {
+                    "sourceAuthor": null,
+                    "claimant": null,
+                    "subject": null,
+                    "eventTime": null,
+                    "commitment": "unknown",
+                    "status": "unassessed"
+                  }
+                }
+              ],
+              "triggerMemoryRefs": []
+            }
+          }
+        }
+      ],
+      [
+        "listCards",
+        {
+          "ok": true,
+          "value": {
+            "cards": [
+              {
+                "id": "00000000-0000-4000-8000-000000000003",
+                "namespace": {
+                  "ownerId": "synthetic-u5a",
+                  "scope": "project",
+                  "projectId": "test"
+                },
+                "revision": 1,
+                "state": "draft",
+                "bodyRevision": null,
+                "origin": "authored",
+                "support": {
+                  "status": "eligible",
+                  "applicability": "unknown",
+                  "reasons": [
+                    "unassessed"
+                  ],
+                  "applicabilityReviewedRevision": null,
+                  "checkedAt": "2026-01-01T00:00:00.000Z"
+                },
+                "createdAt": "2026-01-01T00:00:00.000Z",
+                "updatedAt": "2026-01-01T00:00:00.000Z",
+                "confirmedAt": null
+              }
+            ],
+            "coverage": {
+              "status": "complete",
+              "included": 1,
+              "omitted": 0
+            },
+            "nextCursor": null
+          }
+        }
+      ],
+      [
+        "confirmCardDraft",
+        {
+          "ok": true,
+          "value": {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "revision": 2,
+            "state": "confirmed",
+            "bodyRevision": 1,
+            "effectCount": 0
+          }
+        }
+      ],
+      [
+        "fetchEvidence",
+        {
+          "ok": true,
+          "value": {
+            "items": [
+              {
+                "type": "card",
+                "ref": {
+                  "type": "card",
+                  "namespace": {
+                    "ownerId": "synthetic-u5a",
+                    "scope": "project",
+                    "projectId": "test"
+                  },
+                  "cardId": "00000000-0000-4000-8000-000000000003",
+                  "revision": 2,
+                  "bodyRevision": 1
+                },
+                "state": "confirmed",
+                "support": {
+                  "status": "eligible",
+                  "applicability": "current",
+                  "reasons": [
+                    "unassessed"
+                  ],
+                  "applicabilityReviewedRevision": 2,
+                  "checkedAt": "2026-01-01T00:00:00.000Z"
+                },
+                "origin": "authored",
+                "title": "Synthetic title",
+                "body": "Synthetic body bytes.",
+                "qualification": {
+                  "applicability": "current",
+                  "attribution": "unassessed",
+                  "commitment": "unknown"
+                },
+                "provenance": {
+                  "sources": [
+                    {
+                      "type": "submitted-note",
+                      "namespace": {
+                        "ownerId": "synthetic-u5a",
+                        "scope": "project",
+                        "projectId": "test"
+                      },
+                      "sourceId": "00000000-0000-4000-8000-000000000002",
+                      "revision": 1,
+                      "contentIdentity": "IP37sjLz17sYPM2sqSuulLHIbr5G5yVpVm5C4u0zPpI",
+                      "completeness": "provided-note"
+                    }
+                  ],
+                  "completeness": "provided-note",
+                  "conversationCoverage": "unknown",
+                  "meaning": "unassessed",
+                  "support": "eligible",
+                  "corroboration": "not-assessed",
+                  "coverage": {
+                    "status": "complete",
+                    "included": 1,
+                    "omitted": 0
+                  }
+                },
+                "bindings": [
+                  {
+                    "id": "00000000-0000-4000-8000-000000000002",
+                    "source": {
+                      "type": "submitted-note",
+                      "namespace": {
+                        "ownerId": "synthetic-u5a",
+                        "scope": "project",
+                        "projectId": "test"
+                      },
+                      "sourceId": "00000000-0000-4000-8000-000000000002",
+                      "revision": 1,
+                      "contentIdentity": "IP37sjLz17sYPM2sqSuulLHIbr5G5yVpVm5C4u0zPpI",
+                      "completeness": "provided-note"
+                    },
+                    "dependency": "source-only",
+                    "memoryRef": null,
+                    "receiptId": null,
+                    "role": "required",
+                    "attribution": {
+                      "sourceAuthor": null,
+                      "claimant": null,
+                      "subject": null,
+                      "eventTime": null,
+                      "commitment": "unknown",
+                      "status": "unassessed"
+                    }
+                  }
+                ],
+                "triggerMemoryRefs": []
+              }
+            ],
+            "snapshot": "eyJ2ZXJzaW9uIjoxLCJiaW5kaW5nIjoiYkc4bG1ZTXNRWXdmR3hHZnRHbmlOVWM0N0JfbzFNVHZrOGZjM0o0akIyQSIsImludGVudCI6ImN1cnJlbnQiLCJyZWZzIjpbeyJ0eXBlIjoiY2FyZCIsIm5hbWVzcGFjZSI6eyJvd25lcklkIjoic3ludGhldGljLXU1YSIsInNjb3BlIjoicHJvamVjdCIsInByb2plY3RJZCI6InRlc3QifSwiY2FyZElkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAzIiwicmV2aXNpb24iOjIsImJvZHlSZXZpc2lvbiI6MX1dLCJnZW5lcmF0aW9ucyI6eyJtZW1vcnkiOjEsImNhcmQiOjR9LCJhY2Nlc3NHZW5lcmF0aW9uIjoxLCJmZW5jZXMiOlsiT3o1U245OFhfcW1VNzBIX0stY2J6QXVacko4dEVOVThTODZYbENfSWF3USJdfQ.fqj2V56NmwxdLxkKjENrpZCRyDjimWL-vHP5DvDxNiw"
+          }
+        }
+      ],
+      [
+        "getSource",
+        {
+          "ok": true,
+          "value": {
+            "source": {
+              "type": "submitted-note",
+              "namespace": {
+                "ownerId": "synthetic-u5a",
+                "scope": "project",
+                "projectId": "test"
+              },
+              "sourceId": "00000000-0000-4000-8000-000000000002",
+              "revision": 1,
+              "contentIdentity": "IP37sjLz17sYPM2sqSuulLHIbr5G5yVpVm5C4u0zPpI",
+              "completeness": "provided-note"
+            },
+            "parts": [
+              {
+                "start": 0,
+                "end": 23,
+                "text": "Synthetic source bytes."
+              }
+            ],
+            "coverage": {
+              "status": "complete",
+              "completeness": "provided-note",
+              "conversationCoverage": "unknown",
+              "included": 1,
+              "omitted": 0
+            },
+            "nextCursor": null
+          }
+        }
+      ],
+      [
+        "mapEvidence",
+        {
+          "ok": true,
+          "value": {
+            "type": "card",
+            "indexRevision": 3,
+            "items": [
+              {
+                "type": "unfiled",
+                "ref": {
+                  "type": "card",
+                  "namespace": {
+                    "ownerId": "synthetic-u5a",
+                    "scope": "project",
+                    "projectId": "test"
+                  },
+                  "cardId": "00000000-0000-4000-8000-000000000003",
+                  "revision": 2,
+                  "bodyRevision": 1
+                }
+              }
+            ],
+            "invalidRefs": [],
+            "coverage": {
+              "status": "complete",
+              "scanned": 1,
+              "included": 1,
+              "partial": false
+            },
+            "nextCursor": null
+          }
+        }
+      ],
+      [
+        "capture",
+        {
+          "ok": true,
+          "value": {
+            "duplicate": false,
+            "admission": {
+              "memories": [],
+              "suppressedCount": 0,
+              "indexRevision": 1
+            },
+            "classification": {
+              "status": "skipped",
+              "reason": "empty"
+            }
+          }
+        }
+      ]
+    ],
+    "statements": [
+      [
+        "BEGIN IMMEDIATE",
+        "exec"
+      ],
+      [
+        "SELECT * FROM card_operations WHERE owner_id=? AND scope=? AND project_id=? AND action_id=?",
+        "get"
+      ],
+      [
+        "SELECT byte_count FROM card_note_usage WHERE owner_id=?",
+        "get"
+      ],
+      [
+        "SELECT schema_version AS cookie,(SELECT user_version FROM pragma_user_version) AS physical, (SELECT application_id FROM pragma_application_id) AS applicationId FROM pragma_schema_version",
+        "get"
+      ],
+      [
+        "SELECT schema_version AS cookie,name,type,sql FROM pragma_schema_version LEFT JOIN sqlite_schema ON ( name GLOB 'content_safety_*' OR name GLOB 'content_identity_*' OR name='owner_suppression_epochs' OR name GLOB 'content_suppression*' OR name GLOB 'safety_*') LIMIT 65",
+        "iterate"
+      ],
+      [
+        "SELECT schema_version AS cookie,(SELECT user_version FROM pragma_user_version) AS physical, (SELECT application_id FROM pragma_application_id) AS applicationId FROM pragma_schema_version",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM card_notes WHERE id=?",
+        "get"
+      ],
+      [
+        "INSERT INTO card_notes VALUES(?,?,?,?,1,'available',?,?,?,?)",
+        "run"
+      ],
+      [
+        "INSERT INTO card_note_usage VALUES(?,?) ON CONFLICT(owner_id) DO UPDATE SET byte_count=byte_count+excluded.byte_count",
+        "run"
+      ],
+      [
+        "SELECT * FROM card_notes WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)",
+        "run"
+      ],
+      [
+        "INSERT INTO card_epochs VALUES(?,?,?,2) ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=generation+1",
+        "run"
+      ],
+      [
+        "COMMIT",
+        "exec"
+      ],
+      [
+        "BEGIN IMMEDIATE",
+        "exec"
+      ],
+      [
+        "SELECT * FROM card_operations WHERE owner_id=? AND scope=? AND project_id=? AND action_id=?",
+        "get"
+      ],
+      [
+        "SELECT count(*) AS n FROM (SELECT DISTINCT c.id FROM card_bindings b JOIN private_cards c ON c.id=b.card_id WHERE b.source_id=? AND c.state IN ('draft','confirmed') AND c.id!=? LIMIT 128)",
+        "get"
+      ],
+      [
+        "SELECT * FROM card_notes WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "SELECT schema_version AS cookie,(SELECT user_version FROM pragma_user_version) AS physical, (SELECT application_id FROM pragma_application_id) AS applicationId FROM pragma_schema_version",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM private_cards WHERE id=?",
+        "get"
+      ],
+      [
+        "INSERT INTO private_cards VALUES(?,?,?,?,1,'draft',?,?,NULL,?,?,NULL)",
+        "run"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+        "get"
+      ],
+      [
+        "DELETE FROM card_bindings WHERE card_id=?",
+        "run"
+      ],
+      [
+        "DELETE FROM card_memory_bindings WHERE card_id=?",
+        "run"
+      ],
+      [
+        "INSERT INTO card_bindings VALUES(?,?,?,?)",
+        "run"
+      ],
+      [
+        "SELECT * FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)",
+        "run"
+      ],
+      [
+        "INSERT INTO card_epochs VALUES(?,?,?,2) ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=generation+1",
+        "run"
+      ],
+      [
+        "COMMIT",
+        "exec"
+      ],
+      [
+        "BEGIN IMMEDIATE",
+        "exec"
+      ],
+      [
+        "SELECT * FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "SELECT id,revision,state,body_revision FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT source_ref,position FROM card_bindings WHERE card_id=?",
+        "all"
+      ],
+      [
+        "SELECT source_ref,position FROM card_memory_bindings WHERE card_id=?",
+        "all"
+      ],
+      [
+        "SELECT * FROM card_notes WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "SELECT reviewed_revision,applicability FROM card_applicability_reviews WHERE card_id=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE name='card_current_dependencies' AND type='table'",
+        "get"
+      ],
+      [
+        "COMMIT",
+        "exec"
+      ],
+      [
+        "BEGIN IMMEDIATE",
+        "exec"
+      ],
+      [
+        "SELECT rowid AS cursor_row,id,revision,state,body_revision,created_at,updated_at,confirmed_at FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND state IN (?,?) AND id>? ORDER BY id LIMIT ?",
+        "all"
+      ],
+      [
+        "SELECT id,revision,state,body_revision FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT source_ref,position FROM card_bindings WHERE card_id=?",
+        "all"
+      ],
+      [
+        "SELECT source_ref,position FROM card_memory_bindings WHERE card_id=?",
+        "all"
+      ],
+      [
+        "SELECT * FROM card_notes WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "SELECT reviewed_revision,applicability FROM card_applicability_reviews WHERE card_id=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE name='card_current_dependencies' AND type='table'",
+        "get"
+      ],
+      [
+        "COMMIT",
+        "exec"
+      ],
+      [
+        "BEGIN IMMEDIATE",
+        "exec"
+      ],
+      [
+        "SELECT * FROM card_operations WHERE owner_id=? AND scope=? AND project_id=? AND action_id=?",
+        "get"
+      ],
+      [
+        "SELECT * FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT source_ref,position FROM card_bindings WHERE card_id=?",
+        "all"
+      ],
+      [
+        "SELECT source_ref,position FROM card_memory_bindings WHERE card_id=?",
+        "all"
+      ],
+      [
+        "SELECT id,revision,state,body_revision FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT source_ref,position FROM card_bindings WHERE card_id=?",
+        "all"
+      ],
+      [
+        "SELECT source_ref,position FROM card_memory_bindings WHERE card_id=?",
+        "all"
+      ],
+      [
+        "SELECT * FROM card_notes WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT source_ref,position FROM card_bindings WHERE card_id=?",
+        "all"
+      ],
+      [
+        "SELECT source_ref,position FROM card_memory_bindings WHERE card_id=?",
+        "all"
+      ],
+      [
+        "SELECT count(*) AS n FROM (SELECT DISTINCT c.id FROM card_bindings b JOIN private_cards c ON c.id=b.card_id WHERE b.source_id=? AND c.state IN ('draft','confirmed') AND c.id!=? LIMIT 128)",
+        "get"
+      ],
+      [
+        "SELECT * FROM card_notes WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "UPDATE private_cards SET state='confirmed',revision=revision+1,body_revision=1, confirmed_at=?,updated_at=? WHERE id=?",
+        "run"
+      ],
+      [
+        "INSERT INTO card_applicability_reviews VALUES(?,?,?) ON CONFLICT(card_id) DO UPDATE SET reviewed_revision=excluded.reviewed_revision,applicability=excluded.applicability",
+        "run"
+      ],
+      [
+        "SELECT * FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)",
+        "run"
+      ],
+      [
+        "INSERT INTO card_epochs VALUES(?,?,?,2) ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=generation+1",
+        "run"
+      ],
+      [
+        "COMMIT",
+        "exec"
+      ],
+      [
+        "BEGIN IMMEDIATE",
+        "exec"
+      ],
+      [
+        "SELECT * FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "SELECT id,revision,state,body_revision FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT source_ref,position FROM card_bindings WHERE card_id=?",
+        "all"
+      ],
+      [
+        "SELECT source_ref,position FROM card_memory_bindings WHERE card_id=?",
+        "all"
+      ],
+      [
+        "SELECT * FROM card_notes WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "SELECT reviewed_revision,applicability FROM card_applicability_reviews WHERE card_id=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE name='card_current_dependencies' AND type='table'",
+        "get"
+      ],
+      [
+        "SELECT id,revision,state,body_revision FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "SELECT epoch FROM namespace_epochs WHERE owner_id=? AND scope=? AND project_id=?",
+        "get"
+      ],
+      [
+        "SELECT generation FROM card_epochs WHERE owner_id=? AND scope=? AND project_id=?",
+        "get"
+      ],
+      [
+        "COMMIT",
+        "exec"
+      ],
+      [
+        "BEGIN IMMEDIATE",
+        "exec"
+      ],
+      [
+        "SELECT * FROM card_notes WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "COMMIT",
+        "exec"
+      ],
+      [
+        "BEGIN IMMEDIATE",
+        "exec"
+      ],
+      [
+        "SELECT * FROM ( SELECT 'topic' kind,id a,'' b,NULL card_revision,NULL body_revision FROM card_mocs WHERE owner_id=? AND scope=? AND project_id=? UNION ALL SELECT 'edge',e.parent_id,e.child_id,NULL,NULL FROM card_moc_edges e JOIN card_mocs t ON t.id=e.parent_id WHERE t.owner_id=? AND t.scope=? AND t.project_id=? UNION ALL SELECT 'member',r.moc_id,r.card_id,r.card_revision,r.body_revision FROM card_moc_refs r JOIN card_mocs t ON t.id=r.moc_id WHERE t.owner_id=? AND t.scope=? AND t.project_id=? UNION ALL SELECT 'unfiled',id,'',revision,body_revision FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND state='confirmed' ) ORDER BY CASE kind WHEN 'topic' THEN 0 WHEN 'edge' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,a,b LIMIT 257 OFFSET ?",
+        "all"
+      ],
+      [
+        "SELECT * FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "SELECT id,revision,state,body_revision FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT source_ref,position FROM card_bindings WHERE card_id=?",
+        "all"
+      ],
+      [
+        "SELECT source_ref,position FROM card_memory_bindings WHERE card_id=?",
+        "all"
+      ],
+      [
+        "SELECT * FROM card_notes WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "SELECT reviewed_revision,applicability FROM card_applicability_reviews WHERE card_id=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE name='card_current_dependencies' AND type='table'",
+        "get"
+      ],
+      [
+        "SELECT id,revision,state,body_revision FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "get"
+      ],
+      [
+        "SELECT source_ref,position FROM card_bindings WHERE card_id=?",
+        "all"
+      ],
+      [
+        "SELECT source_ref,position FROM card_memory_bindings WHERE card_id=?",
+        "all"
+      ],
+      [
+        "SELECT * FROM card_notes WHERE owner_id=? AND scope=? AND project_id=? AND id=?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM card_moc_refs WHERE card_id=? AND card_revision=? AND body_revision=? LIMIT 1",
+        "get"
+      ],
+      [
+        "SELECT revision FROM card_moc_epochs WHERE owner_id=? AND scope=? AND project_id=?",
+        "get"
+      ],
+      [
+        "COMMIT",
+        "exec"
+      ],
+      [
+        "BEGIN IMMEDIATE",
+        "exec"
+      ],
+      [
+        "SELECT watermark FROM staged_capture_clocks WHERE owner_id = ? AND scope = ? AND project_id = ?",
+        "get"
+      ],
+      [
+        "SELECT * FROM staged_capture_evidence WHERE owner_id = ? AND scope = ? AND project_id = ? AND client = ? AND event_id = ?",
+        "get"
+      ],
+      [
+        "SELECT * FROM admission_claims WHERE owner_id = ? AND scope = ? AND project_id = ? AND client = ? AND event_id = ?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE name='raw_deletion_actions'",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE name='raw_deletion_actions'",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE name='raw_capture_events'",
+        "get"
+      ],
+      [
+        "SELECT * FROM episode_events WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND event_id=?",
+        "get"
+      ],
+      [
+        "SELECT * FROM staged_capture_evidence WHERE owner_id = ? AND scope = ? AND project_id = ? AND client = ? AND event_id = ?",
+        "get"
+      ],
+      [
+        "SELECT * FROM episode_events WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND event_id=?",
+        "get"
+      ],
+      [
+        "SELECT * FROM episode_events WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND event_id=?",
+        "get"
+      ],
+      [
+        "INSERT INTO admission_claims (owner_id, scope, project_id, client, event_id, payload_digest, state, token, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
+        "run"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE name='raw_deletion_actions'",
+        "get"
+      ],
+      [
+        "COMMIT",
+        "exec"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE name='raw_source_maps'",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE name='raw_source_maps'",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE name='raw_source_maps'",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE name='raw_source_maps'",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE name='raw_source_maps'",
+        "get"
+      ],
+      [
+        "BEGIN IMMEDIATE",
+        "exec"
+      ],
+      [
+        "SELECT watermark FROM staged_capture_clocks WHERE owner_id = ? AND scope = ? AND project_id = ?",
+        "get"
+      ],
+      [
+        "SELECT * FROM staged_capture_evidence WHERE owner_id = ? AND scope = ? AND project_id = ? AND client = ? AND event_id = ?",
+        "get"
+      ],
+      [
+        "SELECT * FROM admission_claims WHERE owner_id = ? AND scope = ? AND project_id = ? AND client = ? AND event_id = ?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE name='raw_deletion_actions'",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM sqlite_master WHERE name='raw_capture_events'",
+        "get"
+      ],
+      [
+        "SELECT * FROM episode_events WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND event_id=?",
+        "get"
+      ],
+      [
+        "SELECT * FROM staged_capture_evidence WHERE owner_id = ? AND scope = ? AND project_id = ? AND client = ? AND event_id = ?",
+        "get"
+      ],
+      [
+        "SELECT 1 FROM capture_events WHERE owner_id = ? AND scope = ? AND project_id = ? AND client = ? AND event_id = ?",
+        "get"
+      ],
+      [
+        "UPDATE admission_claims SET state = 'completed', token = NULL, lease_expires_at = NULL, memory_ids = ?, suppressed_count = ? WHERE owner_id = ? AND scope = ? AND project_id = ? AND client = ? AND event_id = ?",
+        "run"
+      ],
+      [
+        "SELECT * FROM episode_events WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND event_id=?",
+        "get"
+      ],
+      [
+        "UPDATE staged_capture_evidence SET state = ? WHERE owner_id = ? AND scope = ? AND project_id = ? AND client = ? AND event_id = ? AND state = 'pending'",
+        "run"
+      ],
+      [
+        "UPDATE staged_capture_evidence SET state='released',payload=NULL,payload_bytes=0,release_reason='interpreted' WHERE owner_id = ? AND scope = ? AND project_id = ? AND client = ? AND event_id = ? AND event_mode='episode-v1' AND disposition=1 AND state='admitted'",
+        "run"
+      ],
+      [
+        "INSERT INTO capture_initial_classification (owner_id,scope,project_id,client,event_id,status,bound_refs,final_refs) VALUES (?,?,?,?,?,?,?,?)",
+        "run"
+      ],
+      [
+        "SELECT epoch FROM namespace_epochs WHERE owner_id = ? AND scope = ? AND project_id = ?",
+        "get"
+      ],
+      [
+        "COMMIT",
+        "exec"
+      ]
+    ],
+    "dump": [
+      [
+        "admission_claims",
+        [
+          "{\"owner_id\":\"synthetic-u5a\",\"scope\":\"project\",\"project_id\":\"test\",\"client\":\"synthetic\",\"event_id\":\"off-capture\",\"payload_digest\":\"14b8b5746bedd2f34e457d1280edb01b5481e3fc2316efe30f693655bc2b1eaa\",\"state\":\"completed\",\"token\":null,\"lease_expires_at\":null,\"memory_ids\":\"[]\",\"suppressed_count\":0}"
+        ]
+      ],
+      [
+        "capture_events",
+        []
+      ],
+      [
+        "capture_initial_classification",
+        [
+          "{\"owner_id\":\"synthetic-u5a\",\"scope\":\"project\",\"project_id\":\"test\",\"client\":\"synthetic\",\"event_id\":\"off-capture\",\"status\":\"skipped_empty\",\"bound_refs\":\"[]\",\"selected_refs\":null,\"final_refs\":\"[]\",\"attempt_token\":null}"
+        ]
+      ],
+      [
+        "capture_streams",
+        []
+      ],
+      [
+        "card_applicability_reviews",
+        [
+          "{\"card_id\":\"00000000-0000-4000-8000-000000000003\",\"reviewed_revision\":2,\"applicability\":\"current\"}"
+        ]
+      ],
+      [
+        "card_bindings",
+        [
+          "{\"card_id\":\"00000000-0000-4000-8000-000000000003\",\"source_id\":\"00000000-0000-4000-8000-000000000002\",\"source_ref\":\"{\\\"type\\\":\\\"submitted-note\\\",\\\"namespace\\\":{\\\"ownerId\\\":\\\"synthetic-u5a\\\",\\\"scope\\\":\\\"project\\\",\\\"projectId\\\":\\\"test\\\"},\\\"sourceId\\\":\\\"00000000-0000-4000-8000-000000000002\\\",\\\"revision\\\":1,\\\"contentIdentity\\\":\\\"IP37sjLz17sYPM2sqSuulLHIbr5G5yVpVm5C4u0zPpI\\\",\\\"completeness\\\":\\\"provided-note\\\"}\",\"position\":0}"
+        ]
+      ],
+      [
+        "card_effects",
+        []
+      ],
+      [
+        "card_epochs",
+        [
+          "{\"owner_id\":\"synthetic-u5a\",\"scope\":\"project\",\"project_id\":\"test\",\"generation\":4}"
+        ]
+      ],
+      [
+        "card_memory_bindings",
+        []
+      ],
+      [
+        "card_moc_edges",
+        []
+      ],
+      [
+        "card_moc_epochs",
+        [
+          "{\"owner_id\":\"synthetic-u5a\",\"scope\":\"project\",\"project_id\":\"test\",\"revision\":3}"
+        ]
+      ],
+      [
+        "card_moc_refs",
+        []
+      ],
+      [
+        "card_moc_title_sources",
+        []
+      ],
+      [
+        "card_mocs",
+        []
+      ],
+      [
+        "card_note_usage",
+        [
+          "{\"owner_id\":\"synthetic-u5a\",\"byte_count\":23}"
+        ]
+      ],
+      [
+        "card_notes",
+        [
+          "{\"id\":\"00000000-0000-4000-8000-000000000002\",\"owner_id\":\"synthetic-u5a\",\"scope\":\"project\",\"project_id\":\"test\",\"revision\":1,\"state\":\"available\",\"text\":\"Synthetic source bytes.\",\"byte_count\":23,\"occurred_at\":null,\"received_at\":\"2026-01-01T00:00:00.000Z\"}"
+        ]
+      ],
+      [
+        "card_operations",
+        [
+          "{\"owner_id\":\"synthetic-u5a\",\"scope\":\"project\",\"project_id\":\"test\",\"action_id\":\"confirm\",\"method\":\"confirmCardDraft\",\"payload_binding\":\"d7bedwejtX1zV8V5IpS-6gXgPDbXaA-V3uo43ZOB6U0\",\"target_id\":\"00000000-0000-4000-8000-000000000003\",\"result\":\"{\\\"id\\\":\\\"00000000-0000-4000-8000-000000000003\\\",\\\"revision\\\":2,\\\"state\\\":\\\"confirmed\\\",\\\"bodyRevision\\\":1,\\\"effectCount\\\":0}\",\"created_at\":\"2026-01-01T00:00:00.000Z\"}",
+          "{\"owner_id\":\"synthetic-u5a\",\"scope\":\"project\",\"project_id\":\"test\",\"action_id\":\"draft\",\"method\":\"createCardDraft\",\"payload_binding\":\"FAtl3_PE9hQTspwWY-fdLN3BicbCawPo-mdgwYadMU8\",\"target_id\":\"00000000-0000-4000-8000-000000000003\",\"result\":\"{\\\"id\\\":\\\"00000000-0000-4000-8000-000000000003\\\",\\\"revision\\\":1,\\\"state\\\":\\\"draft\\\",\\\"bodyRevision\\\":null,\\\"effectCount\\\":0}\",\"created_at\":\"2026-01-01T00:00:00.000Z\"}",
+          "{\"owner_id\":\"synthetic-u5a\",\"scope\":\"project\",\"project_id\":\"test\",\"action_id\":\"source\",\"method\":\"submitSourceNote\",\"payload_binding\":\"ubHPpEcvcGD6NPkdxPTY3jx7pDCUETJU-IKXVSbEJ5w\",\"target_id\":\"00000000-0000-4000-8000-000000000002\",\"result\":\"{\\\"source\\\":{\\\"type\\\":\\\"submitted-note\\\",\\\"namespace\\\":{\\\"ownerId\\\":\\\"synthetic-u5a\\\",\\\"scope\\\":\\\"project\\\",\\\"projectId\\\":\\\"test\\\"},\\\"sourceId\\\":\\\"00000000-0000-4000-8000-000000000002\\\",\\\"revision\\\":1,\\\"contentIdentity\\\":\\\"IP37sjLz17sYPM2sqSuulLHIbr5G5yVpVm5C4u0zPpI\\\",\\\"completeness\\\":\\\"provided-note\\\"}}\",\"created_at\":\"2026-01-01T00:00:00.000Z\"}"
+        ]
+      ],
+      [
+        "confirmation_actions",
+        []
+      ],
+      [
+        "confirmation_conflicts",
+        []
+      ],
+      [
+        "confirmation_supersessions",
+        []
+      ],
+      [
+        "episode_attempts",
+        []
+      ],
+      [
+        "episode_controls",
+        []
+      ],
+      [
+        "episode_events",
+        []
+      ],
+      [
+        "episode_identity",
+        [
+          "{\"singleton\":1,\"secret\":\"0202020202020202020202020202020202020202020202020202020202020202\"}"
+        ]
+      ],
+      [
+        "episode_keep_actions",
+        []
+      ],
+      [
+        "episode_memory_links",
+        []
+      ],
+      [
+        "episode_messages",
+        []
+      ],
+      [
+        "episode_sources",
+        []
+      ],
+      [
+        "evidence_mappings",
+        []
+      ],
+      [
+        "index_edges",
+        []
+      ],
+      [
+        "index_generations",
+        []
+      ],
+      [
+        "index_memories",
+        []
+      ],
+      [
+        "index_memory_refs",
+        []
+      ],
+      [
+        "index_mocs",
+        []
+      ],
+      [
+        "index_title_sources",
+        []
+      ],
+      [
+        "memories",
+        []
+      ],
+      [
+        "memory_conflicts",
+        []
+      ],
+      [
+        "memory_qualifications",
+        []
+      ],
+      [
+        "memory_supersessions",
+        []
+      ],
+      [
+        "moc_edges",
+        []
+      ],
+      [
+        "moc_memory_refs",
+        []
+      ],
+      [
+        "moc_title_sources",
+        []
+      ],
+      [
+        "mocs",
+        []
+      ],
+      [
+        "namespace_epochs",
+        []
+      ],
+      [
+        "namespace_index_state",
+        []
+      ],
+      [
+        "private_cards",
+        [
+          "{\"id\":\"00000000-0000-4000-8000-000000000003\",\"owner_id\":\"synthetic-u5a\",\"scope\":\"project\",\"project_id\":\"test\",\"revision\":2,\"state\":\"confirmed\",\"title\":\"Synthetic title\",\"body\":\"Synthetic body bytes.\",\"body_revision\":1,\"created_at\":\"2026-01-01T00:00:00.000Z\",\"updated_at\":\"2026-01-01T00:00:00.000Z\",\"confirmed_at\":\"2026-01-01T00:00:00.000Z\"}"
+        ]
+      ],
+      [
+        "procedural_tags",
+        []
+      ],
+      [
+        "qualification_anchors",
+        []
+      ],
+      [
+        "qualified_claim_bindings",
+        []
+      ],
+      [
+        "qualified_slots",
+        []
+      ],
+      [
+        "rationale_edges",
+        []
+      ],
+      [
+        "receipt_causality",
+        []
+      ],
+      [
+        "receipts",
+        []
+      ],
+      [
+        "session_episodes",
+        []
+      ],
+      [
+        "staged_capture_clocks",
+        []
+      ],
+      [
+        "staged_capture_evidence",
+        []
+      ],
+      [
+        "store_metadata",
+        [
+          "{\"singleton\":1,\"store_id\":\"00000000-0000-4000-8000-000000000001\",\"cursor_secret\":\"0101010101010101010101010101010101010101010101010101010101010101\"}"
+        ]
+      ],
+      [
+        "suppressed",
+        []
+      ]
+    ]
+  }
+}

@@ -1678,5 +1678,10 @@
     "path": "core/context-read-sidecar.mjs",
     "source": "fd = openSync(process.argv[1], constants.O_RDONLY | constants.O_NOFOLLOW);",
     "reason": "Fixed header only in a SQLite-free child; the raw descriptor never shares a process with a SQLite connection."
+  },
+  {
+    "path": "core/local-raw-search.mjs",
+    "source": "import { mkdir } from 'node:fs/promises'",
+    "reason": "Creates private search sidecar directories only; mkdir does not open or close a database file descriptor."
   }
 ]

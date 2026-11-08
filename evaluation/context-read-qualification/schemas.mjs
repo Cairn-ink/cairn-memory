@@ -30,7 +30,8 @@ export function assembly(maxItems=24) {
     snapshot:nullable({type:'string',max:16384}),diagnostics:object({version:en('context-read-v1'),policy:object({id:en('rank-first-whole-v1','rank-first-first-source-v1','coverage-first-v1')}),representation:en('representation-v2'),counter:object({id:text}),
       items:array(object({ref:fullRef,metadata:union(metadata,cardMetadata),body:object({tokens:integer}),sources:array(sourceDetail,16)}),maxItems),budget:object({maxTokens:integer,maxItems:integer,used:integer}),
       omitted:object({items:integer,bodies:integer,sources:integer,unavailable:integer,oversized:integer}),dedup:object({sources:integer,body:integer}),stops:object({budget:bool,items:bool,deadline:bool}),
-      trace:object({timings:object({assemblyMs:number}),counterCalls:integer}),candidates:object({count:integer,channels:cv.channels,coverage:cv.coverage,trace:cv.trace})})})}),errorSchema);
+      coverage:object({raw:en('included','unavailable','partial','unsupported_store')}),
+      trace:object({timings:object({assemblyMs:number}),counterCalls:integer}),candidates:object({count:integer,channels:cv.channels,coverage:cv.coverage,trace:cv.trace})},['coverage'])})}),errorSchema);
 }
 const progress=nullable(object({phase:integer,checkpoint:integer,sequence:integer,baseSequence:integer}));
 const statusCounts=object({eligible:nullable(integer),indexed:nullable(integer),embedded:nullable(integer)});

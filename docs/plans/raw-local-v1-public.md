@@ -15,7 +15,8 @@ Parent: `raw-local-v1-completion.md`, step3; original authority:
 Publish the existing Raw composition through `openMemoryCore` and include its
 actual runtime closure in the private local install artifact. This remains the
 same Raw/Memory/authored-Card engine, not another host-owned implementation.
-Raw retention stays explicitly configured and default-off. No automatic Card,
+Raw retention is now default-on for local captures; `raw:false` disables it
+([current defaults](../defaults.md)). No automatic Card,
 new model/algorithm, live call, real transcript, product pin, merge, registry
 release, deployment or operational migration is in this packet.
 
@@ -97,7 +98,7 @@ Allowed author files:
   `packaging/test/raw-conversations.test.mjs` and its dedicated fixture.
 - `core/test/raw-source-bounds.test.mjs` and `packaging/test/private-cards.test.mjs`
   only to replace obsolete file-absence expectations for genuinely promoted
-  modules. Preserve internal-selector/default-off/authority negative tests.
+  modules. Preserve internal-selector and authority negative tests; replace historical default-off pins with default-on plus explicit `raw:false` checks.
 - The same narrow obsolete archive-absence assertion/comment correction is
   allowed in `core/test/raw-boundaries.test.mjs`, `core/test/raw-capture.test.mjs`
   and `core/test/raw-deletion.test.mjs`. Keep the compatibility raw-capture
@@ -122,7 +123,7 @@ An installed child may not fall back to a source-worktree module or fixture engi
 
 | ID | Pass condition |
 | --- | --- |
-| B1-01 | Malformed/extra/accessor/symbol Raw config and port failures refuse before store creation. Own getter counters stay zero. Explicit modes/cap/port combinations and method snapshot/receiver behavior match the contract; omission preserves the ordinary facade. |
+| B1-01 | Malformed/extra/accessor/symbol Raw config and port failures refuse before store creation. Own getter counters stay zero. Explicit modes/cap/port combinations and method snapshot/receiver behavior match the contract; omission enables Raw; `raw:false` preserves the ordinary facade. |
 | B1-02 | Public and internal construction share one composition without a circular import or copied engine. Existing internal P1–P3 tests continue to pass; public lineage/deletion cannot be disabled by an option or wire field. |
 | B1-03 | Reopen off with no cap preserves durable usage/cap; read-only port works; absent decoder never leaks text. Off capture skips Raw but ordinary Memory interpretation remains independent. |
 | B1-04 | Both clients' bounded synthetic parts go through the public captureRaw path. Fresh processes reconstruct long exact whitespace/Unicode through paged reads. First/middle/final overlap replay adds no model call or duplicate saved bytes; continuation has zero model calls. Raw saving and interpretation failure are reported separately. |

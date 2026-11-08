@@ -1,5 +1,5 @@
-import { resolveContentLayout, contentSafetyPin } from './content-safety-layout.mjs';
-import { attestContentSafety } from './content-safety-schema.mjs';
+import { resolveContentLayout, contentSafetyPin, supportsCardLineage } from './content-safety-layout.mjs';
+import { attestContentSafety, cardLineageRevision } from './content-safety-schema.mjs';
 import { validateContextProductLayout } from './context-product-schema.mjs';
 import { validateCardCurrentDependencies, assertNoCardCurrentDependencies } from './card-current-schema.mjs';
 import { validateRoleProfiles, assertNoRoleProfiles } from './role-profile-schema.mjs';
@@ -16,7 +16,8 @@ export function existingStoreOption(value) {
   const input = ownData(value, ['version', 'storeId', 'physical', 'base', 'suppressionRevision', 'cardLineageRevision']);
   if (input.version === 'content-safety-existing-v1') {
     const layout = resolveContentLayout(input.physical);
-    if (Object.keys(input).length !== 6 || !layout.suppressionRevision || input.base !== layout.base || input.suppressionRevision !== 1 || input.cardLineageRevision !== 0) fail('invalid_input');
+    if (Object.keys(input).length !== 6 || !layout.suppressionRevision || input.base !== layout.base || input.suppressionRevision !== 1 ||
+      ![0,1].includes(input.cardLineageRevision) || input.cardLineageRevision===1&&!supportsCardLineage(layout)) fail('invalid_input');
     identifier(input.storeId);
     return Object.freeze({ ...input });
   }
@@ -95,7 +96,7 @@ export function validateExistingStore(db, option, layout = attestContentSafety(d
   if (db.prepare('PRAGMA user_version').get().user_version !== layout.physical) fail('unsupported_database');
   const version = layout.base;
   if (layout.suppressionRevision) {
-    if (option.version !== undefined && (option.version !== 'content-safety-existing-v1' || option.physical !== layout.physical || option.base !== layout.base || option.suppressionRevision !== 1 || option.cardLineageRevision !== 0)) fail('unsupported_database');
+    if (option.version !== undefined && (option.version !== 'content-safety-existing-v1' || option.physical !== layout.physical || option.base !== layout.base || option.suppressionRevision !== 1 || option.cardLineageRevision !== cardLineageRevision(layout))) fail('unsupported_database');
     validateContextProductLayout(db, layout);
     if (db.prepare('PRAGMA application_id').get().application_id !== 0x43414952 ||
         db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id !== option.storeId) fail('unsupported_database');
