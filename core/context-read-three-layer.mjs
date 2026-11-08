@@ -262,7 +262,9 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
     stops.items = remaining.length > 0;
     const value = fits(selected), delivered = memories(selected);
     const snapshot = delivered.length ? args.snapshotOf(delivered) : null;
-    const handles = [...new Set(selected.flatMap(unit => unit.evidence.map(item => item.handle)))];
+    // Omitted Raw units still shape the returned counts, so every prepared
+    // handle is revalidated; a denial anywhere falls back to Memory-only.
+    const handles = [...new Set(units.flatMap(unit => unit.evidence.map(item => item.handle)))];
     return { metered: value.metered, snapshot, selected: delivered, diagnostics: diagnostics(selected, value.used),
       validateRaw() {
         try { check(); port(() => raw.rawSearch.revalidate(handles)); return true; } catch { return false; }
