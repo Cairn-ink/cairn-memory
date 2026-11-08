@@ -113,7 +113,7 @@ export async function seedStore(path, schema, { memories = PROTOCOL.memories, mo
   const { installOverviewLayout } = await import('../../core/testing/topic-overview-raw29-fixture.mjs');
   const { openMemoryCore } = await import('../../core/contract.mjs');
   installOverviewLayout(path, schema);
-  const core = openMemoryCore({ path });
+  const core = openMemoryCore({ path, raw: false });
   try {
     for (let n = 0; n < namespaces.length; n++) {
       const namespace = namespaces[n], saved = [];
@@ -236,7 +236,7 @@ export function measurementDatabase(native, performance) {
 
 export async function openWriter(path, writer) {
   const { openMemoryCore } = await import('../../core/contract.mjs');
-  if (writer !== 'raw') return openMemoryCore({ path });
+  if (writer !== 'raw') return openMemoryCore({ path, raw: false });
   const { localPlainPort, splitRaw } = await import('../../core/testing/raw-fixtures.mjs');
   const { cardHost } = await import('../../core/testing/raw-source-fixtures.mjs');
   const { rationaleModel } = await import('../../core/testing/rationale-model.mjs');

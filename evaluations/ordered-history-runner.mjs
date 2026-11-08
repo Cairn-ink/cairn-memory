@@ -88,7 +88,7 @@ export async function runOrderedHistoryAudit(options) {
       }
       let core;
       try {
-        core = openMemoryCore({ path: database, model });
+        core = openMemoryCore({ path: database, model, raw: false });
         window.capture = await core.capture({ namespace, client: ORDERED_HISTORY_MAPPING.client,
           sessionId: `${history.id}-window-${index}`, eventId: `${history.id}-event-${index}`, messages, causal });
         window.records = [];
@@ -97,7 +97,7 @@ export async function runOrderedHistoryAudit(options) {
         close(core, window);
         core = null;
         if (!infrastructureFailed) {
-          core = openMemoryCore({ path: database });
+          core = openMemoryCore({ path: database, raw: false });
           window.reopenedRecords = [];
           captureAuditSnapshot(core, namespace, window.reopenedRecords, unwrap);
           window.reopenPersisted = same(window.records, window.reopenedRecords);
@@ -120,7 +120,7 @@ export async function runOrderedHistoryAudit(options) {
       }
       let core;
       try {
-        core = openMemoryCore({ path: database, model });
+        core = openMemoryCore({ path: database, model, raw: false });
         recall.result = await core.recall({ readSet: [namespace], query: query.query, limit: 12 });
         recall.status = recall.result.ok && recall.result.value.coverage === 'complete' ? 'completed' : 'failed';
       } catch { recall.status = 'failed'; recall.error = { code: 'history_recall_failed' }; }

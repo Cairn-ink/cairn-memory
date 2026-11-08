@@ -77,7 +77,7 @@ test('M1/M2 keyless SDK inspection filters before pagination and preserves defau
   const path = database(); const seeded = seedInspectionHistory(path); const { client } = await host(t, path);
   const tools = (await client.listTools()).tools;
   assert.deepEqual(tools.map(({ name }) => name).sort(),
-    ['correct_memory', 'forget_memory', 'inspect_memory', 'recall_memory', 'remember_memory']);
+    ['correct_memory', 'fetch_memory_candidate_evidence', 'find_memory_candidates', 'forget_memory', 'inspect_memory', 'read_memory_context', 'recall_memory', 'remember_memory']);
   const schema = tools.find(({ name }) => name === 'inspect_memory').inputSchema;
   assert.ok(schema.properties.states);
   assert.equal(schema.additionalProperties, false);
@@ -167,7 +167,7 @@ test('real stdio lists strict tools and persists revisions, receipts and forgett
   const first = await host(t, path);
   const tools = (await first.client.listTools()).tools;
   assert.deepEqual(tools.map((tool) => tool.name).sort(),
-    ['correct_memory', 'forget_memory', 'inspect_memory', 'recall_memory', 'remember_memory']);
+    ['correct_memory', 'fetch_memory_candidate_evidence', 'find_memory_candidates', 'forget_memory', 'inspect_memory', 'read_memory_context', 'recall_memory', 'remember_memory']);
   for (const tool of tools) {
     assert.equal(tool.inputSchema.additionalProperties, false);
     for (const field of ['owner', 'ownerId', 'namespace', 'path', 'readSet']) {
@@ -210,7 +210,7 @@ test('modern pinned discovery supports the same stdio memory tools as legacy ini
   const { client } = await host(t, database(), { modern: true });
   assert.equal(client.getProtocolEra(), 'modern');
   assert.equal(client.getNegotiatedProtocolVersion(), '2026-07-28');
-  assert.equal((await client.listTools()).tools.length, 5);
+  assert.equal((await client.listTools()).tools.length, 8);
   const saved = ok(await call(client, 'remember_memory', { content: 'Synthetic modern-protocol note' })).memory;
   assert.equal(ok(await call(client, 'inspect_memory', { memoryId: saved.id })).memory.revision, saved.revision);
 });
@@ -487,7 +487,7 @@ test('oversized transport message closes the server without reflecting its paylo
   const { child, closed } = rawProcess(t, ['--db', database(), '--owner', 'synthetic']);
   const marker = 'SYNTHETIC-OVERSIZE-CANARY';
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call',
-    params: { name: 'remember_memory', arguments: { content: marker + 'x'.repeat(70000) } } }) + '\n');
+    params: { name: 'remember_memory', arguments: { content: marker + 'x'.repeat(270000) } } }) + '\n');
   // Keep stdin open: the transport itself must close on the size violation.
   const result = await closed;
   assert.equal(result.signal, null);

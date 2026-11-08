@@ -56,7 +56,7 @@ test('installed MCP stages failed source and reopens keylessly in access-only mo
 
     const cold = await start(accessFlags);
     const names = (await cold.client.listTools()).tools.map(tool => tool.name);
-    assert.equal(names.length, 7); assert.equal(names.includes('capture_memory'), false);
+    assert.equal(names.length, 10); assert.equal(names.includes('capture_memory'), false);
     assert.deepEqual(ok(await call(cold, 'inspect_capture_evidence', { batchId: batch.batchId })).evidence, saved);
     const other = await start(accessFlags, { owner: 'synthetic-other' });
     assert.equal(ok(await call(other, 'inspect_capture_evidence', { batchId: batch.batchId })).evidence, null);

@@ -2,11 +2,11 @@ import { isDeepStrictEqual } from 'node:util';
 import { cardNamespace } from '../../core/private-card-input.mjs';
 
 export const CONTEXT_TOOL_METHODS = Object.freeze(['findCandidates', 'fetchCandidateEvidence', 'contextRead']);
-export function createContextReadAccess(namespace, personal = false, { refresh = false } = {}) {
+export function createContextReadAccess(namespace, personal = false, { refresh = false, maintenance = false } = {}) {
   const scope = Object.freeze(cardNamespace(namespace));
   if (personal && scope.scope !== 'project') throw Error('invalid_mcp_configuration');
   const readSet = Object.freeze(personal ? [Object.freeze({ ownerId: scope.ownerId, scope: 'personal', projectId: null }), scope] : [scope]);
-  const methods = refresh ? ['refreshContextIndex'] : CONTEXT_TOOL_METHODS;
+  const methods = refresh ? ['refreshContextIndex'] : maintenance ? [...CONTEXT_TOOL_METHODS, 'refreshContextIndex'] : CONTEXT_TOOL_METHODS;
   const tokens = new WeakMap(), grants = new WeakMap(); let closed = false;
   const authority = {
     authorize(request, token) {

@@ -65,7 +65,7 @@ for (const directOnly of [false, true]) test(`installed adapter/core/MCP retains
   };
   const retainedReceipts = rationale => rationale.sources.flatMap(source =>
     source.receipts.map(({ role, excerpt }) => ({ role, excerpt }))).sort((a, b) => a.excerpt.localeCompare(b.excerpt));
-  await start(proxy.token); assert.equal((await active.listTools()).tools.length, 7);
+  await start(proxy.token); assert.equal((await active.listTools()).tools.length, 10);
   const batches = [['one', 'I chose A because it supports offline work.'], ['two', 'I checked: A cannot work offline.']]
     .map(([batchId, content]) => ({ batchId, messages: [{ role: 'user', content }] }));
   const first = await call('capture_memory', batches[0]);

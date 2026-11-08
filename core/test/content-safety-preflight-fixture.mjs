@@ -16,7 +16,7 @@ export function fixture(t, version = 23, options = {}) {
   const db = openDatabase(path, { privateCards: version !== 18, currentDependencies: version === 33 });
   db.exec(`PRAGMA busy_timeout=${STORAGE_BUSY_TIMEOUT_MS}`);
   const host = cardHost();
-  const core = openMemoryCore({ path, ...(version !== 18 ? { privateCards: host.options } : {}), ...options });
+  const core = openMemoryCore({ path, raw: false, ...(version !== 18 ? { privateCards: host.options } : {}), ...options });
   let closed = false, serial = 0;
   const f = { workspace, path, db, core,
     call: (method, input) => host.call(core, method, input),

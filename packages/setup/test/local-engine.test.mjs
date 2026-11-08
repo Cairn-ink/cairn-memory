@@ -476,7 +476,7 @@ test('offline install verifies the tree, exact child environment, check JSON, an
     '--no-fund', '--offline', archive]);
   const check = JSON.parse(command(fake.node, [installed.executable, '--check-config',
     '--db', args.databasePath, '--owner', args.ownerId], { env: expectedEnv }));
-  assert.deepEqual(check, { ok: true, mode: 'configuration-check', scope: 'personal', modelKeyPresent: false,
+  assert.deepEqual(check, { ok: true, mode: 'configuration-check', raw: true, rawSearch: true, contextRead: 'context-read-v1', scope: 'personal', modelKeyPresent: false,
     recallModel: null, recall: 'model_not_configured', cloudProcessing: false,
     automaticCapture: false, databaseOpened: false, providerContacted: false,
     unverified: ['database-readiness', 'credential-validity', 'model-availability'] });

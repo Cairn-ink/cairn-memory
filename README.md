@@ -208,10 +208,22 @@ rather than the generic MCP settings above.
 | Tool | Purpose |
 | --- | --- |
 | `remember_memory` | Explicitly save one memory and its receipt |
+| `find_memory_candidates` | Preferred lexical/semantic memory candidate search |
+| `fetch_memory_candidate_evidence` | Refetch exact candidate evidence |
+| `read_memory_context` | Preferred dated Memory + Raw read, within a local token budget |
 | `recall_memory` | Model-guided retrieval of current memories and receipts |
 | `inspect_memory` | List memories, or inspect an ID, revision and receipts |
 | `correct_memory` | Replace content at the revision you inspected |
 | `forget_memory` | Logically delete at the revision you inspected |
+
+The local MCP server and installer enable Raw retention for submitted captures,
+Raw search, dated three-layer contextRead and its tools by default. Library
+`openMemoryCore` keeps Raw off unless `raw:true` is supplied. Stores whose
+attested layout cannot hold Raw run Memory-only. Use `--no-raw`,
+`--no-raw-search` or `--no-context-read` to turn off those server defaults.
+With `OPENAI_API_KEY`, the server also enables bounded embeddings. Without a
+key, contextRead uses BM25. See
+[all defaults, costs and off switches](docs/defaults.md).
 
 The default local server exposes explicit tools. For opt-in submitted-message
 capture, project scope and configuration checks, see the

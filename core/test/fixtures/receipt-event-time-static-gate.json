@@ -4,7 +4,7 @@
     "start": null,
     "end": null,
     "purpose": "finite family mapping; no feature inferred from the integer",
-    "sha256": "882b2d183de2d97bcd83650d901ec9f8c21a43e048d1ef92def9b6006fc8fe85"
+    "sha256": "fb9d00957c5a224b1a414c2c5baa5726fa39ea2323331a9f7e325f4a9e3f3655"
   },
   {
     "file": "core/content-safety-schema.mjs",
@@ -67,14 +67,14 @@
     "start": "    return success(structuredClone({ version: CONTEXT_VERSION",
     "end": "  }, findCandidates",
     "purpose": "public embedded capabilities projection",
-    "sha256": "1ccfb7a773edf3e1822ba913d4effe9f595b89bf82d01e0d1639b53d31562741"
+    "sha256": "31e83a531289bdb1db368b335894c3f4bd1e20db47167e896b9245173fe8d65e"
   },
   {
     "file": "core/context-product-worker.mjs",
     "start": "function capabilities() {",
     "end": "\ntry {",
     "purpose": "public Worker capabilities projection",
-    "sha256": "0c2a07b5f20bc4eea4f945ab029170111297d77b0c4c7e00081c42d3a45d5c7d"
+    "sha256": "814de9f03bd875a871c5dce50a517e85e02056cc3f9c6018fc2ffdbd56712314"
   },
   {
     "file": "core/context-read-facade.mjs",
