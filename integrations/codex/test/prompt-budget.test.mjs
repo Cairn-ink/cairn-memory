@@ -12,27 +12,46 @@ import { policyPath } from '../../client/automatic-policy.mjs';
 import { copyRuntime } from '../../../packages/setup/lib/codex-runtime.mjs';
 
 test('installed prompt entry exits silently within its process-clock budget, five times',
-  { skip: process.platform !== 'linux', timeout: 35000 }, async t => {
+  { skip: process.platform !== 'linux', timeout: 60000 }, async t => {
+    const binaryWorkspace = createTestWorkspace(t, { prefix: 'codex-prompt-binary-' });
+    const codex = join(binaryWorkspace.path, 'codex');
+    // A private native-shaped ancestor exercises production /proc detection
+    // and the identity-keyed qualification cache without using a real host.
+    await copyFile(process.execPath, codex);
+    // copyFile keeps the source mode; a runner's Node can be group-writable.
+    await chmod(codex, 0o700);
+    const identity = await binaryIdentity(codex);
     for (let run = 0; run < 5; run++) await t.test(`run ${run + 1}`, async t => {
       const ws = createTestWorkspace(t, { prefix: 'codex-prompt-budget-' });
       const home = join(ws.path, 'home'), codexHome = join(home, 'codex');
       const root = join(codexHome, 'cairn-standalone'), directory = join(codexHome, 'cairn');
       for (const path of [root, join(directory, 'qualification')])
         await mkdir(path, { recursive: true, mode: 0o700 });
-      let recallHeaders = 0;
+      let recallHeaders = 0, pauseRequests = 0;
+      let spawnedAt;
+      const phases = [];
+      const mark = phase => {
+        if (phases.length < 16) phases.push({ phase, atMs: performance.now() - spawnedAt });
+      };
       const pending = new Set();
       const server = createServer((request, response) => {
         request.resume();
-        if (request.url.endsWith('/recall')) { recallHeaders++; return; }
+        if (request.url.endsWith('/recall')) { mark('recall'); recallHeaders++; return; }
         assert.ok(request.url.endsWith('/pause-state'));
-        // Local pre-fetch work must consume enough time for the process cap to
-        // win over the unchanged 2,500 ms fetch timer. Recall itself never answers.
-        const timer = setTimeout(() => {
-          pending.delete(timer);
+        mark('pause-state');
+        response.once('finish', () => mark('pause-state-reply'));
+        // Hold only the first observation to a spawn-relative floor so the
+        // process cap wins over the 2,500 ms fetch timer without repeated waits.
+        // Recall itself never answers.
+        const delay = pauseRequests++ === 0 ? Math.max(0, Math.ceil(1100 - (performance.now() - spawnedAt))) : 0;
+        const reply = () => {
           response.setHeader('content-type', 'application/json');
           response.end(JSON.stringify({ paused: false, generation: 0, enforced: true }));
-        }, 650);
-        pending.add(timer);
+        };
+        if (delay > 0) {
+          const timer = setTimeout(() => { pending.delete(timer); reply(); }, delay);
+          pending.add(timer);
+        } else reply();
       });
       ws.defer(async () => {
         for (const timer of pending) clearTimeout(timer);
@@ -42,13 +61,6 @@ test('installed prompt entry exits silently within its process-clock budget, fiv
       await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
       const endpoint = `http://127.0.0.1:${server.address().port}`;
       const runtime = await copyRuntime(directory);
-      const codex = join(ws.path, 'codex');
-      // A private native-shaped ancestor exercises production /proc detection
-      // and the identity-keyed qualification cache without using a real host.
-      await copyFile(process.execPath, codex);
-      // copyFile keeps the source mode; a runner's Node can be group-writable.
-      await chmod(codex, 0o700);
-      const identity = await binaryIdentity(codex);
       const put = (path, value) => writeFile(path, JSON.stringify(value), { mode: 0o600 });
       const installation = join(directory, 'installation.json');
       await put(installation, { version: 1, enabled: true, hostVersion: '0.160.1', codex,
@@ -79,7 +91,9 @@ test('installed prompt entry exits silently within its process-clock budget, fiv
         child.stdout.pipe(process.stdout); child.stderr.pipe(process.stderr);
         child.stdin.end(${JSON.stringify(JSON.stringify(input))});
         child.on('close', (code, signal) => process.send({ code, signal,
+          spawnMs: performance.timeOrigin + start - ${performance.timeOrigin},
           elapsedMs: performance.now() - start }, () => process.exit(code ?? 1)));`);
+      spawnedAt = performance.now();
       const child = spawn(codex, [parent], { cwd: ws.path, detached: true,
         env: { HOME: home, CODEX_HOME: codexHome, PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' },
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
@@ -92,11 +106,15 @@ test('installed prompt entry exits silently within its process-clock budget, fiv
       try { code = await new Promise((resolve, reject) => {
         child.once('error', reject); child.once('close', resolve);
       }); } finally { clearTimeout(watchdog); }
+      const { spawnMs, ...result } = outcome ?? {};
+      t.diagnostic(JSON.stringify({ run: run + 1, ...result,
+        hookSpawnMs: outcome ? spawnMs - spawnedAt : null,
+        ancestorCode: code, ancestorSignal: child.signalCode,
+        ancestorElapsedMs: performance.now() - spawnedAt, recallHeaders, phases }));
       assert.equal(code, 0); assert.equal(child.signalCode, null);
       assert.equal(outcome.code, 0); assert.equal(outcome.signal, null);
       assert.equal(stdout, '', 'no_late_context'); assert.equal(stderr, '', 'silent_failure');
       assert.equal(recallHeaders, 1, 'real_loopback_recall_reached');
-      t.diagnostic(JSON.stringify({ run: run + 1, ...outcome, recallHeaders }));
       // The launcher reserves 50 ms; another 50 ms tolerates clock/scheduling noise.
       assert.ok(outcome.elapsedMs >= 2900, 'process_cap_not_shortened');
       assert.ok(outcome.elapsedMs < 4000, 'host_margin');
