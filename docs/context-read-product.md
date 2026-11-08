@@ -1,18 +1,19 @@
 # Product adapter: P2a–P2e
 
-The independent [local Raw index](plans/raw-search-interface.md) does not enter
-this product worker profile. Hosted Raw selection refuses until a separate
-backend and durable accounting integration exist. The existing product read,
-maintenance, broker and worker APIs described below are unchanged.
+The product read defaults to dated Memory + Raw assembly, at 6,000 tokens and
+24 packed items. A trusted Worker host can supply an already-open local
+[`openRawSearch` service](plans/raw-search-interface.md) as `host.rawSearch`.
+An absent or unavailable service falls back to dated Memory-only assembly.
+Hosted Raw selection still requires its own backend/accounting integration.
 
 Select `profile:'context-read-product-v1.1'` and `version:'context-read-v1'`
 with `openContextProductReader` from the core entry. P2a releases capabilities
 and canonical exact evidence fetch for DELETE stores: Memories on physical
 v18/v20–v33 and Cards on v23–v33. P2b adds lexical candidates,
-representation-v2 assembly, index status and explicit service maintenance.
+dated assembly, index status and explicit service maintenance.
 P2c extends that path to one owner with up to 32 selected namespaces: at most
 one personal namespace and 31 projects. Reader requests use certified product
-indexes only. Defaults remain lexical and construct no provider. P2e adds
+indexes only. Memory retrieval defaults remain lexical and construct no provider. P2e adds
 explicit hosted semantic configuration, described below. P2d adds explicitly opted-in WAL handling for the same owner-wide
 selection, subject to deployment qualification below. The legacy profile and
 sidecar remain unchanged.
@@ -1764,7 +1765,8 @@ separate performance-track decision.
 
 Select dates per call with the top-level field
 `contextRead({ ...input, representation: 'representation-v2-dated' }, credential)`.
-The default remains `representation-v2`; unknown ids refuse `invalid_input`.
+The default is `representation-v2-dated`; explicitly request `representation-v2`
+for the earlier undated Memory projection. Unknown ids refuse `invalid_input`.
 `assembly.representations` advertises both ids, and assembly diagnostics report
 the selected id. Candidate/index diagnostics and stored `candidate-text-v1`
 content are unchanged.
@@ -1778,7 +1780,7 @@ window never supplies the date. Source-access denials and Card omissions apply
 unchanged; Cards do not receive dates.
 Items are emitted in date order, earliest first; undated items follow in
 relevance order. Date ties keep relevance order, and `rank` is relevance.
-Selection still visits items and sources in relevance order. Every trial must
+Memory-only selection still visits items and sources in relevance order. Every trial must
 fit both the token budget in emitted date order and a reader-supplied upper
 bound on the complete 65,536-byte response, including snapshots and diagnostics.
 A trial over either budget is omitted and sets `stops.budget`; near-limit reads
@@ -1986,3 +1988,50 @@ are re-fetched from canonical storage and revalidated at delivery, and existing
 `SQLITE_CORRUPT` classifications still route to repair. The keyed seal permits
 bounded admission without repeating those whole-file statements. Status and
 coverage from unverified files confer no readiness or serving authority.
+
+
+## Default three-layer read
+
+The engine's assembly defaults are `budget:{maxTokens:6000,maxItems:24}` and
+`representation:'representation-v2-dated'`. The token ceiling is 6,000, the item
+ceiling is 24, and the complete response remains capped at 65,536 UTF-8 bytes.
+Smaller host budgets are supported. `raw:false` on `contextRead` explicitly
+selects Memory-only assembly. `findCandidates` and exact evidence fetch keep
+their existing interfaces and retrieval behavior.
+
+`createContextReadHost` may return `rawSearch` with `search`, `prepare` and
+synchronous batch `revalidate`. The service stays inside the Worker; functions
+and raw credentials do not cross IPC. The host binds any separate Raw credential
+in these methods and registers its disposer through the existing resource owner
+or `host.close`. The engine neither opens nor maintains this service. A direct
+`openProductIndex` host can supply the same `rawSearch` port. See the
+[local assembly contract](context-read-local.md#default-memory--raw-assembly)
+for the wrapper, scoring formula and wire fields.
+
+Memory uses its existing retrieval and hybrid fusion. Raw searches the same
+query with current intent, BM25 and ready semantic vectors (k=10 RRF). Prepared
+Raw becomes an exact query-matched excerpt capped at 200 tokens, including text
+beyond the receipt prefix of long assistant messages. Conversation/message refs,
+role, original offsets and `occurredAt` accompany the excerpt. Memory citations
+coalesce matching source turns into one packed item. The cost-aware greedy fill
+uses lexical relevance, the Memory rank prior, cost, session/turn breadth and
+redundancy. The legacy `policy` governs Memory-only assembly; the Raw-inclusive
+read uses cost-aware whole units. No Document Card candidates are admitted by
+the new hook. Expanded relation/MOC previews above 24 Memory candidates keep
+Memory-only packing until the snapshot reference ceiling can be extended.
+
+Dated output orders units earliest first, with undated units afterward. Raw
+attached to Memory is dated inside `evidence`; identical body text uses
+`sameAsBody`. The coalesced item's date is the earliest of its evidence dates.
+Saved text remains untrusted data. Signed snapshots cover the selected canonical
+Memories/Cards; Raw evidence is inline and does not expand snapshot fetch.
+
+`diagnostics.coverage.raw` reports `included`, `unavailable` or `partial`.
+Unavailable, incomplete or timed-out Raw uses the exact existing Memory-only
+assembly. Raw work has a subdeadline reserving Memory assembly time. All admitted
+Raw handles are batch-revalidated after host counting/authority callbacks,
+before canonical final delivery. Failed validation discards Raw and rebuilds
+Memory-only output without holding a SQLite transaction across an asynchronous
+operation. The semantic publication gate still covers synchronous assembly and
+final validation; Raw preparation happens before entering it. Hosts own late
+underlying operations and must bound synchronous service calls.

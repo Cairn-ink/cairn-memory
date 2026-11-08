@@ -45,7 +45,7 @@ const exceptions = frozenExceptions.map(entry => {
   assert.equal(entry.sha256, '073071759a46698824ffd029a5fe48fbd737513c5c6936ba826b5d413be32bbe',
     'frozen pre-rebase Worker loader pin');
   // The hunk registers and transports refusal causes; it adds no loader or feature consumer.
-  return { ...entry, line: 120, sha256: '450a1105d9dc2ec7865f4a1261ad205acd5ebc2826ba7622b863bf11ca4b855e' };
+  return { ...entry, line: 120, sha256: '4fda2d6f40c0f01f55dd9a2a1ddcb7d03593ebd0ae875eb959092b16b471bc39' };
 });
 export const moduleLoadingExceptions = exceptions;
 const cache = new Map();

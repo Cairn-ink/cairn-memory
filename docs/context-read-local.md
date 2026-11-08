@@ -1,11 +1,11 @@
 # Local context candidates: core and host
 
-An independent local Raw index is available through the trusted
-[`openRawSearch` interface](plans/raw-search-interface.md). It is default-off and
-does not alter the context representations or MCP tools described here.
-Selection does not enable Raw saving. Its plaintext sidecar, explicit
-maintenance lane and canonical final validation are described in
-[the host seam](plans/raw-search-seam.md).
+Core `contextRead` defaults to a dated Memory + Raw read, with a budget of
+6,000 tokens and 24 packed items. Memory retrieval keeps its existing BM25 and
+optional semantic fusion. When a trusted host supplies an already-open
+[`openRawSearch` service](plans/raw-search-interface.md), the same query also
+retrieves current Raw evidence. Without that service, the read uses the dated
+Memory-only path. Reading does not enable saving or maintain either index.
 
 `context-read-v1` is an explicit opt-in over the existing canonical SQLite store.
 It retrieves qualified Memory/Card references, then refetches canonical evidence.
@@ -23,7 +23,7 @@ cairn-memory --db /absolute/private/memory.sqlite --owner OWNER --project PROJEC
 ```
 
 The host fixes the exact namespace and read set at startup. The zero-value
-`--context-read-personal` requires both project scope and context-read opt-in;
+`--context-read-personal` requires both project scope and enabled context reads;
 it adds that owner's personal namespace, without fallback to another owner or
 project. It can sit beside the separate zero-value `--method-read-personal` flag.
 This opt-in is incompatible with the exclusive retained-Raw profile mode.
@@ -58,8 +58,9 @@ bound. Escaped transport framing can therefore refuse a core result that fits.
 ## Budgeted context assembly (U5b)
 
 `read_memory_context` uses the same host-fixed read set and lexical/semantic
-candidate search. `maxTokens` is an integer from 64–4,000 (default 1,500);
-`maxItems` is 1–24 (default 12), counting admitted bodies. `deadlineMs` is
+candidate search. The engine `budget.maxTokens` is an integer from 64–6,000
+(default 6,000); `budget.maxItems` is 1–24 (default 24), counting packed units.
+An adapter may supply a smaller budget. `deadlineMs` is
 1–5,000 (default 1,000). The host maps the two size arguments to core `budget`;
 callers cannot supply `budget`, a cursor, authority or configuration. `policy`
 is a strict `{id}` object: `rank-first-whole-v1` (initial default) or
@@ -277,8 +278,8 @@ That exception is asserted separately from standalone one-Han, overlapping
 two-Han, supplementary-Han and mixed-width fixtures. Measurements and fake
 embeddings use synthetic data and are observational. They do not establish
 answer correctness, complete semantic recall, native activation, production
-latency or a 100,000-Memory guarantee. Role profiles, Raw search and local-model
-adapters remain unsupported. Relations and MOC retrieval require the separate
+latency or a 100,000-Memory guarantee. Role profiles and local-model
+adapters remain unsupported on this interface. Relations and MOC retrieval require the separate
 source opt-in below.
 
 `node tools/testing/context-embedding-live.mjs` prints an unrun notice without
@@ -387,8 +388,8 @@ qualification workflow. No local embedder is selected by default.
 ## Receipt event dates (addendum v1, 2026-11-03)
 
 Core `contextRead` and MCP `read_memory_context` accept the optional top-level
-field `representation: 'representation-v2-dated'`. Omission or explicit
-`'representation-v2'` preserves the default v2 text. Unknown ids are invalid
+field `representation: 'representation-v2-dated'`. This is the engine default;
+explicit `'representation-v2'` requests the earlier undated Memory projection. Unknown ids are invalid
 input. Capabilities list both ids in `assembly.representations`; assembly
 diagnostics report the selected id even when every date is absent.
 
@@ -397,7 +398,7 @@ items, as a sibling of `ref`, for example `"date":"2023-05-22T05:54Z"`.
 Refs, metadata and sources keep their v2 projection. Cards have no date.
 Items are emitted in date order, earliest first; undated items follow in
 relevance order. Date ties keep relevance order, and `rank` is relevance.
-Selection still visits items and sources in relevance order. Every trial must
+The Memory-only path still visits items and sources in relevance order. Every trial must
 fit both the token budget in emitted date order and a reader-supplied upper
 bound on the complete 65,536-byte response, including snapshots and diagnostics.
 A trial over either budget is omitted and sets `stops.budget`; near-limit reads
@@ -411,8 +412,77 @@ cannot affect it; unavailable source access contributes no dates.
 
 UTC minute precision truncates seconds rather than rounding, with explicit
 `Z` and no zone input. Missing receipt event-time columns and null values both
-omit `date`. There is no recorded-time (`created_at`) fallback. The selection
+omit `date`. There is no recorded-time (`created_at`) fallback. The Memory-only selection
 does not migrate a store, change sidecar representation, add SQL or fence inputs,
 or change counter visits and structural limits. Public role/task reads keep
 their existing v2 projection. Contract §15.9 records lifecycle safety for up to
 16 receipts and the existing receipt-window limitation above that bound.
+
+
+## Default Memory + Raw assembly
+
+The host supplies `contextRead.rawSearch`, an already-open local service exposing
+`search`, `prepare` and synchronous batch `revalidate`. The host owns its
+credentials, fixed owner/read set, maintenance and close. If Raw uses a separate
+credential, bind it in a trusted wrapper rather than passing it as read input:
+
+```js
+const rawSearch = {
+  search: input => rawService.search(input, rawCredential),
+  prepare: (candidate, settings) => rawService.prepare(candidate, settings, rawCredential),
+  revalidate: handles => rawService.revalidate(handles),
+};
+const reader = openContextReader({ path, contextRead: {
+  version: 'context-read-v1', authority, counter, rawSearch,
+} });
+const result = await reader.contextRead({
+  readSet, types: ['memory'], intent: 'current', query: 'Do I like egg pancakes?',
+  // budget: { maxTokens: 6000, maxItems: 24 },
+  // raw: false, // explicit Memory-only read
+}, credential);
+```
+
+Raw always uses `intent:'current'`, including when Memory requests history.
+Its local search uses BM25 and, when ready, semantic vectors with k=10 RRF.
+Text enters only through prepared, validated handles. Each hit contributes an
+exact, query-matched span of at most 200 tokens from anywhere in the message,
+including assistant messages. Slices preserve code points and original offsets.
+Raw wire items carry `layer:'Raw'`, conversation/message refs, role, offsets,
+`occurredAt` when present, and a minute-precision `date` in the dated representation.
+
+Raw from a Memory's cited source turn attaches as `evidence` to that Memory;
+Memories sharing source turns coalesce, and near-identical Memory bodies are
+emitted once. An evidence span identical to the Memory body uses `sameAsBody`.
+Each coalesced group consumes one item. The signed snapshot still refers only
+to the selected Memories/Cards; Raw refs are delivered inline, not fetchable
+through that Memory snapshot.
+
+The legacy `policy` applies to Memory-only assembly. When Raw is included,
+the cost-aware fill selects whole coalesced units. Packing greedily re-scores
+the remaining units after each admission. Scores add
+normalized BM25 relevance, the Memory prior `61/(60+rank)`, `−0.15*tokens/250`,
+`+0.15` per new session (`+0.30` for count/list questions), `+0.05` per new turn,
+and `−0.30` times the largest token-set Jaccard overlap with a selected unit.
+Each trial meters the complete emitted text and bounds the full response,
+including diagnostics and snapshot, to 65,536 bytes. Document Card candidate
+admission is reserved for a future hook; it is empty today. Existing explicit
+Card reads retain their projection.
+
+Dates order the admitted units earliest first, followed by undated units; a
+coalesced unit uses its earliest evidence date and orders its Raw evidence by
+date. Explicit `representation:'representation-v2'` keeps undated Memory output
+and relevance order. Raw retains its original `occurredAt` for attribution.
+The untrusted-data framing applies to both channels.
+
+`diagnostics.coverage.raw` is `included`, `unavailable` or `partial`. An absent
+or unavailable service, partial search, failed preparation, or exhausted Raw
+time allowance yields the existing Memory-only assembly. Raw preparation has a
+subdeadline that reserves time for Memory assembly. Prepared Raw is validated
+again after counting and authority callbacks; a failed final validation drops
+all Raw and rebuilds the Memory-only response. Packing also reserves time for
+Memory-only finalization. Optional relation/MOC previews with more than 24
+Memory candidates use the Memory-only path (`raw:'partial'`) until wider
+coalesced snapshots are supported. Late asynchronous completions
+are discarded. Hosts must keep synchronous service calls bounded and own any
+underlying operation until it settles. No permanent connection refusal is
+created by the read's timeout. `raw:false` skips Raw search entirely.

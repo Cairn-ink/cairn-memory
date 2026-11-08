@@ -94,7 +94,7 @@ function capabilities() {
     namespaceSelection: 'recent-projects-v1', readyOnly: true, maintenance: Boolean(workerData.maintenance), assembly: index.assembly,
     channels: { lexical: { enabled: true }, semantic: { configured: false, enabled: false } },
     schemas: { memory: [18, ...Array.from({ length: 14 }, (_, i) => i + 20)], card: Array.from({ length: 11 }, (_, i) => i + 23) },
-    ...(workerData.wal ? { journals: ['DELETE','WAL'], sidecarJournals: ['DELETE','WAL'], wal: {available:true} } : { journals: ['DELETE'], sidecarJournals: ['DELETE'], wal: {available:false,reason:'deferred_to_p2d'} }), unsupported: ['semantic', 'relations', 'moc', 'raw-search'] } };
+    ...(workerData.wal ? { journals: ['DELETE','WAL'], sidecarJournals: ['DELETE','WAL'], wal: {available:true} } : { journals: ['DELETE'], sidecarJournals: ['DELETE'], wal: {available:false,reason:'deferred_to_p2d'} }), unsupported: ['semantic', 'relations', 'moc'] } };
 }
 try {
   startSqlite(opening);
@@ -137,7 +137,7 @@ try {
   phase?.mark('indexImported');
   let comparison=null;
   if(workerData.memoryComparison===true){comparison=await import('./context-product-comparison.mjs');within(opening);}
-  index = openProductIndex({path:workerData.path,facade,authorize,ownerCoverage:workerData.ownerCoverage,observer,sqlite,sidecarJournalMode:workerData.sidecarJournalMode,maintenance:workerData.maintenance,counter:host.counter,semantic,operation:()=>currentOperation,attribution,
+  index = openProductIndex({path:workerData.path,facade,authorize,ownerCoverage:workerData.ownerCoverage,observer,sqlite,sidecarJournalMode:workerData.sidecarJournalMode,maintenance:workerData.maintenance,counter:host.counter,rawSearch:host.rawSearch,semantic,operation:()=>currentOperation,attribution,
     storageOptions:{sidecarHandles,memoryComparison:comparison,verificationBatching:workerData.verificationBatching===true,verificationBatchState:workerData.verificationBatchState}});
   phase?.mark('indexOpened');
   within(opening);
