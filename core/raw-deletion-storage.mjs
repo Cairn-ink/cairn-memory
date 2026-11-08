@@ -75,13 +75,19 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
           (value.possibleRoots === null || value.possibleRoots.some(candidate => same(candidate, root)))) fail('raw_lineage_unavailable');
       // Only a proven receipt root brings a Memory into this deletion's scope.
       if (![...evidence.values()].some(value => value.roots.some(candidate => same(candidate, root)))) continue;
-      // Correction replaces all receipts, and dedupe never changes the body. An
-      // older other-session receipt therefore also proves the body predates this root.
+      const olderOtherSession = receipt => Date.parse(receipt.created_at) < independentBefore &&
+        !(receipt.client === root.client && roots.keys(ns, receipt.client, receipt.session_id).includes(root.sessionKey));
+      // Insert and correction stamp their receipt group together; dedupe never
+      // rewrites the body. Check every receipt tied at the earliest stored time.
+      // Engine receipt writers use canonical ISO timestamps; age checks parse them.
+      const authorTime = receipts.reduce((minimum, receipt) => receipt.created_at < minimum ? receipt.created_at : minimum,
+        receipts[0].created_at);
+      const independentBody = receipts.filter(receipt => receipt.created_at === authorTime).every(receipt =>
+        !evidence.get(receipt.id).roots.some(candidate => same(candidate, root)) && olderOtherSession(receipt));
       // This exception is local to deletion; legacy keeps still require their proof.
       for (const receipt of receipts) {
         const value = evidence.get(receipt.id);
-        if (value.unknown && !value.legacyKeep && Date.parse(receipt.created_at) < independentBefore &&
-            !(receipt.client === root.client && roots.keys(ns, receipt.client, receipt.session_id).includes(root.sessionKey))) {
+        if (independentBody && value.unknown && !value.legacyKeep && olderOtherSession(receipt)) {
           evidence.set(receipt.id, { ...value, unknown: false, independent: true });
         }
       }

@@ -10,6 +10,10 @@ import { safetyFixture, copySqliteFixture, quiescence, ok, ns } from '../testing
 import { rationaleModel } from '../testing/rationale-model.mjs';
 import { createMemoryRuntime } from '../runtime.mjs';
 import { batch } from '../testing/episode-helpers.mjs';
+import { parse } from '../../tools/testing/vendor/acorn/acorn.mjs';
+import { config, ns as keepNamespace, request, splitRaw } from '../testing/raw-capture-fixtures.mjs';
+import { consumer, empty, episodeInput, legacyKeep } from '../testing/raw-deletion-review-fixtures.mjs';
+import { interpretation } from '../testing/episode-capture-helpers.mjs';
 
 const start = Date.parse('2020-01-01T00:00:00.000Z');
 const content = 'Synthetic saved preference.';
@@ -153,22 +157,46 @@ for (const clock of ['receipt', 'conversation', 'episode']) test(`invalid ${cloc
   remove(f, false);
 });
 
-// Pins the body invariant that makes an old surviving receipt deletion evidence.
-test('only correction writes non-null Memory content and replaces all receipts before attachment', () => {
-  const core = new URL('../', import.meta.url), runtime = readFileSync(new URL('runtime.mjs', core), 'utf8');
+// Unknown template identifiers are potential Memory tables, so dynamic SQL
+// cannot bypass the body-write invariant merely by interpolating its table.
+function assertBodyWriters(sources) {
+  const runtime = sources.get('runtime.mjs');
   const begin = runtime.indexOf('  function correct('), end = runtime.indexOf('  function forgetMutation(', begin);
   assert.ok(begin >= 0 && end > begin);
   const writes = [];
-  for (const file of readdirSync(core).filter(name => name.endsWith('.mjs'))) {
-    const source = readFileSync(new URL(file, core), 'utf8');
-    for (const update of source.matchAll(/\bUPDATE\s+(?:OR\s+\w+\s+)?(?:[\w"`\[\]]+\s*\.\s*)?(?:memories|"memories"|`memories`|\[memories\])(?:\s+(?:AS\s+)?[\w"`\[\]]+)?\s+SET\s+([\s\S]*?)(?=\bWHERE\b|;)/gi)) {
-      for (const assignment of update[1].matchAll(/\bcontent["`\]]?\s*=\s*([^,\n]+)/gi)) {
-        if (/^NULL\s*$/i.test(assignment[1])) continue;
-        assert.equal(file, 'runtime.mjs');
-        assert.ok(update.index > begin && update.index < end, 'content updates must stay inside correction');
-        writes.push(update[0]);
+  const table = String.raw`(?:\w+\s*\.\s*)?(?:memories|__dynamic__)\b`;
+  const assignments = sql => [...sql.matchAll(/\bcontent\s*=\s*([^,\n]+)/gi)]
+    .filter(match => !/^NULL\s*$/i.test(match[1]));
+  for (const [file, source] of sources) {
+    function walk(node) {
+      if (!node || typeof node.type !== 'string') return;
+      let sql;
+      if (node.type === 'Literal' && typeof node.value === 'string') sql = node.value;
+      if (node.type === 'TemplateLiteral') sql = node.quasis.map(part => part.value.cooked ?? part.value.raw).join('__dynamic__');
+      if (sql) {
+        sql = sql.replace(/"(\w+)"|`(\w+)`|\[(\w+)\]/g, (_, a, b, c) => a ?? b ?? c);
+        for (const update of sql.matchAll(new RegExp(String.raw`\bUPDATE\s+(?:OR\s+\w+\s+)?${table}(?:\s+(?:AS\s+)?\w+)?\s+SET\s+([\s\S]*?)(?=\bWHERE\b|;|$)`, 'gi'))) {
+          for (const assignment of assignments(update[1])) {
+            assert.ok(file === 'runtime.mjs' && node.start > begin && node.end < end,
+              'body write outside correction: ' + file);
+            writes.push(assignment[0]);
+          }
+        }
+        for (const insert of sql.matchAll(new RegExp(String.raw`\bINSERT(?:\s+OR\s+\w+)?\s+INTO\s+${table}([\s\S]*?)(?=;|$)`, 'gi'))) {
+          const update = insert[1].match(/\bDO\s+UPDATE\s+SET\s+([\s\S]*)/i);
+          assert.ok(!update || assignments(update[1]).length === 0, 'body write by upsert: ' + file);
+        }
+        for (const replacement of sql.matchAll(new RegExp(String.raw`\b(?:REPLACE|INSERT\s+OR\s+REPLACE)\s+INTO\s+(${table})([\s\S]*?)(?=;|$)`, 'gi'))) {
+          assert.ok(replacement[1].includes('__dynamic__') && !/\bcontent\b/i.test(replacement[2]),
+            'body write by replacement: ' + file);
+        }
+      }
+      for (const value of Object.values(node)) {
+        if (Array.isArray(value)) for (const child of value) walk(child);
+        else if (value && typeof value === 'object') walk(value);
       }
     }
+    walk(parse(source, { ecmaVersion: 2025, sourceType: 'module' }));
   }
   assert.equal(writes.length, 1, 'recognize the existing content update');
   const correction = runtime.slice(begin, end);
@@ -178,4 +206,190 @@ test('only correction writes non-null Memory content and replaces all receipts b
   assert.equal(attachments.length, 1);
   assert.ok(attachments[0].index > deletion.index + deletion[0].length);
   assert.match(correction.slice(deletion.index + deletion[0].length), /for \(const \[index, receipt\] of value\.receipts\.entries\(\)\) attach\(id, receipt, now,/);
+}
+
+function bodySources() {
+  const core = new URL('../', import.meta.url);
+  return new Map(readdirSync(core).filter(name => name.endsWith('.mjs'))
+    .map(file => [file, readFileSync(new URL(file, core), 'utf8')]));
+}
+
+test('only correction writes non-null Memory content and replaces all receipts before attachment', () => {
+  assertBodyWriters(bodySources());
+});
+
+for (const [label, source] of [
+  ['ordinary update', "db.prepare('UPDATE memories SET content = ? WHERE id = ?');"],
+  ['quoted update', 'db.prepare(\'uPdAtE "memories" SET "content" = ? WHERE id = ?\');'],
+  ['literal template update', 'db.prepare(`UPDATE memories SET content = ? WHERE id = ?`);'],
+  ['upsert', "db.prepare('INSERT INTO memories(id,content) SELECT id,content FROM incoming ON CONFLICT(id) DO UPDATE SET content=excluded.content');"],
+  ['interpolated table update', 'const table = "memories"; db.prepare(`UPDATE ${table} SET content = ? WHERE id = ?`);'],
+  ['replace', "db.prepare('REPLACE INTO memories(id,content) VALUES(?,?)');"],
+  ['insert or replace', 'db.prepare(\'INSERT OR REPLACE INTO "memories"(id,"content") VALUES(?,?)\');'],
+]) test(`body-write guard rejects ${label}`, () => {
+  const sources = bodySources(); sources.set('synthetic-writer.mjs', source);
+  assert.throws(() => assertBodyWriters(sources), /body write.*synthetic-writer\.mjs/);
+});
+
+
+async function bodyAuthorFixture(t, { matched = false, corrected = false, episodeOnly = false, sharedCorrection = false, withEpisode = false } = {}) {
+  t.mock.timers.enable({ apis: ['Date'], now: start });
+  const f = safetyFixture(t), client = RAW_CLIENTS[0];
+  let core = openMemoryCore({ path: f.path, model: rationaleModel() });
+  let body = 'Synthetic captured preference.';
+  const capture = (sessionId, eventId, messageId) => core.capture({ namespace: ns, client, sessionId, eventId,
+    messages: [{ id: messageId, role: 'user', content: body }] });
+  let memory;
+  try {
+    ok(await capture('target', 'initial-capture', matched ? 'current-message' : 'initial-message'));
+    const db = f.connect();
+    try { memory = db.prepare('SELECT id,revision FROM memories WHERE deleted=0').get(); }
+    finally { db.close(); }
+    if (corrected || sharedCorrection) {
+      t.mock.timers.setTime(start + 20_000);
+      body = 'Synthetic revised preference.';
+      const receipt = { client, sessionId: sharedCorrection ? 'confirmation' : 'target', eventId: 'revision-message', role: 'user', excerpt: body };
+      memory = ok(core.correct({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision,
+        content: body, kind: 'context', receipt })).memory;
+      if (sharedCorrection) ok(await capture('target', 'same-time-capture', 'same-time-message'));
+    }
+    t.mock.timers.setTime(start + 30_000);
+    ok(await capture('confirmation', 'confirmation-capture', 'confirmation-message'));
+  } finally { core.close(); }
+  copySqliteFixture(f.path, f.backupPath);
+  await upgradeLayoutBase({ path: f.path, backupPath: f.backupPath,
+    expected: { storeId: f.storeId, fromBase: 18, toBase: 33 }, quiescence });
+  copySqliteFixture(f.path, f.backupPath);
+  await migrateReceiptEventTime({ path: f.path, backupPath: f.backupPath,
+    expected: { storeId: f.storeId, base: 33 }, quiescence });
+  core = openMemoryCore({ path: f.path, raw: true, model: rationaleModel() });
+  f.workspace.defer(() => core.close());
+  const db = f.connect(); f.workspace.defer(() => db.close());
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 53);
+  t.mock.timers.setTime(start + 180_000);
+  if (!episodeOnly) ok(await capture('target', 'current-capture', 'current-message'));
+  let episodeId;
+  if (withEpisode || episodeOnly) {
+    const runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+    try {
+      const input = { ...batch('current-episode', body, 'target'), client };
+      input.messages[0].id = input.view.messages[0].id = 'current-message';
+      episodeId = runtime.reserveEpisodeBatch(ns, input).episodeId;
+      const key = { namespace: ns, client, eventId: input.eventId, payloadDigest: input.payloadDigest };
+      const claim = ok(core.claimAdmission({ ...key, leaseMs: 125_000 }));
+      const admission = ok(await core.finishAdmission({ ...key, token: claim.token, items: [{ content: body,
+        kind: 'context', confidence: .5, receipts: [{ client, sessionId: 'target', eventId: 'current-message', role: 'user', excerpt: body }] }] }));
+      assert.equal(admission.memories[0].id, memory.id);
+    } finally { runtime.close(); }
+  }
+  const receipts = db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at').all(memory.id);
+  assert.ok(receipts.some(row => row.session_id === 'confirmation' && Date.parse(row.created_at) === start + 30_000));
+  const authorTime = start + (corrected || sharedCorrection ? 20_000 : 0);
+  const authors = receipts.filter(row => Date.parse(row.created_at) === authorTime);
+  assert.equal(authors.length, sharedCorrection ? 2 : 1);
+  assert.ok(authors.some(row => row.session_id === 'target'));
+  const roots = createRawSourceRoots(db);
+  assert.ok(receipts.some(row => roots.receipt(ns, row).roots.length));
+  if (!corrected && !sharedCorrection) assert.equal(roots.receipt(ns, authors[0]).unknown, !matched);
+  const conversation = db.prepare('SELECT id,first_received_at FROM raw_conversations').get();
+  assert.equal(Boolean(conversation), !episodeOnly);
+  const episode = episodeId ? db.prepare('SELECT id,first_received_at FROM session_episodes WHERE id=?').get(episodeId) : null;
+  assert.equal(Date.parse((conversation ?? episode).first_received_at), start + 180_000);
+  assert.equal(ok(core.get({ namespace: ns, memoryId: memory.id })).memory.content, body);
+  return { core, db, memory, conversation, episode };
+}
+
+function deleteAuthored(f, path) {
+  if (path === 'conversation') {
+    const key = { namespace: ns, conversationId: f.conversation.id,
+      expectedRevision: f.db.prepare('SELECT revision FROM raw_conversations WHERE id=?').get(f.conversation.id).revision };
+    const preview = ok(f.core.previewDeleteConversation(key));
+    const result = ok(f.core.deleteConversation({ ...key, actionId: 'delete-authored' }));
+    for (const field of ['forgottenMemories', 'retainedMemories', 'removedReceipts', 'invalidatedEpisodes'])
+      assert.equal(result[field], preview[field]);
+  } else ok(f.core.forgetEpisode({ namespace: ns, episodeId: f.episode.id,
+    expectedRevision: f.db.prepare('SELECT revision FROM session_episodes WHERE id=?').get(f.episode.id).revision }));
+  if (f.conversation) assert.equal(f.db.prepare('SELECT count(*) n FROM raw_conversations WHERE id=?').get(f.conversation.id).n, 0);
+  else assert.equal(f.db.prepare('SELECT deleted FROM session_episodes WHERE id=?').get(f.episode.id).deleted, 1);
+  assert.equal(f.core.get({ namespace: ns, memoryId: f.memory.id }).error?.code, 'memory_not_found');
+  assert.equal(f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(f.memory.id).n, 0);
+  assert.deepEqual({ ...f.db.prepare('SELECT deleted,content FROM memories WHERE id=?').get(f.memory.id) }, { deleted: 1, content: null });
+}
+
+for (const [label, options] of [['unresolved original', {}], ['resolved original', { matched: true }],
+  ['corrected original', { corrected: true }]]) for (const path of ['conversation', 'episode'])
+  test(`body-author independence: ${label} through ${path} deletion`, async t => {
+    deleteAuthored(await bodyAuthorFixture(t, { ...options, withEpisode: path === 'episode' }), path);
+  });
+
+test('body-author independence: original capture with an episode-only root', async t => {
+  deleteAuthored(await bodyAuthorFixture(t, { episodeOnly: true }), 'episode');
+});
+
+test('all receipts tied at correction time must exclude the deleted author', async t => {
+  deleteAuthored(await bodyAuthorFixture(t, { sharedCorrection: true }), 'conversation');
+});
+
+test('unparseable low-sorting receipt clock stays dependent', async t => {
+  const f = await fixture(t);
+  f.db.prepare('UPDATE receipts SET created_at=? WHERE id=?').run('0000-invalid', f.original.id);
+  remove(f, false);
+});
+
+for (const path of ['conversation', 'episode']) test(`old finite other-root KEEP refuses through ${path} deletion`, async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: start });
+  const f = safetyFixture(t), client = RAW_CLIENTS[0], namespace = keepNamespace;
+  const model = { ...rationaleModel(), extract: empty, interpretEpisode: interpretation };
+  let core = openMemoryCore({ path: f.path, model, ...config('episode') });
+  let memoryId;
+  const db = f.connect();
+  try {
+    const sources = [];
+    for (const session of ['source-one', 'source-two']) {
+      const episode = ok(await core.capture(episodeInput(client, session))).episode;
+      sources.push(db.prepare('SELECT id FROM episode_sources WHERE episode_id=?').get(episode.id).id);
+    }
+    const runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+    try {
+      const legacy = { ...f, core, db, model };
+      const inherited = consumer(legacy, runtime, { client: RAW_CLIENTS[1], sourceIds: sources });
+      memoryId = (await legacyKeep(legacy, runtime, inherited.id, content)).admission.memories[0].id;
+    } finally { runtime.close(); }
+    t.mock.timers.setTime(start + 30_000);
+    assert.equal(ok(core.admit({ namespace, memory: { content, kind: 'context' },
+      receipts: [{ client, sessionId: 'target', eventId: 'target-message', role: 'user', excerpt: content }] })).memory.id, memoryId);
+  } finally { db.close(); core.close(); }
+  copySqliteFixture(f.path, f.backupPath);
+  await upgradeLayoutBase({ path: f.path, backupPath: f.backupPath,
+    expected: { storeId: f.storeId, fromBase: 18, toBase: 33 }, quiescence });
+  copySqliteFixture(f.path, f.backupPath);
+  await migrateReceiptEventTime({ path: f.path, backupPath: f.backupPath,
+    expected: { storeId: f.storeId, base: 33 }, quiescence });
+  core = openMemoryCore({ path: f.path, model, raw: true, ...config('episode') });
+  f.workspace.defer(() => core.close());
+  const current = f.connect(); f.workspace.defer(() => current.close());
+  assert.equal(current.prepare('PRAGMA user_version').get().user_version, 53);
+  t.mock.timers.setTime(start + 180_000);
+  const episode = ok(await core.capture(episodeInput(client, 'target'))).episode;
+  const raw = ok(await core.captureRaw(request(splitRaw('Synthetic later source.', { id: 'target-message', ordinal: 2 })[0],
+    { namespace, client, sessionId: 'target', eventId: 'later-raw' }, 'episode')));
+  const roots = createRawSourceRoots(current), internal = { ...namespace, projectId: namespace.projectId || '' };
+  const receipts = current.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at').all(memoryId);
+  const keep = roots.receipt(internal, receipts[0]);
+  assert.equal(receipts[0].created_at, new Date(start).toISOString());
+  assert.equal(keep.legacyKeep, true); assert.equal(keep.unknown, true);
+  assert.equal(keep.possibleRoots.length, 2);
+  const target = current.prepare('SELECT * FROM raw_conversations WHERE id=?').get(raw.raw.conversationId);
+  assert.ok(keep.possibleRoots.every(root => root.sessionKey !== target.session_key));
+  assert.equal(Date.parse(target.first_received_at), start + 180_000);
+  const snapshot = () => current.prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name").all()
+    .map(({ name }) => [name, current.prepare('SELECT * FROM "' + name + '"').all()]);
+  const key = { namespace, conversationId: target.id, expectedRevision: target.revision };
+  const before = snapshot();
+  const preview = core.previewDeleteConversation(key);
+  const result = path === 'conversation' ? core.deleteConversation({ ...key, actionId: 'delete-with-keep' }) :
+    core.forgetEpisode({ namespace, episodeId: episode.id,
+      expectedRevision: current.prepare('SELECT revision FROM session_episodes WHERE id=?').get(episode.id).revision });
+  assert.deepEqual([preview.error?.code, result.error?.code], ['raw_lineage_unavailable', 'raw_lineage_unavailable']);
+  assert.deepEqual(snapshot(), before);
 });
