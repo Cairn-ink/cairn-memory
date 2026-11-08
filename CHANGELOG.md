@@ -472,7 +472,7 @@ unchanged.
 
 ## Unreleased — explicit local Raw constructor
 
-- Add default-off `openMemoryCore({rawConversations})` using the existing shared
+- Initially add opt-in `openMemoryCore({rawConversations})` (superseded by [current local defaults](docs/defaults.md)) using the existing shared
   Raw/Memory/Card engine, with strict pre-open configuration, retained-read off
   mode, lineage and revision-bound deletion. Raw source/Card operations still
   require existing private-Card authority; no automatic Card creation.
@@ -483,7 +483,7 @@ unchanged.
 
 ## Unreleased — internal local Raw journal foundation
 
-- Add a default-off, model-free internal Raw journal in the existing SQLite
+- Initially add an opt-in, model-free internal Raw journal (now used by [default local capture](docs/defaults.md)) in the existing SQLite
   store: exact paged parts, immutable keyed replay identities, whole-message
   owner reservations, usage snapshots and asynchronous seal/open fences.
   Explicit internal opt-in upgrades compatible synthetic stores additively to

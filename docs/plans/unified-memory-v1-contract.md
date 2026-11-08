@@ -970,15 +970,15 @@ Data methods take `(input,token)` and return envelopes; lookup/refresh are async
 - Persist bounded scan/delta progress and resume across calls/restarts while canonical/access fences match. Changed fences reject affected staged work. Publish a new complete generation only after reconciliation and full-projection statistics finish against unchanged fences. An unrelated epoch change with no document delta advances fences without retokenizing. Each sidecar transaction atomically commits its document, postings, statistics and vector changes together with the matching checkpoint. Resume binds the base generation, projection, canonical/access fences and scan phase. An interrupted batch is either wholly replayable or wholly committed.
 - **Incomplete generations are never searchable.** Until publication return `index_unavailable`, `buildState:'rebuilding'`; unverified counts are null. Partial lexical search coverage describes only a matching published generation.
 - Full rebuilds occur only for missing, corrupt, wrong-store or incompatible sidecars. Report reason plus `rebuilding|rebuilt`; late embeddings cannot publish changed revisions. Sidecar deletion never reconstructs vectors implicitly.
-- Writable ordinary `findCandidates` performs automatic bounded lexical maintenance within its deadline, without model/money. Only explicit host refresh produces document vectors; MCP/capture never trigger it. Read-only/managed-existing context refresh refuses `invalid_input`.
+- Writable ordinary `findCandidates` performs automatic bounded lexical maintenance within its deadline, without model/money. Explicit host refresh and bounded MCP background turns produce document vectors; capture never waits for them. Read-only/managed-existing context refresh refuses `invalid_input`.
 - A dirty 10⁵-Memory projection requires O(Ncanonical+Nsidecar) comparisons: 100,000 canonical tuples plus the corresponding sidecar scan, even after one mutation; Card support checks add cost. This is not O(changes). Measure scan rows, bytes, lookups and time; no 10⁵ latency promise.
 
 ### 13.5 Embedding and host configuration
 
 - Port: `{id,revision,dimensions,normalization,embed(texts,{signal})}`, one ordered vector/input. Normalization `none|l2`, norm tolerance 1e-5. Convert to persisted float32 **before** validating dimensions, finite components, finite positive norm and normalization; repeat validation on load. Invalid vectors never publish/score; preserve lexical with semantic degradation.
-- No embedder by default. Lookup embeds only its query, after preflight; refresh alone embeds canonical documents. Never embed during capture or inside canonical/sidecar transactions. Report oversized inputs without silent truncation.
+- Core hosts configure an embedder explicitly. Ordinary MCP startup automatically selects bounded OpenAI embeddings with `OPENAI_API_KEY`; otherwise it uses BM25. Lookup embeds only its query after preflight; background or explicit refresh embeds canonical documents. Never embed during capture or inside canonical/sidecar transactions. Report oversized inputs without silent truncation.
 - Ship deterministic fake and OpenAI adapter; adapter default `text-embedding-3-small`, 1,536 dimensions; configurable model/dimensions. Configuration changes invalidate vectors and rankings; `provider-unversioned` is an honest hosted revision stamp.
-- Embedding reads existing `OPENAI_API_KEY` only with explicit `--context-embedder openai`; a key alone never constructs an embedder. Existing non-context model behavior remains unchanged.
+- The MCP adapter reads existing `OPENAI_API_KEY` for automatic OpenAI embeddings unless `--no-context-semantic` is selected. A complete explicit `--context-embedder openai` group overrides the automatic model and budgets; see [local defaults](../defaults.md).
 - Require explicit per-process request/spend caps. Reserve before dispatch; retain concurrency until actual settlement and conservative charges for unknown usage; each retry reserves separately (`adapters/local/guarded-model.mjs:35`). Accounting is not HTTP authority (`evaluation/experiment-budget/index.mjs:1018`). Bound transport bytes; honor cancellation/deadlines.
 
 **MCP startup grammar:**
@@ -1001,7 +1001,7 @@ cairn-memory context refresh --db ABS --owner ID [--project ID]
 ```
 
 - Require the entire provider group together; request caps are positive integers, USD cap positive finite, dimensions obey advertised bounds. CLI requires explicit model/dimensions despite adapter defaults. Types select a nonempty supported subset; no inferred intent. `--context-read-personal` consumes zero values, and every provider option consumes exactly one. Parsing is extended without changing legacy argument behaviour. `--check-config` performs no database opening, key lookup or provider construction.
-- MCP fixes provider/configuration/preset at startup; hosted is `rrf-k10`. Tools cannot override them. `--context-read-personal` requires project scope plus context-read opt-in.
+- MCP fixes provider/configuration/preset at startup; hosted is `rrf-k10`. Tools cannot override them. `--context-read-personal` requires project scope and enabled contextRead (now the MCP default; `--no-context-read` disables it).
 
 ### 13.6 Delivery and diagnostics
 
@@ -1100,8 +1100,7 @@ one P2; v0.9 applies all thirteen, and v0.9.1 applies the re-check's two new
 P0 (per-trial snapshot derivation; no hidden-channel claim for diagnostics)
 and one P1 (omission and race boundaries). It specifies the `contextRead()` facade
 reserved in §13.1 and nothing else. Every §13 method, default, DTO, cursor,
-snapshot, sidecar, channel and error stays byte-identical. Without
-`contextRead` opt-in nothing changes. `HR-2/` denotes the research checkout on
+snapshot, sidecar, channel and error stays byte-identical. This historical byte-parity contract applies when contextRead is explicitly disabled. Local MCP now enables contextRead by default; see [current defaults](../defaults.md). `HR-2/` denotes the research checkout on
 `experiment/hr2-assembly`.
 
 **Evidence status.** HR-2 (`HR-2/docs/plans/budgeted-assembly-hr2.md`, frozen
@@ -2183,7 +2182,7 @@ Update ordinary/managed/read gates, asset-selected managed checks, local preflig
 | `compare` | `{mode:'compare',roleKey,from:ReleaseRef|MethodVersionRef,to:same-family-ref,cursor?}` |
 | `file` | `{mode:'file',receipt,package:MethodPackageRef,path,range?:{start:Z,end:Z}}` |
 
-`task` follows U5b’s ≤4,000-unit query grammar; semantic search remains disabled by default. `history={profile:ProfileRef,limit?:N≤20,cursor?}` is allowed on now/then, including disabled registries. Cursors are ≤8,192 units and bind request/profile/generations.
+`task` follows U5b’s ≤4,000-unit query grammar; semantic search in this historical role contract was disabled by default; local MCP now enables it when a provider key is configured ([current defaults](../defaults.md)). `history={profile:ProfileRef,limit?:N≤20,cursor?}` is allowed on now/then, including disabled registries. Cursors are ≤8,192 units and bind request/profile/generations.
 
 Core success is `{ok:true,value:{metered,diagnostics}}`. Diagnostics reuse §15.8.4, with candidate diagnostics null when no search occurs. The metered object always contains:
 

@@ -116,7 +116,10 @@ function keepRequest(model, request, deadline) {
 export async function captureMessages({ model, input, operations, captureQualification,
   captureSourcePolicy, captureRationale, captureEvidence, deadline, episodeRun, rawRegistration, runtime, ns }) {
   deadline?.check();
+  const receivedAt = new Date().toISOString();
   let snapshot = episodeRun?.snapshot ?? captureSnapshot(input, captureQualification, captureSourcePolicy);
+  if (!episodeRun) snapshot = { ...snapshot, messages: snapshot.messages.map(message =>
+    ({ ...message, occurredAt: message.occurredAt ?? receivedAt })) };
   if (!episodeRun && snapshot.messages.some(message => message.occurredAt !== undefined)) {
     snapshot = runtime.captureSnapshot(ns, snapshot, captureQualification, captureSourcePolicy);
   }
@@ -196,7 +199,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
       : await qualifyExtractedItems(model, items, deadline, qualificationReport, assertSources);
     // Join only each receipt's own trusted message; session clocks and Raw never enter here.
     for (const item of items) {
-      const times = item.receipts.map(receipt => rawRegistration ? null :
+      const times = item.receipts.map(receipt =>
         snapshot.messages.find(message => message.id === receipt.eventId)?.occurredAt ?? null);
       if (times.some(time => time !== null)) item.receiptTimes = times;
     }

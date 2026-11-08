@@ -74,7 +74,8 @@ The [context host](context-read-local.md) adds two explicit MCP read tools and a
 separate bounded document-refresh command. Startup fixes provider, preset and
 read set. Tool arguments cannot select authority, configuration or another
 namespace; returned source text remains untrusted data. Semantic query embedding
-is off by default; a key alone does not construct an embedder. Known coverage
+is automatically enabled by `OPENAI_API_KEY` in ordinary MCP startup;
+`--no-context-semantic` selects BM25 only. Known coverage
 gaps send no query request. Hosted configuration uses frozen `rrf-k10`.
 
 The OpenAI adapter uses reviewed frozen accounting inputs, not live price quotes
@@ -2305,13 +2306,10 @@ Limits:
 
 ## Internal Raw journal P1: synthetic foundation only
 
-The [internal local Raw journal](raw-local-journal.md) is a default-off storage
-and read foundation tested with synthetic local fixtures. It does not expose
-public Raw capture, installed hooks, Raw → Card support or source-deletion
-integration. It establishes no production readiness or semantic score, and does
-not authorize real transcript retention, operational migration or deployment.
-The remaining packets and final verification outcomes belong in the
-[local Raw V1 completion plan](plans/raw-local-v1-completion.md).
+The [local Raw journal](raw-local-journal.md) retains submitted captures by
+default and maintains a derived lexical index. Disable retention with `raw:false`
+or `--no-raw`. This does not install transcript hooks, enable hosted Raw, or
+establish a semantic-quality score. See [defaults and costs](defaults.md).
 
 Retained failures under simultaneous core, generic and package test load:
 

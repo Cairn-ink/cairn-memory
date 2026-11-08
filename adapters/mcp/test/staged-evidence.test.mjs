@@ -83,7 +83,7 @@ test('check-config distinguishes keyless access and staging without opening a da
 test('discovery preserves defaults and exposes only strict bound local management tools with explicit access', { timeout: 30000 }, async t => {
   for (const flags of [[], ['--capture-qualification', 'source-bound-v1'], ['--capture-qualification', 'source-bound-v2'], access, staging]) {
     const h = await host(t, database(), { flags, fake: false }); const tools = (await h.client.listTools()).tools;
-    assert.equal(tools.length, flags === access ? 7 : flags === staging ? 8 : flags.length ? 6 : 5);
+    assert.equal(tools.length, flags === access ? 10 : flags === staging ? 11 : flags.length ? 9 : 8);
     if (flags === access || flags === staging) for (const name of ['inspect_capture_evidence', 'discard_capture_evidence']) {
       const tool = tools.find(tool => tool.name === name);
       assert.deepEqual(Object.keys(tool.inputSchema.properties), ['batchId']); assert.equal(tool.inputSchema.additionalProperties, false);

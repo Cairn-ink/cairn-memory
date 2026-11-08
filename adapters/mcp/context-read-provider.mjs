@@ -4,12 +4,16 @@ import { IDENTITY, qualification, refusal } from '../local-embedder/common.mjs';
 import { LOCAL_OPERATIONAL_CODES } from '../../core/context-read-local-status.mjs';
 import { createOpenAIEmbedder, estimateEmbeddingUsd, embeddingPrice } from '../openai/embedding.mjs';
 
-/** Key lookup is conditional on an explicit complete provider group. */
+export const DEFAULT_CONTEXT_PROVIDER = Object.freeze({ provider: 'openai', model: 'text-embedding-3-small',
+  dimensions: 1536, maxRequests: 1000, maxUsd: 1 });
+
+/** The adapter alone reads credentials; absent credentials select local BM25. */
 export function createContextEmbedding(configuration, env = process.env) {
-  if (!configuration) return undefined;
+  configuration ??= DEFAULT_CONTEXT_PROVIDER;
   if (configuration.provider !== 'openai') throw Error('invalid_mcp_configuration');
-  embeddingPrice(configuration.model);
   const apiKey = env.OPENAI_API_KEY;
+  if (!apiKey) return undefined;
+  embeddingPrice(configuration.model);
   const embedder = createOpenAIEmbedder({ apiKey, model: configuration.model, dimensions: configuration.dimensions });
   return Object.freeze({ embedder, policy: Object.freeze({ family: 'hosted', maxRequests: configuration.maxRequests,
     maxUsd: configuration.maxUsd, maxConcurrent: 1, estimateUsd: texts => estimateEmbeddingUsd(texts, { model: configuration.model }) }) });

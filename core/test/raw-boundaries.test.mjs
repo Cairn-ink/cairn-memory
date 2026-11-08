@@ -198,12 +198,14 @@ test('P1-04 real child processes race one owner cap and leave persisted reservat
   assert.equal(usage.clients.reduce((n,client)=>n+client.savedBytes+client.reservedBytes,0),12);
 });
 
-test('P1-10 schema module is in artifact manifest; source public import advertises no raw capability', async t => {
+test('P1-10 artifact includes Raw; default construction enables it and raw:false disables it', async t => {
   const manifest = JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url)));
   assert.ok(manifest.includes('core/raw-schema.mjs'));
-  // Installed public opt-in needs the journal; omission still adds no facade.
+  // The default constructor needs the installed journal; explicit off remains available.
   assert.equal(manifest.includes('core/raw-journal.mjs'),true);
   const { openMemoryCore } = await import(pathToFileURL(join(process.cwd(),'core/contract.mjs')));
   const workspace = createTestWorkspace(t), core = openMemoryCore({ path: join(workspace.path,'plain.sqlite') });
-  assert.equal(core.getConversation,undefined); core.close();
+  assert.equal(typeof core.getConversation,'function'); await core.close();
+  const disabled = openMemoryCore({ path: join(workspace.path,'disabled.sqlite'), raw:false });
+  assert.equal(disabled.getConversation,undefined); disabled.close();
 });

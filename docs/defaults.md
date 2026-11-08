@@ -1,0 +1,77 @@
+# Local engine defaults
+
+A local install retains submitted captures as Raw and maintains a searchable
+index. The MCP server exposes `find_memory_candidates`,
+`fetch_memory_candidate_evidence`, and `read_memory_context` alongside the old
+recall tools. Prefer these contextRead tools for memory reads. The default dated read
+combines Memory with eligible Raw evidence; its default budget is
+6,000 local tokens and 24 items.
+
+These defaults apply to `openMemoryCore` and the ordinary local MCP server,
+including the engine registered by `setup --local`. They do not install a
+transcript hook, start capturing a conversation, or enable hosted processing.
+Only messages actually submitted to capture enter Raw. The separately selected
+retained-profile server is a read-only host with its own authority boundaries.
+
+| Capability | What it does | Default | Cost | Programmatic option / CLI switch |
+| --- | --- | --- | --- | --- |
+| Raw retention | Saves submitted capture messages through the Raw journal, with lineage and existing exclusion/forgetting controls | On | Local plaintext disk, default 200,000,000-byte owner cap; no extra model call | `raw:false` / `--no-raw`; omit to enable. For a custom cap, sealing port or policy, use `rawConversations:{mode:'raw-v1',capBytes,port,readPolicy}`. `mode:'off'` disables saving while retaining management APIs. |
+| Raw search | Searches retained Raw using a separate derived index and canonical authorization checks | On when Raw retention is enabled | Local plaintext postings and metadata, up to 512 MiB per index; lexical indexing makes no model call | `rawSearch:false` / `--no-raw-search`; omit to enable. Turning Raw off prevents new saving; existing retained data is not erased. |
+| Raw maintenance | Builds and refreshes the index after captures, with bounded background work | On with Raw search | One non-overlapping quantum per second, up to 16 rows / 25 ms; existing one-second publication cadence still applies | Follows `rawSearch` / `--no-raw-search`. `close()` stops scheduling and joins work. Capture never waits for index publication. |
+| contextRead tools | Finds candidates, refetches evidence and assembles bounded memory context | On in MCP | Local reads and tokenizer work; no language-model call | MCP option `contextRead:false` / `--no-context-read`; enable with `contextRead:'context-read-v1'` / `--context-read context-read-v1`. Core hosts supply `contextRead:{version:'context-read-v1',authority,counter,...}` to bind their own read authority. |
+| Three-layer read | Returns Memory plus eligible Raw excerpts with dates | On for the default contextRead presentation | Local reads and a 6,000-token / 24-item response budget; no model call | Follows contextRead; `--no-context-read` removes the tools. There is no separate presentation CLI flag. |
+| Semantic search | Adds embedding similarity to lexical candidate search | On in MCP when `OPENAI_API_KEY` is configured; otherwise BM25 only | Query and background document embedding calls. Automatic OpenAI configuration: `text-embedding-3-small`, 1,536 dimensions, at most 1,000 requests and US$1 estimated embedding spend per server process, concurrency 1 | `contextSemantic:false` / `--no-context-semantic`; each read can also set `semantic:false`. Core hosts supply `contextRead.embedder` and `policy`; MCP hosts supply `contextEmbedding`. Explicit provider CLI groups override automatic settings. |
+| Dated reads | Labels evidence with its event date rather than relying only on generated summaries | On for the default contextRead presentation | Local timestamp reads; no provider calls | Follows contextRead; core callers can select `representation:'representation-v2'` for the legacy undated representation. No separate CLI flag. |
+| Event time | Uses the capture receive time for messages without `occurredAt`; an explicit canonical UTC instant wins | On | Timestamp metadata only | Set message `occurredAt` to override. There is no separate CLI switch. The Raw schema has no derived-time marker, so no marker migration is introduced. Existing unknown historical times are not backfilled. |
+| Ordered reconciliation | Reconciles successive captures in a caller-declared causal stream | Off | One additional model call per capture that requires reconciliation | Caller supplies `causal:{streamId,sequence}` to `capture()`; omit to disable. MCP has no causal-sequence flag or argument. |
+| Relation read sources | Adds eligible one-hop relations as retrieval sources | Off | Bounded local graph reads; no extra model call during reads | Core `contextRead.sources:['relations-one-hop-v1']`; MCP `contextReadSources:['relations-one-hop-v1']` / `--context-read-sources relations-one-hop-v1`. Omit to disable. |
+| MOC read sources | Uses maps of content to find evidence | Off | Bounded local organization reads; no extra model call during reads | Core `contextRead.sources:['moc-v1']`; MCP `contextReadSources:['moc-v1']` / `--context-read-sources moc-v1`. Omit to disable. Both source IDs may be selected together. |
+| Old recall | Lets a model browse a catalog and rank current memories | On, available alongside contextRead | Selection/ranking model calls; needs a model provider and has its existing budgets | Core `recall()` / MCP `recall_memory`. Use the contextRead tools to avoid those recall model calls. There is no separate tool-removal switch. |
+| Submitted source-qualified capture | Extracts, qualifies and files explicitly submitted messages | Off in MCP; core `capture()` remains callable | Extraction, qualification and classification model calls when configured; Raw disk retention is independent | `captureQualification:'source-bound-v1'` or `'source-bound-v2'` / `--capture-qualification source-bound-v1` or `--capture-qualification source-bound-v2`; omit to remove the MCP capture tool. |
+| Staged capture evidence | Keeps bounded capture evidence for inspection and recovery | Off | Local disk, bounded 24-hour evidence retention; no extra model call for staging | `captureEvidence:'staged-v1'` / `--capture-evidence staged-v1`, requiring source-bound-v2 capture. Omit to disable new staging. `captureEvidenceAccess:'staged-v1'` / `--capture-evidence-access staged-v1` enables only management tools. |
+| Proposed rationale | Adds a proposed rationale pass after source-qualified capture | Off | Additional bounded model work and stored rationale | `captureRationale:'source-bound-v1'` / `--capture-rationale source-bound-v1`, requiring source-bound-v2 capture; omit to disable. |
+| Classification recovery | Inspects capture admission and explicitly classifies inspected unfiled memories | Off in MCP | Inspection is local; explicit classification calls a model | `classificationRecovery:'guarded-v1'` / `--classification-recovery guarded-v1`; omit to disable these tools. |
+| Whole-source snapshot tool | Reads a bounded current-admitted source set without ranking | Off in MCP | Local reads and token counting; no provider call | Server `sourceSnapshot:'current-admitted-v1'` / `--source-snapshot current-admitted-v1`; omit to remove the tool. Core `sourceSnapshot()` remains available. |
+| Legacy source-only recall presentation | Returns retained receipts instead of generated summaries in old recall | Off | Existing model-guided recall costs plus larger source responses | Server `recallContext:'source-evidence'` / `--recall-context source-evidence`; omit to disable the default. Core/per-call `contextMode:'source-evidence'` selects it for one call. |
+| Session interpretation access | Reads and manages retained session interpretations and next steps | Off in MCP | Local reads; token counting for start context | `sessionEpisodesAccess:'episode-v1'` / `--session-episodes-access episode-v1`; omit to remove the tools. |
+| Session interpretation generation | Interprets messages from a separately trusted producer | Off | Additional interpretation model calls and bounded retained evidence | Core `sessionEpisodes:{mode:'episode-v1',draftEveryBatches:8}` with source-bound-v2 capture and staged evidence; omit to disable. MCP `--session-episodes episode-v1` records configuration but does not install that producer. |
+| Private authored Cards | Reads, drafts and organizes authored Cards with supporting sources | Off for authoring tools; eligible retained Cards can be read through authorized contextRead | Local plaintext disk and reads; no automatic model call | Server `privateCards:'local-v1'` / `--private-cards local-v1`; omit to remove authoring tools. Core hosts configure a `privateCards` authority port. Local confirmation uses its separate terminal review. |
+| Method packages | Stores and reads reusable method text and bindings | Off | Local plaintext disk; no execution or model call from reading a method | Server `methodPackages:'local-v1'` / `--method-packages local-v1`; omit to disable the tools. Core hosts configure a method-package authority port. |
+| Assets | Stores asset versions and reads bounded derivatives | Off | Local blobs, derivatives and processing; no automatic model call | Server `assets:'local-v1'` / `--assets local-v1`; omit to disable the tools. Core hosts configure an asset authority port. |
+| Role profiles | Resolves role-bound methods and role context | Off | Local profile storage and reads; no extra read-time model call | Server `roleProfiles:'local-v1'` / `--role-profiles local-v1`, requiring method packages and contextRead with matching read sets; omit to disable. |
+| Card method dependencies | Reviews authored Card dependencies on method versions | Off for authoring; existing declarations remain enforced | Local dependency records and reads; no model call | Server `privateCardCurrentDependencies:'local-v1'` / `--private-card-current-dependencies local-v1`, requiring private Cards and method packages; omit to disable authoring tools. |
+| Personal reads from a project server | Expands the fixed read set to the same owner's personal namespace | Off | More eligible local data; configured semantic refresh may embed that data | `contextReadPersonal:true` / `--context-read-personal`; method reads use `methodReadPersonal:true` / `--method-read-personal`. Both require project scope; omit to keep project-only reads. |
+| Local embedding model | Uses an explicitly installed local embedding pack | Off; no model is downloaded automatically | Local model disk and CPU; no embedding API charge | Use the complete `--context-embedder local` group, or supply a local `contextRead.embedder` and policy. `--no-context-semantic` disables semantic reads; see [the local model guide](local-embedder-bge-m3.md). |
+| Memory decision review | Holds selected inferred decisions for explicit review | Off | Local review metadata; existing capture model work | Core `decisionReview:'required-v1'`; omit to disable new review holds. There is no MCP startup flag. |
+| Attested content-safety layout | Enables the separately versioned content-safety schema and suppression facts | Off for new stores unless explicitly selected; installed protections remain enforced | Local schema/fact metadata; no provider call | Core `contentSafety:'s2h-v1'` for supported new stores; existing stores use the explicit offline safety migration. There is no default-on migration CLI flag. |
+| Automatic transcript hooks | Submits selected conversation messages without an explicit MCP capture call | Off in the standalone MCP server | When separately installed: Raw disk plus configured capture model calls | No MCP flag installs hooks. Use the separate documented local/client setup and its enable/disable controls. |
+
+Raw and its derived index are local plaintext by default, including vocabulary,
+metadata and any vectors in sidecars. A custom Raw sealing port changes Raw
+storage, not the plaintext nature of the local search index. Keep the database,
+sidecars and backups private. Excluded, suppressed, forgotten or unauthorized
+Raw must never be delivered; owner and namespace boundaries apply to both Raw
+and Memory. Turning a feature off stops future work and does not erase retained
+files or backups.
+
+The embedding limits cover a single server process and its configured embedding
+budget; they are not an account-wide spending cap. Without a key, startup and
+BM25 reads need no provider and make no embedding calls. The installer does not
+copy credentials into registrations or generated files. `--check-config` makes
+no provider request and does not open the database.
+
+For a minimal keyless server:
+
+```sh
+node adapters/mcp/cli.mjs --db /absolute/private/memory.sqlite --owner local-user
+```
+
+For local reads without Raw retention or embedding calls:
+
+```sh
+node adapters/mcp/cli.mjs --db /absolute/private/memory.sqlite --owner local-user \
+  --no-raw --no-context-semantic
+```
+
+See [context reads](context-read-local.md), [Raw retention](raw-local-journal.md),
+and [standalone MCP](standalone-mcp.md) for the detailed API and control contracts.

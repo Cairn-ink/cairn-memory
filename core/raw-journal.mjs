@@ -317,7 +317,8 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     }
     const row = usageRow(ownerId), savedBytes = row?.saved_bytes ?? 0, reservedBytes = row?.reserved_bytes ?? 0;
     const cap = row?.cap_bytes ?? capBytes, remainingBytes = Math.max(0,cap-savedBytes-reservedBytes);
-    const clients = RAW_CLIENTS.map(client => {
+    const knownClients = db.prepare('SELECT DISTINCT client FROM raw_conversations WHERE owner_id=? ORDER BY client').all(ownerId).map(row => row.client);
+    const clients = [...new Set([...RAW_CLIENTS, ...knownClients])].map(client => {
       const counts = db.prepare(`SELECT count(*) conversation_count FROM raw_conversations WHERE owner_id=? AND client=?`).get(ownerId,client);
       const usage = db.prepare(`SELECT coalesce(sum(m.reserved_bytes),0) reserved_bytes FROM raw_messages m JOIN raw_conversations c ON c.id=m.conversation_id
         WHERE c.owner_id=? AND c.client=?`).get(ownerId,client);

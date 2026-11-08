@@ -32,6 +32,14 @@ test('C06 pinned independent 94c1076f wire fixtures, controlled identity/clock/e
   schema.properties = insertAfter(schema.properties, 'policy', {
     representation: { type: 'string', enum: ['representation-v2', 'representation-v2-dated'] },
   });
+  // Keep the legacy bytes except these reviewed host presentation changes.
+  for (const host of ['defaultHost', 'contextHost']) for (const tool of expected[host].tools.tools) {
+    tool.description = tool.description
+      .replace('Retrieve relevant current memories and source receipts.', 'Legacy model-assisted recall; prefer find_memory_candidates and read_memory_context. Retrieve relevant current memories and source receipts.')
+      .replace('Search the fixed host read set. Semantic defaults to false; explicit semantic true', 'Preferred memory read: search the fixed host read set. Semantic defaults on with a configured embedding provider; semantic false selects BM25 only. Semantic lookup')
+      .replace('Assemble whole canonical bodies and sources within an exact local token budget. Semantic defaults to false; explicit semantic true', 'Preferred memory read: assemble dated Memory and Raw sources within an exact local token budget. Semantic defaults on with a configured embedding provider; semantic false selects BM25 only. Semantic lookup');
+    if (tool.name === 'read_memory_context') tool.inputSchema.properties.maxTokens.maximum = 6000;
+  }
   const compare = actual => assert.equal(actual, JSON.stringify(expected, null, 2) + '\n');
   const actual = readFileSync(report, 'utf8');
   compare(actual);
@@ -47,7 +55,7 @@ test('C06 source startup grammar, refusals and check-config side-effect freedom'
   }
   for (const value of ['', ',', 'moc-v1,', ',moc-v1', 'moc-v1,moc-v1', 'unknown', ' moc-v1', 'moc-v1,,relations-one-hop-v1'])
     assert.throws(() => parseConfiguration([...base, ...flag, '--context-read-sources', value]), /invalid_mcp_configuration/);
-  for (const tail of [['--context-read-sources', 'moc-v1'], [...flag, '--context-read-sources'], [...flag, '--context-read-sources', 'moc-v1', '--context-read-sources', 'moc-v1'],
+  for (const tail of [['--no-context-read', '--context-read-sources', 'moc-v1'], [...flag, '--context-read-sources'], [...flag, '--context-read-sources', 'moc-v1', '--context-read-sources', 'moc-v1'],
     [...flag, '--retained-raw-profile', '/synthetic/profile', '--context-read-sources', 'moc-v1']])
     assert.throws(() => parseConfiguration([...base, ...tail]), /invalid_mcp_configuration/);
   const workspace = createTestWorkspace(t, { prefix: 'u5c2-config-' }), path = join(workspace.path, 'absent', 'store.sqlite'), logs = [];
@@ -59,7 +67,7 @@ test('C06 source startup grammar, refusals and check-config side-effect freedom'
   assert.equal(logs[0].databaseOpened, false); assert.equal(existsSync(join(workspace.path, 'absent')), false);
   for (const contextReadSources of [[], ['unknown'], ['moc-v1', 'moc-v1'], 'moc-v1'])
     assert.throws(() => createCairnServer({ path, namespace: ns, contextRead: 'context-read-v1', contextReadSources }), /invalid_mcp_configuration/);
-  assert.throws(() => createCairnServer({ path, namespace: ns, contextReadSources: ['moc-v1'] }), /invalid_mcp_configuration/);
+  assert.throws(() => createCairnServer({ path, namespace: ns, contextRead:false, contextReadSources: ['moc-v1'] }), /invalid_mcp_configuration/);
 });
 test('C05/C08 real SDK tools/list narrowing, no extra tools, metadata-only diagnostics and compact fetch', async t => {
   const f = sourcesFixture(t); const seed = f.admit('needle direct'), endpoint = f.admit('Unmatched endpoint'); await f.relate(endpoint, seed);

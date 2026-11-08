@@ -64,11 +64,11 @@ async function invalid(client, args) {
 test('opt-in read tool is strict, keyless and bound to the configured namespace/client', async (t) => {
   const path = pathFor(t);
   const plain = await host(t, path, undefined, {});
-  assert.equal((await plain.client.listTools()).tools.length, 5);
+  assert.equal((await plain.client.listTools()).tools.length, 8);
   await plain.close();
   const h = await host(t, path, undefined);
   const tools = (await h.client.listTools()).tools;
-  assert.equal(tools.length, 7);
+  assert.equal(tools.length, 10);
   const tool = tools.find(({ name }) => name === 'inspect_capture_admission');
   assert.ok(tool); assert.equal(tool.annotations.readOnlyHint, true);
   assert.equal(tool.annotations.openWorldHint, false);
