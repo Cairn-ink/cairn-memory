@@ -26,7 +26,7 @@ export function workspace(t) {
 export async function episodeHost(t, path, { home, readClient, ns = namespace, cli = false, flags = [], extraEnv = {} } = {}) {
   assert.ok(home, 'Tests must pass home explicitly');
   const args = cli ? [fileURLToPath(new URL('../../cli.mjs', import.meta.url)), '--db', path,
-    '--owner', ns.ownerId, ...(ns.scope === 'project' ? ['--project', ns.projectId] : []), ...flags]
+    '--owner', ns.ownerId, ...(ns.scope === 'project' ? ['--project', ns.projectId] : []), '--no-raw', ...flags]
     : [fileURLToPath(import.meta.url), path, JSON.stringify(ns), readClient ?? ''];
   const transport = new StdioClientTransport({ command: process.execPath, args,
     env: { HOME: home, OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1', ...extraEnv }, stderr: 'pipe' });
@@ -54,7 +54,7 @@ export async function seed(path, { ns = namespace, count = 3, client = 'syntheti
     return { type: field(quick ? 'quick-one-off-question' : 'work'), language: 'mixed', gist: field('Synthetic 中文 session'),
       outcome: null, nextStep: field('Review synthetic evidence'), disposition: null };
   } };
-  const core = openMemoryCore({ path, captureQualification: 'source-bound-v2', captureEvidence: 'staged-v1',
+  const core = openMemoryCore({ path, raw: false, captureQualification: 'source-bound-v2', captureEvidence: 'staged-v1',
     sessionEpisodes: { mode: 'episode-v1' }, model });
   try {
     const inputs = [], ids = [];
@@ -76,7 +76,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     if (process.env.SYNTHETIC_KEEP === '1' && ['extract', 'qualifyCandidates', 'classify'].includes(method)) continue;
     model[method] = () => { process.stderr.write('forbidden_model_call\n'); assert.fail('Model generation forbidden'); };
   }
-  const server = createCairnServer({ path: process.argv[2], namespace: JSON.parse(process.argv[3]), model,
+  const server = createCairnServer({ path: process.argv[2], namespace: JSON.parse(process.argv[3]), model, raw: false,
     sessionEpisodesAccess: 'episode-v1', ...JSON.parse(process.env.SYNTHETIC_OPTIONS ?? '{}'), ...(process.argv[4] ? { readClient: process.argv[4] } : {}) });
   const handle = serveStdio(() => server, { transport: new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: 65536 }) });
   process.stdin.once('end', () => { void handle.close(); });

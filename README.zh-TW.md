@@ -7,7 +7,7 @@
 
 # Cairn Memory
 
-[English README](README.md) · **繁體中文**
+[English README](README.md) · **繁體中文** · [預設功能、成本與開關](docs/defaults.md)
 
 **保存跨次 AI 工作的重要背景，需求改變時也能修改。**
 
@@ -106,3 +106,9 @@ MCP 工具，或登入 cairn.ink 使用雲端自動記憶，也可用 `setup --l
 本機模式目前不會自動保存或回想。
 
 更多安裝、開發與技術文件，請看 [English README](README.md)。
+
+本機 MCP server 和安裝程式預設開啟 Raw 保存、Raw 搜尋、附日期的三層
+contextRead 與讀取工具。可用 `--no-raw`、`--no-raw-search`、
+`--no-context-read` 分別關閉。Library 的 `openMemoryCore` 預設不保存 Raw，
+需要時傳入 `raw:true`。現有資料庫的配置若無法支援 Raw，會以 Memory-only
+模式執行。完整成本與開關見[預設功能說明](docs/defaults.md)。

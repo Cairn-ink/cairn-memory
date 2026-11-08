@@ -48,7 +48,7 @@ const model = {
     })) };
   },
 };
-const core = openMemoryCore({ path: databasePath, model });
+const core = openMemoryCore({ path: databasePath, model, raw: false });
 const ok = (result) => {
   assert.equal(result.ok, true, JSON.stringify(result));
   return result.value;

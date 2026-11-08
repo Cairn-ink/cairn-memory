@@ -45,8 +45,10 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   // The side-effect-free refusal registry adds one module to both product closures.
   // The private checkpoint wall-cost estimator adds one Worker-only module. Card lineage adds the retained-lineage
   // implementation and exact base/lineage DDL, plus the offline installer's observation/classification dependencies.
-  assert.equal(expected.length, 130, 'private_maintenance_admission_closure_pin');
+  // Include three-layer assembly and the private sidecar attestation module.
+  assert.equal(expected.length, 131, 'private_maintenance_admission_closure_pin');
   assert.ok(expected.includes('core/context-product-checkpoint-cost.mjs'));
+  assert.ok(expected.includes('core/context-read-three-layer.mjs'));
   for (const file of ['core/card-lineage.mjs', 'core/card-lineage-schema.mjs', 'core/card-lineage-base-schema.mjs',
     'core/content-safety-observations.mjs', 'core/content-safety-classifier.mjs']) assert.ok(expected.includes(file), file);
   assert.ok(expected.includes('core/context-maintenance-turn.mjs'));

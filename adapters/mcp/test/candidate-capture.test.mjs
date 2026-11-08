@@ -58,7 +58,7 @@ test('M1/M2 both capture modes expose identical six strict tools, default remain
   const lists = [];
   for (const mode of [null, 'source-bound-v1', 'source-bound-v2']) {
     const h = await host(t, database(), { mode }); const tools = (await h.client.listTools()).tools;
-    assert.equal(tools.length, mode ? 6 : 5);
+    assert.equal(tools.length, mode ? 9 : 8);
     if (mode) lists.push(tools.map(({ name, inputSchema }) => ({ name, inputSchema })));
     for (const tool of tools) assert.equal(tool.inputSchema.additionalProperties, false);
     await h.close();

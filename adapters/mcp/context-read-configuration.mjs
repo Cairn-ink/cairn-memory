@@ -3,7 +3,7 @@ import { identifier } from '../../core/validation.mjs';
 
 export const CONTEXT_PROVIDER_FLAGS = Object.freeze(['--context-embedder', '--context-embed-model',
   '--context-embed-dimensions', '--context-embed-max-requests', '--context-embed-max-usd', '--context-embed-pack', '--context-embed-threads']);
-export const CONTEXT_FLAGS = Object.freeze(['--context-read', '--context-read-personal', ...CONTEXT_PROVIDER_FLAGS]);
+export const CONTEXT_FLAGS = Object.freeze(['--context-read', '--no-context-read', '--no-context-semantic', '--context-read-personal', ...CONTEXT_PROVIDER_FLAGS]);
 const invalid = () => { throw Error('invalid_mcp_configuration'); };
 export function contextProviderConfiguration(values, required = false) {
   const selected = CONTEXT_PROVIDER_FLAGS.filter(flag => values.has(flag));
@@ -32,14 +32,14 @@ export function contextProviderConfiguration(values, required = false) {
     maxRequests: integer('--context-embed-max-requests', Number.MAX_SAFE_INTEGER), maxUsd });
 }
 export function contextHostConfiguration(values) {
-  const enabled = values.has('--context-read'), personal = values.has('--context-read-personal');
-  if (enabled && values.get('--context-read') !== 'context-read-v1' || personal && (!enabled || !values.has('--project'))) invalid();
+  const enabled = !values.has('--no-context-read'), personal = values.has('--context-read-personal');
+  if (values.has('--context-read') && (!enabled || values.get('--context-read') !== 'context-read-v1') || personal && (!enabled || !values.has('--project'))) invalid();
   const provider = contextProviderConfiguration(values);
-  if (provider && !enabled) invalid();
-  if (!enabled) return {};
+  if (provider && (!enabled || values.has('--no-context-semantic'))) invalid();
+  if (!enabled) return { contextRead: false };
   const path = values.get('--db');
   if (typeof path !== 'string' || !isAbsolute(path) || resolve(path) !== path || path.includes('\0')) invalid();
-  return { contextRead: 'context-read-v1', ...(personal ? { contextReadPersonal: true } : {}),
+  return { contextRead: 'context-read-v1', ...(values.has('--no-context-semantic') ? { contextSemantic: false } : {}), ...(personal ? { contextReadPersonal: true } : {}),
     ...(provider ? { contextProvider: provider } : {}) };
 }
 function parseRefresh(args) {

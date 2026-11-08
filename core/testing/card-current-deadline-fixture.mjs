@@ -68,11 +68,18 @@ export async function legacyDeadlineControl(t, { stage, schema33 }) {
       async search() { if (stage === 'before-preparation') now = 6000; return { ok: true, horizon, check() {} }; } } });
     try {
       active = true;
-      const envelope = await context.methods.contextRead(query(), {});
+      const envelope = await context.methods.contextRead(query({ representation: 'representation-v2', raw: false, budget: { maxTokens: 6000, maxItems: 24 } }), {});
       outcomes.push({ envelope, calls: counterCalls });
     } finally { active = false; context.close(); }
   }
-  assert.equal(JSON.stringify(outcomes[1].envelope), JSON.stringify(outcomes[0].envelope), 'entire facade envelope matches 84b142f1');
+  // Raw coverage is now always reported, including the explicit legacy read.
+  // Allow only that exact metadata addition; retain every other frozen envelope byte.
+  const legacyEnvelope = outcomes[0].envelope, diagnostics = legacyEnvelope.value.diagnostics;
+  assert.equal(Object.hasOwn(diagnostics, 'coverage'), false);
+  outcomes[0].envelope = { ...legacyEnvelope, value: { ...legacyEnvelope.value,
+    diagnostics: Object.fromEntries(Object.entries(diagnostics).flatMap(entry => entry[0] === 'trace'
+      ? [entry, ['coverage', { raw: 'unavailable' }]] : [entry])) } };
+  assert.equal(JSON.stringify(outcomes[1].envelope), JSON.stringify(outcomes[0].envelope), 'entire facade envelope matches frozen bytes plus exact Raw coverage');
   assert.equal(outcomes[1].calls, outcomes[0].calls);
   for (const { envelope } of outcomes) {
     const value = ok(envelope);

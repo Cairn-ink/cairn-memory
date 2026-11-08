@@ -1,4 +1,4 @@
-// Runs unchanged against a separate 94c1076f tree and the candidate tree.
+// Exercises the current tree against the frozen 94c1076f wire oracle.
 import crypto from 'node:crypto';
 import { syncBuiltinESMExports } from 'node:module';
 import { performance } from 'node:perf_hooks';
@@ -26,7 +26,7 @@ const grants = new WeakMap(), token = {}, authority = { authorize(request, suppl
   if (supplied !== token) return null; const grant = {}, { input, ...binding } = request; grants.set(grant, binding); return grant;
 }, isCurrent(grant) { return grants.has(grant) ? { ...grants.get(grant), accessGeneration: 1 } : null; } };
 const counter = { id: 'synthetic-unit', countTokens: () => 1 }, query = { readSet: [ns], query: 'needle', types: ['memory'], intent: 'current' };
-const plain = openMemoryCore({ path });
+const plain = openMemoryCore({ path, raw:false });
 const result = { base: '94c1076ff64ade20cc49a246bb3fef2e5bd74173', defaultSurface: Object.keys(plain).sort(),
   defaultEmpty: plain.list({ namespace: ns }), defaultRefusal: plain.list({ namespace: ns, unknown: true }) };
 for (let i = 0; i < 30; i++) {
@@ -35,7 +35,7 @@ for (let i = 0; i < 30; i++) {
   if (!value.ok) throw Error(JSON.stringify(value));
 }
 plain.close();
-const core = openMemoryCore({ path, contextRead: { version: 'context-read-v1', authority, counter } });
+const core = openMemoryCore({ path, raw:false, contextRead: { version: 'context-read-v1', authority, counter } });
 result.capabilities = core.getContextReadCapabilities();
 const refreshed = await core.refreshContextIndex({ readSet: [ns], types: ['memory'], intent: 'current', budget: { maxItems: 1024, maxMs: 5000 } }, token);
 if (!refreshed.ok) throw Error(JSON.stringify(refreshed));
@@ -49,21 +49,21 @@ result.semanticRefusal = await core.findCandidates({ ...query, semantic: true },
 result.limitRefusal = await core.findCandidates({ ...query, limit: 25 }, token);
 result.deadlineRefusal = await core.findCandidates({ ...query, deadlineMs: 5001 }, token);
 result.invalidCursor = await core.findCandidates({ ...query, cursor: 'invalid' }, token);
-result.assembly = await core.contextRead(query, token);
+result.assembly = await core.contextRead({ ...query, representation: 'representation-v2', raw: false, budget: { maxTokens: 1500, maxItems: 12 } }, token);
 result.fetch = core.fetchCandidateEvidence({ readSet: [ns], refs: result.first.value.items.map(item => item.ref), intent: 'current' }, token);
 core.close();
-const hosted = openMemoryCore({ path, contextRead: { version: 'context-read-v1', authority, counter, policy: { family: 'hosted' } } });
+const hosted = openMemoryCore({ path, raw:false, contextRead: { version: 'context-read-v1', authority, counter, policy: { family: 'hosted' } } });
 result.hostedCapabilities = hosted.getContextReadCapabilities();
 result.hostedLexical = await hosted.findCandidates({ ...query, limit: 24 }, token);
 hosted.close();
 for (const enabled of [false, true]) {
-  const server = createCairnServer({ path, namespace: ns, ...(enabled ? { contextRead: 'context-read-v1', contextCounter: counter } : {}) });
+  const server = createCairnServer({ path, namespace: ns, raw:false, contextRead:enabled ? 'context-read-v1' : false, ...(enabled ? { contextRead: 'context-read-v1', contextCounter: counter } : {}) });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair(), client = new Client({ name: 'synthetic-wire', version: '1' });
   await server.connect(serverSide); await client.connect(clientSide);
   const key = enabled ? 'contextHost' : 'defaultHost'; result[key] = { tools: await client.listTools() };
   if (enabled) {
     result[key].sourceRefusal = await client.callTool({ name: 'find_memory_candidates', arguments: { query: 'needle', types: ['memory'], intent: 'current', sources: [] } });
-    const assembled = await client.callTool({ name: 'read_memory_context', arguments: { query: 'needle', types: ['memory'], intent: 'current', maxItems: 1 } });
+    const assembled = await client.callTool({ name: 'read_memory_context', arguments: { query: 'needle', types: ['memory'], intent: 'current', representation: 'representation-v2', maxTokens: 1500, maxItems: 1 } });
     result[key].assembly = assembled;
     const refs = JSON.parse(assembled.content[0].text).value.items.map(item => item.ref);
     result[key].compactFetch = await client.callTool({ name: 'fetch_memory_candidate_evidence', arguments: { refs, intent: 'current' } });

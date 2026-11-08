@@ -22,8 +22,14 @@ import { assertRetainedRuntime, retainedProfilePath } from './retained-raw-profi
 
 const help = `Cairn Memory — local stdio MCP developer preview
 
+Defaults: Raw retention and Raw search maintenance are on (--no-raw disables retention).
+Preferred memory reads: find_memory_candidates and read_memory_context (contextRead is on).
+--no-context-read removes these tools; --no-context-semantic keeps reads BM25-only.
+OPENAI_API_KEY automatically selects bounded OpenAI embeddings when present.
+See docs/defaults.md for costs, options and every default.
+
 Usage:
-  cairn-memory --db ABS --owner ID [--project ID] --context-read context-read-v1 [--context-read-personal]
+  cairn-memory --db ABS --owner ID [--project ID] [--context-read context-read-v1 | --no-context-read] [--context-read-personal]
     [--context-read-sources relations-one-hop-v1,moc-v1]
     [--context-embedder openai --context-embed-model MODEL --context-embed-dimensions N --context-embed-max-requests N --context-embed-max-usd X]
   cairn-memory context refresh --db ABS --owner ID [--project ID] --types memory,card --intent current|history --max-items N --max-ms T
@@ -170,10 +176,10 @@ No MCP asset bytes or mutations. Startup upgrades the store one-way to v31.
 --check-config checks syntax only: no database access or provider requests.
 It cannot verify database permissions, credentials or model availability.
 --context-read context-read-v1 adds find_memory_candidates and
-fetch_memory_candidate_evidence only. Read sets are fixed at startup; personal
-reads require project scope and --context-read-personal. Semantic defaults to false.
-Only explicit context refresh embeds documents. All five provider options are
-required together; a key alone never constructs an embedder. Hosted uses rrf-k10.
+fetch_memory_candidate_evidence and read_memory_context by default. Read sets are fixed at startup; personal
+reads require project scope and --context-read-personal. Semantic defaults on with OPENAI_API_KEY; otherwise reads use BM25.
+Background turns refresh configured embeddings. Explicit provider overrides
+require all five provider options together. Hosted uses rrf-k10.
 Context --check-config performs no key lookup, database opening or provider creation.
 Sensitive sidecars invalidate logically, without secure physical erasure. Frozen
 T1 intentionally misses an embedded single Han: 中 does not match 中文.
@@ -182,12 +188,12 @@ See docs/context-read-local.md for budgets, degraded states and non-claims.
 
 function parseHostConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
-    '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
+    '--raw', '--no-raw', '--no-raw-search', '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
     '--classification-recovery', '--capture-deadline-ms', '--session-episodes-access',
     '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--private-cards', '--retained-raw-profile', '--method-packages', '--assets', '--role-profiles', '--private-card-current-dependencies', ...CONTEXT_FLAGS, CONTEXT_SOURCE_FLAG]);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
-    if(args[i]==='--method-read-personal'||args[i]==='--context-read-personal'){
+    if(['--method-read-personal','--context-read-personal','--raw','--no-raw','--no-raw-search','--no-context-read','--no-context-semantic'].includes(args[i])){
       if(values.has(args[i]))throw Error('invalid_mcp_configuration');
       values.set(args[i],true);i--;continue;
     }
@@ -206,6 +212,7 @@ function parseHostConfiguration(args) {
   if (!values.get('--db').trim() || values.get('--db').includes('\0')) throw new Error('invalid_mcp_configuration');
   if(values.has('--method-packages')&&values.get('--method-packages')!=='local-v1'||values.has('--method-read-personal')&&(!values.has('--method-packages')||!values.has('--project')))throw Error('invalid_mcp_configuration');
   if(values.has('--assets')&&values.get('--assets')!=='local-v1')throw Error('invalid_mcp_configuration');
+  if (values.has('--raw') && values.has('--no-raw')) throw Error('invalid_mcp_configuration');
   const context = { ...contextHostConfiguration(values), ...contextSourcesConfiguration(values) };
   // U5c-1: never union independently configured read grants.
   if (values.has('--role-profiles')) roleProfileHostConfiguration({ roleProfiles: values.get('--role-profiles'),
@@ -259,6 +266,8 @@ function parseHostConfiguration(args) {
   return { path: values.get('--db'), namespace: { ownerId: values.get('--owner'),
     scope: values.has('--project') ? 'project' : 'personal', projectId: values.get('--project') ?? null },
     ...context,
+    ...(values.has('--no-raw') ? { raw: false } : {}),
+    ...(values.has('--no-raw-search') ? { rawSearch: false } : {}),
     ...(values.has('--private-card-current-dependencies') ? { privateCardCurrentDependencies: values.get('--private-card-current-dependencies') } : {}),
     ...(values.has('--role-profiles') ? { roleProfiles: values.get('--role-profiles') } : {}),
     ...(values.has('--assets')?{assets:'local-v1'}:{}),
@@ -330,7 +339,7 @@ export async function start(args = process.argv.slice(2), env = process.env) {
       modelKeyInspected: false, databaseOpened: false, providerContacted: false, automaticCapture: false }));
     return;
   }
-  if (check && config.contextRead) {
+  if (check && config.contextRead && args.includes('--context-read')) {
     console.log(JSON.stringify({ ok: true, mode: 'configuration-check', contextRead: config.contextRead,
       contextReadPersonal: config.contextReadPersonal ?? false,
       ...(config.privateCardCurrentDependencies ? { privateCardCurrentDependencies: config.privateCardCurrentDependencies, cardDependencyApproval: 'separate-local-tty-required' } : {}),
@@ -346,6 +355,8 @@ export async function start(args = process.argv.slice(2), env = process.env) {
   }
   if (check) {
     console.log(JSON.stringify({ ok: true, mode: 'configuration-check',
+      raw: config.raw !== false, rawSearch: config.raw !== false && config.rawSearch !== false,
+      contextRead: config.contextRead || false,
       scope: config.namespace.scope, modelKeyPresent: Boolean(key),
       recallModel: key ? DEFAULT_MODEL : null,
       recall: key ? 'configured-not-verified' : 'model_not_configured',
@@ -399,7 +410,7 @@ export async function start(args = process.argv.slice(2), env = process.env) {
     model = { countTokens: countOpenAITokens };
   }
   const { contextProvider, ...serverConfiguration } = config;
-  const contextEmbedding = await prepareContextEmbedding(contextProvider, env);
+  const contextEmbedding = config.contextRead && config.contextSemantic !== false ? await prepareContextEmbedding(contextProvider, env) : undefined;
   const Transport=config.roleProfiles?RoleProfileStdioServerTransport:config.contextRead?ContextStdioServerTransport:(config.methodPackages||config.assets)?MethodStdioServerTransport:StdioServerTransport;
   return startOwnedStdio(() => createCairnServer({ ...serverConfiguration, model, ...(contextCounter ? { contextCounter } : {}), ...(contextEmbedding ? { contextEmbedding: contextEmbeddingPort(contextEmbedding) } : {}) }),
     { serveStdio, StdioServerTransport:Transport },config.methodPackages||config.assets||config.contextRead?262144:65536, contextEmbedding);

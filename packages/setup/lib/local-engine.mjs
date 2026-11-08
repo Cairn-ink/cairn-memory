@@ -248,7 +248,7 @@ async function install({ root, engineId, node, references, onChild, timeoutMs = 
     let report;
     try { report = JSON.parse(checked.stdout); } catch { /* invalid check output */ }
     if (report?.ok !== true || report.databaseOpened !== false || report.providerContacted !== false ||
-        report.modelKeyPresent !== false) throw failure('local_engine_verification_failed', checked);
+        report.modelKeyPresent !== false || report.contextRead !== 'context-read-v1' || report.raw !== true || report.rawSearch !== true) throw failure('local_engine_verification_failed', checked);
   }
   for (;;) {
     const directory = join(root, 'engine', engineId);

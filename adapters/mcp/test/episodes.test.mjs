@@ -195,7 +195,7 @@ test('conversation deletion advertises and executes lineage cascade while preser
   fails(await call(h, 'inspect_session_episode', { episodeId: ref.episodeId }), 'episode_not_found');
   for (const link of episode.memoryLinks.items) fails(await call(h, 'inspect_memory', { memoryId: link.memoryId }), 'memory_not_found');
   assert.equal(ok(await call(h, 'inspect_memory', { memoryId: survivor.id })).memory.content, 'Synthetic unrelated admitted survivor');
-  const core = openMemoryCore({ path: f.path, captureQualification: 'source-bound-v2', captureEvidence: 'staged-v1', sessionEpisodes: { mode: 'episode-v1' } });
+  const core = openMemoryCore({ path: f.path, raw: false, captureQualification: 'source-bound-v2', captureEvidence: 'staged-v1', sessionEpisodes: { mode: 'episode-v1' } });
   try { fails(await core.capture(data.inputs[0]), 'capture_evidence_closed'); } finally { core.close(); }
 });
 

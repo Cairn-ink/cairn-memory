@@ -123,6 +123,13 @@ function servingFacts(db, ns) {
 export const withContentSuppressionRequest = (work, { fresh = false } = {}) => requestAccount.getStore() && !fresh
   ? work() : requestAccount.run({ selected: new Map(), facts: new Map(), reads: new Map() }, work);
 
+// An abandoned operation attempt must not seed the next snapshot's denial
+// memo. Keep its request account, but load this connection's facts on demand.
+export function resetContentSuppressionRequestInside(db) {
+  const account=requestAccount.getStore(),native=contentSafetyConnection(db);
+  account?.selected.delete(native);account?.facts.delete(native);account?.reads.delete(native);
+}
+
 // A serving request may span canonical snapshots. Its denial set is provisional
 // until the independent delivery fence agrees. No state survives the request.
 export const hasContentSuppressionRequestInside = db => Boolean(requestAccount.getStore()) &&

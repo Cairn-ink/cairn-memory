@@ -86,7 +86,7 @@ export async function runCurrentnessAudit(options) {
       if (halted) { skip(window); continue; }
       let core;
       try {
-        core = openMemoryCore({ path: database, model });
+        core = openMemoryCore({ path: database, model, raw: false });
         window.capture = await core.capture({ namespace: namespaceFor(namespaceKey),
           client: CURRENTNESS_ORDERING.client, sessionId: `${source.id}-window-${index}`,
           eventId: `${source.id}-event-${index}`, messages, causal });
@@ -98,7 +98,7 @@ export async function runCurrentnessAudit(options) {
         close(core, window);
         core = null;
         if (!infrastructureFailed) {
-          core = openMemoryCore({ path: database });
+          core = openMemoryCore({ path: database, raw: false });
           window.reopenedSnapshots = [];
           snapshots(core, namespaces, window.reopenedSnapshots);
           window.reopenPersisted = same(window.snapshots, window.reopenedSnapshots);
@@ -116,7 +116,7 @@ export async function runCurrentnessAudit(options) {
       if (halted) { skip(recall); continue; }
       let core;
       try {
-        core = openMemoryCore({ path: database, model });
+        core = openMemoryCore({ path: database, model, raw: false });
         recall.result = await core.recall({ readSet: [namespaceFor(query.namespaceKey)], query: query.query, limit: 12 });
         if (recall.result?.ok === true && recall.result.value.coverage === 'complete') recall.status = 'completed';
         else failure(recall, 'currentness_recall_failed');

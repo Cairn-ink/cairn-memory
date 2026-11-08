@@ -1,8 +1,8 @@
 // The same synthetic workload runs in isolated children against both trees.
 import crypto from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { pathToFileURL } from 'node:url';
-import { join } from 'node:path';
+import { pathToFileURL, fileURLToPath } from 'node:url';
+import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { statements,effectWitnesses,startTrace,stopTrace } from './card-lineage-off-wide-controls.mjs';
@@ -29,6 +29,16 @@ try {
     suppressionDomain:cell>=52?proof.prepare('SELECT suppression_domain FROM content_safety_control').get().suppression_domain:'00000000-0000-4000-8000-000000000000'};
 } finally {proof.close();}
 startTrace();
+const currentTree=resolve(source)===resolve(fileURLToPath(new URL('../../',import.meta.url)));
+// Compare legacy assembly bytes; verify only the newly added diagnostic separately.
+function legacyResult(method,result) {
+  if(currentTree&&method.split('.').at(-1)==='contextRead'&&result?.ok) {
+    assert.deepEqual(result.value.diagnostics.coverage,{raw:'unavailable'});
+    const {coverage,...diagnostics}=result.value.diagnostics;
+    return {...result,value:{...result.value,diagnostics}};
+  }
+  return result;
+}
 const calls=[];
 if(mode==='open') {
   const db=openDatabase(path);calls.push(['open',true,statements.length]);db.close();
@@ -55,11 +65,12 @@ if(mode==='open') {
     port:{version:'raw-seal-v1',async sealRaw({text}){return {format:'local-plain-v1',keyVersion:null,sealed:Buffer.from(text)};},
       async openRaw({sealed}){return {text:new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(sealed)};}},
     readPolicy:()=>({generation:'synthetic',reason:null})};
-  const core=api.openMemoryCore({...options,...(base===33?{rawConversations:rawOptions}:{})});
+  const core=api.openMemoryCore({...options,...(base===33?{rawConversations:rawOptions}:{}),...(currentTree?{rawSearch:false}:{})});
   calls.push(['open',true,statements.length]);
   const call=async(method,input,{error}={})=>{
     const start=statements.length;let result;
     try {result=await core[method](input,{});}catch(thrown){result={thrown:{name:thrown.name,code:thrown.code,message:thrown.message}};}
+    result=legacyResult(method,result);
     calls.push([method,result,start,statements.length]);
     if(error ? result.error?.code!==error : !result.ok)throw Error(method+': '+JSON.stringify(result));
     return result.value;
@@ -148,9 +159,10 @@ if(mode==='open') {
     cell===53?{error:'evidence_unavailable'}:{});
   }
   const query={readSet:[ns],query:'Synthetic',types:['memory','card'],intent:'current',deadlineMs:5000};
+  const assembly={...query,representation:'representation-v2',budget:{maxTokens:1500,maxItems:12}};
   await call('refreshContextIndex',{readSet:[ns],types:['memory','card'],intent:'current',budget:{maxItems:1024,maxMs:5000}});
   await call('findCandidates',query);
-  const assembled=await call('contextRead',query);
+  const assembled=await call('contextRead',assembly);
   await call('fetchCandidateEvidence',{readSet:[ns],refs:[ref(memoryCard)],intent:'current'});
   await call('fetchCandidateEvidence',{readSet:[ns],snapshot:assembled.snapshot});
   if(base===33) {
@@ -247,6 +259,7 @@ if(mode==='open') {
     const invoke=async(name,work,{error}={})=>{
       const start=statements.length;let result;
       try{result=await work();}catch(thrown){result={thrown:{name:thrown.name,code:thrown.code,message:thrown.message}};}
+      result=legacyResult(name,result);
       calls.push([name,result,start,statements.length]);
       if(error)assert.equal(result.thrown?.code??result.error?.code,error,name);
       else assert.equal(result.ok,true,name+': '+JSON.stringify(result));
@@ -265,7 +278,7 @@ if(mode==='open') {
     try{
       const read=on('openContextReader',context);
       await read('findCandidates',query);
-      const value=await read('contextRead',query);
+      const value=await read('contextRead',assembly);
       await read('fetchCandidateEvidence',{readSet:[ns],snapshot:value.snapshot});
       await read('fetchCandidateEvidence',{readSet:[ns],refs:[ref(memoryCard)],intent:'current'});
     }finally{await context.close();}
