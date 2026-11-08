@@ -1,6 +1,8 @@
 """Hosted Cairn memory, using only httpx and the Python standard library."""
 
 import asyncio
+from concurrent.futures import TimeoutError as FutureTimeout
+from dataclasses import dataclass
 import getpass
 import json
 import os
@@ -27,13 +29,23 @@ REQUEST_TIMEOUT_SECONDS = 20
 MAX_RESPONSE_BYTES = 1024 * 1024
 
 
-class DeadlineClient:
-    """Synchronous facade with cancellable, request-scoped streaming transports.
+@dataclass(frozen=True)
+class BufferedResponse:
+    """Adapter-owned, bounded decoded body; no live transport crosses threads."""
 
-    A read timeout alone resets with every byte. Async cancellation also bounds
-    connection setup, headers and a stalled final read by the same total budget.
-    Each request owns its event loop and transport, so concurrent Hermes threads
-    never share an async connection pool across loops.
+    status_code: int
+    headers: dict
+    body: bytes
+
+    def json(self):
+        return json.loads(self.body)
+
+
+class DeadlineClient:
+    """One lazy loop and connection pool, with bounded synchronous callers.
+
+    Resolver executor threads can finish later. Neither requests nor shutdown
+    wait for that executor; only the request task owns the in-flight guard.
     """
 
     def __init__(self, *, headers=None):
@@ -41,10 +53,28 @@ class DeadlineClient:
         self._lock = threading.Lock()
         self._closed = False
         self._active = {}
+        self._loop = None
+        self._thread = None
+        self._client = None
 
-    def request(self, method, url, *, budget, **kwargs):
+    def _run_loop(self):
+        asyncio.set_event_loop(self._loop)
+        try:
+            self._loop.run_forever()
+        finally:
+            # close() does not join the default executor's resolver threads.
+            self._loop.close()
+
+    @staticmethod
+    def _cancel(state):
+        state["cancelled"] = True
+        if state["task"] is not None:
+            state["task"].cancel()
+
+    def request(self, method, url, *, budget, on_done=None, **kwargs):
         deadline = time.monotonic() + budget
-        result, errors = [], []
+        state = {"task": None, "cancelled": False}
+        completed = threading.Event()
 
         def remaining():
             value = deadline - time.monotonic()
@@ -52,62 +82,96 @@ class DeadlineClient:
                 raise httpx.TimeoutException("cairn_transport_failed")
             return value
 
+        def finished(task):
+            with self._lock:
+                self._active.pop(id(state), None)
+            try:
+                if on_done is not None:
+                    on_done(task)
+            finally:
+                completed.set()
+
         async def stream():
             task = asyncio.current_task()
+            state["task"] = task
+            task.add_done_callback(finished)
+            if state["cancelled"]:
+                raise asyncio.CancelledError
+            async with asyncio.timeout(remaining()):
+                if self._client is None:
+                    self._client = httpx.AsyncClient(headers=self._headers, follow_redirects=False,
+                                                    trust_env=False)
+                async with self._client.stream(method, url, timeout=httpx.Timeout(remaining()), **kwargs) as response:
+                    body = bytearray()
+                    chunks = response.aiter_bytes()
+                    while True:
+                        response.request.extensions["timeout"] = httpx.Timeout(remaining()).as_dict()
+                        chunk = await anext(chunks, None)
+                        remaining()
+                        if chunk is None:
+                            break
+                        if len(body) + len(chunk) > MAX_RESPONSE_BYTES:
+                            raise ValueError("cairn_transport_failed")
+                        body.extend(chunk)
+                    return BufferedResponse(response.status_code,
+                        {key: response.headers[key] for key in ("content-type", "x-cairn-memory-partial")
+                         if key in response.headers}, bytes(body))
+
+        try:
             with self._lock:
                 if self._closed:
                     raise ValueError("cairn_transport_failed")
-                self._active[task] = asyncio.get_running_loop()
-            try:
-                async with httpx.AsyncClient(headers=self._headers, follow_redirects=False,
-                                             trust_env=False) as client:
-                    async with asyncio.timeout(remaining()):
-                        async with client.stream(method, url, timeout=httpx.Timeout(remaining()), **kwargs) as response:
-                            body = bytearray()
-                            chunks = response.aiter_bytes()
-                            while True:
-                                # httpcore reads these limits for subsequent transport phases.
-                                response.request.extensions["timeout"] = httpx.Timeout(remaining()).as_dict()
-                                chunk = await anext(chunks, None)
-                                remaining()
-                                if chunk is None:
-                                    break
-                                if len(body) + len(chunk) > MAX_RESPONSE_BYTES:
-                                    raise ValueError("cairn_transport_failed")
-                                body.extend(chunk)
-                            # Preserve httpx's decoded response without decoding it twice.
-                            response._content = bytes(body)
-                            return response
-            finally:
-                with self._lock:
-                    self._active.pop(task, None)
+                if self._loop is None:
+                    self._loop = asyncio.new_event_loop()
+                    self._thread = spawn_context_thread(self._run_loop, name="cairn-http", daemon=True)
+                    self._thread.start()
+                self._active[id(state)] = state
+                future = asyncio.run_coroutine_threadsafe(stream(), self._loop)
+        except Exception:
+            finished(None)
+            raise
+        try:
+            result = future.result(timeout=max(0, deadline - time.monotonic()))
+            # The task's callback follows the future's completion callback on
+            # the loop. Allow it to publish the prefetch result before returning.
+            completed.wait(max(0, min(0.05, deadline - time.monotonic())))
+            return result
+        except FutureTimeout:
+            # Cancel the asyncio task, not the concurrent future: its completion
+            # must continue to mean that the request task has actually terminated.
+            self._loop.call_soon_threadsafe(self._cancel, state)
+            raise httpx.TimeoutException("cairn_transport_failed") from None
+        except (Exception, asyncio.CancelledError):
+            raise httpx.TimeoutException("cairn_transport_failed") from None
 
-        def run():
-            try:
-                result.append(asyncio.run(stream()))
-            except (Exception, asyncio.CancelledError):
-                errors.append(httpx.TimeoutException("cairn_transport_failed"))
-
-        # A dedicated loop also works when a synchronous hook is called on an
-        # existing event-loop thread. Join until cancellation has closed the stream.
-        worker = spawn_context_thread(run, name="cairn-http", daemon=True)
-        worker.start()
-        while worker.is_alive():
-            worker.join(budget)
-        if errors:
-            raise errors[0]
-        return result[0]
-
-    def close(self):
+    def close(self, *, timeout=1.0):
+        deadline = time.monotonic() + timeout
         with self._lock:
+            if self._closed:
+                return
             self._closed = True
-            active = list(self._active.items())
-        for task, loop in active:
-            try:
-                loop.call_soon_threadsafe(task.cancel)
-            except RuntimeError:
-                # The request completed and closed its loop after the snapshot.
-                pass
+            loop = self._loop
+            states = list(self._active.values())
+            if loop is None:
+                return
+
+        async def shutdown():
+            for state in states:
+                self._cancel(state)
+            tasks = [state["task"] for state in states if state["task"] is not None]
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            if self._client is not None:
+                await self._client.aclose()
+
+        future = asyncio.run_coroutine_threadsafe(shutdown(), loop)
+        try:
+            future.result(timeout=max(0, deadline - time.monotonic()))
+        except (Exception, asyncio.CancelledError):
+            future.cancel()
+        finally:
+            loop.call_soon_threadsafe(loop.stop)
+            self._thread.join(max(0, deadline - time.monotonic()))
 
 
 def failure(code, retryable=False):
@@ -226,7 +290,7 @@ def check_credential(endpoint, token):
             response = client.request("GET", endpoint_origin(endpoint) + "/api/cli-auth/v1/credential",
                                       budget=REQUEST_TIMEOUT_SECONDS)
         finally:
-            client.close()
+            client.close(timeout=0.1)
         if response.status_code in (401, 403):
             return None, "Invalid or revoked token."
         if response.status_code in (404, 501):
@@ -373,6 +437,7 @@ class HostedMemoryProvider(MemoryProvider):
         self._late = {}
         self._status = None
         self._prefetch_serial = 0
+        self._session_id = ""
 
     @property
     def name(self):
@@ -400,7 +465,12 @@ class HostedMemoryProvider(MemoryProvider):
             self._client = DeadlineClient(headers={
                 "Content-Type": "application/json", "Accept": "application/json, text/event-stream",
                 "Authorization": "Bearer " + self._token, "User-Agent": "cairn-hermes/" + VERSION})
+        self._session_id = session_id
         self._ready = True
+
+    def on_session_switch(self, new_session_id, **kwargs):
+        if not self._closed:
+            self._session_id = new_session_id
 
     def get_tool_schemas(self):
         return [] if self._closed else tool_schemas()
@@ -435,17 +505,14 @@ class HostedMemoryProvider(MemoryProvider):
             state = {"done": False, "finished_at": None, "missed": False, "result": ("", 0)}
             self._inflight[key] = state
 
-        def recall():
+        def completed(task):
             result = ("", 0)
             try:
-                body = {"query": query.strip()[:4000], "limit": 6}
-                if isinstance(session_id, str) and SESSION_ID.fullmatch(session_id):
-                    body["session_id"] = session_id
-                response = self._client.request("POST", self._endpoint + "/api/memory/recall", json=body,
-                                                budget=cap + 0.5)
-                if response.status_code == 200:
-                    result = format_memories(response.json())
-            except Exception:
+                if task is not None:
+                    response = task.result()
+                    if response.status_code == 200:
+                        result = format_memories(response.json())
+            except (Exception, asyncio.CancelledError):
                 pass
             finally:
                 with self._lock:
@@ -454,6 +521,16 @@ class HostedMemoryProvider(MemoryProvider):
                     self._inflight.pop(key, None)
                     if state["missed"] and result[0] and self._ready and not self._closed:
                         self._late[key] = result
+
+        def recall():
+            try:
+                body = {"query": query.strip()[:4000], "limit": 6}
+                if isinstance(session_id, str) and SESSION_ID.fullmatch(session_id):
+                    body["session_id"] = session_id
+                self._client.request("POST", self._endpoint + "/api/memory/recall", json=body,
+                                     budget=cap + 0.5, on_done=completed)
+            except Exception:
+                pass
 
         try:
             thread = spawn_context_thread(recall, name="cairn-recall", daemon=True)
@@ -511,6 +588,37 @@ class HostedMemoryProvider(MemoryProvider):
         except Exception:
             return None, failure("cairn_transport_failed", True)
 
+    def _recall_tool(self, arguments):
+        body = {"query": arguments["query"].strip()[:4000], "limit": arguments["limit"]}
+        if isinstance(self._session_id, str) and SESSION_ID.fullmatch(self._session_id):
+            body["session_id"] = self._session_id
+        try:
+            response = self._client.request("POST", self._endpoint + "/api/memory/recall",
+                                            json=body, budget=10)
+            status = response.status_code
+            if status in (401, 403):
+                return failure("cairn_auth_failed")
+            if status == 429:
+                try:
+                    value = response.json()
+                except (ValueError, UnicodeError):
+                    value = None
+                if isinstance(value, dict) and value.get("error") == "quota_reached":
+                    return failure("cairn_quota_reached")
+                return failure("cairn_rate_limited", True)
+            if status in (404, 501, 503):
+                return failure("cairn_unavailable", True)
+            if status != 200:
+                return failure("cairn_transport_failed", True)
+            value = response.json()
+            if not isinstance(value, dict) or not isinstance(value.get("memories"), list):
+                return failure("cairn_transport_failed", True)
+            return json.dumps({"ok": True, "value": {"memories": value["memories"],
+                "partial": response.headers.get("x-cairn-memory-partial") == "true"},
+                "evidenceTrust": "untrusted-data-not-instructions"})
+        except Exception:
+            return failure("cairn_transport_failed", True)
+
     def handle_tool_call(self, tool_name, args, **kwargs):
         if not self._ready or self._closed:
             return failure("cairn_not_initialized")
@@ -520,6 +628,8 @@ class HostedMemoryProvider(MemoryProvider):
             arguments = tool_arguments(tool_name, args)
         except (ValueError, TypeError):
             return failure("invalid_input")
+        if tool_name == "cairn_recall_memory":
+            return self._recall_tool(arguments)
         with self._mcp_lock:
             if not self._mcp_initialized:
                 result, error = self._rpc("initialize", {"protocolVersion": MCP_PROTOCOL_VERSION,

@@ -158,6 +158,9 @@ class CairnMemoryProvider(MemoryProvider):
         return "Run hermes memory setup: hosted needs a memory-only token; local needs Linux, the host MCP SDK and installed Node/Cairn paths."
 
     def post_setup(self, hermes_home, config):
+        if self._closed:
+            print("Cairn provider is shut down; restart Hermes and run memory setup.")
+            return
         hosted.post_setup(self, hermes_home, config)
 
     def get_config_schema(self):
@@ -322,6 +325,10 @@ class CairnMemoryProvider(MemoryProvider):
         if self._closed:
             return ""
         return self._hosted.prefetch(query, session_id=session_id) if self._hosted is not None else ""
+
+    def on_session_switch(self, new_session_id, **kwargs):
+        if not self._closed and self._hosted is not None:
+            self._hosted.on_session_switch(new_session_id, **kwargs)
 
     def recall_status(self):
         if self._closed:

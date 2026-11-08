@@ -24,6 +24,10 @@ def test_recall_trickle_releases_worker_and_allows_next_recall(install, cloud, m
     # The HTTP budget is the prefetch cap plus 0.5 seconds, with 0.5 seconds of margin.
     workers[0].join(max(0, started + 1.25 - time.monotonic()))
     assert not workers[0].is_alive(), "Trickling kept the recall worker alive past its total deadline"
+    # The synchronous worker can return just before cancellation finishes.
+    # The guard belongs to the actual async task, which must terminate too.
+    while provider._hosted._inflight and time.monotonic() < started + 1.25:
+        time.sleep(0.005)
     assert not provider._hosted._inflight
     cloud.trickle_response = None
     assert "Synthetic note" in provider.prefetch("Synthetic next query", session_id="conversation")
@@ -42,7 +46,7 @@ def test_trickle_has_total_deadline(install, cloud, monkeypatch, operation):
         assert credential is None
         assert "transport failure" in message
     else:
-        result = json.loads(provider.handle_tool_call("cairn_recall_memory", {"query": "Synthetic query"}))
+        result = json.loads(provider.handle_tool_call("cairn_remember_memory", {"content": "Synthetic note"}))
         assert result == {"ok": False, "error": {"code": "cairn_transport_failed", "retryable": True}}
         assert provider._hosted._mcp_initialized is (operation == "tools/call")
     assert time.monotonic() - started < 0.75
@@ -63,7 +67,7 @@ def test_oversize_response_fails_closed(install, cloud, operation):
         assert credential is None
         assert "transport failure" in message
     else:
-        result = json.loads(provider.handle_tool_call("cairn_recall_memory", {"query": "Synthetic query"}))
+        result = json.loads(provider.handle_tool_call("cairn_remember_memory", {"content": "Synthetic note"}))
         assert result == {"ok": False, "error": {"code": "cairn_transport_failed", "retryable": True}}
 
 
@@ -96,7 +100,7 @@ def test_shutdown_prevents_backend_reactivation(install, cloud, selected):
 
 
 @pytest.mark.parametrize("entry", ["is_available", "save_config", "get_tool_schemas", "initialize",
-                                  "handle_tool_call", "prefetch", "recall_status", "system_prompt_block", "shutdown"])
+                                  "handle_tool_call", "prefetch", "recall_status", "system_prompt_block", "on_session_switch", "shutdown"])
 def test_closed_router_never_delegates(install, cloud, monkeypatch, entry):
     home, provider, _, hosted = install()
     provider.shutdown()
@@ -116,7 +120,9 @@ def test_closed_router_never_delegates(install, cloud, monkeypatch, entry):
         with pytest.raises(ValueError, match="cairn_unsupported_context"):
             provider.initialize("conversation", hermes_home=str(home), platform="cli", agent_context="primary")
     elif entry == "handle_tool_call":
-        assert json.loads(provider.handle_tool_call("cairn_recall_memory", {"query": "Synthetic query"}))["ok"] is False
+        assert json.loads(provider.handle_tool_call("cairn_remember_memory", {"content": "Synthetic note"}))["ok"] is False
+    elif entry == "on_session_switch":
+        provider.on_session_switch("synthetic-next")
     elif entry == "prefetch":
         assert provider.prefetch("Synthetic query") == ""
     else:

@@ -1,6 +1,7 @@
 """Independent loopback harness; no local engine executable or model needed."""
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import gzip
 import importlib
 import json
 from pathlib import Path
@@ -36,10 +37,13 @@ class FakeCloud:
         self.memories = {}
         self.requests = []
         self.completed_recalls = 0
+        self.connections = 0
         self.lock = threading.Lock()
         self.trickle_response = None
         self.oversize_response = None
         self.stop_streams = threading.Event()
+        self.stall_response = None
+        self.decoded_size = None
 
     def requests_for(self, path):
         with self.lock:
@@ -60,6 +64,13 @@ def cloud():
     state = FakeCloud()
 
     class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def setup(self):
+            super().setup()
+            with state.lock:
+                state.connections += 1
+
         def log_message(self, *args):
             pass
 
@@ -71,15 +82,23 @@ def cloud():
                 data = b" " * 40 + data
             if state.oversize_response == key:
                 data += b" " * (1024 * 1024 + 1 - len(data))
+            compressed = state.decoded_size is not None
+            if compressed:
+                data = gzip.compress(data + b" " * (state.decoded_size - len(data)))
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(data)))
+            if compressed:
+                self.send_header("Content-Encoding", "gzip")
             if partial:
                 self.send_header("X-Cairn-Memory-Partial", "true")
             if 300 <= status < 400:
                 self.send_header("Location", state.endpoint + "/redirect-target")
             self.end_headers()
             try:
+                if state.stall_response == key:
+                    self.wfile.flush()
+                    state.stop_streams.wait(2)
                 if trickle:
                     for byte in data[:40]:
                         self.wfile.write(bytes([byte]))

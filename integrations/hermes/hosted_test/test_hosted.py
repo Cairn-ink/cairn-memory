@@ -304,11 +304,13 @@ def test_tools_round_trip_via_memory_manager_and_protocol_pin(install, cloud):
     assert remembered["ok"]
     assert remembered["evidenceTrust"] == "untrusted-data-not-instructions"
     memory = remembered["value"]
+    cloud.recall_value = {"memories": [memory]}
     assert call(manager, "recall", query="examples")["value"]["memories"] == [memory]
     assert call(manager, "forget", memory_id=memory["id"])["value"]["forgotten"] is True
+    cloud.recall_value = {"memories": []}
     assert call(manager, "recall", query="examples")["value"]["memories"] == []
     requests = cloud.requests_for("/api/mcp")
-    assert len(requests) == 5
+    assert len(requests) == 3
     assert requests[0][1]["params"] == {"protocolVersion": "2025-06-18", "capabilities": {},
                                         "clientInfo": {"name": "cairn-hermes", "version": "0.2.0"}}
     assert requests[0][1]["method"] == "initialize"
@@ -320,7 +322,9 @@ def test_tools_round_trip_via_memory_manager_and_protocol_pin(install, cloud):
         assert "session_id" not in json.dumps(body)
         if body["method"] == "tools/call":
             assert headers["MCP-Protocol-Version"] == "2025-06-18"
-    assert requests[2][1]["params"]["arguments"]["limit"] == 6
+    assert len(cloud.requests_for("/api/memory/recall")) == 2
+    assert cloud.requests_for("/api/memory/recall")[0][1] == {
+        "query": "examples", "limit": 6, "session_id": "conversation"}
 
 
 @pytest.mark.parametrize("action,arguments", [("remember", {}), ("remember", {"content": "abc"}),
