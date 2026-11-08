@@ -166,7 +166,7 @@ unverified; neither result authorizes an authentication/network workaround.
 ## Explicit public constructor (P4b-B1)
 
 `openMemoryCore({path, model?, privateCards?, rawConversations})` accepts the
-closed option `{mode:'raw-v1'|'off', port?, capBytes?, configureCap?, readPolicy, localAuthority?}`.
+closed option `{mode:'raw-v1'|'off', port?, capBytes?, configureCap?, readPolicy, localAuthority?, interpretation?}`.
 Omission keeps the library Raw-free, as does `raw:false`. `raw:true` selects local
 Raw retention and ordinary-capture wiring; explicit journal options keep their
 existing behavior, including capability refusals. Explicit undefined/null,

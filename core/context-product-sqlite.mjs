@@ -53,6 +53,8 @@ export function createProductSqlitePolicy({ observer, now = () => Number(process
   const policy = createTopicSqlitePolicy({ now, state });
   return {
     start: deadlineAt => policy.start(deadlineAt),
+    admission: (check, work) => policy.admission(check, work),
+    cleanup: work => policy.cleanup(work),
     files: productSqliteFiles,
     openingFailure,
     initializationFailure(error) {
