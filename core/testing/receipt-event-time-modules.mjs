@@ -19,19 +19,19 @@ const frozenExceptions = JSON.parse(readFileSync(new URL('../test/fixtures/recei
 // change no loader or feature consumer. The private sidecar-handle registry
 // adds an identity-ack field and passes it to storage; loaders stay unchanged.
 const exceptions = frozenExceptions.map(entry => {
-  // The journal-mode probe checks the opening deadline before preparing and
-  // executing its statement. This hunk adds no loader and no feature consumer.
+  // The wait policy scopes the opening check and repeats it after timeout
+  // configuration. These changes add no loader and no feature consumer.
   if (entry.file === 'core/topic-reader-sqlite.mjs') {
     assert.equal(entry.sha256, '78547baf2b9eea0572ad69e8be2ef0bb2e8dcc8314aa4e58fc0b4dda87ce679f',
       'frozen journal-mode probe loader pin');
-    return { ...entry, sha256: 'b284cf9ae1e2a307639e362940d59a08e238219342190a3701aae7f7c17fe51c' };
+    return { ...entry, line: 127, sha256: 'cc8d7218e8772d7f7a2866a12e3ea92d767d2590f8c18230d7105ddafa1a635f' };
   }
-  // Opening-deadline checks run before SQLite configuration and journal-mode
-  // statements. These hunks add no loader and no feature consumer.
+  // The SQLite policy forwards synchronous admission and cleanup scopes.
+  // These changes add no loader and no feature consumer.
   if (entry.file === 'core/context-product-sqlite.mjs') {
     assert.equal(entry.sha256, '03d69f0bdb2e5e8acd1b6e08e566d3333bfbc9e22fdfac97514aa8023618c207',
       'frozen SQLite policy loader pin');
-    return { ...entry, sha256: 'e5c700237258e5e077c03aa49a7ba509f805cfdf0df4dba29a1265ec21b515c1' };
+    return { ...entry, line: 108, sha256: '5bf348977dea61370a8623b98c80648105c6d788c5e0d1dd428970c5bde19d87' };
   }
   // Parent handle reservation, target preparation and close/exit cleanup keep
   // the host loader and synchronous transmission/final validation unchanged.
