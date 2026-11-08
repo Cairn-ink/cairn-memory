@@ -2,6 +2,8 @@
 
 ## Unreleased — hosted recall deadline
 
+- Remove redundant durable publications before hosted recall while preserving pause barriers and diagnostic freshness.
+
 - Allow 2,500 ms from the first recall fetch on both hosts. Codex prompt hooks
   have a 3,000 ms process-clock cap; Claude Code plugin prompt hooks keep their
   3,500 ms process-clock cap. Both use a 4 s host timeout, preserving at least

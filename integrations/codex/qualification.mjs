@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import { privateRead, privateWrite, checkedPath, privateDirectory } from '../client/private-state.mjs';
 import { collectEvidence } from './schema-evidence.mjs';
+import { stateLock } from '../client/state-lock.mjs';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
 export const canonical = value => JSON.stringify(sort(value));
@@ -167,7 +168,12 @@ export async function hasQualifiedCreator(configPath,version,{signal}={}) {
 export async function observeHost(configPath,host) {
   if(!validHost(host))return;
   await safeCache(configPath,{create:true});
-  await privateWrite(join(directory(configPath),'observed-'+host.kind+'.json'),JSON.stringify(host));
+  const path=join(directory(configPath),'observed-'+host.kind+'.json');
+  await stateLock(path+'.lock',async()=>{
+    const bytes=await privateRead(path,{missing:true});
+    const next=JSON.stringify(host);
+    if(bytes!==next)await privateWrite(path,next);
+  });
 }
 export async function observedHosts(configPath) {
   const hosts=[];

@@ -69,7 +69,9 @@ async function observe(config, token, signal) {
         (previous && remote.generation !== previous.generation)) {
       await rotateAutomaticBoundary(config.root);
     }
-    await privateWrite(file, JSON.stringify(remote));
+    // The locked, validated bytes already carry this exact privacy barrier.
+    const next = JSON.stringify(remote);
+    if (bytes !== next) await privateWrite(file, next);
     return remote;
   });
   if (!observed) throw new Error('pause_unavailable');

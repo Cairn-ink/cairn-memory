@@ -115,3 +115,77 @@ for (const [name, pause, resume] of [
   await run(f);
   assert.deepEqual(sent(f), ['First turn']);
 });
+
+// Hosted observations use the same shared pause module in both distributions.
+async function hostedFixture(t) {
+  const { createTestWorkspace } = await import('../../../tools/testing/workspace.mjs');
+  const { mkdir } = await import('node:fs/promises');
+  const { hostedTargetId } = await import('../../client/transport-hosted.mjs');
+  const ws = createTestWorkspace(t), root = join(ws.path, 'state');
+  await mkdir(root, { mode: 0o700 });
+  const config = { root, endpoint: 'http://127.0.0.1:1' };
+  const pause = join(root, 'hosted-pause', hostedTargetId(config) + '.json');
+  return { config, pause };
+}
+
+test('unchanged validated hosted observation never republishes pause bytes', async t => {
+  const { observeHostedPause } = await import('../../client/hosted-pause.mjs');
+  const { withWriteObserver } = await import('../../client/private-state.mjs');
+  const f = await hostedFixture(t), value = { paused: false, generation: 0, enforced: true };
+  let observations = 0;
+  t.mock.method(globalThis, 'fetch', async () => { observations++; return Response.json(value); });
+  await observeHostedPause(f.config, 'synthetic-token');
+  const writes = [];
+  await withWriteObserver(event => writes.push(event), () => observeHostedPause(f.config, 'synthetic-token'));
+  assert.equal(observations, 2, 'unchanged_still_fetches');
+  assert.equal(writes.filter(event => event.kind === 'write' && event.path === f.pause).length, 0);
+  assert.equal(await readFile(f.pause, 'utf8'), JSON.stringify(value));
+});
+
+test('pause equality is byte equality after locked validation, including noncanonical old bytes', async t => {
+  const { observeHostedPause } = await import('../../client/hosted-pause.mjs');
+  const { withWriteObserver } = await import('../../client/private-state.mjs');
+  const f = await hostedFixture(t), value = { paused: false, generation: 0, enforced: true };
+  t.mock.method(globalThis, 'fetch', async () => Response.json(value));
+  await observeHostedPause(f.config, 'synthetic-token');
+  await writeFile(f.pause, JSON.stringify(value, null, 2));
+  const writes = [];
+  await withWriteObserver(event => writes.push(event), () => observeHostedPause(f.config, 'synthetic-token'));
+  assert.equal(writes.filter(event => event.kind === 'write' && event.path === f.pause).length, 1);
+  assert.equal(await readFile(f.pause, 'utf8'), JSON.stringify(value));
+});
+
+test('changed hosted generation publishes and rotates before recall dispatch', async t => {
+  const { observeHostedPause } = await import('../../client/hosted-pause.mjs');
+  const { recallContext } = await import('../hosted-lifecycle.mjs');
+  const f = await hostedFixture(t);
+  let generation = 0, recalls = 0, dispatched;
+  t.mock.method(globalThis, 'fetch', async url => {
+    if (url.endsWith('/pause-state')) return Response.json({ paused: false, generation, enforced: true });
+    recalls++;
+    dispatched = { remote: JSON.parse(await readFile(f.pause, 'utf8')),
+      local: await readControlState(f.config.root) };
+    return Response.json({ memories: [] });
+  });
+  await observeHostedPause(f.config, 'synthetic-token');
+  const before = await readControlState(f.config.root); generation = 1;
+  assert.equal(await recallContext({ prompt: 'Synthetic question', session_id: 's' }, f.config,
+    'synthetic-token', 'synthetic-project-id', new AbortController().signal, async () => true), '');
+  assert.equal(recalls, 1);
+  assert.equal(dispatched.remote.generation, 1, 'generation_published_before_dispatch');
+  assert.notEqual(dispatched.local.generation, before.generation, 'boundary_rotated_before_dispatch');
+});
+
+test('second hosted observation still durably pauses and blocks recall dispatch', async t => {
+  const { recallContext } = await import('../hosted-lifecycle.mjs');
+  const f = await hostedFixture(t); let observations = 0, recalls = 0;
+  t.mock.method(globalThis, 'fetch', async url => {
+    if (!url.endsWith('/pause-state')) { recalls++; return Response.json({ memories: [] }); }
+    observations++;
+    return Response.json({ paused: observations === 2, generation: observations === 2 ? 1 : 0, enforced: true });
+  });
+  assert.equal(await recallContext({ prompt: 'Synthetic question', session_id: 's' }, f.config,
+    'synthetic-token', 'synthetic-project-id', new AbortController().signal, async () => true), '');
+  assert.equal(observations, 2); assert.equal(recalls, 0);
+  assert.deepEqual(JSON.parse(await readFile(f.pause, 'utf8')), { paused: true, generation: 1, enforced: true });
+});
