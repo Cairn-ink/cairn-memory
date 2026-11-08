@@ -13,7 +13,7 @@ const failure = error => {
 const invoke = work => { try { return success(work()); } catch (error) { return failure(error); } };
 
 // Receive the builder to avoid a contract -> composition -> contract cycle.
-export function composeRawCore(buildCore, input, rawOptions, { sources, lineage, deletion, localControls = false, captureDefault = false, searchDefault = false, searchManager }) {
+export function composeRawCore(buildCore, input, rawOptions, { sources, lineage, deletion, localControls = false, captureDefault = false, searchDefault = false, searchManager, searchEmbedding }) {
   const profile = structuredClone(Object.fromEntries(['captureQualification','captureSourcePolicy',
     'captureEvidence','captureRationale','sessionEpisodes','captureQualifiedDuplicates'].filter(key => Object.hasOwn(input, key)).map(key => [key,input[key]])));
   let storage, capture, runtime;
@@ -27,7 +27,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
       attachRaw: db => (storage = createRawCaptureStorage({ db, profile, ...rawOptions, sources })) })),
     attachCapture: operation => { capture = operation; },
   });
-  const search = searchDefault ? searchManager ?? (rawOptions.mode !== 'off' ? createLocalRawSearch(input.path, rawOptions.port) : null) : null;
+  const search = searchDefault ? searchManager ?? (rawOptions.mode !== 'off' ? createLocalRawSearch(input.path, rawOptions.port, searchEmbedding) : null) : null;
   return contentSafetyFacade({ ...core,
     ...(search ? search.methods : {}),
     close() {

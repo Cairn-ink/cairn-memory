@@ -44,6 +44,12 @@ test('embedding configuration is automatic with a key and absent without one; se
   const embedding = createContextEmbedding(undefined, { OPENAI_API_KEY: 'synthetic-not-a-key' });
   assert.ok(embedding.embedder);
   assert.equal(embedding.policy.maxRequests, DEFAULT_CONTEXT_PROVIDER.maxRequests);
+  assert.equal(embedding.policy.maxRequests, Number.MAX_SAFE_INTEGER);
+  assert.equal(embedding.policy.maxUsd, 1);
+  const explicit = createContextEmbedding({ ...DEFAULT_CONTEXT_PROVIDER, maxRequests: 7, maxUsd: 0.02 },
+    { OPENAI_API_KEY: 'synthetic-not-a-key' });
+  assert.equal(explicit.policy.maxRequests, 7);
+  assert.equal(explicit.policy.maxUsd, 0.02);
   const actions = new Map();
   registerContextReadTools((name, description, schema, action) => actions.set(name, action), {},
     { readSet: [namespace], call: (_core, _method, input) => input }, { semantic: true });
