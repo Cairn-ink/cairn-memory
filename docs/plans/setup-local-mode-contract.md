@@ -1505,13 +1505,15 @@ the new evidence are added to `docs/codex-setup.md` and
 | G3 | Extract each packed tarball and compare every engine file byte for byte with the worktree, including an independently checked complete inventory. |
 | G4 | Diff the file lists from `npm pack --dry-run --json` and `tar -tzf`; print both counts and the diff line count. |
 | G5 | Both Nodes produce identical tarballs; print SHA-256 and byte size. |
-| T1 | On each Node, run `npm run test:setup` separately for `local`, `cloud-baseline`, `hosted` and `source`, with required baseline/cache and offline engine installation. |
+| G6 | Find every sync-commit reference in CHANGELOG, setup README and this contract by pattern; require at least one, print the count and require every short or full SHA to match `<sync-sha>`. |
+| T1a | On each Node, run `CAIRN_SETUP_TEST_GROUP=source CAIRN_SETUP_REQUIRE_BASELINE=1 node tools/testing/run.mjs --script packages/setup/test/setup.test.mjs` in its own slot, as CI does. |
+| T1b | On each Node, install the packed installer offline with scripts disabled into a temporary prefix. Run `node tools/testing/run.mjs --script packages/setup/test/setup.test.mjs` with no group variable in its own 25-minute slot, with CI's packed-package paths, private offline cache and required baseline/cache flags. Mechanically verify every ordinary import derived from HEAD plus setup's own tests, and record the reported test count. |
 | T2 | On each Node, run `npm run test:codex` and `node --test core/test/no-raw-db-fd.test.mjs` separately. |
 | T3 | On each Node, run each of `integrations/codex/test/capture-diagnostics.test.mjs` and `packages/setup/test/codex-capture-status.test.mjs` separately under both `TZ=UTC` and `TZ=Etc/GMT+12`. |
 | F1 | Installed 0.6.5 executable `--check-config --db … --owner …` reports `raw:true`, `rawSearch:true`, `contextRead:'context-read-v1'`, without opening the database or contacting a provider. |
 | F2 | Initialize the installed 0.6.5 executable over stdio, send `notifications/initialized`, and list tools: the three contextRead tools are present and `capture_memory` is absent. Repeat with each off switch: `--no-raw` disables retention and Raw search, `--no-raw-search` disables Raw search while retaining Raw, and `--no-context-read` removes contextRead tools. Check configuration, schema/index effects and listed tools. |
 | F3 | Import installed 0.6.5 `createCairnServer`, connect a minimal in-process transport, initialize, explicitly capture synthetic text with a synthetic model and `source-bound-v2`, verify one saved Raw part, and read dated Memory plus Raw evidence through `read_memory_context`. |
-| R1 | Separate installed-core children create a 0.6.3 schema-18 store and memory; 0.6.5 upgrades to schema 29 and captures two memories with Raw lineage; 0.6.3 opens/reads/closes without changing any file, then saves a memory and a Memory-only capture and forgets one Raw-linked memory; 0.6.5 reopens with clean integrity/foreign keys, captures Raw, and finds the control source but no forgotten source in Raw search. |
+| R1 | Separate installed-core children create a 0.6.3 schema-18 store and memory; 0.6.5 upgrades to schema 29, captures two memories with Raw lineage, maintains complete Raw search coverage and finds both exact source message IDs. Retain the closed index in the pre-downgrade hash inventory. 0.6.3 opens/reads/closes without changing any file, then saves a memory and a Memory-only capture and forgets one Raw-linked memory. 0.6.5 reopens with clean integrity/foreign keys and finds the control source but no forgotten source before explicit maintenance or new capture, then again after maintenance and after a new Raw capture. |
 
 Smoke F1, F2, F3 and R1 on Node 22.16.0 only during preparation; the full
 acceptance driver is run separately by the release operator. Each installed-byte
@@ -1543,5 +1545,3 @@ Memory, Raw and search indexes are local plaintext. The default Raw cap is
 `--no-context-read` to disable the respective defaults; see
 [defaults and off switches](../defaults.md).
 You can go back to 0.6.3; it keeps working with the upgraded store, but conversations captured while on 0.6.3 are not kept as Raw.
-| Q09 | Full `test:setup` and the Codex integration suites exit 0 on Node 22.16.0 and 24.15.0 |
-| Q10 | The tarball inventories, compared independently with `tar` and with npm's pack manifest (including the embedded engine), equal 0.6.2's except for the declared version and the Rule 7 files. They contain no fixtures. |
