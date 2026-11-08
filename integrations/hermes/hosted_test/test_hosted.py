@@ -293,7 +293,7 @@ def test_prefetch_json_and_network_failures(install, cloud, monkeypatch):
     assert provider.prefetch("synthetic query") == ""
     def fail(*args, **kwargs):
         raise OSError("synthetic private diagnostic")
-    monkeypatch.setattr(provider._hosted._client, "post", fail)
+    monkeypatch.setattr(provider._hosted._client, "request", fail)
     assert provider.prefetch("synthetic private query") == ""
 
 

@@ -37,6 +37,9 @@ class FakeCloud:
         self.requests = []
         self.completed_recalls = 0
         self.lock = threading.Lock()
+        self.trickle_response = None
+        self.oversize_response = None
+        self.stop_streams = threading.Event()
 
     def requests_for(self, path):
         with self.lock:
@@ -60,8 +63,14 @@ def cloud():
         def log_message(self, *args):
             pass
 
-        def respond(self, status, value, content_type="application/json", partial=False):
+        def respond(self, status, value, content_type="application/json", partial=False, operation=None):
             data = value if isinstance(value, bytes) else json.dumps(value).encode()
+            key = operation or self.path
+            trickle = state.trickle_response == key
+            if trickle:
+                data = b" " * 40 + data
+            if state.oversize_response == key:
+                data += b" " * (1024 * 1024 + 1 - len(data))
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(data)))
@@ -71,7 +80,15 @@ def cloud():
                 self.send_header("Location", state.endpoint + "/redirect-target")
             self.end_headers()
             try:
-                self.wfile.write(data)
+                if trickle:
+                    for byte in data[:40]:
+                        self.wfile.write(bytes([byte]))
+                        self.wfile.flush()
+                        if state.stop_streams.wait(0.05):
+                            return
+                    self.wfile.write(data[40:])
+                else:
+                    self.wfile.write(data)
             except (BrokenPipeError, ConnectionResetError):
                 pass
 
@@ -125,7 +142,7 @@ def cloud():
                                          "structuredContent": {"memory_id": args["memory_id"], "forgotten": forgotten}}
                 else:
                     result["error"] = {"code": -32602, "message": "synthetic server diagnostic"}
-            self.respond(state.mcp_status, result, state.mcp_type)
+            self.respond(state.mcp_status, result, state.mcp_type, operation=body["method"])
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     server.daemon_threads = True
@@ -133,6 +150,7 @@ def cloud():
     thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
     thread.start()
     yield state
+    state.stop_streams.set()
     server.shutdown()
     server.server_close()
     thread.join(2)

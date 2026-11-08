@@ -1,5 +1,6 @@
 """Hosted Cairn memory, using only httpx and the Python standard library."""
 
+import asyncio
 import getpass
 import json
 import os
@@ -22,6 +23,91 @@ MCP_PROTOCOL_VERSION = "2025-06-18"
 DEFAULT_ENDPOINT = "https://cairn.ink"
 SESSION_ID = re.compile(r"[A-Za-z0-9._:-]{1,200}")
 KINDS = ("fact", "preference", "decision", "instruction", "context")
+REQUEST_TIMEOUT_SECONDS = 20
+MAX_RESPONSE_BYTES = 1024 * 1024
+
+
+class DeadlineClient:
+    """Synchronous facade with cancellable, request-scoped streaming transports.
+
+    A read timeout alone resets with every byte. Async cancellation also bounds
+    connection setup, headers and a stalled final read by the same total budget.
+    Each request owns its event loop and transport, so concurrent Hermes threads
+    never share an async connection pool across loops.
+    """
+
+    def __init__(self, *, headers=None):
+        self._headers = dict(headers or {})
+        self._lock = threading.Lock()
+        self._closed = False
+        self._active = {}
+
+    def request(self, method, url, *, budget, **kwargs):
+        deadline = time.monotonic() + budget
+        result, errors = [], []
+
+        def remaining():
+            value = deadline - time.monotonic()
+            if value <= 0:
+                raise httpx.TimeoutException("cairn_transport_failed")
+            return value
+
+        async def stream():
+            task = asyncio.current_task()
+            with self._lock:
+                if self._closed:
+                    raise ValueError("cairn_transport_failed")
+                self._active[task] = asyncio.get_running_loop()
+            try:
+                async with httpx.AsyncClient(headers=self._headers, follow_redirects=False,
+                                             trust_env=False) as client:
+                    async with asyncio.timeout(remaining()):
+                        async with client.stream(method, url, timeout=httpx.Timeout(remaining()), **kwargs) as response:
+                            body = bytearray()
+                            chunks = response.aiter_bytes()
+                            while True:
+                                # httpcore reads these limits for subsequent transport phases.
+                                response.request.extensions["timeout"] = httpx.Timeout(remaining()).as_dict()
+                                chunk = await anext(chunks, None)
+                                remaining()
+                                if chunk is None:
+                                    break
+                                if len(body) + len(chunk) > MAX_RESPONSE_BYTES:
+                                    raise ValueError("cairn_transport_failed")
+                                body.extend(chunk)
+                            # Preserve httpx's decoded response without decoding it twice.
+                            response._content = bytes(body)
+                            return response
+            finally:
+                with self._lock:
+                    self._active.pop(task, None)
+
+        def run():
+            try:
+                result.append(asyncio.run(stream()))
+            except (Exception, asyncio.CancelledError):
+                errors.append(httpx.TimeoutException("cairn_transport_failed"))
+
+        # A dedicated loop also works when a synchronous hook is called on an
+        # existing event-loop thread. Join until cancellation has closed the stream.
+        worker = spawn_context_thread(run, name="cairn-http", daemon=True)
+        worker.start()
+        while worker.is_alive():
+            worker.join(budget)
+        if errors:
+            raise errors[0]
+        return result[0]
+
+    def close(self):
+        with self._lock:
+            self._closed = True
+            active = list(self._active.items())
+        for task, loop in active:
+            try:
+                loop.call_soon_threadsafe(task.cancel)
+            except RuntimeError:
+                # The request completed and closed its loop after the snapshot.
+                pass
 
 
 def failure(code, retryable=False):
@@ -135,9 +221,12 @@ def check_credential(endpoint, token):
     try:
         if not isinstance(token, str) or not token or not all(33 <= ord(c) <= 126 for c in token):
             return None, "Invalid or revoked token."
-        with httpx.Client(follow_redirects=False, trust_env=False, timeout=20) as client:
-            response = client.get(endpoint_origin(endpoint) + "/api/cli-auth/v1/credential",
-                                  headers={"Authorization": "Bearer " + token})
+        client = DeadlineClient(headers={"Authorization": "Bearer " + token})
+        try:
+            response = client.request("GET", endpoint_origin(endpoint) + "/api/cli-auth/v1/credential",
+                                      budget=REQUEST_TIMEOUT_SECONDS)
+        finally:
+            client.close()
         if response.status_code in (401, 403):
             return None, "Invalid or revoked token."
         if response.status_code in (404, 501):
@@ -308,7 +397,7 @@ class HostedMemoryProvider(MemoryProvider):
         self._home, self._config = home, config
         self._endpoint, self._token = endpoint_origin(config["api_endpoint"]), credential["token"]
         if self._client is None:
-            self._client = httpx.Client(follow_redirects=False, trust_env=False, headers={
+            self._client = DeadlineClient(headers={
                 "Content-Type": "application/json", "Accept": "application/json, text/event-stream",
                 "Authorization": "Bearer " + self._token, "User-Agent": "cairn-hermes/" + VERSION})
         self._ready = True
@@ -352,8 +441,8 @@ class HostedMemoryProvider(MemoryProvider):
                 body = {"query": query.strip()[:4000], "limit": 6}
                 if isinstance(session_id, str) and SESSION_ID.fullmatch(session_id):
                     body["session_id"] = session_id
-                response = self._client.post(self._endpoint + "/api/memory/recall", json=body,
-                                             timeout=httpx.Timeout(cap + 0.5))
+                response = self._client.request("POST", self._endpoint + "/api/memory/recall", json=body,
+                                                budget=cap + 0.5)
                 if response.status_code == 200:
                     result = format_memories(response.json())
             except Exception:
@@ -396,9 +485,9 @@ class HostedMemoryProvider(MemoryProvider):
     def _rpc(self, method, params, *, protocol_header=False):
         headers = {"MCP-Protocol-Version": MCP_PROTOCOL_VERSION} if protocol_header else {}
         try:
-            response = self._client.post(self._endpoint + "/api/mcp", headers=headers,
-                                         json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
-                                         timeout=20)
+            response = self._client.request("POST", self._endpoint + "/api/mcp", headers=headers,
+                                            json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
+                                            budget=REQUEST_TIMEOUT_SECONDS)
             status = response.status_code
             if status in (401, 403):
                 return None, failure("cairn_auth_failed")

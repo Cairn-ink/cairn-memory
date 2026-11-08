@@ -138,6 +138,8 @@ class CairnMemoryProvider(MemoryProvider):
         return "cairn"
 
     def is_available(self):
+        if self._closed:
+            return False
         try:
             home = get_hermes_home().resolve()
             config = configuration(home)
@@ -188,6 +190,8 @@ class CairnMemoryProvider(MemoryProvider):
                                     "secret": True, "required": False, "env_var": "CAIRN_MEMORY_OPENAI_API_KEY"}]
 
     def save_config(self, values, hermes_home):
+        if self._closed:
+            raise ValueError("cairn_unsupported_context")
         validated = validate_config(values)
         home = Path(hermes_home).resolve()
         home.mkdir(parents=True, exist_ok=True)
@@ -222,6 +226,8 @@ class CairnMemoryProvider(MemoryProvider):
 
     def initialize(self, session_id, **kwargs):
         self._ready = False
+        if self._closed:
+            raise ValueError("cairn_unsupported_context")
         if self._hosted is not None:
             return self._hosted.initialize(session_id, **kwargs)
         if self._closed or kwargs.get("platform") != "cli" or kwargs.get("agent_context") != "primary":
@@ -235,6 +241,8 @@ class CairnMemoryProvider(MemoryProvider):
         self._ready = True
 
     def handle_tool_call(self, tool_name, args, **kwargs):
+        if self._closed:
+            return error("cairn_not_initialized")
         if self._hosted is not None:
             return self._hosted.handle_tool_call(tool_name, args, **kwargs)
         if not self._ready or self._closed:
@@ -293,8 +301,11 @@ class CairnMemoryProvider(MemoryProvider):
                 self._process = None
 
     def shutdown(self):
+        if self._closed:
+            return
         if self._hosted is not None:
             self._closed = True
+            self._ready = False
             return self._hosted.shutdown()
         with self._lock:
             self._closed = True
@@ -303,12 +314,18 @@ class CairnMemoryProvider(MemoryProvider):
                 stop_process(self._process)
 
     def system_prompt_block(self):
+        if self._closed:
+            return ""
         return self._hosted.system_prompt_block() if self._hosted is not None else ""
 
     def prefetch(self, query, *, session_id=""):
+        if self._closed:
+            return ""
         return self._hosted.prefetch(query, session_id=session_id) if self._hosted is not None else ""
 
     def recall_status(self):
+        if self._closed:
+            return None
         return self._hosted.recall_status() if self._hosted is not None else None
 
     def queue_prefetch(self, query, *, session_id=""):
