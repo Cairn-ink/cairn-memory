@@ -388,6 +388,11 @@
   "core/context-read-assembly.mjs": {
     "key:id": 3
   },
+  "core/context-read-three-layer.mjs": {
+    "key:conversationId": 2,
+    "key:id": 7,
+    "key:messageId": 2
+  },
   "core/context-read-budget.mjs": {
     "key:id": 1
   },
@@ -399,8 +404,10 @@
     "key:actionId": 1,
     "key:batchRefs": 5,
     "key:id": 2,
+    "key:sessionIds": 1,
     "key:storeId": 6,
     "key:targetId": 1,
+    "key:turnIds": 1,
     "literal:cardId": 1,
     "literal:hybrid": 3,
     "literal:memoryId": 1
@@ -553,14 +560,14 @@
     "literal:sessionId": 1
   },
   "core/raw-capture-storage.mjs": {
-    "key:eventId": 2,
-    "key:id": 2,
+    "key:eventId": 3,
+    "key:id": 3,
     "key:ownerId": 1,
     "key:projectId": 1,
-    "key:sessionId": 2,
+    "key:sessionId": 3,
     "key:streamId": 1,
-    "literal:eventId": 1,
-    "literal:sessionId": 2,
+    "literal:eventId": 2,
+    "literal:sessionId": 3,
     "literal:streamId": 1
   },
   "core/raw-journal.mjs": {
@@ -1402,7 +1409,9 @@
     "key:catalogId": 1,
     "key:id": 4,
     "key:ownerId": 2,
+    "key:sessionIds": 1,
     "key:storeId": 4,
+    "key:turnIds": 1,
     "literal:hybrid": 1,
     "literal:validation_invalid": 5
   },
@@ -1564,6 +1573,38 @@
     "key:store_id": 1,
     "key:target_id": 1
   },
+  "core/raw-search-input.mjs": {
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "literal:ownerId": 2,
+    "literal:projectId": 1
+  },
+  "core/raw-search-authority.mjs": {
+    "key:actionId": 1,
+    "key:conversationId": 2,
+    "key:memoryId": 2,
+    "key:messageId": 2,
+    "key:ownerId": 2,
+    "key:projectId": 1,
+    "key:receiptId": 2,
+    "key:storeId": 2,
+    "key:targetId": 1
+  },
+  "core/raw-search-index.mjs": {
+    "key:centerId": 1,
+    "key:conversationId": 3,
+    "key:id": 2,
+    "key:messageId": 3
+  },
+  "core/raw-search-retrieval.mjs": {
+    "key:centerId": 1,
+    "key:id": 4
+  },
+  "core/raw-search-maintenance.mjs": {
+    "key:id": 1,
+    "key:pumpId": 1,
+    "key:windowId": 1
+  },
   "core/card-lineage.mjs": {
     "key:actor_id": 1,
     "key:card_id": 2,
@@ -1589,5 +1630,9 @@
     "literal:projectId": 4,
     "literal:roleId": 2,
     "literal:versionId": 2
+  },
+  "core/local-raw-search.mjs": {
+    "key:ownerId": 1,
+    "key:projectId": 1
   }
 }

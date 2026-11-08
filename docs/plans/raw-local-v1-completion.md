@@ -3,7 +3,7 @@
 Status: authorized implementation, not completed acceptance.
 Base: `cd6d1ad32ac3d6f5926c6846e8c6d27645bb7c9a`.
 Owner approval: 2026-10-21, local synthetic development/tests/PRs may proceed
-before production G1/G2 receipts. Default-off; no real-user data, paid calls,
+before production G1/G2 receipts. That packet initially kept Raw off; current local retention is default-on with `raw:false` / `--no-raw` ([defaults](../defaults.md)). Its acceptance used no real-user data or paid calls; no
 publication, deployment or operational database migration.
 
 Current checkpoint (2026-10-22): storage/capture/source/invalidation and local
@@ -82,7 +82,7 @@ all31 latest-head checks succeeded. It is ready/unmerged as#468. Primary
 reconfirmed that SHA, ready state and31 successful checks on2026-10-22.
 This is Memory-only MOC metadata, not a new Card MOC view or retrieval algorithm.
 The next [standalone closeout packet](local-v1-closeout.md) supplies explicit
-default-off local initialization/setup/activation. Its dual-runtime source and
+local initialization/setup/activation, originally off; current local capture retention and read defaults are documented in [defaults](../defaults.md). Its dual-runtime source and
 installed checks and primary independent installed/native-config probes pass.
 Its26-command affected regression matrix now passes on both runtimes, actual
 outer0/children0,2444 passing cases and2 explicit native-Windows skips; source,
@@ -215,7 +215,8 @@ not merged when this packet started). Worktree `raw-local-v1-capture`, branch
 `feat/raw-local-v1-capture`. Main remains `cd6d1ad`; this is an explicitly
 dependent delivery, not permission to merge either PR.
 
-P2 is an internal local integration, default-off and synthetic-only. Reuse the
+P2 began as an internal synthetic integration. The public local constructor
+now enables Raw by default; see [current defaults](../defaults.md). Reuse the
 actual capture/admission/episode implementation; do not create a test-only
 parallel algorithm or add a host/product store. Public constructor inputs,
 legacy capture request/response fields and advertised capabilities remain
@@ -1227,7 +1228,7 @@ Continue step3 on `feat/raw-local-v1-public`, isolated worktree
 `raw-local-v1-public`, fixed at that accepted P4a commit. The
 [P4b-B1 contract](raw-local-v1-public.md) promotes existing Raw composition
 through public openMemoryCore and the actual private archive, preserving
-default-off and existing Card authority. This remains the same engine.
+existing Card authority. Its original default-off pin is superseded by [current local defaults](../defaults.md). This remains the same engine.
 Its installed programmatic lifecycle is a bounded part of step4, not completed
 Claude/Codex setup/transport/cursor or MCP/terminal acceptance. Product pin stays
 cd6d1ad; later client/control and installed lifecycle packets remain required.

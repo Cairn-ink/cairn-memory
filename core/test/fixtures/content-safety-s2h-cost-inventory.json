@@ -19,6 +19,7 @@
       "openMemoryCore",
       "openMemoryReader",
       "openMemoryStore",
+      "openRawSearch",
       "renewContextMaintenancePump",
       "roleProfileRef",
       "roleProfileReleaseRef",
@@ -3428,6 +3429,10 @@
     "verifyAssetBytes": {
       "kind": "read",
       "entry": "verifyAssetBytes"
+    },
+    "openRawSearch": {
+      "kind": "exempt",
+      "reason": "Optional Raw search handle construction returns no retained content and exposes no fact writer; returned methods are covered by the Raw privacy and erasure tests."
     }
   },
   "unmigratedGate": {

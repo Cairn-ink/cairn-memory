@@ -19,7 +19,7 @@ off. These are product-team measurements, not yet primary reproductions.
 Acknowledgement/request for the synthetic harness: comment6313275124.
 
 Keep production/flags, credentials, user stores and product pin untouched. This
-branch is independent of the default-off Raw dependency stack; it must not
+branch is independent of the Raw dependency stack; it must not
 require merging or enabling Raw to address the product's read bottleneck.
 Finish Raw B1's already frozen verification/review, but prioritize confirmed
 E-1 read blocking over further Raw installation work. Preserve B2a's separate

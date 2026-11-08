@@ -88,7 +88,7 @@ function assertSources(actual, details) {
 for (const mode of [undefined, 'source-bound-v1', 'source-bound-v2']) {
   test(`S6 SDK source mode suppresses interpretation with configuration ${mode ?? 'absent'}`, options, async t => {
     const { path, details } = seed(); const hosted = await host(t, path, mode);
-    assert.equal((await hosted.client.listTools()).tools.length, mode ? 6 : 5);
+    assert.equal((await hosted.client.listTools()).tools.length, mode ? 9 : 8);
     assertSources(await recall(hosted, { contextMode: 'source-evidence' }), details);
     assertSources(await recall(hosted, { contextMode: 'source-evidence', includeQualification: false }), details);
     const scanned = await recall(hosted, { contextMode: 'source-evidence', selectionMode: 'bounded-source-scan' });

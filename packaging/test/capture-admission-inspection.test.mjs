@@ -102,7 +102,7 @@ test('installed cold admission inspection then explicit classification uses one 
       return client;
     }
     const cold = await start(keylessEnv);
-    assert.equal((await cold.listTools()).tools.length, 7);
+    assert.equal((await cold.listTools()).tools.length, 10);
     const inspected = await call(cold, 'inspect_capture_admission', { batchId: key.eventId });
     assert.equal(inspected.status, 'completed');
     assert.deepEqual(inspected.classification, { status: 'unknown' });

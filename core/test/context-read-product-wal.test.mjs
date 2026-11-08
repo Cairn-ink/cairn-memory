@@ -308,11 +308,16 @@ test('P2-01/10 WAL opt-in is strict, default refusal and capability bytes stay i
   const first=await a.open(),second=await b.open();
   // Frozen P2b bytes plus P2c's approved 32-namespace maximum, PR 1's
   // disabled receipt-event-time capability and PR 2's representation list.
-  // Both default spellings must match every byte; preserve the P2b fixture.
+  // The dated/default-budget/Raw-port changes are explicit amendments.
+  // Both WAL default spellings still match; preserve the original P2b fixture.
   const golden=readFileSync(new URL('./fixtures/context-product-capabilities-p2b.json',import.meta.url),'utf8').trimEnd()
     .replace('"readSetMaximum":2,','"readSetMaximum":32,')
     .replace('"intents":["current","history"],','"intents":["current","history"],"receiptEventTime":false,')
-    .replace('"representation":"representation-v2",','"representation":"representation-v2","representations":["representation-v2","representation-v2-dated"],');
+    .replace('"representation":"representation-v2",','"representation":"representation-v2-dated","raw":{"default":true,"configured":false},"representations":["representation-v2","representation-v2-dated"],')
+    .replace('"defaultMaxTokens":1500', '"defaultMaxTokens":6000')
+    .replace('"maxTokens":4000', '"maxTokens":6000')
+    .replace('"defaultMaxItems":12', '"defaultMaxItems":24')
+    .replace(',"raw-search"', '');
   assert.equal(JSON.parse(golden).value.readSetMaximum,32);
   assert.equal(JSON.parse(golden).value.receiptEventTime,false);
   assert.deepEqual(JSON.parse(golden).value.assembly.representations,['representation-v2','representation-v2-dated']);

@@ -11,7 +11,7 @@ import {installedMethods,fileCommand} from './fixtures/method-packages.mjs';
 import {installedImportClosure} from './fixtures/installed-import-closure.mjs';
 import {roleHost,roleCall} from './fixtures/role-profile-host.mjs';
 import {roleLegacyProbe} from '../../adapters/mcp/test/fixtures/role-profile-legacy-probe.mjs';
-import {removeReviewedRoleHelpAdditions,removeReviewedDatedContextOption} from '../../adapters/mcp/test/fixtures/role-profile-help-compat.mjs';
+import {removeReviewedRoleHelpAdditions,removeReviewedDatedContextOption,withReviewedReadDefaults} from '../../adapters/mcp/test/fixtures/role-profile-help-compat.mjs';
 
 const root=fileURLToPath(new URL('../../',import.meta.url)),ns={ownerId:'owner',scope:'personal',projectId:null},project={...ns,scope:'project',projectId:'project'};
 const ok=r=>{assert.equal(r.ok,true,JSON.stringify(r));return r.value;};
@@ -94,10 +94,10 @@ test('C05 pinned 4aa9327b installed flag-off bytes remain identical; feature-off
   const legacy=join(workspace.path,'flag-off-probe');mkdirSync(legacy);
   assert.deepEqual(await roleLegacyProbe(baseline,legacy),expected.value);
   const current=join(workspace.path,'current-probe');mkdirSync(current);
-  const actual=await roleLegacyProbe(installed.root,current);
+  const actual=await roleLegacyProbe(installed.root,current,{legacyModes:true});
   actual.cli.stdout[0]=removeReviewedRoleHelpAdditions(actual.cli.stdout[0]);
   removeReviewedDatedContextOption(actual);
-  assert.deepEqual(actual,expected.value);
+  assert.deepEqual(actual,withReviewedReadDefaults(expected.value));
   const rolePath=join(workspace.path,'feature-off.sqlite');
   const c=coreModule.openMemoryCore({path:rolePath,roleProfiles:{version:'role-profiles-local-v1',storage:'local-plain-v1',authority,attribution:{actorId:'a',agentId:'b'}}});
   const head=ok(c.publishRoleProfileRelease({...publish('finance',fields()),namespace:ns},token));c.close();

@@ -103,7 +103,7 @@ test('I3 exact installed qualified receipt supports capture, both recall context
     const env = { OPENAI_API_KEY: proxy.token, NODE_NO_WARNINGS: '1',
       NODE_OPTIONS: `--import=data:text/javascript;base64,${Buffer.from(preload).toString('base64')}` };
     const client = await start(t, receipt, env);
-    assert.equal((await client.listTools()).tools.length, 6);
+    assert.equal((await client.listTools()).tools.length, 9);
     const batch = { batchId: 'synthetic-install-capture', messages };
     const captured = await call(client, 'capture_memory', batch); assert.equal(requests, 6);
     assert.deepEqual(captured.retainedSourceWindow, { maxUnitsPerMessage: 800, truncatedMessageIndices: [] });
@@ -128,10 +128,10 @@ test('I3 exact installed qualified receipt supports capture, both recall context
     await keyless.close(); assert.equal(requests, 14);
   });
 
-test('I3 absent installer mode keeps generated receipt and actual installed five-tool default', { timeout: 120000 }, async t => {
+test('I3 absent installer mode keeps generated receipt and actual installed eight-tool default', { timeout: 120000 }, async t => {
   const receipt = install(t); assert.equal(Object.hasOwn(receipt, 'captureQualification'), false);
   assert.equal(receipt.stdio.args.includes('--capture-qualification'), false);
   const client = await start(t, receipt, { OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1' });
   const tools = (await client.listTools()).tools;
-  assert.equal(tools.length, 5); assert.equal(tools.some(tool => tool.name === 'capture_memory'), false);
+  assert.equal(tools.length, 8); assert.equal(tools.some(tool => tool.name === 'capture_memory'), false);
 });

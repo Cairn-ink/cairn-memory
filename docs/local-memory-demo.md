@@ -63,11 +63,11 @@ It uses a fresh synthetic temporary database and a synthetic owner, so it does
 not open the installed `data/memory.sqlite` or any existing memory file. The
 child environment deliberately has no model key, even if the parent shell has
 one. Expect a JSON report with `status: "passed"`; its recall stage must receive
-`model_not_configured`, while the other stages check the five tools, receipts,
+`model_not_configured`, while the other stages check the memory tools, receipts,
 restart persistence, revision conflict handling and logical forgetting. This is
 the model-free check; it does not test semantic relevance.
 
-Paid semantic recall is a separate opt-in. Put `OPENAI_API_KEY` in the MCP
+The walkthrough’s paid legacy recall stage is a separate opt-in. Normal MCP contextRead uses semantic search automatically when its process has `OPENAI_API_KEY`; without a key it uses BM25. See [all defaults](defaults.md). Put `OPENAI_API_KEY` in the MCP
 process's secret environment, never in tool arguments, a receipt or committed
 configuration, and run:
 
