@@ -388,6 +388,11 @@
   "core/context-read-assembly.mjs": {
     "key:id": 3
   },
+  "core/context-read-three-layer.mjs": {
+    "key:conversationId": 2,
+    "key:id": 7,
+    "key:messageId": 2
+  },
   "core/context-read-budget.mjs": {
     "key:id": 1
   },
@@ -399,8 +404,10 @@
     "key:actionId": 1,
     "key:batchRefs": 5,
     "key:id": 2,
+    "key:sessionIds": 1,
     "key:storeId": 6,
     "key:targetId": 1,
+    "key:turnIds": 1,
     "literal:cardId": 1,
     "literal:hybrid": 3,
     "literal:memoryId": 1
@@ -1402,7 +1409,9 @@
     "key:catalogId": 1,
     "key:id": 4,
     "key:ownerId": 2,
+    "key:sessionIds": 1,
     "key:storeId": 4,
+    "key:turnIds": 1,
     "literal:hybrid": 1,
     "literal:validation_invalid": 5
   },

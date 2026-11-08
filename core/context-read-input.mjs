@@ -21,15 +21,15 @@ export const ASSEMBLY_DEFAULTS = deepFreeze({ metadata: {
   memory: { state: 'active', reviewState: 'none', filing: { status: 'unfiled' }, kind: 'fact', origin: 'explicit', confidence: 1 },
   card: { state: 'confirmed' } }, sourceAccess: 'available', sourcesComplete: true });
 export const DEFAULT_ASSEMBLY_POLICY = 'rank-first-whole-v1';
-export const ASSEMBLY_LIMITS = Object.freeze({ defaultMaxTokens: 1500, minTokens: 64, maxTokens: 4000,
-  defaultMaxItems: 12, maxItems: 24, candidates: 24, sourcesPerItem: 16, responseBytes: 65536,
+export const ASSEMBLY_LIMITS = Object.freeze({ defaultMaxTokens: 6000, minTokens: 64, maxTokens: 6000,
+  defaultMaxItems: 24, maxItems: 24, candidates: 24, sourcesPerItem: 16, responseBytes: 65536,
   defaultDeadlineMs: 1000, deadlineMs: 5000, counterCalls: 1226 });
 export const CONTEXT_LIMITS = Object.freeze({ defaultLimit: 12, horizon: 24, queryUnits: 4000,
   defaultDeadlineMs: 1000, deadlineMs: 5000, responseBytes: 65536, cursorUnits: 8192,
   snapshotUnits: 16384, refreshItems: 1024, batchRows: 128, batchTextUnits: 2_000_000,
   vectors: 20000, cacheBytes: 134217728, dimensions: 32768, embedderMetadataUnits: 200, rankings: 128, rankingTtlMs: 300000 });
 export function contextOptions(value) {
-  const options = ownData(value, ['version', 'authority', 'embedder', 'policy', 'counter', 'sources', 'localStatus']);
+  const options = ownData(value, ['version', 'authority', 'embedder', 'policy', 'counter', 'sources', 'localStatus', 'rawSearch']);
   if (options.version !== CONTEXT_VERSION) fail('invalid_input');
   const sources = Object.hasOwn(options, 'sources') ? contextSources(options.sources) : null;
   const authority = ownData(options.authority, ['authorize', 'isCurrent']);
@@ -56,7 +56,10 @@ export function contextOptions(value) {
       !Number.isFinite(policy.maxUsd) || policy.maxUsd <= 0 || typeof policy.estimateUsd !== 'function' ||
       types.isAsyncFunction(policy.estimateUsd) || policy.maxConcurrent !== undefined &&
       (!Number.isInteger(policy.maxConcurrent) || policy.maxConcurrent < 1 || policy.maxConcurrent > 1024))) fail('invalid_input');
+  if (options.rawSearch !== undefined && (!options.rawSearch ||
+      ['search', 'prepare', 'revalidate'].some(key => typeof options.rawSearch[key] !== 'function'))) fail('invalid_input');
   return Object.freeze({ authority: Object.freeze(authority), embedder, counter: counter && Object.freeze(counter), family,
+    rawSearch: options.rawSearch ?? null,
     ...(explicitLocal ? { localStatus } : {}),
     preset: sources?.includes('moc-v1') ? 'rrf-k60-d12-moc-v1' : family === 'hosted' ? 'rrf-k10' : 'rrf-k60-d12',
     ...(sources ? { sources } : {}),
@@ -143,7 +146,7 @@ export function contextInput(method, value, supportedTypes, enabledSources, prof
   const payload = deepFreeze(contextSnapshot(value));
   const selected = ownData(payload, method === 'findCandidates' ?
     ['readSet', 'query', 'types', 'intent', 'semantic', 'limit', 'deadlineMs', 'cursor', ...(enabledSources ? ['sources'] : [])] : method === 'contextRead' ?
-      ['readSet', 'query', 'types', 'intent', 'semantic', 'budget', 'policy', 'representation', 'deadlineMs', ...(enabledSources ? ['sources'] : [])] : method === 'refreshContextIndex' ?
+      ['readSet', 'query', 'types', 'intent', 'semantic', 'budget', 'policy', 'representation', 'deadlineMs', 'raw', ...(enabledSources ? ['sources'] : [])] : method === 'refreshContextIndex' ?
       ['readSet', 'types', 'intent', 'budget'] : ['readSet', 'refs', 'intent', 'snapshot', 'responseByteLimit', 'fences']);
   const result = { readSet: contextReadSet(selected.readSet, profile) };
   if (method === 'fetchCandidateEvidence') {
@@ -176,12 +179,15 @@ export function contextInput(method, value, supportedTypes, enabledSources, prof
       result.deadlineMs = integer(selected.deadlineMs, 1000, 5000);
       if (method === 'contextRead') {
         const budget = selected.budget === undefined ? {} : ownData(selected.budget, ['maxTokens', 'maxItems']);
-        result.budget = { maxTokens: integer(budget.maxTokens, 1500, 4000), maxItems: integer(budget.maxItems, 12, 24) };
+        result.budget = { maxTokens: integer(budget.maxTokens, ASSEMBLY_LIMITS.defaultMaxTokens, ASSEMBLY_LIMITS.maxTokens),
+          maxItems: integer(budget.maxItems, ASSEMBLY_LIMITS.defaultMaxItems, ASSEMBLY_LIMITS.maxItems) };
         if (result.budget.maxTokens < 64) fail('invalid_input');
         const policy = selected.policy === undefined ? { id: DEFAULT_ASSEMBLY_POLICY } : ownData(selected.policy, ['id']);
         if (!ASSEMBLY_POLICIES.includes(policy.id)) fail('invalid_input');
         result.policy = { id: policy.id };
-        result.representation = selected.representation === undefined ? ASSEMBLY_REPRESENTATIONS[0] : selected.representation;
+        if (selected.raw !== undefined && typeof selected.raw !== 'boolean') fail('invalid_input');
+        result.raw = selected.raw ?? true;
+        result.representation = selected.representation === undefined ? 'representation-v2-dated' : selected.representation;
         if (!ASSEMBLY_REPRESENTATIONS.includes(result.representation)) fail('invalid_input');
       } else result.limit = integer(selected.limit, 12, 24);
       if (Object.hasOwn(selected, 'cursor')) {

@@ -281,6 +281,9 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // The native guard's added Card/source ids and literal id classify captured
   // changes and validate the approved causal invalidation; they add no public
   // acknowledgement field or terminal exemption. Keep that guard unchanged.
+  // Dated Memory + Raw assembly: source-turn/session ids and inline Raw refs
+  // are private read projections. No writer acknowledgement or native guard
+  // changes; delivery validates canonical Memory and prepared Raw separately.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};
