@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -46,6 +46,8 @@ test('installed prompt entry exits silently within its process-clock budget, fiv
       // A private native-shaped ancestor exercises production /proc detection
       // and the identity-keyed qualification cache without using a real host.
       await copyFile(process.execPath, codex);
+      // copyFile keeps the source mode; a runner's Node can be group-writable.
+      await chmod(codex, 0o700);
       const identity = await binaryIdentity(codex);
       const put = (path, value) => writeFile(path, JSON.stringify(value), { mode: 0o600 });
       const installation = join(directory, 'installation.json');
