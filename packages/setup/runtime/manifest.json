@@ -25,7 +25,7 @@
     "integrations/codex/hook.mjs": "f2cebf18c7a2ad3972a833bddc611f67e0b132ca4845e6f721719d80f27302f9",
     "integrations/codex/hosted-lifecycle.mjs": "5123350b18ee89a7557dbeec237e1e7790f1b7f21484dd393a97a6f66b009e94",
     "integrations/codex/installed-state.mjs": "7ebceb25f266b9aa635d1fd8a588504da33cbfc4c01144ce5b4b9c10f2864932",
-    "integrations/codex/installed.mjs": "7b5a7f28cb1e88ff3a35ab959f7aa9f82ded7053053fd9cab8abdc9de008cfa8",
+    "integrations/codex/installed.mjs": "66ea40d717169c09fb1789dcfec105585d41446341f8c1b0851e73077a40bbbe",
     "integrations/codex/parser.mjs": "41440a7a2e0bb4108bc9abcace2b3d51e8437fea7c6591c28b3d56c65b4243a5",
     "integrations/codex/qualification.mjs": "511eeb9accdeac644690377e712ef4226ea7b5ee2b4fd41f36faa8777014dba4",
     "integrations/codex/schema-evidence.mjs": "1313d5789bbf8aa4a61be3bd4c1269793dbc0df543938e2a23fded3a2d4d518b",
