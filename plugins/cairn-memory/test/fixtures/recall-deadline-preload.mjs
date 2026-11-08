@@ -7,6 +7,12 @@ const notify = (kind, details = {}) => process.send?.({ kind,
 notify('process-origin', { monotonicMs: Number(process.hrtime.bigint()) / 1e6 - performance.now() });
 const startupDelay = Number(process.env.CAIRN_TEST_STARTUP_DELAY ?? 0);
 if (startupDelay) await delay(startupDelay);
+// Observe the configured HTTP delay without replacing the native timeout.
+const originalSignalTimeout = AbortSignal.timeout;
+AbortSignal.timeout = function (milliseconds) {
+  notify('http-timeout', { delayMs: milliseconds });
+  return originalSignalTimeout.call(this, milliseconds);
+};
 // Observe entry at creation of the hook's timer, without moving or replacing it.
 // hrtime has a common monotonic origin across parent/child processes; IPC receipt
 // latency is therefore excluded from application-entry-to-close measurement.

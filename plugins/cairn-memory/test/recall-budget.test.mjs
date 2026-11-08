@@ -49,7 +49,10 @@ test('fetch timer starts at fetch and allows 2500 ms; contention lets the cap wi
   const short = await invocation(t, { neverAnswer: true });
   silent(short); assert.equal(short.serverHeaders, 1);
   const elapsed = at(short, 'recall-aborted') - at(short, 'recall-fetch');
-  assert.ok(elapsed >= 2400 && elapsed < 2900, 'fetch_deadline_2500');
+  assert.deepEqual(short.events.filter(event => event.kind === 'http-timeout').map(event => event.delayMs), [2500],
+    'configured_fetch_deadline_2500');
+  assert.ok(elapsed >= 2400, 'fetch_deadline_not_shortened');
+  // silent() checks the sole exit upper bound: the 4000 ms host boundary.
   assert.equal(short.events.find(event => event.kind === 'recall-aborted').source, 'http');
   const contended = await invocation(t, { lockMs: 1500, neverAnswer: true });
   silent(contended); assert.equal(contended.serverHeaders, 1);
@@ -109,6 +112,11 @@ test('installed prompt launcher and configuration retain the required margin', a
 test('hosted client aborts 2500 ms after fetch', async t => {
   const workspace = createTestWorkspace(t, { prefix: 'recall-fetch-budget-' });
   let started, aborted;
+  const timers = [], originalTimeout = AbortSignal.timeout;
+  t.mock.method(AbortSignal, 'timeout', function (milliseconds) {
+    timers.push(milliseconds);
+    return originalTimeout.call(this, milliseconds);
+  });
   t.mock.method(globalThis, 'fetch', async (_url, { signal }) => {
     started = performance.now();
     await new Promise((resolve, reject) => {
@@ -121,6 +129,7 @@ test('hosted client aborts 2500 ms after fetch', async t => {
     const transport = createHostedTransport({ root: workspace.path,
       endpoint: 'https://synthetic.invalid', token: 'synthetic-token' });
     assert.equal((await transport.recall('Synthetic question')).status, 'unavailable');
-    assert.ok(aborted - started >= 2400 && aborted - started < 2900, 'client_fetch_deadline_2500');
+    assert.deepEqual(timers, [2500], 'configured_client_fetch_deadline_2500');
+    assert.ok(aborted - started >= 2400, 'client_fetch_deadline_not_shortened');
   } finally { clearInterval(keepAlive); }
 });
