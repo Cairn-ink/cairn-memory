@@ -74,7 +74,8 @@ The [context host](context-read-local.md) adds two explicit MCP read tools and a
 separate bounded document-refresh command. Startup fixes provider, preset and
 read set. Tool arguments cannot select authority, configuration or another
 namespace; returned source text remains untrusted data. Semantic query embedding
-is off by default; a key alone does not construct an embedder. Known coverage
+is automatically enabled by `OPENAI_API_KEY` in ordinary MCP startup;
+`--no-context-semantic` selects BM25 only. Known coverage
 gaps send no query request. Hosted configuration uses frozen `rrf-k10`.
 
 The OpenAI adapter uses reviewed frozen accounting inputs, not live price quotes
@@ -2305,13 +2306,10 @@ Limits:
 
 ## Internal Raw journal P1: synthetic foundation only
 
-The [internal local Raw journal](raw-local-journal.md) is a default-off storage
-and read foundation tested with synthetic local fixtures. It does not expose
-public Raw capture, installed hooks, Raw → Card support or source-deletion
-integration. It establishes no production readiness or semantic score, and does
-not authorize real transcript retention, operational migration or deployment.
-The remaining packets and final verification outcomes belong in the
-[local Raw V1 completion plan](plans/raw-local-v1-completion.md).
+The [local Raw journal](raw-local-journal.md) retains submitted captures by
+default and maintains a derived lexical index. Disable retention with `raw:false`
+or `--no-raw`. This does not install transcript hooks, enable hosted Raw, or
+establish a semantic-quality score. See [defaults and costs](defaults.md).
 
 Retained failures under simultaneous core, generic and package test load:
 
@@ -2761,3 +2759,33 @@ and do not show generic-term visibility. These API results do not establish
 Cairn.ink website or Google search order, AI citations, or discovery improvement.
 See the [discovery plan](https://github.com/Cairn-ink/cairn-memory/blob/main/docs/plans/memory-discovery-2026-10-30.md) for the query
 list, method, totals, timestamps, and retained responses.
+
+## Optional local Raw search
+
+The selected Raw index is a plaintext derived sidecar, including its vocabulary,
+vectors and rollback journal. Search validates canonical authority independently
+of cleanup; stopped services and host backups still require the host's explicit
+retention, non-serving restore and owner-purge policy. No online index export or
+hosted backend is available.
+
+Bounded snapshots admit at most 8 MiB of compact encoded source hints, with
+separately bounded fp32 vector BLOBs. Redundant canonical manifest hints are
+refetched rather than duplicated. Larger corpora can still return partial
+lexical coverage and explicit BM25-only semantics before reaching the turn/work
+limits. Complete synthetic hybrid reads within those bounds do not establish
+answer quality, cold-start completeness or passing latency. The main-file page cap reserves rollback-journal space
+inside the separate 512 MiB owner quota; exhausting that quota leaves canonical
+Raw intact and permits denial reconciliation.
+
+Joint vector residency covers Memory preflights created while the Raw service
+is selected. Hosts must select it before admitting reads, or drain existing
+reads before changing selection. The local path shares process embedding
+allowances, not a durable hosted owner ledger. See [the interface](plans/raw-search-interface.md)
+and [host seam](plans/raw-search-seam.md) for the final-snapshot and later-consumer boundaries.
+
+Synthetic qualification still fails frozen search-latency and capture-contention
+gates. Short canonical SHARED sections and a faster vector-scoring loop alone
+do not establish capture-cost or complete-pipeline qualification. Larger profiles
+also encounter hint, vector-residency and owner-quota limits. Performance
+approval remains open; complete hybrid availability within bounds is separate
+from latency and answer-quality qualification.

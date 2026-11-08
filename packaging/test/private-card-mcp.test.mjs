@@ -35,7 +35,7 @@ test('H04/H05/R08/M06 installed stdio preserves reviewed evidence, typed organiz
     const executable = join(root, 'node_modules/.bin/cairn-memory');
     const path = join(root, 'synthetic.sqlite');
     const plain = await host(workspace, path, { command: executable, enabled: false });
-    assert.equal((await plain.client.listTools()).tools.length, 5);
+    assert.equal((await plain.client.listTools()).tools.length, 8);
     await plain.client.close();
     let local = await host(workspace, path, { command: executable });
     const content = 'Synthetic installed review is Tuesday.';

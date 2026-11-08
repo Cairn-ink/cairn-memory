@@ -31,7 +31,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
   const binding = input => db.prepare(`SELECT * FROM raw_capture_events WHERE ${where}`).get(...key(input));
   const rawEvent = input => db.prepare(`SELECT result FROM raw_events WHERE ${where}`).get(...key(input));
 
-  async function prepare(request) {
+  async function prepare(request, ordinary = false, ordinaryOrder) {
     const managed = options.localAuthority;
     if (managed) {
       request = managedRequest(request, Boolean(profile.sessionEpisodes));
@@ -62,7 +62,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     if (previous && previous.binding_digest !== bindingDigest) fail('event_payload_conflict');
     const row = db.prepare(`SELECT id FROM raw_conversations WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=?`)
       .get(...rawBoundary(input.namespace), input.client, sessionKey);
-    const firstIds = previous ? JSON.parse(previous.first_message_ids) : input.messages.filter(message =>
+    const firstIds = ordinary ? input.messages.map(message => message.id) : previous ? JSON.parse(previous.first_message_ids) : input.messages.filter(message =>
       message.part.index === 0 && !(row && db.prepare('SELECT 1 FROM raw_parts WHERE conversation_id=? AND message_id=? AND part_index=0')
         .get(row.id, message.id))).map(message => message.id);
     const messages = hostInterpretation ? [] : input.messages.filter(message => firstIds.includes(message.id)).flatMap(message => {
@@ -70,11 +70,12 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       try { content = boundedText(message.content, 4000, true); }
       catch (error) { if (error.code === 'invalid_text') return []; throw error; }
       return [{ id: message.id, role: message.role, content,
-        ...(profile.sessionEpisodes ? { occurredAt: message.occurredAt } : {}) }];
+        ...((profile.sessionEpisodes || ordinary) ? { occurredAt: message.occurredAt } : {}) }];
     });
+    if (ordinaryOrder) messages.sort((a,b) => ordinaryOrder.indexOf(a.id) - ordinaryOrder.indexOf(b.id));
     const projection = freeze({ namespace: { ...input.namespace, projectId: input.namespace.projectId || null },
       client: input.client, eventId: input.eventId,
-      sessionId: profile.sessionEpisodes ? input.sessionId : sessionKey, messages, ...context });
+      sessionId: profile.sessionEpisodes || ordinary ? input.sessionId : sessionKey, messages, ...context });
     const snapshot = messages.length ? profile.sessionEpisodes ? episodeSnapshot(projection)
       : captureSnapshot(projection, profile.captureQualification, profile.captureSourcePolicy) : null;
     const projectionDigest = snapshot?.payloadDigest ?? hash([hostInterpretation ? 'raw-capture-host-empty-v1' : 'raw-capture-empty-v1',
@@ -143,7 +144,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
         if (managed) db.prepare(`UPDATE raw_capture_events SET local_target_id=?,local_store_id=?,local_consent_generation=? WHERE ${where}`)
           .run(managed.targetId,managed.storeId,managed.expectedConsentGeneration,...key(input));
       }
-      return { raw: result, ...(existing && snapshot ? { observation: replayInside(existing) } : {}) };
+      return { raw: result, ...(existing && snapshot && !ordinary ? { observation: replayInside(existing) } : {}) };
     }
     let accepted = false;
 
@@ -219,6 +220,32 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       return journal.closePending({ ownerId: namespace.ownerId, namespace, client, sessionKey: session, reason: 'capture_barrier' });
     });
   }
-  return Object.freeze({ ...journal, prepare, fenceSession,
+  async function prepareCapture(request) {
+    // Validate and detach before any asynchronous sealing or model work.
+    object(request, ['namespace','client','sessionId','eventId','messages',
+      ...(profile.sessionEpisodes ? ['episodeContext'] : ['causal'])]);
+    rawNamespace(request.namespace);
+    const receivedAt = new Date().toISOString();
+    const snapshot = captureSnapshot(request, profile.captureQualification, profile.captureSourcePolicy, true, receivedAt);
+    // The inherited Raw layout supports two clients; other captures stay Memory-only.
+    if (!['claude-code', 'codex'].includes(snapshot.client)) return null;
+    const namespace = rawNamespace(snapshot.namespace);
+    const session = journal.sessionKey(namespace, snapshot.client, snapshot.sessionId);
+    const conversation = db.prepare(`SELECT id FROM raw_conversations WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=?`)
+      .get(...rawBoundary(namespace), snapshot.client, session);
+    let ordinal = conversation ? db.prepare('SELECT coalesce(max(ordinal),0) n FROM raw_messages WHERE conversation_id=?').get(conversation.id).n : 0;
+    const messages = snapshot.messages.map((message, index) => {
+      const previous = conversation && db.prepare('SELECT ordinal,occurred_at FROM raw_messages WHERE conversation_id=? AND message_id=?').get(conversation.id, message.id);
+      const content = request.messages[index].content;
+      return { id: message.id, role: message.role, content,
+        occurredAt: message.occurredAt ?? previous?.occurred_at ?? receivedAt,
+        messageOrdinal: previous?.ordinal ?? ++ordinal,
+        part: { index: 0, start: 0, totalUnits: content.length, totalBytes: Buffer.byteLength(content) } };
+    });
+    return prepare({ namespace: snapshot.namespace, client: snapshot.client, sessionId: snapshot.sessionId,
+      eventId: snapshot.eventId, messages: messages.sort((a,b) => a.messageOrdinal - b.messageOrdinal), ...(snapshot.causal ? { causal: snapshot.causal } : {}),
+      ...(profile.sessionEpisodes ? { episodeContext: structuredClone(request.episodeContext) } : {}) }, true, snapshot.messages.map(message => message.id));
+  }
+  return Object.freeze({ ...journal, prepare, prepareCapture, fenceSession,
     ...(authority ? { getLocalCaptureControl: authority.get, setLocalCaptureControl: authority.set } : {}) });
 }

@@ -105,7 +105,7 @@ cairn-memory --db /absolute/private/memory.sqlite --owner OWNER --project PROJEC
   --context-read context-read-v1 --context-read-personal
 ```
 
-The zero-value personal flag requires project scope and context opt-in; omit it
+The zero-value personal flag requires project scope and enabled contextRead; omit it
 to read only the startup namespace. This adds only:
 
 | MCP tool | Caller input |
@@ -123,10 +123,10 @@ to MCP startup; supply `OPENAI_API_KEY` in the process environment:
 ```
 
 The adapter defaults to `text-embedding-3-small`/1,536 dimensions, but CLI
-model/dimensions are mandatory. A key alone never creates an embedder; legacy
+model/dimensions are mandatory. `OPENAI_API_KEY` automatically selects bounded OpenAI embeddings; legacy
 model behaviour remains unchanged. Semantic lookup requires explicit
 `semantic:true`, embeds only the query, and refuses `invalid_input` without a
-configured, budgeted embedder. Only explicit refresh embeds documents:
+configured, budgeted embedder. Bounded background turns refresh configured embeddings; explicit refresh is also available:
 
 ```sh
 cairn-memory context refresh --db /absolute/private/memory.sqlite --owner OWNER \

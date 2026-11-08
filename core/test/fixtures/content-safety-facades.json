@@ -1223,6 +1223,10 @@
     "createContextReaderPool": {
       "kind": "no-owner-content",
       "reason": "Returns a frozen close-only lifecycle handle; opens no database and exposes no fact writer."
+    },
+    "openRawSearch": {
+      "kind": "no-owner-content",
+      "reason": "Opens the optional Raw handle without serving retained content; Raw privacy and cache tests classify and exercise its returned methods."
     }
   },
   "semantic": {

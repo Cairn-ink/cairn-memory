@@ -23,7 +23,7 @@ const digest = (v) => createHash('sha256').update(JSON.stringify(['cairn.capture
   v.sessionId, v.messages.map((m) => [m.id, m.role, m.content])])).digest('hex');
 const key = (v) => ({ namespace: v.namespace, client: v.client, eventId: v.eventId, payloadDigest: digest(v) });
 const get = (core, id) => ok(core.get({ namespace, memoryId: id }));
-function fixture(t, options = {}) {
+function fixture(t, options = {}, coreOptions = {}) {
   const path = join(mkdtempSync(join(tmpdir(), 'cairn-capture-')), 'memory.sqlite');
   const calls = [];
   const model = { contextWindow: 8192, countTokens: () => 1,
@@ -36,7 +36,7 @@ function fixture(t, options = {}) {
       return adapter(request);
     };
   }
-  const core = openMemoryCore({ path, model });
+  const core = openMemoryCore({ path, model, ...coreOptions });
   const db = new DatabaseSync(path);
   t.after(() => { core.close(); db.close(); });
   return { core, db, model, calls, path };
@@ -229,11 +229,11 @@ test('C07: digest uses fixed field order and binds every identity, message field
   }
 });
 
-test('C08: normalization and redaction precede hashing and receipt truncation preserves Unicode', async (t) => {
+test('C08: Raw-off Memory normalization and redaction precede hashing; receipt truncation preserves Unicode', async (t) => {
   const secret = 'sk-' + 'a'.repeat(48);
   const v = input({ messages: [{ id: 'message-0', role: 'user', content: `  Ａ token ${secret} stays secret.  ` },
     { id: 'long', role: 'assistant', content: 'z'.repeat(799) + '😀tail' }] });
-  const { core, db, calls } = fixture(t, { extract: () => ({ items: [item({ sourceIndices: [0, 1] })] }) });
+  const { core, db, calls } = fixture(t, { extract: () => ({ items: [item({ sourceIndices: [0, 1] })] }) }, { raw:false });
   const result = ok(await core.capture(v));
   const clean = calls[0].input.messages;
   assert.ok(!JSON.stringify(calls).includes(secret));

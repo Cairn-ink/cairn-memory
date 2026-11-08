@@ -18,14 +18,14 @@ const query={query:'apple',types:['memory'],intent:'current'};
 const ok=result=>{assert.equal(result.ok,true,JSON.stringify(result));return result.value;};
 
 test('R05 context startup and refresh grammars: ordering, adjacent booleans, dependencies and all value boundaries',()=>{
-  assert.equal(parseConfiguration(base).contextRead,undefined);
+  assert.equal(parseConfiguration(base).contextRead,'context-read-v1');
   for(const args of [[...base,...flag], [...flag,...base], [...group,...base,...flag]]) assert.equal(parseConfiguration(args).contextRead,'context-read-v1');
   const adjacent=[...base,'--project','p',...flag,'--method-packages','local-v1','--context-read-personal','--method-read-personal'];
   assert.equal(parseConfiguration(adjacent).contextReadPersonal,true);
   assert.equal(parseConfiguration([...adjacent.slice(0,-2),'--method-read-personal','--context-read-personal']).methodReadPersonal,true);
   for(const tail of [['--context-read-personal'],[...flag,'--context-read-personal'],['--context-read','bad'],
     [...flag,...flag],[...flag,'--semantic'],[...flag,'extra'],[...flag,'--context-read-personal','true'],
-    [...flag,...group,'--context-embed-model','again'],group,['--retained-raw-profile','/synthetic/profile',...flag]]) assert.throws(()=>parseConfiguration([...base,...tail]));
+    [...flag,...group,'--context-embed-model','again'],[...group,'--no-context-read'],['--retained-raw-profile','/synthetic/profile',...flag]]) assert.throws(()=>parseConfiguration([...base,...tail]));
   for(let i=0;i<group.length;i+=2) assert.throws(()=>parseConfiguration([...base,...flag,...group.slice(0,i),...group.slice(i+2)]));
   for(const [name,value] of [['--context-embed-dimensions','32769'],['--context-embed-dimensions','0'],['--context-embed-max-requests','1.2'],
     ['--context-embed-max-usd','NaN'],['--context-embed-max-usd','0'],['--context-embedder','other']]) {
@@ -44,7 +44,8 @@ test('R05 context check-config never opens a database, reads a key or constructs
   const log=t.mock.method(console,'log',value=>logs.push(JSON.parse(value)));
   await start(['--check-config','--db',path,'--owner','o',...flag,...group],env);
   await contextCommand(['refresh','--db',path,'--owner','o','--types','memory','--intent','current','--max-items','1','--max-ms','1',...group,'--check-config'],env);
-  assert.equal(createContextEmbedding(undefined,env),undefined);
+  assert.equal(createContextEmbedding(undefined,{}),undefined);
+  assert.ok(createContextEmbedding(undefined,{OPENAI_API_KEY:'synthetic-not-a-key'}));
   assert.equal(logs.length,2); for(const result of logs){assert.equal(result.databaseOpened,false);assert.equal(result.modelKeyInspected,false);assert.equal(result.providerContacted,false);}
   assert.equal(existsSync(join(workspace.path,'missing')),false); log.mock.restore();
 });
@@ -92,7 +93,7 @@ test('R01/R02/R05 MCP adds exactly two tools; strict grammars and immutable name
   assert.equal(access.call(core,'findCandidates',{}).error.code,'authority_required');
 });
 
-test('R01/R02 MCP personal reads are explicit, preserve qualified refs and a key alone creates no embedder',async t=>{
+test('R01/R02 MCP personal reads are explicit, preserve qualified refs and a explicit semantic opt-out keeps key-bearing reads BM25 only',async t=>{
   const workspace=createTestWorkspace(t,{prefix:'context-personal-'}),path=join(workspace.path,'store.sqlite');
   const core=openMemoryCore({path});workspace.defer(()=>core.close());
   const project={...ns,scope:'project',projectId:'synthetic-project'},foreign={...project,projectId:'foreign-project'};

@@ -46,7 +46,7 @@ test('installed keyless CLI returns bounded complete sources after cold restart 
     for (const content of sources) memories.push(ok(await call(first, 'remember_memory', { content })).memory);
     await first.close();
     const cold = await start(); const tools = (await cold.listTools()).tools;
-    assert.equal(tools.length, 6); assert.equal(tools.find(tool => tool.name === 'read_memory_sources').annotations.openWorldHint, false);
+    assert.equal(tools.length, 9); assert.equal(tools.find(tool => tool.name === 'read_memory_sources').annotations.openWorldHint, false);
     const complete = ok(await call(cold, 'read_memory_sources'));
     assert.equal(complete.coverage, 'complete-current-admitted'); assert.equal(complete.semanticCoverage, 'unassessed');
     assert.deepEqual(complete.memories.flatMap(item => item.receipts.map(receipt => receipt.excerpt)).sort(), [...sources].sort());

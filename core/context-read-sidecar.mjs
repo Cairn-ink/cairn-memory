@@ -19,7 +19,7 @@ import { cardApplicabilityInside } from './private-evidence-schema.mjs';
 import { fail } from './validation.mjs';
 import { rankScores, scoreBM25 } from './context-read-bm25.mjs';
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION, termFrequencies, tokenizeT1 } from './context-read-tokenize.mjs';
-import { cosine, encodeVector, loadVector, semanticCapacity, validateEmbedder } from './context-read-embedder.mjs';
+import { cosine, encodeVector, loadVector, semanticCapacity, validateEmbedder, rawVectorResidencySelected, reserveSharedVectors } from './context-read-embedder.mjs';
 
 export const SIDECAR_FORMAT = 1;
 const APPLICATION_ID = 0x43525831;
@@ -927,6 +927,10 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     if(visible?.unknown)return {state:'partial_coverage',eligible:null,embedded:null,scanned:0,byType:null};
     const byType = Object.fromEntries(p.types.map(type => [type, { embedded: 0, scanned: 0 }]));
     if (!semanticCapacity(count, port).eligible) return { state: 'partial_coverage', eligible: count, embedded: null, scanned: 0, byType: null };
+    const residency=rawVectorResidencySelected?reserveSharedVectors(count,port):null;
+    if(rawVectorResidencySelected&&!residency)return {state:'partial_coverage',eligible:count,embedded:null,scanned:0,byType:null};
+    let retained=false;
+    try {
     let embedded = 0, afterStream = -1, afterId = '', released = false; const vectors = [];
     while (true) {
       if (performance.now() >= deadlineAt) return { state: 'timeout', eligible: count, embedded, scanned: 0, byType };
@@ -959,8 +963,9 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     if (embedded !== count) return { state: 'partial_coverage', eligible: count, embedded, scanned: 0, byType };
     for (const type of p.types) byType[type].scanned = byType[type].embedded;
     // This closure and its bounded fp32 cache are created outside the helper.
+    retained=true;
     return { state: 'ready', eligible: count, embedded, scanned: count, byType, sequence: g.sequence, checkpoint: g.checkpoint, fence: g.fence,
-      release() { vectors.length = 0; released = true; },
+      release() { vectors.length = 0; released = true; residency?.release(); },
       score(queryVector, { deadlineAt: scoreDeadline = deadlineAt } = {}) {
         if (released) unavailable('stale_index');
         assertState(input, g);
@@ -974,6 +979,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
         assertState(input, g);
         return ranked;
       } };
+    } finally {if(!retained)residency?.release();}
   }
   return Object.freeze({ reconcile, lexicalPage, lexical: (...args) => lexicalPage(...args).rows,
     refreshVectors, semanticPreflight, state, assertState, assertFile: checkFile,

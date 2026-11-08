@@ -10,9 +10,10 @@ Main remains `cd6d1ad32ac3d6f5926c6846e8c6d27645bb7c9a` when prepared.
 B1 is ready/unmerged with independent dual review and 31 successful latest-head
 checks. This is an explicitly dependent packet, not authorization to merge it.
 
-Authority remains the pure-local synthetic-development exception in
-`raw-layer-contract.md`. Preserve default-off retention, notices and every
-production gate. No real transcripts, paid/live requests, product pin or flag
+This historical packet used the pure-local synthetic-development exception in
+`raw-layer-contract.md`. Current local Raw retention is default-on for submitted
+captures, with `raw:false` / `--no-raw` to disable it ([defaults](../defaults.md));
+the packet’s separate production gates remain historical acceptance scope. No real transcripts, paid/live requests, product pin or flag
 changes, releases, deployments, operational migrations or merges.
 
 ## Reproduced problem

@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 import { chmodSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from '../context-read-three-layer.mjs';
 import { assembleContext, meteredText, receiptEventDate, completeResponseBytes } from '../context-read-assembly.mjs';
 import { ASSEMBLY_REPRESENTATIONS, ASSEMBLY_LIMITS, ASSEMBLY_DEFAULTS, CONTEXT_LIMITS, contextInput, namespaceKey } from '../context-read-input.mjs';
 import { assemblyQuery, fixedPrepared, ns, ok } from '../testing/context-read-assembly-fixture.mjs';
@@ -126,9 +127,14 @@ function onlyDateDiff(v2, next, expected) {
   assert.equal(JSON.stringify(next.diagnostics).includes('2023-'), false, 'times appear only in date');
 }
 
-test('dated input is opt-in, strict and contextRead-only; helper omits missing/null and truncates UTC', () => {
+test('dated input is default-on, strict and contextRead-only; helper omits missing/null and truncates UTC', () => {
   const parse = patch => contextInput('contextRead', request(ns, patch), ['memory']);
-  assert.equal(parse({}).input.representation, 'representation-v2');
+  assert.equal(parse({}).input.representation, dated);
+  const { budget: _budget, ...withoutBudget } = request();
+  assert.deepEqual(contextInput('contextRead', withoutBudget, ['memory']).input.budget, { maxTokens: 6000, maxItems: 24 });
+  assert.equal(parse({}).input.raw, true);
+  assert.equal(parse({ raw: false }).input.raw, false);
+  for (const raw of [null, 1, 'true', {}]) assert.throws(() => parse({ raw }), { code: 'invalid_input' });
   for (const representation of ASSEMBLY_REPRESENTATIONS) assert.equal(parse({ representation }).input.representation, representation);
   for (const representation of ['candidate-text-v1', 'representation-v3', '', null, 1, {}, []]) assert.throws(() => parse({ representation }), { code: 'invalid_input' });
   assert.throws(() => contextInput('findCandidates', { ...request(), representation: dated }, ['memory']), { code: 'invalid_input' });
@@ -286,9 +292,10 @@ function enclosingReader(kind, definitions, port, { unavailable = 0, localStatus
     evidence: { itemsInside: (_ns, refs) => refs.map(ref => { const item = canonical.get(ref.memoryId); if (!item) fail('evidence_unavailable'); return item; }) },
     cachedContentLayout: () => safety ? { suppressionRevision: 1 } : null, createContentReadMemo, cardLineageItemInside,
     namespaceKey, receiptEventDate, validateSourceReceipt, createHash, bind, encode, ASSEMBLY_LIMITS, CONTEXT_LIMITS,
+    readRawChannel, citedRawTurns, assembleThreeLayerContext: (args, raw) => assembleThreeLayerContext({ ...args, now: () => 0 }, raw),
     success: value => ({ ok: true, value }), failure: error => ({ ok: false, error: { code: error.code } }), MemoryStoreError, fail, deepFreeze,
     same: (a, b) => JSON.stringify(a) === JSON.stringify(b), bytes: size,
-    final: (_p, _access, _publication, work) => work(), sampleLocalStatus: () => ({ state: 'ready', detail: 'synthetic status' }),
+    final: (_p, _access, _publication, work, _code, prepare) => { prepare?.(); return work(); }, sampleLocalStatus: () => ({ state: 'ready', detail: 'synthetic status' }),
     assembleContext: args => assembleContext({ ...args, now: () => 0 }),
     completeResponseBytes(envelope, meteredBytes, snapshotValue) {
       const bytes = completeResponseBytes(envelope, meteredBytes, snapshotValue);
@@ -346,8 +353,12 @@ for (const kind of ['product', 'facade']) test(`${kind}: both reviewer byte-boun
     assert.equal(baseline.ok, true, JSON.stringify(baseline));
     assert.equal(baseline.value.metered.items.length, definitions.length);
     assert.equal(reader.counts.length, fixture === 'spec' ? 120 : 50);
-    // Frozen against the enclosing readers and assembler at the pre-fix head.
-    assert.equal(createHash('sha256').update(JSON.stringify(baseline)).digest('hex'), fixture === 'spec'
+    // Preserve the frozen legacy bytes after removing the new host-only
+    // Raw coverage field; metered text and counter inputs remain unchanged.
+    const legacyBaseline = structuredClone(baseline);
+    assert.deepEqual(legacyBaseline.value.diagnostics.coverage, { raw: 'unavailable' });
+    delete legacyBaseline.value.diagnostics.coverage;
+    assert.equal(createHash('sha256').update(JSON.stringify(legacyBaseline)).digest('hex'), fixture === 'spec'
       ? 'b48a4955943cf55e755b9ab83bf85afb835bb5f9193d69dd0d8791ade509872d'
       : '9a3619ceb76aeadd93437c61e001a30c19820aae33fa87947e9647af87f784cc');
     assert.equal(createHash('sha256').update(JSON.stringify(baselineCalls)).digest('hex'), fixture === 'spec'
@@ -466,12 +477,12 @@ for (const column of [false, true]) test(`all preparation paths: ${column ? 'bou
   await r.build();
   const expected = new Map(column ? [[seeded[0].memory.id, '2023-05-22T05:54Z']] : []);
   for (const read of [r.facadeRead, r.readOnlyRead, input => r.product.run('contextRead', input)]) {
-    const v2 = ok(await read(request())), explicit = ok(await read(request(ns, { representation: 'representation-v2' })));
-    assert.equal(meteredText(v2.metered), meteredText(explicit.metered));
+    const v2 = ok(await read(request(ns, { representation: 'representation-v2' }))), explicit = ok(await read(request()));
+    assert.equal(meteredText(ok(await read(request(ns, { representation: dated }))).metered), meteredText(explicit.metered));
     assert.equal(v2.diagnostics.trace.counterCalls, explicit.diagnostics.trace.counterCalls);
     onlyDateDiff(v2, ok(await read(request(ns, { representation: dated }))), expected);
     const policy = { id: 'rank-first-first-source-v1' };
-    onlyDateDiff(ok(await read(request(ns, { policy }))),
+    onlyDateDiff(ok(await read(request(ns, { policy, representation: 'representation-v2' }))),
       ok(await read(request(ns, { policy, representation: dated }))), expected);
   }
   const projected = roleAssembly(f, r, seeded.map(({ memory }) => ref(memory)));
@@ -630,7 +641,7 @@ test('a suppressed receipt still in the physical window cannot contribute a date
   transaction(db, () => writeContentSuppressionInside(db, { namespace: ns, kind: 'receipt', key: id, reason: 'privacy_erase', actionId: 'dated-receipt-erase' }));
   assert.equal(db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(memory.id).n, 2, 'denied row remains physically present');
   for (const read of [r.facadeRead, r.readOnlyRead, input => r.product.run('contextRead', input)]) {
-    const v2 = ok(await read(request())), next = ok(await read(request(ns, { representation: dated })));
+    const v2 = ok(await read(request(ns, { representation: 'representation-v2' }))), next = ok(await read(request(ns, { representation: dated })));
     onlyDateDiff(v2, next, new Map([[memory.id, '2023-05-22T05:54Z']]));
     assert.equal(next.metered.items[0].sources.length, 1);
     assert.equal(next.metered.items[0].sources[0].excerpt, 'visible');

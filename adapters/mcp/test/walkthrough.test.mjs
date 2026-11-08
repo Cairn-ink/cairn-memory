@@ -11,7 +11,7 @@ const marker = 'SYNTHETIC-SECRET-NOT-FOR-OUTPUT';
 test('walkthrough uses actual stdio lifecycle with model disabled despite inherited key', { timeout: 30000 }, async () => {
   const result = await runWalkthrough({ executable: server }, { OPENAI_API_KEY: marker });
   assert.equal(result.status, 'passed');
-  assert.deepEqual(result.stages.map(s => s.stage), ['five_tools', 'remember_and_inspect',
+  assert.deepEqual(result.stages.map(s => s.stage), ['memory_tools', 'remember_and_inspect',
     'restart_and_inspect', 'correct_and_reject_stale', 'model_disabled', 'forget_and_empty_inspect']);
   assert.ok(result.stages.every(s => s.status === 'passed'));
   assert.match(result.database, /cairn-walkthrough-.*memory.sqlite$/);

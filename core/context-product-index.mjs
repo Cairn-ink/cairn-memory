@@ -11,7 +11,8 @@ import { contextInput, namespaceKey, ASSEMBLY_DEFAULTS, ASSEMBLY_POLICIES, ASSEM
 import { ownData } from './local-authority-input.mjs';
 import { deadline, PRODUCT_PROFILE } from './context-product-control.mjs';
 import { fuseCandidates } from './context-read-fusion.mjs';
-import { assembleContext, receiptEventDate, completeResponseBytes } from './context-read-assembly.mjs';
+import { receiptEventDate, completeResponseBytes } from './context-read-assembly.mjs';
+import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from './context-read-three-layer.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { TOKENIZER_VERSION, REPRESENTATION_VERSION } from './context-read-tokenize.mjs';
 import { fail } from './validation.mjs';
@@ -29,7 +30,7 @@ const channels = ready => ({lexical:{state:ready?'ready':'unavailable',causes:re
 const trace = semantic => ({requested:semantic?'hybrid':'lexical',effective:'lexical',family:'local',preset:'rrf-k60-d12',embedder:null,
   tokenizer:TOKENIZER_VERSION,representation:REPRESENTATION_VERSION,
   timings:{maintenanceMs:0,lexicalMs:0,semanticPreflightMs:0,embeddingMs:0,fusionMs:0}});
-export function openProductIndex({ path, facade, authorize, ownerCoverage, observer, sqlite, sidecarJournalMode, maintenance, counter, semantic, operation, now = () => performance.now(), storageOptions = {}, attribution }) {
+export function openProductIndex({ path, facade, authorize, ownerCoverage, observer, sqlite, sidecarJournalMode, maintenance, counter, rawSearch, semantic, operation, now = () => performance.now(), storageOptions = {}, attribution }) {
   const { db:canonicalDatabase,read:canonicalRead,evidence,bind,encode,identity,features,canonicalFence } = facade.port;
   const db=canonicalDatabase;
   const read=attribution ? work=>canonicalRead(()=>inContentSuppressionRequestInside(db,work),attribution) : canonicalRead;
@@ -76,8 +77,9 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       return {ok:false,error:{code:'index_unavailable',retryable:false,details:assembly?{candidates:details}:details}};
     });
   }
-  function final(p,access,publication,work,code='index_unavailable') {
+  function final(p,access,publication,work,code='index_unavailable',prepare) {
     access.check();
+    prepare?.();
     return read(()=>inContentSuppressionRequestInside(db,()=>{
       if (p.suppressionEpoch !== undefined && p.suppressionEpoch !== contentSuppressionRequestFenceInside(db,p.readSet[0].ownerId)) fail('evidence_unavailable');
       const current=storage.observe(p,access.accessGenerations);
@@ -133,7 +135,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     return {observed,suppressionEpoch,items:fused.rows.map((row,i)=>({ref:row.ref,rank:i+1,fusionScore:row.fusionScore,channels:row.channels})),
       channels:channels(true),coverage:covered,trace:detail,...(prepareOnly?{lexical:ranked}:{})};
   }
-  function assemble(p,access,c,prepareOnly=false) {
+  function assemble(p,access,c,prepareOnly=false,rawChannel={items:[],coverage:'unavailable'}) {
     if (!counter) fail('token_count_unavailable');
     const prepared=read(()=>{
       const generations=canonicalFence(p.readSet,p.types),items=[]; let unavailable=0;
@@ -151,6 +153,8 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         items.push({type:item.type,ref,ns:p.readSet.findIndex(ns=>namespaceKey(ns)===namespaceKey(ref.namespace)),rank:candidate.rank,
           metadata:item.type==='memory'?{state:item.state,reviewState:item.reviewState,filing:item.filing,kind:item.kind,origin:item.origin,confidence:item.confidence}
             :{state:item.state,support:item.support,origin:item.origin},text:item.type==='memory'?item.content:item.title+'\n'+item.body,
+          turnIds:citedRawTurns(db,ref.namespace,sourceRows,rawChannel),
+          sessionIds:sourceRows.map(row=>JSON.stringify(['receipt',namespaceKey(ref.namespace),row.client,row.session_id])),
           date,sources,sourceAccess:item.type==='memory'?item.provenance.sourceAccess:'unsupported',sourcesComplete:item.type==='memory' && item.provenance.coverage.status==='complete',fence:bind('snapshot-item',cardLineageItemInside(db,item))});
       }
       return {generations,items,unavailable};
@@ -161,14 +165,21 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       generations:generationsFor(items),access:access.accessGenerations,fences:items.map(i=>i.fence)});
     const candidateDetails={count:c.items.length,channels:c.channels,coverage:c.coverage,trace:c.trace};
     const decorate=diagnostics=>({...diagnostics,omitted:{...diagnostics.omitted,unavailable:prepared.unavailable},candidates:candidateDetails});
-    const {selected:delivered,...assembled}=assembleContext({prepared:prepared.items,counter,policy:p.policy,budget:p.budget,representation:p.representation,deadlineAt:p.deadlineAt,
+    const assembleRead=raw=>assembleThreeLayerContext({query:p.query,readSet:p.readSet,prepared:prepared.items,counter,policy:p.policy,budget:p.budget,representation:p.representation,deadlineAt:p.deadlineAt,
       responseBytes:p.representation==='representation-v2-dated'?({meteredBytes,diagnostics,selected})=>
         completeResponseBytes(success({metered:null,snapshot:null,diagnostics:decorate(diagnostics)}),meteredBytes,
           selected.length?snapshotValue(selected):null)<=ASSEMBLY_LIMITS.responseBytes:undefined,
-      snapshotOf:items=>encode('snapshot',snapshotValue(items),16384)});
+      snapshotOf:items=>encode('snapshot',snapshotValue(items),16384)},raw);
+    let {selected:delivered,validateRaw,...assembled}=assembleRead(rawChannel);
     assembled.diagnostics=decorate(assembled.diagnostics);
-    const result=success(assembled);
-    if(Buffer.byteLength(JSON.stringify(result))>65536)fail('context_item_too_large');
+    let result=success(assembled);
+    const prepare=()=>{
+      if(!validateRaw()) {
+        ({selected:delivered,validateRaw,...assembled}=assembleRead({items:[],coverage:'partial'}));
+        assembled.diagnostics=decorate(assembled.diagnostics);result=success(assembled);access.check();
+      }
+      if(Buffer.byteLength(JSON.stringify(result))>65536)fail('context_item_too_large');
+    };
     const complete=()=>{
       if(delivered.length && !same(canonicalFence(p.readSet,[...new Set(delivered.map(i=>i.type))]),generationsFor(delivered)))fail('snapshot_stale');
       for(const item of delivered){
@@ -179,7 +190,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       }
       return result;
     };
-    return prepareOnly?{complete,result}:final(p,access,c.observed.publication,complete,'snapshot_stale');
+    return prepareOnly?{complete,result,prepare}:final(p,access,c.observed.publication,complete,'snapshot_stale',prepare);
   }
   function metadataRead(p) {
     if(!cachedContentLayout(db)?.suppressionRevision)return db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();
@@ -297,7 +308,11 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       }
       const c=candidates(p,access);
       if(!c.items)return unavailable(p,access,c.observed.dto,method==='contextRead',p.semantic);
-      if(method==='contextRead')return assemble(p,access,c);
+      if(method==='contextRead') {
+        if(!rawSearch||p.raw===false)return assemble(p,access,c);
+        return readRawChannel(rawSearch,p,credential,p.deadlineAt).then(raw=>assemble(p,access,c,false,raw))
+          .catch(error=>failure(error.code??'storage_error'));
+      }
       for(const [id,r] of rankings)if(r.expires<=Date.now())rankings.delete(id);
       while(rankings.size>=128)rankings.delete(rankings.keys().next().value);
       const r={...c,id:randomUUID(),binding,publication:c.observed.publication,expires:Date.now()+300000};rankings.set(r.id,r);
@@ -413,7 +428,8 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         channels:{...source.channels,semantic:{state:'partial_coverage',causes:['partial_coverage']}},
         coverage:{...source.coverage,depths:{...source.coverage.depths,semantic:0},omitted:{lexical:Math.max(0,lexical.matched-24),semantic:null,horizon:0}}});
       if(method==='contextRead') {
-        if(!p.vectorPublication)return assemble(p,access,c);
+        const rawChannel=rawSearch&&p.raw ? await readRawChannel(rawSearch,p,credential,p.deadlineAt) : {items:[],coverage:'unavailable'};
+        if(!p.vectorPublication)return assemble(p,access,c,false,rawChannel);
         // Freeze publication only for synchronous assembly/final validation;
         // no provider/authority await or SQLite transaction spans the gate.
         // Choose one horizon before counting, preserving the single-assembly
@@ -421,20 +437,20 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         let release;
         try {release=semantic.gate.enter(snapshot.policy);}catch {
           delete p.vectorPublication;
-          return assemble(p,access,lexicalFallback(c));
+          return assemble(p,access,lexicalFallback(c),false,rawChannel);
         }
         try {
           const current=read(()=>{const lexical=storage.observe(p,access.accessGenerations);return vectors.observe(p,lexical.publication,snapshot);});
           if(current.status!=='complete'||current.record.publicationId!==p.vectorPublication) {
             delete p.vectorPublication;
-            return assemble(p,access,lexicalFallback(c));
+            return assemble(p,access,lexicalFallback(c),false,rawChannel);
           }
-          const delivery=assemble(p,access,c,true);
+          const delivery=assemble(p,access,c,true,rawChannel);
           return final(p,access,c.observed.publication,valid=>{
             // Out-of-protocol evidence damage cannot authorize stale vectors.
             if(!valid)fail('snapshot_stale');
             return delivery.complete();
-          },'snapshot_stale');
+          },'snapshot_stale',delivery.prepare);
         }finally{release();}
       }
       for(const [id,r] of rankings)if(r.expires<=Date.now())rankings.delete(id);while(rankings.size>=128)rankings.delete(rankings.keys().next().value);
@@ -521,6 +537,6 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         : error.code === 'memory_not_found' ? 'evidence_unavailable' : error.code ?? 'storage_error';
       return failure(code);
     } });
-  return {run:(...args)=>storage.measureObservation(()=>safe.run(...args)),discard(){storage.discard();},close(){storage.close();rankings.clear();},assembly:{representation:'representation-v2',representations:ASSEMBLY_REPRESENTATIONS,defaults:ASSEMBLY_DEFAULTS,policies:ASSEMBLY_POLICIES,
+  return {run:(...args)=>storage.measureObservation(()=>safe.run(...args)),discard(){storage.discard();},close(){storage.close();rankings.clear();},assembly:{representation:'representation-v2-dated',raw:{default:true,configured:Boolean(rawSearch)},representations:ASSEMBLY_REPRESENTATIONS,defaults:ASSEMBLY_DEFAULTS,policies:ASSEMBLY_POLICIES,
     defaultPolicy:'rank-first-whole-v1',counter:counter?{id:counter.id}:null,limits:ASSEMBLY_LIMITS}};
 }

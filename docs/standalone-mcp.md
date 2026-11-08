@@ -1,5 +1,10 @@
 # Local MCP source preview
 
+Ordinary local MCP startup enables the preferred contextRead tools and Raw
+retention for submitted captures. With `OPENAI_API_KEY`, bounded embeddings are
+selected automatically; otherwise reads use BM25. See [all defaults and off
+switches](defaults.md).
+
 An already retained schema 29 store can instead use the separate keyless
 [`--retained-raw-profile` path](private-card-terminal-review.md#retained-raw-profile).
 It fixes store/namespace through a private profile, keeps the existing 22 Card
@@ -184,7 +189,7 @@ or an authenticated transcript of what a human said.
 Add `--classification-recovery guarded-v1`, or set
 `classificationRecovery: 'guarded-v1'` on `createCairnServer`, to expose
 `inspect_capture_admission` and `classify_unfiled_memories`. The option is
-independent of capture and adds two tools to the five-tool default. A keyless
+independent of capture and adds two tools to the default tool set. A keyless
 server still offers inspection; calling classification without a model returns
 `model_not_configured`. `--check-config` reports the option and whether a model
 key is present without opening the database or contacting a provider.

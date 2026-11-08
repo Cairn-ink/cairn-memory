@@ -38,7 +38,7 @@ export async function prepare({cell,config,ledger}) {
     const schema=exactSchema({ok:true,value:{items:independent,snapshot:''}});schema.properties.value.properties.snapshot={type:'string',max:16384};
     return {input:cell.adapter==='snapshot'?{...base,snapshot:expected.value.snapshot}:{...base,intent,refs,...(cell.adapter==='compact'?{fences}:{})},responseSchema:union(schema,errorSchema),schemas,oracleData};
   }
-  const input={...base,types:config.types,intent,query,semantic:false,...(method==='contextRead'?{budget:{maxTokens:cell.maxTokens??1500,maxItems:cell.limit??12}}:{limit:cell.limit??12})};
+  const input={...base,types:config.types,intent,query,semantic:false,...(method==='contextRead'?{budget:{maxTokens:cell.maxTokens??1500,maxItems:cell.limit??12},representation:'representation-v2',raw:false}:{limit:cell.limit??12})};
   return {input,responseSchema:method==='contextRead'?assembly(cell.limit??12):candidates(cell.limit??12),schemas,oracleData};
 }
 export function validate(result,config) {

@@ -23,7 +23,7 @@ export async function host(workspace,path,{command=cli,enabled=false,project,per
   const transport=new StdioClientTransport({command:'/usr/bin/python3',args:[fileURLToPath(new URL('./fixtures/method-stdio-relay.py',import.meta.url)),workspace.path,process.execPath,
     '--import','data:text/javascript,globalThis.fetch=()=>{process.exit(91)}',command,
     '--db',path,'--owner',owner,...(project?['--project',project]:[]),
-    ...(enabled?['--method-packages','local-v1']:[]),...(assets?['--assets','local-v1']:[]),...(context?['--context-read','context-read-v1']:[]),...(personal?['--method-read-personal']:[])],
+    ...(enabled?['--method-packages','local-v1']:[]),...(assets?['--assets','local-v1']:[]),...(context?['--context-read','context-read-v1']:['--no-context-read']),...(personal?['--method-read-personal']:[])],
     env:{OPENAI_API_KEY:'',NODE_NO_WARNINGS:'1',NODE_DISABLE_COMPILE_CACHE:'1'},stderr:'pipe'});
   let stderr='';transport.stderr.on('data',chunk=>{stderr+=chunk;});
   const client=new Client({name:'synthetic-method-client',version:'1.0.0'});workspace.defer(()=>client.close());

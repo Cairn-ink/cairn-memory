@@ -8,7 +8,7 @@ export function contextReadSources(value) {
 }
 export function contextSourcesConfiguration(values) {
   if (!values.has(CONTEXT_SOURCE_FLAG)) return {};
-  if (values.get('--context-read') !== 'context-read-v1') throw Error('invalid_mcp_configuration');
+  if (values.has('--no-context-read')) throw Error('invalid_mcp_configuration');
   const raw = values.get(CONTEXT_SOURCE_FLAG);
   if (typeof raw !== 'string') throw Error('invalid_mcp_configuration');
   return { contextReadSources: contextReadSources(raw.split(',')) };

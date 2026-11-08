@@ -47,22 +47,22 @@ test('source snapshot mode and counter reject before database creation', () => {
   }
 });
 
-test('syntax-only source check and default keyless startup never load tokenizer or contact a provider', { timeout: 15000 }, async t => {
+test('syntax-only source check and explicit context-off keyless startup never loads tokenizer or contact a provider', { timeout: 15000 }, async t => {
   const path = database();
   const result = spawnSync(process.execPath, ['--import', denyTokenizer, cli, '--check-config', '--db', path,
     '--owner', namespace.ownerId, ...flags], { encoding: 'utf8', timeout: 5000, env: { NODE_NO_WARNINGS: '1' } });
   assert.equal(result.status, 0, result.stderr); const report = JSON.parse(result.stdout);
   assert.equal(report.sourceSnapshot, 'current-admitted-v1'); assert.equal(report.databaseOpened, false);
   assert.equal(report.providerContacted, false); assert.equal(existsSync(path), false);
-  const h = await host(t, path, { args: [], forbidTokenizer: true });
+  const h = await host(t, path, { args: ['--no-context-read'], forbidTokenizer: true });
   assert.equal((await h.client.listTools()).tools.length, 5);
   assert.equal((await h.client.listTools()).tools.some(tool => tool.name === 'read_memory_sources'), false);
 });
 
 test('explicit source discovery is strict, read-only, local and composes with existing capture/staging options', { timeout: 30000 }, async t => {
-  for (const [extra, count] of [[[], 6], [['--capture-qualification', 'source-bound-v1'], 7],
-    [['--capture-qualification', 'source-bound-v2'], 7], [['--capture-evidence-access', 'staged-v1'], 8],
-    [['--capture-qualification', 'source-bound-v2', '--capture-evidence', 'staged-v1'], 9]]) {
+  for (const [extra, count] of [[[], 9], [['--capture-qualification', 'source-bound-v1'], 10],
+    [['--capture-qualification', 'source-bound-v2'], 10], [['--capture-evidence-access', 'staged-v1'], 11],
+    [['--capture-qualification', 'source-bound-v2', '--capture-evidence', 'staged-v1'], 12]]) {
     const h = await host(t, database(), { args: [...flags, ...extra] }); const tools = (await h.client.listTools()).tools;
     assert.equal(tools.length, count); const tool = tools.find(tool => tool.name === 'read_memory_sources');
     assert.equal(tool.annotations.readOnlyHint, true); assert.equal(tool.annotations.openWorldHint, false);

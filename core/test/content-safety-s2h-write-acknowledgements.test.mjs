@@ -212,6 +212,10 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // writer acknowledgement identities. The sidecar decision-table comment's
   // two 'invalid:' labels are counted as key:invalid by this textual census;
   // neither is an executable field. The acknowledgement guard stays unchanged.
+  // Offline layout upgrade adds literal:storeId (1): a public store-binding
+  // field with a closed identifier type, never a secret or a writer
+  // acknowledgement identity. Property access and the returned shorthand
+  // reuse that validated binding; neither adds a textual census occurrence.
   // Include projections after storage returns, and string keys used by computed
   // objects. A new occurrence of an existing name also requires review.
   // R2 round 2: selected-row namespace validation adds existing owner/project
@@ -264,6 +268,10 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // Foreign-binding repair: the read-only disposal check adds one
   // validation_invalid failure-reason string in context-product-sidecar (6 -> 7).
   // It is not a canonical content identity or a writer acknowledgement field.
+  // Optional Raw identities bind read candidates, source proofs, publications,
+  // provider metadata and private maintenance budget windows. They add no
+  // canonical writer acknowledgement fields. Returned reader methods check
+  // canonical denials independently of these hints.
   // Sidecar attestation: three attestation_invalid literals select the private
   // open refusal, repair classification and child recheck verdict. They are
   // failure-reason strings, with no writer acknowledgement field or guard change.
@@ -277,6 +285,13 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // The native guard's added Card/source ids and literal id classify captured
   // changes and validate the approved causal invalidation; they add no public
   // acknowledgement field or terminal exemption. Keep that guard unchanged.
+  // Dated Memory + Raw assembly: source-turn/session ids and inline Raw refs
+  // are private read projections. No writer acknowledgement or native guard
+  // changes; delivery validates canonical Memory and prepared Raw separately.
+  // Local Raw search projects only the fixed owner's namespace into its private
+  // manager. Ordinary Raw capture reconstructs existing message/event/session
+  // identities before journal registration. Pin these existing projections;
+  // neither adds acknowledgement fields or changes the native write guard.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};

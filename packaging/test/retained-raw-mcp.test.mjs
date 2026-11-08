@@ -77,8 +77,8 @@ test('installed retained MCP uses public discovery, real TTY, cold identity and 
   await assert.rejects(host(workspace, executable, ['--retained-raw-profile', invalid]), closed);
   writeFileSync(wrong, JSON.stringify({ ...profile, storeId: 'synthetic-foreign-store' }), { mode: 0o600 });
   await assert.rejects(host(workspace, executable, ['--retained-raw-profile', wrong]), error => error.code === -32603);
-  for (const count of [5, 22]) {
-    const local = await host(workspace, executable, ['--db', database, '--owner', namespace.ownerId, ...(count === 22 ? ['--private-cards', 'local-v1'] : [])]);
+  for (const count of [8, 25]) {
+    const local = await host(workspace, executable, ['--db', database, '--owner', namespace.ownerId, ...(count === 25 ? ['--private-cards', 'local-v1'] : [])]);
     assert.equal((await local.client.listTools()).tools.length, count); await local.client.close();
   }
   let local = await host(workspace, executable, ['--retained-raw-profile', profilePath]);
