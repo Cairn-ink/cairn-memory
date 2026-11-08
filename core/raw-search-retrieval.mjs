@@ -42,13 +42,13 @@ function rank(docs, terms,check=()=>{}) {
   const corpus = {N:docs.length,totalLength,df};
   return docs.map(d=>{check();return {id:d.id,score:scoreBM25(terms,d,corpus)??0};}).filter(d=>d.score>0).sort((a,b)=>{check();return order(a,b);});
 }
-export function rawSearchRrf(left,right) {
+export function rawSearchRrf(left,right,limit=24) {
   const scores=new Map();
-  for (const list of [left,right]) list.slice(0,24).forEach((row,i)=>scores.set(row.id,(scores.get(row.id)??0)+.5/(11+i)));
-  return [...scores].map(([id,score])=>({id,score})).sort(order).slice(0,24);
+  for (const list of [left,right]) list.slice(0,limit).forEach((row,i)=>scores.set(row.id,(scores.get(row.id)??0)+.5/(11+i)));
+  return [...scores].map(([id,score])=>({id,score})).sort(order).slice(0,limit);
 }
 /** Pure hierarchy arithmetic, with independent turn/session/within corpora. */
-export function retrieveRaw(segments,query,{ vectors = null,queryVector = null,maxWork=50000,maxTurns=256,check=()=>{} } = {}) {
+export function retrieveRaw(segments,query,{ vectors = null,queryVector = null,maxWork=50000,maxTurns=256,check=()=>{},accept=()=>true } = {}) {
   const compare=(a,b)=>{check();return order(a,b);};
   const turns=new Map(), sessions=new Map(); let work=0, partial=false,turnPartial=false;
   const charge = n => { work+=n; if (work>maxWork) {partial=true;return false;} return true; };
@@ -71,7 +71,7 @@ export function retrieveRaw(segments,query,{ vectors = null,queryVector = null,m
     const members=sessions.get(turn.sessionId)??[]; members.push(turn);sessions.set(turn.sessionId,members);
   }
   const terms=[...new Set(tokenizeT1(query))], own=d=>terms.filter(t=>d.frequencies.has(t)).length/(terms.length||1);
-  const all=[...turns.values()], lexical=rank(all,terms,check).slice(0,24);
+  const all=[...turns.values()], lexical=rank(all,terms,check).slice(0,maxTurns);
   const sessionDocs=[...sessions].map(([id,members])=>{check();
     members.sort((a,b)=>{check();return a.ordinal-b.ordinal||binary(a.id,b.id);});
     // The prototype prefixes each message's role only in session documents.
@@ -82,11 +82,11 @@ export function retrieveRaw(segments,query,{ vectors = null,queryVector = null,m
   const chunkMax=segment=>{check();return vectorScores?vectorScores[vectors.positions.get(segment.key)]:
     Math.max(-Infinity,...(vectors.get(segment.key)??[]).map(v=>cosine(queryVector,v)));};
   const semantic=vectors&&queryVector?new Map(all.map(t=>[t.id,Math.max(-Infinity,...t.segments.map(chunkMax))])):null;
-  const semRank=docs=>docs.map(d=>({id:d.id,score:semantic.get(d.id)})).filter(d=>Number.isFinite(d.score)).sort(compare).slice(0,24);
-  const globalRank=semantic ? rawSearchRrf(lexical,semRank(all)) : lexical;
-  const semSessions=semantic ? [...sessions].map(([id,m])=>({id,score:Math.max(...m.map(t=>semantic.get(t.id)))})).sort(compare).slice(0,24) : null;
-  const sessionRank=rank(sessionDocs,terms,check).slice(0,24);
-  const rankedSessions=semantic?rawSearchRrf(sessionRank,semSessions):sessionRank;
+  const semRank=docs=>docs.map(d=>({id:d.id,score:semantic.get(d.id)})).filter(d=>Number.isFinite(d.score)).sort(compare).slice(0,maxTurns);
+  const globalRank=semantic ? rawSearchRrf(lexical,semRank(all),maxTurns) : lexical;
+  const semSessions=semantic ? [...sessions].map(([id,m])=>({id,score:Math.max(...m.map(t=>semantic.get(t.id)))})).sort(compare).slice(0,maxTurns) : null;
+  const sessionRank=rank(sessionDocs,terms,check).slice(0,maxTurns);
+  const rankedSessions=semantic?rawSearchRrf(sessionRank,semSessions,maxTurns):sessionRank;
   const within=[];
   for (const session of rankedSessions) {
     const members=sessions.get(session.id);
@@ -94,8 +94,8 @@ export function retrieveRaw(segments,query,{ vectors = null,queryVector = null,m
     const bm=rank(members,terms,check), scores=new Map(bm.map(row=>[row.id,row.score])), max=Math.max(1e-12,...scores.values());
     const lexicalWithin=members.map((t,i)=>({id:t.id,score:(scores.get(t.id)??0)/max+.6*own(t)+.35*own(merge(
       [members[i-1]?.ordinal===t.ordinal-1?members[i-1]:null,members[i+1]?.ordinal===t.ordinal+1?members[i+1]:null].filter(Boolean)))}))
-      .filter(t=>t.score>0).sort(compare).slice(0,24);
-    within.push((semantic?rawSearchRrf(lexicalWithin,semRank(members)):lexicalWithin).slice(0,3));
+      .filter(t=>t.score>0).sort(compare).slice(0,maxTurns);
+    within.push((semantic?rawSearchRrf(lexicalWithin,semRank(members),maxTurns):lexicalWithin).slice(0,3));
   }
   const centers=[0,1,2].flatMap(i=>within.flatMap(hits=>hits[i]?[hits[i]]:[]));
   const scores=new Map();
@@ -111,15 +111,16 @@ export function retrieveRaw(segments,query,{ vectors = null,queryVector = null,m
         candidates.set(turn.id,{id:turn.id,turn,score:score*factor,centerId:id,neighbor:id!==turn.id});
     }
   }
-  const rows=[...candidates.values()].sort(compare).slice(0,RAW_SEARCH_LIMITS.depth),incomplete=rows.some(row=>!row.turn.complete);
-  const contributors=new Map();
-  for(const row of rows){
-    const center=turns.get(row.centerId),members=sessions.get(center.sessionId),index=members.indexOf(center);
-    // The centre's neighbouring terms feed within-session ranking. Retain all
-    // physical siblings of the centre, those neighbours and the delivered turn.
-    for(const turn of [row.turn,center,members[index-1],members[index+1]])if(turn)
-      for(const segment of turn.segments)contributors.set(JSON.stringify(segment.source.ref),segment.source);
+  const rows=[];
+  for(const row of [...candidates.values()].sort(compare)){
+    check();const accepted=accept(row,turns.get(row.centerId));
+    if(accepted)rows.push(accepted===true?row:accepted);
+    if(rows.length===RAW_SEARCH_LIMITS.depth)break;
   }
+  const incomplete=rows.some(row=>!row.turn.complete);
+  const contributors=new Map();
+  for(const row of rows)for(const turn of [row.turn,turns.get(row.centerId)])
+    for(const segment of turn.segments)contributors.set(JSON.stringify(segment.source.ref),segment.source);
   return {rows,sources:[...contributors.values()],coverage:{status:partial||turnPartial||incomplete?'partial':'complete',scanned:Math.min(work,maxWork),expanded:candidates.size,
     causes:[...(partial?['work_limit']:[]),...(turnPartial?['turn_limit']:[]),...(incomplete?['partial_turn']:[])]}};
 }

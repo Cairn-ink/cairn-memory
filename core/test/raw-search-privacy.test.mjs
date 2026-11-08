@@ -174,7 +174,7 @@ test('successive opener and counter/authority ports stop after an unchanged-epoc
   assert.equal((await s.service.classify(hit,{},s.host.token)).kind,'denied');
 });
 
-test('fusion dependency manifest refuses a changed nonselected lexical child',{timeout:30000},async t=>{
+test('preparation checks its direct center without retaining unrelated lexical children',{timeout:30000},async t=>{
   const f=sourceFixture(t),source=await savedSource(f,'Synthetic copper telescope.');
   ok(await f.core.captureRaw((await import('../testing/raw-source-fixtures.mjs')).request(
     (await import('../testing/raw-source-fixtures.mjs')).splitRaw('Synthetic copper adjacent.',{id:'sibling',ordinal:2})[0],{client:'codex',eventId:'sibling'})));
@@ -182,8 +182,13 @@ test('fusion dependency manifest refuses a changed nonselected lexical child',{t
   const hit=(await s.search({query:'copper'})).candidates.find(row=>row.messageId==='sibling');assert.ok(hit);
   const prepared=await s.prepare(hit),mutate=await mutator(t,f.path);
   await mutate('exclude',mutation(f,source,'exclude'));
-  assert.throws(()=>s.service.revalidate([prepared.ticket]),{code:'raw_search_unavailable'});
-  assert.equal((await s.service.classify(hit,{},s.host.token)).kind,'denied');
+  if(hit.centerId===hit.id){
+    assert.equal(s.service.revalidate([prepared.ticket])[0].messageId,'sibling');
+    assert.notEqual((await s.service.classify(hit,{},s.host.token)).kind,'denied');
+  }else{
+    assert.throws(()=>s.service.revalidate([prepared.ticket]),{code:'raw_search_unavailable'});
+    assert.equal((await s.service.classify(hit,{},s.host.token)).kind,'denied');
+  }
   // Fresh preparation can use independently valid data, without stale scores.
   const next=await s.search({query:'copper'});assert.equal(next.candidates.some(row=>row.messageId===source.messageId),false);
 });

@@ -1,184 +1,130 @@
-# Optional local Raw search interface
+# Local Raw search interface
 
-Version: `raw-search-v1`. This trusted engine API is independent of context
-representations and Raw saving. Existing constructors never select it.
+Version: `raw-search-v1`. Raw search is available by default when a host configures
+its Raw store. `openRawSearch(options)` is exported from `core/index.mjs`;
+`enabled` may be omitted. `{ enabled: false }` (or `false`) is the explicit off
+switch and returns `null` before imports, probes, clocks or ports. Omitted store
+options also return `null`. Hosts exposing `rawSearch:false` should map that
+setting to the off switch.
 
-`await openRawSearch(options)` is exported from `core/index.mjs`. Omitted options
-or `{ enabled: false }` return `null` before imports, probes, clocks or ports.
-Selection requires `version: 'raw-search-v1'`, `enabled: true`, `backend: 'local'`,
-canonical `path`, private `directory`, `ownerId`, `readSet`, `authority` and a
-`raw-seal-v1` `crypto` port. Hosted selection refuses. Up to 32 exact namespaces
-belong to one owner. Handles are trusted host configuration, never tool inputs.
-Maintenance selection and read selection are independent.
-Select the service before admitting Memory reads; drain existing reads before
-changing selection so their preflight vectors have been released.
+Configuration requires `version: 'raw-search-v1'`, `backend: 'local'`, canonical
+`path`, private `directory`, `ownerId`, `readSet`, `authority` and a `raw-seal-v1`
+`crypto` port. Hosted backends refuse. Up to 32 exact namespaces belong to one
+owner. These are trusted host options, never tool inputs. Select Raw before
+admitting Memory reads; drain reads before changing shared vector ownership.
 
-The selected handle provides:
+Two safety requirements apply:
 
-- `search({ query, intent?, queryVector? }, token)` returns a Promise of
-  `{ version, publication, candidates, coverage, semantic }`. Intent defaults to
-  `current`; `history` includes retained historical sources. At most 24
-  candidates contain `{ id, namespace, conversationId, messageId, ordinal, role,
-  occurredAt, ranges, score, centerId, neighbor, currentness, classification,
-  rangeClassifications, publication, proof }`, with no prose. Each range is an
-  authenticated canonical Raw ref. `proof` is an opaque, service-local binding
-  to the complete ranking dependency manifest. Do not modify candidates.
-- A search whose commitment cannot be confirmed within its deadline returns
-  this exact constant result, including after its bounded version retry or
-  exhausted canonical busy backoff:
+1. Forgotten, suppressed, excluded, session-fenced or otherwise denied Raw text
+   is never returned or rendered, even when that message ranks first.
+2. Owner and namespace isolation holds before scoring: another owner's or
+   namespace's rows never enter the caller's retrieval corpus or results.
 
-  ```json
-  {"version":"raw-search-v1","publication":null,"candidates":[],"coverage":{"status":"partial","scanned":null,"expanded":null,"causes":["deadline"]},"semantic":{"state":"unknown","reason":null}}
-  ```
+Search ranks the caller's published rows using BM25 and semantic retrieval when
+vectors are ready. It then walks candidates in rank order, applying the complete
+canonical predicate for the requested intent to each candidate and its returned
+segments and center. Denied candidates are skipped until the page fills or the
+bounded candidate pool runs out. Returned candidates receive a final predicate
+check in one fresh canonical snapshot; a newly denied candidate is dropped.
+Search performs no full-store canonical census, commitment rebuild or eligibility
+memo pass. A stale index remains usable for sources that still pass these checks.
 
-  The single owner-neutral cause also covers contention and version movement;
-  it never identifies another owner's write. No count, identity, score, hint,
-  proof or ticket comes from interrupted work. Nothing from a torn or interrupted rebuild is admitted. Vector reservations
-  from interrupted searches are released. A complete rebuild verified at both
-  ends may retain its commitment after a later deadline, and eligibility checks
-  may remain reusable after their bounded unit verifies an unchanged version.
-  Both are keyed by the canonical version and invalidated before reuse after
-  any commit, including a forget or suppression. A version retry starts the
-  rebuild from zero.
-  Consumers must render this as incomplete and count it as unavailable, never
-  as a successful search with no matches. When the source population bound
-  instead prevents a commitment, the existing full dependency validation path
-  may still return declared partial candidates within the same deadline.
-  Earlier tickets still require confirmation and refuse if it cannot finish.
-  Synchronous ticket validation may spend one bounded, snapshot-free busy
-  backoff before refusing. No read snapshot spans an await or a backoff.
-A suppression epoch change makes every previously published hint for that
-owner unavailable (`stale_index`) until maintenance republishes it, including
-hints outside the suppressed scope. With maintenance unselected or stopped,
-there is no upper bound on this availability loss. With maintenance scheduled,
-recovery requires the denial sweep followed by positive publication (four
-sources per quantum, with a one-second commit cadence).
+Corpus statistics, ranking competition, session terms and vector readiness may
+include ineligible rows from the caller's namespace. Their scores can influence
+allowed results. Statistic isolation, an eligible-only corpus, population-wide
+commitment validation and retained eligibility progress are not guarantees.
+Ineligible text and identifiers are never returned as search hits. Maintenance
+may retain commitment checks for publishing; search does not depend on them.
 
-- Each classification is `{ kind, reason }`. Kinds are `denied`,
-  `current-eligible-bare`, `current-eligible-linked`, and `history-only`.
-  Demonstrably bare sources have complete privacy checks and no Memory link;
-  their currentness is unknown. Render them as attributed past-conversation
-  evidence that may be outdated, never adopted/current truth. Linked current
-  sources have resolved current Memory links. Retired links, current/history
-  overlaps and unresolved structural currentness are history-only, with a
-  reason. `rangeClassifications` preserves each child's policy. Unknown privacy
-  ancestry or missing required authority denies both intents.
-- `classify(candidate, { intent? }, token)` returns a fresh classification.
-  A denied/stale/foreign candidate returns only
-  `{ kind: 'denied', reason: 'source-or-authority-unavailable' }`, with no identity,
-  score, range or text. Search omits denied candidates entirely; it never exposes
-  their identifiers. This distinction prevents denial diagnostics becoming a
-  second result channel.
-- `prepare(candidate, { intent? }, token)` returns a private prepared handle
-  `{ value, ticket, validate() }`. `value` contains source metadata,
-  classification and separate `{ source, text, classification }` ranges,
-  materialized from canonical sealed parts outside transactions. It never
-  joins across gaps. Preparation retains every lexical corpus, semantic chunk,
-  session, center and neighbor dependency, including contributors outside the
-  final 24. A permitted sibling cannot carry a denied contributor's score.
-- `prepareSource(rawRef, { intent? }, token)` prepares an authenticated exact
-  canonical Raw ref without requiring an independent search hit. The later
-  allocator can use this with refs resolved from canonical Memory receipt
-  lineage through its existing source adapter. It applies the same policy,
-  per-port guards and final ticket contract, and never uses receipt text as Raw.
-- `revalidate(handlesOrTickets)` synchronously establishes a fresh final
-  canonical snapshot and returns prepared values, or throws the fixed
-  `raw_search_unavailable` error without prepared content. `validate` is an alias;
-  a handle's `validate()` validates that handle. Run this after all preparation,
-  serialization, counters and host awaits, immediately before returning or
-  dispatching. No callback or await may follow before that boundary. Call it
-  before each source-bearing counter/callback too. All retained dependencies,
-  exact identities, currentness, exclusions, actual terminal fences, suppression
-  and access bindings are rechecked. A mismatch refuses the whole preparation.
-  Delivered ranges, coalesced siblings, centres and neighbours feeding returned
-  candidates rerun the full canonical predicate in that final snapshot.
-  Corpus size, lengths and document frequencies, ranking competition, semantic
-  readiness and coverage use the snapshot's eligible set and a complete source
-  commitment. That commitment binds receipt text/integrity, all inbound ancestry
-  edges and each endpoint's own owner/namespace, including unresolved endpoints.
-  Its comparison precedes release of any row, score, hint or status. When the
-  inventory bound prevents a commitment, all dependencies receive full predicates
-  and coverage remains declared partial.
-  No stale-envelope survivor filtering is allowed.
-  Inventory metadata is read in bounded snapshots; native SQLite change
-  detection must prove it unchanged across those reads and at final validation.
-  A retained proof keeps its original message population, so unrelated appended
-  messages do not invalidate it. A fresh search observes the new inventory.
-  A changed cache key refuses that search result. It never substitutes for
-  the actual per-source denial checks at protected ports.
-- Opaque tickets can be passed back to the same owning service after an IPC/host
-  wait; the consumer must request fresh validation there before its dispatch.
-  They expire after five seconds, cannot cross service instances/restarts, and
-  are bounded to 72 preparations for the typed candidate pool. Search proofs are bounded to four searches
-  with the same expiry. Refused/expired handles require fresh preparation.
-  This API guarantees engine snapshot linearization. It provides no automatic
-  worker/transport hook or atomic wire-send-versus-forget guarantee. A later
-  consumer must install and test its own call to `revalidate`.
-- `maintain({ maxItems?, maxMs?, embeddings? }, token)` runs one explicit quantum
-  under the existing version-1 `maintenanceTurn` broker. No index timer/pump is made.
-  The host owns scheduling, renewal, supervision and joined disposal. Denial
-  reconciliation precedes positive refresh. Each Raw opener and actual provider
-  `beforeDispatch` checks canonical denials and access after waits. Embeddings
-  use only the selected existing port and shared process budget.
+The handle provides the following unchanged methods and result fields:
+
+- `search({query, intent?, queryVector?}, token)` returns
+  `{version, publication, candidates, coverage, semantic}`. Intent defaults to
+  `current`; `history` also permits known historical lineage. At most 24 candidates
+  contain `{id, namespace, conversationId, messageId, ordinal, role, occurredAt,
+  ranges, score, centerId, neighbor, currentness, classification,
+  rangeClassifications, publication, proof}` with no prose. Each range is an
+  authenticated canonical Raw ref. Do not modify candidates.
+- `classify(candidate, {intent?}, token)` rechecks that candidate's canonical
+  sources. Denied, stale or foreign candidates return only
+  `{kind:'denied', reason:'source-or-authority-unavailable'}`.
+- `prepare(candidate, {intent?}, token)` returns a private handle
+  `{value, ticket, validate()}`. Value contains source metadata, classification
+  and separate `{source, text, classification}` ranges opened from canonical
+  sealed parts. No gap is joined. Only that candidate's direct source and center
+  dependencies are retained; unrelated corpus rows cannot invalidate a preparation.
+  Preparation uses retained authenticated refs and a publication header check,
+  without decoding the entire ranking index again for each hit.
+- `prepareSource(rawRef, {intent?}, token)` prepares an exact authenticated Raw
+  ref without an independent index hit. Memory source expansion can use it with
+  canonical receipt lineage; receipt text never substitutes for Raw.
+- `revalidate(handlesOrTickets)` synchronously checks prepared values in a fresh
+  final canonical snapshot, returning values or throwing `raw_search_unavailable`.
+  `validate` is an alias. Call after all preparation, counters, serialization and
+  host awaits, immediately before delivery, and before source-bearing callbacks.
+  No callback or await may follow that boundary. A mismatch refuses the preparation.
+- `maintain({maxItems?, maxMs?, embeddings?}, token)` runs one bounded quantum
+  under the existing version-1 `maintenanceTurn` broker. The host owns scheduling,
+  supervision and joined disposal; no indexing timer or pump is created. Denial
+  reconciliation precedes positive refresh. Canonical denials and access are
+  checked at Raw openers and provider `beforeDispatch`, including after waits.
 - `status()` and maintenance acknowledgements expose eligible/indexed/embedded
-  counts as `null` and coverage as `unknown`, or state `unavailable`. Physical
-  stale population, source-bearing checkpoints and provider errors never cross
-  this boundary. `purge()` deletes derived rows and vacuums; `close()` joins
-  active work and disposes connections. Neither changes canonical data.
+  counts as `null`, coverage as `unknown`, and fixed errors. `purge()` deletes
+  derived owner rows and vacuums. `close()` joins active work and disposes connections.
 
-Authority follows the existing private-read protocol: synchronous
-`authorize(request, token)` / `isCurrent(grant, request)`. Requests bind exact
-namespace, `method`, `actionClass: 'read'`, null action/target/revision,
-`payloadBinding` and input. Dedicated methods are `rawSearch`, `rawSearchSource`
-and `rawSearchMaintenance`. Memory-only grants cannot confer Raw access. Each
-protected port checks again after authority callbacks, including callbacks
-that throw or return invalid values.
+Classifications are `{kind, reason}`: `denied`, `current-eligible-bare`,
+`current-eligible-linked` or `history-only`. Bare Raw has complete privacy ancestry
+and no Memory link; render it as attributed past conversation evidence whose
+currentness is unknown. Retired links, current/history overlaps and unresolved
+linked currentness are history-only. Missing privacy ancestry denies both intents.
+Each range retains its own classification. Exclusions and terminal session fences
+deny both intents. Canonical manifest refs bind immutable message/part content;
+unrelated captures or suppression facts do not invalidate allowed sources.
 
-The internal owner-segment backend supports bounded snapshot/search, immutable
-staging, compare-and-publish, invalidation, checkpoints, owner drop and close.
-Bindings include canonical store/file identity, owner, read-set, tokenizer,
-projection, policy, manifests and generation. Index records remain private
-hints. Coverage concerns retained eligible evidence, never complete conversation
-retention or recapture of skipped gaps. The local backend is plaintext, including vocabulary and vectors. There
-is no index export, upload or hosted backend. Main files, rollback journals,
-inactive generations and host backups belong to the host's retention/erasure
-inventory. Restores never confer source authority and must reconcile before
-claiming coverage. Decommissioning requires explicit owner purge. Secure page
-or backup erasure is not promised.
+Each search has a 1,000 ms operation deadline. Expiry or exhausted canonical busy
+backoff returns the constant unavailable partial below. Native statement and row
+boundaries check deadlines; interrupted operations release snapshots and vectors.
+The next search can use the same connection. No canonical snapshot spans an await
+or backoff. Synchronous ticket validation has bounded snapshot-free busy backoff.
 
-Bounds: 256 expanded turns / 50,000 work / 24 final turns; canonical source
-batches retain 16 anchors / 64,000 bytes / 1,024 rows. Semantic chunks preserve
-code points and exact source offsets, with at most 4,000 UTF-16 units / 8,000
-input bytes plus adapter framing. The 512 MiB owner index quota is separate
-from Raw retention; the 20,000-vector / 128 MiB resident ceiling is shared.
-Missing/partial embeddings yield explicit BM25-only. Sidecar snapshots admit at
-most 8 MiB of compact encoded hints before decoding, with separately bounded
-fp32 vector BLOBs. Exact refs bind the complete canonical manifest; omitted
-manifest hints are refetched canonically. Exhausting either bound reports
-partial coverage. Native SQLite changes invalidate the search-eligibility
-cache; actual per-port and final source checks remain independent of that cache. Public coverage reports
-partial causes with unknown scan/expansion counts. The later allocator owns
-Memory-first floor, excerpt counting, coalescing and rendering.
+```json
+{"version":"raw-search-v1","publication":null,"candidates":[],"coverage":{"status":"partial","scanned":null,"expanded":null,"causes":["deadline"]},"semantic":{"state":"unknown","reason":null}}
+```
 
-A reader with the selected `local` embedding policy privately retains verified
-fp32 blocks and bounded decoded hints. Other policies never retain this cache.
-It supplies ranking hints only; exact canonical delivery and protected dispatch
-validation remain mandatory. The key binds owner/read set, sidecar generation
-and publication, native sidecar revision, full provider/model identity, owner
-suppression epoch, namespace exclusion clocks and scoped session-fence digests.
-All canonical components are read together in one snapshot and compared again
-inside the final delivery snapshot. Native canonical changes also invalidate it.
-Coverage is read freshly from the sidecar, and status, diagnostics and errors
-contain no cache state. The cache never holds source prose or supplies openings.
+Render this as incomplete and unavailable, never a successful search with no
+matches. Coverage describes the bounded published snapshot, not complete Raw
+retention or a fresh canonical inventory. Scan and expansion counts remain unknown.
 
-The private cache rechecks its key every second, on the existing maintenance
-cadence, including while searches and host maintenance calls are idle. A failed
-check drops it. Five seconds without use also drops it at the next cadence tick;
-close and purge drop it immediately. Timers are unreferenced and cancelled on
-disposal. The bound is subject to the running reader's event-loop scheduling;
-a terminated Worker owns no surviving blocks. A borrow already in an operation
-keeps its shared reservation until that operation settles. Blocks are never
-handed to another reader or successor. There is no cache persistence or privacy
-mutation callback. Encoded hint overhead (reserved at four times its size) and
-block indexing share the 128 MiB ceiling with fp32 vectors and Memory; the joint
-vector count remains 20,000. Admission failure leaves the operation uncached.
+Authority uses synchronous `authorize(request, token)` / `isCurrent(grant, request)`
+with exact namespace, method, `actionClass:'read'`, null action/target/revision,
+payload binding and input. Dedicated methods are `rawSearch`, `rawSearchSource`
+and `rawSearchMaintenance`. Memory-only grants do not confer Raw access. Protected
+ports check after authority callbacks. Prepared tickets expire after five seconds,
+are service-local and bounded to 72 preparations; search proofs retain four searches.
+Restart refuses old tickets. Consumers must install their own final dispatch
+validation; there is no atomic wire-send-versus-forget guarantee.
+
+Bounds remain 256 expanded turns, 50,000 work, 24 returned turns, 16 source anchors,
+64,000 source bytes and 1,024 source rows. Chunks preserve code points and exact
+source offsets, at most 4,000 UTF-16 units / 8,000 input bytes plus adapter framing.
+The 512 MiB owner index quota is separate from Raw retention. Snapshots admit at
+most 8 MiB compact hints and 128 MiB fp32 vector BLOBs. Missing or partial vectors
+yield explicit BM25-only retrieval. Raw and Memory share 20,000 resident vectors
+and 128 MiB including conservative hint and block-index overhead.
+
+Local embedding policy may retain immutable signed hints and verified vector
+blocks keyed by store/file, owner/read set, sidecar generation/publication/revision
+and provider identity. Canonical writes do not invalidate this ranking cache;
+every returned source still receives current canonical predicates. Its one-second
+cadence drops changed publications or unavailable keys; five idle seconds drops
+unused data. Timers are unreferenced and cancelled on close/purge. Borrowed blocks
+retain their reservation until the operation settles. Other embedding policies
+retain no cache. No source prose, opening or authority is cached.
+
+The local sidecar is plaintext: vocabulary, metadata and vectors, including its
+journals and host backups. There is no export, upload or hosted backend. Bindings
+include canonical store/file identity, one owner and exact read set. Changing a
+read set requires explicit rebuild. Hosts own inactive generations, restore
+reconciliation and decommissioning purge; secure page or backup erasure is not
+promised. The backend uses private POSIX paths and authenticated format-3 schema
+and file seals; incompatible sidecars refuse attachment without mutation.

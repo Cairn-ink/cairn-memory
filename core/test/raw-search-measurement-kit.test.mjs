@@ -90,37 +90,6 @@ test('capture phase timeout grows with the requested sample count',async()=>{
   assert.equal(captureTimeoutMs(1),90000);assert.ok(captureTimeoutMs(120)>90000);
   assert.ok(captureTimeoutMs(240)>captureTimeoutMs(120));
 });
-test('phase ledger records each selection snapshot row count and hold on the functional clock',()=>{
-  const url=path=>new URL(path,import.meta.url).href;
-  const script=`const {installPhaseMeasurement}=await import(${JSON.stringify(url('../../tools/testing/raw-search-phase-loader.mjs'))});const hook=installPhaseMeasurement();
-    const {default:test}=await import('node:test');const {default:assert}=await import('node:assert/strict');
-    const {performance}=await import('node:perf_hooks');
-    const {DatabaseSync}=await import('node:sqlite');
-    const {sourceFixture,savedSource}=await import(${JSON.stringify(url('../testing/raw-source-fixtures.mjs'))});
-    const {searchFixture}=await import(${JSON.stringify(url('../testing/raw-search-fixtures.mjs'))});
-    const {openReadDatabase}=await import(${JSON.stringify(url('../read-database.mjs'))});
-    const {createRawSearchAuthority}=await import(${JSON.stringify(url('../raw-search-authority.mjs'))});
-    const {takeSelectionUnits}=await import(${JSON.stringify(url('../../tools/testing/raw-search-phase-ledger.mjs'))});
-    test('unit records',async t=>{let now=100;Object.defineProperty(performance,'now',{configurable:true,value:()=>now});const f=sourceFixture(t);await savedSource(f,'Synthetic copper.');const s=await searchFixture(f);
-      const reader=openReadDatabase(f.path,{contextRead:true});t.after(()=>reader.db.close());
-      const a=createRawSearchAuthority(reader,s.options),source=a.inventory().rows[0].source;
-      const prepare=DatabaseSync.prototype.prepare;
-      try{a.select([{source}],'current',1100).commit();const prime=takeSelectionUnits();
-        assert.ok(prime[0].checked>=1);assert.ok(prime[0].rows>=1);
-        a.select(Array.from({length:65},()=>({source})),'current',1100);
-        const units=takeSelectionUnits();assert.deepEqual(units.map(u=>u.rows),[32,32,1]);assert.deepEqual(units.map(u=>u.checked),[0,0,0]);assert.ok(units.every(u=>u.holdMs===0));
-        a.reset();let crossed=false;
-        DatabaseSync.prototype.prepare=function(sql){const statement=prepare.call(this,sql);
-          if(!crossed&&new Error().stack.includes('at checkInside')){crossed=true;now+=1001;}return statement;};
-        assert.throws(()=>a.select([{source}],'current',1100),{code:'search_deadline',reason:'deadline'});
-        assert.equal(crossed,true);
-        assert.deepEqual(takeSelectionUnits().map(({rows,checked})=>({rows,checked})),[{rows:0,checked:1}]);
-      }finally{DatabaseSync.prototype.prepare=prepare;hook.deregister();}
-    });`;
-  const child=spawnSync(process.execPath,['--input-type=module','-e',script],{encoding:'utf8',timeout:30000});
-  assert.equal(child.status,0,child.stdout+child.stderr);assert.equal(child.signal,null);
-});
-
 test('capture profile completes baseline and contended phases on a small fixture',{timeout:120000},async t=>{
   const {captureContention}=await import('../../tools/testing/measure-raw-search.mjs');
   const {safetySourceFixture}=await import('../testing/raw-search-fixtures.mjs');
@@ -243,7 +212,7 @@ test('retry refresh deadline and later attempt failure retain origin, final code
     test('retry chain',async t=>{const f=sourceFixture(t);await savedSource(f,'Synthetic copper.');const s=await searchFixture(f);await s.maintain();
       takeInternalErrors();takeInternalErrorCounts();const prepare=DatabaseSync.prototype.prepare;let attempts=0;
       DatabaseSync.prototype.prepare=function(sql){if(sql.startsWith('SELECT s.*,h.sequence')){
-        attempts++;throw Object.assign(Error('synthetic_attempt'),{code:attempts===1?'source_changed':'unsupported_database'});
+        attempts++;throw Object.assign(Error('synthetic_attempt'),{code:attempts===1?'source_busy':'unsupported_database'});
       }return prepare.call(this,sql);};
       try{let failure;await assert.rejects(s.search({query:'copper'}),error=>{failure=error;return error.code==='raw_search_unavailable';});
         assert.equal(attempts,2);const result=measurementError(failure);

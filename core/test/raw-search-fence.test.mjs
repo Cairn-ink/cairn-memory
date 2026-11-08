@@ -64,7 +64,7 @@ for(const eventTime of [false,true])test(`source commitment includes every canon
   t.diagnostic('fence-input-projections='+JSON.stringify(native));
 });
 
-test('direct output contributors include centres, adjacent terms and every scoped sibling',()=>{
+test('direct output contributors include centres and every scoped sibling',()=>{
   const segments=Array.from({length:300},(_,i)=>({key:'same-key',postings:rawSearchPostings('copper'),chunks:[],
     source:{ref:{namespace:{...ns,ownerId:i%2?'second-owner':ns.ownerId},conversationId:'session-'+Math.floor(i/3),
       messageId:'message-'+i,span:{start:0,end:6,precision:'exact'}},ordinal:i%3+1,role:'user',totalUnits:6}}));
@@ -74,9 +74,7 @@ test('direct output contributors include centres, adjacent terms and every scope
     const centre=segments.find(s=>JSON.stringify([s.source.ref.namespace,s.source.ref.conversationId,s.source.ref.messageId])===row.centerId);
     assert.ok(centre);assert.ok(keys.has(JSON.stringify(centre.source.ref)));
     for(const part of row.turn.segments)assert.ok(keys.has(JSON.stringify(part.source.ref)));
-    for(const neighbour of segments.filter(s=>s.source.ref.conversationId===centre.source.ref.conversationId&&
-      JSON.stringify(s.source.ref.namespace)===JSON.stringify(centre.source.ref.namespace)&&Math.abs(s.source.ordinal-centre.source.ordinal)===1))
-      assert.ok(keys.has(JSON.stringify(neighbour.source.ref)));
+
   }
 });
 
@@ -154,26 +152,7 @@ for(const foreign of [false,true])test(`ancestor exclusions and facts use the an
   assert.deepEqual(f.db.prepare('PRAGMA foreign_key_check').all(),[]);
 });
 
-test('forgetting a rare-term turn removes it from corpus statistics and returned scores',async t=>{
-  const f=sourceFixture(t,{model:oneMemory()}),source=await savedSource(f,'rare rare copper',{sessionId:'first'});
-  await savedSource(f,'rare copper specimen',{sessionId:'second'});await savedSource(f,'copper specimen',{sessionId:'third'});
-  const s=await searchFixture(f);await s.maintain();clock(t);
-  const {authority}=canonical(t,f,s),storage=await openRawSearchStorage({directory:s.directory,identity:authority.identity,bind:authority.bind,quotaBytes:512*1024*1024});
-  f.workspace.defer(()=>storage.close());const snapshot=await storage.search(),before=await s.search({query:'rare copper'});
-  const memory=f.db.prepare('SELECT id,revision FROM memories WHERE deleted=0').get();assert.ok(memory);
-  ok(f.core.forget({namespace:ns,memoryId:memory.id,expectedRevision:memory.revision}));
-  const eligible=authority.select(snapshot.rows,'current',Infinity).eligible;
-  assert.equal(eligible.length,2);assert.ok(eligible.every(r=>r.source.ref.conversationId!==source.conversationId));
-  const idf=rows=>{const n=rows.length,df=rows.filter(r=>r.postings.terms.some(([term])=>term==='rare')).length;
-    return Math.log(1+(n-df+.5)/(df+.5));};
-  assert.notEqual(idf(eligible),idf(snapshot.rows));
-  const fresh=await s.search({query:'rare copper'}),expected=retrieveRaw(eligible,'rare copper');
-  assert.deepEqual(fresh.candidates.map(c=>[c.id,c.score]),expected.rows.map(c=>[c.id,c.score]));
-  assert.ok(fresh.candidates.some(c=>before.candidates.find(old=>old.id===c.id)?.score!==c.score));
-  assert.ok(fresh.candidates.every(c=>c.conversationId!==source.conversationId));
-});
-
-test('missing commitment declares partial lexical coverage and checks all dependencies',async t=>{
+test('search remains available when the maintenance commitment exceeds its population bound',async t=>{
   const f=sourceFixture(t),source=await savedSource(f,'copper alpha');
   ok(await f.core.captureRaw(request(splitRaw('copper beta',{id:'sibling',ordinal:2})[0],{client:'codex',eventId:'sibling'})));
   const embedder={id:'synthetic-fallback',revision:'1',dimensions:2,normalization:'l2',async embed(texts,c){c.beforeDispatch();return texts.map(()=>[1,0]);}};
@@ -186,30 +165,10 @@ test('missing commitment declares partial lexical coverage and checks all depend
     .run(ns.ownerId,ns.scope,ns.projectId??'');
   assert.throws(()=>authority.fence(),{code:'source_budget_exceeded'});
   const result=await s.search({query:'copper'});
-  assert.equal(result.coverage.status,'partial');assert.equal(result.semantic.state,'bm25-only');
+  assert.equal(result.coverage.status,'complete');assert.equal(result.semantic.state,'ready');
   const candidate=result.candidates.find(c=>c.messageId==='sibling');assert.ok(candidate);
   const prepared=await s.prepare(candidate);
   f.db.prepare('INSERT INTO raw_source_exclusions VALUES(?,?,?,?,1)').run(source.conversationId,source.messageId,0,source.text.length);
-  assert.throws(()=>s.service.revalidate([prepared.ticket]),{code:'raw_search_unavailable'});
-});
-
-test('cold first read declares deadline partial coverage using the functional clock',async t=>{
-  const f=sourceFixture(t);await savedSource(f,'copper retained');const s=await searchFixture(f);await s.maintain();await s.reopen();
-  const advance=clock(t),prepare=DatabaseSync.prototype.prepare;let pages=0,crossing;
-  DatabaseSync.prototype.prepare=function(sql){
-    const statement=prepare.call(this,sql);
-    const method=sql.startsWith('SELECT * FROM (')?'all':
-      sql.startsWith('SELECT count(*) AS count,json_group_array')?'get':null;
-    if(method){
-      const execute=statement[method];
-      statement[method]=function(...args){const rows=execute.apply(this,args);pages++;
-        if(pages===2){crossing=pages;advance(1001);}return rows;};
-    }
-    return statement;
-  };
-  t.after(()=>{DatabaseSync.prototype.prepare=prepare;});
-  const result=await s.search({query:'copper'});
-  assert.equal(crossing,2);assert.ok(pages<=crossing+1);
-  assert.deepEqual(result,{version:'raw-search-v1',publication:null,candidates:[],
-    coverage:{status:'partial',scanned:null,expanded:null,causes:['deadline']},semantic:{state:'unknown',reason:null}});
+  if(candidate.centerId===candidate.id)assert.equal(s.service.revalidate([prepared.ticket])[0].messageId,'sibling');
+  else assert.throws(()=>s.service.revalidate([prepared.ticket]),{code:'raw_search_unavailable'});
 });

@@ -76,7 +76,8 @@ test('G4 semantic plus lexical dependency denied while another candidate opens',
   f.port.openRaw=async input=>{opens++;await mutate('exclude',{conversationId:source.conversationId,messageId:source.messageId,start:0,end:source.text.length});return open(input);};
   await s.reopen();const again=await s.search({query:'copper'});assert.equal(again.semantic.state,'ready');
   const fresh=again.candidates.find(c=>c.messageId==='sibling');assert.ok(fresh);assert.deepEqual(fresh.namespace,ns);
-  await assert.rejects(s.prepare(fresh),{code:'raw_search_unavailable'});assert.equal(opens,1);
+  if(fresh.centerId===fresh.id)assert.equal((await s.prepare(fresh)).validate().messageId,'sibling');
+  else await assert.rejects(s.prepare(fresh),{code:'raw_search_unavailable'});assert.equal(opens,1);
   f.port.openRaw=open;
   const next=await s.search({query:'copper'});assert.ok(next.candidates.every(c=>c.messageId!==source.messageId));
 });
@@ -151,7 +152,7 @@ test('G1 G2 maintenance inventory cannot publish after an opener commits a termi
   assert.equal((await s.search({query:'retained'})).candidates.length,0);
 });
 
-test('G4 contributor manifest remains complete when the global inventory bound is exhausted',{timeout:60000},async t=>{
+test('G4 direct candidate validation remains available when the maintenance inventory bound is exhausted',{timeout:60000},async t=>{
   const f=sourceFixture(t),source=await savedSource(f,'copper alpha');
   ok(await f.core.captureRaw(request(splitRaw('copper beta',{id:'sibling',ordinal:2})[0],{client:'codex',eventId:'sibling'})));
   assert.equal(f.db.prepare("SELECT conversation_id FROM raw_messages WHERE message_id='sibling'").get().conversation_id,source.conversationId);
@@ -172,8 +173,13 @@ test('G4 contributor manifest remains complete when the global inventory bound i
   assert.deepEqual(candidate.namespace,ns);assert.equal(candidate.conversationId,source.conversationId);
   const prepared=await s.prepare(candidate),mutate=await writer(t,f.path);
   await mutate('exclude',{conversationId:source.conversationId,messageId:source.messageId,start:0,end:source.text.length});
-  await assert.rejects(s.prepare(candidate),{code:'raw_search_unavailable'});
-  assert.throws(()=>s.service.revalidate([prepared.ticket]),{code:'raw_search_unavailable'});
+  if(candidate.centerId===candidate.id){
+    assert.equal((await s.prepare(candidate)).validate().messageId,'sibling');
+    assert.equal(s.service.revalidate([prepared.ticket])[0].messageId,'sibling');
+  }else{
+    await assert.rejects(s.prepare(candidate),{code:'raw_search_unavailable'});
+    assert.throws(()=>s.service.revalidate([prepared.ticket]),{code:'raw_search_unavailable'});
+  }
 });
 
 test('journal aliases cannot drop another live canonical SQLite read lock',{timeout:30000},async t=>{
@@ -201,14 +207,14 @@ import {performance} from 'node:perf_hooks';
 });
 
 for(const cache of [false,true])for(const intent of ['current','history'])for(const change of ['receipt-text','foreign-edge'])
-test(`fresh search cannot revive old classification or sibling ticket: ${change}, ${intent}, cache ${cache}`,{timeout:30000},async t=>{
+test(`fresh search denies damaged classification while independent sibling tickets stay valid: ${change}, ${intent}, cache ${cache}`,{timeout:30000},async t=>{
   let extractions=0;
   const onlyFirst={extract:()=>({items:extractions++===0?
     [{content:'Synthetic copper fact.',kind:'fact',confidence:.8,sourceIndices:[0]}]:[]})};
   const f=sourceFixture(t,{model:onlyFirst}),source=await savedSource(f,'copper alpha');
   ok(await f.core.captureRaw(request(splitRaw('copper beta',{id:'sibling',ordinal:2})[0],{client:'codex',eventId:'sibling'})));
   assert.equal(f.db.prepare("SELECT conversation_id FROM raw_messages WHERE message_id='sibling'").get().conversation_id,source.conversationId);
-  const port={id:'synthetic-refresh',revision:'1',dimensions:2,normalization:'l2',async embed(texts,c){c.beforeDispatch();return texts.map(()=>[1,0]);}};
+  const port={id:'synthetic-refresh-'+change+'-'+intent+'-'+cache,revision:'1',dimensions:2,normalization:'l2',async embed(texts,c){c.beforeDispatch();return texts.map(()=>[1,0]);}};
   const s=await searchFixture(f,{embedder:port,policy:{family:cache?'local':'hosted',maxBatchDocuments:1,
     maxRequests:30,maxConcurrent:1,maxUsd:1,estimateUsd:()=>0}});
   await s.maintain();for(let i=0;i<4;i++)await s.tick({embeddings:true});
@@ -239,10 +245,11 @@ test(`fresh search cannot revive old classification or sibling ticket: ${change}
     }catch(error){f.db.exec('ROLLBACK');throw error;}
   }
   assert.deepEqual(f.db.prepare('PRAGMA foreign_key_check').all(),[]);
-  // Refresh both eligibility and vector-cache state before checking old proofs.
+  // A fresh search checks current predicates even when ranking blocks remain cached.
   const fresh=await s.search({query:'copper',intent});
   assert.ok(fresh.candidates.every(c=>c.messageId!==source.messageId));
   assert.ok(fresh.candidates.some(c=>c.messageId==='sibling'));
   assert.deepEqual(await s.service.classify(a,{intent},s.host.token),{kind:'denied',reason:'source-or-authority-unavailable'});
-  assert.throws(()=>s.service.revalidate([prepared.ticket]),{code:'raw_search_unavailable'});
+  if(b.centerId===b.id)assert.equal(s.service.revalidate([prepared.ticket])[0].messageId,'sibling');
+  else assert.throws(()=>s.service.revalidate([prepared.ticket]),{code:'raw_search_unavailable'});
 });

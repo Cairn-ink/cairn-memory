@@ -10,7 +10,7 @@ import {withContentSuppressionRequest,contentSuppressionRequestInside,cachedCont
 import {safetySourceFixture,searchFixture} from '../testing/raw-search-fixtures.mjs';
 import {savedSource,ns} from '../testing/raw-source-fixtures.mjs';
 
-test('idle cache checks start a fresh request and restore the caller account',async t=>{
+test('idle publication checks preserve the caller account without canonical eligibility reads',async t=>{
   t.mock.timers.enable({apis:['setInterval']});
   const f=safetySourceFixture(t);await savedSource(f,'Synthetic copper telescope.');
   const port=createFakeEmbedder(),s=await searchFixture(f,{embedder:port,
@@ -18,10 +18,8 @@ test('idle cache checks start a fresh request and restore the caller account',as
   await s.maintain();await s.tick({embeddings:true});await s.tick();
   const prepare=DatabaseSync.prototype.prepare;let reader,checking=false,checks=0,shared=false,outer;
   DatabaseSync.prototype.prepare=function(sql){
-    if(sql==='PRAGMA data_version'){
-      reader=this;
-      if(checking){checks++;shared ||= cachedContentSuppressionRequestInside(this,ns.ownerId)===outer;}
-    }
+    if(sql.startsWith('SELECT 1 FROM raw_source_maps WHERE'))reader=this;
+    if(checking&&this===reader){checks++;shared ||= cachedContentSuppressionRequestInside(this,ns.ownerId)===outer;}
     return prepare.call(this,sql);
   };
   t.after(()=>{DatabaseSync.prototype.prepare=prepare;t.mock.timers.reset();});
@@ -32,5 +30,5 @@ test('idle cache checks start a fresh request and restore the caller account',as
     try{t.mock.timers.tick(RAW_SEARCH_CADENCE_MS);}finally{checking=false;}
     assert.equal(cachedContentSuppressionRequestInside(reader,ns.ownerId),outer);
   },{fresh:true});
-  assert.ok(checks>0);assert.equal(shared,false);
+  assert.equal(checks,0);assert.equal(shared,false);
 });

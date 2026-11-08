@@ -75,10 +75,12 @@ try{
         catch(error){const ms=performance.now()-warmStart;warm.push(ms);warmSamples.push({ms,outcome:'error'});throw error;}
         finally{selectionUnits.push(...takeSelectionUnits());}
         takeInternalErrors();stage='full';
-        const original=await measureRawFullRead(storage,authority);full.push(original.ms);rawRetrieval.push(original.retrievalMs);
         const fullStart=performance.now();let preparations=0;
         for(const candidate of next.candidates){let preparationStage='prepare';takeInternalErrors();try{const at=performance.now(),handle=await coldService.prepare(candidate,{},host.token);prepare.push(performance.now()-at);takeInternalErrors();preparationStage='revalidate';coldService.revalidate([handle]);preparations++;}catch(error){errors.push({sample,stage:preparationStage,...measurementError(error)});}}
         preparedFull.push(warm.at(-1)+performance.now()-fullStart);
+        // Measure the legacy full-read path after consuming live search proofs;
+        // its census and repeated opens can outlast the five-second proof TTL.
+        const original=await measureRawFullRead(storage,authority);full.push(original.ms);rawRetrieval.push(original.retrievalMs);
         console.log(JSON.stringify({profile,count,sample,coldMs:cold.at(-1),outcome,preparations,rowsChecked,selectionMs:values.selection??0}));
       }catch(error){errors.push({sample,stage,...measurementError(error),ms:performance.now()-start});
         if(stage==='cold'&&!coldRecorded){const ms=performance.now()-searchAt;cold.push(ms);coldWithFactory.push(performance.now()-start);const units=takeSelectionUnits(),values=takePhases();selectionUnits.push(...units);coldSamples.push({ms,outcome:'error',rowsChecked:units.reduce((n,u)=>n+u.checked,0),selectionMs:values.selection??0});outcomes.error=(outcomes.error??0)+1;}}

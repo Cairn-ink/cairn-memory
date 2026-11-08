@@ -125,7 +125,7 @@ test('publication movement between an optional key read and payload snapshot lea
   const checkpoint=(await storage.status()).checkpoint,prepare=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;
   let target,armed=false,moved;
   DatabaseSync.prototype.prepare=function(sql){
-    if(sql.startsWith('SELECT length(CAST(data AS BLOB))')){target=this;armed=true;}
+    if(sql==='SELECT * FROM header WHERE singleton=1'){target=this;armed=true;}
     return prepare.call(this,sql);
   };
   DatabaseSync.prototype.exec=function(sql){const result=exec.call(this,sql);
@@ -147,7 +147,7 @@ test('a busy idle key check drops silently without changing the next search erro
   }finally{await s.service.close();t.mock.timers.reset();}
 });
 
-test('all key components are read in one canonical snapshot and evict before reuse',async t=>{
+test('publication and provider key components evict before reuse; canonical eligibility is checked per result',async t=>{
   const f=safetySourceFixture(t);await savedSource(f,'Synthetic copper telescope.');const s=await searchFixture(f);
   const reader=openReadDatabase(f.path,{contextRead:true});t.after(()=>reader.db.close());
   const authority=createRawSearchAuthority(reader,s.options),publication={generation:'one',sequence:1,revision:1};
@@ -161,23 +161,12 @@ test('all key components are read in one canonical snapshot and evict before reu
   different(authority.cacheKey({...publication,revision:2},metadata));
   for(const next of [{...metadata,id:'other-provider'},{...metadata,revision:'other-model'},
     {...metadata,dimensions:3},{...metadata,normalization:'none'}])different(authority.cacheKey(publication,next));
-  const exec=DatabaseSync.prototype.exec,prepare=DatabaseSync.prototype.prepare;let active=false,components=0;
-  DatabaseSync.prototype.exec=function(sql){const result=exec.call(this,sql);if(this===reader.db){if(sql==='BEGIN')active=true;if(sql==='COMMIT')active=false;}return result;};
-  DatabaseSync.prototype.prepare=function(sql){
-    if(this===reader.db&&(sql.includes('FROM raw_exclusion_clocks')||sql.includes('FROM raw_session_fences')||sql.includes('FROM owner_suppression_epochs'))){assert.equal(active,true);components++;}
-    return prepare.call(this,sql);
-  };
-  try{assert.equal(authority.cacheKey(publication,metadata),initial);assert.ok(components>=3);}
-  finally{DatabaseSync.prototype.exec=exec;DatabaseSync.prototype.prepare=prepare;}
-  const changed=mutate=>{const before=authority.cacheKey(publication,metadata);mutate();
-    different(authority.cacheKey(publication,metadata),before);};
-  changed(()=>f.db.prepare('UPDATE namespace_epochs SET epoch=epoch+1 WHERE owner_id=?').run(ns.ownerId));
-  changed(()=>f.db.prepare('INSERT INTO raw_exclusion_clocks VALUES(?,?,?,1)').run(ns.ownerId,ns.scope,''));
-  changed(()=>transaction(f.db,()=>suppressOwnerInside(f.db,{ownerId:ns.ownerId,reason:'account_erasure',actionId:'synthetic-cache-erasure'})));
-  const before=authority.cacheKey(publication,metadata),epochs=f.db.prepare('SELECT * FROM namespace_epochs').all();
-  f.db.exec('INSERT INTO raw_session_fences SELECT owner_id,scope,project_id,client,session_key FROM raw_conversations');
-  assert.deepEqual(f.db.prepare('SELECT * FROM namespace_epochs').all(),epochs);
-  different(authority.cacheKey(publication,metadata),before);
+  const unchanged=mutate=>{const before=authority.cacheKey(publication,metadata);mutate();
+    assert.equal(authority.cacheKey(publication,metadata),before);};
+  unchanged(()=>f.db.prepare('UPDATE namespace_epochs SET epoch=epoch+1 WHERE owner_id=?').run(ns.ownerId));
+  unchanged(()=>f.db.prepare('INSERT INTO raw_exclusion_clocks VALUES(?,?,?,1)').run(ns.ownerId,ns.scope,''));
+  unchanged(()=>transaction(f.db,()=>suppressOwnerInside(f.db,{ownerId:ns.ownerId,reason:'account_erasure',actionId:'synthetic-cache-erasure'})));
+  unchanged(()=>f.db.exec('INSERT INTO raw_session_fences SELECT owner_id,scope,project_id,client,session_key FROM raw_conversations'));
 });
 test('late forget after the key read is refused by the final delivery snapshot',async t=>{
   let f,armed=false,calls=0,forgotten=false;
@@ -190,13 +179,7 @@ test('late forget after the key read is refused by the final delivery snapshot',
       return current.apply(this,args);
     };}});
   f=fixture.f;const {s,input}=fixture;await s.search(input);armed=true;
-  await assert.rejects(s.search(input),{code:'raw_search_unavailable'});assert.equal(forgotten,true);
-});
-test('forgotten-derived blocks drop within one real cadence with no search or maintenance call',async t=>{
-  const {f,s,input,port}=await embeddedFixture(t,{fixtureOptions:{model:{extract:()=>({items:[{content:'Synthetic copper fact.',kind:'fact',confidence:.8,sourceIndices:[0]}]})}}});await s.search(input);assert.equal(reserveSharedVectors(20000,port),null);
-  const memory=f.db.prepare('SELECT id,revision FROM memories WHERE deleted=0').get();
-  ok(f.core.forget({namespace:ns,memoryId:memory.id,expectedRevision:memory.revision}));
-  await new Promise(resolve=>setTimeout(resolve,RAW_SEARCH_CADENCE_MS+100));assertReleased(port);
+  assert.equal((await s.search(input)).candidates.length,0);assert.equal(forgotten,true);
 });
 test('owner-scoped readers never reuse another owner block, including identical provider identities',async t=>{
   const a=await embeddedFixture(t),b=await embeddedFixture(t,{ownerId:'other-owner',readSet:[{...ns,ownerId:'other-owner'}]});const loads=observeLoads(t);

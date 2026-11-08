@@ -12,14 +12,14 @@ const publicCodes = new Set(['invalid_input','invalid_query','invalid_read_set',
   'stale_publication','store_closed','read_in_progress','maintenance_authority_required','raw_search_backend_unavailable']);
 const pageAllowanceMs=100;
 const expired = at => {if(performance.now()>=at)rawSearchDeadline();};
-const interrupted = error => ['source_changed','source_busy','search_deadline'].includes(error?.code);
+const interrupted = error => ['source_busy','search_deadline'].includes(error?.code);
 const emptyPartial = () => immutable({version:RAW_SEARCH_VERSION,publication:null,candidates:[],
   coverage:{status:'partial',scanned:null,expanded:null,causes:['deadline']},semantic:{state:'unknown',reason:null}});
 const safeFailure = error => { fail(publicCodes.has(error?.code) ? error.code : 'raw_search_unavailable'); };
 
-/** SQLite remains behind selection. Old engine constructors never call here. */
+/** Open the configured Raw store; enabled:false explicitly disables search. */
 export async function openRawSearch(value) {
-  if (value === undefined || value?.enabled === false) return null;
+  if (value === undefined || value === false || value?.enabled === false) return null;
   const options=rawSearchOptions(value);
   let openingDeadlineAt=performance.now()+1000;
   const openingCheck=()=>expired(openingDeadlineAt);
@@ -67,13 +67,10 @@ export async function openRawSearch(value) {
     }
     const checkSources=(sources,intent,at=Infinity)=>{for(const source of sources)authority.check(source,intent,at);};
     async function retry(work,at,onExhausted) {
-      let moves=0,confirm;
-      while(true)try{expired(at);if(confirm)authority.checkFence(confirm,at);confirm=undefined;return await work(at);}catch(error){
+      while(true)try{expired(at);return await work(at);}catch(error){
         if(!interrupted(error))throw error;
-        cache.drop();authority.reset({keepCommitment:error.code==='search_deadline',keepEligibility:error.code==='search_deadline'});
+        cache.drop();authority.reset();
         if(error.code==='search_deadline')return onExhausted();
-        if(error.code==='source_changed'&&moves++>=1)return onExhausted();
-        confirm=error.fence;
         const wait=error.code==='source_busy'?Math.max(0,authority.resume()-performance.now()):0;
         if(at-performance.now()<wait+pageAllowanceMs)return onExhausted();
         if(wait)await new Promise(resolve=>setTimeout(resolve,wait));
@@ -91,29 +88,29 @@ export async function openRawSearch(value) {
       try {
         let state=null;
         if(cacheEnabled)try{
-          const publication=storage.publication({deadlineAt});
+          const publication=storage.publication({shape:false,deadlineAt});
           cacheProof={publication,metadata,key:authority.cacheKey(publication,metadata,deadlineAt)};
-          state=publication;borrowed=cache.acquire(cacheProof.key);
-        }catch(error){cache.drop();cacheProof=undefined;if(interrupted(error))throw error;}
+          borrowed=cache.acquire(cacheProof.key);
+          if(borrowed){
+            state=storage.publication({deadlineAt});
+            if(state.sequence!==publication.sequence||state.revision!==publication.revision){
+              borrowed.release();borrowed=null;cache.drop();cacheProof=undefined;
+            }
+          }
+        }catch(error){borrowed?.release();borrowed=null;cache.drop();cacheProof=undefined;if(interrupted(error))throw error;}
         const snapshot=borrowed?{...state,rows:borrowed.rows}:await storage.search({deadlineAt});expired(deadlineAt);access();
         // A concurrent publication between the optional header read and the
         // payload snapshot only defers caching. It adds no new search error.
-        if(state&&snapshot.sequence!==state.sequence){cache.drop();cacheProof=undefined;}
-        let current=false;
-        let fence;
-        try{fence=authority.fence(undefined,deadlineAt);current=snapshot.checkpoint.coverageComplete&&snapshot.checkpoint.fence===fence;}
-        catch(error){if(error.code!=='source_budget_exceeded')throw error;}
-        const selection=authority.select(snapshot.rows,input.intent,deadlineAt);
-        const {eligible,denied,timedOut}=selection;
-        expired(deadlineAt);
-        const dependencies=eligible.map(row=>{expired(deadlineAt);return row.source;});
-        const canonical=()=>{if(fence)authority.checkFence(fence,deadlineAt);else checkSources(dependencies,input.intent,deadlineAt);};
-        const guard=()=>{ready();canonical();access(canonical);};
+        if(cacheProof&&snapshot.sequence!==cacheProof.publication.sequence){cache.drop();cacheProof=undefined;}
+        // Scope before scoring: no foreign owner or namespace enters a corpus.
+        const scopeKeys=new Set(options.readSet.map(ns=>JSON.stringify(ns)));
+        const scopedRows=snapshot.rows.filter(row=>{expired(deadlineAt);return scopeKeys.has(JSON.stringify(row.source.ref.namespace));});
+        const guard=()=>{ready();expired(deadlineAt);access();};
         let semantic={state:'bm25-only',reason:options.embedder?'partial_coverage':'disabled'},queryVector=null;
         const port=options.embedder;let query=input.queryVector;
-        const chunks=eligible.reduce((n,row)=>{expired(deadlineAt);return n+row.chunks.length;},0);
-        const complete=current&&!denied&&!snapshot.partial&&!timedOut&&eligible.every(row=>same(row.embedder,metadata)&&row.chunks.every(c=>c.vector));
-        if(port&&!query&&complete&&eligible.length&&embedding.semanticCapacity(chunks,port).eligible){
+        const chunks=scopedRows.reduce((n,row)=>{expired(deadlineAt);return n+row.chunks.length;},0);
+        const complete=!snapshot.partial&&scopedRows.every(row=>same(row.embedder,metadata)&&row.chunks.every(c=>c.vector));
+        if(port&&!query&&complete&&scopedRows.length&&embedding.semanticCapacity(chunks,port).eligible){
           try{
             if(Buffer.byteLength(input.query)+64>8192)fail('provider_error');
             const result=await dispatch(port,[input.query],{signal:new AbortController().signal,deadlineAt,guard});
@@ -128,18 +125,40 @@ export async function openRawSearch(value) {
             if(!borrowed&&cacheProof)borrowed=cache.acquire(cacheProof.key);
             if(!borrowed){residency=embedding.reserveSharedVectors(chunks,port);if(!residency)fail('partial_coverage');}
             queryVector=embedding.validateVector(query.vector,port);
-            vectors=borrowed?borrowed.vectors:retrieval.loadRawVectorBlocks(eligible,port,()=>expired(deadlineAt));
+            vectors=borrowed?borrowed.vectors:retrieval.loadRawVectorBlocks(scopedRows,port,()=>expired(deadlineAt));
             if(!vectors)fail('partial_coverage');
             semantic={state:'ready',reason:null};
           }catch(error){if(interrupted(error))throw error;vectors=null;queryVector=null;semantic={state:'bm25-only',reason:error.code==='partial_coverage'?'partial_coverage':'invalid_vector'};}
         }
         expired(deadlineAt);
-        const result=retrieval.retrieveRaw(eligible,input.query,{vectors,queryVector,check:()=>expired(deadlineAt)});
+        const checked=new Map(),verifiedTurns=new Map(),candidateSources=new Map();
+        const allows=source=>{
+          const key=JSON.stringify(source.ref);
+          if(!checked.has(key))try{authority.check(source,input.intent,deadlineAt);checked.set(key,true);}
+          catch(error){if(!['source_unavailable','source_excluded','raw_crypto_unavailable','source_budget_exceeded'].includes(error.code))throw error;checked.set(key,false);}
+          return checked.get(key);
+        };
+        const verifyTurn=turn=>{
+          if(!verifiedTurns.has(turn.id)){
+            const segments=turn.segments.filter(segment=>allows(segment.source));
+            const spans=segments.map(s=>s.source.ref.span).sort((a,b)=>a.start-b.start);let through=0;
+            for(const span of spans){if(span.start!==through)break;through=span.end;}
+            const total=segments[0]?.source.totalUnits??segments[0]?.source.manifest?.message.total_units;
+            verifiedTurns.set(turn.id,{...turn,segments,complete:segments.length>0&&(total===undefined||through===total)});
+          }
+          return verifiedTurns.get(turn.id);
+        };
+        const result=retrieval.retrieveRaw(scopedRows,input.query,{vectors,queryVector,check:()=>expired(deadlineAt),
+          accept(row,center){
+            const turn=verifyTurn(row.turn),verifiedCenter=verifyTurn(center);
+            if(!turn.segments.length||!verifiedCenter.segments.length)return false;
+            const sources=[...new Map([...turn.segments,...verifiedCenter.segments].map(s=>[JSON.stringify(s.source.ref),s.source])).values()];
+            candidateSources.set(row.id,sources);return {...row,turn};
+          }});
         expired(deadlineAt);
-        const sources=fence?result.sources:dependencies;
         const publication=authority.bind('raw-search-publication-v1',[authority.identity,snapshot.sequence]);
         const proof=authority.bind('raw-search-proof-v1',[instance,publication,++serial]);
-        const candidates=result.rows.map(row=>{expired(deadlineAt);
+        let candidates=result.rows.map(row=>{expired(deadlineAt);
           const sources=row.turn.segments.map(s=>{expired(deadlineAt);return s.source;}),source=sources[0],ref=source.ref;
           const historical=sources.some(s=>s.classification.kind==='history-only');
           const bare=sources.some(s=>s.classification.kind==='current-eligible-bare');
@@ -151,25 +170,21 @@ export async function openRawSearch(value) {
             rangeClassifications:sources.map(s=>s.classification),publication,proof};
         });
         const coverage=result.coverage;
-        if(snapshot.partial||denied||timedOut||!current){coverage.status='partial';coverage.causes.push(timedOut?'deadline':snapshot.partial?snapshot.partialReason:'stale_index');}
+        if(snapshot.partial){coverage.status='partial';coverage.causes.push(snapshot.partialReason);}
         // Work/population counters can describe denied/stale rows. Public coverage
         // reports limits and availability only; operational counts stay internal.
         coverage.scanned=null;coverage.expanded=null;
+        // Final predicates share one canonical snapshot. A newly denied hit is
+        // dropped without refusing the allowed remainder of the page.
+        candidates=authority.validate(candidates.map(candidate=>({sources:candidateSources.get(candidate.id),
+          intent:input.intent,access,value:candidate})),deadlineAt,{dropDenied:true});
         const output=immutable({version:RAW_SEARCH_VERSION,publication,candidates,coverage,semantic},()=>expired(deadlineAt));
-        // Corpus statistics, rank competition, readiness and coverage use the
-        // eligible snapshot plus its complete commitment. Direct contributors
-        // additionally receive full predicates in the final canonical snapshot.
-        authority.validate([{sources,fence,version:selection.version,cache:cacheProof,intent:input.intent,access,value:output}],deadlineAt);
-        expired(deadlineAt);
-        if(cacheProof&&!borrowed&&!denied&&!timedOut&&(vectors||snapshot.partial)){
-          // Transfer the operation's reservation synchronously. Admission failure
-          // only leaves this operation uncached; it cannot change its result.
+        if(cacheProof&&!borrowed&&(vectors||snapshot.partial)){
           residency?.release();residency=null;
-          borrowed=cache.install(cacheProof.key,eligible,vectors,metadata,snapshot.hintBytes,()=>expired(deadlineAt));
+          borrowed=cache.install(cacheProof.key,scopedRows,vectors,metadata,snapshot.hintBytes,()=>expired(deadlineAt));
         }
         expired(deadlineAt);
-        selection.commit(()=>expired(deadlineAt));
-        retain(searches,proof,{dependencies,sources,fence,intent:input.intent,access,candidates},4);
+        retain(searches,proof,{candidateSources,intent:input.intent,access,candidates},4);
         return output;
       }finally{vectors=null;borrowed?.release();residency?.release();}
     }
@@ -180,30 +195,32 @@ export async function openRawSearch(value) {
     function candidateEntry(candidate,intent) {
       const entry=searches.get(candidate?.proof);
       if(!entry||entry.expires<performance.now()||entry.intent!==intent||!entry.candidates.some(row=>same(row,candidate)))fail('stale_publication');
-      return entry;
+      return {...entry,sources:entry.candidateSources.get(candidate.id)};
     }
     async function classifyAttempt(candidate,{intent='current'}={},token,at) {
       if(!['current','history'].includes(intent))fail('invalid_input');
       try {
         const entry=candidateEntry(candidate,intent);
-        const canonical=()=>entry.fence?authority.checkFence(entry.fence,at):checkSources(entry.dependencies,intent,at);
+        const canonical=()=>checkSources(entry.sources,intent,at);
         canonical();
         const access=authority.authorize('rawSearchSource',{publication:candidate.publication,intent},token,
           canonical);
         access();
-        return authority.validate([{sources:entry.sources,fence:entry.fence,intent,access,value:candidate.classification}],at)[0];
+        return authority.validate([{sources:entry.sources,intent,access,value:candidate.classification}],at)[0];
       }catch(error){if(interrupted(error))throw error;return immutable({kind:'denied',reason:'source-or-authority-unavailable'});}
     }
     async function prepareAttempt(candidate,{intent='current'}={},token,at) {
       if(!['current','history'].includes(intent))fail('invalid_input');
-      const entry=candidateEntry(candidate,intent),dependencies=entry.dependencies;
-      const canonical=()=>entry.fence?authority.checkFence(entry.fence,at):checkSources(dependencies,intent,at);
+      const entry=candidateEntry(candidate,intent);
+      const canonical=()=>checkSources(entry.sources,intent,at);
       canonical();
       const access=authority.authorize('rawSearchSource',{candidate,intent},token,canonical);
       const guard=()=>{canonical();access(canonical);};guard();
-      const snapshot=await storage.snapshot({deadlineAt:at});guard();
+      const snapshot=storage.publication({shape:false,deadlineAt:at});guard();
       if(candidate.publication!==authority.bind('raw-search-publication-v1',[authority.identity,snapshot.sequence]))fail('stale_publication');
-      const rows=snapshot.rows.filter(row=>candidate.ranges.some(ref=>same(ref,row.source.ref)))
+      // The private proof retains authenticated refs; text is opened canonically.
+      // Preparing a page must not decode the entire ranking index per hit.
+      const rows=entry.sources.map(source=>({source})).filter(row=>candidate.ranges.some(ref=>same(ref,row.source.ref)))
         .sort((a,b)=>a.source.ref.span.start-b.source.ref.span.start);
       if(!rows.length||rows.length!==candidate.ranges.length||rows.length>1024)fail('source_unavailable');
       const bytes=rows.reduce((n,row)=>n+row.source.bytes,0);
@@ -218,7 +235,7 @@ export async function openRawSearch(value) {
         ordinal:source.ordinal,role:source.role,occurredAt:source.occurredAt,classification:candidate.classification,ranges});
       const ticket=authority.bind('raw-search-prepared-v1',[candidate.proof,++serial]);
       const handle=Object.freeze({value:output,ticket,validate(){return revalidate([ticket])[0];}});
-      retain(prepared,ticket,{sources:entry.sources,fence:entry.fence,intent,access,value:output,handle},RAW_SEARCH_LIMITS.preparations);
+      retain(prepared,ticket,{sources:entry.sources,intent,access,value:output,handle},RAW_SEARCH_LIMITS.preparations);
       try{revalidate([ticket]);}catch(error){prepared.delete(ticket);throw error;}return handle;
     }
     async function prepareSource(ref,{intent='current'}={},token) {
@@ -239,7 +256,7 @@ export async function openRawSearch(value) {
       return withContentSuppressionRequest(()=>revalidateInside(handles),{fresh:true});
     }
     function revalidateInside(handles) {
-      const at=performance.now()+1000;let moves=0,busy=0;
+      const at=performance.now()+1000;let busy=0;
       try {
         ready();if(!Array.isArray(handles)||handles.length>RAW_SEARCH_LIMITS.preparations)fail('invalid_input');
         const entries=handles.map(handle=>{const entry=prepared.get(typeof handle==='string'?handle:handle?.ticket);
@@ -247,7 +264,7 @@ export async function openRawSearch(value) {
         while(true)try{return authority.validate(entries,at);}catch(error){
           if(!interrupted(error))throw error;
           cache.drop();authority.reset();
-          if(error.code==='search_deadline'||error.code==='source_changed'&&moves++>=1||error.code==='source_busy'&&busy++>=1)throw error;
+          if(error.code==='search_deadline'||error.code==='source_busy'&&busy++>=1)throw error;
           const wait=error.code==='source_busy'?Math.max(0,authority.resume()-performance.now()):0;
           if(at-performance.now()<wait+pageAllowanceMs)throw error;
           // This API is synchronous. The bounded backoff owns no read snapshot.

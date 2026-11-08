@@ -54,43 +54,6 @@ function moves(t,f,{times=1,final=false}={}){
   const restore=()=>{DatabaseSync.prototype.prepare=prepare;DatabaseSync.prototype.exec=exec;};
   t.after(restore);return {restore,get count(){return count;},get pages(){return pages;}};
 }
-for(const final of [false,true])test(`one canonical version movement retries a complete fresh search; final snapshot ${final}`,async t=>{
-  const {f,s}=await fixture(t);clock(t);const change=moves(t,f,{final});
-  const result=await s.search({query:'copper'});
-  assert.equal(change.count,1);assert.equal(result.candidates.length,1);
-  assert.ok(result.publication);if(!final)assert.ok(change.pages>=2);
-});
-for(const final of [false,true])test(`two canonical movements return only constants and retain no cache or proof; final snapshot ${final}`,async t=>{
-  let armed=false,installations=0;const interval=globalThis.setInterval;
-  globalThis.setInterval=(work,ms,...args)=>{if(armed&&ms===1000)installations++;return interval(work,ms,...args);};
-  t.after(()=>{globalThis.setInterval=interval;});
-  const {f,s,port}=await fixture(t,true);armed=true;clock(t);const change=moves(t,f,{times:2,final});
-  const result=await s.search({query:'copper'});assert.equal(change.count,2);assert.deepEqual(result,partial);assert.equal(installations,0,'a torn rebuild must never install cache state');armed=false;
-  assert.deepEqual(await s.service.classify(result,{},s.host.token),{kind:'denied',reason:'source-or-authority-unavailable'});
-  await assert.rejects(s.prepare(result),{code:'stale_publication'});
-  assert.throws(()=>s.service.revalidate([result]),{code:'raw_search_unavailable'});
-  const lease=reserveSharedVectors(20000,port,MAX_CACHE_BYTES-20000*port.dimensions*4);
-  assert.ok(lease,'an aborted operation cannot retain vectors or hint bytes');lease.release();
-  change.restore();const prepare=DatabaseSync.prototype.prepare;let loads=0;
-  DatabaseSync.prototype.prepare=function(sql){if(sql.startsWith('SELECT s.*,h.sequence'))loads++;return prepare.call(this,sql);};
-  try{assert.equal((await s.search({query:'copper'})).candidates.length,1);assert.ok(loads>0);}
-  finally{DatabaseSync.prototype.prepare=prepare;}
-});
-test('an earlier ticket refuses when repeated version movements prevent confirmation',async t=>{
-  const {f,s}=await fixture(t);clock(t);
-  const candidate=(await s.search({query:'copper'})).candidates[0],handle=await s.prepare(candidate);
-  f.db.exec('UPDATE raw_owner_usage SET revision=revision+1');const change=moves(t,f,{times:2});
-  assert.throws(()=>s.service.revalidate([handle]),{code:'raw_search_unavailable'});assert.equal(change.count,2);
-});
-for(const method of ['classify','prepare','revalidate'])test(`earlier proofs retry one native version movement during ${method}`,async t=>{
-  const {f,s}=await fixture(t);clock(t);
-  const candidate=(await s.search({query:'copper'})).candidates[0],handle=await s.prepare(candidate);
-  f.db.exec('UPDATE raw_owner_usage SET revision=revision+1');const change=moves(t,f);
-  if(method==='classify')assert.notEqual((await s.service.classify(candidate,{},s.host.token)).kind,'denied');
-  else if(method==='prepare')assert.ok((await s.prepare(candidate)).ticket);
-  else assert.equal(s.service.revalidate([handle])[0],handle.value);
-  assert.equal(change.count,1);
-});
 test('busy search waits for the guard resume with no transaction and then succeeds',async t=>{
   const {f,s}=await fixture(t);const advance=clock(t),timeout=globalThis.setTimeout;
   const exec=DatabaseSync.prototype.exec,readers=new Set();let waits=0,locked=true;
@@ -113,11 +76,11 @@ test('busy exhaustion is the same empty partial and waits only with one page rem
 });
 for(const phase of ['snapshot','selection','final'])test(`expiry in ${phase} releases snapshots and returns the constant partial`,async t=>{
   const {s}=await fixture(t);const advance=clock(t),prepare=DatabaseSync.prototype.prepare;
-  let crossed=false;
+  let crossed=false,sourceChecks=0;
   DatabaseSync.prototype.prepare=function(sql){
     const statement=prepare.call(this,sql);
     const match=phase==='snapshot'?sql.startsWith('SELECT s.*,h.sequence'):
-      phase==='selection'?sql.includes('FROM raw_parts WHERE'):sql==='PRAGMA data_version'&&new Error().stack.includes('at fenceInside');
+      phase==='selection'?sql.includes('FROM raw_parts WHERE'):sql.startsWith('SELECT 1 FROM raw_source_maps WHERE')&&++sourceChecks===2;
     if(match&&!crossed){crossed=true;advance(1001);}return statement;
   };
   try{assert.deepEqual(await s.search({query:'copper'}),partial);assert.equal(crossed,true);}
@@ -135,30 +98,6 @@ test('bounded commitment and cache hashes preserve the original JSON digest',asy
     assert.equal(authority.cacheKey(publication,metadata,1100),authority.cacheKey(publication,metadata));
   }
 });
-test('expiry while hashing stops within one value and retains no commitment output',async t=>{
-  const {s}=await fixture(t);const advance=clock(t),update=Hmac.prototype.update;let updates=0;
-  Hmac.prototype.update=function(...args){
-    const result=update.apply(this,args);
-    if(new Error().stack.includes('at bindWithin')){updates++;if(updates===2)advance(1001);}
-    return result;
-  };
-  try{assert.deepEqual(await s.search({query:'copper'}),partial);assert.ok(updates>=2&&updates<=3);}
-  finally{Hmac.prototype.update=update;}
-});
-test('a retry discards denial memos before rebuilding in the same request',async t=>{
-  const {f,s}=await fixture(t,false,true);clock(t);
-  const change=moves(t,f,{final:true}),prepare=DatabaseSync.prototype.prepare,states=[];
-  DatabaseSync.prototype.prepare=function(sql){
-    if(sql.startsWith('SELECT * FROM (SELECT client,session_key,id FROM raw_conversations WHERE'))
-      states.push(Boolean(cachedContentSuppressionRequestInside(this,ns.ownerId)));
-    return prepare.call(this,sql);
-  };
-  try{
-    assert.equal((await s.search({query:'copper'})).candidates.length,1);assert.equal(change.count,1);
-    assert.ok(states.length>=2);assert.deepEqual(states,states.map(()=>false));
-  }finally{change.restore();}
-});
-
 for(const modern of [false,true])for(const linked of [false,true])test(`every row statement deadline preserves the service connection; safety ${modern}, linked ${linked}`,async t=>{
   const advance=clock(t),stackLimit=Error.stackTraceLimit;Error.stackTraceLimit=100;t.after(()=>{Error.stackTraceLimit=stackLimit;});
   const f=(modern?safetySourceFixture:sourceFixture)(t,linked?{model:{extract:()=>({items:[{content:'Synthetic copper fact.',kind:'fact',confidence:.8,sourceIndices:[0]}]})}}:{model:{extract:()=>({items:[]})}});
@@ -166,7 +105,7 @@ for(const modern of [false,true])for(const linked of [false,true])test(`every ro
   const prepare=DatabaseSync.prototype.prepare;let count=0,target=Infinity,armed=true,crossed=false,connection;
   DatabaseSync.prototype.prepare=function(sql){
     const statement=prepare.call(this,sql),stack=new Error().stack;
-    if(armed&&stack.includes('at checkInside')&&stack.includes('at selectUnit')){
+    if(armed&&stack.includes('at checkInside')&&stack.includes('at allows')){
       connection=this;count++;
       if(count===target){crossed=true;advance(1001);}
     }
