@@ -11,6 +11,7 @@ import { rationaleModel } from '../testing/rationale-model.mjs';
 import { createMemoryRuntime } from '../runtime.mjs';
 import { batch } from '../testing/episode-helpers.mjs';
 import { parse } from '../../tools/testing/vendor/acorn/acorn.mjs';
+import { DatabaseSync } from 'node:sqlite';
 import { config, ns as keepNamespace, request, splitRaw } from '../testing/raw-capture-fixtures.mjs';
 import { consumer, empty, episodeInput, legacyKeep } from '../testing/raw-deletion-review-fixtures.mjs';
 import { interpretation } from '../testing/episode-capture-helpers.mjs';
@@ -114,6 +115,58 @@ test('correction replaces old receipts before deletion of the changed body', asy
   assert.deepEqual([preview.forgottenMemories, preview.retainedMemories, preview.removedReceipts], [1, 0, 1]);
   ok(f.core.deleteConversation({ ...input, actionId: 'delete-corrected' }));
   assertState(f, false);
+});
+
+function traceSql(t, run) {
+  const statements = [], prepare = DatabaseSync.prototype.prepare;
+  const spy = t.mock.method(DatabaseSync.prototype, 'prepare', function(sql) {
+    const statement = prepare.call(this, sql);
+    for (const method of ['get', 'all', 'iterate', 'run']) {
+      const execute = statement[method];
+      statement[method] = function(...args) {
+        statements.push(sql.replace(/\s+/g, ' ').trim());
+        return execute.apply(this, args);
+      };
+    }
+    return statement;
+  });
+  try { run(); return statements; } finally { spy.mock.restore(); }
+}
+const clockLookups = statements => statements.filter(sql => sql.startsWith('SELECT first_received_at FROM raw_conversations'));
+
+test('deletion without in-scope ordinary unknown receipts skips the target clock lookup', async t => {
+  const f = await fixture(t, { correctBody: true });
+  const outside = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic unrelated preference.', kind: 'context' },
+    receipts: [savedReceipt(f.client, 'unrelated')] })).memory;
+  const unknown = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(outside.id);
+  f.db.prepare('DELETE FROM raw_receipt_origins WHERE receipt_id=?').run(unknown.id);
+  assert.equal(createRawSourceRoots(f.db).receipt(ns, unknown).unknown, true);
+  const input = f.key();
+  const statements = traceSql(t, () => {
+    ok(f.core.previewDeleteConversation(input));
+    ok(f.core.deleteConversation({ ...input, actionId: 'delete-known-support' }));
+  });
+  assert.equal(clockLookups(statements).length, 0);
+  assertState(f, false);
+  ok(f.core.get({ namespace: ns, memoryId: outside.id }));
+});
+
+test('target clock lookup is shared by in-scope Memories and refreshed for each plan', async t => {
+  const f = await fixture(t);
+  const other = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic alternate preference.', kind: 'context' },
+    receipts: [savedReceipt(f.client, 'earlier'), { ...savedReceipt(f.client, 'target'), eventId: 'target-message' }] })).memory;
+  const unknown = f.db.prepare('SELECT * FROM receipts WHERE memory_id=? AND session_id=?').get(other.id, 'earlier');
+  f.db.prepare('DELETE FROM raw_receipt_origins WHERE receipt_id=?').run(unknown.id);
+  f.db.prepare('UPDATE receipts SET created_at=? WHERE id=?').run(new Date(start).toISOString(), unknown.id);
+  assert.equal(createRawSourceRoots(f.db).receipt(ns, unknown).unknown, true);
+  for (const [offset, forgotten, retained] of [[120_000, 0, 2], [30_000, 2, 0]]) {
+    f.db.prepare('UPDATE raw_conversations SET first_received_at=? WHERE id=?').run(new Date(start + offset).toISOString(), f.conversation.id);
+    const statements = traceSql(t, () => {
+      const preview = ok(f.core.previewDeleteConversation(f.key()));
+      assert.deepEqual([preview.forgottenMemories, preview.retainedMemories], [forgotten, retained]);
+    });
+    assert.equal(clockLookups(statements).length, 1);
+  }
 });
 
 test('unanchored support from the same session stays dependent despite predating capture', async t => {

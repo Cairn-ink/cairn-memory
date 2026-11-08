@@ -55,14 +55,7 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
   }
   function planInside(ns, root) {
     const memories = [];
-    const args = [...rawBoundary(ns), root.client, ...roots.keys(ns, root.client, root.sessionKey)];
-    // Include deleted episode rows: the first engine observation still dates the root.
-    const received = db.prepare(`SELECT first_received_at FROM raw_conversations WHERE ${where}
-      AND client=? AND session_key IN (?,?) UNION ALL
-      SELECT first_received_at FROM session_episodes WHERE ${where} AND client=? AND session_key IN (?,?)`)
-      .all(...args, ...args).map(row => Date.parse(row.first_received_at));
-    const independentBefore = received.length && received.every(Number.isFinite)
-      ? Math.min(...received) - 60_000 : NaN;
+    let independentBefore;
     const rows = db.prepare(`SELECT r.*,m.id AS memory_id FROM receipts r JOIN memories m ON m.id=r.memory_id
       WHERE m.owner_id=? AND m.scope=? AND m.project_id=? AND m.deleted=0 ORDER BY m.id,r.id`).all(...rawBoundary(ns));
     const byMemory = new Map();
@@ -75,20 +68,33 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
           (value.possibleRoots === null || value.possibleRoots.some(candidate => same(candidate, root)))) fail('raw_lineage_unavailable');
       // Only a proven receipt root brings a Memory into this deletion's scope.
       if (![...evidence.values()].some(value => value.roots.some(candidate => same(candidate, root)))) continue;
-      const olderOtherSession = receipt => Date.parse(receipt.created_at) < independentBefore &&
-        !(receipt.client === root.client && roots.keys(ns, receipt.client, receipt.session_id).includes(root.sessionKey));
-      // Insert and correction stamp their receipt group together; dedupe never
-      // rewrites the body. Check every receipt tied at the earliest stored time.
-      // Engine receipt writers use canonical ISO timestamps; age checks parse them.
-      const authorTime = receipts.reduce((minimum, receipt) => receipt.created_at < minimum ? receipt.created_at : minimum,
-        receipts[0].created_at);
-      const independentBody = receipts.filter(receipt => receipt.created_at === authorTime).every(receipt =>
-        !evidence.get(receipt.id).roots.some(candidate => same(candidate, root)) && olderOtherSession(receipt));
-      // This exception is local to deletion; legacy keeps still require their proof.
-      for (const receipt of receipts) {
-        const value = evidence.get(receipt.id);
-        if (independentBody && value.unknown && !value.legacyKeep && olderOtherSession(receipt)) {
-          evidence.set(receipt.id, { ...value, unknown: false, independent: true });
+      if ([...evidence.values()].some(value => value.unknown && !value.legacyKeep)) {
+        // Read the target clock only when ordinary unknown support needs classification.
+        if (independentBefore === undefined) {
+          const args = [...rawBoundary(ns), root.client, ...roots.keys(ns, root.client, root.sessionKey)];
+          // Include deleted episode rows: the first engine observation still dates the root.
+          const received = db.prepare(`SELECT first_received_at FROM raw_conversations WHERE ${where}
+            AND client=? AND session_key IN (?,?) UNION ALL
+            SELECT first_received_at FROM session_episodes WHERE ${where} AND client=? AND session_key IN (?,?)`)
+            .all(...args, ...args).map(row => Date.parse(row.first_received_at));
+          independentBefore = received.length && received.every(Number.isFinite)
+            ? Math.min(...received) - 60_000 : NaN;
+        }
+        const olderOtherSession = receipt => Date.parse(receipt.created_at) < independentBefore &&
+          !(receipt.client === root.client && roots.keys(ns, receipt.client, receipt.session_id).includes(root.sessionKey));
+        // Insert and correction stamp their receipt group together; dedupe never
+        // rewrites the body. Check every receipt tied at the earliest stored time.
+        // Engine receipt writers use canonical ISO timestamps; age checks parse them.
+        const authorTime = receipts.reduce((minimum, receipt) => receipt.created_at < minimum ? receipt.created_at : minimum,
+          receipts[0].created_at);
+        const independentBody = receipts.filter(receipt => receipt.created_at === authorTime).every(receipt =>
+          !evidence.get(receipt.id).roots.some(candidate => same(candidate, root)) && olderOtherSession(receipt));
+        // This exception is local to deletion; legacy keeps still require their proof.
+        for (const receipt of receipts) {
+          const value = evidence.get(receipt.id);
+          if (independentBody && value.unknown && !value.legacyKeep && olderOtherSession(receipt)) {
+            evidence.set(receipt.id, { ...value, unknown: false, independent: true });
+          }
         }
       }
       const removed = receipts.filter(receipt => evidence.get(receipt.id).unknown && !evidence.get(receipt.id).legacyKeep ||
