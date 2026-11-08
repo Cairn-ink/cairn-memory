@@ -36,7 +36,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
       const result = core.close();
       return stopped ? Promise.resolve(stopped).then(() => result) : result;
     },
-    ...(captureDefault ? { async capture(request) {
+    ...(captureDefault && rawOptions.interpretation !== 'host' ? { async capture(request) {
       try {
         runtime.ready();
         const registration = await storage.prepareCapture(request);

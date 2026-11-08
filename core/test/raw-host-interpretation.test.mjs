@@ -32,7 +32,7 @@ const engineBindings = {
     managed: '6dedcd0f0c78de473cd1814c0f71768fd014df0a80930239332f683cdb4c3ce7',
   },
 };
-function hostFixture(t, { kind = 'ordinary', raw = {}, coreOptions = {}, model = {}, omitInterpretation = false } = {}) {
+function hostFixture(t, { kind = 'ordinary', raw = {}, coreOptions = {}, model = {}, omitInterpretation = false, plain = false } = {}) {
   const workspace = createTestWorkspace(t, { prefix: 'raw-host-' }), path = join(workspace.path, 'store.sqlite');
   const calls = [], base = { ...rationaleModel(), interpretEpisode: interpretation, ...model };
   const portModel = Object.fromEntries(Object.entries(base).map(([name, value]) => [name,
@@ -43,7 +43,7 @@ function hostFixture(t, { kind = 'ordinary', raw = {}, coreOptions = {}, model =
   const reopen = (patch = {}) => {
     core?.close();
     core = openMemoryCore({ path, model: portModel, ...config(kind), ...coreOptions,
-      rawConversations: { ...options, ...patch } });
+      ...(plain ? {} : { rawConversations: { ...options, ...patch } }) });
     return core;
   };
   reopen(); workspace.defer(() => core.close());
@@ -68,6 +68,75 @@ const noInterpretation = f => {
     assert.equal(row.staging, 'none'); assert.equal(row.eligible_message_ids, '[]');
   }
 };
+
+const ordinaryRequest = source => ({ ...source, messages: source.messages.map(({ id, role, content, occurredAt }) =>
+  ({ id, role, content, occurredAt })) });
+
+test('ordinary capture on host and engine profiles retains plain Memory extraction', async t => {
+  const source = ordinaryRequest(request(splitRaw('Synthetic ordinary capture', { occurredAt: '2024-01-02T03:04:05.000Z' })[0]));
+  const profiles = [
+    ['plain', hostFixture(t, { plain: true }), 0],
+    ['engine', hostFixture(t, { raw: { interpretation: 'engine' } }), 1],
+    ['host', hostFixture(t), 0],
+  ];
+  const results = [];
+  for (const [mode, f, rawParts] of profiles) {
+    const result = await f.core.capture(source);
+    results.push({ mode, f, rawParts, result });
+  }
+  const plain = results[0];
+  for (const { mode, f, rawParts, result } of results) await t.test(mode, () => {
+    const captured = ok(result);
+    assert.equal(captured.duplicate, false);
+    assert.equal(captured.admission.memories.length, 1);
+    assert.equal(captured.classification.status, 'applied');
+    assert.equal(count(f.db, 'memories'), 1);
+    assert.equal(f.calls.length, plain.f.calls.length);
+    assert.deepEqual(f.calls, plain.f.calls);
+    assert.equal(f.calls.filter(method => method === 'extract').length, 1);
+    assert.equal(f.calls.filter(method => method === 'classify').length, 1);
+    const hasRaw = f.db.prepare("SELECT 1 FROM sqlite_schema WHERE name='raw_parts'").get();
+    assert.equal(hasRaw ? count(f.db, 'raw_parts') : 0, rawParts);
+  });
+});
+
+test('ordinary host capture failure leaves no Raw registration', async t => {
+  const f = hostFixture(t, { model: { extract: () => { throw Error('Synthetic extraction failure'); } } });
+  const source = ordinaryRequest(request(splitRaw('Synthetic failed capture')[0]));
+  const result = await f.core.capture(source);
+  assert.equal(result.ok, false);
+  for (const table of ['raw_parts', 'raw_messages', 'raw_events', 'raw_capture_events', 'raw_conversations', 'raw_owner_usage'])
+    assert.equal(count(f.db, table), 0, table);
+  assert.equal(result.error.code, 'extraction_failed');
+  assert.equal(f.calls.filter(method => method === 'extract').length, 1);
+  assert.equal(count(f.db, 'memories'), 0);
+});
+
+test('host capture leaves the same event available for first Raw registration and exact replay', async t => {
+  const f = hostFixture(t);
+  const source = request(splitRaw('Synthetic shared capture event', { occurredAt: '2024-01-02T03:04:05.000Z' })[0]);
+  ok(await f.core.capture(ordinaryRequest(source)));
+  assert.equal(count(f.db, 'raw_parts'), 0);
+  assert.equal(count(f.db, 'raw_capture_events'), 0);
+  const calls = [...f.calls];
+  // Memory capture does not claim the Raw event identity. The same event first
+  // archives normally, then replays exactly; changing its Raw payload refuses.
+  const archived = ok(await f.core.captureRaw(source));
+  assert.equal(archived.raw.parts[0].saved, true);
+  assert.deepEqual(archived.interpretation, empty);
+  assert.equal(count(f.db, 'raw_parts'), 1);
+  assert.equal(count(f.db, 'raw_events'), 1);
+  assert.equal(count(f.db, 'raw_capture_events'), 1);
+  assert.equal(f.db.prepare('SELECT event_id FROM raw_capture_events').get().event_id, source.eventId);
+  assert.deepEqual(ok(await f.core.captureRaw(source)), archived);
+  const changed = request(splitRaw('Synthetic altered capture event', { occurredAt: '2024-01-02T03:04:05.000Z' })[0]);
+  denied(await f.core.captureRaw(changed), 'event_payload_conflict');
+  assert.equal(count(f.db, 'raw_parts'), 1);
+  assert.equal(count(f.db, 'raw_events'), 1);
+  assert.equal(count(f.db, 'raw_capture_events'), 1);
+  assert.equal(count(f.db, 'memories'), 1);
+  assert.deepEqual(f.calls, calls);
+});
 
 for (const kind of ['ordinary', 'staged', 'episode']) test(`host ${kind}: eligible batch registers exact Raw with no interpretation`, async t => {
   const f = hostFixture(t, { kind });

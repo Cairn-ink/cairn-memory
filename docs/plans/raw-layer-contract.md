@@ -673,6 +673,9 @@ existing normalization and source-bound limits (at most 4,000 units per message,
 20,000 per batch and existing provider budgets).” That sentence applies to
 engine interpretation only.
 
+On host-interpretation profiles, ordinary `capture()` performs inherited Memory
+capture without Raw registration, and hosts archive Raw only through `captureRaw()`.
+
 Host mode preserves request validation, trusted `readPolicy` authority,
 pause/project/deleted-session/session fences, owner caps and raw reservations,
 sealing and its `raw_crypto_unavailable` failure without registration, exact
