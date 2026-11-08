@@ -67,7 +67,7 @@ test('default keyless MCP reads dated captured Memory and Raw, forgets and isola
   workspace.defer(() => core.close());
   const firstMemories = [];
   for (const message of [day1, day3]) {
-    const captured = ok(await core.capture({ namespace: personal, client: 'synthetic-client', sessionId: 'preference-history',
+    const captured = ok(await core.capture({ namespace: personal, client: 'claude-code', sessionId: 'preference-history',
       eventId: message.id, messages: [message] }));
     assert.equal(captured.admission.memories.length, 1);
     firstMemories.push(captured.admission.memories[0].id);
@@ -88,7 +88,7 @@ test('default keyless MCP reads dated captured Memory and Raw, forgets and isola
   assert.equal((await read(second)).metered.items.length, 0, 'an empty second namespace must see nothing from the first');
   const secondMemories = [];
   for (const message of [day1, day3]) {
-    const captured = ok(await core.capture({ namespace: project, client: 'synthetic-client', sessionId: 'preference-history',
+    const captured = ok(await core.capture({ namespace: project, client: 'claude-code', sessionId: 'preference-history',
       eventId: message.id, messages: [message] }));
     secondMemories.push(...captured.admission.memories.map(item => item.id));
   }
