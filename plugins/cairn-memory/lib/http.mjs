@@ -408,7 +408,7 @@ export function createHostedTransport(options) {
       if (!conforms("recall-request", body)) {
         return Promise.resolve({ status: "error", code: "invalid_memory_input" });
       }
-      return post.reply("/api/memory/recall", body, 2_000, undefined, signal);
+      return post.reply("/api/memory/recall", body, 2_500, undefined, signal);
     },
     sessionStart(request, limits) {
       const body = parseSessionStartRequest(request);
