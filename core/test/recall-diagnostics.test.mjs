@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { Worker } from 'node:worker_threads';
@@ -11,7 +12,8 @@ import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 
 const namespace = { ownerId: 'recall-diagnostics-test', scope: 'personal', projectId: null };
 const request = { readSet: [namespace], query: 'Synthetic note' };
-const keys = ['recallMs', 'hostWaitMs', 'storageMs', 'storageCalls', 'storageMaxMs', 'journalMode'];
+const keys = ['recallMs', 'hostWaitMs', 'storageMs', 'storageCalls', 'storageMaxMs', 'storageMaxCall', 'journalMode'];
+const storageNames = ['map', 'fetch', 'validateFresh', 'recentReceipts', 'finalize'];
 const ok = r => { assert.equal(r.ok, true, JSON.stringify(r)); return r.value; };
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 function model() {
@@ -73,10 +75,11 @@ function shape(plain, measured) {
   assert.deepEqual(Object.keys(d), keys);
   assert.equal(Object.getPrototypeOf(d), Object.prototype);
   assert.ok(Object.isFrozen(d));
-  for (const name of keys.slice(0, -1)) {
+  for (const name of ['recallMs', 'hostWaitMs', 'storageMs', 'storageCalls', 'storageMaxMs']) {
     assert.ok(Number.isFinite(d[name]) && d[name] >= 0, name);
     if (name !== 'storageCalls') assert.equal(d[name], Math.round(d[name] * 10) / 10, name);
   }
+  assert.ok(storageNames.includes(d.storageMaxCall), JSON.stringify(d));
   assert.ok(Number.isInteger(d.storageCalls) && d.storageCalls > 0);
   assert.ok(d.recallMs >= d.hostWaitMs);
   assert.ok(d.recallMs >= d.storageMs);
@@ -175,6 +178,7 @@ test('5 synchronous SQLite exclusive lock is visible in storageMaxMs', async t =
     // Start the hold at the reader's first actual prepare, after entry guards.
     Atomics.store(state, 1, 1); Atomics.notify(state, 1);
   });
+  assert.equal(ok(observed.result).diagnostics.storageMaxCall, 'map');
   const d = shape(plain, ok(observed.result));
   assert.ok(d.storageMaxMs >= 80, JSON.stringify(d));
   assert.equal(d.journalMode, 'delete');
@@ -236,6 +240,7 @@ test('5 freshness storage inside select and rank is excluded from host wait', as
     });
     assert.equal(triggered, true, method);
     const measured = ok(observed.result), d = parity(plain, measured);
+    assert.equal(d.storageMaxCall, 'validateFresh');
     assert.ok(d.storageMaxMs >= 80, JSON.stringify(d));
     shape(plain, measured);
     assert.equal(d.journalMode, 'delete');
@@ -376,4 +381,61 @@ test('7 content read facade and output assertion accept diagnostics on an actual
   // Failure envelopes carry no measurements even after a model await.
   port.rank = () => { throw Error('synthetic provider failure'); };
   assert.deepEqual(await core.recall({ ...request, diagnostics: true }), await core.recall(request));
+});
+
+// Exercise the live private accumulator without adding a public test API or
+// opening a database. These two blocks are the initializer and storage wrappers
+// used by recall itself; no copy of their implementation is maintained here.
+function accumulator() {
+  const source = readFileSync(new URL('../contract.mjs', import.meta.url), 'utf8');
+  const initializer = source.match(/const diagnostics = enabled \?[^;]+;/)?.[0];
+  const wrappers = source.match(/if \(diagnostics\) for \(const name of Object.keys\(storage\)\) \{[\s\S]*?\n      \}(?=\n      const value = await recallMemories)/)?.[0];
+  assert.ok(initializer, 'recall diagnostics initializer');
+  assert.ok(wrappers, 'recall storage wrappers');
+  const clock = [];
+  const storage = Object.fromEntries(storageNames.map(name => [name, () => name]));
+  const performance = { now: () => { assert.ok(clock.length, 'controlled clock exhausted'); return clock.shift(); } };
+  const diagnostics = new Function('enabled', 'storage', 'performance',
+    initializer + '\n' + wrappers + '\nreturn diagnostics;')(true, storage, performance);
+  return { diagnostics, call(name, start, end) {
+    clock.push(start, end);
+    assert.equal(storage[name](), name);
+    assert.equal(clock.length, 0, 'exactly two clock reads per storage call');
+  } };
+}
+
+test('8 accumulator: zero storage calls report null and zero', () => {
+  const { diagnostics: d } = accumulator();
+  assert.equal(d.storageCalls, 0);
+  assert.equal(d.storageMaxMs, 0);
+  assert.equal(d.storageMaxCall, null);
+});
+
+test('8 accumulator: equal unrounded maxima keep the earliest call', () => {
+  const { diagnostics: d, call } = accumulator();
+  // Also attribute a first call whose elapsed time is exactly zero.
+  call('fetch', 0, 0);
+  assert.equal(d.storageMaxCall, 'fetch');
+  call('map', 0, 4.03125);
+  call('validateFresh', 8, 12.03125);
+  assert.equal(d.storageMaxMs, 4.03125);
+  assert.equal(d.storageMaxCall, 'map');
+  // Both round to 4.0 ms, but the unrounded larger duration must replace it.
+  call('recentReceipts', 16, 20.046875);
+  assert.equal(d.storageMaxMs, 4.046875);
+  assert.equal(d.storageMaxCall, 'recentReceipts');
+  call('finalize', 24, 25);
+  assert.equal(d.storageMaxCall, 'recentReceipts');
+  assert.equal(d.storageMaxMs, 4.046875);
+  assert.equal(d.storageCalls, 5);
+  assert.equal(d.storageMs, 13.109375);
+});
+
+test('8 opt-out: storageMaxCall is absent without diagnostics', async t => {
+  const { core } = fixture(t);
+  for (const input of [request, { ...request, diagnostics: false }]) {
+    const value = ok(await core.recall(input));
+    assert.equal(Object.hasOwn(value, 'storageMaxCall'), false);
+    assert.equal(Object.hasOwn(value, 'diagnostics'), false);
+  }
 });

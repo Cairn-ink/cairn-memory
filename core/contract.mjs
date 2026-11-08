@@ -872,7 +872,7 @@ export function createMemoryCore(input, internal) {
       const enabled = Object.hasOwn(input, 'diagnostics') ? input.diagnostics : false;
       const started = enabled === true ? performance.now() : undefined;
       if (typeof enabled !== 'boolean') throw new MemoryStoreError('invalid_input');
-      const diagnostics = enabled ? { hostWaitMs: 0, storageMs: 0, storageCalls: 0, storageMaxMs: 0 } : undefined;
+      const diagnostics = enabled ? { hostWaitMs: 0, storageMs: 0, storageCalls: 0, storageMaxMs: 0, storageMaxCall: null } : undefined;
       const includeQualification = Object.hasOwn(input, 'includeQualification') ? input.includeQualification : false;
       if (typeof includeQualification !== 'boolean') throw new MemoryStoreError('invalid_input');
       const contextMode = Object.hasOwn(input, 'contextMode') ? input.contextMode : undefined;
@@ -921,7 +921,10 @@ export function createMemoryCore(input, internal) {
             const elapsed = performance.now() - start;
             diagnostics.storageMs += elapsed;
             diagnostics.storageCalls++;
-            diagnostics.storageMaxMs = Math.max(diagnostics.storageMaxMs, elapsed);
+            if (diagnostics.storageCalls === 1 || elapsed > diagnostics.storageMaxMs) {
+              diagnostics.storageMaxMs = elapsed;
+              diagnostics.storageMaxCall = name;
+            }
           }
         };
       }
@@ -932,7 +935,8 @@ export function createMemoryCore(input, internal) {
         const ms = value => Math.round(Math.max(0, value) * 10) / 10;
         value.diagnostics = Object.freeze({ recallMs: ms(performance.now() - started),
           hostWaitMs: ms(diagnostics.hostWaitMs), storageMs: ms(diagnostics.storageMs),
-          storageCalls: diagnostics.storageCalls, storageMaxMs: ms(diagnostics.storageMaxMs), journalMode });
+          storageCalls: diagnostics.storageCalls, storageMaxMs: ms(diagnostics.storageMaxMs),
+          storageMaxCall: diagnostics.storageMaxCall, journalMode });
       }
       return success(value);
     } catch (error) { return failure(error); }
