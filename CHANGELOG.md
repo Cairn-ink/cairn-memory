@@ -1,17 +1,34 @@
 # Changelog
 
-## 0.6.4 — Unreleased: Codex capture stop notice
+## 0.6.5 — Unreleased
 
+- 0.6.4 was prepared but not published; its changes ship in 0.6.5.
 - Hosted Codex SessionStart shows a short notice when format qualification
   stays paused or the saved sign-in is missing or unreadable, at most once per
   local calendar day. Intentional pauses and the daily cap stay quiet.
-- Codex status shows the last locally recorded, service-acknowledged capture,
-  or honestly says none is recorded yet. Exec status now aligns with its siblings.
-- 0.6.4 ships the 0.6.3 engine bundle unchanged (built from `be2bc543` with the
-  three Codex format modules of 0.6.3). Engine changes merged to main after
-  that are not in 0.6.4. Capture and recall behaviour remains unchanged.
-- Prepared and unpublished; existing hosted Codex users will need to rerun
-  setup after publication to install the notice and capture diagnostics.
+- Codex status shows the last locally recorded, service-acknowledged capture
+  in local time, or says none is recorded yet. Exec status aligns with its siblings.
+- Ships the current engine synced from `main` at `c838ba99`. Local users get
+  dated three-layer contextRead over saved memories by default:
+  `find_memory_candidates`, `fetch_memory_candidate_evidence`, and
+  `read_memory_context`.
+- Existing local stores upgrade on first open to the Raw-capable schema;
+  a store created by 0.6.3 moves from `user_version` 18 to 29.
+- Raw search is ready but stays empty in an ordinary `setup --local` install.
+  Setup registers only `--db/--owner[/--project]`; `remember_memory` saves
+  Memory only. Raw fills only from explicitly submitted captures through
+  `capture_memory` with `--capture-qualification` and a configured model, or
+  from the engine's separate local preview (`cairn-memory local setup`),
+  configured by hand; see [the local preview guide](docs/raw-local-journal.md).
+  Local mode still has no automatic capture.
+- Local Memory, Raw and search indexes are plaintext on this computer. Raw has
+  a default 200,000,000-byte owner cap. The server switches `--no-raw`,
+  `--no-raw-search`, and `--no-context-read` disable the respective defaults;
+  see [defaults and off switches](docs/defaults.md).
+- You can go back to 0.6.3; it keeps working with the upgraded store, but conversations captured while on 0.6.3 are not kept as Raw.
+- Prepared and unpublished; after publication, rerun setup to install 0.6.5's
+  engine and Codex notice/status updates. Existing installed runtimes stay in
+  use until setup is rerun.
 
 ## Unreleased — optional local Raw index
 

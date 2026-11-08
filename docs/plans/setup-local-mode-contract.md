@@ -1468,3 +1468,80 @@ The status lines in `README.md`, `README.zh-TW.md`, `docs/codex-setup.md` and
 `packages/setup/README.md` name 0.6.3. The 0.164.0–0.166.0 qualification and
 the new evidence are added to `docs/codex-setup.md` and
 `integrations/codex/README.md`.
+
+## 19. 0.6.5 amendment: current engine and Codex capture stop notice
+
+### Rules
+
+1. **Current engine identity.** The bundled engine is byte-identical to
+   `main`'s `packages/setup/runtime/engine/` at sync commit `c838ba99`.
+   This supersedes §18's engine allowed-difference rule; there is no
+   allowed-difference list. The release-identity gate belongs in the release
+   acceptance script, not the repository test suite, so later merges of
+   `main` do not break that suite. Never rebuild the archive during this
+   release preparation; run `build-runtime.mjs --check` only.
+2. **L06/L24 exceptions.** Keep §16 and §18's named per-file exceptions.
+   The capture stop notice adds exactly `integrations/codex/entry.mjs`,
+   `integrations/codex/installed-state.mjs`, `integrations/codex/installed.mjs`
+   and `integrations/codex/worker.mjs`. Each installed copy must equal its
+   current packaged source byte for byte before historical comparison.
+   Any later runtime change shipped alongside these adds its own named
+   per-file exception with the same installed-versus-packaged assertion.
+3. **Private acceptance.** Use installed packages, synthetic data, temporary
+   homes and roots, removed provider keys, and offline dependency installation.
+   Do not add an MCP client dependency: use a minimal JSON-RPC 2.0 client
+   with newline-delimited stdio and the installed SDK's in-process transport
+   interface. Use one SQLite library per database file per process. Hash
+   database files and sidecars only in a separate child after all connections
+   close. Every test command and every installed-byte case gets its own
+   bounded heavy-slot invocation; record command, exit code, counts and load.
+
+### Acceptance additions
+
+| Case | Required result |
+|---|---|
+| G1 | `git diff --quiet <sync-sha> HEAD -- packages/setup/runtime/engine` succeeds. |
+| G2 | `node packages/setup/build-runtime.mjs --check` succeeds on Node 22.16.0 and 24.15.0. |
+| G3 | Extract each packed tarball and compare every engine file byte for byte with the worktree, including an independently checked complete inventory. |
+| G4 | Diff the file lists from `npm pack --dry-run --json` and `tar -tzf`; print both counts and the diff line count. |
+| G5 | Both Nodes produce identical tarballs; print SHA-256 and byte size. |
+| T1 | On each Node, run `npm run test:setup` separately for `local`, `cloud-baseline`, `hosted` and `source`, with required baseline/cache and offline engine installation. |
+| T2 | On each Node, run `npm run test:codex` and `node --test core/test/no-raw-db-fd.test.mjs` separately. |
+| T3 | On each Node, run each of `integrations/codex/test/capture-diagnostics.test.mjs` and `packages/setup/test/codex-capture-status.test.mjs` separately under both `TZ=UTC` and `TZ=Etc/GMT+12`. |
+| F1 | Installed 0.6.5 executable `--check-config --db … --owner …` reports `raw:true`, `rawSearch:true`, `contextRead:'context-read-v1'`, without opening the database or contacting a provider. |
+| F2 | Initialize the installed 0.6.5 executable over stdio, send `notifications/initialized`, and list tools: the three contextRead tools are present and `capture_memory` is absent. Repeat with each off switch: `--no-raw` disables retention and Raw search, `--no-raw-search` disables Raw search while retaining Raw, and `--no-context-read` removes contextRead tools. Check configuration, schema/index effects and listed tools. |
+| F3 | Import installed 0.6.5 `createCairnServer`, connect a minimal in-process transport, initialize, explicitly capture synthetic text with a synthetic model and `source-bound-v2`, verify one saved Raw part, and read dated Memory plus Raw evidence through `read_memory_context`. |
+| R1 | Separate installed-core children create a 0.6.3 schema-18 store and memory; 0.6.5 upgrades to schema 29 and captures two memories with Raw lineage; 0.6.3 opens/reads/closes without changing any file, then saves a memory and a Memory-only capture and forgets one Raw-linked memory; 0.6.5 reopens with clean integrity/foreign keys, captures Raw, and finds the control source but no forgotten source in Raw search. |
+
+Smoke F1, F2, F3 and R1 on Node 22.16.0 only during preparation; the full
+acceptance driver is run separately by the release operator. Each installed-byte
+case prints a one-line JSON verdict and exits nonzero on failure.
+
+### Release text
+
+0.6.4 was prepared but not published; its changes ship in 0.6.5. Hosted Codex
+SessionStart reports paused format qualification or missing/unreadable sign-in
+at most once per local calendar day. Intentional pauses and the daily cap
+stay quiet. Codex status shows the last locally recorded, service-acknowledged
+capture in local time, or says none is recorded yet; exec status aligns with
+its siblings. After publication, rerun setup to install the updates.
+
+The current engine enables dated three-layer contextRead over saved memories
+by default: `find_memory_candidates`, `fetch_memory_candidate_evidence` and
+`read_memory_context`. Existing local stores upgrade on first open to the
+Raw-capable schema; a 0.6.3 store moves from `user_version` 18 to 29.
+Raw search is ready but stays empty in an ordinary local install: setup
+registers only `--db/--owner[/--project]`, and `remember_memory` saves Memory
+only. Raw fills only through explicitly submitted `capture_memory` calls
+with `--capture-qualification` and a configured model, or through the
+engine's separate local preview (`cairn-memory local setup`) configured by
+hand; see [the local preview guide](../raw-local-journal.md). Local mode
+still has no automatic capture.
+
+Memory, Raw and search indexes are local plaintext. The default Raw cap is
+200,000,000 bytes per owner. Use `--no-raw`, `--no-raw-search` and
+`--no-context-read` to disable the respective defaults; see
+[defaults and off switches](../defaults.md).
+You can go back to 0.6.3; it keeps working with the upgraded store, but conversations captured while on 0.6.3 are not kept as Raw.
+| Q09 | Full `test:setup` and the Codex integration suites exit 0 on Node 22.16.0 and 24.15.0 |
+| Q10 | The tarball inventories, compared independently with `tar` and with npm's pack manifest (including the embedded engine), equal 0.6.2's except for the declared version and the Rule 7 files. They contain no fixtures. |

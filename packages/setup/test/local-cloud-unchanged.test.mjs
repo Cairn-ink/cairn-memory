@@ -90,7 +90,7 @@ const generationPath = new RegExp('^\\.codex/cairn/runtime/(' + runtimeId + ')(/
 // PR #454 intentionally changes hosted cancellation and protocol R16 permit
 // restoration. Only these runtime sources may differ from immutable 0.5.3.
 // Contract section 18 (0.6.3) adds the three Codex format qualification modules.
-// Installer 0.6.4 (capture stop notice) adds these four hook runtime files.
+// Installer 0.6.5 (capture stop notice) adds these four hook runtime files.
 const hostedRuntimeExceptions = [
   'integrations/client/control-state.mjs',
   'integrations/client/file-lock.mjs',
@@ -262,7 +262,7 @@ async function inventory(root, normalize = false, options) {
 }
 const normalized = (text, home) => normalizeRuntime(text.replace(/(Cairn\.ink Memory(?: setup| status| 安裝程式)? )\d+\.\d+\.\d+(?:-[\w.]+)?/gu, '$1<version>'), home);
 // The immutable comparator keeps historical stdout byte-for-byte. Only current
-// status blocks (also printed by --dry-run) get the approved 0.6.4 B/C delta.
+// status blocks (also printed by --dry-run) get the approved 0.6.5 B/C delta.
 const captureTimestamp = String.raw`\d{4,6}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01]) (?:[01]\d|2[0-3]):[0-5]\d`;
 const captureStatusLine = new RegExp('^(?:' + ['en','zh'].flatMap(language => [
   escapePattern(messages.codex_last_capture_none[language]),

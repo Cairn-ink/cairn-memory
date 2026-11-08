@@ -16,18 +16,53 @@ EOF boundaries, pending batches and permanent format latches keep their
 behaviour. Existing cloud-mode Codex users must rerun setup to install the
 updated runtime.
 
-Installer **0.6.4 is prepared and unpublished**. It keeps the 0.6.3 engine
-bundle unchanged. Its hosted Codex SessionStart notice reports a format pause
-or missing sign-in, at most once per local calendar day; intentional pauses
-and the daily cap stay quiet. `status --client codex` adds the last recorded
-service-acknowledged capture in local time, or says none is recorded yet.
-After publication, rerun setup to install these runtime diagnostics.
+Installer **0.6.5 is prepared and unpublished**. 0.6.4 was prepared but not
+published; its changes ship in 0.6.5. Hosted Codex SessionStart reports a format
+qualification pause or a missing or unreadable sign-in, at most once per local
+calendar day; intentional pauses and the daily cap stay quiet.
+`status --client codex` shows the last locally recorded, service-acknowledged
+capture in local time, or says none is recorded yet. Exec status aligns with
+its siblings. After publication, rerun setup to install the engine and these
+runtime diagnostics.
 
-安裝器 **0.6.4 已備妥，尚未發布**，沿用 0.6.3 的引擎套件。
-Codex 開始對話時，若格式尚未支援或登入遺失，每個本機日最多提醒一次；
-自行暫停或達到每日上限時不提醒。`status --client codex` 會顯示上次有紀錄、
-服務已確認的成功保存時間（本機時間），沒有紀錄就如實顯示。發布後需重跑
-setup 才會安裝這些診斷功能。
+0.6.5 ships the current engine synced from `main` at `c838ba99`. Local users get
+dated three-layer contextRead over saved memories by default:
+`find_memory_candidates`, `fetch_memory_candidate_evidence`, and
+`read_memory_context`. Existing local stores upgrade on first open to the
+Raw-capable schema; a store created by 0.6.3 moves from `user_version` 18 to 29.
+Raw search is ready but stays empty: `setup --local` registers only
+`--db/--owner[/--project]`, and `remember_memory` saves Memory only. Raw fills
+only from explicitly submitted captures through `capture_memory` with
+`--capture-qualification` and a configured model, or from the engine's separate
+local preview (`cairn-memory local setup`) configured by hand; see
+[the local preview guide](../../docs/raw-local-journal.md). Local mode still
+has no automatic capture. Local Memory, Raw and search indexes are plaintext
+on this computer; Raw has a default 200,000,000-byte owner cap. Use `--no-raw`,
+`--no-raw-search`, or `--no-context-read` in the server registration to disable
+the respective defaults; see [defaults and off switches](../../docs/defaults.md).
+You can go back to 0.6.3; it keeps working with the upgraded store, but conversations captured while on 0.6.3 are not kept as Raw.
+
+安裝器 **0.6.5 已備妥，尚未發布**。0.6.4 已備妥但未發布，改動併入 0.6.5。
+雲端 Codex 開始對話時，若格式資格檢查暫停，或登入資料遺失、無法讀取，
+每個本機日最多提醒一次；自行暫停或達到每日上限時不提醒。
+`status --client codex` 會顯示上次有本機紀錄、服務已確認的保存時間
+（本機時間），沒有紀錄就如實顯示。Exec 狀態也採用相同呈現方式。
+發布後請重跑 setup，才會安裝新版引擎與這些診斷功能。
+
+0.6.5 的引擎同步自 `main` 的 `c838ba99`。本機使用者預設可透過
+`find_memory_candidates`、`fetch_memory_candidate_evidence`、
+`read_memory_context`，以附日期的三層 contextRead 讀取已保存的記憶。
+既有本機資料庫第一次開啟時會升級成支援 Raw 的結構；0.6.3 建立的資料庫，
+`user_version` 會從 18 升到 29。Raw 搜尋已可使用，但內容仍是空的：
+`setup --local` 只註冊 `--db/--owner[/--project]`，`remember_memory` 只保存
+Memory。要填入 Raw，需自行設定 `--capture-qualification` 與模型，透過
+`capture_memory` 明確提交對話；也可以手動設定引擎獨立的本機預覽功能
+（`cairn-memory local setup`），見[本機預覽指南](../../docs/raw-local-journal.md)。
+本機模式仍不會自動記下對話。Memory、Raw 與搜尋索引以明文存於這台電腦，
+Raw 預設每個 owner 上限為 200,000,000 bytes。可在 server 註冊參數加入
+`--no-raw`、`--no-raw-search` 或 `--no-context-read`，關閉對應功能，見
+[預設值與關閉方式](../../docs/defaults.md)。可以退回 0.6.3，升級後的資料庫
+仍可使用，但在 0.6.3 期間提交保存的對話不會保留成 Raw。
 
 ## Setup / 安裝
 
@@ -85,9 +120,12 @@ Restart the tools after setup. If Node moves, rerun `setup --local`.
 兩個工具共用資料庫與 owner，並使用 Node 的絕對路徑。安裝後請重開工具；
 Node 路徑變動時，重跑 `setup --local`。
 
-**0.6.3 local mode has no automatic capture or automatic recall.** Use the five
-explicit MCP tools: `remember_memory`, `recall_memory`, `inspect_memory`,
-`correct_memory`, `forget_memory`. Saving, inspecting, correcting and forgetting
+**0.6.5 local mode has no automatic capture.** Use the five explicit MCP tools:
+`remember_memory`, `recall_memory`, `inspect_memory`, `correct_memory`,
+`forget_memory`, alongside the default dated contextRead tools
+`find_memory_candidates`, `fetch_memory_candidate_evidence`, and
+`read_memory_context`. Raw stays empty unless captures are explicitly submitted;
+setup does not register `capture_memory`. Saving, inspecting, correcting and forgetting
 need no model key. Semantic recall needs a model key; without one it reports
 `model_not_configured`. If `OPENAI_API_KEY` is in the tool's environment, the
 engine will use it for recall and send selected text to that provider.
@@ -97,8 +135,12 @@ it reads the Claude registration configuration file `~/.claude.json` with a
 `cairn-local` MCP registrations. It does not access credential stores or use
 authentication fields. Unrelated entries and file contents are never printed.
 
-**0.6.3 本機模式不會自動記下對話，也不會自動回想。** 請明確呼叫上面五個
-MCP 工具。保存、查看、更正與遺忘不需要模型金鑰；語意回想需要模型金鑰，
+**0.6.5 本機模式不會自動記下對話。** 可明確呼叫 `remember_memory`、
+`recall_memory`、`inspect_memory`、`correct_memory`、`forget_memory`，
+也可使用預設開啟、附日期的 contextRead 工具 `find_memory_candidates`、
+`fetch_memory_candidate_evidence`、`read_memory_context`。沒有明確提交對話，
+Raw 就維持空白；setup 不會註冊 `capture_memory`。
+保存、查看、更正與遺忘不需要模型金鑰；語意回想需要模型金鑰，
 沒有時回報 `model_not_configured`。若工具的環境已有 `OPENAI_API_KEY`，
 引擎會用它回想，並把選取的文字傳給該模型供應商，本機儲存不代表所有處理
 都離線。安裝器不會傳送你的資料；它會讀取上限 4 MiB 的 Claude 註冊設定檔
