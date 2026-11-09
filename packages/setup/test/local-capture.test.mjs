@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, writeFile, appendFile, mkdir, readdir, lstat } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
-import { join, dirname, delimiter } from 'node:path';
+import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
@@ -54,7 +54,7 @@ async function fixture(t, { codex = true, failedQualification = false, cloud = f
     await writeFile(join(bin, client), source, { mode: 0o755 });
   }
   const env = { HOME: home, CODEX_HOME: join(home, '.codex'), CAIRN_MEMORY_HOME: root, TMPDIR: ws.path,
-    PATH: `${bin}${delimiter}${dirname(process.execPath)}:/usr/bin:/bin`, LANG: 'en_US.UTF-8',
+    PATH: bin, LANG: 'en_US.UTF-8',
     CAIRN_SETUP_NPM_CACHE: process.env.CAIRN_SETUP_NPM_CACHE, CAIRN_SETUP_NPM_OFFLINE: '1' };
   const harness = join(ws.path, 'setup.mjs');
   await writeFile(harness, `import{main}from ${JSON.stringify(pathToFileURL(join(pkg, 'lib/setup.mjs')).href)};
@@ -178,8 +178,8 @@ test('packed Traditional Chinese notice appears once and describes controls and 
   if (!needCache(t)) return;
   const f = await fixture(t, { codex: false });
   const output = await f.setup(['setup', '--local', '--lang', 'zh']);
-  assert.match(output, /明文 Raw/); assert.match(output, /200,000,000/); assert.match(output, /30 分鐘/);
-  assert.match(output, /config --local-capture off/);
+  assert.match(output, /明文 Raw/); assert.match(output, /200,000,000/); assert.match(output, /30\s+分鐘/);
+  assert.match(output, /config --local-capture\s+off/);
   assert.doesNotMatch(await f.setup(['setup', '--local', '--lang', 'zh']), /明文 Raw/);
 });
 
