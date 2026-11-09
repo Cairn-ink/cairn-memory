@@ -179,9 +179,11 @@ async function recall(hookInput) {
 }
 
 // Claude-only extensions stay outside the frozen shared cursor parser.
-async function captureMarkers(path) {
+async function captureMarkers(path, { strict = false } = {}) {
   try {
     const state = JSON.parse(await readFile(path, "utf8"));
+    if (strict && (!state || typeof state !== "object" || Array.isArray(state)))
+      throw new Error("invalid_capture_state");
     return {
       ...(Number.isSafeInteger(state.startOffset) && state.startOffset >= 0 ? { startOffset: state.startOffset } : {}),
       ...(typeof state.startedAt === "string" ? { startedAt: state.startedAt } : {}),
@@ -191,7 +193,10 @@ async function captureMarkers(path) {
       ...(state.ownSkillTurn === true ? { ownSkillTurn: true } : {}),
       ...(typeof state.windowInitial === "boolean" ? { windowInitial: state.windowInitial } : {}),
     };
-  } catch { return {}; }
+  } catch (error) {
+    if (strict && error.code !== "ENOENT") throw error;
+    return {};
+  }
 }
 
 async function startCapture(hookInput) {
@@ -200,10 +205,10 @@ async function startCapture(hookInput) {
   const statePath = captureCursorPath(dataDir, event.session_id);
   // Resume/compact need no write. In particular, never queue behind a capture
   // holding this lock across its network request.
-  if (await readCaptureCursor(statePath) || (await captureMarkers(statePath)).startOffset !== undefined) return;
+  if (await readCaptureCursor(statePath) || (await captureMarkers(statePath, { strict: true })).startOffset !== undefined) return;
   await withFileLock(`${statePath}.lock`, async () => {
     const cursor = await readCaptureCursor(statePath);
-    const markers = await captureMarkers(statePath);
+    const markers = await captureMarkers(statePath, { strict: true });
     // An EOF observed after a prompt or capture is not a start boundary.
     if (cursor || markers.startOffset !== undefined || markers.firstPromptAt || markers.captureSeen) return;
     // Missing transcripts are unknown, never a trusted zero boundary.

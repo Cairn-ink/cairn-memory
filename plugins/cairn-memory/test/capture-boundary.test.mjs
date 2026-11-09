@@ -191,3 +191,14 @@ test('SessionStart has a synchronous local boundary and separate async work', as
   assert.ok(boundary); assert.notEqual(boundary.async, true); assert.equal(boundary.timeout, 2);
   assert.equal(hooks.find(h => h.args?.[1] === 'start').async, true);
 });
+
+test('invalid session state leaves the start boundary unknown and retains the turn', async t => {
+  for (const bytes of ['{', 'null']) {
+    const f = await harness(t); await f.write(firstTurn);
+    await mkdir(dirname(f.statePath), { recursive: true });
+    await writeFile(f.statePath, bytes);
+    await f.run('start-boundary');
+    assert.equal(await readFile(f.statePath, 'utf8'), bytes);
+    await f.run('capture'); sentTurn(f);
+  }
+});
