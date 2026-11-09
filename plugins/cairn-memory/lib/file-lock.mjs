@@ -93,11 +93,12 @@ async function reapDeadOwner(path, owner, processIsAlive, context, read, signal)
  * Lock ownership never expires based on elapsed time. A definitively dead
  * owner may be recovered, and token-specific cleanup cannot unlink a newer
  * owner's lock. Returns false when the bounded acquisition window expires.
+ * With tryOnly, a contended path returns false without polling or reaping.
  */
 export async function withFileLock(
   path,
   work,
-  { timeoutMs = 30_000, pollMs = 100, context, validateOwner = async () => {},
+  { tryOnly = false, timeoutMs = 30_000, pollMs = 100, context, validateOwner = async () => {},
     isAlive = processIsAlive, validatePath = async () => {}, read = readFile, signal } = {},
 ) {
   signal?.throwIfAborted();
@@ -113,13 +114,15 @@ export async function withFileLock(
     // Preserve the existing acquisition window after owner publication. A caller's
     // independent signal still cancels setup and is checked before acquisition.
     const deadline = performance.now() + timeoutMs;
-    while (!acquired && performance.now() < deadline) {
+    while (!acquired && (tryOnly || performance.now() < deadline)) {
       signal?.throwIfAborted();
       try {
         await link(ownerPath, path);
         acquired = true;
       } catch (error) {
         if (error?.code !== "EEXIST") throw error;
+        // A best-effort publisher may try once without waiting or reaping.
+        if (tryOnly) return false;
         await validatePath(path);
         const existing = await readOwner(path, read);
         if (existing) await validateOwner(existing);
