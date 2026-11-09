@@ -19,10 +19,19 @@ async function withOpen(intercept, work) {
   try { return await work(); }
   finally { promises.open = original; syncBuiltinESMExports(); }
 }
+// copyFile keeps the source mode; a runner's Node can be group-writable, which
+// the host identity check rejects. Qualify a private owner-only copy instead.
+async function privateNode(ws) {
+  const binary = join(ws.path, 'codex');
+  await promises.copyFile(process.execPath, binary);
+  await promises.chmod(binary, 0o700);
+  return binary;
+}
 async function fixture(t) {
   const ws = createTestWorkspace(t, { prefix: 'observed-host-io-' });
   const config = join(ws.path, 'installation.json');
-  const host = { binaryPath: process.execPath, identity: await binaryIdentity(process.execPath), kind: 'cli' };
+  const binary = await privateNode(ws);
+  const host = { binaryPath: binary, identity: await binaryIdentity(binary), kind: 'cli' };
   const evidence = await formatFixture('0.166.0');
   const verdict = await qualifyBinary(config, host, { collect: async () => ({
     version: '0.166.0', evidence, binarySha256: 'a'.repeat(64),
@@ -76,7 +85,8 @@ for (const failure of ['read replacements', 'write failure', 'comparison failure
 test('cache creation precedes a skipped comparison and pending scheduling', async t => {
   const ws = createTestWorkspace(t, { prefix: 'observed-host-cache-' });
   const config = join(ws.path, 'installation.json');
-  const host = { binaryPath: process.execPath, identity: await binaryIdentity(process.execPath), kind: 'cli',
+  const binary = await privateNode(ws);
+  const host = { binaryPath: binary, identity: await binaryIdentity(binary), kind: 'cli',
     toJSON() { throw new Error('diagnostic_comparison'); } };
   let launches = 0;
   for (let call = 0; call < 2; call++) {
