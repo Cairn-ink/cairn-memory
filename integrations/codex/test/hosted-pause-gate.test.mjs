@@ -1,4 +1,9 @@
 import test from 'node:test';
+import fsPromises from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
+import { withWriteObserver } from '../../client/private-state.mjs';
+import { observeHostedPause } from '../../client/hosted-pause.mjs';
+import { recallContext } from '../hosted-lifecycle.mjs';
 import assert from 'node:assert/strict';
 import { appendFile, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -136,3 +141,51 @@ test('Claude recall and capture respect a hosted pause already observed and publ
     assert.equal(captures.length, 0, 'a previous Codex hosted-pause observation must block Claude capture');
     assert.equal(recalls.length, 0, 'a previous Codex hosted-pause observation must block Claude recall');
   });
+
+
+test('Codex final output guard rechecks an intent after its control-lock wait', { timeout: 10000 }, async t => {
+  const root = join(createTestWorkspace(t).path, 'state');
+  await mkdir(root, { mode: 0o700 });
+  const config = { root, endpoint: 'http://127.0.0.1:1' };
+  let remote = active, armed = false, recalls = 0;
+  t.mock.method(globalThis, 'fetch', async url => {
+    if (url.endsWith('/pause-state')) return Response.json(remote);
+    recalls++;
+    return Response.json({ memories: [{ id: '12345678-1234-4234-8234-123456789abc',
+      content: 'Synthetic memory.', kind: 'preference', scope: 'personal', projectId: null,
+      origin: 'explicit', confidence: 1, createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z',
+      receipts: [{ client: 'codex', sessionId: 's', eventId: 'e', role: 'user',
+        excerpt: 'Synthetic memory.', createdAt: '2026-10-01T00:00:00Z' }] }] });
+  });
+  const entered = rendezvous(), release = rendezvous(), durable = rendezvous(), continueObservation = rendezvous();
+  const nativeLink = fsPromises.link;
+  const linkMock = t.mock.method(fsPromises, 'link', async function (source, destination) {
+    if (armed && destination === join(root, 'control.lock')) {
+      armed = false; entered.resolve(); await release.promise;
+    }
+    return nativeLink.call(this, source, destination);
+  });
+  syncBuiltinESMExports();
+  let observing;
+  const pending = recallContext({ prompt: 'Synthetic query', session_id: 's' }, config,
+    'synthetic-token', null, AbortSignal.timeout(8000), async () => { armed = true; return true; });
+  pending.catch(() => {});
+  t.after(async () => {
+    release.resolve(); continueObservation.resolve();
+    await Promise.allSettled([pending, observing]);
+    linkMock.mock.restore(); syncBuiltinESMExports();
+  });
+  await Promise.race([entered.promise, pending.then(() => { throw new Error('final_output_gate_not_reached'); })]);
+  remote = paused;
+  observing = withWriteObserver(async ({ path, kind }) => {
+    if (kind === 'write' && path.endsWith('/1.true.json')) {
+      durable.resolve(); await continueObservation.promise;
+    }
+  }, () => observeHostedPause(config, 'synthetic-token'));
+  observing.catch(() => {});
+  await Promise.race([durable.promise, observing.then(() => { throw new Error('intent_not_recorded'); })]);
+  release.resolve();
+  await assert.rejects(pending, /pause_unavailable/, 'final_output_intent_guard');
+  assert.equal(recalls, 1, 'recall_completed_before_the_output_race');
+  continueObservation.resolve(); await observing;
+});

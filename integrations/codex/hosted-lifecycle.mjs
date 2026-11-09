@@ -90,6 +90,6 @@ export async function recallContext(input, config, token, projectId, signal, ena
   // The switch read is asynchronous: pause/generation or cancellation may change
   // during it. Re-check both under the control lock; nothing awaits after this.
   if (!await withHostedPauseGate(config, remote.generation,
-    guard => runIfActive(config.root, local.generation, () => {})) || signal.aborted) return '';
+    guard => runIfActive(config.root, local.generation, () => {}, { signal, guard })) || signal.aborted) return '';
   return output;
 }
