@@ -426,12 +426,12 @@ async function control() {
   let policyNote = "";
   if (isAbsolute(dataDir) && statusEndpoint.startsWith("http")) {
     const policy = await inspectAutomaticPolicy(dataDir, statusEndpoint);
-    if (policy.state === "invalid") policyNote = "; Codex policy invalid or unreadable (Claude unchanged)";
+    if (policy.state === "invalid") policyNote = "; Codex policy invalid or unreadable (Codex cap only)";
     else if (policy.state === "available") {
       const gate = await hostedPauseStatus({ root: dataDir, endpoint: statusEndpoint });
       policyNote = (gate.state === 'unavailable' ?
         `; shared pause gate unavailable (last observed ${gate.observedAt}${gate.stale ? '; historical' : ''})` : '') +
-        "; Codex daily cap applies only to Codex; Claude keeps existing local pause/server quota";
+        "; Codex daily cap applies only to Codex; Claude honours shared hosted pause";
     }
   }
   process.stdout.write(

@@ -671,6 +671,25 @@ standalone Codex target, preserving Claude keys/config. Pairing delivers only th
 shared identity record; same account/endpoint remains the person's choice. Local
 deletion does not revoke a server credential.
 
+Hosted automatic recall and capture in both clients also require a freshly
+validated, enforced `/api/memory/pause-state` observation, followed by another
+observation before dispatch. Claude checks again before emitting recalled context.
+Unavailable state blocks both operations. The foreground capture launcher does
+not fetch hosted state; its detached worker performs the observations.
+
+A changed observation records an immutable revocation intent under
+`hosted-pause/<target digest>.json.intents/` before taking the pause-publication
+lock. Each intent contains only `generation` and `paused`. Local rotation and
+durable pause publication precede a matching completion receipt. Dispatch and
+output guards re-read the highest intent under the local control lock: an older
+generation or an unfinished publication cannot authorize content transmission.
+Lock timeout, rotation/publication failure and a process crash retain the intent.
+Resume retains the hosted generation and unblocks only after publication.
+Intent and completion records contain no conversation text and are retained
+across restarts; diagnostic availability records never authorize dispatch.
+Unchanged observations add no durable writes before recall. Non-HTTP local
+integrations retain their existing behavior.
+
 Upgraded Claude honors the shared hosted quota gate as the explicit D1 exception.
 The selected private root retains `hosted-quota/<target digest>.json` and its
 process-owned lock/recovery files. The 0600 record contains only version, a finite

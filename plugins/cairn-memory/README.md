@@ -86,6 +86,16 @@ Explicit pause/resume commands report control failures rather than claiming succ
 each session's first capture hook skips its current unprocessed history; later complete messages are
 eligible. Requests already started before pause may still finish.
 
+Hosted recall and capture require a freshly validated, enforced pause state.
+Both paths observe it before work and again before dispatch; recall also checks
+before emitting context. A hosted pause or unavailable pause endpoint sends no
+recall query or capture text. Shared pause observations apply across paired
+clients, while the local daily cap remains specific to Codex. A newly observed
+pause/generation is retained durably even if its publication lock is busy.
+Resume keeps the hosted generation and permits work only after local publication.
+The Stop/PreCompact foreground launcher makes no hosted request; its detached
+worker performs the observations. Non-HTTP local integrations are unchanged.
+
 Capture is handed to a detached worker so it survives both interactive sessions and `claude -p`
 teardown without delaying Claude's response. The launcher pipes only session id, transcript path,
 working directory, and a content-free control generation directly to the worker, without a queue
