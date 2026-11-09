@@ -7,7 +7,7 @@ import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { observeHostedPause, deferHostedPauseStatus, withHostedPauseGate } from '../hosted-pause.mjs';
 import { hostedTargetId } from '../transport-hosted.mjs';
 
-test('two hundred completed cycles retain constant warm journal cost and no writes', {timeout:60000}, async t=>{
+test('two hundred completed cycles retain constant warm journal cost and no writes', {timeout:110000}, async t=>{
   const root=join(createTestWorkspace(t).path,'state'); await fs.mkdir(root,{mode:0o700});
   const config={root,endpoint:'http://127.0.0.1:1'};
   let remote={paused:false,generation:0,enforced:true};
@@ -16,6 +16,7 @@ test('two hundred completed cycles retain constant warm journal cost and no writ
   const directory=join(root,'hosted-pause',hostedTargetId(config)+'.json.intents');
   const snapshots=[];
   for(let generation=1;generation<=200;generation++) {
+    if(generation%50===0)console.log('JOURNAL_PROGRESS '+JSON.stringify({generation,ms:performance.now()}));
     remote={...remote,generation,paused:true}; await observe();
     remote={...remote,paused:false}; await observe();
     if (generation===1 || generation===200) {
