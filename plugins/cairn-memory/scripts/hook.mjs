@@ -187,6 +187,7 @@ async function captureMarkers(path) {
       ...(typeof state.startedAt === "string" ? { startedAt: state.startedAt } : {}),
       ...(typeof state.firstPromptAt === "string" && Number.isFinite(Date.parse(state.firstPromptAt)) ?
         { firstPromptAt: state.firstPromptAt } : {}),
+      ...(state.captureSeen === true ? { captureSeen: true } : {}),
       ...(state.ownSkillTurn === true ? { ownSkillTurn: true } : {}),
       ...(typeof state.windowInitial === "boolean" ? { windowInitial: state.windowInitial } : {}),
     };
@@ -197,22 +198,25 @@ async function startCapture(hookInput) {
   const event = captureEvent(hookInput);
   if (!event) return;
   const statePath = captureCursorPath(dataDir, event.session_id);
+  // Resume/compact need no write. In particular, never queue behind a capture
+  // holding this lock across its network request.
+  if (await readCaptureCursor(statePath) || (await captureMarkers(statePath)).startOffset !== undefined) return;
   await withFileLock(`${statePath}.lock`, async () => {
-    // Missing transcripts are an unknown boundary, not evidence of an empty
-    // session. Leave them eligible for the first-prompt fallback.
+    const cursor = await readCaptureCursor(statePath);
+    const markers = await captureMarkers(statePath);
+    // An EOF observed after a prompt or capture is not a start boundary.
+    if (cursor || markers.startOffset !== undefined || markers.firstPromptAt || markers.captureSeen) return;
+    // Missing transcripts are unknown, never a trusted zero boundary.
     let size;
     try { size = (await stat(event.transcript_path)).size; }
     catch (error) { if (error.code === "ENOENT") return; throw error; }
-    const cursor = await readCaptureCursor(statePath);
-    const markers = await captureMarkers(statePath);
-    if (markers.startOffset !== undefined) return;
     const generation = (await readControlState(dataDir)).generation;
     const tail = size === 0 ? Buffer.alloc(0) : await readSlice(event.transcript_path, size - 1, size);
     await writeCaptureCursor(statePath, {
-      ...(cursor ?? { offset: size, generation, discardUntilNewline: size > 0 && tail[0] !== 0x0a }),
+      offset: size, generation, discardUntilNewline: size > 0 && tail[0] !== 0x0a,
       ...markers, startOffset: size, startedAt: observedAt,
     });
-  });
+  }, { tryOnly: true });
 }
 
 async function recordFirstPrompt(hookInput) {
@@ -291,10 +295,19 @@ async function readSlice(path, offset, size) {
 
 async function captureLocked(hookInput, statePath, generation) {
   const transcriptPath = hookInput.transcript_path;
-  const size = (await stat(transcriptPath)).size;
   let cursor = await readCaptureCursor(statePath);
   const { ownSkillTurn, windowInitial, ...markers } = await captureMarkers(statePath);
   if (cursor && ownSkillTurn === true) cursor.ownSkillTurn = true;
+  // Persist even an empty/missing-file attempt. This is deliberately not an
+  // offset-zero cursor: bytes flushed later remain an uncertain initial window.
+  if (!markers.captureSeen) {
+    markers.captureSeen = true;
+    await writeCaptureCursor(statePath, { ...cursor, ...markers,
+      ...(ownSkillTurn === true ? { ownSkillTurn: true } : {}),
+      ...(typeof windowInitial === "boolean" ? { windowInitial } : {}),
+    });
+  }
+  const size = (await stat(transcriptPath)).size;
   const fallback = !cursor && markers.startOffset === undefined;
   const initial = cursor?.pendingEnd !== undefined ? windowInitial === true : fallback;
 
@@ -559,7 +572,8 @@ try {
         }, { signal: recallSignal }).catch(() => {});
         checkRecall();
       }
-      if (action === "start") { await startCapture(hookInput); await telemetry("plugin_started"); }
+      if (action === "start-boundary") await startCapture(hookInput);
+      else if (action === "start") await telemetry("plugin_started");
       else if (action === "recall") { recallMarkerInput = hookInput; await recall(hookInput); }
       else if (["capture", "capture-detached"].includes(action)) {
         const requestedGeneration =

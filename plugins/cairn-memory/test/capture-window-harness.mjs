@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { captureCursorPath } from '../lib/capture-cursor.mjs';
@@ -13,7 +13,7 @@ export const row = (id, timestamp = oldTime, extra = {}) => JSON.stringify({
   message: { content: `Synthetic ${id}` }, ...extra,
 }) + '\n';
 
-export async function harness(t, { fail = () => false, holdRecall, hookPath } = {}) {
+export async function harness(t, { fail = () => false, holdRecall, hookPath, observedAt, groupingLimit } = {}) {
   const workspace = createTestWorkspace(t, { prefix: 'capture-window-' });
   const dataDir = join(workspace.path, 'data'), transcript = join(workspace.path, 'transcript.jsonl');
   await mkdir(dataDir, { mode: 0o700 });
@@ -36,6 +36,16 @@ export async function harness(t, { fail = () => false, holdRecall, hookPath } = 
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => { server.closeAllConnections(); server.close(); });
+  if (observedAt || groupingLimit) {
+    const copy = join(workspace.path, 'plugin');
+    const sourceRoot = hookPath ? dirname(dirname(hookPath)) : fileURLToPath(new URL('../', import.meta.url));
+    for (const directory of ['lib', 'scripts']) await cp(join(sourceRoot, directory), join(copy, directory), { recursive: true });
+    hookPath = join(copy, 'scripts/hook.mjs');
+    let source = await readFile(hookPath, 'utf8');
+    if (observedAt) source = source.replace('const observedAt = new Date().toISOString();', `const observedAt = ${JSON.stringify(observedAt)};`);
+    if (groupingLimit) source = source.replace('const CAPTURE_WINDOW_SLICES = 4096;', `const CAPTURE_WINDOW_SLICES = ${groupingLimit};`);
+    await writeFile(hookPath, source);
+  }
   async function run(action, extra = {}) {
     const hook = hookPath ?? process.env.CAIRN_CAPTURE_TEST_HOOK ?? fileURLToPath(new URL('../scripts/hook.mjs', import.meta.url));
     const child = spawn(process.execPath, [hook, action], {
@@ -49,7 +59,7 @@ export async function harness(t, { fail = () => false, holdRecall, hookPath } = 
     child.stdout.resume(); child.stderr.on('data', chunk => stderr += chunk);
     child.stdin.end(JSON.stringify({ session_id: sessionId, transcript_path: transcript, cwd: '/synthetic/project',
       ...(action === 'recall' ? { prompt: 'Synthetic prompt' } : {}),
-      ...(action === 'start' ? { source: 'startup' } : {}), hook_event_name: action === 'start' ? 'SessionStart' :
+      ...(['start', 'start-boundary'].includes(action) ? { source: 'startup' } : {}), hook_event_name: ['start', 'start-boundary'].includes(action) ? 'SessionStart' :
         action === 'recall' ? 'UserPromptSubmit' : 'Stop', ...extra }));
     const code = await new Promise((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
     assert.equal(code, 0, stderr); assert.equal(stderr, '');

@@ -8,7 +8,7 @@ import { harness, oldTime, row } from './capture-window-harness.mjs';
 test('start boundaries exclude copied UUIDs and timestamps from the first capture', async t => {
   const f = await harness(t);
   const copied = row('copied-1') + row('copied-2');
-  await f.write(copied); await f.run('start', { source: 'resume' });
+  await f.write(copied); await f.run('start-boundary', { source: 'resume' });
   let state;
   try { state = await f.state(); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   await appendFile(f.transcript, row('new', new Date().toISOString()));
@@ -18,15 +18,17 @@ test('start boundaries exclude copied UUIDs and timestamps from the first captur
   assert.equal(state.offset, state.startOffset); assert.ok(Date.parse(state.startedAt));
 });
 
-test('an asynchronous start shares the capture lock and preserves an existing cursor', async t => {
+test('existing cursors return without waiting for a held capture lock', { timeout: 5000 }, async t => {
   const f = await harness(t); await f.write(row('old'));
-  let starting;
+  await mkdir(dirname(f.statePath), { recursive: true });
+  const original = { offset: 0, generation: 'initial', pendingEnd: Buffer.byteLength(row('old')), windowInitial: true };
+  await writeFile(f.statePath, JSON.stringify(original));
   await withFileLock(f.statePath + '.lock', async () => {
-    starting = f.run('start');
-    await writeFile(f.statePath, JSON.stringify({ offset: 0, generation: 'initial' }));
+    const before = performance.now();
+    await f.run('start-boundary', { source: 'resume' });
+    assert.ok(performance.now() - before < 1500);
+    assert.deepEqual(await f.state(), original);
   });
-  await starting; assert.equal((await f.state()).offset, 0);
-  assert.equal((await f.state()).startOffset, Buffer.byteLength(row('old')));
   await f.run('capture'); assert.equal(f.captures[0].messages[0].id, 'old');
 });
 
@@ -56,7 +58,7 @@ test('recall skips a busy first-capture lock and publishes once after release', 
 });
 
 test('recall adds one marker to an existing start cursor and preserves its boundary', async t => {
-  const f = await harness(t); await f.write(''); await f.run('start');
+  const f = await harness(t); await f.write(''); await f.run('start-boundary');
   const before = await f.state();
   await f.run('recall');
   const marked = await f.state();
@@ -68,7 +70,7 @@ test('recall adds one marker to an existing start cursor and preserves its bound
 });
 
 test('recall never waits to add a marker to a cursor held by capture', { timeout: 15000 }, async t => {
-  const f = await harness(t); await f.write(''); await f.run('start');
+  const f = await harness(t); await f.write(''); await f.run('start-boundary');
   const before = await f.state();
   await withFileLock(f.statePath + '.lock', async () => {
     await f.run('recall');
@@ -81,7 +83,7 @@ test('recall never waits to add a marker to a cursor held by capture', { timeout
 test('missing and empty transcripts at start permit the complete first turn', async t => {
   for (const exists of [false, true]) {
     const f = await harness(t); if (exists) await f.write('');
-    await f.run('start');
+    await f.run('start-boundary');
     if (exists) assert.equal((await f.state()).startOffset, 0);
     await f.write(row('first', new Date().toISOString())); await f.run('capture');
     assert.deepEqual(f.captures.flatMap(body => body.messages.map(m => m.id)), ['first']);
@@ -90,7 +92,7 @@ test('missing and empty transcripts at start permit the complete first turn', as
 
 test('partial copied EOF is discarded through its newline', async t => {
   const f = await harness(t); const partial = row('copied').trimEnd().slice(0, -1);
-  await f.write(partial); await f.run('start');
+  await f.write(partial); await f.run('start-boundary');
   assert.equal((await f.state()).discardUntilNewline, true);
   await appendFile(f.transcript, '}\n' + row('new', new Date().toISOString())); await f.run('capture');
   assert.deepEqual(f.captures[0].messages.map(m => m.id), ['new']);
@@ -98,9 +100,9 @@ test('partial copied EOF is discarded through its newline', async t => {
 
 test('compact and same-id resume preserve pending bytes and the original start marker', async t => {
   for (const source of ['compact', 'resume']) {
-    const f = await harness(t); await f.write(''); await f.run('start');
+    const f = await harness(t); await f.write(''); await f.run('start-boundary');
     const original = await f.state(); await appendFile(f.transcript, row('pending'));
-    await f.run('start', { source });
+    await f.run('start-boundary', { source });
     assert.equal((await f.state()).offset, 0);
     assert.equal((await f.state()).startedAt, original.startedAt);
     await f.run('capture'); assert.equal(f.captures[0].messages[0].id, 'pending');
@@ -113,4 +115,20 @@ test('a startOffset without a usable cursor still establishes the byte boundary'
   await mkdir(dirname(f.statePath), { recursive: true });
   await writeFile(f.statePath, JSON.stringify({ startOffset: Buffer.byteLength(copied), startedAt: oldTime }));
   await f.run('capture'); assert.deepEqual(f.captures[0].messages.map(m => m.id), ['new']);
+});
+
+test('new boundary fails open promptly on lock contention', { timeout: 5000 }, async t => {
+  const f = await harness(t); await f.write(row('copied'));
+  await withFileLock(f.statePath + '.lock', async () => {
+    const before = performance.now(); await f.run('start-boundary');
+    assert.ok(performance.now() - before < 1500);
+    await assert.rejects(readFile(f.statePath), { code: 'ENOENT' });
+  });
+});
+test('SessionStart has a synchronous local boundary and separate async work', async () => {
+  const config = JSON.parse(await readFile(new URL('../hooks/hooks.json', import.meta.url), 'utf8'));
+  const hooks = config.hooks.SessionStart.flatMap(entry => entry.hooks);
+  const boundary = hooks.find(h => h.args?.[1] === 'start-boundary');
+  assert.ok(boundary); assert.notEqual(boundary.async, true); assert.equal(boundary.timeout, 2);
+  assert.equal(hooks.find(h => h.args?.[1] === 'start').async, true);
 });
