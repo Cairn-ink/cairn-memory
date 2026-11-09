@@ -351,9 +351,8 @@ export async function runGate({ fault = null } = {}) {
     const optRow = await timeRead(() => inspectQuestion(optStore, optFrames, target.memory, capacityQuestion,
       'bounded-keyset-v1'));
     report.cases[1].questions[1] = { ...optRow, status: 'completed' };
-    assertGate(defaultRow.stages.retained && !defaultRow.stages.referenceVisible &&
-      defaultRow.firstMissing === 'candidate-visible' &&
-      defaultRow.firstDeliveryFailure === 'reference-visible', 'capacity_default_prefix');
+    assertGate(delivered(defaultRow) && defaultRow.stages.referenceVisible === true
+      && defaultRow.routingCueVisible === true, 'capacity_default_delivery');
     assertGate(delivered(optRow) && optRow.stages.referenceVisible === true
       && optRow.routingCueVisible === true, 'capacity_optin_delivery');
     assertGate(optRow.recallCoverage === 'budget_exhausted', 'capacity_coverage');
