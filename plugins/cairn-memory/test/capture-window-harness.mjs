@@ -48,7 +48,8 @@ export async function harness(t, { fail = () => false, holdRecall } = {}) {
     let stderr = '';
     child.stdout.resume(); child.stderr.on('data', chunk => stderr += chunk);
     child.stdin.end(JSON.stringify({ session_id: sessionId, transcript_path: transcript, cwd: '/synthetic/project',
-      prompt: 'Synthetic prompt', source: 'startup', hook_event_name: action === 'start' ? 'SessionStart' :
+      ...(action === 'recall' ? { prompt: 'Synthetic prompt' } : {}),
+      ...(action === 'start' ? { source: 'startup' } : {}), hook_event_name: action === 'start' ? 'SessionStart' :
         action === 'recall' ? 'UserPromptSubmit' : 'Stop', ...extra }));
     const code = await new Promise((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
     assert.equal(code, 0, stderr); assert.equal(stderr, '');

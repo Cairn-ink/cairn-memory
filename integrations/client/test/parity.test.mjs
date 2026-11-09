@@ -35,7 +35,7 @@ test('generated original-path modules preserve base 93e52b7 Claude outputs and s
   assert.deepEqual(await observeMechanisms(join(plugin, 'lib')), golden.mechanisms);
 });
 
-test('isolated plugin preserves hosted payload bytes, message/event IDs and frozen retries', async () => {
+test('isolated plugin preserves legacy payload projection, message/event IDs and frozen retries', async () => {
   const isolated = await mkdtemp(join(tmpdir(), 'cairn-installed-plugin-test-'));
   try {
     // Only distributed plugin runtime files exist here, with no repository parent.

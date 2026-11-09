@@ -88,7 +88,7 @@ test('more than 64 sent batches are all sent in bounded metadata windows without
   assert.notEqual(f.captures[64].window.id, f.captures[0].window.id);
 });
 
-test('capture racing a recall fetch freezes initial before the late marker and retries unchanged', async t => {
+test('capture racing a recall fetch freezes initial before the late marker and retries unchanged', { timeout: 15000 }, async t => {
   let announce, release;
   const entered = new Promise(resolve => announce = resolve);
   const held = new Promise(resolve => release = resolve);

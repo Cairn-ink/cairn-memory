@@ -51,7 +51,7 @@ test('worker sends numbered windows and per-attempt time without changing a froz
 test('worker bounds metadata windows above 64 sent slices without losing batches', async t => {
   // The byte-read ceiling permits this many short records in one frozen range.
   const f = await fixture(t, { text: header() + Array.from({ length: 1537 }, (_, n) => item('x', n)).join('') });
-  assert.equal((await runWorker(f.binding, { guard: f.guard, transport: f.transport })).status, 'idle');
+  assert.equal((await runWorker(f.binding, { guard: f.guard, transport: f.transport, now: () => 1800000000000 })).status, 'idle');
   assert.equal(f.calls.length, 65);
   assert.equal(f.calls.flatMap(body => body.messages).length, 1537);
   assert.equal(f.calls[63].window.slice, 64); assert.equal(f.calls[63].window.slices, 64);
