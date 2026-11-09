@@ -5,7 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { withLockClock } from "../../../integrations/client/testing/lock-contention.mjs";
-import { withFileLock } from "../lib/file-lock.mjs";
+import { pathToFileURL } from "node:url";
+const { withFileLock } = await import(process.env.CAIRN_CAPTURE_TEST_FILE_LOCK ?
+  pathToFileURL(process.env.CAIRN_CAPTURE_TEST_FILE_LOCK) : new URL("../lib/file-lock.mjs", import.meta.url));
 
 test("a live lock is never reclaimed based only on age", async (t) => {
   const dir = await mkdtemp(join(tmpdir(), "cairn-live-lock-test-"));
