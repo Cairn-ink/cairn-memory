@@ -1,3 +1,4 @@
+import { registerLocalQualificationTestRoot, awaitLocalQualificationTestChildren } from '../../raw/local-codex-qualification.mjs';
 import { workspaceSnapshot } from './local-workspace-snapshot.mjs';
 import assert from 'node:assert/strict';
 import { mkdirSync,writeFileSync,readFileSync,readdirSync,lstatSync,appendFileSync } from 'node:fs';
@@ -15,6 +16,8 @@ export const ok = outcome => { assert.equal(outcome.ok,true,JSON.stringify(outco
 const sha = value => createHash('sha256').update(value).digest('hex');
 export async function setupFixture(t,{ client='claude-code' } = {}) {
   const workspace=createTestWorkspace(t,{ prefix:'local-setup-' }),root=workspace.path;
+  const unregister=registerLocalQualificationTestRoot(root);
+  workspace.defer(async()=>{await awaitLocalQualificationTestChildren();unregister();});
   const sourceRoot=join(root,'sources'),native=join(root,'native'),pluginRoot=join(root,'plugin'),usageRoot=join(root,'usage');
   const qroot=join(root,'codex-install'),qdir=join(qroot,'qualification');
   for(const path of [sourceRoot,native,pluginRoot,usageRoot,qroot,qdir])mkdirSync(path,{mode:0o700});

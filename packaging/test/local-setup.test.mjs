@@ -54,8 +54,8 @@ for(const client of ['claude-code','codex'])test(`A1–A6/A8/A9 installed ${clie
   assert.equal((await f.inspect()).usage,null);assert.equal((await f.setup()).status,'prepared');assert.equal((await f.activate()).status,'active');
   const native=JSON.parse(readFileSync(f.clientConfigPath));assert.equal(native.theme,'untouched');assert.equal(native.hooks.Notification[0].hooks[1].type,'mcp_tool');
   const key=readFileSync(join(f.request.installationDirectory,'identity.key'),'utf8');
-  // Exact shell command executes the installed CLI. Outside a real Codex host,
-  // its quiet refusal is expected; subsequent ancestry is explicitly synthetic.
+  // Exact shell command executes the installed CLI with a fixture-only native
+  // binding. It never inspects the runner's real process ancestry.
   f.exact('SessionStart');if(client==='claude-code')assert.equal(f.cursor().issuedOrdinal,0);
   await f.invoke('hook',[],{event:client==='codex'?'UserPromptSubmit':'SessionStart'});assert.equal(f.cursor().issuedOrdinal,0);
   const text='x'.repeat(3995)+' sk-'+'a'.repeat(32)+'\n Ａ🙂 e\u0301 '.repeat(700);f.append(text);

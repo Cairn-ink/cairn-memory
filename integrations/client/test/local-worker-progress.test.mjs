@@ -62,6 +62,13 @@ const call = async (f,action,options) => {
   assert.doesNotMatch(result.stdout+result.stderr,/synthetic_source_secret|synthetic_key_secret/);
   assert.equal(result.stdout.trim().split('\n').length,1); return JSON.parse(result.stdout);
 };
+async function initializeSelectedRows(f){
+  const text=readFileSync(f.sourcePath,'utf8');
+  if(f.client==='codex')writeFileSync(f.sourcePath,f.header,{mode:0o600});
+  const result=await call(f,'initialize',{start:f.client==='codex'?'eof':'beginning'});
+  if(f.client==='codex')writeFileSync(f.sourcePath,text,{mode:0o600});
+  return result;
+}
 function readRaw(f) {
   const db = new DatabaseSync(f.databasePath,{ readOnly:true });
   try { return { text:Buffer.concat(db.prepare('SELECT p.sealed FROM raw_parts p JOIN raw_messages m ON m.conversation_id=p.conversation_id AND m.message_id=p.message_id WHERE p.saved=1 ORDER BY m.ordinal,p.part_index').all().map(row => Buffer.from(row.sealed))).toString(),
@@ -72,7 +79,7 @@ for (const client of ['claude-code','codex']) test(`B4b ${client} fresh worker p
   const text = 'x'.repeat(3995)+' sk-'+'a'.repeat(32)+'\n Ａ🙂 e\u0301 '.repeat(700), f = workerFixture(t,{ client,
     rows:[client === 'codex' ? codex(text) : claude(text)] });
   f.providerMode('memory');
-  assert.equal((await call(f,'initialize',{ start:'beginning' })).status,'ready');
+  assert.equal((await initializeSelectedRows(f)).status,'ready');
   const result = await call(f,'run'); assert.equal(result.status,'progress'); assert.equal(result.hasPending,false);
   assert.ok(result.completedParts > 1); assert.equal(result.savedParts,result.completedParts); assert.equal(result.skippedParts,0);
   assert.equal(f.cursor().offset,statSync(f.sourcePath).size); assert.equal(f.cursor().issuedOrdinal,1);
@@ -184,7 +191,7 @@ for (const client of ['claude-code','codex']) test(`Raw-only ${client} real tran
   });
   const f = workerFixture(t,{client,rows}); f.config.interpretation = 'raw-only'; f.config.usage.dailyCap = 1; f.save();
   f.providerMode('provider-error');
-  await call(f,'initialize',{start:'beginning'});
+  await initializeSelectedRows(f);
   const result = await call(f,'run',{key:true});
   assert.equal(result.status,'progress'); assert.equal(result.hasPending,false); assert.ok(result.completedParts>3);
   assert.equal(f.cursor().offset,statSync(f.sourcePath).size); assert.equal(f.cursor().issuedOrdinal,3);

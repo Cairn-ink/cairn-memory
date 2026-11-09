@@ -1,3 +1,4 @@
+import { createLocalUuidFence } from './local-authority-uuid.mjs';
 import { writeContentSuppressionInside } from './content-suppression-storage.mjs';
 import { createHmac, randomUUID } from 'node:crypto';
 import { transaction } from './database.mjs';
@@ -18,7 +19,8 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
   const target = (ns, id) => db.prepare(`SELECT * FROM raw_conversations WHERE ${where} AND id=?`).get(...rawBoundary(ns), id);
   const rootOf = row => ({ client: row.client, sessionKey: row.session_key });
   function input(value, action = false) {
-    object(value, ['namespace','conversationId','expectedRevision', ...(action ? ['actionId'] : [])]);
+    object(value, ['namespace','conversationId','expectedRevision', ...(action ? ['actionId'] : []), ...(localRawPrivacy ? ['retainMemories'] : [])]);
+    if (localRawPrivacy && value.retainMemories !== undefined && value.retainMemories !== true) fail('invalid_input');
     const ns = rawNamespace(value.namespace);
     identifier(value.conversationId); revision(value.expectedRevision);
     if (action) identifier(value.actionId);
@@ -53,10 +55,10 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
     }
     return selected;
   }
-  function planInside(ns, root) {
+  function planInside(ns, root, retainMemories = false) {
     const memories = [];
     let independentBefore;
-    const rows = db.prepare(`SELECT r.*,m.id AS memory_id FROM receipts r JOIN memories m ON m.id=r.memory_id
+    const rows = retainMemories ? [] : db.prepare(`SELECT r.*,m.id AS memory_id FROM receipts r JOIN memories m ON m.id=r.memory_id
       WHERE m.owner_id=? AND m.scope=? AND m.project_id=? AND m.deleted=0 ORDER BY m.id,r.id`).all(...rawBoundary(ns));
     const byMemory = new Map();
     for (const row of rows) {
@@ -122,7 +124,7 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
     return transaction(db, () => {
       const row = target(ns, value.conversationId); if (!row) fail('conversation_not_found');
       if (row.revision !== value.expectedRevision) fail('revision_conflict');
-      return { conversationId: row.id, revision: row.revision, ...planInside(ns, rootOf(row)).counts };
+      return { conversationId: row.id, revision: row.revision, ...planInside(ns, rootOf(row), localRawPrivacy && value.retainMemories).counts };
     });
   }
   function closeJobs(ns, jobs) {
@@ -145,11 +147,11 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
     db.prepare(`INSERT INTO raw_deletion_effects(effect_id,owner_id,scope,project_id,source_type,source_id,entity_type,entity_id,action_id)
       VALUES(?,?,?,?,?,?,?,?,?)`).run(randomUUID(), ...rawBoundary(ns), source.type, source.id, type, id, actionId);
   }
-  function cascade(ns, row, source, actionId) {
-    return rawCards.mutate(ns,actionId,() => cascadeInside(ns,row,source,actionId));
+  function cascade(ns, row, source, actionId, retainMemories = false) {
+    return rawCards.mutate(ns,actionId,() => cascadeInside(ns,row,source,actionId,retainMemories));
   }
-  function cascadeInside(ns, row, source, actionId) {
-    const root = rootOf(row), plan = planInside(ns, root);
+  function cascadeInside(ns, row, source, actionId, retainMemories) {
+    const root = rootOf(row), plan = planInside(ns, root, retainMemories);
     if (source.type === 'conversation') {
       writeContentSuppressionInside(db, { namespace: ns, kind: 'raw', key: row.id, reason: 'purge', actionId });
       rawCards.collect(ns,[{ conversationId: row.id }]);
@@ -185,26 +187,45 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
     return { conversationId: row.id, revision: finalRevision, ...plan.counts, actionId,
       effectCount: 1 + plan.memories.length + plan.episodeIds.filter(id => !(source.type === 'episode' && source.id === id)).length };
   }
+  // A retained/non-local handle can still delete from a locally captured store.
+  // Let the installed SQL guard select this path, keeping ordinary hosted SQL
+  // unchanged. The failed cascade has rolled back before durable hash progress.
+  function retryUuidDelete(ns, select, expectedRevision, work) {
+    // Two cascade attempts at most, with one durable bounded preflight between.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try { return work(); }
+      catch (error) {
+        if (error?.code !== 'ERR_SQLITE_ERROR' || error.errcode !== 1811 ||
+            error.message !== 'local_raw_uuid_pending' || db.isTransaction) throw error;
+        if (attempt === 1) fail('local_raw_privacy_write_failed');
+        const row = select();
+        if (!row) fail('conversation_not_found');
+        if (row.revision !== expectedRevision) fail('revision_conflict');
+        createLocalUuidFence(db).beforeDelete(ns,row.client,row.session_key);
+      }
+    }
+  }
   function remove(value) {
-    const ns = input(value, true), binding = hash(['delete-conversation-v1', ns, value.conversationId, value.expectedRevision]);
+    const ns = input(value, true), binding = hash(['delete-conversation-v1', ns, value.conversationId, value.expectedRevision, ...(localRawPrivacy && value.retainMemories ? ['retain-memories'] : [])]);
     const selected = localRawPrivacy && target(ns,value.conversationId);
     if (selected?.revision === value.expectedRevision) localRawPrivacy.beforeDelete(ns,selected.client,selected.session_key);
-    return transaction(db, () => {
+    return retryUuidDelete(ns,() => target(ns,value.conversationId),value.expectedRevision,() => transaction(db, () => {
       const previous = db.prepare(`SELECT * FROM raw_deletion_actions WHERE ${where} AND action_id=?`).get(...rawBoundary(ns), value.actionId);
       if (previous) { if (previous.payload_binding !== binding) fail('event_payload_conflict'); return JSON.parse(previous.result); }
       const row = target(ns, value.conversationId); if (!row) fail('conversation_not_found');
       if (row.revision !== value.expectedRevision) fail('revision_conflict');
-      const result = cascade(ns, row, { type: 'conversation', id: row.id }, value.actionId);
+      const result = cascade(ns, row, { type: 'conversation', id: row.id }, value.actionId, localRawPrivacy && value.retainMemories);
       db.prepare('INSERT INTO raw_deletion_actions VALUES(?,?,?,?,?,?)').run(...rawBoundary(ns), value.actionId, binding, JSON.stringify(result));
       return result;
-    });
+    }));
   }
   function forgetEpisode(ns, value) {
     if (localRawPrivacy) {
       const selected = db.prepare(`SELECT client,session_key,revision FROM session_episodes WHERE ${where} AND id=? AND deleted=0`).get(...rawBoundary(ns),value.episodeId);
       if (selected?.revision === value.expectedRevision) localRawPrivacy.beforeDelete(ns,selected.client,selected.session_key);
     }
-    return transaction(db, () => {
+    return retryUuidDelete(ns,() => db.prepare(`SELECT client,session_key,revision FROM session_episodes WHERE ${where} AND id=? AND deleted=0`)
+      .get(...rawBoundary(ns),value.episodeId),value.expectedRevision,() => transaction(db, () => {
       const row = db.prepare(`SELECT * FROM session_episodes WHERE ${where} AND id=? AND deleted=0`).get(...rawBoundary(ns), value.episodeId);
       if (!row) fail('episode_not_found');
       if (row.revision !== revision(value.expectedRevision)) fail('revision_conflict');
@@ -213,7 +234,7 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
       const actionId = 'episode-delete:' + hash([ns, row.id, row.revision]);
       cascade(ns, raw ?? row, { type: raw ? 'conversation' : 'episode', id: raw?.id ?? row.id }, actionId);
       return { forgotten: true };
-    });
+    }));
   }
   function list(value) {
     object(value, ['namespace','limit','cursor']); const ns = rawNamespace(value.namespace), limit = value.limit ?? 20;

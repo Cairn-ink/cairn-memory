@@ -1,3 +1,4 @@
+import { detectLocalCodexHost } from './local-codex-qualification.mjs';
 import { localCodexQualification } from './local-codex-qualification.mjs';
 import { checkLocalSession } from './local-session-fence.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -13,7 +14,7 @@ import { reasons as workerReasons } from './local-worker-input.mjs';
 import { readHostProfile, readHostConfiguration, hostRuntime, hostSelection, exact, overlaps, canonicalHostPath, fail } from './local-host-profile.mjs';
 import { checkHostPermission } from './local-host-permission.mjs';
 import { inspectPreparation, prepareHost } from './local-host-preparation.mjs';
-import { detectRunningHost, boundBinary, cachedQualification, hasQualifiedCreator } from '../../codex/qualification.mjs';
+import { boundBinary, cachedQualification, hasQualifiedCreator } from '../../codex/qualification.mjs';
 import { sessionSourceMetadata } from '../../codex/session-source.mjs';
 import { executeRearm, checkHostRearm, lazyRearm } from './local-host-rearm.mjs';
 import { rearmResult } from './local-rearm-state.mjs';
@@ -73,6 +74,7 @@ export function createLocalRawHost(value) {
       if (action === 'rearm' || action === 'rearmStatus') return await executeRearm(profilePath,selection,op,deps,action === 'rearmStatus');
       const selected = ['initialize','run','markStart'].includes(action) ? hostSelection(selection,action !== 'run') : null;
       const profile = await readHostProfile(profilePath), config = await readHostConfiguration(profile); op.check();
+      if (profile.installation.client === 'codex' && selected?.start === 'beginning') fail('invalid_input');
       await checkHostRearm(profile,config); op.check();
       await checkHostPermission(config); op.check();
       if (action === 'prepare') {
@@ -101,7 +103,7 @@ export function createLocalRawHost(value) {
       await checkLocalSession(profile,config,selected); op.check();
       let formatAuthority = null;
       if (profile.installation.client === 'codex') {
-        const host = await (deps.detectHost ?? detectRunningHost)(); op.check();
+        const host = await detectLocalCodexHost(deps.detectHost); op.check();
         if (!host) fail('host_unavailable');
         if (host.execSession === true) fail('host_unqualified');
         const qualification = await localCodexQualification(profile.installation.qualificationConfigPath,host,
