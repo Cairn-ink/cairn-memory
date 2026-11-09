@@ -5,7 +5,7 @@ import { hash } from '../client/common-profile.mjs';
 import { renderContext } from './context.mjs';
 
 export { observeHostedPause } from '../client/hosted-pause.mjs';
-import { observeHostedPause, deferHostedPauseStatus } from '../client/hosted-pause.mjs';
+import { observeHostedPause, deferHostedPauseStatus, withHostedPauseGate } from '../client/hosted-pause.mjs';
 
 export function installedTransport(config, token, expectedRemoteGeneration) {
   const targetId = hostedTargetId(config);
@@ -25,7 +25,8 @@ export function installedTransport(config, token, expectedRemoteGeneration) {
           // Quota-lock waits must not bypass the local pause/generation barrier.
           const current = await observeHostedPause(config, token, signal);
           if (current.paused || current.generation !== expectedRemoteGeneration) throw new Error('dispatch_not_started');
-          const active = await startIfActive(config.root, local.generation, start);
+          const active = await withHostedPauseGate(config, expectedRemoteGeneration,
+            guard => startIfActive(config.root, local.generation, start, { signal, guard }));
           if (!active.started) throw new Error('dispatch_not_started');
           return active.operation;
         };
@@ -59,7 +60,8 @@ export async function recallContext(input, config, token, projectId, signal, ena
     const dispatch = async start => {
       const current = await observation.observe();
       if (current.paused || current.generation !== remote.generation) throw new Error('dispatch_not_started');
-      const result = await startIfActive(config.root, local.generation, start);
+      const result = await withHostedPauseGate(config, remote.generation,
+        guard => startIfActive(config.root, local.generation, start, { signal, guard }));
       if (!result.started) throw new Error('dispatch_not_started');
       return result.operation;
     };
@@ -79,14 +81,15 @@ export async function recallContext(input, config, token, projectId, signal, ena
   // Never truncate a receipt to fit host output. No giant or late response leaks.
   if (!context || signal.aborted) return '';
   let output = '';
-  await runIfActive(config.root, local.generation, () => {
+  await withHostedPauseGate(config, remote.generation, guard => runIfActive(config.root, local.generation, () => {
     if (!signal.aborted) output = JSON.stringify({ hookSpecificOutput: {
       hookEventName: 'UserPromptSubmit', additionalContext: context,
     } });
-  });
+  }, { signal, guard }));
   if (!output || signal.aborted || await enabled() !== true) return '';
   // The switch read is asynchronous: pause/generation or cancellation may change
   // during it. Re-check both under the control lock; nothing awaits after this.
-  if (!await runIfActive(config.root, local.generation, () => {}) || signal.aborted) return '';
+  if (!await withHostedPauseGate(config, remote.generation,
+    guard => runIfActive(config.root, local.generation, () => {})) || signal.aborted) return '';
   return output;
 }

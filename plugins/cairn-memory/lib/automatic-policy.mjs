@@ -9,7 +9,7 @@ import { readControlState } from './control-state.mjs';
 import { randomUUID } from 'node:crypto';
 
 // Installer-owned, secret-free Codex policy. Claude only diagnoses it on status;
-// it never applies this local cap or requires the Codex hosted-pause gate.
+// it never applies this local cap. Hosted pause is shared by both clients.
 export const policyPath = (root, endpoint) => join(root,'automatic-policy',hostedTargetId({endpoint})+'.json');
 export async function automaticPolicy(root, endpoint) {
   const raw = await privateRead(policyPath(root,endpoint), { missing: true });

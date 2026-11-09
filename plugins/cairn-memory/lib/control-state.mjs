@@ -134,11 +134,12 @@ export async function setPaused(dataDir, paused, { rotate = false } = {}) {
  * Call `start` synchronously under the pause lock when a generation is active.
  * Promise work returned by `start` deliberately runs outside the lock.
  */
-export async function startIfActive(dataDir, generation, start, { signal } = {}) {
+export async function startIfActive(dataDir, generation, start, { signal, guard } = {}) {
   let operation;
   let started = false;
   const acquired = await withFileLock(paths(dataDir).lock, async () => {
     const current = await readControlState(dataDir);
+    if (guard) await guard();
     signal?.throwIfAborted();
     if (current.paused || current.generation !== generation) return;
     operation = Promise.resolve(start());
@@ -152,10 +153,11 @@ export async function startIfActive(dataDir, generation, start, { signal } = {})
 }
 
 /** Run a synchronous side effect only while the generation remains active. */
-export async function runIfActive(dataDir, generation, run, { signal } = {}) {
+export async function runIfActive(dataDir, generation, run, { signal, guard } = {}) {
   let ran = false;
   const acquired = await withFileLock(paths(dataDir).lock, async () => {
     const current = await readControlState(dataDir);
+    if (guard) await guard();
     signal?.throwIfAborted();
     if (current.paused || current.generation !== generation) return;
     run();
