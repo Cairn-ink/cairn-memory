@@ -205,7 +205,7 @@ async function capture(hookInput, requestedGeneration) {
   if (!event) return;
   let hosted;
   if (hostedConfig) {
-    const observe = () => observeHostedPause(hostedConfig, token);
+    const observe = () => observeHostedPause(hostedConfig, token, AbortSignal.timeout(25_000));
     const remote = await observe();
     if (remote.paused) return;
     hosted = { generation: remote.generation, observe };

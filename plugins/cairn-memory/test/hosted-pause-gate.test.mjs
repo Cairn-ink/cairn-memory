@@ -24,6 +24,7 @@ async function fixture(t, observation = () => active, memories = []) {
     request.resume(); response.setHeader('content-type', 'application/json');
     if (request.url.endsWith('/pause-state')) {
       const value = observation(++counts.pause);
+      if (value === null) return; // Explicitly held until the child aborts.
       if (value === undefined) { response.writeHead(503); response.end('{}'); }
       else response.end(JSON.stringify(value));
     } else if (request.url.endsWith('/recall')) {
@@ -42,7 +43,7 @@ async function fixture(t, observation = () => active, memories = []) {
     transcript_path: transcript, cwd: ws.path, capture_generation: 'initial' };
   return { counts, env, input };
 }
-async function run(t, f, action, { entry = hook, preload } = {}) {
+async function run(t, f, action, { entry = hook, preload, onSpawn } = {}) {
   const events = [], started = performance.now();
   const child = spawn(process.execPath, [...(preload ? ['--import', preload] : []), entry, ...(action ? [action] : [])],
     { env: f.env, stdio: ['pipe', 'pipe', 'pipe', 'ipc'] });
@@ -53,6 +54,7 @@ async function run(t, f, action, { entry = hook, preload } = {}) {
     child.once('error', reject); child.once('close', (code, signal) => resolve({ code, signal }));
   });
   t.after(async () => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); await done; });
+  onSpawn?.(child);
   child.stdin.end(JSON.stringify(f.input));
   const result = await done;
   assert.equal(result.code, 0); assert.equal(result.signal, null); assert.equal(stderr, '');
@@ -119,3 +121,20 @@ test('hosted operations fail closed when the shared state lock cannot verify the
   assert.equal(f.counts.pause, 3);
   assert.equal(f.counts.recall, 0); assert.equal(f.counts.capture, 0);
 });
+
+
+for (const action of ['capture', 'capture-detached']) test(`${action} cancels an unavailable pause request before dispatch`,
+  { timeout: 15000 }, async t => {
+    const received = Promise.withResolvers();
+    const f = await fixture(t, () => { received.resolve(); return null; });
+    const preload = fileURLToPath(new URL('./fixtures/pause-abort-preload.mjs', import.meta.url));
+    let worker;
+    const running = run(t, f, action, { preload, onSpawn: child => { worker = child; } });
+    running.catch(() => {});
+    await Promise.race([received.promise, running.then(() => { throw new Error('pause_observer_missing'); })]);
+    worker.send({ kind: 'abort-pause' });
+    const result = await running;
+    assert.deepEqual(result.events, [{ kind: 'pause-timeout', milliseconds: 25000 }]);
+    assert.equal(f.counts.pause, 1);
+    assert.equal(f.counts.recall, 0); assert.equal(f.counts.capture, 0); assert.equal(result.stdout, '');
+  });
