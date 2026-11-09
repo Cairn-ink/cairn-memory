@@ -1031,8 +1031,8 @@
   },
   {
     "path": "plugins/cairn-memory/scripts/hook.mjs",
-    "source": "import { link, mkdir, open, readFile, stat, unlink, writeFile } from \"node:fs/promises\"",
-    "reason": "Hook transcript reads and private JSON marker publication only; the hook loads no SQLite library."
+    "source": "import { open, readFile, stat } from \"node:fs/promises\"",
+    "reason": "Hook transcript reads and private session JSON only; database I/O remains in the engine."
   },
   {
     "path": "evaluation/live/diagnostics.mjs",
@@ -1676,17 +1676,7 @@
   },
   {
     "path": "plugins/cairn-memory/scripts/hook.mjs",
-    "source": "await writeFile(temporary, JSON.stringify({ firstPromptAt: observedAt }), { mode: 0o600, flag: \"wx\" });",
-    "reason": "Exclusive temporary JSON marker next to the hashed session cursor; linked only if the cursor path is absent. No database path or library is involved."
-  },
-  {
-    "path": "plugins/cairn-memory/scripts/hook.mjs",
-    "source": "try { state = JSON.parse(await readFile(path, \"utf8\")); }",
-    "reason": "Post-decision session cursor JSON read from a hashed session path; never selects database bytes or loads SQLite."
-  },
-  {
-    "path": "plugins/cairn-memory/scripts/hook.mjs",
-    "source": "const current = JSON.parse(await readFile(path, \"utf8\"));",
-    "reason": "Fresh session cursor JSON read under its nonblocking capture lock; preserves the existing cursor and cannot name a database file."
+    "source": "try { current = JSON.parse(await readFile(path, \"utf8\")); }",
+    "reason": "Fresh hashed-session cursor JSON under one nonblocking capture-lock attempt; marker publication never reads database bytes or overwrites a stale cursor."
   }
 ]
