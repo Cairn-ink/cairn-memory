@@ -547,12 +547,12 @@ test(`${action} tolerates invalid receipt clocks unless no anchor exists (${rece
   }
 });
 
-test('historical memory forget still hides; already-forgotten memory refuses without new windows',async t=>{
+test('historical memory forget still hides; already-forgotten memory is a no-op without new windows',async t=>{
   const f=localPrivacyFixture(t); assert.equal((await f.capture(f.wire('history-session','history'))).status,200);
   const memory=f.remember(); f.db.prepare("UPDATE memories SET currentness='historical' WHERE id=?").run(memory.id);
   ok(f.mutate('forget',memory)); const windows=f.db.prepare('SELECT * FROM local_raw_hide_windows').all();
   assert.equal(windows.length,1); assert.equal(f.db.prepare('SELECT count(*) n FROM raw_session_fences').get().n,1);
-  assert.equal(f.mutate('forget',memory).error.code,'memory_not_found');
+  assert.equal(ok(f.mutate('forget',memory)).forgotten,false);
   assert.deepEqual(f.db.prepare('SELECT * FROM local_raw_hide_windows').all(),windows);
 });
 
@@ -730,3 +730,9 @@ function managedNamespaceCore(f,namespace) {
     interpretation:'host',localAuthority:authority,readPolicy:()=>({generation:'synthetic',reason:null}),port:f.port}});
   f.workspace.defer(()=>core.close()); return core;
 }
+
+test('absent local forget is a no-op and creates no hide window',t=>{
+  const f=localPrivacyFixture(t);
+  assert.equal(ok(f.privacyCore.forget({namespace:ns,memoryId:'absent-memory',expectedRevision:1})).forgotten,false);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_hide_windows').get().n,0);
+});

@@ -252,8 +252,7 @@ test('shared SQLite isolates owners, projects and personal scope against get/cor
     error(await call(foreign.client, 'correct_memory', {
       memoryId: saved.id, expectedRevision: 1, content: 'Foreign update',
     }), 'memory_not_found');
-    // Local forget must establish a window or refuse; foreign IDs have no anchor.
-    error(await call(foreign.client, 'forget_memory', { memoryId: saved.id, expectedRevision: 1 }), 'memory_not_found');
+    assert.equal(ok(await call(foreign.client, 'forget_memory', { memoryId: saved.id, expectedRevision: 1 })).forgotten, false);
     const intact = ok(await call(owner.client, 'inspect_memory', { memoryId: saved.id })).memory;
     assert.equal(intact.revision, 1);
     assert.equal(intact.content, 'Synthetic Harbor private note');

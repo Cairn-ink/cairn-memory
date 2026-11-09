@@ -387,7 +387,6 @@ export function createMemoryRuntime(input, internal) {
   }
   function forgetMutationInside(ns, id, expectedRevision, reason, suppressionReason) {
       const current = activeRow(ns, id);
-      if (!current && localRawPrivacy) fail('memory_not_found');
       if (!current) return { forgotten: false, indexRevision: epoch(ns) };
       if (expectedRevision !== undefined && current.revision !== expectedRevision) fail("revision_conflict");
       localRawPrivacy?.hideMemoryInside(ns, current);
