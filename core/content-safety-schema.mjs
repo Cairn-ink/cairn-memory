@@ -1,3 +1,4 @@
+import { relationDDL, validateMemoryRelations } from './memory-relations-schema.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { resolveContentLayout } from './content-safety-layout.mjs';
 import { fail } from './validation.mjs';
@@ -153,7 +154,7 @@ CREATE TRIGGER safety_${table}_identity BEFORE UPDATE ON ${table}
 `;
   }
   // Split only complete CREATE statements: trigger bodies contain semicolons.
-  const statements = receiptAndRaw.match(/CREATE TRIGGER[\s\S]*?END;/g);
+  const statements = receiptAndRaw.match(/CREATE TRIGGER[\s\S]*?^END;/gm);
   for (const statement of statements) {
     if (statement.includes(' ON receipts') || statement.includes(' ON memories') ||
         base >= 20 && (statement.includes(' ON card_notes') || statement.includes(' ON private_cards')) ||
@@ -171,7 +172,7 @@ function expectedSchema(base, receiptEventTime = false, attestedFeatures = false
   if (!expected.has(key)) {
     // Comparison needs no SQLite handle: use the closed normative declarations.
     const sql = contentSafetyDDL(base, receiptEventTime, attestedFeatures) + (lineage ? cardLineageDDL : '');
-    const declarations = sql.match(/CREATE (?:TABLE|(?:UNIQUE )?INDEX)[\s\S]*?;|CREATE TRIGGER[\s\S]*?END;/g);
+    const declarations = sql.match(/CREATE (?:TABLE|(?:UNIQUE )?INDEX)[\s\S]*?;|CREATE TRIGGER[\s\S]*?^END;/gm);
     expected.set(key, new Map(declarations.map(sql => {
       const [, type, name] = sql.match(/^CREATE (?:UNIQUE )?(TABLE|INDEX|TRIGGER) (\w+)/);
       return [name, { type: type.toLowerCase(), sql: normalize(sql) }];
@@ -193,6 +194,12 @@ function verifyCompleteCardSchema(db,layout,eventTime) {
   if(eventTime)wanted.get('receipts').sql=extendedReceiptDeclarations[layout.base];
   wanted.get('card_memory_revision_invalidation').sql=authoredInvalidationDDL(layout.base);
   for(const [name,row]of expectedSchema(layout.base,eventTime,true,1))wanted.set(name,{name,...row});
+  if(layout.relationsRevision){
+    wanted.delete('memory_conflicts');wanted.delete('right_memory_conflicts');
+    for(const sql of relationDDL.match(/CREATE (?:TABLE|INDEX|VIEW)[\s\S]*?;|CREATE TRIGGER[\s\S]*?^END;/gm)){
+      const [,type,name]=sql.match(/^CREATE (TABLE|INDEX|VIEW|TRIGGER) (\w+)/);wanted.set(name,{name,type:type.toLowerCase(),sql});
+    }
+  }
   const actual=metadataRows(db.prepare('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT '+(wanted.size+1)));
   if(actual.length!==wanted.size||actual.some(row=>!wanted.has(row.name)||row.type!==wanted.get(row.name).type||
     exactDDL(row.sql)!==exactDDL(wanted.get(row.name).sql)))fail('unsupported_database');
@@ -275,6 +282,7 @@ export function attestContentSafety(db, physical) {
   try {
     if (physical === undefined) physical = db.prepare('PRAGMA user_version').get().user_version;
     const layout = resolveContentLayout(physical);
+    if(layout.relationsRevision)validateMemoryRelations(db);
     // The schema rows and their cookie share one statement snapshot. Compare
     // with the final header without adding any opener statements.
     const scanned = metadataRows(db.prepare(safetyObjects));

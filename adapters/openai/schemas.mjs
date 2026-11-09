@@ -314,6 +314,19 @@ export function schemasFor(method, input) {
       links: array(object({ from: { ...integer, maximum: 7 }, to: { ...integer, maximum: 7 },
         relation: { type: 'string', enum: ['supports-decision', 'challenges-current-basis'] } }), 10) });
   }
+  if (method === 'relateMemories') {
+    if (!input || !Array.isArray(input.facts) || input.facts.length > 5 || !Array.isArray(input.candidates) || input.candidates.length !== input.facts.length) invalid();
+    const ids = input.candidates.flatMap(rows => {
+      if (!Array.isArray(rows) || rows.length > 8) invalid();
+      return rows.map(row => id(row?.id));
+    });
+    return object({ facts: array(object({
+      factIndex: constrained(integer, input.facts.map((fact, index) => { if (fact.factIndex !== index || typeof fact.content !== 'string') invalid(); return index; })),
+      eventTime: { anyOf: [{ type: 'string', maxLength: 40 }, { type: 'null' }] },
+      edges: array(object({ candidateId: constrained(string, ids), relation: { anyOf: [{ type: 'string', enum: ['supersedes','contradicts','refines','causes'] }, { type: 'null' }] },
+        confidence: { type: 'number', minimum: 0, maximum: 1 } }), ids.length ? 5 : 0),
+    }), input.facts.length) });
+  }
   if (method === 'relate') {
     const memoryIndices = snapshotIndices(input?.memories, 6);
     if (!memoryIndices.length) invalid();

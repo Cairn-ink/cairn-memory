@@ -435,6 +435,7 @@ export function createMemoryCore(input, internal) {
       const receipts = page.receipts.slice(0, count);
       const exhausted = page.receiptComplete;
       return { memory: page.memory, receipts, ...(page.procedural ? { procedural: page.procedural } : {}), placements: page.placements, conflicts: page.conflicts,
+        ...(page.relations?.length ? { relations: page.relations } : {}),
         ...(input.includeQualification === true ? { qualification: page.qualification } : {}),
         ...(page.supersession ? { supersession: page.supersession } : {}),
         nextReceiptCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch,
@@ -621,7 +622,7 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  function finishAdmissionValidated(input, captureInitial, deadline, qualifiedDuplicates) {
+  function finishAdmissionValidated(input, captureInitial, deadline, qualifiedDuplicates, memoryRelations) {
     return invoke(() => {
       runtime.ready();
       object(input, ['namespace', 'client', 'eventId', 'payloadDigest', 'token', 'items']);
@@ -629,7 +630,7 @@ export function createMemoryCore(input, internal) {
       const key = admissionKey(input);
       const token = contractId(input.token);
       const items = admissionItems(input.items, captureInitial && Boolean(sessionEpisodes));
-      return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items }, deadline, qualifiedDuplicates) :
+      return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items, memoryRelations }, deadline, qualifiedDuplicates) :
         runtime.finishAdmission(ns, { ...key, token, items });
     });
   }
@@ -935,6 +936,7 @@ export function createMemoryCore(input, internal) {
         return page ? [{ namespace, indexRevision: page.epoch, suppressionEpoch: page.suppressionEpoch }] : [];
       }), includeQualification);
       const storage = { map: (request) => mapPage(request, navigation), fetch, validateFresh,
+        expandRelations: refs => runtime.expandRelationRefs(namespaces, refs),
         recentReceipts: (ref, limit) => runtime.recentReceipts(namespaces[ref.namespaceIndex], ref, limit),
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
@@ -943,7 +945,7 @@ export function createMemoryCore(input, internal) {
           ...(isSourceContext(contextMode) ? { sourceEvidence: candidate.item } : {}),
         })), selected, namespaces.map((namespace) => ({ namespace,
           indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch,
-          suppressionEpoch: navigation.pages.get(namespaceBinding(namespace)).suppressionEpoch })), includeQualification, contextMode),
+          suppressionEpoch: navigation.pages.get(namespaceBinding(namespace)).suppressionEpoch })), includeQualification, contextMode, count),
       };
       if (diagnostics) for (const name of Object.keys(storage)) {
         const call = storage[name];
@@ -1065,8 +1067,11 @@ export function createMemoryCore(input, internal) {
           claimAdmission: (value, sources) => invoke(() => runtime.claimCapturedAdmission(ns, {
           ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS,
         }, deadline, rawRegistration, sources)),
-          finishAdmission: value => finishAdmissionValidated(captureKey(value), true, deadline,
-            keepInput || sessionEpisodes ? undefined : captureQualifiedDuplicates),
+          relationNamespace: ns, relationIdentity: runtime.identity,
+          relationCandidates: facts => runtime.relationCandidates(ns, facts),
+          resolveRelationCandidates: refs => runtime.resolveRelationCandidates(ns, refs),
+          finishAdmission: (value, memoryRelations) => finishAdmissionValidated(captureKey(value), true, deadline,
+            keepInput || sessionEpisodes ? undefined : captureQualifiedDuplicates, memoryRelations),
           abandonAdmission: (value, retryable) => retryable
             ? invoke(() => runtime.abandonAdmission(ns, { ...admissionKey(captureKey(value)),
               token: contractId(value.token), retryable: true }))
@@ -1110,8 +1115,8 @@ export function createMemoryCore(input, internal) {
                 if (JSON.stringify(current) !== JSON.stringify(prepared.discovery)) fail('revision_conflict');
               });
             },
-            finish: (snapshot, token, order, prepared, judged) =>
-              invoke(() => runtime.finishOrdered(ns, snapshot, token, order, prepared, judged, deadline)),
+            finish: (snapshot, token, order, prepared, judged, memoryRelations) =>
+              invoke(() => runtime.finishOrdered(ns, snapshot, token, order, prepared, judged, deadline, memoryRelations)),
           } } }));
     } catch (error) { return failure(error); }
   }

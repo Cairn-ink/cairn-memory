@@ -188,7 +188,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
       const ids = new Set();
       let suppressedCount = 0;
       const activeItems = [];
-      for (const item of input.items) {
+      for (const [factIndex, item] of input.items.entries()) {
         // Timed items use this same instant for validation and created_at, even
         // when suppression would otherwise skip the item without attaching.
         const receiptNow = item.receiptTimes?.some(time => time != null) ? new Date().toISOString() : undefined;
@@ -200,15 +200,15 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
           continue;
         }
         conflictStorage.validateTargets(ns, item.conflictHints);
-        activeItems.push({ item, receiptNow });
+        activeItems.push({ item, receiptNow, factIndex });
       }
-      const entries = activeItems.map(({ item, receiptNow }) => {
+      const entries = activeItems.map(({ item, receiptNow, factIndex }) => {
         const result = admitMutation(ns, item, { automatic: true,
           ...(hooks?.captureQualifiedDuplicates ? { captureQualifiedDuplicates: hooks.captureQualifiedDuplicates } : {}) }, receiptNow);
         const memoryId = result.memory.id;
         if (item.procedural !== undefined) proceduralStorage.write(result.memory, item.procedural, 'model', item.receipts);
         ids.add(memoryId);
-        return { memoryId, hints: item.conflictHints, item,
+        return { memoryId, factIndex, hints: item.conflictHints, item,
           insertedReceiptIds: result.insertedReceiptIds };
       });
       conflictStorage.insertBatch(ns, entries, "inferred-hint");

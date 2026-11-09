@@ -124,6 +124,7 @@ function memoryWire(item, representation, body = item.text) {
     const value = canonical(item.metadata[key]);
     if (!Object.hasOwn(defaults, key) || !same(value, canonical(defaults[key]))) metadata[key] = value;
   }
+  if(item.metadata.relations?.length)metadata.relations=canonical(item.metadata.relations);
   return { ref: { ns: item.ns, type: item.type, id: item.ref.memoryId ?? item.ref.cardId, rev: item.ref.revision,
     ...(item.type === 'card' ? { bodyRev: item.ref.bodyRevision } : {}), f: item.fence.slice(0, 8) }, rank: item.rank,
     ...(representation === 'representation-v2-dated' && item.date ? { date: item.date } : {}), body,
@@ -185,7 +186,7 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
     const units = [];
     for (const memory of [...args.prepared].sort((a, b) => a.rank - b.rank)) {
       check(); const turns = memory.turnIds ?? [];
-      const linked = units.filter(unit => turns.some(turn => unit.turns.includes(turn)));
+      const linked = units.filter(unit => !memory.metadata.relations?.length && unit.memories.every(item=>!item.metadata.relations?.length) && turns.some(turn => unit.turns.includes(turn)));
       const unit = linked[0] ?? { id: JSON.stringify(memory.ref), rank: memory.rank, memories: [], turns: [], evidence: [] };
       if (!linked.length) units.push(unit);
       unit.memories.push(memory);

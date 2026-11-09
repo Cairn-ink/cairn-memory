@@ -361,7 +361,8 @@ export function expandRelations(db, identity, features, input, direct, deadlineA
     for (const item of direct) { budget.charge('checks'); seen.add(canonicalKey(item)); }
     for (const candidate of direct.slice(0, SOURCE_LIMITS.seeds)) {
       budget.charge('checks'); const seed = candidate.ref, additions = []; bySeed.set(canonicalKey(seed), additions);
-      for (const family of ['supports-decision', 'challenges-premise', 'contradicts', 'card-memory']) {
+      const families=cachedContentLayout(db)?.relationsRevision?['supports-decision','challenges-premise','card-memory']:['supports-decision','challenges-premise','contradicts','card-memory'];
+      for (const family of families) {
         const best = []; let stop;
         try {
           if (family === 'card-memory') scan(seed, family, seed.type === 'card' ? 'outgoing' : 'incoming', best);

@@ -1,9 +1,10 @@
 import './content-write-safety.mjs';
+import { installMemoryRelations } from './memory-relations-schema.mjs';
 import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheInside } from './content-suppression-storage.mjs';
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
-import { SAFETY_SCHEMA_VERSIONS, resolveContentLayout, assertContentFeatures } from './content-safety-layout.mjs';
-import { attestContentSafety, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection } from './content-safety-schema.mjs';
+import { RELATION_LAYOUTS, SAFETY_SCHEMA_VERSIONS, resolveContentLayout, assertContentFeatures } from './content-safety-layout.mjs';
+import { attestContentSafety, cachedContentLayout, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection } from './content-safety-schema.mjs';
 import { validateContextProductLayout } from './context-product-schema.mjs';
 import { installCardCurrentDependencies, validateCardCurrentDependencies, assertNoCardCurrentDependencies } from './card-current-schema.mjs';
 import { installRoleProfiles, validateRoleProfiles, assertNoRoleProfiles } from './role-profile-schema.mjs';
@@ -11,6 +12,7 @@ import { installAssets, validateAssets, assertNoAssets } from './asset-schema.mj
 import { types } from 'node:util';
 import { createExclusiveSqliteFile } from './sqlite-journal-probe.mjs';
 import { storeFenceOption,pinStoreFile,assertStoreIdentity,noncreatingStoreURI } from './store-fence.mjs';
+import { installMethodPackages } from './method-package-schema.mjs';
 import { migrateMethodPrerequisites } from './method-package-migration.mjs';
 import { randomBytes, randomUUID } from "node:crypto";
 import { installRawDeletion, RAW_DELETION_SCHEMA_VERSION } from './raw-deletion-schema.mjs';
@@ -45,11 +47,11 @@ export const APPLICATION_ID = 0x43414952;
 const VERSION = CONFIRMATION_SCHEMA_VERSION;
 // Existing layouts accepted without an upgrade by the ordinary opener.
 export const READ_SCHEMA_VERSIONS = Object.freeze([VERSION, 20, PRIVATE_CARD_SCHEMA_VERSION,
-  PRIVATE_EVIDENCE_SCHEMA_VERSION, PRIVATE_ORGANIZATION_SCHEMA_VERSION, LOCAL_AUTHORITY_SCHEMA_VERSION, 30, 31, 32, 33, ...SAFETY_SCHEMA_VERSIONS]);
+  PRIVATE_EVIDENCE_SCHEMA_VERSION, PRIVATE_ORGANIZATION_SCHEMA_VERSION, LOCAL_AUTHORITY_SCHEMA_VERSION, 30, 31, 32, 33, ...SAFETY_SCHEMA_VERSIONS, ...RELATION_LAYOUTS.filter(v=>![24,25,26,27,28].includes(v-100))]);
 // Context reads also validate existing pre-control Raw stores. The retained
 // topic reader's narrower supported-version list remains unchanged.
 export const CONTEXT_READ_SCHEMA_VERSIONS = Object.freeze([...new Set([...READ_SCHEMA_VERSIONS,
-  RAW_SCHEMA_VERSION, RAW_CAPTURE_SCHEMA_VERSION, RAW_LINEAGE_SCHEMA_VERSION, RAW_DELETION_SCHEMA_VERSION, RAW_SOURCE_SCHEMA_VERSION])]);
+  RAW_SCHEMA_VERSION, RAW_CAPTURE_SCHEMA_VERSION, RAW_LINEAGE_SCHEMA_VERSION, RAW_DELETION_SCHEMA_VERSION, RAW_SOURCE_SCHEMA_VERSION, ...RELATION_LAYOUTS])]);
 
 function createVersion3(db) {
   db.exec(`
@@ -449,6 +451,9 @@ export function openDatabase(path, options = {}) {
       if (methodPackages && layout.base < 30) fail('unsupported_database');
       if (currentDependencies && layout.base !== 33) fail('unsupported_database');
       location.check();
+      if(!layout.relationsRevision)transaction(db,()=>installMemoryRelations(db));
+      if(!cachedContentLayout(db)?.relationsRevision)attestContentSafety(db);
+      location.check();
       return db;
     } catch (error) {
       try { db.close(); } catch { /* Preserve the construction failure. */ }
@@ -492,10 +497,27 @@ export function openDatabase(path, options = {}) {
           db.prepare('PRAGMA user_version').get().user_version !== 0 ||
           db.prepare('SELECT count(*) n FROM sqlite_schema').get().n !== 0)) fail('unsupported_database');
       const layout = attestContentSafety(db);
+      if (layout.relationsRevision) {
+        let altered=false;
+        if(!layout.suppressionRevision){
+          const target=currentDependencies?33:roleProfiles?32:assets?31:methodPackages?30:localControls?29:rawSources?28:rawDeletion?27:rawLineage?26:rawCapture?25:rawConversations?24:privateCards?23:layout.base;
+          for(const [version,install] of [[20,installPrivateCards],[21,installCardMemorySources],[22,installPrivateEvidence],
+            [23,installPrivateOrganization],[24,installRawJournal],[25,installRawCapture],[26,installRawLineage],
+            [27,installRawDeletion],[28,installRawSources],[29,installLocalAuthority],[30,installMethodPackages],
+            [31,installAssets],[32,installRoleProfiles],[33,installCardCurrentDependencies]]){
+            if(layout.base<version&&target>=version){install(db);db.exec(`PRAGMA user_version=${version+100}`);altered=true;}
+          }
+        }
+        const upgraded=altered?attestContentSafety(db):layout;
+        validateContextProductLayout(db, upgraded);
+        assertContentFeatures(upgraded, { privateCards, rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls, methodPackages, assets, roleProfiles, currentDependencies });
+        return;
+      }
       if (layout.suppressionRevision) {
         if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID) fail('unsupported_database');
         assertContentFeatures(layout, { privateCards, rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls, methodPackages, assets, roleProfiles, currentDependencies });
         validateContextProductLayout(db, layout);
+        installMemoryRelations(db);
         return;
       }
       function initialize() {
@@ -787,7 +809,9 @@ export function openDatabase(path, options = {}) {
         const base = db.prepare('PRAGMA user_version').get().user_version;
         installContentSafetyInside(db, base, contentSafetyInventory(db));
       }
+      installMemoryRelations(db);
     });
+    if(!cachedContentLayout(db)?.relationsRevision)attestContentSafety(db);
     return db;
   } catch (error) {
     db?.close();

@@ -40,7 +40,7 @@ export function featureSources(root = featureRoot) {
 
 const accessor = 'receiptEventTimeEnabled';
 const owner = 'core/content-safety-schema.mjs';
-const consumers = ['core/runtime.mjs', 'core/context-product-schema.mjs', 'core/context-read-facade.mjs'];
+const consumers = ['core/runtime.mjs', 'core/context-product-schema.mjs', 'core/context-read-facade.mjs', 'core/memory-relations-time.mjs'];
 
 // The owner is byte-pinned by the feature gate. No namespace, forwarding or
 // dynamic access to its exports is allowed, even with a computed property key.
@@ -80,5 +80,5 @@ export function assertFeatureImports(sources) {
       }
     }
   }
-  assert.deepEqual(importers.sort(), [...consumers].sort(), 'exact three feature accessor importers');
+  assert.deepEqual(importers.sort(), [...consumers].sort(), 'exact reviewed feature accessor importers');
 }

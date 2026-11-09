@@ -44,6 +44,6 @@ export function modelProfile(extractionModel = DEFAULT_MODEL, rationaleModel = D
   return Object.freeze({ extract: extractionModel === DEFAULT_MODEL ? baseline :
     extractionModel === EXPERIMENTAL_EXTRACTION_MODEL ? experimental : luna,
     qualify: baseline, qualifyCandidates: baseline,
-    relate, reviewBasis,
+    relate, relateMemories: baseline, reviewBasis,
     classify: baseline, select: baseline, rank: baseline, reconcile: baseline });
 }

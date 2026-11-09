@@ -1,3 +1,6 @@
+import { memoryRelationTime, memoryRelationStatedTime } from './memory-relations-time.mjs';
+import { withMemoryRelationVectors } from './memory-relations-vectors.mjs';
+import { deliverMemoryRelations, memoryRelationLabels } from './memory-relations-read.mjs';
 import { cardLineageItemInside, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade, assertContentPort, contentAuthorityPort } from './content-safety-boundary.mjs';
@@ -79,7 +82,12 @@ export function openContextCore(baseOptions, contextRead, openBase) {
   const base = openBase(baseOptions);
   try {
     const context = createContextFacade(baseOptions.path === ':memory:' ? ':memory:' : resolve(baseOptions.path), options, { readOnly, ...busyOptions });
-    return Object.freeze({ ...base, ...context.methods, close() { context.close(); return base.close(); } });
+    const vectorConfig={path:baseOptions.path===':memory:'?':memory:':resolve(baseOptions.path),embedder:options.embedder,dispatch:contextBudget(options),batchSize:options.policy.maxBatchDocuments};
+    return Object.freeze({ ...base, ...context.methods,
+      capture: (...args) => withMemoryRelationVectors(vectorConfig,()=>base.capture(...args)),
+      ...(base.captureRaw?{captureRaw:(...args)=>withMemoryRelationVectors(vectorConfig,()=>base.captureRaw(...args))}:{}),
+      ...(base.keepEpisode?{keepEpisode:(...args)=>withMemoryRelationVectors(vectorConfig,()=>base.keepEpisode(...args))}:{}),
+      close() { context.close(); return base.close(); } });
   } catch (error) { try { base.close(); } catch { /* Preserve the initialization refusal. */ } throw error; }
 }
 export function openContextReader(value) {
@@ -482,6 +490,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           }
         });
       }
+      candidateItems = read(() => deliverMemoryRelations(db, input, candidateItems, deadlineAt));
+      diagnostics.coverage.stops.deadline ||= performance.now() >= deadlineAt;
+      if(cachedContentLayout(db)?.relationsRevision&&input.sources?.includes('relations-one-hop-v1')&&input.intent==='history')diagnostics.trace.sources['relations-one-hop-v1']=relationDiagnostic(performance.now()>=deadlineAt?'deadline':null);
       if (sourceState) diagnostics.coverage.stops.deadline ||= Object.values(diagnostics.trace.sources).some(source => source.reasons.includes('deadline'));
       if (internal) {
         sampleTrace(diagnostics.trace);
@@ -664,7 +675,10 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           const sourceRows = type === 'memory' && item.provenance.sourceAccess === 'available' ?
             (safetyMemo?.evidenceReceipts?.get(JSON.stringify([[ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId??''],ref.memoryId]))?.slice(0,16) ??
               db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId)).filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)) : [];
-          const date = receiptEventDate(sourceRows);
+          const relationLabels = memoryRelationLabels(db,ref,deadlineAt);
+          const stated=type==='memory'&&cachedContentLayout(db)?.relationsRevision?memoryRelationStatedTime(db,{id:ref.memoryId,revision:ref.revision}):null;
+          const eventTime=stated??(relationLabels.length?memoryRelationTime(db,{id:ref.memoryId,revision:ref.revision}):null);
+          const date = stated ? stated.slice(0,16)+'Z' : receiptEventDate(sourceRows) ?? (eventTime?eventTime.slice(0,16)+'Z':null);
           const sources = sourceRows.map((row, index) => {
             const { role, excerpt } = validateSourceReceipt(ref.memoryId, row, source =>
               createHash('sha256').update(JSON.stringify(source)).digest('hex'));
@@ -672,7 +686,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           });
           items.push({ type, ref, ns: input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), rank: candidate.rank,
             metadata: type === 'memory' ? { state, reviewState: item.reviewState, filing: item.filing,
-              kind: item.kind, origin, confidence: item.confidence } : { state, support: item.support, origin },
+              kind: item.kind, origin, confidence: item.confidence,
+              ...(relationLabels.length?{relations:relationLabels}:{}) } : { state, support: item.support, origin },
             text: type === 'memory' ? item.content : item.title + '\n' + item.body,
             turnIds: citedRawTurns(db, ref.namespace, sourceRows, rawChannel),
             sessionIds: sourceRows.map(row => JSON.stringify(['receipt', namespaceKey(ref.namespace), row.client, row.session_id])),
@@ -747,6 +762,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             throw error;
           }
           if (bind('snapshot-item', cardLineageItemInside(db,current)) !== item.fence) fail('snapshot_stale');
+          if(item.metadata.relations?.length&&!same(item.metadata.relations,memoryRelationLabels(db,item.ref)))fail('snapshot_stale');
         }
         return result;
       });
@@ -812,7 +828,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       ...configuration, limits: { ...CONTEXT_LIMITS, ...(options.sources ? { horizon: 32, sources: SOURCE_LIMITS } : {}) }, maintenance: !readOnly && !memoryOnly,
       assembly: { representation: 'representation-v2-dated', raw: { default: true, configured: Boolean(options.rawSearch) }, representations: [...ASSEMBLY_REPRESENTATIONS], defaults: ASSEMBLY_DEFAULTS, policies: [...ASSEMBLY_POLICIES], defaultPolicy: DEFAULT_ASSEMBLY_POLICY,
         counter: options.counter ? { id: options.counter.id } : null, limits: { ...ASSEMBLY_LIMITS, ...(options.sources ? { candidates: 32, counterCalls: 1634 } : {}) } },
-      unsupported: ['role-profiles', ...(!options.sources?.includes('relations-one-hop-v1') ? ['relations'] : []),
+      unsupported: ['role-profiles', ...(!cachedContentLayout(db)?.relationsRevision && !options.sources?.includes('relations-one-hop-v1') ? ['relations'] : []),
         ...(!options.sources?.includes('moc-v1') ? ['moc'] : []), 'partial-semantic-search'] }));
   }, findCandidates, refreshContextIndex, fetchCandidateEvidence, contextRead }, { check: (scopes,{delivery}) => { ready();
         if (!delivery && scopes.length && cachedContentLayout(db)?.suppressionRevision && hasContentSuppressionRequestInside(db) && !db.isTransaction) {

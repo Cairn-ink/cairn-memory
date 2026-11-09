@@ -1,7 +1,7 @@
 import { assertContentPort, hasContentPortBoundary } from './content-safety-boundary.mjs';
 import { modelPortValue } from './model-budget.mjs';
 import { fail } from './validation.mjs';
-const stages = new Set(['interpretEpisode', 'extract', 'classify', 'select', 'rank', 'reconcile', 'qualify', 'qualifyCandidates', 'relate', 'reviewBasis']);
+const stages = new Set(['interpretEpisode', 'extract', 'classify', 'select', 'rank', 'reconcile', 'qualify', 'qualifyCandidates', 'relate', 'relateMemories', 'reviewBasis']);
 const reasons = {
   core_call: new Set(['model_not_configured', 'context_budget_exceeded', 'token_count_unavailable',
     'model_timeout', 'model_cancelled', 'provider_failure', 'adapter_output_invalid',
@@ -12,7 +12,7 @@ const reasons = {
     'invalid_extraction_source_range', 'invalid_qualification',
     'qualification_citation_budget', 'qualification_citation_integrity',
     'qualification_label_canonicality', 'qualification_binding', 'invalid_classification',
-    'invalid_reconciliation', 'invalid_rationale', 'malformed_refs', 'duplicate_ref',
+    'invalid_memory_relations', 'invalid_reconciliation', 'invalid_rationale', 'malformed_refs', 'duplicate_ref',
     'non_visible_ref', 'namespace_selection_limit']),
   adapter: new Set(['response_envelope', 'response_usage', 'response_message', 'response_content',
     'output_json', 'output_shape', 'output_bounds', 'qualification_wire_shape',

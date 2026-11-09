@@ -12,7 +12,7 @@ const outcome = (reason = null, retiredCount = 0) => ({
 });
 
 /** Private ordered-capture proof around the existing admission transactions. */
-export function createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
+export function createOrderedCaptureStorage({ db, memoryRelationStorage, admissionStorage, epoch, activeRow,
   supersessionStorage, receiptKey, isSuppressed }) {
   const event = (ns, s) => db.prepare(`SELECT * FROM capture_events WHERE ${where}
     AND client = ? AND event_id = ?`).get(...eventKey(ns, s));
@@ -95,7 +95,7 @@ export function createOrderedCaptureStorage({ db, admissionStorage, epoch, activ
       return { candidates: safe, reason: null, suppressionEpoch: contentSuppressionFenceInside(db, ns.ownerId) };
     });
   }
-  function finish(ns, s, token, order, snapshot, items, decisions, reason, deadline) {
+  function finish(ns, s, token, order, snapshot, items, decisions, reason, deadline, memoryRelations) {
     let reconciliation;
     return admissionStorage.finishAdmission(ns, { ...s, token, items }, {
       initialClassification: true,
@@ -121,6 +121,7 @@ export function createOrderedCaptureStorage({ db, admissionStorage, epoch, activ
             (receipt_id,owner_id,scope,project_id,client,stream_id,sequence)
             VALUES (?,?,?,?,?,?,?)`).run(id, ...streamKey(ns, s), s.causal.sequence);
         }
+        memoryRelationStorage?.insert(ns, entries, memoryRelations);
         const successors = new Map();
         const resolved = decisions.map(decision => {
           const item = items[decision.replacementIndex];

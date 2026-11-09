@@ -378,5 +378,13 @@
   "core/card-lineage-base-schema.mjs",
   "docs/plans/card-lineage-v1.md",
   "SEAM.md",
-  "docs/plans/layout-base-upgrade.md"
+  "docs/plans/layout-base-upgrade.md",
+  "core/memory-relations-schema.mjs",
+  "core/memory-relations-storage.mjs",
+  "core/memory-relations.mjs",
+  "core/memory-relations-read.mjs",
+  "core/prompts/relate-memories.md",
+  "core/memory-relations-vectors.mjs",
+  "docs/memory-relations.md",
+  "core/memory-relations-time.mjs"
 ]

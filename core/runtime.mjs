@@ -1,3 +1,4 @@
+import { deliverMemoryRelations, memoryRelationLabels } from './memory-relations-read.mjs';
 import { captureSnapshot } from './capture-input.mjs';
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
 import { registerContentWriteBoundary } from './content-write-context.mjs';
@@ -22,6 +23,7 @@ import { createMocStorage } from "./moc-storage.mjs";
 import { createAdmissionStorage } from "./admission-storage.mjs";
 import { createClassificationJournalStorage } from './classification-journal-storage.mjs';
 import { createStagedEvidenceStorage } from './staged-evidence-storage.mjs';
+import { createMemoryRelationStorage } from './memory-relations-storage.mjs';
 import { createConflictStorage } from "./conflict-storage.mjs";
 import { createIndexStorage } from "./index-storage.mjs";
 import { createSupersessionStorage } from "./supersession-storage.mjs";
@@ -561,7 +563,7 @@ export function createMemoryRuntime(input, internal) {
           sessionId: receipt.session_id, eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt, createdAt: receipt.created_at })),
         ...(procedural ? { procedural } : {}),
         placements: mocStorage.placementRefs(ns, id),
-        conflicts: conflictStorage.inspect(ns, id),
+        conflicts: conflictStorage.inspect(ns, id), relations: memoryRelationLabels(db,{type:'memory',namespace:ns,memoryId:id,revision:memory.revision}),
         ...(includeQualification ? { qualification: safeQualification(ns, memory) } : {}),
         ...(memory.currentness === 'historical'
           ? { supersession: supersessionStorage.inspect(ns, id) } : {}), epoch: currentEpoch };
@@ -692,18 +694,24 @@ export function createMemoryRuntime(input, internal) {
     }, undefined, { deferred: true });
   }
 
-  function recallSnapshot(candidates, selected, namespaces = [], includeQualification = false, contextMode) {
+  function recallSnapshot(candidates, selected, namespaces = [], includeQualification = false, contextMode, selectionLimit=12) {
     ready();
     return transaction(db, () => {
       // This transaction is the return linearization point across the read set.
       const rows = candidates.map(({ namespace, memoryId, revision }) => {
         const row = currentRow(namespace, memoryId);
-        if (!safeMemory(namespace, row) || row.revision !== revision) fail('revision_conflict');
+        if (!safeMemory(namespace, row, selected.length?'current':'history') || row.revision !== revision) fail('revision_conflict');
         return row;
       });
       for (const { namespace, indexRevision, suppressionEpoch } of namespaces) {
         indexStorage.assertAvailable(namespace);
         if (epoch(namespace) !== indexRevision || cachedContentLayout(db)?.suppressionRevision && suppressionEpoch !== undefined && suppressionEpoch !== contentSuppressionRequestFenceInside(db, namespace.ownerId)) fail('index_revision_conflict');
+      }
+      if(selected.length&&cachedContentLayout(db)?.relationsRevision){
+        const seeds=selected.map(index=>({ref:{type:'memory',namespace:candidates[index].namespace,memoryId:rows[index].id,revision:rows[index].revision},rank:index+1}));
+        const expanded=deliverMemoryRelations(db,{intent:'current'},seeds,Infinity);
+        selected=expanded.map(item=>candidates.findIndex(candidate=>candidate.memoryId===item.ref.memoryId&&candidate.revision===item.ref.revision))
+          .filter(index=>index>=0).slice(0,selectionLimit);
       }
       if (isSourceContext(contextMode)) {
         const sources = rows.map((row, index) => {
@@ -719,13 +727,16 @@ export function createMemoryRuntime(input, internal) {
         const capped = candidates[index].receiptOrder === 'recent';
         const receipts = capped ? receiptRecent(candidates[index].namespace, rows[index], candidates[index].receiptLimit)
           : receiptPrefix(candidates[index].namespace, rows[index], 0, candidates[index].receiptLimit);
+        const relations=memoryRelationLabels(db,{type:'memory',namespace:candidates[index].namespace,memoryId:memory.id,revision:memory.revision});
         return { memory, receipts, receiptCount: memory.receiptCount,
+          ...(relations.length?{relations}:{}),
           ...(capped ? { receiptsOmitted: memory.receiptCount - receipts.length } : {}),
           ...(includeQualification ? { qualification: qualifications[index] } : {}) };
       });
     }, undefined, { deferred: true });
   }
 
+  const memoryRelationStorage = createMemoryRelationStorage({ db, advanceEpoch });
   const conflictStorage = createConflictStorage({ db, activeRow: currentRow, rawRow: activeRow, advanceEpoch,
     dropHeldWork: (id, reason) => dropHeldWork(db, id, reason) });
   const rationaleStorage = createRationaleStorage({ db, currentRow, readSourceEvidence, epoch, advanceEpoch });
@@ -783,7 +794,7 @@ export function createMemoryRuntime(input, internal) {
     db, admitMutation, validateReceiptTimes, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
     classificationJournal, episodes, proceduralStorage, assertSources: rawLineage.assertReceipts, sourceRoots, memoryAncestry, privacyMemoryDenied,
   });
-  const orderedStorage = createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
+  const orderedStorage = createOrderedCaptureStorage({ db, memoryRelationStorage, admissionStorage, epoch, activeRow,
     supersessionStorage, receiptKey, isSuppressed });
 
   const resolveHeld = createHeldReviewResolver({ db, activeRow, supersessionStorage, conflictStorage });
@@ -933,9 +944,9 @@ export function createMemoryRuntime(input, internal) {
     discoverOrdered(ns, snapshot, order, items) {
       ready(); return orderedStorage.discover(ns, snapshot, order, items);
     },
-    finishOrdered(ns, snapshot, token, order, prepared, judged, deadline) {
+    finishOrdered(ns, snapshot, token, order, prepared, judged, deadline, memoryRelations) {
       ready(); return orderedStorage.finish(ns, snapshot, token, order, prepared.discovery,
-        prepared.items, judged.decisions, judged.reason, deadline);
+        prepared.items, judged.decisions, judged.reason, deadline, memoryRelations);
     },
     rebuildIndex(ns, input) { ready(); return indexStorage.rebuildIndex(ns, input); },
     inspectAdmission(ns, input) { ready(); return admissionStorage.inspectAdmission(ns, input); },
@@ -960,9 +971,16 @@ export function createMemoryRuntime(input, internal) {
     discardCaptureEvidence(ns, input) { ready(); return stagedEvidence.discard(ns, input); },
     assertCaptureEvidence(ns, input, deadline) { ready(); return input[captureDispatch]
       ? admissionStorage.beginCaptureDispatch(ns, input, deadline) : admissionStorage.assertCaptureEvidence(ns, input); },
+    expandRelationRefs(namespaces, refs) { ready(); return readTransaction(db,()=>{
+      const expanded=deliverMemoryRelations(db,{intent:'current'},refs.map((ref,index)=>({ref:{type:'memory',namespace:namespaces[ref.namespaceIndex],memoryId:ref.memoryId,revision:ref.revision},rank:index+1})),Infinity);
+      return expanded.map(item=>({namespaceIndex:namespaces.findIndex(ns=>JSON.stringify(boundary(ns))===JSON.stringify(boundary(item.ref.namespace))),memoryId:item.ref.memoryId,revision:item.ref.revision}));
+    }); },
+    relationCandidates(ns, facts) { ready(); return memoryRelationStorage.candidates(ns, facts); },
+    resolveRelationCandidates(ns, refs) { ready(); return memoryRelationStorage.resolve(ns, refs); },
     finishAdmission(ns, input) { ready(); return admissionStorage.finishAdmission(ns, input); },
     finishCapturedAdmission(ns, input, deadline, captureQualifiedDuplicates) {
       ready(); return admissionStorage.finishAdmission(ns, input, { initialClassification: true,
+        admitted: entries => { memoryRelationStorage.insert(ns, entries, input.memoryRelations); },
         ...(captureQualifiedDuplicates ? { captureQualifiedDuplicates } : {}) }, deadline);
     },
     beginInitialClassification(ns, input, admitted, selected, deadline) {

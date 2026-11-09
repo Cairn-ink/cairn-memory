@@ -80,6 +80,7 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
         const value = canonical(item.metadata[key]);
         if (!Object.hasOwn(defaults, key) || JSON.stringify(value) !== JSON.stringify(canonical(defaults[key]))) metadata[key] = value;
       }
+      if(item.metadata.relations?.length)metadata.relations=canonical(item.metadata.relations);
       details.push({ ref: item.ref, metadata: item.metadata, body: { tokens: chosen.tokens }, sources: sourceDetails });
       const ref = { ns: item.ns, type: item.type, id: item.ref.memoryId ?? item.ref.cardId, rev: item.ref.revision,
         ...(item.type === 'card' ? { bodyRev: item.ref.bodyRevision } : {}), f: item.fence.slice(0, 8) };

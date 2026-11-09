@@ -36,7 +36,7 @@ function fixture(t) {
 const relationTable = (db) => {
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
   return tables.find(({ name }) => db.prepare(`PRAGMA table_info("${name}")`).all()
-    .some(({ name: column }) => column === 'left_memory_id'))?.name ?? 'memory_conflicts';
+    .some(({ name: column }) => ['left_memory_id','from_memory_id'].includes(column)))?.name ?? 'memory_conflicts';
 };
 const snapshot = (db) => db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all()
   .map(({ name }) => [name, db.prepare(`SELECT * FROM "${name}" ORDER BY rowid`).all()]);

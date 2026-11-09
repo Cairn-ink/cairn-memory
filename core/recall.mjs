@@ -73,7 +73,7 @@ function selection(output, allowed, maximum, model, stage) {
 }
 
 export async function recallMemories({ model, readSet, query, limit, map, fetch, finalize, recentReceipts,
-  validateFresh = () => {}, includeQualification = false, contextMode, selectionMode, diagnostics }) {
+  validateFresh = () => {}, expandRelations, includeQualification = false, contextMode, selectionMode, diagnostics }) {
   if (typeof model?.select !== 'function' || typeof model?.rank !== 'function') {
     emitDiagnostic(model, typeof model?.select !== 'function' ? 'select' : 'rank', 'core_call', 'model_not_configured');
     fail('model_not_configured');
@@ -128,6 +128,10 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
     for (const ref of selected) {
       if (!chosen.has(key(ref))) chosen.set(key(ref), ref);
     }
+  }
+  if(expandRelations){
+    const expanded=expandRelations([...chosen.values()]);chosen.clear();
+    for(const ref of expanded)chosen.set(key(ref),ref);
   }
   const namespaces = readSet.map((namespace, i) => ({ namespace, mapExhausted: maps[i].exhausted,
     fetchExhausted: true }));

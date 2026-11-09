@@ -43,3 +43,9 @@ Back up local data before upgrading; no down-migration is supplied.
 The synthetic `npm run demo:conflicts` demonstrates inspection and invalidation,
 not semantic quality. See [acceptance](plans/conflict-lifecycle.md) for exact
 failure ordering, bounds and migration requirements.
+
+
+Automatic capture now uses [typed memory relations](memory-relations.md).
+Existing caller assertions live in the same relation table and retain the
+`conflictHints` contract above. Inspection also exposes additive relation labels;
+the legacy `conflicts` projection stays bounded and keeps its existing shape.
