@@ -350,7 +350,7 @@ export async function observeStandalone(plugin) {
           } catch (error) {
             if (
               (mode.startsWith("plugin-empty") ||
-                (candidate && (mode.startsWith("local-marker-") || mode === "standalone-win32"))) &&
+                (candidate && (mode.startsWith("local-marker-") || ["standalone-win32", "coordination-foreign"].includes(mode)))) &&
               error.code === "ENOENT"
             )
               return null;
@@ -401,17 +401,17 @@ export function candidateGolden(base) {
     if (variant.mode.startsWith("concurrent-")) {
       variant.requestBytes = variant.requestBytes.trimEnd().split("\n").sort().join("\n") + "\n";
     }
-    // Hosted operations now require the shared verified-namespace pause lock.
-    // Windows standalone identity/control behavior remains covered, while hosted
+    // Hosted operations now require the shared verified-namespace, owner-private pause lock.
+    // Standalone identity/control behavior remains covered, while unverifiable hosted
     // recall/capture fail closed. Keep the historical fixture itself immutable.
-    if (["standalone-win32", "concurrent-win32"].includes(variant.mode)) {
+    if (["standalone-win32", "concurrent-win32", "coordination-foreign"].includes(variant.mode)) {
       const lines = variant.requestBytes.split("\n").filter(Boolean).filter(line => {
         const request = JSON.parse(line);
         return !request.url.endsWith("/recall") && !request.url.endsWith("/capture") &&
           !(request.url.endsWith("/telemetry") && JSON.parse(request.body).event === "capture_succeeded");
       });
       variant.requestBytes = lines.join("\n") + (lines.length ? "\n" : "");
-      if (variant.mode === "standalone-win32") {
+      if (["standalone-win32", "coordination-foreign"].includes(variant.mode)) {
         variant.key = null;
         if (variant.entry === "launch-capture") variant.identity = null;
       }

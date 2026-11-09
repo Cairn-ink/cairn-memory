@@ -60,7 +60,7 @@ test('a failed pause publication retains the intent even if rename made the new 
   await handle.close();
   let syncs = 0;
   // Intent ancestors: 2 syncs; intent: 2; rotation: 2; pause: file then directory.
-  t.mock.method(prototype, 'sync', async function () {
+  const syncMock = t.mock.method(prototype, 'sync', async function () {
     if (++syncs === 8) throw new Error('synthetic_publication_failure');
     return sync.call(this);
   });
@@ -69,7 +69,7 @@ test('a failed pause publication retains the intent even if rename made the new 
   let starts = 0;
   await assert.rejects(gate(f.config, 1, () => { starts++; }), /pause_unavailable/);
   assert.equal(starts, 0);
-  t.mock.restoreAll();
+  syncMock.mock.restore();
   await f.observe();
   await gate(f.config, 1, () => { starts++; });
   assert.equal(starts, 1, 'repair_completes_publication_before_dispatch');
@@ -122,6 +122,10 @@ test('an intent survives a process crash before rotation and blocks a stale proc
   // Keep the target ID fixed while using loopback for the child observation.
   const endpoint = `http://127.0.0.1:${server.address().port}`;
   const config = { root: f.config.root, endpoint };
+  // Prime the exact target the child will revoke. An absent publication would
+  // independently deny dispatch and would not prove that the intent survived.
+  await pause.observeHostedPause(config, 'synthetic-token');
+  const pauseFile = join(config.root, 'hosted-pause', hostedTargetId(config) + '.json');
   const child = spawn(process.execPath, [fileURLToPath(new URL('./fixtures/pause-intent-crash.mjs', import.meta.url)),
     config.root, endpoint], { stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
   const done = new Promise((resolve, reject) => {
@@ -135,6 +139,7 @@ test('an intent survives a process crash before rotation and blocks a stale proc
   child.kill('SIGKILL');
   assert.equal((await done).signal, 'SIGKILL');
   assert.equal((await readControlState(config.root)).generation, before.generation, 'crashed_before_rotation');
+  assert.deepEqual(JSON.parse(await readFile(pauseFile, 'utf8')), active, 'older_publication_still_active');
   let starts = 0;
   await assert.rejects(gate(config, 0, () => { starts++; }), /pause_unavailable/);
   assert.equal(starts, 0);

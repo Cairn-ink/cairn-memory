@@ -525,8 +525,8 @@ for (const row of table.rows) {
         );
       });
     // Binding decisions remain unchanged. Hosted content additionally requires
-    // a verified PID namespace for the shared pause-publication lock.
-    const hostedAvailable = f.platform !== "win32";
+    // a verified PID namespace and owner for the shared pause-publication lock.
+    const hostedAvailable = f.platform !== "win32" && f.coord !== "foreign";
     const expectedRequests = hostedAvailable ? row.expect.requests : 0;
     assert.equal((await run("recall")).code, 0);
     assert.equal(requests.length, expectedRequests, "exact request count");
