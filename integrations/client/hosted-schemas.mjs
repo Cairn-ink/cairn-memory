@@ -62,7 +62,48 @@ export const HOSTED_SCHEMAS = {
               "type": "string",
               "minLength": 1,
               "maxLength": 20000
+            },
+            "occurred_at": {
+              "type": "string",
+              "format": "date-time",
+              "maxLength": 40,
+              "description": "Optional record timestamp, preserved exactly by the client."
             }
+          }
+        }
+      },
+      "sent_at": {
+        "type": "string",
+        "format": "date-time",
+        "description": "Client clock at this send attempt; not part of event identity."
+      },
+      "window": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "slice",
+          "slices",
+          "initial"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "slice": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64
+          },
+          "slices": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64
+          },
+          "initial": {
+            "type": "boolean"
           }
         }
       }
