@@ -11,7 +11,7 @@
     "start": null,
     "end": null,
     "purpose": "control tuple, exact DDL and cached attestation",
-    "sha256": "461210f6a71b902ded6aaca22572af53bad060953306f4bf235a7b9375d668c2"
+    "sha256": "c8f9e0bcf08902576a82510f357528ddfdbfa32365e986771a9a76006582c4b1"
   },
   {
     "file": "core/content-safety-migration.mjs",
