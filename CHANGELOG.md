@@ -47,7 +47,7 @@
   tools. Its setup does not disable 0.6.6 hooks: they continue using the retained
   engine. Disable capture with 0.6.6 first to stop it before downgrading. A 0.6.5
   uninstall deletes the engine, so leftover hook commands cannot capture; Raw stays.
-- Engine bundle source sync: `3732d18a`. Release acceptance must compare the
+- Engine bundle source sync: `4650256a`. Release acceptance must compare the
   complete bundled engine against that commit, preserving the sync-commit rule.
 
 ## 0.6.5 — Unreleased
