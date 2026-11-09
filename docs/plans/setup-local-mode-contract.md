@@ -1676,7 +1676,7 @@ the 0.6.5 upgrade/downgrade round trip. Register new modules in
 `packages/setup/test/setup.test.mjs`. A live process or hook exit 0 alone is
 not evidence of capture; assert retained and searchable Raw in the MCP store.
 
-All installer test harnesses that resolve clients must reject PATH entries and
+The capture, local-mode and shared client test harnesses reject PATH entries and
 resolved client targets outside their private fixture before setup runs. Fakes
 also refuse execution outside that fixture, including under a qualification
 child's minimal environment. Required proof includes a leaked Node bin PATH

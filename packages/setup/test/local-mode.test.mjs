@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fsPromises, { readFile, writeFile, mkdir, readdir, lstat, chmod, chown, symlink, rm, cp, copyFile, realpath } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
+import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as delay } from 'node:timers/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { join, dirname, delimiter } from 'node:path';
@@ -33,6 +34,22 @@ const engine = { id: engineId, package: manifest.package.name, packageVersion: m
 const cacheSkip = 'Engine install requires a primed CAIRN_SETUP_NPM_CACHE; no network is used by local-mode tests.';
 const needCache = t => { if (!engineCacheComplete(process.env.CAIRN_SETUP_NPM_CACHE)) { return skipMissingEngineCache(t, cacheSkip); } return true; };
 const json = async path => JSON.parse(await readFile(path, 'utf8'));
+function databaseSnapshot(path, info) {
+  let database;
+  try {
+    database = new DatabaseSync(path, { readOnly: true });
+    const schema = database.prepare('SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY name').all();
+    const tables = schema.filter(row => row.type === 'table' && !row.name.startsWith('sqlite_'));
+    return { schema, userVersion: database.prepare('PRAGMA user_version').get(),
+      rows: tables.map(({ name }) => [name, database.prepare('SELECT * FROM "' + name.replaceAll('"', '""') + '"')
+        .all().map(row => JSON.stringify(row)).sort()]) };
+  } catch (error) {
+    // A few uninstall fixtures use a non-database sentinel with this suffix.
+    // Preserve its metadata without opening a raw descriptor to inspect bytes.
+    if (!error.message.includes('file is not a database')) throw error;
+    return { sentinelSize: info.size, mtimeMs: info.mtimeMs, ino: info.ino };
+  } finally { database?.close(); }
+}
 async function files(root) {
   const result = {};
   try {
@@ -40,7 +57,12 @@ async function files(root) {
       const path = join(root, entry.name);
       if (entry.isDirectory()) result[entry.name + '/'] = { directory: true, mode: (await lstat(path)).mode & 0o777 };
       if (entry.isDirectory()) for (const [key, value] of Object.entries(await files(path))) result[entry.name + '/' + key] = value;
-      else result[entry.name] = { bytes: (await readFile(path)).toString('base64'), mode: (await lstat(path)).mode & 0o777 };
+      else {
+        const info = await lstat(path), sqlite = /\.sqlite(?:-(?:wal|shm|journal))?$/.test(path);
+        result[entry.name] = { mode: info.mode & 0o777,
+          ...(path.endsWith('.sqlite') ? { database: databaseSnapshot(path, info) } : sqlite ?
+            { size: info.size, mtimeMs: info.mtimeMs, ino: info.ino } : { bytes: (await readFile(path)).toString('base64') }) };
+      }
     }
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
   return result;
