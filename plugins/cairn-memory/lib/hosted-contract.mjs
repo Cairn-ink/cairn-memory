@@ -33,6 +33,10 @@ export function conforms(name, value) {
   // portable schema pattern with the same explicit host-id check as callers.
   if (name === "recall-request" && object(value) && Object.hasOwn(value, "session_id") &&
       optionalHostSessionId(value.session_id) === undefined) return false;
+  // JSON Schema cannot compare sibling integers. Apply the capture window's
+  // semantic relation in addition to its independently bounded schema fields.
+  if (name === "capture-request" && object(value) && object(value.window) &&
+      value.window.slice > value.window.slices) return false;
   function check(schema, input) {
     if (schema.$ref) return check(root.$defs[schema.$ref.slice("#/$defs/".length)], input);
     if (schema.oneOf && schema.oneOf.filter((s) => check(s, input)).length !== 1) return false;

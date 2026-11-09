@@ -78,6 +78,7 @@ export const HOSTED_SCHEMAS = {
         "description": "Client clock at this send attempt; not part of event identity."
       },
       "window": {
+        "$comment": "Semantic validation in hosted-contract.mjs additionally requires slice <= slices.",
         "type": "object",
         "additionalProperties": false,
         "required": [

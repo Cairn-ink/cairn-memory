@@ -394,6 +394,8 @@ export function resetCapture(binding, { hostsStopped, confirm, ...options } = {}
   return prepared(binding, { ...options, reset: true });
 }
 
+const CAPTURE_WINDOW_SLICES = 4096;
+
 /** Stub seam: capture(body,{signal}) plus synchronous confirmed-termination query.
  * Every real local/hosted adapter must implement cancellation and idempotency.
  */
@@ -407,11 +409,15 @@ export async function runWorker(
     requestMs,
     overallMs,
     beforeDispatch,
+    // Internal seam for bounded synthetic window tests.
+    captureWindowSlices = CAPTURE_WINDOW_SLICES,
     ...options
   } = {},
 ) {
   if (!["hosted", "hosted-stub", "local-stub"].includes(mode) || !transport || !guard)
     return { status: "transport_unavailable" };
+  if (!Number.isSafeInteger(captureWindowSlices) || captureWindowSlices < 1 ||
+      captureWindowSlices > CAPTURE_WINDOW_SLICES) throw new Error("invalid_window_limit");
   requestMs ??= mode === "local-stub" ? 150000 : 25000;
   overallMs ??= mode === "local-stub" ? 155000 : 60000;
   if (
@@ -513,14 +519,14 @@ export async function runWorker(
                   reject(new Error("timeout"));
                 }, requestMs);
               });
-              const index = sent.indexOf(b), group = Math.floor(index / 64) * 64;
+              const index = sent.indexOf(b), group = Math.floor(index / captureWindowSlices) * captureWindowSlices;
               const body = { ...b.body,
                 messages: b.body.messages.map(message => times.has(message.id) ?
                   { ...message, occurred_at: times.get(message.id) } : message),
                 window: {
                   id: hash(wireBinding(binding).sessionId, group === 0 ? s.pending.start : sent[group].start),
                   slice: index - group + 1,
-                  slices: Math.min(64, sent.length - group),
+                  slices: Math.min(captureWindowSlices, sent.length - group),
                   // Every admitted Codex session already has an EOF boundary.
                   initial: false,
                 },

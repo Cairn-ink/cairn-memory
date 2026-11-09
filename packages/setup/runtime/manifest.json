@@ -7,9 +7,9 @@
     "integrations/client/config.mjs": "e0cd0b8c69a9b56265d2db4ae477c5aa3719a0f7eb7851155ff3d9ac43dca0d3",
     "integrations/client/control-state.mjs": "6d75cddef12008f1af6722e72acce5197805f1b656e2284a192e92e7e6465b8f",
     "integrations/client/file-lock.mjs": "afc42dcf45402c8c5576568d209c982e442eb9aa388b81907f40424f9d57f4c1",
-    "integrations/client/hosted-contract.mjs": "39ce7dcb60b91ab7bf815bd0085f278e9cc5d0f9798b9b5d27e7b7655fd217d1",
+    "integrations/client/hosted-contract.mjs": "7f6778962a9517c7244bd0287ae2462e663f584980fe0ccedc6e62ddaabf4f22",
     "integrations/client/hosted-pause.mjs": "8d15d24036533f5a235b5e54627cb4db3b94312f28874f9fdf24cd2897cb0635",
-    "integrations/client/hosted-schemas.mjs": "205e8ba418e6a416c8121a240c8c8142c06d50871b99da4519689136b824d117",
+    "integrations/client/hosted-schemas.mjs": "410e32b995d49fc47548ea6103601cef5d9327321af65b30311984a7bdbbd4b9",
     "integrations/client/identity.mjs": "f208808740aa9b2e13dfbb5899ce50de3a657a1c507441ad8d9877b2efe09de6",
     "integrations/client/pairing.mjs": "46a3cc1bb1e88ad1ab06c0096fb9c1dbee0d34b19b4c1435c9c07b496065af3c",
     "integrations/client/private-state.mjs": "7dc46417a129414937b0180482acf6bdf7f58c1816f93468e8df1d952057485b",
@@ -32,6 +32,6 @@
     "integrations/codex/session-source.mjs": "1341cc42eebf5a996be305f471393a717bfdd5eddd19fc3fd556fe8483fdfbc3",
     "integrations/codex/source.mjs": "6bf982b4227d6a7834c02faa74690340c72b269ccf1e9a1242358135de37b580",
     "integrations/codex/tripwire.mjs": "96f09081cb2d9416baef2c7a0774a76da178006ad038e8f560af943331232af6",
-    "integrations/codex/worker.mjs": "f4505bc31c6146d0a4ad88bdcc1d13bb98d883a801c555ef9053cffc83fc27c0"
+    "integrations/codex/worker.mjs": "0186d95d6a7ea9e90894e1d330c12a62010f71d4ada798bea13872736b1f0803"
   }
 }
