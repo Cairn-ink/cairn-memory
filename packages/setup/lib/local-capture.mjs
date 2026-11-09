@@ -15,7 +15,7 @@ export async function captureSettings(root) {
   let value;
   try { value = await boundedJSON(file(root), 65536, { privateFile: true }); }
   catch (error) { if (error.code === 'ENOENT') return { version: 1, clients: {} }; fail(); }
-  if (value?.version !== 1 || !value.clients || Object.keys(value).sort().join(',') !== 'clients,version' ||
+  if (value?.version !== 1 || !value.clients || typeof value.clients !== 'object' || Array.isArray(value.clients) || Object.keys(value).sort().join(',') !== 'clients,version' ||
       Object.keys(value.clients).some(client => !['claude', 'codex'].includes(client))) fail();
   for (const receipt of Object.values(value.clients)) {
     if (!receipt || typeof receipt.enabled !== 'boolean' || typeof receipt.noticed !== 'boolean' ||
@@ -76,7 +76,8 @@ async function requestFor(root, descriptor, client, receipt, context) {
     await canonicalPath(context.env.CODEX_HOME ?? join(home, '.codex'));
   await directory(nativeHome);
   const sourceRoot = join(nativeHome, client === 'claude' ? 'projects' : 'sessions');
-  await directory(sourceRoot);
+  await mkdir(sourceRoot, { recursive: true, mode: 0o700 });
+  if (await canonicalPath(sourceRoot) !== sourceRoot) fail(); // The engine validates source ownership/mode.
   await directory(join(root, 'capture'));
   await directory(join(root, 'capture-usage'));
   await directory(join(root, 'capture-support'));
@@ -109,7 +110,7 @@ export async function configureCapture(root, descriptor, selected, context, { en
     // Uninstall disables without changing the user's retained setup preference.
     await save(root, settings);
     const installation = join(root, 'capture', client);
-    let outcome;
+    let outcome, format;
     if (!uninstall && !receipt.noticed) {
       context.write(context.t('local_capture_notice', { client: client === 'claude' ? 'Claude Code' : 'Codex' }));
       if (client === 'codex') context.write(context.t('local_capture_codex_approval'));
@@ -121,8 +122,8 @@ export async function configureCapture(root, descriptor, selected, context, { en
     } else {
       const request = await requestFor(root, descriptor, client, receipt, context);
       if (client === 'codex') {
-        const verdict = await qualification(root, receipt, context, true);
-        if (verdict.status !== 'qualified') context.write(context.t('local_capture_qualification'));
+        format = await qualification(root, receipt, context, true);
+        if (format.status !== 'qualified') context.write(context.t('local_capture_qualification'));
       }
       if (!await exists(descriptor.database.path)) {
         const initialized = await invoke(root, receipt, ['init', '--database', descriptor.database.path], context);
@@ -142,6 +143,7 @@ export async function configureCapture(root, descriptor, selected, context, { en
         if (outcome.status === 'prepared') outcome = await invoke(root, receipt, ['activate', '--installation', installation], context);
       }
     }
+    if (format && format.status !== 'qualified' && outcome.status === 'active') outcome = { ...outcome, status: 'blocked', reason: 'qualification_required' };
     showCapture(client, outcome, context);
     // A disable refusal must stop uninstall before engine/MCP detachment.
     if ((uninstall || !receipt.enabled) && outcome.status !== 'disabled') fail();

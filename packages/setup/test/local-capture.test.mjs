@@ -125,7 +125,7 @@ async function searchCaptured(reader) {
     if (JSON.stringify(value).includes('copper telescope')) return value;
     await delay(100);
   }
-  assert.fail('Captured Raw must be searchable through the registered MCP server: ' + JSON.stringify(value));
+  assert.fail('Captured Raw must be searchable through the registered MCP server; final content: ' + JSON.stringify(value?.content));
 }
 
 for (const interactive of [false, true]) test(`packed default capture, notice once, idempotence and status (${interactive ? 'interactive' : 'noninteractive'})`, { timeout: 150000 }, async t => {
@@ -154,6 +154,33 @@ for (const interactive of [false, true]) test(`packed default capture, notice on
   assert.match(status, /Claude Code local capture: on/); assert.match(status, /Codex local capture: on/);
   assert.match(status, /200,000,000/);
   assert.equal((await readFile(f.calls.codex, 'utf8')).split('\n').filter(line => line.includes('generate-json-schema')).length, probeCount);
+});
+
+test('packed Codex zero-history off/on and update qualification use only setup probes', { timeout: 150000 }, async t => {
+  if (!needCache(t)) return;
+  const f = await fixture(t); await f.setup(['setup', '--local', '--no-capture']);
+  await f.setup(['config', '--local-capture', 'on', '--client', 'codex']);
+  const key = await readFile(join(f.root, 'capture/codex/identity.key'));
+  await f.setup(['config', '--local-capture', 'off', '--client', 'codex']);
+  assert.equal((await f.native('codex')).hooks.Stop, undefined);
+  await f.setup(['config', '--local-capture', 'on', '--client', 'codex']);
+  assert.deepEqual(await readFile(join(f.root, 'capture/codex/identity.key')), key);
+  await appendFile(join(f.bin, 'codex'), '\n// synthetic updated binary\n');
+  const probes = text => text.split('\n').filter(line => line.includes('generate-json-schema')).length;
+  const before = probes(await readFile(f.calls.codex, 'utf8'));
+  assert.match(await f.setup(['status']), /Codex local capture: blocked \(qualification_required\)/);
+  assert.equal(probes(await readFile(f.calls.codex, 'utf8')), before);
+  await f.setup(); assert.match(await f.setup(['status']), /Codex local capture: on/);
+  assert.ok(probes(await readFile(f.calls.codex, 'utf8')) > before);
+});
+
+test('packed Traditional Chinese notice appears once and describes controls and limits', { timeout: 150000 }, async t => {
+  if (!needCache(t)) return;
+  const f = await fixture(t, { codex: false });
+  const output = await f.setup(['setup', '--local', '--lang', 'zh']);
+  assert.match(output, /明文 Raw/); assert.match(output, /200,000,000/); assert.match(output, /30 分鐘/);
+  assert.match(output, /config --local-capture off/);
+  assert.doesNotMatch(await f.setup(['setup', '--local', '--lang', 'zh']), /明文 Raw/);
 });
 
 test('packed failed Codex qualification keeps setup usable, reports waiting, status never probes', { timeout: 150000 }, async t => {
@@ -189,6 +216,7 @@ test('packed --no-capture, config on/off/on and uninstall/setup preserve searcha
   await f.setup(); assert.match(await f.setup(['status']), /local capture: on/);
   assert.deepEqual(await readFile(join(f.root, 'capture/claude/identity.key')), key);
   const restored = await mcp(f, t); await searchCaptured(restored); await restored.close();
+  assert.doesNotMatch(await f.setup(), /Conversation text from this tool/);
 });
 
 test('packed real Claude hook reaches MCP Raw search; forget by save time hides source', { timeout: 150000 }, async t => {
