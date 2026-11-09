@@ -1,6 +1,6 @@
 // Refuse discovery before touching any external PATH directory or executable.
 import { accessSync, constants, realpathSync } from 'node:fs';
-import { delimiter, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, delimiter, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 function inside(root, path) {
@@ -31,6 +31,9 @@ export function assertFixtureClients(env, fixture) {
       try { accessSync(path, constants.X_OK); }
       catch (error) { if (['ENOENT', 'EACCES'].includes(error.code)) continue; throw error; }
       assertFixtureBinary(path, root);
+      // resolveCLI treats codex.js specially and may resolve a vendor package
+      // through ancestor node_modules. Fixtures use direct, guarded binaries.
+      if (basename(realpathSync(path)) !== client) refuse('unexpected fixture client launcher');
       clients[client] = realpathSync(path);
       break;
     }
