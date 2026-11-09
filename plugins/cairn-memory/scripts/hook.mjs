@@ -232,13 +232,18 @@ async function recordFirstPrompt(hookInput) {
     try { current = JSON.parse(await readFile(path, "utf8")); }
     catch (error) { if (error.code !== "ENOENT") throw error; }
     if (!current || typeof current !== "object" || Array.isArray(current) || Object.hasOwn(current, "firstPromptAt")) return;
+    // A later prompt cannot retroactively classify bytes from an earlier capture.
+    if (current.captureSeen === true) return;
     await writeCaptureCursor(path, { ...current, firstPromptAt: observedAt });
   }, { tryOnly: true });
 }
 
+// Match the server copied-history allowance for prompt timestamp/startup latency.
+const FIRST_PROMPT_MARGIN_MS = 10 * 60 * 1000;
+
 // Skip only a leading copied prefix, not older timestamps later in a new turn.
 function copiedPrefix(bytes, firstPromptAt) {
-  const cutoff = Date.parse(firstPromptAt);
+  const cutoff = Date.parse(firstPromptAt) - FIRST_PROMPT_MARGIN_MS;
   if (!Number.isFinite(cutoff)) return 0;
   let at = 0;
   while (at < bytes.length) {
