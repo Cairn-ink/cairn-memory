@@ -73,12 +73,21 @@ The handle provides the following unchanged methods and result fields:
   derived owner rows and vacuums. `close()` joins active work and disposes connections.
 
 Classifications are `{kind, reason}`: `denied`, `current-eligible-bare`,
-`current-eligible-linked` or `history-only`. Engine-interpreted bare Raw has complete
-privacy ancestry and no Memory link. Host registration instead uses reason
-`host-session-ancestry`: the engine cannot see which Memories derive from the
-message, and the host must fence every source session before acknowledging any
-Memory forget or correction, on every forget path. Do not enable host Raw search
-for an owner until that fencing is live. See the
+`current-eligible-linked` or `history-only`. Both `classification.kind` and
+`classification.reason` are diagnostics, not privacy or fencing signals.
+Engine-only bare Raw has complete engine privacy ancestry and no Memory link.
+An unmapped host source can instead report `host-session-ancestry`: the engine
+cannot see which Memories derive from the message. A session that mixes host and
+engine modes can report an engine reason, including `complete-privacy-no-memory-link`,
+after a later engine capture creates maps for a host-archived message. Bare kind
+or an engine reason does not prove complete privacy ancestry for any session ever
+archived through `captureRaw` in host mode.
+
+The host's fencing obligation covers every session it has ever archived through
+`captureRaw` in host mode, whatever kind or reason a later search reports.
+Before acknowledging any Memory forget or correction, fence every source session,
+on every forget path. Do not enable host Raw search for an owner until that
+fencing is live. See the
 [host registration contract](raw-layer-contract.md#host-interpreted-registration-addendum).
 Render bare Raw as attributed past conversation evidence whose currentness is
 unknown. Retired links, current/history overlaps and unresolved

@@ -701,14 +701,21 @@ that work. Local installation and local capture continue to use engine mode.
 Raw search recognizes the durable host registration from its existing
 `raw-capture-host-empty-v1` projection digest, verified against the message's
 first registration event and its metadata. No layout change, map rows or backfill
-is needed, including for existing host archives. Its classification reason is
-`host-session-ancestry`, never `complete-privacy-no-memory-link`.
+is needed, including for existing host archives. An unmapped bare source admitted
+by this proof reports `host-session-ancestry`. Both `classification.reason` and
+`classification.kind` are diagnostics, not privacy or fencing signals. A session
+that mixes host and engine modes can report an engine reason: a later ordinary
+engine capture can create maps for the same host-archived message, which can then
+report `current-eligible-bare` / `complete-privacy-no-memory-link`. For a session
+ever archived in host mode, neither bare kind nor an engine reason proves
+complete privacy ancestry or absence of host-derived Memories.
 
-On host-interpretation profiles the engine cannot see which Memories derive
-from a Raw message. Before acknowledging any forget or correct of a Memory,
-the host must call `fenceSession` for every source session of that Memory, on
-every forget path. Host Raw search must not be enabled for an owner before that
-fencing is live. Session fences, source exclusions, suppression and deleted
+The engine cannot see which Memories derive from host Raw. The host's fencing
+obligation covers every session it has ever archived through `captureRaw` in host
+mode, whatever kind or reason a later search reports. Before acknowledging any
+forget or correct of a Memory, the host must call `fenceSession` for every source
+session of that Memory, on every forget path. Host Raw search must not be enabled
+for an owner before that fencing is live. Session fences, source exclusions, suppression and deleted
 conversations still deny search, including at final validation. Host ancestry
 does not establish an absence of derived Memories or their currentness.
 

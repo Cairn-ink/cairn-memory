@@ -116,7 +116,14 @@ export function createRawSearchAuthority(database, options) {
       WHERE m.conversation_id=? AND m.message_id=? AND e.owner_id=? AND e.scope=? AND e.project_id=? AND e.client=?`)
       .get(ref.conversationId,ref.messageId,...boundary(ref.namespace),message.client);
     if (!event || event.session_key !== message.session_key) return false;
-    const first = JSON.parse(event.first_message_ids), eligible = JSON.parse(event.eligible_message_ids);
+    let first, eligible;
+    try {
+      first = JSON.parse(event.first_message_ids);
+      eligible = JSON.parse(event.eligible_message_ids);
+    } catch (error) {
+      if (error instanceof SyntaxError) return false;
+      throw error;
+    }
     return Array.isArray(first) && first.includes(ref.messageId) && Array.isArray(eligible) && !eligible.length &&
       event.projection_digest === createHash('sha256').update(JSON.stringify(['raw-capture-host-empty-v1',
         event.session_key,event.event_id,first,event.binding_digest])).digest('hex');
@@ -175,7 +182,7 @@ export function createRawSearchAuthority(database, options) {
     const classification = !links.length ? {kind:'current-eligible-bare',reason:'complete-privacy-no-memory-link'} :
       historical ? {kind:'history-only',reason:links.some(row=>row.currentness==='current')?'current-history-overlap':'retired-memory'} :
       unknown ? {kind:'history-only',reason:'unresolved-currentness'} : {kind:'current-eligible-linked',reason:'current-memory-links'};
-    if (hostAncestryOnly) classification.reason = 'host-session-ancestry';
+    if (hostAncestryOnly && classification.kind === 'current-eligible-bare') classification.reason = 'host-session-ancestry';
     if (intent === 'current' && classification.kind === 'history-only') fail('source_unavailable');
     return { ref,manifest:view.manifest,role:view.message.role,ordinal:view.message.ordinal,occurredAt:view.message.occurred_at,
       currentness:historical ? 'historical' : unknown || !links.length ? 'unknown' : 'current',classification,

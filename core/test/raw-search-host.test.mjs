@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { openMemoryCore } from '../contract.mjs';
 import { openDatabase, transaction } from '../database.mjs';
@@ -124,7 +125,7 @@ test('ordinary capture after host registration retains whole-message receipt lin
       start: 0, end: text.length, precision: 'whole-message' }]);
   const s = await searchFixture(f); await s.maintain();
   const hit = (await s.search({ query: 'copper' })).candidates[0]; assert.ok(hit);
-  assert.equal(hit.classification.reason, 'host-session-ancestry');
+  assert.deepEqual(hit.classification, { kind: 'current-eligible-linked', reason: 'current-memory-links' });
   assert.equal((await s.prepare(hit)).validate().ranges[0].text, text);
 });
 
@@ -168,4 +169,129 @@ test('a later overlapping host registration cannot repair missing engine ancestr
   const s = await searchFixture(f), authority = canonical(f, s);
   assert.equal(authority.inventory().rows[0].source, undefined);
   await s.maintain(); assert.equal((await s.search({ query: 'copper' })).candidates.length, 0);
+});
+
+test('mixed host and engine session diagnostics retain initial and final fence authority', async t => {
+  const f = fixture(t, { model: { extract: () => ({ items: [] }) } });
+  const source = request(splitRaw('Synthetic copper telescope.', { occurredAt: '2024-01-02T03:04:05.000Z' })[0]);
+  ok(await f.core.captureRaw(source));
+  ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic external derivation.', kind: 'fact' },
+    receipts: [{ client: source.client, sessionId: source.sessionId, eventId: 'synthetic-external-ingest',
+      role: source.messages[0].role, excerpt: source.messages[0].content }] }));
+  f.reopen('engine');
+  const captured = ok(await f.core.capture({ ...source, eventId: 'synthetic-engine-capture',
+    messages: source.messages.map(({ id, role, content, occurredAt }) => ({ id, role, content, occurredAt })) }));
+  assert.equal(captured.admission.memories.length, 0);
+  f.reopen('host');
+  assert.equal(maps(f.db).length, 1);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM memories WHERE deleted=0').get().n, 1);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM raw_receipt_lineage').get().n, 0);
+  const s = await searchFixture(f); await s.maintain();
+  const hit = (await s.search({ query: 'copper' })).candidates[0]; assert.ok(hit);
+  assert.deepEqual(hit.classification, { kind: 'current-eligible-bare', reason: 'complete-privacy-no-memory-link' });
+  const authority = canonical(f, s), prepared = await s.prepare(hit);
+  assert.equal(prepared.validate().messageId, source.messages[0].id);
+  ok(f.core.fenceSession({ namespace: ns, client: source.client, sessionId: source.sessionId }));
+  assert.throws(() => prepared.validate(), { code: 'raw_search_unavailable' });
+  assert.throws(() => s.service.revalidate([prepared.ticket]), { code: 'raw_search_unavailable' });
+  for (const intent of ['current', 'history']) {
+    assert.throws(() => authority.inspect(hit.ranges[0], intent), { code: 'source_unavailable' });
+    assert.equal((await s.search({ query: 'copper', intent })).candidates.length, 0);
+  }
+});
+
+for (const column of ['first_message_ids', 'eligible_message_ids'])
+for (const value of ['not-json', '{}', 'null', '"scalar"'])
+test(`invalid host ${column} ${value} excludes only the corrupt source`, async t => {
+  const f = fixture(t), { source, s, hit } = await searchable(f), prepared = await s.prepare(hit);
+  const healthy = request(splitRaw('Synthetic copper healthy evidence.', { id: 'healthy-message' })[0],
+    { sessionId: 'synthetic-healthy-session', eventId: 'synthetic-healthy-event' });
+  ok(await f.core.captureRaw(healthy)); await s.tick();
+  assert.equal((await s.search({ query: 'copper' })).candidates.length, 2);
+  f.db.prepare(`UPDATE raw_capture_events SET ${column}=? WHERE event_id=?`).run(value, source.eventId);
+  assert.throws(() => canonical(f, s).inspect(hit.ranges[0]), { code: 'source_unavailable' });
+  assert.throws(() => prepared.validate(), { code: 'raw_search_unavailable' });
+  for (const intent of ['current', 'history']) {
+    const page = await s.search({ query: 'copper', intent });
+    assert.deepEqual(page.candidates.map(row => row.messageId), [healthy.messages[0].id]);
+    assert.equal((await s.prepare(page.candidates[0], intent)).validate().messageId, healthy.messages[0].id);
+  }
+  await s.tick();
+  assert.deepEqual((await s.search({ query: 'copper' })).candidates.map(row => row.messageId), [healthy.messages[0].id]);
+});
+
+for (const guard of ['first-message-membership', 'session-key', 'client'])
+test(`host proof rejects a re-digested ${guard} mismatch`, async t => {
+  const f = fixture(t), { source, s, hit } = await searchable(f), prepared = await s.prepare(hit);
+  const event = f.db.prepare('SELECT * FROM raw_capture_events WHERE event_id=?').get(source.eventId);
+  if (guard === 'first-message-membership') event.first_message_ids = '["synthetic-other-message"]';
+  if (guard === 'session-key') event.session_key = 'synthetic-other-session';
+  if (guard === 'client') {
+    event.client = 'synthetic-other-client';
+    f.db.prepare(`INSERT INTO raw_events SELECT owner_id,scope,project_id,?,event_id,digest,conversation_id,policy,result
+      FROM raw_events WHERE event_id=?`).run(event.client, source.eventId);
+  }
+  event.projection_digest = createHash('sha256').update(JSON.stringify(['raw-capture-host-empty-v1',
+    event.session_key, event.event_id, JSON.parse(event.first_message_ids), event.binding_digest])).digest('hex');
+  // Synthetic corruption keeps the digest valid so each identity guard stands alone.
+  f.db.prepare(`UPDATE raw_capture_events SET first_message_ids=?,session_key=?,client=?,projection_digest=?
+    WHERE event_id=?`).run(event.first_message_ids, event.session_key, event.client, event.projection_digest, source.eventId);
+  assert.equal(f.db.prepare('SELECT projection_digest FROM raw_capture_events WHERE event_id=?')
+    .get(source.eventId).projection_digest, event.projection_digest);
+  assert.throws(() => canonical(f, s).inspect(hit.ranges[0]), { code: 'source_unavailable' });
+  assert.throws(() => prepared.validate(), { code: 'raw_search_unavailable' });
+  assert.equal((await s.search({ query: 'copper' })).candidates.length, 0);
+});
+
+test('host proof statements are lazy for mapped sources and follow session fences', async t => {
+  for (const interpretation of ['engine', 'host']) {
+    const f = fixture(t, { interpretation });
+    const source = request(splitRaw('Synthetic copper telescope.')[0]);
+    ok(await f.core.captureRaw(source));
+    const s = await searchFixture(f), reader = openReadDatabase(f.path, { contextRead: true });
+    f.workspace.defer(() => reader.db.close());
+    const authority = createRawSearchAuthority(reader, s.options), ref = authority.inventory().rows[0].source.ref;
+    const prepare = reader.db.prepare; let statements = [];
+    reader.db.prepare = function(sql) { statements.push(sql); return prepare.call(this, sql); };
+    const hostQueries = () => statements.filter(sql => sql.includes('JOIN raw_capture_events e')).length;
+    try {
+      authority.inspect(ref);
+      assert.equal(hostQueries(), interpretation === 'engine' ? 0 : 1);
+      if (interpretation === 'engine') {
+        f.db.exec('DELETE FROM raw_source_maps'); statements = [];
+        assert.throws(() => authority.inspect(ref), { code: 'source_unavailable' });
+        assert.equal(hostQueries(), 1);
+      }
+      ok(f.core.fenceSession({ namespace: ns, client: source.client, sessionId: source.sessionId }));
+      statements = [];
+      assert.throws(() => authority.inspect(ref), { code: 'source_unavailable' });
+      assert.equal(hostQueries(), 0);
+      assert.equal(statements.filter(sql => sql.includes('FROM raw_source_maps')).length, 0);
+    } finally { reader.db.prepare = prepare; }
+  }
+});
+
+test('host history diagnostics preserve retired ranges and history contributors', async t => {
+  const f = fixture(t), text = 'Synthetic copper telescope. '.repeat(170), parts = splitRaw(text);
+  const source = request(parts[0]);
+  for (const part of parts) ok(await f.core.captureRaw(request(part)));
+  const receipt = { client: source.client, sessionId: source.sessionId, eventId: parts[0].id,
+    role: parts[0].role, excerpt: parts[0].content };
+  ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic derived fact.', kind: 'fact' }, receipts: [receipt] }));
+  const memory = f.db.prepare('SELECT id,revision FROM memories WHERE deleted=0').get();
+  ok(f.core.supersede({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision,
+    replacement: { content: 'Synthetic replacement fact.', kind: 'fact' },
+    receipts: [{ ...receipt, eventId: 'synthetic-replacement' }] }));
+  // Give only the first physical part historical lineage; the second stays bare.
+  f.db.prepare("UPDATE raw_receipt_lineage SET end=?,precision='exact'").run(parts[0].content.length);
+  const s = await searchFixture(f), authority = canonical(f, s), rows = authority.inventory().rows;
+  const retired = rows.find(row => row.source?.ref.span.start === 0).source;
+  assert.deepEqual(retired.classification, { kind: 'history-only', reason: 'retired-memory' });
+  assert.throws(() => authority.inspect(retired.ref, 'current'), { code: 'source_unavailable' });
+  assert.deepEqual(rows.find(row => row.source?.ref.span.start > 0).source.classification, hostClassification);
+  await s.maintain();
+  const hit = (await s.search({ query: 'copper', intent: 'history' })).candidates[0]; assert.ok(hit);
+  assert.deepEqual(hit.classification, { kind: 'history-only', reason: 'history-contributor' });
+  assert.deepEqual(hit.rangeClassifications, [retired.classification, hostClassification]);
+  assert.equal((await s.prepare(hit, 'history')).validate().ranges.map(row => row.text).join(''), text);
 });

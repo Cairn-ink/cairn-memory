@@ -164,7 +164,7 @@ export async function openRawSearch(value) {
           const bare=sources.some(s=>s.classification.kind==='current-eligible-bare');
           const classification=historical?{kind:'history-only',reason:'history-contributor'}:bare?
             {kind:'current-eligible-bare',reason:'complete-privacy-no-memory-link'}:{kind:'current-eligible-linked',reason:'current-memory-links'};
-          if(sources.some(s=>s.classification.reason==='host-session-ancestry'))classification.reason='host-session-ancestry';
+          if(classification.kind==='current-eligible-bare'&&sources.some(s=>s.classification.reason==='host-session-ancestry'))classification.reason='host-session-ancestry';
           return {id:row.id,namespace:ref.namespace,conversationId:ref.conversationId,messageId:ref.messageId,
             ordinal:source.ordinal,role:source.role,occurredAt:source.occurredAt,ranges:sources.map(s=>s.ref),score:row.score,
             centerId:row.centerId,neighbor:row.neighbor,currentness:historical?source.currentness:bare?'unknown':'current',
