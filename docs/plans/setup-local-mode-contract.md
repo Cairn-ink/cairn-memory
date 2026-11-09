@@ -1553,3 +1553,112 @@ Memory, Raw and search indexes are local plaintext. The default Raw cap is
 `--no-context-read` to disable the respective defaults; see
 [defaults and off switches](../defaults.md).
 You can go back to 0.6.3; it keeps working with the upgraded store, but conversations captured while on 0.6.3 are not kept as Raw.
+
+## 20. 0.6.6 amendment: local automatic Raw capture
+
+Status: contract written; implementation blocked by the existing engine's
+disable/reactivate lifecycle. This section specifies required behavior, not
+shipped behavior. In particular, `activate` after `disable` currently returns
+`rearm_required`; the existing session-specific rearm cannot handle an
+installation disabled before any session was initialized. The engine must
+provide a supported reactivation path before the installer can satisfy this
+contract. Do not replace identities, fabricate sessions, edit engine-owned
+authority files, or weaken host qualification to bypass that refusal.
+
+### 20.1 Default and installation boundary
+
+For every selected local client, fresh and repeated `setup --local` installs
+automatic conversation Raw capture by default. This includes interactive and
+non-interactive installation and an upgrade from 0.6.5. An explicit capture-off
+preference persists across reruns until the user changes it. There is one local
+capture path, driven through the bundled engine's local setup CLI; the installer
+does not implement capture, source parsing, authority grants or native hook
+merging. This supersedes the automatic-capture exclusions in §§2, 3, 11 and 19;
+automatic prompt recall remains outside local setup.
+
+Use `interpretationConsent:false`, `rawMode:'local-plain-v1'`,
+`plaintextRawConsent:true` and `foregroundConsent:true`. No provider key,
+provider construction, model call or cloud sign-in is required. The capture
+request uses exactly the database path, owner and namespace registered with
+`cairn-local`: personal scope without a project, project scope with one. Both
+clients use one private usage root, one shared engine budget descriptor and the
+same 200,000,000-byte per-owner Raw cap. Initialize only an absent database
+through the engine CLI; never overwrite an existing store.
+
+Claude's `installation.pluginRoot` is an existing owned local directory used as
+the own-skill exclusion root, not a requirement to install the hosted plugin.
+Codex's `installation.qualificationConfigPath` is a private local metadata file
+with a sibling `qualification/` cache. Populate that cache using the bundled
+engine's documented `binaryIdentity`/`qualifyBinary` operator API against the
+actual selected native binary; require a qualified verdict, never manufacture
+one. This is a schema/format probe without sign-in or model requests. At hook
+time the engine still checks actual running-host identity, creator qualification
+and interactive source eligibility. Status never launches this probe.
+
+The engine registers Claude's SessionStart, Stop and PreCompact hooks in its
+native settings JSON; Codex additionally gets UserPromptSubmit in its native
+hooks JSON. Preserve the engine's `timeout:160` and unrelated native settings.
+Validate canonical, owned paths and source/configuration separation through the
+existing engine. Do not broaden transcript roots to include configuration or
+credential directories.
+
+### 20.2 Notice, controls, status and removal
+
+Before enabling each client's first capture installation, print one notice in
+the selected setup language (English or Traditional Chinese) and persist its
+receipt. Reruns do not repeat it. The notice states that conversation text from
+that tool's sessions on this computer is saved as local plaintext Raw, by
+default, without a key or model; gives the 200,000,000-byte cap; explains that
+forget/correct hides conversations containing messages within 30 minutes of the
+memory's save time, which can include unrelated conversations and does not
+identify every conversation about the same subject; and explains direct
+conversation deletion and both off switches. For Codex it also instructs the
+user to approve the new entries in `/hooks`. Off-only installation must not
+claim that capture is enabled.
+
+`setup --local --no-capture` selects capture off. `config --local-capture off|on`
+changes the selected local clients (`--client` scopes the command). Off invokes
+engine disable, removes owned native hooks and retains data. On must restore
+working capture using a supported engine operation, including with no previous
+session; merely printing `rearm_required` does not satisfy this requirement.
+Persist preferences independently of engine runtime generations and preserve
+the existing setup lock, operation journal and confirmation rules.
+
+Status reports each local client's capture as on, off or blocked with a reason,
+the Raw cap and the Codex `/hooks` approval reminder. It calls engine `status`
+only and starts no capture, qualification or repair work. Do not label a
+prepared, stale, unqualified or `rearm_required` installation as on.
+`uninstall --local` disables capture before removing its engine or MCP
+registration, removes only owned hooks, and keeps captured data. Existing
+interactive confirmation and non-interactive `--yes` rules apply.
+
+### 20.3 Coexistence, artifacts and acceptance
+
+A cloud client never receives local capture. Existing refusal ordering and
+messages remain: `mode_mixed`, `mode_unknown`, `mode_conflict_local`,
+`mode_conflict_cloud`, `local_orphan`, `local_client_home_changed` and
+`local_recovery_required`; engine native conflicts retain
+`configuration_conflict`/`configuration_changed`. The hosted runtime and the
+cloud-unchanged test's allowed exceptions are unchanged.
+
+Release version is 0.6.6. Regenerate `runtime/engine/` from the release branch
+only when execution is authorized, then require `build-runtime.mjs --check`.
+Retain §19's sync-commit identity rule with a newly recorded bundle sync commit,
+not its historical 0.6.5 pin. Release acceptance compares the entire bundled
+engine to that commit and checks every current-release sync reference. Do not
+claim the archive is current before regeneration and verification.
+
+English and Traditional Chinese setup documentation, defaults and the 0.6.6
+changelog cover capture scope, default, controls, cap, forget-by-time limits,
+Codex approval, and reinstalling 0.6.5 with an exact account of retained Raw and
+already-installed hooks. Downgrade behavior requires installed-package evidence;
+do not infer that running 0.6.5 disables hooks installed by 0.6.6. Hook timing
+remains `<latency to be measured>` until measured. Release text contains no
+forward promises, internal identifiers or workstation paths.
+
+Synthetic packed-installer tests cover both clients' native hooks, notice once,
+idempotent rerun, off/on/off including zero history, status, data-preserving
+uninstall, cloud exclusion, real hook to MCP Raw search to forget-by-time, and
+the 0.6.5 upgrade/downgrade round trip. Register new modules in
+`packages/setup/test/setup.test.mjs`. A live process or hook exit 0 alone is
+not evidence of capture; assert retained and searchable Raw in the MCP store.
