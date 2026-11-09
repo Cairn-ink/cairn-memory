@@ -66,7 +66,6 @@ const localDeclaration = sql => {
 // A future unsupported declaration must fail at module load, never destructure null.
 const localRawDeclarations = new Map(LOCAL_RAW_PRIVACY_DDL.map(localDeclaration));
 if (localRawDeclarations.size !== LOCAL_RAW_PRIVACY_DDL.length) throw Error('invalid_local_raw_package');
-const legacyLocalRawNames = new Set(LOCAL_RAW_PRIVACY_DDL.slice(0,5).map(sql => localDeclaration(sql)[0]));
 
 const tables = `CREATE TABLE content_safety_control (
  singleton INTEGER PRIMARY KEY CHECK(singleton=1),
@@ -261,17 +260,12 @@ function verifyCompleteCardSchema(db,layout,eventTime) {
   // the entire exact package or none of it; never ignore a name/prefix family.
   // Metadata only: read-only openers execute no DDL or repair writes.
   const local = new Map(LOCAL_RAW_PRIVACY_DDL.map(localDeclaration));
-  // Preserve the shipped metadata SQL for stores without this package. Only
-  // a recognized local package at the old bound needs the larger overflow read.
-  const shippedLimit=wanted.size+10+1;
+  // Main's first inventory reads at most wanted+1 rows. Only a recognized
+  // local object in that result authorizes the larger bounded package scan.
+  const shippedLimit=wanted.size+1;
   let actual=metadataRows(db.prepare('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT '+shippedLimit));
   if(layout.base===33 && actual.length===shippedLimit && actual.some(row=>local.has(row.name))) {
     actual=metadataRows(db.prepare('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT '+(wanted.size+local.size+1)));
-  }
-  // The previously shipped complete package is accepted for local additive
-  // installation. Partial old/new packages still fail exact comparison.
-  if (!actual.some(row=>row.name.startsWith('local_raw_uuid_'))) {
-    for (const name of local.keys()) if (!legacyLocalRawNames.has(name)) local.delete(name);
   }
   if(layout.base===33&&actual.some(row=>local.has(row.name)))for(const [name,row]of local)wanted.set(name,row);
   if(actual.length!==wanted.size||actual.some(row=>!wanted.has(row.name)||row.type!==wanted.get(row.name).type||

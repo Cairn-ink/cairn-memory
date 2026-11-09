@@ -70,11 +70,11 @@ for (const contentSafety of [undefined,'s2h-v1']) test(`default retains supporte
   assert.equal(db.prepare('SELECT count(*) n FROM raw_parts WHERE saved=1').get().n,2);
 });
 
-test('the previous complete local package upgrades before new UUID state is used',async t=>{
+test('the unshipped five-object local package is refused',async t=>{
   const workspace=createTestWorkspace(t),path=join(workspace.path,'old-local.sqlite');
   const child=spawnSync(process.execPath,[new URL('../testing/create-existing-safety-store.mjs',import.meta.url).pathname,path],{encoding:'utf8',timeout:30000});assert.equal(child.status,0,child.stderr);
-  const {installLocalRawPrivacy}=await import('../local-authority-schema.mjs');
-  const db=new DatabaseSync(path);db.exec(installLocalRawPrivacy(false));attestContentSafety(db);db.close();
-  const core=openMemoryCore({path,raw:true});await core.close();
-  const reader=new DatabaseSync(path,{readOnly:true});try{attestContentSafety(reader);assert.ok(reader.prepare("SELECT 1 FROM sqlite_schema WHERE name='local_raw_uuid_fences'").get());}finally{reader.close();}
+  const {LOCAL_RAW_PRIVACY_DDL}=await import('../content-safety-schema.mjs');
+  const db=new DatabaseSync(path);db.exec(LOCAL_RAW_PRIVACY_DDL.slice(0,5).join('\n'));
+  assert.throws(()=>attestContentSafety(db),{code:'unsupported_database'});db.close();
+  assert.throws(()=>openMemoryCore({path,raw:true}),{code:'unsupported_database'});
 });

@@ -7,7 +7,7 @@ export const LOCAL_BINDING_COLUMNS = ['local_target_id','local_store_id','local_
 // Selected locally, additive, and deliberately independent of user_version.
 // Product stores opening the base or an explicit hosted Raw profile get no DDL.
 export function installLocalRawPrivacy(db) {
-  const ddl = (db === false ? LOCAL_RAW_PRIVACY_DDL.slice(0,5) : LOCAL_RAW_PRIVACY_DDL).join('\n');
+  const ddl = LOCAL_RAW_PRIVACY_DDL.join('\n');
   if (db) db.exec(ddl);
   return ddl;
 }
