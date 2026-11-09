@@ -980,7 +980,7 @@ export function createMemoryRuntime(input, internal) {
     finishAdmission(ns, input) { ready(); return admissionStorage.finishAdmission(ns, input); },
     finishCapturedAdmission(ns, input, deadline, captureQualifiedDuplicates) {
       ready(); return admissionStorage.finishAdmission(ns, input, { initialClassification: true,
-        admitted: entries => { memoryRelationStorage.insert(ns, entries, input.memoryRelations); },
+        admitted: entries => ({ relationSnapshot: memoryRelationStorage.insert(ns, entries, input.memoryRelations) }),
         ...(captureQualifiedDuplicates ? { captureQualifiedDuplicates } : {}) }, deadline);
     },
     beginInitialClassification(ns, input, admitted, selected, deadline) {
@@ -989,9 +989,9 @@ export function createMemoryRuntime(input, internal) {
     failInitialClassification(ns, input, token) {
       ready(); return classificationJournal.failAttempt(ns, input, token);
     },
-    applyInitialPlacement(ns, input, token, proposal, guards, index, deadline) {
+    applyInitialPlacement(ns, input, token, proposal, guards, index, deadline, relationSnapshot) {
       ready(); return mocStorage.applyPlacement(ns, proposal, guards, index,
-        { client: input.client, eventId: input.eventId, token, deadline });
+        { client: input.client, eventId: input.eventId, token, deadline, relationSnapshot });
     },
     abandonAdmission(ns, input) { ready(); return admissionStorage.abandonAdmission(ns, input); },
     applyPlacement(ns, proposal, guards, index) {

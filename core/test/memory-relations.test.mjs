@@ -112,6 +112,36 @@ test('event-time-only decisions survive admission and initial filing, without in
  assert.equal(row.revision,memory.revision);assert.equal(row.event_time,'2020-01-01T00:00:00.000Z');
  assert.equal((await f.read()).metered.items[0].date,'2020-01-01T00:00Z');
 });
+for(const causal of [false,true])test(`initial filing retains this capture's new relations and times; causal=${causal}`,async t=>{
+ const f=fixture(t);
+ const capture=(sequence,content)=>f.core.capture({namespace:ns,client:'synthetic',sessionId:'s',eventId:'owned-'+sequence,
+  ...(causal?{causal:{streamId:'owned-stream',sequence}}:{}),messages:[{id:'owned-message-'+sequence,role:'user',content}]});
+ ok(await capture(1,'My breakfast is oats.'));
+ f.model.classify=({input})=>({items:input.memories.map(memory=>({memoryId:memory.id,parentIds:[],newL1:{title:'New breakfast',parentL2Ids:[]}}))});
+ const second=ok(await capture(2,'My breakfast is pancakes.'));
+ assert.equal(second.classification.status,'applied');
+ const id=second.admission.memories[0].id,memory=ok(f.core.get({namespace:ns,memoryId:id})).memory;
+ assert.ok(memory.revision>second.admission.memories[0].revision);
+ const edge=f.db.prepare('SELECT * FROM memory_relations WHERE from_memory_id=?').get(id);
+ assert.equal(edge.from_revision,memory.revision);
+ assert.equal(f.db.prepare('SELECT revision FROM memory_relation_times WHERE memory_id=?').get(id).revision,memory.revision);
+ assert.deepEqual((await f.read()).metered.items.map(item=>item.body),['My breakfast is pancakes.']);
+});
+test("initial filing of a repeated receipt invalidates earlier captures' relations and times",async t=>{
+ const f=fixture(t);await f.capture('My breakfast is oats.');
+ const second=await f.capture('My breakfast is pancakes.');
+ const id=second.admission.memories[0].id;
+ assert.equal(f.db.prepare('SELECT count(*) n FROM memory_relations').get().n,1);
+ f.model.relateMemories=()=>({facts:[]});
+ f.model.classify=({input})=>({items:input.memories.map(memory=>({memoryId:memory.id,parentIds:[],newL1:{title:'Filed breakfast',parentL2Ids:[]}}))});
+ ok(await f.core.capture({namespace:ns,client:'synthetic',sessionId:'s',eventId:'repeat-source',
+  messages:[{id:'message-2',role:'user',content:'My breakfast is pancakes.'}]}));
+ const memory=ok(f.core.get({namespace:ns,memoryId:id})).memory;
+ assert.ok(memory.revision>second.admission.memories[0].revision);
+ assert.equal(f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(id).n,1);
+ assert.equal(f.db.prepare('SELECT count(*) n FROM memory_relations').get().n,0);
+ assert.equal(f.db.prepare('SELECT count(*) n FROM memory_relation_times WHERE memory_id=?').get(id).n,0);
+});
 test('causal capture uses the same relation decision and preserves receipt provenance',async t=>{
  const f=fixture(t);let oldCalls=0;f.model.reconcile=()=>{oldCalls++;throw Error('legacy path');};
  for(let i=1;i<=2;i++)ok(await f.core.capture({namespace:ns,client:'synthetic',sessionId:'s',eventId:'causal-'+i,

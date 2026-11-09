@@ -248,7 +248,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       const filingRevisions = new Map([...nextRevision].filter(([id, revision]) =>
         revision !== memories.get(id).revision));
       const filingEdges = rationaleStorage.snapshotFilingEdges(ns, filingRevisions.keys());
-      const initialRelations=initialClassification?snapshotInitialRelations(db,ns,filingRevisions.keys()):[];
+      const initialRelations=initialClassification?snapshotInitialRelations(db,ns,filingRevisions.keys(),initialClassification.relationSnapshot):[];
 
       const now = new Date().toISOString();
       for (const l1 of newL1.values()) {

@@ -655,7 +655,7 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  function applyInitialPlacement(input, deadline) {
+  function applyInitialPlacement(input, deadline, relationSnapshot) {
     return invoke(() => {
       runtime.ready();
       const ns = contractNamespace(input.namespace);
@@ -664,7 +664,7 @@ export function createMemoryCore(input, internal) {
       const guards = memoryGuards(input.expectedMemoryRevisions,
         proposal.items.map(item => item.memoryId));
       return runtime.applyInitialPlacement(ns, key, contractId(input.token), proposal, guards,
-        contractRevision(input.expectedIndexRevision), deadline);
+        contractRevision(input.expectedIndexRevision), deadline, relationSnapshot);
     });
   }
 
@@ -1050,6 +1050,11 @@ export function createMemoryCore(input, internal) {
       const ns = contractNamespace(input.namespace);
       const namespace = publicNamespace(ns);
       const captureKey = value => keepInput ? { ...value, [keepAdmissionKey]: true } : value;
+      let relationSnapshot;
+      const captureRelations = result => {
+        if (result.ok) relationSnapshot = result.value.relationSnapshot;
+        return result;
+      };
       if ((captureEvidence || evidenceOnly) && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
       return success(await (keepInput ? keepEpisodeCapture : sessionEpisodes ? captureEpisodeMessages : captureMessages)({ model, captureQualification, captureSourcePolicy,
         runtime, ns, sessionEpisodes, keepInput, rawRegistration,
@@ -1070,15 +1075,15 @@ export function createMemoryCore(input, internal) {
           relationNamespace: ns, relationIdentity: runtime.identity,
           relationCandidates: facts => runtime.relationCandidates(ns, facts),
           resolveRelationCandidates: refs => runtime.resolveRelationCandidates(ns, refs),
-          finishAdmission: (value, memoryRelations) => finishAdmissionValidated(captureKey(value), true, deadline,
-            keepInput || sessionEpisodes ? undefined : captureQualifiedDuplicates, memoryRelations),
+          finishAdmission: (value, memoryRelations) => captureRelations(finishAdmissionValidated(captureKey(value), true, deadline,
+            keepInput || sessionEpisodes ? undefined : captureQualifiedDuplicates, memoryRelations)),
           abandonAdmission: (value, retryable) => retryable
             ? invoke(() => runtime.abandonAdmission(ns, { ...admissionKey(captureKey(value)),
               token: contractId(value.token), retryable: true }))
             : abandonAdmission(captureKey(value)), get, map, isAwaiting: id => runtime.isAwaiting(ns, id),
           beginInitialClassification: value => beginInitialClassification(captureKey(value), deadline),
           failInitialClassification: value => failInitialClassification(captureKey(value)),
-          applyInitialPlacement: value => applyInitialPlacement(captureKey(value), deadline),
+          applyInitialPlacement: value => applyInitialPlacement(captureKey(value), deadline, relationSnapshot),
           claimCaptureEvidence: (value, sources) => invoke(() => runtime.claimCaptureEvidence(ns, {
             ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS, view: value.view,
           }, deadline, rawRegistration, sources)),
@@ -1116,7 +1121,7 @@ export function createMemoryCore(input, internal) {
               });
             },
             finish: (snapshot, token, order, prepared, judged, memoryRelations) =>
-              invoke(() => runtime.finishOrdered(ns, snapshot, token, order, prepared, judged, deadline, memoryRelations)),
+              captureRelations(invoke(() => runtime.finishOrdered(ns, snapshot, token, order, prepared, judged, deadline, memoryRelations))),
           } } }));
     } catch (error) { return failure(error); }
   }

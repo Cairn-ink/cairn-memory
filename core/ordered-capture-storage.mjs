@@ -121,7 +121,7 @@ export function createOrderedCaptureStorage({ db, memoryRelationStorage, admissi
             (receipt_id,owner_id,scope,project_id,client,stream_id,sequence)
             VALUES (?,?,?,?,?,?,?)`).run(id, ...streamKey(ns, s), s.causal.sequence);
         }
-        memoryRelationStorage?.insert(ns, entries, memoryRelations);
+        const relationSnapshot=memoryRelationStorage?.insert(ns, entries, memoryRelations);
         const successors = new Map();
         const resolved = decisions.map(decision => {
           const item = items[decision.replacementIndex];
@@ -163,7 +163,7 @@ export function createOrderedCaptureStorage({ db, memoryRelationStorage, admissi
         reconciliation = outcome(qualified ? 'qualified_transition_required' : held.length ? 'confirmation_required' : reason,
           qualified ? 0 : immediate.length);
         if (qualified && held.length) reconciliation.awaitingCount = held.length;
-        return { reconciliation };
+        return { reconciliation, relationSnapshot };
       },
       complete() {
         db.prepare(`UPDATE capture_events SET reconciliation = ? WHERE ${where}
