@@ -1,6 +1,6 @@
 // Installed entry: every automatic path exits 0, with only vetted context JSON.
 // Dynamic import also contains missing/corrupt runtime failures without stderr.
-import { write, writeSync } from 'node:fs';
+import { write } from 'node:fs';
 const [path, event] = process.argv.slice(2);
 const capture = ['Stop','PreCompact','SessionEnd'].includes(event);
 const controller = new AbortController();
@@ -28,9 +28,8 @@ try {
   if (!['SessionStart','UserPromptSubmit','Stop','PreCompact','SessionEnd','worker','qualify'].includes(event)) finish('');
   const { runInstalled } = await import('./installed.mjs');
   const output = await runInstalled(path, event, process.stdin, { signal: controller.signal, recallDeadline: budget - 50,
-    deliver: output => {
-      controller.signal.throwIfAborted();
-      writeSync(1, output);
-    } });
+    // finish starts the first stdout write synchronously under both gates.
+    // Its existing bounded flush owns continuation of this in-flight output.
+    deliver: finish });
   clearTimeout(timer); finish(output || (capture ? '{}' : ''));
 } catch { clearTimeout(timer); finish(capture ? '{}' : ''); }
