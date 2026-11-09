@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
-import { open, readFile, stat } from "node:fs/promises";
+import { link, mkdir, open, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { platform } from "node:os";
-import { isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { captureEvent } from "../lib/capture-event.mjs";
 import {
   captureCursorPath,
@@ -59,6 +60,7 @@ let post;
 let quotaTarget;
 let credentialDir;
 let recallConfigurationPending = false;
+let recallMarkerInput;
 async function publishRecallConfiguration() {
   if (!recallConfigurationPending) return;
   recallConfigurationPending = false;
@@ -176,6 +178,80 @@ async function recall(hookInput) {
   // Optional recall-success telemetry must not extend the synchronous host hook.
 }
 
+// Claude-only extensions stay outside the frozen shared cursor parser.
+async function captureMarkers(path) {
+  try {
+    const state = JSON.parse(await readFile(path, "utf8"));
+    return {
+      ...(Number.isSafeInteger(state.startOffset) && state.startOffset >= 0 ? { startOffset: state.startOffset } : {}),
+      ...(typeof state.startedAt === "string" ? { startedAt: state.startedAt } : {}),
+      ...(typeof state.firstPromptAt === "string" && Number.isFinite(Date.parse(state.firstPromptAt)) ?
+        { firstPromptAt: state.firstPromptAt } : {}),
+      ...(state.ownSkillTurn === true ? { ownSkillTurn: true } : {}),
+    };
+  } catch { return {}; }
+}
+
+async function startCapture(hookInput) {
+  const event = captureEvent(hookInput);
+  if (!event) return;
+  const statePath = captureCursorPath(dataDir, event.session_id);
+  await withFileLock(`${statePath}.lock`, async () => {
+    // Missing transcripts are an unknown boundary, not evidence of an empty
+    // session. Leave them eligible for the first-prompt fallback.
+    let size;
+    try { size = (await stat(event.transcript_path)).size; }
+    catch (error) { if (error.code === "ENOENT") return; throw error; }
+    const cursor = await readCaptureCursor(statePath);
+    const markers = await captureMarkers(statePath);
+    if (markers.startOffset !== undefined) return;
+    const generation = (await readControlState(dataDir)).generation;
+    const tail = size === 0 ? Buffer.alloc(0) : await readSlice(event.transcript_path, size - 1, size);
+    await writeCaptureCursor(statePath, {
+      ...(cursor ?? { offset: size, generation, discardUntilNewline: size > 0 && tail[0] !== 0x0a }),
+      ...markers, startOffset: size, startedAt: observedAt,
+    });
+  });
+}
+
+async function recordFirstPrompt(hookInput) {
+  const sessionId = optionalHostSessionId(hookInput?.session_id);
+  if (!dataDir || sessionId === undefined) return;
+  const path = captureCursorPath(dataDir, sessionId);
+  // Only the no-cursor case needs this marker. Publish an immutable initial
+  // state by link-if-absent, never a read/modify/write over a capture's cursor.
+  // No capture lock wait, and no write at all before the recall fetch/decision.
+  try { await stat(path); return; }
+  catch (error) { if (error.code !== "ENOENT") return; }
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  const temporary = `${path}.prompt-${process.pid}-${randomUUID()}`;
+  try {
+    await writeFile(temporary, JSON.stringify({ firstPromptAt: observedAt }), { mode: 0o600, flag: "wx" });
+    try { await link(temporary, path); }
+    catch (error) { if (error.code !== "EEXIST") throw error; }
+  } finally { await unlink(temporary).catch(() => {}); }
+}
+
+// Skip only a leading copied prefix, not older timestamps later in a new turn.
+function copiedPrefix(bytes, firstPromptAt) {
+  const cutoff = Date.parse(firstPromptAt);
+  if (!Number.isFinite(cutoff)) return 0;
+  let at = 0;
+  while (at < bytes.length) {
+    const newline = bytes.indexOf(0x0a, at);
+    if (newline < 0) break;
+    let record;
+    try { record = JSON.parse(bytes.subarray(at, newline).toString("utf8")); }
+    catch { at = newline + 1; continue; }
+    if (record?.type === "user" || record?.type === "assistant") {
+      const time = typeof record.timestamp === "string" ? Date.parse(record.timestamp) : NaN;
+      if (!Number.isFinite(time) || time >= cutoff) break;
+    }
+    at = newline + 1;
+  }
+  return at;
+}
+
 async function capture(hookInput, requestedGeneration) {
   if (!token) return;
   const event = captureEvent(hookInput);
@@ -217,15 +293,9 @@ async function captureLocked(hookInput, statePath, generation) {
   const transcriptPath = hookInput.transcript_path;
   const size = (await stat(transcriptPath)).size;
   let cursor = await readCaptureCursor(statePath);
-  // Keep Claude-only turn metadata out of the frozen shared cursor helper.
-  // The caller holds this session's capture lock throughout both reads.
-  if (cursor) {
-    try {
-      if (JSON.parse(await readFile(statePath, "utf8")).ownSkillTurn === true) {
-        cursor.ownSkillTurn = true;
-      }
-    } catch { /* Missing/corrupt extension carries no verified turn state. */ }
-  }
+  const { ownSkillTurn, ...markers } = await captureMarkers(statePath);
+  if (cursor && ownSkillTurn === true) cursor.ownSkillTurn = true;
+  const fallback = !cursor && markers.startOffset === undefined;
 
   // After every pause barrier, the first hook for each session establishes a
   // fresh EOF boundary and transmits nothing. This also protects sessions the
@@ -236,6 +306,7 @@ async function captureLocked(hookInput, statePath, generation) {
   ) {
     const tail = size === 0 ? Buffer.alloc(0) : await readSlice(transcriptPath, size - 1, size);
     await writeCaptureCursor(statePath, {
+      ...markers,
       offset: size,
       generation,
       discardUntilNewline: size > 0 && tail[0] !== 0x0a,
@@ -244,7 +315,7 @@ async function captureLocked(hookInput, statePath, generation) {
   }
 
   cursor ??= {
-    offset: 0,
+    offset: markers.startOffset ?? 0,
     generation,
     discardUntilNewline: false,
     pendingEnd: undefined,
@@ -252,6 +323,7 @@ async function captureLocked(hookInput, statePath, generation) {
   if (cursor.offset > size || (cursor.pendingEnd ?? 0) > size) {
     const tail = size === 0 ? Buffer.alloc(0) : await readSlice(transcriptPath, size - 1, size);
     await writeCaptureCursor(statePath, {
+      ...markers,
       offset: size,
       generation,
       discardUntilNewline: size > 0 && tail[0] !== 0x0a,
@@ -266,10 +338,20 @@ async function captureLocked(hookInput, statePath, generation) {
   if (offset === readEnd) return;
 
   let slice = await readSlice(transcriptPath, offset, readEnd);
+  if (fallback && markers.firstPromptAt) {
+    const skipped = copiedPrefix(slice, markers.firstPromptAt);
+    offset += skipped;
+    slice = slice.subarray(skipped);
+    if (!slice.length) {
+      await writeCaptureCursor(statePath, { ...markers, offset, generation, discardUntilNewline: false });
+      return;
+    }
+  }
   if (cursor.discardUntilNewline) {
     const boundary = slice.indexOf(0x0a);
     if (boundary < 0) {
       await writeCaptureCursor(statePath, {
+        ...markers,
         offset: offset + slice.length,
         generation,
         discardUntilNewline: true,
@@ -281,6 +363,7 @@ async function captureLocked(hookInput, statePath, generation) {
     offset += boundary + 1;
     slice = slice.subarray(boundary + 1);
     await writeCaptureCursor(statePath, {
+      ...markers,
       offset,
       generation,
       discardUntilNewline: false,
@@ -297,6 +380,7 @@ async function captureLocked(hookInput, statePath, generation) {
   const window = transcriptWindow(consumed.toString("utf8"), hookInput.session_id, { turnState });
   if (!window.some((message) => !message.withheld)) {
     await writeCaptureCursor(statePath, {
+      ...markers,
       offset: offset + consumed.length,
       generation,
       discardUntilNewline: false,
@@ -311,6 +395,7 @@ async function captureLocked(hookInput, statePath, generation) {
     // Freeze this extraction window before the first request. Retries keep the
     // same final batch and event id even if the transcript grows meanwhile.
     await writeCaptureCursor(statePath, {
+      ...markers,
       offset,
       generation,
       discardUntilNewline: false,
@@ -344,6 +429,7 @@ async function captureLocked(hookInput, statePath, generation) {
     if (result?.processing) throw new Error("capture_processing");
   }
   await writeCaptureCursor(statePath, {
+    ...markers,
     offset: pendingEnd,
     generation,
     discardUntilNewline: false,
@@ -455,8 +541,8 @@ try {
         }, { signal: recallSignal }).catch(() => {});
         checkRecall();
       }
-      if (action === "start") await telemetry("plugin_started");
-      else if (action === "recall") await recall(hookInput);
+      if (action === "start") { await startCapture(hookInput); await telemetry("plugin_started"); }
+      else if (action === "recall") { recallMarkerInput = hookInput; await recall(hookInput); }
       else if (["capture", "capture-detached"].includes(action)) {
         const requestedGeneration =
           typeof hookInput.capture_generation === "string"
@@ -482,5 +568,6 @@ try {
   // No fetch (or a failed decision) still refreshes configuration diagnostics.
   // After a response, dispatchActive publishes configuration before auth/output.
   await publishRecallConfiguration();
+  if (recallMarkerInput) await recordFirstPrompt(recallMarkerInput).catch(() => {});
   clearTimeout(recallTimer);
 }
