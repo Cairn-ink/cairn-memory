@@ -28,12 +28,14 @@ async function connect(t, server) {
 }
 
 for (const action of ['forget_memory','correct_memory']) test(`MCP ${action} fences both local source sessions for explicit-tool receipts`,async t => {
-  const f = captureFixture(t,{namespace:ns,client:'claude-code'}); f.config.interpretation = 'raw-only';
+  // The local v2 wire requires a project identifier of at least 16 characters.
+  const namespace = {...ns,projectId:'synthetic-local-project'};
+  const f = captureFixture(t,{namespace,client:'claude-code'}); f.config.interpretation = 'raw-only';
   for (const session of ['synthetic-one','synthetic-two']) {
     const input = f.request(session); input.session_id = session; input.messages[0].occurred_at = new Date().toISOString();
     assert.equal((await captureLocal(configuration(f.config),input,{env:{},signal:new AbortController().signal})).status,200);
   }
-  const client = await connect(t,createCairnServer({path:f.databasePath,namespace:ns,client:'claude-code',model:rationaleModel(),contextSemantic:false}));
+  const client = await connect(t,createCairnServer({path:f.databasePath,namespace,client:'claude-code',model:rationaleModel(),contextSemantic:false}));
   const remembered = ok(await contextCall(client,'remember_memory',{content:'Synthetic explicit remembered fact',kind:'fact'}));
   const memory = remembered.memory;
   ok(await contextCall(client,action,{memoryId:memory.id,expectedRevision:memory.revision,

@@ -1,16 +1,17 @@
+import './fixtures/local-host-observer.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync,writeFileSync,existsSync,unlinkSync,symlinkSync,mkdirSync,lstatSync,readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { setupFixture,ok } from './fixtures/local-setup-workspace.mjs';
-import { setupLocalRaw,createLocalRawSetup } from '../raw/local-setup.mjs';
-import { runLocalSetupCli } from '../raw/local-setup-cli.mjs';
+const { setupFixture,ok } = await import('./fixtures/local-setup-workspace.mjs');
+const { setupLocalRaw,createLocalRawSetup } = await import('../raw/local-setup.mjs');
+const { runLocalSetupCli } = await import('../raw/local-setup-cli.mjs');
 import { withWriteObserver } from '../private-state.mjs';
 import { hookCommand } from '../raw/local-setup-files.mjs';
 import { initLocalRawStore } from '../raw/local-setup-init.mjs';
 import { DatabaseSync } from 'node:sqlite';
-import { createLocalRawHost } from '../raw/local-host.mjs';
-import { lazyFixture } from './fixtures/local-setup-workspace.mjs';
+const { createLocalRawHost } = await import('../raw/local-host.mjs');
+const { lazyFixture } = await import('./fixtures/local-setup-workspace.mjs');
 import { localPlainPort } from '../../../core/testing/raw-capture-fixtures.mjs';
 import { searchFixture } from '../../../core/testing/raw-search-fixtures.mjs';
 import { installRawSearchTestClock } from '../../../core/testing/raw-search-clock.mjs';
@@ -46,12 +47,22 @@ test(`lazy ${client} ${action} ${match} fence survives off/on in current and his
   assert.deepEqual(privacy(),protectedRows); assert.equal(db.prepare('SELECT count(*) n FROM raw_parts WHERE sealed IS NOT NULL').get().n,parts);
   assert.equal((await f.hook('Stop',changes)).status,'ready');
   f.append('copper control resumed',{path:controlPath,at:controlAt,nativeSessionId:controlId}); assert.equal((await f.hook('Stop',changes)).status,'progress');
-  await search.maintain();
+  assert.ok(db.prepare('SELECT sealed FROM raw_parts WHERE sealed IS NOT NULL').all()
+    .every(row=>!Buffer.from(row.sealed).toString('utf8').includes('copper paused')),'no off-period content is stored, even behind a fence');
+  // Advance the indexed discovery cadence before requiring the newly resumed
+  // turn; an immediate maintain may legitimately reuse the prior publication.
+  await search.tick();
   for (const intent of ['current','history']) {
     const hits = (await search.search({query:'copper',intent})).candidates; assert.ok(hits.length>0);
+    const texts=[];
     for (const hit of hits) {
-      const source = (await search.prepare(hit,intent)).validate(); assert.ok(source.ranges.every(range => !/fenced|paused/.test(range.text)));
+      const source = (await search.prepare(hit,intent)).validate();
+      // Match whole words: "unfenced control" is the positive control.
+      assert.ok(source.ranges.every(range => !/\b(?:fenced|paused)\b/.test(range.text)));
+      texts.push(...source.ranges.map(range=>range.text));
     }
+    assert.match(texts.join('\n'),/copper unfenced control/);
+    assert.match(texts.join('\n'),/copper control resumed/);
   }
 });
 
@@ -307,4 +318,105 @@ test(`A2/A3 ${client} unchanged owned registration permits unrelated hooks and m
     const outcome=await(action==='setup'?f.setup():f.invoke(action));assert.equal(outcome.status,'active',JSON.stringify({action,outcome}));
     assert.deepEqual(f.control(),control);assert.deepEqual(f.snapshot(),before);
   }
+});
+
+for (const nested of [false,true]) test(`Claude delayed transcript (${nested?'missing parents':'missing file'}) captures first turns from zero`,async t=>{
+  const f=await lazyFixture(t,'claude-code');
+  const path=nested?join(f.request.sourceRoot,'new','nested','session.jsonl'):f.sourcePath;
+  if(!nested)unlinkSync(path);
+  const changes={transcript_path:path};
+  assert.equal((await f.hook('SessionStart',changes)).status,'ready');
+  const starts=join(f.request.installationDirectory,'state','starts'),names=readdirSync(starts);
+  assert.equal(names.length,1); assert.equal(lstatSync(join(starts,names[0])).mode&0o777,0o600);
+  assert.doesNotMatch(readFileSync(join(starts,names[0]),'utf8'),/session\.jsonl|synthetic_source_secret/);
+  if(nested)mkdirSync(join(f.request.sourceRoot,'new','nested'),{recursive:true,mode:0o700});
+  writeFileSync(path,'',{mode:0o600});f.append('first copper turn',{path});f.append('second copper turn',{path});
+  assert.equal((await f.hook('Stop',changes)).status,'progress');
+  const db=new DatabaseSync(f.request.databasePath);t.after(()=>db.close());
+  assert.equal(db.prepare('SELECT count(*) n FROM raw_messages').get().n,2);
+  assert.deepEqual(db.prepare('SELECT sealed FROM raw_parts ORDER BY rowid').all().map(row=>Buffer.from(row.sealed).toString()),['first copper turn','second copper turn']);
+});
+
+test('Claude marker is cleared on disable; absent cursor stays refused until a new SessionStart',async t=>{
+  const f=await lazyFixture(t,'claude-code');unlinkSync(f.sourcePath);await f.hook();
+  const starts=join(f.request.installationDirectory,'state','starts');assert.equal(readdirSync(starts).length,1);
+  await f.invoke('disable');assert.deepEqual(readdirSync(starts),[]);
+  writeFileSync(f.sourcePath,'',{mode:0o600});f.append('off period secret');await f.invoke('activate');
+  assert.equal((await f.hook('Stop')).status,'blocked');
+  assert.equal((await f.hook()).status,'ready'); // Existing file -> EOF, never marker/zero.
+  f.append('on period copper');assert.equal((await f.hook('Stop')).status,'progress');
+  const db=new DatabaseSync(f.request.databasePath);t.after(()=>db.close());
+  assert.deepEqual(db.prepare('SELECT sealed FROM raw_parts').all().map(row=>Buffer.from(row.sealed).toString()),['on period copper']);
+});
+
+for (const unsafe of ['symlink','writable','no-start']) test(`Claude delayed observation refuses ${unsafe} without a marker`,async t=>{
+  const f=await lazyFixture(t,'claude-code');
+  if(unsafe==='symlink'){unlinkSync(f.sourcePath);symlinkSync(join(f.request.sourceRoot,'missing'),f.sourcePath);}
+  if(unsafe==='writable') {const {chmodSync}=await import('node:fs');chmodSync(f.sourcePath,0o660);}
+  assert.equal((await f.hook(unsafe==='no-start'?'Stop':'SessionStart')).status,'blocked');
+  assert.equal(existsSync(join(f.request.installationDirectory,'state','starts')),false);
+});
+
+test('Codex native fork source is terminal before any transcript exists and survives off/on',async t=>{
+  installRawSearchTestClock(t);
+  const f=await lazyFixture(t,'codex');unlinkSync(f.sourcePath);
+  assert.equal((await f.hook('SessionStart',{source:'fork'})).status,'blocked');
+  writeFileSync(f.sourcePath,JSON.stringify({type:'session_meta',payload:{id:'11111111-1111-4111-8111-111111111111',cli_version:'0.162.0',history_mode:'paginated',source:'cli',originator:'codex-tui'}})+'\n',{mode:0o600});
+  f.append('copper fork secret');
+  for(const event of ['UserPromptSubmit','Stop','PreCompact','SessionStart'])assert.equal((await f.hook(event)).status,'blocked');
+  await f.invoke('disable');await f.invoke('activate');f.append('copper resumed fork secret');
+  for(const event of ['UserPromptSubmit','Stop','PreCompact'])assert.equal((await f.hook(event)).status,'blocked');
+  const controlId='22222222-2222-4222-8222-222222222222',path=join(f.request.sourceRoot,'control.jsonl');
+  writeFileSync(path,JSON.stringify({type:'session_meta',payload:{id:controlId,cli_version:'0.162.0',history_mode:'paginated',source:'cli',originator:'codex-tui'}})+'\n',{mode:0o600});
+  const changes={session_id:controlId,transcript_path:path};assert.equal((await f.hook('UserPromptSubmit',changes)).status,'ready');
+  f.append('copper control',{path,nativeSessionId:controlId});assert.equal((await f.hook('Stop',changes)).status,'progress');
+  const db=new DatabaseSync(f.request.databasePath);t.after(()=>db.close());assert.equal(db.prepare('SELECT count(*) n FROM raw_messages').get().n,1);
+  const {createHmac}=await import('node:crypto'),config=JSON.parse(readFileSync(join(f.request.installationDirectory,'capture.json')));
+  const key=Buffer.from(readFileSync(join(f.request.installationDirectory,'identity.key'),'utf8').trim(),'hex'),ns=f.request.namespace;
+  const wire='localv2_'+createHmac('sha256',key).update(JSON.stringify(['local-raw-worker-v1','wire-session',[config.authority.storeId,config.authority.targetId,{ownerId:ns.ownerId,scope:ns.scope,projectId:''},'codex','11111111-1111-4111-8111-111111111111']])).digest('hex');
+  const secret=Buffer.from(db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get().secret,'hex');
+  const expected='s1:'+createHmac('sha256',secret).update(JSON.stringify(['episode-v1',ns.ownerId,ns.scope,'','codex',wire])).digest('hex');
+  assert.equal(db.prepare('SELECT session_key FROM raw_session_fences').get().session_key,expected,'the native fork fence uses the actual worker identity');
+  const search=await searchFixture({workspace:f.workspace,db,path:f.request.databasePath,port:localPlainPort()},{ownerId:f.request.namespace.ownerId,readSet:[f.request.namespace]});await search.maintain();
+  for(const intent of ['current','history']) {const hits=(await search.search({query:'copper',intent})).candidates;assert.equal(hits.length,1);assert.match((await search.prepare(hits[0],intent)).validate().ranges[0].text,/control/);}
+});
+
+test('Codex header fork refusal remains independent of native source',async t=>{
+  const f=await lazyFixture(t,'codex');const rows=readFileSync(f.sourcePath,'utf8').trim().split('\n').map(JSON.parse);
+  rows[0].payload.forked_from_id='synthetic-parent';writeFileSync(f.sourcePath,rows.map(JSON.stringify).join('\n')+'\n');
+  assert.equal((await f.hook()).status,'blocked');assert.equal((await f.hook('UserPromptSubmit')).status,'blocked');
+});
+
+test('failed first Codex qualification installs waiting hooks, then captures after background success',async t=>{
+  const f=await setupFixture(t,{client:'codex'});f.request.interpretationConsent=false;
+  const cache=join(f.root,'codex-install','qualification');for(const name of readdirSync(cache))unlinkSync(join(cache,name));
+  assert.equal((await f.setup()).status,'prepared');assert.equal((await f.invoke('activate')).status,'active');
+  let queued=null,launches=0;f.dependencies.launchQualification=async(path,host)=>{queued={path,host};launches++;};
+  assert.equal((await f.hook('UserPromptSubmit')).status,'blocked');assert.equal(launches,1);
+  const before=await f.invoke('status');assert.equal(before.qualification.status,'pending');assert.match(before.qualification.message,/rerun setup/);
+  const {runLocalQualification}=await import('../raw/local-codex-qualification.mjs');const {formatFixture}=await import('../../codex/test/format-fixtures.mjs');
+  await runLocalQualification(queued.path,queued.host,{collect:async()=>({version:'0.162.0',evidence:await formatFixture('0.160.1'),binarySha256:'a'.repeat(64)})});
+  assert.equal((await f.invoke('status')).qualification.status,'qualified');
+  assert.equal((await f.hook('UserPromptSubmit')).status,'ready');
+  const {appendFileSync}=await import('node:fs');const {codex}=await import('./fixtures/raw-fixtures.mjs');const row=codex('copper first qualified turn');row.timestamp=new Date().toISOString();row.payload.item.id='new-id';
+  appendFileSync(f.sourcePath,JSON.stringify(row)+'\n');assert.equal((await f.hook('Stop')).status,'progress');
+  const db=new DatabaseSync(f.request.databasePath);t.after(()=>db.close());assert.equal(db.prepare('SELECT count(*) n FROM raw_messages').get().n,1);
+  const snapshot=f.snapshot();await f.invoke('status');assert.deepEqual(f.snapshot(),snapshot,'status only reads cached evidence');
+});
+
+test('a restored stale Claude start marker cannot authorize a new authority',async t=>{
+  const f=await lazyFixture(t,'claude-code');unlinkSync(f.sourcePath);await f.hook();
+  const starts=join(f.request.installationDirectory,'state','starts'),name=readdirSync(starts)[0],text=readFileSync(join(starts,name));
+  await f.invoke('disable');await f.invoke('activate');writeFileSync(join(starts,name),text,{mode:0o600});
+  writeFileSync(f.sourcePath,'',{mode:0o600});f.append('off period old marker');assert.equal((await f.hook('Stop')).status,'blocked');
+});
+
+for(const unsafe of ['writable-parent','foreign-parent'])test(`Claude missing file below ${unsafe} never writes a marker`,async t=>{
+  const f=await lazyFixture(t,'claude-code'),parent=join(f.request.sourceRoot,'unsafe');mkdirSync(parent,{mode:0o700});
+  const fs=await import('node:fs');const {syncBuiltinESMExports}=await import('node:module');const original=fs.promises.lstat;
+  if(unsafe==='writable-parent')fs.chmodSync(parent,0o770);
+  else {fs.promises.lstat=async(path,...args)=>{const value=await original(path,...args);if(path===parent)value.uid=process.getuid()+1;return value;};syncBuiltinESMExports();}
+  try {assert.equal((await f.hook('SessionStart',{transcript_path:join(parent,'missing.jsonl')})).status,'blocked');}
+  finally {fs.promises.lstat=original;syncBuiltinESMExports();}
+  assert.equal(existsSync(join(f.request.installationDirectory,'state','starts')),false);
 });

@@ -2,6 +2,9 @@
 
 ## Unreleased — local Raw-only capture and conversation hiding
 
+- Local Codex capture re-qualifies an updated binary in the background, refuses capture while waiting, and reports qualification status with rerun-setup guidance. A failed first qualification no longer prevents installing local hooks.
+- Local Raw captures new Claude sessions from their first turn even when the transcript appears after session start. Forks and resumes of hidden conversations stay hidden, including Claude copies with changed timestamps; Codex forked sessions are not saved locally.
+
 - Local capture can be turned back on with `activate` or an identical `setup`
   request after disable/uninstall. Restore hooks and ready host authority while
   preserving store, target, keys, data and all forget/correct fences.

@@ -192,3 +192,27 @@ for (const client of ['claude-code','codex']) test(`Raw-only ${client} real tran
   assert.equal(f.calls().length,0); assert.equal(f.ledger(),null);
   assert.equal((await call(f,'run',{key:false})).status,'ready');
 });
+
+test('bounded UUID backfill keeps a native worker part retryable until all hashes commit',async t=>{
+  const f=await lazyFixture(t,'claude-code');await f.hook();f.append('copper source');await f.hook('Stop');
+  const {openMemoryCore}=await import('../../../core/index.mjs'),core=openMemoryCore({path:f.request.databasePath,raw:true,rawSearch:false});t.after(()=>core.close());
+  const db=new DatabaseSync(f.request.databasePath);t.after(()=>db.close());
+  const row=db.prepare('SELECT * FROM raw_messages').get(),columns=Object.keys(row);
+  const insert=db.prepare('INSERT INTO raw_messages('+columns.join(',')+') VALUES('+columns.map(()=>'?').join(',')+')');
+  db.exec('BEGIN IMMEDIATE');for(let index=2;index<=300;index++)insert.run(...columns.map(key=>key==='message_id'?'synthetic-long-'+index:key==='ordinal'?index:row[key]));db.exec('COMMIT');
+  const namespace=f.request.namespace,memory=core.admit({namespace,memory:{content:'Synthetic hidden fact',kind:'fact'},receipts:[{client:'claude-code',sessionId:'explicit-tool',eventId:'backfill-memory',role:'user',excerpt:'Synthetic hidden fact'}]}).value.memory;
+  assert.equal(core.forget({namespace,memoryId:memory.id,expectedRevision:memory.revision}).ok,true);
+  const path=join(f.request.sourceRoot,'control.jsonl'),changes={transcript_path:path,session_id:'22222222-2222-4222-8222-222222222222'};
+  writeFileSync(path,'',{mode:0o600});assert.equal((await f.hook('SessionStart',changes)).status,'ready');
+  f.append('copper unrelated after backfill',{path,at:new Date(Date.now()-172800000).toISOString()});
+  for(const expected of [128,256]) {
+    assert.equal((await f.hook('Stop',changes)).status,'waiting');
+    assert.equal(db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,expected);
+    const {readdirSync}=await import('node:fs');
+    const cursors=readdirSync(f.directory).filter(name=>/^[a-f0-9]{64}\.json$/.test(name)).map(name=>JSON.parse(readFileSync(join(f.directory,name))));
+    const cursor=cursors.find(value=>value.pending!==null);assert.equal(cursor.blockedReason,null);assert.equal(cursor.pending.state,'prepared');assert.equal(cursor.pending.attempts,0);
+  }
+  assert.equal((await f.hook('Stop',changes)).status,'progress');assert.equal(db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,300);
+  assert.equal(db.prepare('SELECT count(*) n FROM raw_parts WHERE saved=1').get().n,2);
+  assert.equal((await f.hook('Stop')).status,'blocked');
+});

@@ -1,3 +1,4 @@
+import { clearSessionStarts } from './local-session-start.mjs';
 import { inspectExistingStorePin } from '../../../core/existing-store.mjs';
 import { attestContentSafety } from '../../../core/content-safety-schema.mjs';
 import { assertNoCardCurrentDependencies } from '../../../core/card-current-schema.mjs';
@@ -12,7 +13,7 @@ import { checkedPath, privateRead, privateWrite, privateDirectory, syncDirectory
 import { stateLock } from '../state-lock.mjs';
 import { createLocalRawHost } from './local-host.mjs';
 import { activateHostAuthority } from './local-host-rearm.mjs';
-import { hasQualifiedCreator } from '../../codex/qualification.mjs';
+import { localCodexQualificationStatus } from './local-codex-qualification.mjs';
 import { absolute, exact, setupRequest, consented, locations, runtime, runtimeRoot, sha, fail, result, failure, checkSignal } from './local-setup-input.mjs';
 import { directory, nativeSnapshot, nativeWrite, mergeNative, events, hookCommand } from './local-setup-files.mjs';
 
@@ -43,19 +44,18 @@ async function absent(root) {
 async function qualification(request) {
   if (request.client !== 'codex') { await directory(request.installation.pluginRoot); return; }
   const path = request.installation.qualificationConfigPath;
+  await directory(dirname(dirname(path)));
   await checkedPath(dirname(path),{ directory:true }); await privateRead(path);
-  // Presence is only a prerequisite. Actual hook invocation independently binds
-  // the running ancestor binary and its cached identity, header and exec mode.
+  // A private cache is required; a first failed/pending verdict is allowed.
+  // Hooks remain closed until the actual running identity fully qualifies.
   const cache = join(dirname(path),'qualification'); await checkedPath(cache,{ directory:true });
-  const names = await readdir(cache); if (names.length > 64) fail('qualification_required');
+  const names = await readdir(cache); if (names.length > 256) fail('qualification_required');
   for (const name of names) {
-    if (!/^[a-f0-9]{64}\.json$/.test(name)) continue;
-    try {
-      const verdict = JSON.parse(await privateRead(join(cache,name)));
-      if (await hasQualifiedCreator(path,verdict.version)) return;
-    } catch { /* Corrupt evidence never qualifies a creator. */ }
+    // Preserve private ownership/mode checks for every cache record, including
+    // verdicts that do not yet authorize a creator. Never fabricate evidence.
+    if (/^[a-f0-9]{64}(?:\.json|\.pending|\.local-attempt\.json)$/.test(name) || /^observed-(?:cli|app-server)\.json$/.test(name))
+      await privateRead(join(cache,name));
   }
-  fail('qualification_required');
 }
 async function store(request,expectedStoreId) {
   let db;
@@ -245,6 +245,7 @@ async function disable(root,signal) {
     // leave a stale foreground hook authorized to read the transcript.
     await withCore(request,record.storeId,core => grant(core,request,record.storeId,record.targetId,false));
     record = await publish(root,record,'disabling');
+    await clearSessionStarts(locations(root).state);
     try {
       await stateLock(request.clientConfigPath+'.cairn-local.lock',async () => {
         const before = await nativeSnapshot(request.clientConfigPath),text = mergeNative(before.text,request,false);
@@ -279,7 +280,8 @@ export function createLocalRawSetup(value) {
       if (!['prepared','active'].includes(record.phase)) fail('recovery_required');
       if ((await host(root).status({ signal })).status !== 'ready') fail('authority_changed');
       if (record.phase === 'active' && !registered((await nativeSnapshot(record.request.clientConfigPath)).text,record.request)) fail('configuration_changed');
-      return result(record.phase);
+      const outcome=result(record.phase);
+      return record.request.client === 'codex' ? Object.freeze({...outcome,qualification:await localCodexQualificationStatus(record.request.installation.qualificationConfigPath)}):outcome;
     } catch (error) { return failure(error); }
   }
   return Object.freeze({ status:(options = {}) => call('status',options),activate:(options = {}) => call('activate',options),disable:(options = {}) => call('disable',options) });

@@ -387,7 +387,6 @@ export function createMemoryRuntime(input, internal) {
   }
   function forgetMutationInside(ns, id, expectedRevision, reason, suppressionReason) {
       const current = activeRow(ns, id);
-      if (!current && localRawPrivacy) fail('memory_not_found');
       if (!current) return { forgotten: false, indexRevision: epoch(ns) };
       if (expectedRevision !== undefined && current.revision !== expectedRevision) fail("revision_conflict");
       localRawPrivacy?.hideMemoryInside(ns, current);
@@ -785,7 +784,7 @@ export function createMemoryRuntime(input, internal) {
     forgetMutation, rawCapture, sourceAuthority: rawLineage, sourceRoots, assertEpisodeRead, episodeProjection,
     deleteEpisode: (ns, input) => sourceRoots.enabled() ? deletion.forgetEpisode(ns, input) : undefined });
   stagedEvidence.setEpisodes(episodes);
-  deletion = createRawDeletionStorage({ db, roots: sourceRoots, episodes, forgetMutation, removeReceipts, advanceEpoch });
+  deletion = createRawDeletionStorage({ db, localRawPrivacy, roots: sourceRoots, episodes, forgetMutation, removeReceipts, advanceEpoch });
   const admissionStorage = createAdmissionStorage({
     db, admitMutation, validateReceiptTimes, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
     classificationJournal, episodes, proceduralStorage, assertSources: rawLineage.assertReceipts, sourceRoots, memoryAncestry, privacyMemoryDenied,

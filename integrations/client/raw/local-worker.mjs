@@ -1,3 +1,4 @@
+import { markSessionStart,hasSessionStart } from './local-session-start.mjs';
 import { readConfigurationSnapshot } from '../../../adapters/local/configuration.mjs';
 import { localAuthorityInput } from '../../../core/local-authority-input.mjs';
 import { stateLock } from '../state-lock.mjs';
@@ -9,7 +10,7 @@ import { checkHostPermission } from './local-host-permission.mjs';
 
 export function createLocalRawWorker(value) {
   const options = workerOptions(value);
-  async function execute(value, callOptions, initialize) {
+  async function execute(value, callOptions, initialize, mark = false) {
     let operation, identity, opened, cursor, bytes;
     try {
       const context = workerContext(value,options.authority.client,initialize);
@@ -31,7 +32,13 @@ export function createLocalRawWorker(value) {
           fault(error.reason === 'capture_disabled' ? 'authority_changed':error.reason === 'store_invalid' || error.code === 'invalid_local_capture_configuration' ? 'config_invalid':'state_invalid');
         }
         operation.check(); cursor = await readSession(identity,options.authority.client);
-        if (!initialize && !cursor) fault('state_invalid');
+        if (mark) {
+          if (options.authority.client !== 'claude-code') fault('invalid_input');
+          if (!cursor) await markSessionStart(identity,context);
+          return summary('ready','initialized',cursor);
+        }
+        const fromStart = !initialize && !cursor && options.authority.client === 'claude-code' && await hasSessionStart(identity,context);
+        if (!initialize && !cursor && !fromStart) fault('state_invalid');
         bytes = sourceBudget(operation);
         try {
           opened = await openWorkerSource(context,operation,bytes);
@@ -44,13 +51,14 @@ export function createLocalRawWorker(value) {
           }
           const size = await sourceSize(opened);
           if (context.start === 'eof' && !(await completeBoundary(opened,size))) return summary('waiting','partial_record');
-          const offset = context.start === 'beginning' ? 0 : size;
+          const offset = fromStart || context.start === 'beginning' ? 0 : size;
           cursor = { version:'local-raw-cursor-v1',sessionKey:identity.sessionKey,wireSessionId:identity.wireSessionId,
             authorityCommitment:identity.authorityCommitment,epoch:0,offset,issuedOrdinal:0,
             source:await cursorSource(identity,opened,offset),
-            selection:options.authority.client === 'claude-code' ? { ownSkillTurn:context.start === 'eof',awaitingUserBoundary:context.start === 'eof' } : {},
+            selection:options.authority.client === 'claude-code' ? { ownSkillTurn:!fromStart && context.start === 'eof',awaitingUserBoundary:!fromStart && context.start === 'eof' } : {},
             pending:null,blockedReason:null };
           operation.check(); await initializeSession(identity,cursor);
+          if (fromStart) return await runProgress({ options,identity,context,opened,cursor,operation,bytes });
           return summary('ready','initialized',cursor);
         } catch (error) { fault(sourceReason(error,bytes)); }
         finally { const closing = opened; opened = undefined; await closing?.close(); }
@@ -64,6 +72,6 @@ export function createLocalRawWorker(value) {
       finally { identity?.key.fill(0); operation?.close(); }
     }
   }
-  return Object.freeze({ initialize:(context, options = {}) => execute(context,options,true),
+  return Object.freeze({ markStart:(context, options = {}) => execute(context,options,true,true), initialize:(context, options = {}) => execute(context,options,true),
     run:(context, options = {}) => execute(context,options,false) });
 }

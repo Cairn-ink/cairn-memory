@@ -17,7 +17,10 @@ Local forget and correct hide whole source conversations from both current and
 history Raw search. Each operation snapshots the old receipts inside its write
 transaction and records permanent windows of **30 minutes before and after each
 receipt's creation time**. With no receipts, the memory's created and updated
-times anchor the windows. Missing anchors refuse with
+times anchor the windows. If any receipt clock is invalid, every valid receipt
+clock and both valid memory clocks anchor windows; an invalid clock never
+prevents forgetting when another anchor exists. Only a complete lack of valid
+anchors refuses with
 `local_raw_hide_anchor_missing`, leaving the memory unchanged. Correct uses the
 receipts from before the correction.
 
@@ -26,9 +29,23 @@ terminally fenced, including concurrent sessions and messages outside the
 window in that same session. Real sessions named by receipts are also fenced,
 even outside the time window. This deliberately hides more than the referenced
 text. Capture arrival time is not used for matching. Unknown message event times
-are conservative: an existing window in the same namespace fences the session.
+are conservative: an existing window in the same namespace fences the session,
+including a newly arriving session. Known times elsewhere in a session cannot
+bound an untimed turn, which may be a late arrival of the forgotten source.
+This can refuse future untimed sessions indefinitely; supply real event times
+to distinguish an outside-window session. Capture/receive time is not evidence
+of when an untimed source turn occurred.
 Later arrivals inside a window are fenced and refused before payload storage;
 fences also stop ongoing sessions from capturing later, outside-window messages.
+A fork or resume of a hidden conversation stays hidden. Claude message UUIDs
+are additionally fenced with namespace-scoped keyed hashes, even if a copy
+changes timestamps. Bounded durable hash jobs cover already-fenced sessions;
+capture refuses until pending hash work completes. These hashes and windows
+survive conversation deletion, disabling capture and uninstalling with data kept.
+Only wiping all store data, including forget records, removes them. Raw-only
+purges must retain hashes and windows. Destructive deletion cannot discard
+message IDs while their UUID hash backfill is incomplete, including deletion
+through a retained/off profile of the same local store.
 The payload is retained on disk; this is search hiding and capture fencing.
 
 Hiding anchors on when the memory was saved or corrected. A conversation is
@@ -71,7 +88,12 @@ bounded inspection and authored Raw-backed Cards under its existing authority.
 The private archive has a separate default-off `cairn-memory local` operator
 path for Claude Code or qualified Codex, initially Linux/WSL + Node >=22.16.
 It leaves released hosted hooks and `packages/setup` defaults unchanged.
-SessionStart initializes verified EOF; Stop/PreCompact may hold the foreground
+SessionStart initializes verified EOF when the transcript exists. New Claude
+sessions whose transcript appears later are captured from their first turn: an
+authority-bound private start marker permits the first Stop/PreCompact to start
+at zero. Disable removes these markers; an unmarked session with no cursor
+stays refused. Codex retains EOF initialization and its prompt-time fallback.
+Codex forked sessions are not saved locally. Stop/PreCompact may hold the foreground
 hook for up to 160 seconds (existing host 155 seconds plus teardown). Codex also
 gets an idempotent UserPromptSubmit first-observation fallback: it does not reset
 existing cursors on every prompt. No long SessionEnd hook, detached worker,
@@ -120,8 +142,15 @@ The 0600 request is bounded UTF-8 JSON (64 KiB) with exactly these fields:
 For Codex select `client:"codex"`, its explicit native `hooks.json`, a different
 installation directory, and `installation:{"qualificationConfigPath":
 "/absolute/private-codex/installation.json"}` instead of pluginRoot. Select an
-already-qualified private profile/cache. Setup does not launch or auto-qualify
-a native binary. The existing installed operator API is explicit:
+private profile/cache. A pending or failed first qualification still installs
+the hooks in a waiting state; no capture is permitted until qualification succeeds.
+After a Codex update, hooks refuse the changed binary and start one detached,
+identity-bound schema qualification. Every native capture event can start it, so
+an update during a session can recover without another SessionStart. Hooks never
+wait for the probe. Failures back off; status reads only the cache and reports
+qualified, pending or failed with a reason and guidance to rerun setup.
+The probe uses a disposable home with no credentials, model request or transcript
+read. Unsupported formats keep capture paused. The existing installed operator API is explicit:
 
 ```js
 // Use the selected supported Node. First create the chosen private parent and
@@ -131,7 +160,7 @@ const configPath = '/absolute/private-codex/installation.json';
 const binaryPath = '/absolute/chosen/bin/codex';
 const host = { binaryPath, identity:await q.binaryIdentity(binaryPath), kind:'cli' };
 const verdict = await q.qualifyBinary(configPath, host);
-console.log(verdict.status); // Proceed only with an actually qualified verdict.
+console.log(verdict.status); // Capture requires an actually qualified verdict.
 ```
 
 That probes schema/format, not a capture turn or provider request. Actual hooks
@@ -218,7 +247,8 @@ separate.
 
 The isolated pinned Claude Code 2.1.260 `--init-only` probe dispatches the real
 installed SessionStart hook before its transcript exists; quiet exit 0 is not
-EOF initialization proof. A separate normal interactive, keyless/network-isolated
+EOF initialization proof. This missing-transcript case now writes the private
+start marker described above; its first later capture starts at zero. A separate normal interactive, keyless/network-isolated
 probe exited 1 at the native Anthropic connectivity preflight, before any hook,
 transcript or cursor. Normal interactive transcript timing therefore remains
 unverified; neither result authorizes an authentication/network workaround.

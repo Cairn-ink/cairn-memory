@@ -1,3 +1,4 @@
+import { workspaceSnapshot } from './local-workspace-snapshot.mjs';
 import assert from 'node:assert/strict';
 import { mkdirSync,writeFileSync,readFileSync,readdirSync,lstatSync,appendFileSync } from 'node:fs';
 import { join,relative } from 'node:path';
@@ -41,9 +42,8 @@ export async function setupFixture(t,{ client='claude-code' } = {}) {
   const hook=(event='SessionStart',changes={})=>scoped(()=>runLocalRawHook({installationDirectory:request.installationDirectory,event,
     payload:{hook_event_name:event,session_id:sessionId,transcript_path:sourcePath,...changes}}));
   const control=()=>ok(core.getLocalCaptureControl({namespace:request.namespace,client}));
-  function snapshot(path=root){const entries={};function visit(directory){for(const name of readdirSync(directory)){const file=join(directory,name),info=lstatSync(file);
-    entries[relative(path,file)]={mode:info.mode&0o777,...(info.isFile()?{sha:sha(readFileSync(file))}:{})};if(info.isDirectory())visit(file);}}visit(path);return entries;}
-  return {workspace,root,request,core,sourcePath,clientConfigPath,api,setup,invoke,hook,control,snapshot,scoped,
+  const snapshot=(path=root)=>workspaceSnapshot(path,databasePath);
+  return {workspace,root,request,core,binary,dependencies,sourcePath,clientConfigPath,api,setup,invoke,hook,control,snapshot,scoped,
     setExec:value=>{exec=value},setPresent:value=>{present=value}};
 }
 

@@ -43,7 +43,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       ...(profile.sessionEpisodes ? ['episodeContext'] : ['causal'])]);
     const { causal, episodeContext, ...source } = request;
     const input = freeze(rawRegistration(source));
-    const rangeMessages = input.messages.map(message => unknownMessageIds.includes(message.id) ? { occurredAt: null } : { occurredAt: message.occurredAt });
+    const rangeMessages = input.messages.map(message => unknownMessageIds.includes(message.id) ? { id:message.id, occurredAt: null } : { id:message.id, occurredAt: message.occurredAt });
     if (privacy) arrivalInputs.set(arrivalRequest, { ...input, messages: rangeMessages });
     // Copy the complete context/profile and projection before the first await.
     let context = {};
@@ -59,7 +59,11 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     }
     const sessionKey = journal.sessionKey(input.namespace, input.client, input.sessionId);
     privacy?.assertModeInside(input.namespace, input.client, sessionKey, hostInterpretation ? 'host' : 'engine');
-    privacy?.fenceArrival(input.namespace, input.client, sessionKey, rangeMessages);
+    try { privacy?.fenceArrival(input.namespace, input.client, sessionKey, rangeMessages); }
+    catch (error) {
+      if (privacy && ['storage_busy','conversation_deleted'].includes(error.code)) arrivalInputs.get(arrivalRequest).decided = true;
+      throw error;
+    }
     const previous = binding(input);
     if (previous) { const denied = localAuthorityGuard(db,previous); if (denied) fail(denied); }
     let bindingDigest = managed ? hash(['raw-capture-managed-v1',profile,context,managed.targetId,managed.storeId,
@@ -139,7 +143,8 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       // First decision under the writer lock: a refused batch writes neither
       // mode/range nor admission/Raw/payload rows. Callers commit this sentinel
       // before surfacing the refusal, so no rollback-to-fence crash gap exists.
-      if (privacy?.fenceArrivalInside(input.namespace, input.client, sessionKey, rangeMessages)) return { closed: 'conversation_deleted' };
+      const closed = privacy?.fenceArrivalInside(input.namespace, input.client, sessionKey, rangeMessages);
+      if (closed) { arrivalInputs.get(arrivalRequest).decided = true; return { closed }; }
       if (managed) authority.check(managed,input.namespace,input.client);
       privacy?.assertModeInside(input.namespace, input.client, sessionKey, hostInterpretation ? 'host' : 'engine', true);
       privacy?.recordRangeInside(input.namespace, input.client, sessionKey, rangeMessages);
@@ -229,7 +234,8 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     // Reuse the journal's strict namespace/client/session identity validation.
     const session = journal.sessionKey(namespace, client, sessionId);
     return transaction(db, () => {
-      db.prepare('INSERT OR IGNORE INTO raw_session_fences VALUES(?,?,?,?,?)')
+      if (privacy) privacy.fenceInside(namespace,client,session);
+      else db.prepare('INSERT OR IGNORE INTO raw_session_fences VALUES(?,?,?,?,?)')
         .run(...rawBoundary(namespace), client, session);
       return journal.closePending({ ownerId: namespace.ownerId, namespace, client, sessionKey: session, reason: 'capture_barrier' });
     });
@@ -237,7 +243,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
   function fenceArrival(request) {
     if (!privacy) return;
     const input = arrivalInputs.get(request);
-    if (input) privacy.fenceArrival(input.namespace, input.client,
+    if (input && !input.decided) privacy.fenceArrival(input.namespace, input.client,
       journal.sessionKey(input.namespace, input.client, input.sessionId), input.messages);
   }
   async function prepareCapture(request) {
