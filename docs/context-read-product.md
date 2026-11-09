@@ -2007,7 +2007,7 @@ Smaller host budgets are supported. `raw:false` on `contextRead` explicitly
 selects Memory-only assembly. `findCandidates` and exact evidence fetch keep
 their existing interfaces and retrieval behavior.
 
-`createContextReadHost` may return `rawSearch` with `search`, `prepare` and
+`createContextReadHost` may return `rawSearch` with `search`, `prepareMany` and
 synchronous batch `revalidate`. The service stays inside the Worker; functions
 and raw credentials do not cross IPC. The host binds any separate Raw credential
 in these methods and registers its disposer through the existing resource owner
@@ -2037,9 +2037,14 @@ Memories/Cards; Raw evidence is inline and does not expand snapshot fetch.
 `diagnostics.coverage.raw` reports `included`, `unavailable`, `unsupported_store`
 or `partial`. Incomplete search and preparation cutoffs retain the validated
 candidate prefix with `partial` coverage, including its Raw evidence and dates.
-Invalid or failed candidates are skipped individually. Preparation remains
-serial, limited to the first 24 search candidates; late prepares are ignored
-and the timer returns a snapshot of the prefix collected so far. Empty Raw sets
+Invalid or failed candidates are skipped individually. The first 24 search
+candidates share one preparation batch: one authorization and publication
+header, one canonical read snapshot for source checks and sealed bytes, and one
+reader setup. Texts open in rank order after releasing the snapshot, with byte,
+digest and authenticated-context checks. Each completed outcome is reported to
+the channel immediately; late outcomes are ignored and the timer snapshots the
+items collected so far. The 1,000 ms default deadline and 40% Raw share remain
+unchanged. The single-candidate service APIs remain available. Empty Raw sets
 use the existing Memory-only assembly; a complete search with zero candidates
 still reports `included`. Unavailable services and unsupported stores retain
 their respective coverage values. Raw work has a subdeadline reserving Memory

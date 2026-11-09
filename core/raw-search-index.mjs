@@ -240,6 +240,56 @@ export async function openRawSearch(value) {
       retain(prepared,ticket,{sources:entry.sources,intent,access,value:output,handle},RAW_SEARCH_LIMITS.preparations);
       try{revalidate([ticket]);}catch(error){prepared.delete(ticket);throw error;}return handle;
     }
+    async function prepareMany(candidates,{intent='current',deadlineAt=performance.now()+1000,onPrepared=()=>{}}={},token) {
+      if(!Array.isArray(candidates)||candidates.length>24||!['current','history'].includes(intent)||
+          typeof deadlineAt!=='number'||Number.isNaN(deadlineAt)||typeof onPrepared!=='function')fail('invalid_input');
+      const at=Math.min(deadlineAt,performance.now()+1000),handles=[];
+      if(!candidates.length)return {handles,complete:true};
+      const check=()=>{expired(at);if(closed)fail('store_closed');};
+      try {
+        check();
+        // One search proof, authorization and publication header for the page.
+        // Invalid entries retain their own null outcome without poisoning it.
+        const proof=candidates.find(candidate=>searches.has(candidate?.proof))?.proof;
+        const entries=candidates.map(candidate=>{
+          try{if(candidate?.proof!==proof)fail('stale_publication');return candidateEntry(candidate,intent);}
+          catch{return null;}
+        });
+        const access=authority.authorize('rawSearchSource',{candidates,intent},token);access();check();
+        const publication=storage.publication({shape:false,deadlineAt:at});
+        const binding=authority.bind('raw-search-publication-v1',[authority.identity,publication.sequence]);
+        for(let i=0;i<entries.length;i++)if(candidates[i]?.publication!==binding)entries[i]=null;
+        const batch=authority.prepareBatch(entries,intent,at);
+        for(let index=0;index<candidates.length;index++){
+          check();let handle=null;
+          try {
+            const candidate=candidates[index],entry=entries[index];
+            if(!batch.allowed[index])fail('source_unavailable');
+            const rows=entry.sources.filter(source=>candidate.ranges.some(ref=>same(ref,source.ref)))
+              .sort((a,b)=>a.ref.span.start-b.ref.span.start);
+            if(!rows.length||rows.length!==candidate.ranges.length||rows.length>1024)fail('source_unavailable');
+            if(rows.reduce((bytes,source)=>bytes+source.bytes,0)>256*1024)fail('source_budget_exceeded');
+            const ranges=[];
+            for(const source of rows){
+              const text=await batch.open(source,check);check();
+              ranges.push({source:source.ref,text,classification:source.classification});
+            }
+            const source=rows[0],output=immutable({namespace:source.ref.namespace,conversationId:source.ref.conversationId,
+              messageId:source.ref.messageId,ordinal:source.ordinal,role:source.role,occurredAt:source.occurredAt,
+              classification:candidate.classification,ranges},check);
+            check();
+            const ticket=authority.bind('raw-search-prepared-v1',[candidate.proof,++serial]);
+            handle=Object.freeze({value:output,ticket,validate(){return revalidate([ticket])[0];}});
+            retain(prepared,ticket,{sources:entry.sources,intent,access,value:output,handle},RAW_SEARCH_LIMITS.preparations);
+          }catch(error){if(interrupted(error))throw error;}
+          check();handles.push(handle);onPrepared(handle,index);
+        }
+        return {handles,complete:true};
+      }catch(error){
+        if(!interrupted(error))throw error;
+        return {handles:handles.slice(),complete:false};
+      }
+    }
     async function prepareSource(ref,{intent='current'}={},token) {
       if(!['current','history'].includes(intent))fail('invalid_input');
       const source=authority.inspect(ref,intent),canonical=()=>authority.check(source,intent);
@@ -282,7 +332,7 @@ export async function openRawSearch(value) {
         maintenance:{phase:progress.phase,quantum:progress.quantum,noProgress:progress.noProgress,pending:progress.pending,
           checkpoint:authority.bind('raw-search-progress-v1',progress.checkpointAdvances),lastActualWork:progress.lastActualWork}};
     };
-    return Object.freeze({search:tracked(search),prepare:tracked(prepare),prepareSource:tracked(prepareSource),classify:tracked(classify),validate:revalidate,revalidate,
+    return Object.freeze({search:tracked(search),prepare:tracked(prepare),prepareMany:tracked(prepareMany),prepareSource:tracked(prepareSource),classify:tracked(classify),validate:revalidate,revalidate,
       maintain:tracked(async(input,token)=>{const access=authority.authorize('rawSearchMaintenance',{},token);
         cache.maintain();
         await maintenance.maintain(input,access);return status();}),

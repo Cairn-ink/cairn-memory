@@ -34,22 +34,35 @@ export async function readRawChannel(rawSearch, input, token, deadlineAt) {
       if (expired()) return snapshot('partial');
       if (result.coverage?.status === 'unsupported_store') return unavailable('unsupported_store');
       let dropped = result.coverage?.status !== 'complete';
-      for (const candidate of result.candidates.slice(0, 24)) {
-        if (expired()) return snapshot('partial');
-        if (!input.readSet.some(ns => same(ns, candidate.namespace))) { dropped = true; continue; }
+      const candidates = result.candidates.slice(0, 24).filter(candidate => {
+        if (input.readSet.some(ns => same(ns, candidate.namespace))) return true;
+        dropped = true; return false;
+      });
+      let completed = 0;
+      const onPrepared = (handle, index) => {
+        if (expired()) return;
+        completed++;
+        const candidate = candidates[index];
         try {
-          const handle = await port(() => rawSearch.prepare(candidate, { intent: 'current' }, token));
-          if (expired()) return snapshot('partial');
-          // prepare validates its delivery. Read only identity metadata here;
-          // one fresh batch validation precedes all text projection below.
+          // Read only identity metadata here; one fresh batch validation
+          // precedes all text projection below. Late handles are never read.
+          if (!handle) { dropped = true; return; }
           const value = port(() => handle.value);
           if (!value || !input.readSet.some(ns => same(ns, value.namespace)) ||
               !same(value.namespace, candidate.namespace) || value.conversationId !== candidate.conversationId ||
-              value.messageId !== candidate.messageId) { dropped = true; continue; }
-          if (expired()) return snapshot('partial');
+              value.messageId !== candidate.messageId) { dropped = true; return; }
+          if (expired()) return;
           items.push({ handle, value, key: turnKey(value), rank: items.length + 1 });
         } catch { dropped = true; }
-      }
+      };
+      try {
+        if (candidates.length) {
+          const batch = await port(() => rawSearch.prepareMany(candidates, { intent: 'current', deadlineAt: cutoff, onPrepared }, token));
+          if (expired()) return snapshot('partial');
+          dropped ||= !batch.complete || completed !== candidates.length;
+        }
+      } catch { dropped = true; }
+      if (expired()) return snapshot('partial');
       return snapshot(dropped ? 'partial' : 'included');
     } catch (error) { return unavailable(error?.reason === 'deadline' ||
       ['search_deadline', 'read_timeout', 'timeout'].includes(error?.code) || error?.name === 'AbortError' ? 'partial' : 'unavailable'); }

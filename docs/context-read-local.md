@@ -431,14 +431,14 @@ their existing v2 projection. Contract §15.9 records lifecycle safety for up to
 ## Default Memory + Raw assembly
 
 The host supplies `contextRead.rawSearch`, an already-open local service exposing
-`search`, `prepare` and synchronous batch `revalidate`. The host owns its
+`search`, `prepareMany` and synchronous batch `revalidate`. The host owns its
 credentials, fixed owner/read set, maintenance and close. If Raw uses a separate
 credential, bind it in a trusted wrapper rather than passing it as read input:
 
 ```js
 const rawSearch = {
   search: input => rawService.search(input, rawCredential),
-  prepare: (candidate, settings) => rawService.prepare(candidate, settings, rawCredential),
+  prepareMany: (candidates, settings) => rawService.prepareMany(candidates, settings, rawCredential),
   revalidate: handles => rawService.revalidate(handles),
 };
 const reader = openContextReader({ path, contextRead: {
@@ -487,14 +487,26 @@ The untrusted-data framing applies to both channels.
 `partial`. Incomplete search and exhausted Raw preparation time retain the
 already prepared, identity-checked candidates in rank order with `partial`
 coverage. A candidate outside the read set, an identity mismatch or a failed
-preparation skips only that candidate and makes coverage `partial`. A prepare
-that finishes after the cutoff is discarded; the timer snapshots the validated
+preparation skips only that candidate and makes coverage `partial`. An outcome
+that completes after the cutoff is discarded; the timer snapshots the validated
 prefix, so late completions cannot change it. Partial coverage can accompany
 delivered Raw evidence and dates; it does not mean the Raw channel is empty.
 An empty Raw set uses the existing Memory-only assembly, including a complete
 search with zero candidates (`included`). An absent or failed service reports
 `unavailable`; an unsupported store reports `unsupported_store`.
-Raw preparation has a subdeadline that reserves time for Memory assembly.
+The first 24 search candidates are prepared in one batch. Authorization and the
+publication header are acquired once; all canonical source checks and sealed
+payload copies share one read snapshot. One reader opens texts after releasing
+that snapshot, preserving byte, digest and authenticated-context checks. The
+single-candidate `prepare` and `prepareSource` APIs remain available to other callers.
+`prepareMany(candidates, settings, credential)` returns `{handles, complete}`,
+with a handle or `null` for each completed candidate. It calls
+`settings.onPrepared(handle, index)` in input order as each outcome completes.
+`settings.deadlineAt` is the monotonic Raw cutoff; `complete:false` means the
+batch stopped early. The channel checks handle identities before accepting each
+callback and snapshots only completed items at stop.
+Raw preparation keeps the default 1,000 ms read deadline and its 40% Raw share,
+reserving time for Memory assembly.
 Every nonempty Raw set is batch-revalidated before any Raw text projection.
 Prepared Raw is validated again after counting and authority callbacks; a failed
 final validation drops all Raw and rebuilds the Memory-only response. Packing

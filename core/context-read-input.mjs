@@ -57,7 +57,7 @@ export function contextOptions(value) {
       types.isAsyncFunction(policy.estimateUsd) || policy.maxConcurrent !== undefined &&
       (!Number.isInteger(policy.maxConcurrent) || policy.maxConcurrent < 1 || policy.maxConcurrent > 1024))) fail('invalid_input');
   if (options.rawSearch !== undefined && (!options.rawSearch ||
-      ['search', 'prepare', 'revalidate'].some(key => typeof options.rawSearch[key] !== 'function'))) fail('invalid_input');
+      ['search', 'prepareMany', 'revalidate'].some(key => typeof options.rawSearch[key] !== 'function'))) fail('invalid_input');
   return Object.freeze({ authority: Object.freeze(authority), embedder, counter: counter && Object.freeze(counter), family,
     rawSearch: options.rawSearch ?? null,
     ...(explicitLocal ? { localStatus } : {}),

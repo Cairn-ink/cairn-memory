@@ -14,7 +14,7 @@ import { openProductIndex } from '../context-product-index.mjs';
 import { assembleContext, meteredText, completeResponseBytes } from '../context-read-assembly.mjs';
 import { assembleThreeLayerContext, queryExcerpt, countListQuestion, readRawChannel } from '../context-read-three-layer.mjs';
 import { fixedPrepared } from '../testing/context-read-assembly-fixture.mjs';
-import { ASSEMBLY_LIMITS, contextInput } from '../context-read-input.mjs';
+import { ASSEMBLY_LIMITS, contextInput, contextOptions } from '../context-read-input.mjs';
 import { configured } from '../testing/context-product-owner-fixture.mjs';
 import { accessDigest } from '../context-product-validation.mjs';
 import { transaction } from '../database.mjs';
@@ -51,6 +51,7 @@ async function fixture(t, { extract, portCounter = counter } = {}) {
     assert.equal(ready, true, 'synthetic Raw inventory completes before exercising reads');
     rawPort ??= { search: input => service.search(input),
       prepare: (candidate, settings) => service.service.prepare(candidate, settings, service.host.token),
+      prepareMany: (candidates, settings) => service.service.prepareMany(candidates, settings, service.host.token),
       revalidate: handles => service.service.revalidate(handles) };
     if (!reader) {
       const contextRead = { version: 'context-read-v1', authority: trusted.authority, counter: portCounter, rawSearch: rawPort };
@@ -195,11 +196,11 @@ for (const path of [0, 1, 2]) for (const mutation of ['forgotten', 'suppressed',
       kind: 'fact', confidence: 1, sourceIndices: [message.index] })) }) : undefined;
     const f = await fixture(t, { extract });
     const source = await f.capture('secret-partial-orchid telescope', { occurredAt: '2026-01-01T08:00:00.000Z' }); await f.build();
-    const search = f.rawPort.search, prepare = f.rawPort.prepare, revalidate = f.rawPort.revalidate;
+    const search = f.rawPort.search, prepareMany = f.rawPort.prepareMany, revalidate = f.rawPort.revalidate;
     let changed = false;
     f.rawPort.search = async input => ({ ...await search(input), coverage: { status: 'partial' } });
-    f.rawPort.prepare = async (...args) => {
-      const handle = await prepare(...args);
+    f.rawPort.prepareMany = async (...args) => {
+      const batch = await prepareMany(...args);
       if (!changed) {
         changed = true;
         if (mutation === 'forgotten') {
@@ -212,7 +213,7 @@ for (const path of [0, 1, 2]) for (const mutation of ['forgotten', 'suppressed',
           .run(source.conversationId, source.messageId, 0, source.text.length, 1);
         else f.service.host.revoke();
       }
-      return handle;
+      return batch;
     };
     f.rawPort.revalidate = handles => { assert.equal(handles.length, 1); return revalidate(handles); };
     const result = await f.readers()[path](query('secret-partial-orchid telescope'));
@@ -286,7 +287,11 @@ function syntheticChannel(texts = ['assembly telescope first', 'assembly telesco
   const handles = raw.items.map(item => ({ ...item.handle, value: item.value }));
   const service = { ...raw.rawSearch,
     search: async () => ({ coverage: { status: 'complete' }, candidates }),
-    prepare: async candidate => handles[candidates.indexOf(candidate)] };
+    prepare() { throw Error('the channel must use one batch'); },
+    prepareMany: async (selected, { onPrepared }) => {
+      const prepared = selected.map((candidate, index) => { const handle = handles[candidates.indexOf(candidate)]; onPrepared(handle, index); return handle; });
+      return { handles: prepared, complete: true };
+    } };
   return { candidates, handles, service };
 }
 function channelClock(t) {
@@ -298,59 +303,87 @@ function channelClock(t) {
 }
 const channelInput = () => contextInput('contextRead', query(), ['memory']).input;
 
-for (const k of [0, 1, 2]) test(`Raw cutoff retains exactly ${k} validated candidates in rank order`, async t => {
-  const advance = channelClock(t), { candidates, handles, service } = syntheticChannel();
-  let prepares = 0, lateValueReads = 0;
-  service.prepare = async candidate => {
-    const index = candidates.indexOf(candidate); prepares++;
-    if (index === k) {
-      advance(400);
-      return { get value() { lateValueReads++; return candidate; } };
-    }
-    return handles[index];
-  };
-  const result = await readRawChannel(service, channelInput(), {}, 1100);
-  assert.equal(result.coverage, 'partial'); assert.equal(prepares, k + 1);
-  assert.deepEqual(result.items.map(item => item.handle), handles.slice(0, k));
-  assert.deepEqual(result.items.map(item => item.rank), Array.from({ length: k }, (_, i) => i + 1));
-  assert.equal(lateValueReads, 0, 'a prepare returned at cutoff is not inspected');
+test('context configuration requires the batch port and does not require a single-candidate wrapper', () => {
+  const authority = { authorize() {}, isCurrent() {} }, { service } = syntheticChannel();
+  const { prepare, ...rawSearch } = service;
+  assert.equal(contextOptions({ version: 'context-read-v1', authority, rawSearch }).rawSearch, rawSearch);
+  assert.throws(() => contextOptions({ version: 'context-read-v1', authority,
+    rawSearch: { search: service.search, prepare, revalidate: service.revalidate } }), { code: 'invalid_input' });
 });
 
-test('Raw timer snapshots a validated prefix while a prepare hangs and ignores its late result', async t => {
+test('one batch delivers all 24 identity-checked candidates inside the default Raw cutoff', async t => {
+  const advance = channelClock(t), { candidates, handles, service } = syntheticChannel(Array.from({ length: 30 }, (_, i) => 'assembly telescope ' + i));
+  let calls = 0;
+  service.prepareMany = async (selected, { deadlineAt, onPrepared }) => {
+    calls++; assert.equal(deadlineAt, 500); assert.deepEqual(selected, candidates.slice(0, 24));
+    for (let index = 0; index < selected.length; index++) { advance(5); onPrepared(handles[index], index); }
+    return { handles: handles.slice(0, 24), complete: true };
+  };
+  const result = await readRawChannel(service, channelInput(), {}, 1100);
+  assert.equal(calls, 1); assert.equal(result.coverage, 'included');
+  assert.deepEqual(result.items.map(item => item.handle), handles.slice(0, 24));
+  assert.deepEqual(result.items.map(item => item.rank), Array.from({ length: 24 }, (_, i) => i + 1));
+  const assembled = assembleThreeLayerContext(packedArgs({ prepared: [] }), result);
+  assert.equal(assembled.diagnostics.coverage.raw, 'included'); assert.equal(assembled.metered.items.length, 24);
+  assert.ok(assembled.validateRaw());
+});
+
+for (const k of [0, 1, 2]) test(`Raw batch cutoff retains exactly ${k} validated candidates in rank order`, async t => {
+  const advance = channelClock(t), { candidates, handles, service } = syntheticChannel();
+  let calls = 0, lateValueReads = 0;
+  service.prepareMany = async (_selected, { onPrepared }) => {
+    calls++;
+    for (let index = 0; index < k; index++) onPrepared(handles[index], index);
+    advance(400);
+    onPrepared({ get value() { lateValueReads++; return candidates[k]; } }, k);
+    return { handles, complete: false };
+  };
+  const result = await readRawChannel(service, channelInput(), {}, 1100);
+  assert.equal(result.coverage, 'partial'); assert.equal(calls, 1);
+  assert.deepEqual(result.items.map(item => item.handle), handles.slice(0, k));
+  assert.deepEqual(result.items.map(item => item.rank), Array.from({ length: k }, (_, i) => i + 1));
+  assert.equal(lateValueReads, 0, 'a handle completed at cutoff is not inspected');
+});
+
+test('Raw timer snapshots a completed batch prefix and ignores late progress and return values', async t => {
   channelClock(t); t.mock.timers.enable({ apis: ['setTimeout'] });
   const { candidates, handles, service } = syntheticChannel();
-  let release, hung, prepares = 0, lateValueReads = 0;
+  let release, hung, calls = 0, lateValueReads = 0;
   const started = new Promise(resolve => { hung = resolve; });
-  service.prepare = candidate => {
-    prepares++;
-    if (candidate === candidates[0]) return handles[0];
-    hung(); return new Promise(resolve => { release = resolve; });
+  service.prepareMany = async (_selected, { onPrepared }) => {
+    calls++; onPrepared(handles[0], 0); hung(); await new Promise(resolve => { release = resolve; });
+    onPrepared({ get value() { lateValueReads++; return candidates[1]; } }, 1);
+    return { get handles() { throw Error('late results must be ignored'); }, complete: true };
   };
   const reading = readRawChannel(service, channelInput(), {}, 1100);
   await started; t.mock.timers.tick(400);
   const result = await reading;
   assert.equal(result.coverage, 'partial'); assert.deepEqual(result.items.map(item => item.handle), [handles[0]]);
-  const before = [...result.items]; Object.freeze(result.items);
-  release({ get value() { lateValueReads++; return candidates[1]; } });
+  const before = [...result.items]; Object.freeze(result.items); release();
   await new Promise(resolve => setImmediate(resolve));
-  assert.deepEqual(result.items, before); assert.equal(lateValueReads, 0); assert.equal(prepares, 2);
+  assert.deepEqual(result.items, before); assert.equal(lateValueReads, 0); assert.equal(calls, 1);
 });
 
-for (const invalid of ['outside-readSet', 'identity-mismatch', 'prepare-throws']) test(`Raw skips only the ${invalid} candidate`, async () => {
-  const { candidates, handles, service } = syntheticChannel(); let prepares = 0;
-  if (invalid === 'outside-readSet') candidates[1] = { ...candidates[1], namespace: { ...ns, ownerId: 'foreign-owner' } };
-  service.prepare = async candidate => {
-    prepares++; const index = candidates.indexOf(candidate);
-    if (index === 1 && invalid === 'identity-mismatch') return { value: { ...candidate, messageId: 'wrong-turn' } };
-    if (index === 1 && invalid === 'prepare-throws') throw Error('synthetic prepare failure');
-    return handles[index];
-  };
-  const result = await readRawChannel(service, channelInput(), {}, performance.now() + 1000);
-  assert.equal(result.coverage, 'partial');
-  assert.deepEqual(result.items.map(item => item.handle), [handles[0], handles[2]]);
-  assert.deepEqual(result.items.map(item => item.rank), [1, 2]);
-  assert.equal(prepares, invalid === 'outside-readSet' ? 2 : 3);
-});
+for (const invalid of ['outside-readSet', 'identity-mismatch', 'missing-source', 'over-budget-source', 'open-failure'])
+  test(`Raw batch skips only the ${invalid} candidate`, async () => {
+    const { candidates, handles, service } = syntheticChannel(); let selectedCount = 0;
+    if (invalid === 'outside-readSet') candidates[1] = { ...candidates[1], namespace: { ...ns, ownerId: 'foreign-owner' } };
+    service.prepareMany = async (selected, { onPrepared }) => {
+      selectedCount = selected.length;
+      const results = selected.map((candidate, index) => {
+        const original = candidates.indexOf(candidate);
+        const handle = original !== 1 ? handles[original] : invalid === 'identity-mismatch'
+          ? { value: { ...candidate, messageId: 'wrong-turn' } } : null;
+        onPrepared(handle, index); return handle;
+      });
+      return { handles: results, complete: true };
+    };
+    const result = await readRawChannel(service, channelInput(), {}, performance.now() + 1000);
+    assert.equal(result.coverage, 'partial');
+    assert.deepEqual(result.items.map(item => item.handle), [handles[0], handles[2]]);
+    assert.deepEqual(result.items.map(item => item.rank), [1, 2]);
+    assert.equal(selectedCount, invalid === 'outside-readSet' ? 2 : 3);
+  });
 
 for (const status of ['partial', 'unavailable', undefined]) test(`Raw uses candidates from non-complete search status ${status}`, async () => {
   const { candidates, handles, service } = syntheticChannel();
@@ -364,7 +397,7 @@ for (const status of ['partial', 'unavailable', undefined]) test(`Raw uses candi
 
 test('unsupported Raw store stays unavailable and complete empty search stays included and Memory-only', async () => {
   const { candidates, service } = syntheticChannel(); let prepares = 0;
-  service.prepare = () => { prepares++; throw Error('must not prepare'); };
+  service.prepareMany = () => { prepares++; throw Error('must not prepare'); };
   service.search = async () => ({ coverage: { status: 'unsupported_store' }, candidates });
   assert.deepEqual(await readRawChannel(service, channelInput(), {}, performance.now() + 1000), { items: [], coverage: 'unsupported_store' });
   service.search = async () => ({ coverage: { status: 'complete' }, candidates: [] });

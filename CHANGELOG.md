@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — batch Raw preparation
+
+- Default three-layer reads prepare the first 24 Raw candidates together,
+  sharing authorization, publication and a canonical source snapshot. Completed
+  candidates retain independent outcomes and cutoff delivery; fresh batch and
+  final checks still precede Raw projection and delivery.
+
 ## Unreleased — retain prepared Raw evidence
 
 - Default three-layer reads keep the validated Raw prefix when preparation

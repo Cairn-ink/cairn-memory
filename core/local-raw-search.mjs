@@ -142,6 +142,19 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
           const handle = await service.prepare(candidate, settings, entry.token);
           handles.set(handle, service); return handle;
         },
+        async prepareMany(candidates, settings = {}) {
+          if (closed) fail('store_closed');
+          if (!Array.isArray(candidates) || candidates.length > 24) fail('invalid_input');
+          if (!candidates.length) return { handles: [], complete: true };
+          const service = entry.readers.get(candidates.find(candidate => entry.readers.has(candidate?.proof))?.proof);
+          if (!service || ![entry.service, entry.lexical?.service].includes(service)) fail('stale_publication');
+          const scoped = candidates.map(candidate => entry.readSet.some(ns => same(ns, candidate?.namespace)) &&
+            entry.readers.get(candidate?.proof) === service ? candidate : null);
+          return service.prepareMany(scoped, { ...settings, onPrepared(handle, index) {
+            if (handle) handles.set(handle, service);
+            settings.onPrepared?.(handle, index);
+          } }, entry.token);
+        },
         revalidate(selected) {
           if (closed) fail('store_closed');
           const service = Array.isArray(selected) && selected.length ? handles.get(selected[0]) : entry.service;
