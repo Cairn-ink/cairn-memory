@@ -1,4 +1,6 @@
 import test from 'node:test';
+// Run shared status races through this suite's existing CI entry.
+import '../../client/test/hosted-pause-status.test.mjs';
 import assert from 'node:assert/strict';
 import { appendFile, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
