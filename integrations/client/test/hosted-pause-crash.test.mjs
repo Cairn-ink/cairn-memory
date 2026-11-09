@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
-import { withWriteObserver } from '../private-state.mjs';
+import { withWriteObserver, privateWrite } from '../private-state.mjs';
 import { observeHostedPause, withHostedPauseGate } from '../hosted-pause.mjs';
 import { hostedTargetId } from '../transport-hosted.mjs';
 import { readControlState } from '../control-state.mjs';
@@ -22,10 +22,17 @@ for (const stage of ['intent','rotation','publication','completion','checkpoint'
   const selected={intent:path+'.intents/1.false.json',rotation:join(root,'control.json'),
     publication:path,completion:path+'.intents/1.false.complete',checkpoint:path+'.high-water'}[stage];
   let injected=false;
-  await assert.rejects(withWriteObserver(({path:written,kind})=>{
-    if(kind==='write'&&written===selected&&!injected){injected=true;throw new Error('synthetic_interruption');}
+  await assert.rejects(withWriteObserver(async ({path:written,kind})=>{
+    if(kind==='write'&&written===selected&&!injected){
+      injected=true;
+      // A delayed older publisher can add a dominated intent after compaction's
+      // earlier list. Checkpoint recovery must have real pruning work to repair.
+      if(stage==='checkpoint')await privateWrite(path+'.intents/1.true.json',JSON.stringify({generation:1,paused:true}));
+      throw new Error('synthetic_interruption');
+    }
   },observe),/synthetic_interruption/);
   assert.ok(injected,'fault_stage_reached');
+  if(stage==='checkpoint')assert.ok((await readdir(path+'.intents')).includes('1.true.json'),'interrupted_compaction_has_dominated_record');
   let started=0;
   if(['completion','checkpoint'].includes(stage)) await withHostedPauseGate(config,1,()=>{started++;});
   else {
