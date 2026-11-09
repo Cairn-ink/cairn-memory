@@ -52,7 +52,7 @@ test('internal excerpt cursors bind query and policy without exposing query; pub
     assert.ok(binding.q.length > 20);
     assert.ok(binding.x);
     assert.equal(binding.policy, QUERY_CANDIDATE_VERSION);
-    assert.equal(binding.policy, 'literal-recency-keyset-overlap-v3');
+    assert.equal(binding.policy, 'literal-recency-keyset-overlap-v4');
     assert.notEqual(binding.policy, 'literal-memory-overlap-v1');
     assert.equal(binding.scan, QUERY_CANDIDATES.scan);
     if (contextMode) {

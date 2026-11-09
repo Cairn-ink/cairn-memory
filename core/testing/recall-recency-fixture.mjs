@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import crypto, { createHash } from 'node:crypto';
+import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { openMemoryCore } from '../contract.mjs';
 import { createMemoryRuntime } from '../runtime.mjs';
 import { createQueryScore } from '../query-candidates.mjs';
 import { createQueryExcerpt } from '../query-excerpt.mjs';
 import { fail } from '../validation.mjs';
+import { eventTimeSafetyFixture } from './receipt-event-time-fixture.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 
 export const namespace = { ownerId: 'recency-tests', scope: 'personal', projectId: null };
@@ -36,9 +38,32 @@ export function fixture(t, port = model()) {
   return { workspace, path, core, runtime, db };
 }
 
+// Test-only builtin replacement updates the engine's existing UUID bindings.
+export function installAscendingUUIDs(t, initial = 0) {
+  let counter = initial;
+  const mock = t.mock.method(crypto, 'randomUUID', () =>
+    '00000000-0000-4000-8000-' + String(++counter).padStart(12, '0'));
+  syncBuiltinESMExports();
+  t.after(() => { mock.mock.restore(); syncBuiltinESMExports(); });
+}
+
+export async function layoutFixture(t, layout, port = model()) {
+  if (layout === 'plain') return fixture(t, port);
+  assert.equal(layout, 53);
+  const f = eventTimeSafetyFixture(t, 33);
+  await f.migrate();
+  const core = openMemoryCore({ path: f.path, model: port });
+  f.workspace.defer(() => core.close());
+  let db;
+  const runtime = createMemoryRuntime({ path: f.path }, { attachRaw(connection) { db = connection; } });
+  f.workspace.defer(() => runtime.close());
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 53);
+  return { ...f, core, runtime, db };
+}
+
 // Only fresh synthetic stores use SQL seeding. Each body is 150–600 ASCII
 // characters; timestamps put the last writes first independently of hashed IDs.
-export function seed(db, count, targetNamespace = ns, offset = 0) {
+export function seed(db, count, targetNamespace = ns, offset = 0, identify = key) {
   const memory = db.prepare(`INSERT INTO memories
     (id,owner_id,scope,project_id,fingerprint,content,kind,origin,confidence,revision,
       deleted,created_at,updated_at,filing_status,currentness)
@@ -49,7 +74,7 @@ export function seed(db, count, targetNamespace = ns, offset = 0) {
   db.exec('BEGIN');
   try {
     for (let index = 1 + offset; index <= count + offset; index++) {
-      const id = key(index), content = `${marker(index)} note ` + 'realistic ordinary note text '.repeat(24);
+      const id = identify(index), content = `${marker(index)} note ` + 'realistic ordinary note text '.repeat(24);
       const body = content.slice(0, 150 + index % 451);
       const source = `${marker(index)} sourceonly${index} original note`;
       const eventId = 'event-' + index;

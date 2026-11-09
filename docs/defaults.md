@@ -27,21 +27,31 @@ Recency determines traversal; literal overlap and then ID determine the best
 1,024 retained candidates. Body-only recall reads no scoring receipts; source
 modes still examine only the first four stable-ID receipts per eligible memory.
 
-Each deferred read page releases its lock after at most 256 rows or 25 ms
-(checked between rows). One epoch change restarts the scan with the original
-budget clock and a fresh floor; repeated changes leave incomplete coverage.
-On a second change, only the visited prefix, bounded by its last key and row
-count, is revalidated under the new epochs
-before incomplete delivery; further movement fails the existing freshness check.
-Placement reads also use short, epoch-checked deferred snapshots.
-`scanExhausted:false` means a budget, row cap, interrupted pass or top-candidate
+The first 1,024 rows, safety checks and MOC placement share one deferred read
+transaction with the connection's normal busy timeout. The monotonic budget
+includes acquisition and floor work. Later pages release SHARED after at most
+256 rows or 25 ms (checked between rows) and use busy timeout zero, restored
+synchronously after each page. BUSY at the first cheap read stops the tail.
+There are no restarts: a namespace or suppression epoch change discards all
+tail candidates and returns the already placed floor under its original epochs.
+New tail candidates are placed in one final try-once read that rechecks those
+epochs; contention or movement there also returns the floor. Existing delivery
+freshness and content-safety fences still apply. Other recall reads retain the
+normal connection timeout; the discovery budget is not an end-to-end recall
+deadline.
+`scanExhausted:false` means a budget, row cap, busy tail, epoch change or top-candidate
 pruning left coverage incomplete. It is an ordinary incomplete result, with
 `exhausted:false` on private map pages and the existing recall coverage values;
 it adds no error, retry status or response field. Signed recall cursors bind
 the visited-row count, last recency key and stop cause. Continuations replay
-that exact boundary without the time budget and reject a changed epoch.
-From a source checkout, run `npm run measure:recall-recency -- N`
-for one namespace size at a time.
+that exact boundary without the time budget, with the same normal-timeout
+floor and try-once tail;
+a busy tail or changed epoch yields `cursor_stale`.
+From a source checkout, run `npm run measure:recall-recency -- --layout plain N`
+(or `--layout 53`; add `--writer` for concurrent writes)
+for one namespace size at a time. The writer is unpaced by default;
+`--writer-pause-ms N` sets an explicit pause between write calls for comparison.
+The helper prints failed samples before returning a nonzero exit code.
 
 | Capability | What it does | Default | Cost | Programmatic option / CLI switch |
 | --- | --- | --- | --- | --- |

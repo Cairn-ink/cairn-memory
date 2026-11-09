@@ -313,7 +313,8 @@ export function readTransaction(db, work, acquisition) {
     attempted = true;
     db.exec('BEGIN');
     began = true;
-    // Private maintenance hook; request readers leave it unset.
+    // Private synchronous acquisition hook, before suppression/safety reads.
+    // Internal callers may acquire SHARED here without host callbacks.
     acquisition?.readReady();
     value = inContentSuppressionRequestInside(db, work);
     try { materializedRead(value); } catch (failure) { unsafeResult = true; throw failure; }

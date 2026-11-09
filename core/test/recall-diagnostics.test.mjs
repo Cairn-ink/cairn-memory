@@ -98,8 +98,8 @@ test('1 opt-out identity: omitted, false and true preserve bytes, key order and 
     ok(observed.result);
     assert.deepEqual(Object.keys(observed.result.value), Object.keys(absent.result.value));
     assert.equal(Object.hasOwn(observed.result.value, 'diagnostics'), false);
-    assert.equal(observed.observers.clock, 5,
-      'only the mandatory scan-start, scan-page and placement-page clock reads');
+    assert.equal(observed.observers.clock, 3,
+      'only scan start, floor start and the one physical row clock read');
     assert.equal(observed.observers.timer, 2, 'only the existing model timeout timers');
     assert.equal(observed.observers.listener, 0);
   }

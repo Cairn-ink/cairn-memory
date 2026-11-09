@@ -440,9 +440,9 @@ test('K5 private recall cursors bind the unified policy and source mode', async 
   captured.length = 0;
   value(await expanded.recall(input));
   const newBinding = captured[0];
-  assert.equal(oldBinding.policy, 'literal-recency-keyset-overlap-v3');
+  assert.equal(oldBinding.policy, 'literal-recency-keyset-overlap-v4');
   assert.equal(oldBinding.scan, 20000);
-  assert.equal(newBinding.policy, 'literal-recency-keyset-overlap-v3');
+  assert.equal(newBinding.policy, 'literal-recency-keyset-overlap-v4');
   assert.deepEqual([newBinding.scan, newBinding.physicalPage, newBinding.top,
     newBinding.sourceReceiptLimit], [20_000, 256, 1_024, 4]);
   assert.equal(oldBinding.sourceMode, newBinding.sourceMode);

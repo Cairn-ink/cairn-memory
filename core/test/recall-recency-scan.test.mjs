@@ -4,20 +4,19 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { createMemoryRuntime } from '../runtime.mjs';
 import { openMemoryCore } from '../contract.mjs';
-import { createQueryScore, QUERY_CANDIDATES, QUERY_SCAN_BUDGET_MS } from '../query-candidates.mjs';
+import { createQueryScore, QUERY_SCAN_BUDGET_MS } from '../query-candidates.mjs';
 import { createQueryExcerpt } from '../query-excerpt.mjs';
 import { installRecallScanClock } from '../testing/recall-scan-clock.mjs';
-import { fixture, seed, query, baseCandidates, namespace, ns, key, marker, model, ok } from '../testing/recall-recency-fixture.mjs';
-import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
+import { layoutFixture, seed, query, baseCandidates, namespace, ns, key, marker, model, ok } from '../testing/recall-recency-fixture.mjs';
 import { transaction } from '../database.mjs';
 import { writeContentSuppressionInside, withContentSuppressionRequest } from '../content-suppression-storage.mjs';
 
+for (const layout of ['plain',53]) {
 for (const count of [0,1,100,1024]) for (const sourceReceiptLimit of [0,4]) {
-  test(`base parity: ${count} current rows, receipt limit ${sourceReceiptLimit}`, async t => {
+  test(`layout ${layout}, base parity: ${count} current rows, receipt limit ${sourceReceiptLimit}`, async t => {
     installRecallScanClock(t);
-    const frames = [], f = fixture(t, model(frames)); seed(f.db, count);
+    const frames = [], f = await layoutFixture(t, layout, model(frames)); seed(f.db, count);
     for (const text of ['note', 'sourceonly1', 'absent']) {
       const base = baseCandidates(f.db, text, sourceReceiptLimit);
       const result = query(f.runtime, text, { sourceReceiptLimit });
@@ -37,8 +36,8 @@ for (const count of [0,1,100,1024]) for (const sourceReceiptLimit of [0,4]) {
   });
 }
 
-for (const count of [1025,2049,6500]) test(`fresh notes found at default limit: ${count}`, async t => {
-  const f = fixture(t); seed(f.db,count);
+for (const count of [1025,2049,6500]) test(`layout ${layout}, fresh notes found at default limit: ${count}`, async t => {
+  const f = await layoutFixture(t, layout); seed(f.db,count);
   const prefix = new Set(baseCandidates(f.db,'absent').rows.map(r => r.item.ref.memoryId));
   let baseHits = 0, newHits = 0;
   for (let i = count-49; i <= count; i++) {
@@ -46,13 +45,13 @@ for (const count of [1025,2049,6500]) test(`fresh notes found at default limit: 
     const result = ok(await f.core.recall({ readSet: [namespace], query: marker(i) }));
     if (result.memories.some(row => row.memory.id === key(i))) newHits++;
   }
-  t.diagnostic('FRESH_NOTES ' + JSON.stringify({ count, baseHits, newHits, total: 50 }));
+  t.diagnostic('FRESH_NOTES ' + JSON.stringify({ layout, count, baseHits, newHits, total: 50 }));
   assert.equal(newHits,50);
 });
 
-test('ranking retains older stronger matches ahead of newer weaker matches', t => {
+test('ranking retains older stronger matches ahead of newer weaker matches', async t => {
   installRecallScanClock(t);
-  const f = fixture(t); seed(f.db,2049);
+  const f = await layoutFixture(t, layout); seed(f.db,2049);
   f.db.prepare('UPDATE memories SET content=? WHERE id=?').run('alpha beta gamma old strong note',key(1));
   f.db.prepare('UPDATE memories SET content=? WHERE id=?').run('alpha newest weak note',key(2049));
   const result = query(f.runtime,'alpha beta gamma');
@@ -83,7 +82,7 @@ async function mapHarness(f) {
 test('budget spends no less than floor; signed cursor replays the exact boundary across cold calls', async t => {
   let now = 0;
   const setClock = installRecallScanClock(t, () => now);
-  const f = fixture(t); seed(f.db,2049);
+  const f = await layoutFixture(t, layout); seed(f.db,2049);
   const score = createQueryScore('note'); let scored = 0;
   const first = query(f.runtime,'note',{ score(text) { scored++; now += 1; return score(text); } });
   assert.equal(QUERY_SCAN_BUDGET_MS,400);
@@ -111,9 +110,9 @@ test('budget spends no less than floor; signed cursor replays the exact boundary
   assert.equal(map(page1.nextCursor).error?.code,'cursor_stale');
 });
 
-test('residual history/review filters consume physical rows and budget without scoring', t => {
+test('residual history/review filters consume physical rows and budget without scoring', async t => {
   let now = 0; installRecallScanClock(t,()=>now++);
-  const f = fixture(t); seed(f.db,2049);
+  const f = await layoutFixture(t, layout); seed(f.db,2049);
   f.db.exec("UPDATE memories SET currentness='historical' WHERE updated_at > '2026-01-01T00:17:04.000Z'");
   const result = query(f.runtime,'note',{ score() { assert.fail('historical text scored'); } });
   // No content callbacks are needed for elapsed time to stop the physical scan.
@@ -121,9 +120,9 @@ test('residual history/review filters consume physical rows and budget without s
   assert.equal(result.scanExhausted,false);
 });
 
-test('foreign owner and project rows never reach physical pages or the scorer', t => {
+test('foreign owner and project rows never reach physical pages or the scorer', async t => {
   installRecallScanClock(t);
-  const f = fixture(t); seed(f.db,100);
+  const f = await layoutFixture(t, layout); seed(f.db,100);
   const before = query(f.runtime,'note');
   seed(f.db,2049,{ ...ns,ownerId:'foreign-owner' },10000);
   seed(f.db,2049,{ ...ns,scope:'project',projectId:'foreign-project' },20000);
@@ -132,98 +131,9 @@ test('foreign owner and project rows never reach physical pages or the scorer', 
   assert.equal(after.scanBoundary.rows,100);
 });
 
-test('DELETE writer commits between pages; one epoch change restarts and forget is absent', t => {
+test('20,000-row cap never scores the remaining sentinel and retains only the best 1,024', async t => {
   installRecallScanClock(t);
-  const f = fixture(t); seed(f.db,2049);
-  const writer = openMemoryCore({ path:f.path,model:model() }); t.after(()=>writer.close());
-  let scored = 0, commits = 0, changed = false;
-  const exec = f.db.exec.bind(f.db);
-  t.mock.method(f.db,'exec',sql => {
-    assert.notEqual(sql,'BEGIN IMMEDIATE');
-    const result = exec(sql);
-    if (sql === 'COMMIT' && scored > 0 && !changed) {
-      changed=true; commits++;
-      // The writer's real BEGIN IMMEDIATE and COMMIT must both succeed with
-      // the scan suspended between snapshots on a DELETE-journal store.
-      ok(writer.forget({ namespace,memoryId:key(2049),expectedRevision:1 }));
-    }
-    return result;
-  });
-  const result = query(f.runtime,'note',{ score(text) { scored++; return createQueryScore('note')(text); } });
-  assert.equal(commits,1); assert.ok(scored > 2049);
-  assert.equal(result.scanBoundary.rows,2048);
-  assert.ok(result.rows.every(r=>r.item.ref.memoryId !== key(2049)));
-});
-
-for (const lastRow of [false,true]) test(`two epoch changes revalidate the partial prefix, forgotten last key ${lastRow}`, t => {
-  installRecallScanClock(t);
-  const f=fixture(t); seed(f.db,2049);
-  const writer=openMemoryCore({path:f.path,model:model()}); t.after(()=>writer.close());
-  let scored=0, previous=0, mutations=0;
-  const exec=f.db.exec.bind(f.db);
-  t.mock.method(f.db,'exec',sql=>{
-    const result=exec(sql);
-    if(sql==='COMMIT'&&scored>previous&&mutations<2) {
-      previous=scored;
-      ok(writer.forget({namespace,memoryId:key(mutations===0?2049:lastRow?1793:2048),expectedRevision:1}));
-      mutations++;
-    }
-    return result;
-  });
-  const result=query(f.runtime,'note',{score(text){scored++;return createQueryScore('note')(text);}});
-  assert.equal(mutations,2); assert.equal(result.scanExhausted,false);
-  assert.equal(result.scanBoundary.stop,'changed'); assert.equal(result.scanBoundary.rows,255);
-  assert.ok(result.rows.length>0);
-  assert.ok(result.rows.every(r=>![key(2049),key(lastRow?1793:2048)].includes(r.item.ref.memoryId)));
-  assert.equal(result.scanBoundary.last.id,key(lastRow?1794:1793));
-  assert.ok(result.rows.every(r=>r.item.ref.memoryId!==key(1792)),
-    'reconciliation never fills a deletion with the next older row outside the interrupted prefix');
-  const replay=query(f.runtime,'note',{scanBoundary:result.scanBoundary,expectedEpoch:result.epoch});
-  assert.deepEqual(replay,result);
-});
-
-test('restart reapplies the floor while keeping the original spent budget', t => {
-  let now=0; installRecallScanClock(t,()=>now);
-  const f=fixture(t); seed(f.db,2049);
-  const writer=openMemoryCore({path:f.path,model:model()}); t.after(()=>writer.close());
-  const exec=f.db.exec.bind(f.db); let scored=0, changed=false;
-  t.mock.method(f.db,'exec',sql=>{
-    const result=exec(sql);
-    if(sql==='COMMIT'&&!changed&&scored===300) {
-      ok(writer.forget({namespace,memoryId:key(2049),expectedRevision:1}));
-      changed=true; now=500;
-    }
-    return result;
-  });
-  const result=query(f.runtime,'note',{score(){scored++;now+=changed?0.1:1;return 1;}});
-  assert.equal(changed,true); assert.equal(scored,300+1024);
-  assert.equal(result.scanBoundary.rows,1024); assert.equal(result.scanBoundary.stop,'budget');
-  assert.equal(result.scanExhausted,false);
-  assert.ok(result.rows.every(r=>r.item.ref.memoryId!==key(2049)));
-});
-
-test('per-page time and row holds release SHARED while the floor finishes', t => {
-  let now=0; installRecallScanClock(t,()=>now);
-  const f=fixture(t); seed(f.db,2049);
-  const exec=f.db.exec.bind(f.db), holds=[];
-  let started, bodies=0, previous=0;
-  t.mock.method(f.db,'exec',sql=>{
-    const result=exec(sql);
-    if(sql==='BEGIN') started=now;
-    if(sql==='COMMIT'&&bodies>previous) {
-      holds.push({rows:bodies-previous,ms:now-started}); previous=bodies;
-    }
-    return result;
-  });
-  const result=query(f.runtime,'note',{score(){bodies++;now++;return 1;}});
-  assert.equal(result.scanBoundary.rows,1024);
-  assert.ok(holds.length>4);
-  assert.ok(holds.every(h=>h.rows<=QUERY_CANDIDATES.page&&h.ms<=QUERY_CANDIDATES.pageMs));
-});
-
-test('20,000-row cap never scores the remaining sentinel and retains only the best 1,024', t => {
-  installRecallScanClock(t);
-  const f=fixture(t); seed(f.db,20001);
+  const f=await layoutFixture(t, layout); seed(f.db,20001);
   let bodies=0;
   const result=query(f.runtime,'note',{score(text){
     bodies++; assert.ok(!text.startsWith(marker(1)+' ')); return 1;
@@ -233,38 +143,34 @@ test('20,000-row cap never scores the remaining sentinel and retains only the be
   assert.equal(result.scanExhausted,false);
 });
 
-test('suppression between pages refreshes canonical decisions before restart, including request memo', async t => {
+}
+
+test('suppression epoch movement drops the tail before suppressed text can be scored', async t => {
   installRecallScanClock(t);
-  const f = safetyFixture(t,18); await f.migrate();
-  let db;
-  const runtime = createMemoryRuntime({ path:f.path },{attachRaw(connection) { db=connection; }});
-  t.after(()=>runtime.close()); seed(db,2049);
+  const f = await layoutFixture(t, 53); seed(f.db,2049);
   const writer = new DatabaseSync(f.path); t.after(()=>writer.close()); writer.exec('PRAGMA busy_timeout=0');
-  const exec = db.exec.bind(db); let changed=false, scoresAfter=0;
-  t.mock.method(db,'exec',sql => {
-    const result=exec(sql);
+  const exec = f.db.exec.bind(f.db); let changed=false, scored=0;
+  t.mock.method(f.db,'exec',sql => {
+    const value=exec(sql);
     if (sql==='COMMIT'&&!changed) {
       changed=true;
-      transaction(writer,()=>writeContentSuppressionInside(writer,{namespace:ns,kind:'memory',key:key(2049),
+      transaction(writer,()=>writeContentSuppressionInside(writer,{namespace:ns,kind:'memory',key:key(1),
         reason:'purge',actionId:'synthetic-suppression'}));
     }
-    return result;
+    return value;
   });
-  const result = withContentSuppressionRequest(()=>query(runtime,'note',{score(text) {
-    if(changed) { assert.ok(!text.includes(marker(2049)+' ')); scoresAfter++; }
-    return 1;
+  const result = withContentSuppressionRequest(()=>query(f.runtime,'note',{score(text) {
+    assert.ok(!text.includes(marker(1)+' ')); scored++; return 1;
   }}));
-  assert.ok(scoresAfter>0);
-  assert.ok(result.rows.every(r=>r.item.ref.memoryId!==key(2049)));
-  assert.notEqual(result.suppressionEpoch,'0:0');
+  assert.equal(scored,1024); assert.equal(result.scanBoundary.rows,1024);
+  assert.equal(result.scanExhausted,false); assert.equal(result.scanBoundary.stop,'changed');
+  assert.ok(result.rows.every(r=>r.item.ref.memoryId!==key(1)));
 });
 
-test('public recall drops a newly suppressed winning note and delivers ordinary incomplete coverage', async t => {
+test('public delivery freshness refuses an E0 floor after its winning memory is suppressed', async t => {
   installRecallScanClock(t);
-  const f=safetyFixture(t,18); await f.migrate();
-  const db=f.connect(); seed(db,2049); t.after(()=>db.close());
+  const f=await layoutFixture(t,53); seed(f.db,2049);
   const writer=new DatabaseSync(f.path); writer.exec('PRAGMA busy_timeout=0'); t.after(()=>writer.close());
-  const core=openMemoryCore({path:f.path,model:model()}); t.after(()=>core.close());
   const prepare=DatabaseSync.prototype.prepare, exec=DatabaseSync.prototype.exec;
   let reader, changed=false;
   t.mock.method(DatabaseSync.prototype,'prepare',function(sql) {
@@ -280,8 +186,9 @@ test('public recall drops a newly suppressed winning note and delivers ordinary 
     }
     return result;
   });
-  const result=ok(await core.recall({readSet:[namespace],query:marker(2049)}));
-  assert.equal(changed,true); assert.deepEqual(result.memories,[]);
-  assert.equal(result.coverage,'budget_exhausted');
-  assert.equal(Object.hasOwn(result,'partialReason'),false);
+  const result=await f.core.recall({readSet:[namespace],query:marker(2049)});
+  assert.equal(changed,true); assert.equal(result.ok,false);
+  assert.equal(result.error.code,'cursor_stale');
+  assert.equal(JSON.stringify(result).includes(marker(2049)),false);
+  assert.deepEqual(ok(await f.core.recall({readSet:[namespace],query:marker(2049)})).memories,[]);
 });

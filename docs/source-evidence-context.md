@@ -44,15 +44,21 @@ qualified and unqualified behavior remains unchanged.
 Every recall mode uses the default recency keyset scan described in
 [defaults](defaults.md). It visits at least 1,024 nondeleted physical rows,
 then continues within a fixed 400 ms monotonic budget up to 20,000 rows per
-authorized namespace. Pages release their deferred read transactions after at
-most 256 rows or 25 ms. Historical, awaiting and projection-excluded rows
+authorized namespace. The floor, safety checks and placement share one
+normal-timeout deferred transaction. Tail pages use timeout zero, restored
+synchronously, and release SHARED after at most 256 rows or 25 ms. An epoch
+change discards the tail without restarting. New tail candidates are placed in
+one final try-once read that rechecks the floor epochs; contention or movement
+there returns the placed floor, subject to existing delivery freshness checks.
+Historical, awaiting and projection-excluded rows
 consume the allowance without exposing content or receipts to scoring.
 Source contexts score the body and first four stable-ID receipts of each
 eligible memory, retaining the best 1,024 by literal score then ID. Recency
-only determines scan order. A budget, row cap or discarded eligible candidate
+only determines scan order. A budget, row cap, busy tail or discarded eligible candidate
 keeps coverage incomplete; successful recall does not prove all sources were
 searched. Signed cursors replay the original scan boundary without a new time
-budget. The candidate-policy constructor option has been removed. Namespace
+budget; a busy tail or changed epoch makes a continuation `cursor_stale`.
+The candidate-policy constructor option has been removed. Namespace
 authority, selector/answer budgets and final source payload remain unchanged.
 
 Fetch returns every retained receipt for one memory or fails; it does not slice

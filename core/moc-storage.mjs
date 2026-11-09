@@ -1,10 +1,10 @@
 import { performance } from 'node:perf_hooks';
-import { cachedContentLayout } from './content-safety-schema.mjs';
+import { cachedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
 import { contentReadSafety, receiptReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { contentSuppressionRequestFenceInside, contentSuppressionReasonInside, cachedContentSuppressionRequestInside,
-  contentSuppressionFenceInside, withContentSuppressionRequest, resetContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+  contentSuppressionFenceInside, withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { randomUUID } from "node:crypto";
-import { transaction } from "./database.mjs";
+import { transaction, readTransaction, isStorageBusy } from "./database.mjs";
 import { fail } from "./validation.mjs";
 import { QUERY_SCAN_BUDGET_MS, SOURCE_QUERY_RECEIPT_LIMIT, QUERY_CANDIDATES } from './query-candidates.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
@@ -392,7 +392,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
           typeof scanBoundary.last.id !== 'string' || typeof scanBoundary.last.updatedAt !== 'string') ||
         !Number.isSafeInteger(expectedEpoch))) fail('invalid_cursor');
     // A scan owns these reset-on-get statements; no cursor or SHARED lock
-    // survives a page's COMMIT. The final placement pages use the same cache.
+    // survives a page's COMMIT. Floor and final placement share the cache.
     const discoveryStatements = new Map();
     const discoveryPrepare = sql => {
         sql = projectSQL(sql);
@@ -403,7 +403,6 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     const started = performance.now();
     let currentEpoch, currentSuppressionEpoch, readMemo;
     let last = null, visited = 0, more = true, pruned = false, stop;
-    let restarts = 0, terminalRows, terminalThrough;
     const eligible = [];
     const safety = Boolean(cachedContentLayout(db)?.suppressionRevision);
     const extra = safety ? ',owner_id,scope,project_id,review_state' + readAncestry('memories') : '';
@@ -459,23 +458,11 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       const physicalSQL = `SELECT id, revision, updated_at FROM memories
         INDEXED BY namespace_memories WHERE ${namespaceWhere} AND deleted = 0`;
       const afterSQL = ' AND updated_at <= ? AND (updated_at < ? OR (updated_at = ? AND id > ?))';
-      const throughSQL = ' AND updated_at >= ? AND (updated_at > ? OR (updated_at = ? AND id <= ?))';
       const orderSQL = ' ORDER BY updated_at DESC, id ASC LIMIT ?';
       const firstPage = db.prepare(physicalSQL + orderSQL);
       const nextPage = db.prepare(physicalSQL + afterSQL + orderSQL);
-      let throughFirstPage, throughNextPage;
-      const physicalRows = (position, limit) => {
-        let statement = position ? nextPage : firstPage;
-        const parameters = boundary(ns);
-        if (terminalThrough) {
-          statement = position
-            ? throughNextPage ??= db.prepare(physicalSQL + throughSQL + afterSQL + orderSQL)
-            : throughFirstPage ??= db.prepare(physicalSQL + throughSQL + orderSQL);
-          parameters.push(terminalThrough.updatedAt, terminalThrough.updatedAt, terminalThrough.updatedAt, terminalThrough.id);
-        }
-        if (position) parameters.push(position.updatedAt, position.updatedAt, position.updatedAt, position.id);
-        return statement.all(...parameters, limit);
-      };
+      const physicalRows = (position, limit) => (position ? nextPage : firstPage).all(
+        ...boundary(ns), ...(position ? [position.updatedAt, position.updatedAt, position.updatedAt, position.id] : []), limit);
       const projected = projectPrepare(`SELECT id, revision, content${safety ? ',deleted,currentness' + extra : ''}
         FROM memories WHERE ${namespaceWhere} AND id = ? AND revision = ?
           AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current'`);
@@ -490,111 +477,125 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         eligible.splice(low, 0, candidate);
         if (eligible.length > top) { eligible.pop(); pruned = true; }
       };
-      while (!stop) {
-        let changed = false;
-        readPage(() => {
-          const pageStarted = performance.now();
-          assertIndexAvailable(ns);
-          const observed = epochs();
-          if (replay && (observed[0] !== expectedEpoch ||
-              expectedSuppressionEpoch !== undefined && observed[1] !== expectedSuppressionEpoch)) fail('cursor_stale');
-          if (currentEpoch === undefined) [currentEpoch, currentSuppressionEpoch] = observed;
-          else if (!sameEpochs(observed)) {
-            if (terminalRows !== undefined) fail('index_revision_conflict');
-            changed = true;
-            return;
+      const place = candidate => {
+        const { memory, winningExcerpt } = candidate;
+        const placement = discoveryPrepare(`SELECT r.* FROM moc_memory_refs r
+          JOIN mocs parent ON parent.id = r.moc_id
+          WHERE r.memory_id = ? AND r.memory_revision = ? AND ${qualifiedNamespace('parent')}
+            AND parent.level = 1 AND parent.revision = r.moc_revision
+          ORDER BY parent.canonical_title, parent.id LIMIT 1`)
+          .get(memory.id, memory.revision, ...boundary(ns));
+        const candidateLabel = memoryLabel(winningExcerpt ?? memory.content);
+        return { item: placement
+          ? { type: 'ref', ref: memoryRef(placement), label: candidateLabel }
+          : { type: 'unfiled', ref: { memoryId: memory.id, revision: memory.revision }, label: candidateLabel } };
+      };
+      const result = rows => ({ rows, epoch: currentEpoch, suppressionEpoch: currentSuppressionEpoch,
+        scanExhausted: stop !== 'changed' && !more && !pruned,
+        scanBoundary: { rows: visited, last, stop } });
+      const scanRows = (limit, tail) => {
+        const pageStarted = performance.now();
+        const batch = physicalRows(last, limit);
+        let consumed = 0;
+        for (const physical of batch) {
+          // Residual filters and projection denials consume rows and time.
+          const elapsed = performance.now() - started;
+          if (tail && !replay && elapsed >= QUERY_SCAN_BUDGET_MS) {
+            stop = 'budget'; break;
           }
-          readMemo = safety ? createContentReadMemo(db) : undefined;
-          const remaining = (replay ? scanBoundary.rows : terminalRows ?? scan) - visited;
-          const limit = Math.min(page, remaining);
-          const batch = limit ? physicalRows(last, limit) : [];
-          let consumed = 0;
-          for (const physical of batch) {
-            // Residual filters and projection denials consume rows and time.
-            if (!replay && terminalRows === undefined && visited >= floor &&
-                performance.now() - started >= QUERY_SCAN_BUDGET_MS) {
-              stop = 'budget'; break;
-            }
-            visited++; consumed++;
-            last = { updatedAt: physical.updated_at, id: physical.id };
-            // Physical pages never read content. Probe active-generation
-            // membership before the projected, current/review-filtered read.
-            if (discoveryPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
-              AND revision = ?`).get(...boundary(ns), physical.id, physical.revision)) {
-              const memory = projected.get(...boundary(ns), physical.id, physical.revision);
-              if (memory && (!safety || safeMemory(ns, memory, true))) retain(scoreMemory(memory));
-            }
-            if (performance.now() - pageStarted >= pageMs) break;
+          visited++; consumed++;
+          last = { updatedAt: physical.updated_at, id: physical.id };
+          // IDs-only physical reads, then active-generation membership, then
+          // projected content and all canonical safety predicates.
+          if (discoveryPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
+            AND revision = ?`).get(...boundary(ns), physical.id, physical.revision)) {
+            const memory = projected.get(...boundary(ns), physical.id, physical.revision);
+            if (memory && (!safety || safeMemory(ns, memory, true))) retain(scoreMemory(memory));
           }
-          // A full/partly consumed page continues in a new snapshot. Only the
-          // hard cap needs an ID/key-only sentinel (its final page is <256).
-          // Replay already has the signed stop cause at an unchanged epoch.
-          more = !(consumed === batch.length && batch.length < limit);
-          if (replay && visited === scanBoundary.rows) {
-            stop = scanBoundary.stop;
-            more = stop !== 'end';
-          }
-          else if (terminalRows !== undefined && (visited === terminalRows || !more)) stop = 'changed';
-          else if (!more) stop = 'end';
-          else if (!replay && visited === scan) {
-            more = physicalRows(last, 1).length !== 0;
-            stop = more ? 'cap' : 'end';
-          }
-          if (!sameEpochs(epochs())) fail('index_revision_conflict');
-        });
-        if (changed) {
-          if (replay) fail('cursor_stale');
-          resetContentSuppressionRequestInside(db);
-          if (++restarts > 1) {
-            // Stop discovery at this pass's visited-row boundary. Revalidate
-            // that prefix under the new epochs so removed/suppressed text is
-            // discarded and the returned boundary can be replayed exactly.
-            // This bounded reconciliation ignores time, like cursor replay;
-            // any further movement fails the final freshness fence.
-            terminalRows = visited;
-            terminalThrough = last;
-          }
-          eligible.length = 0; visited = 0; last = null; more = true; pruned = false;
-          currentEpoch = undefined;
+          if (tail && performance.now() - pageStarted >= pageMs) break;
         }
-      }
-      const boundaryResult = { rows: visited, last, stop };
-      if (replay && JSON.stringify(boundaryResult) !== JSON.stringify(scanBoundary)) fail('cursor_stale');
-      for (const candidate of eligible) {
-        candidate.sourceLabel = candidate.winningExcerpt === undefined
-          ? undefined : memoryLabel(candidate.winningExcerpt);
-      }
-      const rows = [];
-      // Bounded placement pages close their read snapshots too. Recheck the
-      // returned pass's epochs before each page and once at final delivery.
-      for (let offset = 0; offset < eligible.length;) {
-        readPage(() => {
-          assertIndexAvailable(ns);
-          if (!sameEpochs(epochs())) fail('index_revision_conflict');
-          const pageStarted = performance.now();
-          for (let count = 0; offset < eligible.length && count < page; count++) {
-            const { memory, sourceLabel } = eligible[offset++];
-            const placement = discoveryPrepare(`SELECT r.* FROM moc_memory_refs r
-              JOIN mocs parent ON parent.id = r.moc_id
-              WHERE r.memory_id = ? AND r.memory_revision = ? AND ${qualifiedNamespace('parent')}
-                AND parent.level = 1 AND parent.revision = r.moc_revision
-              ORDER BY parent.canonical_title, parent.id LIMIT 1`)
-              .get(memory.id, memory.revision, ...boundary(ns));
-            rows.push({ item: placement
-              ? { type: 'ref', ref: memoryRef(placement), label: sourceLabel ?? memoryLabel(memory.content) }
-              : { type: 'unfiled', ref: { memoryId: memory.id, revision: memory.revision },
-                label: sourceLabel ?? memoryLabel(memory.content) } });
-            if (performance.now() - pageStarted >= pageMs) break;
-          }
-          if (!sameEpochs(epochs())) fail('index_revision_conflict');
-        });
-      }
+        more = !(consumed === batch.length && batch.length < limit);
+        const bound = replay ? scanBoundary.rows : scan;
+        if (visited === bound || !tail) more = physicalRows(last, 1).length !== 0;
+        if (replay && visited === bound) {
+          stop = scanBoundary.stop;
+          more = stop !== 'end';
+        } else if (!more) stop = 'end';
+        else if (!replay && visited === scan) stop = 'cap';
+      };
+      let floorResult;
+      const placements = new Map();
+      // The floor, its safety reads and its placement all share ONE normal-
+      // timeout snapshot. Small stores need no subsequent read transaction.
       readPage(() => {
         assertIndexAvailable(ns);
+        [currentEpoch, currentSuppressionEpoch] = epochs();
+        if (replay && (currentEpoch !== expectedEpoch ||
+            expectedSuppressionEpoch !== undefined && currentSuppressionEpoch !== expectedSuppressionEpoch)) fail('cursor_stale');
+        readMemo = safety ? createContentReadMemo(db) : undefined;
+        scanRows(Math.min(floor, replay ? scanBoundary.rows : scan), false);
+        for (const candidate of eligible) placements.set(candidate, place(candidate));
         if (!sameEpochs(epochs())) fail('index_revision_conflict');
+        floorResult = result(eligible.map(candidate => placements.get(candidate)));
       });
-      return { rows, epoch: currentEpoch, suppressionEpoch: currentSuppressionEpoch,
-        scanExhausted: stop !== 'changed' && !more && !pruned, scanBoundary: boundaryResult };
+      // Dropping the tail also drops its signed boundary. Replay reconstructs
+      // precisely this floor under E0, never a mixed-epoch candidate list.
+      const floorOnly = cause => ({ ...floorResult, scanExhausted: false,
+        scanBoundary: { ...floorResult.scanBoundary, stop: cause } });
+      const busyStop = {};
+      const tryReadPage = work => {
+        const savedTimeout = db.prepare('PRAGMA busy_timeout').get().timeout;
+        try {
+          db.exec('PRAGMA busy_timeout=0');
+          return withContentSuppressionRequest(() => readTransaction(db, () => {
+            checkInstalledContentSafety(db);
+            return work();
+          }, { readReady() {
+            // Acquire SHARED before any content/suppression/refusal machinery.
+            // Only BUSY at this statement is converted to ordinary truncation.
+            try {
+              db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${namespaceWhere}`).get(...boundary(ns));
+            } catch (error) {
+              if (isStorageBusy(error)) throw busyStop;
+              throw error;
+            }
+          } }), { fresh: true });
+        } catch (error) {
+          if (error !== busyStop) throw error;
+          return busyStop;
+        } finally {
+          db.exec('PRAGMA busy_timeout=' + savedTimeout);
+        }
+      };
+      while (!stop) {
+        if (!replay && performance.now() - started >= QUERY_SCAN_BUDGET_MS) { stop = 'budget'; break; }
+        const accepted = tryReadPage(() => {
+          if (!sameEpochs(epochs())) return false;
+          assertIndexAvailable(ns);
+          readMemo = safety ? createContentReadMemo(db) : undefined;
+          scanRows(Math.min(page, (replay ? scanBoundary.rows : scan) - visited), true);
+          return true;
+        });
+        if (accepted !== true) {
+          if (replay) fail('cursor_stale');
+          // Movement and contention both remain ordinary incomplete results.
+          return floorOnly(accepted === busyStop ? 'budget' : 'changed');
+        }
+      }
+      if (replay && JSON.stringify({ rows: visited, last, stop }) !== JSON.stringify(scanBoundary)) fail('cursor_stale');
+      if (eligible.some(candidate => !placements.has(candidate))) {
+        const accepted = tryReadPage(() => {
+          if (!sameEpochs(epochs())) return false;
+          assertIndexAvailable(ns);
+          for (const candidate of eligible) if (!placements.has(candidate)) placements.set(candidate, place(candidate));
+          return true;
+        });
+        if (accepted !== true) {
+          if (replay) fail('cursor_stale');
+          return floorOnly(accepted === busyStop ? 'budget' : 'changed');
+        }
+      }
+      return result(eligible.map(candidate => placements.get(candidate)));
     } catch (error) {
       primaryError = true;
       throw error;

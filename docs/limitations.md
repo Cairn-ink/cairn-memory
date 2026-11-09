@@ -1438,11 +1438,16 @@ already sent in a begun model request cannot be withdrawn retroactively.
 All recall modes now share newest-first candidate discovery. The former
 experimental `sourceCandidatePolicy` constructor option has been removed.
 The scan visits at least 1,024 physical nondeleted rows, then stops at its fixed
-400 ms monotonic budget, 20,000-row cap, or the end. Pages use deferred
-transactions bounded by 256 rows or 25 ms. Historical, awaiting and
+400 ms monotonic budget, 20,000-row cap, or the end. The floor, safety checks
+and placement share one normal-timeout deferred transaction. Tail pages use
+zero timeout, restored synchronously, with at most 256 rows or 25 ms per page.
+An epoch change discards the tail without restarting. Final placement of new
+tail candidates is one try-once read that rechecks the floor epochs; contention
+or movement there returns the placed floor, subject to existing freshness checks.
+Historical, awaiting and
 projection-rejected rows still consume rows and time. The best 1,024 candidates
 are retained by literal overlap then ID, independent of recency. Budget/cap
-exhaustion and pruning are incomplete coverage, without a retryable error.
+exhaustion, a busy tail and pruning are incomplete coverage, without a retryable error.
 This widens the searchable prefix within the same authority; it does not change
 source DTOs, model budgets or first-four-receipt/Unicode-run/CJK limitations.
 The budget is an engineering bound, not a latency or answer-quality SLA.
@@ -2514,8 +2519,7 @@ again and replaced a crypto callback after construction had bound it. A later
 47/49 run expected public Memory state `current` instead of `active`. All those
 commands exited 1; fixture corrections preserve strict validation, suppression,
 source pruning and callback binding. Worker logs, including these failures, are
-retained under `/tmp/cairn-raw-p3-evidence.67nhhd/worker-delete-*.log`; primary
-independent logs use `/tmp/cairn-raw-p3b-evidence.xOAiQk/` instead. Neither earlier
+retained privately; primary independent logs are kept separately. Neither earlier
 green runs nor a setup failure substitute for final frozen-source verification.
 
 The first independent P3b Spec review found two further defects on candidate
@@ -2560,8 +2564,7 @@ stopped on qualification conflict and invalid profile setup before the real
 authority-loss red; a later expanded run passed 15/17 because history setup used
 ordinary supersede on a qualified Memory. History now uses real qualified
 binding/transition, preserving the existing refusal. Correction logs, including
-all reds and setup failures, are under
-`/tmp/cairn-raw-p3b-evidence.xOAiQk/review-correction-*.log`.
+all reds and setup failures, are kept outside the repository.
 
 ## Internal Raw sources P3c: bounded local references, not installed Raw adoption
 
@@ -2656,8 +2659,7 @@ now proves exclusion afterward. An 11/13 bounds run reused an event ID across
 different sessions and correctly conflicted. The initial legacy correction
 matrix passed 4/6 because its correction request used admission-shaped fields
 rather than the existing strict correction DTO. Those commands exited 1; fixture
-fixes did not relax runtime validation. Logs are retained under
-`/tmp/cairn-raw-p3c-evidence.n7PShP/worker-*.log`. Final frozen-source gates and
+fixes did not relax runtime validation. Logs are retained privately. Final frozen-source gates and
 independent reviews are recorded separately in the plan/PR; earlier green runs
 are not final-source evidence or measured semantic quality.
 

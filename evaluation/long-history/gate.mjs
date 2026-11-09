@@ -82,12 +82,10 @@ const captureInput = (eventId, messages, ns = namespace) => ({ namespace: ns,
 const message = (id, content) => ({ id, role: 'user', content });
 const opened = (workspace, filename, model, candidatePolicy) => {
   const path = join(workspace.path, filename);
-  let core = openMemoryCore({ path, model, captureSourcePolicy: 'indexed-evidence-v1',
-    ...(candidatePolicy ? { sourceCandidatePolicy: candidatePolicy } : {}) });
+  let core = openMemoryCore({ path, model, captureSourcePolicy: 'indexed-evidence-v1' });
   workspace.defer(() => { core?.close(); core = null; });
   return { path, get core() { return core; }, close() { core?.close(); core = null; },
-    reopen() { core?.close(); core = openMemoryCore({ path, model, captureSourcePolicy: 'indexed-evidence-v1',
-      ...(candidatePolicy ? { sourceCandidatePolicy: candidatePolicy } : {}) }); return core; } };
+    reopen() { core?.close(); core = openMemoryCore({ path, model, captureSourcePolicy: 'indexed-evidence-v1' }); return core; } };
 };
 const passageIn = (receipts, marker) => receipts?.some(row => row.excerpt.includes(marker)) ?? false;
 

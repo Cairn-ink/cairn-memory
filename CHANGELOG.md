@@ -5,9 +5,11 @@
 - Use one newest-first keyset scan for body and source recall: a 1,024-row
   floor, fixed 400 ms budget and 20,000-row cap, retaining the best 1,024 by
   query overlap then ID. Remove the candidate-policy constructor option.
-- Release deferred read locks between bounded pages, restart once after an
-  epoch change, and bind the scan boundary into signed continuation cursors.
-  Budget exhaustion remains ordinary incomplete coverage. See
+- Read the floor and its placement in one normal-timeout deferred transaction,
+  then use try-once tail pages. Epoch changes discard the tail without restarting;
+  final tail placement rechecks the floor epochs in one try-once read. Bind the
+  scan boundary into signed continuation cursors; busy continuations are stale.
+  Budget exhaustion and a busy tail remain ordinary incomplete coverage. See
   [defaults](docs/defaults.md). Earlier prefix/opt-in entries are historical.
 
 ## Unreleased — optional local Raw index

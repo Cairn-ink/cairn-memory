@@ -123,14 +123,18 @@ fetched candidates. Empty arrays are valid. Forged IDs, revisions, extra fields
 and group IDs fail validation. All query/content/receipt/label text is untrusted
 data. Structural validation does not prove that a model judges relevance well.
 
-Recall's private `literal-recency-keyset-overlap-v3` policy scans authorized
+Recall's private `literal-recency-keyset-overlap-v4` policy scans authorized
 nondeleted rows newest first (`updated_at DESC, id ASC`) using the existing
 `namespace_memories` index. All recall modes share a 1,024-row floor, fixed
 400 ms monotonic budget and 20,000-row cap. Historical, awaiting and
 projection-rejected rows consume rows and time without contributing content.
-Only projected current records become candidates. Each deferred page releases
-SHARED after at most 256 rows or 25 ms, checked between rows. One epoch change
-restarts the pass; repeated changes leave coverage incomplete. The scanner
+Only projected current records become candidates. The floor, safety checks and
+placement share one normal-timeout deferred read transaction. Later pages use
+busy timeout zero, synchronously restored, with at most 256 rows or 25 ms checked
+between rows. BUSY at the first cheap read stops the tail. Epoch changes discard
+the tail without restarting; new tail candidates are placed in one final try-once
+read that rechecks the floor epochs. Contention or movement there returns the
+already placed floor, subject to the existing delivery freshness fences. The scanner
 requires the existing index, with no migration or full-scan fallback.
 The snapshot is reused across both pages in one recall.
 Full bodies are scored by the number of distinct

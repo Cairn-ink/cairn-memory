@@ -782,8 +782,10 @@ and those four excerpts. A receipt supplies the existing 120-code-point select
 preview only when it scores strictly above the body; the first stable-ID receipt
 wins a receipt tie, while a body tie keeps the body preview. All recall modes scan nondeleted physical rows newest first on the existing
 `namespace_memories` index, with a 1,024-row floor, a fixed 400 ms monotonic
-budget and a 20,000-row cap. Deferred keyset pages visit at most 256 rows or
-25 ms before releasing SHARED. Currentness, review state and active-generation
+budget and a 20,000-row cap. The floor and its placement share one
+normal-timeout deferred transaction. Tail pages use timeout zero, restored
+synchronously, and visit at most 256 rows or 25 ms before releasing SHARED.
+Currentness, review state and active-generation
 membership are residual eligibility checks; rejected rows still consume time
 and rows. The best 1,024 candidates are retained by overlap then ID. Body-only
 recall scores no receipts; source modes score up to four excerpts of at most
@@ -807,14 +809,17 @@ receipt five or later cannot help that memory reach selection. Existing epoch,
 revision and final-snapshot checks prevent stale later use and finalization;
 they cannot retract a preview after a model request has already begun.
 
-The `literal-recency-keyset-overlap-v3` policy binds the cap, page size and
+The `literal-recency-keyset-overlap-v4` policy binds the cap, page size and
 top bound in private recall cursors, together with a signed scan boundary
 (visited rows, last recency key and stop cause). A continuation rebuilds exactly
-that prefix without the time budget and rejects changed epochs. Older policy
-cursors fail validation. One epoch change restarts from newest with a fresh
-floor and the original budget clock. The returned pass's namespace and
-suppression epochs are rechecked during final short placement reads.
-Budget/cap exhaustion or top-K pruning sets `scanExhausted:false` and ordinary
+that prefix without the time budget and rejects changed epochs or a busy tail.
+Older policy cursors fail validation. The floor, its safety checks and placement
+share one normal-timeout deferred read. Tail pages and final placement use
+try-once reads with timeout zero, restored synchronously after each read.
+There are no restarts: epoch movement discards the tail and returns the floor
+under its original epochs, subject to existing delivery freshness checks.
+Tail placement also rechecks those epochs and falls back to the floor on BUSY
+or movement. Budget/cap exhaustion, a busy tail, movement or top-K pruning sets `scanExhausted:false` and ordinary
 incomplete coverage; it never adds an error, partial reason or retry status.
 No public map, MCP, HTTP, Hermes or persisted schema field is added.
 

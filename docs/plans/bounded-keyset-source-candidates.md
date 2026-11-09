@@ -7,8 +7,15 @@
 > observations and other contracts below remain records of their original version.
 
 The current standalone resource helper is `scripts/measure-recall-recency.mjs`.
-It accepts one synthetic namespace size and reports cold/warm body-only scan
-and recall timings, rows visited, exhaustion and longest deferred page hold.
+It accepts `--layout plain` or `--layout 53`, an optional `--writer`, and one
+synthetic namespace size. It reports cold/warm body-only scan and recall timings,
+rows visited, exhaustion, floor/tail holds and concurrent writer waits.
+The writer loop is unpaced unless `--writer-pause-ms N` is supplied. Failed
+samples and resource-bound violations are printed and produce a nonzero exit.
+The shipped floor and placement share one normal-timeout deferred read; tail
+pages and final placement are try-once with timeout zero, synchronously restored.
+Epoch changes discard the tail without restarting; busy continuations are stale.
+See [defaults](../defaults.md) for the current lock and cursor contract.
 
 Fixed base `6d67cf0c8cf67adddcc74622e9c805d632ed7769` (accepted PR #238).
 Branch `feat/bounded-keyset-source-candidates`, independent of the mixed budget
@@ -164,8 +171,8 @@ resource feasibility remains to be measured. Primary's initial repro harness
 incorrectly assumed admission refs include content, producing TypeError before
 observation; it was corrected to retain original synthetic content alongside
 refs. This was not a product failure. Subsequent both-Node runs reached the
-intended red assertion and the1024 positive control. Primary artifacts:
-`/tmp/cairn-keyset-repro.0kX3CL` (synthetic/local only, no historical cohorts).
+intended red assertion and the1024 positive control. The reproduction artifacts are kept outside the repository
+(synthetic/local only, no historical cohorts).
 
 ## Implementation checkpoint (pending full gates and independent review)
 

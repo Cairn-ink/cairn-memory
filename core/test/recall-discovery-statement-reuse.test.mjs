@@ -276,8 +276,20 @@ test('prepare counts: exact lazy per-namespace bound at zero, one, many and scan
         const before = await measure(() => call(beforeRuntime));
         const after = await measure(() => call(afterRuntime));
         parity(before, after);
-        const membershipCount = count * size, oldCount = Math.min(count, QUERY_CANDIDATES.top) * size, newCount = count ? size : 0;
-        assert.deepEqual(before.counts, { membership: membershipCount, placement: oldCount });
+        const membershipCount = count * size, newCount = count ? size : 0;
+        const db = new DatabaseSync(f.path);
+        let placementCount = 0;
+        try {
+          for (const ns of namespaces.slice(0, size)) {
+            // Independent SQL inventory: mandatory floor placements plus final
+            // ID-ranked winners. A displaced floor row was still placed once.
+            const select = order => db.prepare(`SELECT id FROM memories
+              WHERE owner_id=? AND scope=? AND project_id=? AND deleted=0
+              ORDER BY ${order} LIMIT ?`).all(ns.ownerId, ns.scope, ns.projectId ?? '', QUERY_CANDIDATES.top);
+            placementCount += new Set([...select('updated_at DESC,id ASC'), ...select('id ASC')].map(row => row.id)).size;
+          }
+        } finally { db.close(); }
+        assert.deepEqual(before.counts, { membership: membershipCount, placement: placementCount });
         assert.deepEqual(after.counts, { membership: newCount, placement: newCount }, 'discovery prepares stay constant per namespace');
         assert.equal(new Set(after.statements).size, 2 * newCount, 'no statement shared across transactions/namespaces');
         rows.push({ candidates: count, namespaces: size, before: before.counts, after: after.counts });

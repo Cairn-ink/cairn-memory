@@ -10,8 +10,10 @@ existing `namespace_memories` index and `updated_at DESC, id ASC` keyset.
 A 1,024-row floor precedes the fixed 400 ms budget; the hard cap is 20,000
 physical nondeleted rows. History, awaiting review and projection denials count
 toward that work without contributing text. At most 1,024 candidates survive
-score/ID ordering. Deferred pages release SHARED after at most 256 rows or
-25 ms, checked per row. Valid
+score/ID ordering. The floor, safety checks and placement share one deferred
+transaction with the normal busy timeout. Tail pages release SHARED after at
+most 256 rows or 25 ms, checked per row, and never wait on writers. Their busy
+timeout is zero and is synchronously restored after each page. Valid
 existing placement refs are preserved; memories without one use the public map's unfiled
 fallback. Group headers and hierarchy edges are omitted from this private input,
 reducing group context; public maps and classification are unchanged.
@@ -34,12 +36,16 @@ authenticated cursors bind namespace, epoch, query
 digest, navigation policies, the cap/top/page bounds and candidate offset.
 The signed scan boundary includes rows visited, last recency key and stop cause;
 a continuation rescans exactly that prefix without applying a fresh time budget,
-and a changed namespace or suppression epoch yields `cursor_stale`.
-The candidate-policy binding is `literal-recency-keyset-overlap-v3`; older
+and a busy tail or changed namespace/suppression epoch yields `cursor_stale`.
+The candidate-policy binding is `literal-recency-keyset-overlap-v4`; older
 cursors fail once instead of silently paging a different list. A missing
-recency index fails closed without a full scan or migration. One epoch change
-restarts the pass with its floor and the original scan clock; a repeated change
-leaves incomplete coverage. Budget exhaustion is ordinary incompleteness.
+recency index fails closed without a full scan or migration. There are no
+restarts. An epoch change in the tail discards the tail and returns the floor
+already placed under its original epochs, subject to existing delivery freshness
+checks. New tail candidates receive placement in one final try-once read that
+rechecks the floor epochs; contention or movement returns the floor. The budget
+includes acquisition and floor work. Budget exhaustion and a busy tail are
+ordinary incompleteness.
 
 Each map/fetch response retains its 4,000 counted-token ceiling. Every model call
 still has the stricter 6,000 input / 1,024 output limits and existing deadline.
