@@ -4,7 +4,7 @@ import { guardedModel } from './guarded-model.mjs';
 import { LocalCaptureError } from './configuration.mjs';
 
 const refusalCodes = new Set(['capture_disabled', 'capture_evidence_closed', 'revision_conflict', 'event_payload_conflict',
-  'raw_part_out_of_order', 'raw_session_mode_conflict', 'conversation_deleted', 'source_excluded', 'storage_busy', 'invalid_input', 'raw_crypto_unavailable']);
+  'raw_part_out_of_order', 'raw_session_mode_conflict', 'raw_session_mode_history_limit', 'conversation_deleted', 'source_excluded', 'storage_busy', 'invalid_input', 'raw_crypto_unavailable']);
 const port = Object.freeze({ version: 'raw-seal-v1',
   sealRaw: ({ text }) => ({ format: 'local-plain-v1', keyVersion: null, sealed: Buffer.from(text) }),
   openRaw: ({ sealed }) => ({ text: new TextDecoder('utf8', { fatal: true }).decode(sealed) }) });

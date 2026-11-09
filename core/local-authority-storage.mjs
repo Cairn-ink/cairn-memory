@@ -48,6 +48,7 @@ export function createLocalAuthorityStorage(db) {
   return Object.freeze({ get,set,check });
 }
 
+export const LOCAL_RAW_LEGACY_EVENT_LIMIT = 4096;
 export const LOCAL_RAW_HIDE_WINDOW_MS = 30 * 60 * 1000;
 
 /** Private local selection only. Every mutation joins its caller's transaction. */
@@ -104,31 +105,74 @@ export function createLocalRawPrivacyStorage(db) {
         for (const session of new Set(sessions))
           fenceInside(ns, receipt.client, session);
       }
-      // Use event times across the WHOLE session, including gaps between turns.
-      // Unknown event time is conservative: any window fences that session.
-      const sessions = db.prepare(`SELECT c.client,c.session_key,min(m.occurred_at) first_at,max(m.occurred_at) last_at,
-        count(*) messages,count(m.occurred_at) timed FROM raw_conversations c JOIN raw_messages m ON m.conversation_id=c.id
-        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? GROUP BY c.id`).all(...rawBoundary(ns));
-      for (const session of sessions) {
-        const first = finiteTime(session.first_at), last = finiteTime(session.last_at);
-        if (session.messages !== session.timed || first === null || last === null || intersects(ns, first, last))
-          fenceInside(ns, session.client, session.session_key);
+      // Compatibility scans only conversations without a range row. Once
+      // filled, forget uses the range index and never revisits their messages.
+      const missing = db.prepare(`SELECT c.client,c.session_key FROM raw_conversations c
+        LEFT JOIN local_raw_session_ranges r ON r.owner_id=c.owner_id AND r.scope=c.scope AND r.project_id=c.project_id
+          AND r.client=c.client AND r.session_key=c.session_key
+        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND r.session_key IS NULL`).all(...rawBoundary(ns));
+      for (const session of missing) saveRangeInside(ns, session.client, session.session_key, legacyRange(ns, session.client, session.session_key));
+      const matches = new Map();
+      for (const anchor of anchors) {
+        const sessions = db.prepare(`SELECT client,session_key FROM local_raw_session_ranges
+          WHERE ${nsWhere} AND unknown_time=0 AND min_ms<=? AND max_ms>=?
+          UNION ALL SELECT client,session_key FROM local_raw_session_ranges WHERE ${nsWhere} AND unknown_time=1`)
+          .all(...rawBoundary(ns), anchor + LOCAL_RAW_HIDE_WINDOW_MS, anchor - LOCAL_RAW_HIDE_WINDOW_MS, ...rawBoundary(ns));
+        for (const session of sessions) matches.set(JSON.stringify([session.client,session.session_key]), session);
       }
+      for (const session of matches.values()) fenceInside(ns, session.client, session.session_key);
     } catch { fail('local_raw_privacy_write_failed'); }
   }
-  function arrivalBlocked(ns, messages) {
-    return messages.some(message => {
-      const time = finiteTime(message.occurredAt);
-      return time === null ? Boolean(anyWindow(ns)) : intersects(ns, time, time);
-    });
+  function readRange(ns, client, session) {
+    return db.prepare(`SELECT min_ms,max_ms,unknown_time FROM local_raw_session_ranges WHERE ${where} AND session_key=?`)
+      .get(...rawBoundary(ns), client, session);
+  }
+  function legacyRange(ns, client, session) {
+    const conversation = db.prepare(`SELECT id FROM raw_conversations WHERE ${where} AND session_key=?`)
+      .get(...rawBoundary(ns), client, session);
+    const range = { min_ms: null, max_ms: null, unknown_time: 0 };
+    if (!conversation) return range;
+    // Old engines persisted receive-time fallbacks indistinguishably from real
+    // event times. Preserve stored endpoints but conservatively mark unknown.
+    range.unknown_time = 1;
+    for (const row of db.prepare('SELECT occurred_at FROM raw_messages WHERE conversation_id=?').all(conversation.id))
+      extendRange(range, finiteTime(row.occurred_at));
+    return range;
+  }
+  function extendRange(range, time) {
+    if (time === null) range.unknown_time = 1;
+    else { range.min_ms = range.min_ms === null ? time : Math.min(range.min_ms, time);
+      range.max_ms = range.max_ms === null ? time : Math.max(range.max_ms, time); }
+  }
+  function unionRange(ns, client, session, messages) {
+    const range = { ...(readRange(ns, client, session) ?? legacyRange(ns, client, session)) };
+    for (const message of messages) extendRange(range, finiteTime(message.occurredAt));
+    return range;
+  }
+  function saveRangeInside(ns, client, session, range) {
+    required();
+    db.prepare(`INSERT INTO local_raw_session_ranges VALUES(?,?,?,?,?,?,?,?)
+      ON CONFLICT(owner_id,scope,project_id,client,session_key) DO UPDATE SET
+      min_ms=excluded.min_ms,max_ms=excluded.max_ms,unknown_time=excluded.unknown_time`)
+      .run(...rawBoundary(ns), client, session, range.min_ms, range.max_ms, range.unknown_time);
+  }
+  function recordRangeInside(ns, client, session, messages) {
+    saveRangeInside(ns, client, session, unionRange(ns, client, session, messages));
+  }
+  function arrivalBlocked(ns, client, session, messages) {
+    const range = unionRange(ns, client, session, messages);
+    return range.unknown_time ? Boolean(anyWindow(ns)) : range.min_ms !== null && intersects(ns, range.min_ms, range.max_ms);
+  }
+  function fenceArrivalInside(ns, client, session, messages) {
+    required();
+    if (!arrivalBlocked(ns, client, session, messages)) return false;
+    fenceInside(ns, client, session);
+    return true;
   }
   function fenceArrival(ns, client, session, messages) {
-    // Refusal must be thrown AFTER this transaction commits its terminal fence.
-    const blocked = transaction(db, () => {
-      if (!arrivalBlocked(ns, messages)) return false;
-      fenceInside(ns, client, session); return true;
-    });
-    if (blocked) fail('conversation_deleted');
+    // Never throw within this transaction: its only writes are the terminal
+    // fence and closing pre-existing reservations. Refusal follows COMMIT.
+    if (transaction(db, () => fenceArrivalInside(ns, client, session, messages))) fail('conversation_deleted');
   }
   function assertModeInside(ns, client, session, interpretation, bind = false) {
     const args = [...rawBoundary(ns), client, session];
@@ -138,8 +182,11 @@ export function createLocalRawPrivacyStorage(db) {
       // One-time classification of pre-existing sessions uses the same
       // authenticated empty-projection domain as Raw search. Empty eligible IDs
       // alone also occur in engine mode and must never be treated as host mode.
-      const legacy = db.prepare(`SELECT event_id,first_message_ids,eligible_message_ids,projection_digest,binding_digest
-        FROM raw_capture_events WHERE ${where} AND session_key=?`).all(...args);
+      const conversation = db.prepare(`SELECT id FROM raw_conversations WHERE ${where} AND session_key=?`).get(...args);
+      // The unique conversation key proves fresh sessions have no legacy events.
+      const legacy = conversation ? db.prepare(`SELECT event_id,first_message_ids,eligible_message_ids,projection_digest,binding_digest
+        FROM raw_capture_events WHERE ${where} AND session_key=? ORDER BY event_id LIMIT ?`).all(...args, LOCAL_RAW_LEGACY_EVENT_LIMIT + 1) : [];
+      if (legacy.length > LOCAL_RAW_LEGACY_EVENT_LIMIT) fail('raw_session_mode_history_limit');
       for (const event of legacy) {
         let host;
         try {
@@ -155,5 +202,5 @@ export function createLocalRawPrivacyStorage(db) {
       db.prepare('INSERT INTO local_raw_session_modes VALUES(?,?,?,?,?,?)').run(...args, interpretation);
     }
   }
-  return { hideMemoryInside, arrivalBlocked, fenceArrival, assertModeInside };
+  return { hideMemoryInside, arrivalBlocked, fenceArrivalInside, fenceArrival, recordRangeInside, assertModeInside };
 }

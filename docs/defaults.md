@@ -29,7 +29,7 @@ retained-profile server is a read-only host with its own authority boundaries.
 | Three-layer read | Returns Memory plus eligible Raw excerpts with dates | On for the default contextRead presentation | Local reads and a 6,000-token / 24-item response budget; no model call | Follows contextRead; `--no-context-read` removes the tools. There is no separate presentation CLI flag. |
 | Semantic search | Adds embedding similarity to lexical candidate search | On in MCP when `OPENAI_API_KEY` is configured; otherwise BM25 only | Query and background document embedding calls. Automatic OpenAI configuration: `text-embedding-3-small`, 1,536 dimensions, US$1 estimated embedding spend per server process shared by Memory and Raw, concurrency 1; no practical automatic request ceiling | `contextSemantic:false` / `--no-context-semantic`; each read can also set `semantic:false`. Core hosts supply `contextRead.embedder` and `policy`; MCP hosts supply `contextEmbedding`. Explicit provider CLI groups override automatic settings. |
 | Dated reads | Labels evidence with its event date rather than relying only on generated summaries | On for the default contextRead presentation | Local timestamp reads; no provider calls | Follows contextRead; core callers can select `representation:'representation-v2'` for the legacy undated representation. No separate CLI flag. |
-| Event time | Local Raw keeps missing `occurredAt` unknown; an explicit canonical UTC instant wins. Other profiles retain their receive-time fallback | On for ordinary capture and Raw capture | Timestamp metadata only | Set message `occurredAt` to assert event time. Unknown local Raw times conservatively match any local hide window. Existing historical times are not backfilled. |
+| Event time | Ordinary capture keeps its receive-time fallback for missing `occurredAt`; an explicit canonical UTC instant wins | On for ordinary capture and Raw capture | Timestamp metadata only | Set message `occurredAt` to assert event time. Session range metadata separately marks missing real event time and conservatively matches any local hide window. Legacy sessions without a range row are filled from their own messages and marked conservatively unknown. |
 | Ordered reconciliation | Reconciles successive captures in a caller-declared causal stream | Off | One additional model call per capture that requires reconciliation | Caller supplies `causal:{streamId,sequence}` to `capture()`; omit to disable. MCP has no causal-sequence flag or argument. |
 | Relation read sources | Adds eligible one-hop relations as retrieval sources | Off | Bounded local graph reads; no extra model call during reads | Core `contextRead.sources:['relations-one-hop-v1']`; MCP `contextReadSources:['relations-one-hop-v1']` / `--context-read-sources relations-one-hop-v1`. Omit to disable. |
 | MOC read sources | Uses maps of content to find evidence | Off | Bounded local organization reads; no extra model call during reads | Core `contextRead.sources:['moc-v1']`; MCP `contextReadSources:['moc-v1']` / `--context-read-sources moc-v1`. Omit to disable. Both source IDs may be selected together. |
@@ -58,6 +58,10 @@ whose event-time range overlaps ±30 minutes around an old receipt's creation
 time, plus every real receipt-named session. This includes concurrent sessions
 and can hide more than the affected memory. Permanent content-free namespace
 windows also fence later arrivals; both Raw search intents enforce the fence.
+Hiding anchors on when the memory was saved or corrected; the saving turn
+normally has a captured message nearby. A conversation with no captured message
+near that time, no range crossing the window and no named receipt is not hidden.
+You can delete it directly. This is a known limit for delayed memory saves.
 
 If an existing attested layout cannot hold the Raw capabilities, `raw:true`
 opens Memory-only and reports `raw:'unsupported_store'` in Raw search status;

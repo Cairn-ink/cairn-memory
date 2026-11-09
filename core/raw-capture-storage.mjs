@@ -33,7 +33,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
   const binding = input => db.prepare(`SELECT * FROM raw_capture_events WHERE ${where}`).get(...key(input));
   const rawEvent = input => db.prepare(`SELECT result FROM raw_events WHERE ${where}`).get(...key(input));
 
-  async function prepare(request, ordinary = false, ordinaryOrder) {
+  async function prepare(request, ordinary = false, ordinaryOrder, unknownMessageIds = [], arrivalRequest = request) {
     const managed = options.localAuthority;
     if (managed) {
       request = managedRequest(request, Boolean(profile.sessionEpisodes));
@@ -43,7 +43,8 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       ...(profile.sessionEpisodes ? ['episodeContext'] : ['causal'])]);
     const { causal, episodeContext, ...source } = request;
     const input = freeze(rawRegistration(source));
-    if (privacy) arrivalInputs.set(request, input);
+    const rangeMessages = input.messages.map(message => unknownMessageIds.includes(message.id) ? { occurredAt: null } : { occurredAt: message.occurredAt });
+    if (privacy) arrivalInputs.set(arrivalRequest, { ...input, messages: rangeMessages });
     // Copy the complete context/profile and projection before the first await.
     let context = {};
     if (profile.sessionEpisodes) {
@@ -58,7 +59,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     }
     const sessionKey = journal.sessionKey(input.namespace, input.client, input.sessionId);
     privacy?.assertModeInside(input.namespace, input.client, sessionKey, hostInterpretation ? 'host' : 'engine');
-    privacy?.fenceArrival(input.namespace, input.client, sessionKey, input.messages);
+    privacy?.fenceArrival(input.namespace, input.client, sessionKey, rangeMessages);
     const previous = binding(input);
     if (previous) { const denied = localAuthorityGuard(db,previous); if (denied) fail(denied); }
     let bindingDigest = managed ? hash(['raw-capture-managed-v1',profile,context,managed.targetId,managed.storeId,
@@ -135,8 +136,13 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
 
     function commit() {
       if (!db.isTransaction) fail('raw_transaction_required');
+      // First decision under the writer lock: a refused batch writes neither
+      // mode/range nor admission/Raw/payload rows. Callers commit this sentinel
+      // before surfacing the refusal, so no rollback-to-fence crash gap exists.
+      if (privacy?.fenceArrivalInside(input.namespace, input.client, sessionKey, rangeMessages)) return { closed: 'conversation_deleted' };
       if (managed) authority.check(managed,input.namespace,input.client);
       privacy?.assertModeInside(input.namespace, input.client, sessionKey, hostInterpretation ? 'host' : 'engine', true);
+      privacy?.recordRangeInside(input.namespace, input.client, sessionKey, rangeMessages);
       const result = journal.commitRegistration(token);
       const existing = binding(input);
       if (existing) {
@@ -197,9 +203,11 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
         // Exact source identity and current namespace/session authority still
         // pass through the journal. Staging is never a Raw read permission.
         const committed = commit();
+        if (committed.closed) return committed;
         if (!committed.observation) fail('invalid_input');
         return committed.observation;
       });
+      if (result?.closed) fail(result.closed);
       if (result) accepted = true;
       return result;
     }
@@ -209,7 +217,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       // unaccepted attempt may observe that winner; it never acquires work.
       observeFailedInterpretation: () => !accepted && snapshot ? observeReplay(true) : null,
       accept: () => { accepted = true; },
-      commitOnly: () => { const result = transaction(db, commit); accepted = true; return result; },
+      commitOnly: () => { const result = transaction(db, commit); if (result.closed) fail(result.closed); accepted = true; return result; },
       result: () => { const row = accepted && rawEvent(input); return row ? JSON.parse(row.result) : null; },
       setStaging: staging => db.prepare(`UPDATE raw_capture_events SET staging=? WHERE ${where}`).run(staging, ...key(input)),
     });
@@ -250,15 +258,15 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       const previous = conversation && db.prepare('SELECT ordinal,occurred_at FROM raw_messages WHERE conversation_id=? AND message_id=?').get(conversation.id, message.id);
       const content = request.messages[index].content;
       return { id: message.id, role: message.role, content,
-        occurredAt: message.occurredAt ?? previous?.occurred_at ?? (privacy ? null : receivedAt),
+        occurredAt: message.occurredAt ?? previous?.occurred_at ?? receivedAt,
         messageOrdinal: previous?.ordinal ?? ++ordinal,
         part: { index: 0, start: 0, totalUnits: content.length, totalBytes: Buffer.byteLength(content) } };
     });
     const rawRequest = { namespace: snapshot.namespace, client: snapshot.client, sessionId: snapshot.sessionId,
       eventId: snapshot.eventId, messages: messages.sort((a,b) => a.messageOrdinal - b.messageOrdinal), ...(snapshot.causal ? { causal: snapshot.causal } : {}),
       ...(profile.sessionEpisodes ? { episodeContext: structuredClone(request.episodeContext) } : {}) };
-    if (privacy) arrivalInputs.set(request, rawRequest);
-    return prepare(rawRequest, true, snapshot.messages.map(message => message.id));
+    const unknown = snapshot.messages.filter((message, index) => request.messages[index].occurredAt == null).map(message => message.id);
+    return prepare(rawRequest, true, snapshot.messages.map(message => message.id), unknown, request);
   }
   return Object.freeze({ ...journal, prepare, prepareCapture, fenceSession, fenceArrival,
     ...(authority ? { getLocalCaptureControl: authority.get, setLocalCaptureControl: authority.set } : {}) });

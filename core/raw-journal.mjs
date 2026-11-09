@@ -12,7 +12,7 @@ import { createRawConversationList } from './raw-conversation-list.mjs';
 import { createRawControlStorage } from './raw-control-storage.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { createRawSourceReader } from './raw-source-reader.mjs';
-import { createLocalAuthorityStorage, createLocalRawPrivacyStorage } from './local-authority-storage.mjs';
+import { createLocalAuthorityStorage } from './local-authority-storage.mjs';
 
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const clock = () => new Date().toISOString();
@@ -26,7 +26,6 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
   const rawControls = createRawControlStorage(db);
   const sourceRoots = createRawSourceRoots(db);
   const local = localAuthority ? createLocalAuthorityStorage(db) : null;
-  const privacy = localRawPrivacy ? createLocalRawPrivacyStorage(db) : null;
   const updateCap = capBytes !== undefined && configureCap !== false;
   if (capBytes === undefined) capBytes = 200000000;
   if (!['raw-v1','off'].includes(mode) || !Number.isSafeInteger(capBytes) || capBytes < 1 || typeof readPolicy !== 'function') fail('invalid_input');
@@ -119,7 +118,7 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     return { previous, priorPart: null };
   }
   function assertRegistrationSources(input, conversationId) {
-    if (privacy) for (const message of input.messages) {
+    if (localRawPrivacy) for (const message of input.messages) {
       if (db.prepare(`SELECT 1 FROM raw_source_exclusions WHERE conversation_id=? AND message_id=? AND start<? AND end>? LIMIT 1`)
         .get(conversationId, message.id, message.part.start + message.content.length, message.part.start)) fail('source_excluded');
     }
@@ -212,7 +211,6 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
 
   function commitInside(value) {
     const { input,session,eventDigest,authority,fence,id,revision,sealedParts } = value, ns = input.namespace;
-    if (privacy?.arrivalBlocked(ns, input.messages)) fail('local_raw_window_overlap');
     const currentPolicy = policy(input), currentFence = durableFence(ns,input.client,session);
     const duplicate = replay(input,eventDigest);
     if (duplicate) return duplicate;

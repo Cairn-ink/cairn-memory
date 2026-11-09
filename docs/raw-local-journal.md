@@ -9,8 +9,9 @@ search status and contextRead coverage. Other database errors still fail. This i
 local plaintext retention with a default 200,000,000-byte owner cap. Disable it
 with `raw:false` or `--no-raw`; use `rawConversations` for a custom sealing port,
 cap or policy. The engine maintains lexical Raw search in bounded background
-turns. Local Raw messages with no asserted event time retain an unknown time;
-explicit `occurredAt` wins. See [all defaults and costs](defaults.md).
+turns. Ordinary capture retains its receive-time fallback when `occurredAt`
+is missing; explicit `occurredAt` wins. Separate session range metadata records
+whether any message lacked a real event time. See [all defaults and costs](defaults.md).
 
 Local forget and correct hide whole source conversations from both current and
 history Raw search. Each operation snapshots the old receipts inside its write
@@ -30,11 +31,29 @@ Later arrivals inside a window are fenced and refused before payload storage;
 fences also stop ongoing sessions from capturing later, outside-window messages.
 The payload is retained on disk; this is search hiding and capture fencing.
 
+Hiding anchors on when the memory was saved or corrected. A conversation is
+hidden when its message-time range overlaps that window; the turn that saved
+the memory normally supplies a nearby captured message. A conversation with no
+captured message near that time (and no range crossing the window or named
+receipt) is not hidden. You can delete that conversation directly. This is a
+known limit when a memory is saved much later than its source conversation.
+
 The windows hold only owner, namespace and time range, with no memory, receipt,
 session identity or text. Overlapping windows are merged and never expire. Each
-capture tests at most 24 message timestamps with indexed predecessor lookups,
-each returning at most one row. Forget/correct scans the namespace's captured
-session ranges and fences matches in the same transaction as receipt deletion.
+capture unions the incoming messages with its persisted session range, using
+an indexed session-key lookup and a window predecessor lookup returning at most
+one row. Forget/correct selects overlapping ranges through a namespace/range
+index and fences matches in the same transaction as receipt deletion. Only
+legacy sessions without a range row scan their own messages once, on arrival
+or mutation; their unknown-time flag is conservative because old receive-time
+fallbacks cannot be distinguished from asserted times. Ordinary capture's Raw
+timestamps and dated reads keep their previous fallback behavior.
+
+New conversations skip legacy mode classification through the indexed unique
+conversation key. Existing sessions without a mode row read at most 4,097 events
+through a session/event index; over 4,096 refuses explicitly with
+`raw_session_mode_history_limit`. Mixed legacy modes refuse. Successful capture
+binds the mode so classification is not repeated.
 A failed window or fence write rolls the entire operation back with retryable
 `local_raw_privacy_write_failed`.
 

@@ -76,7 +76,9 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
         return raw ? success({ raw, interpretation }) : interpretation;
       } catch (error) {
         // A window may have arrived during asynchronous sealing/model work.
-        // The rejected capture transaction rolled back; commit its fence now.
+        // Preparation/sealing can fail before returning a registration. Use
+        // only its validated, detached arrival identity for conservative fencing.
+        // Commit-time overlap already committed its fence before refusing.
         try { if (error.code !== 'store_closed') storage.fenceArrival(request); } catch (fenceError) { return failure(fenceError); }
         return failure(error);
       }
