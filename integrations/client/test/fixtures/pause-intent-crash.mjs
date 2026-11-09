@@ -3,6 +3,7 @@ import { withWriteObserver } from '../../private-state.mjs';
 const [root, endpoint] = process.argv.slice(2);
 await withWriteObserver(async ({ path, kind }) => {
   if (kind === 'write' && path.includes('.intents/') && path.endsWith('.json')) {
+    process.channel?.ref(); // Wait for the parent's explicit crash, not event-loop exit.
     process.send({ kind: 'intent-durable' });
     await new Promise(() => {});
   }
