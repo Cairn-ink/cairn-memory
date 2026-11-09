@@ -105,7 +105,9 @@ const GATE_WINDOW_MS = 250;
 // Capability is selected once for each config, never from a lock failure.
 // Tests inject the platform without changing the host or its lock semantics.
 const modes = new WeakMap(), volatileStates = new Map();
-export function hostedPauseMode(config, platform = process.platform) {
+// Portable mode is an explicit client capability. Unconfigured consumers keep
+// the shared barrier (including consumers whose installation is unsupported).
+export function hostedPauseMode(config, platform) {
   if (!modes.has(config)) modes.set(config, Object.freeze({ barrier: platform !== 'win32' }));
   return modes.get(config);
 }
