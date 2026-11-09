@@ -48,16 +48,18 @@ test('worker sends numbered windows and per-attempt time without changing a froz
   assert.notEqual(f.calls.at(-1).window.id, f.calls[0].window.id);
 });
 
-test('worker bounds metadata windows above 64 sent slices without losing batches', async t => {
+test('worker sends 65 batches across a lowered four-slice limit without losing batches', async t => {
   // The byte-read ceiling permits this many short records in one frozen range.
   const f = await fixture(t, { text: header() + Array.from({ length: 1537 }, (_, n) => item('x', n)).join('') });
-  assert.equal((await runWorker(f.binding, { guard: f.guard, transport: f.transport, now: () => 1800000000000 })).status, 'idle');
+  assert.equal((await runWorker(f.binding, { guard: f.guard, transport: f.transport, now: () => 1800000000000, captureWindowSlices: 4 })).status, 'idle');
   assert.equal(f.calls.length, 65);
   assert.equal(f.calls.flatMap(body => body.messages).length, 1537);
   assert.ok(f.calls.every(body => body.window.initial === false));
-  assert.equal(new Set(f.calls.slice(0, 64).map(body => body.window.id)).size, 1);
-  assert.deepEqual(f.calls.slice(0, 64).map(body => body.window.slice), Array.from({ length: 64 }, (_, n) => n + 1));
-  assert.equal(f.calls[63].window.slice, 64); assert.equal(f.calls[63].window.slices, 64);
-  assert.equal(f.calls[64].window.slice, 1); assert.equal(f.calls[64].window.slices, 1);
-  assert.notEqual(f.calls[0].window.id, f.calls[64].window.id);
+  for (let i = 0; i < 65; i++) {
+    const group = Math.floor(i / 4) * 4;
+    assert.equal(f.calls[i].window.slice, i - group + 1);
+    assert.equal(f.calls[i].window.slices, Math.min(4, 65 - group));
+    assert.equal(f.calls[i].window.id, f.calls[group].window.id);
+    if (group > 0) assert.notEqual(f.calls[group].window.id, f.calls[group - 1].window.id);
+  }
 });
