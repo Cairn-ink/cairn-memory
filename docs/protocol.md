@@ -483,22 +483,30 @@ Capture clients may supply these optional time and window fields:
   numbering is 1-based and counts only requests containing messages. Entirely
   withheld batches do not count. The last sent request has `slice === slices`.
   These clients group a backlog exceeding 4096 sent batches into
-  consecutive metadata windows of at most 4096 requests, without changing event IDs or batch boundaries. The first
+  consecutive metadata windows of at most 4096 requests, without changing event
+  IDs or batch boundaries. The first
   group starts at the frozen range's offset; subsequent groups start at their
   first batch's record offset. All groups inherit the range's `initial` value.
   Frozen retries preserve IDs, numbering and `initial` even if the file grows.
 
 Claude sets `initial` when the range began without a cursor or a SessionStart
-byte boundary, including when only a first-prompt time was available. SessionStart
-records an EOF boundary under the capture lock; an existing empty file starts at
-zero, while a missing transcript leaves the boundary unknown. A first-prompt
-marker can exclude an older dated prefix if start did not run. This marker is
-published after recall's fetch or decision without waiting for the capture lock.
-Marker publication uses one nonblocking capture-lock attempt for both missing
-and existing state. A busy cursor is left intact; a first capture that wins
-this race freezes `initial: true`. Marker and cursor writes cannot overwrite
-one another from stale reads.
-If capture wins that race, its frozen range remains initial. Codex establishes
+byte boundary, including when only a first-prompt time was available. A synchronous
+local SessionStart handler records EOF under one nonblocking capture-lock attempt,
+with a two-second host timeout; telemetry remains asynchronous. An existing cursor
+or start boundary returns without acquiring the lock. An existing empty file
+starts at zero, while a missing transcript leaves the boundary unknown. A prompt
+marker or any earlier capture attempt prevents a late start from claiming EOF.
+Even an empty capture persists `captureSeen`, without creating a trusted byte
+boundary, so subsequently flushed bytes remain eligible for `initial: true`.
+
+A first-prompt marker can exclude only a leading dated prefix strictly older than
+`firstPromptAt - 10 minutes`. It is published after recall's fetch or decision,
+using one nonblocking capture-lock attempt, and only before any capture has run.
+A later recall cannot supply a skipping marker for an earlier capture. Records
+inside that margin are sent with their own times and `initial: true`; server
+copied-history classification remains necessary. Marker and cursor writes cannot
+overwrite one another from stale reads. A first capture that wins the race
+freezes its classification across retries. Codex establishes
 an EOF boundary before capture and refuses fork/history headers, so its windows
 have `initial: false`. Codex uses a row timestamp or completion milliseconds
 converted to ISO. Time and window metadata never enter message or event IDs.
