@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import test from 'node:test';
 import { withFileLock } from '../lib/file-lock.mjs';
@@ -9,6 +9,8 @@ test('start boundaries exclude copied UUIDs and timestamps from the first captur
   const f = await harness(t);
   const copied = row('copied-1') + row('copied-2');
   await f.write(copied); await boundedStart(f, { source: 'resume' });
+  assert.deepEqual(await readdir(f.dataDir), ['sessions']);
+  assert.equal(f.captures.length, 0);
   let state;
   try { state = await f.state(); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   await appendFile(f.transcript, row('new', new Date().toISOString()));
@@ -181,6 +183,10 @@ test('new boundary fails open promptly on lock contention', { timeout: 5000 }, a
 test('SessionStart has a synchronous local boundary and separate async work', async () => {
   const config = JSON.parse(await readFile(new URL('../hooks/hooks.json', import.meta.url), 'utf8'));
   const hooks = config.hooks.SessionStart.flatMap(entry => entry.hooks);
+  assert.deepEqual(Object.fromEntries(Object.entries(config.hooks).map(([name, groups]) =>
+    [name, groups.flatMap(group => group.hooks).length])),
+    { SessionStart: 2, UserPromptSubmit: 1, Stop: 1, PreCompact: 1 });
+  assert.deepEqual(hooks.map(h => h.args?.[1]), ['start-boundary', 'start']);
   const boundary = hooks.find(h => h.args?.[1] === 'start-boundary');
   assert.ok(boundary); assert.notEqual(boundary.async, true); assert.equal(boundary.timeout, 2);
   assert.equal(hooks.find(h => h.args?.[1] === 'start').async, true);
