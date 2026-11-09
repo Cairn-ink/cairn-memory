@@ -41,16 +41,18 @@ test('recall fallback skips only the dated copied prefix when start did not run'
   assert.ok(Date.parse(marker.firstPromptAt));
 });
 
-test('recall publishes one marker without waiting for a held capture lock', { timeout: 15000 }, async t => {
+test('recall skips a busy first-capture lock and publishes once after release', { timeout: 15000 }, async t => {
   const f = await harness(t); await f.write('');
   await withFileLock(f.statePath + '.lock', async () => {
     await f.run('recall');
-    const first = await readFile(f.statePath, 'utf8');
-    assert.ok(JSON.parse(first).firstPromptAt);
-    await f.run('recall');
-    assert.equal(await readFile(f.statePath, 'utf8'), first);
+    await assert.rejects(readFile(f.statePath, 'utf8'), { code: 'ENOENT' });
   });
-  assert.equal(f.recalls.length, 2);
+  await f.run('recall');
+  const first = await readFile(f.statePath, 'utf8');
+  assert.ok(JSON.parse(first).firstPromptAt);
+  await f.run('recall');
+  assert.equal(await readFile(f.statePath, 'utf8'), first);
+  assert.equal(f.recalls.length, 3);
 });
 
 test('recall adds one marker to an existing start cursor and preserves its boundary', async t => {

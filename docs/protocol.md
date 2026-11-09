@@ -493,9 +493,10 @@ records an EOF boundary under the capture lock; an existing empty file starts at
 zero, while a missing transcript leaves the boundary unknown. A first-prompt
 marker can exclude an older dated prefix if start did not run. This marker is
 published after recall's fetch or decision without waiting for the capture lock.
-An existing cursor receives the marker only through one nonblocking lock
-attempt; a busy cursor is left intact. An absent state can receive an atomic
-marker even while capture holds the lock before freezing its range.
+Marker publication uses one nonblocking capture-lock attempt for both missing
+and existing state. A busy cursor is left intact; a first capture that wins
+this race freezes `initial: true`. Marker and cursor writes cannot overwrite
+one another from stale reads.
 If capture wins that race, its frozen range remains initial. Codex establishes
 an EOF boundary before capture and refuses fork/history headers, so its windows
 have `initial: false`. Codex uses a row timestamp or completion milliseconds

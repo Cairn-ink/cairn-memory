@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { link, mkdir, open, readFile, stat, unlink, writeFile } from "node:fs/promises";
-import { createHash, randomUUID } from "node:crypto";
+import { open, readFile, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { platform } from "node:os";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import { captureEvent } from "../lib/capture-event.mjs";
 import {
   captureCursorPath,
@@ -219,30 +219,17 @@ async function recordFirstPrompt(hookInput) {
   const sessionId = optionalHostSessionId(hookInput?.session_id);
   if (!dataDir || sessionId === undefined) return;
   const path = captureCursorPath(dataDir, sessionId);
-  // Existing state is updated only under one nonblocking lock attempt. Never
-  // overwrite a concurrent capture's cursor from a stale read.
-  let state;
-  try { state = JSON.parse(await readFile(path, "utf8")); }
-  catch (error) { if (error.code !== "ENOENT") return; }
-  if (state !== undefined) {
-    if (!state || typeof state !== "object" || Array.isArray(state) || Object.hasOwn(state, "firstPromptAt")) return;
-    await withFileLock(`${path}.lock`, async () => {
-      const current = JSON.parse(await readFile(path, "utf8"));
-      if (!current || typeof current !== "object" || Array.isArray(current) || Object.hasOwn(current, "firstPromptAt")) return;
-      await writeCaptureCursor(path, { ...current, firstPromptAt: observedAt });
-    }, { tryOnly: true });
-    return;
-  }
-  // Publish an immutable initial state by link-if-absent when there is no
-  // cursor, even if capture holds the lock but has not frozen its window yet.
-  // All marker work follows the recall fetch/decision; none adds prefetch I/O.
-  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-  const temporary = `${path}.prompt-${process.pid}-${randomUUID()}`;
-  try {
-    await writeFile(temporary, JSON.stringify({ firstPromptAt: observedAt }), { mode: 0o600, flag: "wx" });
-    try { await link(temporary, path); }
-    catch (error) { if (error.code !== "EEXIST") throw error; }
-  } finally { await unlink(temporary).catch(() => {}); }
+  if ((await captureMarkers(path)).firstPromptAt !== undefined) return;
+  // One try-only acquisition serializes marker publication with all cursor
+  // writers. A contended first capture retains initial:true; never wait for it.
+  // All work follows the recall fetch/decision, so none adds prefetch I/O.
+  await withFileLock(`${path}.lock`, async () => {
+    let current = {};
+    try { current = JSON.parse(await readFile(path, "utf8")); }
+    catch (error) { if (error.code !== "ENOENT") throw error; }
+    if (!current || typeof current !== "object" || Array.isArray(current) || Object.hasOwn(current, "firstPromptAt")) return;
+    await writeCaptureCursor(path, { ...current, firstPromptAt: observedAt });
+  }, { tryOnly: true });
 }
 
 // Skip only a leading copied prefix, not older timestamps later in a new turn.
