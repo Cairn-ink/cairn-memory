@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — retain prepared Raw evidence
+
+- Default three-layer reads keep the validated Raw prefix when preparation
+  reaches its cutoff, with `partial` coverage. Incomplete search results and
+  individual candidate failures preserve other valid candidates. Late prepares
+  are ignored, and partial sets retain the existing batch authorization checks
+  before projection and final delivery.
+
 ## 0.3.4 — 2026-11-09: hosted recall deadline
 
 Plugin and marketplace 0.3.4. Protocol stays 0.3.0. The installer version is not
