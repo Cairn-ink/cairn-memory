@@ -145,6 +145,15 @@ async function pruneIntents(config, intent) {
   await syncDirectory(directory);
   for (const name of await privateList(directory)) {
     if (olderIntentName(name, intent)) await privateRemove(join(directory, name));
+    // A process can die after linking/syncing an intent but before removing its
+    // atomic-write staging name. Prune only staging state already dominated by
+    // durable authority, or backed by its matching published record/receipt.
+    const published = name.replace(/\.tmp-[1-9]\d*-[a-f0-9-]{36}$/u, '');
+    if (published !== name && (olderIntentName(published, intent) ||
+        ([intentName(intent) + '.json', intentName(intent) + '.complete'].includes(published) &&
+          await privateRead(join(directory, published), { missing: true }) === intentBytes(intent)))) {
+      await privateRemove(join(directory, name));
+    }
   }
   await syncDirectory(directory);
 }
