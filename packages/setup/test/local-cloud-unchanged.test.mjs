@@ -92,20 +92,22 @@ const generationPath = new RegExp('^\\.codex/cairn/runtime/(' + runtimeId + ')(/
 // Recall deadlines admit exactly these line substitutions, checked against the
 // immutable installer below. Every other source byte remains significant.
 const recallRuntimeChanges = new Map([
-  ['integrations/codex/entry.mjs', [
-    "const budget = event === 'qualify' ? 65000 : event === 'worker' ? 62500 : capture ? 750 : 2000;",
-    "const budget = event === 'qualify' ? 65000 : event === 'worker' ? 62500 : capture ? 750 : event === 'UserPromptSubmit' ? 3000 : 2000;",
-  ]],
   ['integrations/codex/hook.mjs', [
     "  const budget=['SessionStart','UserPromptSubmit'].includes(input?.hook_event_name)?2500:750;",
     "  const budget=input?.hook_event_name==='UserPromptSubmit'?3000:input?.hook_event_name==='SessionStart'?2500:750;",
   ]],
 ]);
+// Atomic output delivery changes entry beyond its recall-budget line.
 // Pause durability changes whole functions; pin both immutable historical and
 // current bytes instead of reconstructing the earlier file from current source.
 // Hosted pause intents and dispatch guards revise only current pins; preserve
 // every historical digest and the historical behavior comparisons below.
 const durabilityRuntimeChanges = new Map([
+  ['integrations/codex/entry.mjs', {
+    historical: '558a2f9f5cbed3c4e08146626708ba5ab4374e6938fa9c2e1cdc935d50580952',
+    before: '0182cc90faddafeea34b8ba11a4c96805f74140117c1ee4b4ad118ca47b0d331',
+    current: '0c483d5f0b081b46ebc173f4d6718aebc8188804eace7844ed2d13adb5abbe7a',
+  }],
   ['integrations/client/private-state.mjs', {
     historical: 'ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64',
     before: 'ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64',
@@ -114,17 +116,17 @@ const durabilityRuntimeChanges = new Map([
   ['integrations/client/hosted-pause.mjs', {
     historical: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
     before: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
-    current: 'ab7634bb0b1d354fd23e3dadce299d4c2ac856ec48c2562fc0f405539a60a91b',
+    current: '6f80998d46eae8245229c1aef098615cc9ce5d9224c8c08affda4d59d4f221b5',
   }],
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
     before: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
-    current: '66ea40d717169c09fb1789dcfec105585d41446341f8c1b0851e73077a40bbbe',
+    current: '8079b851c499f57f2064c29380a3b8b9a137dd3bb9b4dd4b930b5b1b047f32d9',
   }],
   ['integrations/codex/hosted-lifecycle.mjs', {
     historical: '8b4a8e7ea1cef5473147bfe2ea6af9548894c52f08e44a656e545fcb9fc8c496',
     before: 'bd7bc299773cc389565a34bfd9a7131f68ad7bef934d3ce5a0ebeeea800bbe3a',
-    current: 'ee5133d05e4345af1dbaa99a335beaf92a2070dd07b035404874fbee4e0e188e',
+    current: '285aa64ad5d57dbfa5ff85e6861a4f77d84b00f827374243d33e4b8cb4f034e7',
   }],
 ]);
 const hostedRuntimeExceptions = [
