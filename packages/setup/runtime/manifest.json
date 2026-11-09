@@ -21,7 +21,7 @@
     "integrations/codex/context.mjs": "e3bb925f6f3d5ad81414ace302bf7f6cc16d235a785a0c68e39703809f992a1a",
     "integrations/codex/cursor.mjs": "d7f19621809e89c1b0a1420c08a358f19f4c1471e3cbeadf8b2789cd672c3e8b",
     "integrations/codex/digest.mjs": "eeb6b23e608344e42bc2ef3c862fbc3cf09af2c1034293205623f7a8abe37f4e",
-    "integrations/codex/entry.mjs": "0c483d5f0b081b46ebc173f4d6718aebc8188804eace7844ed2d13adb5abbe7a",
+    "integrations/codex/entry.mjs": "482cfba5f620b573d394e435ee69cacba0b262dd3010170c80108ca5438e2ee6",
     "integrations/codex/hook.mjs": "f2cebf18c7a2ad3972a833bddc611f67e0b132ca4845e6f721719d80f27302f9",
     "integrations/codex/hosted-lifecycle.mjs": "285aa64ad5d57dbfa5ff85e6861a4f77d84b00f827374243d33e4b8cb4f034e7",
     "integrations/codex/installed-state.mjs": "7ebceb25f266b9aa635d1fd8a588504da33cbfc4c01144ce5b4b9c10f2864932",
