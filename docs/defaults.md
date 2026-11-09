@@ -7,8 +7,12 @@ Use `setup --local --no-capture` or `config --local-capture off`; enable with
 `config --local-capture on` (optionally `--client claude|codex`). Off removes hooks
 and keeps data. Status is read-only and shows on/off/blocked with the reason.
 Codex requires approval in `/hooks`; if its format is unqualified, capture waits
-for qualification. Rerun setup after a Codex update. The engine owns background
-qualification; status never launches it. Re-enabling skips off-period text and,
+for qualification with its hooks installed. After a Codex update, capture resumes
+once background qualification passes; rerun setup if it stays pending or failed.
+Status reads the engine's last observed qualification state and reason without
+launching qualification. New Claude sessions capture from their first turn.
+A fork or resume of a hidden conversation stays hidden; Codex forks aren't saved
+locally. Re-enabling skips off-period text and,
 for an already-running Claude Code conversation, the first turn after re-enabling.
 Hook latency: `<latency to be measured>`.
 

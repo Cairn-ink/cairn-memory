@@ -31,14 +31,18 @@ Turn capture off with `setup --local --no-capture` or
 Add `--client claude` or `--client codex` to select one tool. Off keeps data and
 removes owned hooks. Setup remembers an explicit off preference. A notice appears
 once per client installation. Codex users must approve new entries in `/hooks`.
-If format qualification fails, Codex capture waits for format qualification;
-rerun setup after a Codex update. The engine handles background qualification of
-an updated binary; status only reads state/cache and never launches Codex.
+A failed or pending format qualification still installs the hooks; capture waits.
+After a Codex update, capture resumes once background qualification passes.
+If it stays pending or failed, rerun setup. Status reads the engine's last observed
+qualification state and reason without launching Codex.
 
 Forgetting or correcting a memory hides whole conversations with messages within
 30 minutes before or after its save time. This can include unrelated conversations
 and miss other conversations about the same subject. Delete a conversation
-directly to remove it. Turning capture back on preserves those hiding fences.
+directly to remove it. A fork or resume of a hidden conversation stays hidden.
+Codex forks aren't saved locally. New Claude Code sessions are captured from
+their first turn, including when the transcript appears after session start.
+Turning capture back on preserves those hiding fences.
 Existing conversations resume at the next real hook's transcript end, skipping
 text written while off. Claude Code also skips the first turn of an already-running
 conversation after re-enabling; subsequent turns resume.
@@ -63,11 +67,14 @@ leaving any still-registered 0.6.6 hook commands unable to capture; it keeps Raw
 `config --local-capture on` 重新開啟。可加 `--client claude` 或
 `--client codex` 只設定一個工具。關閉會移除擷取 hooks、保留資料，重跑 setup
 也會記住關閉偏好。每個工具的安裝提示只顯示一次。Codex 請到 `/hooks` 核准
-新增項目。格式驗證失敗時，Codex 擷取會等待驗證；Codex 更新後請重新執行
-setup。引擎會在背景驗證更新後的 binary，status 只讀取狀態與快取，不啟動 Codex。
+新增項目。格式驗證失敗或還在等待時，仍會安裝 hooks，擷取則等待驗證。
+Codex 更新後，背景驗證通過就會恢復擷取；若持續等待或驗證失敗，請重跑 setup。
+status 讀取引擎上次觀察到的驗證狀態與原因，不啟動 Codex。
 
 忘記或更正記憶時，也會隱藏在記憶保存時間前後 30 分鐘內有訊息的整段對話。
 這可能包含無關對話，也可能漏掉其他談到相同主題的對話，可直接刪除個別對話。
+隱藏對話的分支或續接仍會保持隱藏。Codex 分支對話不會存進本機。
+Claude Code 新對話從第一輪開始保存，包含逐字稿在 session start 之後才建立的情況。
 重新開啟擷取會保留這些隱藏規則，既有對話從下一個實際 hook 看到的逐字稿結尾
 恢復，跳過關閉期間的文字。Claude Code 已在進行中的對話，重新開啟後的第一輪
 也不會保存，後續輪次才恢復。

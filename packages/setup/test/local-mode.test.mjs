@@ -8,6 +8,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { join, dirname, delimiter } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
+import { assertFixtureClients, fixtureBinaryGuard } from './fixture-clients.mjs';
 import { engineCacheComplete, skipMissingEngineCache } from './engine-cache.mjs';
 
 runTest('local mode contract', async parent => {
@@ -53,7 +54,7 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
   for (const [client, enabled, initial] of [['claude', claude, claudeState], ['codex', codex, codexState]]) {
     paths[client] = join(ws.path, client + '.json'); calls[client] = join(ws.path, client + '.jsonl');
     await writeFile(paths[client], JSON.stringify(initial)); await writeFile(calls[client], '');
-    if (enabled) await writeFile(join(bin, client), `#!${process.execPath}\nprocess.env.FAKE_STATE=${JSON.stringify(paths[client])};process.env.FAKE_CALLS=${JSON.stringify(calls[client])};\n` +
+    if (enabled) await writeFile(join(bin, client), `#!${process.execPath}\n${fixtureBinaryGuard(ws.path)}process.env.FAKE_STATE=${JSON.stringify(paths[client])};process.env.FAKE_CALLS=${JSON.stringify(calls[client])};\n` +
       await readFile(new URL(`./fake-${client}.mjs`, import.meta.url), 'utf8'), { mode: 0o755 });
   }
   const moduleURL = pathToFileURL(join(testedPackageRoot, 'lib/setup.mjs')).href;
@@ -103,6 +104,7 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
     PATH: bin, TMPDIR: ws.path,
     CAIRN_SETUP_NPM_CACHE: process.env.CAIRN_SETUP_NPM_CACHE, CAIRN_SETUP_NPM_OFFLINE: '1' };
   const run = async (args = ['setup', '--local'], options = {}) => {
+    assertFixtureClients({ ...env, ...options.env }, ws.path);
     const child = spawn(nodeExecutable, [harness, ...args], { cwd: ws.path,
       env: { ...env, ...options.env, LOCAL_TEST_OPTIONS: JSON.stringify(options) }, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '', stderr = '';
@@ -768,17 +770,12 @@ test('L23 recovery rm command round-trips with shell metacharacters', async t =>
   assert.equal(removed.status, 0, removed.stderr); await assert.rejects(lstat(join(f.root, '.setup.lock')), { code: 'ENOENT' });
   assert.equal((await f.run(['setup', '--local', '--dry-run'])).code, 0);
 });
-test('L23 manual TOML parses through the real Codex binary in a private home', async t => {
+test('L23 manual TOML parses through a fixture Codex binary in a private home', async t => {
   const f = await localFixture(t, { suffix: ' space $ ` " \' \\' });
-  const { access } = await import('node:fs/promises'); let executable;
-  for (const directory of (process.env.PATH ?? '').split(delimiter)) {
-    try { const path = join(directory, 'codex'); await access(path, 1); executable = path; break; } catch { /* Next PATH directory. */ }
-  }
-  if (!executable) { t.skip('Real codex binary is not on PATH; fake TOML checks remain covered separately.'); return; }
   const { vector } = await seed(f, { register: false }); await f.config(codexSnippet(f.root, vector));
-  const result = spawnSync(executable, ['mcp', 'list', '--json'], { env: { ...f.env, PATH: process.env.PATH, TMPDIR: f.ws }, cwd: f.ws,
+  const clients = assertFixtureClients(f.env, f.ws);
+  const result = spawnSync(clients.codex, ['mcp', 'list', '--json'], { env: f.env, cwd: f.ws,
     encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 20000 });
-  if (result.error?.code === 'EPERM') { t.skip('Sandbox blocks real Codex child pipes (EPERM).'); return; }
   assert.equal(result.status, 0, result.stderr);
   const entry = JSON.parse(result.stdout).find(entry => entry.name === 'cairn-local');
   assert.equal(entry.transport.command, vector.node); assert.deepEqual(entry.transport.args, codexAddArguments(f.root, vector).slice(5));

@@ -1592,13 +1592,21 @@ Codex's `installation.qualificationConfigPath` is a private local metadata file
 with a sibling `qualification/` cache. Populate that cache using the bundled
 engine's documented `binaryIdentity`/`qualifyBinary` operator API against the
 resolved native binary in a bounded child; never manufacture a verdict. A failed
-probe retains the intended installation and reports blocked/qualification_required.
-Capture waits for format qualification; rerun setup after a Codex update. The
-engine owns background qualification at hooks after updates; the installer never
-implements background requalification. Status prefers qualification reported by
-engine status and otherwise reads only the identity-bound cache. This is a schema/format probe without sign-in or model requests. At hook
+or pending probe still creates the engine installation and native hooks, with
+capture blocked pending qualification. Setup records the resolved host through
+the engine's observeHost API before qualifying it. After a Codex update, capture
+resumes once background qualification passes; rerun setup if it stays pending or
+failed. The engine owns background qualification at hooks after updates; the
+installer never implements background requalification. Status uses only the
+engine status qualification DTO (status and reason for the last observed host),
+without resolving a binary or reading the qualification cache itself. This is a schema/format probe without sign-in or model requests. At hook
 time the engine still checks actual running-host identity, creator qualification
 and interactive source eligibility. Status never launches this probe.
+
+New Claude sessions capture from their first turn even if the transcript is
+created after SessionStart. A fork or resume of a hidden conversation stays
+hidden. Codex forks are not saved locally; no start-at-zero path is added for
+Codex. Re-enabling an existing Claude conversation retains the skipped-turn rule.
 
 The engine registers Claude's SessionStart, Stop and PreCompact hooks in its
 native settings JSON; Codex additionally gets UserPromptSubmit in its native
@@ -1667,3 +1675,10 @@ uninstall then setup ending active with data kept, cloud exclusion, real hook to
 the 0.6.5 upgrade/downgrade round trip. Register new modules in
 `packages/setup/test/setup.test.mjs`. A live process or hook exit 0 alone is
 not evidence of capture; assert retained and searchable Raw in the MCP store.
+
+All installer test harnesses that resolve clients must reject PATH entries and
+resolved client targets outside their private fixture before setup runs. Fakes
+also refuse execution outside that fixture, including under a qualification
+child's minimal environment. Required proof includes a leaked Node bin PATH
+entry refused before any external lookup or execution. The missing-transcript
+Claude first-turn test is required, not an executing TODO.

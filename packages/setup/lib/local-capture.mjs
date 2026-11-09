@@ -61,14 +61,15 @@ const cli = (root, receipt) => join(engineRoot(root, receipt), 'integrations/cli
 async function invoke(root, receipt, args, context) {
   return engineChild(receipt.node, [cli(root, receipt), ...args], context);
 }
-async function qualification(root, receipt, context, probe) {
+async function qualification(root, receipt, context) {
   const module = pathToFileURL(join(engineRoot(root, receipt), 'integrations/codex/qualification.mjs')).href;
   const config = join(root, 'capture-support/codex/installation.json');
   const script = `const q=await import(${JSON.stringify(module)});
     const host=await q.resolveCLI(process.env);
-    const verdict=host?await q.${probe ? 'qualifyBinary' : 'cachedQualification'}(${JSON.stringify(config)},host):{status:'pending'};
+    if(host)await q.observeHost(${JSON.stringify(config)},host);
+    const verdict=host?await q.qualifyBinary(${JSON.stringify(config)},host):{status:'pending'};
     console.log(JSON.stringify({status:verdict.status}));`;
-  return engineChild(receipt.node, ['--input-type=module', '-e', script], { ...context, timeout: probe ? 90000 : 10000 });
+  return engineChild(receipt.node, ['--input-type=module', '-e', script], { ...context, timeout: 90000 });
 }
 async function requestFor(root, descriptor, client, receipt, context) {
   const home = await canonicalPath(context.env.HOME);
@@ -110,7 +111,7 @@ export async function configureCapture(root, descriptor, selected, context, { en
     // Uninstall disables without changing the user's retained setup preference.
     await save(root, settings);
     const installation = join(root, 'capture', client);
-    let outcome, format;
+    let outcome;
     if (!uninstall && !receipt.noticed) {
       context.write(context.t('local_capture_notice', { client: client === 'claude' ? 'Claude Code' : 'Codex' }));
       if (client === 'codex') context.write(context.t('local_capture_codex_approval'));
@@ -122,8 +123,7 @@ export async function configureCapture(root, descriptor, selected, context, { en
     } else {
       const request = await requestFor(root, descriptor, client, receipt, context);
       if (client === 'codex') {
-        format = await qualification(root, receipt, context, true);
-        if (format.status !== 'qualified') context.write(context.t('local_capture_qualification'));
+        await qualification(root, receipt, context);
       }
       if (!await exists(descriptor.database.path)) {
         const initialized = await invoke(root, receipt, ['init', '--database', descriptor.database.path], context);
@@ -143,21 +143,32 @@ export async function configureCapture(root, descriptor, selected, context, { en
         if (outcome.status === 'prepared') outcome = await invoke(root, receipt, ['activate', '--installation', installation], context);
       }
     }
-    if (format && format.status !== 'qualified' && outcome.status === 'active') outcome = { ...outcome, status: 'blocked', reason: 'qualification_required' };
+    // The engine installs hooks even while qualification is pending/failed.
+    // Its cache-only DTO is the sole qualification authority for setup and status.
+    if (client === 'codex' && outcome.status === 'active') {
+      outcome = await invoke(root, receipt, ['status', '--installation', installation], { ...context, timeout: 10000 });
+    }
     showCapture(client, outcome, context);
     // A disable refusal must stop uninstall before engine/MCP detachment.
     if ((uninstall || !receipt.enabled) && outcome.status !== 'disabled') fail();
   }
 }
 function showCapture(client, outcome, { write, t }) {
-  const state = outcome.status === 'active' ? 'on' : outcome.status === 'disabled' ? 'off' : 'blocked';
+  const verdict = client === 'codex' ? outcome.qualification : undefined;
+  const waiting = verdict && verdict.status !== 'qualified';
+  const state = outcome.status === 'active' && !waiting ? 'on' : outcome.status === 'disabled' ? 'off' : 'blocked';
   const allowedReasons = new Set(['not_installed','prepared','rearm_required','recovery_required','configuration_conflict','configuration_changed',
     'unsafe_path','store_invalid','authority_bound','authority_changed','qualification_required','runtime_unavailable','busy','cancelled','child_unavailable','unexpected_failure']);
-  const reason = state === 'blocked' ? (allowedReasons.has(outcome.reason) ? outcome.reason : 'not_installed') : state;
+  const reason = waiting ? 'qualification_required' : state === 'blocked' ? (allowedReasons.has(outcome.reason) ? outcome.reason : 'not_installed') : state;
   write(t('local_capture_status', { client: client === 'claude' ? 'Claude Code' : 'Codex', state, reason }));
   if (client === 'codex') {
     write(t('local_capture_codex_approval'));
-    if (outcome.reason === 'qualification_required') write(t('local_capture_qualification'));
+    if (verdict) {
+      const status = ['qualified', 'pending', 'failed'].includes(verdict.status) ? verdict.status : 'pending';
+      const reason = /^[a-z_]{1,64}$/.test(verdict.reason ?? '') ? verdict.reason : 'qualification_required';
+      write(t('local_capture_qualification_status', { state: status, reason }));
+      write(t(waiting ? 'local_capture_qualification' : 'local_capture_last_qualified'));
+    } else if (outcome.reason === 'qualification_required') write(t('local_capture_qualification'));
   }
 }
 export async function captureStatus(root, client, context) {
@@ -165,12 +176,6 @@ export async function captureStatus(root, client, context) {
   if (!receipt) return; // 0.6.5 descriptors retain their established status shape.
   let outcome = await invoke(root, receipt, ['status', '--installation', join(root, 'capture', client)], { ...context, timeout: 10000 });
   if (!receipt.enabled && outcome.reason === 'not_installed') outcome = { status: 'disabled' };
-  if (client === 'codex' && receipt.enabled && (['active', 'prepared'].includes(outcome.status) || ['not_installed', 'qualification_required'].includes(outcome.reason))) {
-    // New engines can report the verdict directly. Older engines require only
-    // an identity/cache read. Neither path generates schemas or starts Codex.
-    const verdict = outcome.qualification ?? await qualification(root, receipt, context, false);
-    if ((typeof verdict === 'string' ? verdict : verdict.status) !== 'qualified') outcome = { ...outcome, status: 'blocked', reason: 'qualification_required' };
-  }
   showCapture(client, outcome, context);
 }
 export async function retainedCapture(root) { return Object.keys((await captureSettings(root)).clients).length > 0; }

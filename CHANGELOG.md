@@ -33,10 +33,13 @@
 - Forget/correct hides conversations with messages within ±30 minutes of the
   memory save time. This can hide unrelated conversations and miss other
   conversations about the same subject; delete a conversation directly to remove it.
-- Codex requires approving the entries in `/hooks`. A failed format probe leaves
-  capture waiting for qualification. After a Codex update, hooks let the engine
+- Codex requires approving the entries in `/hooks`. A failed or pending format probe still installs hooks,
+  with capture waiting for qualification. After a Codex update, hooks let the engine
   qualify the new binary in the background; if still unqualified or failed, rerun
   setup. Status never runs qualification.
+- New Claude Code sessions are captured from their first turn. A fork or resume
+  of a hidden conversation stays hidden. Codex forks aren't saved locally.
+- After a Codex update, capture resumes once background qualification passes.
 - Re-enabling keeps identity/data/fences and skips off-period text. Claude Code
   skips the first turn of an already-running conversation after re-enabling;
   subsequent turns resume. Hook latency: `<latency to be measured>`.

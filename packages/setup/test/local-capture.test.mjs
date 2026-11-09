@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile, appendFile, mkdir, lstat } from 'node:fs/promises';
+import { readFile, writeFile, appendFile, mkdir, lstat, copyFile, symlink, unlink } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
+import { assertFixtureClients, fixtureBinaryGuard } from './fixture-clients.mjs';
 import { engineCacheComplete, skipMissingEngineCache } from './engine-cache.mjs';
 import { SERDE_MARKERS } from '../../../integrations/codex/schema-evidence.mjs';
 
@@ -45,7 +46,7 @@ async function fixture(t, { codex = true, failedQualification = false, cloud = f
     const initial = client === 'codex' ? { version: '0.162.0', failSchema: failedQualification,
       formatEvidence: fileURLToPath(new URL('../../../integrations/codex/test/fixtures/', import.meta.url)) } : { installed: cloud };
     await writeFile(paths[client], JSON.stringify(initial)); await writeFile(calls[client], '');
-    let source = `#!${process.execPath}\nprocess.env.FAKE_STATE=${JSON.stringify(paths[client])};process.env.FAKE_CALLS=${JSON.stringify(calls[client])};\n` +
+    let source = `#!${process.execPath}\n${fixtureBinaryGuard(ws.path)}process.env.FAKE_STATE=${JSON.stringify(paths[client])};process.env.FAKE_CALLS=${JSON.stringify(calls[client])};\n` +
       await readFile(new URL(`./fake-${client}.mjs`, import.meta.url), 'utf8');
     if (client === 'codex') {
       const evidence = await json(new URL('../../../integrations/codex/test/fixtures/binary-0.162.0/format.json', import.meta.url));
@@ -62,6 +63,7 @@ async function fixture(t, { codex = true, failedQualification = false, cloud = f
   await writeFile(harness, `import{main}from ${JSON.stringify(pathToFileURL(join(pkg, 'lib/setup.mjs')).href)};
     process.exitCode=await main(process.argv.slice(2),{interactive:${interactive},prompt:async()=> 'yes'});`);
   const setup = async (args = ['setup', '--local'], { expected = 0, packagePath } = {}) => {
+    assertFixtureClients(env, ws.path);
     const result = await run(process.execPath, [packagePath ? join(packagePath, 'bin/memory.mjs') : harness, ...args], { env, cwd: ws.path });
     assert.equal(result.signal, null); assert.equal(result.code, expected, result.stdout + result.stderr);
     t.diagnostic(`${args.join(' ')} exit ${result.code}`);
@@ -70,6 +72,7 @@ async function fixture(t, { codex = true, failedQualification = false, cloud = f
   const descriptor = () => json(join(root, 'installation.json'));
   const native = client => json(join(home, client === 'claude' ? '.claude/settings.json' : '.codex/hooks.json'));
   const hook = async (event, transcript, id = session) => {
+    assertFixtureClients(env, ws.path);
     const config = await native('claude');
     const command = config.hooks[event].flatMap(group => group.hooks).find(hook => hook.type === 'command').command;
     const result = await run('/bin/sh', ['-c', command], { env, cwd: ws.path,
@@ -82,6 +85,7 @@ async function fixture(t, { codex = true, failedQualification = false, cloud = f
   return { ws: ws.path, home, bin, root, env, pkg, setup, descriptor, native, hook, append, paths, calls };
 }
 async function mcp(f, t) {
+  assertFixtureClients(f.env, f.ws);
   const d = await f.descriptor(), receipt = d.clients.claude.vector;
   const executable = join(f.root, 'engine', receipt.engineId, 'app/node_modules/cairn-memory-local-preview/bin/cairn-memory.mjs');
   const child = spawn(receipt.node, [executable, '--db', d.database.path, '--owner', d.ownerId,
@@ -130,6 +134,29 @@ async function searchCaptured(reader) {
   assert.fail('Captured Raw must be searchable through the registered MCP server; final content: ' + JSON.stringify(value?.content));
 }
 
+test('fixture client guard rejects leaked Node bin and escaping clients before execution', async t => {
+  const ws = createTestWorkspace(t, { prefix: 'client-guard-proof-' });
+  const fixture = join(ws.path, 'fixture'), bin = join(fixture, 'bin'), marker = join(ws.path, 'ran');
+  await mkdir(bin, { recursive: true, mode: 0o700 });
+  const source = `#!${process.execPath}\n${fixtureBinaryGuard(fixture)}\n` +
+    `import {writeFileSync} from 'node:fs';writeFileSync(${JSON.stringify(marker)},'ran');`;
+  for (const client of ['codex', 'claude']) await writeFile(join(bin, client), source, { mode: 0o755 });
+  assert.deepEqual(Object.keys(assertFixtureClients({ PATH: bin }, fixture)), ['codex', 'claude']);
+  // No lookup, import, spawn or version probe in Node's directory is allowed.
+  assert.throws(() => assertFixtureClients({ PATH: bin + ':' + dirname(process.execPath) }, fixture),
+    /fixture client guard: PATH entry outside fixture directory/);
+  await assert.rejects(lstat(marker), { code: 'ENOENT' });
+  const outside = join(ws.path, 'codex'); await copyFile(join(bin, 'codex'), outside);
+  await unlink(join(bin, 'codex')); await symlink(outside, join(bin, 'codex'));
+  assert.throws(() => assertFixtureClients({ PATH: bin }, fixture),
+    /fixture client guard: binary target outside fixture directory/);
+  const refused = await run(process.execPath, [outside], { env: { HOME: fixture, PATH: bin } });
+  assert.equal(refused.code, 1); assert.match(refused.stderr, /fixture client guard: binary outside fixture directory/);
+  await assert.rejects(lstat(marker), { code: 'ENOENT' });
+  const accepted = await run(process.execPath, [join(bin, 'claude')], { env: { HOME: fixture, PATH: bin } });
+  assert.equal(accepted.code, 0, accepted.stderr); assert.equal(await readFile(marker, 'utf8'), 'ran');
+});
+
 for (const interactive of [false, true]) test(`packed default capture, notice once, idempotence and status (${interactive ? 'interactive' : 'noninteractive'})`, { timeout: 150000 }, async t => {
   if (!needCache(t)) return;
   const f = await fixture(t, { interactive });
@@ -158,7 +185,7 @@ for (const interactive of [false, true]) test(`packed default capture, notice on
   assert.equal((await readFile(f.calls.codex, 'utf8')).split('\n').filter(line => line.includes('generate-json-schema')).length, probeCount);
 });
 
-test('packed Codex zero-history off/on and update qualification use only setup probes', { timeout: 150000 }, async t => {
+test('packed Codex zero-history off/on and engine qualification status never probes', { timeout: 150000 }, async t => {
   if (!needCache(t)) return;
   const f = await fixture(t); await f.setup(['setup', '--local', '--no-capture']);
   await f.setup(['config', '--local-capture', 'on', '--client', 'codex']);
@@ -170,7 +197,19 @@ test('packed Codex zero-history off/on and update qualification use only setup p
   await appendFile(join(f.bin, 'codex'), '\n// synthetic updated binary\n');
   const probes = text => text.split('\n').filter(line => line.includes('generate-json-schema')).length;
   const before = probes(await readFile(f.calls.codex, 'utf8'));
-  assert.match(await f.setup(['status']), /Codex local capture: blocked \(qualification_required\)/);
+  // Cache-only engine status describes the last observed host, even if the
+  // binary has since changed. The installer must not rediscover it itself.
+  assert.match(await f.setup(['status']), /Codex format qualification: qualified \(qualified\)/);
+  const d = await f.descriptor(), receipt = d.clients.codex.vector;
+  const module = pathToFileURL(join(f.root, 'engine', receipt.engineId,
+    'app/node_modules/cairn-memory-local-preview/integrations/codex/qualification.mjs')).href;
+  const observation = await run(receipt.node, ['--input-type=module', '-e',
+    `const q=await import(${JSON.stringify(module)});await q.observeHost(${JSON.stringify(join(f.root, 'capture-support/codex/installation.json'))},await q.resolveCLI(process.env));`],
+    { env: f.env, cwd: f.ws });
+  assert.equal(observation.code, 0, observation.stderr);
+  const pending = await f.setup(['status']);
+  assert.match(pending, /Codex local capture: blocked \(qualification_required\)/);
+  assert.match(pending, /Codex format qualification: pending \(qualification_pending\)/);
   assert.equal(probes(await readFile(f.calls.codex, 'utf8')), before);
   await f.setup(); assert.match(await f.setup(['status']), /Codex local capture: on/);
   assert.ok(probes(await readFile(f.calls.codex, 'utf8')) > before);
@@ -190,12 +229,33 @@ test('packed failed Codex qualification keeps setup usable, reports waiting, sta
   const f = await fixture(t, { failedQualification: true });
   assert.match(await f.setup(), /Codex capture waits for format qualification/);
   assert.ok((await f.descriptor()).clients.codex);
+  const hooks = await f.native('codex');
+  for (const event of ['SessionStart', 'UserPromptSubmit', 'Stop', 'PreCompact']) assert.ok(hooks.hooks[event]);
+  assert.equal((await json(join(f.root, 'capture/codex/installation.json'))).phase, 'active');
+  assert.ok((await lstat(join(f.root, 'capture/codex/identity.key'))).isFile());
   const before = await readFile(f.calls.codex, 'utf8');
   const status = await f.setup(['status']);
   assert.match(status, /Codex local capture: blocked \(qualification_required\)/);
+  assert.match(status, /Codex format qualification: pending \(qualification_pending\)/);
   assert.match(status, /rerun setup after a Codex update/);
   const probes = text => text.split('\n').filter(line => line.includes('generate-json-schema')).length;
   assert.equal(probes(await readFile(f.calls.codex, 'utf8')), probes(before));
+  // A real engine background attempt against the failing fake publishes the
+  // failed DTO. Exercise its production API rather than forging a cache record.
+  const d = await f.descriptor(), receipt = d.clients.codex.vector;
+  const engine = join(f.root, 'engine', receipt.engineId, 'app/node_modules/cairn-memory-local-preview');
+  assertFixtureClients(f.env, f.ws);
+  const failed = await run(receipt.node, ['--input-type=module', '-e',
+    `const q=await import(${JSON.stringify(pathToFileURL(join(engine, 'integrations/codex/qualification.mjs')).href)});
+     const local=await import(${JSON.stringify(pathToFileURL(join(engine, 'integrations/client/raw/local-codex-qualification.mjs')).href)});
+     await local.runLocalQualification(${JSON.stringify(join(f.root, 'capture-support/codex/installation.json'))},await q.resolveCLI(process.env));`],
+    { env: f.env, cwd: f.ws });
+  assert.equal(failed.code, 0, failed.stderr);
+  const afterFailure = await readFile(f.calls.codex, 'utf8');
+  const failedStatus = await f.setup(['status']);
+  assert.match(failedStatus, /Codex format qualification: failed \(probe_failed\)/);
+  assert.match(failedStatus, /rerun setup after a Codex update/);
+  assert.equal(probes(await readFile(f.calls.codex, 'utf8')), probes(afterFailure));
 });
 
 test('packed --no-capture, config on/off/on and uninstall/setup preserve searchable Raw and identity', { timeout: 150000 }, async t => {
@@ -233,8 +293,7 @@ test('packed real Claude hook reaches MCP Raw search; forget by save time hides 
   await reader.close();
 });
 
-test('packed Claude transcript created after SessionStart captures its first turn', { timeout: 150000,
-  todo: 'Pending engine change for SessionStart before transcript creation; re-run after the engine merge.' }, async t => {
+test('packed Claude transcript created after SessionStart captures its first turn', { timeout: 150000 }, async t => {
   if (!needCache(t)) return;
   const f = await fixture(t, { codex: false }); await f.setup();
   const transcript = join(f.home, '.claude/projects/created-later.jsonl');
