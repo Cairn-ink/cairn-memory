@@ -124,7 +124,7 @@ const durabilityRuntimeChanges = new Map([
   ['integrations/codex/hosted-lifecycle.mjs', {
     historical: '8b4a8e7ea1cef5473147bfe2ea6af9548894c52f08e44a656e545fcb9fc8c496',
     before: 'bd7bc299773cc389565a34bfd9a7131f68ad7bef934d3ce5a0ebeeea800bbe3a',
-    current: 'b0159579e783ec16bcca7505452c4b11d416fb80eb89d41cbb8575d1c23b6b90',
+    current: 'ee5133d05e4345af1dbaa99a335beaf92a2070dd07b035404874fbee4e0e188e',
   }],
 ]);
 const hostedRuntimeExceptions = [
