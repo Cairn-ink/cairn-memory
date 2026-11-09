@@ -9,10 +9,11 @@ import { createTestWorkspace } from '../../../../tools/testing/workspace.mjs';
 import { binaryIdentity, canonical, KNOWN_FORMATS } from '../../qualification.mjs';
 import { resolveClient } from '../../../client/pairing.mjs';
 import { policyPath } from '../../../client/automatic-policy.mjs';
+import { hostedPauseStatus } from '../../../client/hosted-pause.mjs';
 import { copyRuntime } from '../../../../packages/setup/lib/codex-runtime.mjs';
 
 const preload = fileURLToPath(new URL('./prefetch-preload.mjs', import.meta.url));
-export async function installedPrompt(t, { host = 'codex', warm = true, syncDelay = 0, unanswered = false, seedIdentity = true } = {}) {
+export async function installedPrompt(t, { host = 'codex', warm = true, syncDelay = 0, unanswered = false, seedIdentity = true, pauseUnavailable = false } = {}) {
   const ws = createTestWorkspace(t, { prefix: 'prefetch-' });
   try {
     const home = join(ws.path, 'home'), root = join(home, 'data'), directory = join(home, 'codex', 'cairn');
@@ -32,6 +33,7 @@ export async function installedPrompt(t, { host = 'codex', warm = true, syncDela
       const wait = measuring && unanswered && pauseRequests++ === 0 ?
         Math.max(0, Math.ceil(1100 - (performance.now() - startedAt))) : 0;
       const reply = () => {
+        if (measuring && pauseUnavailable) { response.writeHead(503); response.end(); return; }
         response.setHeader('content-type', 'application/json');
         response.end(JSON.stringify({ paused: false, generation: 0, enforced: true }));
       };
@@ -120,6 +122,7 @@ export async function installedPrompt(t, { host = 'codex', warm = true, syncDela
     const watchdog = setTimeout(() => process.kill(-child.pid, 'SIGKILL'), 10000);
     let code;
     try { code = await done; } finally { clearTimeout(watchdog); }
-    return { code, signal: child.signalCode, stdout, stderr, outcome, recallHeaders, snapshot, phases };
+    return { code, signal: child.signalCode, stdout, stderr, outcome, recallHeaders, snapshot, phases,
+      status: await hostedPauseStatus({ root, endpoint }) };
   } finally { await ws.cleanup(); }
 }

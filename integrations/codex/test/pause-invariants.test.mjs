@@ -208,6 +208,8 @@ test('successful recall coalesces status after fetch and refreshes the observati
   assert.equal(observations, 2);
   assert.deepEqual(atFetch, { state: 'not yet observed' }, 'available_status_not_before_fetch');
   assert.equal(writes.filter(event => event.kind === 'write' && event.path.includes('/hosted-pause-status/')).length, 1);
+  assert.ok(writes.some(event => event.kind === 'write' && event.path.endsWith('.available.json')),
+    'success_diagnostic_is_an_atomic_observation_record');
   const status = await hostedPauseStatus(f.config);
   assert.equal(status.state, 'available'); assert.equal(status.stale, false);
   assert.ok(Date.parse(status.observedAt) >= start);

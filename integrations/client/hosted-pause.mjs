@@ -1,5 +1,6 @@
 import { join } from 'node:path';
-import { privateRead, privateWrite } from './private-state.mjs';
+import { readdir, unlink } from 'node:fs/promises';
+import { checkedPath, privateRead, privateWrite } from './private-state.mjs';
 import { stateLock } from './state-lock.mjs';
 import { rotateAutomaticBoundary } from './automatic-policy.mjs';
 import { conforms } from './hosted-contract.mjs';
@@ -8,30 +9,61 @@ import { hostedTargetId } from './transport-hosted.mjs';
 // H5 source evidence: cairn-wiki origin/main app/api/memory/pause-state/route.ts.
 // A missing, unenforced or regressing state never authorizes capture/injection.
 const statusPath = config => join(config.root, 'hosted-pause-status', hostedTargetId(config) + '.json');
+// Timestamped atomic records avoid lock contention for either outcome. Keep the
+// old single-file format readable, including its original freshness semantics.
+const statusDirectory = config => statusPath(config) + '.observations';
+const observationName = (state, at) => at.replace(/\D/gu, '') + '.' + state + '.json';
+const isObservation = name => /^\d{17}\.(available|unavailable)\.json$/u.test(name);
+function decodeStatus(bytes) {
+  if (bytes === undefined) return { state: 'not yet observed' };
+  let value;
+  try { value = JSON.parse(bytes); }
+  catch { return { state: 'observation unreadable' }; }
+  if (!value || value.version !== 1 || !['available','unavailable'].includes(value.state) ||
+    typeof value.observedAt !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value.observedAt) ||
+    !Number.isFinite(Date.parse(value.observedAt)) ||
+    new Date(value.observedAt).toISOString() !== value.observedAt ||
+    Date.parse(value.observedAt) > Date.now()) return { state: 'observation invalid' };
+  return { state: value.state, observedAt: value.observedAt,
+    stale: Date.now() - Date.parse(value.observedAt) > 300000 };
+}
 export async function hostedPauseStatus(config) {
   try {
-    const bytes = await privateRead(statusPath(config), { missing: true });
-    if (bytes === undefined) return {state:'not yet observed'};
-    const value = JSON.parse(bytes);
-    if (!value || value.version !== 1 || !['available','unavailable'].includes(value.state) ||
-      typeof value.observedAt !== 'string' ||
-      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value.observedAt) ||
-      !Number.isFinite(Date.parse(value.observedAt)) ||
-      new Date(value.observedAt).toISOString() !== value.observedAt ||
-      Date.parse(value.observedAt) > Date.now()) return { state: 'observation invalid' };
-    return { state: value.state, observedAt: value.observedAt,
-      stale: Date.now() - Date.parse(value.observedAt) > 300000 };
+    const directory = statusDirectory(config);
+    // A newer durable writer may prune the selected old record between list and
+    // read. Retry that disappearance; never fall back to stale available bytes.
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const previous = decodeStatus(await privateRead(statusPath(config), { missing: true }));
+      if (!(await checkedPath(directory, { directory: true, missing: true }))) return previous;
+      const latest = (await readdir(directory)).filter(isObservation).sort().at(-1);
+      if (!latest) return previous;
+      const bytes = await privateRead(join(directory, latest), { missing: true });
+      if (bytes === undefined) continue;
+      const value = decodeStatus(bytes);
+      if (!value.observedAt || observationName(value.state, value.observedAt) !== latest)
+        return { state: 'observation invalid' };
+      if (previous.observedAt > value.observedAt ||
+          (previous.observedAt === value.observedAt && previous.state === 'unavailable')) return previous;
+      return value;
+    }
+    return { state: 'observation unreadable' };
   } catch { return { state: 'observation unreadable' }; }
 }
-// Only diagnostics read this file. Timestamp the observation, not its delayed
-// publication, and never let an older success erase a newer failure.
+// Only diagnostics read these records. No status lock or retries delay failure
+// publication. Names order by observation time, with unavailable winning ties.
 async function publishStatus(config, state, observedAt) {
-  await stateLock(statusPath(config) + '.lock', async () => {
-    const previous = await hostedPauseStatus(config);
-    if (previous.observedAt > observedAt ||
-        (previous.observedAt === observedAt && previous.state === 'unavailable' && state === 'available')) return;
-    await privateWrite(statusPath(config), JSON.stringify({version:1,state,observedAt}));
-  }).catch(() => {});
+  const directory = statusDirectory(config), name = observationName(state, observedAt);
+  try {
+    await privateWrite(join(directory, name), JSON.stringify({version:1,state,observedAt}));
+    // Publish durably before pruning. Only strictly older names may be removed:
+    // a delayed writer can never delete a newer outcome, even after a crash.
+    for (const older of (await readdir(directory)).filter(isObservation)) {
+      if (older < name) await unlink(join(directory, older)).catch(error => {
+        if (error.code !== 'ENOENT') throw error;
+      });
+    }
+  } catch { /* Diagnostics cannot change the observation's result. */ }
 }
 export async function observeHostedPause(config, token, signal, { available } = {}) {
   try {
