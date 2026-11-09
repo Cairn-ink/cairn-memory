@@ -47,7 +47,7 @@ export function installedTransport(config, token, expectedRemoteGeneration) {
 
 // `enabled` is the prompt-recall kill switch reader; it is required and is read
 // again as the last step, so switching off during an in-flight recall injects nothing.
-export async function recallContext(input, config, token, projectId, signal, enabled, afterRecall = async () => {}) {
+export async function recallContext(input, config, token, projectId, signal, enabled, afterRecall = async () => {}, deliver, { deadlineMs } = {}) {
   const observation = deferHostedPauseStatus(config, token, signal);
   let remote, local, result;
   try {
@@ -65,8 +65,10 @@ export async function recallContext(input, config, token, projectId, signal, ena
       if (!result.started) throw new Error('dispatch_not_started');
       return result.operation;
     };
+    const fetchSignal = Number.isFinite(deadlineMs) ? AbortSignal.any([signal,
+      AbortSignal.timeout(Math.max(1, deadlineMs - performance.now() - 650))]) : signal;
     result = await post.reply('/api/memory/recall', { query, project_id: projectId, limit: 6,
-      session_id: hash('wire-session-v1','codex',input.session_id) }, 2500, undefined, signal, dispatch);
+      session_id: hash('wire-session-v1','codex',input.session_id) }, 2500, undefined, fetchSignal, dispatch);
     if (result.status !== 'complete' || !result.memories.length) return '';
     const current = await observation.observe();
     if (current.paused || current.generation !== remote.generation) return '';
@@ -90,6 +92,10 @@ export async function recallContext(input, config, token, projectId, signal, ena
   // The switch read is asynchronous: pause/generation or cancellation may change
   // during it. Re-check both under the control lock; nothing awaits after this.
   if (!await withHostedPauseGate(config, remote.generation,
-    guard => runIfActive(config.root, local.generation, () => {}, { signal, guard })) || signal.aborted) return '';
-  return output;
+    guard => runIfActive(config.root, local.generation, () => {
+      // Installed entry supplies synchronous delivery: lock cleanup and returned
+      // values must never separate authorization from the actual stdout write.
+      if (deliver) deliver(output);
+    }, { signal, guard })) || signal.aborted) return '';
+  return deliver ? '' : output;
 }

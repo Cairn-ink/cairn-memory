@@ -53,6 +53,9 @@ export async function hostedPauseStatus(config) {
 // Only diagnostics read these records. No status lock or retries delay failure
 // publication. Names order by observation time, with unavailable winning ties.
 async function publishStatus(config, state, observedAt) {
+  // These POSIX-private diagnostics have no portable Windows writer. Skipping
+  // them cannot authorize content or delay a decision.
+  if (!hostedPauseMode(config).barrier) return;
   const directory = statusDirectory(config), name = observationName(state, observedAt);
   try {
     await privateWrite(join(directory, name), JSON.stringify({version:1,state,observedAt}));
@@ -71,6 +74,7 @@ export async function observeHostedPause(config, token, signal, { available } = 
     else await publishStatus(config, 'available', observedAt);
     return remote;
   } catch (error) {
+    if (!hostedPauseMode(config).barrier) volatileState(config).valid = false;
     await publishStatus(config, 'unavailable', new Date().toISOString());
     throw error;
   }
@@ -93,6 +97,23 @@ export function deferHostedPauseStatus(config, token, signal) {
 }
 const pausePath = config => join(config.root, 'hosted-pause', hostedTargetId(config) + '.json');
 const intentDirectory = config => pausePath(config) + '.intents';
+const gatePath = config => pausePath(config) + '.gate';
+const highWaterPath = config => pausePath(config) + '.high-water';
+// A timed-out publisher still journals. Limit every admitted critical section
+// at its synchronous side effect, including an uncooperative filesystem wait.
+const GATE_WINDOW_MS = 250;
+// Capability is selected once for each config, never from a lock failure.
+// Tests inject the platform without changing the host or its lock semantics.
+const modes = new WeakMap(), volatileStates = new Map();
+export function hostedPauseMode(config, platform = process.platform) {
+  if (!modes.has(config)) modes.set(config, Object.freeze({ barrier: platform !== 'win32' }));
+  return modes.get(config);
+}
+function volatileState(config) {
+  const key = config.root + ':' + hostedTargetId(config);
+  if (!volatileStates.has(key)) volatileStates.set(key, { valid: false });
+  return volatileStates.get(key);
+}
 const intentName = remote => `${remote.generation}.${remote.paused}`;
 const intentBytes = remote => JSON.stringify({ generation: remote.generation, paused: remote.paused });
 
@@ -110,10 +131,34 @@ async function readPause(config) {
 // Immutable records cannot be overwritten by an older observer that finishes
 // late. Within one generation, resume is irreversible: false supersedes true.
 // Keep these content-free records across crashes; diagnostics are not authority.
+function olderIntentName(name, remote) {
+  const match = /^(0|[1-9]\d*)\.(true|false)\.(json|complete)$/u.exec(name);
+  return match && (Number(match[1]) < remote.generation ||
+    (Number(match[1]) === remote.generation && match[2] === 'true' && !remote.paused));
+}
+async function pruneIntents(config, intent) {
+  const directory = intentDirectory(config);
+  // A concurrent higher intent may be visible before its writer's directory
+  // sync. Finish that sync ourselves before deleting any dominated authority.
+  await syncDirectory(directory);
+  for (const name of await privateList(directory)) {
+    if (olderIntentName(name, intent)) await privateRemove(join(directory, name));
+  }
+  await syncDirectory(directory);
+}
 async function highestIntent(config) {
   const directory = intentDirectory(config);
+  const checkpoint = await privateRead(highWaterPath(config), { missing: true });
   let selected;
-  for (const name of await privateList(directory, { missing: true }) ?? []) {
+  if (checkpoint !== undefined) {
+    const value = JSON.parse(checkpoint);
+    if (Object.keys(value ?? {}).sort().join(',') !== 'generation,paused' ||
+        !Number.isSafeInteger(value.generation) || value.generation < 0 ||
+        typeof value.paused !== 'boolean') throw new Error('pause_unavailable');
+    selected = { ...value, name: intentName(value) + '.json' };
+  }
+  const names = await privateList(directory, { missing: true }) ?? [];
+  for (const name of names) {
     if (!name.endsWith('.json')) continue; // Incomplete atomic-write temporaries.
     const match = /^(0|[1-9]\d*)\.(true|false)\.json$/u.exec(name);
     const generation = Number(match?.[1]);
@@ -123,14 +168,15 @@ async function highestIntent(config) {
         (generation === selected.generation && !paused)) selected = { name, generation, paused };
   }
   if (!selected) return undefined;
-  // Only the highest record is authority. Reading it once keeps warm checks
-  // independent of the number of historical pause/resume observations.
+  // Completed observations checkpoint their durable high water before pruning.
+  // Keep its matching immutable intent/receipt so all crash stages use the
+  // same validation. Successful transitions retain exactly two journal names.
   const value = JSON.parse(await privateRead(join(directory, selected.name)));
   if (Object.keys(value ?? {}).sort().join(',') !== 'generation,paused' ||
       value.generation !== selected.generation || value.paused !== selected.paused) {
     throw new Error('pause_unavailable');
   }
-  return value;
+  return { ...value, needsPrune: names.some(name => olderIntentName(name, value)) };
 }
 function validateIntent(remote, intent) {
   if (intent && (remote.generation < intent.generation ||
@@ -147,6 +193,15 @@ async function writeOnce(path, bytes) {
 // control-lock waits. Callers pass check to the local gate as its guard. Work
 // only starts a request (returns its promise in an object) or emits output.
 export async function withHostedPauseGate(config, generation, work) {
+  if (!hostedPauseMode(config).barrier) {
+    const check = async () => {
+      const state = volatileState(config);
+      if (!state.valid || state.previous?.paused || state.previous?.generation !== generation)
+        throw new Error('pause_unavailable');
+    };
+    await check();
+    return work(check);
+  }
   const check = async () => {
     const { previous } = await readPause(config), intent = await highestIntent(config);
     if (!previous || !conforms('pause-state', previous) || !previous.enforced ||
@@ -157,8 +212,14 @@ export async function withHostedPauseGate(config, generation, work) {
       if (completed !== intentBytes(previous)) throw new Error('pause_unavailable');
     }
   };
-  await check();
-  return work(check);
+  return stateLock(gatePath(config), async () => {
+    const deadline = performance.now() + GATE_WINDOW_MS;
+    check.beforeStart = () => {
+      if (performance.now() >= deadline) throw new Error('pause_unavailable');
+    };
+    await check();
+    return work(check);
+  });
 }
 async function observe(config, token, signal) {
   signal?.throwIfAborted();
@@ -180,6 +241,12 @@ async function observe(config, token, signal) {
   } finally { await reader.cancel().catch(() => {}); }
   const remote = JSON.parse(Buffer.concat(chunks).toString('utf8'));
   if (!conforms('pause-state', remote) || !remote.enforced) throw new Error('pause_unavailable');
+  if (!hostedPauseMode(config).barrier) {
+    const state = volatileState(config);
+    validateTransition(remote, state.previous);
+    state.previous = remote; state.valid = true;
+    return remote;
+  }
   const file = pausePath(config);
   // Read-only on an unchanged observation. Record a changed, validated denial
   // BEFORE attempting the pause lock: timeout, rotation failure and process
@@ -190,15 +257,30 @@ async function observe(config, token, signal) {
     validateIntent(remote, await highestIntent(config));
     if ((!previous && (remote.generation > 0 || remote.paused)) ||
         (previous && (remote.generation !== previous.generation || remote.paused !== previous.paused))) {
-      const directory = intentDirectory(config);
-      await privateDirectory(directory);
-      // Persist newly created ancestor entries too. A concurrent writer may
-      // already expose the directory/record while its sync is still pending.
-      await syncDirectory(config.root);
-      await syncDirectory(join(config.root, 'hosted-pause'));
-      // Identical exclusive publications are safe across processes. Even when
-      // the name exists, finish its directory sync before attempting the lock.
-      await privateWrite(join(directory, intentName(remote) + '.json'), intentBytes(remote), { exclusive: true });
+      const publish = async () => {
+        const directory = intentDirectory(config);
+        await privateDirectory(directory);
+        // Persist newly created ancestor entries too. A concurrent writer may
+        // already expose the directory/record while its sync is still pending.
+        await syncDirectory(config.root);
+        await syncDirectory(join(config.root, 'hosted-pause'));
+        // Identical exclusive publications are safe across processes. Even when
+        // the name exists, finish its directory sync before attempting the lock.
+        await privateWrite(join(directory, intentName(remote) + '.json'), intentBytes(remote), { exclusive: true });
+        // Bound pending history even when rotation/publication repeatedly fails.
+        // The durable maximum intent alone supersedes every older intent/receipt.
+        await pruneIntents(config, await highestIntent(config));
+      };
+      let entered = false;
+      try {
+        await stateLock(gatePath(config), async () => { entered = true; await publish(); });
+      } catch (error) {
+        // Never discard a validated observation because the shared gate failed.
+        // If publication itself failed, retain that failure rather than retrying
+        // a partially completed write as though it were an acquisition failure.
+        if (entered) throw error;
+        await publish();
+      }
     }
   }
   const observed = await stateLock(file + '.lock', async () => {
@@ -222,7 +304,16 @@ async function observe(config, token, signal) {
     // A visible rename is insufficient if publication's directory sync failed.
     // This receipt is only written AFTER rotation and durable pause publication.
     // A retry repairs an interrupted publication even when its bytes now match.
-    if (completion) await writeOnce(completion, intentBytes(remote));
+    if (completion) {
+      await writeOnce(completion, intentBytes(remote));
+      const checkpoint = await privateRead(highWaterPath(config), { missing: true });
+      if (checkpoint !== intentBytes(remote) || intent.needsPrune) {
+        // Completed observations checkpoint authority before final compaction.
+        // A retry also finishes pruning interrupted after the checkpoint sync.
+        await privateWrite(highWaterPath(config), intentBytes(remote));
+        await pruneIntents(config, remote);
+      }
+    }
     return remote;
   });
   if (!observed) throw new Error('pause_unavailable');
