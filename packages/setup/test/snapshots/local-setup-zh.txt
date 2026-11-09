@@ -13,15 +13,17 @@ Cairn.ink Memory 安裝程式 <version>
 Claude Code 本機擷取預設開啟，會把這台電腦上該工具的對話文字，以明文 Raw
   存進本機資料庫，不需要金鑰，也不呼叫模型。共用 Raw 上限為 200,000,000
   bytes。忘記或更正記憶時，也會隱藏在記憶保存時間前後 30
-  分鐘內有訊息的對話，可能包含無關對話，也可能漏掉其他談到相同主題的對話。可直接
-  刪除個別對話。關閉方式：setup --local --no-capture 或 config --local-capture
+  分鐘內有訊息的對話，可能包含無關對話，也可能漏掉其他談到相同主題的對話。要移除
+  對話，先用 raw list，再用 raw delete <conversation-id> 預覽；加上 --yes
+  才會刪除。關閉方式：setup --local --no-capture 或 config --local-capture
   off；重新開啟：config --local-capture on。
 Claude Code 本機擷取：on（on）。Raw 上限：200,000,000 bytes。
 Codex 本機擷取預設開啟，會把這台電腦上該工具的對話文字，以明文 Raw
   存進本機資料庫，不需要金鑰，也不呼叫模型。共用 Raw 上限為 200,000,000
   bytes。忘記或更正記憶時，也會隱藏在記憶保存時間前後 30
-  分鐘內有訊息的對話，可能包含無關對話，也可能漏掉其他談到相同主題的對話。可直接
-  刪除個別對話。關閉方式：setup --local --no-capture 或 config --local-capture
+  分鐘內有訊息的對話，可能包含無關對話，也可能漏掉其他談到相同主題的對話。要移除
+  對話，先用 raw list，再用 raw delete <conversation-id> 預覽；加上 --yes
+  才會刪除。關閉方式：setup --local --no-capture 或 config --local-capture
   off；重新開啟：config --local-capture on。
 Codex：請到 /hooks 核准新增的項目。
 Codex 本機擷取：blocked（qualification_required）。Raw 上限：200,000,000 bytes。

@@ -393,7 +393,7 @@ test('packed cloud client refuses local setup without local capture', async t =>
   const f = await fixture(t, { cloud: true, codex: false });
   await f.setup(['setup', '--local'], { expected: 2 });
   for (const args of [['raw','list'], ['raw','list','--client','claude'], ['raw','delete','unknown','--yes']])
-    assert.match(await f.setup(args, { expected: 2 }), /unavailable in cloud mode/);
+    assert.match(await f.setup(args, { expected: 2 }), /unavailable in cloud\s+mode/);
   await assert.rejects(lstat(join(f.root, 'capture')), { code: 'ENOENT' });
   await assert.rejects(f.native('claude'), { code: 'ENOENT' });
 });
@@ -429,14 +429,20 @@ test('packed attested store refuses 0.6.5 after 0.6.6 Raw open; reinstall restor
   if (!needCache(t)) return;
   const f = await fixture(t, { codex: false });
   await f.setup(['setup','--local','--no-capture']);
-  await engineScript(f, `const {openMemoryCore}=await import(engine+'core/index.mjs');
-    const core=openMemoryCore({path,contentSafety:'s2h-v1',raw:true,rawSearch:false});await core.close();console.log('true');`);
+  const attested = await engineScript(f, `const {openMemoryCore}=await import(engine+'core/index.mjs');
+    const core=openMemoryCore({path,contentSafety:'s2h-v1',raw:true,rawSearch:false});await core.close();
+    const {DatabaseSync}=await import('node:sqlite'),db=new DatabaseSync(path,{readOnly:true});
+    try {console.log(JSON.stringify({control:db.prepare('SELECT base_layout,suppression_revision,card_lineage_revision FROM content_safety_control').get(),
+      guard:!!db.prepare("SELECT 1 FROM sqlite_schema WHERE name='local_raw_uuid_delete_guard'").get()}));} finally {db.close();}`);
+  t.diagnostic('attested downgrade fixture: '+JSON.stringify(attested));
+  assert.equal(attested.control.suppression_revision, 1); assert.equal(attested.guard, true);
   await f.setup(['config','--local-capture','on']);
   const transcript = join(f.home, '.claude/projects/attested.jsonl'); await writeFile(transcript, '', { mode: 0o600 });
   await f.hook('SessionStart', transcript); await f.append(transcript, 'copper telescope attested downgrade sentinel'); await f.hook('Stop', transcript);
   const current = await mcp(f, t); await searchCaptured(current); await current.close();
   const before = await snapshotDatabase(f);
   const old = await oldPackage(f); await f.setup(['setup','--local'], { packagePath: old });
+  assert.match((await f.descriptor()).clients.claude.vector.engineId, /^0\.6\.5-/);
   const refusal = await engineScript(f, `const {openMemoryCore}=await import(engine+'core/index.mjs');
     try {const core=openMemoryCore({path,raw:true,rawSearch:false});await core.close();console.log(JSON.stringify({opened:true}));}
     catch(error){console.log(JSON.stringify({code:error.code}));}`);

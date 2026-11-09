@@ -15,17 +15,19 @@ Claude Code local capture: on by default. Conversation text from this tool's
   without a key or model calls. Shared Raw cap: 200,000,000 bytes. Forgetting
   or correcting a memory hides conversations with messages within 30 minutes of
   its save time; this can include unrelated conversations and miss other
-  conversations about the same subject. Delete a conversation directly to
-  remove it. Turn off with setup --local --no-capture or config --local-capture
-  off; turn on with config --local-capture on.
+  conversations about the same subject. To remove one, use raw list, then raw
+  delete <conversation-id> (preview); add --yes to delete. Turn off with setup
+  --local --no-capture or config --local-capture off; turn on with config
+  --local-capture on.
 Claude Code local capture: on (on). Raw cap: 200,000,000 bytes.
 Codex local capture: on by default. Conversation text from this tool's sessions
   on this computer is saved as plaintext Raw in the local store, without a key
   or model calls. Shared Raw cap: 200,000,000 bytes. Forgetting or correcting a
   memory hides conversations with messages within 30 minutes of its save time;
   this can include unrelated conversations and miss other conversations about
-  the same subject. Delete a conversation directly to remove it. Turn off with
-  setup --local --no-capture or config --local-capture off; turn on with config
+  the same subject. To remove one, use raw list, then raw delete
+  <conversation-id> (preview); add --yes to delete. Turn off with setup --local
+  --no-capture or config --local-capture off; turn on with config
   --local-capture on.
 Codex: approve the new entries in /hooks.
 Codex local capture: blocked (qualification_required). Raw cap: 200,000,000
