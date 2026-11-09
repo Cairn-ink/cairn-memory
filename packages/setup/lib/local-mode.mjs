@@ -444,7 +444,7 @@ async function uninstallLocal(options, selection, detection, context) {
       const cp = descriptor?.operation?.checkpoints[client];
       if (cp?.state === 'detached') continue;
       if (cp) { cp.state = 'detaching'; await writeDescriptor(root, descriptor); }
-      if (descriptor) await configureCapture(root, descriptor, [client], { ...context, onChild }, { uninstall: true });
+      await configureCapture(root, descriptor, [client], { ...context, onChild }, { uninstall: true });
       if (client === 'claude') await detachClaude({ home: detection.destinations.claude, run: runClaude });
       else await detachCodex({ home: dirname(detection.destinations.codex), env, inspection, write, t });
       if (descriptor) { recordClient(descriptor, client, null); await writeDescriptor(root, descriptor); }
