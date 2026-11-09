@@ -78,7 +78,7 @@ for(const layout of ['plain',53]) {
     f.db.exec("UPDATE memories SET updated_at='2026-01-01T00:00:00.000Z'");
     const last=f.db.prepare('SELECT id FROM memories ORDER BY id DESC LIMIT 1').get().id;
     assert.equal(last,fresh.id);
-    clock(()=>now++);
+    clock(()=>now++ * 500);
     const frozen=query(f.runtime,'quartzneedle');
     assert.equal(frozen.scanBoundary.rows,1024);
     assert.ok(frozen.rows.every(row=>row.item.ref.memoryId!==fresh.id));
