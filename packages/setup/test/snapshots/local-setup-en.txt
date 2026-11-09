@@ -2,15 +2,36 @@ Cairn.ink Memory setup <version>
 1. Local: data stays on this computer, free and offline, without computer sync.
 2. Cloud: memory is shared across computers and tools, with cairn.ink sign-in.
 ? Where should memory live? (1/2)
-Memory stays on this computer in ~/.cairn-memory. Setup sends no user data.
-Use the MCP tools to save and find memories; capture and recall are not
-  automatic.
-Semantic recall needs a model key. If the tool environment has OPENAI_API_KEY,
-the engine uses it for recall and sends selected text to that provider.
+Memory stays on this computer. Setup sends no user data.
+Local MCP provides memory storage and search. Semantic recall with
+  OPENAI_API_KEY sends selected text to that model provider.
 ? Connect Claude Code? (Y/n)
 ? Connect Codex? (y/N)
 Installing the local memory engine…
 ✓ Claude Code connected to local memory (cairn-local)
 ✓ Codex connected to local memory (cairn-local)
+Claude Code local capture: on by default. Conversation text from this tool's
+  sessions on this computer is saved as plaintext Raw in the local store,
+  without a key or model calls. Shared Raw cap: 200,000,000 bytes. Forgetting
+  or correcting a memory hides conversations with messages within 30 minutes of
+  its save time; this can include unrelated conversations and miss other
+  conversations about the same subject. Delete a conversation directly to
+  remove it. Turn off with setup --local --no-capture or config --local-capture
+  off; turn on with config --local-capture on.
+Claude Code local capture: on (on). Raw cap: 200,000,000 bytes.
+Codex local capture: on by default. Conversation text from this tool's sessions
+  on this computer is saved as plaintext Raw in the local store, without a key
+  or model calls. Shared Raw cap: 200,000,000 bytes. Forgetting or correcting a
+  memory hides conversations with messages within 30 minutes of its save time;
+  this can include unrelated conversations and miss other conversations about
+  the same subject. Delete a conversation directly to remove it. Turn off with
+  setup --local --no-capture or config --local-capture off; turn on with config
+  --local-capture on.
+Codex: approve the new entries in /hooks.
+Codex capture waits for format qualification; rerun setup after a Codex update.
+Codex local capture: blocked (qualification_required). Raw cap: 200,000,000
+  bytes.
+Codex: approve the new entries in /hooks.
+Codex capture waits for format qualification; rerun setup after a Codex update.
 ✓ Local memory setup complete.
 Next: reopen Claude Code and Codex.

@@ -462,10 +462,10 @@ test('L17 explicit default database is valid; other database paths inside the ro
   assert.equal(refused.code, 2, refused.display); assert.deepEqual(await f.inventory(), before);
 });
 
-test('L04/L17 noninteractive local flags persist identity and allow a new project after uninstall', async t => {
+test('L04/L17 noninteractive local flags with capture off persist identity and allow a new project after uninstall', async t => {
   if (!needCache(t)) return;
   const f = await localFixture(t), db = join(f.ws, 'external.sqlite');
-  const first = await f.run(['setup', '--local', '--owner', 'synthetic-local-owner', '--project', 'synthetic-project', '--db', db]);
+  const first = await f.run(['setup', '--local', '--no-capture', '--owner', 'synthetic-local-owner', '--project', 'synthetic-project', '--db', db]);
   assert.equal(first.code, 0, first.display); assert.equal(first.prompts.length, 0);
   const installed = await f.descriptor(); assert.equal(installed.state, 'installed');
   assert.equal(installed.ownerId, 'synthetic-local-owner'); assert.equal(installed.projectId, 'synthetic-project');

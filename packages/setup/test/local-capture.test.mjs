@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile, appendFile, mkdir, readdir, lstat } from 'node:fs/promises';
+import { readFile, writeFile, appendFile, mkdir, lstat } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -53,6 +53,8 @@ async function fixture(t, { codex = true, failedQualification = false, cloud = f
     }
     await writeFile(join(bin, client), source, { mode: 0o755 });
   }
+  // Keep discovery fake-only. Node's directory may also contain real clients;
+  // the engine adds its Node/npm path privately when installing dependencies.
   const env = { HOME: home, CODEX_HOME: join(home, '.codex'), CAIRN_MEMORY_HOME: root, TMPDIR: ws.path,
     PATH: bin, LANG: 'en_US.UTF-8',
     CAIRN_SETUP_NPM_CACHE: process.env.CAIRN_SETUP_NPM_CACHE, CAIRN_SETUP_NPM_OFFLINE: '1' };
