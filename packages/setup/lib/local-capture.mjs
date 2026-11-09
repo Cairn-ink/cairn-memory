@@ -154,7 +154,10 @@ export async function configureCapture(root, descriptor, selected, context, { en
   }
 }
 function showCapture(client, outcome, { write, t }) {
-  const verdict = client === 'codex' ? outcome.qualification : undefined;
+  // A retained older runtime may omit the DTO. Keep capture status waiting
+  // rather than infer a qualified host or inspect its private cache ourselves.
+  const verdict = client === 'codex' ? outcome.qualification ??
+    (['active', 'prepared'].includes(outcome.status) ? { status: 'pending', reason: 'qualification_required' } : undefined) : undefined;
   const waiting = verdict && verdict.status !== 'qualified';
   const state = outcome.status === 'active' && !waiting ? 'on' : outcome.status === 'disabled' ? 'off' : 'blocked';
   const allowedReasons = new Set(['not_installed','prepared','rearm_required','recovery_required','configuration_conflict','configuration_changed',
