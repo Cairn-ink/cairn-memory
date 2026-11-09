@@ -1651,7 +1651,7 @@ only when execution is authorized, then require `build-runtime.mjs --check`.
 Retain §19's sync-commit identity rule with a newly recorded bundle sync commit,
 not its historical 0.6.5 pin. Release acceptance compares the entire bundled
 engine to that commit and checks every current-release sync reference. The current
-0.6.6 bundle source sync is `ee5cd3d1`. Do not claim the archive is current before regeneration and verification.
+0.6.6 bundle source sync is `3732d18a`. Do not claim the archive is current before regeneration and verification.
 
 English and Traditional Chinese setup documentation, defaults and the 0.6.6
 changelog cover capture scope, default, controls, cap, forget-by-time limits,

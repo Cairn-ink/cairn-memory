@@ -17,7 +17,7 @@ behaviour. Existing cloud-mode Codex users must rerun setup to install the
 updated runtime.
 
 Installer **0.6.6 is prepared and unpublished**. The engine bundle is synced
-from commit `ee5cd3d1`; release acceptance compares the complete engine archive
+from commit `3732d18a`; release acceptance compares the complete engine archive
 to that source commit, following the existing sync-commit rule.
 
 `setup --local` now installs automatic Raw capture by default for each selected
@@ -51,7 +51,7 @@ hooks; they continue using their retained engine. Turn capture off with 0.6.6
 before downgrading if you want it stopped. A 0.6.5 uninstall removes the engine,
 leaving any still-registered 0.6.6 hook commands unable to capture; it keeps Raw.
 
-安裝器 **0.6.6 已備妥，尚未發布**。引擎同步自 `ee5cd3d1`，發布驗收會依照
+安裝器 **0.6.6 已備妥，尚未發布**。引擎同步自 `3732d18a`，發布驗收會依照
 既有同步規則，比對整份引擎封裝與該 commit 的內容。
 
 `setup --local` 現在預設替所選工具安裝自動 Raw 擷取，把這台電腦上該工具的
