@@ -150,7 +150,7 @@ test('the last local guard re-reads an intent after an asynchronous wait', { tim
   }));
   const denied = assert.rejects(pending, /pause_unavailable/);
   denied.catch(() => {});
-  await entered.promise;
+  await Promise.race([entered.promise, pending.then(() => { throw new Error('local_guard_missing'); })]);
   f.remote(paused);
   const durable = Promise.withResolvers(), continueObservation = Promise.withResolvers();
   t.after(() => continueObservation.resolve());

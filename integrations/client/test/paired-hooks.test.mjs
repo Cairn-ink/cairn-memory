@@ -40,6 +40,10 @@ async function setup(t, paired = true, customRoot = false) {
   const requests = [];
   let recallReply = () => ({ memories: [] });
   const server = createServer((req, res) => {
+      if (req.url === "/api/memory/pause-state") {
+        req.resume(); res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ paused: false, generation: 0, enforced: true })); return;
+      }
     let body = "";
     req.on("data", (bytes) => (body += bytes));
     req.on("end", async () => {

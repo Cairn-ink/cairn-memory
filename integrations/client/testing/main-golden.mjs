@@ -350,7 +350,7 @@ export async function observeStandalone(plugin) {
           } catch (error) {
             if (
               (mode.startsWith("plugin-empty") ||
-                (candidate && mode.startsWith("local-marker-"))) &&
+                (candidate && (mode.startsWith("local-marker-") || mode === "standalone-win32"))) &&
               error.code === "ENOENT"
             )
               return null;
@@ -363,9 +363,11 @@ export async function observeStandalone(plugin) {
         let requestBytes = await readFile(requestsFile, "utf8");
         if (concurrent) {
           // Scheduling order is unspecified; compare the multiset of exact wire bytes.
-          requestBytes = requestBytes.trimEnd().split("\n").sort().join("\n") + "\n";
-          const count = requestBytes.trimEnd().split("\n").length;
-          if (count !== 12) throw new Error(`golden_dropped_hooks:${mode}:${count}`);
+          const lines = requestBytes.trimEnd().split("\n").filter(Boolean).sort();
+          requestBytes = lines.join("\n") + (lines.length ? "\n" : "");
+          const count = lines.length;
+          const expected = candidate && mode === "concurrent-win32" ? 0 : 12;
+          if (count !== expected) throw new Error(`golden_dropped_hooks:${mode}:${count}`);
         }
         variants.push({ mode, entry, key, identity, requestBytes, outcomes });
         if (mode === "default-unreadable") await chmod(legacy, 0o700);
@@ -398,6 +400,21 @@ export function candidateGolden(base) {
     }).join("\n");
     if (variant.mode.startsWith("concurrent-")) {
       variant.requestBytes = variant.requestBytes.trimEnd().split("\n").sort().join("\n") + "\n";
+    }
+    // Hosted operations now require the shared verified-namespace pause lock.
+    // Windows standalone identity/control behavior remains covered, while hosted
+    // recall/capture fail closed. Keep the historical fixture itself immutable.
+    if (["standalone-win32", "concurrent-win32"].includes(variant.mode)) {
+      const lines = variant.requestBytes.split("\n").filter(Boolean).filter(line => {
+        const request = JSON.parse(line);
+        return !request.url.endsWith("/recall") && !request.url.endsWith("/capture") &&
+          !(request.url.endsWith("/telemetry") && JSON.parse(request.body).event === "capture_succeeded");
+      });
+      variant.requestBytes = lines.join("\n") + (lines.length ? "\n" : "");
+      if (variant.mode === "standalone-win32") {
+        variant.key = null;
+        if (variant.entry === "launch-capture") variant.identity = null;
+      }
     }
     // Coordinator's round-10 tie-break: local 0.1.2 history is not first use.
     // These remain actual-base fixtures, but are refusal tests rather than parity.

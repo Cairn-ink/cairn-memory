@@ -108,3 +108,14 @@ test('recall re-observes hosted state before writing context', { timeout: 15000 
   assert.equal(f.counts.pause, 3, 'output_observation_required');
   assert.equal(result.stdout, '', 'paused_context_not_emitted');
 });
+
+
+test('hosted operations fail closed when the shared state lock cannot verify the platform', { timeout: 15000 }, async t => {
+  const f = await fixture(t);
+  const preload = fileURLToPath(new URL('./fixtures/pause-platform-preload.mjs', import.meta.url));
+  for (const action of ['recall', 'capture', 'capture-detached']) {
+    assert.equal((await run(t, f, action, { preload })).stdout, '');
+  }
+  assert.equal(f.counts.pause, 3);
+  assert.equal(f.counts.recall, 0); assert.equal(f.counts.capture, 0);
+});

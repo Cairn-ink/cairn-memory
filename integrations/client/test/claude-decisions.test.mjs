@@ -405,6 +405,10 @@ for (const row of table.rows) {
     const preservedPause = f.resetDestination && (await readControlState(defaultRoot));
     const requests = [];
     const server = createServer((req, res) => {
+      if (req.url === "/api/memory/pause-state") {
+        req.resume(); res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ paused: false, generation: 0, enforced: true })); return;
+      }
       let bytes = "";
       req.on("data", (chunk) => (bytes += chunk));
       req.on("end", () => {
@@ -520,13 +524,17 @@ for (const row of table.rows) {
           }),
         );
       });
+    // Binding decisions remain unchanged. Hosted content additionally requires
+    // a verified PID namespace for the shared pause-publication lock.
+    const hostedAvailable = f.platform !== "win32";
+    const expectedRequests = hostedAvailable ? row.expect.requests : 0;
     assert.equal((await run("recall")).code, 0);
-    assert.equal(requests.length, row.expect.requests, "exact request count");
+    assert.equal(requests.length, expectedRequests, "exact request count");
     if (preservedPause) assert.deepEqual(await readControlState(defaultRoot), preservedPause);
     const afterKeys = await Promise.all(keys.map(exists));
     assert.equal(
       afterKeys.filter((value, i) => value && !beforeKeys[i]).length,
-      row.expect.mint ? 1 : 0,
+      hostedAvailable && row.expect.mint ? 1 : 0,
       "exact number of minted project keys",
     );
     const status = await run("status");
@@ -543,12 +551,12 @@ for (const row of table.rows) {
     );
     assert.equal((await run("pause")).code, row.expect.enabled ? 0 : 1);
     await run("recall");
-    assert.equal(requests.length, row.expect.requests, "pause or disabled gate suppresses recall");
+    assert.equal(requests.length, expectedRequests, "pause or disabled gate suppresses recall");
     assert.equal((await run("resume")).code, row.expect.enabled ? 0 : 1);
     await run("recall");
     assert.equal(
       requests.length,
-      row.expect.requests + (row.expect.resumeRequests ?? (row.expect.enabled ? 1 : 0)),
+      hostedAvailable ? row.expect.requests + (row.expect.resumeRequests ?? (row.expect.enabled ? 1 : 0)) : 0,
     );
     if (row.expect.enabled && requests.length) {
       const key = (await readFile(join(selected, "project-key"), "utf8")).trim();

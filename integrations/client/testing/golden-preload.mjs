@@ -18,6 +18,11 @@ if (process.env.CAIRN_TEST_NO_GETUID === "yes") process.getuid = undefined;
 if (process.env.CAIRN_TEST_FALSY_HOME === "yes") os.homedir = () => "";
 syncBuiltinESMExports();
 globalThis.fetch = async (url, options) => {
+  // Serve hosted observations separately from the historical content oracle.
+  if (new URL(url).pathname.endsWith('/pause-state')) {
+    options.signal?.throwIfAborted();
+    return Response.json({ paused: false, generation: 0, enforced: true });
+  }
   appendFileSync(
     process.env.CAIRN_TEST_REQUESTS,
     JSON.stringify({ url, method: options.method, headers: options.headers, body: options.body }) +
