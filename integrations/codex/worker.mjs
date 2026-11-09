@@ -448,6 +448,9 @@ export async function runWorker(
       await save();
     }
     if (s.notBefore > now()) return { status: s.status, state: s };
+    // Number only sent batches. Metadata windows may split a large frozen
+    // range, but the existing manifests, event IDs and batch boundaries stay.
+    const sent = batches.filter(batch => batch.body);
     let dispatched = 0;
     while (s.pending.next < batches.length) {
       const b = batches[s.pending.next];
@@ -506,7 +509,18 @@ export async function runWorker(
                   reject(new Error("timeout"));
                 }, requestMs);
               });
-              return Promise.race([transport.capture(b.body, { signal: abort.signal }), timeout]);
+              const index = sent.indexOf(b), group = Math.floor(index / 64) * 64;
+              const body = { ...b.body,
+                window: {
+                  id: hash(wireBinding(binding).sessionId, group === 0 ? s.pending.start : sent[group].start),
+                  slice: index - group + 1,
+                  slices: Math.min(64, sent.length - group),
+                  // Every admitted Codex session already has an EOF boundary.
+                  initial: false,
+                },
+                sent_at: new Date(now()).toISOString(),
+              };
+              return Promise.race([transport.capture(body, { signal: abort.signal }), timeout]);
             }),
           );
           if (!gate.ok) {
