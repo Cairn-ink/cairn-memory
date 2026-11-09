@@ -33,12 +33,15 @@ dated three-layer contextRead over saved memories by default:
 `read_memory_context`. Existing local stores upgrade on first open to the
 Raw-capable schema; a store created by 0.6.3 moves from `user_version` 18 to 29.
 Raw search is ready but stays empty: `setup --local` registers only
-`--db/--owner[/--project]`, and `remember_memory` saves Memory only. Raw fills
-only from explicitly submitted captures through `capture_memory` with
-`--capture-qualification` and a configured model, or from the engine's separate
-local preview (`cairn-memory local setup`) configured by hand; see
-[the local preview guide](../../docs/raw-local-journal.md). Local mode still
-has no automatic capture. Local Memory, Raw and search indexes are plaintext
+`--db/--owner[/--project]`, which exposes no capture tool, and
+`remember_memory` saves Memory only. Raw fills only from messages submitted
+explicitly through `capture_memory` on a server registered with
+`--capture-qualification` and `--client codex` or `--client claude-code`, or
+from the engine's separate local preview (`cairn-memory local setup`)
+configured by hand; see [the local preview guide](../../docs/raw-local-journal.md).
+Submitted messages are kept as Raw even without an extraction model; a model is
+needed only to extract them into Memory. Local mode still has no automatic
+capture. Local Memory, Raw and search indexes are plaintext
 on this computer; Raw has a default 200,000,000-byte owner cap. Use `--no-raw`,
 `--no-raw-search`, or `--no-context-read` in the server registration to disable
 the respective defaults; see [defaults and off switches](../../docs/defaults.md).
@@ -58,10 +61,12 @@ You can go back to 0.6.3; it keeps working with the upgraded store, but conversa
 `read_memory_context`，以附日期的三層 contextRead 讀取已保存的記憶。
 既有本機資料庫第一次開啟時會升級成支援 Raw 的結構；0.6.3 建立的資料庫，
 `user_version` 會從 18 升到 29。Raw 搜尋已可使用，但內容仍是空的：
-`setup --local` 只註冊 `--db/--owner[/--project]`，`remember_memory` 只保存
-Memory。要填入 Raw，需自行設定 `--capture-qualification` 與模型，透過
-`capture_memory` 明確提交對話；也可以手動設定引擎獨立的本機預覽功能
+`setup --local` 只註冊 `--db/--owner[/--project]`，不提供保存對話的工具；
+`remember_memory` 只保存 Memory。要填入 Raw，需在 server 註冊參數自行加上
+`--capture-qualification` 與 `--client codex` 或 `--client claude-code`，再透過
+`capture_memory` 明確提交訊息；也可以手動設定引擎獨立的本機預覽功能
 （`cairn-memory local setup`），見[本機預覽指南](../../docs/raw-local-journal.md)。
+沒有設定模型時，提交的訊息仍會保存為 Raw；模型只用於把內容整理成 Memory。
 本機模式仍不會自動記下對話。Memory、Raw 與搜尋索引以明文存於這台電腦，
 Raw 預設每個 owner 上限為 200,000,000 bytes。可在 server 註冊參數加入
 `--no-raw`、`--no-raw-search` 或 `--no-context-read`，關閉對應功能，見

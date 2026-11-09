@@ -1537,12 +1537,15 @@ by default: `find_memory_candidates`, `fetch_memory_candidate_evidence` and
 `read_memory_context`. Existing local stores upgrade on first open to the
 Raw-capable schema; a 0.6.3 store moves from `user_version` 18 to 29.
 Raw search is ready but stays empty in an ordinary local install: setup
-registers only `--db/--owner[/--project]`, and `remember_memory` saves Memory
-only. Raw fills only through explicitly submitted `capture_memory` calls
-with `--capture-qualification` and a configured model, or through the
-engine's separate local preview (`cairn-memory local setup`) configured by
-hand; see [the local preview guide](../raw-local-journal.md). Local mode
-still has no automatic capture.
+registers only `--db/--owner[/--project]`, which exposes no capture tool, and
+`remember_memory` saves Memory only. Raw fills only through explicitly
+submitted `capture_memory` calls on a server registered with
+`--capture-qualification` and `--client codex` or `--client claude-code`, or
+through the engine's separate local preview (`cairn-memory local setup`)
+configured by hand; see [the local preview guide](../raw-local-journal.md).
+Submitted messages are kept as Raw even without an extraction model; a model
+is needed only to extract them into Memory. Local mode still has no automatic
+capture.
 
 Memory, Raw and search indexes are local plaintext. The default Raw cap is
 200,000,000 bytes per owner. Use `--no-raw`, `--no-raw-search` and
