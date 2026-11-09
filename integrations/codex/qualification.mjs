@@ -167,12 +167,15 @@ export async function hasQualifiedCreator(configPath,version,{signal}={}) {
 export async function observeHost(configPath,host) {
   if(!validHost(host))return;
   await safeCache(configPath,{create:true});
-  const path=join(directory(configPath),'observed-'+host.kind+'.json');
   // Diagnostic evidence is last-writer-wins: every publisher observed a real
-  // host. Never wait on another hook; verdicts remain separately identity-bound.
-  const bytes=await privateRead(path,{missing:true});
-  const next=JSON.stringify(host);
-  if(bytes!==next)await privateWrite(path,next);
+  // host. Its comparison/publication must not decide qualification. Validation
+  // and cache creation above still fail closed and precede pending scheduling.
+  try {
+    const path=join(directory(configPath),'observed-'+host.kind+'.json');
+    const bytes=await privateRead(path,{missing:true});
+    const next=JSON.stringify(host);
+    if(bytes!==next)await privateWrite(path,next);
+  } catch { /* Skip diagnostic publication; verdicts remain identity-bound. */ }
 }
 export async function observedHosts(configPath) {
   const hosts=[];
