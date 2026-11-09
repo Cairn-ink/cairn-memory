@@ -1678,5 +1678,15 @@
     "path": "plugins/cairn-memory/scripts/hook.mjs",
     "source": "await writeFile(temporary, JSON.stringify({ firstPromptAt: observedAt }), { mode: 0o600, flag: \"wx\" });",
     "reason": "Exclusive temporary JSON marker next to the hashed session cursor; linked only if the cursor path is absent. No database path or library is involved."
+  },
+  {
+    "path": "plugins/cairn-memory/scripts/hook.mjs",
+    "source": "try { state = JSON.parse(await readFile(path, \"utf8\")); }",
+    "reason": "Post-decision session cursor JSON read from a hashed session path; never selects database bytes or loads SQLite."
+  },
+  {
+    "path": "plugins/cairn-memory/scripts/hook.mjs",
+    "source": "const current = JSON.parse(await readFile(path, \"utf8\"));",
+    "reason": "Fresh session cursor JSON read under its nonblocking capture lock; preserves the existing cursor and cannot name a database file."
   }
 ]

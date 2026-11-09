@@ -54,6 +54,9 @@ test('worker bounds metadata windows above 64 sent slices without losing batches
   assert.equal((await runWorker(f.binding, { guard: f.guard, transport: f.transport, now: () => 1800000000000 })).status, 'idle');
   assert.equal(f.calls.length, 65);
   assert.equal(f.calls.flatMap(body => body.messages).length, 1537);
+  assert.ok(f.calls.every(body => body.window.initial === false));
+  assert.equal(new Set(f.calls.slice(0, 64).map(body => body.window.id)).size, 1);
+  assert.deepEqual(f.calls.slice(0, 64).map(body => body.window.slice), Array.from({ length: 64 }, (_, n) => n + 1));
   assert.equal(f.calls[63].window.slice, 64); assert.equal(f.calls[63].window.slices, 64);
   assert.equal(f.calls[64].window.slice, 1); assert.equal(f.calls[64].window.slices, 1);
   assert.notEqual(f.calls[0].window.id, f.calls[64].window.id);

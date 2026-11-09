@@ -83,6 +83,9 @@ test('more than 64 sent batches are all sent in bounded metadata windows without
   for (const body of f.captures.slice(0, 64)) {
     assert.equal(body.window.slices, 64); assert.equal(body.window.initial, true);
   }
+  assert.ok(f.captures.every(body => body.window.initial === true));
+  assert.equal(new Set(f.captures.slice(0, 64).map(body => body.window.id)).size, 1);
+  assert.deepEqual(f.captures.slice(0, 64).map(body => body.window.slice), Array.from({ length: 64 }, (_, n) => n + 1));
   assert.equal(f.captures[63].window.slice, 64);
   assert.equal(f.captures[64].window.slice, 1); assert.equal(f.captures[64].window.slices, 1);
   assert.notEqual(f.captures[64].window.id, f.captures[0].window.id);
