@@ -2,6 +2,7 @@ import { privateRead, privateWrite, checkedPath } from '../private-state.mjs';
 import { stateLock } from '../state-lock.mjs';
 import { readConfigurationSnapshot } from '../../../adapters/local/configuration.mjs';
 import { localAuthorityInput } from '../../../core/local-authority-input.mjs';
+import { dirname, join, basename } from 'node:path';
 import { readHostProfile, readHostConfiguration, hostSelection, canonicalHostPath, overlaps } from './local-host-profile.mjs';
 import { inspectPreparation } from './local-host-preparation.mjs';
 import { readRearmAuthority, inspectRearmBoundary, checkRearmSession } from './local-host-permission.mjs';
@@ -14,10 +15,15 @@ import { detectRunningHost, boundBinary, cachedQualification, hasQualifiedCreato
 import { sessionSourceMetadata } from '../../codex/session-source.mjs';
 import { sha, same, keyed, authorityCommitment, nonAuthorityCommitment, installationCommitment, rearmFail,
   rearmRequest, rearmResult, readGlobalRearm, readSessionRearm, sessionRearmPath, sessionRecord, globalRecord,
-  assertSessionRearm, writeRearmRecord, encodeRecord } from './local-rearm-state.mjs';
+  assertSessionRearm, writeRearmRecord, encodeRecord, exact, authorityValue } from './local-rearm-state.mjs';
 
 const clone = value => structuredClone(value);
 const actionSame = (a,b) => same({ ...a,phase:'pending' },{ ...b,phase:'pending' });
+async function managedProfile(profile) {
+  if (basename(profile.profilePath) !== 'host-profile.json') return false;
+  const text = await privateRead(join(dirname(profile.profilePath),'installation.json'),{ missing:true });
+  return text !== undefined && JSON.parse(text).version === 'local-raw-installation-v1';
+}
 const snapshot = async profile => {
   const configText = await privateRead(profile.configPath), profileText = await privateRead(profile.profilePath);
   const preparationText = await privateRead(profile.markerPath);
@@ -43,6 +49,12 @@ function assertBindings(profile,files,record) {
   }
 }
 export async function checkHostRearm(profile,config) {
+  const activation = await readActivation(profile);
+  if (activation) {
+    if (activation.phase !== 'ready') rearmFail('preparation_invalid');
+    assertActivationFiles(profile,await snapshot(profile),activation,true);
+    return;
+  }
   const record = await readGlobalRearm(profile);
   if (!record) return;
   if (record.phase !== 'ready' || installationCommitment(profile) !== record.transition.installationCommitment ||
@@ -51,6 +63,161 @@ export async function checkHostRearm(profile,config) {
   const files = await snapshot(profile);
   if (sha(files.configText) !== record.action.files.configDigest || sha(files.profileText) !== record.action.files.profileDigest ||
     sha(files.preparationText) !== record.action.files.preparationDigest) rearmFail('preparation_invalid');
+}
+
+// Activation has no selected session and never touches a cursor. Its bounded
+// predecessor ledger is separate from the standalone explicit-recovery action.
+const activationFields = ['version','phase','predecessors','authority','installationCommitment',
+  'nonAuthorityConfigCommitment','before','after'];
+const textFields = ['configText','profileText','preparationText'];
+const domain = authority => {
+  const { version,storeId,targetId,namespace,client } = authorityValue(authority);
+  return { version,storeId,targetId,namespace,client };
+};
+async function readActivation(profile) {
+  const text = await privateRead(profile.activationPath,{ missing:true });
+  if (text === undefined) return null;
+  const record = exact(JSON.parse(text),activationFields);
+  if (record.version !== 'local-raw-activation-v1' || !['pending','ready'].includes(record.phase) ||
+    !Array.isArray(record.predecessors) || !record.predecessors.length || record.predecessors.length > 64 ||
+    new Set(record.predecessors.map(value => JSON.stringify(authorityValue(value)))).size !== record.predecessors.length ||
+    record.predecessors.some(value => !same(domain(value),domain(record.authority)) || same(value,record.authority))) rearmFail('rearm_invalid');
+  authorityValue(record.authority);
+  for (const files of [record.before,record.after]) {
+    exact(files,textFields);
+    if (textFields.some(field => typeof files[field] !== 'string')) rearmFail('rearm_invalid');
+  }
+  encodeRecord(record); return record;
+}
+function assertActivationFiles(profile,files,record,ready = false) {
+  if (record.installationCommitment !== installationCommitment(profile) ||
+    record.nonAuthorityConfigCommitment !== nonAuthorityCommitment(files.config)) rearmFail('rearm_invalid');
+  for (const field of textFields) if (!(ready ? [record.after[field]]:[record.before[field],record.after[field]])
+    .some(text => sha(text) === sha(files[field]))) rearmFail('rearm_invalid');
+  if (!same(JSON.parse(record.after.configText).authority,record.authority)) rearmFail('rearm_invalid');
+}
+export async function activateHostAuthority(profilePath,check) {
+  const initial = await readHostProfile(profilePath);
+  return stateLock(initial.lockPath,async () => {
+    check(); let profile = await readHostProfile(profilePath), files = await snapshot(profile);
+    let record = await readActivation(profile);
+    if (record) assertActivationFiles(profile,files,record,record.phase === 'ready');
+    const fresh = await readRearmAuthority(files.config); check();
+    if (record?.phase === 'pending' && !same(fresh,record.authority)) rearmFail('authority_changed');
+    if (record?.phase !== 'pending') {
+      await checkHostRearm(profile,files.config);
+      if (await inspectPreparation(profile,files.config) !== 'ready') rearmFail('preparation_invalid');
+      const legacy = record ? null:await readGlobalRearm(profile);
+      if (same(files.config.authority,fresh) && (record || !legacy)) return;
+      const predecessors = [...(record?.predecessors ?? []),...(legacy ? [legacy.transition.predecessorAuthority]:[]),files.config.authority];
+      const unique = predecessors.filter((value,index) => !same(value,fresh) && predecessors.findIndex(other => same(value,other)) === index).slice(-64);
+      const frozen = frozenFiles(profile,files,fresh);
+      record = { version:'local-raw-activation-v1',phase:'pending',predecessors:unique,authority:fresh,
+        installationCommitment:installationCommitment(profile),nonAuthorityConfigCommitment:nonAuthorityCommitment(files.config),
+        before:Object.fromEntries(textFields.map(field => [field,files[field]])),
+        after:Object.fromEntries(textFields.map(field => [field,frozen[field]])) };
+      check(); await writeRearmRecord(profile.activationPath,record);
+    }
+    for (const [path,field] of [[profile.configPath,'configText'],[profile.profilePath,'profileText'],[profile.markerPath,'preparationText']]) {
+      check(); if (!same(await readRearmAuthority(files.config),record.authority)) rearmFail('authority_changed');
+      const actual = await privateRead(path);
+      if (sha(actual) !== sha(record.after[field])) {
+        if (sha(actual) !== sha(record.before[field])) rearmFail('rearm_invalid');
+        await privateWrite(path,record.after[field]);
+      }
+    }
+    profile = await readHostProfile(profilePath); files = await snapshot(profile);
+    assertActivationFiles(profile,files,record,true);
+    if (await inspectPreparation(profile,files.config) !== 'ready') rearmFail('preparation_invalid');
+    check(); await writeRearmRecord(profile.activationPath,{ ...record,phase:'ready' });
+  });
+}
+
+// Called only after the real host's ancestry/source qualification. All source
+// reads below are inode/anchor/complete-EOF proofs; no producer or planner runs.
+export async function lazyRearm(profile,config,context,operation) {
+  const activation = await readActivation(profile);
+  if (!activation) return false;
+  if (activation.phase !== 'ready') rearmFail('preparation_invalid');
+  let identity,opened;
+  try {
+    const options = { stateRoot:profile.stateRoot,identityKeyPath:profile.identityKeyPath,authority:localAuthorityInput(config.authority) };
+    identity = await loadIdentity(options,context,operation);
+    await bindRoot(options,identity,false,operation);
+    return await stateLock(identity.lockPath,async () => {
+      const text = await privateRead(identity.cursorPath,{ missing:true });
+      if (text === undefined) { await readSession(identity,config.authority.client); await checkRearmSession(config,identity); return false; }
+      const raw = JSON.parse(text), receipt = await readSessionRearm(identity);
+      const pending = receipt?.phase === 'pending';
+      if (!pending && raw.authorityCommitment === identity.authorityCommitment) {
+        await readSession(identity,config.authority.client); await checkRearmSession(config,identity); return false;
+      }
+      const predecessor = activation.predecessors.find(value => authorityCommitment(identity,value) ===
+        (pending ? receipt.oldAuthorityCommitment:raw.authorityCommitment));
+      if (!predecessor) rearmFail('rearm_refused');
+      const old = { ...identity,authorityCommitment:authorityCommitment(identity,predecessor) };
+      let cursor = await readSession(raw.authorityCommitment === identity.authorityCommitment ? identity:old,config.authority.client,true);
+      if (!cursor) rearmFail('rearm_refused');
+      await checkHostPermissionForLazy();
+      const bytes = sourceBudget(operation); opened = await openWorkerSource(context,operation,bytes);
+      await verifyCursorSource(identity,opened,cursor);
+      let action = receipt;
+      if (!pending) {
+        const previous = await assertSessionRearm(old,cursor);
+        if (cursor.pending || cursor.blockedReason !== null) rearmFail('rearm_refused');
+        await inspectRearmBoundary(config,identity,cursor,{ oldAuthority:predecessor },previous);
+        const eof = await sourceSize(opened);
+        if (!await completeBoundary(opened,eof)) rearmFail('partial_record');
+        const revision = (previous?.revision ?? 0)+1;
+        const replacementCursor = { ...clone(cursor),authorityCommitment:identity.authorityCommitment,offset:eof,
+          source:await cursorSource(identity,opened,eof),selection:config.authority.client === 'claude-code'
+            ? { ownSkillTurn:true,awaitingUserBoundary:true }:{},rearmRevision:revision };
+        validateCursor(replacementCursor,identity,config.authority.client);
+        const token = keyed(identity,'lazy-action',[old.authorityCommitment,identity.authorityCommitment]);
+        const actionId = token.slice(0,8)+'-'+token.slice(8,12)+'-4'+token.slice(13,16)+'-8'+token.slice(17,20)+'-'+token.slice(20,32);
+        const root = await checkedPath(profile.stateRoot,{ directory:true });
+        action = sessionRecord({ version:'local-raw-session-rearm-v1',phase:'pending',expectedRevision:revision-1,revision,
+          actionId,requestCommitment:keyed(identity,'lazy-request',[context.sessionId,context.sourcePath,actionId]),transitionRevision:revision,
+          sessionKey:identity.sessionKey,wireSessionId:identity.wireSessionId,keyCommitment:identity.keyCommitment,
+          rootDevice:String(root.dev),rootInode:String(root.ino),oldAuthorityCommitment:old.authorityCommitment,
+          authorityCommitment:identity.authorityCommitment,nonAuthorityConfigCommitment:nonAuthorityCommitment(config),oldCursorDigest:sha(text),
+          replacementCursorDigest:sha(JSON.stringify(replacementCursor)),replacementCursor,files:frozenFiles(profile,await snapshot(profile),config.authority).files });
+        await prove(action); await writeRearmRecord(sessionRearmPath(identity),action);
+      }
+      if (action.authorityCommitment !== identity.authorityCommitment || action.keyCommitment !== identity.keyCommitment ||
+        action.sessionKey !== identity.sessionKey || action.wireSessionId !== identity.wireSessionId ||
+        action.nonAuthorityConfigCommitment !== nonAuthorityCommitment(config) ||
+        action.requestCommitment !== keyed(identity,'lazy-request',[context.sessionId,context.sourcePath,action.actionId])) rearmFail('rearm_invalid');
+      validateCursor(action.replacementCursor,identity,config.authority.client);
+      await prove(action);
+      const actual = sha(await privateRead(identity.cursorPath));
+      if (actual === action.oldCursorDigest) await writeCursor(identity,action.replacementCursor);
+      else if (actual !== action.replacementCursorDigest) rearmFail('rearm_invalid');
+      await prove(action);
+      await writeRearmRecord(sessionRearmPath(identity),{ ...action,phase:'committed' });
+      return true;
+
+      async function checkHostPermissionForLazy() {
+        operation.check();
+        const current = await readHostProfile(profile.profilePath), files = await snapshot(current);
+        assertActivationFiles(current,files,activation,true);
+        if (!same(await readRearmAuthority(config),config.authority)) rearmFail('authority_changed');
+        await checkRearmSession(config,identity); operation.check();
+      }
+      async function prove(action) {
+        const root = await checkedPath(profile.stateRoot,{ directory:true });
+        if (String(root.dev) !== action.rootDevice || String(root.ino) !== action.rootInode) rearmFail('rearm_invalid');
+        let freshSource;
+        try {
+          freshSource = await openWorkerSource(context,operation,bytes);
+          await verifyCursorSource(identity,freshSource,cursor);
+          await verifyCursorSource(identity,freshSource,action.replacementCursor);
+        } finally { await freshSource?.close(); }
+        // Fence check follows every awaited source proof, before publication.
+        await checkHostPermissionForLazy();
+      }
+    });
+  } finally { try { await opened?.close(); } finally { identity?.key.fill(0); } }
 }
 async function qualifiedContext(profile,selection,authority,operation,deps) {
   let formatAuthority = null;
@@ -73,7 +240,7 @@ async function qualifiedContext(profile,selection,authority,operation,deps) {
 }
 async function sourcePaths(profile,config,selection) {
   const [source,...privatePaths] = await Promise.all([selection.sourcePath,profile.stateRoot,profile.identityKeyPath,profile.profilePath,
-    profile.markerPath,profile.lockPath,profile.rearmPath,profile.configPath,config.databasePath,config.usage.root].map(canonicalHostPath));
+    profile.markerPath,profile.lockPath,profile.rearmPath,profile.activationPath,profile.configPath,config.databasePath,config.usage.root].map(canonicalHostPath));
   if (privatePaths.some(path => overlaps(source,path))) rearmFail('invalid_input');
 }
 
@@ -84,8 +251,12 @@ export async function executeRearm(profilePath,value,operation,deps = {},statusC
     let request,selection;
     if (!statusCall) { request = rearmRequest(value); selection = hostSelection({ sessionId:request.sessionId,sourcePath:request.sourcePath },false); }
     let profile = await readHostProfile(profilePath);
+    // Lifecycle-managed installations cannot select another explicit boundary.
+    // Only a previously pending legacy action may finish before activation.
+    if (await readActivation(profile)) rearmFail('rearm_refused');
     const work = async () => {
       operation.check(); profile = await readHostProfile(profilePath); record = await readGlobalRearm(profile);
+      if (await managedProfile(profile) && record?.phase !== 'pending') rearmFail('rearm_refused');
       let files = await snapshot(profile), config = files.config;
       if (!record) {
         await readHostConfiguration(profile);

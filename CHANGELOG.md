@@ -2,6 +2,13 @@
 
 ## Unreleased — local Raw-only capture and conversation hiding
 
+- Local capture can be turned back on with `activate` or an identical `setup`
+  request after disable/uninstall. Restore hooks and ready host authority while
+  preserving store, target, keys, data and all forget/correct fences.
+- Existing sessions rearm lazily at the next qualified hook's complete EOF with
+  durable retry receipts. Off-period text is skipped; Claude Code also skips the
+  first resumed turn. Codex supports the prompt hook as the first boundary.
+  Explicit rearm remains only for standalone external-authority recovery.
 - Local foreground setup accepts plaintext Raw capture without interpretation
   consent. Raw-only capture needs no key or provider and advances the worker;
   the owner Raw cap applies, while the daily model-cost cap does not.
@@ -400,7 +407,7 @@ unchanged.
   brand-new-only; setup never migrates existing files. Daily limits count model
   port calls, not USD; owner Raw cap becomes durable on first real capture.
 - Publish foreground 160-second hooks last and revoke SQL first on disable;
-  preserve identity and require existing explicit rearm after re-enabling.
+  preserve identity and lazily rearm established sessions after re-enabling.
   Hosted defaults, trust, credentials and provider algorithms remain unchanged.
 - Separate exact generated-command keyless checks from installed synthetic
   provider/ancestry instrumentation; native, semantic and product gates remain.

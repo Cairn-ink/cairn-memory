@@ -11,6 +11,7 @@ import { ownData } from '../../../core/local-authority-input.mjs';
 import { checkedPath, privateRead, privateWrite, privateDirectory, syncDirectory } from '../private-state.mjs';
 import { stateLock } from '../state-lock.mjs';
 import { createLocalRawHost } from './local-host.mjs';
+import { activateHostAuthority } from './local-host-rearm.mjs';
 import { hasQualifiedCreator } from '../../codex/qualification.mjs';
 import { absolute, exact, setupRequest, consented, locations, runtime, runtimeRoot, sha, fail, result, failure, checkSignal } from './local-setup-input.mjs';
 import { directory, nativeSnapshot, nativeWrite, mergeNative, events, hookCommand } from './local-setup-files.mjs';
@@ -137,6 +138,11 @@ function registered(text,request) {
 async function prepare(request,signal) {
   checkSignal(signal); const paths = locations(request.installationDirectory);
   if (!await absent(paths.root)) {
+    // Rerun setup is the installer's supported off -> on operation. Validate
+    // the identical request before taking the activation path and its lock.
+    const existing = await readLocalInstallation(paths.root);
+    if (existing.requestDigest !== sha(bytes(request))) fail('recovery_required');
+    if (['disabled','reenabling','rearm_required','activation_pending'].includes(existing.phase)) return activate(paths.root,signal);
     return stateLock(paths.lock,async () => {
       const record = await readLocalInstallation(paths.root);
       if (record.requestDigest !== sha(bytes(request)) || !['prepared','active'].includes(record.phase)) fail('recovery_required');
@@ -204,7 +210,7 @@ async function selected(root,signal,work) {
 async function activate(root,signal) {
   return selected(root,signal,async record => {
     const { request } = record; checkSignal(signal);
-    if (record.phase === 'disabled') {
+    if (['disabled','reenabling'].includes(record.phase)) {
       record = await publish(root,record,'reenabling');
       await stateLock(request.databasePath+'.local-setup.lock',() => stateLock(join(request.usageRoot,'.local-setup.lock'),() =>
         withCore(request,record.storeId,async core => {
@@ -212,11 +218,14 @@ async function activate(root,signal) {
           if (descriptor.targetId !== record.targetId) fail('authority_bound');
           grant(core,request,record.storeId,record.targetId,true);
         })));
-      await publish(root,record,'rearm_required'); return result('blocked','rearm_required');
+      record = await publish(root,record,'rearm_required');
     }
-    if (!['prepared','active','rearm_required'].includes(record.phase)) fail('recovery_required');
+    if (!['prepared','active','rearm_required','activation_pending'].includes(record.phase)) fail('recovery_required');
+    if (['rearm_required','activation_pending'].includes(record.phase)) {
+      await activateHostAuthority(locations(root).profile,() => checkSignal(signal));
+    }
     const ready = await host(root).status({ signal });
-    if (ready.status !== 'ready') fail(record.phase === 'rearm_required' ? 'rearm_required':'recovery_required');
+    if (ready.status !== 'ready') fail('recovery_required');
     await qualification(request);
     return stateLock(request.clientConfigPath+'.cairn-local.lock',async () => {
       checkSignal(signal); const before = await nativeSnapshot(request.clientConfigPath);

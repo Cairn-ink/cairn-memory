@@ -13,7 +13,7 @@ import { checkHostPermission } from './local-host-permission.mjs';
 import { inspectPreparation, prepareHost } from './local-host-preparation.mjs';
 import { detectRunningHost, boundBinary, cachedQualification, hasQualifiedCreator } from '../../codex/qualification.mjs';
 import { sessionSourceMetadata } from '../../codex/session-source.mjs';
-import { executeRearm, checkHostRearm } from './local-host-rearm.mjs';
+import { executeRearm, checkHostRearm, lazyRearm } from './local-host-rearm.mjs';
 import { rearmResult } from './local-rearm-state.mjs';
 
 const dependencies = new AsyncLocalStorage();
@@ -23,7 +23,7 @@ export const withLocalHostDependencies = (value, work) => dependencies.run(value
 const runtimeRoot = resolve(fileURLToPath(new URL('../../../',import.meta.url)));
 const hostReasons = ['prepared','preparation_required','preparation_invalid','profile_invalid','config_invalid','store_invalid',
   'authority_changed','capture_disabled','runtime_unavailable','host_unavailable','host_unqualified','source_unqualified',
-  'invalid_input','cancelled','work_limit','unexpected_failure'];
+  'invalid_input','cancelled','work_limit','unexpected_failure','rearm_refused','rearm_invalid'];
 const aborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype,'aborted').get;
 const add = EventTarget.prototype.addEventListener, remove = EventTarget.prototype.removeEventListener;
 export function localHostResult(status, reason = null, worker = null) {
@@ -83,7 +83,7 @@ export function createLocalRawHost(value) {
       let selectedPath,privatePaths;
       try {
         [selectedPath,...privatePaths] = await Promise.all([selected.sourcePath,profile.stateRoot,profile.identityKeyPath,
-          profile.profilePath,profile.markerPath,profile.lockPath,profile.rearmPath,profile.configPath,config.databasePath,config.usage.root].map(canonicalHostPath));
+          profile.profilePath,profile.markerPath,profile.lockPath,profile.rearmPath,profile.activationPath,profile.configPath,config.databasePath,config.usage.root].map(canonicalHostPath));
       } catch { fail('source_unqualified'); }
       if (privatePaths.some(path => overlaps(selectedPath,path))) fail('invalid_input');
       async function freshPermission() {
@@ -115,6 +115,10 @@ export function createLocalRawHost(value) {
       // Re-read the exact profile and preparation binding, then take a fresh
       // authority snapshot immediately before the trusted worker invocation.
       await freshPermission();
+      if (await lazyRearm(profile,config,{ ...selected,
+        pluginRoot:profile.installation.client === 'claude-code' ? profile.installation.pluginRoot:null,formatAuthority },op)) {
+        return localHostResult('ready');
+      }
       const worker = createLocalRawWorker({ stateRoot:profile.stateRoot,identityKeyPath:profile.identityKeyPath,
         nodeExecutable:process.execPath,runtimeRoot,configPath:profile.configPath,expectedAuthority:config.authority,home:profile.home });
       const result = await worker[action]({ ...selected,pluginRoot:profile.installation.client === 'claude-code' ? profile.installation.pluginRoot : null,
@@ -128,7 +132,8 @@ export function createLocalRawHost(value) {
       }
       return localHostResult(result.status,result.reason,result);
     } catch (error) {
-      let reason = hostReasons.includes(error.reason) || workerReasons.includes(error.reason) ? error.reason : 'unexpected_failure';
+      let reason = error.message === 'state_busy' ? 'state_busy'
+        : hostReasons.includes(error.reason) || workerReasons.includes(error.reason) ? error.reason : 'unexpected_failure';
       try { op?.check(); } catch (stopped) { reason = stopped.reason; }
       if (action === 'rearm' || action === 'rearmStatus') return rearmResult(action === 'rearmStatus',reason === 'state_busy' ? 'busy':'blocked',reason);
       return localHostResult(reason === 'state_busy' ? 'busy' : 'blocked',reason);

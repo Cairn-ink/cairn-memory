@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync,writeFileSync,existsSync,unlinkSync,symlinkSync,mkdirSync,lstatSync } from 'node:fs';
+import { readFileSync,writeFileSync,existsSync,unlinkSync,symlinkSync,mkdirSync,lstatSync,readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { setupFixture,ok } from './fixtures/local-setup-workspace.mjs';
 import { setupLocalRaw,createLocalRawSetup } from '../raw/local-setup.mjs';
@@ -9,10 +9,94 @@ import { withWriteObserver } from '../private-state.mjs';
 import { hookCommand } from '../raw/local-setup-files.mjs';
 import { initLocalRawStore } from '../raw/local-setup-init.mjs';
 import { DatabaseSync } from 'node:sqlite';
+import { createLocalRawHost } from '../raw/local-host.mjs';
+import { lazyFixture } from './fixtures/local-setup-workspace.mjs';
+import { localPlainPort } from '../../../core/testing/raw-capture-fixtures.mjs';
+import { searchFixture } from '../../../core/testing/raw-search-fixtures.mjs';
+import { installRawSearchTestClock } from '../../../core/testing/raw-search-clock.mjs';
+import { openMemoryCore } from '../../../core/index.mjs';
+
+for (const client of ['claude-code','codex']) for (const action of ['forget','correct']) for (const match of ['window','named'])
+test(`lazy ${client} ${action} ${match} fence survives off/on in current and history search; control resumes`,async t => {
+  installRawSearchTestClock(t);
+  const f = await lazyFixture(t,client),namespace = f.request.namespace; await f.hook();
+  const now = Date.now(),at = new Date(now-(match === 'named' ? 86400000:0)).toISOString();
+  f.append('copper fenced session',{at}); assert.equal((await f.hook('Stop')).status,'progress');
+  const selected = f.cursor(),controlPath = join(f.request.sourceRoot,'control.jsonl'),controlId = '22222222-2222-4222-8222-222222222222';
+  writeFileSync(controlPath,client === 'codex' ? JSON.stringify({type:'session_meta',payload:{id:controlId,cli_version:'0.162.0',history_mode:'paginated',source:'cli',originator:'codex-tui'}})+'\n':'',{mode:0o600});
+  const changes = {session_id:controlId,transcript_path:controlPath},controlAt = new Date(now-172800000).toISOString();
+  assert.equal((await f.hook('SessionStart',changes)).status,'ready');
+  f.append('copper unfenced control',{path:controlPath,at:controlAt,nativeSessionId:controlId}); assert.equal((await f.hook('Stop',changes)).status,'progress');
+  const privacyCore = openMemoryCore({path:f.request.databasePath,raw:true,rawSearch:false}); f.workspace.defer(()=>privacyCore.close());
+  const memory = ok(privacyCore.admit({namespace,memory:{content:'Synthetic private fact',kind:'fact'},receipts:[{client,
+    sessionId:match === 'named' ? selected.wireSessionId:'explicit-unrelated-tool',eventId:'memory-event',role:'user',excerpt:'Synthetic private fact'}]})).memory;
+  const db = new DatabaseSync(f.request.databasePath); f.workspace.defer(()=>db.close());
+  const search = await searchFixture({workspace:f.workspace,db,path:f.request.databasePath,port:localPlainPort()},
+    {ownerId:namespace.ownerId,readSet:[namespace]}); await search.maintain();
+  for (const intent of ['current','history']) assert.equal((await search.search({query:'copper',intent})).candidates.length,2);
+  ok(privacyCore[action]({namespace,memoryId:memory.id,expectedRevision:memory.revision,...(action === 'correct' ? {content:'Synthetic replacement fact',kind:'fact',
+    receipt:{client,sessionId:'explicit-correction',eventId:'correct-event',role:'user',excerpt:'Synthetic replacement fact'}}:{})}));
+  const tables = ['raw_session_fences','local_raw_hide_windows','local_raw_session_ranges'];
+  const privacy = () => tables.map(table => db.prepare('SELECT * FROM '+table+' ORDER BY rowid').all());
+  const protectedRows = privacy(); assert.ok(protectedRows[0].length>0); assert.ok(protectedRows[1].length>0);
+  await f.invoke('disable'); f.append('copper paused fenced',{at}); f.append('copper paused control',{path:controlPath,at:controlAt,nativeSessionId:controlId});
+  assert.equal((await f.invoke('activate')).status,'active'); assert.deepEqual(privacy(),protectedRows);
+  const parts = db.prepare('SELECT count(*) n FROM raw_parts WHERE sealed IS NOT NULL').get().n;
+  for (const event of (client === 'codex' ? ['Stop','UserPromptSubmit','SessionStart']:['Stop','SessionStart'])) assert.equal((await f.hook(event)).status,'blocked');
+  assert.deepEqual(privacy(),protectedRows); assert.equal(db.prepare('SELECT count(*) n FROM raw_parts WHERE sealed IS NOT NULL').get().n,parts);
+  assert.equal((await f.hook('Stop',changes)).status,'ready');
+  f.append('copper control resumed',{path:controlPath,at:controlAt,nativeSessionId:controlId}); assert.equal((await f.hook('Stop',changes)).status,'progress');
+  await search.maintain();
+  for (const intent of ['current','history']) {
+    const hits = (await search.search({query:'copper',intent})).candidates; assert.ok(hits.length>0);
+    for (const hit of hits) {
+      const source = (await search.prepare(hit,intent)).validate(); assert.ok(source.ranges.every(range => !/fenced|paused/.test(range.text)));
+    }
+  }
+});
+
+for (const client of ['claude-code','codex']) for (const stage of ['pending','config','profile','preparation','ready'])
+test(`lazy ${client} activation crash at ${stage} resumes repinning before hooks become active`,async t => {
+  const f = await setupFixture(t,{client}); await f.setup(); await f.invoke('activate'); await f.invoke('disable');
+  const root = f.request.installationDirectory,key = readFileSync(join(root,'identity.key')); let fired = false;
+  const failed = await withWriteObserver(({path}) => {
+    const name = path.slice(root.length+1);
+    const selected = name === 'host-profile.json.activation.json' ? JSON.parse(readFileSync(path)).phase
+      : ({'capture.json':'config','host-profile.json':'profile','host-profile.json.prepared.json':'preparation'})[name];
+    if (!fired && selected === stage) { fired = true; throw Error('synthetic activation interruption'); }
+  },() => f.invoke('activate'));
+  assert.equal(fired,true); assert.equal(failed.status,'blocked'); assert.equal((await f.hook('Stop')).status,'blocked');
+  assert.equal((await f.setup()).status,'active'); assert.equal((await f.invoke('status')).status,'active');
+  assert.deepEqual(readFileSync(join(root,'identity.key')),key); assert.equal((await f.hook()).status,'ready');
+});
 
 function observe(t){let source=0,worker=0;globalThis[Symbol.for('cairn.host.observe')]=kind=>{if(kind==='source')source++;else worker++};
   t.after(()=>delete globalThis[Symbol.for('cairn.host.observe')]);return ()=>({source,worker});}
 function privateResult(f,value){const text=JSON.stringify(value);for(const secret of [f.root,'synthetic_source_secret','synthetic_key_secret'])assert.equal(text.includes(secret),false);}
+for (const client of ['claude-code','codex']) for (const route of ['activate','setup','legacy'])
+test(`lazy ${client} no-history ${route} restores hooks and host without an ancestor or new identity`,async t => {
+  const f = await setupFixture(t,{client}); await f.setup(); await f.invoke('activate');
+  const keyPath = join(f.request.installationDirectory,'identity.key'), key = readFileSync(keyPath), before = f.control();
+  await f.invoke('disable'); assert.equal(JSON.parse(readFileSync(f.clientConfigPath)).hooks.SessionStart,undefined);
+  if (route === 'legacy') {
+    const current = f.control(); ok(f.core.setLocalCaptureControl({namespace:f.request.namespace,client,targetId:current.targetId,
+      expectedStoreId:current.storeId,expectedRevision:current.revision,automaticCaptureEnabled:true,rawNoticeVersion:current.rawNoticeVersion}));
+    const path = join(f.request.installationDirectory,'installation.json'),record = JSON.parse(readFileSync(path));
+    writeFileSync(path,JSON.stringify({...record,phase:'rearm_required'}));
+  }
+  f.setPresent(false); const counts = observe(t);
+  assert.equal((await (route === 'setup' ? f.setup():f.invoke('activate'))).status,'active');
+  assert.equal((await f.invoke('status')).status,'active');
+  assert.equal((await createLocalRawHost({profilePath:join(f.request.installationDirectory,'host-profile.json')}).status()).status,'ready');
+  assert.deepEqual(counts(),{source:0,worker:0});
+  assert.deepEqual(readFileSync(keyPath),key); assert.equal(f.control().storeId,before.storeId);assert.equal(f.control().targetId,before.targetId);
+  assert.ok(JSON.parse(readFileSync(f.clientConfigPath)).hooks.Stop);
+  assert.deepEqual(readdirSync(join(f.request.installationDirectory,'state/sessions')),[]);
+  f.setPresent(true); assert.equal((await f.hook()).status,'ready');
+  const directory = join(f.request.installationDirectory,'state/sessions');
+  const cursor = JSON.parse(readFileSync(join(directory,readdirSync(directory).find(name=>/^[a-f0-9]{64}\.json$/.test(name)))));
+  assert.equal(cursor.issuedOrdinal,0); assert.equal(cursor.rearmRevision,undefined);
+});
 for(const client of ['claude-code','codex'])test(`A1/A3 ${client} keyless setup/status/activation preserve identity and opaque unrelated handlers`,async t=>{
   const f=await setupFixture(t,{client}),counts=observe(t);
   assert.equal((await f.invoke('status')).reason,'not_installed');
@@ -99,8 +183,8 @@ for(const client of ['claude-code','codex'])test(`A4/A6 ${client} EOF/prompt rep
   const key=readFileSync(join(f.request.installationDirectory,'identity.key'),'utf8');
   assert.equal((await f.invoke('disable')).status,'disabled');assert.equal(f.control().automaticCaptureEnabled,false);
   const counts=observe(t);assert.equal((await f.hook('Stop')).status,'blocked');assert.deepEqual(counts(),{source:0,worker:0});
-  assert.equal((await f.invoke('activate')).reason,'rearm_required');assert.equal((await f.invoke('status')).reason,'rearm_required');
-  assert.equal(readFileSync(join(f.request.installationDirectory,'identity.key'),'utf8'),key);assert.equal((await f.hook('Stop')).status,'blocked');
+  assert.equal((await f.invoke('activate')).status,'active');assert.equal((await f.invoke('status')).status,'active');
+  assert.equal(readFileSync(join(f.request.installationDirectory,'identity.key'),'utf8'),key);assert.equal((await f.hook('Stop')).status,'ready');
 });
 for(const refusal of ['forged','outside','symlink','disabled','exec','unqualified'])test(`A5 ${refusal} refuses before worker/source contents where permission disallows`,async t=>{
   const f=await setupFixture(t,{client:'codex'});await f.setup();await f.invoke('activate');const counts=observe(t);let changes={};

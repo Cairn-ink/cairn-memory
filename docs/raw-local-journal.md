@@ -188,30 +188,33 @@ only `hooks`, and its owned command hook has exactly `type:"command"`, the fixed
 `configuration_changed`, without repair, a new grant or identity changes.
 Unrelated hooks in that array and unrelated groups keep their own options.
 
-Activating after disable may grant fresh SQL consent but stays
-`rearm_required`, not active capture. Use the existing explicit host rearm for
-each admissible selected session, then activate again:
+Activating after disable grants fresh SQL authority, durably re-pins the host
+configuration/profile/preparation, restores the owned native hooks and publishes
+`active` last. The host is ready immediately, including installations with no
+session history and installations left at the older `rearm_required` phase.
+An identical `setup` request on a disabled installation uses this same activation
+path, so reinstalling with the retained installation directory restores capture.
+A different request or changed active hooks still refuses. Activation never needs
+a selected transcript or a running Codex ancestor and never recreates identity.
+Store and target IDs, installation key bytes and session HMAC identities remain.
 
-```sh
-node /absolute/offline/node_modules/cairn-memory-local-preview/integrations/client/raw/local-host-cli.mjs --profile /absolute/private/claude-installation/host-profile.json rearm-status
-node /absolute/offline/node_modules/cairn-memory-local-preview/integrations/client/raw/local-host-cli.mjs --profile /absolute/private/claude-installation/host-profile.json rearm --expected-revision 0 --action-id aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa --session CHOSEN_SESSION --source /absolute/approved-transcript-root/selected.jsonl
-```
+Established sessions adopt that authority lazily at their next qualified hook,
+at the complete EOF observed by that hook. No off-period content is produced,
+sent to Raw or interpreted. For Claude Code there is no prompt-time hook: the
+first turn of an already-running conversation after re-enabling is also skipped,
+because its Stop/PreCompact hook lands at the end of that turn. Subsequent turns
+resume normally. Codex also supports UserPromptSubmit as the first hook: the
+boundary precedes any turn written after that prompt hook. A hook observing an
+already-written turn conservatively skips it too. New sessions initialize as on
+a fresh installation. Forget/correct fences, hide windows and session ranges
+are preserved; a fenced session stays refused in both search intents.
 
-For Codex, the actual `rearm` command must run beneath a currently running,
-qualified, non-exec native Codex CLI/app-server process. A normal terminal plus
-a cached qualification does not supply that ancestry and refuses; the shell
-examples above do not bypass it. `rearm-status` only observes action metadata and
-does not require native ancestry. If native-owned command execution is unavailable,
-leave rearm refused rather than disguising the host or replacing identity.
-
-Rearm preserves key/session/ordinal, skips its frozen complete paused EOF and
-refuses deleted/incomplete/unknown boundaries. Zero-history recovery may remain
-unsupported; do not delete/recreate identity to bypass it. Existing bounded
-predecessor/exact-action replay limits remain. Synthetic installed evidence
-separates exact quiet/keyless generated-command execution from provider capture
-through trusted test-only HTTP/ancestry instrumentation. Neither claims real
-native provider-backed hook execution or semantic quality; native, paid/model
-and product gates remain separate.
+No explicit per-session rearm command is required or accepted for this lifecycle
+transition. Keep the installation directory on uninstall; do not delete/recreate
+identity to bypass a refused boundary. Synthetic installed checks use trusted
+test-only HTTP/ancestry instrumentation and do not establish native provider-backed
+hook execution or semantic quality; native, paid/model and product gates remain
+separate.
 
 The isolated pinned Claude Code 2.1.260 `--init-only` probe dispatches the real
 installed SessionStart hook before its transcript exists; quiet exit 0 is not
@@ -387,7 +390,7 @@ The private0600 profile has exactly these fields:
 
 All paths are normalized absolute paths. Profile/config/key/state parents and
 home must already be private0700 directories. State/key must be separate new
-leaves and may not overlap configuration, preparation/rearm sidecars, database or usage paths,
+leaves and may not overlap configuration, preparation/rearm/activation sidecars, database or usage paths,
 including through ancestor aliases. `configDigest` is SHA256 of the exact UTF-8
 configuration text read by the bounded private reader. Codex's existing private
 qualification configuration/cache location and Claude's owned installation
@@ -423,8 +426,9 @@ new0700 state root,0600 random installation key and compatible B4b root/sessions
 The ready marker binds the profile/config/authority/key and root inode. Complete
 unchanged preparation is idempotent; creating/partial/lost/foreign state refuses
 without repair. The marker lives outside key/state so their loss stays visible.
-Ordinary preparation/initialization/run never clears blocked sessions or refreshes
-authority. The separately explicit rearm operation below has a narrower boundary.
+Preparation never clears blocked sessions or refreshes authority. Managed hooks
+use the lazy transition below after lifecycle activation; standalone profiles
+retain the separately explicit authority-recovery operation.
 
 Programmatic trusted callers import `createLocalRawHost` from
 `integrations/client/raw/local-host.mjs` with `{profilePath}`. It exposes
@@ -436,7 +440,48 @@ signals must be native AbortSignals. Results have exactly
 unchanged B4b summary. Host readiness is not saved coverage or completed Memory.
 Raw retention and Memory interpretation remain separately observable.
 
-### Explicit authority-only rearm
+### Lazy per-session rearm after activation
+
+Activation stores a private durable pending/ready record binding the exact old
+and replacement configuration, profile and preparation bytes. Ambiguous writes
+are retried only from those two known states. It preserves every non-authority
+setting and the existing key/root binding. The newest 64 predecessor authorities
+are retained; older or unknown session bindings refuse rather than backfill.
+No session tree is scanned during activation or status.
+
+After ordinary host permission checks and Codex's real qualified non-exec ancestry
+and interactive-header checks, a hook locks only its selected session. A stale
+cursor must match a retained predecessor and its claim, key, source inode and old
+anchor. Its SQL high-water, first-part/event ownership and completed admission
+must satisfy the existing rearm checks. Deleted, pending, incomplete, blocked or
+unknown boundaries refuse. Lazy rearm does not reconstruct a pending projection
+or run the message producer/planner; it uses file size, complete-line and bounded
+anchor proofs to freeze EOF. It keeps session identity and issued ordinal, adopts
+current authority and makes Claude wait for a new user boundary.
+
+A deterministic internal action identity binds the session and authority change.
+The existing session-action encoding records a pending receipt, replacement cursor
+and committed receipt in that order. Before intent publication a failure leaves
+the old cursor retryable. After pending publication, retries use the frozen EOF
+even if more text is appended. After cursor publication they accept only the exact
+old/replacement cursor digests and complete the same receipt. After the committed
+receipt, normal capture may progress; a retry never writes that boundary again.
+The receipt binds the key/root and positive cursor revision in both directions.
+Direct workers refuse a pending receipt before source access. Each publication
+rechecks live authority and the session deletion fence after awaited source proofs.
+Filesystem publication and SQL fence checks are separate operations; a concurrent
+fence still prevents later capture/storage and search access. No fence/window/range
+is removed or bypassed by activation or rearm.
+
+### Explicit authority-only recovery for standalone profiles
+
+The explicit CLI remains for a standalone host profile whose controls were rotated
+externally, and for retrying its interrupted explicit action. Such a profile has
+no managed installation record or activation ledger. It also remains available
+to finish an already-pending legacy explicit action before lifecycle activation;
+that requires the original action ID/revision and source proofs. A managed profile
+cannot start a new explicit action. Lifecycle-managed off/on uses lazy rearm
+exclusively, without a second boundary selector for the same transition.
 
 After an operator has already re-enabled the authoritative controls, a trusted
 caller may invoke `rearmStatus({signal?})` and
@@ -519,8 +564,9 @@ separate operations, not an atomic deletion/publication transaction.
 
 Direct workers now refresh configuration and actual SQL permission under their
 session lock before source access. Even a no-work invocation refuses after real
-revocation; eligible legacy cursor encoding remains unchanged. Normal runs do
-not acquire the rearm historical SQL ownership checks.
+revocation; eligible legacy cursor encoding remains unchanged. Direct workers do
+not acquire the rearm historical SQL ownership checks. Managed hooks check the
+selected session fence even after a lazy receipt has committed.
 
 Sidecars remain private files below 64 KiB in owned 0700 directories. Source
 opening retains Linux owned-regular/no-symlink checks, not a new transcript 0600
