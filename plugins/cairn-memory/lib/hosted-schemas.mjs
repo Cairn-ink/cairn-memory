@@ -96,12 +96,12 @@ export const HOSTED_SCHEMAS = {
           "slice": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 64
+            "maximum": 4096
           },
           "slices": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 64
+            "maximum": 4096
           },
           "initial": {
             "type": "boolean"
