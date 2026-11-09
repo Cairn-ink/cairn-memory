@@ -237,7 +237,7 @@ test('packed failed Codex qualification keeps setup usable, reports waiting, sta
   const status = await f.setup(['status']);
   assert.match(status, /Codex local capture: blocked \(qualification_required\)/);
   assert.match(status, /Codex format qualification: pending \(qualification_pending\)/);
-  assert.match(status, /rerun setup after a Codex update/);
+  assert.match(status, /rerun setup after a Codex\s+update/);
   const probes = text => text.split('\n').filter(line => line.includes('generate-json-schema')).length;
   assert.equal(probes(await readFile(f.calls.codex, 'utf8')), probes(before));
   // A real engine background attempt against the failing fake publishes the
@@ -254,7 +254,7 @@ test('packed failed Codex qualification keeps setup usable, reports waiting, sta
   const afterFailure = await readFile(f.calls.codex, 'utf8');
   const failedStatus = await f.setup(['status']);
   assert.match(failedStatus, /Codex format qualification: failed \(probe_failed\)/);
-  assert.match(failedStatus, /rerun setup after a Codex update/);
+  assert.match(failedStatus, /rerun setup after a Codex\s+update/);
   assert.equal(probes(await readFile(f.calls.codex, 'utf8')), probes(afterFailure));
 });
 
