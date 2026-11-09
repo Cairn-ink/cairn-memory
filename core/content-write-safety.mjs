@@ -8,7 +8,8 @@ import { contentSuppressionReasonInside, contentSuppressionTargetMatches, suppre
 import { contentWriteChanges } from './content-write-changes.mjs';
 import { CONTENT_TERMINAL_FIELDS, CONTENT_TERMINAL_ACK_FIELDS, registerContentWriteGuard } from './content-write-context.mjs';
 import { fail } from './validation.mjs';
-import { hasCardLineage, loadCardBodyContributorsInside, lineageHmac } from './card-lineage.mjs';
+import { hasCardLineage, loadCardBodyContributorsInside, verifyCardLineageCommitmentsInside, lineageHmac } from './card-lineage.mjs';
+import { engineCardRevisionsInside } from './engine-card-state.mjs';
 
 const names = {memory:'memories',receipt:'receipts',card:'private_cards','submitted-note':'card_notes',raw:'raw_conversations'};
 const kinds = Object.fromEntries(Object.entries(names).map(([kind,table])=>[table,kind]));
@@ -270,6 +271,20 @@ export function beginContentWriteSafety(db, operation) {
       return timestamp===undefined||row.updated_at===timestamp;
     }
     const sourceAuthority=createRawLineageStorage(db);
+    function engineRetiredCard(key,ns) {
+      if(operation.method!=='maintainCards'||changedBindings.has(key))return false;
+      const change=canonical.find(c=>c.table==='private_cards'&&c.row.id===key);
+      if(!change?.old||oldValue(change,'revision')!==1||change.row.revision!==2||
+        change.columns.some((c,i)=>!['id','revision','updated_at'].includes(c.name)&&change.old[i]!==undefined)||
+        [...canonical,...removed].some(c=>['card_body_provenance','card_body_sources','card_body_authorizations'].includes(c.table)&&c.row.card_id===key))return false;
+      const publicNs={...ns,projectId:ns.projectId||null};
+      if(!engineCardRevisionsInside(db,publicNs,{...change.row,revision:1}))return false;
+      // A stale transition exposes no body or source acknowledgement. Preserve
+      // the immutable seal even when source suppression caused the retirement;
+      // requiring readable sources would prevent safe retirement in that case.
+      if(lineage)verifyCardLineageCommitmentsInside(db,identity,publicNs,key);
+      return true;
+    }
     function episodeSource(key,ns) {
       const source=get('episode_sources',key),origin=source?get('session_episodes',source.origin_episode_id):null;
       if(!source||!origin||origin.deleted||!ns||JSON.stringify(boundary(namespace(origin)))!==JSON.stringify(boundary(ns)))fail('evidence_unavailable');
@@ -289,6 +304,7 @@ export function beginContentWriteSafety(db, operation) {
       if(!found.row)fail('evidence_unavailable');
       if(lineage&&kind==='card'&&automaticallyInvalidatedCard(key,ns))return;
       if(contentSuppressionReasonInside(db,ns,target))fail('evidence_unavailable');
+      if(kind==='card'&&engineRetiredCard(key,ns))return;
       const stamp=JSON.stringify([kind,key,ns,revision,extra,audit]);if(checked.has(stamp))return;checked.add(stamp);
       if(kind==='card'&&automaticallyInvalidatedCard(key,ns))return;
       if(kind==='memory'||kind==='card'){

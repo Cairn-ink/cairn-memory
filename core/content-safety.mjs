@@ -5,6 +5,7 @@ import { createCardRawSources } from './card-raw-sources.mjs';
 import { createRawLineageStorage } from './raw-lineage-storage.mjs';
 import { sourceRef } from './private-card-input.mjs';
 import { hasCardLineage, loadCardBodyContributorsInside } from './card-lineage.mjs';
+import { isEngineCard, engineCardRevisionsInside } from './engine-card-state.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
@@ -280,10 +281,12 @@ function canonicalContentReadSafety(db, { identity, namespace: ns, ref, method =
   const policy = policies[contentReadPurpose(method, row)];
   if (!policy.admits(row, type, intent, method)) return denied('ineligible');
   if (type === 'card') {
+    const engine = isEngineCard(row.id);
+    if (engine && !engineCardRevisionsInside(db, ns, row)) return denied('ineligible');
     if (hasCardLineage(db)) {
       try {
         const lineage = loadCardBodyContributorsInside(db,identity,ns,row.id,{
-          current:Boolean(policy.current?.(intent)),
+          current:!engine&&Boolean(policy.current?.(intent)), exactRevisions:engine,
           validateSource:source=>sourceReadSafety(db,{identity,namespace:ns,ref:source,memo}).allowed });
         if (memo) (memo.cardBodies ??= new Map()).set(row.id,lineage);
       } catch (error) {
@@ -299,7 +302,7 @@ function canonicalContentReadSafety(db, { identity, namespace: ns, ref, method =
     const raw = createCardRawSources(db, identity);
     for (const source of contributors) {
       const result = sourceReadSafety(db, { identity, namespace: ns, ref: source,
-        strict: Boolean(policy.current?.(intent)), memo, rawBudget: source.type === 'raw' ? raw.budget(64000, rawRows ?? 1024) : undefined });
+        strict: !engine&&Boolean(policy.current?.(intent)), memo, rawBudget: source.type === 'raw' ? raw.budget(64000, rawRows ?? 1024) : undefined });
       if (!result.allowed) return result;
     }
     // Every contributor has already completed the canonical source decision

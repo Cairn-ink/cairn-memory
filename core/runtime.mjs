@@ -33,6 +33,7 @@ import { createRationaleStorage } from './rationale-storage.mjs';
 import { fail, object, receiptEventTime } from "./validation.mjs";
 import { privateCardOptions } from './private-card-input.mjs';
 import { createPrivateCardStorage } from './private-card-storage.mjs';
+import { createEngineCardStorage } from './engine-card-storage.mjs';
 import { createRawCardInvalidation } from './card-raw-sources.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { createRawDeletionStorage } from './raw-deletion-storage.mjs';
@@ -67,7 +68,7 @@ export function createMemoryRuntime(input, internal) {
   const roleProfiles = roleProfileOptions(input.roleProfiles);
   const sessionEpisodes = input.sessionEpisodes === undefined ? undefined : episodeOptions(input.sessionEpisodes);
   const decisionReview = decisionReviewOption(input);
-  const db = openDatabase(input.path, { ...(busyTimeoutMs !== undefined ? { busyTimeoutMs } : {}), privateCards: Boolean(privateCards), currentDependencies: Boolean(privateCards?.currentDependencies) || Boolean(input.contentSafety && internal?.rawCapture), methodPackages: Boolean(methodPackages), assets: Boolean(assets), roleProfiles: Boolean(roleProfiles), rawCapture: Boolean(internal?.rawCapture),
+  const db = openDatabase(input.path, { ...(busyTimeoutMs !== undefined ? { busyTimeoutMs } : {}), privateCards: Boolean(privateCards)||Boolean(internal?.engineCards && !input.existingStore), currentDependencies: Boolean(privateCards?.currentDependencies) || Boolean(input.contentSafety && internal?.rawCapture), methodPackages: Boolean(methodPackages), assets: Boolean(assets), roleProfiles: Boolean(roleProfiles), rawCapture: Boolean(internal?.rawCapture),
     rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore, storeFence: input.storeFence, contentSafety: input.contentSafety });
   try {
   const rawLineage = createRawLineageStorage(db);
@@ -914,6 +915,7 @@ export function createMemoryRuntime(input, internal) {
     sessionContextSnapshot(ns, groups, expected) { ready(); return sessionContextStorage(ns, groups, expected); },
     episodeRange(ns, operation, filter, cursor) { ready(); return episodeReads(ns, operation, filter, cursor); },
     privateCards: privateCards ? cardStorage : undefined,
+    engineCardStorage: internal?.engineCards ? createEngineCardStorage({ db, identity, ready, rawReader: rawCapture?.sourceReader }) : undefined,
     methodPackages: methodStorage,
     roleProfiles: roleStorage,
     assets: assetStorage,

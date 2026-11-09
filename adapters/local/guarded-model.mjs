@@ -3,7 +3,7 @@ import { createOpenAIModel } from '../openai/index.mjs';
 import { createRuntimeGuard } from '../../integrations/client/runtime-usage.mjs';
 import { LocalCaptureError } from './configuration.mjs';
 
-const remoteMethods = ['extract', 'qualify', 'qualifyCandidates', 'classify', 'select', 'selectChecklist', 'rank', 'reconcile', 'relate', 'reviewBasis'];
+const remoteMethods = ['extract', 'qualify', 'qualifyCandidates', 'classify', 'select', 'selectChecklist', 'rank', 'reconcile', 'relate', 'reviewBasis', 'consolidate'];
 export function guardedModel(config, { core, signal, env = process.env, fetchImpl = globalThis.fetch }) {
   // Reuse the provider's exact pure serializer/counter without looking up a key.
   const planning = createOpenAIModel({ apiKey: 'local-planning-noncredential', fetchImpl: () => { throw new LocalCaptureError(); } });
@@ -59,7 +59,7 @@ export function guardedModel(config, { core, signal, env = process.env, fetchImp
     }
   }
   const model = { contextWindow: planning.contextWindow, countTokens: planning.countTokens,
-    fitsQualificationRequest: planning.fitsQualificationRequest };
+    fitsQualificationRequest: planning.fitsQualificationRequest, fitsConsolidationRequest: planning.fitsConsolidationRequest };
   for (const method of remoteMethods) model[method] = request => {
     const operation = invoke(method, request); active.add(operation);
     operation.then(() => active.delete(operation), () => active.delete(operation));

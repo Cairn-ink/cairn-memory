@@ -19,7 +19,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
   let storage, capture, runtime;
   const core = buildCore(input, {
     rawSources: sources,
-    createRuntime: config => (runtime = createMemoryRuntime(config, { rawCapture: true,
+    createRuntime: (config, extensions) => (runtime = createMemoryRuntime(config, { ...extensions, rawCapture: true,
       rawSources: sources,
       rawLineage: lineage === true,
       rawDeletion: deletion,

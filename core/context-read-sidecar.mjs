@@ -981,7 +981,17 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       } };
     } finally {if(!retained)residency?.release();}
   }
-  return Object.freeze({ reconcile, lexicalPage, lexical: (...args) => lexicalPage(...args).rows,
+  function cardVectors({ namespace, memories }, port) {
+    if (!authorizedProjection?.readSet.some(ns => JSON.stringify(boundary(ns)) === JSON.stringify(boundary(namespace))) ||
+        !Array.isArray(memories) || memories.length > 4096) return [];
+    const rows = sideRead(() => side.prepare(`SELECT v.id AS memoryId,v.revision,hex(v.data) AS data
+      FROM vectors v JOIN json_each(?) m ON v.id=json_extract(m.value,'$.memoryId') AND v.revision=json_extract(m.value,'$.revision')
+      WHERE v.store_id=? AND v.namespace=? AND v.type='memory' AND v.embedder_id=? AND v.embedder_revision=?
+      AND v.dimensions=? AND v.normalization=? AND v.representation=? GROUP BY v.id,v.revision LIMIT 512`)
+      .all(JSON.stringify(memories), identity.storeId, JSON.stringify(namespace), port.id, port.revision, port.dimensions, port.normalization, REPRESENTATION_VERSION));
+    return rows.map(row => ({ memoryId: row.memoryId, revision: row.revision, vector: loadVector(Buffer.from(row.data, 'hex'), port) }));
+  }
+  return Object.freeze({ reconcile, lexicalPage, lexical: (...args) => lexicalPage(...args).rows, cardVectors,
     refreshVectors, semanticPreflight, state, assertState, assertFile: checkFile,
     close() { if (!closed) { closed = true; if (side.isOpen) side.close(); } } });
 }

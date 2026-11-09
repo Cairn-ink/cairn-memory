@@ -151,7 +151,7 @@ function reserveSources(db, ns, sources, origin='writer') {
 }
 
 /** One append/seal path, shared by every authored writer and offline seeding. */
-export function sealCardBodyInside(db, {identity,namespace:ns,cardId,sources,newBody=false,authorization=null,legacy=false}) {
+export function sealCardBodyInside(db, {identity,namespace:ns,cardId,sources,newBody=false,currentSources=true,authorization=null,legacy=false}) {
   if(!db.isTransaction)fail('storage_error');
   const row=exactCardInside(db,ns,cardId),previous=headers(db,ns,cardId);
   if(!positive(row.body_revision) || previous && (newBody ? row.body_revision<=previous.body_revision : row.body_revision!==previous.body_revision))fail('source_unavailable');
@@ -178,7 +178,7 @@ export function sealCardBodyInside(db, {identity,namespace:ns,cardId,sources,new
     authorization_action:previous&&!newBody?previous.authorization_action:own?authorization.host_action_id:null};
   if(header.completeness==='complete'&&!all.length&&!own&&!(previous&&!newBody&&previous.authorization_action))fail('authority_required');
   if(previous&&!newBody&&header.body_digest!==previous.body_digest)fail('source_unavailable');
-  if(header.completeness==='complete')validateCardBodySourcesInside(db,identity,ns,all,{current:newBody,
+  if(header.completeness==='complete')validateCardBodySourcesInside(db,identity,ns,all,{current:newBody&&currentSources,
     validateSource:ref=>sourceReadSafety(db,{identity,namespace:ns,ref}).allowed});
   reserveContentIdentityInside(db,ns,'card',cardId,cardId,legacy?'canonical-edge':'writer');
   reserveSources(db,ns,added,legacy?'canonical-edge':'writer');
@@ -200,7 +200,7 @@ export function verifyCardLineageCommitmentsInside(db,identity,ns,cardId) {
   return {row,header:h,sources};
 }
 /** Verify latest body/header and exact commitments before any source decisions. */
-export function loadCardBodyContributorsInside(db, identity, ns, cardId, {validateSource,current=false}={}) {
+export function loadCardBodyContributorsInside(db, identity, ns, cardId, {validateSource,current=false,exactRevisions=false}={}) {
   const {row,header:h,sources}=verifyCardLineageCommitmentsInside(db,identity,ns,cardId);
   if(h.completeness!=='complete')fail('source_unavailable');
   if(h.authorization_action) {
@@ -214,11 +214,11 @@ export function loadCardBodyContributorsInside(db, identity, ns, cardId, {valida
     if(result.id!==cardId||result.bodyRevision!==row.body_revision)fail('source_unavailable');
   }
   if(!sources.length&&(h.origin!=='user-authored'||!h.authorization_action))fail('source_unavailable');
-  const refs=validateCardBodySourcesInside(db,identity,ns,sources,{validateSource,current});
+  const refs=validateCardBodySourcesInside(db,identity,ns,sources,{validateSource,current,exactRevisions});
   return {row,header:h,sources,refs,stamp:[h.body_revision,h.provenance_revision,h.body_digest,h.provenance_digest]};
 }
 
-function validateCardBodySourcesInside(db,identity,ns,sources,{validateSource,current=false}) {
+function validateCardBodySourcesInside(db,identity,ns,sources,{validateSource,current=false,exactRevisions=false}) {
   const refs=[], raw=createCardRawSources(db,identity), budget=raw.budget();
   for(const s of sources) {
     if(s.source_scope!==ns.scope||s.source_project!==(ns.projectId??'')||s.source_key!==s.source_incarnation||!s.content_identity)fail('source_unavailable');
@@ -230,7 +230,7 @@ function validateCardBodySourcesInside(db,identity,ns,sources,{validateSource,cu
     if(s.source_kind==='memory') {
       if(v.length!==2||v[0]!=='memory-revision-v1'||!positive(v[1]))fail('source_unavailable');
       const m=db.prepare(`SELECT * FROM memories WHERE ${where} AND id=?`).get(...boundary(ns),s.source_key);
-      if(!m||m.deleted||parentDigest(identity,ns,m)!==s.content_identity||current&&(m.currentness!=='current'||m.review_state==='awaiting'))fail('source_unavailable');
+      if(!m||m.deleted||exactRevisions&&m.revision!==v[1]||parentDigest(identity,ns,m)!==s.content_identity||current&&(m.currentness!=='current'||m.review_state==='awaiting'))fail('source_unavailable');
       strictTextBytes(db,'memories',m.id,['content','fingerprint']);
       continue;
     }

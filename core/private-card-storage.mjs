@@ -18,6 +18,7 @@ import { createCardRawSources } from './card-raw-sources.mjs';
 import { cardText, keyed, noteInput, OWNER_NOTE_CAP, pageLimit, refs, sourceRef } from './private-card-input.mjs';
 import { hasCardLineage, collectCardBodySourcesInside, sealCardBodyInside, checkCardActionInside,
   recordCardActionInside, cardBodyDigest } from './card-lineage.mjs';
+import { isEngineCard, engineCardMetadataInside } from './engine-card-state.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
@@ -117,8 +118,11 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
   }
   function metadata(ns, row, readSet = [ns], { historicalReason = false, deadlineAt = Infinity } = {}, memo = createContentReadMemo(db)) {
     const review = cardApplicabilityInside(db, row), currentDependency = historicalReason ? null : dependencies.compare(ns, row, readSet, { deadlineAt });
+    const engine = isEngineCard(row.id) ? engineCardMetadataInside(db, ns, row) : null;
     return { id: row.id, namespace: ns, revision: row.revision, state: row.state,
-      bodyRevision: row.body_revision, origin: 'authored', support: { ...(hasCardLineage(db) && memo?.cardBodies?.get(row.id)?.header.origin === 'user-authored'
+      bodyRevision: row.body_revision, origin: engine ? 'engine' : 'authored',
+      ...(engine ? { builtAt: engine.builtAt, clusterKey: engine.clusterKey, status: 'current', sourceRevisions: engine.sourceRevisions } : {}),
+      support: { ...(engine ? { status: 'eligible', applicability: 'current', reasons: ['unassessed'] } : hasCardLineage(db) && memo?.cardBodies?.get(row.id)?.header.origin === 'user-authored'
         ? {status:'eligible',applicability:'unknown',reasons:['unassessed']} : support(ns, hasCardLineage(db)?memo?.cardBodies?.get(row.id)?.refs??getRefs(row.id,memo):getRefs(row.id, memo), memo)),
         applicability: review.applicability,
         applicabilityReviewedRevision: review.reviewedRevision, checkedAt: row.updated_at,

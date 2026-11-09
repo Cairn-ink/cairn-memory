@@ -76,9 +76,12 @@ export function openContextCore(baseOptions, contextRead, openBase) {
       preflight: () => assertContextReadReadOnlyAuxiliaries(baseOptions.path) });
     probe.db.close();
   }
-  const base = openBase(baseOptions);
+  let context;
+  const base = openBase({ ...baseOptions, ...(baseOptions.cardVectors === undefined ? {
+    cardVectors: { read: request => context?.cardVectors(request) ?? [] },
+  } : {}) });
   try {
-    const context = createContextFacade(baseOptions.path === ':memory:' ? ':memory:' : resolve(baseOptions.path), options, { readOnly, ...busyOptions });
+    context = createContextFacade(baseOptions.path === ':memory:' ? ':memory:' : resolve(baseOptions.path), options, { readOnly, ...busyOptions });
     return Object.freeze({ ...base, ...context.methods, close() { context.close(); return base.close(); } });
   } catch (error) { try { base.close(); } catch { /* Preserve the initialization refusal. */ } throw error; }
 }
@@ -672,7 +675,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           });
           items.push({ type, ref, ns: input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), rank: candidate.rank,
             metadata: type === 'memory' ? { state, reviewState: item.reviewState, filing: item.filing,
-              kind: item.kind, origin, confidence: item.confidence } : { state, support: item.support, origin },
+              kind: item.kind, origin, confidence: item.confidence } : { state, support: item.support, origin,
+                ...(origin === 'engine' ? { builtAt: item.builtAt, clusterKey: item.clusterKey, status: item.status } : {}) },
+            sourceMemoryRefs: type === 'card' ? item.bindings.map(binding => binding.memoryRef).filter(Boolean) : [],
             text: type === 'memory' ? item.content : item.title + '\n' + item.body,
             turnIds: citedRawTurns(db, ref.namespace, sourceRows, rawChannel),
             sessionIds: sourceRows.map(row => JSON.stringify(['receipt', namespaceKey(ref.namespace), row.client, row.session_id])),
@@ -804,7 +809,16 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       return facadeFailure(error);
     }
   }
+  function cardVectors(request) {
+    if (!options.embedder) return [];
+    for (const entry of indexes.values()) {
+      try { const rows = entry.storage.cardVectors(request, options.embedder); if (rows.length) return rows; }
+      catch { /* Optional old/missing vectors retain the lexical cluster path. */ }
+    }
+    return [];
+  }
   return { fileIdentity: database?.fileIdentity, productCapabilities: { types: supportedTypes, receiptEventTime: receiptEventTimeEnabled(cachedContentLayout(db)) },
+    cardVectors,
     ...(options.product ? { productPort: { db, read, ready, evidence, bind, encode, decode, identity, features: info, canonicalFence } } : {}),
     methods: contentSafetyFacade({ getContextReadCapabilities() {
     return success(structuredClone({ version: CONTEXT_VERSION, methods: [...CONTEXT_METHODS], receiptEventTime: receiptEventTimeEnabled(cachedContentLayout(db)), types: [...supportedTypes], intents: ['current', 'history'],

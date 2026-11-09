@@ -40,6 +40,7 @@ import { captureMessages, extractionRequest } from './capture.mjs';
 import { captureSnapshot } from './capture-input.mjs';
 import { requestFits } from './model-packing.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
+import { createEngineCardMaintenance } from './engine-card-maintenance.mjs';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
 import { createQueryScore, QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT,
   SOURCE_QUERY_CANDIDATE_VERSION, SOURCE_QUERY_RECEIPT_LIMIT,
@@ -55,7 +56,8 @@ import {
 // only their own option; all other legal options reach the retained validator.
 const CORE_OPTIONS = Object.freeze(['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy',
   'captureRationale','captureEvidence','captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes',
-  'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence','contentSafety','busyTimeoutMs']);
+  'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence','contentSafety','busyTimeoutMs',
+  'cardRelations','cardVectors']);
 const OPEN_OPTIONS = Object.freeze([...CORE_OPTIONS, 'rawConversations', 'raw', 'rawSearch']);
 
 const keepAdmissionKey = Symbol('keepAdmissionKey');
@@ -225,7 +227,7 @@ function openWithRoleContext(input, roleContext) {
   if (!descriptor && raw !== true) return buildCore(base);
   if (!descriptor) {
     try { return composeRawCore(buildCore, base, defaultRawOptions(), {
-      sources: false, lineage: true, deletion: true, localControls: true,
+      sources: typeof base.model?.consolidate === 'function', lineage: true, deletion: true, localControls: true,
       rawTextReaders: false,
       captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch), searchEmbedding: roleContext,
     }); } catch (error) {
@@ -251,7 +253,7 @@ function openWithRoleContext(input, roleContext) {
   delete fields.rawSearch;
   const coreOptions = Object.create(Object.getPrototypeOf(input), fields);
   return composeRawCore(buildCore, coreOptions, options, {
-    sources: Boolean(coreOptions.privateCards), lineage: true, deletion: true, localControls: true,
+    sources: Boolean(coreOptions.privateCards)||typeof coreOptions.model?.consolidate === 'function', lineage: true, deletion: true, localControls: true,
     captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch), searchEmbedding: roleContext,
   });
 }
@@ -315,9 +317,12 @@ export function createMemoryCore(input, internal) {
     ...(methodPackages ? { methodPackages } : {}),
     ...(assets ? { assets } : {}),
     ...(roleProfiles ? { roleProfiles } : {}),
-    ...(privateCards ? { privateCards } : {}), ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) });
+    ...(privateCards ? { privateCards } : {}), ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) },
+    { engineCards: typeof model?.consolidate === 'function' });
   try {
   const { storeId, cursorSecret } = runtime.identity;
+  const engineCards = createEngineCardMaintenance({ storage: runtime.engineCardStorage, model,
+    relations: input.cardRelations, vectors: input.cardVectors });
 
   function namespaceBinding(ns) {
     return createHmac("sha256", cursorSecret)
@@ -1305,6 +1310,8 @@ export function createMemoryCore(input, internal) {
   const contentReads = new Set(['get','list','map','fetch','recall','sourceSnapshot','getEpisode','listEpisodes','listMemoriesByTime',
     'sessionStartContext','getRationale','inspectAdmission','inspectCaptureEvidence','listReviewTransitions','listReviewConflicts']);
   return contentSafetyFacade({
+    async maintainCards(input) { try { runtime.ready(); return success(await engineCards.maintain(input)); } catch (error) { return failure(error); } },
+    getEngineCardStatus(input) { try { runtime.ready(); return success(engineCards.status(input)); } catch (error) { return failure(error); } },
     ...createMethodPackageFacade(runtime.methodPackages, methodPackages, runtime.ready,assets),
     ...createAssetFacade(runtime.assets, assets, runtime.ready),
     ...createRoleProfileFacade(runtime.roleProfiles, roleProfiles, { path: input.path, readOnly: Boolean(input.existingStore), context: internal?.roleContext, assets }),
@@ -1322,7 +1329,7 @@ export function createMemoryCore(input, internal) {
       runtime.close();
       return success(null);
     },
-  }, { check: runtime.assertContentScope, portGuard: runtime.contentPortGuard, failure, asyncMethods: ['capture'],
+  }, { check: runtime.assertContentScope, portGuard: runtime.contentPortGuard, failure, asyncMethods: ['capture','maintainCards'],
     requestScope: (work, method) => contentWriteMethodClass(method) === 'read' ? withContentSuppressionRequest(work) : work(),
     isFailedCapture(result) {
       // Admission committed before the paused classifier. After close only its
