@@ -387,6 +387,23 @@ test('Codex header fork refusal remains independent of native source',async t=>{
   assert.equal((await f.hook()).status,'blocked');assert.equal((await f.hook('UserPromptSubmit')).status,'blocked');
 });
 
+test('failed first Codex qualification installs waiting hooks, then captures after background success',async t=>{
+  const f=await setupFixture(t,{client:'codex'});f.request.interpretationConsent=false;
+  const cache=join(f.root,'codex-install','qualification');for(const name of readdirSync(cache))unlinkSync(join(cache,name));
+  assert.equal((await f.setup()).status,'prepared');assert.equal((await f.invoke('activate')).status,'active');
+  let queued=null,launches=0;f.dependencies.launchQualification=async(path,host)=>{queued={path,host};launches++;};
+  assert.equal((await f.hook('UserPromptSubmit')).status,'blocked');assert.equal(launches,1);
+  const before=await f.invoke('status');assert.equal(before.qualification.status,'pending');assert.match(before.qualification.message,/rerun setup/);
+  const {runLocalQualification}=await import('../raw/local-codex-qualification.mjs');const {formatFixture}=await import('../../codex/test/format-fixtures.mjs');
+  await runLocalQualification(queued.path,queued.host,{collect:async()=>({version:'0.162.0',evidence:await formatFixture('0.160.1'),binarySha256:'a'.repeat(64)})});
+  assert.equal((await f.invoke('status')).qualification.status,'qualified');
+  assert.equal((await f.hook('UserPromptSubmit')).status,'ready');
+  const {appendFileSync}=await import('node:fs');const {codex}=await import('./fixtures/raw-fixtures.mjs');const row=codex('copper first qualified turn');row.timestamp=new Date().toISOString();row.payload.item.id='new-id';
+  appendFileSync(f.sourcePath,JSON.stringify(row)+'\n');assert.equal((await f.hook('Stop')).status,'progress');
+  const db=new DatabaseSync(f.request.databasePath);t.after(()=>db.close());assert.equal(db.prepare('SELECT count(*) n FROM raw_messages').get().n,1);
+  const snapshot=f.snapshot();await f.invoke('status');assert.deepEqual(f.snapshot(),snapshot,'status only reads cached evidence');
+});
+
 test('a restored stale Claude start marker cannot authorize a new authority',async t=>{
   const f=await lazyFixture(t,'claude-code');unlinkSync(f.sourcePath);await f.hook();
   const starts=join(f.request.installationDirectory,'state','starts'),name=readdirSync(starts)[0],text=readFileSync(join(starts,name));

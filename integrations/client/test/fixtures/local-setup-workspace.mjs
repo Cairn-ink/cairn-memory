@@ -43,7 +43,7 @@ export async function setupFixture(t,{ client='claude-code' } = {}) {
     payload:{hook_event_name:event,session_id:sessionId,transcript_path:sourcePath,...changes}}));
   const control=()=>ok(core.getLocalCaptureControl({namespace:request.namespace,client}));
   const snapshot=(path=root)=>workspaceSnapshot(path,databasePath);
-  return {workspace,root,request,core,sourcePath,clientConfigPath,api,setup,invoke,hook,control,snapshot,scoped,
+  return {workspace,root,request,core,binary,dependencies,sourcePath,clientConfigPath,api,setup,invoke,hook,control,snapshot,scoped,
     setExec:value=>{exec=value},setPresent:value=>{present=value}};
 }
 

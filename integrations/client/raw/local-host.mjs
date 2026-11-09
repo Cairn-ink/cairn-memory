@@ -1,3 +1,4 @@
+import { localCodexQualification } from './local-codex-qualification.mjs';
 import { checkLocalSession } from './local-session-fence.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { performance } from 'node:perf_hooks';
@@ -101,9 +102,11 @@ export function createLocalRawHost(value) {
       let formatAuthority = null;
       if (profile.installation.client === 'codex') {
         const host = await (deps.detectHost ?? detectRunningHost)(); op.check();
-        if (!host || !await boundBinary(host)) fail('host_unavailable');
-        const qualification = await cachedQualification(profile.installation.qualificationConfigPath,host); op.check();
-        if (qualification.status !== 'qualified' || host.execSession === true) fail('host_unqualified');
+        if (!host) fail('host_unavailable');
+        if (host.execSession === true) fail('host_unqualified');
+        const qualification = await localCodexQualification(profile.installation.qualificationConfigPath,host,
+          deps.launchQualification ? {launch:deps.launchQualification}:{}); op.check();
+        if (qualification.status !== 'qualified') fail('host_unqualified');
         await deps.checkpoint?.('before_header'); op.check();
         await freshPermission();
         const source = await sessionSourceMetadata(selected.sourcePath,selected.sessionId,{ signal:op.signal,

@@ -142,8 +142,15 @@ The 0600 request is bounded UTF-8 JSON (64 KiB) with exactly these fields:
 For Codex select `client:"codex"`, its explicit native `hooks.json`, a different
 installation directory, and `installation:{"qualificationConfigPath":
 "/absolute/private-codex/installation.json"}` instead of pluginRoot. Select an
-already-qualified private profile/cache. Setup does not launch or auto-qualify
-a native binary. The existing installed operator API is explicit:
+private profile/cache. A pending or failed first qualification still installs
+the hooks in a waiting state; no capture is permitted until qualification succeeds.
+After a Codex update, hooks refuse the changed binary and start one detached,
+identity-bound schema qualification. Every native capture event can start it, so
+an update during a session can recover without another SessionStart. Hooks never
+wait for the probe. Failures back off; status reads only the cache and reports
+qualified, pending or failed with a reason and guidance to rerun setup.
+The probe uses a disposable home with no credentials, model request or transcript
+read. Unsupported formats keep capture paused. The existing installed operator API is explicit:
 
 ```js
 // Use the selected supported Node. First create the chosen private parent and
@@ -153,7 +160,7 @@ const configPath = '/absolute/private-codex/installation.json';
 const binaryPath = '/absolute/chosen/bin/codex';
 const host = { binaryPath, identity:await q.binaryIdentity(binaryPath), kind:'cli' };
 const verdict = await q.qualifyBinary(configPath, host);
-console.log(verdict.status); // Proceed only with an actually qualified verdict.
+console.log(verdict.status); // Capture requires an actually qualified verdict.
 ```
 
 That probes schema/format, not a capture turn or provider request. Actual hooks
