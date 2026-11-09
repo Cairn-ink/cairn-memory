@@ -8,7 +8,8 @@ for (const warm of [false, true]) test(`distributed plugin prompt pre-fetch fsyn
   assert.equal(result.code, 0); assert.equal(result.signal, null);
   assert.equal(result.stderr, ''); assert.equal(result.stdout, '');
   assert.equal(result.recallHeaders, 1);
-  assert.equal(result.snapshot?.syncCalls, 0, 'prefetch_fsync_ceiling');
+  // A fresh hosted observation publishes its new pause state; warm state adds no sync.
+  assert.equal(result.snapshot?.syncCalls, warm ? 0 : 2, 'prefetch_fsync_ceiling');
 });
 
 test('distributed plugin first identity keeps its durable publications before recall', async t => {
@@ -17,5 +18,5 @@ test('distributed plugin first identity keeps its durable publications before re
   assert.equal(result.code, 0); assert.equal(result.signal, null);
   assert.equal(result.stderr, ''); assert.equal(result.stdout, '');
   assert.equal(result.recallHeaders, 1);
-  assert.equal(result.snapshot?.syncCalls, 6, 'identity_durable_before_fetch');
+  assert.equal(result.snapshot?.syncCalls, 8, 'identity_and_initial_pause_durable_before_fetch');
 });

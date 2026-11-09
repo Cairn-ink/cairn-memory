@@ -103,6 +103,8 @@ const recallRuntimeChanges = new Map([
 ]);
 // Pause durability changes whole functions; pin both immutable historical and
 // current bytes instead of reconstructing the earlier file from current source.
+// Hosted pause intents and dispatch guards revise only current pins; preserve
+// every historical digest and the historical behavior comparisons below.
 const durabilityRuntimeChanges = new Map([
   ['integrations/client/private-state.mjs', {
     historical: 'ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64',
@@ -112,7 +114,7 @@ const durabilityRuntimeChanges = new Map([
   ['integrations/client/hosted-pause.mjs', {
     historical: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
     before: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
-    current: '8d15d24036533f5a235b5e54627cb4db3b94312f28874f9fdf24cd2897cb0635',
+    current: 'ab7634bb0b1d354fd23e3dadce299d4c2ac856ec48c2562fc0f405539a60a91b',
   }],
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
@@ -122,7 +124,7 @@ const durabilityRuntimeChanges = new Map([
   ['integrations/codex/hosted-lifecycle.mjs', {
     historical: '8b4a8e7ea1cef5473147bfe2ea6af9548894c52f08e44a656e545fcb9fc8c496',
     before: 'bd7bc299773cc389565a34bfd9a7131f68ad7bef934d3ce5a0ebeeea800bbe3a',
-    current: '5123350b18ee89a7557dbeec237e1e7790f1b7f21484dd393a97a6f66b009e94',
+    current: 'b0159579e783ec16bcca7505452c4b11d416fb80eb89d41cbb8575d1c23b6b90',
   }],
 ]);
 const hostedRuntimeExceptions = [
