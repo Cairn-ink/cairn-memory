@@ -381,9 +381,10 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     THEN moc.title ELSE NULL END`;
 
   function queryCandidateRows(ns, { score, memoryLabel, sourceReceiptLimit = 0,
-    scanBoundary, expectedEpoch, expectedSuppressionEpoch }) {
+    scanBoundary, expectedEpoch, expectedSuppressionEpoch, scanBudgetMs = QUERY_SCAN_BUDGET_MS }) {
     const { scan, page, top, floor, pageMs } = QUERY_CANDIDATES;
     if (![0, SOURCE_QUERY_RECEIPT_LIMIT].includes(sourceReceiptLimit)) fail('invalid_input');
+    if (!Number.isSafeInteger(scanBudgetMs) || scanBudgetMs < 0 || scanBudgetMs > QUERY_SCAN_BUDGET_MS) fail('invalid_input');
     const replay = scanBoundary !== undefined;
     if (replay && (!scanBoundary || Object.keys(scanBoundary).sort().join(',') !== 'last,rows,stop' ||
         !Number.isSafeInteger(scanBoundary.rows) || scanBoundary.rows < 0 || scanBoundary.rows > scan ||
@@ -511,7 +512,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         for (const physical of batch) {
           // Residual filters and projection denials consume rows and time.
           const elapsed = performance.now() - started;
-          if (tail && !replay && elapsed >= QUERY_SCAN_BUDGET_MS) {
+          if (tail && !replay && elapsed >= scanBudgetMs) {
             stop = 'budget'; break;
           }
           visited++; consumed++;
@@ -602,7 +603,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         }
       };
       while (!stop) {
-        if (!replay && performance.now() - started >= QUERY_SCAN_BUDGET_MS) { stop = 'budget'; break; }
+        if (!replay && performance.now() - started >= scanBudgetMs) { stop = 'budget'; break; }
         const accepted = tryReadPage(() => {
           if (!sameEpochs(epochs())) return false;
           assertIndexAvailable(ns);

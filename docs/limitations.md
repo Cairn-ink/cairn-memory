@@ -1440,7 +1440,7 @@ experimental `sourceCandidatePolicy` constructor option has been removed.
 The floor reads current, nondeleted, non-awaiting rows in one statement and
 scores at most 1,024; an unscored 1,025th row detects whether a tail is needed.
 A namespace with at most 1,024 current rows keeps the ordinary statement budget.
-Tail scanning stops at the fixed 400 ms monotonic budget, 20,000-row cap, or the end. The floor, safety checks
+Tail scanning stops at the namespace's share of the fixed 400 ms per-call monotonic budget, 20,000-row cap, or the end. The floor, safety checks
 and placement share one normal-timeout deferred transaction. Tail pages use
 zero timeout, restored synchronously, with at most 256 rows or 25 ms per page.
 An epoch change discards the tail without restarting. Final placement of new

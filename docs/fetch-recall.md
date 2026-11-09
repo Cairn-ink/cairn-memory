@@ -126,7 +126,8 @@ data. Structural validation does not prove that a model judges relevance well.
 Recall's private `literal-recency-keyset-overlap-v4` policy scans authorized
 nondeleted rows newest first (`updated_at DESC, id ASC`) using the existing
 `namespace_memories` index. All recall modes share a 1,024-row floor, fixed
-400 ms monotonic budget and 20,000-row cap. The floor filters history and
+400 ms monotonic budget per call (split evenly across the read set) and
+20,000-row cap. The floor filters history and
 awaiting rows in one content statement, including an unscored 1,025th row to
 detect a tail. An exhausted floor adds no statements to ordinary recall.
 Historical and awaiting tail rows, and projection-rejected rows, consume rows

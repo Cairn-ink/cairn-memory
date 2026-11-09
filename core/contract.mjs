@@ -41,7 +41,7 @@ import { captureSnapshot } from './capture-input.mjs';
 import { requestFits } from './model-packing.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
-import { createQueryScore, QUERY_CANDIDATE_VERSION,
+import { createQueryScore, QUERY_CANDIDATE_VERSION, namespaceScanBudgetMs,
   SOURCE_QUERY_CANDIDATE_VERSION, SOURCE_QUERY_RECEIPT_LIMIT,
   QUERY_CANDIDATES } from './query-candidates.mjs';
 import { qualificationInput, qualificationSources } from './claim-qualification-input.mjs';
@@ -782,6 +782,7 @@ export function createMemoryCore(input, internal) {
         if (!snapshot) {
           snapshot = runtime.queryCandidateRows(ns, { score: navigation.score, memoryLabel: navigation.excerpt,
             ...(navigation.sourceMode ? { sourceReceiptLimit: SOURCE_QUERY_RECEIPT_LIMIT } : {}),
+            ...(navigation.scanBudgetMs === undefined ? {} : { scanBudgetMs: navigation.scanBudgetMs }),
             ...(cursor ? { scanBoundary: cursor.a.scanBoundary, expectedEpoch: cursor.e,
               expectedSuppressionEpoch: cursor.h } : {}) });
           navigation.pages.set(key, snapshot);
@@ -917,6 +918,7 @@ export function createMemoryCore(input, internal) {
       const count = contractRevision(input.limit ?? 6);
       if (count > 12) throw new MemoryStoreError('invalid_input');
       const navigation = { excerpt: createQueryExcerpt(query), score: createQueryScore(query), pages: new Map(),
+        scanBudgetMs: namespaceScanBudgetMs(namespaces.length),
         ...(isSourceContext(contextMode) ? { sourceMode: contextMode } : {}),
         queryDigest: createHmac('sha256', cursorSecret)
           .update(JSON.stringify([QUERY_EXCERPT_VERSION, query])).digest('base64url') };

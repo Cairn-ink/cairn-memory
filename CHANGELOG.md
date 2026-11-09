@@ -5,6 +5,8 @@
 - Use one newest-first keyset scan for body and source recall: a 1,024-row
   floor, fixed 400 ms budget and 20,000-row cap, retaining the best 1,024 by
   query overlap then ID. Remove the candidate-policy constructor option.
+- Bound the added scan time per recall call: a two-namespace read set splits
+  the budget evenly (rounded down per namespace); each floor always completes.
 - Read floor content in one filtered statement with an unscored extra row to
   detect a tail, preserving ordinary statement costs for small namespaces.
   Keep the floor and its placement in one normal-timeout deferred transaction,

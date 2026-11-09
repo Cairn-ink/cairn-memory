@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { openMemoryCore } from '../contract.mjs';
-import { createQueryScore, QUERY_SCAN_BUDGET_MS } from '../query-candidates.mjs';
+import { createQueryScore, QUERY_SCAN_BUDGET_MS, namespaceScanBudgetMs } from '../query-candidates.mjs';
 import { createQueryExcerpt } from '../query-excerpt.mjs';
 import { installRecallScanClock } from '../testing/recall-scan-clock.mjs';
 import { layoutFixture, seed, query, baseCandidates, namespace, ns, key, marker, model, ok } from '../testing/recall-recency-fixture.mjs';
@@ -235,4 +235,68 @@ test('public delivery freshness refuses an E0 floor after its winning memory is 
   assert.equal(result.error.code,'cursor_stale');
   assert.equal(JSON.stringify(result).includes(marker(2049)),false);
   assert.deepEqual(ok(await f.core.recall({readSet:[namespace],query:marker(2049)})).memories,[]);
+});
+
+test('per-namespace scan budget floors the per-call budget across the read set', () => {
+  assert.equal(namespaceScanBudgetMs(1), QUERY_SCAN_BUDGET_MS);
+  assert.equal(namespaceScanBudgetMs(2), Math.floor(QUERY_SCAN_BUDGET_MS / 2));
+  assert.ok(2 * namespaceScanBudgetMs(2) <= QUERY_SCAN_BUDGET_MS);
+  assert.equal(namespaceScanBudgetMs(2, 401), 200); assert.equal(namespaceScanBudgetMs(3, 400), 133);
+  assert.equal(namespaceScanBudgetMs(2, 1), 0); assert.equal(namespaceScanBudgetMs(2, 0), 0);
+  for (const [count, total] of [[0, 400], [-1, 400], [1.5, 400], [2, -1], [2, 1.5]])
+    assert.throws(() => namespaceScanBudgetMs(count, total), { code: 'invalid_input' });
+});
+
+// Tail page reads advance the injected clock by a fixed step, so the number of
+// tail pages a namespace reads is ceil(its budget / step) with the floor at zero.
+function tailPageClock(t) {
+  const step = 50, reads = new Map(); let now = 0, scans = 0;
+  installRecallScanClock(t, () => now);
+  const prepare = DatabaseSync.prototype.prepare;
+  t.mock.method(DatabaseSync.prototype, 'prepare', function (sql) {
+    const statement = prepare.call(this, sql);
+    if (sql.includes('INDEXED BY namespace_memories')) scans++;
+    if (sql.startsWith('SELECT id, revision, updated_at FROM memories')) {
+      const all = statement.all;
+      statement.all = (...args) => {
+        if (args.at(-1) > 1) { now += step; reads.set(args[1], (reads.get(args[1]) ?? 0) + 1); }
+        return all.apply(statement, args);
+      };
+    }
+    return statement;
+  });
+  return { pages: budget => Math.ceil(budget / step),
+    reset() { reads.clear(); now = 0; scans = 0; },
+    get reads() { return Object.fromEntries(reads); }, get scans() { return scans; } };
+}
+
+test('one recall call splits the tail budget evenly across its read set; floors always complete', async t => {
+  const project = { ...namespace, scope: 'project', projectId: 'budget-split' };
+  const f = await layoutFixture(t, 'plain'); seed(f.db, 3073); seed(f.db, 3073, project, 10000);
+  const clock = tailPageClock(t);
+  clock.reset(); ok(await f.core.recall({ readSet: [namespace], query: 'note' }));
+  assert.deepEqual(clock.reads, { personal: clock.pages(namespaceScanBudgetMs(1)) });
+  clock.reset(); ok(await f.core.recall({ readSet: [namespace, project], query: 'note' }));
+  const share = clock.pages(namespaceScanBudgetMs(2));
+  assert.deepEqual(clock.reads, { personal: share, project: share });
+  assert.ok(share < clock.pages(namespaceScanBudgetMs(1)), 'two namespaces read fewer tail pages each');
+  clock.reset(); const empty = await f.core.recall({ readSet: [], query: 'note' });
+  assert.equal(empty.ok, false); assert.equal(empty.error.code, 'invalid_read_set');
+  assert.equal(clock.scans, 0, 'an empty read set prepares no scan'); assert.deepEqual(clock.reads, {});
+});
+
+test('a namespace share bounds only discovery; continuation replays the signed boundary under any share', async t => {
+  const f = await layoutFixture(t, 'plain'); seed(f.db, 3073);
+  const clock = tailPageClock(t);
+  clock.reset(); const first = query(f.runtime, 'note', { scanBudgetMs: namespaceScanBudgetMs(2) });
+  assert.equal(first.scanBoundary.stop, 'budget'); assert.ok(first.scanBoundary.rows > 1024);
+  clock.reset(); const floorOnly = query(f.runtime, 'note', { scanBudgetMs: 0 });
+  assert.equal(floorOnly.scanBoundary.rows, 1024); assert.equal(floorOnly.scanBoundary.stop, 'budget');
+  for (const scanBudgetMs of [0, namespaceScanBudgetMs(2), QUERY_SCAN_BUDGET_MS]) {
+    clock.reset();
+    const replay = query(f.runtime, 'note', { scanBoundary: first.scanBoundary, expectedEpoch: first.epoch, scanBudgetMs });
+    assert.deepEqual(replay.rows, first.rows); assert.deepEqual(replay.scanBoundary, first.scanBoundary);
+  }
+  for (const scanBudgetMs of [-1, 1.5, QUERY_SCAN_BUDGET_MS + 1, '200'])
+    assert.throws(() => query(f.runtime, 'note', { scanBudgetMs }), { code: 'invalid_input' });
 });
