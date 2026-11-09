@@ -17,6 +17,12 @@ const jsonl = (records) => records.map((record) => JSON.stringify(record)).join(
 const user = (text, extra = {}) => ({ type: "user", message: { content: text }, ...extra });
 const assistant = (text) => ({ type: "assistant", message: { content: [{ type: "text", text }] } });
 const command = (name) => user(`<command-name>/${name}</command-name>\n<command-message>${name}</command-message>\n<command-args></command-args>`);
+// Retry identity, source time, window and withheld content stay exact. Only the
+// attempt clock is expected to vary between otherwise identical requests.
+const stableCapture = ({ sent_at, ...body }) => {
+  assert.ok(Number.isFinite(Date.parse(sent_at)));
+  return body;
+};
 const skillTool = (name) => ({ type: "assistant", message: { content: [
   { type: "tool_use", id: "synthetic-skill", name: "Skill", input: { skill: name } },
 ] } });
@@ -248,7 +254,7 @@ test("failed frozen windows retry from their original skill-turn state and event
   await f.run();
   const calls = await f.calls();
   assert.equal(calls.length, 2);
-  assert.deepEqual(calls[0].body, calls[1].body);
+  assert.deepEqual(stableCapture(calls[0].body), stableCapture(calls[1].body));
   assert.deepEqual(calls[1].body.messages.map((m) => m.content), ["Normal followup", "Normal answer"]);
   assert.equal(calls[1].body.event_id, beforePlan(text, f.sessionId)[0].eventId);
   await f.run();
@@ -295,7 +301,7 @@ test("a retry ending in a skill turn does not suppress an earlier normal assista
   f.env.CAIRN_STATUS_FIXTURE_REPLY = JSON.stringify({ status: 200, body: { duplicate: false, memoryCount: 1 } });
   await f.run();
   const calls = await f.calls();
-  assert.deepEqual(calls[1].body, calls[2].body);
+  assert.deepEqual(stableCapture(calls[1].body), stableCapture(calls[2].body));
   assert.deepEqual(calls[2].body.messages.map((m) => m.content), ["Normal answer"]);
   assert.equal(calls[2].body.event_id, beforePlan(text, f.sessionId)[0].eventId);
   assert.equal((await f.cursor()).ownSkillTurn, true);

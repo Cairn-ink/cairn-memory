@@ -9,12 +9,13 @@ test('start boundaries exclude copied UUIDs and timestamps from the first captur
   const f = await harness(t);
   const copied = row('copied-1') + row('copied-2');
   await f.write(copied); await f.run('start', { source: 'resume' });
-  const state = await f.state();
-  assert.equal(state.startOffset, Buffer.byteLength(copied));
-  assert.equal(state.offset, state.startOffset); assert.ok(Date.parse(state.startedAt));
+  let state;
+  try { state = await f.state(); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   await appendFile(f.transcript, row('new', new Date().toISOString()));
   await f.run('capture');
   assert.deepEqual(f.captures.flatMap(body => body.messages.map(m => m.id)), ['new']);
+  assert.equal(state.startOffset, Buffer.byteLength(copied));
+  assert.equal(state.offset, state.startOffset); assert.ok(Date.parse(state.startedAt));
 });
 
 test('an asynchronous start shares the capture lock and preserves an existing cursor', async t => {
@@ -32,10 +33,12 @@ test('an asynchronous start shares the capture lock and preserves an existing cu
 test('recall fallback skips only the dated copied prefix when start did not run', async t => {
   const f = await harness(t); await f.write(row('copied-1') + row('copied-2'));
   await f.run('recall');
-  assert.ok(Date.parse((await f.state()).firstPromptAt));
+  let marker;
+  try { marker = await f.state(); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   await appendFile(f.transcript, row('new', new Date().toISOString()) + row('late-old-date', oldTime));
   await f.run('capture');
   assert.deepEqual(f.captures.flatMap(body => body.messages.map(m => m.id)), ['new', 'late-old-date']);
+  assert.ok(Date.parse(marker.firstPromptAt));
 });
 
 test('recall publishes one marker without waiting for a held capture lock', { timeout: 15000 }, async t => {
