@@ -134,6 +134,38 @@ async function searchCaptured(reader) {
   assert.fail('Captured Raw must be searchable through the registered MCP server; final content: ' + JSON.stringify(value?.content));
 }
 
+async function engineScript(f, source) {
+  assertFixtureClients(f.env, f.ws);
+  const d = await f.descriptor(), vector = Object.values(d.clients).find(Boolean).vector;
+  const engine = join(f.root, 'engine', vector.engineId, 'app/node_modules/cairn-memory-local-preview');
+  const result = await run(vector.node, ['--input-type=module', '-e',
+    `const path=${JSON.stringify(d.database.path)},engine=${JSON.stringify(pathToFileURL(engine + '/').href)};${source}`],
+  { env: f.env, cwd: f.ws });
+  assert.equal(result.code, 0, result.stderr); assert.equal(result.signal, null);
+  return JSON.parse(result.stdout);
+}
+// All SQLite access is through node:sqlite, in a dedicated closed child. Never
+// read database files through ordinary fs APIs or mix SQLite libraries.
+const snapshotDatabase = (f, localOnly = false) => engineScript(f, `
+  const {DatabaseSync}=await import('node:sqlite'),db=new DatabaseSync(path,{readOnly:true});
+  try {
+    const schema=db.prepare("SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL ORDER BY name").all()
+      .filter(row=>${localOnly ? "row.name.startsWith('local_raw_')" : 'true'});
+    const tables=schema.filter(row=>row.type==='table').map(({name})=>[name,
+      db.prepare('SELECT * FROM "'+name.replaceAll('"','""')+'"').all().map(row=>JSON.stringify(row)).sort()]);
+    console.log(JSON.stringify({schema,tables}));
+  } finally {db.close();}`);
+
+async function oldPackage(f) {
+  if (process.env.CAIRN_SETUP_065_PACKAGE) return process.env.CAIRN_SETUP_065_PACKAGE;
+  const archive = join(f.ws, 'old.tar');
+  const result = await run('git', ['archive', '--format=tar', '--output=' + archive, '77bc049e', 'packages/setup'],
+    { cwd: fileURLToPath(new URL('../../../', import.meta.url)) });
+  assert.equal(result.code, 0, result.stderr);
+  const unpack = await run('tar', ['-xf', archive, '-C', f.ws]); assert.equal(unpack.code, 0, unpack.stderr);
+  return join(f.ws, 'packages/setup');
+}
+
 test('fixture client guard rejects leaked Node bin and escaping clients before execution', async t => {
   const ws = createTestWorkspace(t, { prefix: 'client-guard-proof-' });
   const fixture = join(ws.path, 'fixture'), bin = join(fixture, 'bin'), marker = join(ws.path, 'ran');
@@ -302,33 +334,107 @@ test('packed Claude transcript created after SessionStart captures its first tur
   const reader = await mcp(f, t); await searchCaptured(reader); await reader.close();
 });
 
+test('packed hook → raw list → preview → delete → MCP empty → re-sent copies fenced', { timeout: 150000 }, async t => {
+  if (!needCache(t)) return;
+  const f = await fixture(t); await f.setup(['setup', '--local', '--owner', 'synthetic-raw-owner', '--project', 'synthetic-raw-project']);
+  const transcript = join(f.home, '.claude/projects/delete.jsonl'); await writeFile(transcript, '', { mode: 0o600 });
+  await f.hook('SessionStart', transcript); await f.append(transcript, 'copper telescope private delete sentinel'); await f.hook('Stop', transcript);
+  const reader = await mcp(f, t); await searchCaptured(reader); await reader.close();
+  const listed = await f.setup(['raw', 'list']);
+  assert.doesNotMatch(listed, /copper|telescope|private delete sentinel/);
+  const rows = listed.trim().split('\n').map(JSON.parse); assert.equal(rows.length, 1);
+  const row = rows[0], id = row.id;
+  assert.deepEqual(Object.keys(row).sort(), ['id','client','firstEventAt','lastEventAt','messageCount','byteCount','fenced','hidden'].sort());
+  assert.equal(row.client, 'claude-code'); assert.equal(row.messageCount, 1); assert.ok(row.byteCount > 0);
+  assert.ok(Date.parse(row.firstEventAt)); assert.ok(Date.parse(row.lastEventAt));
+  assert.equal(await f.setup(['raw', 'list', '--client', 'claude']), listed);
+  assert.equal(await f.setup(['raw', 'list', '--client', 'codex']), '');
+  const before = await snapshotDatabase(f);
+  const preview = await f.setup(['raw', 'delete', id]);
+  assert.doesNotMatch(preview, /copper|telescope|private delete sentinel/);
+  const dry = JSON.parse(preview); assert.equal(dry.dryRun, true);
+  for (const key of ['client','firstEventAt','lastEventAt','messageCount','byteCount']) assert.equal(dry[key], row[key]);
+  assert.deepEqual(await snapshotDatabase(f), before);
+  assert.match(await f.setup(['raw', 'delete', 'unknown-conversation', '--yes'], { expected: 1 }), /conversation_not_found/);
+  assert.deepEqual(await snapshotDatabase(f), before);
+  for (const args of [['raw','delete'], ['raw','delete','*','--yes'], ['raw','delete',id,id,'--yes'],
+    ['raw','delete',id,'--all'], ['raw','list','--yes'], ['raw','delete',id,'--db','/synthetic-override']])
+    await f.setup(args, { expected: 2 });
+  assert.deepEqual(await snapshotDatabase(f), before);
+  const deleted = await f.setup(['raw', 'delete', id, '--yes']);
+  assert.equal(JSON.parse(deleted).dryRun, false); assert.doesNotMatch(deleted, /copper|telescope|private delete sentinel/);
+  const checkEmpty = async () => {
+    const current = await mcp(f, t);
+    for (const intent of ['current','history']) {
+      const found = await current.call('read_memory_context', { query: 'copper telescope', types: ['memory'], intent, semantic: false, deadlineMs: 5000 });
+      assert.doesNotMatch(JSON.stringify(found), /private delete sentinel/);
+    }
+    await current.close();
+    const remaining = (await f.setup(['raw','list'])).trim().split('\n').filter(Boolean).map(JSON.parse);
+    assert.ok(remaining.every(value => value.messageCount === 0));
+  };
+  await checkEmpty();
+  // Resume the same wire session, then a fork with exactly the same message
+  // uuid. Invoke the real generated commands rather than the capture API.
+  await f.hook('SessionStart', transcript); await f.hook('Stop', transcript); await checkEmpty();
+  const fork = join(f.home, '.claude/projects/delete-fork.jsonl'); await copyFile(transcript, fork);
+  await f.hook('SessionStart', fork, '22222222-2222-4222-8222-222222222222');
+  await f.hook('Stop', fork, '22222222-2222-4222-8222-222222222222'); await checkEmpty();
+});
+
 test('packed cloud client refuses local setup without local capture', async t => {
   const f = await fixture(t, { cloud: true, codex: false });
   await f.setup(['setup', '--local'], { expected: 2 });
+  for (const args of [['raw','list'], ['raw','list','--client','claude'], ['raw','delete','unknown','--yes']])
+    assert.match(await f.setup(args, { expected: 2 }), /unavailable in cloud mode/);
   await assert.rejects(lstat(join(f.root, 'capture')), { code: 'ENOENT' });
   await assert.rejects(f.native('claude'), { code: 'ENOENT' });
+});
+
+test('packed raw management refuses an absent local installation', async t => {
+  const f = await fixture(t, { codex: false });
+  for (const args of [['raw','list'], ['raw','delete','unknown','--yes']])
+    assert.match(await f.setup(args, { expected: 2 }), /requires an installed local client/);
+  await assert.rejects(lstat(join(f.root, 'data')), { code: 'ENOENT' });
 });
 
 test('packed 0.6.5 → 0.6.6 upgrade, downgrade search and reinstall round trip', { timeout: 150000 }, async t => {
   if (!needCache(t)) return;
   const f = await fixture(t, { codex: false });
-  let old = process.env.CAIRN_SETUP_065_PACKAGE;
-  if (!old) {
-    const archive = join(f.ws, 'old.tar');
-    const result = await run('git', ['archive', '--format=tar', '--output=' + archive, '77bc049e', 'packages/setup'], { cwd: fileURLToPath(new URL('../../../', import.meta.url)) });
-    assert.equal(result.code, 0, result.stderr);
-    const unpack = await run('tar', ['-xf', archive, '-C', f.ws]); assert.equal(unpack.code, 0, unpack.stderr);
-    old = join(f.ws, 'packages/setup');
-  }
+  const old = await oldPackage(f);
   await f.setup(['setup', '--local'], { packagePath: old });
   await assert.rejects(lstat(join(f.root, 'capture')), { code: 'ENOENT' });
   const owner = (await f.descriptor()).ownerId;
   await f.setup(); assert.equal((await f.descriptor()).ownerId, owner);
   const transcript = join(f.home, '.claude/projects/upgrade.jsonl'); await writeFile(transcript, '', { mode: 0o600 });
   await f.hook('SessionStart', transcript); await f.append(transcript, 'copper telescope retained through downgrade'); await f.hook('Stop', transcript);
+  const localTables = await snapshotDatabase(f, true);
+  assert.ok(localTables.tables.length > 0);
   await f.setup(['setup', '--local'], { packagePath: old });
   // The descriptor now points MCP at the actual older engine, not a renamed new binary.
   const reader = await mcp(f, t); await searchCaptured(reader); await reader.close();
+  assert.deepEqual(await snapshotDatabase(f, true), localTables, '0.6.5 ignores and preserves the new local tables');
   assert.ok((await f.native('claude')).hooks.Stop, 'old setup leaves newer hooks registered');
   await f.setup(); assert.match(await f.setup(['status']), /local capture: on/);
+});
+
+test('packed attested store refuses 0.6.5 after 0.6.6 Raw open; reinstall restores access', { timeout: 150000 }, async t => {
+  if (!needCache(t)) return;
+  const f = await fixture(t, { codex: false });
+  await f.setup(['setup','--local','--no-capture']);
+  await engineScript(f, `const {openMemoryCore}=await import(engine+'core/index.mjs');
+    const core=openMemoryCore({path,contentSafety:'s2h-v1',raw:true,rawSearch:false});await core.close();console.log('true');`);
+  await f.setup(['config','--local-capture','on']);
+  const transcript = join(f.home, '.claude/projects/attested.jsonl'); await writeFile(transcript, '', { mode: 0o600 });
+  await f.hook('SessionStart', transcript); await f.append(transcript, 'copper telescope attested downgrade sentinel'); await f.hook('Stop', transcript);
+  const current = await mcp(f, t); await searchCaptured(current); await current.close();
+  const before = await snapshotDatabase(f);
+  const old = await oldPackage(f); await f.setup(['setup','--local'], { packagePath: old });
+  const refusal = await engineScript(f, `const {openMemoryCore}=await import(engine+'core/index.mjs');
+    try {const core=openMemoryCore({path,raw:true,rawSearch:false});await core.close();console.log(JSON.stringify({opened:true}));}
+    catch(error){console.log(JSON.stringify({code:error.code}));}`);
+  assert.deepEqual(refusal, { code: 'unsupported_database' });
+  assert.deepEqual(await snapshotDatabase(f), before, 'refused old open changes nothing');
+  await f.setup();
+  const restored = await mcp(f, t); await searchCaptured(restored); await restored.close();
 });

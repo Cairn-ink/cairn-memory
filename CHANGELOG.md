@@ -32,7 +32,7 @@
   removes hooks, retaining Raw, identity and the pinned runtime for reinstall.
 - Forget/correct hides conversations with messages within ±30 minutes of the
   memory save time. This can hide unrelated conversations and miss other
-  conversations about the same subject; delete a conversation directly to remove it.
+  conversations about the same subject; use `raw delete` to remove one.
 - Codex requires approving the entries in `/hooks`. A failed or pending format probe still installs hooks,
   with capture waiting for qualification. After a Codex update, hooks let the engine
   qualify the new binary in the background; if still unqualified or failed, rerun
@@ -43,8 +43,19 @@
 - Re-enabling keeps identity/data/fences and skips off-period text. Claude Code
   skips the first turn of an already-running conversation after re-enabling;
   subsequent turns resume. Hook latency: `<latency to be measured>`.
-- Reinstalling 0.6.5 keeps captured Raw searchable through its Raw/contextRead
-  tools. Its setup does not disable 0.6.6 hooks: they continue using the retained
+- `raw list [--client claude|codex]` lists metadata without text. Use
+  `raw delete <conversation-id>` to preview counts, client and time range;
+  add `--yes` to delete. One explicit id only, no wildcards; unknown ids fail
+  without changes. Both commands use the installed local MCP store and namespace
+  and refuse cloud mode or an absent local installation.
+- Delete removes the conversation's Raw messages and index rows, its Episodes,
+  and Cards sourced from it under the existing lineage rule. Re-sent copies
+  (fork, resume or cursor reset) are not archived again. Extracted Memories are
+  separate and keep their own forget.
+- Reinstalling 0.6.5 keeps captured Raw searchable in ordinary local stores and
+  leaves the new local tables intact, ignoring them. After 0.6.6 has opened an
+  attested content-safety store with Raw on, 0.6.5 refuses it with
+  `unsupported_database`; reinstall 0.6.6 to recover access. Its setup does not disable 0.6.6 hooks: they continue using the retained
   engine. Disable capture with 0.6.6 first to stop it before downgrading. A 0.6.5
   uninstall deletes the engine, so leftover hook commands cannot capture; Raw stays.
 - Engine bundle source sync: `4650256a`. Release acceptance must compare the

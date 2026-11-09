@@ -1617,6 +1617,20 @@ credential directories.
 
 ### 20.2 Notice, controls, status and removal
 
+`npx @cairn-ink/memory raw list [--client claude|codex]` lists conversation
+metadata only. `npx @cairn-ink/memory raw delete <conversation-id> [--yes]`
+accepts exactly one explicit id, with no wildcard or bulk selection. Without
+`--yes`, the engine previews counts, client and event-time range and changes
+nothing; unknown ids fail without changes. Both commands run the bundled engine
+CLI with the installed descriptor's MCP database, owner and optional project.
+The installer does not implement deletion or open SQLite. Cloud clients and
+absent local installations are refused. List filtering uses only the engine's
+client metadata; it never reads conversation text. Delete removes Raw/index
+rows, Episodes and sourced Cards under the existing lineage rule; session and
+UUID fences prevent re-sent copies from being archived. Extracted Memories keep
+their separate forget. The notice gives both commands in English and Traditional
+Chinese. The existing real-client guard also covers these packed tests.
+
 Before enabling each client's first capture installation, print one notice in
 the selected setup language (English or Traditional Chinese) and persist its
 receipt. Reruns do not repeat it. The notice states that conversation text from

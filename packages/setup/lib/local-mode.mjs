@@ -11,6 +11,7 @@ import { registerCodex, detachCodex, checkCodexLock, codexCapabilities } from '.
 import { shellArgument } from './output.mjs';
 import { configureCapture, captureStatus, captureSettings, retainedCapture } from './local-capture.mjs';
 import { SetupError } from './errors.mjs';
+import { rawLocal, validateRawOptions } from './local-raw.mjs';
 
 const clientNames = ['claude', 'codex'];
 const controls = ['disable', 'pause', 'resume', 'prompt-recall-on', 'prompt-recall-off', 'config'];
@@ -131,8 +132,9 @@ function validateLocalOptions(options, selection, descriptor) {
 }
 export async function routeLocalMode(options, selection, context) {
   const [action, ...flags] = selection.argv;
-  if (!['setup', 'status', 'uninstall', ...controls].includes(action)) { context.beforeRouting?.(); return { handled: false }; }
-  if (flags.some(flag => !['--dry-run', '--no-browser', '--no-clipboard', '--manual-token', '--reauthorize'].includes(flag)) ||
+  if (!['raw', 'setup', 'status', 'uninstall', ...controls].includes(action)) { context.beforeRouting?.(); return { handled: false }; }
+  if (action === 'raw') validateRawOptions(options, selection);
+  else if (flags.some(flag => !['--dry-run', '--no-browser', '--no-clipboard', '--manual-token', '--reauthorize'].includes(flag)) ||
       (action !== 'setup' && flags.length)) { context.beforeRouting?.(); throw new SetupError('unknown_command', 2); }
   if (!context.supportedNode(context.nodeVersion)) { context.beforeRouting?.(); throw new SetupError('node_required'); }
   const { write, t, interactive, prompt } = context;
@@ -141,6 +143,7 @@ export async function routeLocalMode(options, selection, context) {
   if (action === 'setup' && (options.local || union === 'local' || (detection.descriptorError && !options.cloud)))
     validateLocalOptions(options, selection, descriptor);
   context.beforeRouting?.();
+  if (action === 'raw') return { handled: true, code: await rawLocal(options, selection, detection, context) };
   if (action === 'uninstall' && options.local) {
     validateLocalOptions(options, selection, descriptor);
     return { handled: true, code: await uninstallLocal(options, selection, detection, context) };

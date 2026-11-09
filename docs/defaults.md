@@ -17,6 +17,31 @@ for an already-running Claude Code conversation, the first turn after re-enablin
 Hook latency: `<latency to be measured>`.
 
 
+Forgetting or correcting a memory hides conversations with messages within
+30 minutes before or after when it was saved. This can hide unrelated
+conversations and miss others about the same subject. To remove a conversation:
+
+```sh
+npx @cairn-ink/memory raw list [--client claude|codex]
+npx @cairn-ink/memory raw delete <conversation-id> [--yes]
+```
+
+List prints metadata only, never text. Delete requires one explicit id without
+wildcards and previews counts, client and time range by default. `--yes` removes
+that conversation's Raw messages and index rows, its Episodes, and Cards sourced
+from it under the existing lineage rule. Unknown ids fail without changes.
+Re-sent copies (fork, resume or cursor reset) are not archived again. Extracted
+Memories are separate and keep their own forget. The installer uses its installed
+MCP database/owner/project; cloud mode or absent local installation is refused.
+
+Going back to 0.6.5 leaves captured Raw searchable in ordinary local stores;
+the new local tables remain intact and 0.6.5 ignores them. After 0.6.6 opens an
+attested content-safety store with Raw on, 0.6.5 refuses it with
+`unsupported_database`; reinstall 0.6.6 to recover access. Old setup leaves
+0.6.6 hooks using their retained engine. To stop them, turn capture off with
+0.6.6 before downgrading. A 0.6.5 uninstall removes the engine and keeps Raw,
+leaving any remaining hooks unable to capture.
+
 A local install retains submitted captures as Raw and maintains a searchable
 index. The MCP server exposes `find_memory_candidates`,
 `fetch_memory_candidate_evidence`, and `read_memory_context` alongside the old
@@ -78,7 +103,7 @@ windows also fence later arrivals; both Raw search intents enforce the fence.
 Hiding anchors on when the memory was saved or corrected; the saving turn
 normally has a captured message nearby. A conversation with no captured message
 near that time, no range crossing the window and no named receipt is not hidden.
-You can delete it directly. This is a known limit for delayed memory saves.
+Use `raw delete` to remove it. This is a known limit for delayed memory saves.
 
 If an existing attested layout cannot hold the Raw capabilities, `raw:true`
 opens Memory-only and reports `raw:'unsupported_store'` in Raw search status;

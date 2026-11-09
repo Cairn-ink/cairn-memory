@@ -38,8 +38,8 @@ qualification state and reason without launching Codex.
 
 Forgetting or correcting a memory hides whole conversations with messages within
 30 minutes before or after its save time. This can include unrelated conversations
-and miss other conversations about the same subject. Delete a conversation
-directly to remove it. A fork or resume of a hidden conversation stays hidden.
+and miss other conversations about the same subject. To remove a conversation,
+use the commands below. A fork or resume of a hidden conversation stays hidden.
 Codex forks aren't saved locally. New Claude Code sessions are captured from
 their first turn, including when the transcript appears after session start.
 Turning capture back on preserves those hiding fences.
@@ -49,11 +49,32 @@ conversation after re-enabling; subsequent turns resume.
 
 `uninstall --local` disables capture and removes its hooks and MCP registration,
 keeping Raw, identity and the pinned engine runtime so setup can restore capture.
-You can reinstall 0.6.5: captured Raw remains in the database and remains searchable
-with its Raw/contextRead tools. Running 0.6.5 setup does not disable existing 0.6.6
-hooks; they continue using their retained engine. Turn capture off with 0.6.6
-before downgrading if you want it stopped. A 0.6.5 uninstall removes the engine,
-leaving any still-registered 0.6.6 hook commands unable to capture; it keeps Raw.
+To inspect and remove one conversation:
+
+```sh
+npx @cairn-ink/memory raw list
+npx @cairn-ink/memory raw list --client claude
+npx @cairn-ink/memory raw delete <conversation-id>
+npx @cairn-ink/memory raw delete <conversation-id> --yes
+```
+
+`raw list` shows ids, clients, time ranges, counts and hidden/fenced status,
+never text; `--client claude|codex` filters the list. Delete accepts one explicit
+id without wildcards. It previews counts, client and time range unless `--yes`
+is given. An unknown id fails without changes. Both commands require an installed
+local client and refuse cloud mode. They use the same store and namespace as MCP.
+Deletion removes the conversation's Raw messages and index rows, its Episodes,
+and Cards sourced from it under the existing lineage rule. Re-sent copies
+(fork, resume or cursor reset) are not archived again. Memories extracted from
+it are separate and keep their own forget.
+
+Going back to 0.6.5: ordinary local stores keep captured Raw searchable through
+0.6.5's Raw/contextRead tools. The new local tables remain intact; 0.6.5 ignores
+them. After 0.6.6 has opened an **attested content-safety store with Raw on**,
+0.6.5 refuses that store with `unsupported_database`. Reinstall 0.6.6 to recover
+access. Running 0.6.5 setup leaves 0.6.6 hooks registered and using their retained
+engine. Turn capture off with 0.6.6 before downgrading if you want it stopped.
+A 0.6.5 uninstall removes the engine, so leftover hooks cannot capture; Raw stays.
 
 安裝器 **0.6.6 已備妥，尚未發布**。引擎同步自 `4650256a`，發布驗收會依照
 既有同步規則，比對整份引擎封裝與該 commit 的內容。
@@ -72,7 +93,7 @@ Codex 更新後，背景驗證通過就會恢復擷取；若持續等待或驗�
 status 讀取引擎上次觀察到的驗證狀態與原因，不啟動 Codex。
 
 忘記或更正記憶時，也會隱藏在記憶保存時間前後 30 分鐘內有訊息的整段對話。
-這可能包含無關對話，也可能漏掉其他談到相同主題的對話，可直接刪除個別對話。
+這可能包含無關對話，也可能漏掉其他談到相同主題的對話。要移除對話，請用 raw delete。
 隱藏對話的分支或續接仍會保持隱藏。Codex 分支對話不會存進本機。
 Claude Code 新對話從第一輪開始保存，包含逐字稿在 session start 之後才建立的情況。
 重新開啟擷取會保留這些隱藏規則，既有對話從下一個實際 hook 看到的逐字稿結尾
@@ -80,10 +101,32 @@ Claude Code 新對話從第一輪開始保存，包含逐字稿在 session start
 也不會保存，後續輪次才恢復。
 
 `uninstall --local` 會關閉擷取、移除 hooks 與 MCP 連接，保留 Raw、身分與綁定的
-引擎，讓重跑 setup 可以恢復。可以重裝 0.6.5，已保存的 Raw 仍留在資料庫，
-可透過它的 Raw/contextRead 工具搜尋。0.6.5 setup 不會關閉 0.6.6 的 hooks，
-它們會繼續使用保留的引擎。若要停止，請先用 0.6.6 關閉擷取再降版。
-0.6.5 的解除安裝會移除引擎，讓還留著的 0.6.6 hook 指令無法擷取，但 Raw 會保留。
+引擎，讓重跑 setup 可以恢復。要查看或移除一段對話：
+
+```sh
+npx @cairn-ink/memory raw list
+npx @cairn-ink/memory raw list --client codex
+npx @cairn-ink/memory raw delete <conversation-id>
+npx @cairn-ink/memory raw delete <conversation-id> --yes
+```
+
+`raw list` 只列出 id、工具、時間範圍、數量與隱藏／封鎖狀態，不顯示文字；
+可用 `--client claude|codex` 篩選。刪除時一次只能指定一個明確的 id，不能用
+萬用字元。預設只預覽數量、工具與時間範圍，加上 `--yes` 才會刪除；未知 id
+會報錯且不改動資料。這兩個指令需要已安裝的本機工具，雲端模式不能使用，
+資料庫與命名空間都沿用 MCP 的設定。
+
+刪除會移除該對話的 Raw 訊息與索引列、Episodes，以及依既有來源關聯規則
+判定來自該對話的 Cards。分支、續接或游標重設後重送的副本不會再次保存。
+從對話抽取的 Memories 是獨立資料，仍要各自執行 forget。
+
+降回 0.6.5 時，一般本機資料庫裡已保存的 Raw 仍可透過它的 Raw/contextRead
+工具搜尋，新增的本機資料表會完整保留，0.6.5 不會使用它們。但若 0.6.6 已經在
+**開啟 Raw 的情況下開過經驗證的 content-safety 資料庫**，0.6.5 會以
+`unsupported_database` 拒絕開啟；重裝 0.6.6 就能恢復存取。
+0.6.5 setup 不會關閉 0.6.6 的 hooks，它們會繼續使用保留的引擎；若要停止，
+請先用 0.6.6 關閉擷取再降版。0.6.5 解除安裝會移除引擎，讓留下的 hooks
+無法擷取，但 Raw 會保留。
 
 ## Setup / 安裝
 
