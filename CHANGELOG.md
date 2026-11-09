@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.5 — Unreleased
+## 0.6.5 — 2026-11-09: current engine and Codex capture stop notice
 
 - 0.6.4 was prepared but not published; its changes ship in 0.6.5.
 - Hosted Codex SessionStart shows a short notice when format qualification
@@ -32,9 +32,11 @@
   `--no-raw-search`, and `--no-context-read` disable the respective defaults;
   see [defaults and off switches](docs/defaults.md).
 - You can go back to 0.6.3; it keeps working with the upgraded store, but conversations captured while on 0.6.3 are not kept as Raw.
-- Prepared and unpublished; after publication, rerun setup to install 0.6.5's
-  engine, Codex notice/status updates and the prompt recall deadline. Existing
-  installed runtimes stay in use until setup is rerun.
+- `npx @cairn-ink/memory` now runs 0.6.5. Rerun `npx @cairn-ink/memory setup`
+  to install 0.6.5's engine, Codex notice/status updates and the prompt recall
+  deadline; installed runtimes stay in use until setup is rerun.
+- The npm package was built from `77bc049e`. Its bundled engine is
+  byte-identical to `main` at `35a29c14`.
 
 ## 0.3.4 — 2026-11-09: hosted recall deadline
 
@@ -74,12 +76,12 @@ release.
   engine-owned outputs and is readable by the trusted Worker-local host and its
   dependencies.
 
-## Unreleased — Cairn Memory discovery metadata
+## Installer 0.6.5 — Cairn Memory discovery metadata
 
 - Add focused npm search keywords and point the package homepage to Cairn.ink.
 - Clarify the relationship between Cairn Memory and Cairn.ink in the package and
-  repository README entry points. These metadata and documentation changes are
-  not in the published installer; installer version and behavior are unchanged.
+  repository README entry points. The package metadata first shipped in
+  installer 0.6.5; it does not change installer behavior.
 
 ## 0.6.3 — 2026-11-03: Codex 0.164.0–0.166.0 format requalification
 

@@ -99,7 +99,7 @@ Cairn 提供工具，讓你把這些偏好或決定存成記憶，下次可以�
 npx @cairn-ink/memory setup
 ```
 
-Installer **0.6.3** 已於 2026-11-03 發布，修正 Codex 0.164.0–0.166.0 的格式資格，
+Installer **0.6.5** 已於 2026-11-09 發布，帶入目前的引擎與雲端 Codex 停止保存提醒，
 可直接用上方指令；第一次互動安裝會問要用本機
 MCP 工具，或登入 cairn.ink 使用雲端自動記憶，也可用 `setup --local`／
 `setup --cloud` 直接選擇，首次非互動執行時需指定 `--local`／`--cloud`；

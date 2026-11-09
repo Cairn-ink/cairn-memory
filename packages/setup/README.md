@@ -9,23 +9,17 @@ local MCP tools or cloud automatic memory.
 
 Requires Node ≥22.16 and the selected CLI on PATH. The installer itself has no
 runtime dependencies.
-This README describes **installer 0.6.3**, published on 2026-11-03. The Claude
-plugin is **0.3.3**. 0.6.3 requalifies Codex 0.164.0–0.166.0; the engine is
-unchanged from 0.6.2 except the Codex format qualification modules. Existing
-EOF boundaries, pending batches and permanent format latches keep their
-behaviour. Existing cloud-mode Codex users must rerun setup to install the
-updated runtime.
-
-Installer **0.6.5 is prepared and unpublished**. 0.6.4 was prepared but not
-published; its changes ship in 0.6.5. Hosted Codex SessionStart reports a format
+This README describes **installer 0.6.5**, published on 2026-11-09. The Claude
+plugin is **0.3.4**. 0.6.4 was prepared but not published; its changes ship in
+0.6.5. Hosted Codex SessionStart reports a format
 qualification pause or a missing or unreadable sign-in, at most once per local
 calendar day; intentional pauses and the daily cap stay quiet.
 `status --client codex` shows the last locally recorded, service-acknowledged
 capture in local time, or says none is recorded yet. Exec status aligns with
 its siblings. Hosted Codex prompt recall gets the plugin 0.3.4 deadline: up to
-2,500 ms from the first recall fetch, inside a 3,000 ms prompt-hook cap. After
-publication, rerun setup to install the engine, these runtime diagnostics and
-the recall deadline.
+2,500 ms from the first recall fetch, inside a 3,000 ms prompt-hook cap. Rerun
+setup to install the engine, these runtime diagnostics and the recall deadline;
+installed runtimes stay in use until then.
 
 0.6.5 ships the current engine synced from `main` at `35a29c14`. Local users get
 dated three-layer contextRead over saved memories by default:
@@ -48,13 +42,13 @@ on this computer; Raw has a default 200,000,000-byte owner cap. Use `--no-raw`,
 the respective defaults; see [defaults and off switches](../../docs/defaults.md).
 You can go back to 0.6.3; it keeps working with the upgraded store, but conversations captured while on 0.6.3 are not kept as Raw.
 
-安裝器 **0.6.5 已備妥，尚未發布**。0.6.4 已備妥但未發布，改動併入 0.6.5。
+安裝器 **0.6.5** 已於 2026-11-09 發布，Claude 外掛為 **0.3.4**。0.6.4 已備妥但未發布，改動併入 0.6.5。
 雲端 Codex 開始對話時，若格式資格檢查暫停，或登入資料遺失、無法讀取，
 每個本機日最多提醒一次；自行暫停或達到每日上限時不提醒。
 `status --client codex` 會顯示上次有本機紀錄、服務已確認的保存時間
 （本機時間），沒有紀錄就如實顯示。Exec 狀態也採用相同呈現方式。
 雲端 Codex 的提示回憶改用外掛 0.3.4 的時限：從第一次回憶請求起最多 2,500 ms，
-整個提示 hook 上限 3,000 ms。發布後請重跑 setup，才會安裝新版引擎、
+整個提示 hook 上限 3,000 ms。請重跑 setup，才會安裝新版引擎、
 這些診斷功能與新的回憶時限。
 
 0.6.5 的引擎同步自 `main` 的 `35a29c14`。本機使用者預設可透過
