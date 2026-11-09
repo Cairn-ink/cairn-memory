@@ -4,6 +4,8 @@ import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { captureCursorPath, writeCaptureCursor } from '../lib/capture-cursor.mjs';
+import { hostedTargetId } from '../lib/http.mjs';
 import { createServer } from 'node:http';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 
@@ -45,7 +47,7 @@ async function fixture(t, observation = () => active, memories = []) {
     CLAUDE_PLUGIN_OPTION_TELEMETRY: 'false' };
   const input = { session_id: 'synthetic-session', prompt: 'Synthetic recall query.',
     transcript_path: transcript, cwd: ws.path, capture_generation: 'initial' };
-  return { counts, env, input, captures, transcript, root };
+  return { counts, env, input, captures, transcript, root, endpoint };
 }
 async function run(t, f, action, { entry = hook, preload = nativePreload, onSpawn } = {}) {
   const events = [], started = performance.now();
@@ -77,9 +79,14 @@ for(const action of ['recall','capture','capture-detached']) {
   });
   for(const [label,bad] of [['paused',paused],['unavailable',undefined],['regressed',{...active,generation:0}]]) {
     for(const at of (label==='regressed'?[2]:[1,2])) test(`native ${action} blocks ${label} at observation ${at}`,{timeout:10000},async t=>{
-      const f=await fixture(t,number=>number>=at?bad:{...active,generation:1});
+      const before=label==='regressed'?{...active,generation:1}:active;
+      const f=await fixture(t,number=>number>=at?bad:before);
+      if(label==='regressed' && action!=='recall')await writeCaptureCursor(captureCursorPath(f.root,f.input.session_id),{
+        offset:0,generation:'initial',discardUntilNewline:false,hostedGeneration:1,hostedTarget:hostedTargetId({endpoint:f.endpoint}),
+      });
       const result=await run(t,f,action);
       assert.equal(f.counts.recall+f.counts.capture,0,'native_denied_content');assert.equal(result.stdout,'');
+      assert.equal(f.counts.pause,at,'native_denial_observation_reached');
     });
   }
 }
@@ -114,4 +121,12 @@ for(const endpoint of ['file:///synthetic/local','stdio://synthetic'])test(`nati
   const f=await fixture(t);f.env.CLAUDE_PLUGIN_OPTION_API_ENDPOINT=endpoint;
   for(const action of ['recall','capture','capture-detached'])assert.equal((await run(t,f,action)).stdout,'');
   assert.deepEqual(f.counts,{pause:0,recall:0,capture:0,other:0});
+});
+
+for(const action of ['capture','capture-detached'])test(`native ${action} observes before each batch`,{timeout:10000},async t=>{
+  const f=await fixture(t,number=>number<3?active:paused);
+  await writeFile(f.transcript,Array.from({length:25},(_,index)=>JSON.stringify({type:'user',uuid:'message-'+index,message:{content:'Synthetic message '+index}})).join('\n')+'\n');
+  await run(t,f,action);
+  assert.equal(f.counts.pause,3,'every_batch_observes');assert.equal(f.counts.capture,1,'second_batch_blocked');
+  assert.equal(f.captures.flatMap(body=>body.messages).length,24);
 });

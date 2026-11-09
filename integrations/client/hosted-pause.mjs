@@ -136,6 +136,16 @@ function olderIntentName(name, remote) {
   return match && (Number(match[1]) < remote.generation ||
     (Number(match[1]) === remote.generation && match[2] === 'true' && !remote.paused));
 }
+async function pruneIntents(config, intent) {
+  const directory = intentDirectory(config);
+  // A concurrent higher intent may be visible before its writer's directory
+  // sync. Finish that sync ourselves before deleting any dominated authority.
+  await syncDirectory(directory);
+  for (const name of await privateList(directory)) {
+    if (olderIntentName(name, intent)) await privateRemove(join(directory, name));
+  }
+  await syncDirectory(directory);
+}
 async function highestIntent(config) {
   const directory = intentDirectory(config);
   const checkpoint = await privateRead(highWaterPath(config), { missing: true });
@@ -248,15 +258,18 @@ async function observe(config, token, signal) {
     if ((!previous && (remote.generation > 0 || remote.paused)) ||
         (previous && (remote.generation !== previous.generation || remote.paused !== previous.paused))) {
       const publish = async () => {
-      const directory = intentDirectory(config);
-      await privateDirectory(directory);
-      // Persist newly created ancestor entries too. A concurrent writer may
-      // already expose the directory/record while its sync is still pending.
-      await syncDirectory(config.root);
-      await syncDirectory(join(config.root, 'hosted-pause'));
-      // Identical exclusive publications are safe across processes. Even when
-      // the name exists, finish its directory sync before attempting the lock.
-      await privateWrite(join(directory, intentName(remote) + '.json'), intentBytes(remote), { exclusive: true });
+        const directory = intentDirectory(config);
+        await privateDirectory(directory);
+        // Persist newly created ancestor entries too. A concurrent writer may
+        // already expose the directory/record while its sync is still pending.
+        await syncDirectory(config.root);
+        await syncDirectory(join(config.root, 'hosted-pause'));
+        // Identical exclusive publications are safe across processes. Even when
+        // the name exists, finish its directory sync before attempting the lock.
+        await privateWrite(join(directory, intentName(remote) + '.json'), intentBytes(remote), { exclusive: true });
+        // Bound pending history even when rotation/publication repeatedly fails.
+        // The durable maximum intent alone supersedes every older intent/receipt.
+        await pruneIntents(config, await highestIntent(config));
       };
       let entered = false;
       try {
@@ -295,13 +308,10 @@ async function observe(config, token, signal) {
       await writeOnce(completion, intentBytes(remote));
       const checkpoint = await privateRead(highWaterPath(config), { missing: true });
       if (checkpoint !== intentBytes(remote) || intent.needsPrune) {
-        // Only changed observations compact. Never delete authority until both
-        // publication and receipt are durable and the high water is synced.
+        // Completed observations checkpoint authority before final compaction.
+        // A retry also finishes pruning interrupted after the checkpoint sync.
         await privateWrite(highWaterPath(config), intentBytes(remote));
-        for (const name of await privateList(intentDirectory(config))) {
-          if (olderIntentName(name, remote)) await privateRemove(join(intentDirectory(config), name));
-        }
-        await syncDirectory(intentDirectory(config));
+        await pruneIntents(config, remote);
       }
     }
     return remote;
