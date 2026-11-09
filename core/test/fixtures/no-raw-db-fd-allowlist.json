@@ -1201,7 +1201,7 @@
   },
   {
     "path": "integrations/codex/entry.mjs",
-    "source": "import { write, writeSync } from 'node:fs'",
+    "source": "import { write } from 'node:fs'",
     "reason": "Writes only inherited standard/terminal descriptors; this import cannot open a filesystem path."
   },
   {

@@ -106,7 +106,7 @@ const durabilityRuntimeChanges = new Map([
   ['integrations/codex/entry.mjs', {
     historical: '558a2f9f5cbed3c4e08146626708ba5ab4374e6938fa9c2e1cdc935d50580952',
     before: '0182cc90faddafeea34b8ba11a4c96805f74140117c1ee4b4ad118ca47b0d331',
-    current: '0c483d5f0b081b46ebc173f4d6718aebc8188804eace7844ed2d13adb5abbe7a',
+    current: '482cfba5f620b573d394e435ee69cacba0b262dd3010170c80108ca5438e2ee6',
   }],
   ['integrations/client/private-state.mjs', {
     historical: 'ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64',
