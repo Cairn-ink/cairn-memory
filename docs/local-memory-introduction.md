@@ -12,7 +12,7 @@ npx @cairn-ink/memory status
 npx @cairn-ink/memory uninstall --local
 ```
 
-Installer 0.6.3 was published on 2026-11-03; a checkout can also run
+Installer 0.6.5 was published on 2026-11-09; a checkout can also run
 `node packages/setup/bin/memory.mjs setup --local`. A fresh interactive `setup`
 asks once for local or cloud storage; non-interactive runs need `--local` or
 `--cloud`. Existing cloud users keep their flow. Local mode registers
@@ -34,12 +34,14 @@ the tools share the database. Conflicts require ordered detachment, with no
 cloud/local data migration. Linux/WSL are tested, macOS is untested, and native
 Windows local setup is refused. See the [installer guide](../packages/setup/README.md).
 
-Installer 0.6.3 已於 2026-11-03 發布，也可用上方原始碼指令。第一次互動安裝會問一次
+Installer 0.6.5 已於 2026-11-09 發布，也可用上方原始碼指令。第一次互動安裝會問一次
 本機或雲端，非互動時需用 `--local`／`--cloud`，既有雲端使用者維持原流程。
 本機模式為 Claude Code、Codex 註冊 `cairn-local` stdio MCP，預設共用上述
 SQLite 路徑，也能用絕對路徑的 `CAIRN_MEMORY_HOME` 指定根目錄；外部資料庫
 可在首次安裝時用 `setup --local --db <absolute path>` 指定。第一次安裝引擎
-需要 npm registry 或已備妥的快取，不會開啟引擎選用功能、自動保存或回想。
+需要 npm registry 或已備妥的快取。提供明確的記憶工具與建議使用的 contextRead
+工具；提交保存的對話會保留成 Raw，並可在背景搜尋，但不會安裝自動保存對話，
+見[預設值](defaults.md)。
 語意回想沒有金鑰時回報 `model_not_configured`；若工具
 環境已有 `OPENAI_API_KEY`，引擎會使用它，並把選取的文字傳給模型供應商。
 安裝器讀取有大小上限的 Claude 註冊設定，只取出指定 MCP 註冊欄位，
