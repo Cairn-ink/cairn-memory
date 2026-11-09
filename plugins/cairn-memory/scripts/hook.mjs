@@ -240,6 +240,8 @@ async function recordFirstPrompt(hookInput) {
 
 // Match the server copied-history allowance for prompt timestamp/startup latency.
 const FIRST_PROMPT_MARGIN_MS = 10 * 60 * 1000;
+// Internal test copies lower this cap while retaining the legacy batch layout.
+const CAPTURE_WINDOW_SLICES = 4096;
 
 // Skip only a leading copied prefix, not older timestamps later in a new turn.
 function copiedPrefix(bytes, firstPromptAt) {
@@ -426,7 +428,7 @@ async function captureLocked(hookInput, statePath, generation) {
   }
 
   // Preserve every legacy batch, including its event id. Only sent batches
-  // participate in numbering; metadata groups cap at 64 without dropping data.
+  // participate in numbering; metadata groups cap at 4096 without dropping data.
   const sent = [];
   for (let index = 0; index < window.length; index += 24) {
     const batch = window.slice(index, index + 24);
@@ -440,7 +442,7 @@ async function captureLocked(hookInput, statePath, generation) {
   }
   const projectId = await clientProjectId(clientOptions, hookInput.cwd, binding);
   for (const [index, { batch, messages }] of sent.entries()) {
-    const group = Math.floor(index / 64) * 64;
+    const group = Math.floor(index / CAPTURE_WINDOW_SLICES) * CAPTURE_WINDOW_SLICES;
     const windowStart = group === 0 ? offset : sent[group].start;
     const result = await post(
       "/api/memory/capture",
@@ -453,7 +455,7 @@ async function captureLocked(hookInput, statePath, generation) {
         window: {
           id: createHash("sha256").update(JSON.stringify([hookInput.session_id, windowStart])).digest("hex"),
           slice: index - group + 1,
-          slices: Math.min(64, sent.length - group),
+          slices: Math.min(CAPTURE_WINDOW_SLICES, sent.length - group),
           initial,
         },
         sent_at: new Date().toISOString(),

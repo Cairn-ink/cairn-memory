@@ -16,7 +16,7 @@ test('every sent slice retains initial and window identity across a refused firs
   await appendFile(f.transcript, row('later-window'));
   // A late asynchronous start may add a boundary, but cannot reclassify the
   // already-frozen initial range or absorb its newly appended suffix.
-  await f.run('start', { source: 'resume' });
+  await f.run('start-boundary', { source: 'resume' });
   await f.run('capture');
   assert.equal(f.captures.length, 3);
   assert.ok(f.captures.every(body => body.window?.initial === true));
@@ -53,7 +53,7 @@ test('message time is copied byte for byte and send time belongs to each attempt
 });
 
 test('a new empty start has initial false and captures its entire first turn', async t => {
-  const f = await harness(t); await f.write(''); await f.run('start');
+  const f = await harness(t); await f.write(''); await f.run('start-boundary');
   await appendFile(f.transcript, row('first-user') + row('first-answer', oldTime, { type: 'assistant' }));
   await f.run('capture');
   assert.deepEqual(f.captures[0].messages.map(m => m.id), ['first-user', 'first-answer']);
@@ -71,8 +71,8 @@ test('fallback is still initial on every sent slice and after a refused attempt'
   assert.equal(new Set(f.captures.map(body => body.window.id)).size, 1);
 });
 
-test('more than 64 sent batches are all sent in bounded metadata windows without changing event IDs', async t => {
-  const f = await harness(t);
+test('65 sent batches cross a lowered four-slice limit without changing event IDs', async t => {
+  const f = await harness(t, { groupingLimit: 4 });
   const text = Array.from({ length: 24 * 64 + 1 }, (_, n) => row(`message-${n}`)).join('');
   await f.write(text); await f.run('capture');
   assert.equal(f.captures.length, 65);
@@ -80,15 +80,14 @@ test('more than 64 sent batches are all sent in bounded metadata windows without
   const legacy = legacyTranscriptMessages(text, f.sessionId);
   assert.deepEqual(f.captures.map(body => body.event_id), Array.from({ length: 65 }, (_, n) =>
     captureEventId(f.sessionId, legacy.slice(n * 24, n * 24 + 24))));
-  for (const body of f.captures.slice(0, 64)) {
-    assert.equal(body.window.slices, 64); assert.equal(body.window.initial, true);
+  for (let i = 0; i < 65; i++) {
+    const group = Math.floor(i / 4) * 4;
+    assert.equal(f.captures[i].window.slice, i - group + 1);
+    assert.equal(f.captures[i].window.slices, Math.min(4, 65 - group));
+    assert.equal(f.captures[i].window.initial, true);
+    assert.equal(f.captures[i].window.id, f.captures[group].window.id);
+    if (group > 0) assert.notEqual(f.captures[group].window.id, f.captures[group - 1].window.id);
   }
-  assert.ok(f.captures.every(body => body.window.initial === true));
-  assert.equal(new Set(f.captures.slice(0, 64).map(body => body.window.id)).size, 1);
-  assert.deepEqual(f.captures.slice(0, 64).map(body => body.window.slice), Array.from({ length: 64 }, (_, n) => n + 1));
-  assert.equal(f.captures[63].window.slice, 64);
-  assert.equal(f.captures[64].window.slice, 1); assert.equal(f.captures[64].window.slices, 1);
-  assert.notEqual(f.captures[64].window.id, f.captures[0].window.id);
 });
 
 test('capture racing a recall fetch freezes initial before the late marker and retries unchanged', { timeout: 15000 }, async t => {
