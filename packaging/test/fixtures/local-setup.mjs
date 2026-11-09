@@ -76,7 +76,7 @@ export async function installedSetupFixture(t,client='claude-code'){
   function exact(event){const config=JSON.parse(fs.readFileSync(clientConfigPath)),command=config.hooks[event].flatMap(group=>group.hooks).find(hook=>hook.type==='command').command;
     const argv=[...command.matchAll(/'([^']*)'/g)].map(match=>match[1]);assert.deepEqual(argv,['/usr/bin/env','-u','NODE_OPTIONS','-u','NODE_PATH',process.execPath,
       join(installed,'integrations/client/raw/local-setup-cli.mjs'),'hook','--installation',installationDirectory,'--event',event]);
-    const outcome=cp.spawnSync('/bin/sh',['-c',command],{cwd:base,encoding:'utf8',timeout:12000,input:JSON.stringify({hook_event_name:event,session_id:sessionId,transcript_path:sourcePath}),env:environment});
+    const outcome=cp.spawnSync(argv[0],[...argv.slice(1,6),'--import',fileURLToPath(new URL('./local-codex-preload.mjs',import.meta.url)),...argv.slice(6)],{cwd:base,encoding:'utf8',timeout:12000,input:JSON.stringify({hook_event_name:event,session_id:sessionId,transcript_path:sourcePath}),env:environment});
     assert.equal(outcome.error,undefined);assert.equal(outcome.status,0,outcome.stderr);assert.equal(outcome.signal,null);assert.equal(outcome.stdout,'');receipts.push({action:'exact-generated-'+event,code:outcome.status,signal:outcome.signal});return argv;
   }
   const observed=()=>{const seen=new Set();for(const name of fs.readdirSync(base).filter(name=>/^(driver-|child-).*\.jsonl$/.test(name)))for(const row of rows(join(base,name)))if(row.path?.startsWith(installed+'/'))seen.add(relative(installed,row.path));return [...seen].sort()};

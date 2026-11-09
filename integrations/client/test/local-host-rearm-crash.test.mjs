@@ -209,11 +209,8 @@ for(const signal of['SIGTERM','SIGINT'])process.on(signal,()=>child.kill(signal)
 function deleteCaptured(f) {
   const conversation = ok(f.core.listRawConversations({ namespace:f.namespace,client:f.client })).conversations[0];
   assert.ok(conversation);
-  // A local owner deletion drains the UUID guard before discarding source IDs.
-  // A retained non-local handle intentionally cannot bypass that preflight.
-  const local=openMemoryCore({path:f.databasePath,raw:true,rawSearch:false});
-  try {ok(local.deleteConversation({ namespace:f.namespace,conversationId:conversation.id,expectedRevision:conversation.revision,actionId:randomUUID() }));}
-  finally {local.close();}
+  // Retained/off handles recover the guard through durable bounded preflight.
+  ok(f.core.deleteConversation({ namespace:f.namespace,conversationId:conversation.id,expectedRevision:conversation.revision,actionId:randomUUID() }));
 }
 function publications(f) {
   return [paths(f).cursor,paths(f).cursor.replace(/\.json$/,'.rearm.json'),f.configPath,f.profilePath,f.profilePath+'.prepared.json',paths(f).global];

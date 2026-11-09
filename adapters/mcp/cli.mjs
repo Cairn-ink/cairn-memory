@@ -42,6 +42,8 @@ Usage:
   cairn-memory --db ABS --owner ID [--project ID] --assets local-v1
   cairn-memory methods import|adopt|disable [method command arguments; see docs/method-packages-local.md]
   cairn-memory --db PATH --owner ID [--project ID] --method-packages local-v1 [--method-read-personal]
+  cairn-memory raw list --db ABS --owner ID [--project ID]
+  cairn-memory raw delete --db ABS --owner ID [--project ID] --conversation ID [--yes]
   cairn-memory safety preflight --db ABS
   cairn-memory --help
   cairn-memory [--check-config] --retained-raw-profile ABS
@@ -301,6 +303,7 @@ export function parseConfiguration(args) {
 export async function start(args = process.argv.slice(2), env = process.env) {
   if (args.length === 1 && args[0] === '--help') { console.log(help); return; }
   if(args[0]==='safety')return args[1]==='migrate'?safetyMigrateCommand(args.slice(1)):safetyCommand(args.slice(1));
+  if(args[0]==='raw'){const {rawCommand}=await import('./raw-command.mjs');process.exitCode=await rawCommand(args.slice(1));return;}
   if(args[0]==='assets')return assetCommand(args.slice(1));
   if(args[0]==='methods')return methodCommand(args.slice(1));
   if(args[0]==='model')return modelCommand(args.slice(1));

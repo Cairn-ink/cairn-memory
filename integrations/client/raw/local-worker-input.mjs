@@ -6,7 +6,7 @@ import { FORMAT } from '../../codex/parser.mjs';
 import { createLocalCaptureTransport } from './local-transport.mjs';
 
 export const reasons = Object.freeze(['initialized','invalid_input','platform_unavailable','config_invalid','source_unavailable',
-  'state_busy','capture_refused','awaiting_user_boundary','partial_record','work_limit','state_invalid','key_invalid',
+  'state_busy','capture_refused','awaiting_user_boundary','partial_record','work_limit','codex_boundary_required','state_invalid','key_invalid',
   'authority_changed','source_changed','record_limit','processing','uncertain','unavailable','interpretation_incomplete',
   'quota_reached','recovery_exhausted','cancelled']);
 export class WorkerError extends Error {

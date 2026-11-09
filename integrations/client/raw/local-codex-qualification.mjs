@@ -1,16 +1,17 @@
 import { stateLock } from '../state-lock.mjs';
 import { spawn } from 'node:child_process';
-import { realpathSync } from 'node:fs';
-import { stat,lutimes } from 'node:fs/promises';
+import { realpathSync, stat as statCallback, lutimes as lutimesCallback } from 'node:fs';
+import { promisify } from 'node:util';
 import { dirname,join,relative,isAbsolute } from 'node:path';
 import { fileURLToPath,pathToFileURL } from 'node:url';
 import { privateRead,privateWrite,checkedPath } from '../private-state.mjs';
 import { cachedQualification,observeHost,observedHosts,boundBinary,validHost,
-  scheduleQualification,finishQualification,qualifyBinary,binaryIdentity,detectRunningHost } from '../../codex/qualification.mjs';
+  scheduleQualification,finishQualification,qualifyBinary,detectRunningHost } from '../../codex/qualification.mjs';
 
 // Synthetic suites must never discover the runner's real native ancestry. The
 // test context is propagated explicitly to cold commands and owned probe children.
 // There is no production opt-in, DTO field, or alternate qualification policy.
+const stat=promisify(statCallback), lutimes=promisify(lutimesCallback);
 const testRoots = new Set(), ownedTestChildren = new Set();
 const synthetic = () => Boolean(process.env.NODE_TEST_CONTEXT || process.env.CAIRN_SYNTHETIC_FIXTURE_ROOT);
 const below = (root,path) => { const tail=relative(root,path); return tail !== '' && tail !== '..' && !tail.startsWith('../') && !isAbsolute(tail); };
@@ -30,10 +31,9 @@ function probeTestRoot(configPath,host) {
 export async function detectLocalCodexHost(detect) {
   if (!synthetic()) return (detect ?? detectRunningHost)();
   if (detect) return detect();
-  // The exact generated command starts cold, so its fake binding is explicit.
-  const root=process.env.CAIRN_SYNTHETIC_FIXTURE_ROOT, path=process.env.CAIRN_SYNTHETIC_CODEX;
-  if (!root || !path || !below(realpathSync(root),realpathSync(path))) throw Error('synthetic_real_ancestry_forbidden');
-  return {binaryPath:path,identity:await binaryIdentity(path),kind:'cli'};
+  // Environment markers only restrict discovery. Cold tests inject hosts
+  // through a harness-owned preload; environment paths never select a host.
+  throw Error('synthetic_real_ancestry_forbidden');
 }
 export async function awaitLocalQualificationTestChildren() {
   await Promise.all([...ownedTestChildren]);

@@ -55,6 +55,62 @@ captured message near that time (and no range crossing the window or named
 receipt) is not hidden. You can delete that conversation directly. This is a
 known limit when a memory is saved much later than its source conversation.
 
+### List and delete a local conversation
+
+Use the same database, owner and project as the local MCP server. These local
+commands need no model key and do not decode or print conversation text:
+
+```sh
+cairn-memory raw list --db ABS --owner ID [--project ID]
+cairn-memory raw delete --db ABS --owner ID [--project ID] --conversation ID
+cairn-memory raw delete --db ABS --owner ID [--project ID] --conversation ID --yes
+```
+
+Replace the uppercase placeholders with your installed profile values; omit the
+bracketed project option for a personal store. The database must already be a
+local Raw store. The commands open the same `raw:true` local privacy handle as
+the default MCP server, with capture and search scheduling unused.
+
+`raw list` emits one JSON object per conversation in that exact namespace:
+id, client, first/last message event time, message count, declared message byte
+count, and fenced/hidden flags. Unknown event times are null. It includes hidden
+conversations so their owners can delete them. It never emits session keys or
+message text.
+
+`raw delete` accepts exactly one explicit conversation id. Omit `--yes` for a
+dry run: it reports the metadata and cascade counts without deleting, fencing,
+hashing or changing any row. Duplicate ids, bulk options and wildcards are
+rejected. An unknown id and an id from another namespace both return
+`conversation_not_found` without changing the store.
+
+With `--yes`, deletion removes that conversation's Raw messages, parts and
+canonical index/lineage rows; clears its Episodes and invalidates dependent
+Episode copies; and removes Card visibility according to the existing lineage
+rule. Confirmed authored Card bodies may remain stored but cannot be read as
+eligible support from the deleted source. Raw search refuses deleted sources
+immediately for current and history intents; bounded search maintenance removes
+obsolete derived index rows. This is logical deletion, not secure erasure of
+journals, backups, provider copies or the native client's source files.
+
+This command retains separately extracted Memories and their own explicit
+forget operation. It does not run memory forgetting or create memory hide
+windows. The existing Episode-forget and programmatic deletion defaults retain
+their original Memory cascade semantics.
+
+The terminal session fence and keyed message-UUID fences survive deletion.
+Resending that session, or copying its Claude message UUIDs into a fork after a
+cursor reset, cannot archive it again. A large UUID job makes bounded durable
+progress before any message is deleted. Retry the same id when the command
+returns `local_raw_privacy_write_failed` with `retryable:true`; all source rows
+remain until the required hashes are durable. Each call makes at most two
+cascade attempts and one bounded UUID preflight.
+
+Exit codes: **0** for listing, a successful dry run or completed deletion;
+**1** for a missing/foreign conversation, unsupported store or other operation
+failure; **2** for invalid command arguments; **3** for a retryable operation
+failure. Errors contain fixed codes and no conversation text. No MCP deletion
+tool is added.
+
 The windows hold only owner, namespace and time range, with no memory, receipt,
 session identity or text. Overlapping windows are merged and never expire. Each
 capture unions the incoming messages with its persisted session range, using
@@ -651,6 +707,10 @@ planner identity. Wire identity and issued ordinal do not rotate with a source
 path, credential or supplied generation change.
 
 Initialize defaults to verified LF-terminated EOF (or an empty file); explicit
+Previously saved Codex cursors at offset zero are refused with
+`codex_boundary_required`, including pending recovery. Their identity and cursor
+are preserved; upgrading never imports their historical turns or lifts a fence.
+
 `start:'beginning'` is restricted to Claude's explicit operator import. Codex
 refuses it at the CLI, host and worker boundaries. Partial EOF waits
 without arming. Claude's EOF state excludes assistant output until a non-machine

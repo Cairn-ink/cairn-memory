@@ -798,14 +798,25 @@ test('non-local constructors install no UUID package and execute no UUID SQL',t=
   assert.equal(db.prepare("SELECT count(*) n FROM sqlite_schema WHERE name GLOB 'local_raw_*'").get().n,0);
 });
 
-test('a non-local deletion cannot discard a pending local UUID backfill source',async t=>{
+test('a non-local deletion makes bounded durable UUID progress before discarding its source',async t=>{
   const f=localPrivacyFixture(t),saved=await f.capture(f.wire('pending-delete','old-copy'));
-  assert.equal(saved.status,200);ok(f.mutate('forget',f.remember()));
+  assert.equal(saved.status,200);
+  const row=f.db.prepare('SELECT * FROM raw_messages').get(),columns=Object.keys(row);
+  const insert=f.db.prepare('INSERT INTO raw_messages('+columns.join(',')+') VALUES('+columns.map(()=>'?').join(',')+')');
+  f.db.exec('BEGIN IMMEDIATE');
+  for(let index=2;index<=300;index++)insert.run(...columns.map(key=>key==='message_id'?'synthetic-delete-'+index:key==='ordinal'?index:row[key]));
+  f.db.exec('COMMIT');ok(f.mutate('forget',f.remember()));
   const input={namespace:ns,conversationId:saved.body.raw.conversationId,expectedRevision:saved.body.raw.revision,actionId:'cross-profile-delete'};
-  assert.equal(f.core.deleteConversation(input).ok,false);
-  assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n,1);
+  for(const count of [128,256]) {
+    const result=f.core.deleteConversation(input);
+    assert.deepEqual(result,{ok:false,error:{code:'local_raw_privacy_write_failed',retryable:true}});
+    assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n,300);
+    assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,count);
+  }
+  const deleted=ok(f.core.deleteConversation(input));
+  assert.deepEqual(ok(f.core.deleteConversation(input)),deleted);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n,0);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,300);
   assert.equal((await f.capture(f.wire('late-copy','old-copy',-86400000))).body.error,'conversation_deleted');
-  ok(f.core.deleteConversation(input));
-  assert.ok(f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n>0);
   assert.ok(f.db.prepare('SELECT count(*) n FROM local_raw_hide_windows').get().n>0);
 });

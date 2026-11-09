@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync,writeFileSync,symlinkSync,existsSync,copyFileSync,chmodSync } from 'node:fs';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { binaryIdentity,resolveCLI } from '../../codex/qualification.mjs';
 import { registerLocalQualificationTestRoot,runLocalQualification,launchLocalQualification,
@@ -45,4 +46,28 @@ test('cold qualification child inherits the allowlist and is awaited',async t=>{
   await launchLocalQualification(config,host);
   await awaitLocalQualificationTestChildren();
   assert.ok(existsSync(join(qroot,'qualification',host.identity+'.local-attempt.json')));
+});
+
+// Even both environment markers plus an owned host cannot select ancestry.
+test('environment paths cannot substitute a host',async t=>{
+  const owned=createTestWorkspace(t),binary=join(owned.path,'codex');
+  writeFileSync(binary,'synthetic host',{mode:0o700});
+  const before={root:process.env.CAIRN_SYNTHETIC_FIXTURE_ROOT,binary:process.env.CAIRN_SYNTHETIC_CODEX};
+  process.env.CAIRN_SYNTHETIC_FIXTURE_ROOT=owned.path;process.env.CAIRN_SYNTHETIC_CODEX=binary;
+  try {await assert.rejects(detectLocalCodexHost(),/synthetic_real_ancestry_forbidden/);}
+  finally {
+    for(const [key,value]of [['CAIRN_SYNTHETIC_FIXTURE_ROOT',before.root],['CAIRN_SYNTHETIC_CODEX',before.binary]])
+      if(value===undefined)delete process.env[key];else process.env[key]=value;
+  }
+});
+
+test('a cold host comes only from the harness preload',async t=>{
+  const owned=createTestWorkspace(t),binary=join(owned.path,'codex');
+  writeFileSync(binary,'synthetic host',{mode:0o700});
+  const preload=new URL('../../../packaging/test/fixtures/local-codex-preload.mjs',import.meta.url).pathname;
+  const target=new URL('../raw/local-codex-qualification.mjs',import.meta.url).href;
+  const source=`const {detectLocalCodexHost}=await import(${JSON.stringify(target)});const host=await detectLocalCodexHost();if(host.binaryPath!==${JSON.stringify(binary)})throw Error('fixture host missing');`;
+  const child=spawnSync(process.execPath,['--import',preload,'--input-type=module','-e',source],{encoding:'utf8',timeout:10000,
+    env:{NODE_TEST_CONTEXT:'child-v8',CAIRN_SYNTHETIC_FIXTURE_ROOT:owned.path,CAIRN_SYNTHETIC_CODEX:binary}});
+  assert.equal(child.status,0,child.stderr);assert.equal(child.signal,null);
 });
