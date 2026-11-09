@@ -3,7 +3,7 @@ import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheIn
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
 import { SAFETY_SCHEMA_VERSIONS, resolveContentLayout, assertContentFeatures } from './content-safety-layout.mjs';
-import { attestContentSafety, checkInstalledContentSafety, registerContentReadSnapshot } from './content-safety-schema.mjs';
+import { attestContentSafety, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection } from './content-safety-schema.mjs';
 import { validateContextProductLayout } from './context-product-schema.mjs';
 import { installCardCurrentDependencies, validateCardCurrentDependencies, assertNoCardCurrentDependencies } from './card-current-schema.mjs';
 import { installRoleProfiles, validateRoleProfiles, assertNoRoleProfiles } from './role-profile-schema.mjs';
@@ -301,6 +301,22 @@ function materializedRead(value, seen = new Set()) {
     materializedRead(descriptor.value, seen);
   }
 }
+// Only the work phase uses this adapter. Transaction ownership remains keyed on
+// db; safety/suppression resolve the adapter to that same native connection.
+function checkedReadConnection(db, check) {
+  if (!check) return db;
+  const wrap = target => { const proxy = new Proxy(target, { get(object, key) {
+    if (key === Symbol.iterator) return () => proxy;
+    const value = Reflect.get(object, key, object);
+    if (typeof value !== 'function') return value;
+    return (...args) => {
+      if (key !== 'return' && key !== Symbol.dispose && key !== 'close') check();
+      const result = Reflect.apply(value, object, args);
+      return key === 'prepare' || key === 'iterate' ? wrap(result) : result === object ? proxy : result;
+    };
+  } }); return proxy; };
+  return bindContentSafetyConnection(wrap(db), db);
+}
 export function readTransaction(db, work, acquisition) {
   if (discardedConnections.has(db) || !db.isOpen) fail('store_closed');
   if (activeReads.has(db) || db.isTransaction || typeof work !== 'function' ||
@@ -308,17 +324,24 @@ export function readTransaction(db, work, acquisition) {
   activeReads.add(db);
   let saved, began = false, attempted = false, value, error, failed = false, cleanupError, cleanupFailed = false, unsafeResult = false;
   try {
-    saved = db.prepare('PRAGMA query_only').get().query_only;
+    // Optional opening budget; connection identity and cleanup stay unchanged.
+    acquisition?.checkAdmission?.();
+    const queryOnly = db.prepare('PRAGMA query_only');
+    acquisition?.checkAdmission?.();
+    saved = queryOnly.get().query_only;
+    acquisition?.checkAdmission?.();
     db.exec('PRAGMA query_only=ON');
+    acquisition?.checkAdmission?.();
     attempted = true;
     db.exec('BEGIN');
     began = true;
     // Private synchronous acquisition hook, before suppression/safety reads.
     // Internal callers may acquire SHARED here without host callbacks.
-    acquisition?.readReady();
-    value = inContentSuppressionRequestInside(db, work);
+    acquisition?.readReady?.();
+    value = inContentSuppressionRequestInside(checkedReadConnection(db, acquisition?.checkAdmission), work);
     try { materializedRead(value); } catch (failure) { unsafeResult = true; throw failure; }
     if (!db.isTransaction) fail('storage_error');
+    acquisition?.checkAdmission?.();
     db.exec('COMMIT');
     began = false;
   } catch (failure) {
@@ -330,7 +353,10 @@ export function readTransaction(db, work, acquisition) {
       try { db.exec('ROLLBACK'); } catch (failure) { cleanupError = failure; cleanupFailed = true; }
     }
     if (saved !== undefined) {
-      try { db.exec('PRAGMA query_only=' + (saved ? 'ON' : 'OFF')); }
+      try {
+        const restore = () => db.exec('PRAGMA query_only=' + (saved ? 'ON' : 'OFF'));
+        if (acquisition?.cleanup) acquisition.cleanup(restore); else restore();
+      }
       catch (failure) { if (!cleanupFailed) cleanupError = failure; cleanupFailed = true; }
     }
     if (cleanupFailed || unsafeResult) {
