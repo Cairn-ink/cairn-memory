@@ -39,9 +39,10 @@ explicitly through `capture_memory` on a server registered with
 `--capture-qualification` and `--client codex` or `--client claude-code`, or
 from the engine's separate local preview (`cairn-memory local setup`)
 configured by hand; see [the local preview guide](../../docs/raw-local-journal.md).
-Submitted messages are kept as Raw even without an extraction model; a model is
-needed only to extract them into Memory. Local mode still has no automatic
-capture. Local Memory, Raw and search indexes are plaintext
+Submitted messages can be kept as Raw even when no extraction model is
+configured or extraction fails, subject to the Raw capture controls and the
+owner cap; a model is needed to extract them into Memory. Local mode still has
+no automatic capture. Local Memory, Raw and search indexes are plaintext
 on this computer; Raw has a default 200,000,000-byte owner cap. Use `--no-raw`,
 `--no-raw-search`, or `--no-context-read` in the server registration to disable
 the respective defaults; see [defaults and off switches](../../docs/defaults.md).
@@ -66,7 +67,8 @@ You can go back to 0.6.3; it keeps working with the upgraded store, but conversa
 `--capture-qualification` 與 `--client codex` 或 `--client claude-code`，再透過
 `capture_memory` 明確提交訊息；也可以手動設定引擎獨立的本機預覽功能
 （`cairn-memory local setup`），見[本機預覽指南](../../docs/raw-local-journal.md)。
-沒有設定模型時，提交的訊息仍會保存為 Raw；模型只用於把內容整理成 Memory。
+即使沒有設定模型或整理失敗，提交的訊息仍可保存為 Raw，但仍受 Raw 保存開關與
+owner 上限限制；要把內容整理成 Memory 才需要模型。
 本機模式仍不會自動記下對話。Memory、Raw 與搜尋索引以明文存於這台電腦，
 Raw 預設每個 owner 上限為 200,000,000 bytes。可在 server 註冊參數加入
 `--no-raw`、`--no-raw-search` 或 `--no-context-read`，關閉對應功能，見

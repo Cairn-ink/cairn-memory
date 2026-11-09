@@ -23,9 +23,10 @@
   `--capture-qualification` and `--client codex` or `--client claude-code`, or
   from the engine's separate local preview (`cairn-memory local setup`),
   configured by hand; see [the local preview guide](docs/raw-local-journal.md).
-  Submitted messages are kept as Raw even without an extraction model; a model
-  is needed only to extract them into Memory. Local mode still has no
-  automatic capture.
+  Submitted messages can be kept as Raw even when no extraction model is
+  configured or extraction fails, subject to the Raw capture controls and the
+  owner cap; a model is needed to extract them into Memory. Local mode still
+  has no automatic capture.
 - Local Memory, Raw and search indexes are plaintext on this computer. Raw has
   a default 200,000,000-byte owner cap. The server switches `--no-raw`,
   `--no-raw-search`, and `--no-context-read` disable the respective defaults;
