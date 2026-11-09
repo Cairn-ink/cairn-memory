@@ -147,6 +147,34 @@ test('foreign owner and project rows never reach physical pages or the scorer', 
   assert.equal(after.scanBoundary.rows,100);
 });
 
+test('foreign rows just older than the floor never reach tail pages or the scan boundary', async t => {
+  let tick = 0; installRecallScanClock(t,()=>tick++*.34);
+  const f = await layoutFixture(t, layout); seed(f.db,2049);
+  seed(f.db,100,{ ...ns,ownerId:'foreign-owner' },10000);
+  seed(f.db,100,{ ...ns,scope:'project',projectId:'foreign-project' },20000);
+  // Own row 1025 is the first row past the floor; foreign rows sit between it and the floor.
+  f.db.prepare('UPDATE memories SET updated_at=? WHERE owner_id=? OR project_id=?')
+    .run('2026-01-01T00:17:05.500Z','foreign-owner','foreign-project');
+  const foreign = new Set(f.db.prepare('SELECT id FROM memories WHERE owner_id=? OR project_id=?')
+    .all('foreign-owner','foreign-project').map(row=>row.id));
+  assert.equal(foreign.size,200);
+  let pages = 0, fetched = 0; const prepare = f.db.prepare.bind(f.db);
+  t.mock.method(f.db,'prepare',sql=>{
+    const statement = prepare(sql);
+    if (sql.startsWith('SELECT id, revision, updated_at FROM memories')) {
+      const all = statement.all.bind(statement);
+      statement.all = (...args)=>{ const rows = all(...args); pages++; fetched += rows.filter(row=>foreign.has(row.id)).length; return rows; };
+    }
+    return statement;
+  });
+  const result = query(f.runtime,'note');
+  assert.ok(pages > 0,'tail pages ran');
+  assert.equal(result.scanBoundary.stop,'budget'); assert.ok(result.scanBoundary.rows > 1024);
+  assert.equal(fetched,0,'no foreign row in any tail page');
+  assert.equal(foreign.has(result.scanBoundary.last.id),false,'scan boundary is an own row');
+  assert.equal(result.rows.some(row=>foreign.has(row.item.ref.memoryId)),false);
+});
+
 test('20,000-row cap never scores the remaining sentinel and retains only the best 1,024', async t => {
   installRecallScanClock(t);
   const f=await layoutFixture(t, layout); seed(f.db,20001);
