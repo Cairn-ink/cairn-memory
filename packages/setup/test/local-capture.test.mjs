@@ -363,6 +363,10 @@ test('packed hook → raw list → preview → delete → MCP empty → re-sent 
   assert.deepEqual(await snapshotDatabase(f), before);
   const deleted = await f.setup(['raw', 'delete', id, '--yes']);
   assert.equal(JSON.parse(deleted).dryRun, false); assert.doesNotMatch(deleted, /copper|telescope|private delete sentinel/);
+  const fences = () => engineScript(f, `const {DatabaseSync}=await import('node:sqlite'),db=new DatabaseSync(path,{readOnly:true});
+    try {console.log(JSON.stringify({sessions:db.prepare('SELECT count(*) n FROM raw_session_fences').get().n,
+      uuids:db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n}));} finally {db.close();}`);
+  const deletedFences = await fences(); assert.equal(deletedFences.sessions, 1); assert.ok(deletedFences.uuids > 0);
   const checkEmpty = async () => {
     const current = await mcp(f, t);
     for (const intent of ['current','history']) {
@@ -376,10 +380,13 @@ test('packed hook → raw list → preview → delete → MCP empty → re-sent 
   await checkEmpty();
   // Resume the same wire session, then a fork with exactly the same message
   // uuid. Invoke the real generated commands rather than the capture API.
-  await f.hook('SessionStart', transcript); await f.hook('Stop', transcript); await checkEmpty();
-  const fork = join(f.home, '.claude/projects/delete-fork.jsonl'); await copyFile(transcript, fork);
+  const resent = await readFile(transcript, 'utf8');
+  await f.hook('SessionStart', transcript); await appendFile(transcript, resent); await f.hook('Stop', transcript); await checkEmpty();
+  const fork = join(f.home, '.claude/projects/delete-fork.jsonl'); await writeFile(fork, '', { mode: 0o600 });
   await f.hook('SessionStart', fork, '22222222-2222-4222-8222-222222222222');
+  await appendFile(fork, resent);
   await f.hook('Stop', fork, '22222222-2222-4222-8222-222222222222'); await checkEmpty();
+  assert.equal((await fences()).sessions, 2, 'UUID-fenced copy terminally fences its fork session');
 });
 
 test('packed cloud client refuses local setup without local capture', async t => {
