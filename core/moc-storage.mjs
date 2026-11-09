@@ -2,7 +2,8 @@ import { performance } from 'node:perf_hooks';
 import { cachedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
 import { contentReadSafety, receiptReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { contentSuppressionRequestFenceInside, contentSuppressionReasonInside, cachedContentSuppressionRequestInside,
-  contentSuppressionFenceInside, withContentSuppressionRequest } from './content-suppression-storage.mjs';
+  contentSuppressionFenceInside, withContentSuppressionRequest,
+  resetContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { randomUUID } from "node:crypto";
 import { transaction, readTransaction, isStorageBusy } from "./database.mjs";
 import { fail } from "./validation.mjs";
@@ -409,8 +410,10 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     // Sample the actual owner epoch, not the outer request's provisional memo.
     const epochs = () => [epoch(ns), safety ? contentSuppressionFenceInside(db, ns.ownerId) : null];
     const sameEpochs = pair => pair[0] === currentEpoch && pair[1] === currentSuppressionEpoch;
-    const readPage = work => withContentSuppressionRequest(() =>
-      transaction(db, work, undefined, { deferred: true }), { fresh: true });
+    // Keep the ordinary request's suppression memo for the floor. Its epoch
+    // read already checks the fresh owner fence in the same statement as base.
+    // Only tail snapshots need independent request accounts below.
+    const readPage = work => transaction(db, work, undefined, { deferred: true });
     try {
       // A conservative canonical proof of the ordinary-receipt branch. Fold
       // it into the receipt read already required for scoring; any possible Raw
@@ -466,6 +469,13 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       const projected = projectPrepare(`SELECT id, revision, content${safety ? ',deleted,currentness' + extra : ''}
         FROM memories WHERE ${namespaceWhere} AND id = ? AND revision = ?
           AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current'`);
+      // Materialize the floor in the same single content read as ordinary
+      // recall. The extra row proves whether a tail is needed without another
+      // statement. Membership and canonical safety still gate every scorer.
+      const floorPage = db.prepare(`SELECT id, revision, content, deleted, currentness${extra}, updated_at FROM memories
+        INDEXED BY namespace_memories WHERE ${namespaceWhere}
+          AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current'
+        ORDER BY updated_at DESC, id ASC LIMIT ?`);
       const retain = candidate => {
         if (eligible.length === top && compare(candidate, eligible.at(-1)) >= 0) { pruned = true; return; }
         let low = 0, high = eligible.length;
@@ -529,15 +539,34 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       // timeout snapshot. Small stores need no subsequent read transaction.
       readPage(() => {
         assertIndexAvailable(ns);
-        [currentEpoch, currentSuppressionEpoch] = epochs();
-        if (replay && (currentEpoch !== expectedEpoch ||
-            expectedSuppressionEpoch !== undefined && currentSuppressionEpoch !== expectedSuppressionEpoch)) fail('cursor_stale');
+        currentEpoch = epoch(ns);
+        if (replay && currentEpoch !== expectedEpoch) fail('cursor_stale');
         readMemo = safety ? createContentReadMemo(db) : undefined;
-        scanRows(Math.min(floor, replay ? scanBoundary.rows : scan), false);
+        const limit = Math.min(floor, replay ? scanBoundary.rows : scan);
+        const batch = floorPage.all(...boundary(ns), limit + 1);
+        for (const memory of batch.slice(0, limit)) {
+          visited++;
+          last = { updatedAt: memory.updated_at, id: memory.id };
+          if (memory.deleted || memory.currentness !== 'current' || safety && !safeMemory(ns, memory, true)) continue;
+          if (!discoveryPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
+            AND revision = ?`).get(...boundary(ns), memory.id, memory.revision)) continue;
+          retain(scoreMemory(memory));
+        }
+        more = batch.length > limit;
+        if (replay && visited === scanBoundary.rows) {
+          stop = scanBoundary.stop;
+          more = stop !== 'end';
+        } else if (!more) stop = 'end';
         for (const candidate of eligible) placements.set(candidate, place(candidate));
-        if (!sameEpochs(epochs())) fail('index_revision_conflict');
+        currentSuppressionEpoch = suppressionEpochInside(ns);
+        if (replay && expectedSuppressionEpoch !== undefined &&
+            currentSuppressionEpoch !== expectedSuppressionEpoch) fail('cursor_stale');
         floorResult = result(eligible.map(candidate => placements.get(candidate)));
       });
+      // A multi-snapshot scan must not leave its E0 memo in the outer request.
+      // Tail pages keep independent accounts; delivery still checks the saved
+      // epochs. Exhausted floors retain ordinary memo reuse and statement cost.
+      if (more) resetContentSuppressionRequestInside(db, { keepSelection: true });
       // Dropping the tail also drops its signed boundary. Replay reconstructs
       // precisely this floor under E0, never a mixed-epoch candidate list.
       const floorOnly = cause => ({ ...floorResult, scanExhausted: false,

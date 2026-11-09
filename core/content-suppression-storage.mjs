@@ -125,9 +125,10 @@ export const withContentSuppressionRequest = (work, { fresh = false } = {}) => r
 
 // An abandoned operation attempt must not seed the next snapshot's denial
 // memo. Keep its request account, but load this connection's facts on demand.
-export function resetContentSuppressionRequestInside(db) {
+export function resetContentSuppressionRequestInside(db, { keepSelection = false } = {}) {
   const account=requestAccount.getStore(),native=contentSafetyConnection(db);
-  account?.selected.delete(native);account?.facts.delete(native);account?.reads.delete(native);
+  if (!keepSelection) account?.selected.delete(native);
+  account?.facts.delete(native);account?.reads.delete(native);
 }
 
 // A serving request may span canonical snapshots. Its denial set is provisional

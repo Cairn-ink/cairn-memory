@@ -8,8 +8,10 @@ Candidates are distinct memories scored before packing by full-body literal
 query overlap, then stable ID. Every recall mode scans newest first with the
 existing `namespace_memories` index and `updated_at DESC, id ASC` keyset.
 A 1,024-row floor precedes the fixed 400 ms budget; the hard cap is 20,000
-physical nondeleted rows. History, awaiting review and projection denials count
-toward that work without contributing text. At most 1,024 candidates survive
+visited rows. The floor filters history and awaiting review in one content
+statement; its unscored 1,025th row detects a tail. An exhausted floor keeps
+ordinary recall statement costs. History and awaiting review in the tail, and
+projection denials, count toward work without contributing text. At most 1,024 candidates survive
 score/ID ordering. The floor, safety checks and placement share one deferred
 transaction with the normal busy timeout. Tail pages release SHARED after at
 most 256 rows or 25 ms, checked per row, and never wait on writers. Their busy

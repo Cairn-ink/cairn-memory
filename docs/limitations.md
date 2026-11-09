@@ -1437,15 +1437,17 @@ already sent in a begun model request cannot be withdrawn retroactively.
 
 All recall modes now share newest-first candidate discovery. The former
 experimental `sourceCandidatePolicy` constructor option has been removed.
-The scan visits at least 1,024 physical nondeleted rows, then stops at its fixed
-400 ms monotonic budget, 20,000-row cap, or the end. The floor, safety checks
+The floor reads current, nondeleted, non-awaiting rows in one statement and
+scores at most 1,024; an unscored 1,025th row detects whether a tail is needed.
+A namespace with at most 1,024 current rows keeps the ordinary statement budget.
+Tail scanning stops at the fixed 400 ms monotonic budget, 20,000-row cap, or the end. The floor, safety checks
 and placement share one normal-timeout deferred transaction. Tail pages use
 zero timeout, restored synchronously, with at most 256 rows or 25 ms per page.
 An epoch change discards the tail without restarting. Final placement of new
 tail candidates is one try-once read that rechecks the floor epochs; contention
 or movement there returns the placed floor, subject to existing freshness checks.
-Historical, awaiting and
-projection-rejected rows still consume rows and time. The best 1,024 candidates
+Historical and awaiting tail rows, and projection-rejected rows, consume rows
+and time. The best 1,024 candidates
 are retained by literal overlap then ID, independent of recency. Budget/cap
 exhaustion, a busy tail and pruning are incomplete coverage, without a retryable error.
 This widens the searchable prefix within the same authority; it does not change

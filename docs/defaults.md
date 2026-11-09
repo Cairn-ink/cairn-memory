@@ -20,9 +20,12 @@ Legacy `recall()` now scans each authorized namespace newest first, using
 `updated_at DESC, id ASC` on the existing `namespace_memories` index. All recall
 modes use this default; there is no candidate-policy constructor option.
 `QUERY_SCAN_BUDGET_MS` in `core/query-candidates.mjs` is fixed at **400 ms**.
-The scanner always visits at least 1,024 physical nondeleted rows, then stops
-at the monotonic budget, 20,000 rows, or the end. Historical, awaiting and
-projection-rejected rows consume the allowance but never contribute text.
+The floor reads up to 1,025 current, nondeleted, non-awaiting rows in one
+statement, scoring at most 1,024. The extra row decides whether a tail is
+needed. At most 1,024 such rows exhaust the scan with the ordinary statement
+budget. Tail pages visit nondeleted physical rows and stop at the monotonic
+budget, 20,000 total visited rows, or the end. Historical and awaiting tail
+rows, and projection-rejected rows, consume the allowance without contributing text.
 Recency determines traversal; literal overlap and then ID determine the best
 1,024 retained candidates. Body-only recall reads no scoring receipts; source
 modes still examine only the first four stable-ID receipts per eligible memory.

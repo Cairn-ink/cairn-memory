@@ -5,7 +5,9 @@
 - Use one newest-first keyset scan for body and source recall: a 1,024-row
   floor, fixed 400 ms budget and 20,000-row cap, retaining the best 1,024 by
   query overlap then ID. Remove the candidate-policy constructor option.
-- Read the floor and its placement in one normal-timeout deferred transaction,
+- Read floor content in one filtered statement with an unscored extra row to
+  detect a tail, preserving ordinary statement costs for small namespaces.
+  Keep the floor and its placement in one normal-timeout deferred transaction,
   then use try-once tail pages. Epoch changes discard the tail without restarting;
   final tail placement rechecks the floor epochs in one try-once read. Bind the
   scan boundary into signed continuation cursors; busy continuations are stale.

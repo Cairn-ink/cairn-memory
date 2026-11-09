@@ -92,7 +92,7 @@ test('budget spends no less than floor; signed cursor replays the exact boundary
   const map = await mapHarness(f);
   let ticks = 0;
   // Every monotonic sample advances the fake clock: the floor still applies.
-  setClock(() => ticks++);
+  setClock(() => ticks++ * 500);
   const page1 = ok(map());
   const payload = JSON.parse(Buffer.from(page1.nextCursor.split('.')[0],'base64url'));
   assert.equal(payload.a.scanBoundary.rows,1024);
@@ -110,14 +110,30 @@ test('budget spends no less than floor; signed cursor replays the exact boundary
   assert.equal(map(page1.nextCursor).error?.code,'cursor_stale');
 });
 
-test('residual history/review filters consume physical rows and budget without scoring', async t => {
+test('floor filters history in its single scan and exhausts all 1024 current rows', async t => {
   let now = 0; installRecallScanClock(t,()=>now++);
   const f = await layoutFixture(t, layout); seed(f.db,2049);
   f.db.exec("UPDATE memories SET currentness='historical' WHERE updated_at > '2026-01-01T00:17:04.000Z'");
-  const result = query(f.runtime,'note',{ score() { assert.fail('historical text scored'); } });
-  // No content callbacks are needed for elapsed time to stop the physical scan.
-  assert.equal(result.scanBoundary.rows,1024); assert.equal(result.rows.length,0);
-  assert.equal(result.scanExhausted,false);
+  let scored = 0;
+  const result = query(f.runtime,'note',{ score(text) {
+    scored++; assert.ok(Number(text.match(/^distinctive(\d+) /)[1]) <= 1024); return 1;
+  } });
+  assert.equal(scored,1024);
+  assert.equal(result.scanBoundary.rows,1024); assert.equal(result.rows.length,1024);
+  assert.equal(result.scanBoundary.stop,'end'); assert.equal(result.scanExhausted,true);
+});
+
+test('tail history rows consume the physical allowance without reaching the scorer', async t => {
+  let now = 0; installRecallScanClock(t,()=>now++);
+  const f = await layoutFixture(t, layout); seed(f.db,3073);
+  f.db.exec("UPDATE memories SET currentness='historical' WHERE updated_at > '2026-01-01T00:17:04.000Z' AND updated_at <= '2026-01-01T00:34:09.000Z'");
+  let scored = 0;
+  const result = query(f.runtime,'note',{ score(text) {
+    scored++; assert.ok(Number(text.match(/^distinctive(\d+) /)[1]) > 2049); return 1;
+  } });
+  assert.equal(scored,1024);
+  assert.ok(result.scanBoundary.rows > 1024 && result.scanBoundary.rows <= 1280);
+  assert.equal(result.scanBoundary.stop,'budget'); assert.equal(result.scanExhausted,false);
 });
 
 test('foreign owner and project rows never reach physical pages or the scorer', async t => {

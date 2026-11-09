@@ -785,9 +785,11 @@ wins a receipt tie, while a body tie keeps the body preview. All recall modes sc
 budget and a 20,000-row cap. The floor and its placement share one
 normal-timeout deferred transaction. Tail pages use timeout zero, restored
 synchronously, and visit at most 256 rows or 25 ms before releasing SHARED.
-Currentness, review state and active-generation
-membership are residual eligibility checks; rejected rows still consume time
-and rows. The best 1,024 candidates are retained by overlap then ID. Body-only
+The floor filters currentness and review state in one content statement,
+with an unscored 1,025th row detecting a tail. It retains ordinary recall
+statement costs when exhausted. Tail pages apply those filters after physical
+traversal. Active-generation membership and canonical safety gate scoring;
+rejected tail rows still consume time and rows. The best 1,024 candidates are retained by overlap then ID. Body-only
 recall scores no receipts; source modes score up to four excerpts of at most
 800 UTF-16 units per eligible memory. There is no candidate-policy option.
 The selector sees only a winning 120-code-point
