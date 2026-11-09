@@ -2,6 +2,9 @@
 
 ## Unreleased — batch Raw preparation
 
+- Recheck live Raw source predicates and caller grants around each part opener
+  and revalidate handles at registration after the initial snapshot releases.
+
 - Default three-layer reads prepare the first 24 Raw candidates together,
   sharing authorization, publication and a canonical source snapshot. Completed
   candidates retain independent outcomes and cutoff delivery; fresh batch and

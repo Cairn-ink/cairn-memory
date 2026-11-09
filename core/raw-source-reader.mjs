@@ -33,8 +33,8 @@ export function createRawSourceReader({ db, identity, open, partDigest }) {
     } catch { fail('raw_crypto_unavailable'); }
   }
   // Internal canonical batch seam: the authority supplies views and sealed
-  // payloads captured together after applying all source predicates. No live
-  // database state or transaction survives an asynchronous crypto callback.
+  // payloads captured together after initial source checks. The supplied guard
+  // rechecks live state; no transaction spans an asynchronous crypto callback.
   async function openSnapshot(ref, view, payloads, check) {
     check();
     if (!view.parts.length || view.parts.length > 20 ||
@@ -42,8 +42,7 @@ export function createRawSourceReader({ db, identity, open, partDigest }) {
     const parts = [];
     for (const part of view.parts) {
       check();
-      const text = await openPart(ref.namespace, part, view.message, payloads.get(partKey(part)));
-      check();
+      const text = await openPart(ref.namespace, part, view.message, payloads.get(partKey(part)), check);
       const start = Math.max(ref.span.start, part.start), end = Math.min(ref.span.end, part.end);
       const slice = text.slice(start-part.start, end-part.start);
       if (!slice.isWellFormed()) fail('source_unavailable');

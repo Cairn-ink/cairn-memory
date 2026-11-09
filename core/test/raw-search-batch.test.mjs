@@ -3,12 +3,16 @@ import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { DatabaseSync } from 'node:sqlite';
 import { installRawSearchTestClock } from '../testing/raw-search-clock.mjs';
-import { sourceFixture, savedSource } from '../testing/raw-source-fixtures.mjs';
-import { searchFixture } from '../testing/raw-search-fixtures.mjs';
+import { sourceFixture, savedSource, ns, ok } from '../testing/raw-source-fixtures.mjs';
+import { searchFixture, safetySourceFixture } from '../testing/raw-search-fixtures.mjs';
+import { transaction } from '../database.mjs';
+import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 
 test.beforeEach(installRawSearchTestClock);
-async function fixture(t, texts = ['telescope alpha', 'telescope beta', 'telescope gamma']) {
-  const f = sourceFixture(t), sources = [];
+async function fixture(t, texts = ['telescope alpha', 'telescope beta', 'telescope gamma'], safety = false) {
+  const f = safety ? safetySourceFixture(t, { model: { extract: ({ input }) => ({ items: input.messages.map(message => ({
+    content: 'Synthetic telescope source fact.', kind: 'fact', confidence: 1, sourceIndices: [message.index],
+  })) }) } }) : sourceFixture(t), sources = [];
   for (const [index, text] of texts.entries()) sources.push(await savedSource(f, text, { sessionId: 'batch-' + index }));
   const originalOpen = f.port.openRaw; let opener = originalOpen;
   f.port.openRaw = input => opener(input);
@@ -29,7 +33,72 @@ async function fixture(t, texts = ['telescope alpha', 'telescope beta', 'telesco
 }
 const prepare = (s, candidates, settings = {}) => s.service.prepareMany(candidates, settings, s.host.token);
 
-test('batch uses one canonical read snapshot and one authorization, opening outside the snapshot', async t => {
+function invalidate(f, s, source, mutation) {
+  if (mutation === 'forgotten') {
+    const memory = f.db.prepare('SELECT id,revision FROM memories WHERE deleted=0').get();
+    assert.ok(memory, 'fixture must retain a linked Memory before forgetting');
+    ok(f.core.forget({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision }));
+  } else if (mutation === 'suppressed') transaction(f.db, () => writeContentSuppressionInside(f.db,
+    { namespace: ns, kind: 'raw', key: source.conversationId, matchMode: 'span', messageId: source.messageId,
+      start: 0, end: source.text.length, reason: 'purge', actionId: 'synthetic-batch-suppression' }));
+  else if (mutation === 'excluded') f.db.prepare('INSERT INTO raw_source_exclusions VALUES(?,?,?,?,?)')
+    .run(source.conversationId, source.messageId, 0, source.text.length, 1);
+  else s.host.revoke();
+}
+
+for (const mutation of ['forgotten', 'suppressed', 'excluded', 'denied']) {
+  for (const gap of ['snapshot-release', 'part-open', 'registration']) test(`native batch blocks ${mutation} at ${gap}`, async t => {
+    const { f, s, sources: [source], candidates, setOpen } = await fixture(t, ['telescope ' + 'alpha '.repeat(800)], true);
+    const exec = DatabaseSync.prototype.exec;
+    let changed = false, invalidated = false, mutationError, opens = 0, released = false;
+    const mutate = () => {
+      assert.equal(changed, false); changed = true;
+      try { invalidate(f, s, source, mutation); invalidated = true; }
+      catch (error) { mutationError = error; throw error; }
+    };
+    DatabaseSync.prototype.exec = function(sql) {
+      const stack = new Error().stack;
+      if (gap === 'registration' && !changed && sql === 'BEGIN' && stack.includes('revalidateInside')) mutate();
+      const result = exec.call(this, sql);
+      if (sql === 'COMMIT' && stack.includes('prepareBatch')) {
+        assert.equal(this.isTransaction, false); released = true;
+        if (gap === 'snapshot-release' && !changed) mutate();
+      }
+      return result;
+    };
+    t.after(() => { DatabaseSync.prototype.exec = exec; });
+    setOpen((input, open) => {
+      assert.equal(released, true, 'mutation hook and crypto run after snapshot release');
+      opens++;
+      if (gap === 'part-open' && !changed) mutate();
+      return open(input);
+    });
+    const progress = [], result = await prepare(s, candidates, { onPrepared: handle => progress.push(handle) })
+      .catch(error => { throw mutationError ?? error; });
+    assert.equal(changed, true); assert.ifError(mutationError); assert.equal(invalidated, true); assert.equal(result.complete, true);
+    assert.deepEqual(result.handles, candidates.map(() => null));
+    assert.deepEqual(progress, result.handles);
+    assert.equal(JSON.stringify(result).includes('alpha'), false);
+    if (gap === 'snapshot-release') assert.equal(opens, 0, 'live guard refuses before the first crypto callback');
+    if (gap === 'part-open') assert.equal(opens, 1, 'the post-part guard prevents the next callback');
+    if (gap === 'registration') assert.ok(opens > 0, 'registration revalidation refuses already-opened text');
+  });
+}
+
+test('batch and existing single preparation APIs preserve identical source projections', async t => {
+  const { s, candidates: [candidate] } = await fixture(t, ['telescope ' + 'alpha '.repeat(800)]);
+  const single = await s.prepare(candidate), batch = await prepare(s, [candidate]);
+  assert.deepEqual(batch.handles[0].value, single.value);
+  for (const range of single.value.ranges) {
+    const source = await s.service.prepareSource(range.source, {}, s.host.token);
+    assert.deepEqual(source.value.ranges, [range]);
+    assert.deepEqual(source.validate(), source.value);
+  }
+  assert.deepEqual(single.validate(), single.value);
+  assert.deepEqual(s.service.revalidate(batch.handles), [single.value]);
+});
+
+test('batch shares one initial source snapshot and authorization, opening outside transactions', async t => {
   const { s, candidates, authorizations, setOpen } = await fixture(t);
   assert.equal(candidates.length, 3);
   const exec = DatabaseSync.prototype.exec, active = new Set(); let snapshots = 0, opening = false;

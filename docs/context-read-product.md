@@ -2039,9 +2039,12 @@ or `partial`. Incomplete search and preparation cutoffs retain the validated
 candidate prefix with `partial` coverage, including its Raw evidence and dates.
 Invalid or failed candidates are skipped individually. The first 24 search
 candidates share one preparation batch: one authorization and publication
-header, one canonical read snapshot for source checks and sealed bytes, and one
+header, one canonical read snapshot for initial source checks and sealed bytes, and one
 reader setup. Texts open in rank order after releasing the snapshot, with byte,
-digest and authenticated-context checks. Each completed outcome is reported to
+digest and authenticated-context checks. Canonical state and caller grants may
+change after release: live guards check both around each part opener, and
+registration revalidates every contributing source before exposing a handle.
+Each completed outcome is reported to
 the channel immediately; late outcomes are ignored and the timer snapshots the
 items collected so far. The 1,000 ms default deadline and 40% Raw share remain
 unchanged. The single-candidate service APIs remain available. Empty Raw sets

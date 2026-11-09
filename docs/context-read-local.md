@@ -495,10 +495,13 @@ An empty Raw set uses the existing Memory-only assembly, including a complete
 search with zero candidates (`included`). An absent or failed service reports
 `unavailable`; an unsupported store reports `unsupported_store`.
 The first 24 search candidates are prepared in one batch. Authorization and the
-publication header are acquired once; all canonical source checks and sealed
+publication header are acquired once; initial canonical source checks and sealed
 payload copies share one read snapshot. One reader opens texts after releasing
-that snapshot, preserving byte, digest and authenticated-context checks. The
-single-candidate `prepare` and `prepareSource` APIs remain available to other callers.
+that snapshot, preserving byte, digest and authenticated-context checks.
+Canonical source state and caller grants can change after release. Live guards
+check both around every part opener; registration revalidates all contributing
+sources before exposing a handle. Assembly and final delivery revalidate again.
+The single-candidate `prepare` and `prepareSource` APIs remain available to other callers.
 `prepareMany(candidates, settings, credential)` returns `{handles, complete}`,
 with a handle or `null` for each completed candidate. It calls
 `settings.onPrepared(handle, index)` in input order as each outcome completes.

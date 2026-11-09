@@ -493,7 +493,8 @@ export function createRawSearchAuthority(database, options) {
   function prepareBatch(entries,intent,at) {
     const checked=new Map(),allowed=[];
     // Only engine-owned canonical work runs under SHARED. Each distinct source
-    // is checked once, including contributors outside the projected ranges.
+    // is initially checked once, including contributors outside the projected
+    // ranges. Live opening guards and registration revalidate after release.
     read(()=>{
       for(const entry of entries){
         deadline(at);

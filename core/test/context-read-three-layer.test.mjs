@@ -222,15 +222,15 @@ for (const path of [0, 1, 2]) for (const mutation of ['forgotten', 'suppressed',
     if (result.ok) { assert.equal(result.value.diagnostics.coverage.raw, 'partial'); assert.equal(result.value.metered.items.length, 0); }
   });
 
-for (const mutation of ['forgotten', 'suppressed', 'excluded', 'denied'])
-  test(`partial set batch validation blocks Raw ${mutation} between preparation and assembly`, async t => {
+for (const coverage of ['complete', 'partial']) for (const mutation of ['forgotten', 'suppressed', 'excluded', 'denied'])
+  test(`${coverage} set batch validation blocks Raw ${mutation} between preparation and assembly`, async t => {
     const f = await fixture(t, { extract: ({ input }) => ({ items: input.messages.map(message => ({ content: message.content,
       kind: 'fact', confidence: 1, sourceIndices: [message.index] })) }) });
     const source = await f.capture('secret-partial-batch telescope', { occurredAt: '2026-01-01T08:00:00.000Z' }); await f.build();
     const search = f.rawPort.search, revalidate = f.rawPort.revalidate;
-    f.rawPort.search = async input => ({ ...await search(input), coverage: { status: 'partial' } });
+    f.rawPort.search = async input => ({ ...await search(input), coverage: { status: coverage } });
     const raw = await readRawChannel(f.rawPort, { ...channelInput(), query: 'secret-partial-batch telescope' }, {}, performance.now() + 1000);
-    assert.equal(raw.coverage, 'partial'); assert.equal(raw.items.length, 1);
+    assert.equal(raw.coverage, coverage === 'complete' ? 'included' : 'partial'); assert.equal(raw.items.length, 1);
     if (mutation === 'forgotten') {
       const memory = f.db.prepare('SELECT id,revision FROM memories WHERE deleted=0').get();
       ok(f.core.forget({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision }));

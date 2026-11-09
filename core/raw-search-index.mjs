@@ -194,6 +194,9 @@ export async function openRawSearch(value) {
     const classify=(candidate,settings,token)=>retry(at=>classifyAttempt(candidate,settings,token,at),performance.now()+1000,
       ()=>immutable({kind:'denied',reason:'source-or-authority-unavailable'}));
     const prepare=(candidate,settings,token)=>retry(at=>prepareAttempt(candidate,settings,token,at),performance.now()+1000,refused);
+    const preparedOutput=(source,classification,ranges,check)=>immutable({namespace:source.ref.namespace,
+      conversationId:source.ref.conversationId,messageId:source.ref.messageId,ordinal:source.ordinal,
+      role:source.role,occurredAt:source.occurredAt,classification,ranges},check);
     function candidateEntry(candidate,intent) {
       const entry=searches.get(candidate?.proof);
       if(!entry||entry.expires<performance.now()||entry.intent!==intent||!entry.candidates.some(row=>same(row,candidate)))fail('stale_publication');
@@ -233,8 +236,7 @@ export async function openRawSearch(value) {
         ranges.push({source:row.source.ref,text,classification:row.source.classification});
       }
       const source=rows[0].source;
-      const output=immutable({namespace:source.ref.namespace,conversationId:source.ref.conversationId,messageId:source.ref.messageId,
-        ordinal:source.ordinal,role:source.role,occurredAt:source.occurredAt,classification:candidate.classification,ranges});
+      const output=preparedOutput(source,candidate.classification,ranges);
       const ticket=authority.bind('raw-search-prepared-v1',[candidate.proof,++serial]);
       const handle=Object.freeze({value:output,ticket,validate(){return revalidate([ticket])[0];}});
       retain(prepared,ticket,{sources:entry.sources,intent,access,value:output,handle},RAW_SEARCH_LIMITS.preparations);
@@ -271,16 +273,18 @@ export async function openRawSearch(value) {
             if(rows.reduce((bytes,source)=>bytes+source.bytes,0)>256*1024)fail('source_budget_exceeded');
             const ranges=[];
             for(const source of rows){
-              const text=await batch.open(source,check);check();
+              // The captured bytes outlive the snapshot. Recheck live source
+              // predicates after host callbacks and around every part opener.
+              const guard=()=>{check();access();authority.check(source,intent,at);check();};
+              const text=await batch.open(source,guard);check();
               ranges.push({source:source.ref,text,classification:source.classification});
             }
-            const source=rows[0],output=immutable({namespace:source.ref.namespace,conversationId:source.ref.conversationId,
-              messageId:source.ref.messageId,ordinal:source.ordinal,role:source.role,occurredAt:source.occurredAt,
-              classification:candidate.classification,ranges},check);
+            const output=preparedOutput(rows[0],candidate.classification,ranges,check);
             check();
             const ticket=authority.bind('raw-search-prepared-v1',[candidate.proof,++serial]);
             handle=Object.freeze({value:output,ticket,validate(){return revalidate([ticket])[0];}});
             retain(prepared,ticket,{sources:entry.sources,intent,access,value:output,handle},RAW_SEARCH_LIMITS.preparations);
+            try{revalidate([ticket]);}catch(error){prepared.delete(ticket);handle=null;throw error;}
           }catch(error){if(interrupted(error))throw error;}
           check();handles.push(handle);onPrepared(handle,index);
         }
