@@ -168,7 +168,7 @@ test('Codex final output guard rechecks an intent after its control-lock wait', 
   syncBuiltinESMExports();
   let observing;
   const pending = recallContext({ prompt: 'Synthetic query', session_id: 's' }, config,
-    'synthetic-token', null, AbortSignal.timeout(8000), async () => { armed = true; return true; });
+    'synthetic-token', 'a'.repeat(64), AbortSignal.timeout(8000), async () => { armed = true; return true; });
   pending.catch(() => {});
   t.after(async () => {
     release.resolve(); continueObservation.resolve();
