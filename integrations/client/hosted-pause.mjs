@@ -53,6 +53,9 @@ export async function hostedPauseStatus(config) {
 // Only diagnostics read these records. No status lock or retries delay failure
 // publication. Names order by observation time, with unavailable winning ties.
 async function publishStatus(config, state, observedAt) {
+  // These POSIX-private diagnostics have no portable Windows writer. Skipping
+  // them cannot authorize content or delay a decision.
+  if (!hostedPauseMode(config).barrier) return;
   const directory = statusDirectory(config), name = observationName(state, observedAt);
   try {
     await privateWrite(join(directory, name), JSON.stringify({version:1,state,observedAt}));
@@ -71,6 +74,7 @@ export async function observeHostedPause(config, token, signal, { available } = 
     else await publishStatus(config, 'available', observedAt);
     return remote;
   } catch (error) {
+    if (!hostedPauseMode(config).barrier) volatileState(config).valid = false;
     await publishStatus(config, 'unavailable', new Date().toISOString());
     throw error;
   }
@@ -98,6 +102,18 @@ const highWaterPath = config => pausePath(config) + '.high-water';
 // A timed-out publisher still journals. Limit every admitted critical section
 // at its synchronous side effect, including an uncooperative filesystem wait.
 const GATE_WINDOW_MS = 250;
+// Capability is selected once for each config, never from a lock failure.
+// Tests inject the platform without changing the host or its lock semantics.
+const modes = new WeakMap(), volatileStates = new Map();
+export function hostedPauseMode(config, platform = process.platform) {
+  if (!modes.has(config)) modes.set(config, Object.freeze({ barrier: platform !== 'win32' }));
+  return modes.get(config);
+}
+function volatileState(config) {
+  const key = config.root + ':' + hostedTargetId(config);
+  if (!volatileStates.has(key)) volatileStates.set(key, { valid: false });
+  return volatileStates.get(key);
+}
 const intentName = remote => `${remote.generation}.${remote.paused}`;
 const intentBytes = remote => JSON.stringify({ generation: remote.generation, paused: remote.paused });
 
@@ -161,6 +177,15 @@ async function writeOnce(path, bytes) {
 // control-lock waits. Callers pass check to the local gate as its guard. Work
 // only starts a request (returns its promise in an object) or emits output.
 export async function withHostedPauseGate(config, generation, work) {
+  if (!hostedPauseMode(config).barrier) {
+    const check = async () => {
+      const state = volatileState(config);
+      if (!state.valid || state.previous?.paused || state.previous?.generation !== generation)
+        throw new Error('pause_unavailable');
+    };
+    await check();
+    return work(check);
+  }
   const check = async () => {
     const { previous } = await readPause(config), intent = await highestIntent(config);
     if (!previous || !conforms('pause-state', previous) || !previous.enforced ||
@@ -200,6 +225,12 @@ async function observe(config, token, signal) {
   } finally { await reader.cancel().catch(() => {}); }
   const remote = JSON.parse(Buffer.concat(chunks).toString('utf8'));
   if (!conforms('pause-state', remote) || !remote.enforced) throw new Error('pause_unavailable');
+  if (!hostedPauseMode(config).barrier) {
+    const state = volatileState(config);
+    validateTransition(remote, state.previous);
+    state.previous = remote; state.valid = true;
+    return remote;
+  }
   const file = pausePath(config);
   // Read-only on an unchanged observation. Record a changed, validated denial
   // BEFORE attempting the pause lock: timeout, rotation failure and process

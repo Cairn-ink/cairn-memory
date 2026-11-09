@@ -26,7 +26,7 @@ import { resolveClient, clientProjectId, parsePairingRecord } from "../lib/pairi
 import { VERSION } from "../lib/version.mjs";
 import { optionalHostSessionId } from "../lib/hosted-contract.mjs";
 import { inspectAutomaticPolicy } from "../lib/automatic-policy.mjs";
-import { hostedPauseStatus, observeHostedPause, deferHostedPauseStatus, withHostedPauseGate } from "../lib/hosted-pause.mjs";
+import { hostedPauseStatus, observeHostedPause, deferHostedPauseStatus, withHostedPauseGate, hostedPauseMode } from "../lib/hosted-pause.mjs";
 import { INVALID_ENDPOINT, credentialDescription, readCredentialState, recordCredentialAuth,
   recordCredentialConfiguration } from "../lib/credential-state.mjs";
 
@@ -247,11 +247,22 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
   const transcriptPath = hookInput.transcript_path;
   const size = (await stat(transcriptPath)).size;
   let cursor = await readCaptureCursor(statePath);
+  const portableHosted = hosted && !hostedPauseMode(hostedConfig).barrier;
+  // The portable cursor writer uses rename and the existing local process lock;
+  // neither requires POSIX directory fsync or a verified PID namespace.
+  const writeCursor = (path, value) => writeCaptureCursor(path, portableHosted
+    ? { ...value, hostedGeneration: hosted.generation, hostedTarget: hostedTargetId(hostedConfig) }
+    : value);
   // Keep Claude-only turn metadata out of the frozen shared cursor helper.
   // The caller holds this session's capture lock throughout both reads.
   if (cursor) {
     try {
-      if (JSON.parse(await readFile(statePath, "utf8")).ownSkillTurn === true) {
+      const extension = JSON.parse(await readFile(statePath, "utf8"));
+      if (portableHosted) {
+        cursor.hostedGeneration = extension.hostedGeneration;
+        cursor.hostedTarget = extension.hostedTarget;
+      }
+      if (extension.ownSkillTurn === true) {
         cursor.ownSkillTurn = true;
       }
     } catch { /* Missing/corrupt extension carries no verified turn state. */ }
@@ -261,11 +272,12 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
   // fresh EOF boundary and transmits nothing. This also protects sessions the
   // control command could not know about and survives process restarts.
   if (
-    generation !== "initial" &&
-    (!cursor || cursor.generation !== generation)
+    (generation !== "initial" && (!cursor || cursor.generation !== generation)) ||
+    (portableHosted && ((cursor?.hostedGeneration ?? 0) !== hosted.generation ||
+      (cursor?.hostedTarget !== undefined && cursor.hostedTarget !== hostedTargetId(hostedConfig))))
   ) {
     const tail = size === 0 ? Buffer.alloc(0) : await readSlice(transcriptPath, size - 1, size);
-    await writeCaptureCursor(statePath, {
+    await writeCursor(statePath, {
       offset: size,
       generation,
       discardUntilNewline: size > 0 && tail[0] !== 0x0a,
@@ -281,7 +293,7 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
   };
   if (cursor.offset > size || (cursor.pendingEnd ?? 0) > size) {
     const tail = size === 0 ? Buffer.alloc(0) : await readSlice(transcriptPath, size - 1, size);
-    await writeCaptureCursor(statePath, {
+    await writeCursor(statePath, {
       offset: size,
       generation,
       discardUntilNewline: size > 0 && tail[0] !== 0x0a,
@@ -299,7 +311,7 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
   if (cursor.discardUntilNewline) {
     const boundary = slice.indexOf(0x0a);
     if (boundary < 0) {
-      await writeCaptureCursor(statePath, {
+      await writeCursor(statePath, {
         offset: offset + slice.length,
         generation,
         discardUntilNewline: true,
@@ -310,7 +322,7 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
     }
     offset += boundary + 1;
     slice = slice.subarray(boundary + 1);
-    await writeCaptureCursor(statePath, {
+    await writeCursor(statePath, {
       offset,
       generation,
       discardUntilNewline: false,
@@ -326,7 +338,7 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
   const turnState = { ownSkillTurn: cursor.ownSkillTurn === true };
   const window = transcriptWindow(consumed.toString("utf8"), hookInput.session_id, { turnState });
   if (!window.some((message) => !message.withheld)) {
-    await writeCaptureCursor(statePath, {
+    await writeCursor(statePath, {
       offset: offset + consumed.length,
       generation,
       discardUntilNewline: false,
@@ -340,7 +352,7 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
   if (cursor.pendingEnd === undefined) {
     // Freeze this extraction window before the first request. Retries keep the
     // same final batch and event id even if the transcript grows meanwhile.
-    await writeCaptureCursor(statePath, {
+    await writeCursor(statePath, {
       offset,
       generation,
       discardUntilNewline: false,
@@ -373,7 +385,7 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
     // processing. Do not advance the cursor: the next hook can retry safely.
     if (result?.processing) throw new Error("capture_processing");
   }
-  await writeCaptureCursor(statePath, {
+  await writeCursor(statePath, {
     offset: pendingEnd,
     generation,
     discardUntilNewline: false,
@@ -472,6 +484,7 @@ try {
     credentialDir = process.env.CLAUDE_PLUGIN_DATA ?? dataDir;
     if (endpoint.startsWith("http")) {
       hostedConfig = { root: resolve(dataDir), endpoint };
+      hostedPauseMode(hostedConfig);
       quotaTarget = { root: dataDir, targetId: hostedTargetId({ endpoint, token }) };
       post = createJsonPoster({ endpoint, token, ...quotaTarget });
     }
