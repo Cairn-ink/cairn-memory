@@ -1,6 +1,5 @@
 import { join } from 'node:path';
-import { readdir, unlink } from 'node:fs/promises';
-import { checkedPath, privateRead, privateWrite } from './private-state.mjs';
+import { privateList, privateRemove, privateRead, privateWrite } from './private-state.mjs';
 import { stateLock } from './state-lock.mjs';
 import { rotateAutomaticBoundary } from './automatic-policy.mjs';
 import { conforms } from './hosted-contract.mjs';
@@ -35,8 +34,9 @@ export async function hostedPauseStatus(config) {
     // read. Retry that disappearance; never fall back to stale available bytes.
     for (let attempt = 0; attempt < 8; attempt++) {
       const previous = decodeStatus(await privateRead(statusPath(config), { missing: true }));
-      if (!(await checkedPath(directory, { directory: true, missing: true }))) return previous;
-      const latest = (await readdir(directory)).filter(isObservation).sort().at(-1);
+      const names = await privateList(directory, { missing: true });
+      if (!names) return previous;
+      const latest = names.filter(isObservation).sort().at(-1);
       if (!latest) return previous;
       const bytes = await privateRead(join(directory, latest), { missing: true });
       if (bytes === undefined) continue;
@@ -58,10 +58,8 @@ async function publishStatus(config, state, observedAt) {
     await privateWrite(join(directory, name), JSON.stringify({version:1,state,observedAt}));
     // Publish durably before pruning. Only strictly older names may be removed:
     // a delayed writer can never delete a newer outcome, even after a crash.
-    for (const older of (await readdir(directory)).filter(isObservation)) {
-      if (older < name) await unlink(join(directory, older)).catch(error => {
-        if (error.code !== 'ENOENT') throw error;
-      });
+    for (const older of (await privateList(directory)).filter(isObservation)) {
+      if (older < name) await privateRemove(join(directory, older));
     }
   } catch { /* Diagnostics cannot change the observation's result. */ }
 }
