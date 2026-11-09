@@ -98,8 +98,9 @@ test('resume keeps the hosted generation and only unblocks after publication', {
   await assert.rejects(gate(f.config, 0, () => { starts++; }), /pause_unavailable/);
 });
 
-test('unchanged validated observations add zero fsyncs before deferred diagnostics', async t => {
+for (const generation of [0, 1]) test(`unchanged validated generation ${generation} adds zero fsyncs before deferred diagnostics`, async t => {
   const f = await fixture(t);
+  if (generation) { f.remote({ ...active, generation }); await f.observe(); }
   const handle = await open(join(f.config.root, 'probe'), 'wx', 0o600);
   const prototype = Object.getPrototypeOf(handle), sync = prototype.sync;
   await handle.close();
