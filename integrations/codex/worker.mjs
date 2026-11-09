@@ -451,6 +451,10 @@ export async function runWorker(
     // Number only sent batches. Metadata windows may split a large frozen
     // range, but the existing manifests, event IDs and batch boundaries stay.
     const sent = batches.filter(batch => batch.body);
+    // Time is a record attribute, attached only after the legacy byte-size
+    // planner has frozen boundaries. It must not split an existing batch.
+    const times = new Map(records.filter(record => record.message && record.occurred_at !== undefined)
+      .map(record => [record.message.id, record.occurred_at]));
     let dispatched = 0;
     while (s.pending.next < batches.length) {
       const b = batches[s.pending.next];
@@ -511,6 +515,8 @@ export async function runWorker(
               });
               const index = sent.indexOf(b), group = Math.floor(index / 64) * 64;
               const body = { ...b.body,
+                messages: b.body.messages.map(message => times.has(message.id) ?
+                  { ...message, occurred_at: times.get(message.id) } : message),
                 window: {
                   id: hash(wireBinding(binding).sessionId, group === 0 ? s.pending.start : sent[group].start),
                   slice: index - group + 1,

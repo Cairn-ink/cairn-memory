@@ -96,7 +96,8 @@ export function parseLine(bytes, { sessionId, wireSessionId, epoch, start, end }
     new Date(p.completed_at_ms) : null;
   const occurredAt = typeof row.timestamp === 'string' && row.timestamp.length <= 40 ? row.timestamp :
     completed && Number.isFinite(completed.getTime()) ? completed.toISOString() : undefined;
-  return { start, end, ...clean, message: { id: hash(PROFILE,'codex',wireSessionId,epoch,start,end),
-    role: user ? 'user' : 'assistant', content: clean.content,
-    ...(occurredAt === undefined ? {} : { occurred_at: occurredAt }) } };
+  return { start, end, ...clean,
+    ...(occurredAt === undefined ? {} : { occurred_at: occurredAt }),
+    message: { id: hash(PROFILE,'codex',wireSessionId,epoch,start,end),
+      role: user ? 'user' : 'assistant', content: clean.content } };
 }

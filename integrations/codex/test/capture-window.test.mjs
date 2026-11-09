@@ -13,7 +13,7 @@ const { parseLine } = await import(new URL('parser.mjs', modules));
 test('parser copies row time, falls back to completed milliseconds, and keeps wire-scoped IDs', () => {
   const row = JSON.parse(item('Synthetic time'));
   const context = { sessionId: row.payload.thread_id, wireSessionId: 'a'.repeat(64), epoch: 0, start: 10, end: 100 };
-  const parse = (value, extra = {}) => parseLine(Buffer.from(JSON.stringify(value)), { ...context, ...extra }).message;
+  const parse = (value, extra = {}) => parseLine(Buffer.from(JSON.stringify(value)), { ...context, ...extra });
   row.timestamp = '2020-01-02T03:04:05.123456+00:00';
   const original = parse(row);
   assert.equal(original.occurred_at, row.timestamp);
@@ -21,8 +21,8 @@ test('parser copies row time, falls back to completed milliseconds, and keeps wi
   assert.equal(parse(row).occurred_at, '2020-01-02T03:04:05.123Z');
   delete row.payload.completed_at_ms;
   assert.equal(Object.hasOwn(parse(row), 'occurred_at'), false);
-  assert.equal(parse(row).id, original.id);
-  assert.notEqual(parse(row, { wireSessionId: 'b'.repeat(64) }).id, original.id);
+  assert.equal(parse(row).message.id, original.message.id);
+  assert.notEqual(parse(row, { wireSessionId: 'b'.repeat(64) }).message.id, original.message.id);
 });
 
 test('worker sends numbered windows and per-attempt time without changing a frozen retry', async t => {
