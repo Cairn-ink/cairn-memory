@@ -1556,14 +1556,15 @@ You can go back to 0.6.3; it keeps working with the upgraded store, but conversa
 
 ## 20. 0.6.6 amendment: local automatic Raw capture
 
-Status: contract written; implementation blocked by the existing engine's
-disable/reactivate lifecycle. This section specifies required behavior, not
-shipped behavior. In particular, `activate` after `disable` currently returns
-`rearm_required`; the existing session-specific rearm cannot handle an
-installation disabled before any session was initialized. The engine must
-provide a supported reactivation path before the installer can satisfy this
-contract. Do not replace identities, fabricate sessions, edit engine-owned
-authority files, or weaken host qualification to bypass that refusal.
+Capture lifecycle is driven only through the installed engine CLI. Turning off
+calls `disable`, which revokes authority before removing owned native hooks and
+keeps data. Turning on uses `activate`: the engine restores hooks and publishes
+active after preparing fresh authority. Uninstall retains identity and its pinned
+runtime; subsequent setup submits the identical `setup --request`. Existing
+conversations re-arm lazily at the next real hook's complete transcript EOF.
+Off-period text is skipped. Claude Code skips the first turn of an already-running
+conversation after re-enabling; the following turns resume. Fences, data and
+identity remain intact. The installer must never rewrite engine authority.
 
 ### 20.1 Default and installation boundary
 
@@ -1590,8 +1591,12 @@ the own-skill exclusion root, not a requirement to install the hosted plugin.
 Codex's `installation.qualificationConfigPath` is a private local metadata file
 with a sibling `qualification/` cache. Populate that cache using the bundled
 engine's documented `binaryIdentity`/`qualifyBinary` operator API against the
-actual selected native binary; require a qualified verdict, never manufacture
-one. This is a schema/format probe without sign-in or model requests. At hook
+resolved native binary in a bounded child; never manufacture a verdict. A failed
+probe retains the intended installation and reports blocked/qualification_required.
+Capture waits for format qualification; rerun setup after a Codex update. The
+engine owns background qualification at hooks after updates; the installer never
+implements background requalification. Status prefers qualification reported by
+engine status and otherwise reads only the identity-bound cache. This is a schema/format probe without sign-in or model requests. At hook
 time the engine still checks actual running-host identity, creator qualification
 and interactive source eligibility. Status never launches this probe.
 
@@ -1618,9 +1623,9 @@ claim that capture is enabled.
 
 `setup --local --no-capture` selects capture off. `config --local-capture off|on`
 changes the selected local clients (`--client` scopes the command). Off invokes
-engine disable, removes owned native hooks and retains data. On must restore
-working capture using a supported engine operation, including with no previous
-session; merely printing `rearm_required` does not satisfy this requirement.
+engine disable, removes owned native hooks and retains data. On calls engine `activate` for an existing installation, which restores hooks
+and active authority, including with no previous session. If no installation has
+been prepared, submit `setup --request`, then `activate`.
 Persist preferences independently of engine runtime generations and preserve
 the existing setup lock, operation journal and confirmation rules.
 
@@ -1657,8 +1662,8 @@ remains `<latency to be measured>` until measured. Release text contains no
 forward promises, internal identifiers or workstation paths.
 
 Synthetic packed-installer tests cover both clients' native hooks, notice once,
-idempotent rerun, off/on/off including zero history, status, data-preserving
-uninstall, cloud exclusion, real hook to MCP Raw search to forget-by-time, and
+idempotent rerun, off/on/off/on including zero history, status, data-preserving
+uninstall then setup ending active with data kept, cloud exclusion, real hook to MCP Raw search to forget-by-time, and
 the 0.6.5 upgrade/downgrade round trip. Register new modules in
 `packages/setup/test/setup.test.mjs`. A live process or hook exit 0 alone is
 not evidence of capture; assert retained and searchable Raw in the MCP store.

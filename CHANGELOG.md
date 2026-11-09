@@ -18,6 +18,32 @@
   Unknown event times are handled conservatively; both Raw search intents hide
   fenced sessions. Hosted selections retain their existing behavior and schema.
 
+## 0.6.6 — Unreleased
+
+- `setup --local` installs automatic plaintext conversation Raw capture by default
+  for selected Claude Code and Codex clients, without a key or model calls, in the
+  same database and namespace as local MCP. Shared Raw cap: 200,000,000 bytes.
+- One notice per client; `setup --local --no-capture` and
+  `config --local-capture off|on` control capture and keep data. Status reports
+  each client's on/off/blocked state and reason. Uninstall disables capture and
+  removes hooks, retaining Raw, identity and the pinned runtime for reinstall.
+- Forget/correct hides conversations with messages within ±30 minutes of the
+  memory save time. This can hide unrelated conversations and miss other
+  conversations about the same subject; delete a conversation directly to remove it.
+- Codex requires approving the entries in `/hooks`. A failed format probe leaves
+  capture waiting for qualification. After a Codex update, hooks let the engine
+  qualify the new binary in the background; if still unqualified or failed, rerun
+  setup. Status never runs qualification.
+- Re-enabling keeps identity/data/fences and skips off-period text. Claude Code
+  skips the first turn of an already-running conversation after re-enabling;
+  subsequent turns resume. Hook latency: `<latency to be measured>`.
+- Reinstalling 0.6.5 keeps captured Raw searchable through its Raw/contextRead
+  tools. Its setup does not disable 0.6.6 hooks: they continue using the retained
+  engine. Disable capture with 0.6.6 first to stop it before downgrading. A 0.6.5
+  uninstall deletes the engine, so leftover hook commands cannot capture; Raw stays.
+- Engine bundle source sync: `ee5cd3d1`. Release acceptance must compare the
+  complete bundled engine against that commit, preserving the sync-commit rule.
+
 ## 0.6.5 — Unreleased
 
 - 0.6.4 was prepared but not published; its changes ship in 0.6.5.

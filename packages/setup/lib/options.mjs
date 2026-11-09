@@ -14,7 +14,7 @@ export function validEndpoint(value) {
 
 export function parseOptions(argv) {
   let lang, endpoint, dailyCap, captureExec;
-  let verbose = false;
+  let verbose = false, noCapture = false, localCapture;
   let local = false, cloud = false, yes = false, purgeConfig = false, owner, db, project;
   const remaining = [];
   // Resolve the language first so even invalid endpoint/options use the override.
@@ -43,6 +43,13 @@ export function parseOptions(argv) {
         if (flag === '--owner') { if (owner !== undefined) throw new SetupError('local_option_invalid', 2); owner = value; }
         if (flag === '--db') { if (db !== undefined) throw new SetupError('local_option_invalid', 2); db = value; }
         if (flag === '--project') { if (project !== undefined) throw new SetupError('local_option_invalid', 2); project = value; }
+      } else if (flag === '--no-capture') {
+        if (noCapture) throw new SetupError('local_option_invalid', 2);
+        noCapture = true;
+      } else if (flag === '--local-capture') {
+        const value = argv[++index];
+        if (localCapture !== undefined || !['on', 'off'].includes(value)) throw new SetupError('local_option_invalid', 2);
+        localCapture = value === 'on';
       } else if (flag === '--endpoint') {
         const value = argv[++index];
         if (endpoint || typeof value !== 'string' || !validEndpoint(value)) throw new SetupError('endpoint_option_invalid', 2);
@@ -63,6 +70,8 @@ export function parseOptions(argv) {
         dailyCap = Number(value);
       } else remaining.push(flag);
     }
+    if (noCapture && (!local || remaining[0] !== 'setup')) throw new SetupError('local_option_invalid', 2);
+    if (localCapture !== undefined && (remaining[0] !== 'config' || dailyCap !== undefined || captureExec !== undefined)) throw new SetupError('local_option_invalid', 2);
     if (local && cloud) throw new SetupError('mode_conflict', 2);
     if ((local && !['setup', 'uninstall'].includes(remaining[0])) || (cloud && remaining[0] !== 'setup')) throw new SetupError('mode_option_scope', 2);
     if ((owner !== undefined || db !== undefined || project !== undefined) && (!local || remaining[0] !== 'setup')) throw new SetupError('local_option_invalid', 2);
@@ -71,7 +80,7 @@ export function parseOptions(argv) {
     if (endpoint && remaining[0] !== 'setup') throw new SetupError('endpoint_option_invalid', 2);
     if (dailyCap !== undefined && !['setup', 'config'].includes(remaining[0])) throw new SetupError('cap_option_scope', 2);
     if (captureExec !== undefined && !['setup', 'config'].includes(remaining[0])) throw new SetupError('invalid_exec_setting', 2);
-    return { argv: remaining, lang, endpoint, dailyCap, captureExec, verbose, local, cloud, yes, purgeConfig, owner, db, project };
+    return { argv: remaining, lang, endpoint, dailyCap, captureExec, verbose, noCapture, localCapture, local, cloud, yes, purgeConfig, owner, db, project };
   } catch (error) { error.language = lang; throw error; }
 }
 

@@ -1,5 +1,18 @@
 # Local engine defaults
 
+Installer 0.6.6 `setup --local` installs automatic plaintext conversation Raw
+capture by default, without a key or model calls. Each selected client gets one
+notice. Both clients share the 200,000,000-byte cap and the MCP database/namespace.
+Use `setup --local --no-capture` or `config --local-capture off`; enable with
+`config --local-capture on` (optionally `--client claude|codex`). Off removes hooks
+and keeps data. Status is read-only and shows on/off/blocked with the reason.
+Codex requires approval in `/hooks`; if its format is unqualified, capture waits
+for qualification. Rerun setup after a Codex update. The engine owns background
+qualification; status never launches it. Re-enabling skips off-period text and,
+for an already-running Claude Code conversation, the first turn after re-enabling.
+Hook latency: `<latency to be measured>`.
+
+
 A local install retains submitted captures as Raw and maintains a searchable
 index. The MCP server exposes `find_memory_candidates`,
 `fetch_memory_candidate_evidence`, and `read_memory_context` alongside the old
@@ -51,7 +64,7 @@ retained-profile server is a read-only host with its own authority boundaries.
 | Local embedding model | Uses an explicitly installed local embedding pack | Off; no model is downloaded automatically | Local model disk and CPU; no embedding API charge | Use the complete `--context-embedder local` group, or supply a local `contextRead.embedder` and policy. `--no-context-semantic` disables semantic reads; see [the local model guide](local-embedder-bge-m3.md). |
 | Memory decision review | Holds selected inferred decisions for explicit review | Off | Local review metadata; existing capture model work | Core `decisionReview:'required-v1'`; omit to disable new review holds. There is no MCP startup flag. |
 | Attested content-safety layout | Enables the separately versioned content-safety schema and suppression facts | Off for new stores unless explicitly selected; installed protections remain enforced | Local schema/fact metadata; no provider call | Core `contentSafety:'s2h-v1'` for supported new stores; existing stores use the explicit offline safety migration. There is no default-on migration CLI flag. |
-| Automatic transcript hooks | Submits selected conversation messages without an explicit MCP capture call | Off in the standalone MCP server | When separately installed: Raw disk plus configured capture model calls | No MCP flag installs hooks. Use the separate documented local/client setup and its enable/disable controls. |
+| Automatic transcript hooks | Submits selected conversation messages without an explicit MCP capture call | Off in the standalone MCP server | When separately installed: Raw disk plus configured capture model calls | No MCP flag installs hooks. Installer `setup --local` installs Raw-only hooks by default; use `--no-capture` or `config --local-capture off\|on`. Standalone engine setup remains separate. |
 
 For local Raw selections, forget/correct terminally hide every source session
 whose event-time range overlaps ±30 minutes around an old receipt's creation
