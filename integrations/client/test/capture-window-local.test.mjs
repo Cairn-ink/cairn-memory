@@ -5,7 +5,7 @@ import { claude, codex } from './fixtures/raw-fixtures.mjs';
 
 for (const client of ['claude-code', 'codex']) test(`hosted metadata changes preserve non-HTTP ${client} capture through engine validation`, async t => {
   const row = client === 'codex' ? codex('Synthetic local message') : claude('Synthetic local message');
-  row.timestamp = '2026-01-02T03:04:05.000Z';
+  row.timestamp = new Date().toISOString();
   const f = workerFixture(t, { client, rows: [row] });
   f.providerMode('memory');
   async function call(action, options) {
