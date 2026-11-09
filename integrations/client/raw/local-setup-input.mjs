@@ -50,7 +50,8 @@ export function setupRequest(value) {
       overlap(input.databasePath,input.clientConfigPath) || dirname(input.clientConfigPath) === paths.root) fail('invalid_input');
   return { ...input, namespace, installation };
 }
-export const consented = request => request.interpretationConsent && request.foregroundConsent &&
+export const consented = request => request.foregroundConsent &&
+  (request.interpretationConsent || request.rawMode === 'local-plain-v1') &&
   (request.rawMode === 'off' || request.plaintextRawConsent);
 export function result(status, reason = null) {
   if (!['prepared','active','disabled','declined','blocked','busy'].includes(status) || reason !== null && !reasons.includes(reason)) fail('unexpected_failure');

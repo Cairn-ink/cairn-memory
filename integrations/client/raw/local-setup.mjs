@@ -186,6 +186,7 @@ async function prepare(request,signal) {
         return grant(core,request,storeId,record.targetId,true);
       })));
     const config = { version:'local-capture-config-v1',databasePath:request.databasePath,authority,
+      ...(!request.interpretationConsent ? { interpretation:'raw-only' } : {}),
       raw:{ mode:request.rawMode,capBytes:request.rawCapBytes },provider:{ profile:'openai-baseline-v1',apiKeyEnv:request.providerApiKeyEnv },
       usage:{ root:request.usageRoot,dailyCap:request.dailyCap,concurrency:1 },timeouts:{ captureMs:120000,processMs:150000 } };
     const configText = bytes(config); await privateWrite(paths.config,configText,{ exclusive:true });

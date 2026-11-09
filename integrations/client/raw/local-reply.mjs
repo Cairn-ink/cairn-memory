@@ -2,7 +2,7 @@ import { classifyRawAcknowledgement } from './protocol.mjs';
 import { ownData } from '../../../core/local-authority-input.mjs';
 
 const refusals = new Set(['capture_disabled', 'capture_evidence_closed', 'revision_conflict', 'event_payload_conflict',
-  'raw_part_out_of_order', 'conversation_deleted', 'source_excluded', 'storage_busy', 'invalid_input', 'raw_crypto_unavailable', 'local_capture_failed']);
+  'raw_part_out_of_order', 'raw_session_mode_conflict', 'conversation_deleted', 'source_excluded', 'storage_busy', 'invalid_input', 'raw_crypto_unavailable', 'local_capture_failed']);
 const exact = (value, fields) => { const copy = ownData(value, fields); if (Object.keys(copy).length !== fields.length) throw Error(); return copy; };
 export function localCaptureReply(bytes, request) {
   const text = new TextDecoder('utf8', { fatal: true, ignoreBOM: true }).decode(bytes);

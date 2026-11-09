@@ -9,8 +9,39 @@ search status and contextRead coverage. Other database errors still fail. This i
 local plaintext retention with a default 200,000,000-byte owner cap. Disable it
 with `raw:false` or `--no-raw`; use `rawConversations` for a custom sealing port,
 cap or policy. The engine maintains lexical Raw search in bounded background
-turns. Messages without an event time receive the capture time; explicit
-`occurredAt` wins. See [all defaults and costs](defaults.md).
+turns. Local Raw messages with no asserted event time retain an unknown time;
+explicit `occurredAt` wins. See [all defaults and costs](defaults.md).
+
+Local forget and correct hide whole source conversations from both current and
+history Raw search. Each operation snapshots the old receipts inside its write
+transaction and records permanent windows of **30 minutes before and after each
+receipt's creation time**. With no receipts, the memory's created and updated
+times anchor the windows. Missing anchors refuse with
+`local_raw_hide_anchor_missing`, leaving the memory unchanged. Correct uses the
+receipts from before the correction.
+
+Every captured session whose message event-time range overlaps any window is
+terminally fenced, including concurrent sessions and messages outside the
+window in that same session. Real sessions named by receipts are also fenced,
+even outside the time window. This deliberately hides more than the referenced
+text. Capture arrival time is not used for matching. Unknown message event times
+are conservative: an existing window in the same namespace fences the session.
+Later arrivals inside a window are fenced and refused before payload storage;
+fences also stop ongoing sessions from capturing later, outside-window messages.
+The payload is retained on disk; this is search hiding and capture fencing.
+
+The windows hold only owner, namespace and time range, with no memory, receipt,
+session identity or text. Overlapping windows are merged and never expire. Each
+capture tests at most 24 message timestamps with indexed predecessor lookups,
+each returning at most one row. Forget/correct scans the namespace's captured
+session ranges and fences matches in the same transaction as receipt deletion.
+A failed window or fence write rolls the entire operation back with retryable
+`local_raw_privacy_write_failed`.
+
+These additive local tables are created only for `raw:true` or a
+`rawConversations` selection with `localAuthority`; `user_version` is unchanged.
+Base/hosted constructors and other explicit Raw profiles install no such tables
+and retain their existing forget/correct behavior.
 
 Submitting a capture does not install transcript hooks or grant permission to
 execute remembered instructions. The separate retained-profile MCP path provides
@@ -100,6 +131,13 @@ or consent authority. Only the selected session/source fields reach the host.
 Interpretation/provider-processing consent, plaintext Raw consent and foreground
 latency consent are separate. For explicitly consented interpretation without
 plaintext retention choose `rawMode:"off"`, `plaintextRawConsent:false`.
+For Raw-only capture choose `interpretationConsent:false`,
+`rawMode:"local-plain-v1"`, `plaintextRawConsent:true` and
+`foregroundConsent:true`. It saves Raw without an API key, constructing a model
+provider or making a model call. Successful acknowledgements advance the worker
+across batches and turns. With interpretation declined and Raw off, setup
+declines because there is nothing to save. Existing interpretation-consented
+requests keep their behavior, including blocking on incomplete interpretation.
 Declining required consent creates no installation or grant. Only an environment
 slot name (`OPENAI_API_KEY` or `CAIRN_*_API_KEY`) is stored, never a credential.
 Setup/status/disable and acknowledged replay need no key. Real new interpretation
@@ -619,7 +657,21 @@ The closed configuration requires all of these fields:
 }
 ```
 
-The only additional optional top-level policy is
+The optional `interpretation:'raw-only'` field records Raw-only mode. Omission
+or `interpretation:'engine'` retains v1 interpretation behavior. Raw-only requires
+`raw.mode:'local-plain-v1'`. Setup leaves the field absent for existing consented
+requests. Mode is fixed for each installation; switching requires disabling it
+and setting up again. Setup retains its refusal to adopt an already bound
+target, so a separate installation on that same target may refuse. Existing
+sessions keep their first committed mode:
+cross-mode replay and continuation refuse with `raw_session_mode_conflict`,
+including after a new grant or installation on the same store and namespace.
+Start a fresh session in the new mode. Legacy sessions are classified from their
+authenticated capture projections; old local adapter sessions retain engine
+interpretation. Raw is neither duplicated
+nor silently reinterpreted during a mode change.
+
+The other optional top-level policy is
 `captureQualifiedDuplicates:'append-matching-evidence-v1'`. Omission preserves
 the existing configuration shape and strict qualified-source conflict behavior.
 Explicit undefined/null, inherited/accessor options and other values refuse;
@@ -668,6 +720,11 @@ is SHA256 of the JSON tuple `['local-capture-budget-v1', storeId, targetId]`;
 both clients/restarts must use the same private usage root. Counts do not reset
 with a new credential or consent generation. Daily limits count invocations,
 not dollars, and do not protect against the local owner deleting their ledger.
+The daily cap is a model-cost cap and does not apply to Raw-only capture. The
+owner Raw cap still applies. A Raw-cap refusal stores conversation/message/event
+and progress metadata, a closed `quota_reached` message, an unsaved part with its
+digest and byte counts, and capture/session-mode bindings. Its sealed payload,
+format and key version are null; no Raw bytes are saved or reserved for it.
 Corrupt state or uncertain process liveness refuses dispatch; calls are not
 refunded or automatically retried. No network result is awaited under the lock.
 

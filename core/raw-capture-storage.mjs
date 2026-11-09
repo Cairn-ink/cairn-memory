@@ -11,7 +11,7 @@ import { rawSourceMap } from './raw-source-map.mjs';
 import { createRawLineageStorage } from './raw-lineage-storage.mjs';
 import { boundedText, fail, identifier, object, revision } from './validation.mjs';
 import { managedRequest } from './local-authority-input.mjs';
-import { createLocalAuthorityStorage } from './local-authority-storage.mjs';
+import { createLocalAuthorityStorage, createLocalRawPrivacyStorage } from './local-authority-storage.mjs';
 import { localAuthorityGuard } from './local-authority-guard.mjs';
 
 const where = 'owner_id=? AND scope=? AND project_id=? AND client=? AND event_id=?';
@@ -25,6 +25,8 @@ const hash = value => createHash('sha256').update(JSON.stringify(value)).digest(
 /** Internal only: joins the real admission/episode transaction, never interprets. */
 export function createRawCaptureStorage({ db, profile, ...options }) {
   const hostInterpretation = options.interpretation === 'host';
+  const privacy = options.localRawPrivacy ? createLocalRawPrivacyStorage(db) : null;
+  const arrivalInputs = new WeakMap();
   const journal = createRawJournal({ db, ...options });
   const lineage = createRawLineageStorage(db);
   const authority = db.prepare("SELECT 1 FROM sqlite_master WHERE name='local_capture_controls'").get() ? createLocalAuthorityStorage(db) : null;
@@ -41,6 +43,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       ...(profile.sessionEpisodes ? ['episodeContext'] : ['causal'])]);
     const { causal, episodeContext, ...source } = request;
     const input = freeze(rawRegistration(source));
+    if (privacy) arrivalInputs.set(request, input);
     // Copy the complete context/profile and projection before the first await.
     let context = {};
     if (profile.sessionEpisodes) {
@@ -54,6 +57,8 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       context = { causal: { streamId: identifier(causal.streamId), sequence: revision(causal.sequence) } };
     }
     const sessionKey = journal.sessionKey(input.namespace, input.client, input.sessionId);
+    privacy?.assertModeInside(input.namespace, input.client, sessionKey, hostInterpretation ? 'host' : 'engine');
+    privacy?.fenceArrival(input.namespace, input.client, sessionKey, input.messages);
     const previous = binding(input);
     if (previous) { const denied = localAuthorityGuard(db,previous); if (denied) fail(denied); }
     let bindingDigest = managed ? hash(['raw-capture-managed-v1',profile,context,managed.targetId,managed.storeId,
@@ -131,6 +136,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     function commit() {
       if (!db.isTransaction) fail('raw_transaction_required');
       if (managed) authority.check(managed,input.namespace,input.client);
+      privacy?.assertModeInside(input.namespace, input.client, sessionKey, hostInterpretation ? 'host' : 'engine', true);
       const result = journal.commitRegistration(token);
       const existing = binding(input);
       if (existing) {
@@ -220,6 +226,12 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       return journal.closePending({ ownerId: namespace.ownerId, namespace, client, sessionKey: session, reason: 'capture_barrier' });
     });
   }
+  function fenceArrival(request) {
+    if (!privacy) return;
+    const input = arrivalInputs.get(request);
+    if (input) privacy.fenceArrival(input.namespace, input.client,
+      journal.sessionKey(input.namespace, input.client, input.sessionId), input.messages);
+  }
   async function prepareCapture(request) {
     // Validate and detach before any asynchronous sealing or model work.
     object(request, ['namespace','client','sessionId','eventId','messages',
@@ -238,14 +250,16 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       const previous = conversation && db.prepare('SELECT ordinal,occurred_at FROM raw_messages WHERE conversation_id=? AND message_id=?').get(conversation.id, message.id);
       const content = request.messages[index].content;
       return { id: message.id, role: message.role, content,
-        occurredAt: message.occurredAt ?? previous?.occurred_at ?? receivedAt,
+        occurredAt: message.occurredAt ?? previous?.occurred_at ?? (privacy ? null : receivedAt),
         messageOrdinal: previous?.ordinal ?? ++ordinal,
         part: { index: 0, start: 0, totalUnits: content.length, totalBytes: Buffer.byteLength(content) } };
     });
-    return prepare({ namespace: snapshot.namespace, client: snapshot.client, sessionId: snapshot.sessionId,
+    const rawRequest = { namespace: snapshot.namespace, client: snapshot.client, sessionId: snapshot.sessionId,
       eventId: snapshot.eventId, messages: messages.sort((a,b) => a.messageOrdinal - b.messageOrdinal), ...(snapshot.causal ? { causal: snapshot.causal } : {}),
-      ...(profile.sessionEpisodes ? { episodeContext: structuredClone(request.episodeContext) } : {}) }, true, snapshot.messages.map(message => message.id));
+      ...(profile.sessionEpisodes ? { episodeContext: structuredClone(request.episodeContext) } : {}) };
+    if (privacy) arrivalInputs.set(request, rawRequest);
+    return prepare(rawRequest, true, snapshot.messages.map(message => message.id));
   }
-  return Object.freeze({ ...journal, prepare, prepareCapture, fenceSession,
+  return Object.freeze({ ...journal, prepare, prepareCapture, fenceSession, fenceArrival,
     ...(authority ? { getLocalCaptureControl: authority.get, setLocalCaptureControl: authority.set } : {}) });
 }

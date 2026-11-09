@@ -13,6 +13,14 @@ test('B3 validated personal authority uses public null at every public control b
   assert.equal(f.core.getCaptureControl({ namespace: parsed.authority.namespace }).ok, true);
   assert.equal(Object.isFrozen(parsed.authority.namespace), true);
 });
+test('local config keeps absent v1 interpretation and validates the explicit fixed mode', t => {
+  const f = fixture(t);
+  assert.equal(configuration(f.config).interpretation,undefined);
+  assert.equal(configuration({...f.config,interpretation:'engine'}).interpretation,'engine');
+  assert.equal(configuration({...f.config,interpretation:'raw-only'}).interpretation,'raw-only');
+  for (const interpretation of [null,false,'host','unknown']) assert.throws(() => configuration({...f.config,interpretation}));
+  assert.throws(() => configuration({...f.config,interpretation:'raw-only',raw:{...f.config.raw,mode:'off'}}));
+});
 
 test('B3 closed own-data configuration rejects unknown, missing, accessor and proxy fields', t => {
   const f = fixture(t);

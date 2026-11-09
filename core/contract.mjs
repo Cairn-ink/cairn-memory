@@ -175,7 +175,7 @@ function failure(error) {
   if (isStorageBusy(error)) code = "storage_busy";
   if (["invalid_identifier", "invalid_text", "invalid_memory", "invalid_receipt",
     "invalid_revision", "invalid_limit"].includes(code)) code = "invalid_input";
-  return { ok: false, error: { code, retryable: code === "storage_busy" } };
+  return { ok: false, error: { code, retryable: code === "storage_busy" || code === 'local_raw_privacy_write_failed' } };
 }
 
 // Validate the trusted opt-in before composition can snapshot any constructor fields.
@@ -225,7 +225,7 @@ function openWithRoleContext(input, roleContext) {
   if (!descriptor && raw !== true) return buildCore(base);
   if (!descriptor) {
     try { return composeRawCore(buildCore, base, defaultRawOptions(), {
-      sources: false, lineage: true, deletion: true, localControls: true,
+      sources: false, lineage: true, deletion: true, localControls: true, localRawPrivacy: true,
       rawTextReaders: false,
       captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch), searchEmbedding: roleContext,
     }); } catch (error) {
@@ -252,6 +252,7 @@ function openWithRoleContext(input, roleContext) {
   const coreOptions = Object.create(Object.getPrototypeOf(input), fields);
   return composeRawCore(buildCore, coreOptions, options, {
     sources: Boolean(coreOptions.privateCards), lineage: true, deletion: true, localControls: true,
+    localRawPrivacy: Boolean(options.localAuthority),
     captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch), searchEmbedding: roleContext,
   });
 }

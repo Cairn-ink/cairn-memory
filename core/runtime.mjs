@@ -37,6 +37,8 @@ import { createRawCardInvalidation } from './card-raw-sources.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { createRawDeletionStorage } from './raw-deletion-storage.mjs';
 import { createRawLineageStorage, isSourceSnapshotOverflow, SOURCE_SNAPSHOT_MS } from './raw-lineage-storage.mjs';
+import { installLocalRawPrivacy } from './local-authority-schema.mjs';
+import { createLocalRawPrivacyStorage } from './local-authority-storage.mjs';
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
 const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
@@ -70,6 +72,8 @@ export function createMemoryRuntime(input, internal) {
   const db = openDatabase(input.path, { ...(busyTimeoutMs !== undefined ? { busyTimeoutMs } : {}), privateCards: Boolean(privateCards), currentDependencies: Boolean(privateCards?.currentDependencies) || Boolean(input.contentSafety && internal?.rawCapture), methodPackages: Boolean(methodPackages), assets: Boolean(assets), roleProfiles: Boolean(roleProfiles), rawCapture: Boolean(internal?.rawCapture),
     rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore, storeFence: input.storeFence, contentSafety: input.contentSafety });
   try {
+  if (internal?.localRawPrivacy) transaction(db, () => installLocalRawPrivacy(db));
+  const localRawPrivacy = internal?.localRawPrivacy ? createLocalRawPrivacyStorage(db) : null;
   const rawLineage = createRawLineageStorage(db);
   const sourceRoots = createRawSourceRoots(db);
   const rawCards = createRawCardInvalidation(db);
@@ -346,6 +350,7 @@ export function createMemoryRuntime(input, internal) {
         AND fingerprint = ? AND deleted = 0 AND id != ?`)
         .get(...boundary(ns), value.fingerprint, id);
       if (other) fail("memory_conflict");
+      localRawPrivacy?.hideMemoryInside(ns, current);
       sourceRoots.touchMemory(ns, id);
       const suppression = { reason: 'correction_supersession', actionId: 'memory-correct-'+id+'-'+expectedRevision };
       writeContentSuppressionInside(db, { namespace: ns, kind: 'memory', key: id, matchMode: 'revision-through',
@@ -382,8 +387,10 @@ export function createMemoryRuntime(input, internal) {
   }
   function forgetMutationInside(ns, id, expectedRevision, reason, suppressionReason) {
       const current = activeRow(ns, id);
+      if (!current && localRawPrivacy) fail('memory_not_found');
       if (!current) return { forgotten: false, indexRevision: epoch(ns) };
       if (expectedRevision !== undefined && current.revision !== expectedRevision) fail("revision_conflict");
+      localRawPrivacy?.hideMemoryInside(ns, current);
       sourceRoots.touchMemory(ns, id);
       suppress(ns, current.fingerprint);
       const suppression = { reason: suppressionReason, actionId: 'memory-forget-'+id };

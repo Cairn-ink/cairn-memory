@@ -2,6 +2,21 @@ import { fail } from './validation.mjs';
 
 export const LOCAL_AUTHORITY_SCHEMA_VERSION = 29;
 export const LOCAL_BINDING_COLUMNS = ['local_target_id','local_store_id','local_consent_generation'];
+
+// Selected locally, additive, and deliberately independent of user_version.
+// Product stores opening the base or an explicit hosted Raw profile get no DDL.
+export function installLocalRawPrivacy(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS local_raw_hide_windows (
+    owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,
+    start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL CHECK(end_ms>=start_ms),
+    PRIMARY KEY(owner_id,scope,project_id,start_ms)
+  ) STRICT;
+  CREATE TABLE IF NOT EXISTS local_raw_session_modes (
+    owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,
+    client TEXT NOT NULL, session_key TEXT NOT NULL, interpretation TEXT NOT NULL CHECK(interpretation IN ('engine','host')),
+    PRIMARY KEY(owner_id,scope,project_id,client,session_key)
+  ) STRICT;`);
+}
 export function validateRawSourcePrerequisites(db) {
   for (const name of ['card_raw_bindings','card_raw_mutation_context','card_raw_pending_invalidations']) {
     if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)) fail('unsupported_database');

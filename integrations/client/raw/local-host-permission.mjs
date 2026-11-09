@@ -113,8 +113,10 @@ export async function inspectRearmBoundary(config,identity,cursor,proof,previous
     const mac = value => createHmac('sha256',Buffer.from(secret,'hex')).update(JSON.stringify(value)).digest('hex');
     const profile = { captureQualification:'source-bound-v2',...(Object.hasOwn(config,'captureQualifiedDuplicates')
       ? { captureQualifiedDuplicates:config.captureQualifiedDuplicates }:{}) };
-    const binding = hash(['raw-capture-managed-v1',profile,{},config.authority.targetId,config.authority.storeId,
+    let binding = hash(['raw-capture-managed-v1',profile,{},config.authority.targetId,config.authority.storeId,
       boundary,client,captured.local_consent_generation]);
+    const rawOnly = config.interpretation === 'raw-only';
+    if (rawOnly) binding = hash(['raw-capture-host-v1',binding]);
     const rawResult = JSON.parse(event.result), policy = JSON.parse(event.policy);
     if (captured.binding_digest !== binding || !/^[a-f0-9]{64}$/.test(event.digest) ||
       policy.generation !== 'local-capture-v1' || ![null,'notice_required'].includes(policy.reason) ||
@@ -131,7 +133,7 @@ export async function inspectRearmBoundary(config,identity,cursor,proof,previous
       const admission = db.prepare('SELECT state,payload_digest FROM admission_claims WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND event_id=?')
         .get(...boundary,client,last.first_event_id);
       if (admission?.state !== 'completed' || admission.payload_digest !== captured.projection_digest) fail('rearm_refused');
-    } else if (captured.projection_digest !== hash(['raw-capture-empty-v1',session,last.first_event_id,[last.message_id],binding])) fail('rearm_refused');
+    } else if (captured.projection_digest !== hash([rawOnly ? 'raw-capture-host-empty-v1' : 'raw-capture-empty-v1',session,last.first_event_id,[last.message_id],binding])) fail('rearm_refused');
     if (firstBatch) {
       const wire = firstBatch.body, message = wire.messages[0];
       if (wire.event_id !== last.first_event_id || message.id !== last.message_id || message.part.index !== 0 || message.part.start !== 0 ||
