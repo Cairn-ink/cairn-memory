@@ -494,7 +494,7 @@ try {
     credentialDir = process.env.CLAUDE_PLUGIN_DATA ?? dataDir;
     if (endpoint.startsWith("http")) {
       hostedConfig = { root: resolve(dataDir), endpoint };
-      hostedPauseMode(hostedConfig);
+      hostedPauseMode(hostedConfig, process.platform);
       quotaTarget = { root: dataDir, targetId: hostedTargetId({ endpoint, token }) };
       post = createJsonPoster({ endpoint, token, ...quotaTarget });
     }

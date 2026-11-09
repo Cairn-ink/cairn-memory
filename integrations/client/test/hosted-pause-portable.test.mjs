@@ -44,3 +44,10 @@ for(const platform of ['linux','darwin']) test(`${platform} lock timeout never s
   await assert.rejects(f.observe(),/state_busy/,'lock_failure_stays_closed');
   assert.equal(pause.hostedPauseMode(f.config).barrier,true);
 });
+
+test('unconfigured consumers retain the shared barrier on the native platform',t=>{
+  const descriptor=Object.getOwnPropertyDescriptor(process,'platform');
+  Object.defineProperty(process,'platform',{value:'win32',configurable:true});
+  t.after(()=>Object.defineProperty(process,'platform',descriptor));
+  assert.equal(pause.hostedPauseMode({}).barrier,true,'portable_capability_requires_client_selection');
+});

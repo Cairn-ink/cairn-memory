@@ -703,8 +703,9 @@ diagnostics never authorize dispatch. Complete, unchanged observations add no
 durable writes before recall. Resume retains the hosted generation and permits
 work only after publication.
 
-On native Windows, pause is checked right before every send, and a request that
-had already started when you paused can finish. Observation authority there is
+The Claude plugin selects a portable capability on native Windows. On native
+Windows, pause is checked right before every send, and a request that had already
+started when you paused can finish. Observation authority there is
 process-local: a delayed older active response in another hook can still authorize
 a send after a different process has observed pause. Each observation validates
 the full contract, enforcement, generation ordering and pause transitions.
