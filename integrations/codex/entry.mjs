@@ -1,6 +1,6 @@
 // Installed entry: every automatic path exits 0, with only vetted context JSON.
 // Dynamic import also contains missing/corrupt runtime failures without stderr.
-import { write } from 'node:fs';
+import { write, writeSync } from 'node:fs';
 const [path, event] = process.argv.slice(2);
 const capture = ['Stop','PreCompact','SessionEnd'].includes(event);
 const controller = new AbortController();
@@ -27,6 +27,10 @@ process.on('unhandledRejection', () => finish(capture ? '{}' : ''));
 try {
   if (!['SessionStart','UserPromptSubmit','Stop','PreCompact','SessionEnd','worker','qualify'].includes(event)) finish('');
   const { runInstalled } = await import('./installed.mjs');
-  const output = await runInstalled(path, event, process.stdin, { signal: controller.signal });
+  const output = await runInstalled(path, event, process.stdin, { signal: controller.signal,
+    deliver: output => {
+      controller.signal.throwIfAborted();
+      writeSync(1, output);
+    } });
   clearTimeout(timer); finish(output || (capture ? '{}' : ''));
 } catch { clearTimeout(timer); finish(capture ? '{}' : ''); }

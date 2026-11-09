@@ -141,6 +141,7 @@ export async function startIfActive(dataDir, generation, start, { signal, guard 
     if (guard) await guard();
     signal?.throwIfAborted();
     if (current.paused || current.generation !== generation) return;
+    guard?.beforeStart?.();
     operation = Promise.resolve(start());
     // The control lock still has a few filesystem cleanup awaits before this
     // function returns. Attach a handler now so a fast rejection cannot become
@@ -159,6 +160,7 @@ export async function runIfActive(dataDir, generation, run, { signal, guard } = 
     if (guard) await guard();
     signal?.throwIfAborted();
     if (current.paused || current.generation !== generation) return;
+    guard?.beforeStart?.();
     run();
     ran = true;
   }, { timeoutMs: 250, pollMs: 10, signal });

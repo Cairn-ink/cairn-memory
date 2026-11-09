@@ -93,6 +93,10 @@ export function deferHostedPauseStatus(config, token, signal) {
 }
 const pausePath = config => join(config.root, 'hosted-pause', hostedTargetId(config) + '.json');
 const intentDirectory = config => pausePath(config) + '.intents';
+const gatePath = config => pausePath(config) + '.gate';
+// A timed-out publisher still journals. Limit every admitted critical section
+// at its synchronous side effect, including an uncooperative filesystem wait.
+const GATE_WINDOW_MS = 250;
 const intentName = remote => `${remote.generation}.${remote.paused}`;
 const intentBytes = remote => JSON.stringify({ generation: remote.generation, paused: remote.paused });
 
@@ -157,8 +161,14 @@ export async function withHostedPauseGate(config, generation, work) {
       if (completed !== intentBytes(previous)) throw new Error('pause_unavailable');
     }
   };
-  await check();
-  return work(check);
+  return stateLock(gatePath(config), async () => {
+    const deadline = performance.now() + GATE_WINDOW_MS;
+    check.beforeStart = () => {
+      if (performance.now() >= deadline) throw new Error('pause_unavailable');
+    };
+    await check();
+    return work(check);
+  });
 }
 async function observe(config, token, signal) {
   signal?.throwIfAborted();
@@ -190,6 +200,7 @@ async function observe(config, token, signal) {
     validateIntent(remote, await highestIntent(config));
     if ((!previous && (remote.generation > 0 || remote.paused)) ||
         (previous && (remote.generation !== previous.generation || remote.paused !== previous.paused))) {
+      const publish = async () => {
       const directory = intentDirectory(config);
       await privateDirectory(directory);
       // Persist newly created ancestor entries too. A concurrent writer may
@@ -199,6 +210,17 @@ async function observe(config, token, signal) {
       // Identical exclusive publications are safe across processes. Even when
       // the name exists, finish its directory sync before attempting the lock.
       await privateWrite(join(directory, intentName(remote) + '.json'), intentBytes(remote), { exclusive: true });
+      };
+      let entered = false;
+      try {
+        await stateLock(gatePath(config), async () => { entered = true; await publish(); });
+      } catch (error) {
+        // Never discard a validated observation because the shared gate failed.
+        // If publication itself failed, retain that failure rather than retrying
+        // a partially completed write as though it were an acquisition failure.
+        if (entered) throw error;
+        await publish();
+      }
     }
   }
   const observed = await stateLock(file + '.lock', async () => {
