@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { link, mkdir, open, readFile, stat, unlink, writeFile } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { platform } from "node:os";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { captureEvent } from "../lib/capture-event.mjs";
@@ -188,6 +188,7 @@ async function captureMarkers(path) {
       ...(typeof state.firstPromptAt === "string" && Number.isFinite(Date.parse(state.firstPromptAt)) ?
         { firstPromptAt: state.firstPromptAt } : {}),
       ...(state.ownSkillTurn === true ? { ownSkillTurn: true } : {}),
+      ...(typeof state.windowInitial === "boolean" ? { windowInitial: state.windowInitial } : {}),
     };
   } catch { return {}; }
 }
@@ -293,9 +294,10 @@ async function captureLocked(hookInput, statePath, generation) {
   const transcriptPath = hookInput.transcript_path;
   const size = (await stat(transcriptPath)).size;
   let cursor = await readCaptureCursor(statePath);
-  const { ownSkillTurn, ...markers } = await captureMarkers(statePath);
+  const { ownSkillTurn, windowInitial, ...markers } = await captureMarkers(statePath);
   if (cursor && ownSkillTurn === true) cursor.ownSkillTurn = true;
   const fallback = !cursor && markers.startOffset === undefined;
+  const initial = cursor?.pendingEnd !== undefined ? windowInitial === true : fallback;
 
   // After every pause barrier, the first hook for each session establishes a
   // fresh EOF boundary and transmits nothing. This also protects sessions the
@@ -377,7 +379,7 @@ async function captureLocked(hookInput, statePath, generation) {
   // Batches keep 0.1.0's boundaries and event ids, including for a window 0.1.0
   // froze before an upgrade; only messages 0.1.1 keeps are ever sent.
   const turnState = { ownSkillTurn: cursor.ownSkillTurn === true };
-  const window = transcriptWindow(consumed.toString("utf8"), hookInput.session_id, { turnState });
+  const window = transcriptWindow(consumed.toString("utf8"), hookInput.session_id, { turnState, includeOffsets: true });
   if (!window.some((message) => !message.withheld)) {
     await writeCaptureCursor(statePath, {
       ...markers,
@@ -400,19 +402,29 @@ async function captureLocked(hookInput, statePath, generation) {
       generation,
       discardUntilNewline: false,
       pendingEnd,
+      windowInitial: initial,
       // Retries must start from the original turn state, not this window's end.
       ...(cursor.ownSkillTurn === true ? { ownSkillTurn: true } : {}),
     });
   }
 
-  const projectId = await clientProjectId(clientOptions, hookInput.cwd, binding);
+  // Preserve every legacy batch, including its event id. Only sent batches
+  // participate in numbering; metadata groups cap at 64 without dropping data.
+  const sent = [];
   for (let index = 0; index < window.length; index += 24) {
     const batch = window.slice(index, index + 24);
     const messages = batch
       .filter((message) => !message.withheld)
-      .map(({ id, role, content }) => ({ id, role, content }));
+      .map(({ id, role, content, occurred_at }) => ({ id, role, content,
+        ...(occurred_at === undefined ? {} : { occurred_at }) }));
     // A batch of machine records only has nothing to send; it completes as is.
     if (messages.length === 0) continue;
+    sent.push({ batch, messages, start: offset + batch[0].recordOffset });
+  }
+  const projectId = await clientProjectId(clientOptions, hookInput.cwd, binding);
+  for (const [index, { batch, messages }] of sent.entries()) {
+    const group = Math.floor(index / 64) * 64;
+    const windowStart = group === 0 ? offset : sent[group].start;
     const result = await post(
       "/api/memory/capture",
       {
@@ -421,6 +433,13 @@ async function captureLocked(hookInput, statePath, generation) {
         session_id: hookInput.session_id,
         project_id: projectId,
         messages,
+        window: {
+          id: createHash("sha256").update(JSON.stringify([hookInput.session_id, windowStart])).digest("hex"),
+          slice: index - group + 1,
+          slices: Math.min(64, sent.length - group),
+          initial,
+        },
+        sent_at: new Date().toISOString(),
       },
       25_000, true, (start) => dispatchActive(generation, start),
     );

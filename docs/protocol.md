@@ -472,10 +472,41 @@ The tuple `(authenticated user, client, event_id)` is an idempotency key. Concur
 
 Only `user` and `assistant` text belongs in `messages`. Unknown fields are rejected. Automatic results must remain `personal` or `project` private and carry origin `agent-inferred` plus at least one Source Receipt.
 
+Capture clients may supply these optional time and window fields:
+
+- Each message's `occurred_at` is its record's ISO timestamp, preserved exactly,
+  at most 40 characters. Messages without a timestamp omit it.
+- `sent_at` is the client's ISO clock at this send attempt. It changes on retry.
+- `window` is `{ id, slice, slices, initial }`. `id` hashes the wire session and
+  window's starting byte offset. `slice` and `slices` are integers from 1 to 64;
+  numbering is 1-based and counts only requests containing messages. Entirely
+  withheld batches do not count. The last sent request has `slice === slices`.
+  A backlog exceeding 64 sent batches uses consecutive metadata windows of at
+  most 64 requests, without changing event IDs or batch boundaries. The first
+  group starts at the frozen range's offset; subsequent groups start at their
+  first batch's record offset. All groups inherit the range's `initial` value.
+  Frozen retries preserve IDs, numbering and `initial` even if the file grows.
+
+Claude sets `initial` when the range began without a cursor or a SessionStart
+byte boundary, including when only a first-prompt time was available. SessionStart
+records an EOF boundary under the capture lock; an existing empty file starts at
+zero, while a missing transcript leaves the boundary unknown. A first-prompt
+marker can exclude an older dated prefix if start did not run. This marker is
+published after recall's fetch or decision without waiting for the capture lock.
+If capture wins that race, its frozen range remains initial. Codex establishes
+an EOF boundary before capture and refuses fork/history headers, so its windows
+have `initial: false`. Codex uses a row timestamp or completion milliseconds
+converted to ISO. Time and window metadata never enter message or event IDs.
+
+Servers must accept these optional fields before updated hosted clients ship.
+The non-HTTP local raw producer has a separate strict multipart contract and
+does not receive hosted window or send-time fields.
+
 The Claude plugin withholds machine-written user records and its own skill turns,
 including assistant answers until the next submitted user prompt. Whole plugin
-control output lines are also withheld. Its local capture cursor may retain only
-an `ownSkillTurn: true` boolean for continued answers; this is not a wire field.
+control output lines are also withheld. Its local capture cursor retains
+an `ownSkillTurn: true` boolean for continued answers alongside session boundary
+and frozen-window metadata; these cursor fields are not wire fields.
 The parser still keeps every record the 0.1.0 text parser emitted when computing
 24-record batch boundaries and `event_id`. Only the withheld subset is removed
 from `messages`; an entirely withheld batch needs no request. A frozen retry

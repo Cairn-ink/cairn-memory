@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { conforms } from '../lib/hosted-contract.mjs';
+
+test('optional capture metadata accepts source time and bounded strict windows', () => {
+  const body = { client: 'claude-code', event_id: 'synthetic-event', session_id: 'synthetic-session',
+    messages: [{ id: 'message', role: 'user', content: 'Synthetic message', occurred_at: '2020-01-02T03:04:05.123456+00:00' }],
+    sent_at: '2026-01-02T03:04:05.000Z', window: { id: 'a'.repeat(64), slice: 1, slices: 2, initial: true } };
+  assert.equal(conforms('capture-request', body), true);
+  const legacy = structuredClone(body); delete legacy.sent_at; delete legacy.window; delete legacy.messages[0].occurred_at;
+  assert.equal(conforms('capture-request', legacy), true);
+  for (const patch of [{ slice: 0 }, { slice: 65 }, { slices: 65 }, { slice: 1.5 }, { initial: 1 },
+    { id: 'x'.repeat(129) }, { unknown: true }]) {
+    assert.equal(conforms('capture-request', { ...body, window: { ...body.window, ...patch } }), false);
+  }
+  for (const time of ['invalid', 'x'.repeat(41)]) {
+    assert.equal(conforms('capture-request', { ...body, messages: [{ ...body.messages[0], occurred_at: time }] }), false);
+    assert.equal(conforms('capture-request', { ...body, sent_at: time }), false);
+  }
+});
