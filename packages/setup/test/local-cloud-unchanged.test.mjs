@@ -104,10 +104,15 @@ const recallRuntimeChanges = new Map([
 // Pause durability changes whole functions; pin both immutable historical and
 // current bytes instead of reconstructing the earlier file from current source.
 const durabilityRuntimeChanges = new Map([
+  ['integrations/client/private-state.mjs', {
+    historical: 'ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64',
+    before: 'ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64',
+    current: '7dc46417a129414937b0180482acf6bdf7f58c1816f93468e8df1d952057485b',
+  }],
   ['integrations/client/hosted-pause.mjs', {
     historical: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
     before: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
-    current: 'b38be73932e2f91e526048e38d0226d44786caafa70f65766c2ccb33c1137af7',
+    current: '8d15d24036533f5a235b5e54627cb4db3b94312f28874f9fdf24cd2897cb0635',
   }],
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
@@ -362,9 +367,9 @@ test('L06 version normalization preserves unrelated bytes and complete runtime g
     normalized('Cairn.ink Memory setup 0.5.3\nunrelated 0.5.3', home));
 });
 test('L06 hosted runtime exceptions require packaged bytes and preserve all other comparisons', async () => {
-  assert.equal(hostedRuntimeExceptions.length, 12);
+  assert.equal(hostedRuntimeExceptions.length, 13);
   assert.equal(recallRuntimeChanges.size, 2);
-  assert.equal(durabilityRuntimeChanges.size, 3);
+  assert.equal(durabilityRuntimeChanges.size, 4);
   const home = '/synthetic/.codex';
   const oldRuntime = '.codex/cairn/runtime/0.5.3-0123456789ab/';
   const newRuntime = '.codex/cairn/runtime/0.6.0-abcdef012345/';
