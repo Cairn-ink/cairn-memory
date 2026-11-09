@@ -157,3 +157,20 @@ for(const signal of ['SIGINT','SIGTERM','SIGHUP','deadline'])test(`B4c installed
   assert.equal((await f.invoke('run',{key:false},3)).worker.dispatchedParts,0);
   await f.workspace.cleanup();assert.equal(existsSync(f.workspace.path),false);
 });
+
+test('installed Claude delayed transcript captures its first turn through the native hook route',{timeout:120000},async t=>{
+  const f=await installedSetupFixture(t,'claude-code');f.request.interpretationConsent=false;f.save();
+  await f.invoke('cli',['init','--database',f.request.databasePath]);await f.setup();await f.activate();
+  const {unlinkSync}=await import('node:fs');unlinkSync(f.sourcePath);
+  await f.invoke('hook',[],{event:'SessionStart'});writeFileSync(f.sourcePath,'',{mode:0o600});f.append('copper first delayed turn');
+  await f.invoke('hook');assert.equal((await f.inspect()).parts.map(part=>part.text).join(''),'copper first delayed turn');
+});
+
+test('installed Codex fork source is terminal across off/on and never creates a cursor', {timeout:120000},async t=>{
+  const f=await installedSetupFixture(t,'codex');f.request.interpretationConsent=false;f.save();
+  await f.invoke('cli',['init','--database',f.request.databasePath]);await f.setup();await f.activate();
+  await f.invoke('hook',[],{event:'SessionStart',payload:{hook_event_name:'SessionStart',session_id:f.sessionId,transcript_path:f.sourcePath,source:'fork'}});
+  f.append('copper fork secret');await f.invoke('hook',[],{event:'UserPromptSubmit'});await f.invoke('hook');
+  await f.invoke('cli',['disable','--installation',f.request.installationDirectory]);await f.activate();await f.invoke('hook',[],{event:'PreCompact'});
+  assert.deepEqual((await f.inspect()).parts,[]);assert.deepEqual(readdirSync(join(f.request.installationDirectory,'state/sessions')),[]);
+});

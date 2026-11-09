@@ -1,3 +1,4 @@
+import { workspaceSnapshot } from './local-workspace-snapshot.mjs';
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync, readFileSync, readdirSync, lstatSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -41,12 +42,7 @@ export async function hostFixture(t,{ client = 'claude-code' } = {}) {
     return ok(f.core.setLocalCaptureControl({namespace:f.namespace,client,targetId:current.targetId,expectedStoreId:current.storeId,
       expectedRevision:current.revision,automaticCaptureEnabled:false,rawNoticeVersion:current.rawNoticeVersion}));
   };
-  const snapshot=()=>{
-    const result={};
-    function visit(dir){for(const entry of readdirSync(dir)){const path=join(dir,entry),stat=lstatSync(path),key=relative(f.workspace.path,path);
-      result[key]={mode:stat.mode&0o777,ino:stat.ino,...(stat.isFile()?{sha:sha(readFileSync(path))}:{})};if(stat.isDirectory())visit(path);}}
-    visit(f.workspace.path);return result;
-  };
+  const snapshot=()=>workspaceSnapshot(f.workspace.path,f.databasePath);
   return {...f,profilePath,stateRoot,identityKeyPath,pluginRoot,profile,saveProfile,sourcePath,header,saveSource,selection,host,call,disable,snapshot,
     verdict,verdictPath,binary,setExec:value=>{exec=value},setHost:value=>{hostPresent=value}};
 }

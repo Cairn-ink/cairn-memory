@@ -37,6 +37,15 @@ to distinguish an outside-window session. Capture/receive time is not evidence
 of when an untimed source turn occurred.
 Later arrivals inside a window are fenced and refused before payload storage;
 fences also stop ongoing sessions from capturing later, outside-window messages.
+A fork or resume of a hidden conversation stays hidden. Claude message UUIDs
+are additionally fenced with namespace-scoped keyed hashes, even if a copy
+changes timestamps. Bounded durable hash jobs cover already-fenced sessions;
+capture refuses until pending hash work completes. These hashes and windows
+survive conversation deletion, disabling capture and uninstalling with data kept.
+Only wiping all store data, including forget records, removes them. Raw-only
+purges must retain hashes and windows. Destructive deletion cannot discard
+message IDs while their UUID hash backfill is incomplete, including deletion
+through a retained/off profile of the same local store.
 The payload is retained on disk; this is search hiding and capture fencing.
 
 Hiding anchors on when the memory was saved or corrected. A conversation is
@@ -79,7 +88,12 @@ bounded inspection and authored Raw-backed Cards under its existing authority.
 The private archive has a separate default-off `cairn-memory local` operator
 path for Claude Code or qualified Codex, initially Linux/WSL + Node >=22.16.
 It leaves released hosted hooks and `packages/setup` defaults unchanged.
-SessionStart initializes verified EOF; Stop/PreCompact may hold the foreground
+SessionStart initializes verified EOF when the transcript exists. New Claude
+sessions whose transcript appears later are captured from their first turn: an
+authority-bound private start marker permits the first Stop/PreCompact to start
+at zero. Disable removes these markers; an unmarked session with no cursor
+stays refused. Codex retains EOF initialization and its prompt-time fallback.
+Codex forked sessions are not saved locally. Stop/PreCompact may hold the foreground
 hook for up to 160 seconds (existing host 155 seconds plus teardown). Codex also
 gets an idempotent UserPromptSubmit first-observation fallback: it does not reset
 existing cursors on every prompt. No long SessionEnd hook, detached worker,
@@ -226,7 +240,8 @@ separate.
 
 The isolated pinned Claude Code 2.1.260 `--init-only` probe dispatches the real
 installed SessionStart hook before its transcript exists; quiet exit 0 is not
-EOF initialization proof. A separate normal interactive, keyless/network-isolated
+EOF initialization proof. This missing-transcript case now writes the private
+start marker described above; its first later capture starts at zero. A separate normal interactive, keyless/network-isolated
 probe exited 1 at the native Anthropic connectivity preflight, before any hook,
 transcript or cursor. Normal interactive transcript timing therefore remains
 unverified; neither result authorizes an authentication/network workaround.

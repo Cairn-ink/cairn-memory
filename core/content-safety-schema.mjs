@@ -197,12 +197,19 @@ function verifyCompleteCardSchema(db,layout,eventTime) {
   // Local Raw adds one closed, optional package to the inherited schema. Admit
   // the entire exact package or none of it; never ignore a name/prefix family.
   // Metadata only: read-only openers execute no DDL or repair writes.
-  const local = new Map(installLocalRawPrivacy().trim().split(';').filter(sql=>sql.trim()).map(sql=>{
+  const local = new Map(installLocalRawPrivacy().trim().split(/;\s*(?=CREATE|$)/).filter(sql=>sql.trim()).map(sql=>{
     sql=sql.trim().replace(' IF NOT EXISTS','');
-    const [,type,name]=sql.match(/^CREATE (TABLE|INDEX) (\w+)/);
+    const [,type,name]=sql.match(/^CREATE (TABLE|INDEX|TRIGGER) (\w+)/);
     return [name,{type:type.toLowerCase(),sql}];
   }));
   const actual=metadataRows(db.prepare('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT '+(wanted.size+local.size+1)));
+  // The previously shipped complete package is accepted for local additive
+  // installation. Partial old/new packages still fail exact comparison.
+  if (!actual.some(row=>row.name.startsWith('local_raw_uuid_'))) {
+    const legacyNames = new Set(installLocalRawPrivacy(false).match(/(?:TABLE|INDEX) IF NOT EXISTS (\w+)/g)
+      .map(value=>value.split(' ').at(-1)));
+    for (const name of local.keys()) if (!legacyNames.has(name)) local.delete(name);
+  }
   if(layout.base===33&&actual.some(row=>local.has(row.name)))for(const [name,row]of local)wanted.set(name,row);
   if(actual.length!==wanted.size||actual.some(row=>!wanted.has(row.name)||row.type!==wanted.get(row.name).type||
     exactDDL(row.sql)!==exactDDL(wanted.get(row.name).sql)))fail('unsupported_database');

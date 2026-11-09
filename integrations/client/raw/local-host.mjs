@@ -1,3 +1,4 @@
+import { checkLocalSession } from './local-session-fence.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { performance } from 'node:perf_hooks';
 import { types } from 'node:util';
@@ -69,7 +70,7 @@ export function createLocalRawHost(value) {
       hostRuntime();
       await runtimeFiles(); op.check();
       if (action === 'rearm' || action === 'rearmStatus') return await executeRearm(profilePath,selection,op,deps,action === 'rearmStatus');
-      const selected = ['initialize','run'].includes(action) ? hostSelection(selection,action === 'initialize') : null;
+      const selected = ['initialize','run','markStart'].includes(action) ? hostSelection(selection,action !== 'run') : null;
       const profile = await readHostProfile(profilePath), config = await readHostConfiguration(profile); op.check();
       await checkHostRearm(profile,config); op.check();
       await checkHostPermission(config); op.check();
@@ -80,11 +81,13 @@ export function createLocalRawHost(value) {
       const prepared = await inspectPreparation(profile,config); op.check();
       if (prepared !== 'ready') return localHostResult('blocked','preparation_required');
       if (action === 'status') return localHostResult('ready');
+      if (profile.installation.client === 'codex' && action === 'markStart') fail('invalid_input');
       let selectedPath,privatePaths;
       try {
-        [selectedPath,...privatePaths] = await Promise.all([selected.sourcePath,profile.stateRoot,profile.identityKeyPath,
+        [selectedPath,...privatePaths] = await Promise.all([...(action === 'markStart' ? []:[selected.sourcePath]),profile.stateRoot,profile.identityKeyPath,
           profile.profilePath,profile.markerPath,profile.lockPath,profile.rearmPath,profile.activationPath,profile.configPath,config.databasePath,config.usage.root].map(canonicalHostPath));
       } catch { fail('source_unqualified'); }
+      if (action === 'markStart') { privatePaths.unshift(selectedPath); selectedPath = selected.sourcePath; }
       if (privatePaths.some(path => overlaps(selectedPath,path))) fail('invalid_input');
       async function freshPermission() {
         const finalProfile = await readHostProfile(profilePath);
@@ -94,6 +97,7 @@ export function createLocalRawHost(value) {
         if (await inspectPreparation(finalProfile,finalConfig) !== 'ready') fail('preparation_invalid');
         await checkHostPermission(finalConfig); op.check();
       }
+      await checkLocalSession(profile,config,selected); op.check();
       let formatAuthority = null;
       if (profile.installation.client === 'codex') {
         const host = await (deps.detectHost ?? detectRunningHost)(); op.check();
@@ -115,7 +119,7 @@ export function createLocalRawHost(value) {
       // Re-read the exact profile and preparation binding, then take a fresh
       // authority snapshot immediately before the trusted worker invocation.
       await freshPermission();
-      if (await lazyRearm(profile,config,{ ...selected,
+      if (action !== 'markStart' && await lazyRearm(profile,config,{ ...selected,
         pluginRoot:profile.installation.client === 'claude-code' ? profile.installation.pluginRoot:null,formatAuthority },op)) {
         return localHostResult('ready');
       }
@@ -140,6 +144,7 @@ export function createLocalRawHost(value) {
     } finally { op?.close(); }
   }
   return Object.freeze({ status:(options = {}) => execute('status',null,options),prepare:(options = {}) => execute('prepare',null,options),
+    markStart:(selection,options = {}) => execute('markStart',selection,options),
     initialize:(selection,options = {}) => execute('initialize',selection,options),run:(selection,options = {}) => execute('run',selection,options),
     rearmStatus:(options = {}) => execute('rearmStatus',null,options),rearm:(selection,options = {}) => execute('rearm',selection,options) });
 }

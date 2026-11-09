@@ -11,7 +11,7 @@ const same = (a, b) => a.client === b.client && a.sessionKey === b.sessionKey;
 const size = value => Buffer.byteLength(JSON.stringify({ ok: true, value }));
 
 /** One model-free live-source plan for preview, conversation delete and old episode delete. */
-export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, removeReceipts, advanceEpoch }) {
+export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, removeReceipts, advanceEpoch, localRawPrivacy }) {
   const rawCards = createRawCardInvalidation(db);
   const key = Buffer.from(db.prepare('SELECT cursor_secret FROM store_metadata WHERE singleton=1').get().cursor_secret, 'hex');
   const hash = value => createHmac('sha256', key).update(JSON.stringify(value)).digest('base64url');
@@ -187,6 +187,8 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
   }
   function remove(value) {
     const ns = input(value, true), binding = hash(['delete-conversation-v1', ns, value.conversationId, value.expectedRevision]);
+    const selected = localRawPrivacy && target(ns,value.conversationId);
+    if (selected?.revision === value.expectedRevision) localRawPrivacy.beforeDelete(ns,selected.client,selected.session_key);
     return transaction(db, () => {
       const previous = db.prepare(`SELECT * FROM raw_deletion_actions WHERE ${where} AND action_id=?`).get(...rawBoundary(ns), value.actionId);
       if (previous) { if (previous.payload_binding !== binding) fail('event_payload_conflict'); return JSON.parse(previous.result); }
@@ -198,6 +200,10 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
     });
   }
   function forgetEpisode(ns, value) {
+    if (localRawPrivacy) {
+      const selected = db.prepare(`SELECT client,session_key,revision FROM session_episodes WHERE ${where} AND id=? AND deleted=0`).get(...rawBoundary(ns),value.episodeId);
+      if (selected?.revision === value.expectedRevision) localRawPrivacy.beforeDelete(ns,selected.client,selected.session_key);
+    }
     return transaction(db, () => {
       const row = db.prepare(`SELECT * FROM session_episodes WHERE ${where} AND id=? AND deleted=0`).get(...rawBoundary(ns), value.episodeId);
       if (!row) fail('episode_not_found');

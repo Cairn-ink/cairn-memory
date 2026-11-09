@@ -1,3 +1,4 @@
+import { createLocalUuidFence } from './local-authority-uuid.mjs';
 import { randomUUID, createHmac, createHash } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { localControlInput } from './local-authority-input.mjs';
@@ -53,6 +54,7 @@ export const LOCAL_RAW_HIDE_WINDOW_MS = 30 * 60 * 1000;
 
 /** Private local selection only. Every mutation joins its caller's transaction. */
 export function createLocalRawPrivacyStorage(db) {
+  const uuid = createLocalUuidFence(db);
   const nsWhere = 'owner_id=? AND scope=? AND project_id=?';
   const raw = createRawControlStorage(db);
   const secret = db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get().secret;
@@ -71,6 +73,7 @@ export function createLocalRawPrivacyStorage(db) {
   function fenceInside(ns, client, session) {
     required();
     db.prepare('INSERT OR IGNORE INTO raw_session_fences VALUES(?,?,?,?,?)').run(...rawBoundary(ns), client, session);
+    uuid.enqueueInside(ns,client,session);
     raw.closePendingInside({ ownerId: ns.ownerId, namespace: ns, client, sessionKey: session, reason: 'capture_barrier' });
   }
   function addWindowInside(ns, start, end) {
@@ -162,19 +165,24 @@ export function createLocalRawPrivacyStorage(db) {
     saveRangeInside(ns, client, session, unionRange(ns, client, session, messages));
   }
   function arrivalBlocked(ns, client, session, messages) {
+    if (uuid.matches(ns,client,messages)) return true;
     const range = unionRange(ns, client, session, messages);
     return range.unknown_time ? Boolean(anyWindow(ns)) : range.min_ms !== null && intersects(ns, range.min_ms, range.max_ms);
   }
   function fenceArrivalInside(ns, client, session, messages) {
     required();
-    if (!arrivalBlocked(ns, client, session, messages)) return false;
+    const ready = uuid.advanceInside();
+    const fenced = db.prepare(`SELECT 1 FROM raw_session_fences WHERE ${where} AND session_key=?`).get(...rawBoundary(ns),client,session);
+    if (!fenced && !arrivalBlocked(ns, client, session, messages)) return ready ? false : 'storage_busy';
+    uuid.rememberInside(ns,client,messages);
     fenceInside(ns, client, session);
-    return true;
+    return 'conversation_deleted';
   }
   function fenceArrival(ns, client, session, messages) {
     // Never throw within this transaction: its only writes are the terminal
     // fence and closing pre-existing reservations. Refusal follows COMMIT.
-    if (transaction(db, () => fenceArrivalInside(ns, client, session, messages))) fail('conversation_deleted');
+    const reason = transaction(db, () => fenceArrivalInside(ns, client, session, messages));
+    if (reason) fail(reason);
   }
   function assertModeInside(ns, client, session, interpretation, bind = false) {
     const args = [...rawBoundary(ns), client, session];
@@ -204,5 +212,5 @@ export function createLocalRawPrivacyStorage(db) {
       db.prepare('INSERT INTO local_raw_session_modes VALUES(?,?,?,?,?,?)').run(...args, interpretation);
     }
   }
-  return { hideMemoryInside, arrivalBlocked, fenceArrivalInside, fenceArrival, recordRangeInside, assertModeInside };
+  return { fenceInside, beforeDelete:uuid.beforeDelete, hideMemoryInside, arrivalBlocked, fenceArrivalInside, fenceArrival, recordRangeInside, assertModeInside };
 }

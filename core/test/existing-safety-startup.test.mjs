@@ -19,7 +19,7 @@ test('default core and MCP reopen the original attested base-33 lineage package'
   assert.ok(db.prepare("SELECT sql FROM sqlite_schema WHERE name='raw_conversations'").get().sql.includes("CHECK(client IN ('claude-code','codex'))"));
   db.close();
   const core = openMemoryCore({raw:true,path}); await core.close();
-  // All three additive tables and both indexes survive exact attestation on a
+  // The complete local privacy package survive exact attestation on a
   // read-only connection, and subsequent local opens never need a migration.
   const reader = new DatabaseSync(path,{readOnly:true});
   try {
@@ -29,7 +29,7 @@ test('default core and MCP reopen the original attested base-33 lineage package'
   const server = createCairnServer({path,namespace});
   try { assert.equal(await server.contextCounterReady,true); } finally { await server.close(); }
 });
-for(const damage of ['missing-table','missing-index','altered-table','altered-index','extra-table','extra-trigger'])
+for(const damage of ['missing-table','missing-index','missing-uuid-table','missing-uuid-index','missing-uuid-trigger','altered-table','altered-index','extra-table','extra-trigger'])
 test(`inherited attestation refuses damaged or extended local privacy package (${damage})`,async t=>{
   const workspace=createTestWorkspace(t),path=join(workspace.path,'existing.sqlite');
   const child=spawnSync(process.execPath,[new URL('../testing/create-existing-safety-store.mjs',import.meta.url).pathname,path],{encoding:'utf8',timeout:30000});
@@ -39,6 +39,9 @@ test(`inherited attestation refuses damaged or extended local privacy package ($
   try {
     db.exec({
       'missing-table':'DROP TABLE local_raw_session_modes',
+      'missing-uuid-table':'DROP TABLE local_raw_uuid_fences',
+      'missing-uuid-index':'DROP INDEX local_raw_uuid_pending',
+      'missing-uuid-trigger':'DROP TRIGGER local_raw_uuid_delete_guard',
       'missing-index':'DROP INDEX local_raw_capture_session_events',
       'altered-table':'ALTER TABLE local_raw_session_modes ADD COLUMN unexpected TEXT',
       'altered-index':'DROP INDEX local_raw_capture_session_events; CREATE INDEX local_raw_capture_session_events ON raw_capture_events(owner_id,event_id)',
@@ -63,4 +66,13 @@ for (const contentSafety of [undefined,'s2h-v1']) test(`default retains supporte
     assert.equal(db.prepare('SELECT count(*) n FROM raw_conversations WHERE client=?').get(client).n,client==='synthetic-other'?0:1);
   }
   assert.equal(db.prepare('SELECT count(*) n FROM raw_parts WHERE saved=1').get().n,2);
+});
+
+test('the previous complete local package upgrades before new UUID state is used',async t=>{
+  const workspace=createTestWorkspace(t),path=join(workspace.path,'old-local.sqlite');
+  const child=spawnSync(process.execPath,[new URL('../testing/create-existing-safety-store.mjs',import.meta.url).pathname,path],{encoding:'utf8',timeout:30000});assert.equal(child.status,0,child.stderr);
+  const {installLocalRawPrivacy}=await import('../local-authority-schema.mjs');
+  const db=new DatabaseSync(path);db.exec(installLocalRawPrivacy(false));attestContentSafety(db);db.close();
+  const core=openMemoryCore({path,raw:true});await core.close();
+  const reader=new DatabaseSync(path,{readOnly:true});try{attestContentSafety(reader);assert.ok(reader.prepare("SELECT 1 FROM sqlite_schema WHERE name='local_raw_uuid_fences'").get());}finally{reader.close();}
 });

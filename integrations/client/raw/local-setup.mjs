@@ -1,3 +1,4 @@
+import { clearSessionStarts } from './local-session-start.mjs';
 import { inspectExistingStorePin } from '../../../core/existing-store.mjs';
 import { attestContentSafety } from '../../../core/content-safety-schema.mjs';
 import { assertNoCardCurrentDependencies } from '../../../core/card-current-schema.mjs';
@@ -245,6 +246,7 @@ async function disable(root,signal) {
     // leave a stale foreground hook authorized to read the transcript.
     await withCore(request,record.storeId,core => grant(core,request,record.storeId,record.targetId,false));
     record = await publish(root,record,'disabling');
+    await clearSessionStarts(locations(root).state);
     try {
       await stateLock(request.clientConfigPath+'.cairn-local.lock',async () => {
         const before = await nativeSnapshot(request.clientConfigPath),text = mergeNative(before.text,request,false);

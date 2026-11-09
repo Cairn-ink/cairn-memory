@@ -195,7 +195,7 @@ test(`Raw-only ${control} refuses payload storage`,async t => {
     const saved = await f.capture(input); assert.equal(saved.status,200);
     const id = saved.body.raw.conversationId;
     if (control === 'source-exclusion') f.db.prepare('INSERT INTO raw_source_exclusions VALUES(?,?,?,?,?)').run(id,input.messages[0].id,0,input.messages[0].content.length,1);
-    else ok(f.core.deleteConversation({namespace:ns,conversationId:id,expectedRevision:saved.body.raw.revision,actionId:'synthetic-delete'}));
+    else ok(f.privacyCore.deleteConversation({namespace:ns,conversationId:id,expectedRevision:saved.body.raw.revision,actionId:'synthetic-delete'}));
   }
   const before = f.sealedCount(), response = await f.capture(input);
   assert.equal(f.sealedCount(),before); assert.equal(f.fetches(),0);
@@ -496,7 +496,7 @@ test('known limit: uncorrelated-receipt-clock leaves an older conversation searc
   windowAt(f);
   assert.equal(f.db.prepare('SELECT count(*) n FROM raw_session_fences').get().n,0);
   for(const intent of ['current','history'])assert.ok((await search.search({query:'copper',intent})).candidates.some(row=>row.messageId==='message-old-source'));
-  ok(f.core.deleteConversation({namespace:ns,conversationId:capture.body.raw.conversationId,expectedRevision:capture.body.raw.revision,actionId:'synthetic-direct-delete'}));
+  ok(f.privacyCore.deleteConversation({namespace:ns,conversationId:capture.body.raw.conversationId,expectedRevision:capture.body.raw.revision,actionId:'synthetic-direct-delete'}));
   for(const intent of ['current','history'])assert.ok(!(await search.search({query:'copper',intent})).candidates.some(row=>row.messageId==='message-old-source'));
 });
 
@@ -735,4 +735,77 @@ test('absent local forget is a no-op and creates no hide window',t=>{
   const f=localPrivacyFixture(t);
   assert.equal(ok(f.privacyCore.forget({namespace:ns,memoryId:'absent-memory',expectedRevision:1})).forgotten,false);
   assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_hide_windows').get().n,0);
+});
+
+for (const timing of ['original','rewritten','before-forget','deleted']) test(`Claude UUID fence hides fork (${timing}) with positive search control`,async t=>{
+  installRawSearchTestClock(t);
+  const f=localPrivacyFixture(t);
+  const original=await f.capture(f.wire('original','copied'));assert.equal(original.status,200);
+  assert.equal((await f.capture(f.wire('control','fresh',-172800000))).status,200);
+  if(timing==='before-forget') { const copy=f.wire('fork','copied');copy.event_id='fork-before';assert.equal((await f.capture(copy)).status,200); }
+  ok(f.mutate('forget',f.remember()));
+  if(timing==='deleted')ok(f.privacyCore.deleteConversation({namespace:ns,conversationId:original.body.raw.conversationId,expectedRevision:original.body.raw.revision,actionId:'delete-original'}));
+  const fork=f.wire('fork','copied',timing==='original'?0:-86400000);
+  assert.equal((await f.capture(fork)).body.error,'conversation_deleted');
+  assert.equal((await f.capture(f.wire('fork','fresh-after-fence',-172800000,2))).body.error,'conversation_deleted');
+  const hashes=f.db.prepare('SELECT uuid_hash FROM local_raw_uuid_fences').all();assert.ok(hashes.length>0);assert.ok(hashes.every(row=>/^[a-f0-9]{64}$/.test(row.uuid_hash)));
+  const search=await searchFixture(f);await search.maintain();
+  for(const intent of ['current','history']) {const hits=(await search.search({query:'copper',intent})).candidates;assert.ok(hits.some(row=>row.messageId==='message-fresh'));assert.ok(hits.every(row=>row.conversationId!==original.body.raw.conversationId));assert.ok(!hits.some(row=>row.messageId==='message-copied'));}
+  const plan=f.db.prepare('EXPLAIN QUERY PLAN SELECT 1 FROM local_raw_uuid_fences WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND uuid_hash=?').all(ns.ownerId,ns.scope,'',f.client,'x');
+  assert.ok(plan.every(row=>/SEARCH.*INDEX/.test(row.detail)));
+});
+
+test('UUID hash pending crash cut refuses capture until bounded backfill completes, including old fences',async t=>{
+  const f=localPrivacyFixture(t);assert.equal((await f.capture(f.wire('original','old'))).status,200);
+  const memory=f.remember();ok(f.mutate('forget',memory));
+  // Crash immediately after the atomic fence/job commit, before any hash work.
+  assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_uuid_jobs WHERE complete=0').get().n,1);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,0);
+  // Reproduce an upgrade from the old package: fence remains, no new state.
+  f.db.exec('DELETE FROM local_raw_uuid_jobs; DELETE FROM local_raw_uuid_backfill');
+  assert.equal((await f.capture(f.wire('late-copy','old',-86400000))).body.error,'conversation_deleted');
+  assert.ok(f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n>0);
+});
+
+test('UUID jobs are bounded across crashes and block unrelated capture until the last chunk commits',async t=>{
+  const f=localPrivacyFixture(t);assert.equal((await f.capture(f.wire('long-source','first'))).status,200);
+  const row=f.db.prepare('SELECT * FROM raw_messages').get(),columns=Object.keys(row);
+  const insert=f.db.prepare('INSERT INTO raw_messages('+columns.join(',')+') VALUES('+columns.map(()=>'?').join(',')+')');
+  f.db.exec('BEGIN IMMEDIATE');
+  for(let index=2;index<=300;index++)insert.run(...columns.map(key=>key==='message_id'?'synthetic-long-'+index:key==='ordinal'?index:row[key]));
+  f.db.exec('COMMIT');
+  ok(f.mutate('forget',f.remember()));
+  // Each capture opens a fresh core; refusal commits at most 128 hashes.
+  const before=f.sealedCount();
+  for(const expected of [128,256]) {
+    const result=await f.capture(f.wire('unrelated','control-after-backfill',-86400000));
+    assert.equal(result.status,409);assert.equal(result.body.error,'storage_busy');assert.equal(f.sealedCount(),before);
+    assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,expected);
+  }
+  assert.equal((await f.capture(f.wire('unrelated','control-after-backfill',-86400000))).status,200);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,300);
+  const fork=f.wire('late-long-copy','different-event',-86400000);fork.messages[0].id='synthetic-long-300';
+  assert.equal((await f.capture(fork)).body.error,'conversation_deleted');
+});
+
+test('non-local constructors install no UUID package and execute no UUID SQL',t=>{
+  const f=fixture(t),statements=[];
+  const core=traceSql(statements,()=>openMemoryCore({path:f.databasePath,rawSearch:false,
+    rawConversations:{mode:'raw-v1',capBytes:1000000,readPolicy:()=>({generation:'synthetic',reason:null}),port:localPlainPort()}}));
+  f.workspace.defer(()=>core.close());assert.ok(statements.length>0);
+  assert.equal(statements.filter(sql=>/local_raw_uuid/.test(sql)).length,0);
+  const db=new DatabaseSync(f.databasePath);f.workspace.defer(()=>db.close());
+  assert.equal(db.prepare("SELECT count(*) n FROM sqlite_schema WHERE name GLOB 'local_raw_*'").get().n,0);
+});
+
+test('a non-local deletion cannot discard a pending local UUID backfill source',async t=>{
+  const f=localPrivacyFixture(t),saved=await f.capture(f.wire('pending-delete','old-copy'));
+  assert.equal(saved.status,200);ok(f.mutate('forget',f.remember()));
+  const input={namespace:ns,conversationId:saved.body.raw.conversationId,expectedRevision:saved.body.raw.revision,actionId:'cross-profile-delete'};
+  assert.equal(f.core.deleteConversation(input).ok,false);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n,1);
+  assert.equal((await f.capture(f.wire('late-copy','old-copy',-86400000))).body.error,'conversation_deleted');
+  ok(f.core.deleteConversation(input));
+  assert.ok(f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n>0);
+  assert.ok(f.db.prepare('SELECT count(*) n FROM local_raw_hide_windows').get().n>0);
 });
