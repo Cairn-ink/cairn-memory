@@ -93,6 +93,8 @@ recall query or capture text. Shared pause observations apply across paired
 clients, while the local daily cap remains specific to Codex. A newly observed
 pause/generation is retained durably even if its publication lock is busy.
 Resume keeps the hosted generation and permits work only after local publication.
+The shared pause lock requires a verifiable process namespace; hosted operations
+fail closed where that is unavailable, including native Windows.
 The Stop/PreCompact foreground launcher makes no hosted request; its detached
 worker performs the observations. Non-HTTP local integrations are unchanged.
 
