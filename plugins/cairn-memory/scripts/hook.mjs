@@ -37,6 +37,14 @@ const action = process.argv[2] ?? "status";
 // this cannot preempt synchronous CPU or an uncooperative filesystem operation.
 const recallController = action === 'recall' ? new AbortController() : undefined;
 const recallEnd = recallController ? 3500 : undefined;
+// Reserve one bounded pause GET plus local/output work. This deadline starts
+// before dispatch so quota and second-observation waits consume the same budget.
+const OUTPUT_RESERVE_MS = 650;
+// A stalled diagnostic fsync cannot keep the hook alive until the host kills it.
+// Publication is attempted immediately; persistence remains best effort on I/O
+// failure or forced exit, as it does on any process crash.
+const recallHardTimer = recallController ? setTimeout(() => process.exit(0),
+  Math.max(0, 3750 - performance.now())) : undefined;
 const expireRecall = () => { recallController.abort(new Error('recall_timeout')); process.stdin.destroy(); };
 const recallTimer = recallController ? setTimeout(expireRecall, Math.max(0, recallEnd - performance.now())) : undefined;
 const recallSignal = recallController?.signal;
@@ -161,11 +169,13 @@ async function recall(hookInput) {
   const projectId = await clientProjectId(clientOptions, hookInput.cwd, binding);
   checkRecall();
   const sessionId = optionalHostSessionId(hookInput.session_id);
+  const fetchSignal = recallSignal ? AbortSignal.any([recallSignal,
+    AbortSignal.timeout(Math.max(1, recallEnd - performance.now() - OUTPUT_RESERVE_MS))]) : undefined;
   const result = await post(
     "/api/memory/recall",
     { query, ...(projectId === undefined ? {} : { project_id: projectId }), limit: 6,
       ...(sessionId === undefined ? {} : { session_id: sessionId }) },
-    2_500, true, (start) => dispatchActive(control.generation, start, recallSignal, hosted), recallSignal,
+    2_500, true, (start) => dispatchActive(control.generation, start, fetchSignal, hosted), fetchSignal,
   );
   checkRecall();
   if (!Array.isArray(result?.memories) || result.memories.length === 0) return;
@@ -528,4 +538,5 @@ try {
   await recallObservation?.publish();
   await publishRecallConfiguration();
   clearTimeout(recallTimer);
+  clearTimeout(recallHardTimer);
 }

@@ -27,7 +27,7 @@ process.on('unhandledRejection', () => finish(capture ? '{}' : ''));
 try {
   if (!['SessionStart','UserPromptSubmit','Stop','PreCompact','SessionEnd','worker','qualify'].includes(event)) finish('');
   const { runInstalled } = await import('./installed.mjs');
-  const output = await runInstalled(path, event, process.stdin, { signal: controller.signal,
+  const output = await runInstalled(path, event, process.stdin, { signal: controller.signal, recallDeadline: budget - 50,
     deliver: output => {
       controller.signal.throwIfAborted();
       writeSync(1, output);

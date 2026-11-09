@@ -66,7 +66,7 @@ function launchWorker(configPath, config, content) {
 }
 
 export async function runInstalled(configPath, event, stream, { signal, launch = launchWorker,
-  detectHost = detectRunningHost, deliver } = {}) {
+  detectHost = detectRunningHost, deliver, recallDeadline } = {}) {
   const config = await readInstallation(configPath);
   if (!config.enabled || signal.aborted) return '';
   if(event==='qualify') {
@@ -133,7 +133,7 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
       await promptBoundary({ root: config.root, targetId, projectId, sessionId: hook.sessionId, path: hook.path });
       if (!await promptRecallEnabled(configPath) || signal.aborted) return '';
       const token = await readCredential(configPath, config.endpoint);
-      return await recallContext(input, config, token, projectId, signal, async () => await promptRecallEnabled(configPath) && Boolean(await boundBinary(qualification.host)), publishHost, deliver);
+      return await recallContext(input, config, token, projectId, signal, async () => await promptRecallEnabled(configPath) && Boolean(await boundBinary(qualification.host)), publishHost, deliver, { deadlineMs: recallDeadline });
     }
     if (event === 'SessionStart') {
       const token = await readCredential(configPath, config.endpoint);
