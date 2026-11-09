@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fsPromises from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { mkdir, open, readFile, readdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
@@ -58,18 +60,32 @@ test('a failed pause publication retains the intent even if rename made the new 
   const handle = await open(join(f.config.root, 'probe'), 'wx', 0o600);
   const prototype = Object.getPrototypeOf(handle), sync = prototype.sync;
   await handle.close();
-  let syncs = 0;
-  // Intent ancestors: 2 syncs; intent: 2; rotation: 2; pause: file then directory.
+  const paths = new WeakMap(), nativeOpen = fsPromises.open;
+  const openMock = t.mock.method(fsPromises, 'open', async function (path, ...args) {
+    const file = await nativeOpen.call(this, path, ...args); paths.set(file, String(path)); return file;
+  });
+  syncBuiltinESMExports();
+  let failed = false;
   const syncMock = t.mock.method(prototype, 'sync', async function () {
-    if (++syncs === 8) throw new Error('synthetic_publication_failure');
+    // Fail the actual publication-directory sync after rename, independent of
+    // how many intent/rotation/diagnostic syncs precede it in either revision.
+    if (!failed && paths.get(this) === dirname(f.file) &&
+        JSON.parse(await readFile(f.file, 'utf8')).generation === 1) {
+      failed = true; throw new Error('synthetic_publication_failure');
+    }
     return sync.call(this);
   });
+  const restore = () => { syncMock.mock.restore(); openMock.mock.restore(); syncBuiltinESMExports(); };
+  t.after(restore);
   f.remote({ ...paused, paused: false });
   await assert.rejects(f.observe(), /synthetic_publication_failure/);
+  assert.deepEqual(JSON.parse(await readFile(f.file, 'utf8')), { ...paused, paused: false },
+    'new_publication_visible_before_sync_failure');
+  assert.notEqual((await readControlState(f.config.root)).generation, 'initial', 'rotation_completed_before_publication');
   let starts = 0;
   await assert.rejects(gate(f.config, 1, () => { starts++; }), /pause_unavailable/);
   assert.equal(starts, 0);
-  syncMock.mock.restore();
+  restore();
   await f.observe();
   await gate(f.config, 1, () => { starts++; });
   assert.equal(starts, 1, 'repair_completes_publication_before_dispatch');
@@ -109,8 +125,10 @@ for (const generation of [0, 1]) test(`unchanged validated generation ${generati
   const observation = pause.deferHostedPauseStatus(f.config, 'synthetic-token');
   await observation.observe(); await observation.observe();
   assert.equal(syncs, 0, 'unchanged_prefetch_fsyncs');
+  const prefetchSyncs = syncs;
   await observation.publish();
   assert.equal(syncs, 2, 'diagnostic_publication_still_durable');
+  t.diagnostic(JSON.stringify({ generation, prefetchSyncs, totalSyncs: syncs }));
 });
 
 test('an intent survives a process crash before rotation and blocks a stale process', { timeout: 15000 }, async t => {

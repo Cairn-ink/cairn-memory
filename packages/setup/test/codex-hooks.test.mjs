@@ -94,8 +94,10 @@ async function fixture(t,{answers=[''],args,config='',hooks,paired=false,claudeP
       env:{...env,...envOverrides,CX5_TEST_CLI_MODULE:module},stdio:['ignore','pipe','pipe','ipc']});
     wireChild(child,server.server);
     let stdout='',stderr='';child.stdout.on('data',x=>stdout+=x);child.stderr.on('data',x=>stderr+=x);
-    const timer=setTimeout(()=>child.kill('SIGKILL'),30000);
-    const code=await new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',resolve);});clearTimeout(timer);
+    let timedOut=false;
+    const timer=setTimeout(()=>{timedOut=true;child.kill('SIGKILL');},30000);
+    const {code,signal}=await new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',(code,signal)=>resolve({code,signal}));});clearTimeout(timer);
+    if(code===null)t.diagnostic(JSON.stringify({fixtureExit:code,signal,timedOut}));
     assert.ok(!(stdout+stderr).includes(secret));assert.ok(!(stdout+stderr).includes(mcpSecret));
     screens.push(stdout+stderr);
     return {code,stdout,stderr};
