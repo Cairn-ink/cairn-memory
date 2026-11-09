@@ -210,7 +210,16 @@ for (let index = 0; index < sequences.length; index++) {
       return true;
     };
     process.exitCode = 0;
-    await import(`${hook.href}?sequence=${serial++}`);
+    // Each import models a fresh hook process, with its own process time origin.
+    // Keep the worker's imported clock for total sequence duration and local waits.
+    const clock = Object.getOwnPropertyDescriptor(globalThis, "performance");
+    const hookStarted = performance.now();
+    Object.defineProperty(globalThis, "performance", { configurable: true, value: {
+      now: () => performance.now() - hookStarted,
+      timeOrigin: performance.timeOrigin + hookStarted,
+    } });
+    try { await import(`${hook.href}?sequence=${serial++}`); }
+    finally { Object.defineProperty(globalThis, "performance", clock); }
     const code = process.exitCode;
     process.exitCode = 0;
     return { text, code };

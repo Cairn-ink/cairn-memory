@@ -747,7 +747,7 @@ if(process.env.CX5_NATIVE_BINARY && process.env.CX5_NETWORK_SANDBOX) test('CX-5 
   assert.deepEqual(hooks.map(hook=>hook.eventName).sort(),['preCompact','sessionStart','stop','userPromptSubmit']);
   for(const hook of hooks){assert.equal(hook.source,'user');assert.equal(hook.enabled,true);assert.equal(hook.trustStatus,'untrusted');
     assert.equal(hook.statusMessage,'Cairn automatic memory');assert.ok(!hook.command.includes(secret));
-    assert.equal(hook.timeoutSec,['stop','preCompact'].includes(hook.eventName)?1:3);
+    assert.equal(hook.timeoutSec,{sessionStart:3,userPromptSubmit:4,stop:1,preCompact:1}[hook.eventName]);
     if(['sessionStart','userPromptSubmit'].includes(hook.eventName))assert.equal(hook.additionalContextLimit,0);
   }
   if(process.env.CX5_NATIVE_EVIDENCE)await writeFile(process.env.CX5_NATIVE_EVIDENCE,JSON.stringify(result,null,2)+'\n',{mode:0o600});

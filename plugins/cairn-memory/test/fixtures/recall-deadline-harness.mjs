@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createTestWorkspace } from '../../../../tools/testing/workspace.mjs';
 import { withFileLock } from '../../lib/file-lock.mjs';
 import { hostedTargetId } from '../../lib/http.mjs';
+import { createServer } from 'node:http';
 
 const hook = fileURLToPath(new URL('../../scripts/hook.mjs', import.meta.url));
 const preload = fileURLToPath(new URL('./recall-deadline-preload.mjs', import.meta.url));
@@ -17,21 +18,29 @@ export const scenarios = {
   'unavailable-quota-lock': { holdQuotaLock: true, telemetry: true },
   // The schema rejection comes 50 ms after the first fetch, and the fallback
   // waits 5000 ms on the shared signal, so it is still in flight at the
-  // 2500 ms application cutoff. The fallback starts in time while contention
-  // time plus lock acquisition delay stays under about 1.5 s (it was about
-  // 0.3 s with a 1300 ms rejection). The 900 ms lock hold puts the shared
-  // HTTP deadline (first fetch + 2000 ms) at least ~2900 ms after entry.
-  'schema-fallback': { lockMs: 900, reply: 'old-schema' },
+  // 3500 ms process-clock cutoff. The 1500 ms lock hold puts the shared
+  // HTTP deadline (first fetch + 2500 ms) beyond the application cutoff.
+  'schema-fallback': { lockMs: 1500, reply: 'old-schema' },
 };
 
 export async function invocation(t, { lockMs = 0, holdQuotaLock = false, recallMs = 0,
-  telemetry = false, stalledInput = false, reply = 'valid', missingToken = false, onFetch } = {}) {
+  telemetry = false, stalledInput = false, reply = 'valid', missingToken = false, onFetch,
+  startupMs = 0, neverAnswer = false } = {}) {
   const workspace = createTestWorkspace(t, { prefix: 'recall-deadline-' });
   try {
     const home = join(workspace.path, 'home'), root = join(home, 'data');
     await mkdir(root, { recursive: true, mode: 0o700 });
     await writeFile(join(root, 'project-key'), '12345678-1234-4234-8234-123456789abc\n', { mode: 0o600 });
-    const lock = join(root, 'hosted-quota', hostedTargetId({ endpoint: 'https://synthetic.invalid' }) + '.json.lock');
+    let endpoint = 'https://synthetic.invalid', serverHeaders = 0;
+    if (neverAnswer) {
+      const server = createServer(request => { serverHeaders++; request.resume(); });
+      await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+      workspace.defer(async () => {
+        server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
+      });
+      endpoint = `http://127.0.0.1:${server.address().port}`;
+    }
+    const lock = join(root, 'hosted-quota', hostedTargetId({ endpoint }) + '.json.lock');
     let ready, unlock, releaseTimer;
     const acquired = new Promise(resolve => ready = resolve), release = new Promise(resolve => unlock = resolve);
     const holder = lockMs || holdQuotaLock ? withFileLock(lock, async () => { ready(); await release; }) : Promise.resolve(true);
@@ -47,10 +56,11 @@ export async function invocation(t, { lockMs = 0, holdQuotaLock = false, recallM
       ms: (Number.isFinite(childTime) ? childTime : monotonicMs()) - started });
     const child = spawn(process.execPath, ['--import', preload, hook, 'recall'], {
       cwd: home, env: { PATH: '/usr/bin:/bin', HOME: home, TMPDIR: workspace.path,
-        CLAUDE_PLUGIN_DATA: root, CLAUDE_PLUGIN_OPTION_API_ENDPOINT: 'https://synthetic.invalid',
+        CLAUDE_PLUGIN_DATA: root, CLAUDE_PLUGIN_OPTION_API_ENDPOINT: endpoint,
         CLAUDE_PLUGIN_OPTION_API_TOKEN: missingToken ? '' : 'synthetic-token', CLAUDE_PLUGIN_OPTION_TELEMETRY: String(telemetry),
         CAIRN_TEST_RECALL_DELAY: String(recallMs), CAIRN_TEST_RECALL_REPLY: reply,
-        CAIRN_TEST_RECALL_ACK: String(Boolean(onFetch)) }, stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+        CAIRN_TEST_RECALL_ACK: String(Boolean(onFetch)), CAIRN_TEST_STARTUP_DELAY: String(startupMs),
+        ...(neverAnswer ? { CAIRN_TEST_LOOPBACK_ENDPOINT: endpoint } : {}) }, stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
     });
     let stdout = '', stderr = '', hostKilled = false, duringFetch, fetchFailed = false;
     child.on('message', event => {
@@ -81,7 +91,7 @@ export async function invocation(t, { lockMs = 0, holdQuotaLock = false, recallM
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
       await done;
     });
-    const timer = setTimeout(() => { hostKilled = true; child.kill('SIGTERM'); }, 3000);
+    const timer = setTimeout(() => { hostKilled = true; child.kill('SIGTERM'); }, 4000);
     if (!stalledInput) child.stdin.end(JSON.stringify({ session_id: 'synthetic-session', prompt: 'Synthetic question' }));
     let outcome;
     try { outcome = await done; } finally { clearTimeout(timer); }
@@ -96,7 +106,7 @@ export async function invocation(t, { lockMs = 0, holdQuotaLock = false, recallM
       const cleaned = (await lockNames()).length === 0;
       mark({ kind: 'quota-lock-checked', foreignOwnerUnchanged, noChildResidue, cleaned });
     }
-    return { ...outcome, stdout, stderr, hostKilled, events };
+    return { ...outcome, stdout, stderr, hostKilled, events, serverHeaders };
   } finally { await workspace.cleanup(); }
 }
 
@@ -106,7 +116,7 @@ export function processViolations(result) {
   return [
     [result.code === 0, 'exit_code'], [result.signal === null, 'exit_signal'],
     [result.stderr === '', 'stderr'], [result.hostKilled === false, 'host_kill'],
-    [result.elapsedMs < 3000, 'spawn_close_deadline'],
+    [result.elapsedMs < 4000, 'spawn_close_deadline'],
   ].filter(([ok]) => !ok).map(([, name]) => name);
 }
 export function assertProcessOutcome(result) {

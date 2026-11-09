@@ -1,15 +1,25 @@
-// Synthetic HTTP only. No native fetch/network fallback.
+// Synthetic fetches, with an explicit loopback-only native request mode.
 import { setTimeout as delay } from 'node:timers/promises';
 import fsPromises from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
-const notify = (kind, details = {}) => process.send?.({ kind, ...details });
+const notify = (kind, details = {}) => process.send?.({ kind,
+  monotonicMs: Number(process.hrtime.bigint()) / 1e6, ...details });
+notify('process-origin', { monotonicMs: Number(process.hrtime.bigint()) / 1e6 - performance.now() });
+const startupDelay = Number(process.env.CAIRN_TEST_STARTUP_DELAY ?? 0);
+if (startupDelay) await delay(startupDelay);
+// Observe the configured HTTP delay without replacing the native timeout.
+const originalSignalTimeout = AbortSignal.timeout;
+AbortSignal.timeout = function (milliseconds) {
+  notify('http-timeout', { delayMs: milliseconds });
+  return originalSignalTimeout.call(this, milliseconds);
+};
 // Observe entry at creation of the hook's timer, without moving or replacing it.
 // hrtime has a common monotonic origin across parent/child processes; IPC receipt
 // latency is therefore excluded from application-entry-to-close measurement.
 const originalTimeout = globalThis.setTimeout;
 let entryObserved = false;
 globalThis.setTimeout = function (callback, milliseconds, ...args) {
-  if (!entryObserved && milliseconds === 2500 && callback.name === 'expireRecall') {
+  if (!entryObserved && callback.name === 'expireRecall') {
     entryObserved = true;
     notify('application-entry', { monotonicMs: Number(process.hrtime.bigint()) / 1e6 });
   }
@@ -54,12 +64,21 @@ function fetchAcknowledgement(signal, attempt) {
   });
 }
 let attempt = 0, firstSignal, firstLegacyPayload;
+const nativeFetch = globalThis.fetch;
 const memory = { id: '12345678-1234-4234-8234-123456789abc', content: 'Synthetic remembered preference.',
   kind: 'fact', scope: 'personal', projectId: null, origin: 'explicit', confidence: 1,
   createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z', receipts: [{ client: 'claude-code',
     sessionId: 'synthetic-source', eventId: 'synthetic-event', role: 'user', excerpt: 'Synthetic source.',
     createdAt: '2026-10-01T00:00:00Z' }] };
 globalThis.fetch = async (url, options) => {
+  if (process.env.CAIRN_TEST_LOOPBACK_ENDPOINT &&
+      url === process.env.CAIRN_TEST_LOOPBACK_ENDPOINT + '/api/memory/recall') {
+    if (new URL(url).hostname !== '127.0.0.1') throw new Error('loopback_only');
+    notify('recall-fetch', { attempt: ++attempt });
+    options.signal.addEventListener('abort', () => notify('recall-aborted', {
+      attempt, source: abortSource(options.signal) }), { once: true });
+    return nativeFetch(url, options);
+  }
   if (url === 'https://synthetic.invalid/api/memory/recall') {
     const number = ++attempt;
     firstSignal ??= options.signal;
