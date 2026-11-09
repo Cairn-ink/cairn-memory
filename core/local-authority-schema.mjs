@@ -6,7 +6,7 @@ export const LOCAL_BINDING_COLUMNS = ['local_target_id','local_store_id','local_
 // Selected locally, additive, and deliberately independent of user_version.
 // Product stores opening the base or an explicit hosted Raw profile get no DDL.
 export function installLocalRawPrivacy(db) {
-  db.exec(`CREATE TABLE IF NOT EXISTS local_raw_hide_windows (
+  const ddl = `CREATE TABLE IF NOT EXISTS local_raw_hide_windows (
     owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,
     start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL CHECK(end_ms>=start_ms),
     PRIMARY KEY(owner_id,scope,project_id,start_ms)
@@ -27,7 +27,10 @@ export function installLocalRawPrivacy(db) {
   CREATE INDEX IF NOT EXISTS local_raw_range_overlap ON local_raw_session_ranges
     (owner_id,scope,project_id,unknown_time,min_ms,max_ms,client,session_key);
   CREATE INDEX IF NOT EXISTS local_raw_capture_session_events ON raw_capture_events
-    (owner_id,scope,project_id,client,session_key,event_id);`);
+    (owner_id,scope,project_id,client,session_key,event_id);`;
+  // The exact attestor consumes the same declarations without executing DDL.
+  if (db) db.exec(ddl);
+  return ddl;
 }
 export function validateRawSourcePrerequisites(db) {
   for (const name of ['card_raw_bindings','card_raw_mutation_context','card_raw_pending_invalidations']) {

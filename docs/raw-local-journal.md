@@ -17,7 +17,10 @@ Local forget and correct hide whole source conversations from both current and
 history Raw search. Each operation snapshots the old receipts inside its write
 transaction and records permanent windows of **30 minutes before and after each
 receipt's creation time**. With no receipts, the memory's created and updated
-times anchor the windows. Missing anchors refuse with
+times anchor the windows. If any receipt clock is invalid, every valid receipt
+clock and both valid memory clocks anchor windows; an invalid clock never
+prevents forgetting when another anchor exists. Only a complete lack of valid
+anchors refuses with
 `local_raw_hide_anchor_missing`, leaving the memory unchanged. Correct uses the
 receipts from before the correction.
 
@@ -26,7 +29,12 @@ terminally fenced, including concurrent sessions and messages outside the
 window in that same session. Real sessions named by receipts are also fenced,
 even outside the time window. This deliberately hides more than the referenced
 text. Capture arrival time is not used for matching. Unknown message event times
-are conservative: an existing window in the same namespace fences the session.
+are conservative: an existing window in the same namespace fences the session,
+including a newly arriving session. Known times elsewhere in a session cannot
+bound an untimed turn, which may be a late arrival of the forgotten source.
+This can refuse future untimed sessions indefinitely; supply real event times
+to distinguish an outside-window session. Capture/receive time is not evidence
+of when an untimed source turn occurred.
 Later arrivals inside a window are fenced and refused before payload storage;
 fences also stop ongoing sessions from capturing later, outside-window messages.
 The payload is retained on disk; this is search hiding and capture fencing.

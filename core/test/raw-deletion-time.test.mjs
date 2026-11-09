@@ -50,7 +50,10 @@ async function fixture(t, { client = RAW_CLIENTS[0], sameSession = false, episod
   }
   t.mock.timers.setTime(start + 120_000);
   const capture = ok(await core.capture({ namespace: ns, client, sessionId: 'target', eventId: 'target-event',
-    messages: [{ id: 'target-message', role: 'user', content: body }] }));
+    // Local correction now fences nearby/unknown-time arrivals. This deletion
+    // fixture needs an independent, known outside-window source conversation.
+    messages: [{ id: 'target-message', role: 'user', content: body,
+      ...(correctBody ? { occurredAt: new Date(start - 7_200_000).toISOString() } : {}) }] }));
   if (episodes) {
     // Exercise the existing unqualified episode admission seam after ordinary capture.
     const runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });

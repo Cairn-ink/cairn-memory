@@ -91,8 +91,10 @@ export function createLocalRawPrivacyStorage(db) {
     // forgetting, before any receipt deletion. Never read receipt text.
     const receipts = db.prepare('SELECT client,session_id,created_at FROM receipts WHERE memory_id=?').all(memory.id);
     const anchors = receipts.map(row => finiteTime(row.created_at)).filter(value => value !== null);
-    if (anchors.length !== receipts.length) fail('local_raw_hide_anchor_missing');
-    if (!receipts.length) anchors.push(...[memory.created_at, memory.updated_at].map(finiteTime).filter(value => value !== null));
+    // A broken receipt clock must not prevent forgetting. Retain every valid
+    // receipt anchor and conservatively add both memory clocks on any gap.
+    if (anchors.length !== receipts.length || !receipts.length)
+      anchors.push(...[memory.created_at, memory.updated_at].map(finiteTime).filter(value => value !== null));
     if (!anchors.length) fail('local_raw_hide_anchor_missing');
     try {
       for (const anchor of anchors) addWindowInside(ns, anchor - LOCAL_RAW_HIDE_WINDOW_MS, anchor + LOCAL_RAW_HIDE_WINDOW_MS);

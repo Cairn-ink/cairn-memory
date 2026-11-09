@@ -46,12 +46,22 @@ test(`lazy ${client} ${action} ${match} fence survives off/on in current and his
   assert.deepEqual(privacy(),protectedRows); assert.equal(db.prepare('SELECT count(*) n FROM raw_parts WHERE sealed IS NOT NULL').get().n,parts);
   assert.equal((await f.hook('Stop',changes)).status,'ready');
   f.append('copper control resumed',{path:controlPath,at:controlAt,nativeSessionId:controlId}); assert.equal((await f.hook('Stop',changes)).status,'progress');
-  await search.maintain();
+  assert.ok(db.prepare('SELECT sealed FROM raw_parts WHERE sealed IS NOT NULL').all()
+    .every(row=>!Buffer.from(row.sealed).toString('utf8').includes('copper paused')),'no off-period content is stored, even behind a fence');
+  // Advance the indexed discovery cadence before requiring the newly resumed
+  // turn; an immediate maintain may legitimately reuse the prior publication.
+  await search.tick();
   for (const intent of ['current','history']) {
     const hits = (await search.search({query:'copper',intent})).candidates; assert.ok(hits.length>0);
+    const texts=[];
     for (const hit of hits) {
-      const source = (await search.prepare(hit,intent)).validate(); assert.ok(source.ranges.every(range => !/fenced|paused/.test(range.text)));
+      const source = (await search.prepare(hit,intent)).validate();
+      // Match whole words: "unfenced control" is the positive control.
+      assert.ok(source.ranges.every(range => !/\b(?:fenced|paused)\b/.test(range.text)));
+      texts.push(...source.ranges.map(range=>range.text));
     }
+    assert.match(texts.join('\n'),/copper unfenced control/);
+    assert.match(texts.join('\n'),/copper control resumed/);
   }
 });
 

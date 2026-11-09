@@ -519,14 +519,32 @@ test('correct uses only old receipt clocks, separately from the replacement rece
   }
 });
 
-for(const action of ['forget','correct'])test(`${action} refuses an invalid receipt clock without changing any data`,t=>{
+for(const action of ['forget','correct'])for(const receipts of ['invalid','mixed','no-anchor'])
+test(`${action} tolerates invalid receipt clocks unless no anchor exists (${receipts})`,t=>{
   const f=localPrivacyFixture(t), memory=f.remember();
   f.db.prepare("UPDATE receipts SET created_at='invalid' WHERE memory_id=?").run(memory.id);
   const before=f.db.prepare('SELECT * FROM memories WHERE id=?').get(memory.id);
-  const result=f.mutate(action,memory); assert.equal(result.error.code,'local_raw_hide_anchor_missing');
-  assert.deepEqual(f.db.prepare('SELECT * FROM memories WHERE id=?').get(memory.id),before);
-  assert.equal(f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(memory.id).n,1);
-  assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_hide_windows').get().n,0);
+  if(receipts==='mixed') {
+    const attached=ok(f.privacyCore.admit({namespace:ns,memory:{content:before.content,kind:'fact'},receipts:[{
+      client:f.client,sessionId:'explicit-tool',eventId:'valid-clock',role:'user',excerpt:before.content}]})).memory;
+    assert.equal(attached.id,memory.id);
+    f.db.prepare("UPDATE receipts SET created_at=? WHERE memory_id=? AND event_id='valid-clock'").run(f.iso(0),memory.id);
+  }
+  f.db.prepare('UPDATE memories SET created_at=?,updated_at=? WHERE id=?').run(f.iso(-172800000),f.iso(-86400000),memory.id);
+  if(receipts==='no-anchor')f.db.prepare("UPDATE memories SET created_at='',updated_at='' WHERE id=?").run(memory.id);
+  const snapshot=f.db.prepare('SELECT * FROM memories WHERE id=?').get(memory.id);
+  const result=f.mutate(action,snapshot);
+  if(receipts==='no-anchor') {
+    assert.equal(result.error.code,'local_raw_hide_anchor_missing');
+    assert.deepEqual(f.db.prepare('SELECT * FROM memories WHERE id=?').get(memory.id),snapshot);
+    assert.equal(f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(memory.id).n,1);
+    assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_hide_windows').get().n,0);
+  } else {
+    ok(result);
+    const anchors=[-172800000,-86400000,...(receipts==='mixed'?[0]:[])];
+    assert.deepEqual(f.db.prepare('SELECT start_ms,end_ms FROM local_raw_hide_windows ORDER BY start_ms').all().map(r=>[r.start_ms,r.end_ms]),
+      anchors.map(delta=>[Date.parse(f.iso(delta))-LOCAL_RAW_HIDE_WINDOW_MS,Date.parse(f.iso(delta))+LOCAL_RAW_HIDE_WINDOW_MS]));
+  }
 });
 
 test('historical memory forget still hides; already-forgotten memory refuses without new windows',async t=>{
