@@ -28,10 +28,12 @@ Codex local capture: on by default. Conversation text from this tool's sessions
   setup --local --no-capture or config --local-capture off; turn on with config
   --local-capture on.
 Codex: approve the new entries in /hooks.
-Codex capture waits for format qualification; rerun setup after a Codex update.
 Codex local capture: blocked (qualification_required). Raw cap: 200,000,000
   bytes.
 Codex: approve the new entries in /hooks.
-Codex capture waits for format qualification; rerun setup after a Codex update.
+Codex format qualification: pending (qualification_pending).
+Codex capture waits for format qualification. After a Codex update, capture
+  resumes once background qualification passes; rerun setup after a Codex
+  update if it stays pending or failed.
 ✓ Local memory setup complete.
 Next: reopen Claude Code and Codex.

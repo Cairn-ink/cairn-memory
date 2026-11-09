@@ -24,9 +24,10 @@ Codex 本機擷取預設開啟，會把這台電腦上該工具的對話文字�
   刪除個別對話。關閉方式：setup --local --no-capture 或 config --local-capture
   off；重新開啟：config --local-capture on。
 Codex：請到 /hooks 核准新增的項目。
-Codex 擷取正在等待格式驗證；Codex 更新後請重新執行 setup。
 Codex 本機擷取：blocked（qualification_required）。Raw 上限：200,000,000 bytes。
 Codex：請到 /hooks 核准新增的項目。
-Codex 擷取正在等待格式驗證；Codex 更新後請重新執行 setup。
+Codex 格式驗證：pending（qualification_pending）。
+Codex 擷取正在等待格式驗證。Codex 更新後，背景驗證通過就會恢復擷取；若持續等待或
+  驗證失敗，請重新執行 setup。
 ✓ 本機記憶設定完成。
 接下來：重新開啟 Claude Code 和 Codex。
