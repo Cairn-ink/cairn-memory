@@ -14,7 +14,7 @@ function previous(t){
  const available=spawnSync('git',['cat-file','-e',revision+'^{commit}'],{cwd:root});
  if(available.status!==0){t.skip('Previous engine archive is unavailable in this checkout');return null;}
  const workspace=createTestWorkspace(t,{prefix:'memory-relation-migration-'}),baseline=join(workspace.path,'baseline');mkdirSync(baseline,{mode:0o700});
- const archive=spawnSync('git',['archive',revision],{cwd:root,maxBuffer:64*1024*1024});assert.equal(archive.status,0,String(archive.stderr));
+ const archive=spawnSync('git',['archive',revision,'--','core','plugins/cairn-memory/lib'],{cwd:root,maxBuffer:64*1024*1024,timeout:30000});assert.equal(archive.status,0,String(archive.error??archive.stderr));
  const unpack=spawnSync('tar',['-xC',baseline],{input:archive.stdout});assert.equal(unpack.status,0,String(unpack.stderr));
  const path=join(workspace.path,'store.sqlite');
  const child=spawnSync(process.execPath,['--input-type=module','-e',`

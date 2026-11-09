@@ -166,7 +166,7 @@ test('Raw coalescing preserves both dated contradictory memory values',()=>{
 test('capture unions cached vector candidates when lexical overlap is absent',async t=>{
  const base=createFakeEmbedder({aliases:{crepes:'pancakes'}}),calls=[];
  const embedder={...base,embed:async(texts,options)=>{calls.push([...texts]);options.beforeDispatch?.();return base.embed(texts,options);}};
- const f=fixture(t,{contextOptions:{embedder,policy:{family:'local',maxRequests:1000,maxUsd:1,maxConcurrent:1,maxBatchDocuments:1,estimateUsd:()=>0}}});
+ const f=fixture(t,{contextOptions:{embedder,policy:{family:'local',maxRequests:1000,maxUsd:1,maxConcurrent:1,estimateUsd:()=>0}}});
  const memory=ok(f.core.admit({namespace:ns,memory:{content:'I like pancakes.',kind:'preference'},receipts:[{client:'synthetic',sessionId:'s',eventId:'old',role:'user',excerpt:'I like pancakes.'}]})).memory;
  for(let i=0;i<100;i++)if(ok(await f.trusted.call(f.core,'refreshContextIndex',{readSet:[ns],types:['memory'],intent:'current',budget:{maxItems:1024,maxMs:5000}})).status==='complete')break;
  await f.capture('I stopped crepes.');

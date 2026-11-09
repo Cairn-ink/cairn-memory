@@ -209,7 +209,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
       deadline?.check();
       // Causal streams retain receipt/order provenance. Automatic relation
       // decisions now use the same batch port as every other capture.
-      const judged = { decisions: [], reason: null };
+      const judged = { decisions: [], reason: captureQualification && items.length ? 'qualification_requires_identity' : null };
       deadline?.check();
       finished = unwrap(operations.ordered.finish(snapshot, claim.token, claim.order, prepared, judged, memoryRelations));
     } else finished = unwrap(operations.finishAdmission({ ...owned, items: items.map(({ receiptTimes, ...item }) =>

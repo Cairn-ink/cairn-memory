@@ -11,12 +11,16 @@ for(const base of [18,23,33])for(const blocked of ['suppressed','foreign-owner',
  const core=openMemoryCore({path:f.path,contextRead:{version:'context-read-v1',authority:h.authority,counter:{id:'synthetic',countTokens:()=>1}}}),db=f.connect();
  t.after(()=>{core.close();db.close();});
  const seed=ok(core.admit({namespace:ns,memory:{content:'UniqueRelationSeed visible value',kind:'fact'},receipts:[receipt('relation-seed')]})).memory;
- const peer=ok(core.admit({namespace:ns,memory:{content:'SecretRelationPeer hidden value',kind:'fact'},receipts:[receipt('relation-peer')],conflictHints:[{memoryId:seed.id,expectedRevision:seed.revision,relation:'contradicts'}]})).memory;
+ const foreign=blocked==='foreign-owner'||blocked==='foreign-namespace';
+ const peerNamespace=blocked==='foreign-owner'?{...ns,ownerId:'foreign'}:blocked==='foreign-namespace'?{...ns,scope:'project',projectId:'foreign-project'}:ns;
+ const peer=ok(core.admit({namespace:peerNamespace,memory:{content:'SecretRelationPeer hidden value',kind:'fact'},receipts:[receipt('relation-peer')],
+  ...(!foreign?{conflictHints:[{memoryId:seed.id,expectedRevision:seed.revision,relation:'contradicts'}]}:{})})).memory;
  const read=async()=>h.call(core,'contextRead',{readSet:[ns],types:['memory'],intent:'history',query:'UniqueRelationSeed',semantic:false,budget:{}});
- const before=ok(await read());assert.equal(before.metered.items.length,2,'one-hop delivery pulls the other endpoint');
+ const before=ok(await read());assert.equal(before.metered.items.length,foreign?1:2,'one-hop delivery stays within the authorized namespace');
  if(blocked==='suppressed')transaction(db,()=>writeContentSuppressionInside(db,{namespace:ns,kind:'memory',key:peer.id,reason:'purge',actionId:'hide-peer'}));
- if(blocked==='foreign-owner')db.prepare("UPDATE memories SET owner_id='foreign' WHERE id=?").run(peer.id);
- if(blocked==='foreign-namespace')db.prepare("UPDATE memories SET project_id='foreign-project' WHERE id=?").run(peer.id);
+ if(foreign)assert.throws(()=>db.prepare(`INSERT INTO memory_relations
+  (id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,created_at)
+  VALUES('foreign-edge',?,?,?,?,'contradicts',1,'user','now')`).run(seed.id,seed.revision,peer.id,peer.revision),/invalid_relation_boundary/);
  if(blocked==='denied')h.state.enabled=false;
  const after=await read();
  assert.doesNotMatch(JSON.stringify(after),/SecretRelationPeer/);

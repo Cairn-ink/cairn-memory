@@ -154,7 +154,7 @@ CREATE TRIGGER safety_${table}_identity BEFORE UPDATE ON ${table}
 `;
   }
   // Split only complete CREATE statements: trigger bodies contain semicolons.
-  const statements = receiptAndRaw.match(/CREATE TRIGGER[\s\S]*?^END;/gm);
+  const statements = receiptAndRaw.match(/CREATE TRIGGER[\s\S]*?\bEND;(?=\s*(?:CREATE|$))/g);
   for (const statement of statements) {
     if (statement.includes(' ON receipts') || statement.includes(' ON memories') ||
         base >= 20 && (statement.includes(' ON card_notes') || statement.includes(' ON private_cards')) ||
@@ -172,7 +172,7 @@ function expectedSchema(base, receiptEventTime = false, attestedFeatures = false
   if (!expected.has(key)) {
     // Comparison needs no SQLite handle: use the closed normative declarations.
     const sql = contentSafetyDDL(base, receiptEventTime, attestedFeatures) + (lineage ? cardLineageDDL : '');
-    const declarations = sql.match(/CREATE (?:TABLE|(?:UNIQUE )?INDEX)[\s\S]*?;|CREATE TRIGGER[\s\S]*?^END;/gm);
+    const declarations = sql.match(/CREATE (?:TABLE|(?:UNIQUE )?INDEX)[\s\S]*?;|CREATE TRIGGER[\s\S]*?\bEND;(?=\s*(?:CREATE|$))/g);
     expected.set(key, new Map(declarations.map(sql => {
       const [, type, name] = sql.match(/^CREATE (?:UNIQUE )?(TABLE|INDEX|TRIGGER) (\w+)/);
       return [name, { type: type.toLowerCase(), sql: normalize(sql) }];

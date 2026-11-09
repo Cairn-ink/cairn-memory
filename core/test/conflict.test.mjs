@@ -57,7 +57,12 @@ test('K01 symmetric source-attributed hints, canonical replay, link epochs and r
   assert.deepEqual(admit(core, 'Synthetic A', [hint(b)]), a);
   assert.ok(epoch(core) > beforeEpoch);
   assert.equal(core.list({ namespace, limit: 1, cursor }).ok, false);
-  assert.deepEqual(detail(core, a), { ...beforeA, conflicts: [projection(b)] });
+  const { relations, ...legacyDetail } = detail(core, a);
+  assert.deepEqual(legacyDetail, { ...beforeA, conflicts: [projection(b)] });
+  assert.equal(relations.length, 1);
+  assert.equal(relations[0].memoryId, b.id);
+  assert.equal(relations[0].relation, 'contradicts');
+  assert.equal(relations[0].decidedBy, 'user');
   assert.deepEqual(detail(core, b).conflicts, [projection(a)]);
   const state = snapshot(db);
   admit(core, 'Synthetic A', [hint(b)]);
