@@ -49,7 +49,7 @@ async function fixture(t, observation = () => active, memories = []) {
 }
 async function run(t, f, action, { entry = hook, preload = nativePreload, onSpawn } = {}) {
   const events = [], started = performance.now();
-  const child = spawn(process.execPath, [...(preload ? ['--import', preload] : []), entry, ...(action ? [action] : [])],
+  const child = spawn(process.execPath, [...(preload ? [preload].flat().flatMap(path=>['--import',path]) : []), entry, ...(action ? [action] : [])],
     { env: f.env, stdio: ['pipe', 'pipe', 'pipe', 'ipc'] });
   let stdout = '', stderr = '';
   child.stdout.on('data', data => { stdout += data; }); child.stderr.on('data', data => { stderr += data; });
@@ -106,6 +106,12 @@ for(const action of ['capture','capture-detached']) test(`native ${action} disca
 });
 for(const hook_event_name of ['Stop','PreCompact']) test(`native ${hook_event_name} foreground has zero network`,{timeout:10000},async t=>{
   const f=await fixture(t);f.input.hook_event_name=hook_event_name;
-  const result=await run(t,f,'',{entry:launcher,preload:foregroundPreload});
+  const result=await run(t,f,'',{entry:launcher,preload:[nativePreload,foregroundPreload]});
   assert.deepEqual(f.counts,{pause:0,recall:0,capture:0,other:0});assert.equal(result.stdout,'');
+});
+
+for(const endpoint of ['file:///synthetic/local','stdio://synthetic'])test(`native non-HTTP ${new URL(endpoint).protocol} stays local`,{timeout:10000},async t=>{
+  const f=await fixture(t);f.env.CLAUDE_PLUGIN_OPTION_API_ENDPOINT=endpoint;
+  for(const action of ['recall','capture','capture-detached'])assert.equal((await run(t,f,action)).stdout,'');
+  assert.deepEqual(f.counts,{pause:0,recall:0,capture:0,other:0});
 });

@@ -20,19 +20,25 @@ for (const sink of ['request', 'output']) test(`intent committed after final jou
   const selected = Promise.withResolvers(), release = Promise.withResolvers(), durable = Promise.withResolvers();
   t.after(() => release.resolve());
   const originalOpen = fs.open;
-  let completionReads = 0;
+  let completionReads = 0, selectedFinal = false, gatePresent = false, publicationAttempts = 0;
+  const originalLink = fs.link;
+  const linkMock = t.mock.method(fs, 'link', async function(source,destination) {
+    if(selectedFinal && String(destination).endsWith('.json.gate'))publicationAttempts++;
+    return originalLink.call(this,source,destination);
+  });
   const mocked = t.mock.method(fs, 'open', async function(path, ...args) {
     const handle = await originalOpen.call(this, path, ...args);
     // Outer check reads first; the second read is after selection inside the
     // final guard, with control.lock already held. Hold the read resolution.
     if (String(path).endsWith('/1.false.complete') && ++completionReads === 2) {
       assert.ok(await fs.stat(join(root, 'control.lock')));
-      selected.resolve(); await release.promise;
+      gatePresent = await fs.stat(join(root,'hosted-pause',hostedTargetId(config)+'.json.gate')).then(()=>true,()=>false);
+      selectedFinal = true; selected.resolve(); await release.promise;
     }
     return handle;
   });
   syncBuiltinESMExports();
-  t.after(() => {mocked.mock.restore(); syncBuiltinESMExports();});
+  t.after(() => {mocked.mock.restore(); linkMock.mock.restore(); syncBuiltinESMExports();});
   let starts=0;
   const work = guard => sink==='request'
     ? startIfActive(root, local.generation, () => {starts++;}, {guard})
@@ -50,5 +56,7 @@ for (const sink of ['request', 'output']) test(`intent committed after final jou
   const result=await settled;
   assert.equal(starts,0,'no_side_effect_after_durable_intent');
   assert.match(result.error?.message ?? '',/pause_unavailable/);
+  assert.ok(gatePresent,'final_selection_inside_shared_gate');
+  assert.ok(publicationAttempts>0,'intent_writer_attempted_shared_gate');
   await observationResult;
 });

@@ -34,11 +34,15 @@ test('two hundred completed cycles retain constant warm journal cost and no writ
         await observation.observe(); await observation.observe();
         await withHostedPauseGate(config,generation,async check=>{await check();});
       } finally {sync.mock.restore();mock.mock.restore();syncBuiltinESMExports();}
-      assert.equal(syncs,0,'warm_unchanged_no_fsync');
-      assert.equal(names.length,2,'bounded_journal_file_count');
-      assert.ok(listed.length>0); assert.ok(listed.every(count=>count===2),'bounded_names_per_check');
-      snapshots.push({generation,files:names.length,listed,syncs});
+      const files = (await fs.readdir(root,{recursive:true,withFileTypes:true})).filter(entry=>entry.isFile()).length;
+      snapshots.push({generation,files:names.length,totalFiles:files,listed,syncs});
     }
   }
   t.diagnostic(JSON.stringify(snapshots));
+  assert.equal(snapshots[0].totalFiles,snapshots[1].totalFiles,'constant_total_file_count');
+  for(const snapshot of snapshots){
+    assert.equal(snapshot.syncs,0,'warm_unchanged_no_fsync');
+    assert.equal(snapshot.files,2,'bounded_journal_file_count');
+    assert.ok(snapshot.listed.length>0);assert.ok(snapshot.listed.every(count=>count===2),'bounded_names_per_check');
+  }
 });

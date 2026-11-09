@@ -131,6 +131,11 @@ async function readPause(config) {
 // Immutable records cannot be overwritten by an older observer that finishes
 // late. Within one generation, resume is irreversible: false supersedes true.
 // Keep these content-free records across crashes; diagnostics are not authority.
+function olderIntentName(name, remote) {
+  const match = /^(0|[1-9]\d*)\.(true|false)\.(json|complete)$/u.exec(name);
+  return match && (Number(match[1]) < remote.generation ||
+    (Number(match[1]) === remote.generation && match[2] === 'true' && !remote.paused));
+}
 async function highestIntent(config) {
   const directory = intentDirectory(config);
   const checkpoint = await privateRead(highWaterPath(config), { missing: true });
@@ -142,7 +147,8 @@ async function highestIntent(config) {
         typeof value.paused !== 'boolean') throw new Error('pause_unavailable');
     selected = { ...value, name: intentName(value) + '.json' };
   }
-  for (const name of await privateList(directory, { missing: true }) ?? []) {
+  const names = await privateList(directory, { missing: true }) ?? [];
+  for (const name of names) {
     if (!name.endsWith('.json')) continue; // Incomplete atomic-write temporaries.
     const match = /^(0|[1-9]\d*)\.(true|false)\.json$/u.exec(name);
     const generation = Number(match?.[1]);
@@ -160,7 +166,7 @@ async function highestIntent(config) {
       value.generation !== selected.generation || value.paused !== selected.paused) {
     throw new Error('pause_unavailable');
   }
-  return value;
+  return { ...value, needsPrune: names.some(name => olderIntentName(name, value)) };
 }
 function validateIntent(remote, intent) {
   if (intent && (remote.generation < intent.generation ||
@@ -288,18 +294,12 @@ async function observe(config, token, signal) {
     if (completion) {
       await writeOnce(completion, intentBytes(remote));
       const checkpoint = await privateRead(highWaterPath(config), { missing: true });
-      if (checkpoint !== intentBytes(remote)) {
+      if (checkpoint !== intentBytes(remote) || intent.needsPrune) {
         // Only changed observations compact. Never delete authority until both
         // publication and receipt are durable and the high water is synced.
         await privateWrite(highWaterPath(config), intentBytes(remote));
         for (const name of await privateList(intentDirectory(config))) {
-          const match = /^(0|[1-9]\d*)\.(true|false)\.(json|complete)$/u.exec(name);
-          if (!match) continue; // Never interfere with a live atomic writer.
-          const generation = Number(match[1]), paused = match[2] === 'true';
-          if (generation < remote.generation ||
-              (generation === remote.generation && paused && !remote.paused)) {
-            await privateRemove(join(intentDirectory(config), name));
-          }
+          if (olderIntentName(name, remote)) await privateRemove(join(intentDirectory(config), name));
         }
         await syncDirectory(intentDirectory(config));
       }
