@@ -142,6 +142,7 @@ export async function captureStopNotice(configPath, config, input, qualification
     const name = `capture-stop-notice-${day}.claim`;
     const zh = (env.LC_ALL || env.LC_MESSAGES || env.LANG || '').startsWith('zh');
     const version = validVersion(qualification.version) ? qualification.version : 'unknown';
+    // SessionStart diagnostics use fixed systemMessage templates, never memory/server text.
     const text = format ? (zh
       ? `Cairn 自動記憶暫停中：還不支援 Codex ${version}。檢查：npx @cairn-ink/memory status --client codex`
       : `Cairn automatic memory is paused: Codex ${version} is not supported yet. Check: npx @cairn-ink/memory status --client codex`)

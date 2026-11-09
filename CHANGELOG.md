@@ -8,6 +8,8 @@
   local calendar day. Intentional pauses and the daily cap stay quiet.
 - Codex status shows the last locally recorded, service-acknowledged capture
   in local time, or says none is recorded yet. Exec status aligns with its siblings.
+- Hosted Codex prompt recall gets the 0.3.4 deadline: up to 2,500 ms from the
+  first recall fetch, inside a 3,000 ms prompt-hook process-clock cap.
 - Ships the current engine synced from `main` at `c838ba99`. Local users get
   dated three-layer contextRead over saved memories by default:
   `find_memory_candidates`, `fetch_memory_candidate_evidence`, and
@@ -27,8 +29,21 @@
   see [defaults and off switches](docs/defaults.md).
 - You can go back to 0.6.3; it keeps working with the upgraded store, but conversations captured while on 0.6.3 are not kept as Raw.
 - Prepared and unpublished; after publication, rerun setup to install 0.6.5's
-  engine and Codex notice/status updates. Existing installed runtimes stay in
-  use until setup is rerun.
+  engine, Codex notice/status updates and the prompt recall deadline. Existing
+  installed runtimes stay in use until setup is rerun.
+
+## 0.3.4 — 2026-11-09: hosted recall deadline
+
+Plugin and marketplace 0.3.4. Protocol stays 0.3.0. The installer version is not
+bumped here; the Codex prompt changes reach installs through the next installer
+release.
+
+- Allow 2,500 ms from the first recall fetch on both hosts. Codex prompt hooks
+  have a 3,000 ms process-clock cap; Claude Code plugin prompt hooks keep their
+  3,500 ms process-clock cap. Both use a 4 s host timeout, preserving at least
+  500 ms of margin and silent cancellation. Startup, imports and local waits
+  count against each cap.
+  Earlier release entries retain their historical deadline values.
 
 ## Unreleased — optional local Raw index
 
@@ -40,6 +55,8 @@
   [the interface](docs/plans/raw-search-interface.md) and [host seam](docs/plans/raw-search-seam.md).
 
 ## Unreleased — maintenance admission and integrity
+
+- Check opening deadlines before lifecycle locking, canonical read transaction setup, and native dispatch after WAL wait configuration.
 
 - Optional admission capacity covers cold opens while work retains its normal quantum. Each domain prices exhaustion by its own next turn.
 - WAL-mode hosts pay main's integrity check once on the first open after upgrade; DELETE-mode caches rebuild once. Steady maintenance adds no BEGIN or COMMIT.

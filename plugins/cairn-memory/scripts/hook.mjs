@@ -31,13 +31,14 @@ import { INVALID_ENDPOINT, credentialDescription, readCredentialState, recordCre
   recordCredentialConfiguration } from "../lib/credential-state.mjs";
 
 const action = process.argv[2] ?? "status";
-// One recall-only application budget, before setup or stdin awaits. The HTTP
+// One recall-only cap from the process time origin, including startup/imports.
+// It is established before setup or stdin awaits. The HTTP
 // timeout remains narrower. Cooperative waits cancel and clean up naturally;
 // this cannot preempt synchronous CPU or an uncooperative filesystem operation.
 const recallController = action === 'recall' ? new AbortController() : undefined;
-const recallEnd = recallController ? performance.now() + 2500 : undefined;
+const recallEnd = recallController ? 3500 : undefined;
 const expireRecall = () => { recallController.abort(new Error('recall_timeout')); process.stdin.destroy(); };
-const recallTimer = recallController ? setTimeout(expireRecall, 2500) : undefined;
+const recallTimer = recallController ? setTimeout(expireRecall, Math.max(0, recallEnd - performance.now())) : undefined;
 const recallSignal = recallController?.signal;
 function checkRecall() {
   if (recallController && performance.now() >= recallEnd && !recallSignal.aborted) expireRecall();
@@ -138,7 +139,7 @@ async function recall(hookInput) {
     "/api/memory/recall",
     { query, ...(projectId === undefined ? {} : { project_id: projectId }), limit: 6,
       ...(sessionId === undefined ? {} : { session_id: sessionId }) },
-    2_000, true, (start) => dispatchActive(control.generation, start, recallSignal), recallSignal,
+    2_500, true, (start) => dispatchActive(control.generation, start, recallSignal), recallSignal,
   );
   checkRecall();
   if (!Array.isArray(result?.memories) || result.memories.length === 0) return;
@@ -402,6 +403,7 @@ async function control() {
 }
 
 try {
+  checkRecall();
   const { pairingRecord, rest } = parsePairingRecord(process.argv.slice(3));
   if (rest.length) {
     if (rest.length !== 2 || rest[0] !== "--plugin-data") {

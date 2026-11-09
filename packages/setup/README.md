@@ -22,8 +22,10 @@ qualification pause or a missing or unreadable sign-in, at most once per local
 calendar day; intentional pauses and the daily cap stay quiet.
 `status --client codex` shows the last locally recorded, service-acknowledged
 capture in local time, or says none is recorded yet. Exec status aligns with
-its siblings. After publication, rerun setup to install the engine and these
-runtime diagnostics.
+its siblings. Hosted Codex prompt recall gets the plugin 0.3.4 deadline: up to
+2,500 ms from the first recall fetch, inside a 3,000 ms prompt-hook cap. After
+publication, rerun setup to install the engine, these runtime diagnostics and
+the recall deadline.
 
 0.6.5 ships the current engine synced from `main` at `c838ba99`. Local users get
 dated three-layer contextRead over saved memories by default:
@@ -47,7 +49,9 @@ You can go back to 0.6.3; it keeps working with the upgraded store, but conversa
 每個本機日最多提醒一次；自行暫停或達到每日上限時不提醒。
 `status --client codex` 會顯示上次有本機紀錄、服務已確認的保存時間
 （本機時間），沒有紀錄就如實顯示。Exec 狀態也採用相同呈現方式。
-發布後請重跑 setup，才會安裝新版引擎與這些診斷功能。
+雲端 Codex 的提示回憶改用外掛 0.3.4 的時限：從第一次回憶請求起最多 2,500 ms，
+整個提示 hook 上限 3,000 ms。發布後請重跑 setup，才會安裝新版引擎、
+這些診斷功能與新的回憶時限。
 
 0.6.5 的引擎同步自 `main` 的 `c838ba99`。本機使用者預設可透過
 `find_memory_candidates`、`fetch_memory_candidate_evidence`、

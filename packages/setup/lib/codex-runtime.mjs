@@ -76,7 +76,7 @@ export function mergeHooks(text, path, config, previous, enabled) {
     value.hooks[event] = groups.map(group => ({ ...group,
       hooks: group.hooks.filter(hook => !commands.has(hook.command) && !ownedHook(hook,path,event)) })).filter(group => group.hooks.length);
     if (enabled) value.hooks[event].push({ hooks: [{ type: 'command', command: hookCommand(config,path,event),
-      timeout: ['Stop','PreCompact'].includes(event) ? 1 : 3,
+      timeout: ['Stop','PreCompact'].includes(event) ? 1 : event === 'UserPromptSubmit' ? 4 : 3,
       statusMessage: 'Cairn automatic memory', ...(['SessionStart','UserPromptSubmit'].includes(event) ? {additionalContextLimit:0} : {}) }] });
     if (!value.hooks[event].length) delete value.hooks[event];
   }

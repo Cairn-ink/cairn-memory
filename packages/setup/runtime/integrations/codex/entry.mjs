@@ -1,5 +1,4 @@
 // Installed entry: every automatic path exits 0, with only vetted context JSON.
-// SessionStart diagnostics use fixed systemMessage templates, never memory/server text.
 // Dynamic import also contains missing/corrupt runtime failures without stderr.
 import { write } from 'node:fs';
 const [path, event] = process.argv.slice(2);
@@ -20,7 +19,7 @@ const finish = output => {
   });
   flush(0);
 };
-const budget = event === 'qualify' ? 65000 : event === 'worker' ? 62500 : capture ? 750 : 2000;
+const budget = event === 'qualify' ? 65000 : event === 'worker' ? 62500 : capture ? 750 : event === 'UserPromptSubmit' ? 3000 : 2000;
 const timer = setTimeout(() => { controller.abort(); finish(capture ? '{}' : ''); },
   Math.max(1,budget - process.uptime()*1000 - 50));
 process.on('uncaughtException', () => finish(capture ? '{}' : ''));

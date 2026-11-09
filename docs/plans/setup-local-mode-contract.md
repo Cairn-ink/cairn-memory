@@ -1481,10 +1481,14 @@ the new evidence are added to `docs/codex-setup.md` and
    `main` do not break that suite. Never rebuild the archive during this
    release preparation; run `build-runtime.mjs --check` only.
 2. **L06/L24 exceptions.** Keep §16 and §18's named per-file exceptions.
-   The capture stop notice adds exactly `integrations/codex/entry.mjs`,
+   The capture stop notice adds exactly
    `integrations/codex/installed-state.mjs`, `integrations/codex/installed.mjs`
-   and `integrations/codex/worker.mjs`. Each installed copy must equal its
-   current packaged source byte for byte before historical comparison.
+   and `integrations/codex/worker.mjs`. The hosted recall deadline (plugin
+   0.3.4) adds `integrations/codex/entry.mjs`, `integrations/codex/hook.mjs`
+   and `integrations/codex/hosted-lifecycle.mjs`, each admitted only as one
+   exact line substitution against the immutable 0.5.3 source. Each installed
+   copy must equal its current packaged source byte for byte before
+   historical comparison.
    Any later runtime change shipped alongside these adds its own named
    per-file exception with the same installed-versus-packaged assertion.
 3. **Private acceptance.** Use installed packages, synthetic data, temporary

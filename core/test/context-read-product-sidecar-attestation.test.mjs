@@ -5,7 +5,10 @@ import childProcess from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { createHmac, randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
+import { readTransaction, isConnectionDiscarded } from '../database.mjs';
+import { withContentSuppressionRequest, contentSuppressionRequestInside } from '../content-suppression-storage.mjs';
+import { contentSafetyBudgetError, installedContentLayout } from '../content-safety-schema.mjs';
 import { join } from 'node:path';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { openMemoryCore } from '../index.mjs';
@@ -26,20 +29,29 @@ const seals=await import('../context-product-sidecar-attestation.mjs').catch(()=
 const stamp=path=>{const s=sqliteFileStat(path);return [s.dev,s.ino,s.size,s.mtimeNs,s.ctimeNs].join(':');};
 function sql(path,work){const db=new DatabaseSync(path);try{return work(db);}finally{db.close();}}
 function child(code,...args){const r=childProcess.spawnSync(process.execPath,['--input-type=module','-e',code,...args],{encoding:'utf8',env:{},timeout:10000});assert.equal(r.status,0,r.stderr);assert.equal(r.error,undefined);return r.stdout;}
-function setup(t,{build=true,mode='DELETE',batching=false,state=new SharedArrayBuffer(8),factory=productSidecar,attribution,rendezvous}={}) {
+function setup(t,{build=true,mode='DELETE',canonicalWal=false,batching=false,state=new SharedArrayBuffer(8),factory=productSidecar,attribution,rendezvous}={}) {
   const stackLimit=Error.stackTraceLimit;Error.stackTraceLimit=64;t.after(()=>{Error.stackTraceLimit=stackLimit;});
   const f=fixture(t),first=f.admit('attestation first canary'),second=f.admit('attestation second canary');
   const path=f.path+PRODUCT_SIDECAR_SUFFIX,p=selection,access=accessDigest({ownerId:ns.ownerId,namespaces:{readSet:[ns]}});
   const children=[],statements=[],executed=[],commits=[],transactions=new WeakMap(),sideDatabases=new WeakSet();
-  let clock=0,delayChecks=false,checks=0,storage,hook=()=>{},prepared=statement=>statement,afterExec=()=>{},onFiles=()=>{};
-  const base=nativeObserver(),observer={...base,creation(work){return base.creation(()=>{const report=work();children.push(report);return report;});}};
+  let nativeStep=()=>{},nativeDone=()=>{},clock=0,delayChecks=false,checks=0,storage,hook=()=>{},prepared=statement=>statement,afterExec=()=>{},onFiles=()=>{};
+  const base=nativeObserver(),observer={...base,invoke(stage,label,work){
+    if(stage!=='open')return base.invoke(stage,label,work);
+    nativeStep({connection:'opening',method:'open',text:label});
+    const result=base.invoke(stage,label,work);nativeDone();return result;
+  },creation(work){return base.creation(()=>{const report=work();children.push(report);return report;});}};
+  if(canonicalWal)sql(f.path,db=>db.exec('PRAGMA journal_mode=WAL'));
   const sqlite=createProductSqlitePolicy({observer,now:()=>clock}),files=sqlite.files;
   sqlite.files=file=>{const check=files(file);return options=>{check(options);if(file===path)onFiles();};};sqlite.start(Infinity);
+  const roles=new WeakMap(),policyOpen=sqlite.open;
+  sqlite.open=(native,file,...args)=>{roles.set(native,file===f.path?'canonical':file===path?'sidecar':'lifecycle');return policyOpen(native,file,...args);};
   const facade=openContextProductFacade(f.path,{sqlite});
   const prepare=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;
   t.mock.method(DatabaseSync.prototype,'prepare',function(text){
     if(text.includes('FROM product_metadata'))sideDatabases.add(this);
+    nativeStep({connection:roles.get(this),method:'prepare',text,database:this});
     const statement=Reflect.apply(prepare,this,[text]),database=this;
+    nativeDone();
     const wrapped=new Proxy(statement,{get(target,key){const value=Reflect.get(target,key,target);if(typeof value!=='function')return value;
       return (...args)=>{
         if(['get','all','iterate','run'].includes(key)){
@@ -49,7 +61,16 @@ function setup(t,{build=true,mode='DELETE',batching=false,state=new SharedArrayB
             const tx=transactions.get(database);assert.ok(tx,'seal write belongs to a transaction');tx.sealed=true;tx.stamp=args[0];
           }
         }
-        return Reflect.apply(value,target,args);
+        const event={connection:roles.get(database),method:String(key),text,database};
+        nativeStep(event);const result=Reflect.apply(value,target,args);nativeDone();
+        if(key!=='iterate')return result;
+        let iteratorProxy;return iteratorProxy=new Proxy(result,{get(iterator,method){
+          if(method===Symbol.iterator)return ()=>iteratorProxy;
+          const step=Reflect.get(iterator,method,iterator);
+          return typeof step!=='function'?step:(...values)=>{
+            nativeStep({...event,method:String(method)});const result=Reflect.apply(step,iterator,values);nativeDone();return result;
+          };
+        }});
       };}});return prepared(wrapped,text);
   });
   t.mock.method(DatabaseSync.prototype,'exec',function(text){
@@ -65,11 +86,13 @@ function setup(t,{build=true,mode='DELETE',batching=false,state=new SharedArrayB
       if(text==='ROLLBACK')transactions.delete(this);
     }
     if(text!=='BEGIN IMMEDIATE'&&text!=='COMMIT'&&text!=='ROLLBACK')transactions.get(this)?.sql.push(text);
-    const result=Reflect.apply(exec,this,[text]);afterExec(text,this,writing);return result;
+    nativeStep({connection:roles.get(this),method:'exec',text,database:this,stack:new Error().stack});
+    const result=Reflect.apply(exec,this,[text]);nativeDone();afterExec(text,this,writing);return result;
   });
   const options={path:f.path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,observer,sqlite,writable:true,sidecarJournalMode:mode,verificationBatching:batching,verificationBatchState:state,attribution,rendezvous,now:()=>clock};
   const s={f,path,p,access,first,second,facade,children,statements,executed,commits,state,
     get storage(){return storage;},get clock(){return clock;},get checks(){return checks;},
+    traceNative(step=()=>{},done=()=>{}){nativeStep=step;nativeDone=done;},
     setPrepareHook(fn){prepared=fn;},setHook(fn){hook=fn;},afterExec(fn){afterExec=fn;},onFiles(fn){onFiles=fn;},setClock(n){clock=n;},delayChecks(){delayChecks=true;},
     open(write=true){storage?.close();storage=factory({...options,writable:write});return storage;},
     observe(){return storage.observe(p,access);},
@@ -900,4 +923,189 @@ for(const boundary of ['publication binding','resident metadata','binding iterat
   assert.equal(expired,true,'the targeted native boundary was reached');
   assert.equal(lateGets,0,'no native get after prepare exhausted the deadline');
   assert.equal(lateSteps,0,'no native iterator next after expiry');
+});
+
+
+// Observe native starts separately from the prepare hooks that advance the clock.
+const queryOnlyRestoreLine=readFileSync(new URL('../database.mjs',import.meta.url),'utf8').split('\n')
+  .findIndex(line=>line.includes("const restore = () => db.exec('PRAGMA query_only='") || line.includes("try { db.exec('PRAGMA query_only='"))+1;
+const rollbackLine=readFileSync(new URL('../database.mjs',import.meta.url),'utf8').split('\n')
+  .findIndex(line=>line.includes("try { db.exec('ROLLBACK'); }"))+1;
+const admissionCleanup=event=>event.method==='return'||event.method==='Symbol(nodejs.dispose)'||
+  event.method==='exec'&&(event.text==='ROLLBACK'||
+    /^(PRAGMA query_only=|PRAGMA busy_timeout=)/.test(event.text)&&
+    (event.stack.includes(`database.mjs:${queryOnlyRestoreLine}:`)||event.stack.includes(`database.mjs:${rollbackLine}:`)));
+function unlockedAdmission(s) {
+  sql(s.path+'.lifecycle-lock.sqlite',db=>db.exec('PRAGMA busy_timeout=0;BEGIN EXCLUSIVE;COMMIT'));
+  sql(s.path,db=>db.exec('PRAGMA busy_timeout=0;BEGIN IMMEDIATE;COMMIT'));
+}
+for(const boundary of ['lifecycle','canonical transaction'])test(`opening deadline raw admission boundary: ${boundary}`,t=>{
+  const s=setup(t);s.open();let n=0,expired=false;const late=[];
+  s.traceNative(event=>{if(expired&&!admissionCleanup(event))late.push(event.method+':'+event.text);});
+  s.setPrepareHook((statement,text)=>{
+    const match=boundary==='lifecycle'?text==='PRAGMA schema_version':text==='PRAGMA query_only'&&++n===2;
+    if(match&&!expired){expired=true;s.setClock(2000);}
+    return statement;
+  });
+  assert.throws(()=>s.storage.admit(2000),{code:'read_timeout'});
+  s.traceNative();assert.equal(expired,true);assert.deepEqual(late,[],'no late native starts');
+  unlockedAdmission(s);s.setPrepareHook(statement=>statement);s.setClock(0);s.storage.admit(2000);
+  assert.equal(s.valid(),true);t.diagnostic(JSON.stringify({boundary,late,nextCall:true}));
+});
+
+for(const built of [false,true])test(`opening deadline already expired on entry issues zero native statements: built=${built}`,t=>{
+  const s=setup(t,{build:built});s.open();s.setClock(2000);const trace=[];
+  s.traceNative(event=>trace.push(event.method+':'+event.text));
+  assert.throws(()=>s.storage.admit(2000),{code:'read_timeout'});
+  s.traceNative();assert.deepEqual(trace,[]);
+  if(built)unlockedAdmission(s);
+  else {assert.equal(existsSync(s.path+'.lifecycle-lock.sqlite'),false);assert.equal(existsSync(s.path),false);}
+  s.setClock(0);s.storage.admit(2000);unlockedAdmission(s);assert.equal(s.valid(),true);
+});
+
+for(const attributed of [false,true])test(`opening deadline native k-sweep: attribution=${attributed}`,t=>{
+  const s=setup(t,{attribution:attributed?createMaintenanceAttribution():undefined});
+  // A deferred request exercises the real safety header before the identity
+  // callback; its catch must preserve budget errors and never latch refusal.
+  const admission=()=>withContentSuppressionRequest(()=>{
+    contentSuppressionRequestInside(s.facade.port.db,[ns],{defer:true});
+    return s.storage.admit(2000);
+  });
+  // Retain the handles so every k uses the same canonical and sidecar objects.
+  admission();const trace=[];
+  s.traceNative(event=>trace.push({connection:event.connection,method:event.method,text:event.text}));
+  admission();s.traceNative();
+  assert.ok(trace.some(e=>e.connection==='canonical'&&e.text==='PRAGMA application_id'&&e.method==='get'));
+  assert.ok(trace.some(e=>e.connection==='canonical'&&e.text.includes('AS cookie')&&e.method==='get'));
+  const rows=[],violations=[];
+  for(let k=0;k<=trace.length;k++){
+    let steps=0,expired=k===0;const late=[];s.setClock(expired?2000:0);
+    s.traceNative(event=>{if(expired&&!admissionCleanup(event))late.push(event.method+':'+event.text);steps++;},
+      ()=>{if(steps===k&&!expired){expired=true;s.setClock(2000);}});
+    let error;try{admission();}catch(e){error=e;}
+    s.traceNative();assert.equal(expired,true,`k=${k}`);
+    if(!error||!contentSafetyBudgetError(error))violations.push({k,error:error?.code??'success'});
+    if(late.length)violations.push({k,late});
+    const db=s.facade.port.db;let nextCall=true,nextError;
+    try {
+      assert.equal(isConnectionDiscarded(db),false);assert.equal(db.isTransaction,false);
+      assert.ok(readTransaction(db,()=>{installedContentLayout(db);return db.prepare('PRAGMA application_id').get();}).application_id);
+      unlockedAdmission(s);s.setClock(0);admission();
+    } catch(e) {nextCall=false;nextError=e.code??e.message;violations.push({k,nextError});}
+    rows.push({k,...(trace[k-1]??{connection:'entry',method:'entry',text:''}),error:error?.code??'success',nextCall,...(nextError?{nextError}:{})});
+    if(!nextCall)break;
+  }
+  t.diagnostic(JSON.stringify({nativeSteps:trace.length,rows}));
+  assert.deepEqual(violations,[],'every cut is budget-shaped, cleans up, and keeps the connection usable');
+});
+
+
+test('opening deadline before lifecycle BEGIN refuses after opening configuration',t=>{
+  const s=setup(t);s.open();let resets=0,expired=false;const late=[],connections=new Set();
+  s.traceNative(event=>{if(event.database)connections.add(event.database);if(expired&&!admissionCleanup(event))late.push(event.method+':'+event.text);});
+  s.afterExec(text=>{if(text==='PRAGMA busy_timeout=0'&&++resets===2){expired=true;s.setClock(2000);}});
+  assert.throws(()=>s.storage.admit(2000),{code:'read_timeout'});s.traceNative();
+  assert.equal(expired,true);assert.deepEqual(late,[]);
+  for(const db of connections)assert.equal(db.isTransaction,false,'no lifecycle transaction remains after refusal');
+  unlockedAdmission(s);s.afterExec(()=>{});s.setClock(0);s.storage.admit(2000);
+});
+
+test('opening deadline before canonical BEGIN refuses after query-only setup',t=>{
+  const s=setup(t);s.open();let enabled=0,expired=false;const late=[];
+  s.traceNative(event=>{if(expired&&!admissionCleanup(event))late.push(event.method+':'+event.text);});
+  s.afterExec(text=>{if(text==='PRAGMA query_only=ON'&&++enabled===2){expired=true;s.setClock(2000);}});
+  assert.throws(()=>s.storage.admit(2000),{code:'read_timeout'});s.traceNative();
+  assert.equal(expired,true);assert.deepEqual(late,[]);assert.equal(s.facade.port.db.isTransaction,false);
+  unlockedAdmission(s);s.afterExec(()=>{});s.setClock(0);s.storage.admit(2000);
+});
+
+
+test('WAL opening deadline refuses dispatch after wait configuration and clears the admission scope',t=>{
+  const s=setup(t,{mode:'WAL'}),late=[];let expired=false;
+  s.setClock(1);
+  s.traceNative(event=>{if(expired&&!admissionCleanup(event))late.push(event.method+':'+event.text);});
+  s.afterExec(text=>{if(text==='PRAGMA busy_timeout=979'){expired=true;s.setClock(2);}});
+  assert.throws(()=>s.storage.admit(2),{code:'read_timeout'});s.traceNative();
+  assert.equal(expired,true);assert.deepEqual(late,[]);
+  s.afterExec(()=>{});s.setClock(3);
+  assert.equal(s.observe().dto.lexical.state,'ready','ordinary read after refusal has no admission cutoff');
+  s.storage.admit(4);s.setClock(5);
+  assert.equal(s.observe().dto.lexical.state,'ready','ordinary read after success has no admission cutoff');
+  unlockedAdmission(s);s.storage.admit(6);
+  t.diagnostic(JSON.stringify({expired,late,nextCall:true}));
+});
+
+// A timeout installation belongs to the immediately following native call.
+// Pair it with that call to recognize iterator-return configuration as cleanup.
+const lateWalWork=events=>events.filter((event,i)=>!admissionCleanup(event)&&
+  !(event.method==='exec'&&event.text.startsWith('PRAGMA busy_timeout=')&&admissionCleanup(events[i+1]??{})))
+  .map(event=>event.method+':'+event.text);
+
+for(const attributed of [false,true])test(`WAL opening deadline native k-sweep: attribution=${attributed}`,t=>{
+  const s=setup(t,{mode:'WAL',canonicalWal:true,attribution:attributed?createMaintenanceAttribution():undefined});
+  const canonical=s.facade.port.db,admission=()=>withContentSuppressionRequest(()=>{
+    contentSuppressionRequestInside(canonical,[ns],{defer:true});s.storage.admit(2000);
+  });
+  // Advancing after every native call forces fresh wait configuration at each
+  // dispatch. Internal configuration calls count as steps in their own right.
+  const trace=[];s.setClock(1);
+  s.traceNative(event=>trace.push({connection:event.connection,method:event.method,text:event.text}),()=>s.setClock(s.clock+1));
+  admission();s.traceNative();
+  assert.ok(trace.some(e=>e.text.startsWith('PRAGMA busy_timeout=')&&e.connection==='sidecar'));
+  assert.ok(trace.some(e=>e.text.includes('AS cookie')&&e.method==='get'));
+  assert.ok(trace.some(e=>e.text.startsWith('PRAGMA busy_timeout=')&&e.connection==='canonical'));
+  const rows=[],violations=[];
+  for(let k=0;k<=trace.length;k++){
+    // Restore the same installed timeout and native statement state each time.
+    s.setClock(0);admission();
+    let steps=0,expired=k===0;const late=[];s.setClock(expired?2000:1);
+    s.traceNative(event=>{if(expired)late.push(event);steps++;},()=>{
+      if(!expired&&steps===k){expired=true;s.setClock(2000);}else if(!expired)s.setClock(s.clock+1);
+    });
+    let error;try{admission();}catch(e){error=e;}
+    s.traceNative();
+    if(!expired)violations.push({k,expired});
+    if(!error||!contentSafetyBudgetError(error))violations.push({k,error:error?.code??'success'});
+    const lateWork=lateWalWork(late);if(lateWork.length)violations.push({k,late:lateWork});
+    let nextCall=true,nextError;
+    try{
+      assert.equal(s.facade.port.db,canonical);assert.equal(isConnectionDiscarded(canonical),false);assert.equal(canonical.isTransaction,false);
+      assert.ok(readTransaction(canonical,()=>{installedContentLayout(canonical);return canonical.prepare('PRAGMA application_id').get();}).application_id);
+      unlockedAdmission(s);s.setClock(0);admission();
+    }catch(e){nextCall=false;nextError=e.code??e.message;violations.push({k,nextError});}
+    rows.push({k,...(trace[k-1]??{connection:'entry',method:'entry',text:''}),error:error?.code??'success',nextCall,...(nextError?{nextError}:{})});
+    if(!nextCall)break;
+  }
+  t.diagnostic(JSON.stringify({walNativeSteps:trace.length,rows}));
+  assert.deepEqual(violations,[],'every WAL cut refuses late work, cleans up and permits reuse');
+});
+
+test('WAL opening deadline permits rollback wait configuration after expiry',t=>{
+  const s=setup(t,{mode:'WAL'}),connections=new Set(),cleanup=[];let expired=false,sidecar,rolledBack=false;
+  s.setClock(1);
+  s.traceNative(event=>{
+    if(event.database)connections.add(event.database);
+    if(event.connection==='sidecar')sidecar=event.database;
+    if(expired&&event.connection==='sidecar'&&event.method==='exec')cleanup.push(event.text);
+  },()=>s.setClock(s.clock+1));
+  s.afterExec((text,db)=>{
+    if(text==='BEGIN'&&db===sidecar&&!expired){expired=true;s.setClock(2000);}
+    if(text==='ROLLBACK'&&db===sidecar){assert.equal(db.isTransaction,false);rolledBack=true;}
+  });
+  assert.throws(()=>s.storage.admit(2000),{code:'read_timeout'});s.traceNative();s.afterExec(()=>{});
+  assert.equal(expired,true);
+  assert.ok(cleanup.includes('PRAGMA busy_timeout=0'),'rollback installs its expired wait value');
+  assert.ok(cleanup.includes('ROLLBACK'),'rollback reaches native dispatch after its configuration');
+  assert.equal(rolledBack,true,'the sidecar transaction ended before disposal');
+  for(const db of connections)if(db.isOpen)assert.equal(db.isTransaction,false,'no native transaction is left open');
+  unlockedAdmission(s);s.setClock(0);s.storage.admit(2000);
+  t.diagnostic(JSON.stringify({cleanup,nextCall:true}));
+});
+
+test('ordinary WAL read statement trace has no admission in progress',t=>{
+  const s=setup(t,{mode:'WAL'}),trace=[];s.setClock(1);
+  s.traceNative(event=>trace.push({connection:event.connection,method:event.method,text:event.text}),()=>s.setClock(s.clock+1));
+  assert.equal(s.observe().dto.lexical.state,'ready');s.traceNative();
+  assert.ok(trace.some(e=>e.text.startsWith('PRAGMA busy_timeout=')));
+  t.diagnostic(JSON.stringify({ordinaryWalTrace:trace}));
 });

@@ -512,24 +512,24 @@ The shared and bundled clients locally validate recall and retry once without
 one Zod issue: `code:"unrecognized_keys"`, `path:[]`, `keys:["session_id"]`.
 Issue message text is not inspected or logged. Removing the field makes further
 fallback impossible. Preserve query, scope and limit, one quota reservation,
-and cancellation. The two-second deadline starts at the first HTTP dispatch,
+and cancellation. The 2,500 ms deadline starts at the first fetch,
 after local quota/control waits; fallback shares that deadline, including any
 retry dispatch wait. Each HTTP attempt rechecks pause/generation through the
 dispatch callback. Other 400s, authentication,
 rate limits, outages, malformed successes and network errors do not downgrade.
 This avoids a separate probe and a stale capability cache.
 
-The Claude recall hook additionally starts one 2,500 ms application deadline
-at hook-module entry, after Node startup and static imports, before asynchronous
-setup/input. Its unchanged 3 s host timeout leaves a nominal 500 ms margin for
-startup/imports, scheduling and cleanup. Its signal cancels cooperative stdin,
+The recall hook additionally uses one 3,500 ms application cap measured from the
+process time origin with `performance.now()`. Startup and static imports count
+against the cap, along with asynchronous setup/input. The 4 s host timeout
+reserves 500 ms beyond the cap for scheduling and cleanup. Its signal cancels cooperative stdin,
 identity/control/quota/credential lock waits and HTTP; fallback cannot reset
 either deadline. Identity is checked during project-ID resolution; the final
 output barrier rechecks pause/generation and cancellation, without another
 identity lookup. Optional `recall_succeeded` telemetry is omitted rather than
 awaited after output or queued in a detached worker. This cannot preempt
 synchronous CPU or uncooperative kernel/filesystem work; it is not a universal
-2.5 s process-exit guarantee. Other hook actions retain their existing budgets.
+3.5 s process-exit guarantee. Other hook actions retain their existing budgets.
 
 Claude sends this field on its existing prompt recall and injects returned
 memories through its existing untrusted context output. SessionStart has no
