@@ -10,7 +10,7 @@
   in local time, or says none is recorded yet. Exec status aligns with its siblings.
 - Hosted Codex prompt recall gets the 0.3.4 deadline: up to 2,500 ms from the
   first recall fetch, inside a 3,000 ms prompt-hook process-clock cap.
-- Ships the current engine synced from `main` at `c838ba99`. Local users get
+- Ships the current engine synced from `main` at `35a29c14`. Local users get
   dated three-layer contextRead over saved memories by default:
   `find_memory_candidates`, `fetch_memory_candidate_evidence`, and
   `read_memory_context`.

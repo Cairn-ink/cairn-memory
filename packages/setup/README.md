@@ -27,7 +27,7 @@ its siblings. Hosted Codex prompt recall gets the plugin 0.3.4 deadline: up to
 publication, rerun setup to install the engine, these runtime diagnostics and
 the recall deadline.
 
-0.6.5 ships the current engine synced from `main` at `c838ba99`. Local users get
+0.6.5 ships the current engine synced from `main` at `35a29c14`. Local users get
 dated three-layer contextRead over saved memories by default:
 `find_memory_candidates`, `fetch_memory_candidate_evidence`, and
 `read_memory_context`. Existing local stores upgrade on first open to the
@@ -53,7 +53,7 @@ You can go back to 0.6.3; it keeps working with the upgraded store, but conversa
 整個提示 hook 上限 3,000 ms。發布後請重跑 setup，才會安裝新版引擎、
 這些診斷功能與新的回憶時限。
 
-0.6.5 的引擎同步自 `main` 的 `c838ba99`。本機使用者預設可透過
+0.6.5 的引擎同步自 `main` 的 `35a29c14`。本機使用者預設可透過
 `find_memory_candidates`、`fetch_memory_candidate_evidence`、
 `read_memory_context`，以附日期的三層 contextRead 讀取已保存的記憶。
 既有本機資料庫第一次開啟時會升級成支援 Raw 的結構；0.6.3 建立的資料庫，

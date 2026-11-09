@@ -1474,7 +1474,7 @@ the new evidence are added to `docs/codex-setup.md` and
 ### Rules
 
 1. **Current engine identity.** The bundled engine is byte-identical to
-   `main`'s `packages/setup/runtime/engine/` at sync commit `c838ba99`.
+   `main`'s `packages/setup/runtime/engine/` at sync commit `35a29c14`.
    This supersedes §18's engine allowed-difference rule; there is no
    allowed-difference list. The release-identity gate belongs in the release
    acceptance script, not the repository test suite, so later merges of
