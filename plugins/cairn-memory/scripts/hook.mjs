@@ -219,11 +219,23 @@ async function recordFirstPrompt(hookInput) {
   const sessionId = optionalHostSessionId(hookInput?.session_id);
   if (!dataDir || sessionId === undefined) return;
   const path = captureCursorPath(dataDir, sessionId);
-  // Only the no-cursor case needs this marker. Publish an immutable initial
-  // state by link-if-absent, never a read/modify/write over a capture's cursor.
-  // No capture lock wait, and no write at all before the recall fetch/decision.
-  try { await stat(path); return; }
+  // Existing state is updated only under one nonblocking lock attempt. Never
+  // overwrite a concurrent capture's cursor from a stale read.
+  let state;
+  try { state = JSON.parse(await readFile(path, "utf8")); }
   catch (error) { if (error.code !== "ENOENT") return; }
+  if (state !== undefined) {
+    if (!state || typeof state !== "object" || Array.isArray(state) || Object.hasOwn(state, "firstPromptAt")) return;
+    await withFileLock(`${path}.lock`, async () => {
+      const current = JSON.parse(await readFile(path, "utf8"));
+      if (!current || typeof current !== "object" || Array.isArray(current) || Object.hasOwn(current, "firstPromptAt")) return;
+      await writeCaptureCursor(path, { ...current, firstPromptAt: observedAt });
+    }, { tryOnly: true });
+    return;
+  }
+  // Publish an immutable initial state by link-if-absent when there is no
+  // cursor, even if capture holds the lock but has not frozen its window yet.
+  // All marker work follows the recall fetch/decision; none adds prefetch I/O.
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const temporary = `${path}.prompt-${process.pid}-${randomUUID()}`;
   try {

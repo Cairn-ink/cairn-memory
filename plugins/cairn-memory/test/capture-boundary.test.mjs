@@ -53,6 +53,29 @@ test('recall publishes one marker without waiting for a held capture lock', { ti
   assert.equal(f.recalls.length, 2);
 });
 
+test('recall adds one marker to an existing start cursor and preserves its boundary', async t => {
+  const f = await harness(t); await f.write(''); await f.run('start');
+  const before = await f.state();
+  await f.run('recall');
+  const marked = await f.state();
+  assert.ok(Date.parse(marked.firstPromptAt));
+  const { firstPromptAt, ...cursor } = marked;
+  assert.deepEqual(cursor, before);
+  await f.run('recall');
+  assert.deepEqual(await f.state(), marked);
+});
+
+test('recall never waits to add a marker to a cursor held by capture', { timeout: 15000 }, async t => {
+  const f = await harness(t); await f.write(''); await f.run('start');
+  const before = await f.state();
+  await withFileLock(f.statePath + '.lock', async () => {
+    await f.run('recall');
+    assert.deepEqual(await f.state(), before);
+  });
+  await f.run('recall');
+  assert.ok(Date.parse((await f.state()).firstPromptAt));
+});
+
 test('missing and empty transcripts at start permit the complete first turn', async t => {
   for (const exists of [false, true]) {
     const f = await harness(t); if (exists) await f.write('');
