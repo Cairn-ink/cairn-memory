@@ -250,7 +250,7 @@ test("newcomer Claude without evidence is fail-open and sends nothing", async (t
   const requests = join(workspace.path, "requests");
   await writeFile(requests, "");
   const preload = fileURLToPath(new URL("../testing/golden-preload.mjs", import.meta.url));
-  for (const action of ["start", "recall", "capture"]) {
+  for (const action of ["start-boundary", "start", "recall", "capture"]) {
     const child = spawn(process.execPath, ["--import", preload, hook, action], {
       env: {
         PATH: process.env.PATH,

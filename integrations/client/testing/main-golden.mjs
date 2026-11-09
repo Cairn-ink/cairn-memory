@@ -328,6 +328,11 @@ export async function observeStandalone(plugin) {
         else if (entry === "hook") {
           outcomes = [];
           for (const action of ["start", "recall", "capture", "capture"]) {
+            if (action === "start" && candidate) {
+              const boundary = await run("start-boundary");
+              if (boundary.code !== 0 || boundary.stdout || boundary.stderr)
+                throw new Error("startup_boundary_not_silent");
+            }
             outcomes.push(await run(action));
             if (action === "start" && candidate) await writeFile(transcript, transcriptText);
           }

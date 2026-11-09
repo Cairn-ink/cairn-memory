@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { conforms } from '../lib/hosted-contract.mjs';
+import { conforms as pluginConforms } from '../lib/hosted-contract.mjs';
 
-test('optional capture metadata accepts source time and bounded strict windows', () => {
+import { conforms as sourceConforms } from '../../../integrations/client/hosted-contract.mjs';
+import { conforms as installedConforms } from '../../../packages/setup/runtime/integrations/client/hosted-contract.mjs';
+
+for (const [label, conforms] of [['plugin', pluginConforms], ['source', sourceConforms], ['installed', installedConforms]])
+test(`${label}: optional capture metadata accepts source time and bounded strict windows`, () => {
   const body = { client: 'claude-code', event_id: 'synthetic-event', session_id: 'synthetic-session',
     messages: [{ id: 'message', role: 'user', content: 'Synthetic message', occurred_at: '2020-01-02T03:04:05.123456+00:00' }],
     sent_at: '2026-01-02T03:04:05.000Z', window: { id: 'a'.repeat(64), slice: 1, slices: 2, initial: true } };

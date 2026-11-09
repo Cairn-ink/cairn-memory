@@ -8,7 +8,7 @@ import { harness, oldTime, row } from './capture-window-harness.mjs';
 test('start boundaries exclude copied UUIDs and timestamps from the first capture', async t => {
   const f = await harness(t);
   const copied = row('copied-1') + row('copied-2');
-  await f.write(copied); await f.run('start-boundary', { source: 'resume' });
+  await f.write(copied); await boundedStart(f, { source: 'resume' });
   let state;
   try { state = await f.state(); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   await appendFile(f.transcript, row('new', new Date().toISOString()));
@@ -18,6 +18,15 @@ test('start boundaries exclude copied UUIDs and timestamps from the first captur
   assert.equal(state.offset, state.startOffset); assert.ok(Date.parse(state.startedAt));
 });
 
+async function boundedStart(f, extra = {}) {
+  let timer;
+  try {
+    await Promise.race([f.run('start-boundary', extra), new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new assert.AssertionError({ message: 'start lock acquisition is bounded' })), 1500);
+    })]);
+  } finally { clearTimeout(timer); }
+}
+
 test('existing cursors return without waiting for a held capture lock', { timeout: 5000 }, async t => {
   const f = await harness(t); await f.write(row('old'));
   await mkdir(dirname(f.statePath), { recursive: true });
@@ -25,7 +34,7 @@ test('existing cursors return without waiting for a held capture lock', { timeou
   await writeFile(f.statePath, JSON.stringify(original));
   await withFileLock(f.statePath + '.lock', async () => {
     const before = performance.now();
-    await f.run('start-boundary', { source: 'resume' });
+    await boundedStart(f, { source: 'resume' });
     assert.ok(performance.now() - before < 1500);
     assert.deepEqual(await f.state(), original);
   });
@@ -164,7 +173,7 @@ test('only a copied prefix older than the ten-minute margin is withheld', async 
 test('new boundary fails open promptly on lock contention', { timeout: 5000 }, async t => {
   const f = await harness(t); await f.write(row('copied'));
   await withFileLock(f.statePath + '.lock', async () => {
-    const before = performance.now(); await f.run('start-boundary');
+    const before = performance.now(); await boundedStart(f);
     assert.ok(performance.now() - before < 1500);
     await assert.rejects(readFile(f.statePath), { code: 'ENOENT' });
   });
