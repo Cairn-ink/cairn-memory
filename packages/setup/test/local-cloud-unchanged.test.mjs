@@ -116,7 +116,7 @@ const durabilityRuntimeChanges = new Map([
   ['integrations/client/hosted-pause.mjs', {
     historical: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
     before: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
-    current: '087fc13d50a15ab4db6ecb0f037e5b801983fa56c6a9ac511e0ca3cf16883f5f',
+    current: '2f0dbea221b98ad9119dc77f1a48a3482c72c4c763fd2beaa29cb0fc61fbf664',
   }],
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
