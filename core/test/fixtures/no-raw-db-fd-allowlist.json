@@ -751,8 +751,8 @@
   },
   {
     "path": "plugins/cairn-memory/scripts/hook.mjs",
-    "source": "if (JSON.parse(await readFile(statePath, \"utf8\")).ownSkillTurn === true) {",
-    "reason": "Hook transcript input and skill-turn JSON state; SQLite is accessed through the engine."
+    "source": "const extension = JSON.parse(await readFile(statePath, \"utf8\"));",
+    "reason": "Hook transcript input and capture-cursor JSON extensions; SQLite is accessed through the engine."
   },
   {
     "path": "evaluation/live/diagnostics.mjs",
