@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { mkdirSync,writeFileSync,readFileSync,readdirSync,lstatSync } from 'node:fs';
+import { mkdirSync,writeFileSync,readFileSync,readdirSync,lstatSync,appendFileSync } from 'node:fs';
 import { join,relative } from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash,randomUUID } from 'node:crypto';
 import { createTestWorkspace } from '../../../../tools/testing/workspace.mjs';
 import { openMemoryCore } from '../../../../core/index.mjs';
 import { binaryIdentity,canonical,KNOWN_FORMATS } from '../../../codex/qualification.mjs';
@@ -45,4 +45,21 @@ export async function setupFixture(t,{ client='claude-code' } = {}) {
     entries[relative(path,file)]={mode:info.mode&0o777,...(info.isFile()?{sha:sha(readFileSync(file))}:{})};if(info.isDirectory())visit(file);}}visit(path);return entries;}
   return {workspace,root,request,core,sourcePath,clientConfigPath,api,setup,invoke,hook,control,snapshot,scoped,
     setExec:value=>{exec=value},setPresent:value=>{present=value}};
+}
+
+// Full lifecycle with synthetic transcripts and actual keyless Raw transport.
+export async function lazyFixture(t,client) {
+  const f = await setupFixture(t,{client}); f.request.interpretationConsent = false;
+  assert.equal((await f.setup()).status,'prepared');
+  assert.equal((await f.invoke('activate')).status,'active');
+  const directory = join(f.request.installationDirectory,'state/sessions');
+  const cursorPath = () => join(directory,readdirSync(directory).find(name => /^[a-f0-9]{64}\.json$/.test(name)));
+  const cursor = () => JSON.parse(readFileSync(cursorPath()));
+  function append(text,{path=f.sourcePath,at=new Date().toISOString(),nativeSessionId=sessionId}={}) {
+    const row = client === 'codex' ? codex(text):claude(text), id = randomUUID(); row.timestamp = at;
+    if (client === 'codex') { row.payload.item.id = id; row.payload.turn_id = id; row.payload.thread_id = nativeSessionId; }
+    else row.uuid = id;
+    appendFileSync(path,JSON.stringify(row)+'\n');
+  }
+  return { ...f,directory,cursorPath,cursor,append };
 }

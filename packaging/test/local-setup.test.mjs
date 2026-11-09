@@ -8,6 +8,26 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { installedSetupFixture,rows } from './fixtures/local-setup.mjs';
 import { redactSecrets } from '../../integrations/client/redact.mjs';
 
+for (const client of ['claude-code','codex']) test(`installed ${client} no-history uninstall/setup restores capture and preserves identity/data`,{timeout:120000},async t => {
+  const f = await installedSetupFixture(t,client); f.request.interpretationConsent = false; f.save();
+  await f.invoke('cli',['init','--database',f.request.databasePath]); await f.setup(); await f.activate();
+  const keyPath = join(f.request.installationDirectory,'identity.key'),key = readFileSync(keyPath),before = JSON.parse(readFileSync(f.configPath)).authority;
+  await f.invoke('cli',['disable','--installation',f.request.installationDirectory]);
+  assert.equal(JSON.parse(readFileSync(f.clientConfigPath)).hooks.Stop,undefined);
+  assert.equal((await f.inspect()).events,0); assert.deepEqual(readdirSync(join(f.request.installationDirectory,'state/sessions')),[]);
+  // Installer retains the engine lifecycle directory on uninstall. An identical
+  // setup request itself is sufficient to restore the native hooks and active.
+  assert.equal((await f.setup()).status,'active');
+  assert.equal((await f.invoke('cli',['status','--installation',f.request.installationDirectory])).status,'active');
+  const after = JSON.parse(readFileSync(f.configPath)).authority;
+  assert.deepEqual(readFileSync(keyPath),key); assert.equal(after.storeId,before.storeId); assert.equal(after.targetId,before.targetId);
+  assert.ok(JSON.parse(readFileSync(f.clientConfigPath)).hooks.Stop);
+  await f.invoke('hook',[],{event:client === 'codex' ? 'UserPromptSubmit':'SessionStart'});
+  assert.equal(f.cursor().issuedOrdinal,0); assert.equal(f.cursor().rearmRevision,undefined);
+  f.append('copper fresh after reinstall'); await f.invoke('hook');
+  assert.equal((await f.inspect()).parts.map(part=>part.text).join(''),'copper fresh after reinstall');
+});
+
 for (const client of ['claude-code','codex']) test(`installed ${client} Raw-only setup captures turns without a key or model quota`,{timeout:120000},async t => {
   const f = await installedSetupFixture(t,client); f.request.interpretationConsent = false; f.request.dailyCap = 1; f.save();
   assert.equal((await f.invoke('cli',['init','--database',f.request.databasePath])).status,'initialized');
@@ -20,7 +40,7 @@ for (const client of ['claude-code','codex']) test(`installed ${client} Raw-only
   assert.equal(rows(f.scaffold.SYNTHETIC_TRACE).length,0);
 });
 
-for(const client of ['claude-code','codex'])test(`A1–A6/A8/A9 installed ${client}: explicit setup/quiet hooks/capture/replay/disable/rearm`,{timeout:120000},async t=>{
+for(const client of ['claude-code','codex'])test(`A1–A6/A8/A9 installed ${client}: setup/quiet hooks/capture/replay/disable/lazy rearm`,{timeout:120000},async t=>{
   const f=await installedSetupFixture(t,client);
   const guidePath='docs/raw-local-journal.md';
   assert.ok(f.artifact.files.includes(guidePath),'archive contains the advertised operator guide');
@@ -63,12 +83,11 @@ for(const client of ['claude-code','codex'])test(`A1–A6/A8/A9 installed ${clie
   await f.invoke('hook');assert.deepEqual(f.cursor(),cursor);assert.equal(rows(f.scaffold.SYNTHETIC_TRACE).length,calls);
   assert.equal((await f.invoke('cli',['disable','--installation',f.request.installationDirectory])).status,'disabled');f.append('paused content never captured');
   const refused=await f.invoke('hook');assert.equal(refused.filter(row=>row.kind==='source'||row.kind==='worker'||row.kind==='spawn').length,0);
-  assert.equal((await f.invoke('cli',['activate','--installation',f.request.installationDirectory],{},1)).reason,'rearm_required');
-  const rearmed=await f.invoke('rearm');assert.equal(rearmed.status,'ready',JSON.stringify(rearmed));assert.equal((await f.activate()).status,'active');
+  assert.equal((await f.activate()).status,'active');
   assert.equal(readFileSync(join(f.request.installationDirectory,'identity.key'),'utf8'),key);assert.equal(f.cursor().issuedOrdinal,1);
-  await f.invoke('hook');assert.equal(rows(f.scaffold.SYNTHETIC_TRACE).length,calls);f.append('new after explicit rearm');
+  f.append('first turn at lazy boundary');await f.invoke('hook');assert.equal(rows(f.scaffold.SYNTHETIC_TRACE).length,calls);f.append('new after lazy rearm');
   await f.invoke('hook',[],{key:true,mode:'empty'});assert.equal(f.cursor().issuedOrdinal,2);assert.equal(f.cursor().pending,null);
-  const after=await f.inspect();assert.doesNotMatch(after.parts.map(part=>part.text).join(''),/Historical source|paused content/);
+  const after=await f.inspect();assert.doesNotMatch(after.parts.map(part=>part.text).join(''),/Historical source|paused content|first turn at lazy boundary/);
   assert.deepEqual(f.observed(),f.graph.eager);t.diagnostic(JSON.stringify({client,required:f.graph.required.length,eager:f.graph.eager.length,archive:f.artifact.files.length,
     actualGeneratedCommand:true,providerCapture:'installed trusted-code HTTP/ancestry instrumentation',processes:f.receipts}));
   await f.workspace.cleanup();assert.equal(existsSync(f.workspace.path),false);

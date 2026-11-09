@@ -12,6 +12,26 @@ import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { buildArtifact,command,packageName } from '../build.mjs';
 import { redactSecrets } from '../../integrations/client/redact.mjs';
 import { binaryIdentity,canonical,KNOWN_FORMATS } from '../../integrations/codex/qualification.mjs';
+import { installedSetupFixture } from './fixtures/local-setup.mjs';
+
+for (const client of ['claude-code','codex']) for (const event of (client === 'codex' ? ['Stop','UserPromptSubmit']:['Stop']))
+test(`installed ${client} real ${event} route lazily adopts fresh authority without changing session identity`,{timeout:120000},async t => {
+  const f = await installedSetupFixture(t,client); f.request.interpretationConsent = false; f.save();
+  await f.invoke('cli',['init','--database',f.request.databasePath]); await f.setup(); await f.activate();
+  await f.invoke('hook',[],{event:'SessionStart'}); f.append('copper original capture'); await f.invoke('hook');
+  const before = f.cursor(),key = readFileSync(join(f.request.installationDirectory,'identity.key'));
+  await f.invoke('cli',['disable','--installation',f.request.installationDirectory]); f.append('copper OFF never captured');
+  assert.equal((await f.activate()).status,'active'); f.append('copper first reenabled turn');
+  await f.invoke('hook',[],{event});
+  for (const field of ['sessionKey','wireSessionId','issuedOrdinal']) assert.equal(f.cursor()[field],before[field]);
+  const receiptPath = join(f.request.installationDirectory,'state/sessions',before.sessionKey+'.rearm.json');
+  const receipt = JSON.parse(readFileSync(receiptPath)); assert.equal(receipt.phase,'committed'); assert.equal(receipt.revision,1);
+  assert.equal(receipt.replacementCursor.offset,f.cursor().offset);
+  f.append('copper resumed capture'); await f.invoke('hook');
+  assert.equal(f.cursor().issuedOrdinal,before.issuedOrdinal+1); assert.deepEqual(readFileSync(join(f.request.installationDirectory,'identity.key')),key);
+  assert.equal((await f.inspect()).parts.map(part=>part.text).join(''),'copper original capturecopper resumed capture');
+  assert.equal(rows(f.scaffold.SYNTHETIC_TRACE).length,0);
+});
 
 const root=fileURLToPath(new URL('../../',import.meta.url)),preload=fileURLToPath(new URL('./fixtures/local-oneshot.mjs',import.meta.url));
 const childPreload=fileURLToPath(new URL('./fixtures/local-host-child.mjs',import.meta.url));

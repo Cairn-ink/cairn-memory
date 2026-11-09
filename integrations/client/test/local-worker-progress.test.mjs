@@ -10,6 +10,51 @@ import { join } from 'node:path';
 import { workerFixture } from './fixtures/local-worker-workspace.mjs';
 import { claude, codex } from './fixtures/raw-fixtures.mjs';
 import { redactSecrets } from '../redact.mjs';
+import { lazyFixture } from './fixtures/local-setup-workspace.mjs';
+
+for (const client of ['claude-code','codex']) for (const firstEvent of (client === 'codex' ? ['Stop','UserPromptSubmit']:['Stop']))
+test(`lazy ${client} ${firstEvent} never captures the off period and resumes with the same ordinal/session`,async t => {
+  const f = await lazyFixture(t,client); await f.hook();
+  f.append('copper before disabling'); assert.equal((await f.hook('Stop')).status,'progress');
+  const before = f.cursor(),keyPath = join(f.request.installationDirectory,'identity.key'),key = readFileSync(keyPath),control = f.control();
+  await f.invoke('disable'); f.append('copper OFF PERIOD MUST NOT ARRIVE');
+  await f.invoke('activate'); f.append('copper first post-enable boundary turn');
+  assert.equal((await f.hook(firstEvent)).status,'ready');
+  const adopted = f.cursor(); assert.equal(adopted.offset,statSync(f.sourcePath).size);
+  for (const field of ['sessionKey','wireSessionId','issuedOrdinal']) assert.equal(adopted[field],before[field]);
+  assert.deepEqual(readFileSync(keyPath),key); assert.equal(f.control().storeId,control.storeId); assert.equal(f.control().targetId,control.targetId);
+  assert.notEqual(adopted.authorityCommitment,before.authorityCommitment);
+  assert.deepEqual(readRaw({databasePath:f.request.databasePath}),{text:'copper before disabling',memories:0});
+  f.append('copper captured after lazy boundary');
+  assert.equal((await f.hook('Stop')).status,'progress'); assert.equal(f.cursor().issuedOrdinal,before.issuedOrdinal+1);
+  assert.deepEqual(readRaw({databasePath:f.request.databasePath}),{text:'copper before disablingcopper captured after lazy boundary',memories:0});
+  const after = readFileSync(f.cursorPath()); await f.hook('Stop'); assert.deepEqual(readFileSync(f.cursorPath()),after);
+  await f.invoke('disable'); f.append('copper SECOND OFF PERIOD'); await f.invoke('activate');
+  assert.equal((await f.hook('Stop')).status,'ready'); assert.equal(f.cursor().rearmRevision,2);
+  f.append('copper second resumed capture'); assert.equal((await f.hook('Stop')).status,'progress');
+  assert.equal(f.cursor().issuedOrdinal,before.issuedOrdinal+2);
+  assert.equal(readRaw({databasePath:f.request.databasePath}).text,'copper before disablingcopper captured after lazy boundarycopper second resumed capture');
+});
+
+for (const client of ['claude-code','codex']) test(`lazy ${client} a prior receipt proves an unchanged historical high-water on another off/on`,async t => {
+  const f = await lazyFixture(t,client); await f.hook(); f.append('copper original high-water'); await f.hook('Stop');
+  const original = f.cursor();
+  for (let index=1;index<=2;index++) {
+    await f.invoke('disable'); f.append('copper off '+index); await f.invoke('activate');
+    assert.equal((await f.hook('Stop')).status,'ready'); assert.equal(f.cursor().rearmRevision,index);
+    assert.equal(f.cursor().issuedOrdinal,original.issuedOrdinal);
+  }
+  f.append('copper resumed'); assert.equal((await f.hook('Stop')).status,'progress');
+  assert.equal(readRaw({databasePath:f.request.databasePath}).text,'copper original high-watercopper resumed');
+});
+
+test('lazy Codex prompt hook skips only paused EOF before the submitted turn is written',async t => {
+  const f = await lazyFixture(t,'codex'); await f.hook();
+  await f.invoke('disable'); f.append('copper paused'); await f.invoke('activate');
+  assert.equal((await f.hook('UserPromptSubmit')).status,'ready');
+  f.append('copper submitted after prompt boundary'); assert.equal((await f.hook('Stop')).status,'progress');
+  assert.equal(readRaw({databasePath:f.request.databasePath}).text,'copper submitted after prompt boundary');
+});
 
 const call = async (f,action,options) => {
   const result = await f.runWorker(action,options).done;
