@@ -29,7 +29,7 @@ test('default core and MCP reopen the original attested base-33 lineage package'
   const server = createCairnServer({path,namespace});
   try { assert.equal(await server.contextCounterReady,true); } finally { await server.close(); }
 });
-for(const damage of ['missing-table','missing-index','missing-uuid-table','missing-uuid-index','missing-uuid-trigger','altered-table','altered-index','extra-table','extra-trigger'])
+for(const damage of ['missing-table','missing-index','missing-uuid-table','missing-uuid-index','missing-uuid-trigger','missing-enqueue-trigger','altered-enqueue-trigger','altered-table','altered-index','extra-table','extra-trigger'])
 test(`inherited attestation refuses damaged or extended local privacy package (${damage})`,async t=>{
   const workspace=createTestWorkspace(t),path=join(workspace.path,'existing.sqlite');
   const child=spawnSync(process.execPath,[new URL('../testing/create-existing-safety-store.mjs',import.meta.url).pathname,path],{encoding:'utf8',timeout:30000});
@@ -42,6 +42,8 @@ test(`inherited attestation refuses damaged or extended local privacy package ($
       'missing-uuid-table':'DROP TABLE local_raw_uuid_fences',
       'missing-uuid-index':'DROP INDEX local_raw_uuid_pending',
       'missing-uuid-trigger':'DROP TRIGGER local_raw_uuid_delete_guard',
+      'missing-enqueue-trigger':'DROP TRIGGER local_raw_uuid_fence_enqueue',
+      'altered-enqueue-trigger':"DROP TRIGGER local_raw_uuid_fence_enqueue; CREATE TRIGGER local_raw_uuid_fence_enqueue AFTER INSERT ON raw_session_fences BEGIN SELECT 1; END",
       'missing-index':'DROP INDEX local_raw_capture_session_events',
       'altered-table':'ALTER TABLE local_raw_session_modes ADD COLUMN unexpected TEXT',
       'altered-index':'DROP INDEX local_raw_capture_session_events; CREATE INDEX local_raw_capture_session_events ON raw_capture_events(owner_id,event_id)',

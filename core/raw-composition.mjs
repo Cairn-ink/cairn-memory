@@ -38,9 +38,10 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
       return stopped ? Promise.resolve(stopped).then(() => result) : result;
     },
     ...(captureDefault && rawOptions.interpretation !== 'host' ? { async capture(request) {
+      const arrivalToken = {};
       try {
         runtime.ready();
-        const registration = await storage.prepareCapture(request);
+        const registration = await storage.prepareCapture(request, arrivalToken);
         if (!registration) return await core.capture(request);
         let result;
         result = await capture(registration.input, registration);
@@ -49,14 +50,15 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
         search?.schedule(request.namespace);
         return result;
       } catch (error) {
-        try { if (error.code !== 'store_closed') storage.fenceArrival(request); } catch (fenceError) { return failure(fenceError); }
+        try { if (error.code !== 'store_closed') storage.fenceArrival(arrivalToken); } catch (fenceError) { return failure(fenceError); }
         return failure(error);
       }
     } } : {}),
     async captureRaw(request) {
+      const arrivalToken = {};
       try {
         runtime.ready();
-        const registration = await storage.prepare(request);
+        const registration = await storage.prepare(request, false, undefined, [], arrivalToken);
         let interpretation;
         try {
           if (rawOptions.interpretation === 'host' || !registration.hasProjection) {
@@ -71,7 +73,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
           if (observation) interpretation = success(observation);
         }
         const raw = registration.result();
-        if (!raw) storage.fenceArrival(request);
+        if (!raw) storage.fenceArrival(arrivalToken);
         if (raw) search?.schedule(request.namespace);
         return raw ? success({ raw, interpretation }) : interpretation;
       } catch (error) {
@@ -79,7 +81,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
         // Preparation/sealing can fail before returning a registration. Use
         // only its validated, detached arrival identity for conservative fencing.
         // Commit-time overlap already committed its fence before refusing.
-        try { if (error.code !== 'store_closed') storage.fenceArrival(request); } catch (fenceError) { return failure(fenceError); }
+        try { if (error.code !== 'store_closed') storage.fenceArrival(arrivalToken); } catch (fenceError) { return failure(fenceError); }
         return failure(error);
       }
     },

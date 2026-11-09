@@ -249,9 +249,10 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     stagedEvidence.serializeView(input.view, true); // Validate before registration, including overlaps.
     const identity = sessionKey(ns, input.client, input.sessionId);
     const reserve = () => {
+      if (!registration?.localPrivacy) sourceRoots?.assertSession(ns, input.client, input.sessionId);
       const registeredRaw = registration?.commit();
       if (registeredRaw?.closed) return registeredRaw;
-      sourceRoots?.assertSession(ns, input.client, input.sessionId);
+      if (registration?.localPrivacy) sourceRoots?.assertSession(ns, input.client, input.sessionId);
       if (registeredRaw?.observation) return { rawReplay: registeredRaw.observation };
       let row = db.prepare(`SELECT * FROM session_episodes WHERE ${where} AND client=? AND session_key=?`)
         .get(...boundary(ns), input.client, identity);

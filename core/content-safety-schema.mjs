@@ -3,7 +3,70 @@ import { resolveContentLayout } from './content-safety-layout.mjs';
 import { fail } from './validation.mjs';
 import { cardLineageDDL, authoredInvalidationDDL } from './card-lineage-schema.mjs';
 import { lineageBaseDeclarations, extendedReceiptDeclarations } from './card-lineage-base-schema.mjs';
-import { installLocalRawPrivacy } from './local-authority-schema.mjs';
+
+// One exact package, owned by the attestor and reused by the local installer.
+export const LOCAL_RAW_PRIVACY_DDL = Object.freeze([
+  `CREATE TABLE IF NOT EXISTS local_raw_hide_windows (
+    owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,
+    start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL CHECK(end_ms>=start_ms),
+    PRIMARY KEY(owner_id,scope,project_id,start_ms)
+  ) STRICT;`,
+  `CREATE TABLE IF NOT EXISTS local_raw_session_modes (
+    owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,
+    client TEXT NOT NULL, session_key TEXT NOT NULL, interpretation TEXT NOT NULL CHECK(interpretation IN ('engine','host')),
+    PRIMARY KEY(owner_id,scope,project_id,client,session_key)
+  ) STRICT;`,
+  `CREATE TABLE IF NOT EXISTS local_raw_session_ranges (
+    owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,
+    client TEXT NOT NULL, session_key TEXT NOT NULL,
+    min_ms INTEGER, max_ms INTEGER, unknown_time INTEGER NOT NULL CHECK(unknown_time IN (0,1)),
+    CHECK((min_ms IS NULL AND max_ms IS NULL) OR (min_ms IS NOT NULL AND max_ms IS NOT NULL AND max_ms>=min_ms)),
+    CHECK(unknown_time=1 OR min_ms IS NOT NULL),
+    PRIMARY KEY(owner_id,scope,project_id,client,session_key)
+  ) STRICT;`,
+  `CREATE INDEX IF NOT EXISTS local_raw_range_overlap ON local_raw_session_ranges
+    (owner_id,scope,project_id,unknown_time,min_ms,max_ms,client,session_key);`,
+  `CREATE INDEX IF NOT EXISTS local_raw_capture_session_events ON raw_capture_events
+    (owner_id,scope,project_id,client,session_key,event_id);`,
+  `CREATE TABLE IF NOT EXISTS local_raw_uuid_fences (
+    owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,
+    client TEXT NOT NULL CHECK(client='claude-code'), uuid_hash TEXT NOT NULL,
+    PRIMARY KEY(owner_id,scope,project_id,client,uuid_hash)
+  ) STRICT;`,
+  `CREATE TABLE IF NOT EXISTS local_raw_uuid_jobs (
+    owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,
+    client TEXT NOT NULL CHECK(client='claude-code'), session_key TEXT NOT NULL,
+    last_ordinal INTEGER NOT NULL DEFAULT 0, complete INTEGER NOT NULL DEFAULT 0 CHECK(complete IN (0,1)),
+    PRIMARY KEY(owner_id,scope,project_id,client,session_key)
+  ) STRICT;`,
+  `CREATE INDEX IF NOT EXISTS local_raw_uuid_pending ON local_raw_uuid_jobs
+    (complete,owner_id,scope,project_id,client,session_key);`,
+  `CREATE TABLE IF NOT EXISTS local_raw_uuid_backfill (
+    singleton INTEGER PRIMARY KEY CHECK(singleton=1), cursor TEXT NOT NULL, complete INTEGER NOT NULL CHECK(complete IN (0,1))
+  ) STRICT;`,
+  `CREATE TRIGGER IF NOT EXISTS local_raw_uuid_delete_guard BEFORE DELETE ON raw_messages
+  WHEN EXISTS (SELECT 1 FROM raw_conversations c WHERE c.id=OLD.conversation_id AND c.client='claude-code'
+    AND (NOT EXISTS (SELECT 1 FROM local_raw_uuid_backfill WHERE singleton=1 AND complete=1)
+      OR NOT EXISTS (SELECT 1 FROM local_raw_uuid_jobs j WHERE j.owner_id=c.owner_id AND j.scope=c.scope
+        AND j.project_id=c.project_id AND j.client=c.client AND j.session_key=c.session_key AND j.complete=1)))
+  BEGIN SELECT RAISE(ABORT,'local_raw_uuid_pending'); END;`,
+  `CREATE TRIGGER IF NOT EXISTS local_raw_uuid_fence_enqueue AFTER INSERT ON raw_session_fences
+  WHEN NEW.client='claude-code'
+  BEGIN
+    INSERT OR IGNORE INTO local_raw_uuid_jobs(owner_id,scope,project_id,client,session_key)
+      VALUES(NEW.owner_id,NEW.scope,NEW.project_id,NEW.client,NEW.session_key);
+  END;`,
+]);
+const localDeclaration = sql => {
+  if(typeof sql !== 'string') fail('unsupported_database');
+  const match = /^CREATE (?:UNIQUE )?(TABLE|INDEX|TRIGGER) (\w+)\b/.exec(sql.trim().replace(' IF NOT EXISTS',''));
+  if (!match) fail('unsupported_database');
+  return [match[2], { type:match[1].toLowerCase(), sql:sql.trim().replace(' IF NOT EXISTS','') }];
+};
+// A future unsupported declaration must fail at module load, never destructure null.
+const localRawDeclarations = new Map(LOCAL_RAW_PRIVACY_DDL.map(localDeclaration));
+if (localRawDeclarations.size !== LOCAL_RAW_PRIVACY_DDL.length) throw Error('invalid_local_raw_package');
+const legacyLocalRawNames = new Set(LOCAL_RAW_PRIVACY_DDL.slice(0,5).map(sql => localDeclaration(sql)[0]));
 
 const tables = `CREATE TABLE content_safety_control (
  singleton INTEGER PRIMARY KEY CHECK(singleton=1),
@@ -197,18 +260,18 @@ function verifyCompleteCardSchema(db,layout,eventTime) {
   // Local Raw adds one closed, optional package to the inherited schema. Admit
   // the entire exact package or none of it; never ignore a name/prefix family.
   // Metadata only: read-only openers execute no DDL or repair writes.
-  const local = new Map(installLocalRawPrivacy().trim().split(/;\s*(?=CREATE|$)/).filter(sql=>sql.trim()).map(sql=>{
-    sql=sql.trim().replace(' IF NOT EXISTS','');
-    const [,type,name]=sql.match(/^CREATE (TABLE|INDEX|TRIGGER) (\w+)/);
-    return [name,{type:type.toLowerCase(),sql}];
-  }));
-  const actual=metadataRows(db.prepare('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT '+(wanted.size+local.size+1)));
+  const local = new Map(LOCAL_RAW_PRIVACY_DDL.map(localDeclaration));
+  // Preserve the shipped metadata SQL for stores without this package. Only
+  // a recognized local package at the old bound needs the larger overflow read.
+  const shippedLimit=wanted.size+10+1;
+  let actual=metadataRows(db.prepare('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT '+shippedLimit));
+  if(layout.base===33 && actual.length===shippedLimit && actual.some(row=>local.has(row.name))) {
+    actual=metadataRows(db.prepare('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT '+(wanted.size+local.size+1)));
+  }
   // The previously shipped complete package is accepted for local additive
   // installation. Partial old/new packages still fail exact comparison.
   if (!actual.some(row=>row.name.startsWith('local_raw_uuid_'))) {
-    const legacyNames = new Set(installLocalRawPrivacy(false).match(/(?:TABLE|INDEX) IF NOT EXISTS (\w+)/g)
-      .map(value=>value.split(' ').at(-1)));
-    for (const name of local.keys()) if (!legacyNames.has(name)) local.delete(name);
+    for (const name of local.keys()) if (!legacyLocalRawNames.has(name)) local.delete(name);
   }
   if(layout.base===33&&actual.some(row=>local.has(row.name)))for(const [name,row]of local)wanted.set(name,row);
   if(actual.length!==wanted.size||actual.some(row=>!wanted.has(row.name)||row.type!==wanted.get(row.name).type||
