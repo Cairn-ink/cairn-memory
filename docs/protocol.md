@@ -478,10 +478,11 @@ Capture clients may supply these optional time and window fields:
   at most 40 characters. Messages without a timestamp omit it.
 - `sent_at` is the client's ISO clock at this send attempt. It changes on retry.
 - `window` is `{ id, slice, slices, initial }`. `id` hashes the wire session and
-  window's starting byte offset. `slice` and `slices` are integers from 1 to 64;
+  window's starting byte offset. `slice` and `slices` are integers from 1 to 4096;
   numbering is 1-based and counts only requests containing messages. Entirely
   withheld batches do not count. The last sent request has `slice === slices`.
-  A backlog exceeding 64 sent batches uses consecutive metadata windows of at
+  These clients conservatively group a backlog exceeding 64 sent batches into
+  consecutive metadata windows of at
   most 64 requests, without changing event IDs or batch boundaries. The first
   group starts at the frozen range's offset; subsequent groups start at their
   first batch's record offset. All groups inherit the range's `initial` value.

@@ -9,7 +9,8 @@ test('optional capture metadata accepts source time and bounded strict windows',
   assert.equal(conforms('capture-request', body), true);
   const legacy = structuredClone(body); delete legacy.sent_at; delete legacy.window; delete legacy.messages[0].occurred_at;
   assert.equal(conforms('capture-request', legacy), true);
-  for (const patch of [{ slice: 0 }, { slice: 65 }, { slices: 65 }, { slice: 1.5 }, { initial: 1 },
+  assert.equal(conforms('capture-request', { ...body, window: { ...body.window, slice: 4096, slices: 4096 } }), true);
+  for (const patch of [{ slice: 0 }, { slice: 4097 }, { slices: 4097 }, { slice: 1.5 }, { initial: 1 },
     { id: 'x'.repeat(129) }, { unknown: true }]) {
     assert.equal(conforms('capture-request', { ...body, window: { ...body.window, ...patch } }), false);
   }
