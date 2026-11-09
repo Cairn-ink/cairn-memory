@@ -3,7 +3,7 @@ import { cachedContentLayout, checkInstalledContentSafety } from './content-safe
 import { contentReadSafety, receiptReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { contentSuppressionRequestFenceInside, contentSuppressionReasonInside, cachedContentSuppressionRequestInside,
   contentSuppressionFenceInside, withContentSuppressionRequest,
-  resetContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+  resetContentSuppressionRequestInside, contentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { randomUUID } from "node:crypto";
 import { transaction, readTransaction, isStorageBusy } from "./database.mjs";
 import { fail } from "./validation.mjs";
@@ -462,6 +462,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         INDEXED BY namespace_memories WHERE ${namespaceWhere} AND deleted = 0`;
       const afterSQL = ' AND updated_at <= ? AND (updated_at < ? OR (updated_at = ? AND id > ?))';
       const orderSQL = ' ORDER BY updated_at DESC, id ASC LIMIT ?';
+      const positionOf = row => ({ updatedAt: row.updated_at, id: row.id });
       const firstPage = db.prepare(physicalSQL + orderSQL);
       const nextPage = db.prepare(physicalSQL + afterSQL + orderSQL);
       const physicalRows = (position, limit) => (position ? nextPage : firstPage).all(
@@ -514,7 +515,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
             stop = 'budget'; break;
           }
           visited++; consumed++;
-          last = { updatedAt: physical.updated_at, id: physical.id };
+          last = positionOf(physical);
           // IDs-only physical reads, then active-generation membership, then
           // projected content and all canonical safety predicates.
           if (discoveryPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
@@ -546,7 +547,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         const batch = floorPage.all(...boundary(ns), limit + 1);
         for (const memory of batch.slice(0, limit)) {
           visited++;
-          last = { updatedAt: memory.updated_at, id: memory.id };
+          last = positionOf(memory);
           if (memory.deleted || memory.currentness !== 'current' || safety && !safeMemory(ns, memory, true)) continue;
           if (!discoveryPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
             AND revision = ?`).get(...boundary(ns), memory.id, memory.revision)) continue;
@@ -566,7 +567,11 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       // A multi-snapshot scan must not leave its E0 memo in the outer request.
       // Tail pages keep independent accounts; delivery still checks the saved
       // epochs. Exhausted floors retain ordinary memo reuse and statement cost.
-      if (more) resetContentSuppressionRequestInside(db, { keepSelection: true });
+      const floorReadSet = more && safety && cachedContentSuppressionRequestInside(db, ns.ownerId)?.readSet;
+      if (floorReadSet) {
+        resetContentSuppressionRequestInside(db);
+        contentSuppressionRequestInside(db, floorReadSet, { defer: true });
+      }
       // Dropping the tail also drops its signed boundary. Replay reconstructs
       // precisely this floor under E0, never a mixed-epoch candidate list.
       const floorOnly = cause => ({ ...floorResult, scanExhausted: false,
