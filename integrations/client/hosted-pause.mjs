@@ -94,6 +94,7 @@ export function deferHostedPauseStatus(config, token, signal) {
 const pausePath = config => join(config.root, 'hosted-pause', hostedTargetId(config) + '.json');
 const intentDirectory = config => pausePath(config) + '.intents';
 const gatePath = config => pausePath(config) + '.gate';
+const highWaterPath = config => pausePath(config) + '.high-water';
 // A timed-out publisher still journals. Limit every admitted critical section
 // at its synchronous side effect, including an uncooperative filesystem wait.
 const GATE_WINDOW_MS = 250;
@@ -116,7 +117,15 @@ async function readPause(config) {
 // Keep these content-free records across crashes; diagnostics are not authority.
 async function highestIntent(config) {
   const directory = intentDirectory(config);
+  const checkpoint = await privateRead(highWaterPath(config), { missing: true });
   let selected;
+  if (checkpoint !== undefined) {
+    const value = JSON.parse(checkpoint);
+    if (Object.keys(value ?? {}).sort().join(',') !== 'generation,paused' ||
+        !Number.isSafeInteger(value.generation) || value.generation < 0 ||
+        typeof value.paused !== 'boolean') throw new Error('pause_unavailable');
+    selected = { ...value, name: intentName(value) + '.json' };
+  }
   for (const name of await privateList(directory, { missing: true }) ?? []) {
     if (!name.endsWith('.json')) continue; // Incomplete atomic-write temporaries.
     const match = /^(0|[1-9]\d*)\.(true|false)\.json$/u.exec(name);
@@ -127,8 +136,9 @@ async function highestIntent(config) {
         (generation === selected.generation && !paused)) selected = { name, generation, paused };
   }
   if (!selected) return undefined;
-  // Only the highest record is authority. Reading it once keeps warm checks
-  // independent of the number of historical pause/resume observations.
+  // Completed observations checkpoint their durable high water before pruning.
+  // Keep its matching immutable intent/receipt so all crash stages use the
+  // same validation. Successful transitions retain exactly two journal names.
   const value = JSON.parse(await privateRead(join(directory, selected.name)));
   if (Object.keys(value ?? {}).sort().join(',') !== 'generation,paused' ||
       value.generation !== selected.generation || value.paused !== selected.paused) {
@@ -244,7 +254,25 @@ async function observe(config, token, signal) {
     // A visible rename is insufficient if publication's directory sync failed.
     // This receipt is only written AFTER rotation and durable pause publication.
     // A retry repairs an interrupted publication even when its bytes now match.
-    if (completion) await writeOnce(completion, intentBytes(remote));
+    if (completion) {
+      await writeOnce(completion, intentBytes(remote));
+      const checkpoint = await privateRead(highWaterPath(config), { missing: true });
+      if (checkpoint !== intentBytes(remote)) {
+        // Only changed observations compact. Never delete authority until both
+        // publication and receipt are durable and the high water is synced.
+        await privateWrite(highWaterPath(config), intentBytes(remote));
+        for (const name of await privateList(intentDirectory(config))) {
+          const match = /^(0|[1-9]\d*)\.(true|false)\.(json|complete)$/u.exec(name);
+          if (!match) continue; // Never interfere with a live atomic writer.
+          const generation = Number(match[1]), paused = match[2] === 'true';
+          if (generation < remote.generation ||
+              (generation === remote.generation && paused && !remote.paused)) {
+            await privateRemove(join(intentDirectory(config), name));
+          }
+        }
+        await syncDirectory(intentDirectory(config));
+      }
+    }
     return remote;
   });
   if (!observed) throw new Error('pause_unavailable');
