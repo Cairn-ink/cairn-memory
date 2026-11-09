@@ -12,8 +12,9 @@ const client = fileURLToPath(new URL('../', import.meta.url));
 const plugin = fileURLToPath(new URL('../../../plugins/cairn-memory/', import.meta.url));
 const golden = JSON.parse(await readFile(new URL('./fixtures/claude-hosted-93e52b7.json', import.meta.url), 'utf8'));
 // Recall deadlines add cancellation and host-margin-bounded unused-permit restoration.
+// Refresh the current transport digest for the longer recall fetch deadline.
 // Preserve the old observed outputs below; do not regenerate historical goldens.
-const recallDeadlineTransportHash = '200729758fb555ed3a88b0ad06791e2d937c1966f0c19f0ea620327addaed0e1';
+const recallDeadlineTransportHash = '5b62b4fac2d2c9b6bc21195b867bcd821b7866b327d0ba2436df7bcbbb957be4';
 
 test('pinned shared source hashes include the revised hosted transport', async () => {
   assert.equal(golden.base, '93e52b7afb298d728cb4831c34bbda6dcf750704');

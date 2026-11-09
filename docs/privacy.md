@@ -91,8 +91,8 @@ the VS Code extension and the desktop app. Automation is off by default; see
 [automated Codex sessions](#automated-codex-sessions-and-app-server-clients).
 
 The exact old strict recall schema rejection permits one retry without the id,
-with the same query/scope/limit and cancellation. Its two-second deadline starts
-at first HTTP dispatch after local waits, and is shared by fallback. Both
+with the same query/scope/limit and cancellation. Its 2,500 ms deadline starts
+at the first fetch after local waits, and is shared by fallback. Both
 attempts use one quota reservation and recheck the local pause/generation barrier
 only at HTTP dispatch. No control lock wraps another control lock or network
 wait. Tests cover new/old replies reaching Claude context, ASCII omission,

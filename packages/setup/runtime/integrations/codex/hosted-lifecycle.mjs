@@ -61,7 +61,7 @@ export async function recallContext(input, config, token, projectId, signal, ena
     return result.operation;
   };
   const result = await post.reply('/api/memory/recall', { query, project_id: projectId, limit: 6,
-    session_id: hash('wire-session-v1','codex',input.session_id) }, 2000, undefined, signal, dispatch);
+    session_id: hash('wire-session-v1','codex',input.session_id) }, 2500, undefined, signal, dispatch);
   if (result.status !== 'complete' || !result.memories.length) return '';
   const current = await observeHostedPause(config, token, signal);
   if (current.paused || current.generation !== remote.generation) return '';

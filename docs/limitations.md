@@ -2,14 +2,14 @@
 
 ## Claude recall hook application deadline
 
-Recall shares a 2,500 ms cooperative application budget starting at hook-module
-entry, after Node startup and static imports, across asynchronous setup/input,
-local waits and HTTP. The unchanged 3 s host timeout leaves a nominal 500 ms
-margin for startup/imports, scheduling and cleanup; the narrower 2 s
-HTTP/fallback budget remains. Identity is checked during project-ID resolution;
+Recall shares a 3,500 ms cooperative application cap measured from the process
+time origin, including startup, static imports, asynchronous setup/input,
+local waits and HTTP. The 4 s host timeout reserves 500 ms beyond that cap;
+the narrower 2,500 ms HTTP budget starts at the first fetch and is shared by
+schema fallback. Identity is checked during project-ID resolution;
 the final output barrier rechecks pause/generation and cancellation, without
 another identity lookup. Optional recall-success telemetry is omitted, with no
-detached queue. Startup/import time is outside the application budget. Synchronous
+detached queue. Synchronous
 CPU and uncooperative filesystem/kernel stalls are not hard-preemptible;
 synthetic child-process timings are not a universal SLA or native Claude
 verification.
