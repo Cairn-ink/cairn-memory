@@ -28,3 +28,15 @@ test('installed recall delivers synchronously while both final gates are held', 
   assert.equal(writes,1,'actual_delivery_callback');
   assert.equal(output,'','no_late_delivery_after_lock_cleanup');
 });
+
+test('installed entry starts the actual stdout write before releasing either gate', {timeout:15000}, async t=>{
+  const { installedPrompt }=await import('./fixtures/prefetch-harness.mjs');
+  const memories=[{id:'12345678-1234-4234-8234-123456789abc',content:'Synthetic memory.',kind:'preference',
+    scope:'personal',projectId:null,origin:'explicit',confidence:1,
+    createdAt:'2026-10-01T00:00:00Z',updatedAt:'2026-10-01T00:00:00Z',
+    receipts:[{client:'codex',sessionId:'s',eventId:'e',role:'user',excerpt:'Synthetic memory.',createdAt:'2026-10-01T00:00:00Z'}]}];
+  const result=await installedPrompt(t,{warm:false,memories,deliveryEvidence:true});
+  assert.equal(result.code,0);assert.equal(result.signal,null);assert.equal(result.stderr,'');
+  assert.match(JSON.parse(result.stdout).hookSpecificOutput.additionalContext,/Synthetic memory/);
+  assert.deepEqual(result.delivery,{kind:'delivery',control:true,gate:true},'actual_stdout_write_is_gated');
+});
