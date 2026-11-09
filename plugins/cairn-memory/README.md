@@ -87,16 +87,33 @@ each session's first capture hook skips its current unprocessed history; later c
 eligible. Requests already started before pause may still finish.
 
 Hosted recall and capture require a freshly validated, enforced pause state.
-Both paths observe it before work and again before dispatch; recall also checks
-before emitting context. A hosted pause or unavailable pause endpoint sends no
-recall query or capture text. Shared pause observations apply across paired
-clients, while the local daily cap remains specific to Codex. A newly observed
-pause/generation is retained durably even if its publication lock is busy.
-Resume keeps the hosted generation and permits work only after local publication.
-The shared pause lock requires a verifiable process namespace; hosted operations
-fail closed where that is unavailable, including native Windows.
-The Stop/PreCompact foreground launcher makes no hosted request; its detached
-worker performs the observations. Non-HTTP local integrations are unchanged.
+Both paths observe it before work and again before each dispatch; recall also
+checks before emitting context. Paused, unavailable, unenforced or regressing
+observations block that operation. The foreground Stop/PreCompact launcher makes
+no hosted request; its detached worker performs the observations.
+
+On Linux and macOS, intent publication shares a gate with final authorization
+and the synchronous request/output start, ordered before the local control lock.
+A durable intent committed under that gate prevents later authorizations using
+an older generation. If gate acquisition fails or times out after 250 ms, the
+observation is still journaled, but an older dispatcher already inside its
+250 ms admission window can still start. Scheduling suspension after its last
+check can extend that wall-clock interval. Future checks reject the intent;
+resume permits work only after local publication. A high-water checkpoint and
+crash-safe pruning bound completed journal history without warm-path fsyncs.
+Shared observations apply across paired clients; the local daily cap remains
+specific to Codex.
+
+On native Windows, pause is checked right before every send, and a request that
+had already started when you paused can finish. This mode uses process-local
+observations: a delayed older active response in another hook is not revoked by
+a different process's observation. Capture cursors retain the hosted generation;
+after a generation change, the first capture skips to EOF so paused-period text
+is not uploaded after resume. POSIX-only availability diagnostics are skipped.
+This capability is selected once by platform, never after a Linux/macOS lock
+failure. Windows coverage uses injection only. Non-HTTP local integrations are
+unchanged. See [privacy details](../../docs/privacy.md) for the commit point and
+content-free journal recovery rules.
 
 Capture is handed to a detached worker so it survives both interactive sessions and `claude -p`
 teardown without delaying Claude's response. The launcher pipes only session id, transcript path,

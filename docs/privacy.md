@@ -677,18 +677,42 @@ observation before dispatch. Claude checks again before emitting recalled contex
 Unavailable state blocks both operations. The foreground capture launcher does
 not fetch hosted state; its detached worker performs the observations.
 
-A changed observation records an immutable revocation intent under
-`hosted-pause/<target digest>.json.intents/` before taking the pause-publication
-lock. Each intent contains only `generation` and `paused`. Local rotation and
-durable pause publication precede a matching completion receipt. Dispatch and
-output guards re-read the highest intent under the local control lock: an older
-generation or an unfinished publication cannot authorize content transmission.
-Lock timeout, rotation/publication failure and a process crash retain the intent.
-Resume retains the hosted generation and unblocks only after publication.
-Intent and completion records contain no conversation text and are retained
-across restarts; diagnostic availability records never authorize dispatch.
-Unchanged observations add no durable writes before recall. Non-HTTP local
-integrations retain their existing behavior.
+On Linux and macOS, a changed observation durably records a content-free
+`generation`/`paused` intent before attempting pause publication. Intent
+publication and the final authorization plus synchronous request start or context
+write share a gate, acquired before the local control lock. When the publisher
+acquires this gate, its durable intent is the commit point: later authorizations
+cannot use an older generation. Requests already started can finish. Local
+rotation and durable pause publication precede a matching completion receipt;
+uncompleted publication never authorizes work.
+
+Gate acquisition is bounded to 250 ms. If acquisition fails or times out, the
+validated intent is still journaled. A dispatcher already inside the gate can
+have selected the older intent; its synchronous start must pass a 250 ms
+admission deadline. This exceptional path does not provide the same atomic
+publication guarantee. Scheduling suspension between that last check and the
+actual start can extend the wall-clock interval. Later checks see the durable
+intent and fail closed. Lock failure never permits silently discarding it.
+
+A fixed high-water checkpoint and the latest immutable intent/receipt retain
+crash authority across restarts. Changed observations prune dominated records
+only after their replacement authority is durable; interrupted compaction is
+repaired on a later observation. Successful cycles retain two journal files,
+and repeated failed rotations retain only the highest pending intent. Availability
+diagnostics never authorize dispatch. Complete, unchanged observations add no
+durable writes before recall. Resume retains the hosted generation and permits
+work only after publication.
+
+On native Windows, pause is checked right before every send, and a request that
+had already started when you paused can finish. Observation authority there is
+process-local: a delayed older active response in another hook can still authorize
+a send after a different process has observed pause. Each observation validates
+the full contract, enforcement, generation ordering and pause transitions.
+Capture cursors persist the hosted generation and establish a fresh EOF boundary
+when it changes, including after pause/resume and for old detached handoffs.
+POSIX-only availability diagnostics are skipped there. Other platforms never
+select this mode after a lock error. Non-HTTP local integrations retain their
+existing behavior.
 
 Upgraded Claude honors the shared hosted quota gate as the explicit D1 exception.
 The selected private root retains `hosted-quota/<target digest>.json` and its
