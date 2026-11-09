@@ -751,8 +751,8 @@
   },
   {
     "path": "plugins/cairn-memory/scripts/hook.mjs",
-    "source": "if (JSON.parse(await readFile(statePath, \"utf8\")).ownSkillTurn === true) {",
-    "reason": "Hook transcript input and skill-turn JSON state; SQLite is accessed through the engine."
+    "source": "const state = JSON.parse(await readFile(path, \"utf8\"));",
+    "reason": "Session cursor JSON is selected by the hashed host session ID; this read never selects a database file."
   },
   {
     "path": "evaluation/live/diagnostics.mjs",
@@ -1031,8 +1031,8 @@
   },
   {
     "path": "plugins/cairn-memory/scripts/hook.mjs",
-    "source": "import { open, readFile, stat } from \"node:fs/promises\"",
-    "reason": "Hook transcript input and skill-turn JSON state; SQLite is accessed through the engine."
+    "source": "import { link, mkdir, open, readFile, stat, unlink, writeFile } from \"node:fs/promises\"",
+    "reason": "Hook transcript reads and private JSON marker publication only; the hook loads no SQLite library."
   },
   {
     "path": "evaluation/live/diagnostics.mjs",
@@ -1673,5 +1673,10 @@
     "path": "core/local-raw-search.mjs",
     "source": "import { mkdir } from 'node:fs/promises'",
     "reason": "Creates private search sidecar directories only; mkdir does not open or close a database file descriptor."
+  },
+  {
+    "path": "plugins/cairn-memory/scripts/hook.mjs",
+    "source": "await writeFile(temporary, JSON.stringify({ firstPromptAt: observedAt }), { mode: 0o600, flag: \"wx\" });",
+    "reason": "Exclusive temporary JSON marker next to the hashed session cursor; linked only if the cursor path is absent. No database path or library is involved."
   }
 ]

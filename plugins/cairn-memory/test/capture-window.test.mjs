@@ -14,6 +14,9 @@ test('every sent slice retains initial and window identity across a refused firs
     Array.from({ length: 24 }, (_, n) => machine(n + 24)).join('') + row('last');
   await f.write(text); await f.run('capture');
   await appendFile(f.transcript, row('later-window'));
+  // A late asynchronous start may add a boundary, but cannot reclassify the
+  // already-frozen initial range or absorb its newly appended suffix.
+  await f.run('start', { source: 'resume' });
   await f.run('capture');
   assert.equal(f.captures.length, 3);
   assert.ok(f.captures.every(body => body.window?.initial === true));
