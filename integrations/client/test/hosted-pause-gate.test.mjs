@@ -161,6 +161,10 @@ test('an intent survives a process crash before rotation and blocks a stale proc
   let starts = 0;
   await assert.rejects(gate(config, 0, () => { starts++; }), /pause_unavailable/);
   assert.equal(starts, 0);
+  f.remote(paused); await pause.observeHostedPause(config, 'synthetic-token');
+  f.remote({ ...paused, paused: false }); await pause.observeHostedPause(config, 'synthetic-token');
+  assert.deepEqual((await readdir(pauseFile + '.intents')).sort(),
+    ['1.false.complete', '1.false.json'], 'bounded_recovery_files_after_real_crash');
 });
 
 
