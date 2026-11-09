@@ -4,7 +4,7 @@ import { guardedModel } from './guarded-model.mjs';
 import { LocalCaptureError } from './configuration.mjs';
 
 const refusalCodes = new Set(['capture_disabled', 'capture_evidence_closed', 'revision_conflict', 'event_payload_conflict',
-  'raw_part_out_of_order', 'conversation_deleted', 'source_excluded', 'storage_busy', 'invalid_input', 'raw_crypto_unavailable']);
+  'raw_part_out_of_order', 'raw_session_mode_conflict', 'raw_session_mode_history_limit', 'conversation_deleted', 'source_excluded', 'storage_busy', 'invalid_input', 'raw_crypto_unavailable']);
 const port = Object.freeze({ version: 'raw-seal-v1',
   sealRaw: ({ text }) => ({ format: 'local-plain-v1', keyVersion: null, sealed: Buffer.from(text) }),
   openRaw: ({ sealed }) => ({ text: new TextDecoder('utf8', { fatal: true }).decode(sealed) }) });
@@ -33,20 +33,22 @@ export function captureReply(result, request) {
 
 export async function captureLocal(config, request, { signal, env, fetchImpl, captureMs = config.timeouts.captureMs, onClose = () => {} } = {}) {
   let core;
-  const guarded = guardedModel(config, { core: () => core, signal, env, fetchImpl });
+  const rawOnly = config.interpretation === 'raw-only';
+  const guarded = rawOnly ? null : guardedModel(config, { core: () => core, signal, env, fetchImpl });
   try {
-    core = openMemoryCore({ path: config.databasePath, model: guarded.model, captureQualification: 'source-bound-v2', captureDeadlineMs: captureMs,
+    core = openMemoryCore({ path: config.databasePath, ...(guarded ? { model: guarded.model } : {}), captureQualification: 'source-bound-v2', captureDeadlineMs: captureMs,
       ...(Object.hasOwn(config, 'captureQualifiedDuplicates') ? { captureQualifiedDuplicates: config.captureQualifiedDuplicates } : {}),
       rawConversations: { mode: config.raw.mode === 'local-plain-v1' ? 'raw-v1' : 'off', capBytes: config.raw.capBytes, configureCap: false,
+        ...(rawOnly ? { interpretation: 'host' } : {}),
         port, readPolicy: () => ({ generation: 'local-capture-v1', reason: null }), localAuthority: config.authority } });
     onClose(() => core.close());
     const input = { namespace: config.authority.namespace, client: request.client, sessionId: request.session_id, eventId: request.event_id,
       messages: request.messages.map(message => ({ id: message.id, role: message.role, occurredAt: message.occurred_at,
         messageOrdinal: message.message_ordinal, content: message.content, part: { ...message.part } })) };
     const result = await core.captureRaw(input);
-    await guarded.settled();
+    await guarded?.settled();
     return captureReply(result, request);
   } finally {
-    await guarded.settled(); core?.close(); onClose(() => {});
+    await guarded?.settled(); core?.close(); onClose(() => {});
   }
 }

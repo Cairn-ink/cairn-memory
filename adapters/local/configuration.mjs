@@ -24,17 +24,19 @@ export const normalizedPath = value => typeof value === 'string' && !value.inclu
 export function configuration(value) {
   try {
     const required = ['version', 'databasePath', 'authority', 'raw', 'provider', 'usage', 'timeouts'];
-    const input = ownData(value, [...required, 'captureQualifiedDuplicates']);
+    const input = ownData(value, [...required, 'captureQualifiedDuplicates', 'interpretation']);
     if (required.some(field => !Object.hasOwn(input, field)) ||
         'captureQualifiedDuplicates' in value && (!Object.hasOwn(input, 'captureQualifiedDuplicates') ||
           input.captureQualifiedDuplicates !== 'append-matching-evidence-v1')) invalid();
     if (input.version !== 'local-capture-config-v1' || !normalizedPath(input.databasePath)) invalid();
+    if (Object.hasOwn(input, 'interpretation') && !['engine', 'raw-only'].includes(input.interpretation)) invalid();
     const validated = localAuthorityInput(input.authority);
     // The trusted authority validator uses storage's empty personal project ID;
     // public core read controls require the equivalent public null spelling.
     const authority = Object.freeze({ ...validated, namespace: Object.freeze({ ...validated.namespace,
       projectId: validated.namespace.projectId || null }) });
     const raw = exact(input.raw, ['mode', 'capBytes']);
+    if (input.interpretation === 'raw-only' && raw.mode !== 'local-plain-v1') invalid();
     const provider = exact(input.provider, ['profile', 'apiKeyEnv']);
     const usage = exact(input.usage, ['root', 'dailyCap', 'concurrency']);
     const timeouts = exact(input.timeouts, ['captureMs', 'processMs']);

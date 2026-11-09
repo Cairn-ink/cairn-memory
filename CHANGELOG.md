@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — local Raw-only capture and conversation hiding
+
+- Local foreground setup accepts plaintext Raw capture without interpretation
+  consent. Raw-only capture needs no key or provider and advances the worker;
+  the owner Raw cap applies, while the daily model-cost cap does not.
+- Local forget/correct atomically record permanent content-free windows of
+  ±30 minutes around old receipt creation times and fence whole overlapping or
+  receipt-named sessions. Later matching arrivals are fenced before storage.
+  Unknown event times are handled conservatively; both Raw search intents hide
+  fenced sessions. Hosted selections retain their existing behavior and schema.
+
 ## 0.6.5 — Unreleased
 
 - 0.6.4 was prepared but not published; its changes ship in 0.6.5.

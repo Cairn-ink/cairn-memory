@@ -8,6 +8,18 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { installedSetupFixture,rows } from './fixtures/local-setup.mjs';
 import { redactSecrets } from '../../integrations/client/redact.mjs';
 
+for (const client of ['claude-code','codex']) test(`installed ${client} Raw-only setup captures turns without a key or model quota`,{timeout:120000},async t => {
+  const f = await installedSetupFixture(t,client); f.request.interpretationConsent = false; f.request.dailyCap = 1; f.save();
+  assert.equal((await f.invoke('cli',['init','--database',f.request.databasePath])).status,'initialized');
+  assert.equal((await f.setup()).status,'prepared'); assert.equal((await f.activate()).status,'active');
+  assert.equal(JSON.parse(readFileSync(f.configPath)).interpretation,'raw-only');
+  await f.invoke('hook',[],{event:client==='codex'?'UserPromptSubmit':'SessionStart'});
+  for (const key of [false,true]) { f.append('Synthetic copper '.repeat(400)); await f.invoke('hook',[],{event:'PreCompact',key}); }
+  assert.equal(f.cursor().issuedOrdinal,2); assert.equal(f.cursor().pending,null);
+  const stored = await f.inspect(); assert.equal(stored.memories,0); assert.ok(stored.parts.length>2);
+  assert.equal(rows(f.scaffold.SYNTHETIC_TRACE).length,0);
+});
+
 for(const client of ['claude-code','codex'])test(`A1–A6/A8/A9 installed ${client}: explicit setup/quiet hooks/capture/replay/disable/rearm`,{timeout:120000},async t=>{
   const f=await installedSetupFixture(t,client);
   const guidePath='docs/raw-local-journal.md';

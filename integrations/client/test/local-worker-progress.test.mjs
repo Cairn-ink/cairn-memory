@@ -128,3 +128,22 @@ for (const scope of ['root','session']) test(`B4b cancellation during actual hel
     assert.equal(readFileSync(f.cursorPath(),'utf8'),before);
   } finally { release(); await holding; }
 });
+
+for (const client of ['claude-code','codex']) test(`Raw-only ${client} real transport advances multiple multipart turns with a key and no provider`,{timeout:60000},async t => {
+  const texts = ['copper '.repeat(1500),'silver '.repeat(1300),'gold '.repeat(1700)];
+  const rows = texts.map((text,index) => {
+    const row = client === 'codex' ? codex(text) : claude(text);
+    if (client === 'codex') { row.payload.turn_id = 'turn-'+index; row.payload.item.id = 'message-'+index; }
+    else row.uuid = 'message-'+index;
+    return row;
+  });
+  const f = workerFixture(t,{client,rows}); f.config.interpretation = 'raw-only'; f.config.usage.dailyCap = 1; f.save();
+  f.providerMode('provider-error');
+  await call(f,'initialize',{start:'beginning'});
+  const result = await call(f,'run',{key:true});
+  assert.equal(result.status,'progress'); assert.equal(result.hasPending,false); assert.ok(result.completedParts>3);
+  assert.equal(f.cursor().offset,statSync(f.sourcePath).size); assert.equal(f.cursor().issuedOrdinal,3);
+  assert.equal(readRaw(f).memories,0); assert.equal(readRaw(f).text,texts.join(''));
+  assert.equal(f.calls().length,0); assert.equal(f.ledger(),null);
+  assert.equal((await call(f,'run',{key:false})).status,'ready');
+});

@@ -17,6 +17,19 @@ const root=fileURLToPath(new URL('../../',import.meta.url)),preload=fileURLToPat
 const childPreload=fileURLToPath(new URL('./fixtures/local-host-child.mjs',import.meta.url));
 const driver=fileURLToPath(new URL('./fixtures/local-host.mjs',import.meta.url));
 const sha=value=>createHash('sha256').update(value).digest('hex');
+
+for (const client of ['claude-code','codex']) test(`installed ${client} Raw-only host acknowledges multipart capture with a configured key`,{timeout:120000},async t => {
+  const f = await installedFixture(t,client);
+  f.config.interpretation = 'raw-only'; f.config.usage.dailyCap = 1;
+  const profile = JSON.parse(readFileSync(f.profilePath));
+  writeFileSync(profile.configPath,JSON.stringify(f.config),{mode:0o600}); profile.configDigest = sha(readFileSync(profile.configPath));
+  writeFileSync(f.profilePath,JSON.stringify(profile),{mode:0o600});
+  f.source('Synthetic copper '.repeat(600));
+  assert.equal((await f.invoke('prepare')).status,'ready'); assert.equal((await f.invoke('initialize',{start:'beginning'})).status,'ready');
+  const result = await f.invoke('run',{key:true,mode:'provider-error'}); assert.equal(result.worker.hasPending,false);
+  assert.equal(f.cursor().pending,null); assert.equal(f.inspect().memories,0); assert.ok(f.inspect().parts.length>1);
+  assert.equal(rows(f.scaffold.SYNTHETIC_TRACE).length,0);
+});
 function sourceClosure() {
   return installedImportClosure(root, ["adapters/local/cli.mjs","integrations/client/raw/local-host-cli.mjs"]);
 }

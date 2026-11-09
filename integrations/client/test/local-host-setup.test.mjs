@@ -29,9 +29,25 @@ for(const client of ['claude-code','codex'])test(`A1/A3 ${client} keyless setup/
   assert.equal(config.hooks.SessionEnd,undefined);assert.deepEqual(counts(),{source:0,worker:0});
   assert.equal((await f.invoke('status')).status,'active');
 });
-for(const consent of ['interpretationConsent','plaintextRawConsent','foregroundConsent'])test(`A1 declined ${consent} makes no grant or files`,async t=>{
+for(const consent of ['plaintextRawConsent','foregroundConsent'])test(`A1 declined ${consent} makes no grant or files`,async t=>{
   const f=await setupFixture(t);f.request[consent]=false;const before=f.snapshot();
   assert.equal((await f.setup()).status,'declined');assert.deepEqual(f.snapshot(),before);assert.equal(f.control().targetId,null);
+});
+for (const interpretationConsent of [false,true]) for (const rawMode of ['off','local-plain-v1'])
+for (const plaintextRawConsent of [false,true]) for (const foregroundConsent of [false,true])
+test(`local setup consent matrix ${JSON.stringify({interpretationConsent,rawMode,plaintextRawConsent,foregroundConsent})}`, async t => {
+  const f = await setupFixture(t);
+  Object.assign(f.request,{interpretationConsent,rawMode,plaintextRawConsent,foregroundConsent});
+  const accepted = foregroundConsent && (interpretationConsent || rawMode === 'local-plain-v1') && (rawMode === 'off' || plaintextRawConsent);
+  const result = await f.setup(); assert.equal(result.status,accepted ? 'prepared' : 'declined',JSON.stringify(result));
+  if (accepted) {
+    const config = JSON.parse(readFileSync(join(f.request.installationDirectory,'capture.json')));
+    assert.equal(config.interpretation,interpretationConsent ? undefined : 'raw-only');
+    assert.equal((await f.invoke('activate')).status,'active');
+    // Changing the mode in place is a configuration conflict, even when valid.
+    f.request.interpretationConsent = !interpretationConsent;
+    if (rawMode === 'local-plain-v1') assert.equal((await f.setup()).status,'blocked');
+  } else assert.equal(f.control().targetId,null);
 });
 test('A1 closed own-data input, canaries, help and absent status never read a key',async t=>{
   const f=await setupFixture(t);let reads=0;
