@@ -26,7 +26,7 @@ import { resolveClient, clientProjectId, parsePairingRecord } from "../lib/pairi
 import { VERSION } from "../lib/version.mjs";
 import { optionalHostSessionId } from "../lib/hosted-contract.mjs";
 import { inspectAutomaticPolicy } from "../lib/automatic-policy.mjs";
-import { hostedPauseStatus } from "../lib/hosted-pause.mjs";
+import { hostedPauseStatus, observeHostedPause, deferHostedPauseStatus, withHostedPauseGate } from "../lib/hosted-pause.mjs";
 import { INVALID_ENDPOINT, credentialDescription, readCredentialState, recordCredentialAuth,
   recordCredentialConfiguration } from "../lib/credential-state.mjs";
 
@@ -57,6 +57,8 @@ let binding;
 let endpoint;
 let post;
 let quotaTarget;
+let hostedConfig;
+let recallObservation;
 let credentialDir;
 let recallConfigurationPending = false;
 async function publishRecallConfiguration() {
@@ -110,8 +112,12 @@ async function telemetry(event) {
 
 // Recheck the existing local barrier after asynchronous quota-state work.
 // The network start itself stays synchronous under the control lock.
-async function dispatchActive(generation, start, signal) {
-  const dispatch = await startIfActive(dataDir, generation, () => {
+async function dispatchActive(generation, start, signal, hosted) {
+  if (hosted) {
+    const current = await hosted.observe();
+    if (current.paused || current.generation !== hosted.generation) throw new Error("dispatch_not_started");
+  }
+  const startLocal = guard => startIfActive(dataDir, generation, () => {
     checkRecall();
     // Observe actual authenticated fetches, before the transport sanitizes errors.
     // Unauthenticated telemetry and locally blocked requests are not evidence.
@@ -129,7 +135,10 @@ async function dispatchActive(generation, start, signal) {
       await recordCredentialAuth(credentialDir, { endpoint, observedAt, outcome: "unreachable", at }, { signal }).catch(() => {});
       throw error;
     });
-  }, { signal });
+  }, { signal, guard });
+  const dispatch = hosted
+    ? await withHostedPauseGate(hostedConfig, hosted.generation, startLocal)
+    : await startLocal();
   if (!dispatch.started) throw new Error("dispatch_not_started");
   return dispatch.operation;
 }
@@ -139,6 +148,13 @@ async function recall(hookInput) {
   if (!token) return;
   const query = prepareRecallQuery(hookInput.prompt);
   if (query === undefined) return;
+  let hosted;
+  if (hostedConfig) {
+    recallObservation = deferHostedPauseStatus(hostedConfig, token, recallSignal);
+    const remote = await recallObservation.observe();
+    if (remote.paused) return;
+    hosted = { generation: remote.generation, observe: () => recallObservation.observe() };
+  }
   const control = await readControlState(dataDir);
   checkRecall();
   if (control.paused) return;
@@ -149,7 +165,7 @@ async function recall(hookInput) {
     "/api/memory/recall",
     { query, ...(projectId === undefined ? {} : { project_id: projectId }), limit: 6,
       ...(sessionId === undefined ? {} : { session_id: sessionId }) },
-    2_500, true, (start) => dispatchActive(control.generation, start, recallSignal), recallSignal,
+    2_500, true, (start) => dispatchActive(control.generation, start, recallSignal, hosted), recallSignal,
   );
   checkRecall();
   if (!Array.isArray(result?.memories) || result.memories.length === 0) return;
@@ -160,7 +176,12 @@ async function recall(hookInput) {
       : "";
     return `- [${memory.id}] (${memory.origin}, ${memory.scope}, confidence ${Number(memory.confidence).toFixed(2)}${source}) ${memory.content}`;
   });
-  await runIfActive(dataDir, control.generation, () => {
+  if (hosted) {
+    const current = await hosted.observe();
+    if (current.paused || current.generation !== hosted.generation) return;
+    await recallObservation.publish();
+  }
+  const outputLocal = guard => runIfActive(dataDir, control.generation, () => {
     checkRecall();
     process.stdout.write(
       JSON.stringify({
@@ -172,7 +193,9 @@ async function recall(hookInput) {
         },
       }),
     );
-  }, { signal: recallSignal });
+  }, { signal: recallSignal, guard });
+  if (hosted) await withHostedPauseGate(hostedConfig, hosted.generation, outputLocal);
+  else await outputLocal();
   // Optional recall-success telemetry must not extend the synchronous host hook.
 }
 
@@ -180,6 +203,13 @@ async function capture(hookInput, requestedGeneration) {
   if (!token) return;
   const event = captureEvent(hookInput);
   if (!event) return;
+  let hosted;
+  if (hostedConfig) {
+    const observe = () => observeHostedPause(hostedConfig, token);
+    const remote = await observe();
+    if (remote.paused) return;
+    hosted = { generation: remote.generation, observe };
+  }
   const control = await readControlState(dataDir);
   if (
     control.paused ||
@@ -188,7 +218,7 @@ async function capture(hookInput, requestedGeneration) {
 
   const statePath = captureCursorPath(dataDir, event.session_id);
   await withFileLock(`${statePath}.lock`, () =>
-    captureLocked(event, statePath, control.generation),
+    captureLocked(event, statePath, control.generation, hosted),
   );
 }
 
@@ -213,7 +243,7 @@ async function readSlice(path, offset, size) {
   return slice.subarray(0, position);
 }
 
-async function captureLocked(hookInput, statePath, generation) {
+async function captureLocked(hookInput, statePath, generation, hosted) {
   const transcriptPath = hookInput.transcript_path;
   const size = (await stat(transcriptPath)).size;
   let cursor = await readCaptureCursor(statePath);
@@ -337,7 +367,7 @@ async function captureLocked(hookInput, statePath, generation) {
         project_id: projectId,
         messages,
       },
-      25_000, true, (start) => dispatchActive(generation, start),
+      25_000, true, (start) => dispatchActive(generation, start, undefined, hosted),
     );
     // A concurrent/recovered capture still holding its short lease returns
     // processing. Do not advance the cursor: the next hook can retry safely.
@@ -441,6 +471,7 @@ try {
     dataDir = binding.root;
     credentialDir = process.env.CLAUDE_PLUGIN_DATA ?? dataDir;
     if (endpoint.startsWith("http")) {
+      hostedConfig = { root: resolve(dataDir), endpoint };
       quotaTarget = { root: dataDir, targetId: hostedTargetId({ endpoint, token }) };
       post = createJsonPoster({ endpoint, token, ...quotaTarget });
     }
@@ -481,6 +512,7 @@ try {
 } finally {
   // No fetch (or a failed decision) still refreshes configuration diagnostics.
   // After a response, dispatchActive publishes configuration before auth/output.
+  await recallObservation?.publish();
   await publishRecallConfiguration();
   clearTimeout(recallTimer);
 }

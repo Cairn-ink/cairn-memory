@@ -71,6 +71,10 @@ const memory = { id: '12345678-1234-4234-8234-123456789abc', content: 'Synthetic
     sessionId: 'synthetic-source', eventId: 'synthetic-event', role: 'user', excerpt: 'Synthetic source.',
     createdAt: '2026-10-01T00:00:00Z' }] };
 globalThis.fetch = async (url, options) => {
+  if (new URL(url).pathname.endsWith('/pause-state')) {
+    options.signal?.throwIfAborted();
+    return Response.json({ paused: false, generation: 0, enforced: true });
+  }
   if (process.env.CAIRN_TEST_LOOPBACK_ENDPOINT &&
       url === process.env.CAIRN_TEST_LOOPBACK_ENDPOINT + '/api/memory/recall') {
     if (new URL(url).hostname !== '127.0.0.1') throw new Error('loopback_only');

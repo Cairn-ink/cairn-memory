@@ -127,6 +127,12 @@ export async function observeHosted(pluginRoot) {
   const requests = [];
   let captures = 0;
   const server = createServer(async (request, response) => {
+    // Keep the historical content-byte oracle unchanged. The new hosted gate
+    // makes real, validated GET observations outside that content transcript.
+    if (request.url.endsWith('/pause-state')) {
+      request.resume(); response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ paused: false, generation: 0, enforced: true })); return;
+    }
     request.setEncoding('utf8');
     let bytes = '';
     for await (const chunk of request) bytes += chunk;
@@ -142,7 +148,7 @@ export async function observeHosted(pluginRoot) {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   try {
-    await mkdir(dataDir);
+    await mkdir(dataDir, { mode: 0o700 });
     await writeFile(join(dataDir, 'project-key'), `${key}\n`, { mode: 0o600 });
     const record = (content, index) => JSON.stringify({ type: index % 2 ? 'assistant' : 'user',
       ...(index % 3 ? { uuid: `synthetic-${index}` } : {}), message: { content } }) + '\n';
