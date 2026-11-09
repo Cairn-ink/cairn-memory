@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "18eeb17fc5a6260a099d668a3205d686b8b4debb7900f4b415652354c58d0ade",
-  "bytes": 1296733,
+  "sha256": "f17e4e36bfdc5c57344cb3a85e766f078a71cb417308a5ba7e5ad4b8c1220bc2",
+  "bytes": 1297005,
   "files": [
     "LICENSE",
     "README.md",
@@ -703,7 +703,7 @@
     "core/context-product-worker.mjs": "260b9489a7ce615f27ac2d84a8eb80356f0d9f6915636d58fc38e29816330565",
     "core/context-read-supervisor.mjs": "6edba6ca75fb7c7b4d8babec670dba43dc97c802cd26182d05989d925d6180cb",
     "core/reader-worker-lifecycle.mjs": "ce12e0d18a3a0d5274989a088afd2fd2cd93f40529c7cfbae1156e8295f99ddf",
-    "docs/context-read-product.md": "bb51c57b8810692e51b07576337f2a2b02a6b93f93ca1025820ff01e3127a1c8",
+    "docs/context-read-product.md": "46ae61571a1fd83bf91df9af8a60cf4c9813594477da6f6ea1f22bd5f504a561",
     "docs/plans/context-read-maintenance-turn.md": "3acd820c1a966406592c2d53af3cac1cfb365452b5aff32b5a3b450ab5b94be1",
     "docs/plans/context-read-p2a-impl.md": "257e2fb1f4db706b5a0d55df18a6a033613957fb6094e78fbc2cc248c348835a",
     "core/context-product-validation.mjs": "1e4433bbc9978c89e5ea46d640038c190e002f16f960eef463ddd406e8b96a88",
@@ -717,7 +717,7 @@
     "core/context-product-quantum.mjs": "b43d2c3386e4a9704831b6aa6667378a3148593bc09ff5848914ef3c706d2659",
     "core/context-product-sqlite.mjs": "5bf348977dea61370a8623b98c80648105c6d788c5e0d1dd428970c5bde19d87",
     "core/content-safety.mjs": "c5c24267fc8d442e53c1e12397563ac5dd39d38fe4914d7bd0046f6571f69289",
-    "core/context-product-index.mjs": "d76fe69ece8f08887481da0a01577ed1093346cb628a3965f74ed1d7ada76048",
+    "core/context-product-index.mjs": "204867662630f539f475ea614ddf16a6eaeb1309f04b457a43072a03c14ebf02",
     "core/context-product-pump.mjs": "2f7c56e7ce56e6dfb03d3fd0fb85b12f74e5079d3cdba891612ca17352714a63",
     "core/context-maintenance-turn.mjs": "50552d945ef5a87feb94a042cd5a0b8260bbdea8119e0aaf34ff4f991297a23b",
     "docs/plans/context-read-p2b-impl.md": "aa8aa4820502d8b4002ae33ef8b734658a683ed0edd527ef3d183ddb39e9f737",

@@ -78,8 +78,9 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     });
   }
   function final(p,access,publication,work,code='index_unavailable',prepare) {
+    const settle=prepare?.();
     access.check();
-    prepare?.();
+    settle?.();
     return read(()=>inContentSuppressionRequestInside(db,()=>{
       if (p.suppressionEpoch !== undefined && p.suppressionEpoch !== contentSuppressionRequestFenceInside(db,p.readSet[0].ownerId)) fail('evidence_unavailable');
       const current=storage.observe(p,access.accessGenerations);
@@ -173,12 +174,23 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     let {selected:delivered,validateRaw,...assembled}=assembleRead(rawChannel);
     assembled.diagnostics=decorate(assembled.diagnostics);
     let result=success(assembled);
+    let memoryOnly;
     const prepare=()=>{
-      if(!validateRaw()) {
-        ({selected:delivered,validateRaw,...assembled}=assembleRead({items:[],coverage:'partial'}));
-        assembled.diagnostics=decorate(assembled.diagnostics);result=success(assembled);access.check();
+      // Settle every counter callback before the single-use final authority
+      // check, including the response needed if that check invalidates Raw.
+      if(rawChannel.items.length) {
+        const {selected,...fallback}=assembleRead({items:[],coverage:'partial'});
+        delete fallback.validateRaw;
+        fallback.diagnostics=decorate(fallback.diagnostics);
+        memoryOnly={delivered:selected,result:success(fallback)};
+        if(Buffer.byteLength(JSON.stringify(memoryOnly.result))>65536)fail('context_item_too_large');
       }
       if(Buffer.byteLength(JSON.stringify(result))>65536)fail('context_item_too_large');
+      return ()=>{
+        // Raw must also survive the authority callback. Selection performs no
+        // counting, and the canonical read below has no host callbacks.
+        if(!validateRaw())({delivered,result}=memoryOnly);
+      };
     };
     const complete=()=>{
       if(delivered.length && !same(canonicalFence(p.readSet,[...new Set(delivered.map(i=>i.type))]),generationsFor(delivered)))fail('snapshot_stale');
