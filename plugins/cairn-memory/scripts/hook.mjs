@@ -170,7 +170,7 @@ async function recall(hookInput) {
   checkRecall();
   const sessionId = optionalHostSessionId(hookInput.session_id);
   const fetchSignal = recallSignal ? AbortSignal.any([recallSignal,
-    AbortSignal.timeout(Math.max(1, recallEnd - performance.now() - OUTPUT_RESERVE_MS))]) : undefined;
+    AbortSignal.timeout(Math.max(1, Math.floor(recallEnd - performance.now() - OUTPUT_RESERVE_MS)))]) : undefined;
   const result = await post(
     "/api/memory/recall",
     { query, ...(projectId === undefined ? {} : { project_id: projectId }), limit: 6,
