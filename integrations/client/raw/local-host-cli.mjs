@@ -1,5 +1,6 @@
 import { pathToFileURL } from 'node:url';
 import { createLocalRawHost, localHostResult } from './local-host.mjs';
+import { readHostProfile } from './local-host-profile.mjs';
 import { rearmResult } from './local-rearm-state.mjs';
 
 export const localHostExit = result => result.reason === 'unexpected_failure' ? 1 :
@@ -31,6 +32,7 @@ export async function runLocalHostCli(args = process.argv.slice(2)) {
       } else {
         if (![7,9].includes(args.length) || args[3] !== '--session' || args[5] !== '--source' ||
             args.length === 9 && (action !== 'initialize' || args[7] !== '--start' || !['beginning','eof'].includes(args[8]))) throw Error();
+        if (args[8] === 'beginning' && (await readHostProfile(args[1])).installation.client === 'codex') throw Error('invalid_input');
         result = await host[action]({ sessionId:args[4],sourcePath:args[6],...(args.length === 9 ? { start:args[8] } : {}) },{ signal:controller.signal });
       }
     } catch { result = ['rearm-status','rearm'].includes(args?.[2]) ? rearmResult(args[2] === 'rearm-status','blocked','invalid_input')

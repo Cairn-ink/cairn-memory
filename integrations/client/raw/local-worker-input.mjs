@@ -40,7 +40,7 @@ export function workerContext(value, client, initialize) {
     for (const field of ['sessionId','sourcePath','pluginRoot','formatAuthority']) if (!Object.hasOwn(input,field)) fault('invalid_input');
     if (!id(input.sessionId) || !normalizedPath(input.sourcePath)) fault('invalid_input');
     const start = initialize && Object.hasOwn(input,'start') ? input.start : 'eof';
-    if (!['eof','beginning'].includes(start)) fault('invalid_input');
+    if (!['eof','beginning'].includes(start) || client === 'codex' && start !== 'eof') fault('invalid_input');
     let formatAuthority = null;
     if (client === 'claude-code') {
       if (!normalizedPath(input.pluginRoot) || input.formatAuthority !== null) fault('invalid_input');

@@ -1,11 +1,43 @@
 import { stateLock } from '../state-lock.mjs';
 import { spawn } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { stat,lutimes } from 'node:fs/promises';
-import { dirname,join } from 'node:path';
+import { dirname,join,relative,isAbsolute } from 'node:path';
 import { fileURLToPath,pathToFileURL } from 'node:url';
 import { privateRead,privateWrite,checkedPath } from '../private-state.mjs';
 import { cachedQualification,observeHost,observedHosts,boundBinary,validHost,
-  scheduleQualification,finishQualification,qualifyBinary } from '../../codex/qualification.mjs';
+  scheduleQualification,finishQualification,qualifyBinary,binaryIdentity,detectRunningHost } from '../../codex/qualification.mjs';
+
+// Synthetic suites must never discover the runner's real native ancestry. The
+// test context is propagated explicitly to cold commands and owned probe children.
+// There is no production opt-in, DTO field, or alternate qualification policy.
+const testRoots = new Set(), ownedTestChildren = new Set();
+const synthetic = () => Boolean(process.env.NODE_TEST_CONTEXT || process.env.CAIRN_SYNTHETIC_FIXTURE_ROOT);
+const below = (root,path) => { const tail=relative(root,path); return tail !== '' && tail !== '..' && !tail.startsWith('../') && !isAbsolute(tail); };
+export function registerLocalQualificationTestRoot(root) {
+  if (!synthetic()) throw Error('synthetic_test_context_required');
+  const resolved=realpathSync(root); testRoots.add(resolved); return () => testRoots.delete(resolved);
+}
+function probeTestRoot(configPath,host) {
+  if (!synthetic()) return null;
+  const config=realpathSync(configPath), binary=realpathSync(host.binaryPath);
+  const roots=[...testRoots,...(process.env.CAIRN_SYNTHETIC_FIXTURE_ROOT ? [realpathSync(process.env.CAIRN_SYNTHETIC_FIXTURE_ROOT)]:[])];
+  const root=roots.find(value=>below(value,config) && below(value,binary));
+  if (!root) throw Error('synthetic_probe_outside_fixture');
+  if (host.processPath) throw Error('synthetic_real_ancestry_forbidden');
+  return root;
+}
+export async function detectLocalCodexHost(detect) {
+  if (!synthetic()) return (detect ?? detectRunningHost)();
+  if (detect) return detect();
+  // The exact generated command starts cold, so its fake binding is explicit.
+  const root=process.env.CAIRN_SYNTHETIC_FIXTURE_ROOT, path=process.env.CAIRN_SYNTHETIC_CODEX;
+  if (!root || !path || !below(realpathSync(root),realpathSync(path))) throw Error('synthetic_real_ancestry_forbidden');
+  return {binaryPath:path,identity:await binaryIdentity(path),kind:'cli'};
+}
+export async function awaitLocalQualificationTestChildren() {
+  await Promise.all([...ownedTestChildren]);
+}
 
 export const QUALIFICATION_BACKOFF_MS = 300000;
 const attemptPath=(configPath,host)=>join(dirname(configPath),'qualification',host.identity+'.local-attempt.json');
@@ -25,17 +57,27 @@ export async function safeLocalBoundBinary(host) {
   catch{return false;}
 }
 export function launchLocalQualification(configPath,host) {
-  const child=spawn(process.execPath,[fileURLToPath(import.meta.url),configPath],{detached:true,
-    env:{HOME:'/tmp',PATH:'/usr/bin:/bin',LANG:'C.UTF-8'},stdio:['pipe','ignore','ignore']});
-  return new Promise((resolve,reject)=>{
-    child.once('error',reject);child.stdin.once('error',reject);
-    child.once('spawn',()=>child.stdin.end(JSON.stringify(host),()=>{child.unref();resolve();}));
+  const root=probeTestRoot(configPath,host);
+  const child=spawn(process.execPath,[fileURLToPath(import.meta.url),configPath],{detached:!root,
+    env:{HOME:'/tmp',PATH:'/usr/bin:/bin',LANG:'C.UTF-8',...(root?{NODE_TEST_CONTEXT:'child-v8',CAIRN_SYNTHETIC_FIXTURE_ROOT:root}:{})},stdio:['pipe','ignore','ignore']});
+  const done=new Promise((resolve,reject)=>{
+    let failure;
+    const failed=error=>{if(root)failure=error;else reject(error);};
+    child.once('error',failed);child.stdin.once('error',failed);
+    if(root) child.once('close',(code,signal)=>{
+      if(failure || code!==0 || signal!==null)reject(failure ?? Error('synthetic_qualification_child_failed'));
+      else resolve();
+    });
+    child.once('spawn',()=>child.stdin.end(JSON.stringify(host),()=>{if(!root){child.unref();resolve();}}));
   });
+  if(root){ownedTestChildren.add(done);done.then(()=>ownedTestChildren.delete(done),()=>ownedTestChildren.delete(done));}
+  return done;
 }
 // No probe on the hook path. Capture still uses the complete identity-bound
 // verdict read before scheduling; a racing success is used by the next hook.
 export async function localCodexQualification(configPath,host,{launch=launchLocalQualification}={}) {
   if(!validHost(host))return {status:'pending'};
+  probeTestRoot(configPath,host);
   const observed=await observedHosts(configPath);
   if(!observed.some(value=>JSON.stringify(value)===JSON.stringify(host))) await observeHost(configPath,host);
   else {
@@ -61,6 +103,7 @@ export async function localCodexQualification(configPath,host,{launch=launchLoca
 }
 export async function runLocalQualification(configPath,host,options={}) {
   if(!validHost(host))return;
+  probeTestRoot(configPath,host);
   return stateLock(join(dirname(configPath),'qualification',host.identity+'.local-probe.lock'),async()=>{
   try {
     await checkedPath(configPath);

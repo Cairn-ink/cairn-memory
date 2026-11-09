@@ -48,7 +48,7 @@ export async function installedSetupFixture(t,client='claude-code'){
   let row=0;function append(text){const id='native-'+row++;const value=client==='claude-code'?{type:'user',uuid:id,timestamp:null,promptSource:'typed',message:{content:[{type:'text',text}]}}:
     {type:'event_msg',timestamp:null,payload:{type:'item_completed',thread_id:sessionId,turn_id:id,item:{type:'UserMessage',id,content:[{type:'text',text}]}}};fs.appendFileSync(sourcePath,JSON.stringify(value)+'\n');}
   append('Historical source must never be backfilled.');
-  const environment={PATH:dirname(process.execPath)+':/usr/bin:/bin',HOME:home,TMPDIR:base,TMP:base,TEMP:base,NODE_NO_WARNINGS:'1',NODE_DISABLE_COMPILE_CACHE:'1'};
+  const environment={NODE_TEST_CONTEXT:'child-v8',CAIRN_SYNTHETIC_FIXTURE_ROOT:base,CAIRN_SYNTHETIC_CODEX:binary,PATH:dirname(process.execPath)+':/usr/bin:/bin',HOME:home,TMPDIR:base,TMP:base,TEMP:base,NODE_NO_WARNINGS:'1',NODE_DISABLE_COMPILE_CACHE:'1'};
   const scaffold={...environment,SYNTHETIC_INSTALLED:installed,SYNTHETIC_CONFIG:configPath,SYNTHETIC_USAGE:usageRoot,SYNTHETIC_TRACE:join(base,'http.jsonl'),
     SYNTHETIC_CORE:join(installed,'core/index.mjs'),SYNTHETIC_READY:join(base,'ready'),SYNTHETIC_RELEASE:join(base,'release')};
   let sequence=0;const receipts=[],traces=[];
@@ -103,6 +103,8 @@ async function driver(path){
 export async function resolve(specifier,context,next){const result=await next(specifier,context);if(result.url.startsWith('file:')){const path=fileURLToPath(result.url);if(!path.startsWith(data.allowed+'/'))throw Error('installed_setup_source_fallback');appendFileSync(data.trace,JSON.stringify({kind:'module',path})+'\\n')}return result}
 export async function load(url,context,next){const result=await next(url,context);const names=url.endsWith('/integrations/codex/source.mjs')?['openSource','source']:url.endsWith('/integrations/client/raw/local-worker.mjs')?['createLocalRawWorker','worker']:null;if(!names)return result;const[name,kind]=names;let source=String(result.source).replace('export async function '+name+'(','async function observed_'+name+'(').replace('export function '+name+'(','function observed_'+name+'(');source+='\\nexport function '+name+'(...args){globalThis[Symbol.for("cairn.setup.observe")]?.('+JSON.stringify(kind)+');return observed_'+name+'(...args)}';return{...result,source}}`),{parentURL:import.meta.url,data:{allowed:dirname(installed),trace}});
   globalThis[Symbol.for('cairn.setup.observe')]=kind=>note({kind});
+  const {registerLocalQualificationTestRoot,awaitLocalQualificationTestChildren}=await import(pathToFileURL(join(installed,'integrations/client/raw/local-codex-qualification.mjs')));
+  const unregister=registerLocalQualificationTestRoot(dirname(settings.request.installationDirectory));
   const {withLocalHostDependencies,createLocalRawHost}=await import(pathToFileURL(join(installed,'integrations/client/raw/local-host.mjs')));
   const {runLocalSetupCli}=await import(pathToFileURL(join(installed,'integrations/client/raw/local-setup-cli.mjs')));
   const qualification=await import(pathToFileURL(join(installed,'integrations/codex/qualification.mjs')));
@@ -123,6 +125,6 @@ export async function load(url,context,next){const result=await next(url,context
           usage:db.prepare('SELECT cap_bytes FROM raw_owner_usage WHERE owner_id=?').get(settings.request.namespace.ownerId)??null}));
       }finally{db.close()}
     }else throw Error('invalid_fixture_action');
-  });assert.equal(children.size,0,'all actual B4a children close before CLI returns');
+  });await awaitLocalQualificationTestChildren();unregister();assert.equal(children.size,0,'all actual B4a children close before CLI returns');
 }
 if(process.argv[2]==='--driver')await driver(process.argv[3]);

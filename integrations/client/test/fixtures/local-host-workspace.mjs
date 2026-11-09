@@ -1,3 +1,4 @@
+import { registerLocalQualificationTestRoot, awaitLocalQualificationTestChildren } from '../../raw/local-codex-qualification.mjs';
 import { workspaceSnapshot } from './local-workspace-snapshot.mjs';
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync, readFileSync, readdirSync, lstatSync } from 'node:fs';
@@ -10,6 +11,8 @@ import { claude, codex, sessionId } from './raw-fixtures.mjs';
 const sha = value => createHash('sha256').update(value).digest('hex');
 export async function hostFixture(t,{ client = 'claude-code' } = {}) {
   const f = fixture(t,{ client });
+  const unregister=registerLocalQualificationTestRoot(f.workspace.path);
+  f.workspace.defer(async()=>{await awaitLocalQualificationTestChildren();unregister();});
   f.config.provider.apiKeyEnv='CAIRN_SYNTHETIC_API_KEY'; f.save();
   const profilePath=join(f.workspace.path,'profile.json'),stateRoot=join(f.workspace.path,'worker-state'),identityKeyPath=join(f.workspace.path,'identity.key');
   const pluginRoot=join(f.workspace.path,'plugin'); mkdirSync(pluginRoot,{mode:0o700});

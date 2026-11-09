@@ -51,7 +51,7 @@ export function createLocalRawWorker(value) {
           }
           const size = await sourceSize(opened);
           if (context.start === 'eof' && !(await completeBoundary(opened,size))) return summary('waiting','partial_record');
-          const offset = fromStart || context.start === 'beginning' ? 0 : size;
+          const offset = options.authority.client === 'claude-code' && (fromStart || context.start === 'beginning') ? 0 : size;
           cursor = { version:'local-raw-cursor-v1',sessionKey:identity.sessionKey,wireSessionId:identity.wireSessionId,
             authorityCommitment:identity.authorityCommitment,epoch:0,offset,issuedOrdinal:0,
             source:await cursorSource(identity,opened,offset),

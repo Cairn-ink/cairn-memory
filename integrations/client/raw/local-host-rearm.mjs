@@ -1,3 +1,4 @@
+import { detectLocalCodexHost } from './local-codex-qualification.mjs';
 import { privateRead, privateWrite, checkedPath } from '../private-state.mjs';
 import { stateLock } from '../state-lock.mjs';
 import { readConfigurationSnapshot } from '../../../adapters/local/configuration.mjs';
@@ -11,7 +12,7 @@ import { sourceBudget, openWorkerSource, qualifySource, verifyCursorSource, sour
   producerInput, producerOptions, sourceReason } from './local-worker-source.mjs';
 import { prepareRawRecord } from './message.mjs';
 import { restoreRawBatch, planRawBatch } from './planner.mjs';
-import { detectRunningHost, boundBinary, cachedQualification, hasQualifiedCreator } from '../../codex/qualification.mjs';
+import { boundBinary, cachedQualification, hasQualifiedCreator } from '../../codex/qualification.mjs';
 import { sessionSourceMetadata } from '../../codex/session-source.mjs';
 import { sha, same, keyed, authorityCommitment, nonAuthorityCommitment, installationCommitment, rearmFail,
   rearmRequest, rearmResult, readGlobalRearm, readSessionRearm, sessionRearmPath, sessionRecord, globalRecord,
@@ -19,6 +20,10 @@ import { sha, same, keyed, authorityCommitment, nonAuthorityCommitment, installa
 
 const clone = value => structuredClone(value);
 const actionSame = (a,b) => same({ ...a,phase:'pending' },{ ...b,phase:'pending' });
+const lazyActionId = (identity,oldAuthorityCommitment,authorityCommitment) => {
+  const token=keyed(identity,'lazy-action',[oldAuthorityCommitment,authorityCommitment]);
+  return token.slice(0,8)+'-'+token.slice(8,12)+'-4'+token.slice(13,16)+'-8'+token.slice(17,20)+'-'+token.slice(20,32);
+};
 async function managedProfile(profile) {
   if (basename(profile.profilePath) !== 'host-profile.json') return false;
   const text = await privateRead(join(dirname(profile.profilePath),'installation.json'),{ missing:true });
@@ -145,84 +150,96 @@ export async function lazyRearm(profile,config,context,operation) {
     identity = await loadIdentity(options,context,operation);
     await bindRoot(options,identity,false,operation);
     return await stateLock(identity.lockPath,async () => {
-      const text = await privateRead(identity.cursorPath,{ missing:true });
-      if (text === undefined) { await readSession(identity,config.authority.client); await checkRearmSession(config,identity); return false; }
-      const raw = JSON.parse(text), receipt = await readSessionRearm(identity);
-      const pending = receipt?.phase === 'pending';
-      if (!pending && raw.authorityCommitment === identity.authorityCommitment) {
-        await readSession(identity,config.authority.client); await checkRearmSession(config,identity); return false;
-      }
-      const predecessor = activation.predecessors.find(value => authorityCommitment(identity,value) ===
-        (pending ? receipt.oldAuthorityCommitment:raw.authorityCommitment));
-      if (!predecessor) rearmFail('rearm_refused');
-      const old = { ...identity,authorityCommitment:authorityCommitment(identity,predecessor) };
-      let cursor = await readSession(raw.authorityCommitment === identity.authorityCommitment ? identity:old,config.authority.client,true);
-      if (!cursor) rearmFail('rearm_refused');
-      await checkHostPermissionForLazy();
-      const bytes = sourceBudget(operation); opened = await openWorkerSource(context,operation,bytes);
-      await verifyCursorSource(identity,opened,cursor);
-      let action = receipt;
-      if (!pending) {
-        const previous = await assertSessionRearm(old,cursor);
-        if (cursor.pending || cursor.blockedReason !== null) rearmFail('rearm_refused');
-        await inspectRearmBoundary(config,identity,cursor,{ oldAuthority:predecessor },previous);
-        const eof = await sourceSize(opened);
-        if (!await completeBoundary(opened,eof)) rearmFail('partial_record');
-        const revision = (previous?.revision ?? 0)+1;
-        const replacementCursor = { ...clone(cursor),authorityCommitment:identity.authorityCommitment,offset:eof,
-          source:await cursorSource(identity,opened,eof),selection:config.authority.client === 'claude-code'
-            ? { ownSkillTurn:true,awaitingUserBoundary:true }:{},rearmRevision:revision };
-        validateCursor(replacementCursor,identity,config.authority.client);
-        const token = keyed(identity,'lazy-action',[old.authorityCommitment,identity.authorityCommitment]);
-        const actionId = token.slice(0,8)+'-'+token.slice(8,12)+'-4'+token.slice(13,16)+'-8'+token.slice(17,20)+'-'+token.slice(20,32);
-        const root = await checkedPath(profile.stateRoot,{ directory:true });
-        action = sessionRecord({ version:'local-raw-session-rearm-v1',phase:'pending',expectedRevision:revision-1,revision,
-          actionId,requestCommitment:keyed(identity,'lazy-request',[context.sessionId,context.sourcePath,actionId]),transitionRevision:revision,
-          sessionKey:identity.sessionKey,wireSessionId:identity.wireSessionId,keyCommitment:identity.keyCommitment,
-          rootDevice:String(root.dev),rootInode:String(root.ino),oldAuthorityCommitment:old.authorityCommitment,
-          authorityCommitment:identity.authorityCommitment,nonAuthorityConfigCommitment:nonAuthorityCommitment(config),oldCursorDigest:sha(text),
-          replacementCursorDigest:sha(JSON.stringify(replacementCursor)),replacementCursor,files:frozenFiles(profile,await snapshot(profile),config.authority).files });
-        await prove(action); await writeRearmRecord(sessionRearmPath(identity),action);
-      }
-      if (action.authorityCommitment !== identity.authorityCommitment || action.keyCommitment !== identity.keyCommitment ||
-        action.sessionKey !== identity.sessionKey || action.wireSessionId !== identity.wireSessionId ||
-        action.nonAuthorityConfigCommitment !== nonAuthorityCommitment(config) ||
-        action.requestCommitment !== keyed(identity,'lazy-request',[context.sessionId,context.sourcePath,action.actionId])) rearmFail('rearm_invalid');
-      validateCursor(action.replacementCursor,identity,config.authority.client);
-      await prove(action);
-      const actual = sha(await privateRead(identity.cursorPath));
-      if (actual === action.oldCursorDigest) await writeCursor(identity,action.replacementCursor);
-      else if (actual !== action.replacementCursorDigest) rearmFail('rearm_invalid');
-      await prove(action);
-      await writeRearmRecord(sessionRearmPath(identity),{ ...action,phase:'committed' });
-      return true;
-
-      async function checkHostPermissionForLazy() {
-        operation.check();
-        const current = await readHostProfile(profile.profilePath), files = await snapshot(current);
-        assertActivationFiles(current,files,activation,true);
-        if (!same(await readRearmAuthority(config),config.authority)) rearmFail('authority_changed');
-        await checkRearmSession(config,identity); operation.check();
-      }
-      async function prove(action) {
-        const root = await checkedPath(profile.stateRoot,{ directory:true });
-        if (String(root.dev) !== action.rootDevice || String(root.ino) !== action.rootInode) rearmFail('rearm_invalid');
-        let freshSource;
-        try {
-          freshSource = await openWorkerSource(context,operation,bytes);
-          await verifyCursorSource(identity,freshSource,cursor);
-          await verifyCursorSource(identity,freshSource,action.replacementCursor);
-        } finally { await freshSource?.close(); }
-        // Fence check follows every awaited source proof, before publication.
+      // Finish the frozen predecessor receipt first, then choose a NEW EOF
+      // for current authority. At most one pending transition can exist.
+      for (let step = 0; step < 2; step++) {
+        const text = await privateRead(identity.cursorPath,{ missing:true });
+        if (text === undefined) { await readSession(identity,config.authority.client); await checkRearmSession(config,identity); return false; }
+        const raw = JSON.parse(text), receipt = await readSessionRearm(identity);
+        const pending = receipt?.phase === 'pending';
+        if (!pending && raw.authorityCommitment === identity.authorityCommitment) {
+          await readSession(identity,config.authority.client); await checkRearmSession(config,identity); return false;
+        }
+        const predecessor = activation.predecessors.find(value => authorityCommitment(identity,value) ===
+          (pending ? receipt.oldAuthorityCommitment:raw.authorityCommitment));
+        if (!predecessor) rearmFail('rearm_refused');
+        const old = { ...identity,authorityCommitment:authorityCommitment(identity,predecessor) };
+        const authorities = [...activation.predecessors,activation.authority];
+        const target = pending ? authorities.find(value =>
+          authorityCommitment(identity,value) === receipt.authorityCommitment) : config.authority;
+        if (!target || authorities.findIndex(value=>same(value,target)) <= authorities.findIndex(value=>same(value,predecessor))) rearmFail('rearm_invalid');
+        const adopted = { ...identity,authorityCommitment:authorityCommitment(identity,target) };
+        let cursor = await readSession(raw.authorityCommitment === adopted.authorityCommitment ? adopted:old,config.authority.client,true);
+        if (!cursor) rearmFail('rearm_refused');
         await checkHostPermissionForLazy();
+        const bytes = sourceBudget(operation); opened = await openWorkerSource(context,operation,bytes);
+        await verifyCursorSource(identity,opened,cursor);
+        let action = receipt;
+        if (!pending) {
+          const previous = await assertSessionRearm(old,cursor);
+          if (cursor.pending || cursor.blockedReason !== null) rearmFail('rearm_refused');
+          await inspectRearmBoundary(config,identity,cursor,{ oldAuthority:predecessor },previous);
+          const eof = await sourceSize(opened);
+          if (!await completeBoundary(opened,eof)) rearmFail('partial_record');
+          const revision = (previous?.revision ?? 0)+1;
+          const replacementCursor = { ...clone(cursor),authorityCommitment:identity.authorityCommitment,offset:eof,
+            source:await cursorSource(identity,opened,eof),selection:config.authority.client === 'claude-code'
+              ? { ownSkillTurn:true,awaitingUserBoundary:true }:{},rearmRevision:revision };
+          validateCursor(replacementCursor,identity,config.authority.client);
+          const actionId = lazyActionId(identity,old.authorityCommitment,identity.authorityCommitment);
+          const root = await checkedPath(profile.stateRoot,{ directory:true });
+          action = sessionRecord({ version:'local-raw-session-rearm-v1',phase:'pending',expectedRevision:revision-1,revision,
+            actionId,requestCommitment:keyed(identity,'lazy-request',[context.sessionId,context.sourcePath,actionId]),transitionRevision:revision,
+            sessionKey:identity.sessionKey,wireSessionId:identity.wireSessionId,keyCommitment:identity.keyCommitment,
+            rootDevice:String(root.dev),rootInode:String(root.ino),oldAuthorityCommitment:old.authorityCommitment,
+            authorityCommitment:identity.authorityCommitment,nonAuthorityConfigCommitment:nonAuthorityCommitment(config),oldCursorDigest:sha(text),
+            replacementCursorDigest:sha(JSON.stringify(replacementCursor)),replacementCursor,files:frozenFiles(profile,await snapshot(profile),config.authority).files });
+          await prove(action); await writeRearmRecord(sessionRearmPath(identity),action);
+        }
+        if (action.actionId !== lazyActionId(identity,old.authorityCommitment,adopted.authorityCommitment) ||
+          action.oldAuthorityCommitment !== old.authorityCommitment || action.authorityCommitment !== adopted.authorityCommitment || action.keyCommitment !== identity.keyCommitment ||
+          action.sessionKey !== identity.sessionKey || action.wireSessionId !== identity.wireSessionId ||
+          action.nonAuthorityConfigCommitment !== nonAuthorityCommitment(config) ||
+          action.requestCommitment !== keyed(identity,'lazy-request',[context.sessionId,context.sourcePath,action.actionId])) rearmFail('rearm_invalid');
+        validateCursor(action.replacementCursor,adopted,config.authority.client);
+        await prove(action);
+        const actual = sha(await privateRead(identity.cursorPath));
+        if (actual === action.oldCursorDigest) await writeCursor(adopted,action.replacementCursor);
+        else if (actual !== action.replacementCursorDigest) rearmFail('rearm_invalid');
+        await prove(action);
+        await writeRearmRecord(sessionRearmPath(identity),{ ...action,phase:'committed' });
+        if (adopted.authorityCommitment === identity.authorityCommitment) return true;
+        await opened.close(); opened = undefined;
+        continue;
+
+        async function checkHostPermissionForLazy() {
+          operation.check();
+          const current = await readHostProfile(profile.profilePath), files = await snapshot(current);
+          assertActivationFiles(current,files,activation,true);
+          if (!same(await readRearmAuthority(config),config.authority)) rearmFail('authority_changed');
+          await checkRearmSession(config,identity); operation.check();
+        }
+        async function prove(action) {
+          const root = await checkedPath(profile.stateRoot,{ directory:true });
+          if (String(root.dev) !== action.rootDevice || String(root.ino) !== action.rootInode) rearmFail('rearm_invalid');
+          let freshSource;
+          try {
+            freshSource = await openWorkerSource(context,operation,bytes);
+            await verifyCursorSource(identity,freshSource,cursor);
+            await verifyCursorSource(identity,freshSource,action.replacementCursor);
+          } finally { await freshSource?.close(); }
+          // Fence check follows every awaited source proof, before publication.
+          await checkHostPermissionForLazy();
+        }
       }
+      rearmFail('rearm_invalid');
     });
   } finally { try { await opened?.close(); } finally { identity?.key.fill(0); } }
 }
 async function qualifiedContext(profile,selection,authority,operation,deps) {
   let formatAuthority = null;
   if (profile.installation.client === 'codex') {
-    const host = await (deps.detectHost ?? detectRunningHost)(); operation.check();
+    const host = await detectLocalCodexHost(deps.detectHost); operation.check();
     if (!host || !await boundBinary(host)) rearmFail('host_unavailable');
     const qualification = await cachedQualification(profile.installation.qualificationConfigPath,host);
     if (qualification.status !== 'qualified' || host.execSession === true) rearmFail('host_unqualified');

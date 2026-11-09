@@ -441,13 +441,14 @@ node integrations/client/raw/local-host-cli.mjs --profile /private/profile.json 
 ```
 
 Initialization defaults to a verified complete-record EOF, with no historical
-backfill. Only initialize accepts `--start beginning` or `--start eof`; beginning
-is an explicit owner-selected import. Each run is a separate bounded invocation,
+backfill. Only initialize accepts `--start`. Codex accepts only `--start eof`;
+Claude also keeps the explicit owner-selected `--start beginning` import. Each run is a separate bounded invocation,
 never an internal drain/retry loop. No stdin hook/MCP payload is accepted. Claude
 uses the profile-bound plugin root and explicit owner selector. Codex checks the
 running host, bound binary and existing qualification cache, then its permitted
-source header/creator; missing qualification and automation refuse without a
-probe or hosted fallback.
+source header/creator. Missing qualification refuses the current initialize/run
+call and may schedule identity-bound background qualification. Exec sessions
+refuse before scheduling. Status reads only the cache and never schedules a probe.
 
 Status is nonmutating and never reads a transcript or qualifies a host. Prepare
 serializes on `profilePath+'.prepare.lock'`, publishes a durable creating intent
@@ -650,7 +651,8 @@ planner identity. Wire identity and issued ordinal do not rotate with a source
 path, credential or supplied generation change.
 
 Initialize defaults to verified LF-terminated EOF (or an empty file); explicit
-`start:'beginning'` is for authorized synthetic/import use. Partial EOF waits
+`start:'beginning'` is restricted to Claude's explicit operator import. Codex
+refuses it at the CLI, host and worker boundaries. Partial EOF waits
 without arming. Claude's EOF state excludes assistant output until a non-machine
 user boundary, including an empty user record. Reinitialization preserves the
 existing offset and any visible block. Run streams existing selection and whole
