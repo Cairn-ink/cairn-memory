@@ -107,6 +107,27 @@ export function createRawSearchAuthority(database, options) {
       }
     };
   }
+  function hostAncestry(ref, message) {
+    // Host registration already persists a domain-separated empty projection.
+    // Authenticate the message's first event, not a later overlapping batch or
+    // an empty eligible list (which engine registration can also produce).
+    const event = db.prepare(`SELECT e.session_key,e.event_id,e.first_message_ids,e.eligible_message_ids,e.binding_digest,e.projection_digest
+      FROM raw_messages m JOIN raw_capture_events e ON e.conversation_id=m.conversation_id AND e.event_id=m.first_event_id
+      WHERE m.conversation_id=? AND m.message_id=? AND e.owner_id=? AND e.scope=? AND e.project_id=? AND e.client=?`)
+      .get(ref.conversationId,ref.messageId,...boundary(ref.namespace),message.client);
+    if (!event || event.session_key !== message.session_key) return false;
+    let first, eligible;
+    try {
+      first = JSON.parse(event.first_message_ids);
+      eligible = JSON.parse(event.eligible_message_ids);
+    } catch (error) {
+      if (error instanceof SyntaxError) return false;
+      throw error;
+    }
+    return Array.isArray(first) && first.includes(ref.messageId) && Array.isArray(eligible) && !eligible.length &&
+      event.projection_digest === createHash('sha256').update(JSON.stringify(['raw-capture-host-empty-v1',
+        event.session_key,event.event_id,first,event.binding_digest])).digest('hex');
+  }
   function inspectInside(ref,intent = 'history') {
     namespace(ref.namespace); ref = rawSourceRef(ref,ref.namespace);
     const ns = ref.namespace, state = sources.budget();
@@ -123,10 +144,13 @@ export function createRawSearchAuthority(database, options) {
     if (db.prepare(`SELECT 1 FROM raw_session_fences WHERE ${where} AND client=? AND session_key=?`)
       .get(...boundary(ns),view.message.client,view.message.session_key)) fail('source_unavailable');
     if (!sourceReadSafety(db,{identity:sourceIdentity,namespace:ns,ref,rawBudget:state,rawMutableRevision:false}).allowed) fail('source_unavailable');
-    // A message saved before lineage registration has no complete privacy
-    // ancestry proof. Schema presence alone cannot repair that old gap.
-    if (!db.prepare('SELECT 1 FROM raw_source_maps WHERE conversation_id=? AND message_id=? LIMIT 1')
-      .get(ref.conversationId,ref.messageId)) fail('source_unavailable');
+    // Engine maps prove engine interpretation. Host registration instead binds
+    // session ancestry; the host must fence every source session on forget or
+    // correction. Never infer that contract from absent maps alone.
+    const mapped = db.prepare('SELECT 1 FROM raw_source_maps WHERE conversation_id=? AND message_id=? LIMIT 1')
+      .get(ref.conversationId,ref.messageId);
+    const hostAncestryOnly = !mapped && hostAncestry(ref,view.message);
+    if (!mapped && !hostAncestryOnly) fail('source_unavailable');
     // LEFT joins preserve unresolved ancestry. An inner join would turn missing
     // authority into an apparently bare source.
     const links = db.prepare(`SELECT l.receipt_id,l.start,l.end,l.precision,r.memory_id,r.client,r.session_id,r.event_id,r.role,r.excerpt,
@@ -158,6 +182,7 @@ export function createRawSearchAuthority(database, options) {
     const classification = !links.length ? {kind:'current-eligible-bare',reason:'complete-privacy-no-memory-link'} :
       historical ? {kind:'history-only',reason:links.some(row=>row.currentness==='current')?'current-history-overlap':'retired-memory'} :
       unknown ? {kind:'history-only',reason:'unresolved-currentness'} : {kind:'current-eligible-linked',reason:'current-memory-links'};
+    if (hostAncestryOnly && classification.kind === 'current-eligible-bare') classification.reason = 'host-session-ancestry';
     if (intent === 'current' && classification.kind === 'history-only') fail('source_unavailable');
     return { ref,manifest:view.manifest,role:view.message.role,ordinal:view.message.ordinal,occurredAt:view.message.occurred_at,
       currentness:historical ? 'historical' : unknown || !links.length ? 'unknown' : 'current',classification,
