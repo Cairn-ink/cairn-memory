@@ -15,7 +15,7 @@ for (const client of ['claude-code', 'codex']) test(`hosted metadata changes pre
   }
   assert.equal((await call('initialize', { start: 'beginning' })).status, 'ready');
   const captured = await call('run');
-  assert.equal(captured.status, 'progress'); assert.equal(captured.savedParts, 1);
+  assert.equal(captured.status, 'progress', JSON.stringify(captured)); assert.equal(captured.savedParts, 1);
   assert.equal(captured.hasPending, false);
   const calls = f.calls().length;
   assert.ok(f.calls().some(call => call.method === 'cairn_extract' && !call.count));

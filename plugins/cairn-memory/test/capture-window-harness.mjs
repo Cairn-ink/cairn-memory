@@ -13,7 +13,7 @@ export const row = (id, timestamp = oldTime, extra = {}) => JSON.stringify({
   message: { content: `Synthetic ${id}` }, ...extra,
 }) + '\n';
 
-export async function harness(t, { fail = () => false, holdRecall } = {}) {
+export async function harness(t, { fail = () => false, holdRecall, hookPath } = {}) {
   const workspace = createTestWorkspace(t, { prefix: 'capture-window-' });
   const dataDir = join(workspace.path, 'data'), transcript = join(workspace.path, 'transcript.jsonl');
   await mkdir(dataDir, { mode: 0o700 });
@@ -37,7 +37,7 @@ export async function harness(t, { fail = () => false, holdRecall } = {}) {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => { server.closeAllConnections(); server.close(); });
   async function run(action, extra = {}) {
-    const hook = process.env.CAIRN_CAPTURE_TEST_HOOK ?? fileURLToPath(new URL('../scripts/hook.mjs', import.meta.url));
+    const hook = hookPath ?? process.env.CAIRN_CAPTURE_TEST_HOOK ?? fileURLToPath(new URL('../scripts/hook.mjs', import.meta.url));
     const child = spawn(process.execPath, [hook, action], {
       env: { PATH: process.env.PATH, HOME: workspace.path, CLAUDE_PLUGIN_DATA: dataDir,
         CLAUDE_PLUGIN_OPTION_API_ENDPOINT: `http://127.0.0.1:${server.address().port}`,
