@@ -21,7 +21,7 @@ test('installed recall delivers synchronously while both final gates are held', 
   const output=await recallContext({prompt:'Synthetic query',session_id:'s'},config,'synthetic-token',
     'a'.repeat(64),AbortSignal.timeout(5000),async()=>true,async()=>{},bytes=>{
       assert.ok(existsSync(join(root,'control.lock')),'delivery_control_lock');
-      assert.ok(existsSync(join(root,'hosted-pause',hostedTargetId(config)+'.json.gate')),'delivery_shared_gate');
+      assert.ok(existsSync(join(root, 'hosted-pause.gate')),'delivery_shared_gate');
       assert.match(JSON.parse(bytes).hookSpecificOutput.additionalContext,/Synthetic memory/);
       writes++;
     });

@@ -6,15 +6,25 @@ import { observeHostedPause } from '../../hosted-pause.mjs';
 import { hostedTargetId } from '../../transport-hosted.mjs';
 import { withFileLock } from '../../file-lock.mjs';
 import { stateLock } from '../../state-lock.mjs';
+import { withWriteObserver } from '../../private-state.mjs';
 import { readControlState } from '../../control-state.mjs';
 
 // Hold both admission and control across their complete acquisition windows.
 export async function interruptRotation(t, config, kind) {
   if (kind === 'timeout') {
-    const gate = join(config.root, 'hosted-pause', hostedTargetId(config) + '.json.gate');
-    await stateLock(gate, () => withFileLock(join(config.root, 'control.lock'), async () => {
-      await assert.rejects(observeHostedPause(config, 'synthetic-token'), /control_busy/);
-    }));
+    const gate = join(config.root, 'hosted-pause.gate');
+    await withFileLock(join(config.root, 'control.lock'), async () => {
+      const acquired = Promise.withResolvers(), release = Promise.withResolvers();
+      const holder = stateLock(gate, async () => { acquired.resolve(); await release.promise; });
+      await acquired.promise;
+      try {
+        await assert.rejects(withWriteObserver(async ({ path, kind }) => {
+          if (kind === 'write' && path.endsWith('/1.true.json')) {
+            release.resolve(); await holder;
+          }
+        }, () => observeHostedPause(config, 'synthetic-token')), /control_busy/);
+      } finally { release.resolve(); await holder; }
+    });
   } else {
     const child = spawn(process.execPath, [fileURLToPath(new URL('./pause-intent-crash.mjs', import.meta.url)),
       config.root, config.endpoint], { stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });

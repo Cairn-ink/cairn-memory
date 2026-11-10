@@ -127,7 +127,7 @@ export async function installedPrompt(t, { host = 'codex', warm = true, syncDela
     try { code = await done; } finally { clearTimeout(watchdog); }
     const exists = path => readFile(path).then(() => true, error => { if(error.code==='ENOENT')return false; throw error; });
     const deliveryLocks = deliveryEvidence ? {control:await exists(join(root,'control.lock')),
-      gate:await exists(join(root,'hosted-pause',hostedTargetId({endpoint})+'.json.gate'))} : undefined;
+      gate:await exists(join(root, 'hosted-pause.gate'))} : undefined;
     return { code, signal: child.signalCode, stdout, stderr, outcome, recallHeaders, snapshot, phases, deliveryLocks,
       delivery, status: await hostedPauseStatus({ root, endpoint }) };
   } finally { await ws.cleanup(); }
