@@ -104,7 +104,8 @@ export async function rawCommand(args, write = line => console.log(line), {testD
               const {revision,...metadata}=row;
               emit({ok:true,dryRun:false,...metadata,conversationId:id});return 0;
             }
-            if(counts.pending || counts.fenced && counts.prepared===counts.total) {
+            // Only Claude Code conversations owe message-UUID preparation.
+            if(counts.pending || counts.fenced && (row.client!=='claude-code' || counts.prepared===counts.total)) {
               process.stderr.write(`${counts.prepared.toLocaleString('en-US')}/${counts.total.toLocaleString('en-US')} prepared\n`);
               retry=true;
             }

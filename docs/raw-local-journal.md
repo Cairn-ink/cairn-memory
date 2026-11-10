@@ -105,8 +105,9 @@ progress before any message is deleted. One command finishes on its own and
 shows progress counts. Only if it stops after about 10 minutes, run the same
 command again to continue. All source rows remain until the required hashes
 are durable. While a long delete runs, Claude Code and Codex conversation
-saving pauses and catches up afterwards (about 11–15 seconds for a
-10,000-message conversation).
+saving pauses and catches up afterwards. On a busy machine, saving paused for
+about 11–15 seconds and the whole delete took about 12–19 seconds for a
+10,000-message conversation. Longer conversations take proportionally longer.
 
 Local deletion runs the whole deletion and rolls it back before the first
 privacy fence and again after UUID preparation. Already-fenced middle passes
