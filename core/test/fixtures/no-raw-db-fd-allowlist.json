@@ -580,6 +580,11 @@
     "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
   },
   {
+    "path": "integrations/codex/installed-state.mjs",
+    "source": "const claim = await open(join(dirname(configPath),name), 'wx', 0o600);",
+    "reason": "Exclusive 0600 per-day notice claim in the private installation directory, closed immediately; never a SQLite store path."
+  },
+  {
     "path": "integrations/codex/qualification.mjs",
     "source": "export async function detectRunningHost({pid=process.ppid,proc='/proc',read=readFile,link=readlink,identity=binaryIdentity}={}) {",
     "reason": "Bounded explicit transcript/source input, not the engine SQLite path."
@@ -978,6 +983,11 @@
     "path": "integrations/client/transport-hosted.mjs",
     "source": "import { lstat, mkdir, realpath, open, rename, unlink } from \"node:fs/promises\"",
     "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
+  },
+  {
+    "path": "integrations/codex/installed-state.mjs",
+    "source": "import { open, readdir, unlink } from 'node:fs/promises'",
+    "reason": "Exclusive 0600 per-day notice claim in the private installation directory, closed immediately; never a SQLite store path."
   },
   {
     "path": "integrations/codex/qualification.mjs",

@@ -2,6 +2,14 @@
 import { DEFAULT_ENDPOINT } from './constants.mjs';
 import { shellArgument } from './output.mjs';
 export const messages = {
+  "codex_last_capture": {
+    "zh": "  上次成功保存：{date}（本機時間）",
+    "en": "  Last successful capture: {date} (local time)"
+  },
+  "codex_last_capture_none": {
+    "zh": "  上次成功保存：尚無紀錄",
+    "en": "  Last successful capture: none recorded yet"
+  },
   "engine_bundle_invalid": {
     "zh": "本機引擎套件損壞，請重新下載安裝程式。",
     "en": "The local engine bundle is invalid. Download the installer again."

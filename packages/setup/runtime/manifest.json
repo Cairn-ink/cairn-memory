@@ -25,14 +25,14 @@
     "integrations/codex/entry.mjs": "4bc207d972508f7e0ba7eea2ed69021188673d47cccfe6a375de1b8d88973ea4",
     "integrations/codex/hook.mjs": "f2cebf18c7a2ad3972a833bddc611f67e0b132ca4845e6f721719d80f27302f9",
     "integrations/codex/hosted-lifecycle.mjs": "513a735b9f14899f824374b7fe27fcbf0c06ce81d025588cd6c84c0e415be44a",
-    "integrations/codex/installed-state.mjs": "7ebceb25f266b9aa635d1fd8a588504da33cbfc4c01144ce5b4b9c10f2864932",
-    "integrations/codex/installed.mjs": "8079b851c499f57f2064c29380a3b8b9a137dd3bb9b4dd4b930b5b1b047f32d9",
+    "integrations/codex/installed-state.mjs": "bcdbad772154da9361e456ae30fd28a973a389aaf68998b9dee1355779af911d",
+    "integrations/codex/installed.mjs": "a054b5da392fc2b4dce7bc7b0e2c9e161ba1bc7beb5a3518247b1c8575f9997b",
     "integrations/codex/parser.mjs": "34995f489e59bc5692dabe6c67d72f999ff2063c8aaee2cfb11ed021d6b2e45c",
     "integrations/codex/qualification.mjs": "d5bea045ed4c3fefd45e325f268833f1d535b075ab63ad5dd8dd0409c57dd380",
     "integrations/codex/schema-evidence.mjs": "1313d5789bbf8aa4a61be3bd4c1269793dbc0df543938e2a23fded3a2d4d518b",
     "integrations/codex/session-source.mjs": "1341cc42eebf5a996be305f471393a717bfdd5eddd19fc3fd556fe8483fdfbc3",
     "integrations/codex/source.mjs": "6bf982b4227d6a7834c02faa74690340c72b269ccf1e9a1242358135de37b580",
     "integrations/codex/tripwire.mjs": "96f09081cb2d9416baef2c7a0774a76da178006ad038e8f560af943331232af6",
-    "integrations/codex/worker.mjs": "a22f205506062e00debe4971a825dfd3990240a005c7c2d7d180f34e4affa3fd"
+    "integrations/codex/worker.mjs": "b26a5823e39aaabb21e9224794801be7d80ede84a9c29122bc60e33745b825c6"
   }
 }

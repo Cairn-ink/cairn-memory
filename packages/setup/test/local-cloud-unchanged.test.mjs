@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { fixture } from './clients.test.mjs';
+import { messages } from '../lib/messages.mjs';
 import { KNOWN_FORMATS } from '../runtime/integrations/codex/qualification.mjs';
 
 // Extract immutable historical git objects, never current source, with the same
@@ -117,7 +118,10 @@ const durabilityRuntimeChanges = new Map([
     historical: '0fbb1295e596769035eca5e974efa4f355774a6c37d70f3442a3e78c4aa7264d',
     before: '0fbb1295e596769035eca5e974efa4f355774a6c37d70f3442a3e78c4aa7264d',
     previousPauseWorker: '6453ea0e6d3c0f3a4eb70bfc4eb7c45e85251c48dcc4c3da89e177be834ff03e',
-    current: 'a22f205506062e00debe4971a825dfd3990240a005c7c2d7d180f34e4affa3fd',
+    previousCombined: 'a22f205506062e00debe4971a825dfd3990240a005c7c2d7d180f34e4affa3fd',
+    previousInstaller: '2fd5987edcf0c047d0ad78145b7f2887e20643ce6eca723871b41598ca2e13e4',
+    // Acknowledged-capture diagnostics plus capture windows, root replay and frozen-generation dispatch.
+    current: 'b26a5823e39aaabb21e9224794801be7d80ede84a9c29122bc60e33745b825c6',
   }],
   ['integrations/codex/entry.mjs', {
     historical: '558a2f9f5cbed3c4e08146626708ba5ab4374e6938fa9c2e1cdc935d50580952',
@@ -150,11 +154,15 @@ const durabilityRuntimeChanges = new Map([
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
     before: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
-    current: '8079b851c499f57f2064c29380a3b8b9a137dd3bb9b4dd4b930b5b1b047f32d9',
+    previousCombined: '8079b851c499f57f2064c29380a3b8b9a137dd3bb9b4dd4b930b5b1b047f32d9',
+    previousInstaller: '0377df55d80378aad167522116c58262e3b5e182b9c4b5da517e14670bb832e8',
+    // Capture-stop notices plus pause-gated context delivery and deferred host publication.
+    current: 'a054b5da392fc2b4dce7bc7b0e2c9e161ba1bc7beb5a3518247b1c8575f9997b',
   }],
   ['integrations/codex/hosted-lifecycle.mjs', {
     historical: '8b4a8e7ea1cef5473147bfe2ea6af9548894c52f08e44a656e545fcb9fc8c496',
     before: 'bd7bc299773cc389565a34bfd9a7131f68ad7bef934d3ce5a0ebeeea800bbe3a',
+    previousInstallerDeadline: '5123350b18ee89a7557dbeec237e1e7790f1b7f21484dd393a97a6f66b009e94',
     previousPromptDeadline: '3771ad2a034c5cad4b9a2882d5a9306a7cefd704bcebc67893fc286b93937b24',
     // Recall retains its full deadline and cancellation after the final switch withholds output.
     current: '513a735b9f14899f824374b7fe27fcbf0c06ce81d025588cd6c84c0e415be44a',
@@ -199,6 +207,10 @@ const hostedRuntimeExceptions = [...new Set([
   'integrations/codex/parser.mjs',
   'integrations/codex/qualification.mjs',
   'integrations/codex/schema-evidence.mjs',
+  // Installer 0.6.5 (capture stop notice) adds these hook runtime files. Its
+  // installed.mjs change is covered by the durability pin below, listed once.
+  'integrations/codex/installed-state.mjs',
+  'integrations/codex/worker.mjs',
   ...recallRuntimeChanges.keys(),
   ...durabilityRuntimeChanges.keys(),
   ...captureRuntimeChanges.keys(),
@@ -404,6 +416,44 @@ async function inventory(root, normalize = false, options) {
   return fileInventory(await entries(root), normalize, join(root, '.codex'), options);
 }
 const normalized = (text, home) => normalizeRuntime(text.replace(/(Cairn\.ink Memory(?: setup| status| 安裝程式)? )\d+\.\d+\.\d+(?:-[\w.]+)?/gu, '$1<version>'), home);
+// The immutable comparator keeps historical stdout byte-for-byte. Only current
+// status blocks (also printed by --dry-run) get the approved 0.6.5 B/C delta.
+const captureTimestamp = String.raw`\d{4,6}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01]) (?:[01]\d|2[0-3]):[0-5]\d`;
+const captureStatusLine = new RegExp('^(?:' + ['en','zh'].flatMap(language => [
+  escapePattern(messages.codex_last_capture_none[language]),
+  escapePattern(messages.codex_last_capture[language]).replace(escapePattern('{date}'), captureTimestamp),
+]).join('|') + ')(?:\n|$)', 'mu');
+const indentedExecLine = new RegExp('^  (' + ['en','zh'].map(language =>
+  escapePattern(messages.codex_exec_enabled[language])).join('|') + ')(?=\n|$)', 'mu');
+const currentHostedOutput = text => text.replace(captureStatusLine, '').replace(indentedExecLine, '$1');
+for (const language of ['en','zh']) test(`L06/L33/L24 current-only B/C output exception rejects unrelated line edits (${language})`, () => {
+  const exec = messages.codex_exec_enabled[language];
+  const before = `header\n  existing sibling\n${exec}\n  existing tail\n`;
+  for (const date of [null,'1970-01-01 00:00','2026-11-04 17:42','275760-09-13 08:00']) {
+    const line = date === null ? messages.codex_last_capture_none[language] :
+      messages.codex_last_capture[language].replace('{date}',date);
+    const after = before.replace(exec+'\n','  '+exec+'\n'+line+'\n');
+    const equal = text => assert.equal(currentHostedOutput(text),before);
+    equal(after);
+    for (const damaged of [
+      after+'unrelated added line\n',
+      after.replace('  existing sibling\n',''),
+      after.replace('existing tail','changed tail'),
+      after.replace(exec+'\n','changed exec\n'),
+      after.replace('  '+exec+'\n','   '+exec+'\n'),
+      after.replace(line+'\n',line+' changed\n'),
+      after.replace(line+'\n',' '+line+'\n'),
+      after.replace(line+'\n',line+'\n'+line+'\n'),
+      after.replace('header\n','header\n\n'),
+    ]) assert.throws(()=>equal(damaged), {code:'ERR_ASSERTION'});
+    if(date !== null) for(const invalid of ['not a timestamp','2026-13-04 17:42','2026-11-04 24:00','2026-11-04 17:99'])
+      assert.throws(()=>equal(after.replace(date,invalid)), {code:'ERR_ASSERTION'});
+    // Historical stdout is passed straight to the old normalizer; B and C
+    // bytes in historical data must remain visible to the comparison.
+    assert.notEqual(normalized(after,'/synthetic/.codex'),normalized(before,'/synthetic/.codex'));
+  }
+});
+
 test('L06 version normalization preserves unrelated bytes and complete runtime generations', () => {
   const home = '/synthetic/.codex';
   const oldRuntime = home + '/cairn/runtime/0.5.3-0123456789ab';
@@ -450,16 +500,18 @@ test('L06 version normalization preserves unrelated bytes and complete runtime g
     normalized('Cairn.ink Memory setup 0.5.3\nunrelated 0.5.3', home));
 });
 test('L06 hosted runtime exceptions require packaged bytes and preserve all other comparisons', async () => {
-  // Seven unpinned modules + recall (1) + durability (7) + capture (4),
-  // less the shared worker (1): eighteen unique runtime exceptions. Merging
+  // Eight unpinned modules + recall (1) + durability (7) + capture (4),
+  // less the shared worker (1): nineteen unique runtime exceptions. Merging
   // synchronous metadata reads and pending replay changes pins, not membership.
-  assert.equal(hostedRuntimeExceptions.length, 18);
+  assert.equal(hostedRuntimeExceptions.length, 19);
   // Atomic output moved entry to whole-file pins; root replay and cancellable
   // admission add worker/state-lock. Immutable historical/before pins remain.
   assert.equal(recallRuntimeChanges.size, 1);
   assert.equal(durabilityRuntimeChanges.size, 7);
   // The worker belongs to both behaviors but shares one exact pin object.
   assert.equal(captureRuntimeChanges.size, 4);
+  // Capture-stop diagnostics add installed-state; worker is already pinned.
+  assert.equal(new Set(hostedRuntimeExceptions).size, hostedRuntimeExceptions.length);
   const home = '/synthetic/.codex';
   const oldRuntime = '.codex/cairn/runtime/0.5.3-0123456789ab/';
   const newRuntime = '.codex/cairn/runtime/0.6.0-abcdef012345/';
@@ -749,7 +801,7 @@ for (const { scenario, args, label } of cells) test(`${label} hosted baseline: $
     await restore(); const start = await f.calls(), orderedStart = (await f.orderedCalls()).length;
     const disabled = await run({ args, choices, fixedNow, disableLocalMode: true });
     assert.equal(disabled.code, baseline.code, disabled.stdout);
-    assert.equal(normalized(disabled.stdout, f.codexHome), normalized(baseline.stdout, f.codexHome));
+    assert.equal(normalized(currentHostedOutput(disabled.stdout), f.codexHome), normalized(baseline.stdout, f.codexHome));
     assert.deepEqual(disabled.prompts, baseline.prompts);
     const disabledCalls = await f.calls();
     assert.deepEqual(mutating(disabledCalls, start), mutations);
@@ -762,7 +814,7 @@ for (const { scenario, args, label } of cells) test(`${label} hosted baseline: $
   const beforeRouted = await f.calls(), routedOrdered = (await f.orderedCalls()).length;
   const routed = await run({ args, choices, fixedNow, disableLocalMode: false });
   assert.equal(routed.code, baseline.code, routed.stdout);
-  assert.equal(normalized(routed.stdout, f.codexHome), normalized(baseline.stdout, f.codexHome));
+  assert.equal(normalized(currentHostedOutput(routed.stdout), f.codexHome), normalized(baseline.stdout, f.codexHome));
   assert.deepEqual(routed.prompts, baseline.prompts);
   assert.deepEqual(mutating(await f.calls(), beforeRouted), mutations);
   assert.deepEqual((await f.orderedCalls()).slice(routedOrdered).filter(callsThatMutate).map(call => normalizedCall(call, f.codexHome)), orderedMutations);
