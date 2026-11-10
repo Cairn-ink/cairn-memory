@@ -195,7 +195,12 @@ export async function observeHosted(pluginRoot) {
     outcomes.push(await run('capture'));
     const legacyCursor = async () => {
       const state = JSON.parse(await readFile(cursorPath, 'utf8'));
+      // Capture-window bookkeeping is outside the historical cursor projection.
+      // Keep the original offset/generation/pending-boundary bytes pinned.
       delete state.windowInitial;
+      if (Object.hasOwn(state, 'captureSeen'))
+        assert.equal(state.captureSeen, true, 'capture bookkeeping remains present');
+      delete state.captureSeen;
       return JSON.stringify(state);
     };
     cursorFiles.push(await legacyCursor());
