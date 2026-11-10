@@ -1,3 +1,4 @@
+import { sourceTimestamp } from "./hosted-contract.mjs";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { redactSecrets } from "./redact.mjs";
@@ -155,7 +156,7 @@ export function transcriptWindow(jsonl, sessionId, { turnState = {}, pluginRoot 
             .update(`${sessionId}\0${lineIndex}\0${role}\0${content}`)
             .digest("hex");
     messages.push({ id, role, content,
-      ...(typeof record.timestamp === "string" && record.timestamp.length <= 40 ? { occurred_at: record.timestamp } : {}),
+      ...(sourceTimestamp(record.timestamp) ? { occurred_at: record.timestamp } : {}),
       ...(includeOffsets ? { recordOffset } : {}),
       withheld: machine || turnState.ownSkillTurn === true ||
       (role === "assistant" && pluginControlOutput(rawText)) });

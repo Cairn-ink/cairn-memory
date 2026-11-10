@@ -8,6 +8,14 @@ import { harness, oldTime, row } from './capture-window-harness.mjs';
 
 const plugin = fileURLToPath(new URL('../', import.meta.url));
 const cases = [
+  { name: 'unvalidated source time', file: 'lib/transcript.mjs',
+    before: 'sourceTimestamp(record.timestamp)', after: 'typeof record.timestamp === "string"',
+    label: 'invalid source time omitted', async probe(t, hookPath) {
+      const f = await harness(t, { hookPath, strictTimes: true });
+      await f.write(row('message', 'not-a-date')); await f.run('capture');
+      assert.equal(Object.hasOwn(f.captures[0].messages[0], 'occurred_at'), false, this.label);
+      assert.equal((await f.state()).pendingEnd, undefined, this.label);
+    } },
   { name: 'zero start cursor', file: 'scripts/hook.mjs', before: 'offset: size, generation, discardUntilNewline: size > 0', after: 'offset: 0, generation, discardUntilNewline: size > 0',
     label: 'own start boundary', async probe(t, hookPath) {
       const f = await harness(t, { hookPath }); await f.write(row('copied')); await f.run('start-boundary');
