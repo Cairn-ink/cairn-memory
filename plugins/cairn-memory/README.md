@@ -87,8 +87,12 @@ each session's first capture hook skips its current unprocessed history; later c
 eligible. Requests already started before pause may still finish.
 
 Hosted recall and capture require a freshly validated, enforced pause state.
-Both paths observe it before work and again before each dispatch; recall also
-checks before emitting context. Paused, unavailable, unenforced or regressing
+Claude recall observes it once immediately before fetching, after project and
+quota preparation, then checks only the local published barrier before emitting
+context (in-process state on native Windows). A recall already in flight when
+you pause can still complete for that one prompt; nothing is sent after the pause
+is seen by that hook. Capture and its detached worker keep their initial and
+pre-dispatch observations. Paused, unavailable, unenforced or regressing
 observations block that operation. The foreground Stop/PreCompact launcher makes
 no hosted request; its detached worker performs the observations.
 

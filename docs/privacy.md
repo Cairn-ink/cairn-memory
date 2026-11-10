@@ -672,8 +672,12 @@ shared identity record; same account/endpoint remains the person's choice. Local
 deletion does not revoke a server credential.
 
 Hosted automatic recall and capture in both clients also require a freshly
-validated, enforced `/api/memory/pause-state` observation, followed by another
-observation before dispatch. Claude checks again before emitting recalled context.
+validated, enforced `/api/memory/pause-state` observation. Claude recall observes
+once immediately before its fetch, after project and quota preparation; output
+checks only the local published pause barrier (in-process state on native Windows).
+A recall already in flight when you pause can still complete for that one prompt;
+nothing is sent after the pause is seen by that hook. Capture, its detached worker
+and Codex retain their initial and pre-dispatch observations.
 Unavailable state blocks both operations. The foreground capture launcher does
 not fetch hosted state; its detached worker performs the observations.
 
