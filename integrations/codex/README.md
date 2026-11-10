@@ -10,7 +10,8 @@ policy. Publication is a separate release step. See [setup, qualification and ga
 and 62.5 s for a detached worker. Prompt recall has a 2.5 s fetch deadline inside
 a 4 s host timeout; startup and imports count against its process-clock cap.
 It dynamically imports the runtime so missing/corrupt modules also fail quietly.
-Only vetted context JSON or capture `{}` may reach stdout. The bounded output
+Only vetted context JSON (including a fixed SessionStart `systemMessage`
+when automatic memory has stopped) or capture `{}` may reach stdout. The bounded output
 write has its own 50 ms flush deadline; worker stdout/stderr are discarded.
 
 `installed.mjs` reads owner-private installation/credential state, checks the

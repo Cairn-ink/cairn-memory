@@ -5,7 +5,9 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { SERDE_MARKERS } from '../schema-evidence.mjs';
-import { fingerprint, KNOWN_FORMATS, binaryIdentity, qualifyBinary, cachedQualification, finishQualification } from '../qualification.mjs';
+import { fingerprint, KNOWN_FORMATS, binaryIdentity, qualifyBinary, cachedQualification, finishQualification, observeHost, validHost } from '../qualification.mjs';
+import { stateLock } from '../../client/state-lock.mjs';
+import { privateRead, withWriteObserver } from '../../client/private-state.mjs';
 import { currentHost } from '../installed.mjs';
 import { parseLine, verifyHeader, FORMAT } from '../parser.mjs';
 import { formatFixture } from './format-fixtures.mjs';
@@ -181,5 +183,53 @@ test('Q03/Q06 complete fingerprint refuses mutations; both old verdict kinds bec
     assert.equal((await qualifyBinary(configPath, host, { collect })).status, 'qualified');
     assert.equal((await currentHost(configPath, { detect: async () => host, launch: async () => { launches++; } })).status, 'qualified');
     assert.equal(launches, 1); await finishQualification(configPath, host);
+  }
+});
+
+test('observed-host contention never blocks parallel hooks or changes identity-bound verdicts', { timeout: 30000 }, async t => {
+  const ws = createTestWorkspace(t, { prefix: 'codex-observed-contention-' });
+  const configPath = join(ws.path, 'installation.json'), binaryPath = join(ws.path, 'codex');
+  await copyFile(process.execPath, binaryPath); await chmod(binaryPath, 0o700);
+  const host = { binaryPath, identity: await binaryIdentity(binaryPath), kind: 'app-server' };
+  const other = { ...host, identity: host.identity === 'b'.repeat(64) ? 'c'.repeat(64) : 'b'.repeat(64) };
+  const evidence = await formatFixture('0.166.0');
+  const collect = async () => ({ version: '0.166.0', evidence, binarySha256: 'a'.repeat(64) });
+  const qualified = await qualifyBinary(configPath, host, { collect });
+  const path = join(ws.path, 'qualification', 'observed-app-server.json');
+  const verdictPath = join(ws.path, 'qualification', host.identity + '.json');
+  for (const verdict of [qualified, { ...qualified, status: 'changed', reason: 'schema_missing' },
+    { ...qualified, policy: oldPolicy }]) {
+    await writeFile(verdictPath, JSON.stringify(verdict));
+    const expected = verdict.policy === oldPolicy ? 'pending' : verdict.status;
+    let release, entered;
+    const held = new Promise(resolve => { entered = resolve; });
+    const gate = new Promise(resolve => { release = resolve; });
+    const holder = stateLock(path + '.lock', async () => { entered(); await gate; });
+    // If acquisition itself fails, do not leave a rendezvous hanging.
+    await Promise.race([held, holder.then(() => { throw new Error('holder_not_entered'); })]);
+    let launches = 0;
+    try {
+      // The holder stays inside the lock until every hook/publication settles.
+      // This deterministically exceeds any acquisition window in locked code.
+      const results = await Promise.allSettled(Array.from({ length: 8 }, async () => {
+        const [current] = await Promise.all([
+          currentHost(configPath, { detect: async () => host, launch: async () => { launches++; } }),
+          observeHost(configPath, other),
+        ]);
+        return current;
+      }));
+      assert.deepEqual(results.filter(row => row.status === 'rejected').map(row => row.reason.message), []);
+      assert.ok(results.every(row => row.value.status === expected && row.value.host.identity === host.identity));
+      assert.equal(launches, expected === 'pending' ? 1 : 0);
+      const observed = JSON.parse(await privateRead(path));
+      assert.ok(validHost(observed));
+      assert.ok([host.identity, other.identity].includes(observed.identity));
+      assert.equal((await cachedQualification(configPath, host)).status, expected);
+      const writes = [];
+      await withWriteObserver(event => { writes.push(event); }, () => observeHost(configPath, observed));
+      assert.deepEqual(writes, [], 'unchanged observations remain read-only');
+    } finally {
+      release(); await holder; await finishQualification(configPath, host);
+    }
   }
 });
