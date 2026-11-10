@@ -1641,7 +1641,7 @@
   },
   "adapters/mcp/raw-command.mjs": {
     "key:actionId": 1,
-    "key:conversationId": 1
+    "key:conversationId": 2
   },
   "core/local-authority-uuid.mjs": {
     "key:ownerId": 2,

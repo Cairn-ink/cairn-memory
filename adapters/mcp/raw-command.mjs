@@ -88,10 +88,28 @@ export async function rawCommand(args, write = line => console.log(line), {testD
       const input={namespace,conversationId:id,expectedRevision:row.revision,retainMemories:true};
       const result=values.has('--yes')?core.deleteConversation({...input,actionId:randomUUID()}):core.previewDeleteConversation(input);
       if(!result.ok){
-        if(values.has('--yes') && result.error.code==='local_raw_privacy_write_failed' && result.error.retryable===true) {
-          const counts=progress.get(...boundary,id);
-          if(counts.pending || counts.fenced && counts.prepared===counts.total) {
-            process.stderr.write(`${counts.prepared.toLocaleString('en-US')}/${counts.total.toLocaleString('en-US')} prepared\n`);
+        if(values.has('--yes') && result.error.retryable===true) {
+          let retry=false;
+          if(result.error.code==='storage_busy') {
+            // Contention can occur in either probe or the destructive pass,
+            // independently of UUID hashing. Do not label it hash progress.
+            process.stderr.write('storage busy; waiting to retry\n');
+            retry=true;
+          } else if(result.error.code==='local_raw_privacy_write_failed') {
+            const counts=progress.get(...boundary,id);
+            // Another writer can finish after our bounded pass returns. An
+            // empty aggregate also describes an existing empty conversation,
+            // so confirm absence before reporting the requested deletion done.
+            if(!counts.pending && !select.get(...boundary,id)) {
+              const {revision,...metadata}=row;
+              emit({ok:true,dryRun:false,...metadata,conversationId:id});return 0;
+            }
+            if(counts.pending || counts.fenced && counts.prepared===counts.total) {
+              process.stderr.write(`${counts.prepared.toLocaleString('en-US')}/${counts.total.toLocaleString('en-US')} prepared\n`);
+              retry=true;
+            }
+          }
+          if(retry) {
             // No transaction or writer is held between normal deletion calls.
             // Yield for signals and other sessions, then re-read the revision.
             await new Promise(resolve=>setTimeout(resolve,250));

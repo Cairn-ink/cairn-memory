@@ -219,3 +219,25 @@ test('guard retry rechecks a changed target before writing privacy fences',async
   for(const table of ['raw_session_fences','local_raw_uuid_jobs','local_raw_uuid_fences'])assert.equal(f.db.prepare('SELECT count(*) n FROM '+table).get().n,0);
   assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n,1);
 });
+
+test('non-hashing privacy BUSY preserves its storage_busy classification and rolls back',async t=>{
+  const f=sourceFixture(t),core=local(t,f);
+  const memory=ok(core.admit({namespace:ns,memory:{content:'Synthetic private memory',kind:'fact'},
+    receipts:[{client:'claude-code',sessionId:'synthetic-busy-session',eventId:'synthetic-busy-event',role:'user',excerpt:'Synthetic receipt'}]})).memory;
+  const before=snapshot(f.db),prepare=DatabaseSync.prototype.prepare;let injections=0;
+  DatabaseSync.prototype.prepare=function(sql,...args){
+    const statement=prepare.call(this,sql,...args);
+    if(sql.startsWith('INSERT INTO local_raw_hide_windows VALUES'))return {run(){
+      injections++;throw Object.assign(Error('synthetic busy'),{code:'ERR_SQLITE_ERROR',errcode:5});
+    }};
+    return statement;
+  };
+  let result;
+  try{result=core.forget({namespace:ns,memoryId:memory.id,expectedRevision:memory.revision});}
+  finally{DatabaseSync.prototype.prepare=prepare;}
+  assert.equal(injections,1);assert.deepEqual(result,{ok:false,error:{code:'storage_busy',retryable:true}});
+  assert.deepEqual(snapshot(f.db),before);
+  ok(core.forget({namespace:ns,memoryId:memory.id,expectedRevision:memory.revision}));
+  assert.equal(f.db.prepare('SELECT deleted FROM memories WHERE id=?').get(memory.id).deleted,1);
+  assert.equal(f.db.prepare('PRAGMA integrity_check').get().integrity_check,'ok');
+});

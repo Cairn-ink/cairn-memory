@@ -1,6 +1,6 @@
 import { createLocalUuidFence } from './local-authority-uuid.mjs';
 import { randomUUID, createHmac, createHash } from 'node:crypto';
-import { transaction } from './database.mjs';
+import { transaction, isStorageBusy } from './database.mjs';
 import { localControlInput } from './local-authority-input.mjs';
 import { rawBoundary } from './raw-input.mjs';
 import { createRawControlStorage } from './raw-control-storage.mjs';
@@ -126,7 +126,10 @@ export function createLocalRawPrivacyStorage(db) {
         for (const session of sessions) matches.set(JSON.stringify([session.client,session.session_key]), session);
       }
       for (const session of matches.values()) fenceInside(ns, session.client, session.session_key);
-    } catch { fail('local_raw_privacy_write_failed'); }
+    } catch (error) {
+      if (isStorageBusy(error)) throw error;
+      fail('local_raw_privacy_write_failed');
+    }
   }
   function readRange(ns, client, session) {
     return db.prepare(`SELECT min_ms,max_ms,unknown_time FROM local_raw_session_ranges WHERE ${where} AND session_key=?`)

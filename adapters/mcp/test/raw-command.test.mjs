@@ -202,10 +202,10 @@ test('raw delete cap preserves durable progress and one rerun completes',async t
   await deleted(fixture);
 });
 
-for(const code of ['evidence_unavailable','storage_busy','local_raw_privacy_write_failed'])
+for(const code of ['evidence_unavailable','local_raw_privacy_write_failed'])
   test(`raw delete stops after one refused pass: ${code}`,async t=>{
     const fixture=await largeConversation(t),{f,local,source,argv}=fixture;
-    // The first two cases already have real pending work. A generic retry
+    // The evidence refusal already has real pending work. A generic retry
     // mutant must still stop on either kind of unrelated error.
     if(code!=='local_raw_privacy_write_failed') {
       const progress=local.deleteConversation({namespace:ns,conversationId:source.conversationId,
@@ -296,3 +296,101 @@ for(const point of ['between passes','inside a transaction'])
     assert.doesNotMatch(stdout+stderr+resumed.output+resumed.stderr,/Synthetic|sentinel|large-copy/);
     await deleted(fixture);
   });
+
+test('raw delete completes after the final prepared batch has no pending UUID work',async t=>{
+  const fixture=await largeConversation(t),{f,argv}=fixture,prepare=DatabaseSync.prototype.prepare;
+  const observations=[];
+  DatabaseSync.prototype.prepare=function(sql,...args){
+    const statement=prepare.call(this,sql,...args);
+    if(sql.startsWith('SELECT EXISTS(SELECT 1 FROM raw_session_fences f WHERE'))return {get(...values){
+      const counts=statement.get(...values);observations.push({...counts});
+      assert.equal(f.db.prepare('SELECT count(*) n FROM raw_conversations WHERE id=?').get(fixture.source.conversationId).n,1);
+      return counts;
+    }};
+    return statement;
+  };
+  let result;
+  try{result=await command(argv);}finally{DatabaseSync.prototype.prepare=prepare;}
+  assert.equal(result.code,0,result.output);assert.equal(result.rows[0].ok,true);assert.equal(result.rows[0].dryRun,false);
+  assert.deepEqual(observations.at(-1),{fenced:1,total:1008,prepared:1008,pending:0});
+  await deleted(fixture);
+});
+
+for(const point of ['before preparation','final probe','final transaction'])
+  test(`raw delete retries non-hashing SQLite BUSY ${point} and reports completion`,async t=>{
+    const fixture=await largeConversation(t),{f,argv}=fixture,prepare=DatabaseSync.prototype.prepare;
+    let injections=0,deletions=0;
+    DatabaseSync.prototype.prepare=function(sql,...args){
+      const statement=prepare.call(this,sql,...args),writer=this;
+      if(point==='before preparation'&&sql.startsWith('SELECT * FROM raw_deletion_actions WHERE'))return {get(...values){
+        if(injections===0){injections++;throw Object.assign(Error('synthetic busy'),{code:'ERR_SQLITE_ERROR',errcode:5});}
+        return statement.get(...values);
+      }};
+      if(sql==='DELETE FROM raw_messages WHERE conversation_id=?')return {run(...values){
+        deletions++;
+        assert.equal(writer.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,1008);
+        assert.equal(writer.prepare('SELECT complete FROM local_raw_uuid_jobs').get().complete,1);
+        // First probe rolls back; second probe follows the durable last batch;
+        // only the third cascade may commit the actual deletion.
+        const selected=point==='final probe'?2:point==='final transaction'?3:0;
+        if(deletions===selected){injections++;throw Object.assign(Error('synthetic busy'),{code:'ERR_SQLITE_ERROR',errcode:5});}
+        return statement.run(...values);
+      }};
+      return statement;
+    };
+    let result;
+    try{result=await command(argv);}finally{DatabaseSync.prototype.prepare=prepare;}
+    assert.equal(injections,1);assert.equal(result.code,0,result.output);
+    assert.equal(result.rows[0].ok,true);assert.equal(result.rows[0].dryRun,false);
+    assert.equal(result.stderr.split('storage busy; waiting to retry\n').length-1,1);
+    assert.doesNotMatch(result.stderr,/rerun/);
+    await deleted(fixture);assert.equal(f.db.prepare('PRAGMA integrity_check').get().integrity_check,'ok');
+  });
+
+test('raw delete capped on non-hashing BUSY reports the reason and retains the conversation',async t=>{
+  const {f,argv,source}=await largeConversation(t),prepare=DatabaseSync.prototype.prepare;
+  DatabaseSync.prototype.prepare=function(sql,...args){
+    const statement=prepare.call(this,sql,...args);
+    if(sql.startsWith('SELECT * FROM raw_deletion_actions WHERE'))return {get(){
+      throw Object.assign(Error('synthetic busy'),{code:'ERR_SQLITE_ERROR',errcode:5});
+    }};
+    return statement;
+  };
+  let result;
+  try{result=await command(argv,{testDeleteCapMs:0});}finally{DatabaseSync.prototype.prepare=prepare;}
+  assert.equal(result.code,3);assert.deepEqual(result.rows,[{ok:false,error:{code:'storage_busy',retryable:true}}]);
+  assert.equal(result.stderr,'storage busy; waiting to retry\nrerun the same command to continue\n');
+  assert.equal(f.db.prepare('SELECT count(*) n FROM raw_conversations WHERE id=?').get(source.conversationId).n,1);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n,1008);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM raw_session_fences').get().n,0);
+});
+
+test('raw delete reports done when another deleter finishes before the progress query',async t=>{
+  const fixture=await largeConversation(t),{f,local,source,argv}=fixture,prepare=DatabaseSync.prototype.prepare;
+  let observations=0;
+  DatabaseSync.prototype.prepare=function(sql,...args){
+    const statement=prepare.call(this,sql,...args);
+    if(sql.startsWith('SELECT EXISTS(SELECT 1 FROM raw_session_fences f WHERE'))return {get(...values){
+      observations++;
+      let result;
+      for(let pass=0;pass<16;pass++){
+        result=local.deleteConversation({namespace:ns,conversationId:source.conversationId,
+          expectedRevision:source.expectedConversationRevision,retainMemories:true,actionId:'synthetic-other-delete-'+pass});
+        if(result.ok)break;
+        assert.deepEqual(result.error,{code:'local_raw_privacy_write_failed',retryable:true});
+      }
+      assert.equal(result.ok,true,JSON.stringify(result));
+      const counts=statement.get(...values);
+      assert.deepEqual({...counts},{fenced:0,total:0,prepared:0,pending:0});
+      assert.equal(f.db.prepare('SELECT count(*) n FROM raw_conversations WHERE id=?').get(source.conversationId).n,0);
+      return counts;
+    }};
+    return statement;
+  };
+  let result;
+  try{result=await command(argv);}finally{DatabaseSync.prototype.prepare=prepare;}
+  assert.equal(observations,1);assert.equal(result.code,0,result.output);
+  assert.equal(result.rows[0].ok,true);assert.equal(result.rows[0].dryRun,false);
+  assert.equal(result.rows[0].conversationId,source.conversationId);
+  assert.equal(result.stderr,'');await deleted(fixture);
+});
