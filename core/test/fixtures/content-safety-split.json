@@ -980,8 +980,8 @@
       "file": "core/raw-deletion-storage.mjs",
       "start": "  function cascadeInside(",
       "end": "  function remove(",
-      "sha256": "0a907aef3737efdff03f1eded5ebd232b947092dff00c02b3859272d6b6dbb20",
-      "reason": "Local deletion runs and rolls back the real cascade and post-callback validation before committing privacy fences."
+      "sha256": "c56a1768d1cb527b0fcff3fe739cc227d7e8292507c4730aa2e8a93aa976c52a",
+      "reason": "Local deletion probes before its first fence and final cascade; already fenced middle passes only advance owed UUID jobs."
     },
     {
       "id": "raw-exclusion",

@@ -161,9 +161,15 @@ function forgetCascade(f,path='conversation') {
   const loader=String.raw`export async function load(url,context,next){
     const result=await next(url,context);
     if(url.endsWith('/core/raw-deletion-storage.mjs')){
-      const source=String(result.source),start=source.indexOf('  function precheck('),end=source.indexOf('  function conversationTarget',start);
-      if(start<0||end<0)throw Error('probe_boundary_missing');
-      return {...result,source:source.slice(0,start)+'  function precheck(ns,select) { return select(); }\n'+source.slice(end)};
+      let source=String(result.source);
+      for(const [call,selection] of [
+        ['precheck(ns, () => conversationTarget(ns, value, binding).row, deleteConversationInside)','conversationTarget(ns, value, binding).row'],
+        ['precheck(ns, () => episodeTarget(ns, value), forgetEpisodeInside)','episodeTarget(ns, value)']
+      ]) {
+        if(source.split(call).length!==2)throw Error('probe_call_missing');
+        source=source.replace(call,selection);
+      }
+      return {...result,source};
     }
     return result;
   }`;

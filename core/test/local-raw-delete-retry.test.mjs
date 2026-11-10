@@ -21,7 +21,7 @@ for(const mode of ['off','local']) test(`${mode} deletion exposes bounded UUID p
   const core=mode==='local'?local:openMemoryCore({path:f.path,rawSearch:false,rawConversations:{mode:'off',configureCap:false,
     readPolicy(){throw Error('no capture');}}});if(core!==local)f.workspace.defer(()=>core.close());
   const input={namespace:ns,conversationId:source.conversationId,expectedRevision:source.expectedConversationRevision,actionId:'delete-large'};
-  for(const hashes of [128,256]){
+  for(const hashes of (mode==='local'?[128,256,300]:[128,256])){
     assert.deepEqual(core.deleteConversation(input),{ok:false,error:{code:'local_raw_privacy_write_failed',retryable:true}});
     assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n,300);
     assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,hashes);
@@ -109,18 +109,22 @@ for(const path of ['conversation','episode']) test(`local ${path} hashes every U
   f.db.exec('BEGIN');
   try {for(let n=2;n<=total;n++)insert.run(...keys.map(key=>key==='message_id'?'synthetic-copy-'+n:key==='ordinal'?n:row[key]));f.db.exec('COMMIT');}
   catch(error){f.db.exec('ROLLBACK');throw error;}
-  const prepare=DatabaseSync.prototype.prepare;let deleted=0,dryRuns=0;
+  const prepare=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;let deleted=0,dryRuns=0,destructive=false;
+  DatabaseSync.prototype.exec=function(sql,...args){
+    const result=exec.call(this,sql,...args);
+    if(destructive && (sql==='ROLLBACK'||sql==='COMMIT')) {if(sql==='ROLLBACK')dryRuns++;else deleted++;destructive=false;}
+    return result;
+  };
   DatabaseSync.prototype.prepare=function(sql,...args){
     const statement=prepare.call(this,sql,...args),writer=this;
     if(sql==='DELETE FROM raw_messages WHERE conversation_id=?')return {run(...values){
-      const durable=f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n===total;
+      destructive=true;
       const uuid=createLocalUuidFence(writer);
       assert.equal(writer.prepare('SELECT count(*) n FROM raw_messages').get().n,total);
       assert.equal(writer.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,total);
       assert.equal(writer.prepare('SELECT complete FROM local_raw_uuid_jobs').get().complete,1);
       assert.equal(writer.prepare('SELECT count(*) n FROM raw_session_fences').get().n,1);
       for(let n=1;n<=total;n++)assert.equal(uuid.matches(internal,'claude-code',[{id:n===1?row.message_id:'synthetic-copy-'+n}]),true);
-      if(durable)deleted++;else dryRuns++;
       return statement.run(...values);
     }};
     return statement;
@@ -130,10 +134,12 @@ for(const path of ['conversation','episode']) test(`local ${path} hashes every U
     for(let n=1;n<=2;n++){
       denied(core[method](input),'local_raw_privacy_write_failed');
       assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,UUID_HASH_CHUNK*n);
-      assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n,total);assert.equal(deleted,0);assert.equal(dryRuns,n);
+      assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n,total);assert.equal(deleted,0);assert.equal(dryRuns,1);
     }
-    ok(core[method](input));assert.equal(deleted,1);assert.equal(dryRuns,3);
-  } finally {DatabaseSync.prototype.prepare=prepare;}
+    denied(core[method](input),'local_raw_privacy_write_failed');
+    assert.equal(dryRuns,1);assert.equal(deleted,0);
+    ok(core[method](input));assert.equal(deleted,1);assert.equal(dryRuns,2);
+  } finally {DatabaseSync.prototype.prepare=prepare;DatabaseSync.prototype.exec=exec;}
   assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n,0);
   denied(await core.captureRaw(request(splitRaw('Synthetic copied evidence.',{id:row.message_id})[0],{sessionId:'fork',eventId:'fork'})),'conversation_deleted');
 });

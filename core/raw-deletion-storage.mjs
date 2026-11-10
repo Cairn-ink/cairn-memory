@@ -211,6 +211,21 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
     }
     fail('storage_error');
   }
+  function prepareLocalDelete(ns, select, check) {
+    // Read this session's committed fence before starting any transaction.
+    // Global pending work alone says nothing about this session's privacy debt.
+    const selected = select();
+    const fenced = selected && db.prepare(`SELECT 1 FROM raw_session_fences WHERE ${where} AND client=? AND session_key=?`)
+      .get(...rawBoundary(ns), selected.client, selected.session_key);
+    if (fenced && createLocalUuidFence(db).pending()) {
+      localRawPrivacy.beforeDelete(ns,selected.client,selected.session_key);
+      // Even the last bounded chunk returns progress. The next pass must probe
+      // the now-prepared cascade before entering its destructive transaction.
+      fail('local_raw_privacy_write_failed');
+    }
+    const checked = check();
+    if (checked) localRawPrivacy.beforeDelete(ns,checked.client,checked.session_key);
+  }
   function conversationTarget(ns, value, binding) {
     const previous = db.prepare(`SELECT * FROM raw_deletion_actions WHERE ${where} AND action_id=?`).get(...rawBoundary(ns), value.actionId);
     if (previous) { if (previous.payload_binding !== binding) fail('event_payload_conflict'); return { previous }; }
@@ -250,10 +265,7 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
       return result;
     }
     const check = () => precheck(ns, () => conversationTarget(ns, value, binding).row, deleteConversationInside);
-    if (localRawPrivacy) {
-      const selected = check();
-      if (selected) localRawPrivacy.beforeDelete(ns,selected.client,selected.session_key);
-    }
+    if (localRawPrivacy) prepareLocalDelete(ns, () => conversationTarget(ns, value, binding).row, check);
     return retryUuidDelete(ns,check,() => transaction(db, deleteConversationInside));
   }
   function forgetEpisode(ns, value) {
@@ -266,10 +278,7 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
       return { forgotten: true };
     }
     const check = () => precheck(ns, () => episodeTarget(ns, value), forgetEpisodeInside);
-    if (localRawPrivacy) {
-      const selected = check();
-      localRawPrivacy.beforeDelete(ns,selected.client,selected.session_key);
-    }
+    if (localRawPrivacy) prepareLocalDelete(ns, () => episodeTarget(ns, value), check);
     return retryUuidDelete(ns,check,() => transaction(db, forgetEpisodeInside));
   }
   function list(value) {

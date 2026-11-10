@@ -184,7 +184,7 @@ test('one raw delete CLI invocation prepares over a thousand Claude messages and
     {encoding:'utf8',env:{NODE_NO_WARNINGS:'1'},timeout:30000});
   assert.equal(child.error,undefined);assert.equal(child.status,0,child.stderr);
   assert.equal(JSON.parse(child.stdout).dryRun,false);
-  assert.deepEqual(countsOnly(child.stderr),Array.from({length:7},(_,i)=>`${(128*(i+1)).toLocaleString('en-US')}/1,008 prepared`));
+  assert.deepEqual(countsOnly(child.stderr),[...Array.from({length:7},(_,i)=>`${(128*(i+1)).toLocaleString('en-US')}/1,008 prepared`),'1,008/1,008 prepared']);
   assert.doesNotMatch(child.stdout+child.stderr,/Synthetic|sentinel|large-first|large-copy|large-target/);
   await deleted(fixture);
 });
@@ -218,8 +218,10 @@ for(const code of ['evidence_unavailable','storage_busy','local_raw_privacy_writ
     const before=snapshot(f.db),prepare=DatabaseSync.prototype.prepare;let passes=0;
     DatabaseSync.prototype.prepare=function(sql,...args){
       const statement=prepare.call(this,sql,...args);
-      if(sql==='DELETE FROM raw_messages WHERE conversation_id=?')return {run(...values){
-        passes++;if(passes===1)throw new MemoryStoreError(code);return statement.run(...values);
+      // Refuse at the API's first target read, before any bounded preparation.
+      // A DELETE injector runs only on the final probe after middle-pass work.
+      if(sql.startsWith('SELECT * FROM raw_deletion_actions WHERE'))return {get(...values){
+        passes++;if(passes===1)throw new MemoryStoreError(code);return statement.get(...values);
       }};
       return statement;
     };
@@ -232,23 +234,27 @@ for(const code of ['evidence_unavailable','storage_busy','local_raw_privacy_writ
 
 test('raw delete re-reads revisions, uses fresh action ids and releases the writer between passes',async t=>{
   const {f,argv}=await largeConversation(t),prepare=DatabaseSync.prototype.prepare,write=process.stderr.write;
-  const actions=new Set();let progress=0;
+  const actions=new Set(),times=[],metadataTimeouts=[];let progress=0;
   DatabaseSync.prototype.prepare=function(sql,...args){
     const statement=prepare.call(this,sql,...args);
+    if(sql.startsWith('SELECT c.id,c.client,c.revision,')||sql.startsWith('SELECT EXISTS(SELECT 1 FROM raw_session_fences f WHERE'))
+      metadataTimeouts.push(prepare.call(this,'PRAGMA busy_timeout').get().timeout);
     if(sql.startsWith('SELECT * FROM raw_deletion_actions WHERE'))return {get(...values){actions.add(values.at(-1));return statement.get(...values);}};
     return statement;
   };
   process.stderr.write=function(chunk){
-    assert.match(String(chunk),/^\d+\/1,008 prepared\n$/);
+    assert.match(String(chunk),/^[\d,]+\/1,008 prepared\n$/);
     // A separate connection can take the writer, and change the next revision.
     f.db.exec('BEGIN IMMEDIATE');
     f.db.exec('UPDATE raw_conversations SET revision=revision+1');
-    f.db.exec('COMMIT');progress++;return true;
+    f.db.exec('COMMIT');times.push(performance.now());progress++;return true;
   };
   const lines=[];let code;
   try {code=await rawCommand(argv,line=>lines.push(line));}
   finally{DatabaseSync.prototype.prepare=prepare;process.stderr.write=write;}
-  assert.equal(code,0,lines.join('\n'));assert.equal(progress,7);assert.equal(actions.size,8);
+  assert.equal(code,0,lines.join('\n'));assert.equal(progress,8);assert.equal(actions.size,9);
+  assert.deepEqual(metadataTimeouts,[5000,5000],'both metadata queries retain the capture contention timeout');
+  for(let i=1;i<times.length;i++)assert.ok(times[i]-times[i-1]>=245,'timer yields at least 250 ms between passes (5 ms clock tolerance)');
 });
 
 for(const point of ['between passes','inside a transaction'])

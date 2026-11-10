@@ -104,13 +104,15 @@ cursor reset, cannot archive it again. A large UUID job makes bounded durable
 progress before any message is deleted. One command finishes on its own and
 shows progress counts. Only if it stops after about 10 minutes, run the same
 command again to continue. All source rows remain until the required hashes
-are durable. While a large conversation is being deleted, capture in other
-sessions may wait briefly, or skip a turn and catch up later.
+are durable. While a long delete runs, Claude Code and Codex conversation
+saving pauses and catches up afterwards (about 11–15 seconds for a
+10,000-message conversation).
 
-Local deletion runs the whole deletion once and rolls it back before writing
-privacy fences. A refusal already known at that check leaves the
-store unchanged. A delete that is refused because the conversation changed
-during the call can still leave that conversation hidden. Its source rows stay
+Local deletion runs the whole deletion and rolls it back before the first
+privacy fence and again after UUID preparation. Already-fenced middle passes
+only advance owed hashes; the command yields between bounded chunks. A refusal
+found before the first fence leaves the store unchanged. A refusal after privacy
+preparation can still leave that conversation hidden. Its source rows stay
 stored, and its session and UUID fences remain until a wipe.
 
 Exit codes: **0** for listing, a successful dry run or completed deletion;

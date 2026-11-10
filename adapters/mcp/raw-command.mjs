@@ -44,7 +44,7 @@ export async function rawCommand(args, write = line => console.log(line), {testD
     const namespace={ownerId,scope:projectId===null?'personal':'project',projectId};
     // A typo must not create a store, and inspection must not install a package.
     const {DatabaseSync}=await import('node:sqlite');
-    db=new DatabaseSync(path,{readOnly:true});
+    db=new DatabaseSync(path,{readOnly:true,timeout:5000});
     if(!db.prepare("SELECT 1 FROM sqlite_schema WHERE name='local_raw_uuid_delete_guard' AND type='trigger'").get())
       throw Object.assign(Error(),{code:'unsupported_database'});
     const {openMemoryCore}=await import('../../core/index.mjs');
@@ -63,7 +63,9 @@ export async function rawCommand(args, write = line => console.log(line), {testD
       GROUP BY c.id ORDER BY c.id LIMIT 100`);
     // Count messages, not ordinals: imported conversations can have gaps.
     // The core's bounded preflight also drains older jobs, so pending is global.
-    const progress=db.prepare(`SELECT count(m.message_id) AS total,
+    const progress=db.prepare(`SELECT EXISTS(SELECT 1 FROM raw_session_fences f WHERE
+      (f.owner_id,f.scope,f.project_id,f.client,f.session_key)=(c.owner_id,c.scope,c.project_id,c.client,c.session_key)) AS fenced,
+      count(m.message_id) AS total,
       coalesce(sum(m.ordinal<=coalesce(j.last_ordinal,0)),0) AS prepared,
       (EXISTS(SELECT 1 FROM local_raw_uuid_jobs WHERE complete=0) OR
         NOT EXISTS(SELECT 1 FROM local_raw_uuid_backfill WHERE singleton=1 AND complete=1)) AS pending
@@ -88,11 +90,11 @@ export async function rawCommand(args, write = line => console.log(line), {testD
       if(!result.ok){
         if(values.has('--yes') && result.error.code==='local_raw_privacy_write_failed' && result.error.retryable===true) {
           const counts=progress.get(...boundary,id);
-          if(counts.pending) {
+          if(counts.pending || counts.fenced && counts.prepared===counts.total) {
             process.stderr.write(`${counts.prepared.toLocaleString('en-US')}/${counts.total.toLocaleString('en-US')} prepared\n`);
             // No transaction or writer is held between normal deletion calls.
             // Yield for signals and other sessions, then re-read the revision.
-            await new Promise(resolve=>setImmediate(resolve));
+            await new Promise(resolve=>setTimeout(resolve,250));
             if(performance.now()<deadline)continue;
             process.stderr.write('rerun the same command to continue\n');
           }
