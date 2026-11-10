@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.6.5 — Unreleased
+
+- 0.6.4 was prepared but not published; its changes ship in 0.6.5.
+- Hosted Codex SessionStart shows a short notice when format qualification
+  stays paused or the saved sign-in is missing or unreadable, at most once per
+  local calendar day. Intentional pauses and the daily cap stay quiet.
+- Codex status shows the last locally recorded, service-acknowledged capture
+  in local time, or says none is recorded yet. Exec status aligns with its siblings.
+- Hosted Codex prompt recall gets the 0.3.4 deadline: up to 2,500 ms from the
+  first recall fetch, inside a 3,000 ms prompt-hook process-clock cap.
+- Ships the current engine synced from `main` at `35a29c14`. Local users get
+  dated three-layer contextRead over saved memories by default:
+  `find_memory_candidates`, `fetch_memory_candidate_evidence`, and
+  `read_memory_context`.
+- Existing local stores upgrade on first open to the Raw-capable schema;
+  a store created by 0.6.3 moves from `user_version` 18 to 29.
+- Raw search is ready but stays empty in an ordinary `setup --local` install.
+  Setup registers only `--db/--owner[/--project]`, which exposes no capture
+  tool; `remember_memory` saves Memory only. Raw fills only from messages
+  submitted explicitly through `capture_memory` on a server registered with
+  `--capture-qualification` and `--client codex` or `--client claude-code`, or
+  from the engine's separate local preview (`cairn-memory local setup`),
+  configured by hand; see [the local preview guide](docs/raw-local-journal.md).
+  Submitted messages can be kept as Raw even when no extraction model is
+  configured or extraction fails, subject to the Raw capture controls and the
+  owner cap; a model is needed to extract them into Memory. Local mode still
+  has no automatic capture.
+- Local Memory, Raw and search indexes are plaintext on this computer. Raw has
+  a default 200,000,000-byte owner cap. The server switches `--no-raw`,
+  `--no-raw-search`, and `--no-context-read` disable the respective defaults;
+  see [defaults and off switches](docs/defaults.md).
+- You can go back to 0.6.3; it keeps working with the upgraded store, but conversations captured while on 0.6.3 are not kept as Raw.
+- Prepared and unpublished; after publication, rerun setup to install 0.6.5's
+  engine, Codex notice/status updates and the prompt recall deadline. Existing
+  installed runtimes stay in use until setup is rerun.
+
 ## 0.3.5 — 2026-11-09: hosted recall pre-fetch durability
 
 Plugin and marketplace 0.3.5. Protocol stays 0.3.0. The installer version is not
