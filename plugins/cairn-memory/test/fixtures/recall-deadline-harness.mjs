@@ -161,6 +161,6 @@ export function assertScenario(name, result) {
     assert.equal(calls.length, 2);
     assert.equal(calls[0].hasSession, true); assert.equal(calls[1].hasSession, false);
     assert.equal(calls[1].sameSignal, true); assert.equal(calls[1].sameLegacyPayload, true);
-    assert.ok(aborted[0].source === 'output', 'output_reservation_deadline');
+    assert.ok(aborted[0].source === 'application', 'remaining_process_deadline');
   }
 }
