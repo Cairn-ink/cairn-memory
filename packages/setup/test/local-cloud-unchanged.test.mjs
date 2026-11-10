@@ -126,10 +126,11 @@ const durabilityRuntimeChanges = new Map([
     before: 'ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64',
     current: '7dc46417a129414937b0180482acf6bdf7f58c1816f93468e8df1d952057485b',
   }],
+  // Portable first-prompt publication also matches the exact GET observation.
   ['integrations/client/hosted-pause.mjs', {
     historical: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
     before: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
-    current: '365314ab54f794b34e4972de22d456b2c529a0f6d608c62a01f8558fe4a32892',
+    current: '76cc819ac94a85ed1fc8a2d2dabd92bf9b3581ad82422119df279c054727639c',
   }],
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',

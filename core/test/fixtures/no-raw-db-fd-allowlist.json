@@ -1688,5 +1688,10 @@
     "path": "plugins/cairn-memory/scripts/hook.mjs",
     "source": "try { current = JSON.parse(await readFile(path, \"utf8\")); }",
     "reason": "Fresh hashed-session cursor JSON under one nonblocking capture-lock attempt; marker publication never reads database bytes or overwrites a stale cursor."
+  },
+  {
+    "path": "plugins/cairn-memory/scripts/hook.mjs",
+    "source": "await writeFile(temporary, JSON.stringify(state), { mode: 0o600, flag: \"wx\" });",
+    "reason": "Portable first-prompt publication writes only session cursor JSON to an exclusive temporary file before atomic rename; no SQLite file is opened."
   }
 ]

@@ -713,9 +713,16 @@ started when you paused can finish. Observation authority there is
 process-local: a delayed older active response in another hook can still authorize
 a send after a different process has observed pause. Each observation validates
 the full contract, enforcement, generation ordering and pause transitions.
-Capture cursors persist the hosted generation and establish a fresh EOF boundary
-when it changes, including after pause/resume and for old detached handoffs.
-POSIX-only availability diagnostics are skipped there. Other platforms never
+Capture cursors persist the hosted generation and target and establish a fresh
+EOF boundary when either changes, including after pause/resume and for old
+detached handoffs. Before any capture and only when hosted tags are absent, the
+first prompt can authorize bytes appended after one transcript-size snapshot at
+hook entry, using only that recall's validated active observation. A prompt record
+already on disk at that snapshot is conservatively omitted. Later prompts never
+add or refresh these tags. A denied observation, busy capture lock, unknown byte
+boundary or insufficient recall cleanup time leaves the first capture to establish
+EOF; Stop still requires a fresh observation matching both tags. POSIX-only
+availability diagnostics and root revocation checkpoints are skipped there. Other platforms never
 select this mode after a lock error. Non-HTTP local integrations retain their
 existing behavior.
 

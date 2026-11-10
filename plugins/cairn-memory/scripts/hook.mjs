@@ -85,6 +85,8 @@ let credentialDir;
 let recallConfigurationPending = false;
 let recallMarkerInput;
 let recallAuthPending;
+let recallPromptOffset;
+let recallAuthority;
 async function publishRecallConfiguration() {
   if (!recallConfigurationPending) return;
   recallConfigurationPending = false;
@@ -141,6 +143,11 @@ async function dispatchActive(generation, start, signal, hosted) {
     const current = await hosted.observe();
     if (current.paused || (hosted.generation !== undefined && current.generation !== hosted.generation)) throw new Error("dispatch_not_started");
     hosted.generation = current.generation;
+    // Only recall's own validated pre-fetch observation can authorize the first
+    // portable prompt. Keep its identity, not just a reusable generation number.
+    if (action === 'recall' && !hostedPauseMode(hostedConfig).barrier)
+      recallAuthority = { config: hostedConfig, observation: current,
+        target: hostedTargetId(hostedConfig), generation: current.generation };
   }
   const startLocal = guard => startIfActive(dataDir, generation, () => {
     checkRecall();
@@ -331,8 +338,40 @@ async function recordFirstPrompt(hookInput) {
     if (!current || typeof current !== "object" || Array.isArray(current) || Object.hasOwn(current, "firstPromptAt")) return;
     // A later prompt cannot retroactively classify bytes from an earlier capture.
     if (current.captureSeen === true) return;
+    if (hostedConfig && !hostedPauseMode(hostedConfig).barrier &&
+        recallAuthority?.config === hostedConfig && recallAuthority.target === hostedTargetId(hostedConfig) &&
+        Number.isSafeInteger(recallPromptOffset) && recallPromptOffset >= 0 &&
+        !Object.hasOwn(current, 'hostedGeneration') && !Object.hasOwn(current, 'hostedTarget')) {
+      const tagged = await withHostedPauseGate(hostedConfig, recallAuthority.generation, async guard => {
+        // The byte fence replaces every old pending range. A partial record
+        // after this offset is handled by the existing transcript parser.
+        await writePortableFirstPrompt(path, { ...current, firstPromptAt: observedAt,
+          offset: recallPromptOffset, discardUntilNewline: false, pendingEnd: undefined,
+          hostedGeneration: recallAuthority.generation, hostedTarget: recallAuthority.target,
+        }, guard);
+        return true;
+      }, { signal: recallSignal, observation: recallAuthority.observation }).catch(() => false);
+      if (tagged) return;
+      checkRecall();
+    }
     await writeCaptureCursor(path, { ...current, firstPromptAt: observedAt });
   }, { tryOnly: true });
+}
+
+// Only portable first-prompt authority uses this publisher. Check the exact
+// observation again after temporary I/O, immediately before atomic publication.
+// The recall cap remains armed throughout; interruption leaves old or full state.
+async function writePortableFirstPrompt(path, state, guard) {
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
+  try {
+    await writeFile(temporary, JSON.stringify(state), { mode: 0o600, flag: "wx" });
+    checkRecall();
+    await guard();
+    await rename(temporary, path);
+  } finally {
+    await unlink(temporary).catch(() => {});
+  }
 }
 
 // Match the server copied-history allowance for prompt timestamp/startup latency.
@@ -706,7 +745,16 @@ try {
       }
       if (action === "start-boundary") await startCapture(hookInput);
       else if (action === "start") await telemetry("plugin_started");
-      else if (action === "recall") { recallMarkerInput = hookInput; await recall(hookInput); }
+      else if (action === "recall") {
+        recallMarkerInput = hookInput;
+        if (hostedConfig && !hostedPauseMode(hostedConfig).barrier) {
+          // One metadata-only read at prompt entry; no transcript read or write
+          // precedes recall. A failed stat leaves first-turn capture conservative.
+          try { recallPromptOffset = (await stat(hookInput.transcript_path)).size; }
+          catch { /* Unknown prompt boundary cannot grant hosted authority. */ }
+        }
+        await recall(hookInput);
+      }
       else if (["capture", "capture-detached"].includes(action)) {
         const requestedGeneration =
           typeof hookInput.capture_generation === "string"
