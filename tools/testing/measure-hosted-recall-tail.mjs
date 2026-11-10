@@ -6,7 +6,7 @@ for (const responseMs of [2300, 2450, 2499]) for (const contended of [false, tru
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try { const result = await tailInvocation(null, responseMs, contended);
       console.log(JSON.stringify({ attempt, ...result })); pass++;
-    } catch (error) { console.log(JSON.stringify({ attempt, responseMs, contended, failure: error.code ?? error.name })); fail++; }
+    } catch (error) { console.log(JSON.stringify({ attempt, responseMs, contended, failure: error.code ?? error.name, assertion: error.code === 'ERR_ASSERTION' ? error.message.split('\n')[0] : undefined, evidence: error.tailEvidence })); fail++; }
   }
 }
 console.log(JSON.stringify({ pass, fail }));

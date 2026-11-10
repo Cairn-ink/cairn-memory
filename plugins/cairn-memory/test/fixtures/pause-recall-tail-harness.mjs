@@ -26,7 +26,7 @@ export async function tailInvocation(t, responseMs, contended = false) {
     } else if (request.url.endsWith('/recall')) {
       fetchCount++;
       if (contended) {
-        holder = stateLock(join(root, 'hosted-pause', hostedTargetId({ endpoint }) + '.json.gate'), async () => {
+        holder = stateLock(join(root, 'hosted-pause.gate'), async () => {
           acquired.resolve(); await release.promise;
         });
         await acquired.promise;
@@ -54,7 +54,7 @@ export async function tailInvocation(t, responseMs, contended = false) {
     events.push(event);
     if (event.kind === 'recall') {
       fetchCount++;
-      if (contended) holder = stateLock(join(root, 'hosted-pause', hostedTargetId({ endpoint }) + '.json.gate'), async () => {
+      if (contended) holder = stateLock(join(root, 'hosted-pause.gate'), async () => {
         acquired.resolve(); await release.promise;
       });
     }
@@ -67,19 +67,24 @@ export async function tailInvocation(t, responseMs, contended = false) {
   try { outcome = await done; }
   finally { clearTimeout(timer); release.resolve(); await holder; server.closeAllConnections(); server.close(); }
   const elapsed = Number(process.hrtime.bigint()) / 1e6 - (events.find(event => event.kind === 'origin')?.wallOrigin ?? started);
-  assert.equal(outcome.code, 0, 'child_exit_code'); assert.equal(outcome.signal, null); assert.equal(stderr, '');
-  assert.equal(pauseCount, 1); assert.equal(fetchCount, 1);
-  if (contended) assert.equal(stdout, '', 'contended_output_dropped');
-  else {
-    assert.ok(stdout.length > 0, 'nonempty_context_expected');
-    assert.match(JSON.parse(stdout).hookSpecificOutput.additionalContext, /Synthetic tail memory/);
-    assert.ok(events.some(event => event.kind === 'write-complete' && !event.failed), 'stdout_callback_completed');
-  }
-  // Close is after the process cap's timer callback and kernel reap scheduling.
-  // Delivery itself is measured at the completion callback, against the cap.
-  assert.ok(elapsed < 3500, 'process_exits_inside_cap');
-  const complete = events.find(event => event.kind === 'write-complete');
-  if (complete) assert.ok(complete.ms < 3500, 'complete_output_inside_cap');
-  await ws.cleanup();
+  const evidence = { node: process.versions.node, responseMs, contended, elapsed, events };
+  try {
+    assert.equal(outcome.code, 0, 'child_exit_code'); assert.equal(outcome.signal, null); assert.equal(stderr, '');
+    assert.equal(pauseCount, 1); assert.equal(fetchCount, 1);
+    if (contended) assert.equal(stdout, '', 'contended_output_dropped');
+    else {
+      assert.ok(stdout.length > 0, 'nonempty_context_expected');
+      assert.match(JSON.parse(stdout).hookSpecificOutput.additionalContext, /Synthetic tail memory/);
+      assert.ok(events.some(event => event.kind === 'write-complete' && !event.failed), 'stdout_callback_completed');
+    }
+    // Close is after the process cap's timer callback and kernel reap scheduling.
+    // Delivery itself is measured at the completion callback, against the cap.
+    assert.ok(elapsed < 3500, 'process_exits_inside_cap');
+    const complete = events.find(event => event.kind === 'write-complete');
+    if (complete) assert.ok(complete.ms < 3500, 'complete_output_inside_cap');
+  } catch (error) {
+    error.tailEvidence = evidence;
+    throw error;
+  } finally { await ws.cleanup(); }
   return { node: process.versions.node, responseMs, contended, elapsed, events };
 }
