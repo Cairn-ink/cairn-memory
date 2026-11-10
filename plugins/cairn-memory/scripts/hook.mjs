@@ -37,9 +37,9 @@ const action = process.argv[2] ?? "status";
 // this cannot preempt synchronous CPU or an uncooperative filesystem operation.
 const recallController = action === 'recall' ? new AbortController() : undefined;
 const recallEnd = recallController ? 3500 : undefined;
-// Reserve one bounded pause GET plus local/output work. This deadline starts
-// before dispatch so quota and second-observation waits consume the same budget.
-const OUTPUT_RESERVE_MS = 650;
+// Reserve the local gate admission window (250 ms) plus stdout/cleanup margin.
+// Setup, quota and the single pre-fetch observation consume the fetch budget.
+const OUTPUT_RESERVE_MS = 300;
 // A stalled diagnostic fsync cannot keep the hook alive until the host kills it.
 // Publication is attempted immediately; persistence remains best effort on I/O
 // failure or forced exit, as it does on any process crash.
@@ -186,11 +186,7 @@ async function recall(hookInput) {
       : "";
     return `- [${memory.id}] (${memory.origin}, ${memory.scope}, confidence ${Number(memory.confidence).toFixed(2)}${source}) ${memory.content}`;
   });
-  if (hosted) {
-    const current = await hosted.observe();
-    if (current.paused || current.generation !== hosted.generation) return;
-    await recallObservation.publish();
-  }
+  // Output uses only published local authority; no further network observation.
   const outputLocal = guard => runIfActive(dataDir, control.generation, () => {
     checkRecall();
     process.stdout.write(
