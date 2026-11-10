@@ -47,13 +47,13 @@ function deleting(f,id,preload) {
 
 test('concurrent captureLocal defers with busy during a thousand-message CLI deletion and resends every request', {timeout:60000},async t=>{
   const f=fixture(t),id=await seed(f,1008),script=join(f.workspace.path,'concurrent.mjs');
-  const trace=join(f.workspace.path,'uuid-trace.jsonl'),preload=join(f.workspace.path,'uuid-trace.mjs');
+  const trace=join(f.workspace.path,'uuid-trace.jsonl'),preload=join(f.workspace.path,'uuid-trace.mjs'),release=join(f.workspace.path,'release-concurrent-delete');
   const session=f.db.prepare('SELECT session_key FROM raw_conversations WHERE id=?').get(id).session_key;
   // Observe durable completion in either writer, never the rolled-back probe.
   // hrtime is the same monotonic clock across these processes. Record API
   // returns separately from process close, which includes unrelated teardown.
   writeFileSync(preload,`
-    import {DatabaseSync} from 'node:sqlite';import {appendFileSync} from 'node:fs';import {registerHooks} from 'node:module';
+    import {DatabaseSync} from 'node:sqlite';import {appendFileSync,existsSync} from 'node:fs';import {registerHooks} from 'node:module';
     const trace=${JSON.stringify(trace)},session=${JSON.stringify(session)},exec=DatabaseSync.prototype.exec;let uuidComplete=false;
     const record=value=>appendFileSync(trace,JSON.stringify({...value,pid:process.pid,at:process.hrtime.bigint().toString()})+'\\n');
     DatabaseSync.prototype.exec=function(sql,...args){
@@ -63,6 +63,13 @@ test('concurrent captureLocal defers with busy during a thousand-message CLI del
       if(complete){uuidComplete=true;record({kind:'uuid-complete-commit'});}
       return result;
     };
+    // Keep pending work stable through three capture attempts. A final delete
+    // during asynchronous sealing legitimately changes the namespace epoch.
+    const writeDelete=process.stderr.write;let heldDelete=false;
+    process.stderr.write=function(chunk,...args){const result=writeDelete.call(this,chunk,...args);
+      if(!heldDelete&&String(chunk).includes('prepared')){heldDelete=true;
+        while(!existsSync(${JSON.stringify(release)}))Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10);
+      }return result;};
     globalThis.recordUuidApiReturn=kind=>record({kind,uuidComplete});
     registerHooks({load(url,context,next){const result=next(url,context);
       if(url.endsWith('/core/index.mjs'))return {...result,source:result.source.toString().replace(
@@ -79,30 +86,39 @@ test('concurrent captureLocal defers with busy during a thousand-message CLI del
     import {configuration} from ${JSON.stringify(new URL('../../local/configuration.mjs',import.meta.url).href)};
     import {setTimeout as delay} from 'node:timers/promises';
     const config=configuration(JSON.parse(process.argv[2])),base=JSON.parse(process.argv[3]);process.send({ready:true});
-    process.once('message',async()=>{let i=0,stop=false,pending;const deferred=[];process.once('message',()=>stop=true);
-      do {if(!pending){pending=structuredClone(base);pending.session_id='concurrent-session';pending.event_id='concurrent-'+i;pending.messages[0].id='concurrent-'+i;pending.messages[0].message_ordinal=i+1;}
+    process.once('message',async()=>{let i=0,pending,finish;const deferred=[];
+      const stopped=new Promise(resolve=>finish=resolve);process.once('message',()=>finish());
+      for(let attempt=0;attempt<3;attempt++){if(!pending){pending=structuredClone(base);pending.session_id='concurrent-session';pending.event_id='concurrent-'+i;pending.messages[0].id='concurrent-'+i;pending.messages[0].message_ordinal=i+1;}
         const body=pending;
         let result;try{result=await captureLocal(config,body,{env:{}});}catch(error){result={thrown:{code:error.code,errcode:error.errcode}};}
         process.send({result,eventId:body.event_id,at:process.hrtime.bigint().toString()});if(result.status===409&&result.body?.error==='storage_busy')deferred.push(body);
         if(result.status===200){pending=undefined;i++;}
         await delay(250);
-      }while(!stop);
+      }
+      process.send({paused:true});await stopped;
+      // The first successful attempt follows the completed deletion, avoiding
+      // an unrelated namespace-revision race while retaining the 200 check.
+      const result=await captureLocal(config,pending,{env:{}});
+      process.send({result,eventId:pending.event_id,at:process.hrtime.bigint().toString()});
       const replay=[];
       for(const body of deferred){const result=await captureLocal(config,body,{env:{}});replay.push({eventId:body.event_id,result,at:process.hrtime.bigint().toString()});}
       process.send({replay});process.disconnect();});
   `);
   const capture=spawn(process.execPath,['--import',preload,script,JSON.stringify(f.config),JSON.stringify(f.request())],{stdio:['ignore','ignore','pipe','ipc']});
   let errors='';capture.stderr.on('data',b=>errors+=b);const results=[];let replay;
-  const ready=new Promise(resolve=>capture.once('message',resolve));capture.on('message',m=>{if(m.result)results.push({result:m.result,eventId:m.eventId,at:m.at});if(m.replay)replay=m.replay;});
+  let pause;const paused=new Promise(resolve=>pause=resolve);
+  const ready=new Promise(resolve=>capture.once('message',resolve));capture.on('message',m=>{if(m.result)results.push({result:m.result,eventId:m.eventId,at:m.at});if(m.replay)replay=m.replay;if(m.paused)pause();});
   const closed=new Promise((resolve,reject)=>{capture.once('error',reject);capture.once('close',(code,signal)=>resolve({code,signal}));});
   f.workspace.defer(async()=>{if(capture.exitCode===null&&capture.signalCode===null)capture.kill('SIGTERM');await closed;});
   await ready;const deletion=deleting(f,id,preload);await deletion.progress;capture.send({start:true});
+  try {await Promise.race([paused,closed.then(result=>{throw Error('capture exited before attempts: '+JSON.stringify({result,errors}));})]);}
+  finally {writeFileSync(release,'release');}
   const result=await deletion.done;capture.send({stop:true});assert.equal(result.code,0,JSON.stringify(result));assert.equal(result.signal,null);
   assert.deepEqual(await closed,{code:0,signal:null},errors);
   const events=readFileSync(trace,'utf8').trim().split('\n').map(line=>JSON.parse(line));
   const complete=events.filter(e=>e.kind==='uuid-complete-commit').reduce((a,b)=>BigInt(a.at)<BigInt(b.at)?a:b);
   t.diagnostic(JSON.stringify({attempts:results.length,outcomes:results,uuidCompleteAt:complete.at,events,deferredResent:replay?.length}));
-  assert.ok(results.length>0);assert.ok(events.some(e=>e.kind==='delete-api-return'));
+  assert.equal(results.length,4);assert.ok(results.length>0);assert.ok(events.some(e=>e.kind==='delete-api-return'));
   const completedApi=events.find(e=>e.uuidComplete&&e.kind.endsWith('api-return'));
   assert.ok(completedApi,'durable UUID completion observed at an API return');
   let refused=0;
@@ -115,7 +131,7 @@ test('concurrent captureLocal defers with busy during a thousand-message CLI del
       assert.ok(BigInt(at)>=BigInt(complete.at),'200 returned after durable UUID completion');
     }
   }
-  assert.ok(refused>0);assert.equal(replay.length,refused);
+  assert.equal(refused,3);assert.ok(refused>0);assert.equal(replay.length,refused);
   for(const row of replay) {
     assert.ok(BigInt(row.at)>BigInt(events.filter(e=>e.kind==='delete-api-return').at(-1).at),'resend after deletion API loop');
     assert.equal(row.result.status,200,JSON.stringify(row));
@@ -128,8 +144,21 @@ test('concurrent captureLocal defers with busy during a thousand-message CLI del
 
 test('a real worker capture started during a thousand-message CLI deletion catches up after completion', {timeout:60000},async t=>{
   const f=fixture(t),id=await seed(f,1008);await f.worker.initialize({...f.context,start:'beginning'});
-  const deletion=deleting(f,id);await deletion.progress;
-  const during=await f.worker.run(f.context);
+  const preload=join(f.workspace.path,'hold-delete.mjs'),release=join(f.workspace.path,'release-delete');
+  // Hold the actual deleter between committed passes until this worker returns.
+  // The prepared reply is caused by durable pending work, independent of load.
+  writeFileSync(preload,`
+    import {existsSync} from 'node:fs';
+    const write=process.stderr.write;let held=false;
+    process.stderr.write=function(chunk,...args){const result=write.call(this,chunk,...args);
+      if(!held&&String(chunk).includes('prepared')){held=true;
+        while(!existsSync(${JSON.stringify(release)}))Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10);
+      }return result;};
+  `);
+  const deletion=deleting(f,id,preload);await deletion.progress;
+  let during;
+  try {during=await f.worker.run(f.context);}
+  finally {writeFileSync(release,'release');}
   assert.equal(during.status,'waiting',JSON.stringify(during));
   const pending=f.cursor().pending;assert.equal(pending.state,'prepared');assert.equal(pending.attempts,0);
   const ended=await deletion.done;assert.equal(ended.code,0,ended.stderr);

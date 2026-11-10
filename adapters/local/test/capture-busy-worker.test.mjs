@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync,writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { existsSync,readFileSync,writeFileSync } from 'node:fs';
+import { setTimeout as delay } from 'node:timers/promises';
 import { join } from 'node:path';
 import { workerFixture } from '../../../integrations/client/test/fixtures/local-worker-workspace.mjs';
 import { createLocalRawWorker } from '../../../integrations/client/raw/local-worker.mjs';
@@ -70,6 +72,53 @@ test('opener busy timeout is an accepted 409 and the worker resends its identica
   assert.equal(captured.event_id,prepared.projection.eventId);
   assert.equal(f.db.prepare('SELECT ordinal FROM raw_messages').get().ordinal,prepared.projection.messageOrdinal);
 });
+test('preflight exclusive-lock busy defers the worker without an attempt and captures after release', {timeout:30000},async t=>{
+  const f=fixture(t);f.config.timeouts.captureMs=1000;f.save();
+  await f.worker.initialize({...f.context,start:'beginning'});
+  assert.equal(f.db.prepare('PRAGMA journal_mode').get().journal_mode,'delete');
+  const holder=spawn(process.execPath,['--input-type=module','-e',`
+    import {DatabaseSync} from 'node:sqlite';
+    const db=new DatabaseSync(process.argv[1]);process.send('ready');
+    process.once('message',()=>{db.exec('BEGIN EXCLUSIVE');process.send('locked');
+      process.once('message',()=>{db.exec('ROLLBACK');db.close();process.disconnect();});});
+  `,f.databasePath],{stdio:['ignore','ignore','pipe','ipc']});
+  let stderr='';holder.stderr.on('data',b=>stderr+=b);
+  const done=new Promise((resolve,reject)=>{holder.once('error',reject);holder.once('close',(code,signal)=>resolve({code,signal}));});
+  f.workspace.defer(async()=>{if(holder.exitCode===null&&holder.signalCode===null)holder.kill('SIGTERM');await done;});
+  await Promise.race([new Promise(resolve=>holder.once('message',resolve)),done.then(result=>{throw Error(JSON.stringify({result,stderr}));})]);
+  const ready=join(f.workspace.path,'capture-ready'),go=join(f.workspace.path,'capture-go'),executable=join(f.workspace.path,'gated-node.mjs');
+  // Acquire EXCLUSIVE after the worker's own permission reader, immediately
+  // before the real CLI starts. Otherwise that earlier reader masks preflight.
+  writeFileSync(executable,`#!${process.execPath}
+    import {spawn} from 'node:child_process';import {existsSync,writeFileSync} from 'node:fs';
+    import {setTimeout as delay} from 'node:timers/promises';
+    if(process.argv[2]==='--version')process.stdout.write(process.version+'\\n');
+    else {writeFileSync(${JSON.stringify(ready)},'ready');while(!existsSync(${JSON.stringify(go)}))await delay(10);
+      const child=spawn(${JSON.stringify(process.execPath)},process.argv.slice(2),{stdio:'inherit',env:process.env});
+      for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>child.kill(signal));
+      child.once('close',code=>{process.exitCode=code??1;});}
+  `,{mode:0o700});
+  const worker=createLocalRawWorker({...f.options,nodeExecutable:executable,env:{}});
+  const running=worker.run(f.context);
+  while(!existsSync(ready))await delay(10);
+  const locked=new Promise(resolve=>holder.once('message',resolve));holder.send('lock');await locked;
+  const start=performance.now();let pending;
+  writeFileSync(go,'go');
+  try {
+    const during=await running;
+    assert.equal(during.status,'waiting',JSON.stringify(during));assert.equal(during.reason,'processing',JSON.stringify(during));
+    pending=f.cursor().pending;assert.equal(pending.state,'prepared');assert.equal(pending.attempts,0);
+    assert.equal(pending.lastAttemptAt,null);assert.equal(pending.nextEligibleAt,null);assert.equal(f.cursor().offset,0);
+    assert.ok(performance.now()-start>=750,'preflight waits within its one-second capture budget');
+  } finally {holder.send('release');}
+  assert.deepEqual(await done,{code:0,signal:null},stderr);
+  const result=await f.worker.run(f.context);assert.equal(result.status,'progress');assert.equal(result.completedParts,1);
+  assert.equal(f.cursor().pending,null);assert.equal(rows(f.db),1);
+  assert.equal(f.db.prepare('SELECT event_id FROM raw_capture_events').get().event_id,pending.projection.eventId);
+  assert.equal(f.db.prepare('SELECT ordinal FROM raw_messages').get().ordinal,pending.projection.messageOrdinal);
+  assert.equal(f.db.prepare('PRAGMA integrity_check').get().integrity_check,'ok');
+});
+
 for(const stage of ['open','capture'])test(`${stage} non-mapped failure exits child 1 and keeps worker uncertain for 125 seconds`,async t=>{
   const f=fixture(t),injected=inject(f,stage,stage==='open'?14:5);
   await injected.worker.initialize({...f.context,start:'beginning'});
