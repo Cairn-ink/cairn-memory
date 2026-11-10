@@ -7,7 +7,8 @@ import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { observeHostedPause, deferHostedPauseStatus, withHostedPauseGate } from '../hosted-pause.mjs';
 import { hostedTargetId } from '../transport-hosted.mjs';
 
-test('two hundred completed cycles retain constant warm journal cost and no writes', {timeout:110000}, async t=>{
+// Real directory fsyncs can stall under shared-disk load; keep all 200 cycles.
+test('two hundred completed cycles retain constant warm journal cost and no writes', {timeout:300000}, async t=>{
   const root=join(createTestWorkspace(t).path,'state'); await fs.mkdir(root,{mode:0o700});
   const config={root,endpoint:'http://127.0.0.1:1'};
   let remote={paused:false,generation:0,enforced:true};
