@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile, readFile, chmod, lstat, symlink, unlink, rm, appendFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
@@ -579,16 +579,38 @@ for (const [name, observation] of [
   ['invalid', { ...portableActive, generation: -1 }],
   ['unenforced', { ...portableActive, enforced: false }],
   ['unavailable', {}],
-]) test(`native Windows ${name} observation sends nothing and mints no key`, async t => {
-  const f = await portableHarness(t, { portable: true, pauseState: () => observation });
-  await f.write('');
-  await f.run('start-boundary');
-  await f.run('recall');
-  assert.equal(f.recalls.length, 0, 'denied observation sends zero requests');
-  const state = await f.state();
-  assert.equal(Object.hasOwn(state, 'hostedGeneration'), false);
-  assert.equal(Object.hasOwn(state, 'hostedTarget'), false);
-  assert.equal(await exists(join(f.dataDir, 'project-key')), false, 'denied observation mints zero keys');
+]) test(`native Windows ${name} observation permits only its GET and keeps local identity private`, async t => {
+  const keyExists = [];
+  for (const portable of [true, false]) {
+    const mode = portable ? 'Windows' : 'POSIX';
+    const f = await portableHarness(t, { portable, pauseState: () => observation });
+    await f.write('');
+    await f.run('start-boundary');
+    await f.run('recall');
+    assert.deepEqual(f.requests.map(({ method, url }) => [method, url]),
+      [['GET', '/api/memory/pause-state']],
+      `${mode}: denied observation permits only its own GET; no other network requests`);
+    if (portable) {
+      const state = await f.state();
+      assert.equal(Object.hasOwn(state, 'hostedGeneration'), false);
+      assert.equal(Object.hasOwn(state, 'hostedTarget'), false);
+    }
+    const keyPath = join(f.dataDir, 'project-key');
+    keyExists.push(await exists(keyPath));
+    if (keyExists.at(-1)) {
+      const key = (await readFile(keyPath, 'utf8')).trim();
+      assert.match(key, /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u);
+      const identities = [key, createHash('sha256').update(key).digest('hex'),
+        createHmac('sha256', key).update('/synthetic/project').digest('hex')];
+      for (const request of f.requests) {
+        const received = JSON.stringify(request);
+        for (const identity of identities)
+          assert.equal(received.includes(identity), false,
+            `${mode}: denied observation transmits no project key or derived identity in URL, headers or body`);
+      }
+    }
+  }
+  assert.equal(keyExists[0], keyExists[1], 'Windows local project-key existence matches POSIX hosted mode');
 });
 
 test('native Windows first-prompt authority covers only bytes after the prompt snapshot', async t => {

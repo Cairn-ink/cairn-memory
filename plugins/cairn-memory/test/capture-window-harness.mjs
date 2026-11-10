@@ -18,15 +18,19 @@ export async function harness(t, { fail = () => false, holdRecall, hookPath, obs
   const dataDir = join(workspace.path, 'data'), transcript = join(workspace.path, 'transcript.jsonl');
   await mkdir(dataDir, { mode: 0o700 });
   const sessionId = 'synthetic-session', statePath = captureCursorPath(dataDir, sessionId);
-  const captures = [], recalls = [], forgets = [];
+  const captures = [], recalls = [], forgets = [], requests = [];
   const server = createServer(async (request, response) => {
+    let text = '';
+    for await (const chunk of request) text += chunk;
+    // Record every request before routing, including metadata and unknown paths.
+    requests.push({ method: request.method, url: request.url, headers: request.rawHeaders, body: text });
     if (request.url === '/api/memory/pause-state') {
       request.resume(); response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify(pauseState())); return;
     }
-    let text = '';
-    for await (const chunk of request) text += chunk;
-    const body = JSON.parse(text);
+    let body;
+    try { body = JSON.parse(text); }
+    catch { response.writeHead(400); response.end('{}'); return; }
     if (request.url.endsWith('/forget')) {
       forgets.push(body);
       response.writeHead(200, { 'content-type': 'application/json' });
@@ -80,7 +84,7 @@ export async function harness(t, { fail = () => false, holdRecall, hookPath, obs
     if (action === 'start-boundary') assert.equal(stdout, '');
     return { wallMs: performance.now() - before, pid: child.pid, code, stdout, stderr };
   }
-  return { workspace, dataDir, transcript, sessionId, statePath, captures, recalls, forgets, run,
+  return { workspace, dataDir, transcript, sessionId, statePath, captures, recalls, forgets, requests, run,
     forget: at => fetch(`http://127.0.0.1:${server.address().port}/api/memory/forget`, {
       method: 'POST', body: JSON.stringify({ at }), headers: { 'content-type': 'application/json' } }),
     state: async () => JSON.parse(await readFile(statePath, 'utf8')),
