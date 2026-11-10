@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { privateDirectory, privateList, privateRemove, privateRead, privateReadSync, privateListSync, privateWrite, syncDirectory } from './private-state.mjs';
+import { privateDirectory, hostDirectory, withHostStateFile, privateList, privateRemove, privateRead, privateReadSync, privateListSync, privateWrite, syncDirectory } from './private-state.mjs';
 import { stateLock } from './state-lock.mjs';
 import { rotateAutomaticBoundary } from './automatic-policy.mjs';
 import { conforms } from './hosted-contract.mjs';
@@ -126,9 +126,9 @@ function rotationMismatch(pending, completed) {
 async function rotateUnderGate(config) {
   const pending = await pendingRotation(config.root);
   if (!pending) return;
-  await syncDirectory(config.root);
-  await rotateAutomaticBoundary(config.root);
-  await privateWrite(rotatedPath(config.root), pending);
+  await syncDirectory(await hostDirectory(config.root));
+  await withHostStateFile(join(config.root, 'control.json'), () => rotateAutomaticBoundary(config.root));
+  await privateWrite(rotatedPath(config.root), pending, { hostParent: true });
 }
 export async function completeHostedPauseRotation(config) {
   if (!hostedPauseMode(config).barrier) return;
@@ -136,7 +136,7 @@ export async function completeHostedPauseRotation(config) {
   await stateLock(gatePath(config), async () => {
     await replayPendingUnderGate(config);
     await rotateUnderGate(config);
-  });
+  }, { hostParent: true });
   if (await pendingRotation(config.root)) throw new Error('pause_unavailable');
 }
 
@@ -311,7 +311,7 @@ export async function withHostedPauseGate(config, generation, work, { signal, de
     };
     await check();
     return work(check);
-  }, { signal });
+  }, { signal, hostParent: true });
 }
 async function observe(config, token, signal) {
   signal?.throwIfAborted();
@@ -350,7 +350,7 @@ async function observe(config, token, signal) {
     entered = true;
     await replayPendingUnderGate(config);
     return commitUnderGate(config, remote);
-  }, { signal: waitSignal });
+  }, { signal: waitSignal, hostParent: true });
   // Finish this first bounded attempt even if the caller aborts: a validated
   // changed observation must either commit under the gate or leave its marker.
   try { return await publish(); }
@@ -359,10 +359,10 @@ async function observe(config, token, signal) {
     // authoritative record outside the gate, including the failure path.
     if (entered || error.message !== 'state_busy' || !changed) throw error;
     await privateDirectory(pendingDirectory(config));
-    await syncDirectory(config.root);
+    await syncDirectory(await hostDirectory(config.root));
     await privateWrite(join(pendingDirectory(config),
       `${hostedTargetId(config)}.${intentName(remote)}.json`), intentBytes(remote), { exclusive: true });
-    await syncDirectory(config.root);
+    await syncDirectory(await hostDirectory(config.root));
     // A caller's process budget/abort may end this wait. Its durable marker is
     // retained for the next holder; no network retry is needed to replay it.
     for (;;) {
@@ -431,10 +431,10 @@ async function commitUnderGate(config, remote) {
     // Root authority precedes target authority; both are exclusively under the
     // gate, as are rotation and completion. Crash receipts remain binding.
     if (!previous || remote.generation !== previous.generation)
-      await privateWrite(rotationPath(config.root), randomUUID());
+      await privateWrite(rotationPath(config.root), randomUUID(), { hostParent: true });
     const directory = intentDirectory(config);
     await privateDirectory(directory);
-    await syncDirectory(config.root);
+    await syncDirectory(await hostDirectory(config.root));
     await syncDirectory(join(config.root, 'hosted-pause'));
     await privateWrite(join(directory, intentName(remote) + '.json'), intentBytes(remote), { exclusive:true });
     await pruneIntents(config, await highestIntent(config));

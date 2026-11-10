@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "007747c3da4133670f70ef0bb7aeb47f726794f8c078f7ae3adce8ff878092d1",
-  "bytes": 1298447,
+  "sha256": "4b9955bcced828f0a0da64fe088c4246a4a11f111c684c143fb5247024fb685d",
+  "bytes": 1298925,
   "files": [
     "LICENSE",
     "README.md",
@@ -593,7 +593,7 @@
     "integrations/client/hosted-contract.mjs": "07bb439a728f1be053cfa40f425d7e52e0a2b958a22dd72cd889f3f942fb12fd",
     "integrations/client/hosted-schemas.mjs": "c9e2b4fc3e85e136594438ad58a24d15526296b12ab1d438ae930a91b8ec82d3",
     "integrations/client/pairing.mjs": "46a3cc1bb1e88ad1ab06c0096fb9c1dbee0d34b19b4c1435c9c07b496065af3c",
-    "integrations/client/private-state.mjs": "7fd62ae5b862cfe77b393e06ef787508f89f7071879a84859357420893aff0c4",
+    "integrations/client/private-state.mjs": "df7adad56c4a0e40d072a69f4f67ccd62ec3e9b7970327443fb114f5a4715dff",
     "integrations/client/raw/bounds.mjs": "0a59bb7b9655ab3fe8a90704c4cb2f6cb802beb7d5e70c19561eaaffc8ff61f2",
     "integrations/client/raw/local-process.mjs": "6cdff0cd8f7a71bf7878ee512eaa1547904d81a34a9c896325464a9966a610cf",
     "integrations/client/raw/local-reply.mjs": "6956fdcbc8f00750b96086f7a64b6ec8ff669c313a9134225219891093c5e630",
@@ -635,7 +635,7 @@
     "plugins/cairn-memory/lib/source-time.mjs": "b1c0b9ccf03ff76103ed759840b60effdfdc4b31e93f3dfd107ae876aa5dcb27",
     "plugins/cairn-memory/lib/transcript.mjs": "a1817bf9b9f484da4fc3eef82fd95ed0a6a320669491dae56e5e29d57523fc75",
     "integrations/client/runtime-usage.mjs": "8bf732bb36664b33aa238a40903986b16c112a44829412c32a11b01dcad08d4d",
-    "integrations/client/state-lock.mjs": "47899f7e6881b7e27726f5145fe151c0f8068537045b3e26556eb9e53d87e14a",
+    "integrations/client/state-lock.mjs": "b1c40477819aceb2bf374d598da25eb258c81f031a6f70646d28c154aefba152",
     "docs/raw-local-journal.md": "05d5119acede566c55c964f03a5d98cfe231a04cde2a16c08e88a001a15fec5e",
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
     "docs/context-read-local.md": "5ff66e329a4cb6c426b7df43eef24178e6755d181644afb490e162f1da3af265",

@@ -67,7 +67,7 @@ export async function recallContext(input, config, token, projectId, signal, ena
       return result.operation;
     };
     const fetchSignal = Number.isFinite(deadlineMs) ? AbortSignal.any([signal,
-      AbortSignal.timeout(Math.max(1, Math.floor(deadlineMs - performance.now() - 650)))]) : signal;
+      AbortSignal.timeout(Math.max(1, Math.floor(deadlineMs - performance.now())))]) : signal;
     result = await post.reply('/api/memory/recall', { query, project_id: projectId, limit: 6,
       session_id: hash('wire-session-v1','codex',input.session_id) }, 2500, undefined, fetchSignal, dispatch);
     if (result.status !== 'complete' || !result.memories.length) return '';
@@ -89,7 +89,7 @@ export async function recallContext(input, config, token, projectId, signal, ena
       hookEventName: 'UserPromptSubmit', additionalContext: context,
     } });
   }, { signal, guard }));
-  if (!output || signal.aborted || await enabled() !== true) return '';
+  if (!output || signal.aborted || await enabled() !== true || signal.aborted) return '';
   // The switch read is asynchronous: pause/generation or cancellation may change
   // during it. Re-check both under the control lock; nothing awaits after this.
   if (!await withHostedPauseGate(config, remote.generation,
