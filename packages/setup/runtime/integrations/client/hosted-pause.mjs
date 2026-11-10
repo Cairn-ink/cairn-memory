@@ -236,12 +236,13 @@ async function writeOnce(path, bytes) {
 // Re-read the durable intent at the decision boundary, including after local
 // control-lock waits. Callers pass check to the local gate as its guard. Work
 // only starts a request (returns its promise in an object) or emits output.
-export async function withHostedPauseGate(config, generation, work, { signal, deadlineMs = Infinity } = {}) {
+export async function withHostedPauseGate(config, generation, work, { signal, deadlineMs = Infinity, observation } = {}) {
   signal?.throwIfAborted();
   if (!hostedPauseMode(config).barrier) {
     const check = async () => {
       const state = volatileState(config);
-      if (!state.valid || state.previous?.paused || state.previous?.generation !== generation)
+      if (!state.valid || state.previous?.paused || state.previous?.generation !== generation ||
+          (observation !== undefined && state.previous !== observation))
         throw new Error('pause_unavailable');
     };
     await check();
