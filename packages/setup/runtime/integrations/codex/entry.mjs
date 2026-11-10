@@ -19,7 +19,7 @@ const finish = output => {
   });
   flush(0);
 };
-const budget = event === 'qualify' ? 65000 : event === 'worker' ? 62500 : capture ? 750 : 2000;
+const budget = event === 'qualify' ? 65000 : event === 'worker' ? 62500 : capture ? 750 : event === 'UserPromptSubmit' ? 3000 : 2000;
 const timer = setTimeout(() => { controller.abort(); finish(capture ? '{}' : ''); },
   Math.max(1,budget - process.uptime()*1000 - 50));
 process.on('uncaughtException', () => finish(capture ? '{}' : ''));

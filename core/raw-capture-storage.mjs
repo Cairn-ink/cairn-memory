@@ -24,6 +24,7 @@ const hash = value => createHash('sha256').update(JSON.stringify(value)).digest(
 
 /** Internal only: joins the real admission/episode transaction, never interprets. */
 export function createRawCaptureStorage({ db, profile, ...options }) {
+  const hostInterpretation = options.interpretation === 'host';
   const journal = createRawJournal({ db, ...options });
   const lineage = createRawLineageStorage(db);
   const authority = db.prepare("SELECT 1 FROM sqlite_master WHERE name='local_capture_controls'").get() ? createLocalAuthorityStorage(db) : null;
@@ -55,15 +56,16 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     const sessionKey = journal.sessionKey(input.namespace, input.client, input.sessionId);
     const previous = binding(input);
     if (previous) { const denied = localAuthorityGuard(db,previous); if (denied) fail(denied); }
-    const bindingDigest = managed ? hash(['raw-capture-managed-v1',profile,context,managed.targetId,managed.storeId,
+    let bindingDigest = managed ? hash(['raw-capture-managed-v1',profile,context,managed.targetId,managed.storeId,
       rawBoundary(managed.namespace),managed.client,managed.expectedConsentGeneration]) : hash(['raw-capture-v1', profile, context]);
+    if (hostInterpretation) bindingDigest = hash(['raw-capture-host-v1', bindingDigest]);
     if (previous && previous.binding_digest !== bindingDigest) fail('event_payload_conflict');
     const row = db.prepare(`SELECT id FROM raw_conversations WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=?`)
       .get(...rawBoundary(input.namespace), input.client, sessionKey);
     const firstIds = ordinary ? input.messages.map(message => message.id) : previous ? JSON.parse(previous.first_message_ids) : input.messages.filter(message =>
       message.part.index === 0 && !(row && db.prepare('SELECT 1 FROM raw_parts WHERE conversation_id=? AND message_id=? AND part_index=0')
         .get(row.id, message.id))).map(message => message.id);
-    const messages = input.messages.filter(message => firstIds.includes(message.id)).flatMap(message => {
+    const messages = hostInterpretation ? [] : input.messages.filter(message => firstIds.includes(message.id)).flatMap(message => {
       let content;
       try { content = boundedText(message.content, 4000, true); }
       catch (error) { if (error.code === 'invalid_text') return []; throw error; }
@@ -76,7 +78,8 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       sessionId: profile.sessionEpisodes || ordinary ? input.sessionId : sessionKey, messages, ...context });
     const snapshot = messages.length ? profile.sessionEpisodes ? episodeSnapshot(projection)
       : captureSnapshot(projection, profile.captureQualification, profile.captureSourcePolicy) : null;
-    const projectionDigest = snapshot?.payloadDigest ?? hash(['raw-capture-empty-v1', sessionKey, input.eventId, firstIds, bindingDigest]);
+    const projectionDigest = snapshot?.payloadDigest ?? hash([hostInterpretation ? 'raw-capture-host-empty-v1' : 'raw-capture-empty-v1',
+      sessionKey, input.eventId, firstIds, bindingDigest]);
     const maps = lineage.enabled() ? input.messages.filter(message => messages.some(value => value.id === message.id)).map(rawSourceMap) : [];
     if (previous && previous.projection_digest !== projectionDigest) fail('event_payload_conflict');
     const generation = db.prepare('SELECT generation FROM episode_controls WHERE owner_id=? AND scope=? AND project_id=?')
@@ -108,7 +111,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
 
     function emptyOutcome() {
       const overlap = input.messages.filter(message => message.part.index === 0 && !firstIds.includes(message.id));
-      if (!overlap.length) return { status: 'not-run', reason: firstIds.length ? 'no-eligible-first-part' : 'continuation' };
+      if (hostInterpretation || !overlap.length) return { status: 'not-run', reason: firstIds.length ? 'no-eligible-first-part' : 'continuation' };
       let processing = false, incomplete = false, interpreted = false;
       for (const message of overlap) {
         const owner = db.prepare('SELECT first_event_id FROM raw_messages WHERE conversation_id=? AND message_id=?').get(row?.id, message.id);

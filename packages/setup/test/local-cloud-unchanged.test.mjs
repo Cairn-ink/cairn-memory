@@ -89,6 +89,22 @@ const generationPath = new RegExp('^\\.codex/cairn/runtime/(' + runtimeId + ')(/
 // PR #454 intentionally changes hosted cancellation and protocol R16 permit
 // restoration. Only these runtime sources may differ from immutable 0.5.3.
 // Contract section 18 (0.6.3) adds the three Codex format qualification modules.
+// Recall deadlines admit exactly these line substitutions, checked against the
+// immutable installer below. Every other source byte remains significant.
+const recallRuntimeChanges = new Map([
+  ['integrations/codex/entry.mjs', [
+    "const budget = event === 'qualify' ? 65000 : event === 'worker' ? 62500 : capture ? 750 : 2000;",
+    "const budget = event === 'qualify' ? 65000 : event === 'worker' ? 62500 : capture ? 750 : event === 'UserPromptSubmit' ? 3000 : 2000;",
+  ]],
+  ['integrations/codex/hook.mjs', [
+    "  const budget=['SessionStart','UserPromptSubmit'].includes(input?.hook_event_name)?2500:750;",
+    "  const budget=input?.hook_event_name==='UserPromptSubmit'?3000:input?.hook_event_name==='SessionStart'?2500:750;",
+  ]],
+  ['integrations/codex/hosted-lifecycle.mjs', [
+    "    session_id: hash('wire-session-v1','codex',input.session_id) }, 2000, undefined, signal, dispatch);",
+    "    session_id: hash('wire-session-v1','codex',input.session_id) }, 2500, undefined, signal, dispatch);",
+  ]],
+]);
 const hostedRuntimeExceptions = [
   'integrations/client/control-state.mjs',
   'integrations/client/file-lock.mjs',
@@ -97,10 +113,21 @@ const hostedRuntimeExceptions = [
   'integrations/codex/parser.mjs',
   'integrations/codex/qualification.mjs',
   'integrations/codex/schema-evidence.mjs',
+  ...recallRuntimeChanges.keys(),
 ];
 const packagedHostedRuntime = new Map(await Promise.all(hostedRuntimeExceptions.map(async path =>
   [path, await readFile(new URL('../runtime/' + path, import.meta.url))])));
 const packagedHostedManifest = await readFile(new URL('../runtime/manifest.json', import.meta.url));
+const historicalRecallRuntime = new Map([...recallRuntimeChanges].map(([path, [before, after]]) => {
+  const current = packagedHostedRuntime.get(path).toString();
+  assert.equal(current.split(after).length, 2, 'Exactly one approved recall line: ' + path);
+  return [path, Buffer.from(current.replace(after, before))];
+}));
+const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
+function assertRecallRuntime(path, bytes) {
+  assert.ok(bytes.equals(packagedHostedRuntime.get(path)) || bytes.equals(historicalRecallRuntime.get(path)),
+    'Only the approved recall line may differ: ' + path);
+}
 
 // Contract section 18, Rule 8 (v0.21): an independent historical-verdict oracle.
 // Do not import production canonical/fingerprint or derive expected values from
@@ -177,6 +204,16 @@ function normalizeFile(name, bytes, home, { historical = false } = {}) {
         value([...path, index]);
         if (tokens[at++][0] === ']') return;
       }
+    } else if (historical && name === '.codex/hooks.json' && raw === '3' &&
+        path.length === 6 && path[0] === 'hooks' && path[1] === 'UserPromptSubmit' &&
+        Number.isInteger(path[2]) && path[3] === 'hooks' && Number.isInteger(path[4]) && path[5] === 'timeout') {
+      const hook = parsed.hooks.UserPromptSubmit[path[2]].hooks[path[4]];
+      const command = hook.command;
+      if (hook.type === 'command' && typeof command === 'string' &&
+          command.startsWith("'/usr/bin/env' '-i' 'HOME=") &&
+          normalizeRuntime(command, home).includes(" '" + home + "/cairn/runtime/<version>-<digest>/integrations/codex/entry.mjs' ") &&
+          command.endsWith(" '" + home + "/cairn/installation.json' 'UserPromptSubmit' 2>/dev/null || true"))
+        edits.push([token.index, raw.length, '4']);
     } else if (raw.startsWith('"')) {
       if (verdict) {
         if (path.length === 1 && translatedValues.has(path[0])) {
@@ -191,6 +228,9 @@ function normalizeFile(name, bytes, home, { historical = false } = {}) {
         // Preserve paths, order, formatting and every other manifest byte.
         if (path.length === 2 && path[0] === 'files' && hostedRuntimeExceptions.includes(path[1])) {
           assert.match(raw, /^"[a-f0-9]{64}"$/u);
+          if (recallRuntimeChanges.has(path[1])) assert.ok([
+            sha256(historicalRecallRuntime.get(path[1])), sha256(packagedHostedRuntime.get(path[1])),
+          ].includes(JSON.parse(raw)), 'Only the approved recall hashes: ' + path[1]);
           edits.push([token.index, raw.length, '"<PR-454-runtime-hash>"']);
         }
         return;
@@ -219,6 +259,7 @@ function fileInventory(entries, normalize, home, { historical = false } = {}) {
       assert.deepEqual(bytes, packagedHostedManifest, 'Installed runtime manifest must match packaged manifest: ' + name);
     const packaged = normalize && generation && packagedHostedRuntime.get(generation[2]?.slice(1));
     if (packaged) {
+      if (historical && recallRuntimeChanges.has(generation[2]?.slice(1))) assertRecallRuntime(generation[2].slice(1), bytes);
       if (!historical) assert.deepEqual(bytes, packaged, 'Installed runtime must match packaged source: ' + name);
       bytes = packaged;
     }
@@ -301,7 +342,8 @@ test('L06 version normalization preserves unrelated bytes and complete runtime g
     normalized('Cairn.ink Memory setup 0.5.3\nunrelated 0.5.3', home));
 });
 test('L06 hosted runtime exceptions require packaged bytes and preserve all other comparisons', async () => {
-  assert.equal(hostedRuntimeExceptions.length, 7);
+  assert.equal(hostedRuntimeExceptions.length, 10);
+  assert.equal(recallRuntimeChanges.size, 3);
   const home = '/synthetic/.codex';
   const oldRuntime = '.codex/cairn/runtime/0.5.3-0123456789ab/';
   const newRuntime = '.codex/cairn/runtime/0.6.0-abcdef012345/';
@@ -314,7 +356,7 @@ test('L06 hosted runtime exceptions require packaged bytes and preserve all othe
       files([[oldRuntime + path, payload]], true)), { code: 'ERR_ASSERTION' }, path);
   }
   for (const [path, packaged] of packagedHostedRuntime) {
-    const baseline = files([[oldRuntime + path, payload]], true);
+    const baseline = files([[oldRuntime + path, historicalRecallRuntime.get(path) ?? payload]], true);
     assert.deepEqual(files([[newRuntime + path, packaged]]), baseline);
     const damaged = Buffer.from(packaged); damaged[0] ^= 1;
     assert.throws(() => files([[newRuntime + path, damaged]]), { code: 'ERR_ASSERTION' }, path);
@@ -324,7 +366,8 @@ test('L06 hosted runtime exceptions require packaged bytes and preserve all othe
   }
   const manifestName = newRuntime + 'manifest.json';
   const oldManifest = Buffer.from(packagedHostedManifest.toString().replace(/"([^"\n]+)": "[a-f0-9]{64}"/gu,
-    (raw, path) => hostedRuntimeExceptions.includes(path) ? JSON.stringify(path) + ': "' + '0'.repeat(64) + '"' : raw));
+    (raw, path) => hostedRuntimeExceptions.includes(path) ? JSON.stringify(path) + ': "' +
+      (historicalRecallRuntime.has(path) ? sha256(historicalRecallRuntime.get(path)) : '0'.repeat(64)) + '"' : raw));
   const baselineManifest = files([[oldRuntime + 'manifest.json', oldManifest]], true);
   assert.deepEqual(files([[manifestName, packagedHostedManifest]]), baselineManifest);
   assert.deepEqual(files([[oldRuntime + 'manifest.json', oldManifest], [manifestName, packagedHostedManifest]], true), baselineManifest);
@@ -345,6 +388,59 @@ test('L06 hosted runtime exceptions require packaged bytes and preserve all othe
   }
   // Even an approved hash cannot hide a corrupt installed manifest copy.
   assert.throws(() => files([[manifestName, oldManifest]]), { code: 'ERR_ASSERTION' });
+});
+
+test('L06 recall allowances prove the exact historical source and hash changes', async t => {
+  const historical = await baselineForTest(t);
+  if (!historical) return;
+  const manifest = JSON.parse(await readFile(new URL('../runtime/manifest.json', historical.module)));
+  for (const [path, expected] of historicalRecallRuntime) {
+    const original = await readFile(new URL('../runtime/' + path, historical.module));
+    assert.deepEqual(original, expected, 'Only the approved recall line changed: ' + path);
+    assert.equal(manifest.files[path], sha256(original));
+    assert.equal(JSON.parse(packagedHostedManifest).files[path], sha256(packagedHostedRuntime.get(path)));
+    const damaged = Buffer.from(original); damaged[0] ^= 1;
+    assert.throws(() => assertRecallRuntime(path, damaged), { code: 'ERR_ASSERTION' });
+    const name = '.codex/cairn/runtime/0.5.3-0123456789ab/' + path;
+    assert.throws(() => fileInventory([[name, damaged]], true, '/synthetic/.codex', { historical: true }),
+      { code: 'ERR_ASSERTION' });
+    const badManifest = Buffer.from(packagedHostedManifest.toString().replace(
+      sha256(packagedHostedRuntime.get(path)), '0'.repeat(64)));
+    assert.throws(() => normalizeFile(name.replace(path, 'manifest.json'), badManifest, '/synthetic/.codex'),
+      { code: 'ERR_ASSERTION' });
+  }
+});
+
+test('L06 recall hook allowance changes only the managed historical prompt timeout', () => {
+  const home = '/synthetic/.codex', name = '.codex/hooks.json';
+  const command = event => "'/usr/bin/env' '-i' 'HOME=/synthetic' 'PATH=/bin' 'LANG=C.UTF-8' '/bin/node' '" +
+    home + "/cairn/runtime/0.5.3-0123456789ab/integrations/codex/entry.mjs' '" + home +
+    "/cairn/installation.json' '" + event + "' 2>/dev/null || true";
+  const hooks = Object.fromEntries(['SessionStart', 'UserPromptSubmit', 'Stop', 'PreCompact'].map(event =>
+    [event, [{ hooks: [{ type: 'command', command: command(event), timeout: ['Stop', 'PreCompact'].includes(event) ? 1 : 3 }] }]]));
+  const before = JSON.stringify({ hooks }, null, 2) + '\n';
+  hooks.UserPromptSubmit[0].hooks[0].timeout = 4;
+  const after = JSON.stringify({ hooks }, null, 2) + '\n';
+  const normalizedHooks = (text, historical = false) => normalizeFile(name, Buffer.from(text), home, { historical });
+  assert.deepEqual(normalizedHooks(before, true), normalizedHooks(after));
+  assert.notDeepEqual(normalizedHooks(before), normalizedHooks(after));
+  for (const event of ['SessionStart', 'Stop', 'PreCompact', 'UserPromptSubmit']) {
+    const changed = JSON.parse(after); changed.hooks[event][0].hooks[0].timeout++;
+    assert.notDeepEqual(normalizedHooks(before, true), normalizedHooks(JSON.stringify(changed, null, 2) + '\n'));
+  }
+  for (const mutate of [
+    hook => { hook.command = 'unrelated'; },
+    hook => { hook.command = hook.command.replace('installation.json', 'other.json'); },
+    hook => { hook.type = 'other'; },
+    hook => { hook.nested = { timeout: 3 }; },
+  ]) {
+    const old = JSON.parse(before), current = JSON.parse(after);
+    mutate(old.hooks.UserPromptSubmit[0].hooks[0]); mutate(current.hooks.UserPromptSubmit[0].hooks[0]);
+    // Nested timeout remains literal, even when the outer owned timeout qualifies.
+    if (old.hooks.UserPromptSubmit[0].hooks[0].nested) current.hooks.UserPromptSubmit[0].hooks[0].nested.timeout = 4;
+    assert.notDeepEqual(normalizedHooks(JSON.stringify(old), true), normalizedHooks(JSON.stringify(current)));
+  }
+  assert.notDeepEqual(normalizedHooks(before, true), normalizedHooks(after.replace('{\n', '{ \n')));
 });
 
 test('L06/L33/L24 verdict exception edits only historical value spans using the independent oracle', () => {

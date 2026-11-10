@@ -36,6 +36,22 @@ not invalidate allowed sources. Missing privacy ancestry denies both intents;
 known historical lineage requires history intent. Bare sources remain attributed
 past evidence with unknown currentness.
 
+Unmapped bare host sources use the durable host registration proof and reason
+`host-session-ancestry`. Both `classification.kind` and `classification.reason`
+are diagnostics, not privacy or fencing signals. A session that mixes host and
+engine modes can report an engine reason, including `complete-privacy-no-memory-link`,
+after an engine capture creates maps for a host-archived message. For sessions
+ever archived in host mode, bare kind does not prove complete privacy ancestry:
+the engine cannot see which Memories derive from host Raw.
+
+The host's fencing obligation covers every session it has ever archived through
+`captureRaw` in host mode, whatever kind or reason a later search reports.
+Before acknowledging any Memory forget or correction, the host must call
+`fenceSession` for every source session, on every forget path. Host Raw search
+must remain disabled for an owner until that fencing is live. The existing exclusions, suppression, deletion and final
+session-fence checks still apply. See the
+[host registration contract](raw-layer-contract.md#host-interpreted-registration-addendum).
+
 Search deadlines stay at 1,000 ms and return the fixed `reason:'deadline'` partial
 shape documented by the interface. Expiry releases snapshots and reservations;
 the same connection remains available to subsequent operations. No SQLite snapshot
