@@ -187,10 +187,39 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
     return { conversationId: row.id, revision: finalRevision, ...plan.counts, actionId,
       effectCount: 1 + plan.memories.length + plan.episodeIds.filter(id => !(source.type === 'episode' && source.id === id)).length };
   }
+  // Hash progress must commit in bounded chunks before destructive deletion.
+  // This read-only snapshot uses the same planner and target/replay checks as
+  // the deletion transaction. It rolls back even on success. A concurrent change
+  // after this check can still refuse deletion and leave conservative fences;
+  // only a wipe removes fences. The transaction always rechecks the full plan.
+  function precheck(ns, select, retainMemories = false) {
+    db.exec('SAVEPOINT raw_delete_precheck');
+    try {
+      const row = select();
+      if (row) planInside(ns, rootOf(row), retainMemories);
+      return row;
+    } finally {
+      db.exec('ROLLBACK TO raw_delete_precheck');
+      db.exec('RELEASE raw_delete_precheck');
+    }
+  }
+  function conversationTarget(ns, value, binding) {
+    const previous = db.prepare(`SELECT * FROM raw_deletion_actions WHERE ${where} AND action_id=?`).get(...rawBoundary(ns), value.actionId);
+    if (previous) { if (previous.payload_binding !== binding) fail('event_payload_conflict'); return { previous }; }
+    const row = target(ns, value.conversationId); if (!row) fail('conversation_not_found');
+    if (row.revision !== value.expectedRevision) fail('revision_conflict');
+    return { row };
+  }
+  function episodeTarget(ns, value) {
+    const row = db.prepare(`SELECT * FROM session_episodes WHERE ${where} AND id=? AND deleted=0`).get(...rawBoundary(ns), value.episodeId);
+    if (!row) fail('episode_not_found');
+    if (row.revision !== revision(value.expectedRevision)) fail('revision_conflict');
+    return row;
+  }
   // A retained/non-local handle can still delete from a locally captured store.
   // Let the installed SQL guard select this path, keeping ordinary hosted SQL
   // unchanged. The failed cascade has rolled back before durable hash progress.
-  function retryUuidDelete(ns, select, expectedRevision, work) {
+  function retryUuidDelete(ns, check, work) {
     // Two cascade attempts at most, with one durable bounded preflight between.
     for (let attempt = 0; attempt < 2; attempt++) {
       try { return work(); }
@@ -198,37 +227,34 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
         if (error?.code !== 'ERR_SQLITE_ERROR' || error.errcode !== 1811 ||
             error.message !== 'local_raw_uuid_pending' || db.isTransaction) throw error;
         if (attempt === 1) fail('local_raw_privacy_write_failed');
-        const row = select();
-        if (!row) fail('conversation_not_found');
-        if (row.revision !== expectedRevision) fail('revision_conflict');
-        createLocalUuidFence(db).beforeDelete(ns,row.client,row.session_key);
+        const row = check();
+        if (row) createLocalUuidFence(db).beforeDelete(ns,row.client,row.session_key);
       }
     }
   }
   function remove(value) {
     const ns = input(value, true), binding = hash(['delete-conversation-v1', ns, value.conversationId, value.expectedRevision, ...(localRawPrivacy && value.retainMemories ? ['retain-memories'] : [])]);
-    const selected = localRawPrivacy && target(ns,value.conversationId);
-    if (selected?.revision === value.expectedRevision) localRawPrivacy.beforeDelete(ns,selected.client,selected.session_key);
-    return retryUuidDelete(ns,() => target(ns,value.conversationId),value.expectedRevision,() => transaction(db, () => {
-      const previous = db.prepare(`SELECT * FROM raw_deletion_actions WHERE ${where} AND action_id=?`).get(...rawBoundary(ns), value.actionId);
-      if (previous) { if (previous.payload_binding !== binding) fail('event_payload_conflict'); return JSON.parse(previous.result); }
-      const row = target(ns, value.conversationId); if (!row) fail('conversation_not_found');
-      if (row.revision !== value.expectedRevision) fail('revision_conflict');
+    const check = () => precheck(ns, () => conversationTarget(ns, value, binding).row, localRawPrivacy && value.retainMemories);
+    if (localRawPrivacy) {
+      const selected = check();
+      if (selected) localRawPrivacy.beforeDelete(ns,selected.client,selected.session_key);
+    }
+    return retryUuidDelete(ns,check,() => transaction(db, () => {
+      const { previous, row } = conversationTarget(ns, value, binding);
+      if (previous) return JSON.parse(previous.result);
       const result = cascade(ns, row, { type: 'conversation', id: row.id }, value.actionId, localRawPrivacy && value.retainMemories);
       db.prepare('INSERT INTO raw_deletion_actions VALUES(?,?,?,?,?,?)').run(...rawBoundary(ns), value.actionId, binding, JSON.stringify(result));
       return result;
     }));
   }
   function forgetEpisode(ns, value) {
+    const check = () => precheck(ns, () => episodeTarget(ns, value));
     if (localRawPrivacy) {
-      const selected = db.prepare(`SELECT client,session_key,revision FROM session_episodes WHERE ${where} AND id=? AND deleted=0`).get(...rawBoundary(ns),value.episodeId);
-      if (selected?.revision === value.expectedRevision) localRawPrivacy.beforeDelete(ns,selected.client,selected.session_key);
+      const selected = check();
+      localRawPrivacy.beforeDelete(ns,selected.client,selected.session_key);
     }
-    return retryUuidDelete(ns,() => db.prepare(`SELECT client,session_key,revision FROM session_episodes WHERE ${where} AND id=? AND deleted=0`)
-      .get(...rawBoundary(ns),value.episodeId),value.expectedRevision,() => transaction(db, () => {
-      const row = db.prepare(`SELECT * FROM session_episodes WHERE ${where} AND id=? AND deleted=0`).get(...rawBoundary(ns), value.episodeId);
-      if (!row) fail('episode_not_found');
-      if (row.revision !== revision(value.expectedRevision)) fail('revision_conflict');
+    return retryUuidDelete(ns,check,() => transaction(db, () => {
+      const row = episodeTarget(ns, value);
       const raw = db.prepare(`SELECT * FROM raw_conversations WHERE ${where} AND client=? AND session_key=?`)
         .get(...rawBoundary(ns), row.client, row.session_key);
       const actionId = 'episode-delete:' + hash([ns, row.id, row.revision]);

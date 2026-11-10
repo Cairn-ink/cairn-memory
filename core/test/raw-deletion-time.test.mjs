@@ -15,6 +15,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { config, ns as keepNamespace, request, splitRaw } from '../testing/raw-capture-fixtures.mjs';
 import { consumer, empty, episodeInput, legacyKeep } from '../testing/raw-deletion-review-fixtures.mjs';
 import { interpretation } from '../testing/episode-capture-helpers.mjs';
+import { searchFixture } from '../testing/raw-search-fixtures.mjs';
+import { defaultRawOptions } from '../local-defaults.mjs';
+import { createLocalUuidFence } from '../local-authority-uuid.mjs';
 
 const start = Date.parse('2020-01-01T00:00:00.000Z');
 const content = 'Synthetic saved preference.';
@@ -448,4 +451,17 @@ for (const path of ['conversation', 'episode']) test(`old finite other-root KEEP
       expectedRevision: current.prepare('SELECT revision FROM session_episodes WHERE id=?').get(episode.id).revision });
   assert.deepEqual([preview.error?.code, result.error?.code], ['raw_lineage_unavailable', 'raw_lineage_unavailable']);
   assert.deepEqual(snapshot(), before);
+  for (const table of ['raw_session_fences', 'local_raw_uuid_jobs']) {
+    assert.equal(current.prepare(`SELECT count(*) n FROM ${table} WHERE session_key=?`).get(target.session_key).n, 0);
+  }
+  assert.equal(createLocalUuidFence(current).matches(internal, client, [{ id: 'target-message' }]), false);
+  assert.equal(current.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n, 0);
+  const search = await searchFixture({ ...f, db: current, port: defaultRawOptions().port });
+  await search.maintain();
+  assert.ok((await search.search({ query: 'later', intent: 'history' })).candidates.some(hit => hit.conversationId === target.id));
+  ok(await core.captureRaw(request(splitRaw('Synthetic later continuation.', { id: 'after-refusal', ordinal: 3 })[0],
+    { namespace, client, sessionId: 'target', eventId: 'after-refusal-raw' }, 'episode')));
+  ok(await core.capture({ ...episodeInput(client, 'target', 'after-refusal-episode'), eventId: 'after-refusal-episode' }));
+  ok(await core.captureRaw(request(splitRaw('Synthetic copied source.', { id: 'target-message' })[0],
+    { namespace, client, sessionId: 'after-refusal-fork', eventId: 'after-refusal-fork' }, 'episode')));
 });

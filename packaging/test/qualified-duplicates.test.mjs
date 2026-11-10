@@ -80,7 +80,7 @@ async function fixture(t, client, selected) {
       ? ['--session', source.sessionId, '--source', source.path, ...(action === 'initialize' ? ['--start', 'beginning'] : [])] : [])];
     writeFileSync(settings, JSON.stringify({ installed, profilePath, args, trace, scaffold, mode: 'memory', syntheticBinary: binary, preload: childPreload }), { mode: 0o600 });
     const result = spawnSync(process.execPath, [driver, settings], { cwd: workspace.path, encoding: 'utf8', timeout: 20000, maxBuffer: 262144,
-      env: { PATH: dirname(process.execPath), HOME: home, TMPDIR: workspace.path, TMP: workspace.path, TEMP: workspace.path,
+      env: { PATH: dirname(process.execPath), HOME: home, TMPDIR: workspace.path, TMP: workspace.path, TEMP: workspace.path, NODE_TEST_CONTEXT: 'child-v8', CAIRN_SYNTHETIC_FIXTURE_ROOT: workspace.path,
         NODE_DISABLE_COMPILE_CACHE: '1', NODE_NO_WARNINGS: '1', ...(key ? { CAIRN_SYNTHETIC_API_KEY: 'synthetic_key_secret' } : {}) } });
     assert.equal(result.error, undefined); assert.equal(result.status, expected, result.stderr + result.stdout); assert.equal(result.signal, null);
     assert.doesNotMatch(result.stdout + result.stderr, /synthetic_source_secret|synthetic_key_secret/);
