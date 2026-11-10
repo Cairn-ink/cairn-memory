@@ -100,7 +100,7 @@ const recallRuntimeChanges = new Map([
 // Atomic output delivery changes entry beyond its recall-budget line.
 // Pause durability changes whole functions; pin both immutable historical and
 // current bytes instead of reconstructing the earlier file from current source.
-// Hosted pause intents and dispatch guards revise only current pins; preserve
+// The shared root dispatch gate revises only the current pause pin; preserve
 // every historical digest and the historical behavior comparisons below.
 const durabilityRuntimeChanges = new Map([
   // Output gate admission now accepts the remaining-budget abort signal.
@@ -128,7 +128,7 @@ const durabilityRuntimeChanges = new Map([
   ['integrations/client/hosted-pause.mjs', {
     historical: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
     before: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
-    current: 'ac9ecacaa55be79b2877d01de150d9c2b76519ab85a50db96b453be744c79015',
+    current: '365314ab54f794b34e4972de22d456b2c529a0f6d608c62a01f8558fe4a32892',
   }],
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
