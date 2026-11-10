@@ -1031,8 +1031,13 @@
   },
   {
     "path": "plugins/cairn-memory/scripts/hook.mjs",
-    "source": "import { open, readFile, stat } from \"node:fs/promises\"",
-    "reason": "Hook transcript reads and private session JSON only; database I/O remains in the engine."
+    "source": "import { open, readFile, stat, mkdir, rename, unlink, writeFile } from \"node:fs/promises\"",
+    "reason": "Hook transcript reads and private session JSON boundaries; the PID/UUID temporary JSON is under the session state directory, never a database file."
+  },
+  {
+    "path": "plugins/cairn-memory/scripts/hook.mjs",
+    "source": "await writeFile(temporary, JSON.stringify(state), { mode: 0o600, flag: \"wx\" });",
+    "reason": "Exclusive PID/UUID temporary JSON under the session state directory, atomically renamed to boundary state; never a database file."
   },
   {
     "path": "evaluation/live/diagnostics.mjs",
