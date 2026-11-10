@@ -8,6 +8,18 @@ import { forgetThenFork, harness, oldTime, row } from './capture-window-harness.
 
 const plugin = fileURLToPath(new URL('../', import.meta.url));
 const cases = [
+  { name: 'regex-only source-time predicate', file: 'lib/source-time.mjs',
+    before: 'SOURCE_TIMESTAMP_PATTERN.test(value) && dateTime(value)',
+    after: 'SOURCE_TIMESTAMP_PATTERN.test(value) && Number.isFinite(Date.parse(value))',
+    label: 'real calendar source time omitted', async probe(_t, hookPath) {
+      const path = hookPath ? pathToFileURL(join(hookPath, '../../lib/transcript.mjs')) : new URL('../lib/transcript.mjs', import.meta.url);
+      const { transcriptWindow } = await import(path);
+      for (const time of ['2026-11-10T24:00:00Z', '2026-02-30T00:00:00Z']) {
+        const [message] = transcriptWindow(row('message', time), 'synthetic-session');
+        assert.equal(message.id, 'message');
+        assert.equal(Object.hasOwn(message, 'occurred_at'), false, this.label);
+      }
+    } },
   { name: 'forget fork time replaced by arrival', file: 'lib/transcript.mjs',
     before: 'occurred_at: record.timestamp', after: 'occurred_at: new Date().toISOString()',
     label: 'forget fork original source times', async probe(t, hookPath) { await forgetThenFork(t, hookPath); } },

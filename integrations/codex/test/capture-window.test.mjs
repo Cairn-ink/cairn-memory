@@ -20,9 +20,15 @@ test('parser copies row time, falls back to completed milliseconds, and keeps wi
   row.timestamp = '2020-01-02T03:04:05.123456+00:00';
   const original = parse(row);
   assert.equal(original.occurred_at, row.timestamp);
+  for (const time of ['2000-02-29T23:59:59.123456789Z', '2024-02-29T00:00:00.1+23:59',
+    '2024-02-29T23:59:59.123456789-23:59']) {
+    row.timestamp = time;
+    assert.equal(parse(row).occurred_at, time);
+  }
   delete row.timestamp; row.payload.completed_at_ms = 1577934245123;
   assert.equal(parse(row).occurred_at, '2020-01-02T03:04:05.123Z');
-  for (const time of ['', 'not-a-date', '2020-01-02', '2020-01-02T03:04:05.123456789000000+00:00']) {
+  for (const time of ['', 'not-a-date', '2020-01-02', '2020-01-02T03:04:05.123456789000000+00:00',
+    '2026-11-10T24:00:00Z', '2026-02-30T00:00:00Z']) {
     row.timestamp = time;
     assert.equal(parse(row).occurred_at, '2020-01-02T03:04:05.123Z');
   }
@@ -105,4 +111,14 @@ test('invalid row time overriding completion is caught by the fallback assertion
     '2020-01-02T03:04:05.123Z', 'completion fallback');
   probe({ parseLine });
   assert.throws(() => probe(mutant), error => error.code === 'ERR_ASSERTION' && error.message.includes('completion fallback'));
+});
+
+for (const time of ['2026-11-10T24:00:00Z', '2026-02-30T00:00:00Z'])
+test(`Codex uses valid completion for invalid calendar source time ${time}`, () => {
+  const row = JSON.parse(item('Synthetic calendar fallback'));
+  row.timestamp = time;
+  row.payload.completed_at_ms = 1794268800000;
+  const context = { sessionId: row.payload.thread_id, wireSessionId: 'a'.repeat(64), epoch: 0, start: 10, end: 100 };
+  const parsed = parseLine(Buffer.from(JSON.stringify(row)), context);
+  assert.equal(parsed.occurred_at, '2026-11-10T00:00:00.000Z');
 });
