@@ -235,7 +235,9 @@ test("incremental capture retains only a boolean through command-only windows an
   assert.equal(calls[0].body.event_id, beforePlan(last, f.sessionId)[0].eventId);
   assert.equal((await f.cursor()).ownSkillTurn, undefined);
   const state = JSON.parse(await readFile(captureCursorPath(f.data, f.sessionId), "utf8"));
-  assert.deepEqual(Object.keys(state).sort(), ["discardUntilNewline", "generation", "offset"]);
+  // Capture remembers only that a Stop ran; it grants no hosted authority.
+  assert.equal(state.captureSeen, true);
+  assert.deepEqual(Object.keys(state).sort(), ["captureSeen", "discardUntilNewline", "generation", "offset"]);
 });
 
 test("failed frozen windows retry from their original skill-turn state and event ids", async (t) => {
