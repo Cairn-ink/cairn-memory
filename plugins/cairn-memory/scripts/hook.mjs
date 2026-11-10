@@ -26,7 +26,7 @@ import { resolveClient, clientProjectId, parsePairingRecord } from "../lib/pairi
 import { VERSION } from "../lib/version.mjs";
 import { optionalHostSessionId } from "../lib/hosted-contract.mjs";
 import { inspectAutomaticPolicy } from "../lib/automatic-policy.mjs";
-import { hostedPauseStatus, observeHostedPause, deferHostedPauseStatus, withHostedPauseGate, hostedPauseMode } from "../lib/hosted-pause.mjs";
+import { hostedPauseStatus, completeHostedPauseRotation, observeHostedPause, deferHostedPauseStatus, withHostedPauseGate, hostedPauseMode } from "../lib/hosted-pause.mjs";
 import { INVALID_ENDPOINT, credentialDescription, readCredentialState, recordCredentialAuth,
   recordCredentialConfiguration } from "../lib/credential-state.mjs";
 
@@ -216,6 +216,7 @@ async function capture(hookInput, requestedGeneration) {
     if (remote.paused) return;
     hosted = { generation: remote.generation, observe };
   }
+  if (hosted) await completeHostedPauseRotation(hostedConfig);
   const control = await readControlState(dataDir);
   if (
     control.paused ||
