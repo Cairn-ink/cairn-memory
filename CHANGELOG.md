@@ -2,6 +2,8 @@
 
 ## Unreleased — batch Raw preparation
 
+- Document and pin the mixed-reader Raw grant-sampling known limit; final whole-set stored-state checks remain enforced.
+
 - Preserve prepare-only host ports and candidate-based authorizers; optional
   batches retain candidates from every live proof and reject known oversized
   ranges before source inspection.

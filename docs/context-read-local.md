@@ -522,8 +522,16 @@ Raw preparation keeps the default 1,000 ms read deadline and its 40% Raw share,
 reserving time for Memory assembly.
 Every nonempty Raw set is batch-revalidated before any Raw text projection.
 Prepared Raw is validated again after counting and authority callbacks; a failed
-final validation drops all Raw and rebuilds the Memory-only response. Packing
-also reserves time for Memory-only finalization. Optional relation/MOC previews
+final validation drops all Raw and rebuilds the Memory-only response.
+
+Known limit: in mixed-reader Raw validation, each issuing reader's grant is
+sampled once. If a later reader's access callback revokes an earlier reader's
+grant during the same validation, the set is still accepted for that validation;
+the next validation of the revoked grant refuses it. Stored-state checks for
+forgotten, suppressed or excluded sources and owner/namespace isolation are
+unaffected: one final whole-set snapshot enforces them.
+
+Packing also reserves time for Memory-only finalization. Optional relation/MOC previews
 with more than 24 Memory candidates use the Memory-only path (`raw:'partial'`) until wider
 coalesced snapshots are supported. Late asynchronous completions
 are discarded. Hosts must keep synchronous service calls bounded and own any

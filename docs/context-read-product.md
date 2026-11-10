@@ -218,6 +218,13 @@ errors. Search and assembly diagnostic errors also take their final sample befor
 constructing a data-bearing error envelope. Status and maintenance take their
 final sample immediately before a fresh canonical read transaction.
 
+Known limit: in mixed-reader Raw validation, each issuing reader's grant is
+sampled once. If a later reader's access callback revokes an earlier reader's
+grant during the same validation, the set is still accepted for that validation;
+the next validation of the revoked grant refuses it. Stored-state checks for
+forgotten, suppressed or excluded sources and owner/namespace isolation are
+unaffected: one final whole-set snapshot enforces them.
+
 Opening operational failures reject with sanitized `code` and `cleanupId`;
 validation errors create no Worker. Fetch/capabilities return Promise envelopes.
 Timeout/cancellation settles independently of cleanup; late data is discarded.
