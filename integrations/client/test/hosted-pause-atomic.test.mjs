@@ -102,3 +102,182 @@ for (const sink of ['request', 'output']) test(`a cross-target publication fence
   await settled; await observing;
   assert.equal(starts, 0, 'root_publication_fences_other_target');
 });
+
+
+// An aged publication waiter is overtaken by a young gate
+// holder. Synthetic clock values isolate ordering from shared-machine timing.
+for (const sink of ['request', 'output']) test(`an aged publisher fences a younger final ${sink} gate after a handoff`, { timeout: 15000 }, async t => {
+  const { AsyncLocalStorage } = await import('node:async_hooks');
+  const { stateLock } = await import('../state-lock.mjs');
+  const scope = new AsyncLocalStorage();
+  const root = join(createTestWorkspace(t).path, 'state');
+  await fs.mkdir(root, { mode: 0o700 });
+  const a = { root, endpoint: 'http://127.0.0.1:1' }, b = { root, endpoint: 'http://127.0.0.1:2' };
+  let revoked = false;
+  t.mock.method(globalThis, 'fetch', async url => Response.json(revoked && url.startsWith(a.endpoint + '/')
+    ? { paused: true, generation: 1, enforced: true } : { paused: false, generation: 0, enforced: true }));
+  await observeHostedPause(a, 'synthetic-token');
+  await observeHostedPause(b, 'synthetic-token');
+  let delivered = false;
+  const finish = Promise.withResolvers();
+  const before = await withHostedPauseGate(b, 0, guard => startIfActive(root, 'initial',
+    () => finish.promise.then(() => { delivered = true; }), { guard }));
+  assert.equal(before.started, true, 'operation_admitted_before_publication');
+  let clock = 0;
+  t.mock.method(performance, 'now', () => clock);
+  const gate = join(root, 'hosted-pause.gate');
+  const held = Promise.withResolvers(), releaseOld = Promise.withResolvers();
+  const waiter = Promise.withResolvers(), releaseWaiter = Promise.withResolvers();
+  const selected = Promise.withResolvers(), releaseFinal = Promise.withResolvers();
+  const durable = Promise.withResolvers(), continuePublisher = Promise.withResolvers();
+  let publisher, sender, hits = 0, starts = 0;
+  const nativeLink = fs.link, nativeOpen = fs.open;
+  const linkMock = t.mock.method(fs, 'link', async function(source, destination) {
+    try { return await nativeLink.call(this, source, destination); }
+    catch (error) {
+      if (scope.getStore() === 'publisher' && destination === gate && error.code === 'EEXIST' && hits++ === 0) {
+        waiter.resolve(); await releaseWaiter.promise;
+      }
+      throw error;
+    }
+  });
+  let finalHeld = false;
+  const openMock = t.mock.method(fs, 'open', async function(path, ...args) {
+    const handle = await nativeOpen.call(this, path, ...args);
+    if (scope.getStore() === 'sender' && !finalHeld && String(path) === join(root, 'hosted-pause', hostedTargetId(b) + '.json') &&
+        await fs.stat(join(root, 'control.lock')).then(() => true, () => false)) {
+      finalHeld = true; selected.resolve(); await releaseFinal.promise;
+    }
+    return handle;
+  });
+  syncBuiltinESMExports();
+  const old = stateLock(gate, async () => { held.resolve(); await releaseOld.promise; });
+  t.after(async () => {
+    releaseOld.resolve(); releaseWaiter.resolve(); releaseFinal.resolve(); continuePublisher.resolve();
+    await Promise.allSettled([old, publisher, sender]);
+    openMock.mock.restore(); linkMock.mock.restore(); syncBuiltinESMExports();
+  });
+  await held.promise;
+  revoked = true;
+  publisher = scope.run('publisher', () => withWriteObserver(async ({ path, kind }) => {
+    if (kind === 'write' && path.endsWith('/1.true.json')) { durable.resolve(); await continuePublisher.promise; }
+  }, () => observeHostedPause(a, 'synthetic-token')));
+  publisher.catch(() => {});
+  await waiter.promise; // P has a 250 ms deadline, starting at synthetic time 0.
+  clock = 200; releaseOld.resolve(); await old;
+  sender = scope.run('sender', () => withHostedPauseGate(b, 0,
+    guard => sink === 'request'
+      ? startIfActive(root, 'initial', () => { starts++; }, { guard })
+      : runIfActive(root, 'initial', () => { starts++; }, { guard })));
+  sender.catch(() => {});
+  await selected.promise; // W's final pending check finished; W deadline is 450.
+  clock = 251; releaseWaiter.resolve();
+  await durable.promise; // P has timed out and journaled outside W's held gate.
+  assert.equal((await readControlState(root)).generation, 'initial', 'revocation_still_unrotated');
+  releaseFinal.resolve();
+  const result = await sender.then(value => ({ value }), error => ({ error }));
+  finish.resolve(); await before.operation;
+  assert.equal(delivered, true, 'already_started_operation_finishes_after_publication');
+  continuePublisher.resolve(); await publisher;
+  t.diagnostic(JSON.stringify({ publisherDeadline: 250, holderEntered: 200, holderDeadline: 450,
+    durablePublicationAndDispatch: 251, starts }));
+  assert.equal(starts, 0, 'aged_publication_must_fence_younger_holder');
+  assert.match(result.error?.message ?? '', /pause_unavailable/);
+});
+
+for (const sink of ['request', 'output']) test(`a cross-process aged publisher fences a younger ${sink} holder`, { timeout: 30000 }, async t => {
+  const { fork } = await import('node:child_process');
+  const { stateLock } = await import('../state-lock.mjs');
+  const root = join(createTestWorkspace(t).path, 'state');
+  await fs.mkdir(root, { mode: 0o700 });
+  const a = { root, endpoint: 'http://127.0.0.1:1' }, b = { root, endpoint: 'http://127.0.0.1:2' };
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ paused: false, generation: 0, enforced: true }));
+  await observeHostedPause(a, 'synthetic-token'); await observeHostedPause(b, 'synthetic-token');
+  const finish = Promise.withResolvers(); let delivered = false;
+  const before = await withHostedPauseGate(b, 0, guard => startIfActive(root, 'initial',
+    () => finish.promise.then(() => { delivered = true; }), { guard }));
+  assert.equal(before.started, true);
+  const children = [];
+  function launch(role) {
+    const child = fork(new URL('./fixtures/pause-handoff.mjs', import.meta.url), [role, root, sink],
+      { stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
+    const messages = new Map(), waiting = new Map(); let stderr = '';
+    const done = new Promise((resolve, reject) => {
+      child.once('error', reject); child.once('close', (code, signal) => resolve({ code, signal }));
+    });
+    child.stderr.on('data', bytes => { stderr += bytes; });
+    child.on('message', message => { messages.set(message.kind, message); waiting.get(message.kind)?.resolve(message); });
+    const event = kind => {
+      if (messages.has(kind)) return Promise.resolve(messages.get(kind));
+      const deferred = Promise.withResolvers(); waiting.set(kind, deferred);
+      return Promise.race([deferred.promise, done.then(() => { throw new Error('handoff_child_closed_before_' + kind); })]);
+    };
+    const send = (kind, time) => child.send({ kind, time });
+    const result = { child, done, event, send, stderr: () => stderr }; children.push(result); return result;
+  }
+  const held = Promise.withResolvers(), release = Promise.withResolvers();
+  const old = stateLock(join(root, 'hosted-pause.gate'), async () => { held.resolve(); await release.promise; });
+  t.after(async () => {
+    release.resolve(); finish.resolve();
+    for (const { child } of children) if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    await Promise.allSettled([old, ...children.map(child => child.done)]);
+  });
+  await held.promise;
+  const publisher = launch('publisher'); await publisher.event('waiter');
+  release.resolve(); await old;
+  const sender = launch('sender'); await sender.event('selected');
+  publisher.send('release-waiter', 251); await publisher.event('durable');
+  assert.equal((await readControlState(root)).generation, 'initial', 'publication_precedes_rotation');
+  sender.send('release-final', 251);
+  const result = await sender.event('done');
+  finish.resolve(); await before.operation;
+  publisher.send('continue-publisher', 251); await publisher.event('done');
+  for (const child of children) {
+    assert.deepEqual(await child.done, { code: 0, signal: null }); assert.equal(child.stderr(), '');
+  }
+  assert.equal(delivered, true, 'already_started_operation_finishes_after_publication');
+  assert.equal(result.starts, 0, 'aged_publication_must_fence_younger_holder');
+  assert.equal(result.error, 'pause_unavailable');
+});
+
+for (const sink of ['request', 'output']) test(`the final root read and ${sink} start share one synchronous turn`, { timeout: 15000 }, async t => {
+  const { default: syncFs } = await import('node:fs');
+  const { randomUUID } = await import('node:crypto');
+  const root = join(createTestWorkspace(t).path, 'state'); await fs.mkdir(root, { mode: 0o700 });
+  const config = { root, endpoint: 'http://127.0.0.1:1' };
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ paused: false, generation: 1, enforced: true }));
+  await observeHostedPause(config, 'synthetic-token');
+  const local = await readControlState(root), rotation = join(root, 'hosted-pause-rotation.json');
+  const originalOpen = syncFs.openSync, originalRead = syncFs.readFileSync, originalClose = syncFs.closeSync;
+  const paths = new Map(); let rereads = 0, published = false, starts = 0, startedBeforePublication = false;
+  // Publication is queued precisely after the final synchronous root read.
+  // An await inserted before start/write lets this durable rename overtake it.
+  const openMock = t.mock.method(syncFs, 'openSync', function (path, ...args) {
+    const fd = originalOpen.call(this, path, ...args); paths.set(fd, String(path)); return fd;
+  });
+  const closeMock = t.mock.method(syncFs, 'closeSync', function (fd) {
+    paths.delete(fd); return originalClose.call(this, fd);
+  });
+  const readMock = t.mock.method(syncFs, 'readFileSync', function (fd, ...args) {
+    const bytes = originalRead.call(this, fd, ...args);
+    if (paths.get(fd) === rotation && ++rereads === 1) queueMicrotask(() => {
+      const temporary = rotation + '.synthetic';
+      const file = originalOpen(temporary, 'wx', 0o600);
+      try { syncFs.writeFileSync(file, randomUUID()); syncFs.fsyncSync(file); } finally { originalClose(file); }
+      syncFs.renameSync(temporary, rotation);
+      const directory = originalOpen(root, 'r');
+      try { syncFs.fsyncSync(directory); } finally { originalClose(directory); }
+      published = true;
+    });
+    return bytes;
+  });
+  syncBuiltinESMExports();
+  t.after(() => { readMock.mock.restore(); closeMock.mock.restore(); openMock.mock.restore(); syncBuiltinESMExports(); });
+  const start = () => { starts++; startedBeforePublication = !published; };
+  await withHostedPauseGate(config, 1, guard => sink === 'request'
+    ? startIfActive(root, local.generation, start, { guard }) : runIfActive(root, local.generation, start, { guard }));
+  assert.equal(rereads, 1, 'synchronous_root_reread_required');
+  assert.equal(published, true, 'real_durable_publication_executed');
+  assert.equal(starts, 1, 'operation_started_before_publication_is_delivered');
+  assert.equal(startedBeforePublication, true, 'no_await_between_root_read_and_side_effect');
+});

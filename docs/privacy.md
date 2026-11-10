@@ -681,22 +681,27 @@ and Codex retain their initial and pre-dispatch observations.
 Unavailable state blocks both operations. The foreground capture launcher does
 not fetch hosted state; its detached worker performs the observations.
 
-On Linux and macOS, a changed observation durably records a content-free
-`generation`/`paused` intent before attempting pause publication. Intent
-publication and the final authorization plus synchronous request start or context
-write share a gate, acquired before the local control lock. When the publisher
-acquires this gate, its durable intent is the commit point: later authorizations
-cannot use an older generation. Requests already started can finish. Local
-rotation and durable pause publication precede a matching completion receipt;
-uncompleted publication never authorizes work.
+On Linux and macOS, a changed observation durably records a content-free root
+revocation token before its target's `generation`/`paused` intent. Publication
+normally shares a gate with final authorization, acquired before the local
+control lock. If gate acquisition fails or times out, revocation is still
+published; the publisher's wait age says nothing about the current holder.
 
-Gate acquisition is bounded to 250 ms. If acquisition fails or times out, the
-validated intent is still journaled. A dispatcher already inside the gate can
-have selected the older intent; its synchronous start must pass a 250 ms
-admission deadline. This exceptional path does not provide the same atomic
-publication guarantee. Scheduling suspension between that last check and the
-actual start can extend the wall-clock interval. Later checks see the durable
-intent and fail closed. Lock failure never permits silently discarding it.
+Every final request start and context write synchronously re-reads the target's
+pause record, intent checkpoint, journal and completion receipt, then the root
+revocation token and its rotation receipt. No asynchronous step separates those
+reads from starting the request or writing the context. This also fences a
+holder admitted after the publisher began waiting, on any target. Once a pause
+is recorded on this machine, no request starts with paused-period text. A request
+already in flight completes. Context not yet admitted is suppressed. Local
+rotation and durable pause publication precede a matching completion receipt;
+uncompleted publication never authorizes work. Lock failure never discards
+validated revocation knowledge.
+
+Final admission adds only local reads: one target record, one high-water probe,
+one bounded journal listing, and (when an intent exists) its record and receipt;
+one root probe, plus its receipt when the root token exists. No network, durable
+write, fsync or additional lock wait is added to the unchanged path.
 
 A fixed high-water checkpoint and the latest immutable intent/receipt retain
 crash authority across restarts. Changed observations prune dominated records
