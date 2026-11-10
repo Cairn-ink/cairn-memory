@@ -99,7 +99,8 @@ export function deferHostedPauseStatus(config, token, signal) {
 }
 const pausePath = config => join(config.root, 'hosted-pause', hostedTargetId(config) + '.json');
 const intentDirectory = config => pausePath(config) + '.intents';
-const gatePath = config => pausePath(config) + '.gate';
+// One root gate serializes every target with root revocation publication.
+const gatePath = config => join(config.root, 'hosted-pause.gate');
 const highWaterPath = config => pausePath(config) + '.high-water';
 
 // Root-wide content-free authority survives endpoint changes. Tokens are never
@@ -121,7 +122,7 @@ async function pendingRotation(root) {
 // Portable clients retain their cursor tags and never require POSIX durability.
 export async function completeHostedPauseRotation(config) {
   if (!hostedPauseMode(config).barrier || !await pendingRotation(config.root)) return;
-  await stateLock(rotationPath(config.root) + '.gate', async () => {
+  await stateLock(gatePath(config), async () => {
     const pending = await pendingRotation(config.root);
     if (!pending) return;
     // A concurrent publisher may have exposed its rename before directory sync.
