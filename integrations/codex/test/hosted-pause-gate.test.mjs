@@ -1,3 +1,4 @@
+import { deferred } from '../../../tools/testing/deferred.mjs';
 import test from 'node:test';
 import fsPromises from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
@@ -23,7 +24,7 @@ const plugin = join(repo, 'plugins/cairn-memory/scripts/hook.mjs');
 const childRunner = fileURLToPath(new URL('./fixtures/pause-gate-child.mjs', import.meta.url));
 const active = { paused: false, generation: 0, enforced: true };
 const paused = { paused: true, generation: 1, enforced: true };
-const rendezvous = () => Promise.withResolvers();
+const rendezvous = () => deferred();
 function start(t, script, args, input, extra = {}) {
   const child = spawn(process.execPath, [script, ...args], {
     env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8', HOME: process.env.HOME, TMPDIR: tmpdir(), ...extra }, stdio: ['pipe', 'pipe', 'pipe'],

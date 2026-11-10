@@ -1,3 +1,4 @@
+import { deferred } from '../../../tools/testing/deferred.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdir,readFile,readdir} from 'node:fs/promises';
@@ -23,7 +24,7 @@ async function marker(f,generation,paused){
 
 test('publisher crash after durable marker: next holder replays before any send',{timeout:20000},async t=>{
  const f=await fixture(t),local=await readControlState(f.root);
- const held=Promise.withResolvers(),release=Promise.withResolvers();
+ const held=deferred(),release=deferred();
  const old=stateLock(join(f.root,'hosted-pause.gate'),async()=>{held.resolve();await release.promise;});
  await held.promise;
  const child=fork(new URL('./fixtures/pause-marker-crash.mjs',import.meta.url),[f.root],{stdio:['ignore','ignore','pipe','ipc']});
@@ -67,7 +68,7 @@ test('pause then marker then resume at the same generation reopens only after pu
 });
 
 test('warm unchanged contention fails closed without writing a pending marker',{timeout:10000},async t=>{
- const f=await fixture(t),held=Promise.withResolvers(),release=Promise.withResolvers();
+ const f=await fixture(t),held=deferred(),release=deferred();
  const holder=stateLock(join(f.root,'hosted-pause.gate'),async()=>{held.resolve();await release.promise;});
  t.after(async()=>{release.resolve();await holder;});await held.promise;
  await assert.rejects(f.observe(),/state_busy/,'unchanged_observation_does_not_bypass_gate');
@@ -77,7 +78,7 @@ test('warm unchanged contention fails closed without writing a pending marker',{
 
 
 test('publisher budget ends after marker: durable knowledge survives the abort',{timeout:10000},async t=>{
- const f=await fixture(t),held=Promise.withResolvers(),release=Promise.withResolvers();
+ const f=await fixture(t),held=deferred(),release=deferred();
  const holder=stateLock(join(f.root,'hosted-pause.gate'),async()=>{held.resolve();await release.promise;});
  t.after(async()=>{release.resolve();await holder;});await held.promise;
  f.set({generation:1,paused:true});const controller=new AbortController();let marked=false;

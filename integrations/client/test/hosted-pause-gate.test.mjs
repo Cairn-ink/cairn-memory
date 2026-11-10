@@ -1,3 +1,4 @@
+import { deferred } from '../../../tools/testing/deferred.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fsPromises from 'node:fs/promises';
@@ -32,7 +33,7 @@ async function gate(config, generation, work) {
   return pause.withHostedPauseGate ? pause.withHostedPauseGate(config, generation, work) : work();
 }
 async function failedRotation(t, f) {
-  const held = Promise.withResolvers(), release = Promise.withResolvers();
+  const held = deferred(), release = deferred();
   const holder = withFileLock(join(f.config.root, 'control.lock'), async () => {
     held.resolve(); await release.promise;
   });
@@ -98,7 +99,7 @@ test('resume keeps the hosted generation and only unblocks after publication', {
   let starts = 0;
   await assert.rejects(gate(f.config, 1, () => { starts++; }), /pause_unavailable/);
   f.remote({ ...paused, paused: false });
-  const published = Promise.withResolvers(), release = Promise.withResolvers();
+  const published = deferred(), release = deferred();
   t.after(() => release.resolve());
   const resuming = withWriteObserver(async ({ path, kind }) => {
     if (kind === 'write' && path === f.file) { published.resolve(); await release.promise; }
@@ -170,7 +171,7 @@ test('an intent survives a process crash before rotation and blocks a stale proc
 
 test('the last local guard re-reads an intent after an asynchronous wait', { timeout: 10000 }, async t => {
   const f = await fixture(t);
-  const entered = Promise.withResolvers(), finalCheck = Promise.withResolvers();
+  const entered = deferred(), finalCheck = deferred();
   t.after(() => finalCheck.resolve());
   let starts = 0;
   const pending = gate(f.config, 0, guard => startIfActive(f.config.root, 'initial', () => { starts++; }, {
@@ -180,7 +181,7 @@ test('the last local guard re-reads an intent after an asynchronous wait', { tim
   denied.catch(() => {});
   await Promise.race([entered.promise, pending.then(() => { throw new Error('local_guard_missing'); })]);
   f.remote(paused);
-  const durable = Promise.withResolvers(), continueObservation = Promise.withResolvers();
+  const durable = deferred(), continueObservation = deferred();
   t.after(() => continueObservation.resolve());
   const observing = withWriteObserver(async ({ path, kind }) => {
     if (kind === 'write' && (path.endsWith('/1.true.json') || path.includes('/hosted-pause-pending/'))) {

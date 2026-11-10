@@ -1,3 +1,4 @@
+import { deferred } from '../../../tools/testing/deferred.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -111,7 +112,7 @@ test('hosted operations fail closed when the shared state lock cannot verify the
 
 for (const action of ['capture', 'capture-detached']) test(`${action} cancels an unavailable pause request before dispatch`,
   { timeout: 15000 }, async t => {
-    const received = Promise.withResolvers();
+    const received = deferred();
     const f = await fixture(t, () => { received.resolve(); return null; });
     const preload = fileURLToPath(new URL('./fixtures/pause-abort-preload.mjs', import.meta.url));
     let worker;

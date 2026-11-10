@@ -1,3 +1,4 @@
+import { deferred } from '../../../tools/testing/deferred.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, readdir, writeFile } from 'node:fs/promises';
@@ -38,7 +39,7 @@ test('native generation regression and same-generation pause flip cannot reautho
 for(const platform of ['linux','darwin']) test(`${platform} lock timeout never selects portable mode`,{timeout:10000},async t=>{
   const f=await fixture(t,platform);await f.observe();
   const path=join(f.root,'hosted-pause',hostedTargetId(f.config)+'.json.lock');
-  const entered=Promise.withResolvers(),release=Promise.withResolvers();
+  const entered=deferred(),release=deferred();
   const holder=stateLock(path,async()=>{entered.resolve();await release.promise;});
   t.after(async()=>{release.resolve();await holder;});await entered.promise;
   await assert.rejects(f.observe(),/state_busy/,'lock_failure_stays_closed');

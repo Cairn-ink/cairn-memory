@@ -1,3 +1,4 @@
+import { deferred } from '../../../../tools/testing/deferred.mjs';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -14,7 +15,7 @@ export async function interruptRotation(t, config, kind) {
   if (kind === 'timeout') {
     const gate = join(config.root, 'hosted-pause.gate');
     await withFileLock(join(config.root, 'control.lock'), async () => {
-      const acquired = Promise.withResolvers(), release = Promise.withResolvers();
+      const acquired = deferred(), release = deferred();
       const holder = stateLock(gate, async () => { acquired.resolve(); await release.promise; });
       await acquired.promise;
       try {

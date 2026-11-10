@@ -1,3 +1,4 @@
+import { deferred } from '../../../tools/testing/deferred.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -17,7 +18,7 @@ for(const sink of ['request','output'])test(`cross-process publication after fin
  t.mock.method(globalThis,'fetch',async url=>Response.json({paused:false,generation:url.startsWith(a.endpoint+'/')?1:0,enforced:true}));
  await observeHostedPause(a,'synthetic-token');await observeHostedPause(b,'synthetic-token');
  const local=await readControlState(root);
- let delivered=false;const finish=Promise.withResolvers();
+ let delivered=false;const finish=deferred();
  const before=await withHostedPauseGate(b,0,guard=>startIfActive(root,local.generation,()=>finish.promise.then(()=>{delivered=true;}),{guard}));
  assert.equal(before.started,true);
  let published=false,wireStarts=0,wireBody='';
@@ -31,10 +32,10 @@ for(const sink of ['request','output'])test(`cross-process publication after fin
   child.stdout.on('data',v=>{stdout+=v;});child.stderr.on('data',v=>{stderr+=v;});
   const done=new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',(code,signal)=>resolve({code,signal}));});
   child.on('message',m=>{messages.set(m.kind,m);waiting.get(m.kind)?.resolve(m);if(m.kind==='failed')waiting.forEach(v=>v.reject(Error(m.error)));});
-  const event=kind=>{if(messages.has(kind))return Promise.resolve(messages.get(kind));const p=Promise.withResolvers();waiting.set(kind,p);return Promise.race([p.promise,done.then(()=>{throw Error('child_closed_before_'+kind+':'+JSON.stringify([...messages.values()])+stderr);})]);};
+  const event=kind=>{if(messages.has(kind))return Promise.resolve(messages.get(kind));const p=deferred();waiting.set(kind,p);return Promise.race([p.promise,done.then(()=>{throw Error('child_closed_before_'+kind+':'+JSON.stringify([...messages.values()])+stderr);})]);};
   const result={child,done,event,send:(kind,time)=>child.send({kind,time}),stdout:()=>stdout,stderr:()=>stderr};children.push(result);return result;
  }
- const held=Promise.withResolvers(),release=Promise.withResolvers();
+ const held=deferred(),release=deferred();
  const old=stateLock(join(root,'hosted-pause.gate'),async()=>{held.resolve();await release.promise;});
  workspace.defer(async()=>{release.resolve();finish.resolve();await fs.writeFile(join(root,'release-sender'),'go',{mode:0o600});for(const c of children)if(c.child.exitCode===null&&c.child.signalCode===null)c.child.kill('SIGKILL');await Promise.allSettled([old,...children.map(c=>c.done)]);await new Promise(resolve=>server.close(resolve));globalThis.fetch=nativeFetch;});
  await held.promise;

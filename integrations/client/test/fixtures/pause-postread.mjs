@@ -1,3 +1,4 @@
+import { deferred } from '../../../../tools/testing/deferred.mjs';
 import fs from 'node:fs';
 import promises from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
@@ -11,7 +12,7 @@ let clock = role === 'publisher' ? 0 : 200;
 Object.defineProperty(performance, 'now', {value:()=>clock});
 const commands = new Map();
 process.on('message', ({kind,time})=>{if(time!==undefined)clock=time;commands.get(kind)?.resolve();});
-const wait = kind => {const p=Promise.withResolvers();commands.set(kind,p);return p.promise;};
+const wait = kind => {const p=deferred();commands.set(kind,p);return p.promise;};
 const notify = (kind, details={})=>process.send({kind,...details});
 try {
  if(role==='publisher') {

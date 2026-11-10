@@ -1,3 +1,4 @@
+import { deferred } from '../../../../tools/testing/deferred.mjs';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -17,7 +18,7 @@ export async function tailInvocation(t, responseMs, contended = false) {
   await mkdir(root, { recursive: true, mode: 0o700 });
   await writeFile(join(root, 'project-key'), '11111111-1111-4111-8111-111111111111\n', { mode: 0o600 });
   let pauseCount = 0, fetchCount = 0, holder;
-  const release = Promise.withResolvers(), acquired = Promise.withResolvers();
+  const release = deferred(), acquired = deferred();
   const server = createServer(async (request, response) => {
     request.resume(); response.setHeader('content-type', 'application/json');
     if (request.url.endsWith('/pause-state')) {
