@@ -7,6 +7,9 @@
   individual candidate failures preserve other valid candidates. Late prepares
   are ignored, and partial sets retain the existing batch authorization checks
   before projection and final delivery.
+- Known limit: on the product reader, Raw invalidated between initial and final
+  validation yields the existing refusal (`reader_failed`) rather than a Memory-only
+  response; the local/facade reader rebuilds Memory-only.
 
 ## 0.3.4 — 2026-11-09: hosted recall deadline
 
