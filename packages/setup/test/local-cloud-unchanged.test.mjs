@@ -125,6 +125,41 @@ const durabilityRuntimeChanges = new Map([
     current: '5123350b18ee89a7557dbeec237e1e7790f1b7f21484dd393a97a6f66b009e94',
   }],
 ]);
+// Capture metadata changes the contract/schema and worker, and extracts a pure
+// calendar helper. Pin the exact historical/current bytes; the new helper is
+// required in current generations and synthesized only for the pinned old tree.
+const captureRuntimeChanges = new Map([
+  [
+    "integrations/client/hosted-contract.mjs",
+    {
+      "historical": "39ce7dcb60b91ab7bf815bd0085f278e9cc5d0f9798b9b5d27e7b7655fd217d1",
+      "current": "07bb439a728f1be053cfa40f425d7e52e0a2b958a22dd72cd889f3f942fb12fd"
+    }
+  ],
+  [
+    "integrations/client/hosted-schemas.mjs",
+    {
+      "historical": "fda2e6b4f6feda316300819e1a199dd25f7462b9f47e33bff950c3c4f95ba8ce",
+      "current": "c9e2b4fc3e85e136594438ad58a24d15526296b12ab1d438ae930a91b8ec82d3"
+    }
+  ],
+  [
+    "integrations/codex/worker.mjs",
+    {
+      "historical": "0fbb1295e596769035eca5e974efa4f355774a6c37d70f3442a3e78c4aa7264d",
+      "current": "0186d95d6a7ea9e90894e1d330c12a62010f71d4ada798bea13872736b1f0803"
+    }
+  ],
+  [
+    "integrations/client/source-time.mjs",
+    {
+      "historical": null,
+      "current": "002acf215bd6b79b3e4ace3e9d181a89dbf8efc48093a6e980c8417df64b9401"
+    }
+  ]
+]);
+const captureSourceModule = 'integrations/client/source-time.mjs';
+const historicalCaptureManifestHash = "3f03f7e0f15e3f4b482b383e2a8b01c5c51ce2903c22f2983d5f3da42b41b1dd";
 const hostedRuntimeExceptions = [
   'integrations/client/control-state.mjs',
   'integrations/client/file-lock.mjs',
@@ -135,6 +170,7 @@ const hostedRuntimeExceptions = [
   'integrations/codex/schema-evidence.mjs',
   ...recallRuntimeChanges.keys(),
   ...durabilityRuntimeChanges.keys(),
+  ...captureRuntimeChanges.keys(),
 ];
 const packagedHostedRuntime = new Map(await Promise.all(hostedRuntimeExceptions.map(async path =>
   [path, await readFile(new URL('../runtime/' + path, import.meta.url))])));
@@ -146,7 +182,7 @@ const historicalRecallRuntime = new Map([...recallRuntimeChanges].map(([path, [b
 }));
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 function assertRecallRuntime(path, bytes) {
-  const pins = durabilityRuntimeChanges.get(path);
+  const pins = durabilityRuntimeChanges.get(path) ?? captureRuntimeChanges.get(path);
   assert.ok(pins ? Object.values(pins).includes(sha256(bytes)) :
     bytes.equals(packagedHostedRuntime.get(path)) || bytes.equals(historicalRecallRuntime.get(path)),
     'Only approved runtime bytes may differ: ' + path);
@@ -196,7 +232,14 @@ function normalizeFile(name, bytes, home, { historical = false } = {}) {
   const runtimeManifest = generationPath.exec(name)?.[2] === '/manifest.json';
   const verdict = historical && qualificationVerdictPath.test(name);
   if (!installation && !runtimeManifest && name !== '.codex/hooks.json' && !verdict) return bytes;
-  const text = verdict ? new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) : bytes.toString();
+  let text = verdict ? new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) : bytes.toString();
+  if (runtimeManifest && historical && !Object.hasOwn(JSON.parse(text).files, captureSourceModule)) {
+    assert.equal(sha256(bytes), historicalCaptureManifestHash, 'Only the pinned historical manifest lacks the calendar helper');
+    const next = '    "integrations/client/state-lock.mjs":';
+    assert.equal(text.split(next).length, 2);
+    text = text.replace(next, '    ' + JSON.stringify(captureSourceModule) + ': ' +
+      JSON.stringify(captureRuntimeChanges.get(captureSourceModule).current) + ',\n' + next);
+  }
   const parsed = JSON.parse(text), translatedValues = new Map();
   if (verdict) {
     assert.ok(parsed && typeof parsed === 'object' && !Array.isArray(parsed), 'Malformed qualification verdict');
@@ -251,7 +294,7 @@ function normalizeFile(name, bytes, home, { historical = false } = {}) {
         // Preserve paths, order, formatting and every other manifest byte.
         if (path.length === 2 && path[0] === 'files' && hostedRuntimeExceptions.includes(path[1])) {
           assert.match(raw, /^"[a-f0-9]{64}"$/u);
-          const pins = durabilityRuntimeChanges.get(path[1]);
+          const pins = durabilityRuntimeChanges.get(path[1]) ?? captureRuntimeChanges.get(path[1]);
           if (pins) assert.ok(Object.values(pins).includes(JSON.parse(raw)), 'Only approved diagnostic hashes: ' + path[1]);
           else if (recallRuntimeChanges.has(path[1])) assert.ok([
             sha256(historicalRecallRuntime.get(path[1])), sha256(packagedHostedRuntime.get(path[1])),
@@ -278,13 +321,22 @@ function normalizeFile(name, bytes, home, { historical = false } = {}) {
 const normalizedCall = (call, home) => ({ ...call, args: call.args.map(arg => normalizeRuntime(arg, home)) });
 function fileInventory(entries, normalize, home, { historical = false } = {}) {
   const result = {}, generations = new Map();
+  entries = [...entries];
+  if (normalize && historical) for (const [name, bytes] of [...entries]) {
+    const generation = generationPath.exec(name);
+    if (generation?.[2] !== '/manifest.json' || Object.hasOwn(JSON.parse(bytes).files, captureSourceModule)) continue;
+    assert.equal(sha256(bytes), historicalCaptureManifestHash, 'Only the pinned historical inventory lacks the calendar helper');
+    const leaf = name.slice(0, -'manifest.json'.length) + captureSourceModule;
+    assert.ok(!entries.some(([path]) => path === leaf), 'Historical helper must be absent before its explicit classification');
+    entries.push([leaf, packagedHostedRuntime.get(captureSourceModule)]);
+  }
   for (let [name, bytes] of entries) {
     const generation = generationPath.exec(name);
     if (normalize && generation?.[2] === '/manifest.json' && !historical)
       assert.deepEqual(bytes, packagedHostedManifest, 'Installed runtime manifest must match packaged manifest: ' + name);
     const packaged = normalize && generation && packagedHostedRuntime.get(generation[2]?.slice(1));
     if (packaged) {
-      if (historical && (recallRuntimeChanges.has(generation[2]?.slice(1)) || durabilityRuntimeChanges.has(generation[2]?.slice(1)))) assertRecallRuntime(generation[2].slice(1), bytes);
+      if (historical && (recallRuntimeChanges.has(generation[2]?.slice(1)) || durabilityRuntimeChanges.has(generation[2]?.slice(1)) || captureRuntimeChanges.has(generation[2]?.slice(1)))) assertRecallRuntime(generation[2].slice(1), bytes);
       if (!historical) assert.deepEqual(bytes, packaged, 'Installed runtime must match packaged source: ' + name);
       bytes = packaged;
     }
@@ -367,7 +419,8 @@ test('L06 version normalization preserves unrelated bytes and complete runtime g
     normalized('Cairn.ink Memory setup 0.5.3\nunrelated 0.5.3', home));
 });
 test('L06 hosted runtime exceptions require packaged bytes and preserve all other comparisons', async () => {
-  assert.equal(hostedRuntimeExceptions.length, 13);
+  assert.equal(hostedRuntimeExceptions.length, 17);
+  assert.equal(captureRuntimeChanges.size, 4);
   assert.equal(recallRuntimeChanges.size, 2);
   assert.equal(durabilityRuntimeChanges.size, 4);
   const home = '/synthetic/.codex';
@@ -382,7 +435,7 @@ test('L06 hosted runtime exceptions require packaged bytes and preserve all othe
       files([[oldRuntime + path, payload]], true)), { code: 'ERR_ASSERTION' }, path);
   }
   for (const [path, packaged] of packagedHostedRuntime) {
-    const baseline = files([[oldRuntime + path, historicalRecallRuntime.get(path) ?? (durabilityRuntimeChanges.has(path) ? packaged : payload)]], true);
+    const baseline = files([[oldRuntime + path, historicalRecallRuntime.get(path) ?? ((durabilityRuntimeChanges.has(path) || captureRuntimeChanges.has(path)) ? packaged : payload)]], true);
     assert.deepEqual(files([[newRuntime + path, packaged]]), baseline);
     const damaged = Buffer.from(packaged); damaged[0] ^= 1;
     assert.throws(() => files([[newRuntime + path, damaged]]), { code: 'ERR_ASSERTION' }, path);
@@ -393,7 +446,7 @@ test('L06 hosted runtime exceptions require packaged bytes and preserve all othe
   const manifestName = newRuntime + 'manifest.json';
   const oldManifest = Buffer.from(packagedHostedManifest.toString().replace(/"([^"\n]+)": "[a-f0-9]{64}"/gu,
     (raw, path) => hostedRuntimeExceptions.includes(path) ? JSON.stringify(path) + ': "' +
-      (historicalRecallRuntime.has(path) ? sha256(historicalRecallRuntime.get(path)) : durabilityRuntimeChanges.get(path)?.historical ?? '0'.repeat(64)) + '"' : raw));
+      (historicalRecallRuntime.has(path) ? sha256(historicalRecallRuntime.get(path)) : durabilityRuntimeChanges.get(path)?.historical ?? captureRuntimeChanges.get(path)?.historical ?? captureRuntimeChanges.get(path)?.current ?? '0'.repeat(64)) + '"' : raw));
   const baselineManifest = files([[oldRuntime + 'manifest.json', oldManifest]], true);
   assert.deepEqual(files([[manifestName, packagedHostedManifest]]), baselineManifest);
   assert.deepEqual(files([[oldRuntime + 'manifest.json', oldManifest], [manifestName, packagedHostedManifest]], true), baselineManifest);
@@ -414,6 +467,34 @@ test('L06 hosted runtime exceptions require packaged bytes and preserve all othe
   }
   // Even an approved hash cannot hide a corrupt installed manifest copy.
   assert.throws(() => files([[manifestName, oldManifest]]), { code: 'ERR_ASSERTION' });
+});
+
+test('L06 capture allowances pin exact source bytes and require the new calendar helper', async t => {
+  const historical = await baselineForTest(t);
+  if (!historical) return;
+  const oldBytes = await readFile(new URL('../runtime/manifest.json', historical.module));
+  const oldManifest = JSON.parse(oldBytes), currentManifest = JSON.parse(packagedHostedManifest);
+  assert.equal(sha256(oldBytes), historicalCaptureManifestHash);
+  const oldBase = '.codex/cairn/runtime/0.5.3-0123456789ab/';
+  const newBase = '.codex/cairn/runtime/0.6.0-abcdef012345/';
+  const previous = [[oldBase + 'manifest.json', oldBytes]];
+  for (const path of Object.keys(oldManifest.files))
+    previous.push([oldBase + path, await readFile(new URL('../runtime/' + path, historical.module))]);
+  const current = [[newBase + 'manifest.json', packagedHostedManifest]];
+  for (const path of Object.keys(currentManifest.files))
+    current.push([newBase + path, await readFile(new URL('../runtime/' + path, import.meta.url))]);
+  const compare = entries => assert.deepEqual(fileInventory(entries, true, '/synthetic/.codex'),
+    fileInventory(previous, true, '/synthetic/.codex', { historical: true }));
+  compare(current);
+  for (const [path, pins] of captureRuntimeChanges) {
+    assert.equal(currentManifest.files[path], pins.current);
+    assert.equal(oldManifest.files[path] ?? null, pins.historical);
+    const missing = current.filter(([name]) => name !== newBase + path);
+    assert.throws(() => compare(missing), { code: 'ERR_ASSERTION' }, path);
+    const damaged = current.map(([name, bytes]) => [name,
+      name === newBase + path ? Buffer.concat([bytes, Buffer.from('damaged')]) : bytes]);
+    assert.throws(() => compare(damaged), { code: 'ERR_ASSERTION' }, path);
+  }
 });
 
 test('L06 recall allowances prove the exact historical source and hash changes', async t => {
