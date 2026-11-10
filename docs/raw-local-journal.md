@@ -117,9 +117,11 @@ remain timeouts. Other conflicts retain their existing refusal behavior.
 
 With no concurrent captures, one synthetic 10,008-message conversation took
 80 CLI passes and about 25 seconds to delete on a busy machine (one run on
-Node 22.16.0). This measured the whole command; no saving-pause duration was
-measured in that run. An earlier concurrent-capture measurement needed 41
-passes because captures also advanced UUID hashing: saving waited about
+Node 22.16.0). About 20 seconds of that time comes from the CLI yielding
+for 250 ms between passes (80 × 250 ms). This measured the whole command;
+no saving-pause duration was measured in that run. An earlier concurrent-capture
+measurement needed 41 passes because captures also advanced UUID hashing: saving
+waited about
 11–15 seconds and the whole delete took about 12–19 seconds. Those timings
 apply to that concurrent workload. Longer conversations require more passes;
 load and other writers affect wall time.
