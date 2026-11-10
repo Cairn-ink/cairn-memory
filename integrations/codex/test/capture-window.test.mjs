@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFile } from 'node:fs/promises';
+import { appendFile, cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
+import { join } from 'node:path';
+import { conforms } from '../../client/hosted-contract.mjs';
 import { fixture, header, item, timestamp } from './helpers.mjs';
 
 // Private baseline/mutation copies can exercise this same contract suite.
@@ -19,6 +22,11 @@ test('parser copies row time, falls back to completed milliseconds, and keeps wi
   assert.equal(original.occurred_at, row.timestamp);
   delete row.timestamp; row.payload.completed_at_ms = 1577934245123;
   assert.equal(parse(row).occurred_at, '2020-01-02T03:04:05.123Z');
+  for (const time of ['', 'not-a-date', '2020-01-02', '2020-01-02T03:04:05.123456789000000000+00:00']) {
+    row.timestamp = time;
+    assert.equal(parse(row).occurred_at, '2020-01-02T03:04:05.123Z');
+  }
+  delete row.timestamp;
   delete row.payload.completed_at_ms;
   assert.equal(Object.hasOwn(parse(row), 'occurred_at'), false);
   assert.equal(parse(row).message.id, original.message.id);
@@ -35,6 +43,7 @@ test('worker sends numbered windows and per-attempt time without changing a froz
   f.clear(); assert.equal((await run(1800000001000)).status, 'idle');
   assert.equal(f.calls.length, 3);
   assert.deepEqual(f.calls.map(body => [body.window.slice, body.window.slices]), [[1, 2], [1, 2], [2, 2]]);
+  assert.ok(f.calls.every(body => conforms('capture-request', body)));
   assert.ok(f.calls.every(body => body.window.initial === false));
   assert.equal(new Set(f.calls.map(body => body.window.id)).size, 1);
   assert.deepEqual(f.calls[0].window, f.calls[1].window);
@@ -54,6 +63,7 @@ test('worker sends 65 batches across a lowered four-slice limit without losing b
   assert.equal((await runWorker(f.binding, { guard: f.guard, transport: f.transport, now: () => 1800000000000, captureWindowSlices: 4 })).status, 'idle');
   assert.equal(f.calls.length, 65);
   assert.equal(f.calls.flatMap(body => body.messages).length, 1537);
+  assert.ok(f.calls.every(body => conforms('capture-request', body)));
   assert.ok(f.calls.every(body => body.window.initial === false));
   for (let i = 0; i < 65; i++) {
     const group = Math.floor(i / 4) * 4;
@@ -62,4 +72,24 @@ test('worker sends 65 batches across a lowered four-slice limit without losing b
     assert.equal(f.calls[i].window.id, f.calls[group].window.id);
     if (group > 0) assert.notEqual(f.calls[group].window.id, f.calls[group - 1].window.id);
   }
+});
+
+test('invalid row time overriding completion is caught by the fallback assertion', async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'capture-time-mutant-' });
+  const root = join(workspace.path, 'integrations');
+  await mkdir(root);
+  await cp(new URL('../../client/', import.meta.url), join(root, 'client'), { recursive: true, filter: path => !path.includes('node_modules') && !path.includes('/test') });
+  await mkdir(join(root, 'codex'));
+  const source = await readFile(new URL('../parser.mjs', import.meta.url), 'utf8');
+  const target = 'sourceTimestamp(row.timestamp)';
+  assert.equal(source.split(target).length, 2);
+  await writeFile(join(root, 'codex/parser.mjs'), source.replace(target, "typeof row.timestamp === 'string' && row.timestamp.length <= 40"));
+  const mutant = await import(pathToFileURL(join(root, 'codex/parser.mjs')));
+  const row = JSON.parse(item('Synthetic fallback'));
+  row.timestamp = 'not-a-date'; row.payload.completed_at_ms = 1577934245123;
+  const context = { sessionId: row.payload.thread_id, wireSessionId: 'a'.repeat(64), epoch: 0, start: 10, end: 100 };
+  const probe = parser => assert.equal(parser.parseLine(Buffer.from(JSON.stringify(row)), context).occurred_at,
+    '2020-01-02T03:04:05.123Z', 'completion fallback');
+  probe({ parseLine });
+  assert.throws(() => probe(mutant), error => error.code === 'ERR_ASSERTION' && error.message.includes('completion fallback'));
 });
