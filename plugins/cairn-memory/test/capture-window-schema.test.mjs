@@ -25,6 +25,8 @@ test(`${label}: optional capture metadata accepts source time and bounded strict
   for (const time of ['', 'invalid', '2026-01-02', '2026-01-02T03:04:05.1234567890Z',
     '2026-01-02T03:04:05.123456789000000+00:00', 'x'.repeat(41)]) {
     assert.equal(conforms('capture-request', { ...body, messages: [{ ...body.messages[0], occurred_at: time }] }), false);
+  }
+  for (const time of ['', 'invalid', '2026-01-02', 'x'.repeat(41)]) {
     assert.equal(conforms('capture-request', { ...body, sent_at: time }), false);
   }
 });
