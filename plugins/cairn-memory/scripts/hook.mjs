@@ -390,7 +390,7 @@ async function recordFirstPrompt(hookInput) {
           hostedGeneration: recallAuthority.generation, hostedTarget: recallAuthority.target,
         }, guard);
         return true;
-      }, { signal: recallSignal, observation: recallAuthority.observation }).catch(() => false);
+      }, { signal: recallSignal, deadlineMs: recallEnd, observation: recallAuthority.observation }).catch(() => false);
       if (tagged) return;
       checkRecall();
     }
