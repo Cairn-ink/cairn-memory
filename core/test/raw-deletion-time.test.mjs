@@ -16,6 +16,7 @@ import { config, ns as keepNamespace, request, splitRaw } from '../testing/raw-c
 import { consumer, empty, episodeInput, legacyKeep } from '../testing/raw-deletion-review-fixtures.mjs';
 import { interpretation } from '../testing/episode-capture-helpers.mjs';
 import { searchFixture } from '../testing/raw-search-fixtures.mjs';
+import { installRawSearchTestClock } from '../testing/raw-search-clock.mjs';
 import { defaultRawOptions } from '../local-defaults.mjs';
 import { createLocalUuidFence } from '../local-authority-uuid.mjs';
 
@@ -396,6 +397,7 @@ test('unparseable low-sorting receipt clock stays dependent', async t => {
 });
 
 for (const path of ['conversation', 'episode']) test(`old finite other-root KEEP refuses through ${path} deletion`, async t => {
+  installRawSearchTestClock(t);
   t.mock.timers.enable({ apis: ['Date'], now: start });
   const f = safetyFixture(t), client = RAW_CLIENTS[0], namespace = keepNamespace;
   const model = { ...rationaleModel(), extract: empty, interpretEpisode: interpretation };
@@ -457,8 +459,9 @@ for (const path of ['conversation', 'episode']) test(`old finite other-root KEEP
   assert.equal(createLocalUuidFence(current).matches(internal, client, [{ id: 'target-message' }]), false);
   assert.equal(current.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n, 0);
   const search = await searchFixture({ ...f, db: current, port: defaultRawOptions().port });
-  await search.maintain();
-  assert.ok((await search.search({ query: 'later', intent: 'history' })).candidates.some(hit => hit.conversationId === target.id));
+  const maintained = await search.maintain();
+  const found = await search.search({ query: 'later', intent: 'history' });
+  assert.ok(found.candidates.some(hit => hit.conversationId === target.id), JSON.stringify({ maintained, found, raw }));
   ok(await core.captureRaw(request(splitRaw('Synthetic later continuation.', { id: 'after-refusal', ordinal: 3 })[0],
     { namespace, client, sessionId: 'target', eventId: 'after-refusal-raw' }, 'episode')));
   ok(await core.capture({ ...episodeInput(client, 'target', 'after-refusal-episode'), eventId: 'after-refusal-episode' }));

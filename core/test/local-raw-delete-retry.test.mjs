@@ -5,6 +5,7 @@ import { openMemoryCore } from '../index.mjs';
 import { sourceFixture,savedSource,ns,ok } from '../testing/raw-source-fixtures.mjs';
 import { safetySourceFixture,searchFixture } from '../testing/raw-search-fixtures.mjs';
 import { createLocalUuidFence,UUID_HASH_CHUNK } from '../local-authority-uuid.mjs';
+import { installRawSearchTestClock } from '../testing/raw-search-clock.mjs';
 import { createRawDeletionStorage } from '../raw-deletion-storage.mjs';
 import { createRawSourceRoots } from '../raw-source-roots.mjs';
 import { request,splitRaw,denied } from '../testing/raw-source-fixtures.mjs';
@@ -131,6 +132,7 @@ for(const path of ['conversation','episode']) test(`local ${path} hashes every U
 });
 
 for(const path of ['conversation','episode']) test(`local ${path} concurrent revision refusal keeps only conservative target fences`,async t=>{
+  installRawSearchTestClock(t);
   const f=sourceFixture(t,{kind:'episode'});local(t,f);
   async function capture(sessionId) {
     const result=ok(await f.core.captureRaw(request(splitRaw('Synthetic '+sessionId+' evidence.',{id:sessionId})[0],
