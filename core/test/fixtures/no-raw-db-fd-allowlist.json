@@ -1733,5 +1733,25 @@
     "path": "plugins/cairn-memory/lib/private-state.mjs",
     "source": "return readFileSync(file, \"utf8\");",
     "reason": "Read only the checked pause metadata handle, bounded to 64 KiB, never a SQLite file."
+  },
+  {
+    "path": "plugins/cairn-memory/scripts/hook.mjs",
+    "source": "if (JSON.parse(await readFile(statePath, \"utf8\")).ownSkillTurn === true) {",
+    "reason": "Hook transcript input and skill-turn JSON state; SQLite is accessed through the engine."
+  },
+  {
+    "path": "plugins/cairn-memory/scripts/hook.mjs",
+    "source": "import { open, readFile, stat } from \"node:fs/promises\"",
+    "reason": "Hook transcript input and skill-turn JSON state; SQLite is accessed through the engine."
+  },
+  {
+    "path": "integrations/client/raw/local-codex-qualification.mjs",
+    "source": "import { realpathSync, stat as statCallback, lutimes as lutimesCallback } from 'node:fs'",
+    "reason": "Metadata only: realpathSync resolves host/config fixture boundaries; promisified stat/lutimes inspect the bound host or update observed-host cache JSON timestamps. None opens database or sidecar data descriptors."
+  },
+  {
+    "path": "integrations/client/raw/local-session-start.mjs",
+    "source": "import { readdir, unlink } from 'node:fs/promises'",
+    "reason": "Lists and removes only authority-bound session-start JSON markers under the private starts directory; never database files or sidecars."
   }
 ]

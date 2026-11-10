@@ -1,7 +1,17 @@
+import { LOCAL_RAW_PRIVACY_DDL } from './content-safety-schema.mjs';
 import { fail } from './validation.mjs';
 
 export const LOCAL_AUTHORITY_SCHEMA_VERSION = 29;
 export const LOCAL_BINDING_COLUMNS = ['local_target_id','local_store_id','local_consent_generation'];
+
+// Selected locally, additive, and deliberately independent of user_version.
+// Product stores opening the base or an explicit hosted Raw profile get no DDL.
+export function installLocalRawPrivacy(db) {
+  const ddl = LOCAL_RAW_PRIVACY_DDL.join('\n');
+  if (db) db.exec(ddl);
+  return ddl;
+}
+
 export function validateRawSourcePrerequisites(db) {
   for (const name of ['card_raw_bindings','card_raw_mutation_context','card_raw_pending_invalidations']) {
     if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)) fail('unsupported_database');

@@ -1,3 +1,4 @@
+import { DatabaseSync } from 'node:sqlite';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
@@ -494,4 +495,26 @@ test('oversized transport message closes the server without reflecting its paylo
   assert.equal(result.stdout.includes(marker), false);
   assert.equal(result.stderr.includes(marker), false);
   assert.match(result.stderr, /cairn_mcp_transport_error/);
+});
+
+
+test('local MCP forget bytes are identical for absent, foreign and deleted IDs at fixed A state', options, async t => {
+  const path=database(), a=await host(t,path,{owner:'synthetic-A'}), b=await host(t,path,{owner:'synthetic-B'});
+  const own=ok(await call(a.client,'remember_memory',{content:'Synthetic own fact'})).memory;
+  const foreign=ok(await call(b.client,'remember_memory',{content:'Synthetic foreign fact'})).memory;
+  const before=await b.client.callTool({name:'inspect_memory',arguments:{memoryId:foreign.id}});
+  const successful=await a.client.callTool({name:'forget_memory',arguments:{memoryId:own.id,expectedRevision:own.revision}});
+  assert.equal(ok(JSON.parse(successful.content[0].text)).forgotten,true);
+  const db=new DatabaseSync(path,{readOnly:true});t.after(()=>db.close());
+  const windows=()=>db.prepare('SELECT * FROM local_raw_hide_windows ORDER BY owner_id,scope,project_id,start_ms').all();
+  const fixedWindows=windows();assert.ok(fixedWindows.length>0);
+  const bytes=[];
+  for(const memoryId of ['synthetic-nonexistent-id',foreign.id,own.id]){
+    const response=await a.client.callTool({name:'forget_memory',arguments:{memoryId,expectedRevision:1}});
+    assert.equal(ok(JSON.parse(response.content[0].text)).forgotten,false);
+    bytes.push(JSON.stringify(response));assert.deepEqual(windows(),fixedWindows);
+  }
+  assert.equal(bytes[0],bytes[1]);assert.equal(bytes[0],bytes[2]);
+  assert.notEqual(JSON.stringify(successful),bytes[0]);
+  assert.deepEqual(await b.client.callTool({name:'inspect_memory',arguments:{memoryId:foreign.id}}),before);
 });

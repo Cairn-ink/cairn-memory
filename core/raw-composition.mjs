@@ -8,12 +8,12 @@ import { MemoryStoreError } from './validation.mjs';
 const success = value => ({ ok: true, value });
 const failure = error => {
   const code = isStorageBusy(error) ? 'storage_busy' : error instanceof MemoryStoreError ? error.code : 'storage_error';
-  return { ok: false, error: { code, retryable: code === 'storage_busy' } };
+  return { ok: false, error: { code, retryable: code === 'storage_busy' || code === 'local_raw_privacy_write_failed' } };
 };
 const invoke = work => { try { return success(work()); } catch (error) { return failure(error); } };
 
 // Receive the builder to avoid a contract -> composition -> contract cycle.
-export function composeRawCore(buildCore, input, rawOptions, { sources, lineage, deletion, localControls = false, rawTextReaders = true, captureDefault = false, searchDefault = false, searchManager, searchEmbedding }) {
+export function composeRawCore(buildCore, input, rawOptions, { sources, lineage, deletion, localControls = false, localRawPrivacy = false, rawTextReaders = true, captureDefault = false, searchDefault = false, searchManager, searchEmbedding }) {
   const profile = structuredClone(Object.fromEntries(['captureQualification','captureSourcePolicy',
     'captureEvidence','captureRationale','sessionEpisodes','captureQualifiedDuplicates'].filter(key => Object.hasOwn(input, key)).map(key => [key,input[key]])));
   let storage, capture, runtime;
@@ -24,7 +24,8 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
       rawLineage: lineage === true,
       rawDeletion: deletion,
       localControls,
-      attachRaw: db => (storage = createRawCaptureStorage({ db, profile, ...rawOptions, sources })) })),
+      localRawPrivacy,
+      attachRaw: db => (storage = createRawCaptureStorage({ db, profile, ...rawOptions, sources, localRawPrivacy })) })),
     attachCapture: operation => { capture = operation; },
   });
   const search = searchDefault ? searchManager ?? (rawOptions.mode !== 'off' ? createLocalRawSearch(input.path, rawOptions.port, searchEmbedding) : null) : null;
@@ -37,9 +38,10 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
       return stopped ? Promise.resolve(stopped).then(() => result) : result;
     },
     ...(captureDefault && rawOptions.interpretation !== 'host' ? { async capture(request) {
+      const arrivalToken = {};
       try {
         runtime.ready();
-        const registration = await storage.prepareCapture(request);
+        const registration = await storage.prepareCapture(request, arrivalToken);
         if (!registration) return await core.capture(request);
         let result;
         result = await capture(registration.input, registration);
@@ -47,12 +49,16 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
         if (!registration.result()) registration.commitOnly();
         search?.schedule(request.namespace);
         return result;
-      } catch (error) { return failure(error); }
+      } catch (error) {
+        try { if (error.code !== 'store_closed') storage.fenceArrival(arrivalToken); } catch (fenceError) { return failure(fenceError); }
+        return failure(error);
+      }
     } } : {}),
     async captureRaw(request) {
+      const arrivalToken = {};
       try {
         runtime.ready();
-        const registration = await storage.prepare(request);
+        const registration = await storage.prepare(request, false, undefined, [], arrivalToken);
         let interpretation;
         try {
           if (rawOptions.interpretation === 'host' || !registration.hasProjection) {
@@ -67,9 +73,17 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
           if (observation) interpretation = success(observation);
         }
         const raw = registration.result();
+        if (!raw) storage.fenceArrival(arrivalToken);
         if (raw) search?.schedule(request.namespace);
         return raw ? success({ raw, interpretation }) : interpretation;
-      } catch (error) { return failure(error); }
+      } catch (error) {
+        // A window may have arrived during asynchronous sealing/model work.
+        // Preparation/sealing can fail before returning a registration. Use
+        // only its validated, detached arrival identity for conservative fencing.
+        // Commit-time overlap already committed its fence before refusing.
+        try { if (error.code !== 'store_closed') storage.fenceArrival(arrivalToken); } catch (fenceError) { return failure(fenceError); }
+        return failure(error);
+      }
     },
     ...(rawTextReaders ? {
       getConversation: async input => { try { runtime.ready(); return success(await storage.getConversation(input)); } catch (error) { return failure(error); } },

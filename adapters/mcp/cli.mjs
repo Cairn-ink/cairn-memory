@@ -301,6 +301,7 @@ export function parseConfiguration(args) {
 export async function start(args = process.argv.slice(2), env = process.env) {
   if (args.length === 1 && args[0] === '--help') { console.log(help); return; }
   if(args[0]==='safety')return args[1]==='migrate'?safetyMigrateCommand(args.slice(1)):safetyCommand(args.slice(1));
+  if(args[0]==='raw'){const {rawCommand}=await import('./raw-command.mjs');process.exitCode=await rawCommand(args.slice(1));return;}
   if(args[0]==='assets')return assetCommand(args.slice(1));
   if(args[0]==='methods')return methodCommand(args.slice(1));
   if(args[0]==='model')return modelCommand(args.slice(1));

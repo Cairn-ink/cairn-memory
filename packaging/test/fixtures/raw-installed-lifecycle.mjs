@@ -63,10 +63,10 @@ export async function lifecycleFixture(t,{ client,matching = false }) {
   const database = join(workspace.path,'memory.sqlite'),configPath = join(workspace.path,'capture.json'),profilePath = join(workspace.path,'host.json');
   const stateRoot = join(workspace.path,'state'),identityKeyPath = join(workspace.path,'identity-key'),retainedPath = join(workspace.path,'retained.json');
   const trace = join(workspace.path,'http.jsonl'),namespace = { ownerId:'synthetic-installed-local',scope:'personal',projectId:null };
-  const scaffold = { PATH:dirname(process.execPath),HOME:home,TMPDIR:workspace.path,TMP:workspace.path,TEMP:workspace.path,
+  const scaffold = { NODE_TEST_CONTEXT:'child-v8',CAIRN_SYNTHETIC_FIXTURE_ROOT:workspace.path,PATH:dirname(process.execPath),HOME:home,TMPDIR:workspace.path,TMP:workspace.path,TEMP:workspace.path,
     NODE_NO_WARNINGS:'1',NODE_DISABLE_COMPILE_CACHE:'1',SYNTHETIC_INSTALLED:installed,SYNTHETIC_CLIENT:client,
     SYNTHETIC_DATABASE:database,SYNTHETIC_CONFIG:configPath,SYNTHETIC_USAGE:usage,SYNTHETIC_TRACE:trace,SYNTHETIC_CORE:join(installed,'core/index.mjs') };
-  const environment = { PATH:dirname(process.execPath),HOME:home,LOGNAME:'synthetic',USER:'synthetic',SHELL:'/bin/sh',TERM:'dumb',
+  const environment = { NODE_TEST_CONTEXT:'child-v8',CAIRN_SYNTHETIC_FIXTURE_ROOT:workspace.path,PATH:dirname(process.execPath),HOME:home,LOGNAME:'synthetic',USER:'synthetic',SHELL:'/bin/sh',TERM:'dumb',
     TMPDIR:workspace.path,TMP:workspace.path,TEMP:workspace.path,NODE_NO_WARNINGS:'1',NODE_DISABLE_COMPILE_CACHE:'1' };
   let phase = 0; const processes = [],captures = [],mcpSessions = [];
   function direct(args) {
@@ -96,6 +96,8 @@ export async function lifecycleFixture(t,{ client,matching = false }) {
     writeFileSync(sourcePath,header,{ mode:0o600 }); return { sessionId,sourcePath,initialized:false };
   });
   function append(index,text) {
+    // Codex observes the header EOF before the first synthetic user record.
+    if (client === 'codex' && !sessions[index].initialized) initialize(index);
     const { sessionId,sourcePath } = sessions[index],id = randomUUID();
     const row = client === 'claude-code' ? { type:'user',uuid:id,timestamp:null,promptSource:'typed',message:{ content:[{ type:'text',text }] } }
       : { type:'event_msg',timestamp:null,payload:{ type:'item_completed',thread_id:sessionId,turn_id:'synthetic-turn-'+id,item:{ type:'UserMessage',id,content:[{ type:'text',text }] } } };
@@ -115,8 +117,12 @@ export async function lifecycleFixture(t,{ client,matching = false }) {
     return JSON.parse(result.stdout);
   }
   const selected = (action,index = 0) => [action,'--session',sessions[index].sessionId,'--source',sessions[index].sourcePath];
+  function initialize(index) {
+    assert.equal(host([...selected('initialize',index),'--start',client === 'codex' ? 'eof':'beginning']).reason,'initialized');
+    sessions[index].initialized = true;
+  }
   function capture(index = 0,mode = 'memory') {
-    if (!sessions[index].initialized) { assert.equal(host([...selected('initialize',index),'--start','beginning']).reason,'initialized'); sessions[index].initialized = true; }
+    if (!sessions[index].initialized) initialize(index);
     const result = host(selected('run',index),{ mode,key:true }); assert.equal(result.worker.completedParts,1); assert.equal(result.worker.hasPending,false);
     captures.push({ session:index,mode,completedParts:result.worker.completedParts }); return result;
   }
@@ -206,6 +212,20 @@ else throw Error('synthetic probe action invalid');console.log(JSON.stringify(re
   }
   async function finish() {
     for (const session of mcpSessions) await session.close();
+    // Exercise the installed operator branch as well as retained MCP reads.
+    await noWork(async()=>{
+      const before = probe();
+      const output = direct(['--import',preload,executable,'raw','list','--db',database,'--owner',namespace.ownerId]);
+      const listed = output.trim().split('\n').filter(Boolean).map(JSON.parse);
+      assert.deepEqual(listed.map(row=>row.id).sort(),before.conversations.map(row=>row.id).sort());
+      for (const row of listed) {
+        assert.deepEqual(Object.keys(row).sort(),['id','client','firstEventAt','lastEventAt','messageCount','byteCount','fenced','hidden'].sort());
+        const messages = before.messages.filter(message=>message.conversation_id === row.id);
+        assert.equal(row.client,client); assert.equal(row.messageCount,messages.length);
+        assert.equal(row.byteCount,messages.reduce((total,message)=>total+message.total_bytes,0));
+      }
+      assert.deepEqual(probe(),before,'metadata-only list preserves retained rows');
+    });
     const observed = new Set();
     for (const name of readdirSync(workspace.path).filter(name=>/^(direct-|host-|child-|mcp-|pty-).*\.jsonl$/.test(name)))
       for (const row of rows(join(workspace.path,name))) if (row.path?.startsWith(installed+'/')) observed.add(relative(installed,row.path));
