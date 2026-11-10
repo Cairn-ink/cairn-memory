@@ -38,4 +38,3 @@ for(const limit of [1,4])test(`forget after epoch rollback ${limit} fences the a
  assert.equal(db.prepare('SELECT count(*) n FROM raw_parts').get().n,0);
  assert.deepEqual(fork,{ok:false,error:{code:'conversation_deleted',retryable:false}},'the arrived original UUID must stay fenced even when its capture did not store Raw');
 });
-

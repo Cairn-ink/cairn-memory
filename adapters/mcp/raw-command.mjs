@@ -73,7 +73,7 @@ export async function rawCommand(args, write = line => console.log(line), {testD
       LEFT JOIN local_raw_uuid_jobs j ON
         (j.owner_id,j.scope,j.project_id,j.client,j.session_key)=(c.owner_id,c.scope,c.project_id,c.client,c.session_key)
       WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.id=?`);
-    let after='';
+    let after='', seen;
     do {
       db.exec('BEGIN');
       let rows;
@@ -84,7 +84,14 @@ export async function rawCommand(args, write = line => console.log(line), {testD
       } catch(error) {db.exec('ROLLBACK');throw error;}
       if(operation==='list') {for(const {revision,...row}of rows)emit(row);after=rows.at(-1)?.id??after;if(rows.length<100)break;continue;}
       const row=rows[0];
-      if(!row)throw Object.assign(Error(),{code:'conversation_not_found'});
+      if(!row){
+        if(seen && values.has('--yes')) {
+          const {revision,...metadata}=seen;
+          emit({ok:true,dryRun:false,...metadata,conversationId:id});return 0;
+        }
+        throw Object.assign(Error(),{code:'conversation_not_found'});
+      }
+      seen=row;
       const input={namespace,conversationId:id,expectedRevision:row.revision,retainMemories:true};
       const result=values.has('--yes')?core.deleteConversation({...input,actionId:randomUUID()}):core.previewDeleteConversation(input);
       if(!result.ok){
