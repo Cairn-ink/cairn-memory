@@ -103,6 +103,18 @@ const recallRuntimeChanges = new Map([
 // Hosted pause intents and dispatch guards revise only current pins; preserve
 // every historical digest and the historical behavior comparisons below.
 const durabilityRuntimeChanges = new Map([
+  // Output gate admission now accepts the remaining-budget abort signal.
+  ['integrations/client/state-lock.mjs', {
+    historical: 'ee4bc6161d97bac44a8dc34a2058ed48e3dbbfeb105e32f6e66590b883b29b58',
+    before: 'ee4bc6161d97bac44a8dc34a2058ed48e3dbbfeb105e32f6e66590b883b29b58',
+    current: '47899f7e6881b7e27726f5145fe151c0f8068537045b3e26556eb9e53d87e14a',
+  }],
+  // Hosted cursors replay root-wide revocations before reading their generation.
+  ['integrations/codex/worker.mjs', {
+    historical: '0fbb1295e596769035eca5e974efa4f355774a6c37d70f3442a3e78c4aa7264d',
+    before: '0fbb1295e596769035eca5e974efa4f355774a6c37d70f3442a3e78c4aa7264d',
+    current: 'f8c90177c90b2bea59e7683786889ee27059989e2347070e7ea1c7295d538933',
+  }],
   ['integrations/codex/entry.mjs', {
     historical: '558a2f9f5cbed3c4e08146626708ba5ab4374e6938fa9c2e1cdc935d50580952',
     before: '0182cc90faddafeea34b8ba11a4c96805f74140117c1ee4b4ad118ca47b0d331',
@@ -116,7 +128,7 @@ const durabilityRuntimeChanges = new Map([
   ['integrations/client/hosted-pause.mjs', {
     historical: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
     before: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
-    current: '2f0dbea221b98ad9119dc77f1a48a3482c72c4c763fd2beaa29cb0fc61fbf664',
+    current: 'ac9ecacaa55be79b2877d01de150d9c2b76519ab85a50db96b453be744c79015',
   }],
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
@@ -371,11 +383,11 @@ test('L06 version normalization preserves unrelated bytes and complete runtime g
     normalized('Cairn.ink Memory setup 0.5.3\nunrelated 0.5.3', home));
 });
 test('L06 hosted runtime exceptions require packaged bytes and preserve all other comparisons', async () => {
-  assert.equal(hostedRuntimeExceptions.length, 13);
-  // Atomic output moved entry.mjs from recall substitutions to whole-file
-  // durability pins; the combined inventory remains thirteen runtime files.
+  assert.equal(hostedRuntimeExceptions.length, 15);
+  // Root replay and cancellable output admission add worker/state-lock pins.
+  // Existing immutable historical and previous digests stay unchanged.
   assert.equal(recallRuntimeChanges.size, 1);
-  assert.equal(durabilityRuntimeChanges.size, 5);
+  assert.equal(durabilityRuntimeChanges.size, 7);
   const home = '/synthetic/.codex';
   const oldRuntime = '.codex/cairn/runtime/0.5.3-0123456789ab/';
   const newRuntime = '.codex/cairn/runtime/0.6.0-abcdef012345/';
