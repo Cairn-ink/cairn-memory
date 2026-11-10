@@ -64,7 +64,6 @@
   "core/conflict-storage.mjs",
   "core/context-read-assembly.mjs",
   "core/context-read-three-layer.mjs",
-  "core/context-read-source-dates.mjs",
   "core/context-read-bm25.mjs",
   "core/context-read-budget.mjs",
   "core/context-read-embedder.mjs",

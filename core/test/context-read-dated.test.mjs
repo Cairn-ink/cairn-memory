@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { chmodSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from '../context-read-three-layer.mjs';
-import { receiptSourceRows, resolveMemorySourceDates } from '../context-read-source-dates.mjs';
-import { assembleContext, meteredText, receiptEventDate, completeResponseBytes } from '../context-read-assembly.mjs';
+import { receiptSourceRows, resolveMemorySourceDates, assembleContext, meteredText, receiptEventDate, completeResponseBytes } from '../context-read-assembly.mjs';
+
 import { ASSEMBLY_REPRESENTATIONS, ASSEMBLY_LIMITS, ASSEMBLY_DEFAULTS, CONTEXT_LIMITS, contextInput, namespaceKey } from '../context-read-input.mjs';
 import { assemblyQuery, fixedPrepared, ns, ok } from '../testing/context-read-assembly-fixture.mjs';
 import { host, receipt } from '../testing/context-read-core-fixture.mjs';
@@ -97,7 +97,13 @@ function roleAssembly(f, r, refs, namespace = ns, intent = 'current') {
 }
 const ref = (memory, namespace = ns) => ({ type: 'memory', namespace, memoryId: memory.id, revision: memory.revision });
 function expandedItems(metered) {
-  return metered.items.map(item => ({ ...item, sources: item.sources.map(source => {
+  return metered.items.map(item => ({ ...item, sources: item.sources.filter(source => {
+    if (source.excerpt !== undefined || source.sameAs || source.sameAsBody) return true;
+    // Date-only provenance has no excerpt to compare with the v2 projection.
+    assert.ok(source.date || source.dates?.length);
+    assert.ok(Object.keys(source).every(key => ['index', 'role', 'date', 'dates'].includes(key)));
+    return false;
+  }).map(source => {
     const concrete = source.sameAs ? metered.items[source.sameAs.item].sources[source.sameAs.source] : source;
     assert.equal(concrete.sameAs, undefined, 'aliases point directly to a concrete source');
     return { index: source.index, role: concrete.role, excerpt: concrete.sameAsBody ? item.body : concrete.excerpt };

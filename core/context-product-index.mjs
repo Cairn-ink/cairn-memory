@@ -11,9 +11,8 @@ import { contextInput, contextRawSearch, namespaceKey, ASSEMBLY_DEFAULTS, ASSEMB
 import { ownData } from './local-authority-input.mjs';
 import { deadline, PRODUCT_PROFILE } from './context-product-control.mjs';
 import { fuseCandidates } from './context-read-fusion.mjs';
-import { receiptEventDate, completeResponseBytes } from './context-read-assembly.mjs';
+import { receiptEventDate, completeResponseBytes, receiptSourceRows, resolveMemorySourceDates } from './context-read-assembly.mjs';
 import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from './context-read-three-layer.mjs';
-import { receiptSourceRows, resolveMemorySourceDates } from './context-read-source-dates.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { TOKENIZER_VERSION, REPRESENTATION_VERSION } from './context-read-tokenize.mjs';
 import { fail } from './validation.mjs';

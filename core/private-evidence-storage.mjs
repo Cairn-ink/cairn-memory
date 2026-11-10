@@ -8,7 +8,7 @@ import { createQualificationStorage } from './claim-qualification-storage.mjs';
 import { evidenceInput, evidenceRefs } from './private-evidence-input.mjs';
 import { keyed } from './private-card-input.mjs';
 import { fail } from './validation.mjs';
-import { receiptSourceTimeProbe } from './context-read-source-dates.mjs';
+import { receiptSourceTimeProbe } from './context-read-assembly.mjs';
 
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];

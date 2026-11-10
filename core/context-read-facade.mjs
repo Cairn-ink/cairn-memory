@@ -26,9 +26,8 @@ import { fuseCandidates, RRF_PRESETS } from './context-read-fusion.mjs';
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION } from './context-read-tokenize.mjs';
 import { validateVector } from './context-read-embedder.mjs';
 import { contextBudget } from './context-read-budget.mjs';
-import { receiptEventDate, completeResponseBytes } from './context-read-assembly.mjs';
+import { receiptEventDate, completeResponseBytes, receiptSourceRows, resolveMemorySourceDates } from './context-read-assembly.mjs';
 import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from './context-read-three-layer.mjs';
-import { receiptSourceRows, resolveMemorySourceDates } from './context-read-source-dates.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { CONTEXT_VERSION, CONTEXT_METHODS, CONTEXT_LIMITS, SOURCE_LIMITS, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_DEFAULTS, DEFAULT_ASSEMBLY_POLICY,
   contextOptions, contextInput, contextRefs, namespaceKey } from './context-read-input.mjs';

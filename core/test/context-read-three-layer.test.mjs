@@ -167,7 +167,7 @@ test('one Memory with multiple receipt sources keeps all dates in mixed and Memo
     const value = ok(await read(query('telescope preference', { raw })));
     assert.equal(value.metered.items.length, 1);
     const item = value.metered.items[0];
-    assert.equal(item.ref.type, 'memory'); assert.equal(item.date, undefined);
+    assert.equal(item.ref.type, 'memory'); assert.equal(item.date, '2026-01-01T08:00Z');
     assert.deepEqual(item.sources.map(source => source.date).sort(), ['2026-01-01T08:00Z', '2026-01-03T08:00Z']);
     assert.equal(value.diagnostics.budget.used, counter.countTokens(meteredText(value.metered)));
   }

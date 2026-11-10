@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { resolveMemorySourceDates, receiptSourceRows, sourceDateFields } from '../context-read-source-dates.mjs';
-import { assembleContext, meteredText } from '../context-read-assembly.mjs';
+import { resolveMemorySourceDates, receiptSourceRows, sourceDateFields, assembleContext, meteredText } from '../context-read-assembly.mjs';
+
 import { assembleThreeLayerContext } from '../context-read-three-layer.mjs';
 import { fixedPrepared, ns } from '../testing/context-read-assembly-fixture.mjs';
 
@@ -64,7 +64,7 @@ test('one batch resolves canonical Raw times across Memories/namespaces and refu
   assert.equal(unauthorized.item.sources[0].date, undefined);
 });
 
-test('multi-source Memory retains each source date and uses chronology only for emission', t => {
+test('multi-source Memory retains each source date and the earliest item date', t => {
   const { db, add } = database(t);
   add('multi', 'multi-first', first); add('multi', 'multi-last', last);
   add('single', 'single', '2026-01-02T08:00:00.000Z');
@@ -75,7 +75,7 @@ test('multi-source Memory retains each source date and uses chronology only for 
   resolveMemorySourceDates(db, entries, Infinity);
   const prepared = entries.map(e => e.item), result = assembleContext(options(prepared));
   assert.deepEqual(result.metered.items.map(item => item.ref.id), ['multi', 'single']);
-  assert.equal(result.metered.items[0].date, undefined);
+  assert.equal(result.metered.items[0].date, '2026-01-01T08:00Z');
   assert.deepEqual(result.metered.items[0].sources.map(source => source.date), ['2026-01-03T08:00Z', '2026-01-01T08:00Z']);
   assert.deepEqual(result.selected.map(item => item.ref.memoryId), ['single', 'multi']);
   assert.equal(result.diagnostics.budget.used, Buffer.byteLength(meteredText(result.metered)));
@@ -85,15 +85,67 @@ test('multi-source Memory retains each source date and uses chronology only for 
   assert.ok(!JSON.stringify(legacy.metered).includes('2026-'));
 });
 
-test('one receipt with several canonical source times emits dates without an item-level date', t => {
+test('one receipt with several canonical source times emits dates and the earliest item date', t => {
   const { db, add } = database(t);
   add('multi', 'receipt', first, ns, 'conversation-first');
   add('multi', 'receipt', last, ns, 'conversation-last');
   const value = entry('multi', [{ id: 'receipt', source_time_available: 1 }]);
   resolveMemorySourceDates(db, [value], Infinity);
-  assert.equal(value.item.date, null);
+  assert.equal(value.item.date, '2026-01-01T08:00Z');
   assert.deepEqual(value.item.sources[0].dates, ['2026-01-01T08:00Z', '2026-01-03T08:00Z']);
   assert.deepEqual(sourceDateFields(value.item.sources[0], dated), { dates: ['2026-01-01T08:00Z', '2026-01-03T08:00Z'] });
+});
+
+test('Raw lineage preserves an existing receipt item date while retaining its own source date', t => {
+  const { db, add } = database(t);
+  for (const [id, receiptTime, rawTime] of [['earlier', first, last], ['later', last, first]]) {
+    add(id, id, rawTime);
+    const value = entry(id, [{ id, source_time_available: 1, occurred_at: receiptTime }]);
+    value.item.date = receiptTime.slice(0, 16) + 'Z';
+    resolveMemorySourceDates(db, [value], Infinity);
+    assert.equal(value.item.date, receiptTime.slice(0, 16) + 'Z');
+    assert.equal(value.item.sources[0].date, rawTime.slice(0, 16) + 'Z');
+    assert.equal(value.item.sortDate, rawTime.slice(0, 16) + 'Z');
+  }
+});
+
+test('mixed item dates retain the earliest receipt or attached Raw date across coalesced Memories', () => {
+  const turn = JSON.stringify([JSON.stringify([ns.ownerId, ns.scope, ns.projectId ?? '']), 'synthetic', 'shared']);
+  for (const [primaryDate, secondaryDate, rawDate, expected] of [
+    [null, null, first, '2026-01-01T08:00Z'],
+    ['2026-01-03T08:00Z', '2026-01-01T08:00Z', last, '2026-01-01T08:00Z'],
+    ['2026-01-03T08:00Z', null, first, '2026-01-01T08:00Z'],
+  ]) {
+    const prepared = ['primary', 'secondary'].map((id, index) => {
+      const { item } = entry(id, [{ id }]);
+      return { ...item, rank: index + 1, date: [primaryDate, secondaryDate][index], turnIds: [turn] };
+    });
+    const value = { namespace: ns, conversationId: 'synthetic', messageId: 'shared', role: 'user', occurredAt: rawDate,
+      ranges: [{ source: { span: { start: 0, end: 9 } }, text: 'telescope' }] };
+    const result = assembleThreeLayerContext(options(prepared), { items: [{ key: turn, rank: 1, value, handle: {} }],
+      coverage: 'included', rawSearch: { revalidate: () => [value] } });
+    assert.equal(result.metered.items.length, 1);
+    assert.equal(result.metered.items[0].date, expected);
+  }
+});
+
+test('new lineage dates preserve an existing attached Raw item date and the round-one ordering key', t => {
+  const { db, add } = database(t);
+  add('memory', 'receipt', first);
+  const { item, rows } = entry('memory', [{ id: 'receipt', source_time_available: 1 }]);
+  resolveMemorySourceDates(db, [{ item, rows }], Infinity);
+  const turn = JSON.stringify([JSON.stringify([ns.ownerId, ns.scope, ns.projectId ?? '']), 'synthetic', 'shared']);
+  item.turnIds = [turn];
+  const value = { namespace: ns, conversationId: 'synthetic', messageId: 'shared', role: 'user', occurredAt: last,
+    ranges: [{ source: { span: { start: 0, end: 9 } }, text: 'telescope' }] };
+  const result = assembleThreeLayerContext(options([item]), { items: [{ key: turn, rank: 1, value, handle: {} }],
+    coverage: 'included', rawSearch: { revalidate: () => [value] } });
+  assert.equal(result.metered.items[0].date, '2026-01-03T08:00Z');
+  assert.equal(result.metered.items[0].sources[0].date, '2026-01-01T08:00Z');
+  assert.equal(item.sortDate, '2026-01-01T08:00Z');
+  assert.ok(!JSON.stringify(result.metered).includes('receiptDate'));
+  const fallback = assembleThreeLayerContext(options([item]), { items: [], coverage: 'unavailable' });
+  assert.equal(fallback.metered.items[0].date, '2026-01-01T08:00Z');
 });
 
 test('dated receipt entries remain when excerpt text cannot fit, with exact budget and omission counts', () => {

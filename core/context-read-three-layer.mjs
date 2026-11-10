@@ -1,11 +1,10 @@
 import { performance } from 'node:perf_hooks';
 import { assertContentPort } from './content-safety-boundary.mjs';
-import { assembleContext, ASSEMBLY_FRAMING, meteredText } from './context-read-assembly.mjs';
+import { assembleContext, ASSEMBLY_FRAMING, meteredText, sourceDateFields } from './context-read-assembly.mjs';
 import { ASSEMBLY_DEFAULTS, ASSEMBLY_LIMITS, CONTEXT_VERSION, namespaceKey } from './context-read-input.mjs';
 import { createBM25, scoreBM25 } from './context-read-bm25.mjs';
 import { tokenizeT1, termFrequencies } from './context-read-tokenize.mjs';
 import { countTokens } from './model-budget.mjs';
-import { sourceDateFields } from './context-read-source-dates.mjs';
 import { fail } from './validation.mjs';
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -268,6 +267,12 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
         const { body, ...ref } = item.wire; return { ...ref, sameAsBody: true };
       });
       unit.date = [...unit.memories.map(item => item.sortDate ?? item.date), ...unit.evidence.map(item => item.date)].filter(Boolean).sort(binary)[0];
+      // Preserve the date this unit already delivered from receipts/attached
+      // Raw. Lineage-only dates fill the previously undated case.
+      const existingDate = [...unit.memories.map(item => Object.hasOwn(item, 'receiptDate') ? item.receiptDate : item.date),
+        ...unit.evidence.map(item => item.date)].filter(Boolean).sort(binary)[0];
+      const itemDate = existingDate ?? unit.memories.map(item => item.date).filter(Boolean).sort(binary)[0];
+      if (args.representation === 'representation-v2-dated' && itemDate) unit.wire.date = itemDate.slice(0, 16) + 'Z';
       unit.lexicalText = [...bodies, ...unit.evidence.map(item => item.wire.body)].join(' ');
       unit.terms = new Set(tokenizeT1(unit.lexicalText));
       unit.cost = countTokens(counter, JSON.stringify(unit.wire));
