@@ -23,7 +23,7 @@
     "integrations/codex/digest.mjs": "eeb6b23e608344e42bc2ef3c862fbc3cf09af2c1034293205623f7a8abe37f4e",
     "integrations/codex/entry.mjs": "4bc207d972508f7e0ba7eea2ed69021188673d47cccfe6a375de1b8d88973ea4",
     "integrations/codex/hook.mjs": "f2cebf18c7a2ad3972a833bddc611f67e0b132ca4845e6f721719d80f27302f9",
-    "integrations/codex/hosted-lifecycle.mjs": "7c19835ca726fb3f0e0302f9a84736ed4fadd10429e508a8009be40c40a0ceb1",
+    "integrations/codex/hosted-lifecycle.mjs": "3771ad2a034c5cad4b9a2882d5a9306a7cefd704bcebc67893fc286b93937b24",
     "integrations/codex/installed-state.mjs": "7ebceb25f266b9aa635d1fd8a588504da33cbfc4c01144ce5b4b9c10f2864932",
     "integrations/codex/installed.mjs": "8079b851c499f57f2064c29380a3b8b9a137dd3bb9b4dd4b930b5b1b047f32d9",
     "integrations/codex/parser.mjs": "41440a7a2e0bb4108bc9abcace2b3d51e8437fea7c6591c28b3d56c65b4243a5",
@@ -32,6 +32,6 @@
     "integrations/codex/session-source.mjs": "1341cc42eebf5a996be305f471393a717bfdd5eddd19fc3fd556fe8483fdfbc3",
     "integrations/codex/source.mjs": "6bf982b4227d6a7834c02faa74690340c72b269ccf1e9a1242358135de37b580",
     "integrations/codex/tripwire.mjs": "96f09081cb2d9416baef2c7a0774a76da178006ad038e8f560af943331232af6",
-    "integrations/codex/worker.mjs": "f8c90177c90b2bea59e7683786889ee27059989e2347070e7ea1c7295d538933"
+    "integrations/codex/worker.mjs": "6453ea0e6d3c0f3a4eb70bfc4eb7c45e85251c48dcc4c3da89e177be834ff03e"
   }
 }

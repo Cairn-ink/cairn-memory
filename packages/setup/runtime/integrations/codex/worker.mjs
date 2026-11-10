@@ -510,7 +510,8 @@ export async function runWorker(
                   reject(new Error("timeout"));
                 }, requestMs);
               });
-              return Promise.race([transport.capture(b.body, { signal: abort.signal }), timeout]);
+              return Promise.race([transport.capture(b.body, { signal: abort.signal,
+                ...(mode === 'hosted' ? { generation: s.generation } : {}) }), timeout]);
             }),
           );
           if (!gate.ok) {

@@ -13,7 +13,7 @@ export function installedTransport(config, token, expectedRemoteGeneration) {
   let inFlight = 0;
   return {
     terminated: () => inFlight === 0,
-    async capture(body, { signal }) {
+    async capture(body, { signal, generation }) {
       inFlight++;
       try {
         const remote = await observeHostedPause(config, token, signal);
@@ -26,7 +26,8 @@ export function installedTransport(config, token, expectedRemoteGeneration) {
           const current = await observeHostedPause(config, token, signal);
           if (current.paused || current.generation !== expectedRemoteGeneration) throw new Error('dispatch_not_started');
           const active = await withHostedPauseGate(config, expectedRemoteGeneration,
-            guard => startIfActive(config.root, local.generation, start, { signal, guard }));
+            // A repaired root generation cannot authorize an older frozen body.
+            guard => startIfActive(config.root, generation ?? local.generation, start, { signal, guard }));
           if (!active.started) throw new Error('dispatch_not_started');
           return active.operation;
         };
