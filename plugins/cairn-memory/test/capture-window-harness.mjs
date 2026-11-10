@@ -13,13 +13,17 @@ export const row = (id, timestamp = oldTime, extra = {}) => JSON.stringify({
   message: { content: `Synthetic ${id}` }, ...extra,
 }) + '\n';
 
-export async function harness(t, { fail = () => false, holdRecall, hookPath, observedAt, groupingLimit, mutateRuntime, strictTimes = false } = {}) {
+export async function harness(t, { fail = () => false, holdRecall, hookPath, observedAt, groupingLimit, mutateRuntime, strictTimes = false, portable = false, pauseState = () => ({ paused: false, generation: 0, enforced: true }) } = {}) {
   const workspace = createTestWorkspace(t, { prefix: 'capture-window-' });
   const dataDir = join(workspace.path, 'data'), transcript = join(workspace.path, 'transcript.jsonl');
   await mkdir(dataDir, { mode: 0o700 });
   const sessionId = 'synthetic-session', statePath = captureCursorPath(dataDir, sessionId);
   const captures = [], recalls = [], forgets = [];
   const server = createServer(async (request, response) => {
+    if (request.url === '/api/memory/pause-state') {
+      request.resume(); response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify(pauseState())); return;
+    }
     let text = '';
     for await (const chunk of request) text += chunk;
     const body = JSON.parse(text);
@@ -45,7 +49,8 @@ export async function harness(t, { fail = () => false, holdRecall, hookPath, obs
   t.after(() => { server.closeAllConnections(); server.close(); });
   if (observedAt || groupingLimit || mutateRuntime) {
     const copy = join(workspace.path, 'plugin');
-    const sourceRoot = hookPath ? dirname(dirname(hookPath)) : fileURLToPath(new URL('../', import.meta.url));
+    const sourceHook = hookPath ?? process.env.CAIRN_CAPTURE_TEST_HOOK;
+    const sourceRoot = sourceHook ? dirname(dirname(sourceHook)) : fileURLToPath(new URL('../', import.meta.url));
     for (const directory of ['lib', 'scripts']) await cp(join(sourceRoot, directory), join(copy, directory), { recursive: true });
     hookPath = join(copy, 'scripts/hook.mjs');
     let source = await readFile(hookPath, 'utf8');
@@ -57,7 +62,7 @@ export async function harness(t, { fail = () => false, holdRecall, hookPath, obs
   async function run(action, extra = {}) {
     const hook = hookPath ?? process.env.CAIRN_CAPTURE_TEST_HOOK ?? fileURLToPath(new URL('../scripts/hook.mjs', import.meta.url));
     const before = performance.now();
-    const child = spawn(process.execPath, [hook, action], {
+    const child = spawn(process.execPath, [...(portable ? ['--import', fileURLToPath(new URL('./fixtures/pause-native-preload.mjs', import.meta.url))] : []), hook, action], {
       env: { PATH: process.env.PATH, HOME: workspace.path, CLAUDE_PLUGIN_DATA: dataDir,
         CLAUDE_PLUGIN_OPTION_API_ENDPOINT: `http://127.0.0.1:${server.address().port}`,
         CLAUDE_PLUGIN_OPTION_API_TOKEN: 'synthetic-token', CLAUDE_PLUGIN_OPTION_TELEMETRY: 'false' },
