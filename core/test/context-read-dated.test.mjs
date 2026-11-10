@@ -30,6 +30,8 @@ import { MemoryStoreError, fail } from '../validation.mjs';
 import { deepFreeze } from '../private-card-input.mjs';
 import { createContentReadMemo } from '../content-safety.mjs';
 import { cardLineageItemInside } from '../card-lineage.mjs';
+import { deliverMemoryRelations, memoryRelationLabels, memoryRelationsPresent } from '../memory-relations-read.mjs';
+import { memoryRelationTime } from '../memory-relations-time.mjs';
 
 const fixtureBase = Number(process.env.CAIRN_DATED_TEST_BASE ?? 18);
 assert.ok([18, 23, 33].includes(fixtureBase), 'known dated fixture base');
@@ -291,6 +293,7 @@ function enclosingReader(kind, definitions, port, { unavailable = 0, localStatus
     db: { prepare(sql) { assert.match(sql, /^SELECT \* FROM receipts/); return { all: id => rows.get(id) }; } },
     evidence: { itemsInside: (_ns, refs) => refs.map(ref => { const item = canonical.get(ref.memoryId); if (!item) fail('evidence_unavailable'); return item; }) },
     cachedContentLayout: () => safety ? { suppressionRevision: 1 } : null, createContentReadMemo, cardLineageItemInside,
+    deliverMemoryRelations, memoryRelationLabels, memoryRelationsPresent, memoryRelationTime,
     namespaceKey, receiptEventDate, validateSourceReceipt, createHash, bind, encode, ASSEMBLY_LIMITS, CONTEXT_LIMITS,
     readRawChannel, citedRawTurns, assembleThreeLayerContext: (args, raw) => assembleThreeLayerContext({ ...args, now: () => 0 }, raw),
     success: value => ({ ok: true, value }), failure: error => ({ ok: false, error: { code: error.code } }), MemoryStoreError, fail, deepFreeze,
