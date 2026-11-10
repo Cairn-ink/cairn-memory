@@ -5,6 +5,7 @@ import { ASSEMBLY_DEFAULTS, ASSEMBLY_LIMITS, CONTEXT_VERSION, namespaceKey } fro
 import { createBM25, scoreBM25 } from './context-read-bm25.mjs';
 import { tokenizeT1, termFrequencies } from './context-read-tokenize.mjs';
 import { countTokens } from './model-budget.mjs';
+import { sourceDateFields } from './context-read-source-dates.mjs';
 import { fail } from './validation.mjs';
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -166,7 +167,7 @@ function memoryWire(item, representation, body = item.text) {
     ...(item.type === 'card' ? { bodyRev: item.ref.bodyRevision } : {}), f: item.fence.slice(0, 8) }, rank: item.rank,
     ...(representation === 'representation-v2-dated' && item.date ? { date: item.date } : {}), body,
     ...(Object.keys(metadata).length ? { metadata } : {}),
-    sources: item.sources.map(source => ({ index: source.index, role: source.role,
+    sources: item.sources.map(source => ({ index: source.index, ...sourceDateFields(source, representation), role: source.role,
       ...(source.excerpt === body ? { sameAsBody: true } : { excerpt: source.excerpt }) })),
     ...(item.sourceAccess !== 'available' ? { sourceAccess: item.sourceAccess } : {}),
     ...(!item.sourcesComplete ? { sourcesComplete: false } : {}) };
@@ -246,13 +247,27 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
         overlap(new Set(tokenizeT1(body)), new Set(tokenizeT1(memory.text))) >= .6)) bodies.push(memory.text);
       unit.wire = unit.memories.length ? memoryWire(unit.memories[0], args.representation, bodies.join('\n'))
         : { layer: 'Raw', ...unit.evidence[0].wire };
+      if (args.representation === 'representation-v2-dated' && unit.memories.length > 1) {
+        // Coalescing retains the original bodies/excerpts. Date-only entries
+        // keep secondary Memories' source dates, qualified by their own ref so
+        // receipt indexes never silently refer to the primary Memory instead.
+        for (const memory of unit.memories.slice(1)) {
+          let ref;
+          for (const source of memory.sources) {
+            if (!source.date && !source.dates?.length) continue;
+            ref ??= memoryWire(memory, args.representation).ref;
+            unit.wire.sources.push({ memory: ref, index: source.index,
+              ...sourceDateFields(source, args.representation), role: source.role });
+            unit.wire.sourcesComplete = false;
+          }
+        }
+      }
       unit.evidence.sort((a, b) => datedOrder({ date: a.date, rank: a.rank }, { date: b.date, rank: b.rank }));
       if (unit.memories.length && unit.evidence.length) unit.wire.evidence = unit.evidence.map(item => {
         if (item.wire.body !== unit.wire.body) return item.wire;
         const { body, ...ref } = item.wire; return { ...ref, sameAsBody: true };
       });
-      unit.date = [...unit.memories.map(item => item.date), ...unit.evidence.map(item => item.date)].filter(Boolean).sort(binary)[0];
-      if (args.representation === 'representation-v2-dated' && unit.date) unit.wire.date = unit.date.slice(0, 16) + 'Z';
+      unit.date = [...unit.memories.map(item => item.sortDate ?? item.date), ...unit.evidence.map(item => item.date)].filter(Boolean).sort(binary)[0];
       unit.lexicalText = [...bodies, ...unit.evidence.map(item => item.wire.body)].join(' ');
       unit.terms = new Set(tokenizeT1(unit.lexicalText));
       unit.cost = countTokens(counter, JSON.stringify(unit.wire));

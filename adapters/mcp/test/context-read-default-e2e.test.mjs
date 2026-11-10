@@ -44,7 +44,7 @@ async function publish(core, namespace, expected) {
   assert.fail('default Raw maintenance did not publish: ' + JSON.stringify(found));
 }
 
-async function read(client) {
+async function read(client, { coverage = 'included' } = {}) {
   // The server owns a separate reader, so wait for its bounded discovery turn.
   let result;
   for (let turn = 0; turn < 16; turn++) {
@@ -54,7 +54,7 @@ async function read(client) {
     assert.equal(response.isError, false, JSON.stringify(response));
     result = { metered: ok(envelope), diagnostics: response._meta['ink.cairn/context-read-diagnostics'],
       snapshot: response._meta['ink.cairn/context-read-snapshot'] };
-    if (result.diagnostics.coverage.raw === 'included') return result;
+    if (result.diagnostics.coverage.raw === coverage) return result;
     await delay(1100);
   }
   assert.fail('default contextRead did not include Raw: ' + JSON.stringify(result));
@@ -83,6 +83,17 @@ test('default keyless MCP reads dated captured Memory and Raw, forgets and isola
   assert.match(JSON.stringify(before.metered.items[1]), /I no longer like egg pancakes because of gutter oil/);
   assert.ok(before.metered.items.some(item => item.ref.type === 'memory'));
   assert.ok(before.metered.items.some(item => item.ref.type === 'raw' || item.evidence?.some(evidence => evidence.ref.type === 'raw')));
+
+  const rawDisabled = await connect(workspace, path, personal, { raw: false });
+  const rawUnavailable = await connect(workspace, path, personal, { rawSearch: false });
+  for (const result of [await read(rawDisabled, { coverage: 'unavailable' }),
+    await read(rawUnavailable, { coverage: 'unavailable' })]) {
+    assert.deepEqual(result.metered.items.map(item => item.date), ['2026-01-01T08:00Z', '2026-01-03T08:00Z']);
+    assert.deepEqual(result.metered.items.map(item => item.sources[0].date), ['2026-01-01T08:00Z', '2026-01-03T08:00Z']);
+    assert.ok(result.metered.items.every(item => item.ref.type === 'memory' && !item.evidence));
+    assert.match(JSON.stringify(result.metered.items[0]), /I like egg pancakes/);
+    assert.match(JSON.stringify(result.metered.items[1]), /I no longer like egg pancakes because of gutter oil/);
+  }
 
   const second = await connect(workspace, path, project);
   assert.equal((await read(second)).metered.items.length, 0, 'an empty second namespace must see nothing from the first');

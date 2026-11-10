@@ -2,6 +2,7 @@ import test, { describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { eventTimeFixture } from '../testing/receipt-event-time-fixture.mjs';
+import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import { installRawSearchTestClock } from '../testing/raw-search-clock.mjs';
 import { cardHost, localPlainPort, ns, ok, request, splitRaw } from '../testing/raw-source-fixtures.mjs';
 import { searchFixture } from '../testing/raw-search-fixtures.mjs';
@@ -19,6 +20,7 @@ import { configured } from '../testing/context-product-owner-fixture.mjs';
 import { accessDigest } from '../context-product-validation.mjs';
 import { transaction } from '../database.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
+import { measureContentRead } from '../testing/content-safety-cost-meter.mjs';
 
 test.beforeEach(installRawSearchTestClock);
 for (const preparation of ['batch', 'single']) describe(preparation + ' host', () => {
@@ -26,8 +28,8 @@ const counter = { id: 'synthetic-quarter-bytes', countTokens: text => Math.ceil(
 const dated = 'representation-v2-dated';
 const query = (text = '蛋餅', patch = {}) => ({ readSet: [ns], types: ['memory'], intent: 'current', query: text, ...patch });
 
-async function fixture(t, { extract, portCounter = counter } = {}) {
-  const base = await eventTimeFixture(t, 33), privateHost = cardHost(), crypto = localPlainPort();
+async function fixture(t, { extract, portCounter = counter, eventTime = true } = {}) {
+  const base = eventTime ? await eventTimeFixture(t, 33) : safetyFixture(t, 33), privateHost = cardHost(), crypto = localPlainPort();
   const core = openRawCaptureCore({ path: base.path, privateCards: privateHost.options,
     model: { ...rationaleModel(), extract: extract ?? (() => ({ items: [] })) } },
   { mode: 'raw-v1', sources: true, port: crypto, readPolicy: () => ({ generation: 'synthetic', reason: null }) });
@@ -61,7 +63,10 @@ async function fixture(t, { extract, portCounter = counter } = {}) {
       readOnly = openContextReader({ path: f.path, contextRead }); base.workspace.defer(() => readOnly.close());
       const facade = openContextProductFacade(f.path, {}); base.workspace.defer(() => facade.close());
       product = openProductIndex({ path: f.path, facade, counter: portCounter, rawSearch: rawPort, maintenance: true,
-        authorize: () => ({ accessGenerations: accessDigest({ ownerId: ns.ownerId, namespaces: { readSet: [ns] } }), check() {}, envelope: work => work() }),
+        authorize: () => {
+          if (!trusted.state.enabled) throw Object.assign(Error('synthetic context denial'), { code: 'scope_changed' });
+          return { accessGenerations: accessDigest({ ownerId: ns.ownerId, namespaces: { readSet: [ns] } }), check() {}, envelope: work => work() };
+        },
         ownerCoverage: { policy: 'recent-projects-v1', selectionRevision: 'synthetic', requestedNamespaces: 1, selectedNamespaces: 1, omittedNamespaces: 0 } });
       base.workspace.defer(() => product.close());
     }
@@ -73,7 +78,7 @@ async function fixture(t, { extract, portCounter = counter } = {}) {
     }
     for (let i = 0; i < 100; i++) if (ok(product.run('refreshContextIndex', { ...input, mode: 'lexical' })).status === 'complete') break;
   }
-  return { ...f, capture, build, get service() { return service; }, get rawPort() { return rawPort; },
+  return { ...f, capture, build, trusted, get service() { return service; }, get rawPort() { return rawPort; },
     read: input => trusted.call(reader, 'contextRead', input),
     readers: () => [input => trusted.call(reader, 'contextRead', input), input => trusted.call(readOnly, 'contextRead', input), input => product.run('contextRead', input)] };
 }
@@ -103,6 +108,93 @@ test('dated default preserves the egg-pancake preference change and coalesces ci
     t.diagnostic('egg-pancake rendered: ' + meteredText(result.metered));
   }
 });
+
+test('canonical source dates survive every Memory-only fallback on every reader without receipt time columns', async t => {
+  const f = await fixture(t, { eventTime: false, extract: ({ input }) => ({ items: input.messages.map(message => ({
+    content: message.content, kind: 'fact', confidence: 1, sourceIndices: [message.index] })) }) });
+  // Capture and relevance order deliberately differ from source chronology.
+  await f.capture('telescope newer preference', { id: 'newer', occurredAt: '2026-01-03T08:00:00.000Z' });
+  await f.capture('telescope older preference', { id: 'older', ordinal: 2, occurredAt: '2026-01-01T08:00:00.000Z' });
+  assert.equal(f.db.prepare('PRAGMA table_info(receipts)').all().some(row => row.name === 'occurred_at'), false);
+  await f.build();
+  const search = f.rawPort.search, revalidate = f.rawPort.revalidate;
+  for (const read of f.readers()) {
+    for (const mode of ['mixed', 'disabled', 'empty', 'unavailable', 'validation-failed']) {
+      let validations = 0;
+      f.rawPort.search = mode === 'empty' ? async () => ({ coverage: { status: 'complete' }, candidates: [] })
+        : mode === 'unavailable' ? async () => { throw Error('synthetic Raw unavailable'); } : search;
+      f.rawPort.revalidate = handles => {
+        if (mode === 'validation-failed' && ++validations === 2) throw Error('synthetic final validation failure');
+        return revalidate(handles);
+      };
+      const measured = await measureContentRead('contextRead', 'source-dates', () =>
+        read(query('telescope preference', mode === 'disabled' ? { raw: false } : {})));
+      const value = ok(measured.result);
+      assert.equal(measured.sql.filter(([sql]) => sql.startsWith('WITH wanted AS (SELECT value FROM json_each(?))'))
+        .reduce((n, [, count]) => n + count, 0), 1, 'one source-time statement for the entire read');
+      assert.equal(value.metered.items.length, 2, mode);
+      assert.deepEqual(value.metered.items.map(item => item.date), ['2026-01-01T08:00Z', '2026-01-03T08:00Z'], mode);
+      assert.deepEqual(value.metered.items.map(item => item.sources[0].date), ['2026-01-01T08:00Z', '2026-01-03T08:00Z'], mode);
+      assert.ok(value.metered.items.every(item => item.ref.type === 'memory'));
+      assert.equal(value.diagnostics.budget.used, counter.countTokens(meteredText(value.metered)));
+      if (mode !== 'mixed') assert.ok(value.metered.items.every(item => !item.evidence));
+      if (mode === 'validation-failed') { assert.equal(validations, 2); assert.equal(value.diagnostics.coverage.raw, 'partial'); }
+    }
+  }
+});
+
+test('an undated Raw-capable store adds no date lookup and preserves the base Memory-only bytes', async t => {
+  const f = await fixture(t, { eventTime: false, extract: ({ input }) => ({ items: input.messages.map(message => ({
+    content: message.content, kind: 'fact', confidence: 1, sourceIndices: [message.index] })) }) });
+  await f.capture('telescope undated preference'); await f.build();
+  for (const read of f.readers()) for (const raw of [true, false]) {
+    const legacy = ok(await read(query('telescope', { raw, representation: 'representation-v2' })));
+    const measured = await measureContentRead('contextRead', 'undated-source-dates', () => read(query('telescope', { raw })));
+    const current = ok(measured.result);
+    assert.equal(meteredText(current.metered), meteredText(legacy.metered));
+    assert.equal(current.snapshot, legacy.snapshot);
+    assert.equal(measured.sql.filter(([sql]) => sql.startsWith('WITH wanted AS (SELECT value FROM json_each(?))')).length, 0);
+  }
+});
+
+test('one Memory with multiple receipt sources keeps all dates in mixed and Memory-only packs', async t => {
+  const f = await fixture(t, { eventTime: false, extract: ({ input }) => ({ items: input.messages.map(message => ({
+    content: 'telescope combined preference', kind: 'fact', confidence: 1, sourceIndices: [message.index] })) }) });
+  await f.capture('telescope first source', { id: 'first', occurredAt: '2026-01-01T08:00:00.000Z' });
+  await f.capture('telescope second source', { id: 'second', ordinal: 2, occurredAt: '2026-01-03T08:00:00.000Z' });
+  await f.build();
+  for (const read of f.readers()) for (const raw of [true, false]) {
+    const value = ok(await read(query('telescope preference', { raw })));
+    assert.equal(value.metered.items.length, 1);
+    const item = value.metered.items[0];
+    assert.equal(item.ref.type, 'memory'); assert.equal(item.date, undefined);
+    assert.deepEqual(item.sources.map(source => source.date).sort(), ['2026-01-01T08:00Z', '2026-01-03T08:00Z']);
+    assert.equal(value.diagnostics.budget.used, counter.countTokens(meteredText(value.metered)));
+  }
+});
+
+for (const mutation of ['forgotten', 'suppressed', 'excluded', 'denied'])
+  test(`Memory receipt ${mutation} contributes neither date nor text`, async t => {
+    const f = await fixture(t, { eventTime: mutation === 'suppressed', extract: ({ input }) => ({ items: input.messages.map(message => ({
+      content: 'telescope summary', kind: 'fact', confidence: 1, sourceIndices: [message.index] })) }) });
+    const source = await f.capture('telescope hidden source', { occurredAt: '1971-02-03T04:05:00.000Z' });
+    await f.build();
+    assert.equal(ok(await f.read(query('telescope', { raw: false }))).metered.items[0].sources[0].date, '1971-02-03T04:05Z');
+    if (mutation === 'forgotten') {
+      const memory = f.db.prepare('SELECT id,revision FROM memories WHERE deleted=0').get();
+      ok(f.core.forget({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision }));
+    } else if (mutation === 'suppressed') transaction(f.db, () => writeContentSuppressionInside(f.db,
+      { namespace: ns, kind: 'raw', key: source.conversationId, matchMode: 'span', messageId: source.messageId,
+        start: 0, end: source.text.length, reason: 'privacy_erase', actionId: 'synthetic-source-date-suppression' }));
+    else if (mutation === 'excluded') f.db.prepare('INSERT INTO raw_source_exclusions VALUES(?,?,?,?,?)')
+      .run(source.conversationId, source.messageId, 0, source.text.length, 1);
+    else f.trusted.state.enabled = false;
+    for (const read of f.readers()) {
+      const value = await read(query('telescope', { raw: false }));
+      assert.ok(!JSON.stringify(value).includes('hidden source'));
+      assert.ok(!JSON.stringify(value).includes('1971-02-03'));
+    }
+  });
 
 test('a query-matched assistant fact beyond 800 characters is delivered as an exact Raw excerpt', async t => {
   const f = await fixture(t);
@@ -164,8 +256,8 @@ test('Raw and Memory remain isolated by both owner and namespace', async t => {
   const foreignSources = [];
   for (const [label, namespace] of [['other-project', { ...ns, scope: 'project', projectId: 'other-project' }],
     ['other-owner', { ...ns, ownerId: 'other-owner' }]]) {
-    foreignSources.push(await f.capture('telescope foreign-synthetic-' + label, { namespace, sessionId: label }));
-    foreignSources.push(await f.capture('telescope public-synthetic', { namespace, sessionId: label, id: 'identical', ordinal: 2 }));
+    foreignSources.push(await f.capture('telescope foreign-synthetic-' + label, { namespace, sessionId: label, occurredAt: '1970-02-03T00:00:00.000Z' }));
+    foreignSources.push(await f.capture('telescope public-synthetic', { namespace, sessionId: label, id: 'identical', ordinal: 2, occurredAt: '1970-02-03T00:00:00.000Z' }));
   }
   await f.build();
   const search = f.rawPort.search;
@@ -173,6 +265,7 @@ test('Raw and Memory remain isolated by both owner and namespace', async t => {
   for (const read of f.readers()) {
     const result = ok(await read(query('telescope')));
     assert.ok(!JSON.stringify(result).includes('foreign-synthetic'));
+    assert.ok(!JSON.stringify(result).includes('1970-02-03'));
     for (const source of foreignSources) assert.ok(!JSON.stringify(result).includes(source.conversationId));
     assert.match(JSON.stringify(result.metered), /public-synthetic/);
     assert.equal(result.diagnostics.coverage.raw, 'partial');

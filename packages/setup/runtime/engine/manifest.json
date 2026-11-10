@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "91557afa6e546cb12d6b599c50e6e8829ab420d311667a6f64c52f5ad694b02d",
-  "bytes": 1301121,
+  "sha256": "ede72aa2809b4720d663a2af0411c936473d1b76618343277251baa8cfb13113",
+  "bytes": 1303247,
   "files": [
     "LICENSE",
     "README.md",
@@ -158,6 +158,7 @@
     "core/context-read-moc.mjs",
     "core/context-read-relations.mjs",
     "core/context-read-sidecar.mjs",
+    "core/context-read-source-dates.mjs",
     "core/context-read-supervisor.mjs",
     "core/context-read-three-layer.mjs",
     "core/context-read-tokenize.mjs",
@@ -438,7 +439,7 @@
     "core/card-receipt-sources.mjs": "0b2901d464504b7fb2715c84bb0c11796f70efdff25042c08bc0122af8a77542",
     "core/private-evidence-input.mjs": "07e3569de2ecdfc27aeb4183b1ef98d7c5b402f9dd8c2a4e2e61555af68a1c72",
     "core/private-evidence-schema.mjs": "b3929d42f296fce535b7691e3ed946e1828d74224f58db4cb17c1e940746ca6c",
-    "core/private-evidence-storage.mjs": "6bda19d70c0b5b239e3e98fc3b98107b08725b7d94d23834d7acad146099ebff",
+    "core/private-evidence-storage.mjs": "b88497a81efe87d8f0e458b0f8c47b579056a6019a9ab8aa243245a4c72f00fa",
     "core/private-organization-input.mjs": "0850ebf916a064bced8966e1510d2476d32a52ac3c2bfd8aa6fb4fc6687ead84",
     "core/private-organization-schema.mjs": "384df00afd9fff4e652a0ef65bd88df36b64c87eac745d7902e5eaa174e916f7",
     "core/private-organization-storage.mjs": "78806a4238bef4bd6f5594118dd403cf2abb8dcbf17ad8b4a85aad75c712d105",
@@ -458,12 +459,13 @@
     "core/classification-journal-storage.mjs": "ddb37e52f29e5de3a25615fdc282321d8ace08e7bd39a3ebee15ee43d2954166",
     "core/classification.mjs": "0f3f90217e3ede407b33fb52f1db309beafd8d65e09c419a96b3e0523de7164d",
     "core/conflict-storage.mjs": "0d29a3b3dd3dd3341e2e3b4667a6487b5d458026d0bd7035590b557eacb10a32",
-    "core/context-read-assembly.mjs": "17701b1b40792f9e47f5eb08429f611c255759e523cb9399a31e3aef376bf057",
-    "core/context-read-three-layer.mjs": "098c7d4e6a6cfdeb5aba92e86e82e1e72ccc4cd8f14dec2a24e3fd959583da72",
+    "core/context-read-assembly.mjs": "891a26b57dbb0be53a1b8ebb0aaa01d509656540315e4d4c8e41a7387ae4f958",
+    "core/context-read-three-layer.mjs": "5db8cd96af3d60492acc226b557dda58f3f5c9c2f72dcceee8b45fe89ccd1eee",
+    "core/context-read-source-dates.mjs": "a613ef30b0055a91b08d7f8c66d7d7ff729214bd69ea1288509621afc0a83648",
     "core/context-read-bm25.mjs": "a8174fe0b187063048e386d871caba1c55b65d4d28ea5e408b2abb7eb34ee6e4",
     "core/context-read-budget.mjs": "dcb2313736df4b74a6ed6f8e783034386d1a2dada80c5d3e267154eef1fa6fb0",
     "core/context-read-embedder.mjs": "5852e65bb1b01cae14b94536b6872ef1003707501791d38a5b7d7dbf0aedc1ec",
-    "core/context-read-facade.mjs": "97a181bcd00abc6c04b1c0586a4fbae968ad6e14e6ac0d54a2aca7d72263c231",
+    "core/context-read-facade.mjs": "c65b459f91e50aabd878de689f3874e7c3f47df41227dd4669ae3dcc93f30a26",
     "core/context-read-fusion.mjs": "e7e571c0037a9dd8fcd7435886ec32b42a469bcdd6c0bce4ef4691df1ba67344",
     "core/context-read-input.mjs": "08c0e664f25f902828e72e346cb8763fc022b1ae79dc4abef323c2bf1a645902",
     "core/context-read-sidecar.mjs": "f3658ed58110caed5d965f5e131101653ac5a49ba97dc465d9f5080498d201b5",
@@ -717,7 +719,7 @@
     "core/context-product-quantum.mjs": "b43d2c3386e4a9704831b6aa6667378a3148593bc09ff5848914ef3c706d2659",
     "core/context-product-sqlite.mjs": "5bf348977dea61370a8623b98c80648105c6d788c5e0d1dd428970c5bde19d87",
     "core/content-safety.mjs": "c5c24267fc8d442e53c1e12397563ac5dd39d38fe4914d7bd0046f6571f69289",
-    "core/context-product-index.mjs": "814c1716423241731d1cff160d185c145aa5232f0d63b0c87654245a920b722b",
+    "core/context-product-index.mjs": "a4885561bc60cbd8b25f97fd503563710a98f675d1a7282202264a89b38f8f27",
     "core/context-product-pump.mjs": "2f7c56e7ce56e6dfb03d3fd0fb85b12f74e5079d3cdba891612ca17352714a63",
     "core/context-maintenance-turn.mjs": "50552d945ef5a87feb94a042cd5a0b8260bbdea8119e0aaf34ff4f991297a23b",
     "docs/plans/context-read-p2b-impl.md": "aa8aa4820502d8b4002ae33ef8b734658a683ed0edd527ef3d183ddb39e9f737",
@@ -781,7 +783,7 @@
     "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b"
   },
   "generatedHashes": {
-    "package.json": "4f8fdac2f17c8e78cc986fefe7cd41ed97ddbf775c1cbe68a603457fba5a418c",
+    "package.json": "0da48ba8ff15b911452e4653c4ff1c6e28bf20c5f45fc44210c3a079bd6527b4",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8"
   }
 }

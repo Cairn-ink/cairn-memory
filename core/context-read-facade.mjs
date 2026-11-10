@@ -28,6 +28,7 @@ import { validateVector } from './context-read-embedder.mjs';
 import { contextBudget } from './context-read-budget.mjs';
 import { receiptEventDate, completeResponseBytes } from './context-read-assembly.mjs';
 import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from './context-read-three-layer.mjs';
+import { receiptSourceRows, resolveMemorySourceDates } from './context-read-source-dates.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { CONTEXT_VERSION, CONTEXT_METHODS, CONTEXT_LIMITS, SOURCE_LIMITS, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_DEFAULTS, DEFAULT_ASSEMBLY_POLICY,
   contextOptions, contextInput, contextRefs, namespaceKey } from './context-read-input.mjs';
@@ -636,8 +637,10 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           deadline = true;
           return { generations: [], items: [], unavailable: candidates.items.length };
         }
-        const generations = canonicalFence(input.readSet, input.types), items = [];
+        const generations = canonicalFence(input.readSet, input.types), items = [], dateEntries = [];
         const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
+        const dated = input.representation === 'representation-v2-dated';
+        if (safetyMemo && dated) safetyMemo.sourceDates = true;
         if (searched.sourceState) assertSourcesInside(input, searched.sourceState, 'snapshot_stale');
         let unavailable = 0;
         const witnessBudget = searched.sourceState ? sourceBudget(dependencyAware ? deadlineAt : Infinity) : null;
@@ -661,9 +664,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             unavailable++; continue;
           }
           const { type, ref, state, origin } = item;
+          const memoryKey = JSON.stringify([[ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId??''],ref.memoryId]);
           const sourceRows = type === 'memory' && item.provenance.sourceAccess === 'available' ?
-            (safetyMemo?.evidenceReceipts?.get(JSON.stringify([[ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId??''],ref.memoryId]))?.slice(0,16) ??
-              db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId)).filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)) : [];
+            receiptSourceRows(db, ref.memoryId, dated && cachedContentLayout(db)?.rawLineage,
+              safetyMemo?.evidenceReceipts?.get(memoryKey)?.slice(0,16), safetyMemo?.evidenceMemories?.get(memoryKey))
+              .filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)) : [];
           const date = receiptEventDate(sourceRows);
           const sources = sourceRows.map((row, index) => {
             const { role, excerpt } = validateSourceReceipt(ref.memoryId, row, source =>
@@ -680,7 +685,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             sourcesComplete: type === 'memory' && item.provenance.coverage.status === 'complete',
             fence: bind('snapshot-item', cardLineageItemInside(db,item)),
             dependencyCount: item.support?.currentDependency ? item.support.currentDependency.versions?.length ?? 0 : null });
+          if (dated && type === 'memory') dateEntries.push({ item: items.at(-1), rows: sourceRows });
         }
+        if (dated && !resolveMemorySourceDates(db, dateEntries, deadlineAt)) { items.length = 0; deadline = true; }
         return { generations, items, unavailable };
       });
       const scope = bind('snapshot-scope', input.readSet);

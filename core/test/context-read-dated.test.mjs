@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { chmodSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from '../context-read-three-layer.mjs';
+import { receiptSourceRows, resolveMemorySourceDates } from '../context-read-source-dates.mjs';
 import { assembleContext, meteredText, receiptEventDate, completeResponseBytes } from '../context-read-assembly.mjs';
 import { ASSEMBLY_REPRESENTATIONS, ASSEMBLY_LIMITS, ASSEMBLY_DEFAULTS, CONTEXT_LIMITS, contextInput, namespaceKey } from '../context-read-input.mjs';
 import { assemblyQuery, fixedPrepared, ns, ok } from '../testing/context-read-assembly-fixture.mjs';
@@ -291,7 +292,7 @@ function enclosingReader(kind, definitions, port, { unavailable = 0, localStatus
     db: { prepare(sql) { assert.match(sql, /^SELECT \* FROM receipts/); return { all: id => rows.get(id) }; } },
     evidence: { itemsInside: (_ns, refs) => refs.map(ref => { const item = canonical.get(ref.memoryId); if (!item) fail('evidence_unavailable'); return item; }) },
     cachedContentLayout: () => safety ? { suppressionRevision: 1 } : null, createContentReadMemo, cardLineageItemInside,
-    namespaceKey, receiptEventDate, validateSourceReceipt, createHash, bind, encode, ASSEMBLY_LIMITS, CONTEXT_LIMITS,
+    namespaceKey, receiptEventDate, receiptSourceRows, resolveMemorySourceDates, validateSourceReceipt, createHash, bind, encode, ASSEMBLY_LIMITS, CONTEXT_LIMITS,
     readRawChannel, citedRawTurns, assembleThreeLayerContext: (args, raw) => assembleThreeLayerContext({ ...args, now: () => 0 }, raw),
     success: value => ({ ok: true, value }), failure: error => ({ ok: false, error: { code: error.code } }), MemoryStoreError, fail, deepFreeze,
     same: (a, b) => JSON.stringify(a) === JSON.stringify(b), bytes: size,

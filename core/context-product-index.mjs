@@ -13,6 +13,7 @@ import { deadline, PRODUCT_PROFILE } from './context-product-control.mjs';
 import { fuseCandidates } from './context-read-fusion.mjs';
 import { receiptEventDate, completeResponseBytes } from './context-read-assembly.mjs';
 import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from './context-read-three-layer.mjs';
+import { receiptSourceRows, resolveMemorySourceDates } from './context-read-source-dates.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { TOKENIZER_VERSION, REPRESENTATION_VERSION } from './context-read-tokenize.mjs';
 import { fail } from './validation.mjs';
@@ -139,13 +140,15 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
   function assemble(p,access,c,prepareOnly=false,rawChannel={items:[],coverage:'unavailable'}) {
     if (!counter) fail('token_count_unavailable');
     const prepared=read(()=>{
-      const generations=canonicalFence(p.readSet,p.types),items=[]; let unavailable=0;
+      const generations=canonicalFence(p.readSet,p.types),items=[],dateEntries=[]; let unavailable=0;
+      const dated=p.representation==='representation-v2-dated';
       for(const candidate of c.items) {
         const ref=candidate.ref; let item;
         try {item=evidence.itemsInside(ref.namespace,[ref],p.intent,p.readSet)[0];}
         catch(e) {if(['evidence_unavailable','revision_conflict'].includes(e.code)){unavailable++;continue;}throw e;}
         const sourceRows=item.type==='memory' && item.provenance.sourceAccess==='available'
-          ? db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)):[];
+          ? receiptSourceRows(db,ref.memoryId,dated&&cachedContentLayout(db)?.rawLineage)
+            .filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)):[];
         const date=receiptEventDate(sourceRows);
         const sources=sourceRows.map((row,index)=>{
           const {role,excerpt}=validateSourceReceipt(ref.memoryId,row,source=>createHash('sha256').update(JSON.stringify(source)).digest('hex'));
@@ -157,7 +160,9 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
           turnIds:citedRawTurns(db,ref.namespace,sourceRows,rawChannel),
           sessionIds:sourceRows.map(row=>JSON.stringify(['receipt',namespaceKey(ref.namespace),row.client,row.session_id])),
           date,sources,sourceAccess:item.type==='memory'?item.provenance.sourceAccess:'unsupported',sourcesComplete:item.type==='memory' && item.provenance.coverage.status==='complete',fence:bind('snapshot-item',cardLineageItemInside(db,item))});
+        if(dated&&item.type==='memory')dateEntries.push({item:items.at(-1),rows:sourceRows});
       }
+      if(dated&&!resolveMemorySourceDates(db,dateEntries,p.deadlineAt))items.length=0;
       return {generations,items,unavailable};
     });
     const generationsFor=items=>prepared.generations.map(g=>({memory:g.memory,...(items.some(i=>i.type==='card')?{card:g.card,...(g.lineage?{lineage:g.lineage}:{})}:{})}));
