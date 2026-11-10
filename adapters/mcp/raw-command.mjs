@@ -13,8 +13,12 @@ List and delete print metadata only. Delete is a dry run unless --yes is supplie
 See docs/raw-local-journal.md for deletion and retention details.`;
 
 // Explicit local operator surface. No model, source decoding or MCP tool.
-export async function rawCommand(args, write = line => console.log(line)) {
+export async function rawCommand(args, write = line => console.log(line), {testDeleteCapMs} = {}) {
   if (args.length === 1 && args[0] === '--help') { write(help); return 0; }
+  // Only synthetic tests can shorten the overall monotonic deadline.
+  const capMs=process.env.NODE_TEST_CONTEXT && Number.isFinite(testDeleteCapMs) && testDeleteCapMs>=0
+    ? Math.min(testDeleteCapMs,600000):600000;
+  const deadline=performance.now()+capMs;
   let core, db;
   const emit = value => write(JSON.stringify(value));
   try {
@@ -57,6 +61,16 @@ export async function rawCommand(args, write = line => console.log(line)) {
       FROM raw_conversations c LEFT JOIN raw_messages m ON m.conversation_id=c.id
       WHERE c.owner_id=? AND c.scope=? AND c.project_id=? ${id?'AND c.id=?':'AND c.id>?'}
       GROUP BY c.id ORDER BY c.id LIMIT 100`);
+    // Count messages, not ordinals: imported conversations can have gaps.
+    // The core's bounded preflight also drains older jobs, so pending is global.
+    const progress=db.prepare(`SELECT count(m.message_id) AS total,
+      coalesce(sum(m.ordinal<=coalesce(j.last_ordinal,0)),0) AS prepared,
+      (EXISTS(SELECT 1 FROM local_raw_uuid_jobs WHERE complete=0) OR
+        NOT EXISTS(SELECT 1 FROM local_raw_uuid_backfill WHERE singleton=1 AND complete=1)) AS pending
+      FROM raw_conversations c LEFT JOIN raw_messages m ON m.conversation_id=c.id
+      LEFT JOIN local_raw_uuid_jobs j ON
+        (j.owner_id,j.scope,j.project_id,j.client,j.session_key)=(c.owner_id,c.scope,c.project_id,c.client,c.session_key)
+      WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.id=?`);
     let after='';
     do {
       db.exec('BEGIN');
@@ -71,7 +85,20 @@ export async function rawCommand(args, write = line => console.log(line)) {
       if(!row)throw Object.assign(Error(),{code:'conversation_not_found'});
       const input={namespace,conversationId:id,expectedRevision:row.revision,retainMemories:true};
       const result=values.has('--yes')?core.deleteConversation({...input,actionId:randomUUID()}):core.previewDeleteConversation(input);
-      if(!result.ok){emit(result);return result.error.retryable?3:1;}
+      if(!result.ok){
+        if(values.has('--yes') && result.error.code==='local_raw_privacy_write_failed' && result.error.retryable===true) {
+          const counts=progress.get(...boundary,id);
+          if(counts.pending) {
+            process.stderr.write(`${counts.prepared.toLocaleString('en-US')}/${counts.total.toLocaleString('en-US')} prepared\n`);
+            // No transaction or writer is held between normal deletion calls.
+            // Yield for signals and other sessions, then re-read the revision.
+            await new Promise(resolve=>setImmediate(resolve));
+            if(performance.now()<deadline)continue;
+            process.stderr.write('rerun the same command to continue\n');
+          }
+        }
+        emit(result);return result.error.retryable?3:1;
+      }
       const {revision,...metadata}=row;
       emit({ok:true,dryRun:!values.has('--yes'),...metadata,...result.value});
       break;

@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { DatabaseSync } from 'node:sqlite';
+import { MemoryStoreError } from '../../../core/validation.mjs';
+import { createLocalUuidFence } from '../../../core/local-authority-uuid.mjs';
 import { openMemoryCore } from '../../../core/index.mjs';
 import { rawCommand } from '../raw-command.mjs';
 import { sourceFixture,ns,ok,request,splitRaw,anchor,resolve,draft } from '../../../core/testing/raw-source-fixtures.mjs';
@@ -12,7 +15,13 @@ const secret='Synthetic copper private conversation sentinel';
 const args=(f,owner=ns.ownerId)=>['--db',f.path,'--owner',owner];
 const snapshot=db=>db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all()
   .map(({name})=>[name,db.prepare('SELECT * FROM "'+name+'"').all().map(row=>JSON.stringify(row)).sort()]);
-async function command(argv){const lines=[];const code=await rawCommand(argv,line=>lines.push(line));return{code,lines,output:lines.join('\n'),rows:lines.map(JSON.parse)};}
+async function command(argv,options){
+  const lines=[],errors=[],write=process.stderr.write;
+  process.stderr.write=function(chunk){errors.push(String(chunk));return true;};
+  try {const code=await rawCommand(argv,line=>lines.push(line),options);
+    return{code,lines,output:lines.join('\n'),rows:lines.map(JSON.parse),stderr:errors.join('')};}
+  finally{process.stderr.write=write;}
+}
 function localHandle(f){const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});f.workspace.defer(()=>core.close());return core;}
 async function capture(f,session,id,text=secret,episode=false,namespace=ns){
   const part=splitRaw(text,{id,occurredAt:'2020-01-01T00:00:00.000Z'})[0];
@@ -135,3 +144,149 @@ test('--no-raw MCP forget_session_episode recovers the local guard after rollbac
   assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,300);
   assert.equal(f.db.prepare('SELECT count(*) n FROM session_episodes WHERE deleted=0').get().n,1);
 });
+
+async function largeConversation(t,total=1008) {
+  const f=sourceFixture(t),local=localHandle(f),source=await capture(f,'large-target','large-first');
+  const row=f.db.prepare('SELECT * FROM raw_messages WHERE conversation_id=?').get(source.conversationId),keys=Object.keys(row);
+  const insert=f.db.prepare('INSERT INTO raw_messages('+keys.join(',')+') VALUES('+keys.map(()=>'?').join(',')+')');
+  f.db.exec('BEGIN');
+  try {
+    // Sparse ordinals ensure the progress numerator counts messages, not slots.
+    for(let n=2;n<=total;n++)insert.run(...keys.map(key=>key==='message_id'?'large-copy-'+n:key==='ordinal'?n*2:row[key]));
+    f.db.exec('COMMIT');
+  } catch(error){f.db.exec('ROLLBACK');throw error;}
+  return {f,local,source,total,argv:['delete',...args(f),'--conversation',source.conversationId,'--yes']};
+}
+function countsOnly(stderr,{capped=false}={}) {
+  const lines=stderr.trim().split('\n');
+  if(capped)assert.equal(lines.pop(),'rerun the same command to continue');
+  assert.ok(lines.length>0);
+  for(const line of lines)assert.match(line,/^(?:[1-9]\d{0,2}(?:,\d{3})*|0)\/(?:[1-9]\d{0,2}(?:,\d{3})*|0) prepared$/);
+  assert.doesNotMatch(stderr,/Synthetic|sentinel|large-first|large-copy|large-target/);
+  return lines;
+}
+async function deleted({f,local,source,total}) {
+  assert.equal(f.db.prepare('SELECT count(*) n FROM raw_conversations WHERE id=?').get(source.conversationId).n,0);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n,0);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM raw_session_fences').get().n,1);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,total);
+  assert.equal(f.db.prepare('SELECT complete FROM local_raw_uuid_jobs').get().complete,1);
+  for(const sessionId of ['large-target','resent-fork']) {
+    const result=await local.captureRaw(request(splitRaw(secret,{id:'large-copy-1000'})[0],
+      {client:'claude-code',sessionId,eventId:'resent-'+sessionId}));
+    assert.deepEqual(result,{ok:false,error:{code:'conversation_deleted',retryable:false}});
+  }
+}
+
+test('one raw delete CLI invocation prepares over a thousand Claude messages and fences resends',async t=>{
+  const fixture=await largeConversation(t);
+  const child=spawnSync(process.execPath,[new URL('../cli.mjs',import.meta.url).pathname,'raw',...fixture.argv],
+    {encoding:'utf8',env:{NODE_NO_WARNINGS:'1'},timeout:30000});
+  assert.equal(child.error,undefined);assert.equal(child.status,0,child.stderr);
+  assert.equal(JSON.parse(child.stdout).dryRun,false);
+  assert.deepEqual(countsOnly(child.stderr),Array.from({length:7},(_,i)=>`${(128*(i+1)).toLocaleString('en-US')}/1,008 prepared`));
+  assert.doesNotMatch(child.stdout+child.stderr,/Synthetic|sentinel|large-first|large-copy|large-target/);
+  await deleted(fixture);
+});
+
+test('raw delete cap preserves durable progress and one rerun completes',async t=>{
+  const fixture=await largeConversation(t),{f,argv}=fixture;
+  const first=await command(argv,{testDeleteCapMs:0});
+  assert.equal(first.code,3);assert.deepEqual(first.rows,[{ok:false,error:{code:'local_raw_privacy_write_failed',retryable:true}}]);
+  assert.deepEqual(countsOnly(first.stderr,{capped:true}),['128/1,008 prepared']);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n,1008);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,128);
+  const second=await command(argv);assert.equal(second.code,0,second.output);
+  assert.equal(countsOnly(second.stderr)[0],'256/1,008 prepared');
+  assert.doesNotMatch(first.output+second.output+first.stderr+second.stderr,/Synthetic|sentinel|large-copy/);
+  await deleted(fixture);
+});
+
+for(const code of ['evidence_unavailable','storage_busy','local_raw_privacy_write_failed'])
+  test(`raw delete stops after one refused pass: ${code}`,async t=>{
+    const fixture=await largeConversation(t),{f,local,source,argv}=fixture;
+    // The first two cases already have real pending work. A generic retry
+    // mutant must still stop on either kind of unrelated error.
+    if(code!=='local_raw_privacy_write_failed') {
+      const progress=local.deleteConversation({namespace:ns,conversationId:source.conversationId,
+        expectedRevision:source.expectedConversationRevision,actionId:'synthetic-prime',retainMemories:true});
+      assert.equal(progress.error.code,'local_raw_privacy_write_failed');
+    } else {
+      // Finish the empty historical backfill without creating any hash job.
+      f.db.exec('BEGIN');createLocalUuidFence(f.db).advanceInside();f.db.exec('COMMIT');
+    }
+    const before=snapshot(f.db),prepare=DatabaseSync.prototype.prepare;let passes=0;
+    DatabaseSync.prototype.prepare=function(sql,...args){
+      const statement=prepare.call(this,sql,...args);
+      if(sql==='DELETE FROM raw_messages WHERE conversation_id=?')return {run(...values){
+        passes++;if(passes===1)throw new MemoryStoreError(code);return statement.run(...values);
+      }};
+      return statement;
+    };
+    let result;
+    try {result=await command(argv);}finally{DatabaseSync.prototype.prepare=prepare;}
+    assert.equal(result.code,code==='evidence_unavailable'?1:3,result.output);
+    assert.deepEqual(result.rows,[{ok:false,error:{code,retryable:code!=='evidence_unavailable'}}]);
+    assert.equal(passes,1);assert.equal(result.stderr,'');assert.deepEqual(snapshot(f.db),before);
+  });
+
+test('raw delete re-reads revisions, uses fresh action ids and releases the writer between passes',async t=>{
+  const {f,argv}=await largeConversation(t),prepare=DatabaseSync.prototype.prepare,write=process.stderr.write;
+  const actions=new Set();let progress=0;
+  DatabaseSync.prototype.prepare=function(sql,...args){
+    const statement=prepare.call(this,sql,...args);
+    if(sql.startsWith('SELECT * FROM raw_deletion_actions WHERE'))return {get(...values){actions.add(values.at(-1));return statement.get(...values);}};
+    return statement;
+  };
+  process.stderr.write=function(chunk){
+    assert.match(String(chunk),/^\d+\/1,008 prepared\n$/);
+    // A separate connection can take the writer, and change the next revision.
+    f.db.exec('BEGIN IMMEDIATE');
+    f.db.exec('UPDATE raw_conversations SET revision=revision+1');
+    f.db.exec('COMMIT');progress++;return true;
+  };
+  const lines=[];let code;
+  try {code=await rawCommand(argv,line=>lines.push(line));}
+  finally{DatabaseSync.prototype.prepare=prepare;process.stderr.write=write;}
+  assert.equal(code,0,lines.join('\n'));assert.equal(progress,7);assert.equal(actions.size,8);
+});
+
+for(const point of ['between passes','inside a transaction'])
+  test(`SIGINT ${point} preserves committed chunks and rerun matches uninterrupted deletion`,async t=>{
+    const fixture=await largeConversation(t),{f,argv}=fixture;
+    const script=`
+      import { DatabaseSync } from 'node:sqlite';
+      import { rawCommand } from ${JSON.stringify(new URL('../raw-command.mjs',import.meta.url).href)};
+      const inside=${JSON.stringify(point==='inside a transaction')};
+      let progressed=false;
+      const stop=()=>{process.send({ready:true});Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0);};
+      const write=process.stderr.write;
+      process.stderr.write=function(chunk){const result=write.call(this,chunk);progressed=true;if(!inside)stop();return result;};
+      const exec=DatabaseSync.prototype.exec;
+      DatabaseSync.prototype.exec=function(sql,...args){
+        const result=exec.call(this,sql,...args);
+        if(inside && progressed && sql==='BEGIN IMMEDIATE') {
+          // This uncommitted synthetic revision must disappear on interruption.
+          this.prepare('UPDATE raw_conversations SET revision=revision+1').run();stop();
+        }
+        return result;
+      };
+      process.exitCode=await rawCommand(JSON.parse(process.argv[1]));`;
+    const child=spawn(process.execPath,['--input-type=module','-e',script,JSON.stringify(argv)],
+      {env:{NODE_NO_WARNINGS:'1'},stdio:['ignore','pipe','pipe','ipc']});
+    let stdout='',stderr='',ready=false;
+    child.stdout.on('data',chunk=>stdout+=chunk);child.stderr.on('data',chunk=>stderr+=chunk);
+    child.on('message',message=>{if(message.ready){ready=true;child.kill('SIGINT');}});
+    const timer=setTimeout(()=>child.kill('SIGKILL'),15000);
+    t.after(()=>{clearTimeout(timer);if(child.exitCode===null && child.signalCode===null)child.kill('SIGKILL');});
+    const result=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',(code,signal)=>resolve({code,signal}));});
+    clearTimeout(timer);assert.equal(ready,true);assert.deepEqual(result,{code:null,signal:'SIGINT'});
+    assert.equal(stdout,'');assert.deepEqual(countsOnly(stderr),['128/1,008 prepared']);
+    assert.equal(f.db.prepare('SELECT revision FROM raw_conversations').get().revision,fixture.source.expectedConversationRevision);
+    assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n,1008);
+    assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,128);
+    const resumed=await command(argv);assert.equal(resumed.code,0,resumed.output);
+    assert.equal(countsOnly(resumed.stderr)[0],'256/1,008 prepared');
+    assert.doesNotMatch(stdout+stderr+resumed.output+resumed.stderr,/Synthetic|sentinel|large-copy/);
+    await deleted(fixture);
+  });

@@ -101,10 +101,11 @@ their original Memory cascade semantics.
 The terminal session fence and keyed message-UUID fences survive deletion.
 Resending that session, or copying its Claude message UUIDs into a fork after a
 cursor reset, cannot archive it again. A large UUID job makes bounded durable
-progress before any message is deleted. Retry the same id when the command
-returns `local_raw_privacy_write_failed` with `retryable:true`; all source rows
-remain until the required hashes are durable. Each call makes at most two
-cascade attempts and one bounded UUID preflight.
+progress before any message is deleted. One command finishes on its own and
+shows progress counts. Only if it stops after about 10 minutes, run the same
+command again to continue. All source rows remain until the required hashes
+are durable. While a large conversation is being deleted, capture in other
+sessions may wait briefly, or skip a turn and catch up later.
 
 Local deletion runs the whole deletion once and rolls it back before writing
 privacy fences. A refusal already known at that check leaves the
