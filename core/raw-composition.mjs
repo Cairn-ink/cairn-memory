@@ -1,3 +1,4 @@
+import { isRawEpochConflict, retryRawEpochConflict } from './raw-journal.mjs';
 import { createLocalRawSearch } from './local-raw-search.mjs';
 import { contentSafetyFacade } from './content-safety-boundary.mjs';
 import { createMemoryRuntime } from './runtime.mjs';
@@ -10,6 +11,7 @@ const failure = error => {
   const code = isStorageBusy(error) ? 'storage_busy' : error instanceof MemoryStoreError ? error.code : 'storage_error';
   return { ok: false, error: { code, retryable: code === 'storage_busy' || code === 'local_raw_privacy_write_failed' } };
 };
+const retryCapture = work => retryRawEpochConflict(work).catch(failure);
 const invoke = work => { try { return success(work()); } catch (error) { return failure(error); } };
 
 // Receive the builder to avoid a contract -> composition -> contract cycle.
@@ -37,7 +39,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
       const result = core.close();
       return stopped ? Promise.resolve(stopped).then(() => result) : result;
     },
-    ...(captureDefault && rawOptions.interpretation !== 'host' ? { async capture(request) {
+    ...(captureDefault && rawOptions.interpretation !== 'host' ? { capture(request) { return retryCapture(async () => {
       const arrivalToken = {};
       try {
         runtime.ready();
@@ -45,16 +47,18 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
         if (!registration) return await core.capture(request);
         let result;
         result = await capture(registration.input, registration);
+        registration.assertEpochCurrent();
         // Raw retention also works with no extraction provider or failed preflight.
         if (!registration.result()) registration.commitOnly();
         search?.schedule(request.namespace);
         return result;
       } catch (error) {
+        if (isRawEpochConflict(error)) throw error;
         try { if (error.code !== 'store_closed') storage.fenceArrival(arrivalToken); } catch (fenceError) { return failure(fenceError); }
         return failure(error);
       }
-    } } : {}),
-    async captureRaw(request) {
+    }); } } : {}),
+    captureRaw(request) { return retryCapture(async () => {
       const arrivalToken = {};
       try {
         runtime.ready();
@@ -67,7 +71,8 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
           }
           else if (registration.replay) interpretation = success(registration.observeReplay());
           else interpretation = await capture(registration.input, registration);
-        } catch (error) { interpretation = failure(error); }
+          registration.assertEpochCurrent();
+        } catch (error) { if (isRawEpochConflict(error)) throw error; interpretation = failure(error); }
         if (!interpretation.ok) {
           const observation = registration.observeFailedInterpretation();
           if (observation) interpretation = success(observation);
@@ -77,6 +82,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
         if (raw) search?.schedule(request.namespace);
         return raw ? success({ raw, interpretation }) : interpretation;
       } catch (error) {
+        if (isRawEpochConflict(error)) throw error;
         // A window may have arrived during asynchronous sealing/model work.
         // Preparation/sealing can fail before returning a registration. Use
         // only its validated, detached arrival identity for conservative fencing.
@@ -84,7 +90,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
         try { if (error.code !== 'store_closed') storage.fenceArrival(arrivalToken); } catch (fenceError) { return failure(fenceError); }
         return failure(error);
       }
-    },
+    }); },
     ...(rawTextReaders ? {
       getConversation: async input => { try { runtime.ready(); return success(await storage.getConversation(input)); } catch (error) { return failure(error); } },
     } : {}),

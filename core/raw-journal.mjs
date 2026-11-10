@@ -14,6 +14,30 @@ import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { createRawSourceReader } from './raw-source-reader.mjs';
 import { createLocalAuthorityStorage } from './local-authority-storage.mjs';
 
+// Private provenance survives internal error envelopes through the registration.
+class RawEpochConflict extends MemoryStoreError {
+  constructor() { super('storage_busy'); }
+}
+// Short contention bursts retry in-call; persistent churn defers to the host.
+const RAW_EPOCH_ATTEMPTS = 4;
+export const isRawEpochConflict = error => error instanceof RawEpochConflict;
+export async function retryRawEpochConflict(work) {
+  for (let attempt = 0; ; attempt++) {
+    try { return await work(); }
+    catch (error) {
+      if (!isRawEpochConflict(error)) throw error;
+      if (attempt + 1 === RAW_EPOCH_ATTEMPTS) throw new MemoryStoreError('storage_busy');
+    }
+  }
+}
+
+// Keep every non-epoch fence field in the comparison, including future fields.
+function isEpochOnlyFenceChange(prepared, current) {
+  const { epoch: before, ...beforeFence } = prepared;
+  const { epoch: after, ...afterFence } = current;
+  return before !== after && JSON.stringify(beforeFence) === JSON.stringify(afterFence);
+}
+
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const clock = () => new Date().toISOString();
 const freeze = value => {
@@ -214,10 +238,13 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     const currentPolicy = policy(input), currentFence = durableFence(ns,input.client,session);
     const duplicate = replay(input,eventDigest);
     if (duplicate) return duplicate;
-    if (JSON.stringify(currentPolicy) !== JSON.stringify(authority) || JSON.stringify(currentFence) !== JSON.stringify(fence)) fail('revision_conflict');
+    const epochOnly = isEpochOnlyFenceChange(fence, currentFence);
+    if (JSON.stringify(currentPolicy) !== JSON.stringify(authority) ||
+        (JSON.stringify(currentFence) !== JSON.stringify(fence) && !epochOnly)) fail('revision_conflict');
     const current = conversation(ns,input.client,session);
     if(current)assertRegistrationSources(input,current.id);
     if ((current?.revision ?? null) !== revision || (current && current.id !== id)) fail('revision_conflict');
+    if (epochOnly) throw new RawEpochConflict();
     const now = clock();
     if (!current) db.prepare(`INSERT INTO raw_conversations(id,owner_id,scope,project_id,client,session_key,revision,first_received_at,last_received_at)
       VALUES(?,?,?,?,?,?,1,?,?)`).run(id,...rawBoundary(ns),input.client,session,now,now);
@@ -283,8 +310,10 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     catch (error) { db.exec(`ROLLBACK TO ${name}; RELEASE ${name}`); throw error; }
   }
   async function register(input) {
-    const token = await prepareRegistration(input);
-    return transaction(db,() => commitRegistration(token));
+    return retryRawEpochConflict(async () => {
+      const token = await prepareRegistration(input);
+      return transaction(db,() => commitRegistration(token));
+    });
   }
 
   function closePendingInside({ ownerId,client,namespace,sessionKey: session,reason }) {

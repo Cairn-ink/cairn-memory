@@ -2,7 +2,7 @@ import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety } from './content-safety.mjs';
 import { createHash } from 'node:crypto';
 import { transaction } from './database.mjs';
-import { createRawJournal } from './raw-journal.mjs';
+import { createRawJournal, isRawEpochConflict } from './raw-journal.mjs';
 import { rawBoundary, rawRegistration, rawNamespace } from './raw-input.mjs';
 import { captureSnapshot } from './capture-input.mjs';
 import { episodeSnapshot } from './episode-input.mjs';
@@ -138,6 +138,8 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
             : { status: 'not-run', reason: 'no-eligible-first-part' };
     }
 
+    let epochConflict;
+    function assertEpochCurrent() { if (epochConflict) throw epochConflict; }
     function commit() {
       if (!db.isTransaction) fail('raw_transaction_required');
       // First decision under the writer lock: a refused batch writes neither
@@ -148,7 +150,9 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       if (managed) authority.check(managed,input.namespace,input.client);
       privacy?.assertModeInside(input.namespace, input.client, sessionKey, hostInterpretation ? 'host' : 'engine', true);
       privacy?.recordRangeInside(input.namespace, input.client, sessionKey, rangeMessages);
-      const result = journal.commitRegistration(token);
+      let result;
+      try { result = journal.commitRegistration(token); }
+      catch (error) { if (isRawEpochConflict(error)) epochConflict = error; throw error; }
       const existing = binding(input);
       if (existing) {
         if (existing.binding_digest !== bindingDigest || existing.projection_digest !== projectionDigest) fail('event_payload_conflict');
@@ -217,7 +221,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       return result;
     }
     return Object.freeze({ localPrivacy: Boolean(privacy), input: projection, hasProjection: Boolean(snapshot), replay,
-      emptyOutcome, commit, observeReplay,
+      emptyOutcome, commit, observeReplay, assertEpochCurrent,
       // A winner can commit even during a failing model preflight. Only an
       // unaccepted attempt may observe that winner; it never acquires work.
       observeFailedInterpretation: () => !accepted && snapshot ? observeReplay(true) : null,
