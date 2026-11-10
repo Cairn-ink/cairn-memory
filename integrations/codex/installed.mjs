@@ -13,16 +13,24 @@ import { detectRunningHost, cachedQualification, observeHost, qualifyBinary, val
   scheduleQualification, finishQualification, hasQualifiedCreator } from './qualification.mjs';
 import { readInstallation, readCredential, clientOptions, childEnvironment, promptRecallEnabled } from './installed-state.mjs';
 import { observeHostedPause, installedTransport, recallContext } from './hosted-lifecycle.mjs';
+import { captureStopNotice, pendingCaptureNotice, recordQualificationAttempt } from './installed-state.mjs';
 import { sessionSource } from './session-source.mjs';
 
 // No --version/schema subprocess on the hook path. Ancestor detection and
 // identity-keyed cache reads are the only host work before capture/recall.
-export async function currentHost(configPath,{detect=detectRunningHost,launch=launchQualification}={}) {
+export async function currentHost(configPath,{detect=detectRunningHost,launch=launchQualification,observe=observeHost,now=Date.now}={}) {
   const host=await detect();
   if(!host)return {status:'pending'};
-  await observeHost(configPath,host);
+  await observe(configPath,host);
   const verdict=await cachedQualification(configPath,host);
-  if(verdict.status==='pending')await scheduleQualification(configPath,host,launch);
+  if(verdict.status==='pending') {
+    // Pending hooks need their private cache before background scheduling.
+    if(observe!==observeHost)await observeHost(configPath,host);
+    // Read diagnostic evidence before a retry replaces an expired marker.
+    // Finished history remains independent of who scheduled the first probe.
+    verdict.pendingNotice=await pendingCaptureNotice(configPath,host,{now});
+    await scheduleQualification(configPath,host,launch);
+  }
   return {...verdict,host};
 }
 function launchQualification(configPath,host) {
@@ -62,86 +70,111 @@ function launchWorker(configPath, config, content) {
 }
 
 export async function runInstalled(configPath, event, stream, { signal, launch = launchWorker,
-  detectHost = detectRunningHost } = {}) {
+  detectHost = detectRunningHost, noticeOptions = {} } = {}) {
   const config = await readInstallation(configPath);
   if (!config.enabled || signal.aborted) return '';
   if(event==='qualify') {
     const host=await readHookInput(stream,{deadlineMs:750});
     if(!validHost(host))return '';
-    try {await qualifyBinary(configPath,host);} finally {await finishQualification(configPath,host);}
+    try {await qualifyBinary(configPath,host);} finally {
+      await finishQualification(configPath,host);
+      await recordQualificationAttempt(configPath,host,{now:noticeOptions.now});
+    }
     return '';
   }
   // Detached workers re-check the host supplied by the trusted launcher. Hook
   // payloads cannot supply or override it; a changed binary invalidates the key.
-  let input, qualification;
-  if(event==='worker') {
-    input=await readHookInput(stream,{deadlineMs:750});
-    const host=input?.host;
-    if(!await boundBinary(host))return '';
-    qualification={...await cachedQualification(configPath,host),host};
-    delete input.host;
-  } else qualification=await currentHost(configPath,{detect:detectHost});
-  if(qualification.status!=='qualified' || signal.aborted)return '';
-  input??=await readHookInput(stream,{deadlineMs:300});
-  const qualifyCreator = version => hasQualifiedCreator(configPath,version,{signal});
-  const session = await sessionSource(event === 'worker' ? input?.path : input?.transcript_path,
-    event === 'worker' ? input?.sessionId : input?.session_id,
-    { qualifiedCreatorVersion: qualification.version, qualifyCreator });
-  // Apply the same gate in the launcher and detached worker; old installations
-  // without captureExec inherit the safe default. Never trust hook extras.
-  // Exec sources and app-server threads without an interactive originator are
-  // automation. Resume appends to the old rollout without replacing its source
-  // header; the trusted native ancestor's exec marker denies exec resume of an
-  // interactive thread.
-  if (!session || ((!session.interactive || qualification.host.execSession === true) &&
-      config.captureExec !== true) || signal.aborted) return '';
-  const options = clientOptions(config);
-  const resolved = await resolveClient(options);
-  if (!resolved.enabled || resolved.root !== config.root || signal.aborted) return '';
-  const policy = await automaticPolicy(config.root, config.endpoint);
-  if (!policy || policy.dailyCap !== config.dailyCap) return '';
-  const targetId = hostedTargetId(config);
-  if (event === 'worker') {
-    const token = await readCredential(configPath, config.endpoint);
-    const remote = await observeHostedPause(config, token, signal);
-    if (remote.paused || signal.aborted) return '';
-    const handoff = input;
-    const guard = automaticGuard(config.root, config.endpoint, policy);
-    const transport = installedTransport(config, token, remote.generation);
-    await workerFromHandoff(handoff, { clientOptions: options, targetId, transport, guard,
-      mode: 'hosted', overallMs: 60000, qualifiedCreatorVersion: qualification.version, qualifyCreator });
-    return '';
+  let input, qualification, pendingHost, hostPublished = false;
+  const publishHost = async () => {
+    hostPublished = true;
+    if (pendingHost && !signal.aborted) await observeHost(configPath,pendingHost);
+  };
+  try {
+    if(event==='worker') {
+      input=await readHookInput(stream,{deadlineMs:750});
+      const host=input?.host;
+      if(!await boundBinary(host))return '';
+      qualification={...await cachedQualification(configPath,host),host};
+      delete input.host;
+    } else qualification=await currentHost(configPath,{detect:detectHost,
+      ...(event === 'UserPromptSubmit' ? {observe:async (_path,host)=>{pendingHost=host;}} : {})});
+    if(qualification.status!=='qualified' || signal.aborted) {
+      if (event !== 'SessionStart' || signal.aborted) return '';
+      input=await readHookInput(stream,{deadlineMs:300});
+      if (validateHook(input).event !== event) return '';
+      return captureStopNotice(configPath,config,input,qualification,{...noticeOptions,signal});
+    }
+    input??=await readHookInput(stream,{deadlineMs:300});
+    let sessionToken;
+    if (event === 'SessionStart') {
+      if (validateHook(input).event !== event || input.agent_id != null || input.agent_type != null) return '';
+      try { sessionToken = await readCredential(configPath, config.endpoint); }
+      catch { return captureStopNotice(configPath,config,input,qualification,{...noticeOptions,signal}); }
+    }
+    const qualifyCreator = version => hasQualifiedCreator(configPath,version,{signal});
+    const session = await sessionSource(event === 'worker' ? input?.path : input?.transcript_path,
+      event === 'worker' ? input?.sessionId : input?.session_id,
+      { qualifiedCreatorVersion: qualification.version, qualifyCreator });
+    // Apply the same gate in the launcher and detached worker; old installations
+    // without captureExec inherit the safe default. Never trust hook extras.
+    // Exec sources and app-server threads without an interactive originator are
+    // automation. Resume appends to the old rollout without replacing its source
+    // header; the trusted native ancestor's exec marker denies exec resume of an
+    // interactive thread.
+    if (!session || ((!session.interactive || qualification.host.execSession === true) &&
+        config.captureExec !== true) || signal.aborted) return '';
+    const options = clientOptions(config);
+    const resolved = await resolveClient(options);
+    if (!resolved.enabled || resolved.root !== config.root || signal.aborted) return '';
+    const policy = await automaticPolicy(config.root, config.endpoint);
+    if (!policy || policy.dailyCap !== config.dailyCap) return '';
+    const targetId = hostedTargetId(config);
+    if (event === 'worker') {
+      const token = await readCredential(configPath, config.endpoint);
+      const remote = await observeHostedPause(config, token, signal);
+      if (remote.paused || signal.aborted) return '';
+      const handoff = input;
+      const guard = automaticGuard(config.root, config.endpoint, policy);
+      const transport = installedTransport(config, token, remote.generation);
+      await workerFromHandoff(handoff, { clientOptions: options, targetId, transport, guard,
+        mode: 'hosted', overallMs: 60000, qualifiedCreatorVersion: qualification.version, qualifyCreator });
+      return '';
+    }
+    const hook = validateHook(input);
+    if (hook.event !== event || input.agent_id != null || input.agent_type != null) return '';
+    const projectId = await clientProjectId(options, hook.cwd, resolved);
+    if (signal.aborted) return '';
+    if (event === 'UserPromptSubmit') {
+      // Codex writes the rollout header and runs this hook before it records the
+      // prompt. A session first seen here gets its boundary before its coming turn,
+      // which Stop then captures, whether or not prompt recall is on.
+      await promptBoundary({ root: config.root, targetId, projectId, sessionId: hook.sessionId, path: hook.path });
+      if (!await promptRecallEnabled(configPath) || signal.aborted) return '';
+      const token = await readCredential(configPath, config.endpoint);
+      return await recallContext(input, config, token, projectId, signal, async () => await promptRecallEnabled(configPath) && Boolean(await boundBinary(qualification.host)), publishHost);
+    }
+    if (event === 'SessionStart') {
+      const token = sessionToken;
+      const remote = await observeHostedPause(config, token, signal);
+      if (remote.paused || signal.aborted) return '';
+      if (hook.path) await establishPauseBoundary({ root: config.root,targetId,projectId,
+        sessionId: hook.sessionId,path: hook.path });
+      // Protocol 0.3.0 startup context requires a qualified local o200k counter
+      // and separate authority acceptance. Keep that optional port disabled.
+      return '';
+    }
+    const control = await readControlState(config.root);
+    if (control.paused || signal.aborted) return '';
+    const result = await handleHook(input, { clientOptions: options, targetId,
+      qualifiedCreatorVersion: qualification.version, qualifyCreator,
+      launch: async content => {
+        if (signal.aborted) return;
+        await launch(configPath, config, JSON.stringify({...JSON.parse(content),host:qualification.host}));
+      } });
+    return result.output;
+  } finally {
+    // Early hook decisions still record the observed host. A context result has
+    // already published it before recall's final control and kill-switch checks.
+    if (!hostPublished) await publishHost();
   }
-  const hook = validateHook(input);
-  if (hook.event !== event || input.agent_id != null || input.agent_type != null) return '';
-  const projectId = await clientProjectId(options, hook.cwd, resolved);
-  if (signal.aborted) return '';
-  if (event === 'UserPromptSubmit') {
-    // Codex writes the rollout header and runs this hook before it records the
-    // prompt. A session first seen here gets its boundary before its coming turn,
-    // which Stop then captures, whether or not prompt recall is on.
-    await promptBoundary({ root: config.root, targetId, projectId, sessionId: hook.sessionId, path: hook.path });
-    if (!await promptRecallEnabled(configPath) || signal.aborted) return '';
-    const token = await readCredential(configPath, config.endpoint);
-    return recallContext(input, config, token, projectId, signal, async () => await promptRecallEnabled(configPath) && Boolean(await boundBinary(qualification.host)));
-  }
-  if (event === 'SessionStart') {
-    const token = await readCredential(configPath, config.endpoint);
-    const remote = await observeHostedPause(config, token, signal);
-    if (remote.paused || signal.aborted) return '';
-    if (hook.path) await establishPauseBoundary({ root: config.root,targetId,projectId,
-      sessionId: hook.sessionId,path: hook.path });
-    // Protocol 0.3.0 startup context requires a qualified local o200k counter
-    // and separate authority acceptance. Keep that optional port disabled.
-    return '';
-  }
-  const control = await readControlState(config.root);
-  if (control.paused || signal.aborted) return '';
-  const result = await handleHook(input, { clientOptions: options, targetId,
-    qualifiedCreatorVersion: qualification.version, qualifyCreator,
-    launch: async content => {
-      if (signal.aborted) return;
-      await launch(configPath, config, JSON.stringify({...JSON.parse(content),host:qualification.host}));
-    } });
-  return result.output;
 }

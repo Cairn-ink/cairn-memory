@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { fixture } from './clients.test.mjs';
+import { messages } from '../lib/messages.mjs';
 import { KNOWN_FORMATS } from '../runtime/integrations/codex/qualification.mjs';
 
 // Extract immutable historical git objects, never current source, with the same
@@ -100,10 +101,31 @@ const recallRuntimeChanges = new Map([
     "  const budget=['SessionStart','UserPromptSubmit'].includes(input?.hook_event_name)?2500:750;",
     "  const budget=input?.hook_event_name==='UserPromptSubmit'?3000:input?.hook_event_name==='SessionStart'?2500:750;",
   ]],
-  ['integrations/codex/hosted-lifecycle.mjs', [
-    "    session_id: hash('wire-session-v1','codex',input.session_id) }, 2000, undefined, signal, dispatch);",
-    "    session_id: hash('wire-session-v1','codex',input.session_id) }, 2500, undefined, signal, dispatch);",
-  ]],
+]);
+// Pause durability changes whole functions; pin both immutable historical and
+// current bytes instead of reconstructing the earlier file from current source.
+const durabilityRuntimeChanges = new Map([
+  ['integrations/client/private-state.mjs', {
+    historical: 'ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64',
+    before: 'ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64',
+    current: '7dc46417a129414937b0180482acf6bdf7f58c1816f93468e8df1d952057485b',
+  }],
+  ['integrations/client/hosted-pause.mjs', {
+    historical: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
+    before: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
+    current: '8d15d24036533f5a235b5e54627cb4db3b94312f28874f9fdf24cd2897cb0635',
+  }],
+  ['integrations/codex/installed.mjs', {
+    historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
+    before: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
+    // Merged capture-stop notices and deferred host publication change the installed runtime bytes.
+    current: '0377df55d80378aad167522116c58262e3b5e182b9c4b5da517e14670bb832e8',
+  }],
+  ['integrations/codex/hosted-lifecycle.mjs', {
+    historical: '8b4a8e7ea1cef5473147bfe2ea6af9548894c52f08e44a656e545fcb9fc8c496',
+    before: 'bd7bc299773cc389565a34bfd9a7131f68ad7bef934d3ce5a0ebeeea800bbe3a',
+    current: '5123350b18ee89a7557dbeec237e1e7790f1b7f21484dd393a97a6f66b009e94',
+  }],
 ]);
 const hostedRuntimeExceptions = [
   'integrations/client/control-state.mjs',
@@ -113,7 +135,12 @@ const hostedRuntimeExceptions = [
   'integrations/codex/parser.mjs',
   'integrations/codex/qualification.mjs',
   'integrations/codex/schema-evidence.mjs',
+  // Installer 0.6.5 (capture stop notice) adds these hook runtime files. Its
+  // installed.mjs change is covered by the durability pin below, listed once.
+  'integrations/codex/installed-state.mjs',
+  'integrations/codex/worker.mjs',
   ...recallRuntimeChanges.keys(),
+  ...durabilityRuntimeChanges.keys(),
 ];
 const packagedHostedRuntime = new Map(await Promise.all(hostedRuntimeExceptions.map(async path =>
   [path, await readFile(new URL('../runtime/' + path, import.meta.url))])));
@@ -125,8 +152,10 @@ const historicalRecallRuntime = new Map([...recallRuntimeChanges].map(([path, [b
 }));
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 function assertRecallRuntime(path, bytes) {
-  assert.ok(bytes.equals(packagedHostedRuntime.get(path)) || bytes.equals(historicalRecallRuntime.get(path)),
-    'Only the approved recall line may differ: ' + path);
+  const pins = durabilityRuntimeChanges.get(path);
+  assert.ok(pins ? Object.values(pins).includes(sha256(bytes)) :
+    bytes.equals(packagedHostedRuntime.get(path)) || bytes.equals(historicalRecallRuntime.get(path)),
+    'Only approved runtime bytes may differ: ' + path);
 }
 
 // Contract section 18, Rule 8 (v0.21): an independent historical-verdict oracle.
@@ -228,7 +257,9 @@ function normalizeFile(name, bytes, home, { historical = false } = {}) {
         // Preserve paths, order, formatting and every other manifest byte.
         if (path.length === 2 && path[0] === 'files' && hostedRuntimeExceptions.includes(path[1])) {
           assert.match(raw, /^"[a-f0-9]{64}"$/u);
-          if (recallRuntimeChanges.has(path[1])) assert.ok([
+          const pins = durabilityRuntimeChanges.get(path[1]);
+          if (pins) assert.ok(Object.values(pins).includes(JSON.parse(raw)), 'Only approved diagnostic hashes: ' + path[1]);
+          else if (recallRuntimeChanges.has(path[1])) assert.ok([
             sha256(historicalRecallRuntime.get(path[1])), sha256(packagedHostedRuntime.get(path[1])),
           ].includes(JSON.parse(raw)), 'Only the approved recall hashes: ' + path[1]);
           edits.push([token.index, raw.length, '"<PR-454-runtime-hash>"']);
@@ -259,7 +290,7 @@ function fileInventory(entries, normalize, home, { historical = false } = {}) {
       assert.deepEqual(bytes, packagedHostedManifest, 'Installed runtime manifest must match packaged manifest: ' + name);
     const packaged = normalize && generation && packagedHostedRuntime.get(generation[2]?.slice(1));
     if (packaged) {
-      if (historical && recallRuntimeChanges.has(generation[2]?.slice(1))) assertRecallRuntime(generation[2].slice(1), bytes);
+      if (historical && (recallRuntimeChanges.has(generation[2]?.slice(1)) || durabilityRuntimeChanges.has(generation[2]?.slice(1)))) assertRecallRuntime(generation[2].slice(1), bytes);
       if (!historical) assert.deepEqual(bytes, packaged, 'Installed runtime must match packaged source: ' + name);
       bytes = packaged;
     }
@@ -296,6 +327,44 @@ async function inventory(root, normalize = false, options) {
   return fileInventory(await entries(root), normalize, join(root, '.codex'), options);
 }
 const normalized = (text, home) => normalizeRuntime(text.replace(/(Cairn\.ink Memory(?: setup| status| 安裝程式)? )\d+\.\d+\.\d+(?:-[\w.]+)?/gu, '$1<version>'), home);
+// The immutable comparator keeps historical stdout byte-for-byte. Only current
+// status blocks (also printed by --dry-run) get the approved 0.6.5 B/C delta.
+const captureTimestamp = String.raw`\d{4,6}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01]) (?:[01]\d|2[0-3]):[0-5]\d`;
+const captureStatusLine = new RegExp('^(?:' + ['en','zh'].flatMap(language => [
+  escapePattern(messages.codex_last_capture_none[language]),
+  escapePattern(messages.codex_last_capture[language]).replace(escapePattern('{date}'), captureTimestamp),
+]).join('|') + ')(?:\n|$)', 'mu');
+const indentedExecLine = new RegExp('^  (' + ['en','zh'].map(language =>
+  escapePattern(messages.codex_exec_enabled[language])).join('|') + ')(?=\n|$)', 'mu');
+const currentHostedOutput = text => text.replace(captureStatusLine, '').replace(indentedExecLine, '$1');
+for (const language of ['en','zh']) test(`L06/L33/L24 current-only B/C output exception rejects unrelated line edits (${language})`, () => {
+  const exec = messages.codex_exec_enabled[language];
+  const before = `header\n  existing sibling\n${exec}\n  existing tail\n`;
+  for (const date of [null,'1970-01-01 00:00','2026-11-04 17:42','275760-09-13 08:00']) {
+    const line = date === null ? messages.codex_last_capture_none[language] :
+      messages.codex_last_capture[language].replace('{date}',date);
+    const after = before.replace(exec+'\n','  '+exec+'\n'+line+'\n');
+    const equal = text => assert.equal(currentHostedOutput(text),before);
+    equal(after);
+    for (const damaged of [
+      after+'unrelated added line\n',
+      after.replace('  existing sibling\n',''),
+      after.replace('existing tail','changed tail'),
+      after.replace(exec+'\n','changed exec\n'),
+      after.replace('  '+exec+'\n','   '+exec+'\n'),
+      after.replace(line+'\n',line+' changed\n'),
+      after.replace(line+'\n',' '+line+'\n'),
+      after.replace(line+'\n',line+'\n'+line+'\n'),
+      after.replace('header\n','header\n\n'),
+    ]) assert.throws(()=>equal(damaged), {code:'ERR_ASSERTION'});
+    if(date !== null) for(const invalid of ['not a timestamp','2026-13-04 17:42','2026-11-04 24:00','2026-11-04 17:99'])
+      assert.throws(()=>equal(after.replace(date,invalid)), {code:'ERR_ASSERTION'});
+    // Historical stdout is passed straight to the old normalizer; B and C
+    // bytes in historical data must remain visible to the comparison.
+    assert.notEqual(normalized(after,'/synthetic/.codex'),normalized(before,'/synthetic/.codex'));
+  }
+});
+
 test('L06 version normalization preserves unrelated bytes and complete runtime generations', () => {
   const home = '/synthetic/.codex';
   const oldRuntime = home + '/cairn/runtime/0.5.3-0123456789ab';
@@ -342,8 +411,10 @@ test('L06 version normalization preserves unrelated bytes and complete runtime g
     normalized('Cairn.ink Memory setup 0.5.3\nunrelated 0.5.3', home));
 });
 test('L06 hosted runtime exceptions require packaged bytes and preserve all other comparisons', async () => {
-  assert.equal(hostedRuntimeExceptions.length, 10);
-  assert.equal(recallRuntimeChanges.size, 3);
+  assert.equal(hostedRuntimeExceptions.length, 15);
+  assert.equal(new Set(hostedRuntimeExceptions).size, hostedRuntimeExceptions.length);
+  assert.equal(recallRuntimeChanges.size, 2);
+  assert.equal(durabilityRuntimeChanges.size, 4);
   const home = '/synthetic/.codex';
   const oldRuntime = '.codex/cairn/runtime/0.5.3-0123456789ab/';
   const newRuntime = '.codex/cairn/runtime/0.6.0-abcdef012345/';
@@ -356,7 +427,7 @@ test('L06 hosted runtime exceptions require packaged bytes and preserve all othe
       files([[oldRuntime + path, payload]], true)), { code: 'ERR_ASSERTION' }, path);
   }
   for (const [path, packaged] of packagedHostedRuntime) {
-    const baseline = files([[oldRuntime + path, historicalRecallRuntime.get(path) ?? payload]], true);
+    const baseline = files([[oldRuntime + path, historicalRecallRuntime.get(path) ?? (durabilityRuntimeChanges.has(path) ? packaged : payload)]], true);
     assert.deepEqual(files([[newRuntime + path, packaged]]), baseline);
     const damaged = Buffer.from(packaged); damaged[0] ^= 1;
     assert.throws(() => files([[newRuntime + path, damaged]]), { code: 'ERR_ASSERTION' }, path);
@@ -367,7 +438,7 @@ test('L06 hosted runtime exceptions require packaged bytes and preserve all othe
   const manifestName = newRuntime + 'manifest.json';
   const oldManifest = Buffer.from(packagedHostedManifest.toString().replace(/"([^"\n]+)": "[a-f0-9]{64}"/gu,
     (raw, path) => hostedRuntimeExceptions.includes(path) ? JSON.stringify(path) + ': "' +
-      (historicalRecallRuntime.has(path) ? sha256(historicalRecallRuntime.get(path)) : '0'.repeat(64)) + '"' : raw));
+      (historicalRecallRuntime.has(path) ? sha256(historicalRecallRuntime.get(path)) : durabilityRuntimeChanges.get(path)?.historical ?? '0'.repeat(64)) + '"' : raw));
   const baselineManifest = files([[oldRuntime + 'manifest.json', oldManifest]], true);
   assert.deepEqual(files([[manifestName, packagedHostedManifest]]), baselineManifest);
   assert.deepEqual(files([[oldRuntime + 'manifest.json', oldManifest], [manifestName, packagedHostedManifest]], true), baselineManifest);
@@ -605,7 +676,7 @@ for (const { scenario, args, label } of cells) test(`${label} hosted baseline: $
     await restore(); const start = await f.calls(), orderedStart = (await f.orderedCalls()).length;
     const disabled = await run({ args, choices, fixedNow, disableLocalMode: true });
     assert.equal(disabled.code, baseline.code, disabled.stdout);
-    assert.equal(normalized(disabled.stdout, f.codexHome), normalized(baseline.stdout, f.codexHome));
+    assert.equal(normalized(currentHostedOutput(disabled.stdout), f.codexHome), normalized(baseline.stdout, f.codexHome));
     assert.deepEqual(disabled.prompts, baseline.prompts);
     const disabledCalls = await f.calls();
     assert.deepEqual(mutating(disabledCalls, start), mutations);
@@ -618,7 +689,7 @@ for (const { scenario, args, label } of cells) test(`${label} hosted baseline: $
   const beforeRouted = await f.calls(), routedOrdered = (await f.orderedCalls()).length;
   const routed = await run({ args, choices, fixedNow, disableLocalMode: false });
   assert.equal(routed.code, baseline.code, routed.stdout);
-  assert.equal(normalized(routed.stdout, f.codexHome), normalized(baseline.stdout, f.codexHome));
+  assert.equal(normalized(currentHostedOutput(routed.stdout), f.codexHome), normalized(baseline.stdout, f.codexHome));
   assert.deepEqual(routed.prompts, baseline.prompts);
   assert.deepEqual(mutating(await f.calls(), beforeRouted), mutations);
   assert.deepEqual((await f.orderedCalls()).slice(routedOrdered).filter(callsThatMutate).map(call => normalizedCall(call, f.codexHome)), orderedMutations);
@@ -803,4 +874,28 @@ for (const relativeHome of ['settings', 'tmp/.codex']) test(`L34a endpoint reaut
   assert.equal(actual.code, 2, actual.stdout); assert.equal(actual.stdout, control.stdout);
   assert.match(actual.stdout, /--reauthorize/u); assert.doesNotMatch(actual.stdout, /TMPDIR has ancestor/u);
   assert.equal((await f.calls()).codex.length, start); assert.deepEqual(await inventory(f.home), before);
+});
+
+test('L06 diagnostic durability allowances bind historical, previous and current runtime bytes', async t => {
+  const historical = await baselineForTest(t);
+  if (!historical) return;
+  const previous = acceptBaseline(t, await historicalInstaller('a46aeb18', '0.6.3'));
+  if (!previous) return;
+  for (const [path, pins] of durabilityRuntimeChanges) {
+    const original = await readFile(new URL('../runtime/' + path, historical.module));
+    const before = await readFile(new URL('../runtime/' + path, previous.module));
+    const current = packagedHostedRuntime.get(path);
+    assert.equal(sha256(original), pins.historical, path);
+    assert.equal(sha256(before), pins.before, path);
+    assert.equal(sha256(current), pins.current, path);
+    for (const bytes of [original, before, current]) assertRecallRuntime(path, bytes);
+    const damaged = Buffer.from(original); damaged[0] ^= 1;
+    assert.throws(() => assertRecallRuntime(path, damaged), { code: 'ERR_ASSERTION' });
+    const name = '.codex/cairn/runtime/0.5.3-0123456789ab/' + path;
+    assert.throws(() => fileInventory([[name, damaged]], true, '/synthetic/.codex', { historical: true }),
+      { code: 'ERR_ASSERTION' });
+    const badManifest = Buffer.from(packagedHostedManifest.toString().replace(pins.current, '0'.repeat(64)));
+    assert.throws(() => normalizeFile('.codex/cairn/runtime/0.6.3-abcdef012345/manifest.json', badManifest,
+      '/synthetic/.codex', { historical: true }), { code: 'ERR_ASSERTION' });
+  }
 });
