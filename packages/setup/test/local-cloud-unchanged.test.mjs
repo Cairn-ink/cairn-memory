@@ -135,9 +135,9 @@ const hostedRuntimeExceptions = [
   'integrations/codex/parser.mjs',
   'integrations/codex/qualification.mjs',
   'integrations/codex/schema-evidence.mjs',
-  // Installer 0.6.5 (capture stop notice) adds these three hook runtime files.
+  // Installer 0.6.5 (capture stop notice) adds these hook runtime files. Its
+  // installed.mjs change is covered by the durability pin below, listed once.
   'integrations/codex/installed-state.mjs',
-  'integrations/codex/installed.mjs',
   'integrations/codex/worker.mjs',
   ...recallRuntimeChanges.keys(),
   ...durabilityRuntimeChanges.keys(),
@@ -411,7 +411,8 @@ test('L06 version normalization preserves unrelated bytes and complete runtime g
     normalized('Cairn.ink Memory setup 0.5.3\nunrelated 0.5.3', home));
 });
 test('L06 hosted runtime exceptions require packaged bytes and preserve all other comparisons', async () => {
-  assert.equal(hostedRuntimeExceptions.length, 13);
+  assert.equal(hostedRuntimeExceptions.length, 15);
+  assert.equal(new Set(hostedRuntimeExceptions).size, hostedRuntimeExceptions.length);
   assert.equal(recallRuntimeChanges.size, 2);
   assert.equal(durabilityRuntimeChanges.size, 4);
   const home = '/synthetic/.codex';
