@@ -21,6 +21,24 @@ async function capture(f,session,id,text=secret,episode=false,namespace=ns){
     expectedConversationRevision:f.db.prepare('SELECT revision FROM raw_conversations WHERE id=?').get(result.raw.conversationId).revision};
 }
 
+test('raw --help prints both commands and no conversation text',async t=>{
+  const f=sourceFixture(t);localHandle(f);await capture(f,'help-target','help-private');
+  const before=snapshot(f.db);
+  const child=spawnSync(process.execPath,[new URL('../cli.mjs',import.meta.url).pathname,'raw','--help'],{encoding:'utf8',env:{},timeout:15000});
+  assert.equal(child.error,undefined);assert.equal(child.status,0,child.stderr);assert.equal(child.stderr,'');
+  assert.equal(child.stdout,`Cairn Memory — local Raw conversation commands
+
+Usage:
+  cairn-memory raw list --db ABS --owner ID [--project ID]
+  cairn-memory raw delete --db ABS --owner ID [--project ID] --conversation ID [--yes]
+
+List and delete print metadata only. Delete is a dry run unless --yes is supplied.
+See docs/raw-local-journal.md for deletion and retention details.
+`);
+  assert.doesNotMatch(child.stdout,/Synthetic copper private conversation sentinel/);
+  assert.deepEqual(snapshot(f.db),before);
+});
+
 test('raw list and dry run are text-free, inert, namespace-bound and reachable through CLI',async t=>{
   const f=sourceFixture(t),core=localHandle(f),source=await capture(f,'target','private');
   const foreign=await capture(f,'foreign','other','Synthetic foreign sentinel',false,{...ns,ownerId:'foreign'});

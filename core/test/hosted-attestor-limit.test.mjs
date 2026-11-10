@@ -1,20 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
 import { lineageFixture } from '../testing/card-lineage-fixture.mjs';
 import { attestContentSafety } from '../content-safety-schema.mjs';
 
 for (const base of [23,33]) test(`no-package lineage base ${base} prepares main's exact inventory SQL`,async t=>{
   const f=await lineageFixture(t,{base}), prepared=[];
-  const main=spawnSync('git',['show','35a29c14:core/content-safety-schema.mjs'],{encoding:'utf8'});
-  assert.equal(main.status,0,main.stderr);
-  assert.match(main.stdout,/db.prepare\('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT '\+\(wanted.size\+1\)\)/);
+  // Frozen main statement prefix: this oracle also works in shallow checkouts and archives.
+  const mainInventoryPrefix='SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT ';
   const count=f.db.prepare('SELECT count(*) n FROM sqlite_schema WHERE sql IS NOT NULL').get().n;
   const adapter={prepare(sql){prepared.push(sql);return f.db.prepare(sql);}};
   attestContentSafety(adapter);
   assert.deepEqual(prepared.filter(sql=>sql.startsWith('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT ')),
-    ['SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT '+(count+1)]);
+    [mainInventoryPrefix+(count+1)]);
 });
 
 // Port of the delta review's source-derived hosted-limit reproduction.

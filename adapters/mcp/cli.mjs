@@ -42,8 +42,6 @@ Usage:
   cairn-memory --db ABS --owner ID [--project ID] --assets local-v1
   cairn-memory methods import|adopt|disable [method command arguments; see docs/method-packages-local.md]
   cairn-memory --db PATH --owner ID [--project ID] --method-packages local-v1 [--method-read-personal]
-  cairn-memory raw list --db ABS --owner ID [--project ID]
-  cairn-memory raw delete --db ABS --owner ID [--project ID] --conversation ID [--yes]
   cairn-memory safety preflight --db ABS
   cairn-memory --help
   cairn-memory [--check-config] --retained-raw-profile ABS

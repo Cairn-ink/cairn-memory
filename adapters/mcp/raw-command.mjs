@@ -3,8 +3,18 @@ import { isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { identifier } from '../../core/validation.mjs';
 
+const help = `Cairn Memory — local Raw conversation commands
+
+Usage:
+  cairn-memory raw list --db ABS --owner ID [--project ID]
+  cairn-memory raw delete --db ABS --owner ID [--project ID] --conversation ID [--yes]
+
+List and delete print metadata only. Delete is a dry run unless --yes is supplied.
+See docs/raw-local-journal.md for deletion and retention details.`;
+
 // Explicit local operator surface. No model, source decoding or MCP tool.
 export async function rawCommand(args, write = line => console.log(line)) {
+  if (args.length === 1 && args[0] === '--help') { write(help); return 0; }
   let core, db;
   const emit = value => write(JSON.stringify(value));
   try {

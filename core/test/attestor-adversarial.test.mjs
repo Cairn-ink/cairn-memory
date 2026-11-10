@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { installLocalRawPrivacy } from '../../core/local-authority-schema.mjs';
-import { attestContentSafety } from '../../core/content-safety-schema.mjs';
+import { LOCAL_RAW_PRIVACY_DDL, attestContentSafety } from '../../core/content-safety-schema.mjs';
 
 const cases = [
   { name: 'complete current package', ddl: s => s, accept: true },
@@ -20,7 +20,7 @@ const cases = [
   { name: 'ALTER adds a column', ddl: s => s, after: 'ALTER TABLE local_raw_session_modes ADD COLUMN unexpected TEXT', accept: false },
   { name: 'extra index', ddl: s => s, after: 'CREATE INDEX local_raw_extra ON local_raw_session_modes(interpretation)', accept: false },
   { name: 'extra trigger', ddl: s => s, after: 'CREATE TRIGGER local_raw_extra AFTER INSERT ON local_raw_session_modes BEGIN SELECT 1; END', accept: false },
-  { name: 'previous complete package upgrades explicitly', ddl: () => installLocalRawPrivacy(false), accept: true },
+  { name: 'unshipped five-object package is refused', ddl: () => LOCAL_RAW_PRIVACY_DDL.slice(0,5).join('\n'), accept: false },
 ];
 for (const c of cases) test(c.name, async t => {
   const workspace = createTestWorkspace(t, { prefix: 'independent-attestor-' });
