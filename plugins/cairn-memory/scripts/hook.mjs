@@ -1,37 +1,46 @@
 #!/usr/bin/env node
 
-import { open, readFile, stat } from "node:fs/promises";
-import { createHash } from "node:crypto";
+import { open, readFile, stat, mkdir, rename, unlink, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
 import { platform } from "node:os";
-import { isAbsolute, resolve } from "node:path";
-import { captureEvent } from "../lib/capture-event.mjs";
-import {
+import { dirname, isAbsolute, resolve } from "node:path";
+// Arm before loading the client graph or resolving a binding. performance.now()
+// counts Node startup too; an exhausted startup budget exits before local work.
+const action = process.argv[2] ?? "status";
+const START_BOUNDARY_BUDGET_MS = 300;
+function checkStartBoundary() {
+  if (action === 'start-boundary' && performance.now() >= START_BOUNDARY_BUDGET_MS) process.exit(0);
+}
+checkStartBoundary();
+const startBoundaryTimer = action === 'start-boundary' ? setTimeout(() => process.exit(0),
+  Math.max(0, START_BOUNDARY_BUDGET_MS - performance.now())) : undefined;
+
+const { captureEvent } = await import("../lib/capture-event.mjs");
+const {
   captureCursorPath,
   readCaptureCursor,
   writeCaptureCursor,
-} from "../lib/capture-cursor.mjs";
-import { captureEventId, transcriptWindow } from "../lib/transcript.mjs";
-import { installId } from "../lib/identity.mjs";
-import { normalizeEndpoint } from "../lib/config.mjs";
-import {
+} = await import("../lib/capture-cursor.mjs");
+const { captureEventId, transcriptWindow } = await import("../lib/transcript.mjs");
+const { installId } = await import("../lib/identity.mjs");
+const { normalizeEndpoint } = await import("../lib/config.mjs");
+const {
   readControlState,
   runIfActive,
   setPaused,
   startIfActive,
-} from "../lib/control-state.mjs";
-import { withFileLock } from "../lib/file-lock.mjs";
-import { createJsonPoster, hostedQuotaStatus, hostedTargetId, resumeHostedQuota }
-  from "../lib/http.mjs";
-import { prepareRecallQuery } from "../lib/recall-query.mjs";
-import { resolveClient, clientProjectId, parsePairingRecord } from "../lib/pairing.mjs";
-import { VERSION } from "../lib/version.mjs";
-import { optionalHostSessionId } from "../lib/hosted-contract.mjs";
-import { inspectAutomaticPolicy } from "../lib/automatic-policy.mjs";
-import { hostedPauseStatus } from "../lib/hosted-pause.mjs";
-import { INVALID_ENDPOINT, credentialDescription, readCredentialState, recordCredentialAuth,
-  recordCredentialConfiguration } from "../lib/credential-state.mjs";
+} = await import("../lib/control-state.mjs");
+const { withFileLock } = await import("../lib/file-lock.mjs");
+const { createJsonPoster, hostedQuotaStatus, hostedTargetId, resumeHostedQuota } = await import("../lib/http.mjs");
+const { prepareRecallQuery } = await import("../lib/recall-query.mjs");
+const { resolveClient, clientProjectId, parsePairingRecord } = await import("../lib/pairing.mjs");
+const { VERSION } = await import("../lib/version.mjs");
+const { optionalHostSessionId } = await import("../lib/hosted-contract.mjs");
+const { inspectAutomaticPolicy } = await import("../lib/automatic-policy.mjs");
+const { hostedPauseStatus } = await import("../lib/hosted-pause.mjs");
+const { INVALID_ENDPOINT, credentialDescription, readCredentialState, recordCredentialAuth,
+  recordCredentialConfiguration } = await import("../lib/credential-state.mjs");
 
-const action = process.argv[2] ?? "status";
 // One recall-only cap from the process time origin, including startup/imports.
 // It is established before setup or stdin awaits. The HTTP
 // timeout remains narrower. Cooperative waits cancel and clean up naturally;
@@ -199,6 +208,24 @@ async function captureMarkers(path, { strict = false } = {}) {
   }
 }
 
+// The hard exit is crash-like: a linked lock names a dead PID and the normal
+// capture lock reaper recovers it (and its owner file). An unlinked owner or
+// temporary file is never state and is ignored by all readers. No cleanup I/O
+// may extend the deadline. Rename is atomic: if exit races an in-flight rename,
+// readers see either the old state or the complete new boundary, never a prefix.
+async function writeStartBoundary(path, state) {
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
+  try {
+    checkStartBoundary();
+    await writeFile(temporary, JSON.stringify(state), { mode: 0o600, flag: "wx" });
+    checkStartBoundary();
+    await rename(temporary, path);
+  } finally {
+    await unlink(temporary).catch(() => {});
+  }
+}
+
 async function startCapture(hookInput) {
   const event = captureEvent(hookInput);
   if (!event) return;
@@ -217,7 +244,8 @@ async function startCapture(hookInput) {
     catch (error) { if (error.code === "ENOENT") return; throw error; }
     const generation = (await readControlState(dataDir)).generation;
     const tail = size === 0 ? Buffer.alloc(0) : await readSlice(event.transcript_path, size - 1, size);
-    await writeCaptureCursor(statePath, {
+    checkStartBoundary();
+    await writeStartBoundary(statePath, {
       offset: size, generation, discardUntilNewline: size > 0 && tail[0] !== 0x0a,
       ...markers, startOffset: size, startedAt: observedAt,
     });
@@ -614,4 +642,5 @@ try {
   await publishRecallConfiguration();
   if (recallMarkerInput) await recordFirstPrompt(recallMarkerInput).catch(() => {});
   clearTimeout(recallTimer);
+  clearTimeout(startBoundaryTimer);
 }
