@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — retain prepared Raw evidence
+
+- Default three-layer reads keep the validated Raw prefix when preparation
+  reaches its cutoff, with `partial` coverage. Incomplete search results and
+  individual candidate failures preserve other valid candidates. Late prepares
+  are ignored, and partial sets retain the existing batch authorization checks
+  before projection and final delivery.
+- Known limit: on the product reader, Raw invalidated between initial and final
+  validation yields the existing refusal (`reader_failed`) rather than a Memory-only
+  response; the local/facade reader rebuilds Memory-only.
+
 ## Unreleased — local Raw-only capture and conversation hiding
 
 - Local Codex capture re-qualifies an updated binary in the background, refuses capture while waiting, and reports qualification status with rerun-setup guidance. A failed first qualification no longer prevents installing local hooks.

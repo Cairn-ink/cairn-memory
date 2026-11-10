@@ -483,14 +483,23 @@ date. Explicit `representation:'representation-v2'` keeps undated Memory output
 and relevance order. Raw retains its original `occurredAt` for attribution.
 The untrusted-data framing applies to both channels.
 
-`diagnostics.coverage.raw` is `included`, `unavailable` or `partial`. An absent
-or unavailable service, partial search, failed preparation, or exhausted Raw
-time allowance yields the existing Memory-only assembly. Raw preparation has a
-subdeadline that reserves time for Memory assembly. Prepared Raw is validated
-again after counting and authority callbacks; a failed final validation drops
-all Raw and rebuilds the Memory-only response. Packing also reserves time for
-Memory-only finalization. Optional relation/MOC previews with more than 24
-Memory candidates use the Memory-only path (`raw:'partial'`) until wider
+`diagnostics.coverage.raw` is `included`, `unavailable`, `unsupported_store` or
+`partial`. Incomplete search and exhausted Raw preparation time retain the
+already prepared, identity-checked candidates in rank order with `partial`
+coverage. A candidate outside the read set, an identity mismatch or a failed
+preparation skips only that candidate and makes coverage `partial`. A prepare
+that finishes after the cutoff is discarded; the timer snapshots the validated
+prefix, so late completions cannot change it. Partial coverage can accompany
+delivered Raw evidence and dates; it does not mean the Raw channel is empty.
+An empty Raw set uses the existing Memory-only assembly, including a complete
+search with zero candidates (`included`). An absent or failed service reports
+`unavailable`; an unsupported store reports `unsupported_store`.
+Raw preparation has a subdeadline that reserves time for Memory assembly.
+Every nonempty Raw set is batch-revalidated before any Raw text projection.
+Prepared Raw is validated again after counting and authority callbacks; a failed
+final validation drops all Raw and rebuilds the Memory-only response. Packing
+also reserves time for Memory-only finalization. Optional relation/MOC previews
+with more than 24 Memory candidates use the Memory-only path (`raw:'partial'`) until wider
 coalesced snapshots are supported. Late asynchronous completions
 are discarded. Hosts must keep synchronous service calls bounded and own any
 underlying operation until it settles. No permanent connection refusal is
