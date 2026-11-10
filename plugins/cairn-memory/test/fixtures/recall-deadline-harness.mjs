@@ -18,8 +18,8 @@ export const scenarios = {
   'unavailable-quota-lock': { holdQuotaLock: true, telemetry: true },
   // The schema rejection comes 50 ms after the first fetch, and the fallback
   // waits 5000 ms on the shared signal, so it is still in flight at the
-  // 3500 ms process-clock cutoff. The 1500 ms lock hold puts the shared
-  // HTTP deadline (first fetch + 2500 ms) beyond the application cutoff.
+  // output-reservation cutoff. The 1500 ms lock hold puts the shared HTTP
+  // deadline (first fetch + 2500 ms) beyond the output reservation.
   'schema-fallback': { lockMs: 1500, reply: 'old-schema' },
 };
 
@@ -161,6 +161,6 @@ export function assertScenario(name, result) {
     assert.equal(calls.length, 2);
     assert.equal(calls[0].hasSession, true); assert.equal(calls[1].hasSession, false);
     assert.equal(calls[1].sameSignal, true); assert.equal(calls[1].sameLegacyPayload, true);
-    assert.ok(aborted[0].source === 'application', 'application_deadline');
+    assert.ok(aborted[0].source === 'output', 'output_reservation_deadline');
   }
 }

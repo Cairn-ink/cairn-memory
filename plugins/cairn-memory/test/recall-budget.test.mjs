@@ -19,19 +19,20 @@ const silent = result => {
 };
 const capTime = result => result.elapsedMs - at(result, 'process-origin');
 
-test('cap and kill boundary: ten unanswered loopback requests consume the process-clock cap', async t => {
+test('ten unanswered loopback requests retain an output reserve after contention', async t => {
   const exits = [];
   for (let run = 0; run < 10; run++) await t.test(`run ${run + 1}`, async () => {
-    // Contention makes the application cap precede the fetch deadline.
+    // The output reservation now precedes the 3500 ms application cap.
     const result = await invocation(t, { lockMs: 1500, neverAnswer: true });
     exits.push(result.elapsedMs);
     t.diagnostic(JSON.stringify({ run: run + 1, code: result.code, spawnExitMs: result.elapsedMs,
       processExitMs: capTime(result), fetchMs: at(result, 'recall-fetch') }));
     silent(result);
     assert.equal(result.serverHeaders, 1);
-    assert.ok(capTime(result) >= 3400, 'cap_not_shortened');
+    const aborted = at(result, 'recall-aborted') - at(result, 'process-origin');
+    assert.ok(aborted >= 2750 && aborted < 3150, 'output_reservation_deadline');
     assert.ok(result.elapsedMs < 4000, 'host_margin');
-    assert.equal(result.events.find(event => event.kind === 'recall-aborted')?.source, 'application');
+    assert.equal(result.events.find(event => event.kind === 'recall-aborted')?.source, 'output');
   });
   t.diagnostic(JSON.stringify({ runs: exits.length, maxSpawnExitMs: Math.max(...exits) }));
 });
@@ -45,7 +46,7 @@ test('startup and imports count against the cap', async t => {
   assert.equal(result.events.filter(event => event.kind === 'recall-fetch').length, 0);
 });
 
-test('fetch timer starts at fetch and allows 2500 ms; contention lets the cap win', async t => {
+test('fetch timer allows 2500 ms while the output reserve bounds contended invocations', async t => {
   const short = await invocation(t, { neverAnswer: true });
   silent(short); assert.equal(short.serverHeaders, 1);
   const elapsed = at(short, 'recall-aborted') - at(short, 'recall-fetch');
@@ -56,9 +57,11 @@ test('fetch timer starts at fetch and allows 2500 ms; contention lets the cap wi
   assert.equal(short.events.find(event => event.kind === 'recall-aborted').source, 'http');
   const contended = await invocation(t, { lockMs: 1500, neverAnswer: true });
   silent(contended); assert.equal(contended.serverHeaders, 1);
-  assert.ok(capTime(contended) >= 3400, 'process_cap_3500');
-  assert.ok(at(contended, 'recall-aborted') - at(contended, 'recall-fetch') < 2400, 'cap_wins');
-  assert.equal(contended.events.find(event => event.kind === 'recall-aborted').source, 'application');
+  const reserved = at(contended, 'recall-aborted') - at(contended, 'process-origin');
+  assert.ok(reserved >= 2750 && reserved < 3150, 'reserved_output_time');
+  assert.equal(contended.events.filter(event => event.kind === 'output-timeout').length, 1);
+  assert.ok(at(contended, 'recall-aborted') - at(contended, 'recall-fetch') < 2400, 'output_reserve_wins');
+  assert.equal(contended.events.find(event => event.kind === 'recall-aborted').source, 'output');
 });
 
 test('configured host timeouts reserve at least 500 ms after each recall cap', async () => {
@@ -106,7 +109,7 @@ test('installed prompt launcher and configuration retain the required margin', a
   assert.equal(launcherBudget('SessionStart', false), 2000, 'startup_unchanged');
   assert.equal(launcherBudget('Stop', true), 750, 'capture_unchanged');
   const lifecycle = await source('../../../integrations/codex/hosted-lifecycle.mjs');
-  assert.match(lifecycle, /hash\('wire-session-v1','codex',input.session_id\) }, 2500, undefined, signal, dispatch\)/);
+  assert.match(lifecycle, /hash\('wire-session-v1','codex',input.session_id\) }, 2500, undefined, fetchSignal, dispatch\)/);
 });
 
 test('hosted client aborts 2500 ms after fetch', async t => {

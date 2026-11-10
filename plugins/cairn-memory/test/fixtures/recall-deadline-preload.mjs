@@ -9,9 +9,14 @@ const startupDelay = Number(process.env.CAIRN_TEST_STARTUP_DELAY ?? 0);
 if (startupDelay) await delay(startupDelay);
 // Observe the configured HTTP delay without replacing the native timeout.
 const originalSignalTimeout = AbortSignal.timeout;
+let outputSignal;
 AbortSignal.timeout = function (milliseconds) {
-  notify('http-timeout', { delayMs: milliseconds });
-  return originalSignalTimeout.call(this, milliseconds);
+  const signal = originalSignalTimeout.call(this, milliseconds);
+  const caller = new Error().stack?.split('\n')[2] ?? '';
+  const outputBudget = caller.includes('/scripts/hook.mjs:');
+  if (outputBudget) outputSignal = signal;
+  notify(outputBudget ? 'output-timeout' : 'http-timeout', { delayMs: milliseconds });
+  return signal;
 };
 // Observe entry at creation of the hook's timer, without moving or replacing it.
 // hrtime has a common monotonic origin across parent/child processes; IPC receipt
@@ -40,7 +45,8 @@ fsPromises.link = async function (source, target) {
   }
 };
 syncBuiltinESMExports();
-const abortSource = signal => signal.reason?.message === 'recall_timeout' ? 'application'
+const abortSource = signal => outputSignal?.aborted && signal.reason === outputSignal.reason ? 'output'
+  : signal.reason?.message === 'recall_timeout' ? 'application'
   : signal.reason?.name === 'TimeoutError' ? 'http' : 'other';
 // Register the rendezvous before announcing fetch so an early parent ack cannot
 // be lost. Keep IPC live only while waiting, and remove listeners on abort too.
