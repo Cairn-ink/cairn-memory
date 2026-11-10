@@ -62,7 +62,7 @@
   does not capture automatically, so its engine does not use the new hide windows
   or fork fences for capture. Its setup leaves 0.6.6 hooks registered with their
   retained engine; turn capture off with 0.6.6 before downgrading to stop them.
-- Engine bundle source sync: `9701e44e`. Release acceptance must compare the
+- Engine bundle source sync: `83cee2e3`. Release acceptance must compare the
   complete bundled engine against that commit, preserving the sync-commit rule.
 
 ## 0.6.5 — Unreleased
