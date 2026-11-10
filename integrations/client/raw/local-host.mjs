@@ -1,3 +1,6 @@
+import { detectLocalCodexHost } from './local-codex-qualification.mjs';
+import { localCodexQualification } from './local-codex-qualification.mjs';
+import { checkLocalSession } from './local-session-fence.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { performance } from 'node:perf_hooks';
 import { types } from 'node:util';
@@ -11,9 +14,9 @@ import { reasons as workerReasons } from './local-worker-input.mjs';
 import { readHostProfile, readHostConfiguration, hostRuntime, hostSelection, exact, overlaps, canonicalHostPath, fail } from './local-host-profile.mjs';
 import { checkHostPermission } from './local-host-permission.mjs';
 import { inspectPreparation, prepareHost } from './local-host-preparation.mjs';
-import { detectRunningHost, boundBinary, cachedQualification, hasQualifiedCreator } from '../../codex/qualification.mjs';
+import { boundBinary, cachedQualification, hasQualifiedCreator } from '../../codex/qualification.mjs';
 import { sessionSourceMetadata } from '../../codex/session-source.mjs';
-import { executeRearm, checkHostRearm } from './local-host-rearm.mjs';
+import { executeRearm, checkHostRearm, lazyRearm } from './local-host-rearm.mjs';
 import { rearmResult } from './local-rearm-state.mjs';
 
 const dependencies = new AsyncLocalStorage();
@@ -23,7 +26,7 @@ export const withLocalHostDependencies = (value, work) => dependencies.run(value
 const runtimeRoot = resolve(fileURLToPath(new URL('../../../',import.meta.url)));
 const hostReasons = ['prepared','preparation_required','preparation_invalid','profile_invalid','config_invalid','store_invalid',
   'authority_changed','capture_disabled','runtime_unavailable','host_unavailable','host_unqualified','source_unqualified',
-  'invalid_input','cancelled','work_limit','unexpected_failure'];
+  'invalid_input','cancelled','work_limit','unexpected_failure','rearm_refused','rearm_invalid'];
 const aborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype,'aborted').get;
 const add = EventTarget.prototype.addEventListener, remove = EventTarget.prototype.removeEventListener;
 export function localHostResult(status, reason = null, worker = null) {
@@ -69,8 +72,9 @@ export function createLocalRawHost(value) {
       hostRuntime();
       await runtimeFiles(); op.check();
       if (action === 'rearm' || action === 'rearmStatus') return await executeRearm(profilePath,selection,op,deps,action === 'rearmStatus');
-      const selected = ['initialize','run'].includes(action) ? hostSelection(selection,action === 'initialize') : null;
+      const selected = ['initialize','run','markStart'].includes(action) ? hostSelection(selection,action !== 'run') : null;
       const profile = await readHostProfile(profilePath), config = await readHostConfiguration(profile); op.check();
+      if (profile.installation.client === 'codex' && selected?.start === 'beginning') fail('invalid_input');
       await checkHostRearm(profile,config); op.check();
       await checkHostPermission(config); op.check();
       if (action === 'prepare') {
@@ -80,11 +84,13 @@ export function createLocalRawHost(value) {
       const prepared = await inspectPreparation(profile,config); op.check();
       if (prepared !== 'ready') return localHostResult('blocked','preparation_required');
       if (action === 'status') return localHostResult('ready');
+      if (profile.installation.client === 'codex' && action === 'markStart') fail('invalid_input');
       let selectedPath,privatePaths;
       try {
-        [selectedPath,...privatePaths] = await Promise.all([selected.sourcePath,profile.stateRoot,profile.identityKeyPath,
-          profile.profilePath,profile.markerPath,profile.lockPath,profile.rearmPath,profile.configPath,config.databasePath,config.usage.root].map(canonicalHostPath));
+        [selectedPath,...privatePaths] = await Promise.all([...(action === 'markStart' ? []:[selected.sourcePath]),profile.stateRoot,profile.identityKeyPath,
+          profile.profilePath,profile.markerPath,profile.lockPath,profile.rearmPath,profile.activationPath,profile.configPath,config.databasePath,config.usage.root].map(canonicalHostPath));
       } catch { fail('source_unqualified'); }
+      if (action === 'markStart') { privatePaths.unshift(selectedPath); selectedPath = selected.sourcePath; }
       if (privatePaths.some(path => overlaps(selectedPath,path))) fail('invalid_input');
       async function freshPermission() {
         const finalProfile = await readHostProfile(profilePath);
@@ -94,12 +100,15 @@ export function createLocalRawHost(value) {
         if (await inspectPreparation(finalProfile,finalConfig) !== 'ready') fail('preparation_invalid');
         await checkHostPermission(finalConfig); op.check();
       }
+      await checkLocalSession(profile,config,selected); op.check();
       let formatAuthority = null;
       if (profile.installation.client === 'codex') {
-        const host = await (deps.detectHost ?? detectRunningHost)(); op.check();
-        if (!host || !await boundBinary(host)) fail('host_unavailable');
-        const qualification = await cachedQualification(profile.installation.qualificationConfigPath,host); op.check();
-        if (qualification.status !== 'qualified' || host.execSession === true) fail('host_unqualified');
+        const host = await detectLocalCodexHost(deps.detectHost); op.check();
+        if (!host) fail('host_unavailable');
+        if (host.execSession === true) fail('host_unqualified');
+        const qualification = await localCodexQualification(profile.installation.qualificationConfigPath,host,
+          deps.launchQualification ? {launch:deps.launchQualification}:{}); op.check();
+        if (qualification.status !== 'qualified') fail('host_unqualified');
         await deps.checkpoint?.('before_header'); op.check();
         await freshPermission();
         const source = await sessionSourceMetadata(selected.sourcePath,selected.sessionId,{ signal:op.signal,
@@ -115,6 +124,10 @@ export function createLocalRawHost(value) {
       // Re-read the exact profile and preparation binding, then take a fresh
       // authority snapshot immediately before the trusted worker invocation.
       await freshPermission();
+      if (action !== 'markStart' && await lazyRearm(profile,config,{ ...selected,
+        pluginRoot:profile.installation.client === 'claude-code' ? profile.installation.pluginRoot:null,formatAuthority },op)) {
+        return localHostResult('ready');
+      }
       const worker = createLocalRawWorker({ stateRoot:profile.stateRoot,identityKeyPath:profile.identityKeyPath,
         nodeExecutable:process.execPath,runtimeRoot,configPath:profile.configPath,expectedAuthority:config.authority,home:profile.home });
       const result = await worker[action]({ ...selected,pluginRoot:profile.installation.client === 'claude-code' ? profile.installation.pluginRoot : null,
@@ -128,13 +141,15 @@ export function createLocalRawHost(value) {
       }
       return localHostResult(result.status,result.reason,result);
     } catch (error) {
-      let reason = hostReasons.includes(error.reason) || workerReasons.includes(error.reason) ? error.reason : 'unexpected_failure';
+      let reason = error.message === 'state_busy' ? 'state_busy'
+        : hostReasons.includes(error.reason) || workerReasons.includes(error.reason) ? error.reason : 'unexpected_failure';
       try { op?.check(); } catch (stopped) { reason = stopped.reason; }
       if (action === 'rearm' || action === 'rearmStatus') return rearmResult(action === 'rearmStatus',reason === 'state_busy' ? 'busy':'blocked',reason);
       return localHostResult(reason === 'state_busy' ? 'busy' : 'blocked',reason);
     } finally { op?.close(); }
   }
   return Object.freeze({ status:(options = {}) => execute('status',null,options),prepare:(options = {}) => execute('prepare',null,options),
+    markStart:(selection,options = {}) => execute('markStart',selection,options),
     initialize:(selection,options = {}) => execute('initialize',selection,options),run:(selection,options = {}) => execute('run',selection,options),
     rearmStatus:(options = {}) => execute('rearmStatus',null,options),rearm:(selection,options = {}) => execute('rearm',selection,options) });
 }

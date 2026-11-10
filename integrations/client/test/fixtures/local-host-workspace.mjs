@@ -1,3 +1,5 @@
+import { registerLocalQualificationTestRoot, awaitLocalQualificationTestChildren } from '../../raw/local-codex-qualification.mjs';
+import { workspaceSnapshot } from './local-workspace-snapshot.mjs';
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync, readFileSync, readdirSync, lstatSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -9,6 +11,8 @@ import { claude, codex, sessionId } from './raw-fixtures.mjs';
 const sha = value => createHash('sha256').update(value).digest('hex');
 export async function hostFixture(t,{ client = 'claude-code' } = {}) {
   const f = fixture(t,{ client });
+  const unregister=registerLocalQualificationTestRoot(f.workspace.path);
+  f.workspace.defer(async()=>{await awaitLocalQualificationTestChildren();unregister();});
   f.config.provider.apiKeyEnv='CAIRN_SYNTHETIC_API_KEY'; f.save();
   const profilePath=join(f.workspace.path,'profile.json'),stateRoot=join(f.workspace.path,'worker-state'),identityKeyPath=join(f.workspace.path,'identity.key');
   const pluginRoot=join(f.workspace.path,'plugin'); mkdirSync(pluginRoot,{mode:0o700});
@@ -41,12 +45,7 @@ export async function hostFixture(t,{ client = 'claude-code' } = {}) {
     return ok(f.core.setLocalCaptureControl({namespace:f.namespace,client,targetId:current.targetId,expectedStoreId:current.storeId,
       expectedRevision:current.revision,automaticCaptureEnabled:false,rawNoticeVersion:current.rawNoticeVersion}));
   };
-  const snapshot=()=>{
-    const result={};
-    function visit(dir){for(const entry of readdirSync(dir)){const path=join(dir,entry),stat=lstatSync(path),key=relative(f.workspace.path,path);
-      result[key]={mode:stat.mode&0o777,ino:stat.ino,...(stat.isFile()?{sha:sha(readFileSync(path))}:{})};if(stat.isDirectory())visit(path);}}
-    visit(f.workspace.path);return result;
-  };
+  const snapshot=()=>workspaceSnapshot(f.workspace.path,f.databasePath);
   return {...f,profilePath,stateRoot,identityKeyPath,pluginRoot,profile,saveProfile,sourcePath,header,saveSource,selection,host,call,disable,snapshot,
     verdict,verdictPath,binary,setExec:value=>{exec=value},setHost:value=>{hostPresent=value}};
 }
