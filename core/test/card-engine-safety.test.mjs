@@ -103,3 +103,22 @@ test('engine generation reads bounded receipt Raw spans; exclusion revokes the g
   f.db.prepare('INSERT INTO raw_source_exclusions VALUES(?,?,?,?,1)').run(source.conversationId, source.messageId, 0, 1);
   assert.equal(ok(f.call('getCard', { namespace: rawNs, cardId: card.id })).card, null);
 });
+
+
+for (const port of ['model', 'relations', 'relations-accessor']) test(`engine ${port} failures never expose Memory or Raw text in results or diagnostics`, async t => {
+  const marker = 'Synthetic private Memory and Raw error text';
+  const diagnostics = [], model = scriptedConsolidator(() => { throw Object.assign(Error(marker), { code: marker }); });
+  model.onDiagnostic = event => diagnostics.push(event);
+  const f = engineCardFixture(t, { model, ...(port !== 'model' ? { cardRelations: {
+    read() {
+      if (port === 'relations-accessor') {
+        let reads = 0; throw { get code() { return reads++ ? marker : 'source_unavailable'; } };
+      }
+      throw Object.assign(Error(marker), { code: marker });
+    },
+  } } : {}) });
+  f.seed(8);
+  const result = ok(await f.pass());
+  assert.equal(result.state, 'refused'); assert.equal(result.reason, port === 'relations-accessor' ? 'source_unavailable' : 'consolidation_failed');
+  assert.doesNotMatch(JSON.stringify({ result, diagnostics }), /Synthetic private Memory and Raw error text/);
+});

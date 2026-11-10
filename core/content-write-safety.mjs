@@ -9,7 +9,7 @@ import { contentWriteChanges } from './content-write-changes.mjs';
 import { CONTENT_TERMINAL_FIELDS, CONTENT_TERMINAL_ACK_FIELDS, registerContentWriteGuard } from './content-write-context.mjs';
 import { fail } from './validation.mjs';
 import { hasCardLineage, loadCardBodyContributorsInside, verifyCardLineageCommitmentsInside, lineageHmac } from './card-lineage.mjs';
-import { engineCardRevisionsInside } from './engine-card-state.mjs';
+import { engineCardRevisionsInside } from './content-safety.mjs';
 
 const names = {memory:'memories',receipt:'receipts',card:'private_cards','submitted-note':'card_notes',raw:'raw_conversations'};
 const kinds = Object.fromEntries(Object.entries(names).map(([kind,table])=>[table,kind]));
@@ -277,7 +277,7 @@ export function beginContentWriteSafety(db, operation) {
       if(!change?.old||oldValue(change,'revision')!==1||change.row.revision!==2||
         change.columns.some((c,i)=>!['id','revision','updated_at'].includes(c.name)&&change.old[i]!==undefined)||
         [...canonical,...removed].some(c=>['card_body_provenance','card_body_sources','card_body_authorizations'].includes(c.table)&&c.row.card_id===key))return false;
-      const publicNs={...ns,projectId:ns.projectId||null};
+      const publicNs=namespace(change.row); publicNs.projectId ||= null;
       if(!engineCardRevisionsInside(db,publicNs,{...change.row,revision:1}))return false;
       // A stale transition exposes no body or source acknowledgement. Preserve
       // the immutable seal even when source suppression caused the retirement;

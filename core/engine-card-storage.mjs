@@ -1,36 +1,50 @@
 import { randomUUID, createHmac, createHash } from 'node:crypto';
 import { readTransaction, transaction } from './database.mjs';
-import { inContentSuppressionRequestInside, writeContentSuppressionInside } from './content-suppression-storage.mjs';
+import { inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, sourceReadSafety, receiptReadSafety, createContentReadMemo } from './content-safety.mjs';
-import { collectCardBodySourcesInside, sealCardBodyInside, hasCardLineage } from './card-lineage.mjs';
+import { createPrivateCardStorage } from './private-card-storage.mjs';
 import { createCardRawSources } from './card-raw-sources.mjs';
 import { reviewCardApplicabilityInside } from './private-evidence-schema.mjs';
 import { keyed } from './private-card-input.mjs';
-import { engineCardMetadataInside, engineCardRevisionsInside } from './engine-card-state.mjs';
-import { ENGINE_CARD_LIMITS } from './engine-card-clusters.mjs';
+import { engineCardMetadataInside, engineCardRevisionsInside } from './content-safety.mjs';
+import { ENGINE_CARD_LIMITS, cardMemoryRevisions } from './engine-card-clusters.mjs';
 import { tokenizeT1 } from './context-read-tokenize.mjs';
 import { createPrivateEvidenceStorage } from './private-evidence-storage.mjs';
 import { createCardReceiptSources } from './card-receipt-sources.mjs';
 import { receiptEventDate } from './context-read-assembly.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { fail } from './validation.mjs';
+import { installPrivateCards, installCardMemorySources } from './private-card-schema.mjs';
+import { installPrivateEvidence } from './private-evidence-schema.mjs';
+import { installPrivateOrganization } from './private-organization-schema.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
 
 /** Shares the runtime's canonical handle, Card bindings, epochs, operation
  * ledger and (when installed) sealed body lineage. No parallel fact store. */
-export function createEngineCardStorage({ db, identity, ready, rawReader }) {
+export function createEngineCardStorage({ db, identity, ready, rawReader, upgrade = false }) {
   const read = (ns, work) => { ready(); return readTransaction(db, () => inContentSuppressionRequestInside(db, work, [ns])); };
   const bind = (purpose, value) => keyed(identity.cursorSecret, purpose, [identity.storeId, value]);
   const has = table => Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table));
-  const available = () => has('card_applicability_reviews');
+  const installed = () => has('card_applicability_reviews');
+  const available = () => installed() || upgrade && [18,20,21,22].includes(db.prepare('PRAGMA user_version').get().user_version);
+  // Use the existing Card layout, only after an explicit engine maintenance
+  // call. Managed stores never migrate; ordinary opening stays unchanged.
+  function ensureLayout() { if (upgrade && !installed()) transaction(db, () => {
+    const version = db.prepare('PRAGMA user_version').get().user_version;
+    if (![18,20,21,22].includes(version)) return;
+    if (version < 20) installPrivateCards(db);
+    if (version < 21) installCardMemorySources(db);
+    if (version < 22) installPrivateEvidence(db);
+    installPrivateOrganization(db);
+    db.exec('PRAGMA user_version=23');
+  }); }
   const raw = createCardRawSources(db, identity);
-  function receiptRef(ns, memory, row) {
-    return { type: 'receipt', namespace: ns, memoryId: memory.id, memoryRevision: memory.revision,
-      receiptId: row.id, contentIdentity: bind('retained-receipt-content-v1', [ns, memory.id, memory.revision,
-        row.id, row.client, row.session_id, row.event_id, row.role, row.excerpt]), completeness: 'excerpt-only' };
-  }
+  const writers = createPrivateCardStorage({ db, identity, ready }).engineCardWriters();
+  const receiptRef = createCardReceiptSources(db, bind).retainedRefInside;
+  const memoryReference = (ns, memory) => ({ type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision });
+  const cardReference = (ns, row) => ({ type: 'card', namespace: ns, cardId: row.id, revision: row.revision, bodyRevision: row.body_revision });
   function sourcesCurrent(ns, refs, check = () => {}) {
     const memo = createContentReadMemo(db);
     return refs.every(ref => { check(); return db.prepare(`SELECT revision FROM memories WHERE ${where} AND id=? AND deleted=0`)
@@ -54,7 +68,7 @@ export function createEngineCardStorage({ db, identity, ready, rawReader }) {
     return read(ns, () => {
       const receipts = createCardReceiptSources(db, bind), evidence = createPrivateEvidenceStorage({ db, identity,
         receiptRefInside: receipts.refInside });
-      const refs = memories.map(memory => ({ type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision }));
+      const refs = memories.map(memory => memoryReference(ns, memory));
       return evidence.itemsInside(ns, refs, 'history', [ns], { legacyEvidence: true }).map((item, index) => {
         const rows = item.provenance.sourceAccess === 'available' ? db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16')
           .all(item.ref.memoryId).filter(row => item.provenance.receiptMetadata.some(receipt => receipt.receiptId === row.id)) : [];
@@ -78,7 +92,7 @@ export function createEngineCardStorage({ db, identity, ready, rawReader }) {
       for (const memory of rows.slice(0, maximum)) {
         check(); units += memory.content.length;
         if (units > 2000000) fail('source_budget_exceeded');
-        const ref = { type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision };
+        const ref = memoryReference(ns, memory);
         if (!contentReadSafety(db, { identity, namespace: ns, ref, intent: 'history', memo }).allowed) continue;
         const receipts = db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(memory.id)
           .filter(receipt => receiptReadSafety(db, { namespace: ns, receipt, memo }).allowed);
@@ -125,7 +139,7 @@ export function createEngineCardStorage({ db, identity, ready, rawReader }) {
     return result;
   }
   function cards(ns, check = () => {}) {
-    if (!available()) return [];
+    if (!installed()) return [];
     return read(ns, () => { const memo = createContentReadMemo(db); return db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id
       AND o.owner_id=c.owner_id AND o.scope=c.scope AND o.project_id=c.project_id AND o.action_id=c.id
       WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate'
@@ -133,7 +147,7 @@ export function createEngineCardStorage({ db, identity, ready, rawReader }) {
       check();
       const metadata = engineCardMetadataInside(db, ns, row);
       const current = engineCardRevisionsInside(db, ns, row) && contentReadSafety(db, { identity, namespace: ns, memo,
-        ref: { type: 'card', namespace: ns, cardId: row.id, revision: row.revision, bodyRevision: row.body_revision },
+        ref: cardReference(ns, row),
         intent: 'history', method: 'getCard' }).allowed;
       return { ...metadata, row, status: current ? 'current' : 'stale' };
     }); });
@@ -143,6 +157,7 @@ export function createEngineCardStorage({ db, identity, ready, rawReader }) {
       DO UPDATE SET generation=generation+1`).run(...boundary(ns));
   }
   function claim(ns, cluster, timestamp, check) {
+    ensureLayout();
     ready(); check();
     return transaction(db, () => {
       check(); if (!sourcesCurrent(ns, cluster.memories.map(memory => memory.source), check)) fail('source_unavailable');
@@ -155,10 +170,9 @@ export function createEngineCardStorage({ db, identity, ready, rawReader }) {
         ORDER BY c.created_at DESC,c.id DESC LIMIT 1`).get(...boundary(ns), cluster.key);
       if (latest?.revision === 1) {
         const metadata = engineCardMetadataInside(db, ns, latest);
-        const same = JSON.stringify(metadata?.sourceRevisions) === JSON.stringify(cluster.memories.map(memory =>
-          ({ memoryId: memory.id, revision: memory.revision })));
+        const same = JSON.stringify(metadata?.sourceRevisions) === JSON.stringify(cardMemoryRevisions(cluster.memories));
         if (same && contentReadSafety(db, { identity, namespace: ns, intent: 'history', method: 'getCard',
-          ref: { type: 'card', namespace: ns, cardId: latest.id, revision: latest.revision, bodyRevision: latest.body_revision } }).allowed) return false;
+          ref: cardReference(ns, latest) }).allowed) return false;
         db.prepare('UPDATE private_cards SET revision=revision+1,updated_at=? WHERE id=?').run(timestamp, latest.id);
         advance(ns); return false;
       }
@@ -182,10 +196,8 @@ export function createEngineCardStorage({ db, identity, ready, rawReader }) {
       const row = db.prepare(`SELECT * FROM private_cards WHERE ${where} AND id=?`).get(...boundary(ns), id);
       if (!row || !engineCardMetadataInside(db, ns, row)) fail('source_unavailable');
       if (row.state === 'deleted' || !deleted && row.revision !== 1) return;
-      if (deleted) writeContentSuppressionInside(db, { namespace: ns, kind: 'card', key: id,
-        reason: 'purge', actionId: 'engine-retire.' + randomUUID() });
-      db.prepare(`UPDATE private_cards SET revision=revision+1,updated_at=?${deleted ?
-        ",state='deleted',title=NULL,body=NULL" : ''} WHERE id=?`).run(timestamp, id);
+      if (deleted) writers.purge(ns, row, 'engine-retire.' + randomUUID());
+      else db.prepare('UPDATE private_cards SET revision=revision+1,updated_at=? WHERE id=?').run(timestamp, id);
       advance(ns);
     });
   }
@@ -208,16 +220,14 @@ export function createEngineCardStorage({ db, identity, ready, rawReader }) {
         cluster.memories.filter(memory => tokenizeT1(memory.content).includes(term)).length >= cluster.memories.length / 2);
       const id = 'engine-card.' + randomUUID(), title = 'Topic: ' + (shared ?? 'current state and history');
       const metadata = { id, revision: 1, origin: 'engine', builtAt: timestamp, clusterKey: cluster.key,
-        sourceRevisions: cluster.memories.map(m => ({ memoryId: m.id, revision: m.revision })) };
+        sourceRevisions: cardMemoryRevisions(cluster.memories) };
       db.prepare(`INSERT INTO private_cards VALUES(?,?,?,?,1,'confirmed',?,?,1,?,?,?)`)
         .run(id, ...boundary(ns), title, value.body, timestamp, timestamp, timestamp);
       const insert = db.prepare('INSERT INTO card_memory_bindings VALUES(?,?,?,?,?,?)');
       // Position is display metadata, not a source-set bound. The existing
       // receipt binding format has sixteen positions and no position uniqueness.
       refs.forEach((ref, i) => insert.run(id, ref.memoryId, ref.memoryRevision, ref.receiptId, JSON.stringify(ref), i % 16));
-      if (hasCardLineage(db)) sealCardBodyInside(db, { identity, namespace: ns, cardId: id, newBody: true,
-        currentSources: false, sources: collectCardBodySourcesInside(db, identity, ns, refs,
-          ref => sourceReadSafety(db, { identity, namespace: ns, ref }).allowed) });
+      writers.seal(ns, id, refs);
       reviewCardApplicabilityInside(db, id, 1, 'current');
       db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)').run(...boundary(ns), id,
         'consolidate', bind('engine-card-cluster-v1', cluster.key), id, JSON.stringify(metadata), timestamp);

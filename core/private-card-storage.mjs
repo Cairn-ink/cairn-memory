@@ -18,7 +18,7 @@ import { createCardRawSources } from './card-raw-sources.mjs';
 import { cardText, keyed, noteInput, OWNER_NOTE_CAP, pageLimit, refs, sourceRef } from './private-card-input.mjs';
 import { hasCardLineage, collectCardBodySourcesInside, sealCardBodyInside, checkCardActionInside,
   recordCardActionInside, cardBodyDigest } from './card-lineage.mjs';
-import { isEngineCard, engineCardMetadataInside } from './engine-card-state.mjs';
+import { isEngineCard, engineCardMetadataInside } from './content-safety.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
@@ -375,6 +375,15 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     cardDetailInside: (ns, id, readSet, options) => detail(ns, card(ns, id), readSet, options) });
   return Object.freeze({ assertContentOutput(value, scopes) { if(!cachedContentLayout(db)?.suppressionRevision)return; return assertContentOutput(db,identity,value,scopes); }, assertContentScope: (scopes,{delivery=false}={}) => { ready(); if(!cachedContentLayout(db)?.suppressionRevision)return; if(!delivery && scopes.length && hasContentSuppressionRequestInside(db) && !db.isTransaction) { contentSuppressionRequestInside(db,scopes,{defer:true}); return; } assertContentScopes(db,scopes); },
     lineageEnabled:()=>hasCardLineage(db),
+    // Canonical internal writers; maintenance cannot obtain a fact-only sink.
+    engineCardWriters() { return {
+      seal(ns, id, refs) {
+        if (hasCardLineage(db)) sealCardBodyInside(db, { identity, namespace: ns, cardId: id,
+          sources: collectCardBodySourcesInside(db, identity, ns, refs,
+            ref => sourceReadSafety(db, { identity, namespace: ns, ref }).allowed) });
+      },
+      purge(ns, row, actionId) { purgeCard(ns, row, 'deleted', actionId); },
+    }; },
     // Internal shared-read seams: caller owns scope authorization and transaction.
     cardDetailInside(ns, id, readSet, intent) { ready(); return detail(ns, card(ns, id), readSet, intent); },
     cardMetadataInside(ns, row) { ready(); const memo = createContentReadMemo(db); return row && cardSafe(ns, row, 'listCards', memo) ? metadata(ns, row, undefined, undefined, memo) : null; },

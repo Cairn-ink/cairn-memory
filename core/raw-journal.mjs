@@ -336,9 +336,11 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
   }
   const getConversation = createRawReads({ db,identity,epoch,open,digest,partDigest });
   const listRawConversations = createRawConversationList({ db,identity,epoch });
-  const sourceReader = sources ? createRawSourceReader({ db,identity,open,partDigest }) : undefined;
+  let sourceReader = sources ? createRawSourceReader({ db,identity,open,partDigest }) : undefined;
   return Object.freeze({ prepareRegistration,commitRegistration,register,getConversation,listRawConversations,getRawUsage,
     sourceReader,
+    // The engine worker opens retained sources only when maintenance asks.
+    engineSourceReader() { return sourceReader ??= createRawSourceReader({ db,identity,open,partDigest }); },
     getRawCaptureControl,setRawCaptureControl,closePending,
     sessionKey: (namespace, client, sessionId) => sessionKey(rawNamespace(namespace), rawClient(client), identifier(sessionId)) });
 }

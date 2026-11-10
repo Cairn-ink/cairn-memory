@@ -559,7 +559,7 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
 function startContextMaintenance(core, access, { cards = false, semantic = true } = {}) {
   const { readSet } = access;
   const capabilities = core.getContextReadCapabilities?.();
-  const types = capabilities?.ok ? capabilities.value.types : ['memory'];
+  let types = capabilities?.ok ? capabilities.value.types : ['memory'];
   let closed = false, active, timer;
   const arm = () => {
     if (closed) return;
@@ -570,6 +570,7 @@ function startContextMaintenance(core, access, { cards = false, semantic = true 
           const pass = await core.maintainCards({ namespace, budget: { maxItems: 512, maxMs: 30000 } });
           if (!pass.ok || pass.value.state === 'refused') return;
         }
+        if (cards) { const current = core.getContextReadCapabilities?.(); if (current?.ok) types = current.value.types; }
         if (!closed && access.call && (semantic || cards)) await access.call(core, 'refreshContextIndex', {
           readSet, types, intent: 'current', budget: { maxItems: 16, maxMs: 1000 },
         });

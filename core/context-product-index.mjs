@@ -1,3 +1,4 @@
+import { isEngineCard } from './content-safety.mjs';
 import { hasCardLineage, cardLineageItemInside } from './card-lineage.mjs';
 import { admissionRequired } from './context-product-admission.mjs';
 import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
@@ -11,7 +12,7 @@ import { contextInput, namespaceKey, ASSEMBLY_DEFAULTS, ASSEMBLY_POLICIES, ASSEM
 import { ownData } from './local-authority-input.mjs';
 import { deadline, PRODUCT_PROFILE } from './context-product-control.mjs';
 import { fuseCandidates } from './context-read-fusion.mjs';
-import { receiptEventDate, completeResponseBytes } from './context-read-assembly.mjs';
+import { receiptEventDate, completeResponseBytes, cardPackSources } from './context-read-assembly.mjs';
 import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from './context-read-three-layer.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { TOKENIZER_VERSION, REPRESENTATION_VERSION } from './context-read-tokenize.mjs';
@@ -153,7 +154,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         items.push({type:item.type,ref,ns:p.readSet.findIndex(ns=>namespaceKey(ns)===namespaceKey(ref.namespace)),rank:candidate.rank,
           metadata:item.type==='memory'?{state:item.state,reviewState:item.reviewState,filing:item.filing,kind:item.kind,origin:item.origin,confidence:item.confidence}
             :{state:item.state,support:item.support,origin:item.origin,...(item.origin==='engine'?{builtAt:item.builtAt,clusterKey:item.clusterKey,status:item.status}:{})},text:item.type==='memory'?item.content:item.title+'\n'+item.body,
-          sourceMemoryRefs:item.type==='card'?item.bindings.map(binding=>binding.memoryRef).filter(Boolean):[],
+          ...cardPackSources(item),
           turnIds:citedRawTurns(db,ref.namespace,sourceRows,rawChannel),
           sessionIds:sourceRows.map(row=>JSON.stringify(['receipt',namespaceKey(ref.namespace),row.client,row.session_id])),
           date,sources,sourceAccess:item.type==='memory'?item.provenance.sourceAccess:'unsupported',sourcesComplete:item.type==='memory' && item.provenance.coverage.status==='complete',fence:bind('snapshot-item',cardLineageItemInside(db,item))});
@@ -411,14 +412,14 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       // The request's zero owner epoch proves every retained candidate has no
       // fact to match. Delivery still independently fences facts added during
       // semantic callbacks; a safety layout alone is not a populated fact set.
-      if((hasCardLineage(db) || c.suppressionEpoch && c.suppressionEpoch !== '0:0') && ranked.some(candidate=>hasCardLineage(db)&&candidate.ref.type==='card'||contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId}))) ranked=read(()=>ranked.filter(candidate=>{
+      if(ranked.some(candidate=>candidate.ref.type==='card'&&isEngineCard(candidate.ref.cardId)) || (hasCardLineage(db) || c.suppressionEpoch && c.suppressionEpoch !== '0:0') && ranked.some(candidate=>hasCardLineage(db)&&candidate.ref.type==='card'||contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId}))) ranked=read(()=>ranked.filter(candidate=>{
         try{evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);return true;}
         catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
       }));
       const fusionStarted=performance.now(),lexical=c.lexical,fused=fuseCandidates(lexical.rows,ranked,{preset:'rrf-k10',limit:24,semanticState:channel,coverageComplete:preflight?.status==='complete'});
       detail.timings.fusionMs=performance.now()-fusionStarted;
       c.items=fused.rows.map((row,i)=>({ref:row.ref,rank:i+1,fusionScore:row.fusionScore,channels:row.channels}));
-      if((hasCardLineage(db) || c.suppressionEpoch && c.suppressionEpoch !== '0:0') && c.items.some(candidate=>hasCardLineage(db)&&candidate.ref.type==='card'||contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId})))c.items=read(()=>c.items.filter(candidate=>{
+      if(c.items.some(candidate=>candidate.ref.type==='card'&&isEngineCard(candidate.ref.cardId)) || (hasCardLineage(db) || c.suppressionEpoch && c.suppressionEpoch !== '0:0') && c.items.some(candidate=>hasCardLineage(db)&&candidate.ref.type==='card'||contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId})))c.items=read(()=>c.items.filter(candidate=>{
         try{evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);return true;}
         catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
       }));

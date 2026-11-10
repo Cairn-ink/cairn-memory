@@ -19,7 +19,7 @@ import { existingStoreOption } from './existing-store.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { types } from 'node:util';
 import { composeRawCore } from './raw-composition.mjs';
-import { privateCardOptions } from './private-card-input.mjs';
+import { privateCardOptions, cardNamespace, ENGINE_CARD_LIMITS } from './private-card-input.mjs';
 import { createPrivateCardFacade } from './private-card-facade.mjs';
 import { contextInput, assembleSessionContext } from './session-context.mjs';
 import { rangeInput, rangeOrder, validateRangeAnchor, rangePage, envelopeText } from './episode-reads.mjs';
@@ -40,7 +40,6 @@ import { captureMessages, extractionRequest } from './capture.mjs';
 import { captureSnapshot } from './capture-input.mjs';
 import { requestFits } from './model-packing.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
-import { createEngineCardMaintenance } from './engine-card-maintenance.mjs';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
 import { createQueryScore, QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT,
   SOURCE_QUERY_CANDIDATE_VERSION, SOURCE_QUERY_RECEIPT_LIMIT,
@@ -227,7 +226,7 @@ function openWithRoleContext(input, roleContext) {
   if (!descriptor && raw !== true) return buildCore(base);
   if (!descriptor) {
     try { return composeRawCore(buildCore, base, defaultRawOptions(), {
-      sources: typeof base.model?.consolidate === 'function', lineage: true, deletion: true, localControls: true,
+      sources: false, lineage: true, deletion: true, localControls: true,
       rawTextReaders: false,
       captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch), searchEmbedding: roleContext,
     }); } catch (error) {
@@ -253,7 +252,7 @@ function openWithRoleContext(input, roleContext) {
   delete fields.rawSearch;
   const coreOptions = Object.create(Object.getPrototypeOf(input), fields);
   return composeRawCore(buildCore, coreOptions, options, {
-    sources: Boolean(coreOptions.privateCards)||typeof coreOptions.model?.consolidate === 'function', lineage: true, deletion: true, localControls: true,
+    sources: Boolean(coreOptions.privateCards), lineage: true, deletion: true, localControls: true,
     captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch), searchEmbedding: roleContext,
   });
 }
@@ -321,8 +320,19 @@ export function createMemoryCore(input, internal) {
     { engineCards: typeof model?.consolidate === 'function' });
   try {
   const { storeId, cursorSecret } = runtime.identity;
-  const engineCards = createEngineCardMaintenance({ storage: runtime.engineCardStorage, model,
-    relations: input.cardRelations, vectors: input.cardVectors });
+  let engineCards, engineCardsLoading;
+  const engineConfigured = typeof model?.consolidate === 'function';
+  for (const port of [input.cardRelations, input.cardVectors])
+    if (port !== undefined && typeof port?.read !== 'function') fail('invalid_input');
+  async function loadEngineCards() {
+    engineCardsLoading ??= (async () => {
+      const { createEngineCardMaintenance } = await import('./engine-card-maintenance.mjs');
+      const storage = await runtime.engineCardStorage(); runtime.ready();
+      return engineCards = createEngineCardMaintenance({ storage, model,
+        relations: input.cardRelations, vectors: input.cardVectors });
+    })();
+    return engineCardsLoading;
+  }
 
   function namespaceBinding(ns) {
     return createHmac("sha256", cursorSecret)
@@ -1310,8 +1320,16 @@ export function createMemoryCore(input, internal) {
   const contentReads = new Set(['get','list','map','fetch','recall','sourceSnapshot','getEpisode','listEpisodes','listMemoriesByTime',
     'sessionStartContext','getRationale','inspectAdmission','inspectCaptureEvidence','listReviewTransitions','listReviewConflicts']);
   return contentSafetyFacade({
-    async maintainCards(input) { try { runtime.ready(); return success(await engineCards.maintain(input)); } catch (error) { return failure(error); } },
-    getEngineCardStatus(input) { try { runtime.ready(); return success(engineCards.status(input)); } catch (error) { return failure(error); } },
+    ...(engineConfigured ? {
+      async maintainCards(input) { try { runtime.ready(); return success(await (await loadEngineCards()).maintain(input)); } catch (error) { return failure(error); } },
+      getEngineCardStatus(input) { try {
+        runtime.ready();
+        if (engineCards) return success(engineCards.status(input));
+        object(input, ['namespace']); cardNamespace(input.namespace);
+        return success({ configured: true, state: runtime.engineCardAvailable() ? 'ready' : 'unsupported_store',
+          limits: ENGINE_CARD_LIMITS, lastPass: null });
+      } catch (error) { return failure(error); } },
+    } : {}),
     ...createMethodPackageFacade(runtime.methodPackages, methodPackages, runtime.ready,assets),
     ...createAssetFacade(runtime.assets, assets, runtime.ready),
     ...createRoleProfileFacade(runtime.roleProfiles, roleProfiles, { path: input.path, readOnly: Boolean(input.existingStore), context: internal?.roleContext, assets }),

@@ -26,7 +26,7 @@ import { fuseCandidates, RRF_PRESETS } from './context-read-fusion.mjs';
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION } from './context-read-tokenize.mjs';
 import { validateVector } from './context-read-embedder.mjs';
 import { contextBudget } from './context-read-budget.mjs';
-import { receiptEventDate, completeResponseBytes } from './context-read-assembly.mjs';
+import { receiptEventDate, completeResponseBytes, cardPackSources } from './context-read-assembly.mjs';
 import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from './context-read-three-layer.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { CONTEXT_VERSION, CONTEXT_METHODS, CONTEXT_LIMITS, SOURCE_LIMITS, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_DEFAULTS, DEFAULT_ASSEMBLY_POLICY,
@@ -77,12 +77,24 @@ export function openContextCore(baseOptions, contextRead, openBase) {
     probe.db.close();
   }
   let context;
-  const base = openBase({ ...baseOptions, ...(baseOptions.cardVectors === undefined ? {
+  const base = openBase({ ...baseOptions, ...(typeof baseOptions.model?.consolidate === 'function' && baseOptions.cardVectors === undefined ? {
     cardVectors: { read: request => context?.cardVectors(request) ?? [] },
   } : {}) });
   try {
     context = createContextFacade(baseOptions.path === ':memory:' ? ':memory:' : resolve(baseOptions.path), options, { readOnly, ...busyOptions });
-    return Object.freeze({ ...base, ...context.methods, close() { context.close(); return base.close(); } });
+    if (!base.maintainCards) return Object.freeze({ ...base, ...context.methods, close() { context.close(); return base.close(); } });
+    const engineMethods = {
+      ...Object.fromEntries(Object.keys(context.methods).map(method => [method, (...args) => context.methods[method](...args)])),
+      async maintainCards(input) {
+        const result = await base.maintainCards(input);
+        if (result.ok && result.value.built?.length && !context.productCapabilities.types.includes('card')) {
+          context.close();
+          context = createContextFacade(resolve(baseOptions.path), options, { readOnly, ...busyOptions });
+        }
+        return result;
+      },
+    };
+    return Object.freeze({ ...base, ...context.methods, ...engineMethods, close() { context.close(); return base.close(); } });
   } catch (error) { try { base.close(); } catch { /* Preserve the initialization refusal. */ } throw error; }
 }
 export function openContextReader(value) {
@@ -677,7 +689,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             metadata: type === 'memory' ? { state, reviewState: item.reviewState, filing: item.filing,
               kind: item.kind, origin, confidence: item.confidence } : { state, support: item.support, origin,
                 ...(origin === 'engine' ? { builtAt: item.builtAt, clusterKey: item.clusterKey, status: item.status } : {}) },
-            sourceMemoryRefs: type === 'card' ? item.bindings.map(binding => binding.memoryRef).filter(Boolean) : [],
+            ...cardPackSources(item),
             text: type === 'memory' ? item.content : item.title + '\n' + item.body,
             turnIds: citedRawTurns(db, ref.namespace, sourceRows, rawChannel),
             sessionIds: sourceRows.map(row => JSON.stringify(['receipt', namespaceKey(ref.namespace), row.client, row.session_id])),

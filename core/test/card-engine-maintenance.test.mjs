@@ -37,6 +37,7 @@ test('long recurring topic builds in maintenance, read packs Card, fact read ret
 test('five memories, short histories, one conversation and missing pressure do not build', async t => {
   const f = engineCardFixture(t); f.seed(5);
   assert.equal(ok(await f.pass()).built.length, 0); assert.equal(f.model.calls.length, 0);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 18);
   const memories = Array.from({ length: 8 }, (_, i) => ({ id: String(i), date: new Date(2026, 0, i + 1).toISOString(), conversations: ['a'] }));
   assert.equal(cardTrigger(memories, undefined, 100).eligible, false);
   assert.equal(cardTrigger(memories.slice(0, 4), [{ from: '0', to: '1', kind: 'supersedes', slot: 's' },
@@ -115,7 +116,8 @@ test('output drops uncited sentences, refuses foreign citations and excess token
 
 test('keyless status, worker limits, provider refusal and source races never store a Card', async t => {
   const keyless = engineCardFixture(t, { model: null });
-  assert.equal(ok(keyless.core.getEngineCardStatus({ namespace: ns })).state, 'model_not_configured');
+  assert.equal(Object.hasOwn(keyless.core, 'getEngineCardStatus'), false);
+  assert.equal(Object.hasOwn(keyless.core, 'maintainCards'), false);
   const denied = engineCardFixture(t, { model: scriptedConsolidator(() => { throw Error('quota refusal'); }) }); denied.seed();
   const result = ok(await denied.pass()); assert.equal(result.state, 'refused'); assert.equal(result.modelCalls, 1);
   const incomplete = ok(await denied.pass({ maxItems: 10 })); assert.equal(incomplete.state, 'work_limit');
@@ -167,7 +169,7 @@ test('model deadline is a budget result and does not permanently refuse the next
   const recovered = ok(await f.pass()); assert.equal(recovered.built.length, 1, JSON.stringify(recovered));
   const raw = engineCardFixture(t); raw.seed(8);
   const canonical = createEngineCardStorage({ db: raw.db,
-    identity: raw.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get(), ready() {} });
+    identity: raw.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get(), ready() {}, upgrade: true });
   let rawWaiting = true;
   const worker = createEngineCardMaintenance({ model: raw.model, storage: { ...canonical,
     rawSpans: () => rawWaiting ? new Promise(() => {}) : [] } });
@@ -207,4 +209,39 @@ test('both packers dedupe source revisions only after a Card fits, including Mem
     assert.ok(rejected.metered.items.some(item => item.ref?.type === 'memory'));
     assert.equal(rejected.metered.items.some(item => item.ref?.type === 'card'), false);
   }
+});
+
+
+test('ordinary opening and admission keep the original layout until engine maintenance is invoked', async t => {
+  const f = engineCardFixture(t);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 18);
+  assert.equal(f.db.prepare("SELECT name FROM sqlite_schema WHERE name='private_cards'").get(), undefined);
+  f.seed(8);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 18);
+  assert.equal(ok(await f.pass()).built.length, 1);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 23);
+  ok(await f.refresh());
+  assert.ok(ok(await f.read('Orion current state')).metered.items.some(item => item.ref.type === 'card'));
+});
+
+test('authored Cards retain their place beside higher-ranked source Memories in both packers', () => {
+  const namespace = ns, ref = { type: 'memory', namespace, memoryId: 'synthetic-memory', revision: 1 };
+  const memory = { type: 'memory', ref, ns: 0, rank: 1, text: 'Synthetic source',
+    metadata: { state: 'active', reviewState: 'not-required', filing: { status: 'unfiled' }, kind: 'fact', origin: 'explicit', confidence: 1 },
+    sources: [], sourceAccess: 'available', sourcesComplete: true, fence: 'synthetic-memory-fence', date: null };
+  const card = { ...memory, type: 'card', rank: 2, text: 'Synthetic authored Card',
+    ref: { type: 'card', namespace, cardId: 'synthetic-card', revision: 1, bodyRevision: 1 },
+    metadata: { state: 'confirmed', origin: 'authored', support: { status: 'eligible', applicability: 'current', reasons: [] } },
+    sourceMemoryRefs: [ref], fence: 'synthetic-card-fence' };
+  const args = { prepared: [memory, card], counter: { id: 'synthetic', countTokens: text => text.length },
+    policy: { id: 'rank-first-whole-v1' }, budget: { maxItems: 12, maxTokens: 100000 },
+    snapshotOf: () => null, deadlineAt: Infinity, query: 'Synthetic', readSet: [ns], representation: 'representation-v2-dated' };
+  const text = 'Synthetic Raw source', value = { namespace: ns, conversationId: 'synthetic-conversation',
+    messageId: 'synthetic-message', role: 'user', occurredAt: null,
+    ranges: [{ source: { span: { start: 0, end: text.length } }, text }] };
+  const raw = { items: [{ key: 'synthetic-turn', rank: 1, value, handle: {} }], coverage: 'included',
+    rawSearch: { revalidate: handles => handles.map(() => value) } };
+  for (const result of [assembleContext(args), assembleThreeLayerContext(args, raw)])
+    assert.deepEqual(result.metered.items.filter(item => item.ref?.type === 'card' || item.ref?.type === 'memory')
+      .map(item => item.ref.id), ['synthetic-memory', 'synthetic-card']);
 });

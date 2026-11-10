@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto';
 import { createBM25, scoreBM25 } from './context-read-bm25.mjs';
 import { tokenizeT1, termFrequencies } from './context-read-tokenize.mjs';
 
-export const ENGINE_CARD_LIMITS = Object.freeze({ memories: 512, sources: 96, rawUnits: 400,
-  rawTotalUnits: 8000, scanMemories: 4096, scanBytes: 8388608, debounceMs: 600000, maxCards: 1, maxTokens: 250 });
+import { ENGINE_CARD_LIMITS } from './private-card-input.mjs';
+export { ENGINE_CARD_LIMITS };
+export const cardMemoryRevisions = memories => memories.map(memory => ({ memoryId: memory.id, revision: memory.revision }));
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const cosine = (a, b) => {
   const vector = value => Array.isArray(value) || value instanceof Float32Array || value instanceof Float64Array;

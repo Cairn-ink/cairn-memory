@@ -6,7 +6,7 @@ import { countTokens, modelPortValue } from './model-budget.mjs';
 import { cardNamespace } from './private-card-input.mjs';
 import { object, fail } from './validation.mjs';
 import { CONSOLIDATE_PROMPT, validateConsolidation } from './engine-card-output.mjs';
-import { ENGINE_CARD_LIMITS, cardTrigger, clusterMemories, chainLength } from './engine-card-clusters.mjs';
+import { ENGINE_CARD_LIMITS, cardTrigger, clusterMemories, chainLength, cardMemoryRevisions } from './engine-card-clusters.mjs';
 import { assembleContext } from './context-read-assembly.mjs';
 
 /** Called only by a bounded maintenance pass, never admission/capture. The model
@@ -14,6 +14,9 @@ import { assembleContext } from './context-read-assembly.mjs';
  * quota as other engine work. Refusal ends the pass without another dispatch. */
 export function createEngineCardMaintenance({ storage, model, relations, vectors, now = Date.now }) {
   let active = false, last = null;
+  const failureReasons = new Set(['model_timeout', 'model_cancelled', 'source_unavailable', 'source_excluded',
+    'context_budget_exceeded', 'token_count_unavailable', 'invalid_model_output', 'scope_changed',
+    'dependency_limit_reached', 'source_budget_exceeded', 'store_closed', 'invalid_input', 'consolidation_failed']);
   const attempts = new Map();
   const scans = new Map();
   for (const port of [relations, vectors]) if (port !== undefined && typeof port?.read !== 'function') fail('invalid_input');
@@ -63,7 +66,7 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
         scans.delete(scope);
         const snapshot = { memories: scan.memories };
         const request = { namespace: ns, memoryIds: snapshot.memories.map(m => m.id),
-          memories: snapshot.memories.map(m => ({ memoryId: m.id, revision: m.revision })) };
+          memories: cardMemoryRevisions(snapshot.memories) };
         const portRead = async port => {
           let timer; const controller = new AbortController();
           try {
@@ -116,7 +119,7 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
             }
             continue;
           }
-          const sameSources = JSON.stringify(card.sourceRevisions) === JSON.stringify(cluster.memories.map(m => ({ memoryId: m.id, revision: m.revision })));
+          const sameSources = JSON.stringify(card.sourceRevisions) === JSON.stringify(cardMemoryRevisions(cluster.memories));
           if (card.status === 'current' && sameSources) { eligible.delete(cluster.key); continue; }
           const newlyStale = card.row.revision === 1;
           if (newlyStale) storage.retire(ns, card.id, timestamp);
@@ -171,8 +174,10 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
         }
       }, { fresh: true });
     } catch (error) {
-      result.state = error?.code === 'model_timeout' ? 'deadline' : 'refused';
-      result.reason = result.state === 'deadline' ? 'deadline' : error?.code ?? 'consolidation_failed';
+      let code;
+      try { const proposed = error?.code; if (failureReasons.has(proposed)) code = proposed; } catch { /* Port exception properties are untrusted. */ }
+      result.state = code === 'model_timeout' ? 'deadline' : 'refused';
+      result.reason = result.state === 'deadline' ? 'deadline' : code ?? 'consolidation_failed';
     } finally { active = false; last = { namespace: JSON.stringify(ns), value: structuredClone(result) }; }
     return result;
   }

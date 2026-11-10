@@ -8,7 +8,8 @@ Generation is available by default when the model implements `consolidate`.
 There is no authoring confirmation or generation toggle. Capture never builds a
 Card. The existing MCP maintenance loop calls `maintainCards`; embedded hosts can
 call the same method in their maintenance worker. `getEngineCardStatus` reports
-`model_not_configured` without a model, and exposes the last bounded pass.
+the last bounded pass. These methods are present only when the model implements
+`consolidate`; ordinary handles retain their established method surface.
 Writable pinned stores reuse installed Card tables without upgrading their schema.
 
 ## Trigger
@@ -77,7 +78,9 @@ The context reader supplies this port automatically for its retained embeddings.
 ## Lineage and reads
 
 Engine Cards use `private_cards`, canonical receipt bindings, Card epochs and
-the operation ledger. On stores with sealed Card lineage, the same body/source
+the operation ledger. Ordinary opening and admission retain the existing layout.
+A triggered maintenance attempt installs the existing Card layout on an unmanaged
+minimal store; empty or ineligible workloads keep their layout. A managed or fenced store must already support Cards. On stores with sealed Card lineage, the same body/source
 seal includes every source Memory revision and its receipt/Raw ancestry.
 Historical Memory values can support the timeline while their exact cited
 revisions remain unchanged. Engine metadata lives in a `consolidate` operation,
@@ -91,9 +94,9 @@ rebuild inserts a fresh Card row and source set, retaining the old row and seal.
 If the trigger no longer holds, maintenance deletes the stale Card body while
 retaining its row and lineage records.
 
-Cards enter the existing candidate ranking. Packing a Card removes its exact
+Engine Cards enter the existing candidate ranking. Packing an engine Card removes its exact
 source Memory revisions from that pack; a Card that does not fit removes
-nothing. A lower-ranked Card does not displace a higher-ranked source Memory
+nothing. Authored Cards keep their existing packing behavior. A lower-ranked engine Card does not displace a higher-ranked source Memory
 already selected for a specific fact. This also applies when Memory and Raw are assembled together. Single
 fact matches continue to use ordinary Memory candidates. Ranking is unchanged.
 

@@ -202,3 +202,6 @@ export function validateCardCall(method, input, raw = false, currentDependencies
   }
   return ns;
 }
+
+export const ENGINE_CARD_LIMITS = Object.freeze({ memories: 512, sources: 96, rawUnits: 400,
+  rawTotalUnits: 8000, scanMemories: 4096, scanBytes: 8388608, debounceMs: 600000, maxCards: 1, maxTokens: 250 });
