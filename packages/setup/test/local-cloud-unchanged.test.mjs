@@ -148,6 +148,8 @@ const durabilityRuntimeChanges = new Map([
     previousPortableFirstPrompt: '76cc819ac94a85ed1fc8a2d2dabd92bf9b3581ad82422119df279c054727639c',
     previousPendingReplay: 'c2cb8a1dce38e1a9ae2055094c9ef8b1ec65ba40e6ce0cbfbcee8bfa1f9e8086',
     previousHostContainer: 'ab63b7ddb34a8f097255e4f702bd7cfaefd5155a63873d66b93f0d229a6995d2',
+    // Retain the installer's superseded pause runtime alongside gate-only replay.
+    previousInstallerPause: '8d15d24036533f5a235b5e54627cb4db3b94312f28874f9fdf24cd2897cb0635',
     // Root authority and rotation retain the gate in host-managed containers.
     current: 'ef2f022848664bb436d7f59f4cc446a2d230e3aacf637707f20d09b66ac563ba',
   }],
