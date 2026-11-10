@@ -43,14 +43,16 @@ async function readOwner(path, read = readFile) {
   }
 }
 
-async function reapDeadOwner(path, owner, processIsAlive, context, read, signal) {
+async function reapDeadOwner(path, owner, processIsAlive, context, read, signal, reaperRoot = path) {
   signal?.throwIfAborted();
   if (processIsAlive(owner.pid, owner) !== false) return;
 
   // A token-specific marker elects one live reaper. Only a definitively dead
   // reaper may be displaced, through the same election protocol on its marker.
   // Recursive markers fence delayed contenders at every recovery level.
-  const reaperPath = `${path}.reap-${owner.token}`;
+  // Every level uses the original lock prefix and a unique owner token, so
+  // repeated recovery crashes cannot exhaust the filesystem leaf-name limit.
+  const reaperPath = `${reaperRoot}.reap-${owner.token}`;
   const reaperToken = randomUUID();
   const reaperOwner = { pid: process.pid, token: reaperToken, ...context };
   const reaperOwnerPath = `${reaperPath}.owner-${process.pid}-${reaperToken}`;
@@ -73,7 +75,7 @@ async function reapDeadOwner(path, owner, processIsAlive, context, read, signal)
         // Malformed/unknown and live ownership remain fail-closed. EPERM is
         // live, exactly as for the original lock; elapsed time grants nothing.
         if (attempt > 0 || !reaper || processIsAlive(reaper.pid, reaper) !== false) return;
-        await reapDeadOwner(reaperPath, reaper, processIsAlive, context, read, signal);
+        await reapDeadOwner(reaperPath, reaper, processIsAlive, context, read, signal, reaperRoot);
       }
     }
   } finally {
