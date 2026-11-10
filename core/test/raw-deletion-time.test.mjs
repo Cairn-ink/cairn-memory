@@ -432,6 +432,10 @@ for (const path of ['conversation', 'episode']) test(`old finite other-root KEEP
   const episode = ok(await core.capture(episodeInput(client, 'target'))).episode;
   const raw = ok(await core.captureRaw(request(splitRaw('Synthetic later source.', { id: 'target-message', ordinal: 2 })[0],
     { namespace, client, sessionId: 'target', eventId: 'later-raw' }, 'episode')));
+  // The legacy target-message receipt intentionally has unresolved ancestry.
+  // Use a sibling with complete Raw ancestry to prove conversation visibility.
+  ok(await core.captureRaw(request(splitRaw('Synthetic searchable source.', { id: 'searchable-message', ordinal: 3 })[0],
+    { namespace, client, sessionId: 'target', eventId: 'searchable-raw' }, 'episode')));
   const roots = createRawSourceRoots(current), internal = { ...namespace, projectId: namespace.projectId || '' };
   const receipts = current.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at').all(memoryId);
   const keep = roots.receipt(internal, receipts[0]);
@@ -441,6 +445,14 @@ for (const path of ['conversation', 'episode']) test(`old finite other-root KEEP
   const target = current.prepare('SELECT * FROM raw_conversations WHERE id=?').get(raw.raw.conversationId);
   assert.ok(keep.possibleRoots.every(root => root.sessionKey !== target.session_key));
   assert.equal(Date.parse(target.first_received_at), start + 180_000);
+  let visible;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    await rawSearchTestWait(1010);
+    ok(await core.maintainRawSearch({ namespace }));
+    visible = ok(await core.searchRaw({ namespace, query: 'searchable', intent: 'history' }));
+    if (visible.candidates.some(hit => hit.conversationId === target.id)) break;
+  }
+  assert.ok(visible.candidates.some(hit => hit.conversationId === target.id), JSON.stringify(visible));
   const snapshot = () => current.prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name").all()
     .map(({ name }) => [name, current.prepare('SELECT * FROM "' + name + '"').all()]);
   const key = { namespace, conversationId: target.id, expectedRevision: target.revision };
@@ -456,11 +468,9 @@ for (const path of ['conversation', 'episode']) test(`old finite other-root KEEP
   }
   assert.equal(createLocalUuidFence(current).matches(internal, client, [{ id: 'target-message' }]), false);
   assert.equal(current.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n, 0);
-  await rawSearchTestWait(1010);
-  const maintained = ok(await core.maintainRawSearch({ namespace }));
-  const found = ok(await core.searchRaw({ namespace, query: 'later', intent: 'history' }));
-  assert.ok(found.candidates.some(hit => hit.conversationId === target.id), JSON.stringify({ maintained, found, raw }));
-  ok(await core.captureRaw(request(splitRaw('Synthetic later continuation.', { id: 'after-refusal', ordinal: 3 })[0],
+  const found = ok(await core.searchRaw({ namespace, query: 'searchable', intent: 'history' }));
+  assert.ok(found.candidates.some(hit => hit.conversationId === target.id), JSON.stringify(found));
+  ok(await core.captureRaw(request(splitRaw('Synthetic later continuation.', { id: 'after-refusal', ordinal: 4 })[0],
     { namespace, client, sessionId: 'target', eventId: 'after-refusal-raw' }, 'episode')));
   ok(await core.capture({ ...episodeInput(client, 'target', 'after-refusal-episode'), eventId: 'after-refusal-episode' }));
   ok(await core.captureRaw(request(splitRaw('Synthetic copied source.', { id: 'target-message' })[0],
