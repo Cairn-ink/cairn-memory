@@ -215,8 +215,16 @@ async function recall(hookInput) {
   // Unsupported local authority must not create a project key before the
   // eventual gate rejects dispatch. This probe is read-only and precedes the
   // single fresh observation immediately before fetch.
-  if (hostedConfig && hostedPauseMode(hostedConfig).barrier)
-    await checkStateLock(join(hostedConfig.root, 'hosted-pause.gate'), { hostParent: true, signal: recallSignal });
+  if (hostedConfig && hostedPauseMode(hostedConfig).barrier) {
+    try {
+      await checkStateLock(join(hostedConfig.root, 'hosted-pause.gate'), { hostParent: true, signal: recallSignal });
+    } catch (error) {
+      // Keep the metadata-only observation on a denied hook, without creating
+      // identity first. Even a recovered observation cannot undo this refusal.
+      await hosted.observe();
+      throw error;
+    }
+  }
   const projectId = await clientProjectId(clientOptions, hookInput.cwd, binding);
   checkRecall();
   const sessionId = optionalHostSessionId(hookInput.session_id);
