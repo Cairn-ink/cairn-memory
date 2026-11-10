@@ -755,6 +755,11 @@
     "reason": "Hook transcript input and capture-cursor JSON extensions; SQLite is accessed through the engine."
   },
   {
+    "path": "plugins/cairn-memory/scripts/hook.mjs",
+    "source": "const state = JSON.parse(await readFile(path, \"utf8\"));",
+    "reason": "Session cursor JSON is selected by the hashed host session ID; this read never selects a database file."
+  },
+  {
     "path": "evaluation/live/diagnostics.mjs",
     "source": "writeFileSync(path.join(directory, name), '', { mode: 0o600, flag: 'wx' });",
     "reason": "Shipped diagnostic utility reads/writes exclusively created report-slot files in its diagnostic directory, never the SQLite store."
@@ -1031,8 +1036,13 @@
   },
   {
     "path": "plugins/cairn-memory/scripts/hook.mjs",
-    "source": "import { open, readFile, stat } from \"node:fs/promises\"",
-    "reason": "Hook transcript input and skill-turn JSON state; SQLite is accessed through the engine."
+    "source": "import { open, readFile, stat, mkdir, rename, unlink, writeFile } from \"node:fs/promises\"",
+    "reason": "Hook transcript reads and private session JSON boundaries; the PID/UUID temporary JSON is under the session state directory, never a database file."
+  },
+  {
+    "path": "plugins/cairn-memory/scripts/hook.mjs",
+    "source": "await writeFile(temporary, JSON.stringify(state), { mode: 0o600, flag: \"wx\" });",
+    "reason": "Exclusive PID/UUID temporary JSON under the session state directory, atomically renamed to boundary state; never a database file."
   },
   {
     "path": "evaluation/live/diagnostics.mjs",
@@ -1673,5 +1683,10 @@
     "path": "core/local-raw-search.mjs",
     "source": "import { mkdir } from 'node:fs/promises'",
     "reason": "Creates private search sidecar directories only; mkdir does not open or close a database file descriptor."
+  },
+  {
+    "path": "plugins/cairn-memory/scripts/hook.mjs",
+    "source": "try { current = JSON.parse(await readFile(path, \"utf8\")); }",
+    "reason": "Fresh hashed-session cursor JSON under one nonblocking capture-lock attempt; marker publication never reads database bytes or overwrites a stale cursor."
   }
 ]

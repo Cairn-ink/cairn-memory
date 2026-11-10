@@ -292,6 +292,9 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // manager. Ordinary Raw capture reconstructs existing message/event/session
   // identities before journal registration. Pin these existing projections;
   // neither adds acknowledgement fields or changes the native write guard.
+  // Capture-window metadata adds two literal id occurrences in the hosted
+  // schema (required key and property). This opaque window identity is transport
+  // metadata, not writer authority or a new acknowledgement/terminal field.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};

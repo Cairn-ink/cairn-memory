@@ -9,6 +9,23 @@ import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
+// Preserve the historical bytes as the identity/content pin. Validate the new
+// additive contract before projecting it out; never regenerate old goldens.
+export function legacyCaptureBody(body) {
+  const { window, sent_at, ...legacy } = body;
+  if (window !== undefined || sent_at !== undefined) {
+    assert.deepEqual(Object.keys(window).sort(), ['id', 'initial', 'slice', 'slices']);
+    assert.match(window.id, /^[a-f0-9]{64}$/);
+    assert.equal(typeof window.initial, 'boolean');
+    assert.ok(Number.isInteger(window.slice) && window.slice >= 1 && window.slice <= window.slices && window.slices <= 64);
+    assert.ok(Number.isFinite(Date.parse(sent_at)));
+  }
+  legacy.messages = legacy.messages.map(({ occurred_at, ...message }) => {
+    if (occurred_at !== undefined) assert.ok(typeof occurred_at === 'string' && occurred_at.length <= 40 && Number.isFinite(Date.parse(occurred_at)));
+    return message;
+  });
+  return legacy;
+}
 const key = '12345678-1234-4234-8234-123456789abc';
 const session = 'synthetic-session/中文';
 const generation = '11111111-1111-4111-8111-111111111111';
@@ -136,8 +153,10 @@ export async function observeHosted(pluginRoot) {
     request.setEncoding('utf8');
     let bytes = '';
     for await (const chunk of request) bytes += chunk;
-    const body = JSON.parse(bytes);
-    requests.push({ path: request.url, bytes: Buffer.byteLength(bytes), sha256: hash(bytes),
+    const wireBody = JSON.parse(bytes);
+    const body = request.url.endsWith('/capture') ? legacyCaptureBody(wireBody) : wireBody;
+    const legacyBytes = JSON.stringify(body);
+    requests.push({ path: request.url, bytes: Buffer.byteLength(legacyBytes), sha256: hash(legacyBytes),
       authorization: request.headers.authorization, contentType: request.headers['content-type'],
       sessionId: body.session_id ?? null, eventId: body.event_id ?? null,
       messages: body.messages?.map(message => ({ id: message.id, role: message.role, units: message.content.length })) ?? null });
@@ -180,11 +199,21 @@ export async function observeHosted(pluginRoot) {
     const cursorPath = captureCursorPath(dataDir, session);
     const cursorFiles = []; const outcomes = [];
     outcomes.push(await run('capture'));
-    cursorFiles.push(await readFile(cursorPath, 'utf8'));
+    const legacyCursor = async () => {
+      const state = JSON.parse(await readFile(cursorPath, 'utf8'));
+      // Capture-window bookkeeping is outside the historical cursor projection.
+      // Keep the original offset/generation/pending-boundary bytes pinned.
+      delete state.windowInitial;
+      if (Object.hasOwn(state, 'captureSeen'))
+        assert.equal(state.captureSeen, true, 'capture bookkeeping remains present');
+      delete state.captureSeen;
+      return JSON.stringify(state);
+    };
+    cursorFiles.push(await legacyCursor());
     await appendFile(transcript, 'true}\n' + record('Synthetic appended after failure', 25));
     for (let i = 0; i < 3; i++) {
       outcomes.push(await run('capture'));
-      cursorFiles.push(await readFile(cursorPath, 'utf8'));
+      cursorFiles.push(await legacyCursor());
     }
     outcomes.push(await run('recall'));
     return { requests, cursorPath: relative(dataDir, cursorPath), cursorFiles, outcomes };

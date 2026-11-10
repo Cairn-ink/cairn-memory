@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { VERSION } from "../../../plugins/cairn-memory/lib/version.mjs";
 import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
-import { observeHosted } from "../test/observe-legacy.mjs";
+import { observeHosted, legacyCaptureBody } from "../test/observe-legacy.mjs";
 export const BASE = "3a1c17d9c888b28e878f5e2d8de0180d9b49fa4e";
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
 const preload = fileURLToPath(new URL("./golden-preload.mjs", import.meta.url));
@@ -250,6 +250,10 @@ export async function observeStandalone(plugin) {
             message: { content: "Please remember concise examples." },
           }) + "\n",
         );
+        // A new session's first turn is written after SessionStart. Prewritten
+        // history now has its own exclusion tests instead of masquerading as it.
+        const transcriptText = await readFile(transcript, "utf8");
+        if (candidate && entry === "hook" && !concurrent) await writeFile(transcript, "");
         const env = {
           PATH: process.env.PATH,
           HOME: home,
@@ -324,7 +328,13 @@ export async function observeStandalone(plugin) {
         else if (entry === "hook") {
           outcomes = [];
           for (const action of ["start", "recall", "capture", "capture"]) {
+            if (action === "start" && candidate) {
+              const boundary = await run("start-boundary");
+              if (boundary.code !== 0 || boundary.stdout || boundary.stderr)
+                throw new Error("startup_boundary_not_silent");
+            }
             outcomes.push(await run(action));
+            if (action === "start" && candidate) await writeFile(transcript, transcriptText);
           }
         } else outcomes = [await run("capture")];
         if (
@@ -361,6 +371,13 @@ export async function observeStandalone(plugin) {
         // No telemetry runs in concurrent cases, whose install ID was seeded.
         const identity = await optionalIdentity("install-id");
         let requestBytes = await readFile(requestsFile, "utf8");
+        requestBytes = requestBytes.split("\n").map(line => {
+          if (!line) return line;
+          const request = JSON.parse(line);
+          if (!request.url.endsWith("/capture")) return line;
+          request.body = JSON.stringify(legacyCaptureBody(JSON.parse(request.body)));
+          return JSON.stringify(request);
+        }).join("\n");
         if (concurrent) {
           // Scheduling order is unspecified; compare the multiset of exact wire bytes.
           const lines = requestBytes.trimEnd().split("\n").filter(Boolean).sort();

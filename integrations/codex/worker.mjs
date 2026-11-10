@@ -394,6 +394,8 @@ export function resetCapture(binding, { hostsStopped, confirm, ...options } = {}
   return prepared(binding, { ...options, reset: true });
 }
 
+const CAPTURE_WINDOW_SLICES = 4096;
+
 /** Stub seam: capture(body,{signal}) plus synchronous confirmed-termination query.
  * Every real local/hosted adapter must implement cancellation and idempotency.
  */
@@ -407,11 +409,15 @@ export async function runWorker(
     requestMs,
     overallMs,
     beforeDispatch,
+    // Internal seam for bounded synthetic window tests.
+    captureWindowSlices = CAPTURE_WINDOW_SLICES,
     ...options
   } = {},
 ) {
   if (!["hosted", "hosted-stub", "local-stub"].includes(mode) || !transport || !guard)
     return { status: "transport_unavailable" };
+  if (!Number.isSafeInteger(captureWindowSlices) || captureWindowSlices < 1 ||
+      captureWindowSlices > CAPTURE_WINDOW_SLICES) throw new Error("invalid_window_limit");
   requestMs ??= mode === "local-stub" ? 150000 : 25000;
   overallMs ??= mode === "local-stub" ? 155000 : 60000;
   if (
@@ -448,6 +454,13 @@ export async function runWorker(
       await save();
     }
     if (s.notBefore > now()) return { status: s.status, state: s };
+    // Number only sent batches. Metadata windows may split a large frozen
+    // range, but the existing manifests, event IDs and batch boundaries stay.
+    const sent = batches.filter(batch => batch.body);
+    // Time is a record attribute, attached only after the legacy byte-size
+    // planner has frozen boundaries. It must not split an existing batch.
+    const times = new Map(records.filter(record => record.message && record.occurred_at !== undefined)
+      .map(record => [record.message.id, record.occurred_at]));
     let dispatched = 0;
     while (s.pending.next < batches.length) {
       const b = batches[s.pending.next];
@@ -506,7 +519,20 @@ export async function runWorker(
                   reject(new Error("timeout"));
                 }, requestMs);
               });
-              return Promise.race([transport.capture(b.body, { signal: abort.signal }), timeout]);
+              const index = sent.indexOf(b), group = Math.floor(index / captureWindowSlices) * captureWindowSlices;
+              const body = { ...b.body,
+                messages: b.body.messages.map(message => times.has(message.id) ?
+                  { ...message, occurred_at: times.get(message.id) } : message),
+                window: {
+                  id: hash(wireBinding(binding).sessionId, group === 0 ? s.pending.start : sent[group].start),
+                  slice: index - group + 1,
+                  slices: Math.min(captureWindowSlices, sent.length - group),
+                  // Every admitted Codex session already has an EOF boundary.
+                  initial: false,
+                },
+                sent_at: new Date(now()).toISOString(),
+              };
+              return Promise.race([transport.capture(body, { signal: abort.signal }), timeout]);
             }),
           );
           if (!gate.ok) {

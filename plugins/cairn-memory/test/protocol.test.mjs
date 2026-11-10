@@ -16,7 +16,7 @@ test("capture schema is a strict conversation-text allowlist", async () => {
   assert.equal(capture.properties.messages.items.additionalProperties, false);
   assert.deepEqual(
     Object.keys(capture.properties.messages.items.properties).sort(),
-    ["content", "id", "role"],
+    ["content", "id", "occurred_at", "role"],
   );
 });
 
