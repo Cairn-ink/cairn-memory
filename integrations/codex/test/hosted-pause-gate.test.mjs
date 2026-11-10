@@ -248,3 +248,38 @@ for (const kind of ['timeout', 'death']) test(`Codex installed capture repairs $
     ['SYNTHETIC_AFTER_BOUNDARY'], 'zero_paused_period_bytes_on_wire');
   assert.equal(observationsB, 3, 'target_change_and_both_capture_observations');
 });
+
+// The cursor generation must reach the inner hosted dispatch too. An outer
+// tripwire admission cannot authorize a body after the transport rotates root.
+test('Codex transport cannot adopt a repaired generation for an already frozen range', { timeout: 20000 }, async t => {
+  const { fixture: workerFixture, item } = await import('./helpers.mjs');
+  const { runWorker } = await import('../worker.mjs');
+  const { installedTransport } = await import('../hosted-lifecycle.mjs');
+  const { automaticGuard } = await import('../../client/automatic-policy.mjs');
+  const { interruptRotation } = await import('../../client/test/fixtures/pending-revocation.mjs');
+  const f = await workerFixture(t), captures = [];
+  const a = createServer((request, response) => { request.resume(); reply(response, paused); });
+  const b = createServer((request, response) => {
+    if (request.url.endsWith('/pause-state')) { request.resume(); reply(response, active); return; }
+    let bytes = ''; request.on('data', chunk => { bytes += chunk; });
+    request.on('end', () => { captures.push(JSON.parse(bytes)); reply(response, { duplicate: false, memoryCount: 1 }); });
+  });
+  for (const server of [a, b]) {
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => { server.closeAllConnections(); server.close(); });
+  }
+  const config = { root: f.root, endpoint: `http://127.0.0.1:${b.address().port}` };
+  f.binding.targetId = hostedTargetId(config); await f.observe();
+  await appendFile(f.path, item('SYNTHETIC_PAUSED_PERIOD'));
+  const guard = automaticGuard(f.root, config.endpoint, { dailyCap: 10000, concurrency: 2 });
+  const transport = installedTransport(config, 'synthetic-token', 0);
+  // Publish after cursor preparation but before outer control admission. The
+  // first B observation in transport repairs A's pending local rotation.
+  await runWorker(f.binding, { mode: 'hosted', guard, transport, beforeDispatch: () =>
+    interruptRotation(t, { root: f.root, endpoint: `http://127.0.0.1:${a.address().port}` }, 'timeout') });
+  assert.equal(captures.length, 0, 'frozen_generation_cannot_be_reauthorized');
+  assert.equal((await runWorker(f.binding, { mode: 'hosted', guard, transport })).status, 'pause_boundary');
+  await appendFile(f.path, item('SYNTHETIC_AFTER_BOUNDARY', 1));
+  await runWorker(f.binding, { mode: 'hosted', guard, transport });
+  assert.deepEqual(captures.flatMap(body => body.messages).map(message => message.content), ['SYNTHETIC_AFTER_BOUNDARY']);
+});
