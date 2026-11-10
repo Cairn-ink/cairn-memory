@@ -39,4 +39,5 @@ test('installed entry starts the actual stdout write before releasing either gat
   assert.equal(result.code,0);assert.equal(result.signal,null);assert.equal(result.stderr,'');
   assert.match(JSON.parse(result.stdout).hookSpecificOutput.additionalContext,/Synthetic memory/);
   assert.deepEqual(result.delivery,{kind:'delivery',control:true,gate:true},'actual_stdout_write_is_gated');
+  assert.deepEqual(result.deliveryLocks,{control:false,gate:false},'delivery_releases_locks_before_exit');
 });

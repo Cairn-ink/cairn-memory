@@ -9,6 +9,7 @@ import { createTestWorkspace } from '../../../../tools/testing/workspace.mjs';
 import { binaryIdentity, canonical, KNOWN_FORMATS } from '../../qualification.mjs';
 import { resolveClient } from '../../../client/pairing.mjs';
 import { policyPath } from '../../../client/automatic-policy.mjs';
+import { hostedTargetId } from '../../../client/transport-hosted.mjs';
 import { hostedPauseStatus } from '../../../client/hosted-pause.mjs';
 import { copyRuntime } from '../../../../packages/setup/lib/codex-runtime.mjs';
 
@@ -124,7 +125,10 @@ export async function installedPrompt(t, { host = 'codex', warm = true, syncDela
     const watchdog = setTimeout(() => process.kill(-child.pid, 'SIGKILL'), 10000);
     let code;
     try { code = await done; } finally { clearTimeout(watchdog); }
-    return { code, signal: child.signalCode, stdout, stderr, outcome, recallHeaders, snapshot, phases,
+    const exists = path => readFile(path).then(() => true, error => { if(error.code==='ENOENT')return false; throw error; });
+    const deliveryLocks = deliveryEvidence ? {control:await exists(join(root,'control.lock')),
+      gate:await exists(join(root,'hosted-pause',hostedTargetId({endpoint})+'.json.gate'))} : undefined;
+    return { code, signal: child.signalCode, stdout, stderr, outcome, recallHeaders, snapshot, phases, deliveryLocks,
       delivery, status: await hostedPauseStatus({ root, endpoint }) };
   } finally { await ws.cleanup(); }
 }
