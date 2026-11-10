@@ -13,7 +13,7 @@ export const row = (id, timestamp = oldTime, extra = {}) => JSON.stringify({
   message: { content: `Synthetic ${id}` }, ...extra,
 }) + '\n';
 
-export async function harness(t, { fail = () => false, holdRecall, holdCapture, hookPath, observedAt, groupingLimit, mutateRuntime, strictTimes = false, portable = false, pauseState = () => ({ paused: false, generation: 0, enforced: true }) } = {}) {
+export async function harness(t, { fail = () => false, holdRecall, holdCapture, holdPause, hookPath, observedAt, groupingLimit, mutateRuntime, strictTimes = false, portable = false, pauseState = () => ({ paused: false, generation: 0, enforced: true }) } = {}) {
   const workspace = createTestWorkspace(t, { prefix: 'capture-window-' });
   const dataDir = join(workspace.path, 'data'), transcript = join(workspace.path, 'transcript.jsonl');
   await mkdir(dataDir, { mode: 0o700 });
@@ -25,6 +25,7 @@ export async function harness(t, { fail = () => false, holdRecall, holdCapture, 
     // Record every request before routing, including metadata and unknown paths.
     requests.push({ method: request.method, url: request.url, headers: request.rawHeaders, body: text });
     if (request.url === '/api/memory/pause-state') {
+      await holdPause?.();
       request.resume(); response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify(pauseState())); return;
     }
