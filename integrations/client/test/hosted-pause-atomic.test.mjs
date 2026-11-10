@@ -23,7 +23,7 @@ for (const sink of ['request', 'output']) test(`intent committed after final jou
   let completionReads = 0, selectedFinal = false, gatePresent = false, publicationAttempts = 0;
   const originalLink = fs.link;
   const linkMock = t.mock.method(fs, 'link', async function(source,destination) {
-    if(selectedFinal && String(destination).endsWith('.json.gate'))publicationAttempts++;
+    if(selectedFinal && String(destination).endsWith('/hosted-pause.gate'))publicationAttempts++;
     return originalLink.call(this,source,destination);
   });
   const mocked = t.mock.method(fs, 'open', async function(path, ...args) {
@@ -32,7 +32,7 @@ for (const sink of ['request', 'output']) test(`intent committed after final jou
     // final guard, with control.lock already held. Hold the read resolution.
     if (String(path).endsWith('/1.false.complete') && ++completionReads === 2) {
       assert.ok(await fs.stat(join(root, 'control.lock')));
-      gatePresent = await fs.stat(join(root,'hosted-pause',hostedTargetId(config)+'.json.gate')).then(()=>true,()=>false);
+      gatePresent = await fs.stat(join(root, 'hosted-pause.gate')).then(()=>true,()=>false);
       selectedFinal = true; selected.resolve(); await release.promise;
     }
     return handle;
@@ -59,4 +59,46 @@ for (const sink of ['request', 'output']) test(`intent committed after final jou
   assert.ok(gatePresent,'final_selection_inside_shared_gate');
   assert.ok(publicationAttempts>0,'intent_writer_attempted_shared_gate');
   await observationResult;
+});
+
+for (const sink of ['request', 'output']) test(`a cross-target publication fences the final ${sink} check`, { timeout: 10000 }, async t => {
+  const root = join(createTestWorkspace(t).path, 'state'); await fs.mkdir(root, { mode: 0o700 });
+  const a = { root, endpoint: 'http://127.0.0.1:1' }, b = { root, endpoint: 'http://127.0.0.1:2' };
+  const active = { paused: false, generation: 0, enforced: true };
+  // This race isolates ordering. Disk sync latency must not hide the old gap
+  // by expiring its gate window first; crash suites exercise actual fsyncs.
+  const probe = await fs.open(join(root, 'probe'), 'wx', 0o600);
+  const sync = t.mock.method(Object.getPrototypeOf(probe), 'sync', async () => {});
+  await probe.close(); t.after(() => sync.mock.restore());
+  let revoked = false;
+  t.mock.method(globalThis, 'fetch', async url => Response.json(revoked && url.startsWith(a.endpoint + '/')
+    ? { paused: true, generation: 1, enforced: true } : active));
+  await observeHostedPause(a, 'synthetic-token'); await observeHostedPause(b, 'synthetic-token');
+  const entered = Promise.withResolvers(), release = Promise.withResolvers(), durable = Promise.withResolvers();
+  let held = false, starts = 0;
+  const original = fs.open;
+  const mock = t.mock.method(fs, 'open', async function(path, ...args) {
+    const handle = await original.call(this, path, ...args);
+    if (!held && String(path) === join(root, 'hosted-pause', hostedTargetId(b) + '.json') &&
+        await fs.stat(join(root, 'control.lock')).then(() => true, () => false)) {
+      held = true; entered.resolve(); await release.promise;
+    }
+    return handle;
+  });
+  syncBuiltinESMExports();
+  let observing;
+  const dispatch = withHostedPauseGate(b, 0, guard => sink === 'request'
+    ? startIfActive(root, 'initial', () => { starts++; }, { guard })
+    : runIfActive(root, 'initial', () => { starts++; }, { guard }));
+  const settled = dispatch.then(value => ({ value }), error => ({ error }));
+  t.after(async () => { release.resolve(); await Promise.allSettled([dispatch, observing]); mock.mock.restore(); syncBuiltinESMExports(); });
+  await Promise.race([entered.promise, settled.then(() => { throw new Error('final_check_not_reached'); })]);
+  revoked = true;
+  observing = withWriteObserver(async ({ path, kind }) => {
+    if (kind === 'write' && path.endsWith('/1.true.json')) durable.resolve();
+  }, () => observeHostedPause(a, 'synthetic-token'));
+  observing.catch(() => {});
+  await durable.promise; release.resolve();
+  await settled; await observing;
+  assert.equal(starts, 0, 'root_publication_fences_other_target');
 });

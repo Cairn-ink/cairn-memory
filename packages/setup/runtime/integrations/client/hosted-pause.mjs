@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { privateDirectory, privateList, privateRemove, privateRead, privateWrite, syncDirectory } from './private-state.mjs';
 import { stateLock } from './state-lock.mjs';
@@ -97,8 +98,40 @@ export function deferHostedPauseStatus(config, token, signal) {
 }
 const pausePath = config => join(config.root, 'hosted-pause', hostedTargetId(config) + '.json');
 const intentDirectory = config => pausePath(config) + '.intents';
-const gatePath = config => pausePath(config) + '.gate';
+// One root gate serializes every target with root revocation publication.
+const gatePath = config => join(config.root, 'hosted-pause.gate');
 const highWaterPath = config => pausePath(config) + '.high-water';
+
+// Root-wide content-free authority survives endpoint changes. Tokens are never
+// reused; a concurrent publication cannot be erased by an older completion.
+// Retain the matching checkpoint instead of unlinking a pending marker: unlink
+// could erase a publisher racing the end of rotation. Warm reads stay constant.
+const rotationPath = root => join(root, 'hosted-pause-rotation.json');
+const rotatedPath = root => join(root, 'hosted-pause-rotated.json');
+async function pendingRotation(root) {
+  const pending = await privateRead(rotationPath(root), { missing: true });
+  if (pending === undefined) return undefined;
+  if (!/^[a-f0-9-]{36}$/u.test(pending)) throw new Error('pause_unavailable');
+  const completed = await privateRead(rotatedPath(root), { missing: true });
+  if (completed !== undefined && !/^[a-f0-9-]{36}$/u.test(completed)) throw new Error('pause_unavailable');
+  return pending === completed ? undefined : pending;
+}
+// Call before reading a hosted cursor's local generation. Rotation keeps the
+// gate -> control order; failure denies adoption rather than exposing old bytes.
+// Portable clients retain their cursor tags and never require POSIX durability.
+export async function completeHostedPauseRotation(config) {
+  if (!hostedPauseMode(config).barrier || !await pendingRotation(config.root)) return;
+  await stateLock(gatePath(config), async () => {
+    const pending = await pendingRotation(config.root);
+    if (!pending) return;
+    // A concurrent publisher may have exposed its rename before directory sync.
+    await syncDirectory(config.root);
+    await rotateAutomaticBoundary(config.root);
+    await privateWrite(rotatedPath(config.root), pending);
+  });
+  if (await pendingRotation(config.root)) throw new Error('pause_unavailable');
+}
+
 // A timed-out publisher still journals. Limit every admitted critical section
 // at its synchronous side effect, including an uncooperative filesystem wait.
 const GATE_WINDOW_MS = 250;
@@ -203,7 +236,8 @@ async function writeOnce(path, bytes) {
 // Re-read the durable intent at the decision boundary, including after local
 // control-lock waits. Callers pass check to the local gate as its guard. Work
 // only starts a request (returns its promise in an object) or emits output.
-export async function withHostedPauseGate(config, generation, work) {
+export async function withHostedPauseGate(config, generation, work, { signal, deadlineMs = Infinity } = {}) {
+  signal?.throwIfAborted();
   if (!hostedPauseMode(config).barrier) {
     const check = async () => {
       const state = volatileState(config);
@@ -214,6 +248,7 @@ export async function withHostedPauseGate(config, generation, work) {
     return work(check);
   }
   const check = async () => {
+    if (await pendingRotation(config.root)) throw new Error('pause_unavailable');
     const { previous } = await readPause(config), intent = await highestIntent(config);
     if (!previous || !conforms('pause-state', previous) || !previous.enforced ||
         previous.paused || previous.generation !== generation) throw new Error('pause_unavailable');
@@ -224,13 +259,14 @@ export async function withHostedPauseGate(config, generation, work) {
     }
   };
   return stateLock(gatePath(config), async () => {
-    const deadline = performance.now() + GATE_WINDOW_MS;
+    const deadline = Math.min(performance.now() + GATE_WINDOW_MS, deadlineMs);
     check.beforeStart = () => {
+      signal?.throwIfAborted();
       if (performance.now() >= deadline) throw new Error('pause_unavailable');
     };
     await check();
     return work(check);
-  });
+  }, { signal });
 }
 async function observe(config, token, signal) {
   signal?.throwIfAborted();
@@ -269,6 +305,12 @@ async function observe(config, token, signal) {
     if ((!previous && (remote.generation > 0 || remote.paused)) ||
         (previous && (remote.generation !== previous.generation || remote.paused !== previous.paused))) {
       const publish = async () => {
+        // Publish root revocation BEFORE target authority. A crash anywhere
+        // after this write forces every target to rotate or fail closed.
+        if ((!previous && (remote.generation > 0 || remote.paused)) ||
+            (previous && remote.generation !== previous.generation)) {
+          await privateWrite(rotationPath(config.root), randomUUID());
+        }
         const directory = intentDirectory(config);
         await privateDirectory(directory);
         // Persist newly created ancestor entries too. A concurrent writer may
@@ -294,6 +336,7 @@ async function observe(config, token, signal) {
       }
     }
   }
+  await completeHostedPauseRotation(config);
   const observed = await stateLock(file + '.lock', async () => {
     signal?.throwIfAborted();
     const { bytes, previous } = await readPause(config);
@@ -304,7 +347,7 @@ async function observe(config, token, signal) {
     // clear a pause the user established locally; hosted state is a separate gate.
     if ((!previous && (remote.generation > 0 || remote.paused)) ||
         (previous && remote.generation !== previous.generation)) {
-      await rotateAutomaticBoundary(config.root);
+      await completeHostedPauseRotation(config);
     }
     const next = JSON.stringify(remote);
     const completion = intent ? join(intentDirectory(config), intentName(remote) + '.complete') : undefined;

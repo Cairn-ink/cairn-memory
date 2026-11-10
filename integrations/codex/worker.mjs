@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { completeHostedPauseRotation } from '../client/hosted-pause.mjs';
 import { transcriptDigest } from "./digest.mjs";
 import { checkedPath } from "../client/private-state.mjs";
 import { stateLock } from "../client/state-lock.mjs";
@@ -79,6 +80,9 @@ async function prepared(binding, options, action) {
   )
     throw new Error("invalid_binding");
   await checkedPath(root, { directory: true });
+  // Hosted cursor adoption uses the root's repaired generation on every target.
+  // Stub/local workers retain their released behavior and do not read hosted state.
+  if (options.hosted) await completeHostedPauseRotation({ root });
   const cp = cursorPath(root, targetId, sessionId);
   return stateLock(
     cp.replace(/\.json$/, ".lock"),
@@ -428,7 +432,7 @@ export async function runWorker(
   )
     throw new Error("invalid_worker_deadline");
   const started = now();
-  return prepared(binding, options, async ({ s, save, batches, records, bytes, stat, digest }) => {
+  return prepared(binding, { ...options, hosted: mode === 'hosted' }, async ({ s, save, batches, records, bytes, stat, digest }) => {
     if (s.quotaRefusal && !s.quotaRefusal.latched) {
       try {
         const latch = await guard.refuse({ resetAt: s.quotaRefusal.resetAt });
@@ -532,7 +536,8 @@ export async function runWorker(
                 },
                 sent_at: new Date(now()).toISOString(),
               };
-              return Promise.race([transport.capture(body, { signal: abort.signal }), timeout]);
+              return Promise.race([transport.capture(body, { signal: abort.signal,
+                ...(mode === 'hosted' ? { generation: s.generation } : {}) }), timeout]);
             }),
           );
           if (!gate.ok) {

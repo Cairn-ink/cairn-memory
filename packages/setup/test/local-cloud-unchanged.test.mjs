@@ -100,9 +100,22 @@ const recallRuntimeChanges = new Map([
 // Atomic output delivery changes entry beyond its recall-budget line.
 // Pause durability changes whole functions; pin both immutable historical and
 // current bytes instead of reconstructing the earlier file from current source.
-// Hosted pause intents and dispatch guards revise only current pins; preserve
+// Root replay and the frozen capture generation revise current pins; preserve
 // every historical digest and the historical behavior comparisons below.
 const durabilityRuntimeChanges = new Map([
+  // Output gate admission now accepts the remaining-budget abort signal.
+  ['integrations/client/state-lock.mjs', {
+    historical: 'ee4bc6161d97bac44a8dc34a2058ed48e3dbbfeb105e32f6e66590b883b29b58',
+    before: 'ee4bc6161d97bac44a8dc34a2058ed48e3dbbfeb105e32f6e66590b883b29b58',
+    current: '47899f7e6881b7e27726f5145fe151c0f8068537045b3e26556eb9e53d87e14a',
+  }],
+  // The merged worker retains capture windows/source times plus root replay
+  // and frozen-generation dispatch; pin these combined bytes exactly once.
+  ['integrations/codex/worker.mjs', {
+    historical: '0fbb1295e596769035eca5e974efa4f355774a6c37d70f3442a3e78c4aa7264d',
+    before: '0fbb1295e596769035eca5e974efa4f355774a6c37d70f3442a3e78c4aa7264d',
+    current: 'a22f205506062e00debe4971a825dfd3990240a005c7c2d7d180f34e4affa3fd',
+  }],
   ['integrations/codex/entry.mjs', {
     historical: '558a2f9f5cbed3c4e08146626708ba5ab4374e6938fa9c2e1cdc935d50580952',
     before: '0182cc90faddafeea34b8ba11a4c96805f74140117c1ee4b4ad118ca47b0d331',
@@ -116,7 +129,7 @@ const durabilityRuntimeChanges = new Map([
   ['integrations/client/hosted-pause.mjs', {
     historical: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
     before: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
-    current: '2f0dbea221b98ad9119dc77f1a48a3482c72c4c763fd2beaa29cb0fc61fbf664',
+    current: '365314ab54f794b34e4972de22d456b2c529a0f6d608c62a01f8558fe4a32892',
   }],
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
@@ -126,7 +139,7 @@ const durabilityRuntimeChanges = new Map([
   ['integrations/codex/hosted-lifecycle.mjs', {
     historical: '8b4a8e7ea1cef5473147bfe2ea6af9548894c52f08e44a656e545fcb9fc8c496',
     before: 'bd7bc299773cc389565a34bfd9a7131f68ad7bef934d3ce5a0ebeeea800bbe3a',
-    current: '7c19835ca726fb3f0e0302f9a84736ed4fadd10429e508a8009be40c40a0ceb1',
+    current: '3771ad2a034c5cad4b9a2882d5a9306a7cefd704bcebc67893fc286b93937b24',
   }],
 ]);
 // Capture metadata changes the contract/schema and worker, and extracts a pure
@@ -147,13 +160,9 @@ const captureRuntimeChanges = new Map([
       "current": "c9e2b4fc3e85e136594438ad58a24d15526296b12ab1d438ae930a91b8ec82d3"
     }
   ],
-  [
-    "integrations/codex/worker.mjs",
-    {
-      "historical": "0fbb1295e596769035eca5e974efa4f355774a6c37d70f3442a3e78c4aa7264d",
-      "current": "0186d95d6a7ea9e90894e1d330c12a62010f71d4ada798bea13872736b1f0803"
-    }
-  ],
+  // Reuse the durability object's historical/before/current pins: one worker,
+  // one authority for its merged bytes, with both behavioral classifications.
+  ['integrations/codex/worker.mjs', durabilityRuntimeChanges.get('integrations/codex/worker.mjs')],
   [
     "integrations/client/source-time.mjs",
     {
@@ -164,7 +173,7 @@ const captureRuntimeChanges = new Map([
 ]);
 const captureSourceModule = 'integrations/client/source-time.mjs';
 const historicalCaptureManifestHash = "3f03f7e0f15e3f4b482b383e2a8b01c5c51ce2903c22f2983d5f3da42b41b1dd";
-const hostedRuntimeExceptions = [
+const hostedRuntimeExceptions = [...new Set([
   'integrations/client/control-state.mjs',
   'integrations/client/file-lock.mjs',
   'integrations/client/pairing.mjs',
@@ -175,7 +184,7 @@ const hostedRuntimeExceptions = [
   ...recallRuntimeChanges.keys(),
   ...durabilityRuntimeChanges.keys(),
   ...captureRuntimeChanges.keys(),
-];
+])];
 const packagedHostedRuntime = new Map(await Promise.all(hostedRuntimeExceptions.map(async path =>
   [path, await readFile(new URL('../runtime/' + path, import.meta.url))])));
 const packagedHostedManifest = await readFile(new URL('../runtime/manifest.json', import.meta.url));
@@ -423,11 +432,14 @@ test('L06 version normalization preserves unrelated bytes and complete runtime g
     normalized('Cairn.ink Memory setup 0.5.3\nunrelated 0.5.3', home));
 });
 test('L06 hosted runtime exceptions require packaged bytes and preserve all other comparisons', async () => {
-  // Thirteen pause runtime files plus four capture metadata/helper files.
-  assert.equal(hostedRuntimeExceptions.length, 17);
-  // Atomic output moved entry.mjs to whole-file durability pins.
+  // Seven unpinned modules + recall (1) + durability (7) + capture (4),
+  // less the shared worker (1): eighteen unique runtime exceptions.
+  assert.equal(hostedRuntimeExceptions.length, 18);
+  // Atomic output moved entry to whole-file pins; root replay and cancellable
+  // admission add worker/state-lock. Immutable historical/before pins remain.
   assert.equal(recallRuntimeChanges.size, 1);
-  assert.equal(durabilityRuntimeChanges.size, 5);
+  assert.equal(durabilityRuntimeChanges.size, 7);
+  // The worker belongs to both behaviors but shares one exact pin object.
   assert.equal(captureRuntimeChanges.size, 4);
   const home = '/synthetic/.codex';
   const oldRuntime = '.codex/cairn/runtime/0.5.3-0123456789ab/';

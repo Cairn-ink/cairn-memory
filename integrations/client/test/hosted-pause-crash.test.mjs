@@ -45,3 +45,22 @@ for (const stage of ['intent','rotation','publication','completion','checkpoint'
   assert.deepEqual((await readdir(path+'.intents')).sort(),['1.false.complete','1.false.json'],'repair_bounded_journal');
   assert.deepEqual(JSON.parse(await readFile(path+'.high-water','utf8')),{generation:1,paused:false});
 });
+
+for (const stage of ['root-publication', 'root-completion']) test(`interrupted ${stage} remains binding on another target`, { timeout: 10000 }, async t => {
+  const root = join(createTestWorkspace(t).path, 'state'); await mkdir(root, { mode: 0o700 });
+  const a = { root, endpoint: 'http://127.0.0.1:1' }, b = { root, endpoint: 'http://127.0.0.1:2' };
+  const active = { paused: false, generation: 0, enforced: true };
+  t.mock.method(globalThis, 'fetch', async url => Response.json(url.startsWith(a.endpoint + '/')
+    ? { paused: true, generation: 1, enforced: true } : active));
+  const selected = join(root, stage === 'root-publication' ? 'hosted-pause-rotation.json' : 'hosted-pause-rotated.json');
+  let injected = false;
+  await assert.rejects(withWriteObserver(async ({ path, kind }) => {
+    if (!injected && kind === 'write' && path === selected) { injected = true; throw new Error('synthetic_interruption'); }
+  }, () => observeHostedPause(a, 'synthetic-token')), /synthetic_interruption/);
+  assert.ok(injected, 'root_crash_stage_reached');
+  await observeHostedPause(b, 'synthetic-token');
+  assert.notEqual((await readControlState(root)).generation, 'initial', 'cross_target_rotation_completed');
+  assert.equal(await readFile(join(root, 'hosted-pause-rotation.json'), 'utf8'),
+    await readFile(join(root, 'hosted-pause-rotated.json'), 'utf8'), 'matching_root_checkpoint');
+  await withHostedPauseGate(b, 0, async check => { await check(); });
+});

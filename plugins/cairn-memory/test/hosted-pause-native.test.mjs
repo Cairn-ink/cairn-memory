@@ -170,3 +170,39 @@ for (const action of ['capture', 'capture-detached']) test(`native ${action} leg
   await run(t, posix, action, { preload: null });
   assert.equal(posix.counts.capture, 1, 'posix_legacy_pending_range_preserved');
 });
+
+// Barrier-mode failed rotations must govern every target, including legacy cursors.
+for (const kind of ['timeout', 'death']) for (const action of ['capture', 'capture-detached']) {
+  test(`barrier ${action} repairs ${kind} before adopting a generation-zero target`, { timeout: 20000 }, async t => {
+    const { interruptRotation } = await import('../../../integrations/client/test/fixtures/pending-revocation.mjs');
+    const { readControlState } = await import('../../../integrations/client/control-state.mjs');
+    let remote = active;
+    const f = await fixture(t, () => remote), targetB = await fixture(t);
+    const path = captureCursorPath(f.root, f.input.session_id);
+    await writeCaptureCursor(path, { offset: (await readFile(f.transcript)).length,
+      generation: 'initial', discardUntilNewline: false });
+    remote = paused;
+    await interruptRotation(t, { root: f.root, endpoint: f.endpoint }, kind);
+    await appendFile(f.transcript, JSON.stringify({ type: 'user', uuid: 'private',
+      message: { content: 'SYNTHETIC_PAUSED_PERIOD' } }) + '\n');
+    remote = { ...paused, paused: false };
+    f.env.CLAUDE_PLUGIN_OPTION_API_ENDPOINT = targetB.endpoint;
+    if (action === 'capture') delete f.input.capture_generation;
+    await run(t, f, action, { preload: null });
+    assert.equal(targetB.counts.capture, 0, 'pending_revocation_forces_eof');
+    const boundary = await readControlState(f.root);
+    assert.notEqual(boundary.generation, 'initial', 'root_rotation_repaired');
+    f.input.capture_generation = boundary.generation;
+    // An old detached handoff is denied after repair; its fresh successor adopts EOF.
+    if (action === 'capture-detached') await run(t, f, action, { preload: null });
+    assert.equal(JSON.parse(await readFile(path, 'utf8')).offset, (await readFile(f.transcript)).length);
+    await appendFile(f.transcript, JSON.stringify({ type: 'user', uuid: 'resumed',
+      message: { content: 'SYNTHETIC_AFTER_BOUNDARY' } }) + '\n');
+    f.input.capture_generation = boundary.generation;
+    await run(t, f, action, { preload: null });
+    assert.equal(targetB.counts.capture, 1, 'post_boundary_bytes_sent');
+    const text = targetB.captures.flatMap(body => body.messages).map(message => message.content).join('\n');
+    assert.ok(!text.includes('SYNTHETIC_PAUSED_PERIOD'), 'zero_paused_period_bytes');
+    assert.match(text, /SYNTHETIC_AFTER_BOUNDARY/);
+  });
+}
