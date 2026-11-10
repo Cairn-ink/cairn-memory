@@ -25,7 +25,13 @@ for (const sink of ['slow-pipe', 'blocked-pipe', 'file']) test(`admitted recall 
   await file?.close();
   let stderr = '', hostKilled = false, drainTimer;
   child.stderr.on('data', bytes => { stderr += bytes; });
-  child.on('message', event => events.push({ ...event, ms: event.at - started }));
+  child.on('message', event => {
+    events.push({ ...event, ms: event.at - started });
+    // Align release with the child's process clock, independently of startup
+    // latency: its abort fires at origin + 3,500, release is 25 ms later.
+    if (sink === 'slow-pipe' && event.kind === 'origin')
+      drainTimer = setTimeout(collect, Math.max(0, event.at + 3525 - now()));
+  });
   const done = new Promise((resolve, reject) => {
     child.once('error', reject); child.once('close', (code, signal) => resolve({ code, signal }));
   });
@@ -33,7 +39,6 @@ for (const sink of ['slow-pipe', 'blocked-pipe', 'file']) test(`admitted recall 
   // A never-draining reader begins collecting only AFTER process termination,
   // so the parent's stdio close event cannot itself be blocked by unread bytes.
   if (sink === 'blocked-pipe') child.once('exit', collect);
-  if (sink === 'slow-pipe') drainTimer = setTimeout(collect, Math.max(0, 3525 - (now() - started)));
   const hostTimer = setTimeout(() => { hostKilled = true; child.kill('SIGKILL'); child.stdout?.resume(); }, 4000);
   t.after(async () => {
     clearTimeout(hostTimer); clearTimeout(drainTimer);
@@ -66,6 +71,8 @@ for (const sink of ['slow-pipe', 'blocked-pipe', 'file']) test(`admitted recall 
   } else {
     assert.equal(events.filter(event => event.kind === 'write-complete').length, 1, 'admitted_write_completed');
     assert.equal(output.length, entry.bytes, 'complete_json_byte_count');
+    if (sink === 'slow-pipe') assert.ok(events.find(event => event.kind === 'abort-cap').ms <
+      events.find(event => event.kind === 'write-complete').ms, 'write_drains_after_abort');
     let envelope; try { envelope = JSON.parse(output.toString()); } catch { assert.fail('complete_json_required'); }
     assert.equal(envelope.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
     assert.ok(envelope.hookSpecificOutput.additionalContext.endsWith(' synthetic-tail'), 'json_suffix_delivered');
