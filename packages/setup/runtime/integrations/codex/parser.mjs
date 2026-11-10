@@ -1,3 +1,4 @@
+import { sourceTimestamp } from '../client/hosted-contract.mjs';
 import { normalizeBlocks, hash, PROFILE } from '../client/common-profile.mjs';
 
 export const CODEX_COMMIT = '36650394c5b38c2990ccf2a3457165ca3e9d9726';
@@ -94,7 +95,7 @@ export function parseLine(bytes, { sessionId, wireSessionId, epoch, start, end }
   if (clean.reason) return excluded(clean.reason);
   const completed = typeof p.completed_at_ms === 'number' && Number.isFinite(p.completed_at_ms) ?
     new Date(p.completed_at_ms) : null;
-  const occurredAt = typeof row.timestamp === 'string' && row.timestamp.length <= 40 ? row.timestamp :
+  const occurredAt = sourceTimestamp(row.timestamp) ? row.timestamp :
     completed && Number.isFinite(completed.getTime()) ? completed.toISOString() : undefined;
   return { start, end, ...clean,
     ...(occurredAt === undefined ? {} : { occurred_at: occurredAt }),

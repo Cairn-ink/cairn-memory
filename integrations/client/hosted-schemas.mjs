@@ -67,7 +67,9 @@ export const HOSTED_SCHEMAS = {
               "type": "string",
               "format": "date-time",
               "maxLength": 40,
-              "description": "Optional record timestamp, preserved exactly by the client."
+              "description": "Optional record timestamp, preserved exactly by the client.",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?(Z|[+-]\\d{2}:\\d{2})$",
+              "$comment": "Source timestamp conformance additionally requires finite Date.parse; sourceTimestamp in hosted-contract.mjs owns this rule."
             }
           }
         }
