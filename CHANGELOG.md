@@ -36,6 +36,14 @@
   engine, Codex notice/status updates and the prompt recall deadline. Existing
   installed runtimes stay in use until setup is rerun.
 
+## 0.3.5 — 2026-11-09: hosted recall pre-fetch durability
+
+Plugin and marketplace 0.3.5. Protocol stays 0.3.0. The installer version is not
+bumped here; the Codex prompt changes reach installs through the next installer
+release.
+
+- Remove redundant durable publications before hosted recall while preserving pause barriers and diagnostic freshness.
+
 ## 0.3.4 — 2026-11-09: hosted recall deadline
 
 Plugin and marketplace 0.3.4. Protocol stays 0.3.0. The installer version is not

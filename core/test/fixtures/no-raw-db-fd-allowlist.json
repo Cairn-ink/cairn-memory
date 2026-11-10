@@ -956,7 +956,7 @@
   },
   {
     "path": "integrations/client/private-state.mjs",
-    "source": "import { lstat, mkdir, open, link, rename, unlink, realpath } from \"node:fs/promises\"",
+    "source": "import { lstat, mkdir, open, link, rename, unlink, realpath, readdir } from \"node:fs/promises\"",
     "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
   },
   {
@@ -1036,7 +1036,7 @@
   },
   {
     "path": "plugins/cairn-memory/lib/private-state.mjs",
-    "source": "import { lstat, mkdir, open, link, rename, unlink, realpath } from \"node:fs/promises\"",
+    "source": "import { lstat, mkdir, open, link, rename, unlink, realpath, readdir } from \"node:fs/promises\"",
     "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
   },
   {

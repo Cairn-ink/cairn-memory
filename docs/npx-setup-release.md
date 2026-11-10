@@ -12,7 +12,7 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
   Unscoped `cairn-memory` is owned by someone else.
 - [ ] Confirm installer version **0.6.2** (0.6.1 was published on 2026-10-28) in
   `packages/setup/package.json`. Future releases explicitly bump this version.
-  It is independent of plugin versions. The Claude plugin is 0.3.4. If plugin
+  It is independent of plugin versions. The Claude plugin is 0.3.5. If plugin
   changes ship too, bump plugin, marketplace and runtime versions together per `CONTRIBUTING.md`.
 - [ ] On Node **22.16.0** and **24.15.0**, install isolated maintainer dependencies
   per `CONTRIBUTING.md`; first check each `node_modules` for a shared symlink.

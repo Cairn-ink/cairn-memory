@@ -1,7 +1,7 @@
 // Owner-only local state. Only ENOENT means absence; never follow symlinks.
 import { constants } from "node:fs";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { lstat, mkdir, open, link, rename, unlink, realpath } from "node:fs/promises";
+import { lstat, mkdir, open, link, rename, unlink, realpath, readdir } from "node:fs/promises";
 import { dirname, basename, isAbsolute, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -54,6 +54,18 @@ export async function privateDirectory(path) {
     await notifyWrite(path, "directory");
   }
   await checkedPath(path, { directory: true });
+}
+// Listing and pruning stay inside the owner-only private-state boundary.
+export async function privateList(path, { missing = false } = {}) {
+  if (!(await checkedPath(path, { directory: true, missing }))) return undefined;
+  return readdir(path);
+}
+export async function privateRemove(path) {
+  try {
+    if (await checkedPath(path, { missing: true })) await unlink(path);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
 }
 export async function privateRead(path, { missing = false, portable = false } = {}) {
   // Atomic metadata replacement can race the read-only discovery preceding a
