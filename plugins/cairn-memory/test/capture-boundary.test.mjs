@@ -3,7 +3,7 @@ import { appendFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promise
 import { dirname } from 'node:path';
 import test from 'node:test';
 import { withFileLock } from '../lib/file-lock.mjs';
-import { harness, oldTime, row } from './capture-window-harness.mjs';
+import { forgetThenFork, harness, oldTime, row } from './capture-window-harness.mjs';
 
 test('start boundaries exclude copied UUIDs and timestamps from the first capture', async t => {
   const f = await harness(t);
@@ -201,4 +201,8 @@ test('invalid session state leaves the start boundary unknown and retains the tu
     assert.equal(await readFile(f.statePath, 'utf8'), bytes);
     await f.run('capture'); sentTurn(f);
   }
+});
+
+test('remember then forget then new-id fork retains copied times and initial classification', async t => {
+  await forgetThenFork(t);
 });

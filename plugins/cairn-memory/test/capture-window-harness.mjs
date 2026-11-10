@@ -18,12 +18,16 @@ export async function harness(t, { fail = () => false, holdRecall, hookPath, obs
   const dataDir = join(workspace.path, 'data'), transcript = join(workspace.path, 'transcript.jsonl');
   await mkdir(dataDir, { mode: 0o700 });
   const sessionId = 'synthetic-session', statePath = captureCursorPath(dataDir, sessionId);
-  const captures = [], recalls = [];
+  const captures = [], recalls = [], forgets = [];
   const server = createServer(async (request, response) => {
     let text = '';
     for await (const chunk of request) text += chunk;
     const body = JSON.parse(text);
-    if (request.url.endsWith('/recall')) {
+    if (request.url.endsWith('/forget')) {
+      forgets.push(body);
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end('{}'); // Server event only; no client state mutation.
+    } else if (request.url.endsWith('/recall')) {
       recalls.push(body);
       await holdRecall?.();
       response.writeHead(200, { 'content-type': 'application/json' });
@@ -71,7 +75,36 @@ export async function harness(t, { fail = () => false, holdRecall, hookPath, obs
     if (action === 'start-boundary') assert.equal(stdout, '');
     return { wallMs: performance.now() - before, pid: child.pid, code, stdout, stderr };
   }
-  return { workspace, dataDir, transcript, sessionId, statePath, captures, recalls, run,
+  return { workspace, dataDir, transcript, sessionId, statePath, captures, recalls, forgets, run,
+    forget: at => fetch(`http://127.0.0.1:${server.address().port}/api/memory/forget`, {
+      method: 'POST', body: JSON.stringify({ at }), headers: { 'content-type': 'application/json' } }),
     state: async () => JSON.parse(await readFile(statePath, 'utf8')),
     write: text => writeFile(transcript, text) };
+}
+
+// Client half only: the loopback forget is a server-side no-op. The server's
+// exclusion window relies on these original times surviving a new-id fork.
+export async function forgetThenFork(t, hookPath) {
+  const f = await harness(t, { hookPath, observedAt: '2026-11-10T00:05:00.000Z' });
+  const parent = [
+    { type: 'user', uuid: 'u1', timestamp: '2026-11-10T00:00:00.000Z', message: { content: 'Remember X.' } },
+    { type: 'assistant', uuid: 'a1', timestamp: '2026-11-10T00:00:01.000Z', message: { content: 'I will remember X.' } },
+  ].map(record => ({ ...record, sessionId: 'synthetic-parent' }));
+  await f.write(parent.map(record => JSON.stringify(record) + '\n').join(''));
+  await f.run('capture', { session_id: 'synthetic-parent' });
+  assert.equal((await f.forget('2026-11-10T00:02:00.000Z')).status, 200);
+  assert.deepEqual(f.forgets, [{ at: '2026-11-10T00:02:00.000Z' }]);
+  const fork = parent.map(record => ({ ...record, sessionId: f.sessionId }));
+  await f.write(fork.map(record => JSON.stringify(record) + '\n').join(''));
+  // No start boundary exists for the fork. Empty recall still records a marker.
+  await f.run('recall');
+  assert.equal((await f.state()).firstPromptAt, '2026-11-10T00:05:00.000Z');
+  assert.equal(f.recalls.length, 1);
+  await f.run('capture');
+  const copied = f.captures.filter(body => body.session_id === f.sessionId);
+  assert.equal(copied.length, 1);
+  assert.equal(copied[0].window.initial, true);
+  assert.deepEqual(copied[0].messages.map(m => m.id), parent.map(record => record.uuid));
+  assert.deepEqual(copied[0].messages.map(m => m.occurred_at), parent.map(record => record.timestamp),
+    'forget fork original source times');
 }

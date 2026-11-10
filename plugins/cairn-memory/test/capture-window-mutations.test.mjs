@@ -4,10 +4,13 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
-import { harness, oldTime, row } from './capture-window-harness.mjs';
+import { forgetThenFork, harness, oldTime, row } from './capture-window-harness.mjs';
 
 const plugin = fileURLToPath(new URL('../', import.meta.url));
 const cases = [
+  { name: 'forget fork time replaced by arrival', file: 'lib/transcript.mjs',
+    before: 'occurred_at: record.timestamp', after: 'occurred_at: new Date().toISOString()',
+    label: 'forget fork original source times', async probe(t, hookPath) { await forgetThenFork(t, hookPath); } },
   { name: 'unvalidated source time', file: 'lib/transcript.mjs',
     before: 'sourceTimestamp(record.timestamp)', after: 'typeof record.timestamp === "string"',
     label: 'invalid source time omitted', async probe(t, hookPath) {
