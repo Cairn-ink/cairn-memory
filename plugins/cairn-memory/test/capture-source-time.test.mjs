@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { harness, row } from './capture-window-harness.mjs';
 import { transcriptWindow } from '../lib/transcript.mjs';
 import { conforms, sourceTimestamp } from '../lib/hosted-contract.mjs';
@@ -39,4 +44,17 @@ test('a malformed source time cannot freeze capture behind a strict receiver', a
   assert.equal((await f.state()).offset, Buffer.byteLength(bytes));
   assert.equal((await f.state()).pendingEnd, undefined);
   await f.run('capture'); assert.equal(f.captures.length, 1);
+});
+
+test('the shipped engine includes the transcript validator import graph', async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'capture-time-engine-' });
+  const run = promisify(execFile);
+  const manifest = JSON.parse(await (await import('node:fs/promises')).readFile(
+    new URL('../../../packages/setup/runtime/engine/manifest.json', import.meta.url), 'utf8'));
+  const archive = new URL(`../../../packages/setup/runtime/engine/${manifest.package.name}-${manifest.package.version}.tgz`, import.meta.url);
+  await run('tar', ['-xzf', archive.pathname, '-C', workspace.path]);
+  const module = await import(pathToFileURL(join(workspace.path, 'package/plugins/cairn-memory/lib/transcript.mjs')));
+  const [message] = module.transcriptWindow(row('message', 'not-a-date'), 'synthetic-session');
+  assert.equal(message.id, 'message');
+  assert.equal(Object.hasOwn(message, 'occurred_at'), false);
 });
