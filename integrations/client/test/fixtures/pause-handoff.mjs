@@ -24,7 +24,7 @@ try {
   if (role === 'publisher') {
     globalThis.fetch = async () => Response.json({ paused: true, generation: 1, enforced: true });
     const nativeLink = fs.link;
-    let hits = 0;
+    let hits = 0, durableNotified = false;
     fs.link = async function (source, destination) {
       try { return await nativeLink.call(this, source, destination); }
       catch (error) {
@@ -36,7 +36,8 @@ try {
     };
     syncBuiltinESMExports();
     await withWriteObserver(async ({ path, kind }) => {
-      if (kind === 'write' && (path.endsWith('/1.true.json') || path.includes('/hosted-pause-pending/'))) {
+      if (!durableNotified && kind === 'write' && (path.endsWith('/1.true.json') || path.includes('/hosted-pause-pending/'))) {
+        durableNotified = true;
         const release = wait('continue-publisher'); notify('durable'); await release;
       }
     }, () => observeHostedPause(a, 'synthetic-token'));
