@@ -19,12 +19,14 @@ function stalled(source, phase) {
 async function probe(t, phase, budget = true) {
   const f = await harness(t, { mutateRuntime: source => {
     if (phase) source = stalled(source, phase);
-    if (!budget) source = source.replace('const START_BOUNDARY_BUDGET_MS = 300;', 'const START_BOUNDARY_BUDGET_MS = 10000;');
+    if (!budget) source = source
+      .replace("if (action === 'start-boundary' && performance.now() >= START_BOUNDARY_BUDGET_MS) process.exit(0);", '')
+      .replace("const startBoundaryTimer = action === 'start-boundary' ?", 'const startBoundaryTimer = false ?');
     return source;
   } });
   await f.write(row('first', new Date().toISOString()));
   const result = await f.run('start-boundary');
-  assert.ok(result.wallMs < 650, `total start budget: ${result.wallMs.toFixed(1)} ms`);
+  assert.ok(result.wallMs < 450, `total start budget: ${result.wallMs.toFixed(1)} ms`);
   if (phase) {
     await assert.rejects(readFile(f.statePath), { code: 'ENOENT' });
     // stat/temporary stalls happen while holding the lock. Capture must reap
