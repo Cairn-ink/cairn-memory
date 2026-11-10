@@ -46,10 +46,10 @@ const OUTPUT_WRITE_MARGIN_MS = 50;
 const expireRecall = () => { recallController.abort(new Error('recall_timeout')); process.stdin.destroy(); };
 const recallTimer = recallController ? setTimeout(expireRecall, Math.max(0, recallEnd - performance.now())) : undefined;
 // Cancellation must precede forced termination even when rounding schedules
-// both timers in the same turn. Notify fetch/lock listeners before exiting.
+// both timers in the same turn. Let abort rejections settle before exiting.
 const recallHardTimer = recallController ? setTimeout(() => {
   expireRecall();
-  process.exit(0);
+  setImmediate(() => process.exit(0));
 }, Math.max(0, recallEnd - performance.now())) : undefined;
 const recallSignal = recallController?.signal;
 function checkRecall() {

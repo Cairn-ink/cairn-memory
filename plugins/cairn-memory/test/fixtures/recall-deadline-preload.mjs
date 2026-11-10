@@ -22,8 +22,13 @@ AbortSignal.timeout = function (milliseconds) {
 // hrtime has a common monotonic origin across parent/child processes; IPC receipt
 // latency is therefore excluded from application-entry-to-close measurement.
 const originalTimeout = globalThis.setTimeout;
-let entryObserved = false;
+let entryObserved = false, forcedHardCap;
 globalThis.setTimeout = function (callback, milliseconds, ...args) {
+  if (process.env.CAIRN_TEST_FORCE_HARD_CAP === 'true' &&
+      callback.toString().includes('process.exit(0)')) {
+    forcedHardCap = callback;
+    return originalTimeout(() => {}, milliseconds);
+  }
   if (!entryObserved && callback.name === 'expireRecall') {
     entryObserved = true;
     notify('application-entry', { monotonicMs: Number(process.hrtime.bigint()) / 1e6 });
@@ -99,6 +104,10 @@ globalThis.fetch = async (url, options) => {
       ? fetchAcknowledgement(options.signal, number) : undefined;
     notify('recall-fetch', { attempt: number, sameSignal: options.signal === firstSignal,
       hasSession: Object.hasOwn(body, 'session_id'), sameLegacyPayload: JSON.stringify(legacy) === firstLegacyPayload });
+    if (process.env.CAIRN_TEST_FORCE_HARD_CAP === 'true') {
+      if (!forcedHardCap) throw new Error('hard_cap_not_registered');
+      setImmediate(forcedHardCap);
+    }
     const mode = process.env.CAIRN_TEST_RECALL_REPLY;
     const milliseconds = mode === 'old-schema' ? number === 1 ? 50 : 5000 : Number(process.env.CAIRN_TEST_RECALL_DELAY);
     try {

@@ -25,7 +25,7 @@ export const scenarios = {
 
 export async function invocation(t, { lockMs = 0, holdQuotaLock = false, recallMs = 0,
   telemetry = false, stalledInput = false, reply = 'valid', missingToken = false, onFetch,
-  startupMs = 0, neverAnswer = false } = {}) {
+  startupMs = 0, neverAnswer = false, forceHardCap = false } = {}) {
   const workspace = createTestWorkspace(t, { prefix: 'recall-deadline-' });
   try {
     const home = join(workspace.path, 'home'), root = join(home, 'data');
@@ -58,7 +58,7 @@ export async function invocation(t, { lockMs = 0, holdQuotaLock = false, recallM
       cwd: home, env: { PATH: '/usr/bin:/bin', HOME: home, TMPDIR: workspace.path,
         CLAUDE_PLUGIN_DATA: root, CLAUDE_PLUGIN_OPTION_API_ENDPOINT: endpoint,
         CLAUDE_PLUGIN_OPTION_API_TOKEN: missingToken ? '' : 'synthetic-token', CLAUDE_PLUGIN_OPTION_TELEMETRY: String(telemetry),
-        CAIRN_TEST_RECALL_DELAY: String(recallMs), CAIRN_TEST_RECALL_REPLY: reply,
+        CAIRN_TEST_FORCE_HARD_CAP: String(forceHardCap), CAIRN_TEST_RECALL_DELAY: String(recallMs), CAIRN_TEST_RECALL_REPLY: reply,
         CAIRN_TEST_RECALL_ACK: String(Boolean(onFetch)), CAIRN_TEST_STARTUP_DELAY: String(startupMs),
         ...(neverAnswer ? { CAIRN_TEST_LOOPBACK_ENDPOINT: endpoint } : {}) }, stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
     });
