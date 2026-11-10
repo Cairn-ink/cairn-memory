@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { link, readFile, writeFile } from 'node:fs/promises';
+import { link, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { withFileLock } from '../file-lock.mjs';
@@ -99,6 +99,29 @@ for (const name of ['capture.lock', 'state.lock', 'control.lock']) {
         assert.equal(await readFile(path, 'utf8'), successor, 'successor_token_unchanged');
       }, { timeoutMs: 400, pollMs: 5 }), true);
     } finally { resume(); await stale; }
+
+    // Repeated interrupted takeovers must not grow filesystem leaf names until
+    // recovery itself becomes impossible. Use a real target-sized lock name.
+    const deepName = 'a'.repeat(64) + '.json.gate';
+    const deepPath = join(workspace.path, deepName);
+    await writeFile(deepPath, JSON.stringify({ ...owner, token: randomUUID() }), { mode: 0o600, flag: 'wx' });
+    let rendezvousPath = deepPath;
+    for (let depth = 0; depth < 6; depth++) {
+      const interrupted = child(t, [driver, deepPath, rendezvousPath]);
+      await Promise.race([new Promise(resolve => interrupted.process.once('message', resolve)),
+        interrupted.done.then(result => { throw Error('repeated_reaper_exited_before_election: ' + JSON.stringify(result)); })]);
+      const elected = [];
+      for (const leaf of await readdir(workspace.path)) {
+        if (!leaf.startsWith(deepName + '.reap-') || leaf.includes('.owner-')) continue;
+        if (JSON.parse(await readFile(join(workspace.path, leaf), 'utf8')).pid === interrupted.process.pid) elected.push(leaf);
+      }
+      assert.equal(elected.length, 1, 'one_token_specific_elected_marker');
+      rendezvousPath = join(workspace.path, elected[0]);
+      interrupted.process.kill('SIGKILL');
+      assert.equal((await interrupted.done).signal, 'SIGKILL');
+    }
+    assert.equal(await withFileLock(deepPath, () => { entered++; }, { timeoutMs: 400, pollMs: 5 }),
+      true, 'repeated_crashed_reapers_remain_recoverable');
 
   });
 }
