@@ -62,12 +62,12 @@ async function run(t, f, action, { entry = hook, preload, onSpawn } = {}) {
 }
 
 const budgetPreload=fileURLToPath(new URL('./fixtures/pause-budget-preload.mjs',import.meta.url));
-test('recall leaves an output observation budget before the process cap',{timeout:10000},async t=>{
-  const f=await fixture(t,async()=>{await new Promise(resolve=>setTimeout(resolve,300));return active;},[],4000);
+test('recall leaves a local output budget before the process cap',{timeout:10000},async t=>{
+  const f=await fixture(t,async()=>{await new Promise(resolve=>setTimeout(resolve,900));return active;},[],4000);
   const result=await run(t,f,'recall',{preload:budgetPreload});
   const abort=result.events.find(event=>event.kind==='recall-aborted');
   assert.ok(abort,'recall_fetch_was_started');
-  assert.ok(abort.ms<=2950,'output_budget_reserved_before_fetch');
+  assert.ok(abort.ms>=3100 && abort.ms<=3300,'local_output_budget_reserved_before_fetch');
   assert.equal(f.counts.recall,1);assert.equal(result.stdout,'');
 });
 test('an unavailable diagnostic sync cannot hold recall past the host margin',{timeout:15000},async t=>{

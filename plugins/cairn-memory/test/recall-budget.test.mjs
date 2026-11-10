@@ -30,7 +30,7 @@ test('ten unanswered loopback requests retain an output reserve after contention
     silent(result);
     assert.equal(result.serverHeaders, 1);
     const aborted = at(result, 'recall-aborted') - at(result, 'process-origin');
-    assert.ok(aborted >= 2750 && aborted < 3150, 'output_reservation_deadline');
+    assert.ok(aborted >= 3100 && aborted < 3400, 'output_reservation_deadline');
     assert.ok(result.elapsedMs < 4000, 'host_margin');
     assert.equal(result.events.find(event => event.kind === 'recall-aborted')?.source, 'output');
   });
@@ -58,7 +58,7 @@ test('fetch timer allows 2500 ms while the output reserve bounds contended invoc
   const contended = await invocation(t, { lockMs: 1500, neverAnswer: true });
   silent(contended); assert.equal(contended.serverHeaders, 1);
   const reserved = at(contended, 'recall-aborted') - at(contended, 'process-origin');
-  assert.ok(reserved >= 2750 && reserved < 3150, 'reserved_output_time');
+  assert.ok(reserved >= 3100 && reserved < 3400, 'reserved_output_time');
   assert.equal(contended.events.filter(event => event.kind === 'output-timeout').length, 1);
   assert.ok(at(contended, 'recall-aborted') - at(contended, 'recall-fetch') < 2400, 'output_reserve_wins');
   assert.equal(contended.events.find(event => event.kind === 'recall-aborted').source, 'output');

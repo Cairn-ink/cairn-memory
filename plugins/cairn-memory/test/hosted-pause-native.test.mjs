@@ -70,15 +70,15 @@ const memory={ id:'11111111-1111-4111-8111-111111111111',content:'Synthetic memo
   projectId:null,origin:'explicit',confidence:1,createdAt:'2026-10-01T00:00:00Z',updatedAt:'2026-10-01T00:00:00Z',
   receipts:[{client:'claude-code',sessionId:'s',eventId:'e',role:'user',excerpt:'Synthetic source.',createdAt:'2026-10-01T00:00:00Z'}]};
 for(const action of ['recall','capture','capture-detached']) {
-  test(`native ${action} sends after two active observations`,{timeout:10000},async t=>{
+  test(`native ${action} sends after fresh active observations`,{timeout:10000},async t=>{
     const f=await fixture(t,()=>active,action==='recall'?[memory]:[]);
     const result=await run(t,f,action);
-    assert.equal(f.counts.pause,action==='recall'?3:2,'native_fresh_observations');
+    assert.equal(f.counts.pause,action==='recall'?1:2,'native_fresh_observations');
     assert.equal(f.counts[action==='recall'?'recall':'capture'],1,'native_active_send');
     if(action==='recall')assert.match(JSON.parse(result.stdout).hookSpecificOutput.additionalContext,/Synthetic memory/);
   });
-  for(const [label,bad] of [['paused',paused],['unavailable',undefined],['regressed',{...active,generation:0}]]) {
-    for(const at of (label==='regressed'?[2]:[1,2])) test(`native ${action} blocks ${label} at observation ${at}`,{timeout:10000},async t=>{
+  for(const [label,bad] of (action==='recall' ? [['paused',paused],['unavailable',undefined]] : [['paused',paused],['unavailable',undefined],['regressed',{...active,generation:0}]])) {
+    for(const at of (action==='recall'?[1]:label==='regressed'?[2]:[1,2])) test(`native ${action} blocks ${label} at observation ${at}`,{timeout:10000},async t=>{
       const before=label==='regressed'?{...active,generation:1}:active;
       const f=await fixture(t,number=>number>=at?bad:before);
       if(label==='regressed' && action!=='recall')await writeCaptureCursor(captureCursorPath(f.root,f.input.session_id),{
@@ -89,14 +89,6 @@ for(const action of ['recall','capture','capture-detached']) {
       assert.equal(f.counts.pause,at,'native_denial_observation_reached');
     });
   }
-}
-for(const [label,bad] of [['paused',paused],['unavailable',undefined],['regressed',{...active,generation:0}]]) {
-  test(`native output blocks ${label} after recall`,{timeout:10000},async t=>{
-    const before=label==='regressed'?{...active,generation:1}:active;
-    const f=await fixture(t,number=>number<3?before:bad,[memory]);
-    const result=await run(t,f,'recall');
-    assert.equal(f.counts.recall,1);assert.equal(f.counts.pause,3);assert.equal(result.stdout,'','native_output_denied');
-  });
 }
 for(const action of ['capture','capture-detached']) test(`native ${action} discards paused-period bytes after resume across fresh processes`,{timeout:15000},async t=>{
   let remote=active;

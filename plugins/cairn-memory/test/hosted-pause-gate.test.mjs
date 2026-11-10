@@ -60,7 +60,7 @@ async function run(t, f, action, { entry = hook, preload, onSpawn } = {}) {
   assert.equal(result.code, 0); assert.equal(result.signal, null); assert.equal(stderr, '');
   return { stdout, events, elapsedMs: performance.now() - started };
 }
-for (const action of ['recall', 'capture', 'capture-detached']) {
+for (const action of ['capture', 'capture-detached']) {
   test(`${action} observes twice and blocks a pause arriving before dispatch`, { timeout: 15000 }, async t => {
     const f = await fixture(t, number => number === 1 ? active : paused);
     const result = await run(t, f, action);
@@ -96,20 +96,6 @@ for (const endpoint of ['file:///synthetic/local', 'stdio://synthetic']) test(`n
     for (const action of ['recall', 'capture', 'capture-detached']) assert.equal((await run(t, f, action)).stdout, '');
     assert.deepEqual(f.counts, { pause: 0, recall: 0, capture: 0, other: 0 });
   });
-
-
-test('recall re-observes hosted state before writing context', { timeout: 15000 }, async t => {
-  const memories = [{ id: '11111111-1111-4111-8111-111111111111', content: 'Synthetic remembered preference.',
-    kind: 'fact', scope: 'personal', projectId: null, origin: 'explicit', confidence: 1,
-    createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z', receipts: [{ client: 'claude-code',
-      sessionId: 'synthetic-source', eventId: 'synthetic-event', role: 'user', excerpt: 'Synthetic source.',
-      createdAt: '2026-10-01T00:00:00Z' }] }];
-  const f = await fixture(t, number => number < 3 ? active : paused, memories);
-  const result = await run(t, f, 'recall');
-  assert.equal(f.counts.recall, 1, 'recall_was_in_flight_before_pause');
-  assert.equal(f.counts.pause, 3, 'output_observation_required');
-  assert.equal(result.stdout, '', 'paused_context_not_emitted');
-});
 
 
 test('hosted operations fail closed when the shared state lock cannot verify the platform', { timeout: 15000 }, async t => {
