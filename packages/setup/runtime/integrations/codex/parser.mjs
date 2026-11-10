@@ -96,7 +96,7 @@ export function parseLine(bytes, { sessionId, wireSessionId, epoch, start, end }
   const completed = typeof p.completed_at_ms === 'number' && Number.isFinite(p.completed_at_ms) ?
     new Date(p.completed_at_ms) : null;
   const occurredAt = sourceTimestamp(row.timestamp) ? row.timestamp :
-    completed && Number.isFinite(completed.getTime()) ? completed.toISOString() : undefined;
+    completed && Number.isFinite(completed.getTime()) && sourceTimestamp(completed.toISOString()) ? completed.toISOString() : undefined;
   return { start, end, ...clean,
     ...(occurredAt === undefined ? {} : { occurred_at: occurredAt }),
     message: { id: hash(PROFILE,'codex',wireSessionId,epoch,start,end),
