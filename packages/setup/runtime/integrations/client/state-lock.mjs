@@ -14,14 +14,15 @@ export function ownerAlive(owner, live) {
   return live.isAlive(owner.pid);
 }
 
-export async function stateLock(path, work, { liveness, timeoutMs = 250 } = {}) {
+export async function stateLock(path, work, { liveness, timeoutMs = 250, signal } = {}) {
+  signal?.throwIfAborted();
   const live = liveness ?? await localLiveness();
   ownerAlive({ pid: process.pid, namespace: live.namespace, boot: live.boot }, live);
   await privateDirectory(dirname(path));
   await checkedPath(path, { missing: true });
   let value;
   const acquired = await withFileLock(path, async () => { value = await work(live); }, {
-    timeoutMs, pollMs: 10, context: { namespace: live.namespace, boot: live.boot },
+    timeoutMs, pollMs: 10, signal, context: { namespace: live.namespace, boot: live.boot },
     isAlive: (_pid, owner) => ownerAlive(owner, live),
     validateOwner: async owner => { ownerAlive(owner, live); },
     validatePath: p => checkedPath(p, { missing: true }),
