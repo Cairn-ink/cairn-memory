@@ -100,7 +100,7 @@ const recallRuntimeChanges = new Map([
 // Atomic output delivery changes entry beyond its recall-budget line.
 // Pause durability changes whole functions; pin both immutable historical and
 // current bytes instead of reconstructing the earlier file from current source.
-// The shared root dispatch gate revises only the current pause pin; preserve
+// Root replay and the frozen capture generation revise current pins; preserve
 // every historical digest and the historical behavior comparisons below.
 const durabilityRuntimeChanges = new Map([
   // Output gate admission now accepts the remaining-budget abort signal.
@@ -113,7 +113,7 @@ const durabilityRuntimeChanges = new Map([
   ['integrations/codex/worker.mjs', {
     historical: '0fbb1295e596769035eca5e974efa4f355774a6c37d70f3442a3e78c4aa7264d',
     before: '0fbb1295e596769035eca5e974efa4f355774a6c37d70f3442a3e78c4aa7264d',
-    current: 'f8c90177c90b2bea59e7683786889ee27059989e2347070e7ea1c7295d538933',
+    current: '6453ea0e6d3c0f3a4eb70bfc4eb7c45e85251c48dcc4c3da89e177be834ff03e',
   }],
   ['integrations/codex/entry.mjs', {
     historical: '558a2f9f5cbed3c4e08146626708ba5ab4374e6938fa9c2e1cdc935d50580952',
@@ -138,7 +138,7 @@ const durabilityRuntimeChanges = new Map([
   ['integrations/codex/hosted-lifecycle.mjs', {
     historical: '8b4a8e7ea1cef5473147bfe2ea6af9548894c52f08e44a656e545fcb9fc8c496',
     before: 'bd7bc299773cc389565a34bfd9a7131f68ad7bef934d3ce5a0ebeeea800bbe3a',
-    current: '7c19835ca726fb3f0e0302f9a84736ed4fadd10429e508a8009be40c40a0ceb1',
+    current: '3771ad2a034c5cad4b9a2882d5a9306a7cefd704bcebc67893fc286b93937b24',
   }],
 ]);
 const hostedRuntimeExceptions = [
