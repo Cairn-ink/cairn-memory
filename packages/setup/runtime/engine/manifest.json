@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "959c8effcb0a704718833bcd9013252bf5166828eb8ba302a327e27683592e84",
-  "bytes": 1320042,
+  "sha256": "5acbb4ba69a30b6adf1bed9920ddc9c4a1a6dda9e01c5509bed2e7a8f61383b5",
+  "bytes": 1320347,
   "files": [
     "LICENSE",
     "README.md",
@@ -406,7 +406,7 @@
     "core/admission-storage.mjs": "e1ed41ed5265f62bb3a95b95c4fab1b99d5addbf59e810b2935e71adc1fb2f6f",
     "core/local-authority-input.mjs": "bfce603a1081956e8d4dd790d09e8e394c0b06b20cca987980217d2e4d85a988",
     "core/local-authority-schema.mjs": "b1ff2de1a829c503dff18f425ac57942b52e3b90e9ef01aa209e06863945a3d3",
-    "core/local-authority-storage.mjs": "1b304d4e60017d1e5173e6d9fbdf56015719b10f60b4585dbb59d30c9956137a",
+    "core/local-authority-storage.mjs": "1d11b7ffe0ad1437d4d077ef012d9edb43dad45a90ea0fa13f1fe5b0a8445ff2",
     "core/local-authority-uuid.mjs": "7c75d6e49d77ceb83d1074eb520e7436fadb26ceed949b51e007fd4bf5f0f92d",
     "core/local-authority-guard.mjs": "f6856880a3e4d9c3d4685e063fd0d6768832e721ed0ccebdf035574bb0d976c6",
     "core/confirmation-schema.mjs": "abfd7cb0f8ad71a54aae23b341a9ddb6ec4c05cf7e123690a5c58f7b4f8b1bf5",
@@ -556,7 +556,7 @@
     "core/prompts/recall-rank-rationale-evidence.md": "e13943a0217c15423d8bed5bfb8a791f2b358bed97fe258288fdb3ee1d86a24b",
     "core/prompts/recall-select.md": "41cc02441ede2b53763bc0afad5eb26d9b35441defd9a5a2e2746216c9ba1880",
     "adapters/mcp/cli.mjs": "08cbfe64cda3fbf4668dc35e060755194e8ba4e0f6f05a79438c75e916b4648e",
-    "adapters/mcp/raw-command.mjs": "c3d00a12331350bab7001df426c04f86f6f1b0225fa1692f5f397bfad5a399f6",
+    "adapters/mcp/raw-command.mjs": "eccc682f75067a925383451c0e6fb1ae24341310b1caf5be7dcf05583787f3ef",
     "adapters/mcp/asset-access.mjs": "a58ffd7331daef74d1cac4dc90e5c72cd13b3adbdf4f754e09a1095d04091b93",
     "adapters/mcp/asset-command.mjs": "82ac95243e0c725191f9296299cf4cfba89d5e356fb0f96ecc7fab4fc3b60a3c",
     "adapters/mcp/asset-export.mjs": "bfe2d15c69cb5700b958bdafedb011dac0f6bbc08f64df09f88de3dc8d2ead20",
