@@ -33,6 +33,19 @@ test('parser copies row time, falls back to completed milliseconds, and keeps wi
   assert.notEqual(parse(row, { wireSessionId: 'b'.repeat(64) }).message.id, original.message.id);
 });
 
+test('every produced completion fallback satisfies capture conformance', () => {
+  const row = JSON.parse(item('Synthetic completion range'));
+  const context = { sessionId: row.payload.thread_id, wireSessionId: 'a'.repeat(64), epoch: 0, start: 10, end: 100 };
+  for (const milliseconds of [0, -1, 1577934245123, 253402300799999, 253402300800000, -8640000000000000, 8640000000000000, 1e100, null]) {
+    row.timestamp = 'not-a-date'; row.payload.completed_at_ms = milliseconds;
+    const parsed = parseLine(Buffer.from(JSON.stringify(row)), context);
+    const wire = { ...parsed.message, ...(parsed.occurred_at === undefined ? {} : { occurred_at: parsed.occurred_at }) };
+    assert.equal(conforms('capture-request', { client: 'codex', event_id: 'synthetic-event', session_id: 'synthetic-session', messages: [wire] }), true);
+    if (milliseconds === 0) assert.equal(wire.occurred_at, '1970-01-01T00:00:00.000Z');
+    if (milliseconds === 253402300800000) assert.equal(Object.hasOwn(wire, 'occurred_at'), false);
+  }
+});
+
 test('worker sends numbered windows and per-attempt time without changing a frozen retry', async t => {
   const f = await fixture(t, { text: header() + Array.from({ length: 25 }, (_, n) => item(`Synthetic ${n}`, n)).join('') });
   f.fail('processing');
