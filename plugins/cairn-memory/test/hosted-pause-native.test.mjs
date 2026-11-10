@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFile, mkdir, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -47,6 +47,8 @@ async function fixture(t, observation = () => active, memories = []) {
     CLAUDE_PLUGIN_OPTION_TELEMETRY: 'false' };
   const input = { session_id: 'synthetic-session', prompt: 'Synthetic recall query.',
     transcript_path: transcript, cwd: ws.path, capture_generation: 'initial' };
+  await writeCaptureCursor(captureCursorPath(root, input.session_id), { offset: 0, generation: 'initial',
+    discardUntilNewline: false, hostedGeneration: 0, hostedTarget: hostedTargetId({ endpoint }) });
   return { counts, env, input, captures, transcript, root, endpoint };
 }
 async function run(t, f, action, { entry = hook, preload = nativePreload, onSpawn } = {}) {
@@ -121,4 +123,50 @@ for(const action of ['capture','capture-detached'])test(`native ${action} observ
   await run(t,f,action);
   assert.equal(f.counts.pause,3,'every_batch_observes');assert.equal(f.counts.capture,1,'second_batch_blocked');
   assert.equal(f.captures.flatMap(body=>body.messages).length,24);
+});
+
+for (const action of ['capture', 'capture-detached']) test(`native ${action} legacy authority cannot bridge pause and a generation-zero target change`, { timeout: 20000 }, async t => {
+  let remote = active;
+  const f = await fixture(t, () => remote);
+  // A distinct loopback endpoint is a fresh hosted target at generation zero.
+  const targetB = await fixture(t);
+  const cursorPath = captureCursorPath(f.root, f.input.session_id);
+  const offset = (await readFile(f.transcript)).length;
+  const legacy = { offset, generation: 'initial', discardUntilNewline: false };
+  await writeCaptureCursor(cursorPath, legacy);
+  remote = paused;
+  await run(t, f, action); // Validated pause on A, without tagging the legacy cursor.
+  assert.equal(f.counts.pause, 1);
+  assert.deepEqual(JSON.parse(await readFile(cursorPath, 'utf8')), legacy);
+  await appendFile(f.transcript, JSON.stringify({ type: 'user', uuid: 'private',
+    message: { content: 'SYNTHETIC_PAUSED_PERIOD' } }) + '\n');
+  remote = { ...paused, paused: false }; // Resume A before switching profile to B.
+  f.env.CLAUDE_PLUGIN_OPTION_API_ENDPOINT = targetB.endpoint;
+  const target = hostedTargetId({ endpoint: targetB.endpoint });
+  // Also isolate missing generation from missing target: the zero-default mutation
+  // must fail even when the target is valid and already matches B.
+  for (const tags of [{}, { hostedTarget: target }, { hostedGeneration: -1, hostedTarget: target },
+    { hostedGeneration: '0', hostedTarget: target }, { hostedGeneration: 0 },
+    { hostedGeneration: 0, hostedTarget: null },
+    { hostedGeneration: 0, hostedTarget: hostedTargetId({ endpoint: f.endpoint }) }]) {
+    await writeCaptureCursor(cursorPath, { ...legacy, ...tags });
+    await run(t, f, action);
+    assert.equal(targetB.counts.capture, 0, 'unknown_or_different_authority_establishes_eof');
+    const cursor = JSON.parse(await readFile(cursorPath, 'utf8'));
+    assert.equal(cursor.offset, (await readFile(f.transcript)).length);
+    assert.equal(cursor.hostedGeneration, 0);
+    assert.equal(cursor.hostedTarget, target);
+  }
+  await appendFile(f.transcript, JSON.stringify({ type: 'user', uuid: 'resumed',
+    message: { content: 'SYNTHETIC_AFTER_RESUME' } }) + '\n');
+  await run(t, f, action);
+  assert.equal(targetB.counts.capture, 1, 'new_bytes_after_boundary_are_captured');
+  assert.ok(targetB.captures.flatMap(body => body.messages)
+    .every(message => !message.content.includes('SYNTHETIC_PAUSED_PERIOD')), 'zero_paused_period_bytes');
+  // POSIX upgrades still adopt the pending legacy range when no barrier changed.
+  const posix = await fixture(t);
+  await writeCaptureCursor(captureCursorPath(posix.root, posix.input.session_id),
+    { offset: 0, generation: 'initial', discardUntilNewline: false });
+  await run(t, posix, action, { preload: null });
+  assert.equal(posix.counts.capture, 1, 'posix_legacy_pending_range_preserved');
 });

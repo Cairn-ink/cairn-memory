@@ -111,9 +111,13 @@ specific to Codex.
 On native Windows, pause is checked right before every send, and a request that
 had already started when you paused can finish. This mode uses process-local
 observations: a delayed older active response in another hook is not revoked by
-a different process's observation. Capture cursors retain the hosted generation;
-after a generation change, the first capture skips to EOF so paused-period text
-is not uploaded after resume. POSIX-only availability diagnostics are skipped.
+a different process's observation. Capture cursors retain the hosted generation
+and target; after either changes, the first capture skips to EOF so paused-period
+text is not uploaded after resume. On upgrade, a Windows hosted session with
+missing or invalid cursor authority also skips its pending bytes through that
+first capture's EOF, even at generation zero. A new session starts at EOF too.
+This can omit unpaused text, because old cursors cannot prove which target
+authorized it. Linux/macOS upgrades and local capture retain their existing behavior. POSIX-only availability diagnostics are skipped.
 This capability is selected once by platform, never after a Linux/macOS lock
 failure. Windows coverage uses injection only. Non-HTTP local integrations are
 unchanged. See [privacy details](../../docs/privacy.md) for the commit point and

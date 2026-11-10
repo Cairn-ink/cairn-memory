@@ -274,13 +274,18 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
     } catch { /* Missing/corrupt extension carries no verified turn state. */ }
   }
 
+  // Only portable hosted cursors carry remote authority. Missing/invalid tags
+  // cannot establish that an old range belongs to this active target, even at
+  // generation zero. POSIX retains its durable local generation barrier.
+  const knownHostedAuthority = portableHosted && Number.isSafeInteger(cursor?.hostedGeneration) &&
+    cursor.hostedGeneration >= 0 && cursor.hostedTarget === hostedTargetId(hostedConfig);
+
   // After every pause barrier, the first hook for each session establishes a
   // fresh EOF boundary and transmits nothing. This also protects sessions the
   // control command could not know about and survives process restarts.
   if (
     (generation !== "initial" && (!cursor || cursor.generation !== generation)) ||
-    (portableHosted && ((cursor?.hostedGeneration ?? 0) !== hosted.generation ||
-      (cursor?.hostedTarget !== undefined && cursor.hostedTarget !== hostedTargetId(hostedConfig))))
+    (portableHosted && (!knownHostedAuthority || cursor.hostedGeneration !== hosted.generation))
   ) {
     const tail = size === 0 ? Buffer.alloc(0) : await readSlice(transcriptPath, size - 1, size);
     await writeCursor(statePath, {
