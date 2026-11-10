@@ -13,6 +13,9 @@ const publicCodes = new Set(['invalid_input','invalid_query','invalid_read_set',
 const pageAllowanceMs=100;
 const expired = at => {if(performance.now()>=at)rawSearchDeadline();};
 const interrupted = error => ['source_busy','search_deadline'].includes(error?.code);
+// Opaque handles may cross readers only within the exact same host authority,
+// physical canonical file, owner and read set. Tickets remain reader-local.
+const preparedByAuthority = new WeakMap();
 const emptyPartial = () => immutable({version:RAW_SEARCH_VERSION,publication:null,candidates:[],
   coverage:{status:'partial',scanned:null,expanded:null,causes:['deadline']},semantic:{state:'unknown',reason:null}});
 const safeFailure = error => { fail(publicCodes.has(error?.code) ? error.code : 'raw_search_unavailable'); };
@@ -53,6 +56,8 @@ export async function openRawSearch(value) {
     const dispatch=options.embedder&&contextBudget({budgetConfigured:true,policy:options.policy,embedder:options.embedder});
     const releaseResidency=embedding.selectRawVectorResidency();
     const instance=randomUUID();
+    let sharedPrepared=preparedByAuthority.get(options.authority);
+    if(!sharedPrepared)preparedByAuthority.set(options.authority,sharedPrepared=new WeakMap());
     let closed=false,serial=0;
     const operations=new Set();
     const ready=()=>{if(closed)fail('store_closed');database.assertFile();};
@@ -66,6 +71,19 @@ export async function openRawSearch(value) {
       map.set(key,{...entry,expires:performance.now()+5000});
     }
     const checkSources=(sources,intent,at=Infinity)=>{for(const source of sources)authority.check(source,intent,at);};
+    function retainPrepared(ticket,entry) {
+      retain(prepared,ticket,entry,RAW_SEARCH_LIMITS.preparations);
+      sharedPrepared.set(entry.handle,{identity:authority.identity,resolve(at){
+        ready();
+        const live=prepared.get(ticket);
+        if(!live||live.handle!==entry.handle||live.expires<performance.now())fail('source_unavailable');
+        // Each issuing reader runs its own access callbacks and live guards
+        // before the validating reader's final whole-set canonical snapshot.
+        return {...live,access(){live.access(()=>{
+          ready();expired(at);checkSources(live.sources,live.intent,at);
+        });}};
+      }});
+    }
     async function retry(work,at,onExhausted) {
       while(true)try{expired(at);return await work(at);}catch(error){
         if(!interrupted(error))throw error;
@@ -239,7 +257,7 @@ export async function openRawSearch(value) {
       const output=preparedOutput(source,candidate.classification,ranges);
       const ticket=authority.bind('raw-search-prepared-v1',[candidate.proof,++serial]);
       const handle=Object.freeze({value:output,ticket,validate(){return revalidate([ticket])[0];}});
-      retain(prepared,ticket,{sources:entry.sources,intent,access,value:output,handle},RAW_SEARCH_LIMITS.preparations);
+      retainPrepared(ticket,{sources:entry.sources,intent,access,value:output,handle});
       try{revalidate([ticket]);}catch(error){prepared.delete(ticket);throw error;}return handle;
     }
     async function prepareMany(candidates,{intent='current',deadlineAt=performance.now()+1000,onPrepared=()=>{}}={},token) {
@@ -288,7 +306,7 @@ export async function openRawSearch(value) {
             check();
             const ticket=authority.bind('raw-search-prepared-v1',[candidate.proof,++serial]);
             handle=Object.freeze({value:output,ticket,validate(){return revalidate([ticket])[0];}});
-            retain(prepared,ticket,{sources:entry.sources,intent,access,value:output,handle},RAW_SEARCH_LIMITS.preparations);
+            retainPrepared(ticket,{sources:entry.sources,intent,access,value:output,handle});
             try{revalidate([ticket]);}catch(error){prepared.delete(ticket);handle=null;throw error;}
           }catch(error){if(interrupted(error))throw error;}
           check();handles.push(handle);onPrepared(handle,index);
@@ -310,7 +328,7 @@ export async function openRawSearch(value) {
         ranges:[{source:source.ref,text,classification:source.classification}]});
       const ticket=authority.bind('raw-search-source-prepared-v1',[instance,++serial,source.ref]);
       const handle=Object.freeze({value:output,ticket,validate(){return revalidate([ticket])[0];}});
-      retain(prepared,ticket,{sources:[source],intent,access,value:output,handle},RAW_SEARCH_LIMITS.preparations);
+      retainPrepared(ticket,{sources:[source],intent,access,value:output,handle});
       revalidate([ticket]);return handle;
     }
     function revalidate(handles) {
@@ -320,8 +338,18 @@ export async function openRawSearch(value) {
       const at=performance.now()+1000;let busy=0;
       try {
         ready();if(!Array.isArray(handles)||handles.length>RAW_SEARCH_LIMITS.preparations)fail('invalid_input');
-        const entries=handles.map(handle=>{const entry=prepared.get(typeof handle==='string'?handle:handle?.ticket);
-          if(!entry||entry.expires<performance.now()||typeof handle!=='string'&&entry.handle!==handle)fail('source_unavailable');return entry;});
+        const entries=handles.map(handle=>{
+          const own=prepared.get(typeof handle==='string'?handle:handle?.ticket);
+          if(own&&(typeof handle==='string'||own.handle===handle)){
+            if(own.expires<performance.now())fail('source_unavailable');return own;
+          }
+          if(typeof handle!=='string'){
+            const reader=sharedPrepared.get(handle);
+            if(!reader||!same(reader.identity,authority.identity))fail('source_unavailable');
+            return reader.resolve(at);
+          }
+          fail('source_unavailable');
+        });
         while(true)try{return authority.validate(entries,at);}catch(error){
           if(!interrupted(error))throw error;
           cache.drop();authority.reset();

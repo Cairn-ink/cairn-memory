@@ -36,6 +36,16 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
     return entries.get(key);
   }
   async function serviceFor(entry, lexical = false) {
+    // Both readers belong to the same host authority and canonical store.
+    // Keep that private identity so their handles can share a final snapshot.
+    entry.authority ??= {
+      authorize(request, token) {
+        if (closed || token !== entry.token) return null;
+        const { input, ...binding } = request, grant = {};
+        entry.grants.set(grant, { ...binding, accessGeneration: 1 }); return grant;
+      },
+      isCurrent: grant => closed ? null : entry.grants.get(grant) ?? null,
+    };
     if (lexical && embedder) {
       entry.lexical ??= { ...entry, service: null, opening: null, lexicalOnly: true };
       return serviceFor(entry.lexical);
@@ -46,17 +56,9 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
       if (path === ':memory:') fail('raw_search_backend_unavailable');
       const directory = resolve(path) + '.raw-search/' + entry.key;
       await mkdir(directory, { recursive: true, mode: 0o700 });
-      const authority = {
-        authorize(request, token) {
-          if (closed || token !== entry.token) return null;
-          const { input, ...binding } = request, grant = {};
-          entry.grants.set(grant, { ...binding, accessGeneration: 1 }); return grant;
-        },
-        isCurrent: grant => closed ? null : entry.grants.get(grant) ?? null,
-      };
       const service = await openRawSearch({ version: 'raw-search-v1', enabled: true, backend: 'local',
         path: resolve(path), directory, ownerId: entry.readSet[0].ownerId, readSet: entry.readSet,
-        authority, crypto, maintenanceTurn, ...(embedder && !entry.lexicalOnly ? { embedder, policy: embeddingPolicy } : {}) });
+        authority: entry.authority, crypto, maintenanceTurn, ...(embedder && !entry.lexicalOnly ? { embedder, policy: embeddingPolicy } : {}) });
       if (closed) { await service.close(); fail('store_closed'); }
       entry.error = null;
       return entry.service = service;
@@ -174,23 +176,19 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
         revalidate(selected) {
           if (closed) fail('store_closed');
           if (!Array.isArray(selected)) fail('stale_publication');
-          const groups = new Map();
+          let validator;
           for (const handle of selected) {
             const service = handles.get(handle);
             if (!service || ![entry.service, entry.lexical?.service].includes(service)) fail('stale_publication');
-            if (!groups.has(service)) groups.set(service, []);
-            groups.get(service).push(handle);
+            validator ??= service;
           }
           if (!selected.length) {
             if (!entry.service) fail('stale_publication');
             return entry.service.revalidate([]);
           }
-          const values = new Map();
-          for (const [service, group] of groups) {
-            const checked = service.revalidate(group);
-            group.forEach((handle, index) => values.set(handle, checked[index]));
-          }
-          return selected.map(handle => values.get(handle));
+          // Issuing-reader callbacks run first. One reader then checks the
+          // entire set in one canonical snapshot, preserving input order.
+          return validator.revalidate(selected);
         },
       });
       owners.set(port, manager); return port;

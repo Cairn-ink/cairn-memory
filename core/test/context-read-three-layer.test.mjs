@@ -597,6 +597,27 @@ test('an optional throwing batch method recovers through the existing single por
   assert.deepEqual(await readRawChannel(service, channelInput(), {}, performance.now() + 1000), { items: [], coverage: 'unavailable' });
 });
 
+for (const reported of ['handle', 'null']) test(`throwing batch preserves its reported ${reported} outcome without preparing or counting it twice`, async () => {
+  const { service, candidates, handles } = syntheticChannel(), singles = [];
+  service.prepareMany = async (_selected, { onPrepared }) => {
+    onPrepared(reported === 'handle' ? handles[0] : null, 0);
+    throw Error('synthetic failure after reporting progress');
+  };
+  service.prepare = async candidate => {
+    const index = candidates.indexOf(candidate); singles.push(index); return handles[index];
+  };
+  const result = await readRawChannel(service, channelInput(), {}, performance.now() + 1000);
+  const expected = reported === 'handle' ? handles : handles.slice(1);
+  assert.deepEqual(singles, [1, 2]);
+  assert.deepEqual(result.items.map(item => item.handle), expected);
+  assert.equal(result.coverage, reported === 'handle' ? 'included' : 'partial');
+  const assembled = assembleThreeLayerContext(packedArgs({ prepared: [] }), result);
+  assert.equal(assembled.metered.items.length, expected.length);
+  assert.equal(assembled.diagnostics.omitted.items, 0);
+  assert.equal(new Set(assembled.metered.items.map(item => item.ref.messageId)).size, expected.length);
+  assert.equal(assembled.validateRaw(), true);
+});
+
 test('invalid product ports fail before a reader can advertise Raw as configured', () => {
   const { service } = syntheticChannel();
   assert.throws(() => openProductIndex({ rawSearch: { search: service.search, revalidate: service.revalidate } }), { code: 'invalid_input' });

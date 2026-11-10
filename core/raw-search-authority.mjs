@@ -509,7 +509,9 @@ export function createRawSearchAuthority(database, options) {
             if(['source_busy','search_deadline'].includes(error?.code))throw error;
             checked.set(key,null);
           }
-          if(!checked.get(key))valid=false;
+          // Every source is required. Once one fails, the remaining sources
+          // cannot rescue this entry and must not consume its peers' budget.
+          if(!checked.get(key)){valid=false;break;}
         }
         allowed.push(valid);
       }

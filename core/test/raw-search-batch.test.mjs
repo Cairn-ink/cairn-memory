@@ -8,6 +8,7 @@ import { searchFixture, safetySourceFixture } from '../testing/raw-search-fixtur
 import { readRawChannel } from '../context-read-three-layer.mjs';
 import { transaction } from '../database.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
+import { openRawSearch } from '../raw-search-index.mjs';
 
 test.beforeEach(installRawSearchTestClock);
 async function fixture(t, texts = ['telescope alpha', 'telescope beta', 'telescope gamma'], safety = false, candidateChecking = false) {
@@ -196,6 +197,29 @@ test('one batch preserves candidates from two live search proofs in input order'
   assert.deepEqual(progress.map(([, index]) => index), [0, 1, 2]);
 });
 
+test('shared-reader validation requires live opaque handles and the exact host and store', async t => {
+  const { f, s, candidates } = await fixture(t, ['telescope shared validation']);
+  const handle = await s.prepare(candidates[0]);
+  const sibling = await openRawSearch(s.options);
+  t.after(() => sibling.close());
+  assert.deepEqual(sibling.revalidate([handle]), [handle.value]);
+  assert.throws(() => sibling.revalidate([handle.ticket]), { code: 'raw_search_unavailable' });
+  assert.throws(() => sibling.revalidate([{ ...handle }]), { code: 'raw_search_unavailable' });
+  const otherHost = await openRawSearch({ ...s.options, authority: { ...s.options.authority } });
+  t.after(() => otherHost.close());
+  assert.throws(() => otherHost.revalidate([handle]), { code: 'raw_search_unavailable' });
+  const otherStore = await searchFixture(sourceFixture(t), { authority: s.options.authority });
+  assert.throws(() => otherStore.service.revalidate([handle]), { code: 'raw_search_unavailable' });
+  for (const namespace of [{ ...ns, scope: 'project', projectId: 'other-project' }, { ...ns, ownerId: 'other-owner' }]) {
+    const otherScope = await openRawSearch({ ...s.options, directory: f.workspace.path,
+      ownerId: namespace.ownerId, readSet: [namespace] });
+    t.after(() => otherScope.close());
+    assert.throws(() => otherScope.revalidate([handle]), { code: 'raw_search_unavailable' });
+  }
+  await s.service.close();
+  assert.throws(() => sibling.revalidate([handle]), { code: 'raw_search_unavailable' });
+});
+
 test('known oversized sources cannot spend deliverable candidates Raw cutoff', async t => {
   const { s, candidates } = await fixture(t, ['telescope deliverable', 'telescope ' + 'x'.repeat(524288)]);
   const small = candidates.find(candidate => candidate.ranges.length === 1);
@@ -223,4 +247,37 @@ test('known oversized sources cannot spend deliverable candidates Raw cutoff', a
   assert.equal(base.items.length, 1, JSON.stringify({ errors, baseInspections, inspected, now, baseCoverage: base.coverage }));
   assert.ok(batch.items.length >= base.items.length, JSON.stringify({ base: base.items.length, batch: batch.items.length, baseInspections, inspected }));
   assert.deepEqual(batch.items.map(item => item.value), base.items.map(item => item.value));
+});
+
+test('a failed under-cap turn stops spending independent candidates Raw cutoff', async t => {
+  const { f, s, candidates } = await fixture(t, ['telescope deliverable', 'telescope ' + 'x'.repeat(256000)]);
+  const small = candidates.find(candidate => candidate.ranges.length === 1);
+  const bad = candidates.find(candidate => candidate.ranges.length === 65);
+  assert.ok(small); assert.ok(bad);
+  assert.equal(f.db.prepare('SELECT total_bytes FROM raw_messages WHERE conversation_id=? AND message_id=?')
+    .get(bad.conversationId, bad.messageId).total_bytes, 256010);
+  f.db.prepare('DELETE FROM raw_parts WHERE conversation_id=? AND message_id=? AND part_index=0')
+    .run(bad.conversationId, bad.messageId);
+  const selected = [small, bad], original = DatabaseSync.prototype.prepare;
+  const own = Object.getOwnPropertyDescriptor(performance, 'now'); let now = 100, inspected = 0;
+  Object.defineProperty(performance, 'now', { configurable: true, value: () => now });
+  DatabaseSync.prototype.prepare = function(sql) {
+    if (sql.startsWith('SELECT 1 FROM raw_session_fences') && new Error().stack.includes('inspectInside')) {
+      now += 8; inspected++;
+    }
+    return original.call(this, sql);
+  };
+  t.after(() => { DatabaseSync.prototype.prepare = original; Object.defineProperty(performance, 'now', own); });
+  const port = { search: async () => ({ candidates: selected, coverage: { status: 'complete' } }),
+    prepare: candidate => s.prepare(candidate), prepareMany: (values, settings) => prepare(s, values, settings),
+    revalidate: handles => s.service.revalidate(handles) };
+  const { prepareMany, ...serial } = port, input = { query: 'telescope', readSet: [ns] };
+  const base = await readRawChannel(serial, input, {}, now + 1000), baseInspections = inspected;
+  now = 100; inspected = 0;
+  const batch = await readRawChannel(port, input, {}, now + 1000);
+  t.diagnostic(JSON.stringify({ base: base.items.length, batch: batch.items.length, baseInspections, inspected }));
+  assert.equal(base.items.length, 1); assert.equal(base.coverage, 'partial');
+  assert.ok(batch.items.length >= base.items.length);
+  assert.deepEqual(batch.items.map(item => item.value), base.items.map(item => item.value));
+  assert.equal(batch.coverage, 'partial');
 });
