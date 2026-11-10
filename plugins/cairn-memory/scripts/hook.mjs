@@ -562,9 +562,14 @@ try {
   // After a response, dispatchActive publishes configuration before auth/output.
   // Content delivery finishes before best-effort durable diagnostics. Their I/O
   // cannot consume the response-to-output budget or clear a draining write's cap.
-  await recallAuthPending?.();
-  await recallObservation?.publish();
-  await publishRecallConfiguration();
+  // Two diagnostic publications can wait on slow fsyncs. Start this optional
+  // cleanup only with its own 250 ms headroom; it never reserves fetch/output
+  // time. Near the cap, leave diagnostics for the next hook instead.
+  if (!recallController || performance.now() < recallEnd - 250) {
+    await recallAuthPending?.();
+    await recallObservation?.publish();
+    await publishRecallConfiguration();
+  }
   clearTimeout(recallTimer);
   clearTimeout(recallHardTimer);
 }

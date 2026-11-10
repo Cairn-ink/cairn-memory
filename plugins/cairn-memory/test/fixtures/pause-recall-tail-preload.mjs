@@ -26,8 +26,10 @@ fs.link = async function(source, target) {
   return originalLink.call(this, source, target);
 };
 syncBuiltinESMExports();
+const preparedResponse = Response.json({ memories: [JSON.parse(process.env.CAIRN_TEST_TAIL_MEMORY)] });
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (url, options) => {
+  const fetchStart = performance.now();
   const route = new URL(url).pathname.split('/').at(-1);
   if (new URL(url).hostname !== '127.0.0.1') throw new Error('loopback_only');
   send(route);
@@ -35,10 +37,10 @@ globalThis.fetch = async (url, options) => {
     fetched = true;
     // A synthetic response clock starts at fetch entry, avoiding loopback
     // request/header latency consuming the one-millisecond HTTP boundary case.
-    const response = Response.json({ memories: [JSON.parse(process.env.CAIRN_TEST_TAIL_MEMORY)] });
-    await delay(Number(process.env.CAIRN_TEST_TAIL_RESPONSE_MS), undefined, { signal: options.signal });
+    await delay(Math.max(0, Math.floor(Number(process.env.CAIRN_TEST_TAIL_RESPONSE_MS) -
+      (performance.now() - fetchStart))), undefined, { signal: options.signal });
     send('recall-response');
-    return response;
+    return preparedResponse;
   }
   return originalFetch(url, options);
 };
