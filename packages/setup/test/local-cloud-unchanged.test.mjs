@@ -372,8 +372,10 @@ test('L06 version normalization preserves unrelated bytes and complete runtime g
 });
 test('L06 hosted runtime exceptions require packaged bytes and preserve all other comparisons', async () => {
   assert.equal(hostedRuntimeExceptions.length, 13);
-  assert.equal(recallRuntimeChanges.size, 2);
-  assert.equal(durabilityRuntimeChanges.size, 4);
+  // Atomic output moved entry.mjs from recall substitutions to whole-file
+  // durability pins; the combined inventory remains thirteen runtime files.
+  assert.equal(recallRuntimeChanges.size, 1);
+  assert.equal(durabilityRuntimeChanges.size, 5);
   const home = '/synthetic/.codex';
   const oldRuntime = '.codex/cairn/runtime/0.5.3-0123456789ab/';
   const newRuntime = '.codex/cairn/runtime/0.6.0-abcdef012345/';
