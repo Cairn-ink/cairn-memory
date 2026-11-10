@@ -189,3 +189,24 @@ test('Codex final output guard rechecks an intent after its control-lock wait', 
   assert.equal(recalls, 1, 'recall_completed_before_the_output_race');
   continueObservation.resolve(); await observing;
 });
+
+for (const kind of ['timeout', 'death']) test(`Codex worker repairs ${kind} on another target before cursor adoption`, { timeout: 20000 }, async t => {
+  const { fixture: workerFixture, item } = await import('./helpers.mjs');
+  const { runWorker } = await import('../worker.mjs');
+  const { interruptRotation } = await import('../../client/test/fixtures/pending-revocation.mjs');
+  const f = await workerFixture(t);
+  // B already has a generation-initial cursor. A is the observed paused target.
+  const server = createServer((request, response) => { request.resume(); reply(response, paused); });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const endpoint = `http://127.0.0.1:${server.address().port}`;
+  await interruptRotation(t, { root: f.root, endpoint }, kind);
+  await appendFile(f.path, item('SYNTHETIC_PAUSED_PERIOD'));
+  const run = () => runWorker(f.binding, { mode: 'hosted', guard: f.guard, transport: f.transport });
+  assert.equal((await run()).status, 'pause_boundary', 'root_pending_forces_boundary_on_B');
+  assert.equal(f.calls.length, 0, 'zero_paused_period_bytes');
+  await appendFile(f.path, item('SYNTHETIC_AFTER_BOUNDARY', 1));
+  await run();
+  const texts = f.calls.flatMap(body => body.messages).map(message => message.content);
+  assert.deepEqual(texts, ['SYNTHETIC_AFTER_BOUNDARY'], 'only_post_boundary_bytes_sent');
+});
