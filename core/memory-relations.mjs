@@ -136,7 +136,9 @@ export async function relateCapturedMemories({model,items,operations,deadline,va
      reason:typeof edge.reason==='string'&&edge.reason.isWellFormed()?Array.from(edge.reason.replace(/\0/g,'')).slice(0,600).join(''):null});
    }
   }
-  return result;
+  // An explicit unrelated decision still completes relation interpretation.
+  // Keep this orchestration marker out of the persisted edge proposals.
+  return Object.defineProperty(result,'decisionComplete',{value:true});
  }catch(error){
   emitDiagnostic(model,'relateMemories','core_validation','invalid_memory_relations');
   return fallback();

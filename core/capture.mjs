@@ -210,7 +210,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
     const memoryRelations = operations.relationEnabled?.() === false ? []
       : await relateCapturedMemories({ model, items, operations, deadline, validateFresh: assertSources });
     if (snapshot.causal) {
-      const relationMode = operations.relationMode?.() || memoryRelations.some(edge=>!edge.timingOnly);
+      const relationMode = operations.relationMode?.() || memoryRelations.decisionComplete === true || memoryRelations.some(edge=>!edge.timingOnly);
       const prepared = unwrap(operations.ordered.prepare(snapshot, claim.order, items, relationMode));
       deadline?.check();
       // Causal streams retain receipt/order provenance. Automatic relation
