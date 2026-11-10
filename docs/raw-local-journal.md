@@ -61,6 +61,7 @@ Use the same database, owner and project as the local MCP server. These local
 commands need no model key and do not decode or print conversation text:
 
 ```sh
+cairn-memory raw --help
 cairn-memory raw list --db ABS --owner ID [--project ID]
 cairn-memory raw delete --db ABS --owner ID [--project ID] --conversation ID
 cairn-memory raw delete --db ABS --owner ID [--project ID] --conversation ID --yes
