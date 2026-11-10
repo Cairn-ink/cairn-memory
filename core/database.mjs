@@ -47,7 +47,7 @@ export const APPLICATION_ID = 0x43414952;
 const VERSION = CONFIRMATION_SCHEMA_VERSION;
 // Existing layouts accepted without an upgrade by the ordinary opener.
 export const READ_SCHEMA_VERSIONS = Object.freeze([VERSION, 20, PRIVATE_CARD_SCHEMA_VERSION,
-  PRIVATE_EVIDENCE_SCHEMA_VERSION, PRIVATE_ORGANIZATION_SCHEMA_VERSION, LOCAL_AUTHORITY_SCHEMA_VERSION, 30, 31, 32, 33, ...SAFETY_SCHEMA_VERSIONS, ...RELATION_LAYOUTS.filter(v=>![24,25,26,27,28].includes(v-100))]);
+  PRIVATE_EVIDENCE_SCHEMA_VERSION, PRIVATE_ORGANIZATION_SCHEMA_VERSION, LOCAL_AUTHORITY_SCHEMA_VERSION, 30, 31, 32, 33, ...SAFETY_SCHEMA_VERSIONS, ...RELATION_LAYOUTS.filter(v=>![24,25,26,27,28].includes(v%100))]);
 // Context reads also validate existing pre-control Raw stores. The retained
 // topic reader's narrower supported-version list remains unchanged.
 export const CONTEXT_READ_SCHEMA_VERSIONS = Object.freeze([...new Set([...READ_SCHEMA_VERSIONS,
@@ -451,8 +451,8 @@ export function openDatabase(path, options = {}) {
       if (methodPackages && layout.base < 30) fail('unsupported_database');
       if (currentDependencies && layout.base !== 33) fail('unsupported_database');
       location.check();
-      if(!layout.relationsRevision)transaction(db,()=>installMemoryRelations(db));
-      if(!cachedContentLayout(db)?.relationsRevision)attestContentSafety(db);
+      if(layout.relationsRevision!==2)transaction(db,()=>installMemoryRelations(db));
+      if(cachedContentLayout(db)?.relationsRevision!==2)attestContentSafety(db);
       location.check();
       return db;
     } catch (error) {
@@ -496,16 +496,18 @@ export function openDatabase(path, options = {}) {
       if (contentSafety !== undefined && (db.prepare('PRAGMA application_id').get().application_id !== 0 ||
           db.prepare('PRAGMA user_version').get().user_version !== 0 ||
           db.prepare('SELECT count(*) n FROM sqlite_schema').get().n !== 0)) fail('unsupported_database');
-      const layout = attestContentSafety(db);
+      let layout = attestContentSafety(db);
+      if(layout.relationsRevision===1){installMemoryRelations(db);layout=attestContentSafety(db);}
       if (layout.relationsRevision) {
         let altered=false;
         if(!layout.suppressionRevision){
+          const upgradedOffset=layout.relationsRevision*100;
           const target=currentDependencies?33:roleProfiles?32:assets?31:methodPackages?30:localControls?29:rawSources?28:rawDeletion?27:rawLineage?26:rawCapture?25:rawConversations?24:privateCards?23:layout.base;
           for(const [version,install] of [[20,installPrivateCards],[21,installCardMemorySources],[22,installPrivateEvidence],
             [23,installPrivateOrganization],[24,installRawJournal],[25,installRawCapture],[26,installRawLineage],
             [27,installRawDeletion],[28,installRawSources],[29,installLocalAuthority],[30,installMethodPackages],
             [31,installAssets],[32,installRoleProfiles],[33,installCardCurrentDependencies]]){
-            if(layout.base<version&&target>=version){install(db);db.exec(`PRAGMA user_version=${version+100}`);altered=true;}
+            if(layout.base<version&&target>=version){install(db);db.exec(`PRAGMA user_version=${version+upgradedOffset}`);altered=true;}
           }
         }
         const upgraded=altered?attestContentSafety(db):layout;
@@ -811,7 +813,7 @@ export function openDatabase(path, options = {}) {
       }
       installMemoryRelations(db);
     });
-    if(!cachedContentLayout(db)?.relationsRevision)attestContentSafety(db);
+    if(cachedContentLayout(db)?.relationsRevision!==2)attestContentSafety(db);
     return db;
   } catch (error) {
     db?.close();

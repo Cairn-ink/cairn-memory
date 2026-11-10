@@ -24,7 +24,7 @@ function fixture(t,{keyed=true,filing=false,options={},contextOptions={},coreOpt
  const core=openMemoryCore({path,model,...coreOptions,contextRead:{version:'context-read-v1',authority:trusted.authority,counter:{id:'synthetic',countTokens:()=>1},...contextOptions}});
  const db=new DatabaseSync(path);let event=0;
  t.after(async()=>{await core.close();db.close();rmSync(dir,{recursive:true,force:true});});
- const capture=async(content,namespace=ns)=>ok(await core.capture({namespace,client:'synthetic',sessionId:'s',eventId:'batch-'+(++event),messages:[{id:'message-'+event,role:'user',content}]}));
+ const capture=async(content,namespace=ns,occurredAt)=>ok(await core.capture({namespace,client:'synthetic',sessionId:'s',eventId:'batch-'+(++event),messages:[{id:'message-'+event,role:'user',content,...(occurredAt?{occurredAt}:{})}]}));
  const read=async(intent='current',query='breakfast')=>{
   for(let i=0;i<10;i++){const value=ok(await trusted.call(core,'refreshContextIndex',{readSet:[ns],types:['memory'],intent,budget:{maxItems:1024,maxMs:5000}}));if(value.status==='complete')break;}
   return ok(await trusted.call(core,'contextRead',{readSet:[ns],types:['memory'],intent,query,semantic:false,budget:{maxItems:24,maxTokens:6000}}));
@@ -35,15 +35,16 @@ for(const filing of [false,true])test(`capture derives current from retained cha
  const f=fixture(t,{filing}),ids=[];
  for(let i=0;i<9;i++){
   const admitted=await f.capture(`My breakfast is value ${i}.`);ids.push(admitted.admission.memories[0].id);
-  const pack=await f.read();assert.deepEqual(pack.metered.items.map(item=>item.body),[`My breakfast is value ${i}.`]);
+  const pack=await f.read();assert.equal(pack.metered.items.length,Math.min(i+1,4));
+  assert.equal((pack.metered.items.find(item=>item.metadata?.thread?.status==='current')??pack.metered.items[0]).body,`My breakfast is value ${i}.`);
  }
  assert.equal(f.calls.length,9);
  assert.ok(f.db.prepare('SELECT count(*) n FROM memory_relations').get().n>0);
  const newest=ok(f.core.get({namespace:ns,memoryId:ids.at(-1)})).memory;
  ok(f.core.forget({namespace:ns,memoryId:newest.id,expectedRevision:newest.revision}));
- const restored=await f.read();assert.deepEqual(restored.metered.items.map(item=>item.body),['My breakfast is value 7.']);
+ const restored=await f.read();assert.equal(restored.metered.items.find(item=>item.metadata.thread.status==='current').body,'My breakfast is value 7.');
  assert.equal(f.db.prepare('SELECT count(*) n FROM memory_relations WHERE from_memory_id=? OR to_memory_id=?').get(newest.id,newest.id).n,0);
- const history=await f.read('history');assert.equal(history.metered.items.length,8);
+ const history=await f.read('history');assert.equal(history.metered.items.length,4);
 });
 test('contradictions deliver both ends with labels and dates',async t=>{
  const f=fixture(t,{options:{relateMemories:({input})=>({facts:input.facts.map(fact=>({factIndex:fact.factIndex,eventTime:null,
@@ -52,33 +53,33 @@ test('contradictions deliver both ends with labels and dates',async t=>{
  const pack=await f.read('current','stopped');assert.equal(pack.metered.items.length,2);
  assert.ok(pack.metered.items.every(item=>item.metadata.relations.some(edge=>edge.relation==='contradicts'&&edge.otherEventTime)));
 });
-test('failed relation call admits without edges and emits a content-free diagnostic',async t=>{
+test('failed relation call admits with neutral fallback and emits a content-free diagnostic',async t=>{
  const diagnostics=[];const f=fixture(t,{options:{relateMemories:()=>{throw Error('untrusted provider content');},onDiagnostic:value=>diagnostics.push(value)}});
  await f.capture('My breakfast is oats.');await f.capture('My breakfast is eggs.');
- assert.equal(f.db.prepare('SELECT count(*) n FROM memory_relations').get().n,0);
+ assert.equal(f.db.prepare('SELECT relation FROM memory_relations').get().relation,'same_thread');
  assert.ok(diagnostics.some(value=>value.stage==='relateMemories'&&value.reason==='provider_failure'));
  assert.ok(!JSON.stringify(diagnostics).includes('untrusted provider content'));
 });
-test('post-validation drops foreign IDs, caps edges and downgrades low confidence or older supersession',async()=>{
+test('post-validation drops foreign IDs, caps edges and ignores model dates',async()=>{
  const candidates=Array.from({length:8},(_,i)=>({id:'candidate-'+i,revision:1,content:'breakfast',eventTime:'2026-03-01T00:00:00.000Z'}));
  const model={contextWindow:8192,countTokens:()=>1,relateMemories:()=>({facts:[{factIndex:0,eventTime:'2026-02-01T00:00:00.000Z',edges:[
-  {candidateId:'foreign',relation:'supersedes',confidence:1},...candidates.slice(0,7).map(candidate=>({candidateId:candidate.id,relation:'supersedes',confidence:0.5}))]}]})};
- const edges=await relateCapturedMemories({model,items:[{content:'breakfast'}],operations:{relationCandidates:()=>[candidates]}});
- assert.equal(edges.filter(edge=>!edge.timingOnly).length,5);assert.ok(edges.filter(edge=>!edge.timingOnly).every(edge=>edge.relation==='contradicts'));
+  {candidateId:'foreign',relation:'supersedes',confidence:1},...candidates.slice(0,7).map(candidate=>({candidateId:candidate.id,relation:'supersedes',confidence:0.95}))]}]})};
+ const edges=await relateCapturedMemories({model,items:[{content:'new breakfast value'}],operations:{relationCandidates:()=>[candidates]}});
+ assert.equal(edges.filter(edge=>!edge.timingOnly).length,5);assert.ok(edges.filter(edge=>!edge.timingOnly).every(edge=>edge.relation==='supersedes'));
 });
-test('keyless rule never claims supersession, including Traditional Chinese markers',()=>{
- for(const [oldText,newText] of [['I like egg pancakes for breakfast','I no longer eat egg pancakes for breakfast'],['每天早餐吃蛋餅','每天早餐不吃了蛋餅']]){
+test('keyless rule emits only neutral links, including Traditional Chinese',()=>{
+ for(const [oldText,newText] of [['I like egg pancakes for breakfast','I no longer eat egg pancakes for breakfast'],['我喜歡蛋餅','我不再喜歡蛋餅']]){
   const edges=ruleRelation({content:newText},[{id:'old',content:oldText}]);
-  assert.ok(edges.length);assert.equal(edges[0].relation,'contradicts');assert.equal(edges[0].confidence,0.3);
+  assert.ok(edges.length);assert.equal(edges[0].relation,'same_thread');assert.ok(edges[0].confidence>=0.8);
  }
- assert.deepEqual(ruleRelation({content:'I like pancakes'},[{id:'old',content:'I like pancakes'}]),[]);
+ assert.deepEqual(ruleRelation({content:'I like pancakes'},[{id:'old',content:'My brother likes pancakes'}]),[]);
 });
 test('capture candidates and database edges cannot cross owner or namespace',async t=>{
  const f=fixture(t);await f.capture('My breakfast is oats.',{...ns,ownerId:'other-owner'});
  await f.capture('My breakfast is eggs.',{...ns,scope:'project',projectId:'other-project'});
  await f.capture('My breakfast is pancakes.');assert.deepEqual(f.calls.at(-1).candidates,[[]]);
  const rows=f.db.prepare('SELECT id,revision FROM memories ORDER BY id').all();
- assert.throws(()=>f.db.prepare(`INSERT INTO memory_relations VALUES('bad',?,?,?,?,'contradicts',1,'user',NULL,NULL,'now')`).run(rows[0].id,rows[0].revision,rows[1].id,rows[1].revision),/invalid_relation_boundary/);
+ assert.throws(()=>f.db.prepare(`INSERT INTO memory_relations(id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,receipt_id,event_time,created_at) VALUES('bad',?,?,?,?,'contradicts',1,'user',NULL,NULL,'now')`).run(rows[0].id,rows[0].revision,rows[1].id,rows[1].revision),/invalid_relation_boundary/);
 });
 test('correction invalidates every old revision edge atomically',async t=>{
  const f=fixture(t);await f.capture('My breakfast is oats.');const last=await f.capture('My breakfast is pancakes.');
@@ -105,12 +106,12 @@ test('suppressed endpoints never enter the delivery pack through a relation',asy
 });
 test('event-time-only decisions survive admission and initial filing, without inventing an edge',async t=>{
  const f=fixture(t,{filing:true,options:{relateMemories:({input})=>({facts:input.facts.map(fact=>({factIndex:fact.factIndex,eventTime:'2020-01-01T00:00:00.000Z',edges:[]}))})}});
- const result=await f.capture('My breakfast changed on 2020-01-01.');
+ const result=await f.capture('My breakfast changed on 2020-01-01.',ns,'2020-01-01T00:00:00.000Z');
  assert.equal(f.db.prepare('SELECT count(*) n FROM memory_relations').get().n,0);
  const row=f.db.prepare('SELECT * FROM memory_relation_times').get();
  const memory=ok(f.core.get({namespace:ns,memoryId:result.admission.memories[0].id})).memory;
  assert.equal(row.revision,memory.revision);assert.equal(row.event_time,'2020-01-01T00:00:00.000Z');
- assert.equal((await f.read()).metered.items[0].date,'2020-01-01T00:00Z');
+ assert.ok((await f.read()).metered.items.every(item=>!item.metadata?.thread));
 });
 for(const causal of [false,true])test(`initial filing retains this capture's new relations and times; causal=${causal}`,async t=>{
  const f=fixture(t);
@@ -125,7 +126,7 @@ for(const causal of [false,true])test(`initial filing retains this capture's new
  const edge=f.db.prepare('SELECT * FROM memory_relations WHERE from_memory_id=?').get(id);
  assert.equal(edge.from_revision,memory.revision);
  assert.equal(f.db.prepare('SELECT revision FROM memory_relation_times WHERE memory_id=?').get(id).revision,memory.revision);
- assert.deepEqual((await f.read()).metered.items.map(item=>item.body),['My breakfast is pancakes.']);
+ assert.equal((await f.read()).metered.items.find(item=>item.metadata.thread.status==='current').body,'My breakfast is pancakes.');
 });
 test("initial filing of a repeated receipt invalidates earlier captures' relations and times",async t=>{
  const f=fixture(t);await f.capture('My breakfast is oats.');
@@ -149,9 +150,9 @@ test('causal capture uses the same relation decision and preserves receipt prove
  assert.equal(oldCalls,0);assert.equal(f.calls.length,2);
  assert.equal(f.db.prepare('SELECT count(*) n FROM receipt_causality').get().n,2);
  assert.equal(f.db.prepare("SELECT count(*) n FROM memory_relations WHERE relation='supersedes'").get().n,1);
- assert.equal((await f.read()).metered.items.length,1);
+ assert.equal((await f.read()).metered.items.length,2);
 });
-test('history follows only eight chain edges from a unique lexical seed',async t=>{
+test('history carries the newest four members from a unique lexical seed',async t=>{
  const f=fixture(t);let previous;
  for(let i=0;i<11;i++){
   const memory=ok(f.core.admit({namespace:ns,memory:{content:i===0?'UniqueAnchor original breakfast':'Historical value '+i,kind:'fact'},receipts:[{client:'synthetic',sessionId:'s',eventId:'history-'+i,role:'user',excerpt:'history '+i}]})).memory;
@@ -161,8 +162,8 @@ test('history follows only eight chain edges from a unique lexical seed',async t
   previous=memory;
  }
  const pack=await f.read('history','UniqueAnchor');
- assert.equal(pack.metered.items.length,9);
- assert.ok(!pack.metered.items.some(item=>/Historical value (9|10)$/.test(item.body)));
+ assert.equal(pack.metered.items.length,4);
+ assert.ok(pack.metered.items.some(item=>item.metadata.thread.status==='current'));
 });
 test('legacy recall resolves an old selected ref to the newest current memory',async t=>{
  const f=fixture(t);const first=await f.capture('My breakfast is original value.');
@@ -172,7 +173,8 @@ test('legacy recall resolves an old selected ref to the newest current memory',a
  f.model.select=()=>({refs:[{namespaceIndex:0,memoryId:old.id,revision:old.revision}]});
  f.model.rank=({input})=>({refs:input.candidates.slice(0,1).map(candidate=>({namespaceIndex:candidate.namespaceIndex,memoryId:candidate.memory.id,revision:candidate.memory.revision}))});
  const result=ok(await f.core.recall({readSet:[ns],query:'original',limit:2}));
- assert.deepEqual(result.memories.map(item=>item.memory.id),[newId]);
+ assert.equal(result.memories[0].memory.id,newId);
+ assert.ok(result.memories.some(item=>item.memory.id===oldId));
  assert.equal(result.memories[0].relations[0].relation,'supersedes');
 });
 
@@ -225,7 +227,8 @@ test('current resolution continues beyond the history depth limit',async t=>{
   previous=memory;
  }
  const pack=await f.read('current','UniqueCurrentAnchor');
- assert.deepEqual(pack.metered.items.map(item=>item.body),['Replacement value 10']);
+ assert.equal(pack.metered.items.length,4);
+ assert.equal(pack.metered.items.find(item=>item.metadata.thread.status==='current').body,'Replacement value 10');
 });
 
 test('a relation timeout reserves admission time and admits without edges',async t=>{

@@ -60,6 +60,23 @@ export function writeContentSuppressionInside(db, { namespace: ns, kind, key = '
     incarnation,match_mode,source_version,message_key,span_start,span_end,reason,action_id,recorded_at,evidence_origin,cleanup_status,cleanup_attempt)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'pending',0)`).run(ns.ownerId, factId, Number(epoch >> 32n), Number(epoch & 0xffffffffn),
     ...target.slice(1, 11), reason, actionId, recordedAt, origin);
+  const relationLayout=cachedContentLayout(db);
+  if(!installing && relationLayout?.relationsRevision && ['owner','namespace','memory','receipt','raw'].includes(kind)){
+    // Delete incident edges with their durable denial. A caller's temporary
+    // authorization denial is enforced at read time and never edits the store.
+    const boundRevision=kind==='memory'&&['version','revision-through'].includes(matchMode)?JSON.parse(sourceVersion)[1]:-1;
+    const targets=db.prepare(`SELECT m.id FROM memories m WHERE m.owner_id=?
+      AND (?='owner' OR (m.scope=? AND m.project_id=?)) AND (
+        ? IN ('owner','namespace') OR (?='memory' AND m.id=? AND (? NOT IN ('version','revision-through') OR
+          (?='version' AND m.revision=?) OR (?='revision-through' AND m.revision<=?))) OR
+        (?='receipt' AND m.id IN(SELECT memory_id FROM receipts WHERE id=?))
+        ${relationLayout.rawLineage?"OR (?='raw' AND m.id IN(SELECT p.memory_id FROM receipts p JOIN raw_receipt_lineage l ON l.receipt_id=p.id WHERE l.conversation_id=? AND (?='' OR (l.message_id=? AND l.start<? AND l.end>?))))":''})`)
+      .all(ns.ownerId,matchMode,ns.scope,ns.projectId??'',kind,kind,key,matchMode,matchMode,boundRevision,matchMode,boundRevision,kind,key,
+        ...(relationLayout.rawLineage?[kind,key,messageId,messageId,end,start]:[]));
+    if(targets.length){const ids=JSON.stringify(targets.map(target=>target.id));
+      db.prepare(`DELETE FROM memory_relations WHERE from_memory_id IN(SELECT value FROM json_each(?))
+        OR to_memory_id IN(SELECT value FROM json_each(?))`).run(ids,ids);}
+  }
   return { factId, epoch };
 }
 export function suppressOwnerInside(db, { ownerId, reason, actionId, recordedAt }) {

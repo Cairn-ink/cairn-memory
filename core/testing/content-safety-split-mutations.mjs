@@ -59,6 +59,6 @@ export const splitRevisionMutations = [
   { name:'existing get inserts quoted qualified facts', change:sqlGetMutation(true) },
   { name:'method added only to context-core composition', surface:'contextCore', addedMethod:'pruneContextEvidence', graphUnchanged:true,
     change: { 'core/context-read-facade.mjs': source => replace(source,
-      'return Object.freeze({ ...base, ...context.methods, close()',
-      'return Object.freeze({ ...base, ...context.methods, pruneContextEvidence() { return null; }, close()') } },
+      'return Object.freeze({ ...base, ...context.methods,',
+      'return Object.freeze({ ...base, ...context.methods, pruneContextEvidence() { return null; },') } },
 ];

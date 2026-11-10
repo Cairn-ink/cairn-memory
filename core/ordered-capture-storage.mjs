@@ -25,12 +25,12 @@ export function createOrderedCaptureStorage({ db, memoryRelationStorage, admissi
     }
     return row;
   }
-  function validate(ns, s, order) {
+  function validate(ns, s, order, checkIndex = true) {
     bound(ns, s);
     if (highWater(ns, s) !== order.highWater || s.causal.sequence <= order.highWater) {
       fail('capture_order_conflict');
     }
-    if (epoch(ns) !== order.indexRevision) fail('index_revision_conflict');
+    if (checkIndex && epoch(ns) !== order.indexRevision) fail('index_revision_conflict');
   }
   function claim(ns, s, deadline, registration, sources) {
     return admissionStorage.claimAdmission(ns, { ...s, leaseMs: 125000 }, {
@@ -100,7 +100,7 @@ export function createOrderedCaptureStorage({ db, memoryRelationStorage, admissi
     return admissionStorage.finishAdmission(ns, { ...s, token, items }, {
       initialClassification: true,
       validate() {
-        validate(ns, s, order);
+        validate(ns, s, order, false);
         for (const candidate of snapshot.candidates) {
           const row = activeRow(ns, candidate.row.id);
           if (!row || row.currentness !== 'current' || row.revision !== candidate.row.revision ||

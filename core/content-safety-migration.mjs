@@ -97,7 +97,7 @@ function verifyPopulation(db, expectedFacts) {
  * The caller owns the transaction and inventories the pristine legacy layout. */
 export function installContentSafetyInside(db, base, inventory, seeds = []) {
   if (!db.isTransaction) fail('storage_error');
-  const physical = safetyPhysicalVersion(base) + (attestContentSafety(db).relationsRevision ? 100 : 0), factIds = new Set();
+  const physical = safetyPhysicalVersion(base) + (attestContentSafety(db).relationsRevision*100), factIds = new Set();
   validateContextProductLayout(db); verifyIntegrity(db);
   db.exec(contentSafetyDDL(base));
   verifyContentSafetyDDL(db, physical);
@@ -186,7 +186,7 @@ async function migrateSafety({ path, backupPath, expected, quiescence }, eventTi
 }
 
 function installCardLineageInside(db,base,inventory,snapshot) {
-  const relationOffset=attestContentSafety(db).relationsRevision?100:0;
+  const relationOffset=attestContentSafety(db).relationsRevision*100;
   const control=db.prepare('SELECT * FROM content_safety_control').get();
   if(control.card_lineage_revision!==0)fail('unsupported_database');
   const identity=db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get();
@@ -241,8 +241,8 @@ function installCardLineageInside(db,base,inventory,snapshot) {
 /** Internal installer; caller owns the offline migration transaction. */
 export function installReceiptEventTimeInside(db, base) {
   const inherited=attestContentSafety(db);
-  if (!db.isTransaction || inherited.physical !== safetyPhysicalVersion(base)+(inherited.relationsRevision?100:0)) fail('unsupported_database');
-  const physical = { 18: 51, 23: 52, 33: 53 }[base]+(inherited.relationsRevision?100:0);
+  if (!db.isTransaction || inherited.physical !== safetyPhysicalVersion(base)+(inherited.relationsRevision*100)) fail('unsupported_database');
+  const physical = { 18: 51, 23: 52, 33: 53 }[base]+(inherited.relationsRevision*100);
   // Add the attested flag atomically, preserving every existing control value.
   db.exec('ALTER TABLE receipts ADD COLUMN occurred_at TEXT; DROP TRIGGER safety_receipt_identity;');
   db.exec(`DROP TRIGGER safety_control_insert; DROP TRIGGER safety_control_delete; DROP TRIGGER safety_control_update;

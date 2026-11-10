@@ -546,6 +546,15 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
         writeContentSuppressionInside(db, { namespace: ns, kind: 'raw', key: anchor.conversationId, matchMode: 'span',
           messageId: anchor.messageId, start: anchor.start, end: anchor.end, ...suppression });
         insert.run(anchor.conversationId, anchor.messageId, anchor.start, anchor.end, generation);
+        if(cachedContentLayout(db)?.relationsRevision && !cachedContentLayout(db)?.suppressionRevision){
+          const affected=db.prepare(`SELECT DISTINCT p.memory_id FROM receipts p JOIN memories m ON m.id=p.memory_id JOIN raw_receipt_lineage l ON l.receipt_id=p.id
+            WHERE m.owner_id=? AND m.scope=? AND m.project_id=? AND l.conversation_id=? AND l.message_id=? AND l.start<? AND l.end>?`)
+            .all(...boundary(ns),anchor.conversationId,anchor.messageId,anchor.end,anchor.start);
+          if(affected.length){const ids=JSON.stringify(affected.map(target=>target.memory_id));
+            db.prepare(`DELETE FROM memory_relations WHERE from_memory_id IN(SELECT value FROM json_each(?))
+              OR to_memory_id IN(SELECT value FROM json_each(?))`).run(ids,ids);}
+        }
+
       }
     });
   }

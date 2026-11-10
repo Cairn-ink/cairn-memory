@@ -324,7 +324,7 @@ export function schemasFor(method, input) {
       factIndex: constrained(integer, input.facts.map((fact, index) => { if (fact.factIndex !== index || typeof fact.content !== 'string') invalid(); return index; })),
       eventTime: { anyOf: [{ type: 'string', maxLength: 40 }, { type: 'null' }] },
       edges: array(object({ candidateId: constrained(string, ids), relation: { anyOf: [{ type: 'string', enum: ['supersedes','contradicts','refines','causes'] }, { type: 'null' }] },
-        confidence: { type: 'number', minimum: 0, maximum: 1 } }), ids.length ? 5 : 0),
+        confidence: { type: 'number', minimum: 0, maximum: 1 }, reason: { anyOf: [{ type: 'string', maxLength: 600 }, { type: 'null' }] } }), ids.length ? 5 : 0),
     }), input.facts.length) });
   }
   if (method === 'relate') {

@@ -15,7 +15,7 @@ import { fail } from './validation.mjs';
 // capture, authority grants or backfill. A failure rolls back the whole opener.
 export function migrateMethodPrerequisites(db) {
   const layout=attestContentSafety(db);
-  const version=layout.base,relationOffset=layout.relationsRevision?100:0;
+  const version=layout.base,relationOffset=layout.relationsRevision*100;
   if (layout.suppressionRevision) fail('unsupported_database');
   if (version >= 30) return;
   if (![18,20,21,22,23,24,25,26,27,28,29].includes(version)) fail('unsupported_database');

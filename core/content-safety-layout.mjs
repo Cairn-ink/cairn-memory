@@ -3,13 +3,13 @@ import { cardLineageRevision } from './content-safety-schema.mjs';
 
 // Deliberately finite: legacy cells and per-base attested-feature families.
 // The integer selects a family, never an installed feature or future revision.
-export const RELATION_LAYOUTS = Object.freeze([18,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,38,48,51,52,53].map(v => v + 100));
+export const RELATION_LAYOUTS = Object.freeze([18,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,38,48,51,52,53].flatMap(v => [v + 100, v + 200]));
 const families = new Set([51, 52, 53]);
 const cells = new Map([[34, 18], [38, 23], [48, 33], [51, 18], [52, 23], [53, 33]]);
 export const SAFETY_SCHEMA_VERSIONS = Object.freeze([...cells.keys()]);
 export function resolveContentLayout(physical) {
-  const relationsRevision = RELATION_LAYOUTS.includes(physical) ? 1 : 0;
-  const inherited = relationsRevision ? physical - 100 : physical;
+  const relationsRevision = RELATION_LAYOUTS.includes(physical) ? (physical >= 200 ? 2 : 1) : 0;
+  const inherited = relationsRevision ? physical - relationsRevision * 100 : physical;
   if (!Number.isSafeInteger(inherited) || inherited < 0 || inherited > 33 && !cells.has(inherited)) fail('unsupported_database');
   const base = cells.get(inherited) ?? inherited;
   return Object.freeze({ physical, base, relationsRevision, suppressionRevision: cells.has(inherited) ? 1 : 0,

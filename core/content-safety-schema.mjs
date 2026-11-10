@@ -1,4 +1,4 @@
-import { relationDDL, validateMemoryRelations } from './memory-relations-schema.mjs';
+import { relationDDL, previousRelationDDL, validateMemoryRelations } from './memory-relations-schema.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { resolveContentLayout } from './content-safety-layout.mjs';
 import { fail } from './validation.mjs';
@@ -196,7 +196,7 @@ function verifyCompleteCardSchema(db,layout,eventTime) {
   for(const [name,row]of expectedSchema(layout.base,eventTime,true,1))wanted.set(name,{name,...row});
   if(layout.relationsRevision){
     wanted.delete('memory_conflicts');wanted.delete('right_memory_conflicts');
-    for(const sql of relationDDL.match(/CREATE (?:TABLE|INDEX|VIEW)[\s\S]*?;|CREATE TRIGGER[\s\S]*?^END;/gm)){
+    for(const sql of (layout.relationsRevision===1?previousRelationDDL:relationDDL).match(/CREATE (?:TABLE|INDEX|VIEW)[\s\S]*?;|CREATE TRIGGER[\s\S]*?^END;/gm)){
       const [,type,name]=sql.match(/^CREATE (TABLE|INDEX|VIEW|TRIGGER) (\w+)/);wanted.set(name,{name,type:type.toLowerCase(),sql});
     }
   }

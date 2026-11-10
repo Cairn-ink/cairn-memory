@@ -1,97 +1,116 @@
-# Memory relations
+# Memory threads
 
-Capture automatically links extracted facts to existing memories in the same
-namespace. Both memories and their evidence remain stored. The graph contains
-only memory-to-memory edges: `supersedes`, `contradicts`, `refines`, and `causes`.
-It has no entity nodes and adds no stored current flag.
+Capture links facts about the same topic within a namespace. Both facts and
+their receipts remain stored. Relations are always enabled; no read-side model
+or opt-in setting is required.
 
-A newer value points to the value it supersedes. Current context reads follow
-that direction to the newest available end and omit superseded values. A
-contradiction keeps both values visible. History reads follow supersession and
-refinement in both directions, up to eight edges, and order the chain by time.
-Related memories use the existing item and token budgets. Reads use indexed
-local SQL and never call a relation model. The compatibility source name
-`relations-one-hop-v1` remains compatible; its existing explicit rationale and
-Card-binding hops stay available, while typed memory edges are delivered directly
-for every read, including when optional sources are narrowed.
+Without a relation model, a conservative lexical rule emits only `same_thread`.
+It checks the subject as well as the topic. This neutral label makes no claim
+about agreement, negation, replacement or causation. Discovery retains the
+lexical/vector union, capped at eight candidates per fact, and admission accepts
+at most five outgoing edges. Uncertain matches are omitted.
 
-## Capture model port
+When the extraction model supplies `relateMemories`, capture makes one relation
+request per batch. The model may label a pair `supersedes`, `contradicts`,
+`refines` or `causes`, or leave it unrelated. A typed decision replaces a neutral
+edge for that pair. An unrelated decision adds no edge. A failed, malformed or
+timed-out request falls back to the neutral rule and never prevents admission.
+Causal captures retain their high-water and receipt provenance but no longer
+invoke the older `reconcile` port or automatically retire Memory rows. Pending
+review transitions already stored by an earlier engine remain resolvable.
+Candidates and model results are untrusted data. Unknown IDs, duplicate decisions,
+invalid labels or confidence values are discarded. Low-confidence supersession
+is omitted. Provider diagnostics contain closed codes, never Memory text.
 
-`relateMemories({system, input, maxOutputTokens, signal})` is an optional method
-on the extraction model. Capture sends one additional relation request per batch:
+## Dates and delivery
+
+Chronology comes from the source message's stored date, falling back to capture
+time. The model cannot override it. Ties use capture order. Currency follows
+dates independently of the direction or type of an edge; a late capture of an
+older message stays earlier. Attaching an older receipt to an exact-content
+fact retains that fact's latest trusted support date.
+
+A default context read that selects any member resolves its connected thread.
+It brings the current member and up to three earlier members, choosing the most
+recent earlier members first. Four members leave room for the present value,
+the preceding change and recent supporting context. All text, dates, labels,
+reasons and sources count against the existing token and response-byte budgets.
+The thread counts as one item for the item budget. The current member is packed
+first under tight budgets. History delivery orders the selected members by date
+and capture order. A thread is never coalesced into a single unlabeled Raw body.
+
+Each delivered member has `metadata.thread`:
 
 ```js
-input: {
-  facts: [{factIndex: 0, content: 'I stopped eating egg pancakes.', eventTime: null}],
-  candidates: [[{id: 'older-memory', revision: 1,
-    content: 'I like egg pancakes.', eventTime: '2026-01-01T00:00:00.000Z'}]]
+{
+  currentMemoryId: 'current-memory', currentRevision: 1,
+  status: 'earlier', eventTime: '2025-01-01T00:00:00.000Z',
+  relation: 'supersedes', direction: 'incoming',
+  reason: 'The preference changed because of the cooking oil.'
 }
-// Result:
-{facts: [{factIndex: 0, eventTime: null, edges: [
-  {candidateId: 'older-memory', relation: 'contradicts', confidence: 0.8}
-]}]}
 ```
 
-A null relation means abstention. Candidate arrays correspond to fact indexes.
-Discovery takes the namespace's lexical top ten and, when a matching vector
-cache and configured embedder are available, vector top ten. Their union is
-capped at eight per fact. Vector requests share the existing embedding budget.
-The relation call shares the existing input/output budgets, shortens candidate
-text when necessary, and reserves time for admission. A failed call emits a
-content-free diagnostic; admission proceeds without its edges.
+The current member has `status: 'current'` and a null relation, direction and
+reason. An earlier member without a direct typed edge to the current member has
+`relation: 'same_thread'`; no transitive typed assertion is invented.
+`metadata.relations` retains bounded direct edge labels, dates and known reasons.
+`get().relations` and legacy recall relation labels remain additive and are absent
+when empty. The compatibility source name `relations-one-hop-v1` remains accepted.
 
-Candidate text and model output are untrusted data. Core drops unknown IDs,
-duplicates, invalid relations, and invalid confidence values. A supersession
-with confidence below 0.6 or an earlier event time becomes a contradiction.
-Each new memory gets at most five outgoing edges. The admission transaction
-rechecks candidate revisions, namespace, and content eligibility, and binds the
-edge to both final revisions and the receipt inserted by that capture.
+Every traversed endpoint passes the canonical content predicate in the authorized
+read transaction. Forgotten, suppressed, excluded, denied or foreign memories
+cannot enter the thread or its labels. Revision changes invalidate incident
+edges. Durable Memory/receipt/Raw suppression removes incident edges in its
+transaction. Forgetting the latest member therefore restores the preceding
+eligible value. Temporary caller denial never edits another caller's graph.
 
-Without the port, a conservative rule can emit only `contradicts`, at confidence
-0.3. It requires a cessation/negation marker in English or Traditional Chinese
-and content-token Jaccard overlap of at least 0.5 with the top lexical candidate.
-Rule decisions retain their receipt and revision bindings so a future authorized
-backfill can re-evaluate them. There is no automatic backfill scheduler.
+The local traversal is bounded by the read deadline and a component ceiling.
+An incomplete traversal does not assert a current member. Empty graphs use the
+existing read path: an edge-presence bit rides an existing epoch statement,
+without a new statement or wire annotation. Standalone facts keep their original
+representation, including after deletion removes a thread's last edge.
 
-## Storage and lifecycle
+## Model port
 
-The additive relation layout family preserves each inherited base and safety
-layout. `memory_relations` stores typed, revision-bound edges, confidence,
-decision source, triggering receipt, event time, and creation time. Endpoint
-foreign keys cascade on deletion. The endpoint indexes support both traversal
-directions. A namespace/revision trigger rejects invalid endpoint bindings.
+```js
+relateMemories({ system, input, maxOutputTokens, signal })
+// input:
+{
+  facts: [{ factIndex: 0, content: 'I stopped eating egg pancakes.',
+    eventTime: '2025-03-01T00:00:00.000Z' }],
+  candidates: [[{ id: 'older-memory', revision: 1,
+    content: 'I like egg pancakes.', eventTime: '2025-01-01T00:00:00.000Z' }]]
+}
+// output:
+{ facts: [{ factIndex: 0, eventTime: null, edges: [
+  { candidateId: 'older-memory', relation: 'supersedes', confidence: 0.9,
+    reason: 'The preference changed because of the cooking oil.' }
+] }] }
+```
 
-`memory_relation_times` stores revision-bound event times even for a fact with
-no edge. This avoids losing a stated date on the first fact in a chain. It is
-memory metadata, not an entity graph. Receipt time and admission time provide
-fallbacks when there is no stated event time.
+The output `eventTime` field remains accepted for port compatibility and is
+ignored. `reason` is optional for existing custom ports and bounded to 600
+characters; the OpenAI adapter requests a string or null. Requests share the
+existing model input/output and embedding budgets and reserve time for admission.
 
-Existing conflict assertions migrate to user-decided contradiction edges;
-`memory_conflicts` becomes a compatibility view. `conflictHints` retains its
-validation, two source labels, atomic failures, and five-assertion incident
-limit. `get().conflicts` keeps its bounded legacy projection. `get().relations`
-legacy recall item `relations`, and context item `metadata.relations` add typed relation labels and dates.
+## Layout and compatibility
 
-Correction, forgetting, a new receipt, and ordinary filing revision changes
-invalidate incident edges atomically. Forgetting a superseder therefore makes
-its predecessor available to current reads again. A capture's own initial
-filing settles that capture's automatic edges on its final revisions inside the
-filing transaction; caller assertions and other captures' edges are invalidated.
-Every endpoint is checked through the existing content safety predicate before
-expansion or labeling. Forgotten, suppressed, excluded, denied, and foreign
-content cannot be reintroduced through an edge.
+The second relation package uses inherited physical layout plus 200 and
+`relationsRevision: 2`. It expands the closed relation set with `same_thread`,
+adds nullable `memory_relations.reason`, and constrains rule decisions to neutral
+edges. The prior four-label package (inherited layout plus 100) upgrades
+transactionally, retaining model/user edges and removing the obsolete rule
+assertions. Its receipt bindings are retained and dates are rederived from those source
+receipts, replacing dates previously supplied by a model.
 
+Legacy conflict rows migrate to user-decided contradiction edges and
+`memory_conflicts` remains a compatibility view. Existing conflict hint limits
+and projections remain supported. Endpoint foreign keys and revision guards
+invalidate edges together with their memories. Existing base, safety and
+attested-feature capabilities are preserved. Previous engines refuse the new
+layout with `unsupported_database` before writing it.
 
-## Backfill hook design
-
-A future authorized writer can expose a two-step internal hook:
-`planRuleRelationBackfill({namespace, afterId, limit})` pages rule decisions and
-captures edge ID, both revisions, receipt ID and original event time. Batches of
-at most five source memories use the same discovery, `relateMemories` port and
-compiler as capture. `applyRuleRelationDecisions({expected, decisions})` must
-compare-and-set only rows still decided by a rule with exactly those endpoint
-and receipt bindings, recheck content eligibility, and advance the namespace
-revision in its transaction. An abstention can remove the rule assertion; an
-accepted decision becomes LLM-decided. Backfill uses the original event time,
-never its execution time. This is a proposed internal protocol, not a shipped
-public API or an automatic scheduler.
+The `index_memory_keyset` name and columns, `openDatabase` entry point, and
+`raw-control-storage` exports are unchanged. No host configuration change is
+required to receive threads. Hosts that enumerate relation labels or render
+context metadata should accept the additive neutral label and thread annotation.

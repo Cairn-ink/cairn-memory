@@ -119,6 +119,9 @@ export async function captureMessages({ model, input, operations, captureQualifi
   // The default Raw capture registration already supplies each message's
   // explicit or receive time; captureRaw and Raw-free captures keep their input.
   let snapshot = episodeRun?.snapshot ?? captureSnapshot(input, captureQualification, captureSourcePolicy);
+  // Legacy receipt layouts omit dates from their admission/hash snapshot. Keep
+  // the validated source clock separately for relation chronology.
+  const relationSourceTimes=new Map(snapshot.messages.map(message=>[message.id,message.occurredAt??null]));
   if (!episodeRun && snapshot.messages.some(message => message.occurredAt !== undefined)) {
     snapshot = runtime.captureSnapshot(ns, snapshot, captureQualification, captureSourcePolicy);
   }
@@ -199,7 +202,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
     // Join only each receipt's own trusted message; session clocks and Raw never enter here.
     for (const item of items) {
       const times = item.receipts.map(receipt =>
-        snapshot.messages.find(message => message.id === receipt.eventId)?.occurredAt ?? null);
+        relationSourceTimes.get(receipt.eventId) ?? null);
       if (times.some(time => time !== null)) item.receiptTimes = times;
     }
     deadline?.check();

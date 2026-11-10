@@ -198,14 +198,14 @@ test('D3 ordinary final admission checks after actual receipt INSERT and rolls b
   } finally { delayed.restore(); }
 });
 
-test('D3 ordered high-water and predecessor retirement roll back after actual in-transaction mutation', async t => {
+test('D3 ordered high-water and relation edges roll back after actual in-transaction mutation', async t => {
   const friday = 'Project Alpha deadline is Friday.';
   const monday = 'Project Alpha deadline is Monday.';
   let judgments = 0;
-  const model = { ...scripted(), reconcile: () => { judgments++; return { transitions: [{
-    replacementIndex: 0, predecessorIndex: 0, evidenceIndices: [0],
-    relation: 'supersedes', valueChange: 'changed', adoption: 'explicit',
-  }] }; } };
+  const model = { ...scripted(), relateMemories: ({input}) => {
+    if(input.candidates.some(rows=>rows.length))judgments++;
+    return {facts:input.facts.map(fact=>({factIndex:fact.factIndex,eventTime:null,edges:input.candidates[fact.factIndex].map(candidate=>({candidateId:candidate.id,relation:'supersedes',confidence:.95}))}))};
+  } };
   const { core, db } = fixture(t, { model, captureDeadlineMs: 600 });
   const causal = sequence => ({ streamId: 'synthetic-stream', sequence });
   const first = ok(await core.capture(input('ordered-first', friday, causal(1))));
@@ -216,10 +216,10 @@ test('D3 ordered high-water and predecessor retirement roll back after actual in
   assert.equal(count(db, 'memory_supersessions'), 0);
   let inside;
   const delayed = delayAfterSql('UPDATE capture_streams SET high_water', 900, connection => {
-    const supersession = connection.prepare(`SELECT previous_memory_id,previous_revision,
-      replacement_memory_id,replacement_revision,receipt_ids FROM memory_supersessions
-      WHERE previous_memory_id=?`).get(prior.id);
-    const receiptIds = supersession ? JSON.parse(supersession.receipt_ids) : [];
+    const supersession = connection.prepare(`SELECT to_memory_id AS previous_memory_id,to_revision AS previous_revision,
+      from_memory_id AS replacement_memory_id,from_revision AS replacement_revision,receipt_id
+      FROM memory_relations WHERE to_memory_id=?`).get(prior.id);
+    const receiptIds = supersession ? [supersession.receipt_id] : [];
     inside = {
       highWater: connection.prepare(`SELECT high_water FROM capture_streams
         WHERE stream_id='synthetic-stream'`).get()?.high_water,
@@ -233,19 +233,20 @@ test('D3 ordered high-water and predecessor retirement roll back after actual in
     assert.equal(delayed.reached(), 1, 'ordered high-water advanced before precommit check');
     assert.equal(judgments, 1);
     assert.equal(inside.highWater, 2, 'new stream progress was visible inside the write transaction');
-    assert.deepEqual(inside.previous, { currentness: 'historical', revision: prior.revision + 1 },
-      'predecessor retirement was visible inside the write transaction');
+    assert.deepEqual(inside.previous, priorBefore,
+      'the predecessor remains retained while its relation is written');
     assert.equal(inside.supersession.previous_memory_id, prior.id);
     assert.equal(inside.supersession.previous_revision, prior.revision);
     assert.notEqual(inside.supersession.replacement_memory_id, prior.id);
     assert.equal(inside.evidenceOwners.length, 1);
     assert.deepEqual(inside.evidenceOwners, [inside.supersession.replacement_memory_id],
-      'the uncommitted successor receipt was bound as supersession evidence');
+      'the uncommitted successor receipt was bound as relation evidence');
     assert.equal(result.error.code, 'model_timeout');
     assert.equal(db.prepare("SELECT high_water FROM capture_streams WHERE stream_id='synthetic-stream'")
       .get().high_water, 1);
     assert.deepEqual({ ...db.prepare('SELECT currentness,revision FROM memories WHERE id=?').get(prior.id) }, priorBefore);
     assert.equal(count(db, 'memory_supersessions'), 0);
+    assert.equal(count(db, 'memory_relations'), 0);
     assert.equal(ok(core.get({ namespace, memoryId: prior.id })).memory.state, 'active');
     assert.equal(count(db, 'memories'), 1);
     assert.equal(count(db, 'receipts'), before);
@@ -430,24 +431,23 @@ test('D2/D3 cumulative extraction plus v1/v2 qualification exhausts one budget b
   }
 });
 
-test('D2/D3 ordered reconciliation expiry preserves predecessor and rejects new admission', async t => {
-  let reconciles = 0;
-  const model = { ...scripted(), reconcile: () => { reconciles++; return new Promise(() => {}); } };
-  const { core, db } = fixture(t, { model, captureDeadlineMs: 1_000 });
-  const causal = sequence => ({ streamId: 'reconcile-stream', sequence });
-  const first = ok(await core.capture(input('reconcile-first',
-    'Project Alpha deadline is Friday.', causal(1))));
-  const prior = first.admission.memories[0];
-  const before = count(db, 'receipts');
-  const result = await core.capture(input('reconcile-second',
-    'Project Alpha deadline is Monday.', causal(2)));
-  assert.equal(result.error.code, 'model_timeout');
-  assert.equal(reconciles, 1);
-  assert.equal(count(db, 'memories'), 1);
-  assert.equal(count(db, 'receipts'), before);
-  assert.equal(ok(core.get({ namespace, memoryId: prior.id })).memory.state, 'active');
-  assert.equal(db.prepare("SELECT high_water FROM capture_streams WHERE stream_id='reconcile-stream'")
-    .get().high_water, 1);
+test('D2/D3 ordered relation expiry retains the predecessor and admits with neutral fallback', async t => {
+  let relates = 0;
+  const model = { ...scripted(), relateMemories: ({input}) => {
+    if(input.candidates.every(rows=>!rows.length))return {facts:[]};
+    relates++;return new Promise(() => {});
+  } };
+  const { core, db } = fixture(t, { model, captureDeadlineMs: 2_000 });
+  const causal = sequence => ({ streamId: 'relation-stream', sequence });
+  const first = ok(await core.capture(input('relation-first','My breakfast is oats.',causal(1))));
+  const prior = first.admission.memories[0],before = count(db, 'receipts');
+  const result = ok(await core.capture(input('relation-second','My breakfast is eggs.',causal(2))));
+  assert.equal(result.admission.memories.length,1);assert.equal(relates,1);
+  assert.equal(count(db,'memories'),2);assert.equal(count(db,'receipts'),before+1);
+  assert.equal(ok(core.get({namespace,memoryId:prior.id})).memory.state,'active');
+  assert.equal(db.prepare("SELECT high_water FROM capture_streams WHERE stream_id='relation-stream'").get().high_water,2);
+  assert.equal(db.prepare('SELECT relation FROM memory_relations').get().relation,'same_thread');
+  assert.equal(count(db,'memory_supersessions'),0);
 });
 
 test('D4 rationale-only expiry is honest; ordinary classifier failure still runs best-effort rationale', () => {

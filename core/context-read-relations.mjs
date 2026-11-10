@@ -1,3 +1,4 @@
+import { memoryRelationsPresent } from './memory-relations-read.mjs';
 import { bindContentSafetyConnection, cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
@@ -259,7 +260,7 @@ function candidateRef(ns, type, id, revision, bodyRevision) {
 // final key. No endpoint join, residual family filter, OFFSET or SQL sort can
 // conceal visits. Outgoing rationales read both families in PK order: filtering
 // relation in SQL would hide skipped index entries from the work ledger.
-export function relationIncidentQuery(seed, family, direction, after, group) {
+export function relationIncidentQuery(seed, family, direction, after, group, relationLayout = false) {
   const id = seed.memoryId ?? seed.cardId;
   let table, index, prefix, values, columns;
   if (family === 'card-memory') {
@@ -283,9 +284,17 @@ export function relationIncidentQuery(seed, family, direction, after, group) {
       columns = ['to_id', 'relation', 'from_receipt', 'to_receipt'];
     } else { index = 'rationale_incoming'; prefix = 'to_id=? AND relation=?'; values = [id, family]; columns = ['rowid']; }
   }
+  if(family==='contradicts'&&relationLayout){
+    table=`(SELECT rowid,from_memory_id AS left_memory_id,from_revision AS left_revision,
+      to_memory_id AS right_memory_id,to_revision AS right_revision,relation,
+      CASE WHEN id LIKE 'inferred-hint:%' THEN 'inferred-hint' ELSE 'explicit-hint' END AS source
+      FROM memory_relations INDEXED BY ${direction==='outgoing'?'memory_relations_from':'memory_relations_to'}
+      WHERE decided_by='user' AND relation='contradicts')`;
+    index=null;
+  }
   const key = columns.map(c => 'e.' + c), continuation = after ? ` AND (${key.join(',')})>(${key.map(() => '?').join(',')})` : '';
   const discoverCard = family === 'card-memory' && seed.type === 'memory' && group === undefined;
-  return { sql: `SELECT e.rowid AS incident_rowid,e.* FROM ${table} e INDEXED BY ${index} WHERE ${prefix}${continuation} ORDER BY ${key.join(',')}${discoverCard ? ',e.rowid' : ''} LIMIT ${discoverCard ? 1 : 128}`,
+  return { sql: `SELECT e.rowid AS incident_rowid,e.* FROM ${table} e${index?' INDEXED BY '+index:''} WHERE ${prefix}${continuation} ORDER BY ${key.join(',')}${discoverCard ? ',e.rowid' : ''} LIMIT ${discoverCard ? 1 : 128}`,
     args: [...values, ...(after ?? [])], key: row => columns.map(c => c === 'rowid' ? row.incident_rowid : row[c]) };
 }
 const storedEdge = row => Object.fromEntries(Object.entries(row).filter(([k]) => k !== 'incident_rowid'));
@@ -310,7 +319,7 @@ export function expandRelations(db, identity, features, input, direct, deadlineA
     // probes. Only equality-prefix predicates reach SQLite; every stepped row
     // is classified and charged. Materialization is one row, with deadline/work
     // checks before EACH step (stricter than the 128-row synchronous batch cap).
-    const plan = relationIncidentQuery(seed, family, direction);
+    const plan = relationIncidentQuery(seed, family, direction,undefined,undefined,Boolean(cachedContentLayout(db)?.relationsRevision));
     const sql = plan.sql.replace(/LIMIT (?:128|1)$/, '');
     budget.ensure(1); budget.charge('lookups');
     const iterator = db.prepare(sql).iterate(...plan.args);
@@ -361,7 +370,7 @@ export function expandRelations(db, identity, features, input, direct, deadlineA
     for (const item of direct) { budget.charge('checks'); seen.add(canonicalKey(item)); }
     for (const candidate of direct.slice(0, SOURCE_LIMITS.seeds)) {
       budget.charge('checks'); const seed = candidate.ref, additions = []; bySeed.set(canonicalKey(seed), additions);
-      const families=cachedContentLayout(db)?.relationsRevision?['supports-decision','challenges-premise','card-memory']:['supports-decision','challenges-premise','contradicts','card-memory'];
+      const families=memoryRelationsPresent(db)?['supports-decision','challenges-premise','card-memory']:['supports-decision','challenges-premise','contradicts','card-memory'];
       for (const family of families) {
         const best = []; let stop;
         try {

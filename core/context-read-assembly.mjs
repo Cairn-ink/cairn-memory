@@ -81,6 +81,7 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
         if (!Object.hasOwn(defaults, key) || JSON.stringify(value) !== JSON.stringify(canonical(defaults[key]))) metadata[key] = value;
       }
       if(item.metadata.relations?.length)metadata.relations=canonical(item.metadata.relations);
+      if(item.metadata.thread)metadata.thread=canonical(item.metadata.thread);
       details.push({ ref: item.ref, metadata: item.metadata, body: { tokens: chosen.tokens }, sources: sourceDetails });
       const ref = { ns: item.ns, type: item.type, id: item.ref.memoryId ?? item.ref.cardId, rev: item.ref.revision,
         ...(item.type === 'card' ? { bodyRev: item.ref.bodyRevision } : {}), f: item.fence.slice(0, 8) };
@@ -114,10 +115,23 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
   let accepted = payload(selected, dateOrder);
   const emptyText = meteredText(accepted.metered), emptyUsed = count(emptyText, true);
   if (emptyUsed > budget.maxTokens || !fitsBytes(accepted, emptyText, emptyUsed, selected)) fail('context_item_too_large');
+  const threaded=prepared.some(item=>item.threadKey);
+  const unitCount=selection=>threaded?new Set([...selection.keys()].map(item=>item.threadKey??item)).size:selection.size;
+  // Currency wins admission to a tight token budget, including history reads.
+  let visits=prepared;
+  if(threaded){
+    const groups=new Map();
+    for(const item of prepared){const key=item.threadKey??item;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(item);}
+    visits=[...groups.values()].sort((a,b)=>(a[0].threadRank??a[0].rank)-(b[0].threadRank??b[0].rank)).flatMap(group=>group[0].threadKey?
+      group.sort((a,b)=>a.metadata.thread.status==='current'?-1:b.metadata.thread.status==='current'?1:
+        (b.metadata.thread.eventTime??'').localeCompare(a.metadata.thread.eventTime??'')||(b.threadOrder??0)-(a.threadOrder??0)):group);
+  }
   function visit(item, source) {
     if (expired()) return;
-    if (!source && selected.size >= budget.maxItems) { stops.items = true; return; }
+    if (!source && unitCount(selected) >= budget.maxItems && ![...selected.keys()].some(other=>item.threadKey&&other.threadKey===item.threadKey)) { stops.items = true; return; }
     if (source && !selected.has(item)) return;
+    if (!source && item.metadata.thread?.status==='earlier' && ![...selected.keys()].some(other=>
+      other.threadKey===item.threadKey&&other.metadata.thread?.status==='current')) return;
     const tokens = count(source ? source.excerpt : item.text);
     if (stops.deadline) return;
     const trial = new Map(selected), current = selected.get(item);
@@ -126,7 +140,7 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
     if (stops.deadline) return;
     if (used <= budget.maxTokens && fitsBytes(value, text, used, trial)) {
       selected.set(item, trial.get(item)); accepted = value;
-      if (selected.size >= budget.maxItems) stops.items = true;
+      if (unitCount(selected) >= budget.maxItems) stops.items = true;
       return;
     }
     stops.budget = true;
@@ -138,13 +152,13 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
     if (minimum !== null && (minimum > budget.maxTokens || !fitsBytes(minimumValue, minimumText, minimum, minimal))) oversized++;
   }
   if (policy.id !== 'coverage-first-v1') {
-    for (const item of prepared) {
+    for (const item of visits) {
       visit(item);
       if (selected.has(item)) for (const source of policy.id === 'rank-first-first-source-v1' ? item.sources.slice(0, 1) : item.sources) visit(item, source);
       if (stops.deadline) break;
     }
   } else {
-    for (const item of prepared) { visit(item); if (stops.deadline) break; }
+    for (const item of visits) { visit(item); if (stops.deadline) break; }
     if (!stops.deadline) for (const item of prepared) if (selected.has(item)) {
       for (const source of item.sources) visit(item, source);
       if (stops.deadline) break;

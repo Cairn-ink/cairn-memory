@@ -3,6 +3,7 @@ import { validateContextProductLayout } from './context-product-schema.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { createCardRawSources } from './card-raw-sources.mjs';
 import { contentSuppressionTargetMatches } from './content-suppression-storage.mjs';
+import { resolveContentLayout } from './content-safety-layout.mjs';
 
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const legacyVersion = row => ['legacy-unresolved-v1', digest(row)];
@@ -80,7 +81,7 @@ function boundedReader(db, limits, check) {
 export function contentSafetyObservations(native, limits, check, installedLayout) {
   const db = boundedReader(native, limits, check);
   const physical = db.prepare('PRAGMA user_version').get().user_version;
-  const schemaBase = installedLayout?.base ?? physical;
+  const schemaBase = installedLayout?.base ?? resolveContentLayout(physical).base;
   if (![18, 23, 33].includes(schemaBase) || db.prepare('PRAGMA application_id').get().application_id !== 0x43414952) throw Error();
   const objects = db.prepare('SELECT name,tbl_name FROM sqlite_schema').all();
   const safety = /^(?:content_safety_|content_identity_|content_suppression|owner_suppression_|card_body_|safety_|card_operations_owner_action$)/i;

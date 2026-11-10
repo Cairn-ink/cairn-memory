@@ -84,9 +84,9 @@ export async function upgradeLayoutBase(input) {
         if (source.dev !== current.dev || source.ino !== current.ino) fail('unsupported_database');
         if (db.prepare('PRAGMA journal_mode').get().journal_mode !== 'delete') fail('unsafe_database_file');
         if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID ||
-            ![18,118].includes(db.prepare('PRAGMA user_version').get().user_version)) fail('unsupported_database');
+            ![18,118,218].includes(db.prepare('PRAGMA user_version').get().user_version)) fail('unsupported_database');
         const layout = attestContentSafety(db);
-        const relationOffset=layout.relationsRevision?100:0;
+        const relationOffset=layout.relationsRevision*100;
         if (layout.suppressionRevision || layout.attestedFeatures ||
             db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id !== storeId) fail('unsupported_database');
         validateContextProductLayout(db, layout); verifyIntegrity(db);

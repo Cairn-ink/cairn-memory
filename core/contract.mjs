@@ -1110,7 +1110,9 @@ export function createMemoryCore(input, internal) {
                 const items = admissionItems(extracted.map(({ sourceIndices, receiptTimes, ...item }) =>
                   receiptTimes ? { ...item, receipts: item.receipts.map((receipt, index) =>
                     ({ ...receipt, occurredAt: receiptTimes[index] })) } : item));
-                return { items, discovery: runtime.discoverOrdered(ns, snapshot, order, items) };
+                // Relations carry their own revision checks. The causal stream still
+                // fences its event/high-water and lease inside final admission.
+                return { items, discovery: {candidates:[],reason:null} };
               });
             },
             assertPrepared(snapshot, order, prepared) {

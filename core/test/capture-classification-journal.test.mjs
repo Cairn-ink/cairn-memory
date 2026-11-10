@@ -257,7 +257,7 @@ test('CJ1/CJ3 journal faults rollback admission and changed placement, preservin
   assert.equal(inspect(noOp, 'no-op-fault').members[0].filing.status, 'unfiled');
 });
 
-test('CJ1 journal insert fault rolls back staged admission and ordered retirement/high-water in shared transaction', async (t) => {
+test('CJ1 journal insert fault rolls back staged admission and ordered relations/high-water in shared transaction', async (t) => {
   const stagedDir = mkdtempSync(join(tmpdir(), 'cairn-journal-staged-fault-'));
   const stagedPath = join(stagedDir, 'memory.sqlite');
   const staged = openMemoryCore({ path: stagedPath, model: rationaleModel(),
@@ -280,10 +280,10 @@ test('CJ1 journal insert fault rolls back staged admission and ordered retiremen
     'pending');
 
   let judgments = 0;
-  const model = { ...scripted(['empty']), reconcile: () => { judgments++; return { transitions: [{
-    replacementIndex: 0, predecessorIndex: 0, evidenceIndices: [0],
-    relation: 'supersedes', valueChange: 'changed', adoption: 'explicit',
-  }] }; } };
+  const model = { ...scripted(['empty']), relateMemories: ({input}) => {
+    if(input.candidates.some(rows=>rows.length))judgments++;
+    return {facts:input.facts.map(fact=>({factIndex:fact.factIndex,eventTime:null,edges:input.candidates[fact.factIndex].map(candidate=>({candidateId:candidate.id,relation:'supersedes',confidence:.95}))}))};
+  } };
   const { core, db } = fixture(t, model);
   const first = ok(await core.capture({ ...batch('ordered-first', 'Project Alpha deadline is Friday.'),
     causal: { streamId: 'synthetic-stream', sequence: 1 } }));
@@ -292,7 +292,7 @@ test('CJ1 journal insert fault rolls back staged admission and ordered retiremen
   const beforeCount = db.prepare('SELECT count(*) AS n FROM memories').get().n;
   db.exec(`CREATE TRIGGER synthetic_ordered_journal_fault BEFORE INSERT ON capture_initial_classification
     WHEN NEW.event_id='ordered-second'
-      AND EXISTS (SELECT 1 FROM memories WHERE id='${original.id}' AND currentness='historical')
+      AND EXISTS (SELECT 1 FROM memory_relations WHERE to_memory_id='${original.id}' AND relation='supersedes')
       AND EXISTS (SELECT 1 FROM capture_streams
         WHERE stream_id='synthetic-stream' AND high_water=2)
     BEGIN SELECT RAISE(ABORT,'synthetic_ordered_journal_fault'); END;`);
@@ -302,6 +302,7 @@ test('CJ1 journal insert fault rolls back staged admission and ordered retiremen
   assert.equal(ordered.error.code, 'storage_error');
   assert.equal(judgments, 1);
   assert.equal(db.prepare('SELECT count(*) AS n FROM memories').get().n, beforeCount);
+  assert.equal(db.prepare('SELECT count(*) AS n FROM memory_relations').get().n,0);
   assert.deepEqual(receipts(db, original.id), beforeReceipts);
   assert.equal(ok(core.get({ namespace, memoryId: original.id })).memory.state, 'active');
   assert.equal(db.prepare("SELECT high_water FROM capture_streams WHERE stream_id='synthetic-stream'")

@@ -1,4 +1,3 @@
-import { memoryRelationCurrent } from './memory-relations-read.mjs';
 import { contentSuppressionReasonInside, registerContentSuppressionReadMemoInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { bindContentSafetyConnection, cachedContentLayout, contentSafetyConnection } from './content-safety-schema.mjs';
 import { createHash, createHmac } from 'node:crypto';
@@ -280,8 +279,6 @@ function canonicalContentReadSafety(db, { identity, namespace: ns, ref, method =
   }
   const policy = policies[contentReadPurpose(method, row)];
   if (!policy.admits(row, type, intent, method)) return denied('ineligible');
-  if(type==='memory'&&intent==='current'&&method==='retrieval'&&!memoryRelationCurrent(db,ns,row.id,other=>
-    contentReadSafety(db,{namespace:ns,ref:other,intent:'history',memo}).allowed))return denied('ineligible');
   if (type === 'card') {
     if (hasCardLineage(db)) {
       try {

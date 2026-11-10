@@ -125,6 +125,7 @@ function memoryWire(item, representation, body = item.text) {
     if (!Object.hasOwn(defaults, key) || !same(value, canonical(defaults[key]))) metadata[key] = value;
   }
   if(item.metadata.relations?.length)metadata.relations=canonical(item.metadata.relations);
+  if(item.metadata.thread)metadata.thread=canonical(item.metadata.thread);
   return { ref: { ns: item.ns, type: item.type, id: item.ref.memoryId ?? item.ref.cardId, rev: item.ref.revision,
     ...(item.type === 'card' ? { bodyRev: item.ref.bodyRevision } : {}), f: item.fence.slice(0, 8) }, rank: item.rank,
     ...(representation === 'representation-v2-dated' && item.date ? { date: item.date } : {}), body,
@@ -186,8 +187,9 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
     const units = [];
     for (const memory of [...args.prepared].sort((a, b) => a.rank - b.rank)) {
       check(); const turns = memory.turnIds ?? [];
-      const linked = units.filter(unit => !memory.metadata.relations?.length && unit.memories.every(item=>!item.metadata.relations?.length) && turns.some(turn => unit.turns.includes(turn)));
-      const unit = linked[0] ?? { id: JSON.stringify(memory.ref), rank: memory.rank, memories: [], turns: [], evidence: [] };
+      const linked = units.filter(unit => memory.threadKey?unit.threadKey===memory.threadKey:
+        !unit.threadKey && !memory.metadata.relations?.length && unit.memories.every(item=>!item.metadata.relations?.length) && turns.some(turn => unit.turns.includes(turn)));
+      const unit = linked[0] ?? { id: memory.threadKey??JSON.stringify(memory.ref), threadKey:memory.threadKey, rank: memory.threadRank??memory.rank, memories: [], turns: [], evidence: [] };
       if (!linked.length) units.push(unit);
       unit.memories.push(memory);
       for (const other of linked.slice(1)) { unit.memories.push(...other.memories); units.splice(units.indexOf(other), 1); }
@@ -207,7 +209,8 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
       const bodies = [];
       for (const memory of unit.memories) if (!bodies.some(body => body === memory.text ||
         overlap(new Set(tokenizeT1(body)), new Set(tokenizeT1(memory.text))) >= .6)) bodies.push(memory.text);
-      unit.wire = unit.memories.length ? memoryWire(unit.memories[0], args.representation, bodies.join('\n'))
+      const primary=unit.memories.find(item=>item.metadata.thread?.status==='current')??unit.memories[0];
+      unit.wire = unit.memories.length ? memoryWire(primary, args.representation, unit.threadKey?primary.text:bodies.join('\n'))
         : { layer: 'Raw', ...unit.evidence[0].wire };
       unit.evidence.sort((a, b) => datedOrder({ date: a.date, rank: a.rank }, { date: b.date, rank: b.rank }));
       if (unit.memories.length && unit.evidence.length) unit.wire.evidence = unit.evidence.map(item => {
@@ -215,10 +218,11 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
         const { body, ...ref } = item.wire; return { ...ref, sameAsBody: true };
       });
       unit.date = [...unit.memories.map(item => item.date), ...unit.evidence.map(item => item.date)].filter(Boolean).sort(binary)[0];
-      if (args.representation === 'representation-v2-dated' && unit.date) unit.wire.date = unit.date.slice(0, 16) + 'Z';
+      if (!unit.threadKey && args.representation === 'representation-v2-dated' && unit.date) unit.wire.date = unit.date.slice(0, 16) + 'Z';
       unit.lexicalText = [...bodies, ...unit.evidence.map(item => item.wire.body)].join(' ');
       unit.terms = new Set(tokenizeT1(unit.lexicalText));
-      unit.cost = countTokens(counter, JSON.stringify(unit.wire));
+      if(unit.threadKey)unit.wires=unit.memories.map(item=>item===primary?unit.wire:memoryWire(item,args.representation));
+      unit.cost = countTokens(counter, JSON.stringify(unit.wires??unit.wire));
       unit.sessions = [...new Set([...unit.evidence.map(item => item.session), ...unit.memories.flatMap(item =>
         item.turnIds?.length ? item.turnIds.map(turn => { const [namespace, conversation] = JSON.parse(turn); return JSON.stringify([namespace, conversation]); })
           : item.sessionIds ?? [])])];
@@ -229,7 +233,7 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
     const selected = [], remaining = [...units], sessions = new Set(), turns = new Set();
     const stops = { budget: false, items: false, deadline: false }, breadth = countListQuestion(args.query);
     const payload = proposed => ({ framing: ASSEMBLY_FRAMING, items: [...proposed]
-      .sort(args.representation === 'representation-v2-dated' ? datedOrder : (a, b) => a.rank - b.rank).map(unit => unit.wire) });
+      .sort(args.representation === 'representation-v2-dated' ? datedOrder : (a, b) => a.rank - b.rank).flatMap(unit => unit.wires??[unit.wire]) });
     const memories = proposed => proposed.flatMap(unit => unit.memories);
     const diagnostics = (proposed, used) => ({ version: CONTEXT_VERSION, policy: { id: args.policy.id }, representation: args.representation,
       counter: { id: counter.id }, items: memories(proposed).map(item => ({ ref: item.ref, metadata: item.metadata })),
@@ -258,7 +262,15 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
         return score(b) - score(a) || a.rank - b.rank || binary(a.id, b.id);
       });
       const unit = remaining.shift();
-      if (!fits([...selected, unit]).fits) { stops.budget = true; continue; }
+      let trial=fits([...selected,unit]);
+      while(!trial.fits&&unit.threadKey&&unit.memories.length>1){
+        const oldest=unit.memories.filter(item=>item.metadata.thread.status!=='current').sort((a,b)=>
+          (a.metadata.thread.eventTime??'').localeCompare(b.metadata.thread.eventTime??'')||(a.threadOrder??0)-(b.threadOrder??0))[0];
+        unit.memories=unit.memories.filter(item=>item!==oldest);
+        unit.wires=unit.wires.filter(wire=>wire.ref.id!==(oldest.ref.memoryId??oldest.ref.cardId));
+        stops.budget=true;trial=fits([...selected,unit]);
+      }
+      if (!trial.fits) { stops.budget = true; continue; }
       selected.push(unit); unit.sessions.forEach(session => sessions.add(session)); unit.turns.forEach(turn => turns.add(turn));
     }
     stops.items = remaining.length > 0;

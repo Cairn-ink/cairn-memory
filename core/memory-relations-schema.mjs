@@ -8,12 +8,14 @@ export const relationDDL = `CREATE TABLE memory_relations (
  from_revision INTEGER NOT NULL CHECK(from_revision>0),
  to_memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
  to_revision INTEGER NOT NULL CHECK(to_revision>0),
- relation TEXT NOT NULL CHECK(relation IN ('supersedes','contradicts','refines','causes')),
+ relation TEXT NOT NULL CHECK(relation IN ('supersedes','contradicts','refines','causes','same_thread')),
  confidence REAL NOT NULL CHECK(confidence BETWEEN 0 AND 1),
  decided_by TEXT NOT NULL CHECK(decided_by IN ('llm','rule','user')),
  receipt_id TEXT REFERENCES receipts(id) ON DELETE CASCADE,
  event_time TEXT,
+ reason TEXT CHECK(reason IS NULL OR length(reason)<=600),
  created_at TEXT NOT NULL,
+ CHECK(decided_by!='rule' OR relation='same_thread'),
  CHECK(from_memory_id!=to_memory_id)
 ) STRICT;
 CREATE INDEX memory_relations_to ON memory_relations(to_memory_id,relation);
@@ -46,22 +48,40 @@ CREATE VIEW memory_conflicts AS SELECT from_memory_id AS left_memory_id,
 
 export function installMemoryRelations(db) {
  const physical=db.prepare('PRAGMA user_version').get().user_version;
- if(RELATION_LAYOUTS.includes(physical))return;
- if(!RELATION_LAYOUTS.includes(physical+100))fail('unsupported_database');
- // Migration and both endpoints remain in the opener's admission transaction.
- db.exec('ALTER TABLE memory_conflicts RENAME TO legacy_memory_conflicts');
- db.exec(relationDDL);
- db.exec(`INSERT INTO memory_relations SELECT source||':'||lower(hex(randomblob(16))),
- left_memory_id,left_revision,right_memory_id,right_revision,'contradicts',1,'user',NULL,NULL,
- (SELECT max(updated_at) FROM memories WHERE id IN(left_memory_id,right_memory_id))
- FROM legacy_memory_conflicts;
- DROP TABLE legacy_memory_conflicts;
- PRAGMA user_version=${physical+100};`);
+ if(RELATION_LAYOUTS.includes(physical)&&physical>=200)return;
+ const inherited=RELATION_LAYOUTS.includes(physical)?physical-100:physical;
+ if(!RELATION_LAYOUTS.includes(inherited+200))fail('unsupported_database');
+ if(RELATION_LAYOUTS.includes(physical)){
+  // The first relation package had four labels and no reason field.
+  db.exec(`DROP VIEW memory_conflicts;
+   DROP TRIGGER memory_relations_boundary; DROP TRIGGER memory_relations_revision;
+   DROP INDEX memory_relations_to; DROP INDEX memory_relations_from; DROP INDEX memory_relations_to_date;
+   ALTER TABLE memory_relations RENAME TO previous_memory_relations;
+   ALTER TABLE memory_relation_times RENAME TO previous_memory_relation_times;`);
+  db.exec(relationDDL);
+  const sourceDate=db.prepare("SELECT 1 FROM pragma_table_info('receipts') WHERE name='occurred_at'").get()?'coalesce(p.occurred_at,p.created_at)':'p.created_at';
+  db.exec(`INSERT INTO memory_relations(id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,receipt_id,event_time,created_at)
+   SELECT r.id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,receipt_id,
+    (SELECT ${sourceDate} FROM receipts p WHERE p.id=r.receipt_id),created_at FROM previous_memory_relations r WHERE decided_by!='rule';
+   INSERT INTO memory_relation_times SELECT t.memory_id,t.revision,${sourceDate},t.receipt_id
+    FROM previous_memory_relation_times t JOIN receipts p ON p.id=t.receipt_id;
+   DROP TABLE previous_memory_relations; DROP TABLE previous_memory_relation_times;`);
+ }else{
+  db.exec('ALTER TABLE memory_conflicts RENAME TO legacy_memory_conflicts');
+  db.exec(relationDDL);
+  db.exec(`INSERT INTO memory_relations(id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,receipt_id,event_time,created_at)
+   SELECT source||':'||lower(hex(randomblob(16))),left_memory_id,left_revision,right_memory_id,right_revision,
+   'contradicts',1,'user',NULL,NULL,(SELECT max(updated_at) FROM memories WHERE id IN(left_memory_id,right_memory_id))
+   FROM legacy_memory_conflicts; DROP TABLE legacy_memory_conflicts;`);
+ }
+ db.exec(`PRAGMA user_version=${inherited+200}`);
 }
+
+export const previousRelationDDL=relationDDL.replace(",'same_thread'",'').replace(' reason TEXT CHECK(reason IS NULL OR length(reason)<=600),\n','').replace(" CHECK(decided_by!='rule' OR relation='same_thread'),\n",'');
 
 export function validateMemoryRelations(db) {
  const expected=new Map();
- for(const sql of relationDDL.match(/CREATE (?:TABLE|INDEX|VIEW)[\s\S]*?;|CREATE TRIGGER[\s\S]*?^END;/gm)) {
+ for(const sql of (db.prepare('PRAGMA user_version').get().user_version<200?previousRelationDDL:relationDDL).match(/CREATE (?:TABLE|INDEX|VIEW)[\s\S]*?;|CREATE TRIGGER[\s\S]*?^END;/gm)) {
   const [,type,name]=sql.match(/^CREATE (TABLE|INDEX|VIEW|TRIGGER) (\w+)/);
   expected.set(name,{type:type.toLowerCase(),sql});
  }

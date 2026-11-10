@@ -41,7 +41,9 @@ test('additive migration retains both caller sources; previous engine refuses wi
  assert.deepEqual(result.value.conflicts.map(row=>row.source),['explicit-hint','inferred-hint']);
  await core.close();
  const db=new DatabaseSync(f.path);
- assert.equal(db.prepare('PRAGMA user_version').get().user_version,118);
+ assert.equal(db.prepare('PRAGMA user_version').get().user_version,218);
+ assert.ok(db.prepare("SELECT name FROM pragma_index_list('memories') WHERE name='index_memory_keyset'").get());
+ assert.deepEqual(db.prepare("SELECT name FROM pragma_index_info('index_memory_keyset') ORDER BY seqno").all().map(row=>row.name),['owner_id','scope','project_id','id']);
  assert.equal(db.prepare('SELECT count(*) n FROM memory_relations').get().n,2);
  assert.ok(db.prepare('SELECT decided_by FROM memory_relations').all().every(row=>row.decided_by==='user'));
  assert.equal(db.prepare("SELECT type FROM sqlite_schema WHERE name='memory_conflicts'").get().type,'view');db.close();
@@ -62,4 +64,32 @@ test('migration collision rolls back the rename, legacy rows, layout and all new
  assert.equal(db.prepare('SELECT count(*) n FROM memory_conflicts').get().n,2);
  db.exec('DROP TABLE memory_relations');db.close();
  const core=openMemoryCore({path:f.path});assert.equal(core.get({namespace:ns,memoryId:f.a.id}).value.conflicts.length,2);await core.close();
+});
+
+test('the earlier four-label package upgrades, retaining typed edges and discarding obsolete rule assertions',async t=>{
+ const workspace=createTestWorkspace(t,{prefix:'relation-package-upgrade-'}),baseline=join(workspace.path,'previous');mkdirSync(baseline);
+ const archive=spawnSync('git',['archive','02e2f9b2','--','core','plugins/cairn-memory/lib'],{cwd:root,maxBuffer:64*1024*1024,timeout:30000});
+ if(archive.status!==0){t.skip('Previous relation package archive unavailable');return;}
+ assert.equal(spawnSync('tar',['-xC',baseline],{input:archive.stdout}).status,0);
+ const path=join(workspace.path,'store.sqlite');
+ const child=spawnSync(process.execPath,['--input-type=module','-e',`
+  import {openMemoryCore} from ${JSON.stringify(join(baseline,'core/index.mjs'))};
+  import {DatabaseSync} from 'node:sqlite';
+  const ns=${JSON.stringify(ns)},core=openMemoryCore({path:process.argv[1]});
+  const admit=(content,eventId)=>core.admit({namespace:ns,memory:{content,kind:'fact'},receipts:[{client:'synthetic',sessionId:'session',eventId,role:'user',excerpt:content}]}).value.memory;
+  const a=admit('Earlier breakfast','a'),b=admit('Later breakfast','b');await core.close();
+  const db=new DatabaseSync(process.argv[1]);
+  const insert=db.prepare("INSERT INTO memory_relations(id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,created_at) VALUES(?,?,?,?,?,'contradicts',1,?,'now')");
+  insert.run('typed',b.id,b.revision,a.id,a.revision,'llm');insert.run('obsolete-rule',a.id,a.revision,b.id,b.revision,'rule');db.close();
+ `,path],{encoding:'utf8',timeout:30000});assert.equal(child.status,0,child.stderr);
+ const core=openMemoryCore({path});await core.close();
+ const db=new DatabaseSync(path);assert.equal(db.prepare('PRAGMA user_version').get().user_version,218);
+ assert.deepEqual(db.prepare('SELECT id,relation,decided_by FROM memory_relations').all().map(row=>({...row})),[{id:'typed',relation:'contradicts',decided_by:'llm'}]);
+ assert.ok(db.prepare("SELECT name FROM pragma_table_info('memory_relations')").all().some(row=>row.name==='reason'));db.close();
+ const before=hash(path);
+ const refused=spawnSync(process.execPath,['--input-type=module','-e',`
+  import {openMemoryCore} from ${JSON.stringify(join(baseline,'core/index.mjs'))};
+  try{openMemoryCore({path:process.argv[1]});process.exitCode=1;}catch(error){console.log(error.code);if(error.code!=='unsupported_database')process.exitCode=1;}
+ `,path],{encoding:'utf8',timeout:30000});
+ assert.equal(refused.status,0,refused.stderr);assert.equal(refused.stdout.trim(),'unsupported_database');assert.equal(hash(path),before);
 });

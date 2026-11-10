@@ -1,4 +1,4 @@
-import { deliverMemoryRelations, memoryRelationLabels } from './memory-relations-read.mjs';
+import { deliverMemoryRelations, memoryRelationLabels, relationEpochColumn, observeRelationPresence } from './memory-relations-read.mjs';
 import { captureSnapshot } from './capture-input.mjs';
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
 import { registerContentWriteBoundary } from './content-write-context.mjs';
@@ -120,14 +120,16 @@ export function createMemoryRuntime(input, internal) {
       // Fold the fresh denial fence into this existing canonical read. In
       // particular, caller-queued microtasks must be observed before a model
       // invocation resumes; this adds no statement or E1 allowance.
-      const row=db.prepare(`SELECT n.epoch,coalesce(f.epoch_hi,0) epoch_hi,coalesce(f.epoch_lo,0) epoch_lo
+      const row=db.prepare(`SELECT n.epoch${relationEpochColumn(db)},coalesce(f.epoch_hi,0) epoch_hi,coalesce(f.epoch_lo,0) epoch_lo
         FROM (SELECT 1) anchor LEFT JOIN namespace_epochs n ON n.owner_id=? AND n.scope=? AND n.project_id=?
         LEFT JOIN owner_suppression_epochs f ON f.owner_id=?`).get(...boundary(ns),ns.ownerId);
+      observeRelationPresence(db,row);
       if(`${row.epoch_hi}:${row.epoch_lo}`!==proof.epoch)fail('evidence_unavailable');
       return row.epoch??1;
     }
-    return db.prepare(`SELECT epoch FROM namespace_epochs WHERE
-      owner_id = ? AND scope = ? AND project_id = ?`).get(...boundary(ns))?.epoch ?? 1;
+    const row=db.prepare(`SELECT epoch${relationEpochColumn(db)} FROM namespace_epochs WHERE
+      owner_id = ? AND scope = ? AND project_id = ?`).get(...boundary(ns));
+    observeRelationPresence(db,row);return row?.epoch??1;
   }
 
   function advanceEpoch(ns) {
@@ -558,12 +560,13 @@ export function createMemoryRuntime(input, internal) {
       sql += " ORDER BY created_at ASC, id ASC LIMIT ?";
       params.push(count + 1);
       const original = db.prepare(sql).all(...params), scanned = original.slice(0, count), procedural = safeProcedural(ns, id);
+      const relations=memoryRelationLabels(db,{type:'memory',namespace:ns,memoryId:id,revision:memory.revision});
       return { receiptComplete: original.length <= count, receiptScan: scanned.at(-1)?.cursor_row, memory: { ...metadataDto(memory), content: memory.content },
         receipts: safeReceipts(ns, scanned).map(receipt => ({ id: receipt.id, client: receipt.client,
           sessionId: receipt.session_id, eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt, createdAt: receipt.created_at })),
         ...(procedural ? { procedural } : {}),
         placements: mocStorage.placementRefs(ns, id),
-        conflicts: conflictStorage.inspect(ns, id), relations: memoryRelationLabels(db,{type:'memory',namespace:ns,memoryId:id,revision:memory.revision}),
+        conflicts: conflictStorage.inspect(ns, id), ...(relations.length?{relations}:{}),
         ...(includeQualification ? { qualification: safeQualification(ns, memory) } : {}),
         ...(memory.currentness === 'historical'
           ? { supersession: supersessionStorage.inspect(ns, id) } : {}), epoch: currentEpoch };
@@ -791,7 +794,7 @@ export function createMemoryRuntime(input, internal) {
   stagedEvidence.setEpisodes(episodes);
   deletion = createRawDeletionStorage({ db, roots: sourceRoots, episodes, forgetMutation, removeReceipts, advanceEpoch });
   const admissionStorage = createAdmissionStorage({
-    db, admitMutation, validateReceiptTimes, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
+    db, admitMutation, validateReceiptTimes, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence, memoryRelationStorage,
     classificationJournal, episodes, proceduralStorage, assertSources: rawLineage.assertReceipts, sourceRoots, memoryAncestry, privacyMemoryDenied,
   });
   const orderedStorage = createOrderedCaptureStorage({ db, memoryRelationStorage, admissionStorage, epoch, activeRow,

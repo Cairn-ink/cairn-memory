@@ -12,6 +12,12 @@ export function createMemoryRelationStorage({ db, advanceEpoch }) {
     .get(...boundary(ns),id);
   const safe = (ns,memory,memo) => memory && contentReadSafety(db,{namespace:ns,intent:'history',memo,
     ref:{type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision}}).allowed;
+  function rememberedTime(ns,fingerprint) {
+    if(!cachedContentLayout(db)?.relationsRevision)return undefined;
+    return db.prepare(`SELECT t.* FROM memory_relation_times t JOIN memories m
+      ON m.id=t.memory_id AND m.revision=t.revision WHERE m.owner_id=? AND m.scope=? AND m.project_id=?
+      AND m.fingerprint=? AND m.deleted=0`).get(...boundary(ns),fingerprint);
+  }
   function candidates(ns,facts) {
     return readTransaction(db,()=>{
       const memo=createContentReadMemo(db);
@@ -41,30 +47,41 @@ export function createMemoryRelationStorage({ db, advanceEpoch }) {
       if(!safe(ns,from,memo))continue;
       const timing=proposals.find(p=>p.factIndex===entry.factIndex&&p.timingOnly);
       if(timing&&entry.insertedReceiptIds[0]){
+        // Exact-content receipt attachment changes the revision. Retain the
+        // latest trusted support date before that mutation's revision trigger
+        // removes the old row; a late older receipt must not rewind the fact.
+        const currentTime=db.prepare('SELECT * FROM memory_relation_times WHERE memory_id=? AND revision=?').get(from.id,from.revision);
+        const previous=[entry.previousRelationTime,currentTime].filter(time=>time?.memory_id===from.id)
+          .sort((a,b)=>b.event_time.localeCompare(a.event_time))[0];
+        const retain=previous&&previous.event_time>timing.eventTime&&db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(previous.receipt_id,from.id);
         db.prepare(`INSERT INTO memory_relation_times VALUES(?,?,?,?) ON CONFLICT(memory_id)
           DO UPDATE SET revision=excluded.revision,event_time=excluded.event_time,receipt_id=excluded.receipt_id`)
-          .run(from.id,from.revision,timing.eventTime,entry.insertedReceiptIds[0]);
+          .run(from.id,from.revision,retain?previous.event_time:timing.eventTime,retain?previous.receipt_id:entry.insertedReceiptIds[0]);
         snapshot.times.push(from.id);
       }
       let count=db.prepare('SELECT count(*) n FROM memory_relations WHERE from_memory_id=? AND from_revision=?').get(from.id,from.revision).n;
       const seen=new Set();
       for(const proposal of proposals.filter(p=>p.factIndex===entry.factIndex)){
         if(proposal.timingOnly)continue;
-        if(count>=5)break;
         if(seen.has(proposal.candidateId)||proposal.candidateId===from.id)continue;
         seen.add(proposal.candidateId);
         const to=row(ns,proposal.candidateId);
         if(!safe(ns,to,memo)||to.revision!==proposal.candidateRevision)continue;
-        // Recheck the ordering against the final transaction snapshot.
-        let relation=proposal.relation;
-        if(relation==='supersedes'&&(proposal.confidence<0.6||proposal.eventTime<memoryRelationTime(db,to)))relation='contradicts';
         const receiptId=entry.insertedReceiptIds[0];
         if(!receiptId)continue;
+        const relation=proposal.relation;
+        if(relation!=='same_thread'){
+          const removed=db.prepare(`DELETE FROM memory_relations WHERE relation='same_thread' AND
+            ((from_memory_id=? AND to_memory_id=?) OR (from_memory_id=? AND to_memory_id=?))`)
+            .run(from.id,to.id,to.id,from.id).changes;
+          if(removed)count=db.prepare('SELECT count(*) n FROM memory_relations WHERE from_memory_id=? AND from_revision=?').get(from.id,from.revision).n;
+        }
+        if(count>=5)continue;
         const id=randomUUID();
         db.prepare(`INSERT INTO memory_relations
-          (id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,receipt_id,event_time,created_at)
-          VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(id,from.id,from.revision,to.id,to.revision,relation,
-          proposal.confidence,proposal.decidedBy,receiptId,proposal.eventTime,new Date().toISOString());
+          (id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,receipt_id,event_time,created_at,reason)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`).run(id,from.id,from.revision,to.id,to.revision,relation,
+          proposal.confidence,proposal.decidedBy,receiptId,proposal.eventTime,new Date().toISOString(),proposal.reason??null);
         snapshot.edges.push(id);
         count++;changed=true;
       }
@@ -74,7 +91,7 @@ export function createMemoryRelationStorage({ db, advanceEpoch }) {
   }
   // Backfill can reuse candidates + insert in an authorized writer transaction;
   // replacing rule rows must bind the same revisions and retain their receipt.
-  return { candidates, resolve, insert };
+  return { candidates, resolve, insert, rememberedTime };
 }
 
 // An automatic capture's own initial filing settles its final revision. This
@@ -98,8 +115,8 @@ export function restoreInitialRelations(db,ns,snapshot){
   const from=get.get(...boundary(ns),edge.from_memory_id),to=get.get(...boundary(ns),edge.to_memory_id);
   if(!from||!to)continue;
   db.prepare(`INSERT OR IGNORE INTO memory_relations
-   (id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,receipt_id,event_time,created_at)
-   VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(edge.id,from.id,from.revision,to.id,to.revision,edge.relation,
-    edge.confidence,edge.decided_by,edge.receipt_id,edge.event_time,edge.created_at);
+   (id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,receipt_id,event_time,created_at,reason)
+   VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`).run(edge.id,from.id,from.revision,to.id,to.revision,edge.relation,
+    edge.confidence,edge.decided_by,edge.receipt_id,edge.event_time,edge.created_at,edge.reason??null);
  }
 }
