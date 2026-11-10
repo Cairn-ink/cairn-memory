@@ -96,13 +96,12 @@ pre-dispatch observations. Paused, unavailable, unenforced or regressing
 observations block that operation. The foreground Stop/PreCompact launcher makes
 no hosted request; its detached worker performs the observations.
 
-On Linux and macOS, intent publication shares a gate with final authorization
-and the synchronous request/output start, ordered before the local control lock.
-A durable intent committed under that gate prevents later authorizations using
-an older generation. If gate acquisition fails or times out after 250 ms, the
-observation is still journaled, but an older dispatcher already inside its
-250 ms admission window can still start. Scheduling suspension after its last
-check can extend that wall-clock interval. Future checks reject the intent;
+On Linux and macOS, pause publication and final request/output admission share
+one filesystem gate, acquired before the local control lock. Pause authority is
+committed only under that gate. Once a pause is recorded on this machine, no
+request starts after that; work already admitted in another process may complete.
+A content-free pending marker keeps new admissions closed while pause publication
+waits, including after a process restart. A suspended holder can delay publication;
 resume permits work only after local publication. A high-water checkpoint and
 crash-safe pruning bound completed journal history without warm-path fsyncs.
 Shared observations apply across paired clients; the local daily cap remains

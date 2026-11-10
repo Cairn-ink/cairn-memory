@@ -681,27 +681,25 @@ and Codex retain their initial and pre-dispatch observations.
 Unavailable state blocks both operations. The foreground capture launcher does
 not fetch hosted state; its detached worker performs the observations.
 
-On Linux and macOS, a changed observation durably records a content-free root
-revocation token before its target's `generation`/`paused` intent. Publication
-normally shares a gate with final authorization, acquired before the local
-control lock. If gate acquisition fails or times out, revocation is still
-published; the publisher's wait age says nothing about the current holder.
+On Linux and macOS, pause publication and final request or context-write
+admission share one filesystem gate, acquired before the local control lock.
+Pause authority is committed only under that gate. Once a pause is recorded on
+this machine, no request starts after that; work already admitted in another
+process may complete. Context not yet admitted is suppressed. A content-free
+pending marker keeps new admissions closed while pause publication waits,
+including after a process restart.
 
-Every final request start and context write synchronously re-reads the target's
-pause record, intent checkpoint, journal and completion receipt, then the root
-revocation token and its rotation receipt. No asynchronous step separates those
-reads from starting the request or writing the context. This also fences a
-holder admitted after the publisher began waiting, on any target. Once a pause
-is recorded on this machine, no request starts with paused-period text. A request
-already in flight completes. Context not yet admitted is suppressed. Local
-rotation and durable pause publication precede a matching completion receipt;
-uncompleted publication never authorizes work. Lock failure never discards
-validated revocation knowledge.
+Resume permits new work only after local publication. Local rotation and durable
+pause publication precede a matching completion receipt; incomplete publication
+never authorizes work. The publisher
+continues waiting until it holds the gate or its process budget ends. A live
+holder suspended by the operating system can delay publication indefinitely;
+the admission deadline is cooperative and cannot bound OS suspension or disk I/O.
 
-Final admission adds only local reads: one target record, one high-water probe,
-one bounded journal listing, and (when an intent exists) its record and receipt;
-one root probe, plus its receipt when the root token exists. No network, durable
-write, fsync or additional lock wait is added to the unchanged path.
+Final admission retains synchronous owner-checked reads of local authority and
+checks for pending observations. The unchanged path adds no network call or
+fsync. Network completion and the drain of an admitted output happen after the
+gate is released.
 
 A fixed high-water checkpoint and the latest immutable intent/receipt retain
 crash authority across restarts. Changed observations prune dominated records

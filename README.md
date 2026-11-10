@@ -436,8 +436,9 @@ Use `/cairn-memory:pause`, `/cairn-memory:resume`, and `/cairn-memory:status` to
 Paused text is not automatically backfilled. After resume, each session's first
 capture hook skips its current unprocessed history (including any early resumed
 text); later complete messages are captured. Once a pause is recorded on this
-machine, no request starts with paused-period text. A request already in flight
-completes. See the detailed pause boundaries in the privacy guide.
+machine, no request starts after that; work already admitted in another process
+may complete. A content-free pending marker keeps new admissions closed while
+pause publication waits, including after a process restart. See the detailed pause boundaries in the privacy guide.
 
 Read the full [privacy and threat model](docs/privacy.md). Security reports belong in the private channel described in [SECURITY.md](SECURITY.md), not a public issue.
 
