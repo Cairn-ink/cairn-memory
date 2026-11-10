@@ -3,7 +3,7 @@
 import { open, readFile, stat, mkdir, rename, unlink, writeFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { platform } from "node:os";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, resolve, join } from "node:path";
 // Arm before loading the client graph or resolving a binding. performance.now()
 // counts Node startup too; an exhausted startup budget exits before local work.
 const action = process.argv[2] ?? "status";
@@ -35,6 +35,7 @@ const { createJsonPoster, hostedQuotaStatus, hostedTargetId, resumeHostedQuota }
 const { prepareRecallQuery } = await import("../lib/recall-query.mjs");
 const { resolveClient, clientProjectId, parsePairingRecord } = await import("../lib/pairing.mjs");
 const { VERSION } = await import("../lib/version.mjs");
+const { checkStateLock } = await import("../lib/state-lock.mjs");
 const { optionalHostSessionId } = await import("../lib/hosted-contract.mjs");
 const { inspectAutomaticPolicy } = await import("../lib/automatic-policy.mjs");
 const { hostedPauseStatus, completeHostedPauseRotation, observeHostedPause, deferHostedPauseStatus, withHostedPauseGate, hostedPauseMode } = await import("../lib/hosted-pause.mjs");
@@ -211,6 +212,11 @@ async function recall(hookInput) {
   const control = await readControlState(dataDir);
   checkRecall();
   if (control.paused) return;
+  // Unsupported local authority must not create a project key before the
+  // eventual gate rejects dispatch. This probe is read-only and precedes the
+  // single fresh observation immediately before fetch.
+  if (hostedConfig && hostedPauseMode(hostedConfig).barrier)
+    await checkStateLock(join(hostedConfig.root, 'hosted-pause.gate'), { hostParent: true, signal: recallSignal });
   const projectId = await clientProjectId(clientOptions, hookInput.cwd, binding);
   checkRecall();
   const sessionId = optionalHostSessionId(hookInput.session_id);
