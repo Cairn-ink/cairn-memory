@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, writeFile, readFile, chmod, lstat, symlink, unlink, rm } from "node:fs/promises";
+import { mkdir, writeFile, readFile, chmod, lstat, symlink, unlink, rm, appendFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHmac } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
+import { harness as portableHarness, row as transcriptRow } from '../../../plugins/cairn-memory/test/capture-window-harness.mjs';
 import { privateWrite } from "../private-state.mjs";
 import {
   probeClaudeFacts,
@@ -524,9 +525,9 @@ for (const row of table.rows) {
           }),
         );
       });
-    // Binding decisions remain unchanged. Hosted content additionally requires
+    // Windows uses validated process-local observations; POSIX still requires
     // a verified PID namespace and owner for the shared pause-publication lock.
-    const hostedAvailable = f.platform !== "win32" && f.coord !== "foreign";
+    const hostedAvailable = f.coord !== "foreign";
     const expectedRequests = hostedAvailable ? row.expect.requests : 0;
     assert.equal((await run("recall")).code, 0);
     assert.equal(requests.length, expectedRequests, "exact request count");
@@ -571,3 +572,41 @@ for (const row of table.rows) {
       );
   });
 }
+
+const portableActive = { paused: false, generation: 0, enforced: true };
+for (const [name, observation] of [
+  ['paused', { ...portableActive, paused: true, generation: 1 }],
+  ['invalid', { ...portableActive, generation: -1 }],
+  ['unenforced', { ...portableActive, enforced: false }],
+  ['unavailable', {}],
+]) test(`native Windows ${name} observation sends nothing and mints no key`, async t => {
+  const f = await portableHarness(t, { portable: true, pauseState: () => observation });
+  await f.write('');
+  await f.run('start-boundary');
+  await f.run('recall');
+  assert.equal(f.recalls.length, 0, 'denied observation sends zero requests');
+  const state = await f.state();
+  assert.equal(Object.hasOwn(state, 'hostedGeneration'), false);
+  assert.equal(Object.hasOwn(state, 'hostedTarget'), false);
+  assert.equal(await exists(join(f.dataDir, 'project-key')), false, 'denied observation mints zero keys');
+});
+
+test('native Windows first-prompt authority covers only bytes after the prompt snapshot', async t => {
+  let observations = 0;
+  const f = await portableHarness(t, { portable: true,
+    pauseState: () => { observations++; return portableActive; } });
+  await f.write(''); await f.run('start-boundary');
+  const prefix = transcriptRow('before-first-prompt');
+  await appendFile(f.transcript, prefix);
+  await f.run('recall');
+  assert.equal(observations, 1, 'recall takes its own fresh observation');
+  assert.equal(f.recalls.length, 1, 'valid active Windows recall dispatches');
+  const state = await f.state();
+  assert.equal(state.hostedGeneration, 0);
+  assert.match(state.hostedTarget, /^[a-f0-9]{64}$/u);
+  assert.equal(state.offset, Buffer.byteLength(prefix), 'first-prompt byte fence');
+  await appendFile(f.transcript, transcriptRow('after-first-prompt'));
+  await f.run('capture');
+  assert.equal(f.captures.length, 1, 'first turn actually captured');
+  assert.deepEqual(f.captures[0].messages.map(message => message.id), ['after-first-prompt']);
+});

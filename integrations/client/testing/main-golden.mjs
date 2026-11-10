@@ -383,8 +383,16 @@ export async function observeStandalone(plugin) {
           const lines = requestBytes.trimEnd().split("\n").filter(Boolean).sort();
           requestBytes = lines.join("\n") + (lines.length ? "\n" : "");
           const count = lines.length;
-          const expected = candidate && mode === "concurrent-win32" ? 0 : 12;
+          const expected = candidate && mode === "concurrent-win32" && entry === "launch-capture" ? 0 : 12;
           if (count !== expected) throw new Error(`golden_dropped_hooks:${mode}:${count}`);
+        }
+        if (candidate && mode.endsWith("win32")) {
+          const audit = (await readFile(requestsFile + '.observations', 'utf8').catch(() => ''))
+            .trim().split('\n').filter(Boolean).map(JSON.parse);
+          const sends = audit.filter(event => event.kind === 'recall');
+          const expected = concurrent ? entry === 'hook' ? 12 : 0 : entry === 'hook' ? 1 : 0;
+          if (sends.length !== expected || sends.some(event => !event.fresh || !event.valid || event.paused))
+            throw new Error(`windows_requires_fresh_process_observation:${mode}:${entry}`);
         }
         variants.push({ mode, entry, key, identity, requestBytes, outcomes });
         if (mode === "default-unreadable") await chmod(legacy, 0o700);
@@ -421,7 +429,22 @@ export function candidateGolden(base) {
     // Hosted operations now require the shared verified-namespace, owner-private pause lock.
     // Standalone identity/control behavior remains covered, while unverifiable hosted
     // recall/capture fail closed. Keep the historical fixture itself immutable.
-    if (["standalone-win32", "concurrent-win32", "coordination-foreign"].includes(variant.mode)) {
+    if (["standalone-win32", "concurrent-win32"].includes(variant.mode)) {
+      // Windows recall is authorized by its own fresh active observation. These
+      // fixtures prewrite their transcript: first-prompt tags cannot cover it,
+      // and a detached first capture without tags establishes EOF instead.
+      const lines = variant.requestBytes.split("\n").filter(Boolean).filter(line => {
+        const request = JSON.parse(line);
+        return !request.url.endsWith("/capture") &&
+          !(request.url.endsWith("/telemetry") && JSON.parse(request.body).event === "capture_succeeded");
+      });
+      variant.requestBytes = lines.join("\n") + (lines.length ? "\n" : "");
+      if (variant.mode === "standalone-win32" && variant.entry === "launch-capture") {
+        variant.key = null;
+        variant.identity = null;
+      }
+    }
+    if (variant.mode === "coordination-foreign") {
       const lines = variant.requestBytes.split("\n").filter(Boolean).filter(line => {
         const request = JSON.parse(line);
         return !request.url.endsWith("/recall") && !request.url.endsWith("/capture") &&
