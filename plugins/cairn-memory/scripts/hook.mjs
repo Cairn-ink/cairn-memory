@@ -43,10 +43,14 @@ const OUTPUT_WRITE_MARGIN_MS = 50;
 // A stalled diagnostic fsync cannot keep the hook alive until the host kills it.
 // Publication is attempted immediately; persistence remains best effort on I/O
 // failure or forced exit, as it does on any process crash.
-const recallHardTimer = recallController ? setTimeout(() => process.exit(0),
-  Math.max(0, recallEnd - performance.now())) : undefined;
 const expireRecall = () => { recallController.abort(new Error('recall_timeout')); process.stdin.destroy(); };
 const recallTimer = recallController ? setTimeout(expireRecall, Math.max(0, recallEnd - performance.now())) : undefined;
+// Cancellation must precede forced termination even when rounding schedules
+// both timers in the same turn. Notify fetch/lock listeners before exiting.
+const recallHardTimer = recallController ? setTimeout(() => {
+  expireRecall();
+  process.exit(0);
+}, Math.max(0, recallEnd - performance.now())) : undefined;
 const recallSignal = recallController?.signal;
 function checkRecall() {
   if (recallController && performance.now() >= recallEnd && !recallSignal.aborted) expireRecall();
