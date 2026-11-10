@@ -53,8 +53,8 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
         search?.schedule(request.namespace);
         return result;
       } catch (error) {
-        if (isRawEpochConflict(error)) throw error;
         try { if (error.code !== 'store_closed') storage.fenceArrival(arrivalToken); } catch (fenceError) { return failure(fenceError); }
+        if (isRawEpochConflict(error)) throw error;
         return failure(error);
       }
     }); } } : {}),
@@ -82,12 +82,12 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
         if (raw) search?.schedule(request.namespace);
         return raw ? success({ raw, interpretation }) : interpretation;
       } catch (error) {
-        if (isRawEpochConflict(error)) throw error;
         // A window may have arrived during asynchronous sealing/model work.
         // Preparation/sealing can fail before returning a registration. Use
         // only its validated, detached arrival identity for conservative fencing.
         // Commit-time overlap already committed its fence before refusing.
         try { if (error.code !== 'store_closed') storage.fenceArrival(arrivalToken); } catch (fenceError) { return failure(fenceError); }
+        if (isRawEpochConflict(error)) throw error;
         return failure(error);
       }
     }); },
