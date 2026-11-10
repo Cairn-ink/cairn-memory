@@ -77,9 +77,9 @@ export function openContextCore(baseOptions, contextRead, openBase) {
     probe.db.close();
   }
   let context;
-  const base = openBase({ ...baseOptions, ...(typeof baseOptions.model?.consolidate === 'function' && baseOptions.cardVectors === undefined ? {
+  const base = openBase(typeof baseOptions.model?.consolidate === 'function' && baseOptions.cardVectors === undefined ? { ...baseOptions,
     cardVectors: { read: request => context?.cardVectors(request) ?? [] },
-  } : {}) });
+  } : baseOptions);
   try {
     context = createContextFacade(baseOptions.path === ':memory:' ? ':memory:' : resolve(baseOptions.path), options, { readOnly, ...busyOptions });
     if (!base.maintainCards) return Object.freeze({ ...base, ...context.methods, close() { context.close(); return base.close(); } });
@@ -689,7 +689,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             metadata: type === 'memory' ? { state, reviewState: item.reviewState, filing: item.filing,
               kind: item.kind, origin, confidence: item.confidence } : { state, support: item.support, origin,
                 ...(origin === 'engine' ? { builtAt: item.builtAt, clusterKey: item.clusterKey, status: item.status } : {}) },
-            ...cardPackSources(item),
+            ...(type === 'card' && origin === 'engine' ? cardPackSources(item) : {}),
             text: type === 'memory' ? item.content : item.title + '\n' + item.body,
             turnIds: citedRawTurns(db, ref.namespace, sourceRows, rawChannel),
             sessionIds: sourceRows.map(row => JSON.stringify(['receipt', namespaceKey(ref.namespace), row.client, row.session_id])),

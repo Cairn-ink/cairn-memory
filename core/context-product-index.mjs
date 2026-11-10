@@ -154,7 +154,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         items.push({type:item.type,ref,ns:p.readSet.findIndex(ns=>namespaceKey(ns)===namespaceKey(ref.namespace)),rank:candidate.rank,
           metadata:item.type==='memory'?{state:item.state,reviewState:item.reviewState,filing:item.filing,kind:item.kind,origin:item.origin,confidence:item.confidence}
             :{state:item.state,support:item.support,origin:item.origin,...(item.origin==='engine'?{builtAt:item.builtAt,clusterKey:item.clusterKey,status:item.status}:{})},text:item.type==='memory'?item.content:item.title+'\n'+item.body,
-          ...cardPackSources(item),
+          ...(item.type==='card' && item.origin==='engine'?cardPackSources(item):{}),
           turnIds:citedRawTurns(db,ref.namespace,sourceRows,rawChannel),
           sessionIds:sourceRows.map(row=>JSON.stringify(['receipt',namespaceKey(ref.namespace),row.client,row.session_id])),
           date,sources,sourceAccess:item.type==='memory'?item.provenance.sourceAccess:'unsupported',sourcesComplete:item.type==='memory' && item.provenance.coverage.status==='complete',fence:bind('snapshot-item',cardLineageItemInside(db,item))});

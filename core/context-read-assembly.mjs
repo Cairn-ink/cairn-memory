@@ -49,6 +49,7 @@ function canonical(value) {
 export function assembleContext({ prepared, counter, policy, budget, snapshotOf, deadlineAt, representation = 'representation-v2',
   responseBytes, now = () => performance.now() }) {
   const started = now(), selected = new Map();
+  const hasEngineCards = prepared.some(item => item.type === 'card' && item.metadata?.origin === 'engine');
   const stops = { budget: false, items: false, deadline: false };
   let counterCalls = 0, oversized = 0;
   const expired = () => { stops.deadline ||= now() >= deadlineAt; return stops.deadline; };
@@ -126,7 +127,7 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
       const covered = cardSourceKeys([item]);
       if ([...selected.keys()].some(entry => entry.type === 'memory' && entry.rank < item.rank && covered.has(memoryPackKey(entry.ref)))) return;
     }
-    if (!source && item.type === 'memory' && cardSourceKeys([...selected.keys()]).has(memoryPackKey(item.ref))) return;
+    if (!source && hasEngineCards && item.type === 'memory' && cardSourceKeys([...selected.keys()]).has(memoryPackKey(item.ref))) return;
     if (!source && selected.size >= budget.maxItems && !(item.type === 'card' && item.metadata.origin === 'engine')) { stops.items = true; return; }
     if (source && !selected.has(item)) return;
     const tokens = count(source ? source.excerpt : item.text);
@@ -141,7 +142,10 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
     const value = payload(trial, dateOrder), text = meteredText(value.metered), used = count(text);
     if (stops.deadline) return;
     if (used <= budget.maxTokens && fitsBytes(value, text, used, trial)) {
-      selected.clear(); for (const [entry, value] of trial) selected.set(entry, value); accepted = value;
+      if (hasEngineCards) {
+        selected.clear(); for (const [entry, value] of trial) selected.set(entry, value);
+      } else selected.set(item, trial.get(item));
+      accepted = value;
       if (selected.size >= budget.maxItems) stops.items = true;
       return;
     }
