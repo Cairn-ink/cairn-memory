@@ -57,7 +57,7 @@ test('portable early captureSeen crash preserves prior authority until the EOF d
     mutateRuntime(source) {
       const needle = '\n  const size = (await stat(transcriptPath)).size;';
       assert.equal(source.split(needle).length, 2);
-      return source.replace(needle, '\n  if (hookInput.crash_after_marker) process.exit(0);' + needle);
+      return source.replace(needle, '\n  if (action === \'capture-detached\') process.exit(0);' + needle);
     },
   });
   await f.write(''); await f.run('capture'); // Establish verified authority at EOF.
@@ -71,13 +71,14 @@ test('portable early captureSeen crash preserves prior authority until the EOF d
   const skipped = row('portable-paused-period', time);
   await appendFile(f.transcript, skipped);
   remote = { ...active, generation: 2 };
-  await f.run('capture', { crash_after_marker: true });
+  await f.run('capture-detached', { capture_generation: verified.generation });
   const crashed = await f.state();
   assert.equal(crashed.captureSeen, true);
-  assert.equal(crashed.hostedGeneration, 0, 'early_marker_must_not_refresh_authority');
+  assert.equal(crashed.offset, verified.offset, 'crash_precedes_eof_decision');
   assert.equal(crashed.hostedTarget, verified.hostedTarget);
   await f.run('capture');
   assert.deepEqual(ids(f), [], 'portable_crash_resume_zero_paused_bytes');
+  assert.equal(crashed.hostedGeneration, 0, 'early_marker_must_not_refresh_authority');
   assert.equal((await f.state()).offset, Buffer.byteLength(skipped));
   await appendFile(f.transcript, row('portable-later', time)); await f.run('capture');
   assert.deepEqual(ids(f), ['portable-later'], 'portable_crash_actual_later_send');
