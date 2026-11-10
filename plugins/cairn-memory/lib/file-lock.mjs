@@ -60,7 +60,9 @@ async function reapDeadOwner(path, owner, processIsAlive, context, read, signal)
   });
   let elected = false;
   try {
-    while (!elected) {
+    // One recovery attempt per acquisition poll. A live nested reaper must
+    // yield back to the outer deadline, rather than spin on its dead parent.
+    for (let attempt = 0; !elected; attempt++) {
       signal?.throwIfAborted();
       try {
         await link(reaperOwnerPath, reaperPath);
@@ -70,7 +72,7 @@ async function reapDeadOwner(path, owner, processIsAlive, context, read, signal)
         const reaper = await readOwner(reaperPath, read);
         // Malformed/unknown and live ownership remain fail-closed. EPERM is
         // live, exactly as for the original lock; elapsed time grants nothing.
-        if (!reaper || processIsAlive(reaper.pid, reaper) !== false) return;
+        if (attempt > 0 || !reaper || processIsAlive(reaper.pid, reaper) !== false) return;
         await reapDeadOwner(reaperPath, reaper, processIsAlive, context, read, signal);
       }
     }
