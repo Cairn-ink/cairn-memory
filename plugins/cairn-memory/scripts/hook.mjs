@@ -388,7 +388,7 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
   let captureExtension = {};
   try {
     const extension = JSON.parse(await readFile(statePath, "utf8"));
-    captureExtension = extension;
+    if (extension && typeof extension === "object" && !Array.isArray(extension)) captureExtension = extension;
   } catch { /* Missing/corrupt extensions carry no verified authority. */ }
   const { ownSkillTurn, windowInitial, hostedGeneration, hostedTarget, ...markers } = markersFromState(captureExtension);
   if (cursor && ownSkillTurn === true) cursor.ownSkillTurn = true;
