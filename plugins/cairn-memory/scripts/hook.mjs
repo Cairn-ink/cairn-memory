@@ -37,8 +37,8 @@ const action = process.argv[2] ?? "status";
 // this cannot preempt synchronous CPU or an uncooperative filesystem operation.
 const recallController = action === 'recall' ? new AbortController() : undefined;
 const recallEnd = recallController ? 3500 : undefined;
-// Measured warm gate + completed small stdout writes take about 5 ms.
-// Allow ten times that cost before starting output; never shorten the fetch.
+// Stop admitting output 50 ms before abort, without shortening the fetch.
+// This is admission headroom; an admitted pipe write uses its own drain cap.
 const OUTPUT_WRITE_MARGIN_MS = 50;
 // The host counts its four seconds from spawn. Reserve 100 ms for the interval
 // before Node's performance origin and 150 ms for exit/reaping. The backstop is
@@ -584,7 +584,7 @@ try {
   }
 } finally {
   // No fetch (or a failed decision) still refreshes configuration diagnostics.
-  // After a response, dispatchActive publishes configuration before auth/output.
+  // After a response, deferred configuration/auth diagnostics follow output.
   // Content delivery finishes before best-effort durable diagnostics. Their I/O
   // cannot consume the response-to-output budget or clear a draining write's cap.
   // Two diagnostic publications can wait on slow fsyncs. Start this optional
