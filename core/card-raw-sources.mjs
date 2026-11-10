@@ -1,4 +1,5 @@
 import { createHash, createHmac } from 'node:crypto';
+import { CARD_DEPENDENCY_LIMIT } from './private-card-schema.mjs';
 import { fail } from './validation.mjs';
 import { rawSourceKey } from './raw-source-input.mjs';
 import { cardLineageRevision, cachedContentLayout } from './content-safety-schema.mjs';
@@ -8,6 +9,65 @@ const partKey = row => JSON.stringify([row.conversation_id,row.message_id,row.pa
 const columns = `conversation_id,message_id,part_index,start,end,byte_count,digest,event_id,saved,reason,format,key_version,length(sealed) AS sealed_length`;
 const sameSpan = (a,b) => a.conversation_id === b.conversationId && a.message_id === b.messageId && a.start < b.span.end && a.end > b.span.start;
 const mutations = new WeakMap();
+
+/** Read-only local deletion preflight; enforcement remains in the cascade.
+ * Model the outer mutation's namespace context without inserting it. Every
+ * candidate query and the in-memory union stop at limit + 1 distinct Cards. */
+export function checkRawCardDeletion(db, ns, conversationId, memories, fallback = []) {
+  const tables = new Set(db.prepare(`SELECT name FROM sqlite_master WHERE type='table'
+    AND name IN ('private_cards','card_memory_bindings','card_raw_bindings',
+      'card_raw_mutation_context','card_raw_pending_invalidations')`).all().map(row => row.name));
+  if (!tables.has('private_cards')) return;
+  const raw = ['card_raw_bindings','card_raw_mutation_context','card_raw_pending_invalidations'].every(name => tables.has(name));
+  const pending = new Set();
+  const check = rows => {
+    if (rows.length > CARD_DEPENDENCY_LIMIT) fail('dependency_limit_reached');
+    return rows;
+  };
+  const enqueue = rows => {
+    for (const row of check(rows)) {
+      pending.add(row.id);
+      if (pending.size > CARD_DEPENDENCY_LIMIT) fail('dependency_limit_reached');
+    }
+  };
+  if (raw) {
+    enqueue(db.prepare(`SELECT card_id AS id FROM card_raw_pending_invalidations LIMIT ${CARD_DEPENDENCY_LIMIT+1}`).all());
+    if (conversationId) enqueue(db.prepare(`SELECT DISTINCT c.id FROM card_raw_bindings b JOIN private_cards c ON c.id=b.card_id
+      WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state IN ('draft','confirmed') AND b.conversation_id=?
+      LIMIT ${CARD_DEPENDENCY_LIMIT+1}`).all(...boundary(ns),conversationId));
+  }
+  if (raw) for (const [id,messageId,sourceKey,whole,totalUnits] of fallback) {
+    enqueue(db.prepare(`SELECT DISTINCT c.id FROM card_raw_bindings b JOIN private_cards c ON c.id=b.card_id
+      WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state IN ('draft','confirmed')
+        AND b.conversation_id=? AND b.message_id=? AND ((? AND b.start<? AND b.end>0) OR EXISTS(
+          SELECT 1 FROM raw_source_maps m WHERE m.conversation_id=b.conversation_id AND m.message_id=b.message_id
+            AND m.source_key=? AND b.start<m.end AND b.end>m.start)) LIMIT ${CARD_DEPENDENCY_LIMIT+1}`)
+      .all(...boundary(ns),id,messageId,whole,totalUnits,sourceKey));
+  }
+  for (const memory of memories) {
+    if (raw && memory.forget) {
+      // excludeMemory also collects stored receipt spans, including spans in a
+      // different conversation. Legacy fallback spans are counted above too,
+      // even when an episode root has no exact-key Raw conversation.
+      enqueue(db.prepare(`SELECT DISTINCT c.id FROM receipts r JOIN raw_receipt_lineage l ON l.receipt_id=r.id
+        JOIN card_raw_bindings b ON b.conversation_id=l.conversation_id AND b.message_id=l.message_id
+          AND b.start<l.end AND b.end>l.start JOIN private_cards c ON c.id=b.card_id
+        WHERE r.memory_id=? AND c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state IN ('draft','confirmed')
+        LIMIT ${CARD_DEPENDENCY_LIMIT+1}`).all(memory.id,...boundary(ns)));
+    }
+    if (!tables.has('card_memory_bindings')) continue;
+    check(db.prepare(`SELECT DISTINCT c.id FROM private_cards c JOIN card_memory_bindings b ON b.card_id=c.id
+      WHERE b.memory_id=? AND c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state IN ('draft','confirmed')
+      LIMIT ${CARD_DEPENDENCY_LIMIT+1}`).all(memory.id,...boundary(ns)));
+    if (raw) enqueue(db.prepare(`SELECT DISTINCT c.id FROM card_memory_bindings b INDEXED BY card_memory_dependents
+      CROSS JOIN private_cards c ON c.id=b.card_id
+      WHERE b.memory_id=? AND c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state IN ('draft','confirmed')
+        AND (EXISTS(SELECT 1 FROM card_raw_mutation_context x WHERE x.owner_id=c.owner_id AND x.scope=c.scope AND x.project_id=c.project_id)
+          OR NOT EXISTS(SELECT 1 FROM card_raw_mutation_context))
+        AND EXISTS(SELECT 1 FROM card_raw_bindings r WHERE r.card_id=c.id)
+      LIMIT ${CARD_DEPENDENCY_LIMIT+1}`).all(memory.id,...boundary(ns)));
+  }
+}
 
 /** One source mutation, including nested Memory cascades, invalidates each Card once. */
 export function createRawCardInvalidation(db) {
@@ -21,12 +81,12 @@ export function createRawCardInvalidation(db) {
     for (const value of values) {
       const rows = db.prepare(`SELECT DISTINCT c.id,c.revision FROM card_raw_bindings b JOIN private_cards c ON c.id=b.card_id
         WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state IN ('draft','confirmed') AND b.conversation_id=?
-        ${value.messageId ? 'AND b.message_id=? AND b.start<? AND b.end>?' : ''} ORDER BY c.id LIMIT 129`)
+        ${value.messageId ? 'AND b.message_id=? AND b.start<? AND b.end>?' : ''} ORDER BY c.id LIMIT ${CARD_DEPENDENCY_LIMIT+1}`)
         .all(...boundary(ns),value.conversationId,...(value.messageId ? [value.messageId,value.end,value.start] : []));
-      if (rows.length > 128) fail('dependency_limit_reached');
+      if (rows.length > CARD_DEPENDENCY_LIMIT) fail('dependency_limit_reached');
       const queue = db.prepare('INSERT OR IGNORE INTO card_raw_pending_invalidations(card_id,revision) VALUES(?,?)');
       for (const row of rows) queue.run(row.id,row.revision);
-      if (db.prepare('SELECT card_id FROM card_raw_pending_invalidations LIMIT 129').all().length > 128) fail('dependency_limit_reached');
+      if (db.prepare(`SELECT card_id FROM card_raw_pending_invalidations LIMIT ${CARD_DEPENDENCY_LIMIT+1}`).all().length > CARD_DEPENDENCY_LIMIT) fail('dependency_limit_reached');
     }
   }
   function mutate(ns, actionId, work) {
@@ -43,8 +103,8 @@ export function createRawCardInvalidation(db) {
       const result = work();
       if (owner) {
         let changed = false;
-        const pending = db.prepare('SELECT card_id,revision FROM card_raw_pending_invalidations ORDER BY card_id LIMIT 129').all();
-        if (pending.length > 128) fail('dependency_limit_reached');
+        const pending = db.prepare(`SELECT card_id,revision FROM card_raw_pending_invalidations ORDER BY card_id LIMIT ${CARD_DEPENDENCY_LIMIT+1}`).all();
+        if (pending.length > CARD_DEPENDENCY_LIMIT) fail('dependency_limit_reached');
         for (const { card_id: id,revision } of pending) {
           const row = db.prepare('SELECT state,revision FROM private_cards WHERE id=?').get(id);
           // Receipt triggers defer these Cards into the same SQL queue, so
@@ -153,8 +213,8 @@ export function createCardRawSources(db, identity, { mutableRevision = true } = 
   function checkFanout(refs, cardId) {
     for (const id of new Set(refs.filter(ref => ref.type === 'raw').map(ref => ref.conversationId))) {
       const rows = db.prepare(`SELECT DISTINCT c.id FROM card_raw_bindings b JOIN private_cards c ON c.id=b.card_id
-        WHERE b.conversation_id=? AND c.state IN ('draft','confirmed') AND c.id!=? LIMIT 128`).all(id,cardId);
-      if (rows.length >= 128) fail('dependency_limit_reached');
+        WHERE b.conversation_id=? AND c.state IN ('draft','confirmed') AND c.id!=? LIMIT ${CARD_DEPENDENCY_LIMIT}`).all(id,cardId);
+      if (rows.length >= CARD_DEPENDENCY_LIMIT) fail('dependency_limit_reached');
     }
   }
   const bindingId = ref => bind('raw-card-binding-v1', [ref.namespace,rawSourceKey(ref)]);
