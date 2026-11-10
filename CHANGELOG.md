@@ -11,6 +11,71 @@
   validation yields the existing refusal (`reader_failed`) rather than a Memory-only
   response; the local/facade reader rebuilds Memory-only.
 
+## Unreleased — local Raw-only capture and conversation hiding
+
+- Local Codex capture re-qualifies an updated binary in the background, refuses capture while waiting, and reports qualification status with rerun-setup guidance. A failed first qualification no longer prevents installing local hooks.
+- Local Raw captures new Claude sessions from their first turn even when the transcript appears after session start. Forks and resumes of hidden conversations stay hidden, including Claude copies with changed timestamps; Codex forked sessions are not saved locally.
+
+- Local capture can be turned back on with `activate` or an identical `setup`
+  request after disable/uninstall. Restore hooks and ready host authority while
+  preserving store, target, keys, data and all forget/correct fences.
+- Existing sessions rearm lazily at the next qualified hook's complete EOF with
+  durable retry receipts. Off-period text is skipped; Claude Code also skips the
+  first resumed turn. Codex supports the prompt hook as the first boundary.
+  Explicit rearm remains only for standalone external-authority recovery.
+- Local foreground setup accepts plaintext Raw capture without interpretation
+  consent. Raw-only capture needs no key or provider and advances the worker;
+  the owner Raw cap applies, while the daily model-cost cap does not.
+- Local forget/correct atomically record permanent content-free windows of
+  ±30 minutes around old receipt creation times and fence whole overlapping or
+  receipt-named sessions. Later matching arrivals are fenced before storage.
+  Unknown event times are handled conservatively; both Raw search intents hide
+  fenced sessions. Hosted selections retain their existing behavior and schema.
+
+## 0.6.5 — Unreleased
+
+- 0.6.4 was prepared but not published; its changes ship in 0.6.5.
+- Hosted Codex SessionStart shows a short notice when format qualification
+  stays paused or the saved sign-in is missing or unreadable, at most once per
+  local calendar day. Intentional pauses and the daily cap stay quiet.
+- Codex status shows the last locally recorded, service-acknowledged capture
+  in local time, or says none is recorded yet. Exec status aligns with its siblings.
+- Hosted Codex prompt recall gets the 0.3.4 deadline: up to 2,500 ms from the
+  first recall fetch, inside a 3,000 ms prompt-hook process-clock cap.
+- Ships the current engine synced from `main` at `35a29c14`. Local users get
+  dated three-layer contextRead over saved memories by default:
+  `find_memory_candidates`, `fetch_memory_candidate_evidence`, and
+  `read_memory_context`.
+- Existing local stores upgrade on first open to the Raw-capable schema;
+  a store created by 0.6.3 moves from `user_version` 18 to 29.
+- Raw search is ready but stays empty in an ordinary `setup --local` install.
+  Setup registers only `--db/--owner[/--project]`, which exposes no capture
+  tool; `remember_memory` saves Memory only. Raw fills only from messages
+  submitted explicitly through `capture_memory` on a server registered with
+  `--capture-qualification` and `--client codex` or `--client claude-code`, or
+  from the engine's separate local preview (`cairn-memory local setup`),
+  configured by hand; see [the local preview guide](docs/raw-local-journal.md).
+  Submitted messages can be kept as Raw even when no extraction model is
+  configured or extraction fails, subject to the Raw capture controls and the
+  owner cap; a model is needed to extract them into Memory. Local mode still
+  has no automatic capture.
+- Local Memory, Raw and search indexes are plaintext on this computer. Raw has
+  a default 200,000,000-byte owner cap. The server switches `--no-raw`,
+  `--no-raw-search`, and `--no-context-read` disable the respective defaults;
+  see [defaults and off switches](docs/defaults.md).
+- You can go back to 0.6.3; it keeps working with the upgraded store, but conversations captured while on 0.6.3 are not kept as Raw.
+- Prepared and unpublished; after publication, rerun setup to install 0.6.5's
+  engine, Codex notice/status updates and the prompt recall deadline. Existing
+  installed runtimes stay in use until setup is rerun.
+
+## 0.3.5 — 2026-11-09: hosted recall pre-fetch durability
+
+Plugin and marketplace 0.3.5. Protocol stays 0.3.0. The installer version is not
+bumped here; the Codex prompt changes reach installs through the next installer
+release.
+
+- Remove redundant durable publications before hosted recall while preserving pause barriers and diagnostic freshness.
+
 ## 0.3.4 — 2026-11-09: hosted recall deadline
 
 Plugin and marketplace 0.3.4. Protocol stays 0.3.0. The installer version is not
@@ -364,7 +429,7 @@ unchanged.
   brand-new-only; setup never migrates existing files. Daily limits count model
   port calls, not USD; owner Raw cap becomes durable on first real capture.
 - Publish foreground 160-second hooks last and revoke SQL first on disable;
-  preserve identity and require existing explicit rearm after re-enabling.
+  preserve identity and lazily rearm established sessions after re-enabling.
   Hosted defaults, trust, credentials and provider algorithms remain unchanged.
 - Separate exact generated-command keyless checks from installed synthetic
   provider/ancestry instrumentation; native, semantic and product gates remain.

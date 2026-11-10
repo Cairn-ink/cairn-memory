@@ -22,7 +22,7 @@ const freeze = value => {
 };
 
 /** Internal model-free seam. Hosts must not expose this before P2 controls/lineage. */
-export function createRawJournal({ db, mode = 'off', port, capBytes, configureCap, readPolicy, sources = false, localAuthority }) {
+export function createRawJournal({ db, mode = 'off', port, capBytes, configureCap, readPolicy, sources = false, localAuthority, localRawPrivacy = false }) {
   const rawControls = createRawControlStorage(db);
   const sourceRoots = createRawSourceRoots(db);
   const local = localAuthority ? createLocalAuthorityStorage(db) : null;
@@ -118,6 +118,10 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     return { previous, priorPart: null };
   }
   function assertRegistrationSources(input, conversationId) {
+    if (localRawPrivacy) for (const message of input.messages) {
+      if (db.prepare(`SELECT 1 FROM raw_source_exclusions WHERE conversation_id=? AND message_id=? AND start<? AND end>? LIMIT 1`)
+        .get(conversationId, message.id, message.part.start + message.content.length, message.part.start)) fail('source_excluded');
+    }
     if(!cachedContentLayout(db)?.suppressionRevision)return;
     for(const message of input.messages){
       const start=message.part.start,end=start+message.content.length;

@@ -9,8 +9,142 @@ search status and contextRead coverage. Other database errors still fail. This i
 local plaintext retention with a default 200,000,000-byte owner cap. Disable it
 with `raw:false` or `--no-raw`; use `rawConversations` for a custom sealing port,
 cap or policy. The engine maintains lexical Raw search in bounded background
-turns. Messages without an event time receive the capture time; explicit
-`occurredAt` wins. See [all defaults and costs](defaults.md).
+turns. Ordinary capture retains its receive-time fallback when `occurredAt`
+is missing; explicit `occurredAt` wins. Separate session range metadata records
+whether any message lacked a real event time. See [all defaults and costs](defaults.md).
+
+Local forget and correct hide whole source conversations from both current and
+history Raw search. Each operation snapshots the old receipts inside its write
+transaction and records permanent windows of **30 minutes before and after each
+receipt's creation time**. With no receipts, the memory's created and updated
+times anchor the windows. If any receipt clock is invalid, every valid receipt
+clock and both valid memory clocks anchor windows; an invalid clock never
+prevents forgetting when another anchor exists. Only a complete lack of valid
+anchors refuses with
+`local_raw_hide_anchor_missing`, leaving the memory unchanged. Correct uses the
+receipts from before the correction.
+
+Every captured session whose message event-time range overlaps any window is
+terminally fenced, including concurrent sessions and messages outside the
+window in that same session. Real sessions named by receipts are also fenced,
+even outside the time window. This deliberately hides more than the referenced
+text. Capture arrival time is not used for matching. Unknown message event times
+are conservative: an existing window in the same namespace fences the session,
+including a newly arriving session. Known times elsewhere in a session cannot
+bound an untimed turn, which may be a late arrival of the forgotten source.
+This can refuse future untimed sessions indefinitely; supply real event times
+to distinguish an outside-window session. Capture/receive time is not evidence
+of when an untimed source turn occurred.
+Later arrivals inside a window are fenced and refused before payload storage;
+fences also stop ongoing sessions from capturing later, outside-window messages.
+A fork or resume of a hidden conversation stays hidden. Claude message UUIDs
+are additionally fenced with namespace-scoped keyed hashes, even if a copy
+changes timestamps. Bounded durable hash jobs cover already-fenced sessions;
+capture refuses until pending hash work completes. These hashes and windows
+survive conversation deletion, disabling capture and uninstalling with data kept.
+Only wiping all store data, including forget records, removes them. Raw-only
+purges must retain hashes and windows. Destructive deletion cannot discard
+message IDs while their UUID hash backfill is incomplete, including deletion
+through a retained/off profile of the same local store.
+The payload is retained on disk; this is search hiding and capture fencing.
+
+Hiding anchors on when the memory was saved or corrected. A conversation is
+hidden when its message-time range overlaps that window; the turn that saved
+the memory normally supplies a nearby captured message. A conversation with no
+captured message near that time (and no range crossing the window or named
+receipt) is not hidden. You can delete that conversation directly. This is a
+known limit when a memory is saved much later than its source conversation.
+
+### List and delete a local conversation
+
+Use the same database, owner and project as the local MCP server. These local
+commands need no model key and do not decode or print conversation text:
+
+```sh
+cairn-memory raw --help
+cairn-memory raw list --db ABS --owner ID [--project ID]
+cairn-memory raw delete --db ABS --owner ID [--project ID] --conversation ID
+cairn-memory raw delete --db ABS --owner ID [--project ID] --conversation ID --yes
+```
+
+Replace the uppercase placeholders with your installed profile values; omit the
+bracketed project option for a personal store. The database must already be a
+local Raw store. The commands open the same `raw:true` local privacy handle as
+the default MCP server, with capture and search scheduling unused.
+
+`raw list` emits one JSON object per conversation in that exact namespace:
+id, client, first/last message event time, message count, declared message byte
+count, and fenced/hidden flags. Unknown event times are null. It includes hidden
+conversations so their owners can delete them. It never emits session keys or
+message text.
+
+`raw delete` accepts exactly one explicit conversation id. Omit `--yes` for a
+dry run: it reports the metadata and cascade counts without deleting, fencing,
+hashing or changing any row. Duplicate ids, bulk options and wildcards are
+rejected. An unknown id and an id from another namespace both return
+`conversation_not_found` without changing the store.
+
+With `--yes`, deletion removes that conversation's Raw messages, parts and
+canonical index/lineage rows; clears its Episodes and invalidates dependent
+Episode copies; and removes Card visibility according to the existing lineage
+rule. Confirmed authored Card bodies may remain stored but cannot be read as
+eligible support from the deleted source. Raw search refuses deleted sources
+immediately for current and history intents; bounded search maintenance removes
+obsolete derived index rows. This is logical deletion, not secure erasure of
+journals, backups, provider copies or the native client's source files.
+
+This command retains separately extracted Memories and their own explicit
+forget operation. It does not run memory forgetting or create memory hide
+windows. The existing Episode-forget and programmatic deletion defaults retain
+their original Memory cascade semantics.
+
+The terminal session fence and keyed message-UUID fences survive deletion.
+Resending that session, or copying its Claude message UUIDs into a fork after a
+cursor reset, cannot archive it again. A large UUID job makes bounded durable
+progress before any message is deleted. One command finishes on its own and
+shows progress counts. Only if it stops after about 10 minutes, run the same
+command again to continue. All source rows remain until the required hashes
+are durable. While a long delete runs, Claude Code and Codex conversation
+saving pauses and catches up afterwards. On a busy machine, saving paused for
+about 11–15 seconds and the whole delete took about 12–19 seconds for a
+10,000-message conversation. Longer conversations take proportionally longer.
+
+Local deletion runs the whole deletion and rolls it back before the first
+privacy fence and again after UUID preparation. Already-fenced middle passes
+only advance owed hashes; the command yields between bounded chunks. A refusal
+found before the first fence leaves the store unchanged. A refusal after privacy
+preparation can still leave that conversation hidden. Its source rows stay
+stored, and its session and UUID fences remain until a wipe.
+
+Exit codes: **0** for listing, a successful dry run or completed deletion;
+**1** for a missing/foreign conversation, unsupported store or other operation
+failure; **2** for invalid command arguments; **3** for a retryable operation
+failure. Errors contain fixed codes and no conversation text. No MCP deletion
+tool is added.
+
+The windows hold only owner, namespace and time range, with no memory, receipt,
+session identity or text. Overlapping windows are merged and never expire. Each
+capture unions the incoming messages with its persisted session range, using
+an indexed session-key lookup and a window predecessor lookup returning at most
+one row. Forget/correct selects overlapping ranges through a namespace/range
+index and fences matches in the same transaction as receipt deletion. Only
+legacy sessions without a range row scan their own messages once, on arrival
+or mutation; their unknown-time flag is conservative because old receive-time
+fallbacks cannot be distinguished from asserted times. Ordinary capture's Raw
+timestamps and dated reads keep their previous fallback behavior.
+
+New conversations skip legacy mode classification through the indexed unique
+conversation key. Existing sessions without a mode row read at most 4,097 events
+through a session/event index; over 4,096 refuses explicitly with
+`raw_session_mode_history_limit`. Mixed legacy modes refuse. Successful capture
+binds the mode so classification is not repeated.
+A failed window or fence write rolls the entire operation back with retryable
+`local_raw_privacy_write_failed`.
+
+These additive local tables are created only for `raw:true` or a
+`rawConversations` selection with `localAuthority`; `user_version` is unchanged.
+Base/hosted constructors and other explicit Raw profiles install no such tables
+and retain their existing forget/correct behavior.
 
 Submitting a capture does not install transcript hooks or grant permission to
 execute remembered instructions. The separate retained-profile MCP path provides
@@ -21,7 +155,12 @@ bounded inspection and authored Raw-backed Cards under its existing authority.
 The private archive has a separate default-off `cairn-memory local` operator
 path for Claude Code or qualified Codex, initially Linux/WSL + Node >=22.16.
 It leaves released hosted hooks and `packages/setup` defaults unchanged.
-SessionStart initializes verified EOF; Stop/PreCompact may hold the foreground
+SessionStart initializes verified EOF when the transcript exists. New Claude
+sessions whose transcript appears later are captured from their first turn: an
+authority-bound private start marker permits the first Stop/PreCompact to start
+at zero. Disable removes these markers; an unmarked session with no cursor
+stays refused. Codex retains EOF initialization and its prompt-time fallback.
+Codex forked sessions are not saved locally. Stop/PreCompact may hold the foreground
 hook for up to 160 seconds (existing host 155 seconds plus teardown). Codex also
 gets an idempotent UserPromptSubmit first-observation fallback: it does not reset
 existing cursors on every prompt. No long SessionEnd hook, detached worker,
@@ -70,8 +209,15 @@ The 0600 request is bounded UTF-8 JSON (64 KiB) with exactly these fields:
 For Codex select `client:"codex"`, its explicit native `hooks.json`, a different
 installation directory, and `installation:{"qualificationConfigPath":
 "/absolute/private-codex/installation.json"}` instead of pluginRoot. Select an
-already-qualified private profile/cache. Setup does not launch or auto-qualify
-a native binary. The existing installed operator API is explicit:
+private profile/cache. A pending or failed first qualification still installs
+the hooks in a waiting state; no capture is permitted until qualification succeeds.
+After a Codex update, hooks refuse the changed binary and start one detached,
+identity-bound schema qualification. Every native capture event can start it, so
+an update during a session can recover without another SessionStart. Hooks never
+wait for the probe. Failures back off; status reads only the cache and reports
+qualified, pending or failed with a reason and guidance to rerun setup.
+The probe uses a disposable home with no credentials, model request or transcript
+read. Unsupported formats keep capture paused. The existing installed operator API is explicit:
 
 ```js
 // Use the selected supported Node. First create the chosen private parent and
@@ -81,7 +227,7 @@ const configPath = '/absolute/private-codex/installation.json';
 const binaryPath = '/absolute/chosen/bin/codex';
 const host = { binaryPath, identity:await q.binaryIdentity(binaryPath), kind:'cli' };
 const verdict = await q.qualifyBinary(configPath, host);
-console.log(verdict.status); // Proceed only with an actually qualified verdict.
+console.log(verdict.status); // Capture requires an actually qualified verdict.
 ```
 
 That probes schema/format, not a capture turn or provider request. Actual hooks
@@ -100,6 +246,13 @@ or consent authority. Only the selected session/source fields reach the host.
 Interpretation/provider-processing consent, plaintext Raw consent and foreground
 latency consent are separate. For explicitly consented interpretation without
 plaintext retention choose `rawMode:"off"`, `plaintextRawConsent:false`.
+For Raw-only capture choose `interpretationConsent:false`,
+`rawMode:"local-plain-v1"`, `plaintextRawConsent:true` and
+`foregroundConsent:true`. It saves Raw without an API key, constructing a model
+provider or making a model call. Successful acknowledgements advance the worker
+across batches and turns. With interpretation declined and Raw off, setup
+declines because there is nothing to save. Existing interpretation-consented
+requests keep their behavior, including blocking on incomplete interpretation.
 Declining required consent creates no installation or grant. Only an environment
 slot name (`OPENAI_API_KEY` or `CAIRN_*_API_KEY`) is stored, never a credential.
 Setup/status/disable and acknowledged replay need no key. Real new interpretation
@@ -131,34 +284,38 @@ only `hooks`, and its owned command hook has exactly `type:"command"`, the fixed
 `configuration_changed`, without repair, a new grant or identity changes.
 Unrelated hooks in that array and unrelated groups keep their own options.
 
-Activating after disable may grant fresh SQL consent but stays
-`rearm_required`, not active capture. Use the existing explicit host rearm for
-each admissible selected session, then activate again:
+Activating after disable grants fresh SQL authority, durably re-pins the host
+configuration/profile/preparation, restores the owned native hooks and publishes
+`active` last. The host is ready immediately, including installations with no
+session history and installations left at the older `rearm_required` phase.
+An identical `setup` request on a disabled installation uses this same activation
+path, so reinstalling with the retained installation directory restores capture.
+A different request or changed active hooks still refuses. Activation never needs
+a selected transcript or a running Codex ancestor and never recreates identity.
+Store and target IDs, installation key bytes and session HMAC identities remain.
 
-```sh
-node /absolute/offline/node_modules/cairn-memory-local-preview/integrations/client/raw/local-host-cli.mjs --profile /absolute/private/claude-installation/host-profile.json rearm-status
-node /absolute/offline/node_modules/cairn-memory-local-preview/integrations/client/raw/local-host-cli.mjs --profile /absolute/private/claude-installation/host-profile.json rearm --expected-revision 0 --action-id aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa --session CHOSEN_SESSION --source /absolute/approved-transcript-root/selected.jsonl
-```
+Established sessions adopt that authority lazily at their next qualified hook,
+at the complete EOF observed by that hook. No off-period content is produced,
+sent to Raw or interpreted. For Claude Code there is no prompt-time hook: the
+first turn of an already-running conversation after re-enabling is also skipped,
+because its Stop/PreCompact hook lands at the end of that turn. Subsequent turns
+resume normally. Codex also supports UserPromptSubmit as the first hook: the
+boundary precedes any turn written after that prompt hook. A hook observing an
+already-written turn conservatively skips it too. New sessions initialize as on
+a fresh installation. Forget/correct fences, hide windows and session ranges
+are preserved; a fenced session stays refused in both search intents.
 
-For Codex, the actual `rearm` command must run beneath a currently running,
-qualified, non-exec native Codex CLI/app-server process. A normal terminal plus
-a cached qualification does not supply that ancestry and refuses; the shell
-examples above do not bypass it. `rearm-status` only observes action metadata and
-does not require native ancestry. If native-owned command execution is unavailable,
-leave rearm refused rather than disguising the host or replacing identity.
-
-Rearm preserves key/session/ordinal, skips its frozen complete paused EOF and
-refuses deleted/incomplete/unknown boundaries. Zero-history recovery may remain
-unsupported; do not delete/recreate identity to bypass it. Existing bounded
-predecessor/exact-action replay limits remain. Synthetic installed evidence
-separates exact quiet/keyless generated-command execution from provider capture
-through trusted test-only HTTP/ancestry instrumentation. Neither claims real
-native provider-backed hook execution or semantic quality; native, paid/model
-and product gates remain separate.
+No explicit per-session rearm command is required or accepted for this lifecycle
+transition. Keep the installation directory on uninstall; do not delete/recreate
+identity to bypass a refused boundary. Synthetic installed checks use trusted
+test-only HTTP/ancestry instrumentation and do not establish native provider-backed
+hook execution or semantic quality; native, paid/model and product gates remain
+separate.
 
 The isolated pinned Claude Code 2.1.260 `--init-only` probe dispatches the real
 installed SessionStart hook before its transcript exists; quiet exit 0 is not
-EOF initialization proof. A separate normal interactive, keyless/network-isolated
+EOF initialization proof. This missing-transcript case now writes the private
+start marker described above; its first later capture starts at zero. A separate normal interactive, keyless/network-isolated
 probe exited 1 at the native Anthropic connectivity preflight, before any hook,
 transcript or cursor. Normal interactive transcript timing therefore remains
 unverified; neither result authorizes an authentication/network workaround.
@@ -330,7 +487,7 @@ The private0600 profile has exactly these fields:
 
 All paths are normalized absolute paths. Profile/config/key/state parents and
 home must already be private0700 directories. State/key must be separate new
-leaves and may not overlap configuration, preparation/rearm sidecars, database or usage paths,
+leaves and may not overlap configuration, preparation/rearm/activation sidecars, database or usage paths,
 including through ancestor aliases. `configDigest` is SHA256 of the exact UTF-8
 configuration text read by the bounded private reader. Codex's existing private
 qualification configuration/cache location and Claude's owned installation
@@ -351,13 +508,14 @@ node integrations/client/raw/local-host-cli.mjs --profile /private/profile.json 
 ```
 
 Initialization defaults to a verified complete-record EOF, with no historical
-backfill. Only initialize accepts `--start beginning` or `--start eof`; beginning
-is an explicit owner-selected import. Each run is a separate bounded invocation,
+backfill. Only initialize accepts `--start`. Codex accepts only `--start eof`;
+Claude also keeps the explicit owner-selected `--start beginning` import. Each run is a separate bounded invocation,
 never an internal drain/retry loop. No stdin hook/MCP payload is accepted. Claude
 uses the profile-bound plugin root and explicit owner selector. Codex checks the
 running host, bound binary and existing qualification cache, then its permitted
-source header/creator; missing qualification and automation refuse without a
-probe or hosted fallback.
+source header/creator. Missing qualification refuses the current initialize/run
+call and may schedule identity-bound background qualification. Exec sessions
+refuse before scheduling. Status reads only the cache and never schedules a probe.
 
 Status is nonmutating and never reads a transcript or qualifies a host. Prepare
 serializes on `profilePath+'.prepare.lock'`, publishes a durable creating intent
@@ -366,8 +524,9 @@ new0700 state root,0600 random installation key and compatible B4b root/sessions
 The ready marker binds the profile/config/authority/key and root inode. Complete
 unchanged preparation is idempotent; creating/partial/lost/foreign state refuses
 without repair. The marker lives outside key/state so their loss stays visible.
-Ordinary preparation/initialization/run never clears blocked sessions or refreshes
-authority. The separately explicit rearm operation below has a narrower boundary.
+Preparation never clears blocked sessions or refreshes authority. Managed hooks
+use the lazy transition below after lifecycle activation; standalone profiles
+retain the separately explicit authority-recovery operation.
 
 Programmatic trusted callers import `createLocalRawHost` from
 `integrations/client/raw/local-host.mjs` with `{profilePath}`. It exposes
@@ -379,7 +538,48 @@ signals must be native AbortSignals. Results have exactly
 unchanged B4b summary. Host readiness is not saved coverage or completed Memory.
 Raw retention and Memory interpretation remain separately observable.
 
-### Explicit authority-only rearm
+### Lazy per-session rearm after activation
+
+Activation stores a private durable pending/ready record binding the exact old
+and replacement configuration, profile and preparation bytes. Ambiguous writes
+are retried only from those two known states. It preserves every non-authority
+setting and the existing key/root binding. The newest 64 predecessor authorities
+are retained; older or unknown session bindings refuse rather than backfill.
+No session tree is scanned during activation or status.
+
+After ordinary host permission checks and Codex's real qualified non-exec ancestry
+and interactive-header checks, a hook locks only its selected session. A stale
+cursor must match a retained predecessor and its claim, key, source inode and old
+anchor. Its SQL high-water, first-part/event ownership and completed admission
+must satisfy the existing rearm checks. Deleted, pending, incomplete, blocked or
+unknown boundaries refuse. Lazy rearm does not reconstruct a pending projection
+or run the message producer/planner; it uses file size, complete-line and bounded
+anchor proofs to freeze EOF. It keeps session identity and issued ordinal, adopts
+current authority and makes Claude wait for a new user boundary.
+
+A deterministic internal action identity binds the session and authority change.
+The existing session-action encoding records a pending receipt, replacement cursor
+and committed receipt in that order. Before intent publication a failure leaves
+the old cursor retryable. After pending publication, retries use the frozen EOF
+even if more text is appended. After cursor publication they accept only the exact
+old/replacement cursor digests and complete the same receipt. After the committed
+receipt, normal capture may progress; a retry never writes that boundary again.
+The receipt binds the key/root and positive cursor revision in both directions.
+Direct workers refuse a pending receipt before source access. Each publication
+rechecks live authority and the session deletion fence after awaited source proofs.
+Filesystem publication and SQL fence checks are separate operations; a concurrent
+fence still prevents later capture/storage and search access. No fence/window/range
+is removed or bypassed by activation or rearm.
+
+### Explicit authority-only recovery for standalone profiles
+
+The explicit CLI remains for a standalone host profile whose controls were rotated
+externally, and for retrying its interrupted explicit action. Such a profile has
+no managed installation record or activation ledger. It also remains available
+to finish an already-pending legacy explicit action before lifecycle activation;
+that requires the original action ID/revision and source proofs. A managed profile
+cannot start a new explicit action. Lifecycle-managed off/on uses lazy rearm
+exclusively, without a second boundary selector for the same transition.
 
 After an operator has already re-enabled the authoritative controls, a trusted
 caller may invoke `rearmStatus({signal?})` and
@@ -462,8 +662,9 @@ separate operations, not an atomic deletion/publication transaction.
 
 Direct workers now refresh configuration and actual SQL permission under their
 session lock before source access. Even a no-work invocation refuses after real
-revocation; eligible legacy cursor encoding remains unchanged. Normal runs do
-not acquire the rearm historical SQL ownership checks.
+revocation; eligible legacy cursor encoding remains unchanged. Direct workers do
+not acquire the rearm historical SQL ownership checks. Managed hooks check the
+selected session fence even after a lazy receipt has committed.
 
 Sidecars remain private files below 64 KiB in owned 0700 directories. Source
 opening retains Linux owned-regular/no-symlink checks, not a new transcript 0600
@@ -517,7 +718,12 @@ planner identity. Wire identity and issued ordinal do not rotate with a source
 path, credential or supplied generation change.
 
 Initialize defaults to verified LF-terminated EOF (or an empty file); explicit
-`start:'beginning'` is for authorized synthetic/import use. Partial EOF waits
+Previously saved Codex cursors at offset zero are refused with
+`codex_boundary_required`, including pending recovery. Their identity and cursor
+are preserved; upgrading never imports their historical turns or lifts a fence.
+
+`start:'beginning'` is restricted to Claude's explicit operator import. Codex
+refuses it at the CLI, host and worker boundaries. Partial EOF waits
 without arming. Claude's EOF state excludes assistant output until a non-machine
 user boundary, including an empty user record. Reinitialization preserves the
 existing offset and any visible block. Run streams existing selection and whole
@@ -619,7 +825,21 @@ The closed configuration requires all of these fields:
 }
 ```
 
-The only additional optional top-level policy is
+The optional `interpretation:'raw-only'` field records Raw-only mode. Omission
+or `interpretation:'engine'` retains v1 interpretation behavior. Raw-only requires
+`raw.mode:'local-plain-v1'`. Setup leaves the field absent for existing consented
+requests. Mode is fixed for each installation; switching requires disabling it
+and setting up again. Setup retains its refusal to adopt an already bound
+target, so a separate installation on that same target may refuse. Existing
+sessions keep their first committed mode:
+cross-mode replay and continuation refuse with `raw_session_mode_conflict`,
+including after a new grant or installation on the same store and namespace.
+Start a fresh session in the new mode. Legacy sessions are classified from their
+authenticated capture projections; old local adapter sessions retain engine
+interpretation. Raw is neither duplicated
+nor silently reinterpreted during a mode change.
+
+The other optional top-level policy is
 `captureQualifiedDuplicates:'append-matching-evidence-v1'`. Omission preserves
 the existing configuration shape and strict qualified-source conflict behavior.
 Explicit undefined/null, inherited/accessor options and other values refuse;
@@ -668,6 +888,11 @@ is SHA256 of the JSON tuple `['local-capture-budget-v1', storeId, targetId]`;
 both clients/restarts must use the same private usage root. Counts do not reset
 with a new credential or consent generation. Daily limits count invocations,
 not dollars, and do not protect against the local owner deleting their ledger.
+The daily cap is a model-cost cap and does not apply to Raw-only capture. The
+owner Raw cap still applies. A Raw-cap refusal stores conversation/message/event
+and progress metadata, a closed `quota_reached` message, an unsaved part with its
+digest and byte counts, and capture/session-mode bindings. Its sealed payload,
+format and key version are null; no Raw bytes are saved or reserved for it.
 Corrupt state or uncertain process liveness refuses dispatch; calls are not
 refunded or automatically retried. No network result is awaited under the lock.
 

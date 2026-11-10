@@ -14,6 +14,7 @@ Codex 0.160.1
   · 提問時找回記憶：開啟
   要關閉提問回想：
 npx @cairn-ink/memory prompt-recall-off --client codex
+  上次成功保存：尚無紀錄
   請確認已在 Codex 的 /hooks 允許 Cairn 的 4 個項目（這裡無法檢查）。
 
 這裡只讀本機設定，沒有實際連線測試。

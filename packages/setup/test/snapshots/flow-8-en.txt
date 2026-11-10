@@ -14,6 +14,7 @@ Codex 0.160.1
   · Find memories when you ask: on
   To turn prompt recall off:
 npx @cairn-ink/memory prompt-recall-off --client codex
+  Last successful capture: none recorded yet
   Make sure the 4 Cairn entries are allowed in Codex /hooks (not checked here).
 
 Only local settings were read; no connection was tested.

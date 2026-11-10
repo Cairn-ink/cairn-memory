@@ -80,7 +80,7 @@
     "literal:target_id": 1
   },
   "core/local-authority-storage.mjs": {
-    "key:ownerId": 2,
+    "key:ownerId": 3,
     "key:targetId": 1
   },
   "core/local-authority-guard.mjs": {
@@ -561,7 +561,7 @@
   },
   "core/raw-capture-storage.mjs": {
     "key:eventId": 3,
-    "key:id": 3,
+    "key:id": 5,
     "key:ownerId": 1,
     "key:projectId": 1,
     "key:sessionId": 3,
@@ -956,7 +956,8 @@
     "literal:config_invalid": 1,
     "literal:preparation_invalid": 3,
     "literal:profile_invalid": 1,
-    "literal:store_invalid": 1
+    "literal:store_invalid": 1,
+    "literal:rearm_invalid": 1
   },
   "integrations/client/raw/local-setup-input.mjs": {
     "key:projectId": 1,
@@ -1003,12 +1004,12 @@
     "key:messageId": 1,
     "key:projectId": 3,
     "key:sessionId": 2,
-    "key:wireSessionId": 1,
+    "key:wireSessionId": 2,
     "literal:config_invalid": 1,
     "literal:key_invalid": 1,
-    "literal:preparation_invalid": 3,
+    "literal:preparation_invalid": 7,
     "literal:profile_invalid": 1,
-    "literal:rearm_invalid": 20,
+    "literal:rearm_invalid": 31,
     "literal:state_invalid": 1,
     "literal:store_invalid": 1
   },
@@ -1637,5 +1638,20 @@
   },
   "core/layout-base-upgrade.mjs": {
     "literal:storeId": 1
+  },
+  "adapters/mcp/raw-command.mjs": {
+    "key:actionId": 1,
+    "key:conversationId": 2
+  },
+  "core/local-authority-uuid.mjs": {
+    "key:ownerId": 2,
+    "key:projectId": 2
+  },
+  "integrations/client/raw/local-session-fence.mjs": {
+    "key:sessionId": 1,
+    "literal:preparation_invalid": 1
+  },
+  "integrations/client/raw/local-session-start.mjs": {
+    "literal:state_invalid": 1
   }
 }
