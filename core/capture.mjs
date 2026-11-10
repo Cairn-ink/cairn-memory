@@ -1,3 +1,4 @@
+import { reconcileCapture } from './ordered-capture.mjs';
 import { relateCapturedMemories } from './memory-relations.mjs';
 import { readFileSync } from 'node:fs';
 import { isStorageBusy } from './database.mjs';
@@ -206,13 +207,17 @@ export async function captureMessages({ model, input, operations, captureQualifi
       if (times.some(time => time !== null)) item.receiptTimes = times;
     }
     deadline?.check();
-    const memoryRelations = await relateCapturedMemories({ model, items, operations, deadline, validateFresh: assertSources });
+    const memoryRelations = operations.relationEnabled?.() === false ? []
+      : await relateCapturedMemories({ model, items, operations, deadline, validateFresh: assertSources });
     if (snapshot.causal) {
-      const prepared = unwrap(operations.ordered.prepare(snapshot, claim.order, items));
+      const relationMode = operations.relationMode?.() || memoryRelations.some(edge=>!edge.timingOnly);
+      const prepared = unwrap(operations.ordered.prepare(snapshot, claim.order, items, relationMode));
       deadline?.check();
       // Causal streams retain receipt/order provenance. Automatic relation
       // decisions now use the same batch port as every other capture.
-      const judged = { decisions: [], reason: captureQualification && items.length ? 'qualification_requires_identity' : null };
+      const judged = captureQualification || relationMode
+        ? { decisions: [], reason: captureQualification && items.length ? 'qualification_requires_identity' : null }
+        : await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery, deadline, validateFresh: () => { assertSources(); unwrap(operations.ordered.assertPrepared(snapshot, claim.order, prepared)); }, sourceView });
       deadline?.check();
       finished = unwrap(operations.ordered.finish(snapshot, claim.token, claim.order, prepared, judged, memoryRelations));
     } else finished = unwrap(operations.finishAdmission({ ...owned, items: items.map(({ receiptTimes, ...item }) =>

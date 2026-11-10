@@ -100,7 +100,7 @@ export function createOrderedCaptureStorage({ db, memoryRelationStorage, admissi
     return admissionStorage.finishAdmission(ns, { ...s, token, items }, {
       initialClassification: true,
       validate() {
-        validate(ns, s, order, false);
+        validate(ns, s, order, !snapshot.relationMode);
         for (const candidate of snapshot.candidates) {
           const row = activeRow(ns, candidate.row.id);
           if (!row || row.currentness !== 'current' || row.revision !== candidate.row.revision ||

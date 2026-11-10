@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { relationDDL, previousRelationDDL, validateMemoryRelations } from './memory-relations-schema.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { resolveContentLayout } from './content-safety-layout.mjs';
@@ -224,8 +225,18 @@ const metadataRows = statement => typeof statement.iterate === 'function' ? [...
 // All serving adapters share the native connection's attestation and refusal.
 const connections = new WeakMap();
 export function contentSafetyConnection(db) { return connections.get(db) ?? db; }
-export function bindContentSafetyConnection(adapter, db) {
+// Local peers learn of a committed optional layout without polling unrelated
+// stores. Weak references do not keep closed runtimes or stores alive.
+const layoutPeers=new Map(),peerStores=new WeakMap(),dirtyLayouts=new WeakMap();
+const peerCleanup=new FinalizationRegistry(({key,ref})=>{
+ const peers=layoutPeers.get(key);peers?.delete(ref);if(!peers?.size)layoutPeers.delete(key);
+});
+export function bindContentSafetyConnection(adapter, db, path) {
   const native = contentSafetyConnection(db), previous = connections.get(adapter);
+  if(typeof path==='string'&&path!==':memory:'&&!peerStores.has(native)){
+    const key=resolve(path),ref=new WeakRef(native),peers=layoutPeers.get(key)??new Set();
+    peers.add(ref);layoutPeers.set(key,peers);peerStores.set(native,key);peerCleanup.register(native,{key,ref});
+  }
   if (previous && previous !== native) fail('unsupported_database');
   // Registration must never clear a refusal observed before association.
   if (refused.has(adapter)) refused.add(native);
@@ -349,10 +360,39 @@ export function attestContentSafety(db, physical) {
     fail('unsupported_database');
   }
 }
-/** Trusted adapters can reuse the opener's attestation without any new SQL. */
-export function cachedContentLayout(db) {
-  if (refused.has(contentSafetyConnection(db))) fail('unsupported_database');
-  return layouts.get(contentSafetyConnection(db))?.layout;
+/** Unchanged stores reuse attestation without SQL. A committed local relation
+ * install invalidates peers once, so their next snapshot can reattest. */
+export function cachedContentLayout(db, { refresh = true } = {}) {
+  const native=contentSafetyConnection(db);
+  if (refused.has(native)) fail('unsupported_database');
+  const physical=dirtyLayouts.get(native);
+  if(refresh&&physical!==undefined){
+    const layout=attestContentSafety(db);
+    if(layout.physical===physical)dirtyLayouts.delete(native);
+  }
+  return layouts.get(native)?.layout;
+}
+// A successful optional DDL write can refresh the cache inside a transaction.
+// Its owner must restore this checkpoint after rolling that transaction back.
+export function contentLayoutCheckpoint(db, { optional = false } = {}) {
+  const native=contentSafetyConnection(db),before=layouts.get(native),wasRefused=refused.has(native),pending=dirtyLayouts.get(native);
+  const rollback = () => {
+    const changed=layouts.get(native)!==before;
+    if(before)layouts.set(native,before);else layouts.delete(native);
+    if((changed||optional)&&!wasRefused)refused.delete(native);
+    if(pending!==undefined)dirtyLayouts.set(native,pending);
+  };
+  rollback.commit=()=>{
+    const after=layouts.get(native);
+    if(after?.layout.relationsRevision!==2||after.layout.physical===before?.layout.physical)return;
+    const key=peerStores.get(native),peers=layoutPeers.get(key);
+    for(const ref of peers??[]){
+      const peer=ref.deref();
+      if(!peer?.isOpen){peers.delete(ref);continue;}
+      if(peer!==native)dirtyLayouts.set(peer,after.layout.physical);
+    }
+  };
+  return rollback;
 }
 export function installedContentLayout(db) {
   if (refused.has(contentSafetyConnection(db))) fail('unsupported_database');

@@ -210,7 +210,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
         const memoryId = result.memory.id;
         if (item.procedural !== undefined) proceduralStorage.write(result.memory, item.procedural, 'model', item.receipts);
         ids.add(memoryId);
-        return { memoryId, factIndex, hints: item.conflictHints, item, previousRelationTime,
+        return { memoryId, memoryRevision: result.memory.revision, factIndex, hints: item.conflictHints, item, previousRelationTime,
           insertedReceiptIds: result.insertedReceiptIds };
       });
       conflictStorage.insertBatch(ns, entries, "inferred-hint");

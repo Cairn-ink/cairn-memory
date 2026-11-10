@@ -1,3 +1,4 @@
+import { installMemoryThreadLayout } from '../testing/install-memory-thread-layout.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { memoryThreadFixture,measureThreadChain,threadNamespace as ns,unwrap,chainDate } from '../testing/memory-thread-fixture.mjs';
@@ -31,8 +32,9 @@ test('failed and malformed model calls fall back to neutral links with the sourc
 test('unrelated decisions suppress neutral fallback and the model cannot change chronology',async t=>{
  const f=memoryThreadFixture(t,{tier:2,model:{relateMemories:({input})=>({facts:input.facts.map(fact=>({factIndex:fact.factIndex,eventTime:'2099-01-01T00:00:00.000Z',edges:[]}))})}});
  await f.capture('My breakfast is oats.',{occurredAt:chainDate(0)});await f.capture('My breakfast is eggs.',{occurredAt:chainDate(1)});
- assert.equal(f.db.prepare('SELECT count(*) n FROM memory_relations').get().n,0);
- assert.deepEqual(f.db.prepare('SELECT event_time FROM memory_relation_times ORDER BY event_time').all().map(row=>row.event_time),[chainDate(0),chainDate(1)]);
+ assert.equal(f.db.prepare('PRAGMA user_version').get().user_version,18);
+ assert.deepEqual(f.db.prepare("SELECT name FROM sqlite_schema WHERE name IN ('memory_relations','memory_relation_times')").all(),[]);
+ assert.ok((await f.read()).metered.items.every(item=>!item.metadata?.thread));
 });
 test('a late capture of an older message stays earlier, regardless of the model edge direction',async t=>{
  const f=memoryThreadFixture(t,{tier:2});
@@ -79,6 +81,7 @@ test('a historical thread member remains available through the context snapshot'
  const a=unwrap(f.core.admit({namespace:ns,memory:{content:'My breakfast is oats.',kind:'fact'},receipts:[{client:'synthetic',sessionId:'session',eventId:'old',role:'user',excerpt:'Oats'}]})).memory;
  const replacement=unwrap(f.core.supersede({namespace:ns,memoryId:a.id,expectedRevision:a.revision,replacement:{content:'My breakfast is eggs.',kind:'fact'},
   receipts:[{client:'synthetic',sessionId:'session',eventId:'new',role:'user',excerpt:'Eggs'}]}));
+ installMemoryThreadLayout(f.path);
  const old=f.db.prepare('SELECT id,revision FROM memories WHERE id=?').get(a.id),current=replacement.memory;
  f.db.prepare(`INSERT INTO memory_relations(id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,created_at)
   VALUES('historical-thread',?,?,?,?,'supersedes',1,'user','now')`).run(current.id,current.revision,old.id,old.revision);
@@ -129,4 +132,21 @@ for(const tier of [1,2])test(`tier ${tier}: an older repeat receipt cannot rewin
  const current=pack.metered.items.find(item=>item.metadata.thread.status==='current');
  assert.equal(current.body,'My breakfast is eggs.');
  assert.equal(current.metadata.thread.eventTime,chainDate(3));
+});
+
+for(const [left,right] of [
+ ['我喜歡吃蛋餅，早餐幾乎每天都吃蛋餅。','我現在不吃蛋餅了，因為聽說那家早餐店的蛋餅用的是地溝油。'],
+ ['我喜歡吃蛋餅。','我不喜歡吃蛋餅了，因為地溝油。'],
+ ['I like egg pancakes for breakfast.','I stopped eating egg pancakes because of gutter oil.'],
+])test('natural preference change links through capture and the default context read: '+left,async t=>{
+ const f=memoryThreadFixture(t);await f.capture(left);await f.capture(right);
+ assert.equal(f.db.prepare('SELECT relation FROM memory_relations').get()?.relation,'same_thread');
+ const pack=await f.read({query:left,maxItems:1});assert.equal(pack.metered.items.length,2);
+ assert.equal(pack.metered.items.find(item=>item.metadata?.thread?.status==='current')?.body,right.normalize('NFKC'));
+});
+test('labelled natural and templated matcher strata remain separately visible',()=>{
+ const pairs=syntheticThreadPairs(),counts=threadClassificationCounts(pairs,sameThreadScore,SAME_THREAD_THRESHOLD);
+ console.log(JSON.stringify({kind:'matcher-strata',strata:counts,misses:pairs.filter(p=>p.stratum==='natural'&&p.positive&&sameThreadScore(p.left,p.right)<SAME_THREAD_THRESHOLD)}));
+ for(const language of ['en','zh-Hant'])assert.ok(pairs.filter(p=>p.language===language&&p.stratum==='natural').length>=12);
+ for(const row of counts)assert.equal(row.fp,0,JSON.stringify(row));
 });

@@ -47,6 +47,7 @@ CREATE VIEW memory_conflicts AS SELECT from_memory_id AS left_memory_id,
  FROM memory_relations WHERE decided_by='user' AND relation='contradicts';`;
 
 export function installMemoryRelations(db) {
+ if(!db.isTransaction)fail('storage_error');
  const physical=db.prepare('PRAGMA user_version').get().user_version;
  if(RELATION_LAYOUTS.includes(physical)&&physical>=200)return;
  const inherited=RELATION_LAYOUTS.includes(physical)?physical-100:physical;

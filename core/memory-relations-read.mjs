@@ -7,12 +7,12 @@ export const THREAD_MEMBER_CAP = 4;
 const presence = new WeakMap();
 // Fold this bit into an existing epoch statement. Empty graphs never add a
 // relation statement to a context read, including across writer connections.
-export const relationEpochColumn = db => cachedContentLayout(db)?.relationsRevision
+export const relationEpochColumn = db => cachedContentLayout(db)?.relationsRevision === 2
  ? ',EXISTS(SELECT 1 FROM memory_relations LIMIT 1) AS memory_relations_present' : '';
 export function observeRelationPresence(db,row) {
  if(row && Object.hasOwn(row,'memory_relations_present'))presence.set(contentSafetyConnection(db),Boolean(row.memory_relations_present));
 }
-export const memoryRelationsPresent = db => Boolean(cachedContentLayout(db)?.relationsRevision) && presence.get(contentSafetyConnection(db)) === true;
+export const memoryRelationsPresent = db => (cachedContentLayout(db)?.relationsRevision === 2) && presence.get(contentSafetyConnection(db)) === true;
 const boundary=ns=>[ns.ownerId,ns.scope,ns.projectId??''];
 const where='m.owner_id=? AND m.scope=? AND m.project_id=?';
 const refKey=ref=>JSON.stringify([boundary(ref.namespace),ref.type,ref.memoryId??ref.cardId,ref.revision,ref.bodyRevision??null]);

@@ -76,7 +76,7 @@ test('r2 native refusal: restoring a guard cannot revive fresh support wrappers,
  });
 });
 
-test('r2 ordered relation capture stays bounded with 32768 receipts and no legacy reconciliation',async t=>{
+test('r2 ordered capture: 32768 receipts take bounded fallback before materialization',async t=>{
  const f=safetyFixture(t);await f.migrate();const db=f.connect();let calls=0;
  const core=openMemoryCore({path:f.path,model:{contextWindow:8192,countTokens:()=>1,extract:({input})=>({items:[{content:input.messages[0].content,kind:'fact',confidence:.8,sourceIndices:[0]}]}),reconcile(){calls++;return{transitions:[]};}}});t.after(()=>{core.close();db.close();});
  const input=n=>({namespace:ns,client:'synthetic',sessionId:'ordered',eventId:'ordered-'+n,causal:{streamId:'stream',sequence:n},messages:[{id:'ordered-'+n,role:'user',content:'Synthetic ordered value '+n}]});
@@ -89,9 +89,7 @@ test('r2 ordered relation capture stays bounded with 32768 receipts and no legac
  DatabaseSync.prototype.prepare=function(sql){const stmt=prepare.call(this,sql);if(!/FROM receipts\b.*memory_id/s.test(sql)&&!sql.includes('FROM json_each(?) wanted CROSS JOIN receipts r INDEXED BY memory_receipts'))return stmt;return new Proxy(stmt,{get(target,key){const value=Reflect.get(target,key,target);if(key==='all')return(...args)=>{const rows=value.apply(target,args);maximum=Math.max(maximum,rows.length);return rows;};return typeof value==='function'?value.bind(target):value;}});};
  let result;try{result=await core.capture(input(2));}finally{DatabaseSync.prototype.prepare=prepare;}
  await t.test('materialized receipt bound',()=>assert.ok(maximum<=5,'ordered_materialization_bound rows='+maximum));
- assert.equal(result.ok,true,'ordered_receipt_bound '+JSON.stringify(result));
- assert.deepEqual(result.value.reconciliation,{status:'complete_no_change',reason:null,retiredCount:0});
- assert.ok(maximum<=5,'materialized '+maximum+' receipt rows');assert.equal(calls,0);
+ assert.equal(result.ok,true,'ordered_receipt_bound '+JSON.stringify(result));assert.equal(result.value.reconciliation.reason,'unordered_sources');assert.ok(maximum<=5,'materialized '+maximum+' receipt rows');assert.equal(calls,0);
 });
 
 test('r2 pull windows: 10000-fact checkpoints and cached batches use bounded seeks and charged rows',async t=>{

@@ -137,7 +137,7 @@ for(const failure of ['missing','provider','malformed','oversized'])test(`ordere
 test('successful unrelated decisions add no neutral edge',async t=>{
   const {core,db}=fixture(t,{relateMemories:()=>({facts:[]})});
   ok(await core.capture(capture(1,'My breakfast is oats.')));ok(await core.capture(capture(2,'My breakfast is eggs.')));
-  assert.equal(db.prepare('SELECT count(*) n FROM memory_relations').get().n,0);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version,18);assert.equal(db.prepare("SELECT count(*) n FROM sqlite_schema WHERE name='memory_relations'").get().n,0);
 });
 
 test('O3 namespace and stream scopes are exact; foreign memories are never candidates', async (t) => {
@@ -176,7 +176,7 @@ for(const action of ['correct','forget'])test(`candidate ${action} during a rela
   const other=openMemoryCore({path});workspaces.get(t).defer(()=>other.close());const revision=detail(other,previous).memory.revision;
   if(action==='forget')ok(other.forget({namespace,memoryId:previous,expectedRevision:revision}));
   else ok(other.correct({namespace,memoryId:previous,expectedRevision:revision,content:'Project Alpha deadline is Wednesday.',kind:'fact',receipt:receipt('corrected')}));
-  release();ok(await pending);assert.equal(db.prepare('SELECT count(*) n FROM memory_relations').get().n,0);
+  release();ok(await pending);assert.equal(db.prepare('PRAGMA user_version').get().user_version,18);assert.equal(db.prepare("SELECT count(*) n FROM sqlite_schema WHERE name='memory_relations'").get().n,0);
   assert.equal(db.prepare('SELECT high_water FROM capture_streams').get().high_water,2);
 });
 
@@ -249,7 +249,7 @@ test('a suppressed replacement never acquires an edge or retires its predecessor
   const hidden=ok(core.admit({namespace,memory:{content:monday,kind:'fact'},receipts:[receipt('hidden')]})).memory;
   ok(core.forget({namespace,memoryId:hidden.id,expectedRevision:hidden.revision}));
   const result=ok(await core.capture(capture(2)));assert.equal(result.admission.suppressedCount,1);assert.deepEqual(result.admission.memories,[]);
-  assert.equal(detail(core,previous).memory.state,'active');assert.equal(db.prepare('SELECT count(*) n FROM memory_relations').get().n,0);
+  assert.equal(detail(core,previous).memory.state,'active');assert.equal(db.prepare('PRAGMA user_version').get().user_version,18);assert.equal(db.prepare("SELECT count(*) n FROM sqlite_schema WHERE name='memory_relations'").get().n,0);
 });
 
 test('O2 real process race binds one stream position to one event', { timeout: 15000 }, async (t) => {

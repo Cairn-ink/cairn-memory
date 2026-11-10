@@ -1,10 +1,9 @@
 import './content-write-safety.mjs';
-import { installMemoryRelations } from './memory-relations-schema.mjs';
 import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheInside } from './content-suppression-storage.mjs';
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
 import { RELATION_LAYOUTS, SAFETY_SCHEMA_VERSIONS, resolveContentLayout, assertContentFeatures } from './content-safety-layout.mjs';
-import { attestContentSafety, cachedContentLayout, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection } from './content-safety-schema.mjs';
+import { attestContentSafety, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection, contentLayoutCheckpoint } from './content-safety-schema.mjs';
 import { validateContextProductLayout } from './context-product-schema.mjs';
 import { installCardCurrentDependencies, validateCardCurrentDependencies, assertNoCardCurrentDependencies } from './card-current-schema.mjs';
 import { installRoleProfiles, validateRoleProfiles, assertNoRoleProfiles } from './role-profile-schema.mjs';
@@ -380,6 +379,7 @@ export function transaction(db, work, check, { deferred = false } = {}) {
   const execute = () => {
     db.exec(deferred ? "BEGIN" : "BEGIN IMMEDIATE");
     let contentWrite;
+    const restoreLayout = contentLayoutCheckpoint(db);
     try {
       const result = inContentSuppressionRequestInside(db, () => {
         checkInstalledContentSafety(db);
@@ -391,9 +391,11 @@ export function transaction(db, work, check, { deferred = false } = {}) {
       contentWrite = null;
       check?.();
       db.exec("COMMIT");
+      restoreLayout.commit();
       return result;
     } catch (error) {
       if(db.isTransaction)db.exec("ROLLBACK");
+      restoreLayout();
       if (error?.code === 'ERR_SQLITE_ERROR' && error.message === 'card_dependency_limit_reached') {
         fail('dependency_limit_reached');
       }
@@ -440,6 +442,7 @@ export function openDatabase(path, options = {}) {
   if (existingStore !== undefined) {
     const option = existingStoreOption(existingStore), location = existingStorePath(path);
     const db = new DatabaseSync(location.uri, { timeout });
+    bindContentSafetyConnection(db,db,path);
     try {
       location.check();
       db.exec('PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;');
@@ -450,9 +453,6 @@ export function openDatabase(path, options = {}) {
       if ((roleProfiles || currentDependencies) && layout.base < 32) fail('unsupported_database');
       if (methodPackages && layout.base < 30) fail('unsupported_database');
       if (currentDependencies && layout.base !== 33) fail('unsupported_database');
-      location.check();
-      if(layout.relationsRevision!==2)transaction(db,()=>installMemoryRelations(db));
-      if(cachedContentLayout(db)?.relationsRevision!==2)attestContentSafety(db);
       location.check();
       return db;
     } catch (error) {
@@ -486,6 +486,7 @@ export function openDatabase(path, options = {}) {
   try {
     // URI mode=rw is mandatory for fences: no mkdir or creation fallback.
     db = new DatabaseSync(fence ? noncreatingStoreURI(path) : path, { timeout });
+    bindContentSafetyConnection(db,db,path);
     db.exec("PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;");
     transaction(db, () => {
       if (fence) {
@@ -496,8 +497,7 @@ export function openDatabase(path, options = {}) {
       if (contentSafety !== undefined && (db.prepare('PRAGMA application_id').get().application_id !== 0 ||
           db.prepare('PRAGMA user_version').get().user_version !== 0 ||
           db.prepare('SELECT count(*) n FROM sqlite_schema').get().n !== 0)) fail('unsupported_database');
-      let layout = attestContentSafety(db);
-      if(layout.relationsRevision===1){installMemoryRelations(db);layout=attestContentSafety(db);}
+      const layout = attestContentSafety(db);
       if (layout.relationsRevision) {
         if (layout.base < 33) assertNoCardCurrentDependencies(db);
         if (layout.base < 32) assertNoRoleProfiles(db);
@@ -525,7 +525,6 @@ export function openDatabase(path, options = {}) {
         if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID) fail('unsupported_database');
         assertContentFeatures(layout, { privateCards, rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls, methodPackages, assets, roleProfiles, currentDependencies });
         validateContextProductLayout(db, layout);
-        installMemoryRelations(db);
         return;
       }
       function initialize() {
@@ -817,9 +816,7 @@ export function openDatabase(path, options = {}) {
         const base = db.prepare('PRAGMA user_version').get().user_version;
         installContentSafetyInside(db, base, contentSafetyInventory(db));
       }
-      installMemoryRelations(db);
     });
-    if(cachedContentLayout(db)?.relationsRevision!==2)attestContentSafety(db);
     return db;
   } catch (error) {
     db?.close();

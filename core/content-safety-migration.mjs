@@ -3,7 +3,7 @@ import { sqliteFileStat } from './sqlite-journal-probe.mjs';
 import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { attestContentSafety, contentSafetyDDL, verifyContentSafetyDDL } from './content-safety-schema.mjs';
+import { cachedContentLayout, attestContentSafety, contentSafetyDDL, verifyContentSafetyDDL } from './content-safety-schema.mjs';
 import { safetyPhysicalVersion } from './content-safety-layout.mjs';
 import { validateContextProductLayout } from './context-product-schema.mjs';
 import { writeContentSuppressionInside, suppressionEpoch } from './content-suppression-storage.mjs';
@@ -97,7 +97,7 @@ function verifyPopulation(db, expectedFacts) {
  * The caller owns the transaction and inventories the pristine legacy layout. */
 export function installContentSafetyInside(db, base, inventory, seeds = []) {
   if (!db.isTransaction) fail('storage_error');
-  const physical = safetyPhysicalVersion(base) + (attestContentSafety(db).relationsRevision*100), factIds = new Set();
+  const physical = safetyPhysicalVersion(base) + ((cachedContentLayout(db)??attestContentSafety(db)).relationsRevision*100), factIds = new Set();
   validateContextProductLayout(db); verifyIntegrity(db);
   db.exec(contentSafetyDDL(base));
   verifyContentSafetyDDL(db, physical);
@@ -186,7 +186,7 @@ async function migrateSafety({ path, backupPath, expected, quiescence }, eventTi
 }
 
 function installCardLineageInside(db,base,inventory,snapshot) {
-  const relationOffset=attestContentSafety(db).relationsRevision*100;
+  const relationOffset=(cachedContentLayout(db)??attestContentSafety(db)).relationsRevision*100;
   const control=db.prepare('SELECT * FROM content_safety_control').get();
   if(control.card_lineage_revision!==0)fail('unsupported_database');
   const identity=db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get();

@@ -1,3 +1,4 @@
+import { installMemoryThreadLayout } from '../testing/install-memory-thread-layout.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -29,7 +30,7 @@ function fixture(t,{keyed=true,filing=false,options={},contextOptions={},coreOpt
   for(let i=0;i<10;i++){const value=ok(await trusted.call(core,'refreshContextIndex',{readSet:[ns],types:['memory'],intent,budget:{maxItems:1024,maxMs:5000}}));if(value.status==='complete')break;}
   return ok(await trusted.call(core,'contextRead',{readSet:[ns],types:['memory'],intent,query,semantic:false,budget:{maxItems:24,maxTokens:6000}}));
  };
- return {core,db,model,calls,capture,read,trusted};
+ return {core,db,path,model,calls,capture,read,trusted};
 }
 for(const filing of [false,true])test(`capture derives current from retained chains and retracts after forgetting; filing=${filing}`,async t=>{
  const f=fixture(t,{filing}),ids=[];
@@ -78,7 +79,9 @@ test('capture candidates and database edges cannot cross owner or namespace',asy
  const f=fixture(t);await f.capture('My breakfast is oats.',{...ns,ownerId:'other-owner'});
  await f.capture('My breakfast is eggs.',{...ns,scope:'project',projectId:'other-project'});
  await f.capture('My breakfast is pancakes.');assert.deepEqual(f.calls.at(-1).candidates,[[]]);
- const rows=f.db.prepare('SELECT id,revision FROM memories ORDER BY id').all();
+ await f.capture('My breakfast is toast.');
+ const all=f.db.prepare('SELECT id,revision,owner_id,scope FROM memories ORDER BY id').all();
+ const rows=[all.find(row=>row.owner_id==='other-owner'),all.find(row=>row.owner_id===ns.ownerId&&row.scope==='personal')];
  assert.throws(()=>f.db.prepare(`INSERT INTO memory_relations(id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,receipt_id,event_time,created_at) VALUES('bad',?,?,?,?,'contradicts',1,'user',NULL,NULL,'now')`).run(rows[0].id,rows[0].revision,rows[1].id,rows[1].revision),/invalid_relation_boundary/);
 });
 test('correction invalidates every old revision edge atomically',async t=>{
@@ -87,12 +90,13 @@ test('correction invalidates every old revision edge atomically',async t=>{
  ok(f.core.correct({namespace:ns,memoryId:memory.id,expectedRevision:memory.revision,content:'My breakfast is rice.',kind:'fact',receipt:{client:'synthetic',sessionId:'s',eventId:'correction',role:'user',excerpt:'My breakfast is rice.'}}));
  assert.equal(f.db.prepare('SELECT count(*) n FROM memory_relations').get().n,0);
 });
-test('relation insertion and admission completion roll back together',async t=>{
- const f=fixture(t);await f.capture('My breakfast is oats.');
+test('optional relation insertion failure rolls back only relations and admits the Memory',async t=>{
+ const f=fixture(t);await f.capture('My breakfast is oats.');await f.capture('My breakfast is eggs.');
  f.db.exec(`CREATE TRIGGER relation_failure BEFORE INSERT ON memory_relations BEGIN SELECT RAISE(ABORT,'synthetic'); END`);
  const result=await f.core.capture({namespace:ns,client:'synthetic',sessionId:'s',eventId:'failed',messages:[{id:'failed-message',role:'user',content:'My breakfast is pancakes.'}]});
- assert.equal(result.ok,false);assert.equal(f.db.prepare('SELECT count(*) n FROM memories').get().n,1);
- assert.equal(f.db.prepare('SELECT count(*) n FROM receipts').get().n,1);
+ assert.equal(result.ok,true,JSON.stringify(result));assert.equal(f.db.prepare('SELECT count(*) n FROM memories').get().n,3);
+ assert.equal(f.db.prepare('SELECT count(*) n FROM receipts').get().n,3);
+ assert.equal(f.db.prepare('SELECT count(*) n FROM memory_relations').get().n,1);
 });
 test('suppressed endpoints never enter the delivery pack through a relation',async t=>{
  const f=fixture(t,{options:{relateMemories:({input})=>({facts:input.facts.map(fact=>({factIndex:fact.factIndex,eventTime:null,edges:input.candidates[fact.factIndex].map(c=>({candidateId:c.id,relation:'contradicts',confidence:0.9}))}))})}});
@@ -104,13 +108,12 @@ test('suppressed endpoints never enter the delivery pack through a relation',asy
  ok(f.core.forget({namespace:ns,memoryId:id,expectedRevision:memory.revision}));
  const pack=await f.read();assert.ok(pack.metered.items.every(item=>item.ref.id!==id&&!JSON.stringify(item.metadata).includes(id)));
 });
-test('event-time-only decisions survive admission and initial filing, without inventing an edge',async t=>{
+test('event-time-only decisions admit and file without installing a layout or inventing an edge',async t=>{
  const f=fixture(t,{filing:true,options:{relateMemories:({input})=>({facts:input.facts.map(fact=>({factIndex:fact.factIndex,eventTime:'2020-01-01T00:00:00.000Z',edges:[]}))})}});
  const result=await f.capture('My breakfast changed on 2020-01-01.',ns,'2020-01-01T00:00:00.000Z');
- assert.equal(f.db.prepare('SELECT count(*) n FROM memory_relations').get().n,0);
- const row=f.db.prepare('SELECT * FROM memory_relation_times').get();
- const memory=ok(f.core.get({namespace:ns,memoryId:result.admission.memories[0].id})).memory;
- assert.equal(row.revision,memory.revision);assert.equal(row.event_time,'2020-01-01T00:00:00.000Z');
+ assert.equal(f.db.prepare('PRAGMA user_version').get().user_version,18);
+ assert.deepEqual(f.db.prepare("SELECT name FROM sqlite_schema WHERE name IN ('memory_relations','memory_relation_times')").all(),[]);
+ assert.equal(ok(f.core.get({namespace:ns,memoryId:result.admission.memories[0].id})).memory.content,'My breakfast changed on 2020-01-01.');
  assert.ok((await f.read()).metered.items.every(item=>!item.metadata?.thread));
 });
 for(const causal of [false,true])test(`initial filing retains this capture's new relations and times; causal=${causal}`,async t=>{
@@ -153,7 +156,7 @@ test('causal capture uses the same relation decision and preserves receipt prove
  assert.equal((await f.read()).metered.items.length,2);
 });
 test('history carries the newest four members from a unique lexical seed',async t=>{
- const f=fixture(t);let previous;
+ const f=fixture(t);installMemoryThreadLayout(f.path);let previous;
  for(let i=0;i<11;i++){
   const memory=ok(f.core.admit({namespace:ns,memory:{content:i===0?'UniqueAnchor original breakfast':'Historical value '+i,kind:'fact'},receipts:[{client:'synthetic',sessionId:'s',eventId:'history-'+i,role:'user',excerpt:'history '+i}]})).memory;
   if(previous)f.db.prepare(`INSERT INTO memory_relations
@@ -215,10 +218,11 @@ test('a candidate forgotten by the token counter is never sent to the relation m
  };
  const second=await f.capture('My breakfast is new value.');
  assert.equal(fired,true);assert.equal(second.admission.memories.length,1);assert.equal(f.calls.length,1);
- assert.equal(f.db.prepare('SELECT count(*) n FROM memory_relations').get().n,0);
+ assert.equal(f.db.prepare('PRAGMA user_version').get().user_version,18);
+ assert.equal(f.db.prepare("SELECT count(*) n FROM sqlite_schema WHERE name='memory_relations'").get().n,0);
 });
 test('current resolution continues beyond the history depth limit',async t=>{
- const f=fixture(t);let previous;
+ const f=fixture(t);installMemoryThreadLayout(f.path);let previous;
  for(let i=0;i<11;i++){
   const memory=ok(f.core.admit({namespace:ns,memory:{content:i===0?'UniqueCurrentAnchor original':'Replacement value '+i,kind:'fact'},receipts:[{client:'synthetic',sessionId:'s',eventId:'current-'+i,role:'user',excerpt:'current '+i}]})).memory;
   if(previous)f.db.prepare(`INSERT INTO memory_relations
@@ -236,6 +240,7 @@ test('a relation timeout reserves admission time and admits without edges',async
  const f=fixture(t,{coreOptions:{captureDeadlineMs:2000},options:{onDiagnostic:value=>diagnostics.push(value),
   relateMemories:({signal})=>new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(Error('cancelled')),{once:true}))}});
  const result=await f.capture('My breakfast is oats.');
- assert.equal(result.admission.memories.length,1);assert.equal(f.db.prepare('SELECT count(*) n FROM memory_relations').get().n,0);
+ assert.equal(result.admission.memories.length,1);assert.equal(f.db.prepare('PRAGMA user_version').get().user_version,18);
+ assert.equal(f.db.prepare("SELECT count(*) n FROM sqlite_schema WHERE name='memory_relations'").get().n,0);
  assert.ok(diagnostics.some(value=>value.stage==='relateMemories'&&value.reason==='model_timeout'));
 });

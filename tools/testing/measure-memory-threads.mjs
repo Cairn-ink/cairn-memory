@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join,resolve } from 'node:path';
 import { pathToFileURL,fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { installMemoryThreadLayout } from '../../core/testing/install-memory-thread-layout.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { performance } from 'node:perf_hooks';
 import { memoryThreadFixture,measureThreadChain,threadNamespace as ns,unwrap } from '../../core/testing/memory-thread-fixture.mjs';
@@ -49,7 +50,7 @@ if(mode==='all'||mode==='cost'){
      const trusted=host();trusted.state.allowed=[ns];
      core=engine.openMemoryCore({path,contextRead:{version:'context-read-v1',authority:trusted.authority,counter:{id:'synthetic-cost',countTokens:text=>Math.ceil(text.length/4)}}});
      if(scenario==='thread'&&variant==='after'){
-      const db=new DatabaseSync(path);
+      installMemoryThreadLayout(path);const db=new DatabaseSync(path);
       for(let i=0;i<9;i++){
        const memory=db.prepare('SELECT revision FROM memories WHERE id=?').get(ids[i]);
        const receipt=db.prepare('SELECT id FROM receipts WHERE memory_id=?').get(ids[i]).id;

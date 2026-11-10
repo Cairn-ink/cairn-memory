@@ -1,4 +1,4 @@
-import { deliverMemoryRelations, memoryRelationLabels, relationEpochColumn, observeRelationPresence } from './memory-relations-read.mjs';
+import { deliverMemoryRelations, memoryRelationLabels, relationEpochColumn, observeRelationPresence, memoryRelationsPresent } from './memory-relations-read.mjs';
 import { captureSnapshot } from './capture-input.mjs';
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
 import { registerContentWriteBoundary } from './content-write-context.mjs';
@@ -60,8 +60,9 @@ export function readRecallJournalMode(runtime) {
 
 /** Shared persistence runtime used by both the legacy and envelope facades. */
 export function createMemoryRuntime(input, internal) {
-  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "methodPackages", "assets", "roleProfiles", "existingStore", "storeFence", "contentSafety", "busyTimeoutMs"]);
+  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "methodPackages", "assets", "roleProfiles", "existingStore", "storeFence", "contentSafety", "busyTimeoutMs", "memoryRelations"]);
   const busyTimeoutMs = busyTimeoutOption(input);
+  if(Object.hasOwn(input,'memoryRelations') && typeof input.memoryRelations!=='boolean')fail('invalid_input');
   const privateCards = privateCardOptions(input.privateCards);
   const methodPackages = methodPackageOptions(input.methodPackages);
   if (privateCards?.currentDependencies && !methodPackages) fail('invalid_input');
@@ -739,8 +740,9 @@ export function createMemoryRuntime(input, internal) {
     }, undefined, { deferred: true });
   }
 
-  const memoryRelationStorage = createMemoryRelationStorage({ db, advanceEpoch });
-  const conflictStorage = createConflictStorage({ db, activeRow: currentRow, rawRow: activeRow, advanceEpoch,
+  const memoryRelationStorage = createMemoryRelationStorage({ db, advanceEpoch,
+    enabled: input.memoryRelations !== false, managed: input.existingStore !== undefined || input.storeFence !== undefined });
+  const conflictStorage = createConflictStorage({ upgradeRelations: input.memoryRelations !== false && input.existingStore === undefined && input.storeFence === undefined, db, activeRow: currentRow, rawRow: activeRow, advanceEpoch,
     dropHeldWork: (id, reason) => dropHeldWork(db, id, reason) });
   const rationaleStorage = createRationaleStorage({ db, currentRow, readSourceEvidence, epoch, advanceEpoch });
   const qualificationStorage = createQualificationStorage({ db, receiptKey,
@@ -935,6 +937,8 @@ export function createMemoryRuntime(input, internal) {
     previewDeleteConversation(input) { ready(); return deletion.preview(input); },
     deleteConversation(input) { ready(); return deletion.remove(input); },
     listRawEffects(input) { ready(); return deletion.list(input); },
+    relationWritesEnabled() { ready(); return memoryRelationStorage.enabled(); },
+    relationMode() { ready(); return cachedContentLayout(db,{refresh:false})?.relationsRevision === 2; },
     identity, ready, admit, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recentReceipts, recallSnapshot, sourceSnapshot,
@@ -974,7 +978,7 @@ export function createMemoryRuntime(input, internal) {
     discardCaptureEvidence(ns, input) { ready(); return stagedEvidence.discard(ns, input); },
     assertCaptureEvidence(ns, input, deadline) { ready(); return input[captureDispatch]
       ? admissionStorage.beginCaptureDispatch(ns, input, deadline) : admissionStorage.assertCaptureEvidence(ns, input); },
-    expandRelationRefs(namespaces, refs) { ready(); return readTransaction(db,()=>{
+    expandRelationRefs(namespaces, refs) { ready(); if(!memoryRelationsPresent(db))return refs; return readTransaction(db,()=>{
       const expanded=deliverMemoryRelations(db,{intent:'current'},refs.map((ref,index)=>({ref:{type:'memory',namespace:namespaces[ref.namespaceIndex],memoryId:ref.memoryId,revision:ref.revision},rank:index+1})),Infinity);
       return expanded.map(item=>({namespaceIndex:namespaces.findIndex(ns=>JSON.stringify(boundary(ns))===JSON.stringify(boundary(item.ref.namespace))),memoryId:item.ref.memoryId,revision:item.ref.revision}));
     }); },
@@ -1012,7 +1016,7 @@ export function createMemoryRuntime(input, internal) {
     assertEpoch(ns, index, suppressionEpoch) { ready(); return mocStorage.assertEpoch(ns, index, suppressionEpoch); },
     epoch(ns) { ready(); return epoch(ns); },
     close() { if (!closed) { if (db.isOpen) db.close(); closed = true; } },
-  }, { check: assertContentScope, noOwner: ['ready','close','assertContentScope','assertContentOutput','contentPortGuard'] });
+  }, { check: assertContentScope, noOwner: ['ready','close','relationWritesEnabled','relationMode','assertContentScope','assertContentOutput','contentPortGuard'] });
   }
   const runtime = createRuntimeFacade();
   // Include the facade's entry/delivery attestation in these two error

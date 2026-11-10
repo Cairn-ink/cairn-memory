@@ -10,10 +10,16 @@ const system=readFileSync(new URL('./prompts/relate-memories.md',import.meta.url
 const relations=new Set(['supersedes','contradicts','refines','causes']);
 // Neutral topic matching only. No polarity or replacement claim is made here.
 export const SAME_THREAD_THRESHOLD = 0.8;
-const noise = /\b(?:i|my|me|the|a|an|am|is|are|was|were|to|of|and|now|still|no|longer|not|never|do|does|dont|like|likes|love|loves|enjoy|enjoys|prefer|prefers|eat|eats|eating|drink|drinks|drinking|stopped)\b|不再|不|每天|喜歡|喜爱|愛吃|愛|吃|喝|我|了/giu;
+const noise = /\b(?:i|my|me|the|a|an|am|is|are|was|were|to|of|and|now|still|no|longer|not|never|do|does|dont|like|likes|love|loves|enjoy|enjoys|prefer|prefers|eat|eats|eating|drink|drinks|drinking|stopped|avoid|avoids|avoiding|usually|often)\b|現在|目前|已經|以前|戒掉|避免|停止|不再|不|每天|喜歡|喜爱|愛吃|愛|吃|喝|我|了/giu;
 function topic(text) {
- const value=text.normalize('NFKC').toLowerCase().replace(/[’']/g,'')
+ let value=text.normalize('NFKC').toLowerCase().replace(/[’']/g,'')
   .replace(/^(?:the user|user)\b/u,'i').replace(/^(?:使用者|用戶)/u,'我');
+ // Temporal/frequency modifiers belong to the self assertion, not to a named
+ // relative (for example, 我最近喜歡 vs 我妹妹喜歡).
+ value=value.replace(/^我(?:(?:現在|目前|最近|以前|已經|還是|仍然|每天|常常|通常|一直|偶爾|週末|每週[一二三四五六日]|早上|晚上|午餐|早餐|暫時|完全|後來|不再|不|很|都|也|會))+/u,'我');
+ // Ignore an explanatory tail, but keep a leading reason before the predicate.
+ const beforeReason=value.split(/\bbecause\b|\bdue to\b|因為|由於/u)[0];
+ if(tokenizeT1(beforeReason.replace(noise,' ')).some(token=>token.length>1))value=beforeReason;
  const relative=value.match(/\bmy\s+(brother|sister|mother|father|friend|partner|wife|husband)\b|我(?:的)?(哥哥|弟弟|姊姊|姐姐|妹妹|媽媽|爸爸|朋友|伴侶)/u);
  const possessive=value.match(/^my\s+(.+?)\s+(?:likes|loves|enjoys|prefers|eats|drinks|does)\b/u)?.[1]
   ??value.match(/^我(?:的)?(?!因為|由於|不|現在|以前|每天)(.{1,8}?)(?:喜歡|愛吃|偏好)/u)?.[1];
@@ -24,10 +30,15 @@ function topic(text) {
    ??value.match(/^([^。！？.!?]{2,80}?)(?:是|改成|換成)/u)?.[1];
  const property=owned??named?.replace(/^the\s+/u,'');
  const subject=/\b(?:think|believe|said|says)\b|認為|覺得/u.test(value)?null:named?'topic':possessive?'relative:'+possessive:relative?'relative:'+(relative[1]??relative[2]):/^(?:i\b|my\b|me\b|我)/u.test(value)?'self':null;
- const tail=value.split(/\bbecause\b|\bdue to\b|因為|由於/u)[0];
- const object=value.match(/(?:喜歡|愛吃|偏好|改吃)(.+)/u)?.[1];
- const tokens=new Set(tokenizeT1((object??tail).replace(noise,' ')).filter(token=>token.length>1));
- return {subject,property,tokens};
+ const tail=value;
+ const object=tail.match(/(?:喜歡|愛吃|偏好|改吃)(.+)/u)?.[1];
+ const tokens=new Set(tokenizeT1((object??tail).replace(noise,' ')).filter(token=>token.length>1)
+  // Local inflection normalization; the frozen retrieval tokenizer is unchanged.
+  .map(token=>/^[a-z]{5,}$/u.test(token)?token.replace(/(?:ing|ed)$/u,'').replace(/e$/u,''):token));
+ // A preference about buying/price/preparation is not the consumption claim.
+ const focus=value.match(/\b(buying|buy|price|cost|cooking)\b|價格|價錢|買|煎/u)?.[0]??null;
+ const destination=value.match(/\bto\s+([a-z]+)\b|去(\p{Script=Han}{2})(?=[。！？了，,]|$)/u)?.[0]??null;
+ return {subject,property,tokens,focus,destination};
 }
 export function relationJaccard(left,right){
  const a=topic(left).tokens,b=topic(right).tokens,union=new Set([...a,...b]);
@@ -35,12 +46,13 @@ export function relationJaccard(left,right){
 }
 export function sameThreadScore(left,right){
  const a=topic(left),b=topic(right);
- if(!a.subject||a.subject!==b.subject)return 0;
+ if(!a.subject||a.subject!==b.subject||a.focus!==b.focus)return 0;
+ if(a.destination&&b.destination&&a.destination!==b.destination)return 0;
  if(a.property&&b.property)return a.property===b.property?1:0;
  const common=[...a.tokens].filter(token=>b.tokens.has(token));
  // Require a specific anchor, not just a shared generic noun or a pronoun.
  if(common.length<2&&!common.some(token=>/\p{Script=Han}{2}/u.test(token)))return 0;
- return common.length/Math.max(1,Math.max(a.tokens.size,b.tokens.size));
+ return common.length/Math.max(1,Math.min(a.tokens.size,b.tokens.size));
 }
 export function ruleRelation(fact,candidates){
  return candidates.map(candidate=>({candidateId:candidate.id,relation:'same_thread',

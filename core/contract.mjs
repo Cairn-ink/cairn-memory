@@ -55,7 +55,7 @@ import {
 // only their own option; all other legal options reach the retained validator.
 const CORE_OPTIONS = Object.freeze(['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy',
   'captureRationale','captureEvidence','captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes',
-  'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence','contentSafety','busyTimeoutMs']);
+  'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence','contentSafety','busyTimeoutMs','memoryRelations']);
 const OPEN_OPTIONS = Object.freeze([...CORE_OPTIONS, 'rawConversations', 'raw', 'rawSearch']);
 
 const keepAdmissionKey = Symbol('keepAdmissionKey');
@@ -261,6 +261,7 @@ export function createMemoryCore(input, internal) {
   const captureQualifiedDuplicates = qualifiedDuplicatesOption(input);
   object(input, CORE_OPTIONS);
   const busyTimeoutMs = busyTimeoutOption(input);
+  if(Object.hasOwn(input,'memoryRelations') && typeof input.memoryRelations!=='boolean')fail('invalid_input');
   const privateCards = privateCardOptions(input.privateCards);
   const methodPackages = methodPackageOptions(input.methodPackages);
   if (privateCards?.currentDependencies && !methodPackages) fail('invalid_input');
@@ -309,6 +310,7 @@ export function createMemoryCore(input, internal) {
   if (input.contentSafety !== undefined && input.contentSafety !== 's2h-v1') fail('invalid_input');
   const runtime = (internal?.createRuntime ?? createMemoryRuntime)({ path: input.path,
     ...(busyTimeoutMs !== undefined ? { busyTimeoutMs } : {}),
+    ...(input.memoryRelations !== undefined ? { memoryRelations: input.memoryRelations } : {}),
     ...(input.contentSafety !== undefined ? { contentSafety: input.contentSafety } : {}),
     ...(input.existingStore ? { existingStore: input.existingStore } : {}),
     ...(input.storeFence ? { storeFence: input.storeFence } : {}),
@@ -936,7 +938,7 @@ export function createMemoryCore(input, internal) {
         return page ? [{ namespace, indexRevision: page.epoch, suppressionEpoch: page.suppressionEpoch }] : [];
       }), includeQualification);
       const storage = { map: (request) => mapPage(request, navigation), fetch, validateFresh,
-        expandRelations: refs => runtime.expandRelationRefs(namespaces, refs),
+        ...(runtime.relationMode() ? { expandRelations: refs => runtime.expandRelationRefs(namespaces, refs) } : {}),
         recentReceipts: (ref, limit) => runtime.recentReceipts(namespaces[ref.namespaceIndex], ref, limit),
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
@@ -1072,6 +1074,8 @@ export function createMemoryCore(input, internal) {
           claimAdmission: (value, sources) => invoke(() => runtime.claimCapturedAdmission(ns, {
           ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS,
         }, deadline, rawRegistration, sources)),
+          relationEnabled: () => runtime.relationWritesEnabled(),
+          relationMode: () => runtime.relationMode(),
           relationNamespace: ns, relationIdentity: runtime.identity,
           relationCandidates: facts => runtime.relationCandidates(ns, facts),
           resolveRelationCandidates: refs => runtime.resolveRelationCandidates(ns, refs),
@@ -1105,14 +1109,14 @@ export function createMemoryCore(input, internal) {
           classifyPlacement: value => classifyPlacementValidated(value, deadline), applyPlacement,
           ordered: {
             claim: (snapshot, sources) => invoke(() => runtime.claimOrdered(ns, snapshot, deadline, rawRegistration, sources)),
-            prepare(snapshot, order, extracted) {
+            prepare(snapshot, order, extracted, relationMode) {
               return invoke(() => {
                 const items = admissionItems(extracted.map(({ sourceIndices, receiptTimes, ...item }) =>
                   receiptTimes ? { ...item, receipts: item.receipts.map((receipt, index) =>
                     ({ ...receipt, occurredAt: receiptTimes[index] })) } : item));
                 // Relations carry their own revision checks. The causal stream still
                 // fences its event/high-water and lease inside final admission.
-                return { items, discovery: {candidates:[],reason:null} };
+                return { items, discovery: relationMode ? {candidates:[],reason:null,relationMode:true} : runtime.discoverOrdered(ns, snapshot, order, items) };
               });
             },
             assertPrepared(snapshot, order, prepared) {

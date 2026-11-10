@@ -2,18 +2,28 @@ import { memoryRelationTime } from './memory-relations-time.mjs';
 import { randomUUID } from 'node:crypto';
 import { readTransaction } from './database.mjs';
 import { contentReadSafety, createContentReadMemo } from './content-safety.mjs';
-import { cachedContentLayout } from './content-safety-schema.mjs';
+import { installMemoryRelations } from './memory-relations-schema.mjs';
+import { cachedContentLayout, installedContentLayout, attestContentSafety, contentLayoutCheckpoint } from './content-safety-schema.mjs';
 import { createBM25 } from './context-read-bm25.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
-export function createMemoryRelationStorage({ db, advanceEpoch }) {
+export function createMemoryRelationStorage({ db, advanceEpoch, enabled = true, managed = false }) {
+  const writable = () => enabled && (!managed || cachedContentLayout(db,{refresh:false})?.relationsRevision === 2);
+  // Before the first edge, keep only a bounded, volatile clock hint. Legacy
+  // stores have no source-date column: persisting one would change main's bytes.
+  // Every hint is receipt-validated before it can enter the installed package.
+  const pendingTimes=new Map(),timeKey=(ns,fingerprint)=>JSON.stringify([boundary(ns),fingerprint]);
+  const pendingTime=(ns,memory)=>{
+    const time=pendingTimes.get(timeKey(ns,memory.fingerprint));
+    return time?.memory_id===memory.id?time:undefined;
+  };
   const row = (ns,id) => db.prepare(`SELECT * FROM memories WHERE ${where} AND id=? AND deleted=0 AND review_state!='awaiting'`)
     .get(...boundary(ns),id);
   const safe = (ns,memory,memo) => memory && contentReadSafety(db,{namespace:ns,intent:'history',memo,
     ref:{type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision}}).allowed;
   function rememberedTime(ns,fingerprint) {
-    if(!cachedContentLayout(db)?.relationsRevision)return undefined;
+    if(cachedContentLayout(db)?.relationsRevision!==2)return pendingTimes.get(timeKey(ns,fingerprint));
     return db.prepare(`SELECT t.* FROM memory_relation_times t JOIN memories m
       ON m.id=t.memory_id AND m.revision=t.revision WHERE m.owner_id=? AND m.scope=? AND m.project_id=?
       AND m.fingerprint=? AND m.deleted=0`).get(...boundary(ns),fingerprint);
@@ -27,7 +37,7 @@ export function createMemoryRelationStorage({ db, advanceEpoch }) {
       const bm25=createBM25(rows.map(memory=>({id:memory.id,text:memory.content})));
       return facts.map(fact=>bm25.search(fact.content,10).map(hit=>{
         const memory=byId.get(hit.id);
-        return {id:memory.id,revision:memory.revision,content:memory.content,eventTime:memoryRelationTime(db,memory)};
+        return {id:memory.id,revision:memory.revision,content:memory.content,eventTime:(cachedContentLayout(db)?.relationsRevision!==2?pendingTime(ns,memory)?.event_time:undefined)??memoryRelationTime(db,memory)};
       }));
     });
   }
@@ -35,10 +45,10 @@ export function createMemoryRelationStorage({ db, advanceEpoch }) {
     return readTransaction(db,()=>{
       const memo=createContentReadMemo(db);
       return refs.flatMap(ref=>{const memory=row(ns,ref.id);return memory&&memory.revision===ref.revision&&safe(ns,memory,memo)
-        ?[{id:memory.id,revision:memory.revision,content:memory.content,eventTime:memoryRelationTime(db,memory)}]:[];});
+        ?[{id:memory.id,revision:memory.revision,content:memory.content,eventTime:(cachedContentLayout(db)?.relationsRevision!==2?pendingTime(ns,memory)?.event_time:undefined)??memoryRelationTime(db,memory)}]:[];});
     });
   }
-  function insert(ns,entries,proposals=[]) {
+  function write(ns,entries,proposals=[]) {
     const snapshot={edges:[],times:[]};
     if(!proposals?.length)return snapshot;
     const memo=createContentReadMemo(db);let changed=false;
@@ -89,9 +99,66 @@ export function createMemoryRelationStorage({ db, advanceEpoch }) {
     if(changed)advanceEpoch(ns);
     return snapshot;
   }
+  function insert(ns,entries,proposals=[]) {
+    const empty={edges:[],times:[]};
+    if(!writable() || !proposals?.length)return empty;
+    const layout=cachedContentLayout(db);
+    if(layout?.relationsRevision!==2)for(const entry of entries){
+      const timing=proposals.find(p=>p.timingOnly&&p.factIndex===entry.factIndex);
+      if(!timing||!entry.insertedReceiptIds[0])continue;
+      const key=timeKey(ns,entry.item.fingerprint),previous=pendingTimes.get(key);
+      const latest=previous?.memory_id===entry.memoryId&&previous.event_time>timing.eventTime?previous:null;
+      pendingTimes.delete(key);pendingTimes.set(key,latest??{memory_id:entry.memoryId,revision:entry.memoryRevision,
+        event_time:timing.eventTime,receipt_id:entry.insertedReceiptIds[0]});
+      if(pendingTimes.size>256)pendingTimes.delete(pendingTimes.keys().next().value);
+    }
+    // Timing metadata alone never justifies installing or upgrading a package.
+    if(layout?.relationsRevision!==2 && !proposals.some(p=>!p.timingOnly))return empty;
+    // The caller already holds admission's writer lock. No separate migration
+    // transaction or lock wait is allowed for this optional feature.
+    if(!db.isTransaction)return empty;
+    let valid;
+    try {
+    const memo=createContentReadMemo(db);
+    valid=proposals.filter(proposal=>{
+      if(proposal.timingOnly)return true;
+      const entry=entries.find(entry=>entry.factIndex===proposal.factIndex);
+      if(!entry?.insertedReceiptIds[0] || entry.memoryId===proposal.candidateId)return false;
+      const from=row(ns,entry.memoryId),to=row(ns,proposal.candidateId);
+      return to?.revision===proposal.candidateRevision && safe(ns,from,memo) && safe(ns,to,memo);
+    });
+    }catch{return empty;}
+    if(layout?.relationsRevision!==2 && !valid.some(p=>!p.timingOnly))return empty;
+    const restoreLayout=contentLayoutCheckpoint(db,{optional:true});
+    try{db.exec('SAVEPOINT memory_relation_admission');}catch{return empty;}
+    try {
+      // Refresh only when an edge will be written, including a package another
+      // connection installed after this runtime opened. Managed stores never
+      // reach this installer until the host has explicitly upgraded them.
+      if(layout?.relationsRevision!==2){
+        installMemoryRelations(db);
+        attestContentSafety(db);
+        for(const proposal of valid.filter(p=>!p.timingOnly)){
+          const to=row(ns,proposal.candidateId),time=pendingTime(ns,to);
+          if(time&&db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(time.receipt_id,to.id)){
+            db.prepare('INSERT OR IGNORE INTO memory_relation_times VALUES(?,?,?,?)').run(to.id,to.revision,time.event_time,time.receipt_id);
+          }
+        }
+      }else installedContentLayout(db);
+      const snapshot=write(ns,entries,valid);
+      if(layout?.relationsRevision!==2&&!snapshot.edges.length)throw Error('relation_write_skipped');
+      db.exec('RELEASE memory_relation_admission');
+      return snapshot;
+    }catch(error){
+      db.exec('ROLLBACK TO memory_relation_admission');
+      db.exec('RELEASE memory_relation_admission');
+      restoreLayout();
+      return empty;
+    }
+  }
   // Backfill can reuse candidates + insert in an authorized writer transaction;
   // replacing rule rows must bind the same revisions and retain their receipt.
-  return { candidates, resolve, insert, rememberedTime };
+  return { candidates, resolve, insert, rememberedTime, enabled: writable };
 }
 
 // An automatic capture's own initial filing settles its final revision. This

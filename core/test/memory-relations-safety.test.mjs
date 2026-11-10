@@ -1,3 +1,4 @@
+import { installMemoryThreadLayout } from '../testing/install-memory-thread-layout.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { openMemoryCore } from '../index.mjs';
@@ -15,6 +16,7 @@ for(const base of [18,23,33])for(const blocked of ['suppressed','malformed-versi
  const peerNamespace=blocked==='foreign-owner'?{...ns,ownerId:'foreign'}:blocked==='foreign-namespace'?{...ns,scope:'project',projectId:'foreign-project'}:ns;
  const peer=ok(core.admit({namespace:peerNamespace,memory:{content:'SecretRelationPeer hidden value',kind:'fact'},receipts:[receipt('relation-peer')],
   ...(!foreign?{conflictHints:[{memoryId:seed.id,expectedRevision:seed.revision,relation:'contradicts'}]}:{})})).memory;
+ installMemoryThreadLayout(f.path);
  const read=async()=>h.call(core,'contextRead',{readSet:[ns],types:['memory'],intent:'history',query:'UniqueRelationSeed',semantic:false,budget:{}});
  const before=ok(await read());assert.equal(before.metered.items.length,foreign?1:2,'one-hop delivery stays within the authorized namespace');
  if(['suppressed','malformed-version'].includes(blocked)){transaction(db,()=>writeContentSuppressionInside(db,{namespace:ns,kind:'memory',key:peer.id,reason:'purge',actionId:'hide-peer',
@@ -37,6 +39,7 @@ test('supersession follows only safe endpoints, so suppressing the newest value 
  t.after(()=>{core.close();db.close();});
  const a=ok(core.admit({namespace:ns,memory:{content:'Breakfast previous value',kind:'fact'},receipts:[receipt('previous')]})).memory;
  const b=ok(core.admit({namespace:ns,memory:{content:'Breakfast newest value',kind:'fact'},receipts:[receipt('newest')]})).memory;
+ installMemoryThreadLayout(f.path);
  db.prepare(`INSERT INTO memory_relations(id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,created_at)
  VALUES('superseder',?,?,?,?,'supersedes',1,'user','now')`).run(b.id,b.revision,a.id,a.revision);
  const read=()=>h.call(core,'contextRead',{readSet:[ns],types:['memory'],intent:'current',query:'Breakfast',semantic:false,budget:{}});
@@ -55,6 +58,7 @@ test('a peer suppressed by the token counter cannot remain in relation metadata'
  const core=openMemoryCore({path:f.path,contextRead:{version:'context-read-v1',authority:h.authority,counter}});t.after(()=>{core.close();db.close();});
  const seed=ok(core.admit({namespace:ns,memory:{content:'Visible current breakfast',kind:'fact'},receipts:[receipt('visible')]})).memory;
  peer=ok(core.admit({namespace:ns,memory:{content:'Hidden historical breakfast',kind:'fact'},receipts:[receipt('peer')]})).memory;
+ installMemoryThreadLayout(f.path);
  db.prepare(`INSERT INTO memory_relations(id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,created_at)
  VALUES('race',?,?,?,?,'supersedes',1,'user','now')`).run(seed.id,seed.revision,peer.id,peer.revision);
  armed=true;
@@ -70,6 +74,7 @@ test('Raw exclusion removes incident edges and never brings a surviving derived 
  await savedSource(f,'Shared synthetic source.');
  const [ancestor,derived]=f.db.prepare('SELECT * FROM memories ORDER BY content').all();
  const visible=ok(f.core.admit({namespace:sourceNamespace,memory:{content:'UniqueVisibleThread independent fact',kind:'fact'},receipts:[receipt('independent-thread')]})).memory;
+ installMemoryThreadLayout(f.path);
  f.db.prepare(`INSERT INTO memory_relations(id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,created_at)
   VALUES('raw-thread',?,?,?,?,'same_thread',1,'user','now')`).run(visible.id,visible.revision,derived.id,derived.revision);
  const h=host();h.state.allowed=[sourceNamespace];
@@ -95,7 +100,7 @@ test('first-install safety preflight accepts the relation package and preserves 
     title:'Synthetic thread title',body:'Synthetic thread body',authoredInput:{text:'Synthetic submitted source',occurredAt:null}}}));
    ok(h.call(core,'confirmCardDraft',{namespace:ns,cardId:draft.id,expectedRevision:draft.revision,actionId:'confirm'}));
   }
-  await core.close();
+  installMemoryThreadLayout(path);await core.close();
   const report=await preflightContentSafetyV1({path});
   assert.equal(report.schemaBase,cards?23:18,JSON.stringify(report));
   assert.equal(report.enumerated,cards?1:0);assert.equal(report.unchangedFiles,true);

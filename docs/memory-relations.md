@@ -25,7 +25,12 @@ is omitted. Provider diagnostics contain closed codes, never Memory text.
 ## Dates and delivery
 
 Chronology comes from the source message's stored date, falling back to capture
-time. The model cannot override it. Ties use capture order. Currency follows
+time. The model cannot override it. Before the first edge, legacy layouts without a
+source-date column keep main's stored receipt dates. A bounded volatile clock
+hint retains recent source-message dates on the admitting connection and binds
+them to receipts when the first edge installs the package. Reopening or evicting
+that hint before the first edge falls back to main's stored capture date; no
+extra date row or schema is persisted for an unrelated store. Ties use capture order. Currency follows
 dates independently of the direction or type of an edge; a late capture of an
 older message stays earlier. Attaching an older receipt to an exact-content
 fact retains that fact's latest trusted support date.
@@ -66,7 +71,8 @@ eligible value. Temporary caller denial never edits another caller's graph.
 
 The local traversal is bounded by the read deadline and a component ceiling.
 An incomplete traversal does not assert a current member. Empty graphs use the
-existing read path: an edge-presence bit rides an existing epoch statement,
+existing read path and exact epoch SQL while the layout is absent. Once installed,
+an edge-presence bit rides an existing epoch statement,
 without a new statement or wire annotation. Standalone facts keep their original
 representation, including after deletion removes a thread's last edge.
 
@@ -98,10 +104,33 @@ existing model input/output and embedding budgets and reserve time for admission
 The second relation package uses inherited physical layout plus 200 and
 `relationsRevision: 2`. It expands the closed relation set with `same_thread`,
 adds nullable `memory_relations.reason`, and constrains rule decisions to neutral
-edges. The prior four-label package (inherited layout plus 100) upgrades
-transactionally, retaining model/user edges and removing the obsolete rule
+edges. The prior four-label package (inherited layout plus 100) upgrades lazily
+on its first relation write in the admission transaction, retaining model/user edges and removing the obsolete rule
 assertions. Its receipt bindings are retained and dates are rederived from those source
 receipts, replacing dates previously supplied by a model.
+
+Opening, creating, reading, forgetting, suppressing, maintaining and migrating
+an unrelated store never installs this package. An unmanaged local store installs
+it only after admission validates its first neutral or typed edge, in the same
+transaction as the Memory and edge. Failed optional installation rolls back the
+relation work and preserves ordinary admission. Timing-only decisions do not
+install anything. Revision-one reads omit threads until the first write upgrades.
+
+Managed stores (`existingStore`) and stores with a host-pinned `storeFence`
+never install or upgrade relations implicitly.
+The host must explicitly upgrade the layout while the store is quiescent and
+reopen its connections before relation writes are enabled. The internal
+`installMemoryRelations(db)` installer requires a caller-owned writer transaction;
+it is not called by the managed opener.
+
+Set `memoryRelations: false` in `openMemoryCore` before the first edge to disable
+relation discovery and new relation writes. This does not remove an installed
+layout. A store that has only been opened by the new engine, without gaining any
+relation, remains readable by main. After the first edge, older engines refuse
+with `unsupported_database`; hosts can inspect `PRAGMA user_version` and resolve
+the inherited-plus-package layout, or use the internal layout attestation's
+`relationsRevision`. Downgrading after the first relation requires reinstalling
+the newer version, as with the lineage layout; there is no downgrade conversion.
 
 Legacy conflict rows migrate to user-decided contradiction edges and
 `memory_conflicts` remains a compatibility view. Existing conflict hint limits

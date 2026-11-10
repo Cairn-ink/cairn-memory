@@ -35,6 +35,55 @@ export function syntheticThreadPairs(){
   add('zh-Hant','value-change',true,`專案甲的${property}是原本的選擇。`,`專案甲的${property}是後來的選擇。`);
   add('zh-Hant','different-subject',false,`專案甲的${property}是原本的選擇。`,`專案乙的${property}是原本的選擇。`);
  }
+ // Handwritten natural sentences are a separate labelled stratum. Keep misses
+ // visible: these are topic labels, not examples generated from matcher rules.
+ for(const [positive,left,right] of [
+  [true,'I like egg pancakes for breakfast.','I stopped eating egg pancakes because of gutter oil.'],
+  [true,'I usually have green tea with lunch.','I no longer drink green tea, because it keeps me awake.'],
+  [true,'I love walking along the river after work.','I stopped walking along the river after work because the path is closed.'],
+  [true,'My home address is on Cedar Lane.','My home address changed to Pine Road after the move.'],
+  [true,'I enjoy playing board games on weekends.','I still enjoy playing board games, especially with my cousins.'],
+  [true,'I prefer taking the night train to Boston.','I stopped taking the night train to Boston because the service ended.'],
+  [true,'I eat peanut butter on toast most mornings.','I avoid peanut butter now because of an allergy.'],
+  [true,'I like listening to jazz while cooking.','I no longer listen to jazz while cooking because my kitchen speaker broke.'],
+  [true,'My preferred editor is Vim at work.','My preferred editor is now Helix.'],
+  [true,'I drink black coffee before my morning run.','I stopped drinking black coffee because it upsets my stomach.'],
+  [true,'I love the little ramen shop near the station.','I do not eat at the little ramen shop near the station anymore because it closed.'],
+  [true,'I cycle to the office every Tuesday.','I have given up cycling to the office because the bridge is being repaired.'],
+  [true,'I keep my spare keys in the blue drawer.','I moved my spare keys from the blue drawer to my backpack.'],
+  [false,'I like egg pancakes for breakfast.','My partner stopped eating egg pancakes because of gutter oil.'],
+  [false,'I love playing board games.','I dislike buying board games online because shipping is expensive.'],
+  [false,'I enjoy green tea.','I dislike the price of green tea at the airport.'],
+  [false,'My home address is on Cedar Lane.','My office address is on Cedar Lane.'],
+  [false,'I drink black coffee every morning.','I think my colleague stopped drinking black coffee.'],
+  [false,'I like the night train to Boston.','I like the night train to Seattle.'],
+  [false,'I like cooking egg pancakes.','I like eating egg pancakes.'],
+  [false,'I enjoy walking along the river.','I repaired the bicycle in my garage.'],
+ ])add('en','natural',positive,left,right);
+ for(const [positive,left,right] of [
+  [true,'我喜歡吃蛋餅，早餐幾乎每天都吃蛋餅。','我現在不吃蛋餅了，因為聽說那家早餐店的蛋餅用的是地溝油。'],
+  [true,'我喜歡吃蛋餅。','我不喜歡吃蛋餅了，因為地溝油。'],
+  [true,'我午餐常常配綠茶。','我最近不喝綠茶了，因為下午喝了晚上睡不著。'],
+  [true,'我喜歡下班後沿著河堤散步。','我暫時不去河堤散步，因為步道施工。'],
+  [true,'我的住址是松柏路那棟公寓。','我的住址換成了車站旁邊的新大樓。'],
+  [true,'我週末很喜歡玩桌遊。','我現在還是喜歡玩桌遊，只是改成跟同事一起玩。'],
+  [true,'我習慣搭夜車去台南。','我不搭夜車去台南了，因為班次取消。'],
+  [true,'我以前早餐會抹花生醬。','我現在完全不吃花生醬，因為過敏。'],
+  [true,'我喜歡煮飯時聽爵士樂。','我最近不在煮飯時聽爵士樂了，因為喇叭壞了。'],
+  [true,'我的編輯器是 Vim。','我的編輯器改成 Helix，想試試新的操作方式。'],
+  [true,'我每天早上喝黑咖啡再去跑步。','我已經戒掉黑咖啡，因為喝了胃不舒服。'],
+  [true,'我很喜歡車站旁邊的小拉麵店。','我不去車站旁邊的小拉麵店了，因為已經歇業。'],
+  [true,'我每週二騎腳踏車去公司。','我暫時不騎腳踏車去公司，因為橋在整修。'],
+  [true,'我把備用鑰匙放在藍色抽屜裡。','我後來把備用鑰匙從藍色抽屜移到背包了。'],
+  [false,'我喜歡吃蛋餅。','我妹妹不吃蛋餅了，因為地溝油。'],
+  [false,'我喜歡玩桌遊。','我不喜歡買桌遊，因為運費太貴。'],
+  [false,'我喜歡喝綠茶。','我不喜歡綠茶在機場的價格。'],
+  [false,'我的住址是松柏路。','我的公司地址是松柏路。'],
+  [false,'我早上都喝黑咖啡。','我覺得同事不喝黑咖啡了。'],
+  [false,'我喜歡搭夜車去台南。','我喜歡搭夜車去台北。'],
+  [false,'我喜歡煎蛋餅。','我喜歡吃蛋餅。'],
+  [false,'我喜歡沿河堤散步。','我今天修好了車庫裡的腳踏車。'],
+ ])add('zh-Hant','natural',positive,left,right);
  return rows;
 }
 export function threadClassificationCounts(pairs,score,threshold){
