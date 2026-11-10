@@ -5,28 +5,39 @@ import { DatabaseSync } from 'node:sqlite';
 import { installRawSearchTestClock } from '../testing/raw-search-clock.mjs';
 import { sourceFixture, savedSource, ns, ok } from '../testing/raw-source-fixtures.mjs';
 import { searchFixture, safetySourceFixture } from '../testing/raw-search-fixtures.mjs';
+import { readRawChannel } from '../context-read-three-layer.mjs';
 import { transaction } from '../database.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 
 test.beforeEach(installRawSearchTestClock);
-async function fixture(t, texts = ['telescope alpha', 'telescope beta', 'telescope gamma'], safety = false) {
+async function fixture(t, texts = ['telescope alpha', 'telescope beta', 'telescope gamma'], safety = false, candidateChecking = false) {
   const f = safety ? safetySourceFixture(t, { model: { extract: ({ input }) => ({ items: input.messages.map(message => ({
     content: 'Synthetic telescope source fact.', kind: 'fact', confidence: 1, sourceIndices: [message.index],
   })) }) } }) : sourceFixture(t), sources = [];
   for (const [index, text] of texts.entries()) sources.push(await savedSource(f, text, { sessionId: 'batch-' + index }));
   const originalOpen = f.port.openRaw; let opener = originalOpen;
   f.port.openRaw = input => opener(input);
-  let authorizations = 0;
+  let authorizations = 0, denied = false;
   const s = await searchFixture(f, { setupHost(host) {
     const authorize = host.authority.authorize;
-    host.authority.authorize = (request, token) => { if (request.method === 'rawSearchSource') authorizations++; return authorize(request, token); };
+    host.denyPreparation = () => { denied = true; host.revoke(); };
+    host.authority.authorize = (request, token) => {
+      if (request.method === 'rawSearchSource') {
+        authorizations++;
+        if (denied) return null;
+        if (candidateChecking && (!request.input.candidate ||
+            !sources.some(source => source.conversationId === request.input.candidate.conversationId && source.messageId === request.input.candidate.messageId) ||
+            JSON.stringify(Object.keys(request.input).sort()) !== JSON.stringify(['candidate', 'intent']))) return null;
+      }
+      return authorize(request, token);
+    };
   } });
   await s.maintain({ maxItems: 128, maxMs: 5000 });
   let coverage;
   for (let index = 0; index < 64; index++) {
     const result = await s.search({ query: 'telescope' });
     coverage = result.coverage;
-    if (result.coverage.status === 'complete') return { f, s, sources, candidates: result.candidates, authorizations: () => authorizations, setOpen(work) { opener = input => work(input, originalOpen); } };
+    if (result.coverage.status === 'complete' && s.indexCount() === f.db.prepare('SELECT count(*) n FROM raw_parts WHERE saved=1').get().n) return { f, s, sources, candidates: result.candidates, authorizations: () => authorizations, setOpen(work) { opener = input => work(input, originalOpen); } };
     await s.tick({ maxItems: 128, maxMs: 5000 });
   }
   assert.fail('synthetic batch index must be ready: ' + JSON.stringify({ coverage, status: await s.service.status() }));
@@ -43,11 +54,11 @@ function invalidate(f, s, source, mutation) {
       start: 0, end: source.text.length, reason: 'purge', actionId: 'synthetic-batch-suppression' }));
   else if (mutation === 'excluded') f.db.prepare('INSERT INTO raw_source_exclusions VALUES(?,?,?,?,?)')
     .run(source.conversationId, source.messageId, 0, source.text.length, 1);
-  else s.host.revoke();
+  else s.host.denyPreparation();
 }
 
-for (const mutation of ['forgotten', 'suppressed', 'excluded', 'denied']) {
-  for (const gap of ['snapshot-release', 'part-open', 'registration']) test(`native batch blocks ${mutation} at ${gap}`, async t => {
+for (const mode of ['batch', 'single']) for (const mutation of ['forgotten', 'suppressed', 'excluded', 'denied']) {
+  for (const gap of ['before-snapshot', 'snapshot-release', 'part-open', 'registration']) test(`native ${mode} blocks ${mutation} at ${gap}`, async t => {
     const { f, s, sources: [source], candidates, setOpen } = await fixture(t, ['telescope ' + 'alpha '.repeat(800)], true);
     const exec = DatabaseSync.prototype.exec;
     let changed = false, invalidated = false, mutationError, opens = 0, released = false;
@@ -60,7 +71,7 @@ for (const mutation of ['forgotten', 'suppressed', 'excluded', 'denied']) {
       const stack = new Error().stack;
       if (gap === 'registration' && !changed && sql === 'BEGIN' && stack.includes('revalidateInside')) mutate();
       const result = exec.call(this, sql);
-      if (sql === 'COMMIT' && stack.includes('prepareBatch')) {
+      if (sql === 'COMMIT' && (mode === 'batch' ? stack.includes('prepareBatch') : stack.includes('raw-source-reader.mjs'))) {
         assert.equal(this.isTransaction, false); released = true;
         if (gap === 'snapshot-release' && !changed) mutate();
       }
@@ -73,13 +84,18 @@ for (const mutation of ['forgotten', 'suppressed', 'excluded', 'denied']) {
       if (gap === 'part-open' && !changed) mutate();
       return open(input);
     });
-    const progress = [], result = await prepare(s, candidates, { onPrepared: handle => progress.push(handle) })
-      .catch(error => { throw mutationError ?? error; });
+    if (gap === 'before-snapshot') mutate();
+    const progress = [];
+    const result = mode === 'batch' ? await prepare(s, candidates, { onPrepared: handle => progress.push(handle) })
+      .catch(error => { throw mutationError ?? error; }) : {
+        handles: [await s.prepare(candidates[0]).catch(error => { if (mutationError) throw mutationError; return null; })], complete: true,
+      };
+    if (mode === 'single') progress.push(...result.handles);
     assert.equal(changed, true); assert.ifError(mutationError); assert.equal(invalidated, true); assert.equal(result.complete, true);
     assert.deepEqual(result.handles, candidates.map(() => null));
     assert.deepEqual(progress, result.handles);
     assert.equal(JSON.stringify(result).includes('alpha'), false);
-    if (gap === 'snapshot-release') assert.equal(opens, 0, 'live guard refuses before the first crypto callback');
+    if (['before-snapshot', 'snapshot-release'].includes(gap)) assert.equal(opens, 0, 'live guard refuses before the first crypto callback');
     if (gap === 'part-open') assert.equal(opens, 1, 'the post-part guard prevents the next callback');
     if (gap === 'registration') assert.ok(opens > 0, 'registration revalidation refuses already-opened text');
   });
@@ -98,7 +114,7 @@ test('batch and existing single preparation APIs preserve identical source proje
   assert.deepEqual(s.service.revalidate(batch.handles), [single.value]);
 });
 
-test('batch shares one initial source snapshot and authorization, opening outside transactions', async t => {
+test('batch shares one initial source snapshot with candidate authorizations, opening outside transactions', async t => {
   const { s, candidates, authorizations, setOpen } = await fixture(t);
   assert.equal(candidates.length, 3);
   const exec = DatabaseSync.prototype.exec, active = new Set(); let snapshots = 0, opening = false;
@@ -115,7 +131,7 @@ test('batch shares one initial source snapshot and authorization, opening outsid
     opening = true; try { await new Promise(resolve => setImmediate(resolve)); return await open(input); } finally { opening = false; }
   });
   const progress = [], result = await prepare(s, candidates, { onPrepared: (handle, index) => progress.push([handle, index]) });
-  assert.equal(result.complete, true); assert.equal(snapshots, 1); assert.equal(authorizations(), 1);
+  assert.equal(result.complete, true); assert.equal(snapshots, 1); assert.equal(authorizations(), candidates.length);
   assert.deepEqual(progress.map(([handle]) => handle), result.handles);
   assert.deepEqual(progress.map(([, index]) => index), [0, 1, 2]);
   assert.deepEqual(s.service.revalidate(result.handles).map(value => value.messageId), candidates.map(candidate => candidate.messageId));
@@ -156,4 +172,55 @@ test('native batch cutoff preserves completed handles and permits the next opera
   assert.equal(result.complete, false); assert.equal(result.handles.length, 1); assert.deepEqual(progress, result.handles);
   assert.equal(opens, 2);
   assert.equal((await prepare(s, candidates)).handles.filter(Boolean).length, 3);
+});
+
+
+test('candidate-checking host authorizers accept both single and batch preparation', async t => {
+  const { s, candidates } = await fixture(t, undefined, false, true);
+  const singles = await Promise.all(candidates.map(candidate => s.prepare(candidate)));
+  const batch = await prepare(s, candidates);
+  assert.equal(batch.complete, true);
+  assert.deepEqual(batch.handles.map(handle => handle?.value), singles.map(handle => handle.value));
+});
+
+test('one batch preserves candidates from two live search proofs in input order', async t => {
+  const { s, candidates } = await fixture(t);
+  const second = await s.search({ query: 'telescope' });
+  const selected = [second.candidates[1], candidates[0], second.candidates[2]];
+  assert.notEqual(selected[0].proof, selected[1].proof);
+  const singles = [];
+  for (const candidate of selected) singles.push(await s.prepare(candidate));
+  const progress = [], batch = await prepare(s, selected, { onPrepared: (handle, index) => progress.push([handle, index]) });
+  assert.equal(batch.complete, true);
+  assert.deepEqual(batch.handles.map(handle => handle?.value), singles.map(handle => handle.value));
+  assert.deepEqual(progress.map(([, index]) => index), [0, 1, 2]);
+});
+
+test('known oversized sources cannot spend deliverable candidates Raw cutoff', async t => {
+  const { s, candidates } = await fixture(t, ['telescope deliverable', 'telescope ' + 'x'.repeat(524288)]);
+  const small = candidates.find(candidate => candidate.ranges.length === 1);
+  const large = candidates.find(candidate => candidate.ranges.length >= 129);
+  assert.ok(small); assert.ok(large, 'all oversized parts must be indexed before the cost injection');
+  const selected = [small, large], original = DatabaseSync.prototype.prepare;
+  const own = Object.getOwnPropertyDescriptor(performance, 'now'); let now = 100, inspected = 0;
+  Object.defineProperty(performance, 'now', { configurable: true, value: () => now });
+  DatabaseSync.prototype.prepare = function(sql) {
+    if (sql.startsWith('SELECT 1 FROM raw_session_fences') && new Error().stack.includes('inspectInside')) {
+      now += 5; inspected++;
+    }
+    return original.call(this, sql);
+  };
+  t.after(() => { DatabaseSync.prototype.prepare = original; Object.defineProperty(performance, 'now', own); });
+  const errors = [];
+  const port = { search: async () => ({ candidates: selected, coverage: { status: 'complete' } }),
+    prepare: async candidate => { try { return await s.prepare(candidate); } catch (error) { errors.push({ code: error.code, now }); throw error; } }, prepareMany: (values, settings) => prepare(s, values, settings),
+    revalidate: handles => s.service.revalidate(handles) };
+  const input = { query: 'telescope', readSet: [ns] };
+  const { prepareMany, ...serial } = port;
+  const base = await readRawChannel(serial, input, {}, now + 1000), baseInspections = inspected;
+  now = 100; inspected = 0;
+  const batch = await readRawChannel(port, input, {}, now + 1000);
+  assert.equal(base.items.length, 1, JSON.stringify({ errors, baseInspections, inspected, now, baseCoverage: base.coverage }));
+  assert.ok(batch.items.length >= base.items.length, JSON.stringify({ base: base.items.length, batch: batch.items.length, baseInspections, inspected }));
+  assert.deepEqual(batch.items.map(item => item.value), base.items.map(item => item.value));
 });

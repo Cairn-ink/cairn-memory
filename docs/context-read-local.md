@@ -431,13 +431,16 @@ their existing v2 projection. Contract §15.9 records lifecycle safety for up to
 ## Default Memory + Raw assembly
 
 The host supplies `contextRead.rawSearch`, an already-open local service exposing
-`search`, `prepareMany` and synchronous batch `revalidate`. The host owns its
+`search`, synchronous batch `revalidate`, and `prepare`, `prepareMany`, or both.
+Existing single-candidate hosts need no changes. The host owns its
 credentials, fixed owner/read set, maintenance and close. If Raw uses a separate
 credential, bind it in a trusted wrapper rather than passing it as read input:
 
 ```js
 const rawSearch = {
   search: input => rawService.search(input, rawCredential),
+  prepare: (candidate, settings) => rawService.prepare(candidate, settings, rawCredential),
+  // Optional optimization when the service supports it:
   prepareMany: (candidates, settings) => rawService.prepareMany(candidates, settings, rawCredential),
   revalidate: handles => rawService.revalidate(handles),
 };
@@ -494,9 +497,16 @@ delivered Raw evidence and dates; it does not mean the Raw channel is empty.
 An empty Raw set uses the existing Memory-only assembly, including a complete
 search with zero candidates (`included`). An absent or failed service reports
 `unavailable`; an unsupported store reports `unsupported_store`.
-The first 24 search candidates are prepared in one batch. Authorization and the
-publication header are acquired once; initial canonical source checks and sealed
-payload copies share one read snapshot. One reader opens texts after releasing
+The first 24 search candidates use `prepareMany` when present; otherwise the
+shared channel uses the existing single-candidate loop. A throwing optional batch
+method can recover unprocessed candidates through `prepare`. Native batches
+authorize each candidate using the unchanged `rawSearchSource` input
+`{candidate, intent}`; no new authorization shape or capability declaration is
+required. Known range-count and byte-cap failures are rejected before source
+inspection. Each candidate is authenticated against its own live search proof;
+local ports partition candidates by issuing reader while preserving input order.
+The publication header is acquired once per native batch; initial canonical
+source checks and sealed payload copies share one read snapshot. One reader opens texts after releasing
 that snapshot, preserving byte, digest and authenticated-context checks.
 Canonical source state and caller grants can change after release. Live guards
 check both around every part opener; registration revalidates all contributing

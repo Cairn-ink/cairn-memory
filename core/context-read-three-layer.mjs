@@ -39,9 +39,11 @@ export async function readRawChannel(rawSearch, input, token, deadlineAt) {
         dropped = true; return false;
       });
       let completed = 0;
+      const processed = new Set();
       const onPrepared = (handle, index) => {
         if (expired()) return;
-        completed++;
+        if (!Number.isInteger(index) || index < 0 || index >= candidates.length || processed.has(index)) { dropped = true; return; }
+        processed.add(index); completed++;
         const candidate = candidates[index];
         try {
           // Read only identity metadata here; one fresh batch validation
@@ -55,13 +57,35 @@ export async function readRawChannel(rawSearch, input, token, deadlineAt) {
           items.push({ handle, value, key: turnKey(value), rank: items.length + 1 });
         } catch { dropped = true; }
       };
-      try {
-        if (candidates.length) {
-          const batch = await port(() => rawSearch.prepareMany(candidates, { intent: 'current', deadlineAt: cutoff, onPrepared }, token));
-          if (expired()) return snapshot('partial');
-          dropped ||= !batch.complete || completed !== candidates.length;
+      // This loop is shared by local, facade and Worker readers. Keep the
+      // original per-candidate failure and checked-prefix delivery semantics.
+      const singles = async () => {
+        for (let index = 0; index < candidates.length; index++) {
+          if (expired()) return;
+          if (processed.has(index)) continue;
+          try {
+            const handle = await port(() => rawSearch.prepare(candidates[index], { intent: 'current' }, token));
+            onPrepared(handle, index);
+          } catch { onPrepared(null, index); }
         }
-      } catch { dropped = true; }
+      };
+      if (candidates.length) {
+        if (typeof rawSearch.prepareMany === 'function') {
+          try {
+            const batch = await port(() => rawSearch.prepareMany(candidates, { intent: 'current', deadlineAt: cutoff, onPrepared }, token));
+            if (expired()) return snapshot('partial');
+            dropped ||= !batch.complete || completed !== candidates.length;
+          } catch (error) {
+            // A host may expose an optional batch method it cannot honour.
+            // Recover the unprocessed suffix through its existing port.
+            if (typeof rawSearch.prepare !== 'function') throw error;
+            await singles();
+          }
+        } else {
+          if (typeof rawSearch.prepare !== 'function') fail('invalid_input');
+          await singles();
+        }
+      }
       if (expired()) return snapshot('partial');
       return snapshot(dropped ? 'partial' : 'included');
     } catch (error) { return unavailable(error?.reason === 'deadline' ||

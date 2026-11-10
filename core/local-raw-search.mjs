@@ -146,22 +146,51 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
           if (closed) fail('store_closed');
           if (!Array.isArray(candidates) || candidates.length > 24) fail('invalid_input');
           if (!candidates.length) return { handles: [], complete: true };
-          const service = entry.readers.get(candidates.find(candidate => entry.readers.has(candidate?.proof))?.proof);
-          if (!service || ![entry.service, entry.lexical?.service].includes(service)) fail('stale_publication');
-          const scoped = candidates.map(candidate => entry.readSet.some(ns => same(ns, candidate?.namespace)) &&
-            entry.readers.get(candidate?.proof) === service ? candidate : null);
-          return service.prepareMany(scoped, { ...settings, onPrepared(handle, index) {
-            if (handle) handles.set(handle, service);
-            settings.onPrepared?.(handle, index);
-          } }, entry.token);
+          // Consecutive reader partitions preserve input/progress order. Each
+          // native reader authenticates every proof in its own partition.
+          const groups = [];
+          for (const candidate of candidates) {
+            const reader = entry.readSet.some(ns => same(ns, candidate?.namespace)) ? entry.readers.get(candidate?.proof) : null;
+            const service = [entry.service, entry.lexical?.service].includes(reader) ? reader : null;
+            if (!groups.length || groups.at(-1).service !== service) groups.push({ service, candidates: [], start: groups.reduce((n, group) => n + group.candidates.length, 0) });
+            groups.at(-1).candidates.push(candidate);
+          }
+          const prepared = [], deadlineAt = Math.min(settings.deadlineAt ?? Infinity, performance.now() + 1000);
+          for (const group of groups) {
+            if (performance.now() >= deadlineAt) return { handles: prepared, complete: false };
+            if (!group.service) {
+              for (const [offset] of group.candidates.entries()) { prepared.push(null); settings.onPrepared?.(null, group.start + offset); }
+              continue;
+            }
+            const result = await group.service.prepareMany(group.candidates, { ...settings, deadlineAt, onPrepared(handle, offset) {
+              if (handle) handles.set(handle, group.service);
+              settings.onPrepared?.(handle, group.start + offset);
+            } }, entry.token);
+            prepared.push(...result.handles);
+            if (!result.complete || result.handles.length !== group.candidates.length) return { handles: prepared, complete: false };
+          }
+          return { handles: prepared, complete: true };
         },
         revalidate(selected) {
           if (closed) fail('store_closed');
-          const service = Array.isArray(selected) && selected.length ? handles.get(selected[0]) : entry.service;
-          if (!service || ![entry.service, entry.lexical?.service].includes(service) || !Array.isArray(selected) || selected.some(handle => handles.get(handle) !== service)) fail('stale_publication');
-          // One native batch preserves final canonical validation across the
-          // whole authorized read set, including personal + project reads.
-          return service.revalidate(selected);
+          if (!Array.isArray(selected)) fail('stale_publication');
+          const groups = new Map();
+          for (const handle of selected) {
+            const service = handles.get(handle);
+            if (!service || ![entry.service, entry.lexical?.service].includes(service)) fail('stale_publication');
+            if (!groups.has(service)) groups.set(service, []);
+            groups.get(service).push(handle);
+          }
+          if (!selected.length) {
+            if (!entry.service) fail('stale_publication');
+            return entry.service.revalidate([]);
+          }
+          const values = new Map();
+          for (const [service, group] of groups) {
+            const checked = service.revalidate(group);
+            group.forEach((handle, index) => values.set(handle, checked[index]));
+          }
+          return selected.map(handle => values.get(handle));
         },
       });
       owners.set(port, manager); return port;

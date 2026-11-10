@@ -2007,8 +2007,9 @@ Smaller host budgets are supported. `raw:false` on `contextRead` explicitly
 selects Memory-only assembly. `findCandidates` and exact evidence fetch keep
 their existing interfaces and retrieval behavior.
 
-`createContextReadHost` may return `rawSearch` with `search`, `prepareMany` and
-synchronous batch `revalidate`. The service stays inside the Worker; functions
+`createContextReadHost` may return `rawSearch` with `search`, synchronous batch
+`revalidate`, and `prepare`, `prepareMany`, or both. Existing prepare-only hosts
+continue through the shared single-candidate loop; batch preparation is optional. The service stays inside the Worker; functions
 and raw credentials do not cross IPC. The host binds any separate Raw credential
 in these methods and registers its disposer through the existing resource owner
 or `host.close`. The engine neither opens nor maintains this service. A direct
@@ -2038,9 +2039,14 @@ Memories/Cards; Raw evidence is inline and does not expand snapshot fetch.
 or `partial`. Incomplete search and preparation cutoffs retain the validated
 candidate prefix with `partial` coverage, including its Raw evidence and dates.
 Invalid or failed candidates are skipped individually. The first 24 search
-candidates share one preparation batch: one authorization and publication
-header, one canonical read snapshot for initial source checks and sealed bytes, and one
-reader setup. Texts open in rank order after releasing the snapshot, with byte,
+candidates use the optional batch method when present, with the existing
+single-candidate loop as fallback. Each native batch authorizes candidates
+separately with the unchanged `rawSearchSource` input `{candidate, intent}`;
+existing host authorizers need no changes. Overbudget metadata is rejected before
+source inspection. Candidates from every live issuing proof/reader retain their
+input order and individual outcomes. Each native batch shares one publication
+header, one canonical read snapshot for initial source checks and sealed bytes,
+and one reader setup. Texts open in rank order after releasing the snapshot, with byte,
 digest and authenticated-context checks. Canonical state and caller grants may
 change after release: live guards check both around each part opener, and
 registration revalidates every contributing source before exposing a handle.

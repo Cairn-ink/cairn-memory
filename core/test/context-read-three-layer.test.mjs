@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { eventTimeFixture } from '../testing/receipt-event-time-fixture.mjs';
@@ -21,6 +21,7 @@ import { transaction } from '../database.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 
 test.beforeEach(installRawSearchTestClock);
+for (const preparation of ['batch', 'single']) describe(preparation + ' host', () => {
 const counter = { id: 'synthetic-quarter-bytes', countTokens: text => Math.ceil(Buffer.byteLength(text) / 4) };
 const dated = 'representation-v2-dated';
 const query = (text = '蛋餅', patch = {}) => ({ readSet: [ns], types: ['memory'], intent: 'current', query: text, ...patch });
@@ -53,6 +54,7 @@ async function fixture(t, { extract, portCounter = counter } = {}) {
       prepare: (candidate, settings) => service.service.prepare(candidate, settings, service.host.token),
       prepareMany: (candidates, settings) => service.service.prepareMany(candidates, settings, service.host.token),
       revalidate: handles => service.service.revalidate(handles) };
+    if (preparation === 'single') delete rawPort.prepareMany;
     if (!reader) {
       const contextRead = { version: 'context-read-v1', authority: trusted.authority, counter: portCounter, rawSearch: rawPort };
       reader = openMemoryCore({ path: f.path, contextRead }); base.workspace.defer(() => reader.close());
@@ -196,11 +198,12 @@ for (const path of [0, 1, 2]) for (const mutation of ['forgotten', 'suppressed',
       kind: 'fact', confidence: 1, sourceIndices: [message.index] })) }) : undefined;
     const f = await fixture(t, { extract });
     const source = await f.capture('secret-partial-orchid telescope', { occurredAt: '2026-01-01T08:00:00.000Z' }); await f.build();
-    const search = f.rawPort.search, prepareMany = f.rawPort.prepareMany, revalidate = f.rawPort.revalidate;
+    const method = preparation === 'single' ? 'prepare' : 'prepareMany';
+    const search = f.rawPort.search, prepare = f.rawPort[method], revalidate = f.rawPort.revalidate;
     let changed = false;
     f.rawPort.search = async input => ({ ...await search(input), coverage: { status: 'partial' } });
-    f.rawPort.prepareMany = async (...args) => {
-      const batch = await prepareMany(...args);
+    f.rawPort[method] = async (...args) => {
+      const batch = await prepare(...args);
       if (!changed) {
         changed = true;
         if (mutation === 'forgotten') {
@@ -287,7 +290,7 @@ function syntheticChannel(texts = ['assembly telescope first', 'assembly telesco
   const handles = raw.items.map(item => ({ ...item.handle, value: item.value }));
   const service = { ...raw.rawSearch,
     search: async () => ({ coverage: { status: 'complete' }, candidates }),
-    prepare() { throw Error('the channel must use one batch'); },
+    prepare: async candidate => handles[candidates.indexOf(candidate)],
     prepareMany: async (selected, { onPrepared }) => {
       const prepared = selected.map((candidate, index) => { const handle = handles[candidates.indexOf(candidate)]; onPrepared(handle, index); return handle; });
       return { handles: prepared, complete: true };
@@ -303,12 +306,15 @@ function channelClock(t) {
 }
 const channelInput = () => contextInput('contextRead', query(), ['memory']).input;
 
-test('context configuration requires the batch port and does not require a single-candidate wrapper', () => {
+test('context configuration accepts either preparation method and rejects missing methods', () => {
   const authority = { authorize() {}, isCurrent() {} }, { service } = syntheticChannel();
-  const { prepare, ...rawSearch } = service;
-  assert.equal(contextOptions({ version: 'context-read-v1', authority, rawSearch }).rawSearch, rawSearch);
+  for (const methods of [['prepare'], ['prepareMany'], ['prepare', 'prepareMany']]) {
+    const rawSearch = { search: service.search, revalidate: service.revalidate,
+      ...Object.fromEntries(methods.map(method => [method, service[method]])) };
+    assert.equal(contextOptions({ version: 'context-read-v1', authority, rawSearch }).rawSearch, rawSearch);
+  }
   assert.throws(() => contextOptions({ version: 'context-read-v1', authority,
-    rawSearch: { search: service.search, prepare, revalidate: service.revalidate } }), { code: 'invalid_input' });
+    rawSearch: { search: service.search, revalidate: service.revalidate } }), { code: 'invalid_input' });
 });
 
 test('one batch delivers all 24 identity-checked candidates inside the default Raw cutoff', async t => {
@@ -482,7 +488,7 @@ test('the actual product Worker accepts the host Raw port and default budget, wi
   await f.build();
   const configuredReader = configured(t, f.path, [ns]);
   configuredReader.options.wal = true;
-  configuredReader.options.host.moduleUrl = new URL('../testing/context-read-three-layer-host.mjs', import.meta.url).href;
+  configuredReader.options.host.moduleUrl = new URL(preparation === 'single' ? '../testing/context-read-three-layer-single-host.mjs' : '../testing/context-read-three-layer-host.mjs', import.meta.url).href;
   configuredReader.options.host.configuration.rawText = 'worker telescope synthetic-fact';
   const reader = await configuredReader.open();
   const capabilities = ok(await reader.getContextReadCapabilities());
@@ -549,4 +555,68 @@ test('expanded-source coalescing preserves the existing snapshot reference ceili
   assert.ok(result.selected.length <= 24);
   assert.ok(JSON.parse(result.snapshot).length <= 24);
   assert.ok(result.metered.items.every(item => item.ref.type === 'memory'));
+});
+
+
+test('prepare-only hosts retain the same channel output as batch hosts', async () => {
+  const { candidates, handles, service } = syntheticChannel();
+  const { prepareMany, ...single } = service;
+  single.prepare = async candidate => handles[candidates.indexOf(candidate)];
+  const options = { version: 'context-read-v1', authority: { authorize() {}, isCurrent() {} }, rawSearch: single };
+  assert.equal(contextOptions(options).rawSearch, single);
+  const batch = await readRawChannel(service, channelInput(), {}, performance.now() + 1000);
+  const serial = await readRawChannel(single, channelInput(), {}, performance.now() + 1000);
+  assert.deepEqual(serial.items, batch.items); assert.equal(serial.coverage, batch.coverage);
+});
+
+
+for (const status of ['complete', 'partial', 'unsupported_store']) test(`native ${status} output is equal for both preparation ports on every reader`, async t => {
+  const f = await fixture(t);
+  await f.capture('telescope equal preparation evidence', { occurredAt: '2026-01-01T00:00:00.000Z' });
+  await f.build();
+  const search = f.rawPort.search;
+  f.rawPort.search = async input => ({ ...await search(input), coverage: { status } });
+  const batch = (candidates, settings) => f.service.service.prepareMany(candidates, settings, f.service.host.token);
+  for (const read of f.readers()) {
+    f.rawPort.prepareMany = batch;
+    const withBatch = ok(await read(query('telescope')));
+    delete f.rawPort.prepareMany;
+    const withSingle = ok(await read(query('telescope')));
+    assert.deepEqual(withSingle.metered, withBatch.metered);
+    assert.deepEqual(withSingle.diagnostics.coverage, withBatch.diagnostics.coverage);
+    assert.equal(withSingle.snapshot, withBatch.snapshot);
+  }
+});
+
+test('an optional throwing batch method recovers through the existing single port', async () => {
+  const { service, handles } = syntheticChannel();
+  service.prepareMany = async () => { throw Object.assign(Error('host batch unavailable'), { code: 'authority_required' }); };
+  const result = await readRawChannel(service, channelInput(), {}, performance.now() + 1000);
+  assert.equal(result.coverage, 'included'); assert.deepEqual(result.items.map(item => item.handle), handles);
+  delete service.prepare;
+  assert.deepEqual(await readRawChannel(service, channelInput(), {}, performance.now() + 1000), { items: [], coverage: 'unavailable' });
+});
+
+test('invalid product ports fail before a reader can advertise Raw as configured', () => {
+  const { service } = syntheticChannel();
+  assert.throws(() => openProductIndex({ rawSearch: { search: service.search, revalidate: service.revalidate } }), { code: 'invalid_input' });
+});
+
+
+for (const kept of [0, 1, 2]) test(`prepare-only cutoff preserves ${kept} checked outcomes and ignores late values`, async t => {
+  const advance = channelClock(t), { candidates, handles, service } = syntheticChannel();
+  delete service.prepareMany;
+  let lateReads = 0;
+  service.prepare = async candidate => {
+    const index = candidates.indexOf(candidate);
+    if (index < kept) return handles[index];
+    advance(400);
+    return { get value() { lateReads++; return candidate; } };
+  };
+  const result = await readRawChannel(service, channelInput(), {}, 1100);
+  assert.equal(result.coverage, 'partial');
+  assert.deepEqual(result.items.map(item => item.handle), handles.slice(0, kept));
+  assert.equal(lateReads, 0);
+});
+
 });

@@ -250,14 +250,22 @@ export async function openRawSearch(value) {
       const check=()=>{expired(at);if(closed)fail('store_closed');};
       try {
         check();
-        // One search proof, authorization and publication header for the page.
-        // Invalid entries retain their own null outcome without poisoning it.
-        const proof=candidates.find(candidate=>searches.has(candidate?.proof))?.proof;
+        // Authenticate each issuing proof independently. Known unpreparable
+        // ranges must not spend the shared snapshot's opening budget.
         const entries=candidates.map(candidate=>{
-          try{if(candidate?.proof!==proof)fail('stale_publication');return candidateEntry(candidate,intent);}
-          catch{return null;}
+          try {
+            check();
+            const entry=candidateEntry(candidate,intent);
+            const rows=entry.sources.filter(source=>candidate.ranges.some(ref=>same(ref,source.ref)))
+              .sort((a,b)=>a.ref.span.start-b.ref.span.start);
+            if(!rows.length||rows.length!==candidate.ranges.length||rows.length>1024)fail('source_unavailable');
+            if(rows.reduce((bytes,source)=>bytes+source.bytes,0)>256*1024)fail('source_budget_exceeded');
+            // Preserve the existing host authorization protocol. Authorization
+            // is metadata-only; the shared canonical snapshot follows it.
+            const access=authority.authorize('rawSearchSource',{candidate,intent},token,check);access();check();
+            return {...entry,rows,access};
+          }catch(error){if(interrupted(error))throw error;return null;}
         });
-        const access=authority.authorize('rawSearchSource',{candidates,intent},token);access();check();
         const publication=storage.publication({shape:false,deadlineAt:at});
         const binding=authority.bind('raw-search-publication-v1',[authority.identity,publication.sequence]);
         for(let i=0;i<entries.length;i++)if(candidates[i]?.publication!==binding)entries[i]=null;
@@ -267,10 +275,7 @@ export async function openRawSearch(value) {
           try {
             const candidate=candidates[index],entry=entries[index];
             if(!batch.allowed[index])fail('source_unavailable');
-            const rows=entry.sources.filter(source=>candidate.ranges.some(ref=>same(ref,source.ref)))
-              .sort((a,b)=>a.ref.span.start-b.ref.span.start);
-            if(!rows.length||rows.length!==candidate.ranges.length||rows.length>1024)fail('source_unavailable');
-            if(rows.reduce((bytes,source)=>bytes+source.bytes,0)>256*1024)fail('source_budget_exceeded');
+            const {rows,access}=entry;
             const ranges=[];
             for(const source of rows){
               // The captured bytes outlive the snapshot. Recheck live source

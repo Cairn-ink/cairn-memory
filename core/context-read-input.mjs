@@ -28,6 +28,13 @@ export const CONTEXT_LIMITS = Object.freeze({ defaultLimit: 12, horizon: 24, que
   defaultDeadlineMs: 1000, deadlineMs: 5000, responseBytes: 65536, cursorUnits: 8192,
   snapshotUnits: 16384, refreshItems: 1024, batchRows: 128, batchTextUnits: 2_000_000,
   vectors: 20000, cacheBytes: 134217728, dimensions: 32768, embedderMetadataUnits: 200, rankings: 128, rankingTtlMs: 300000 });
+// Batch preparation is optional for existing host-owned Raw services.
+export function contextRawSearch(rawSearch) {
+  if (rawSearch !== undefined && (!rawSearch ||
+      ['search', 'revalidate'].some(key => typeof rawSearch[key] !== 'function') ||
+      !['prepare', 'prepareMany'].some(key => typeof rawSearch[key] === 'function'))) fail('invalid_input');
+  return rawSearch ?? null;
+}
 export function contextOptions(value) {
   const options = ownData(value, ['version', 'authority', 'embedder', 'policy', 'counter', 'sources', 'localStatus', 'rawSearch']);
   if (options.version !== CONTEXT_VERSION) fail('invalid_input');
@@ -56,10 +63,9 @@ export function contextOptions(value) {
       !Number.isFinite(policy.maxUsd) || policy.maxUsd <= 0 || typeof policy.estimateUsd !== 'function' ||
       types.isAsyncFunction(policy.estimateUsd) || policy.maxConcurrent !== undefined &&
       (!Number.isInteger(policy.maxConcurrent) || policy.maxConcurrent < 1 || policy.maxConcurrent > 1024))) fail('invalid_input');
-  if (options.rawSearch !== undefined && (!options.rawSearch ||
-      ['search', 'prepareMany', 'revalidate'].some(key => typeof options.rawSearch[key] !== 'function'))) fail('invalid_input');
+  const rawSearch = contextRawSearch(options.rawSearch);
   return Object.freeze({ authority: Object.freeze(authority), embedder, counter: counter && Object.freeze(counter), family,
-    rawSearch: options.rawSearch ?? null,
+    rawSearch,
     ...(explicitLocal ? { localStatus } : {}),
     preset: sources?.includes('moc-v1') ? 'rrf-k60-d12-moc-v1' : family === 'hosted' ? 'rrf-k10' : 'rrf-k60-d12',
     ...(sources ? { sources } : {}),
