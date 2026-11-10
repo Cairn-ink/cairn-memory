@@ -221,31 +221,31 @@ export async function captureEpisodeMessages(options) {
   // every duplicate/processing return and any lazy provider work.
   let registered = options.rawRegistration
     ? runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true }, options.rawRegistration) : undefined;
-  if (registered?.rawReplay) return registered.rawReplay;
-  const checked = registered ?? runtime.validateEpisodeBatch(ns, batch);
-  if (checked.processing) return { processing: true,
-    episode: { status: 'processing' }, admission: { status: 'processing' } };
-  if (checked.overlap) return { duplicate: true, overlap: true,
-    episode: { id: checked.episodeId, status: 'not-run', reason: 'overlap' },
-    admission: { status: 'covered' } };
-  let lazy;
-  if (!checked.duplicate) {
-    const pending = runtime.pendingEpisodeSession(ns, batch);
-    if (pending) lazy = await auxiliary({ runtime, ns, model, episodeId: pending,
-      generation: batch.generation, trigger: 'lazy', deadline: sharedDeadline });
-  }
-  registered ??= runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true });
-  const episodeId = registered.episodeId;
-  if (registered.processing) return { processing: true,
-    episode: { id: episodeId, status: 'processing' }, admission: { status: 'processing' } };
-  if (registered.overlap) return { duplicate: true, overlap: true,
-    episode: { id: episodeId, status: 'not-run', reason: 'overlap' },
-    admission: { status: 'covered' } };
-  if (registered.messageIds?.length) {
-    snapshot.messages = snapshot.messages.filter(message => registered.messageIds.includes(message.id));
-  }
-  const writerToken = registered.token;
   try {
+    if (registered?.rawReplay) return registered.rawReplay;
+    const checked = registered ?? runtime.validateEpisodeBatch(ns, batch);
+    if (checked.processing) return { processing: true,
+      episode: { status: 'processing' }, admission: { status: 'processing' } };
+    if (checked.overlap) return { duplicate: true, overlap: true,
+      episode: { id: checked.episodeId, status: 'not-run', reason: 'overlap' },
+      admission: { status: 'covered' } };
+    let lazy;
+    if (!checked.duplicate) {
+      const pending = runtime.pendingEpisodeSession(ns, batch);
+      if (pending) lazy = await auxiliary({ runtime, ns, model, episodeId: pending,
+        generation: batch.generation, trigger: 'lazy', deadline: sharedDeadline });
+    }
+    registered ??= runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true });
+    const episodeId = registered.episodeId;
+    if (registered.processing) return { processing: true,
+      episode: { id: episodeId, status: 'processing' }, admission: { status: 'processing' } };
+    if (registered.overlap) return { duplicate: true, overlap: true,
+      episode: { id: episodeId, status: 'not-run', reason: 'overlap' },
+      admission: { status: 'covered' } };
+    if (registered.messageIds?.length) {
+      snapshot.messages = snapshot.messages.filter(message => registered.messageIds.includes(message.id));
+    }
+    const writerToken = registered.token;
     let pendingFailure;
     const state = runtime.episodeCaptureState(ns, {
       episodeId, client: batch.client, eventId: batch.eventId });
@@ -279,7 +279,9 @@ export async function captureEpisodeMessages(options) {
       ...(result.duplicate ? { admission: { status: 'completed',
         memoryIds: result.memoryIds, suppressedCount: result.suppressedCount } }
         : result.processing ? { admission: { status: 'processing' } } : {}) };
-  } finally { if (writerToken) runtime.releaseEpisodeWriter(ns, { episodeId, token: writerToken }); }
+  } finally {
+    if (registered?.token) runtime.releaseEpisodeWriter(ns, { episodeId: registered.episodeId, token: registered.token });
+  }
 }
 
 export async function keepEpisodeCapture(options) {
