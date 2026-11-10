@@ -120,15 +120,19 @@ const durabilityRuntimeChanges = new Map([
     before: '0182cc90faddafeea34b8ba11a4c96805f74140117c1ee4b4ad118ca47b0d331',
     current: '4bc207d972508f7e0ba7eea2ed69021188673d47cccfe6a375de1b8d88973ea4',
   }],
+  // Final admission needs synchronous owner-checked reads of pause metadata.
   ['integrations/client/private-state.mjs', {
     historical: 'ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64',
     before: 'ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64',
-    current: '7dc46417a129414937b0180482acf6bdf7f58c1816f93468e8df1d952057485b',
+    previousCurrent: '7dc46417a129414937b0180482acf6bdf7f58c1816f93468e8df1d952057485b',
+    current: '7fd62ae5b862cfe77b393e06ef787508f89f7071879a84859357420893aff0c4',
   }],
+  // Re-read publication authority synchronously beside request/output entry.
   ['integrations/client/hosted-pause.mjs', {
     historical: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
     before: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
-    current: '365314ab54f794b34e4972de22d456b2c529a0f6d608c62a01f8558fe4a32892',
+    previousCurrent: '365314ab54f794b34e4972de22d456b2c529a0f6d608c62a01f8558fe4a32892',
+    current: '24d0588a6316c89cc5c2d4c0cc2a8ee5a6bacd035c2187298e3480ac3c21a5b2',
   }],
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
