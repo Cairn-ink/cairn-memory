@@ -2,9 +2,12 @@ import fs from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
 const nativeFetch=globalThis.fetch;
 globalThis.fetch=async(url,options)=>{
-  if(url.endsWith('/recall')) options.signal.addEventListener('abort',()=>{
+  if(url.endsWith('/recall')) {
+    process.send?.({kind:'recall-started',ms:performance.now()});
+    options.signal.addEventListener('abort',()=>{
     process.send?.({kind:'recall-aborted',ms:performance.now()});
   },{once:true});
+  }
   return nativeFetch(url,options);
 };
 // A hung unavailable diagnostic is independent of authorization. Model it at

@@ -62,16 +62,23 @@ async function run(t, f, action, { entry = hook, preload, onSpawn } = {}) {
 }
 
 const budgetPreload=fileURLToPath(new URL('./fixtures/pause-budget-preload.mjs',import.meta.url));
-test('recall leaves a local output budget before the process cap',{timeout:10000},async t=>{
+test('recall retains the full fetch allowance until the process cap',{timeout:10000},async t=>{
   const f=await fixture(t,async()=>{await new Promise(resolve=>setTimeout(resolve,900));return active;},[],4000);
   const result=await run(t,f,'recall',{preload:budgetPreload});
   const abort=result.events.find(event=>event.kind==='recall-aborted');
   assert.ok(abort,'recall_fetch_was_started');
-  assert.ok(abort.ms>=3100 && abort.ms<=3300,'local_output_budget_reserved_before_fetch');
+  // No fixed 300 ms fetch reservation: the process cap bounds this request.
+  assert.ok(abort.ms>=3400 && abort.ms<=3700,'fetch_not_shortened_for_output');
+  const started=result.events.find(event=>event.kind==='recall-started');
+  assert.ok(started);
+  assert.ok(abort.ms-started.ms<=2600,'full_fetch_timeout_stays_bounded');
+  assert.equal(f.counts.pause,1,'one_prefetch_observation');
   assert.equal(f.counts.recall,1);assert.equal(result.stdout,'');
 });
 test('an unavailable diagnostic sync cannot hold recall past the host margin',{timeout:15000},async t=>{
-  const f=await fixture(t,()=>null);
+  // An actual unavailable response has diagnostic headroom. A held GET can
+  // exhaust the process cap before best-effort diagnostic I/O starts.
+  const f=await fixture(t,()=>undefined);
   f.env.SYNTHETIC_STALL_STATUS='1';
   const result=await run(t,f,'recall',{preload:budgetPreload});
   assert.ok(result.events.some(event=>event.kind==='unavailable-sync-started'),'unavailable_publication_attempted_immediately');
