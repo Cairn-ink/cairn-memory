@@ -187,6 +187,7 @@ for (const kind of ['timeout', 'death']) for (const action of ['capture', 'captu
       message: { content: 'SYNTHETIC_PAUSED_PERIOD' } }) + '\n');
     remote = { ...paused, paused: false };
     f.env.CLAUDE_PLUGIN_OPTION_API_ENDPOINT = targetB.endpoint;
+    if (action === 'capture') delete f.input.capture_generation;
     await run(t, f, action, { preload: null });
     assert.equal(targetB.counts.capture, 0, 'pending_revocation_forces_eof');
     const boundary = await readControlState(f.root);
