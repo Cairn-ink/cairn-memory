@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "9c7d430d3f2835e66513b121eda5d23773e203aeb43d23fba130e51af21a17db",
-  "bytes": 1296288,
+  "sha256": "d80e9afae7a0787e21fc23e27233b939b2ee36148c6e25bc1f032eec03ed03a4",
+  "bytes": 1296543,
   "files": [
     "LICENSE",
     "README.md",
@@ -590,7 +590,7 @@
     "integrations/client/hosted-contract.mjs": "39ce7dcb60b91ab7bf815bd0085f278e9cc5d0f9798b9b5d27e7b7655fd217d1",
     "integrations/client/hosted-schemas.mjs": "fda2e6b4f6feda316300819e1a199dd25f7462b9f47e33bff950c3c4f95ba8ce",
     "integrations/client/pairing.mjs": "46a3cc1bb1e88ad1ab06c0096fb9c1dbee0d34b19b4c1435c9c07b496065af3c",
-    "integrations/client/private-state.mjs": "ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64",
+    "integrations/client/private-state.mjs": "7dc46417a129414937b0180482acf6bdf7f58c1816f93468e8df1d952057485b",
     "integrations/client/raw/bounds.mjs": "0a59bb7b9655ab3fe8a90704c4cb2f6cb802beb7d5e70c19561eaaffc8ff61f2",
     "integrations/client/raw/local-process.mjs": "6cdff0cd8f7a71bf7878ee512eaa1547904d81a34a9c896325464a9966a610cf",
     "integrations/client/raw/local-reply.mjs": "6956fdcbc8f00750b96086f7a64b6ec8ff669c313a9134225219891093c5e630",
@@ -627,7 +627,7 @@
     "integrations/codex/parser.mjs": "41440a7a2e0bb4108bc9abcace2b3d51e8437fea7c6591c28b3d56c65b4243a5",
     "integrations/codex/source.mjs": "6bf982b4227d6a7834c02faa74690340c72b269ccf1e9a1242358135de37b580",
     "integrations/codex/session-source.mjs": "1341cc42eebf5a996be305f471393a717bfdd5eddd19fc3fd556fe8483fdfbc3",
-    "integrations/codex/qualification.mjs": "9c37710cfffa802fbc42286c6e9bf8c3bf8bdf3d4c34a0c163d672868714cdac",
+    "integrations/codex/qualification.mjs": "d5bea045ed4c3fefd45e325f268833f1d535b075ab63ad5dd8dd0409c57dd380",
     "integrations/codex/schema-evidence.mjs": "1313d5789bbf8aa4a61be3bd4c1269793dbc0df543938e2a23fded3a2d4d518b",
     "plugins/cairn-memory/lib/transcript.mjs": "9b049fa05f2ff0c26f4c9ef1a757e4c3846b51d72bfb968a126228424e998804",
     "integrations/client/runtime-usage.mjs": "8bf732bb36664b33aa238a40903986b16c112a44829412c32a11b01dcad08d4d",
