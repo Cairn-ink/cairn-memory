@@ -190,3 +190,52 @@ for(const count of [128,129])test(`Card deletion agreement fallback spans withou
   } catch(error){if(error===rollback)enforced='proceed';else if(error.code==='dependency_limit_reached')enforced=error.code;else throw error;}
   assert.equal(enforced,count===128?'proceed':'dependency_limit_reached');assert.equal(planned,enforced);assert.deepEqual(snapshot(f.db),before);
 });
+
+function installLegacyProof(f,consumer) {
+  const sourceId='synthetic-shared-keep-source',eventId='synthetic-legacy-keep';
+  f.db.exec('BEGIN');
+  try {
+    f.db.prepare('INSERT INTO episode_sources VALUES(?,?,?,?,?,?,?,?,0,1)')
+      .run(sourceId,consumer.id,f.episode.id,eventId,f.source.messageId,'a'.repeat(64),'user',f.source.text);
+    for(const [index,memory]of f.memories.entries()) {
+      const receipts=f.db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(memory.id).map(row=>row.id);
+      f.db.prepare('DELETE FROM raw_receipt_lineage WHERE receipt_id IN (SELECT id FROM receipts WHERE memory_id=?)').run(memory.id);
+      f.db.prepare('INSERT INTO episode_memory_links VALUES(?,?,?,?,1,?)')
+        .run('synthetic-keep-link-'+index,consumer.id,memory.id,eventId,JSON.stringify(receipts));
+    }
+    f.db.prepare(`INSERT INTO episode_keep_actions VALUES(?,?,?,?,?,?,?,?,?,'completed',NULL,NULL,?,0,'completed',NULL,?,?,?,1,?)`)
+      .run('b'.repeat(64),'synthetic-keep',consumer.id,ns.ownerId,ns.scope,ns.projectId??'',consumer.client,eventId,'c'.repeat(64),
+        JSON.stringify(f.memories.map(memory=>memory.id)),JSON.stringify([sourceId]),consumer.revision,consumer.source_fence,'2020-01-01T00:00:00.000Z');
+    f.db.exec('COMMIT');
+  } catch(error){if(f.db.isTransaction)f.db.exec('ROLLBACK');throw error;}
+}
+
+for(const path of ['conversation','episode'])test(`local ${path} checks legacy KEEP proof consumed by an earlier Memory mutation`,async t=>{
+  const f=await fixture(t,'memory');
+  const consumer=f.db.prepare('SELECT * FROM session_episodes WHERE session_key=(SELECT session_key FROM raw_conversations WHERE id=?)').get(f.second.conversationId);
+  installLegacyProof(f,consumer);
+  const before=snapshot(f.db);
+  // The retained handle proves the refusal comes from real cascade ordering,
+  // before its UUID guard. The local handle must decide it before preflight.
+  denied(f.core.deleteConversation(deletion(f)),'raw_lineage_unavailable');assert.deepEqual(snapshot(f.db),before);
+  denied(await remove(f,path),'raw_lineage_unavailable');assert.deepEqual(snapshot(f.db),before);
+});
+
+test('local episode-only deletion keeps the no-Raw source exclusion shortcut for shared legacy KEEP proofs',async t=>{
+  const base=sourceFixture(t,{kind:'episode',model}),local=openMemoryCore({path:base.path,raw:true,rawSearch:false});
+  base.workspace.defer(()=>local.close());
+  const input=sessionId=>({namespace:ns,client:'claude-code',sessionId,eventId:'episode-'+sessionId,
+    messages:[{id:'message',role:'user',content:'Synthetic '+sessionId+' episode evidence.',occurredAt:'2020-01-01T00:00:00.000Z'}],
+    episodeContext:{clientLabel:'Synthetic',generation:'initial',origin:'ordinary'}});
+  const target=input('target'),episode=ok(await base.core.capture(target)).episode;
+  const memories=base.db.prepare('SELECT id FROM memories WHERE deleted=0 ORDER BY id').all().map(row=>({...row,forget:true}));
+  assert.equal(memories.length,2);
+  const consumerId=ok(await base.core.capture(input('consumer'))).episode.id;
+  const consumer=base.db.prepare('SELECT * FROM session_episodes WHERE id=?').get(consumerId);
+  const f={...base,local,episode,memories,source:{messageId:target.messages[0].id,text:target.messages[0].content}};
+  installLegacyProof(f,consumer);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM raw_conversations').get().n,0);
+  const current=f.db.prepare('SELECT revision FROM session_episodes WHERE id=?').get(episode.id);
+  ok(local.forgetEpisode({namespace:ns,episodeId:episode.id,expectedRevision:current.revision}));
+  for(const memory of memories)assert.equal(f.db.prepare('SELECT deleted FROM memories WHERE id=?').get(memory.id).deleted,1);
+});
