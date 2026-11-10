@@ -41,17 +41,21 @@ for(const safety of [false,true])test(`native uuid guard caps at two attempts wi
   probe.exec("CREATE TABLE t(x); INSERT INTO t VALUES(1); CREATE TRIGGER guard BEFORE DELETE ON t BEGIN SELECT RAISE(ABORT,'local_raw_uuid_pending'); END");
   let native;try{probe.exec('DELETE FROM t');}catch(error){native=error;}finally{probe.close();}
   assert.equal(native.code,'ERR_SQLITE_ERROR');assert.equal(native.errcode,1811);assert.equal(native.message,'local_raw_uuid_pending');
-  const original=DatabaseSync.prototype.prepare;let attempts=0;
+  const original=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;let attempts=0,transactions=0,probes=0;
+  DatabaseSync.prototype.exec=function(sql,...args){if(sql==='BEGIN IMMEDIATE')transactions++;return exec.call(this,sql,...args);};
   DatabaseSync.prototype.prepare=function(sql,...args){
     const statement=original.call(this,sql,...args);
-    if(sql==='DELETE FROM raw_messages WHERE conversation_id=?')return {run(){attempts++;throw native;}};
+    if(sql==='DELETE FROM raw_messages WHERE conversation_id=?')return {run(...values){
+      if(transactions===2){probes++;return statement.run(...values);}
+      attempts++;throw native;
+    }};
     return statement;
   };
   let result;
   try {result=f.core.deleteConversation({namespace:ns,conversationId:source.conversationId,
     expectedRevision:source.expectedConversationRevision,actionId:'bounded-guard'});}
-  finally{DatabaseSync.prototype.prepare=original;}
-  assert.equal(attempts,2);assert.deepEqual(result,{ok:false,error:{code:'local_raw_privacy_write_failed',retryable:true}});
+  finally{DatabaseSync.prototype.prepare=original;DatabaseSync.prototype.exec=exec;}
+  assert.equal(probes,1);assert.equal(attempts,2);assert.deepEqual(result,{ok:false,error:{code:'local_raw_privacy_write_failed',retryable:true}});
   assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n,1);
   assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,1);
   assert.equal(f.core.listRawConversations({namespace:ns,client:'claude-code'}).ok,true);
@@ -105,16 +109,19 @@ for(const path of ['conversation','episode']) test(`local ${path} hashes every U
   f.db.exec('BEGIN');
   try {for(let n=2;n<=total;n++)insert.run(...keys.map(key=>key==='message_id'?'synthetic-copy-'+n:key==='ordinal'?n:row[key]));f.db.exec('COMMIT');}
   catch(error){f.db.exec('ROLLBACK');throw error;}
-  const prepare=DatabaseSync.prototype.prepare,uuid=createLocalUuidFence(f.db);let deleted=0;
+  const prepare=DatabaseSync.prototype.prepare;let deleted=0,dryRuns=0;
   DatabaseSync.prototype.prepare=function(sql,...args){
-    const statement=prepare.call(this,sql,...args);
+    const statement=prepare.call(this,sql,...args),writer=this;
     if(sql==='DELETE FROM raw_messages WHERE conversation_id=?')return {run(...values){
-      assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n,total);
-      assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,total);
-      assert.equal(f.db.prepare('SELECT complete FROM local_raw_uuid_jobs').get().complete,1);
-      assert.equal(f.db.prepare('SELECT count(*) n FROM raw_session_fences').get().n,1);
+      const durable=f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n===total;
+      const uuid=createLocalUuidFence(writer);
+      assert.equal(writer.prepare('SELECT count(*) n FROM raw_messages').get().n,total);
+      assert.equal(writer.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,total);
+      assert.equal(writer.prepare('SELECT complete FROM local_raw_uuid_jobs').get().complete,1);
+      assert.equal(writer.prepare('SELECT count(*) n FROM raw_session_fences').get().n,1);
       for(let n=1;n<=total;n++)assert.equal(uuid.matches(internal,'claude-code',[{id:n===1?row.message_id:'synthetic-copy-'+n}]),true);
-      deleted++;return statement.run(...values);
+      if(durable)deleted++;else dryRuns++;
+      return statement.run(...values);
     }};
     return statement;
   };
@@ -123,9 +130,9 @@ for(const path of ['conversation','episode']) test(`local ${path} hashes every U
     for(let n=1;n<=2;n++){
       denied(core[method](input),'local_raw_privacy_write_failed');
       assert.equal(f.db.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n,UUID_HASH_CHUNK*n);
-      assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n,total);assert.equal(deleted,0);
+      assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n,total);assert.equal(deleted,0);assert.equal(dryRuns,n);
     }
-    ok(core[method](input));assert.equal(deleted,1);
+    ok(core[method](input));assert.equal(deleted,1);assert.equal(dryRuns,3);
   } finally {DatabaseSync.prototype.prepare=prepare;}
   assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n,0);
   denied(await core.captureRaw(request(splitRaw('Synthetic copied evidence.',{id:row.message_id})[0],{sessionId:'fork',eventId:'fork'})),'conversation_deleted');
@@ -133,7 +140,7 @@ for(const path of ['conversation','episode']) test(`local ${path} hashes every U
 
 for(const path of ['conversation','episode']) test(`local ${path} concurrent revision refusal keeps only conservative target fences`,async t=>{
   installRawSearchTestClock(t);
-  const f=sourceFixture(t,{kind:'episode'});local(t,f);
+  const f=sourceFixture(t,{kind:'episode'}),core=local(t,f);
   async function capture(sessionId) {
     const result=ok(await f.core.captureRaw(request(splitRaw('Synthetic '+sessionId+' evidence.',{id:sessionId})[0],
       {sessionId,eventId:sessionId,episodeContext:{clientLabel:'Synthetic',generation:'initial',origin:'ordinary'}},'episode')));
@@ -152,15 +159,22 @@ for(const path of ['conversation','episode']) test(`local ${path} concurrent rev
   const targetRow=f.db.prepare('SELECT * FROM raw_conversations WHERE id=?').get(target.conversationId);
   const targetEpisode=f.db.prepare('SELECT id,revision FROM session_episodes WHERE session_key=?').get(targetRow.session_key);
   const input=path==='conversation'?deleteKey(target):{namespace:ns,episodeId:targetEpisode.id,expectedRevision:targetEpisode.revision};
-  // The seam is immediately after the completed read-only snapshot and before
-  // the transaction's recheck; the synthetic writer changes only this target.
-  let preflights=0;
-  const storage=createRawDeletionStorage({db:f.db,roots:createRawSourceRoots(f.db),localRawPrivacy:{beforeDelete(...args){
-    preflights++;uuid.beforeDelete(...args);
-    if(path==='conversation')f.db.prepare('UPDATE raw_conversations SET revision=revision+1 WHERE id=?').run(target.conversationId);
-    else f.db.prepare('UPDATE session_episodes SET revision=revision+1 WHERE id=?').run(input.episodeId);
-  }}});
-  assert.throws(()=>path==='conversation'?storage.remove(input):storage.forgetEpisode(internal,input),{code:'revision_conflict'});
+  // Change the target after the probe rolled back and durable privacy
+  // preflight committed, immediately before the real transaction rechecks it.
+  let preflights=0,checked=false;
+  const exec=DatabaseSync.prototype.exec;
+  DatabaseSync.prototype.exec=function(sql,...args){
+    const result=exec.call(this,sql,...args);
+    if(sql==='ROLLBACK')checked=true;
+    if(sql==='COMMIT'&&checked&&preflights===0){
+      preflights++;
+      if(path==='conversation')f.db.prepare('UPDATE raw_conversations SET revision=revision+1 WHERE id=?').run(target.conversationId);
+      else f.db.prepare('UPDATE session_episodes SET revision=revision+1 WHERE id=?').run(input.episodeId);
+    }
+    return result;
+  };
+  try{denied(core[path==='conversation'?'deleteConversation':'forgetEpisode'](input),'revision_conflict');}
+  finally{DatabaseSync.prototype.exec=exec;}
   assert.equal(preflights,1);assert.deepEqual(f.db.prepare('SELECT * FROM raw_messages ORDER BY conversation_id,ordinal').all(),beforeMessages);
   assert.equal(uuid.matches(internal,'claude-code',[{id:'target'}]),true);
   assert.equal(uuid.matches(internal,'claude-code',[{id:'other'}]),false);

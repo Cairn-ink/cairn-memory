@@ -106,8 +106,8 @@ returns `local_raw_privacy_write_failed` with `retryable:true`; all source rows
 remain until the required hashes are durable. Each call makes at most two
 cascade attempts and one bounded UUID preflight.
 
-Local deletion checks the current target, revision, replay and deletion plan
-before writing privacy fences. A refusal already known at that check leaves the
+Local deletion runs the whole deletion once and rolls it back before writing
+privacy fences. A refusal already known at that check leaves the
 store unchanged. A delete that is refused because the conversation changed
 during the call can still leave that conversation hidden. Its source rows stay
 stored, and its session and UUID fences remain until a wipe.

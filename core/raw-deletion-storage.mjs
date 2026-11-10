@@ -1,11 +1,10 @@
-import { episodeSourceKeys } from './raw-lineage-storage.mjs';
 import { createLocalUuidFence } from './local-authority-uuid.mjs';
 import { writeContentSuppressionInside } from './content-suppression-storage.mjs';
 import { createHmac, randomUUID } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { rawNamespace, rawBoundary } from './raw-input.mjs';
 import { fail, identifier, object, revision } from './validation.mjs';
-import { checkRawCardDeletion, createRawCardInvalidation } from './card-raw-sources.mjs';
+import { createRawCardInvalidation } from './card-raw-sources.mjs';
 
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const publicNs = ns => ({ ...ns, projectId: ns.projectId || null });
@@ -188,85 +187,29 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
     return { conversationId: row.id, revision: finalRevision, ...plan.counts, actionId,
       effectCount: 1 + plan.memories.length + plan.episodeIds.filter(id => !(source.type === 'episode' && source.id === id)).length };
   }
-  // Legacy receipts without stored spans still pass through anchors() during
-  // forgetting. Check its identity predicates before durable privacy preflight.
-  function checkForgetPrerequisites(ns, memories) {
-    const fallback = [], invalidated = new Set(), projected = new Set();
-    const rawPresent = db.prepare(`SELECT 1 FROM raw_conversations WHERE ${where} LIMIT 1`).get(...rawBoundary(ns));
-    for (const memory of memories) {
-      if (memory.forget) {
-        const receipts = db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(memory.id);
-        if (localRawPrivacy) {
-          const row = db.prepare('SELECT created_at,updated_at FROM memories WHERE id=?').get(memory.id);
-          const finite = value => typeof value === 'string' && Number.isFinite(Date.parse(value));
-          if (!receipts.some(receipt => finite(receipt.created_at)) && ![row.created_at,row.updated_at].some(finite))
-            fail('local_raw_hide_anchor_missing');
-        }
-        if (rawPresent) for (const receipt of receipts) {
-          if (db.prepare('SELECT 1 FROM raw_receipt_lineage WHERE receipt_id=? LIMIT 1').get(receipt.id)) continue;
-          const authority = roots.receipt(ns, receipt);
-          if (authority.legacyKeep && authority.unknown) fail('raw_lineage_unavailable');
-          if (authority.legacyKeep && invalidated.size && db.prepare(`SELECT 1 FROM episode_memory_links l
-            JOIN json_each(l.receipt_ids) r JOIN episode_keep_actions a ON a.episode_id=l.episode_id AND a.event_id=l.event_id
-            JOIN session_episodes e ON e.id=l.episode_id JOIN json_each(a.keep_source_ids) ids
-            JOIN episode_sources s ON s.id=ids.value
-            WHERE r.value=? AND l.memory_id=? AND e.owner_id=? AND e.scope=? AND e.project_id=?
-              AND a.owner_id=? AND a.scope=? AND a.project_id=?
-              AND s.episode_id IN (SELECT value FROM json_each(?)) LIMIT 1`)
-            .get(receipt.id,memory.id,...rawBoundary(ns),...rawBoundary(ns),JSON.stringify([...invalidated]))) fail('raw_lineage_unavailable');
-          const candidates = authority.legacyKeep ? authority.roots : [{client:receipt.client,sessionKey:receipt.session_id}];
-          for (const root of candidates) {
-            const rows = db.prepare(`SELECT c.id,m.role,m.total_units FROM raw_conversations c JOIN raw_messages m ON m.conversation_id=c.id
-              WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.client=? AND c.session_key IN (?,?) AND m.message_id=? LIMIT 2`)
-              .all(...rawBoundary(ns),root.client,...roots.keys(ns,root.client,root.sessionKey),receipt.event_id);
-            if (rows.length > 1) fail('raw_lineage_unavailable');
-            if (!rows.length) continue;
-            const row = rows[0];
-            if (row.role !== receipt.role) fail('event_payload_conflict');
-            const secret = db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get().secret;
-            const [key] = episodeSourceKeys(ns,[{sources:[{client:root.client,session:root.sessionKey,role:receipt.role,text:receipt.excerpt}]}],secret);
-            const matching = db.prepare('SELECT 1 FROM raw_source_maps WHERE conversation_id=? AND message_id=? AND source_key=? LIMIT 1')
-              .get(row.id,receipt.event_id,key.sourceKey);
-            if (!matching && db.prepare('SELECT 1 FROM raw_source_maps WHERE conversation_id=? AND message_id=? LIMIT 1')
-              .get(row.id,receipt.event_id)) fail('raw_lineage_unavailable');
-            fallback.push([row.id,receipt.event_id,key.sourceKey,matching ? 0 : 1,row.total_units]);
-          }
-        }
-      }
-      if (!rawPresent) continue;
-      // Every preceding Memory mutation invalidates its linked episodes and
-      // consumers. Project those passage removals before checking later KEEP
-      // receipts; otherwise a proof can disappear inside the cascade itself.
-      const pending = db.prepare('SELECT episode_id FROM episode_memory_links WHERE memory_id=?').all(memory.id).map(row => row.episode_id);
-      while (pending.length) {
-        const id = pending.pop(); if (projected.has(id)) continue; projected.add(id);
-        if (db.prepare(`SELECT 1 FROM session_episodes WHERE ${where} AND id=? AND deleted=0`).get(...rawBoundary(ns),id)) invalidated.add(id);
-        for (const row of db.prepare('SELECT DISTINCT episode_id FROM episode_sources WHERE origin_episode_id=?').all(id)) pending.push(row.episode_id);
-      }
-    }
-    return fallback;
-  }
-  // Hash progress must commit in bounded chunks before destructive deletion.
-  // This read-only snapshot uses the same planner and target/replay checks as
-  // the deletion transaction. It rolls back even on success. A concurrent change
-  // after this check can still refuse deletion and leave conservative fences;
-  // only a wipe removes fences. The transaction always rechecks the full plan.
-  function precheck(ns, select, retainMemories = false, episode = false) {
-    db.exec('SAVEPOINT raw_delete_precheck');
+  // Exercise the entire deletion, including post-callback validation, before
+  // privacy writes commit. The second check runs after validation and close.
+  // Only our private sentinel means success; every other error is a refusal.
+  function precheck(ns, select, work) {
+    const rollback = Object.freeze({});
+    let checks = 0, selected;
     try {
-      const row = select();
-      if (row) {
-        const plan = planInside(ns, rootOf(row), retainMemories);
-        const raw = episode ? db.prepare(`SELECT id FROM raw_conversations WHERE ${where} AND client=? AND session_key=?`)
-          .get(...rawBoundary(ns), row.client, row.session_key) : row;
-        const fallback = checkForgetPrerequisites(ns, plan.memories);
-        checkRawCardDeletion(db, ns, raw?.id, plan.memories, fallback);
-      }
-      return row;
-    } finally {
-      db.exec('ROLLBACK TO raw_delete_precheck');
-      db.exec('RELEASE raw_delete_precheck');
+      transaction(db, () => {
+        selected = select();
+        if (selected) {
+          const uuid = createLocalUuidFence(db);
+          db.prepare('INSERT OR IGNORE INTO raw_session_fences VALUES(?,?,?,?,?)')
+            .run(...rawBoundary(ns), selected.client, selected.session_key);
+          uuid.enqueueInside(ns, selected.client, selected.session_key);
+          do { uuid.advanceInside(); } while (uuid.pending());
+        }
+        return work();
+      }, () => { if (++checks === 2) throw rollback; });
+    } catch (error) {
+      if (error !== rollback) throw error;
+      return selected;
     }
+    fail('storage_error');
   }
   function conversationTarget(ns, value, binding) {
     const previous = db.prepare(`SELECT * FROM raw_deletion_actions WHERE ${where} AND action_id=?`).get(...rawBoundary(ns), value.actionId);
@@ -299,33 +242,35 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
   }
   function remove(value) {
     const ns = input(value, true), binding = hash(['delete-conversation-v1', ns, value.conversationId, value.expectedRevision, ...(localRawPrivacy && value.retainMemories ? ['retain-memories'] : [])]);
-    const check = () => precheck(ns, () => conversationTarget(ns, value, binding).row, localRawPrivacy && value.retainMemories);
-    if (localRawPrivacy) {
-      const selected = check();
-      if (selected) localRawPrivacy.beforeDelete(ns,selected.client,selected.session_key);
-    }
-    return retryUuidDelete(ns,check,() => transaction(db, () => {
+    function deleteConversationInside() {
       const { previous, row } = conversationTarget(ns, value, binding);
       if (previous) return JSON.parse(previous.result);
       const result = cascade(ns, row, { type: 'conversation', id: row.id }, value.actionId, localRawPrivacy && value.retainMemories);
       db.prepare('INSERT INTO raw_deletion_actions VALUES(?,?,?,?,?,?)').run(...rawBoundary(ns), value.actionId, binding, JSON.stringify(result));
       return result;
-    }));
-  }
-  function forgetEpisode(ns, value) {
-    const check = () => precheck(ns, () => episodeTarget(ns, value), false, true);
+    }
+    const check = () => precheck(ns, () => conversationTarget(ns, value, binding).row, deleteConversationInside);
     if (localRawPrivacy) {
       const selected = check();
-      localRawPrivacy.beforeDelete(ns,selected.client,selected.session_key);
+      if (selected) localRawPrivacy.beforeDelete(ns,selected.client,selected.session_key);
     }
-    return retryUuidDelete(ns,check,() => transaction(db, () => {
+    return retryUuidDelete(ns,check,() => transaction(db, deleteConversationInside));
+  }
+  function forgetEpisode(ns, value) {
+    function forgetEpisodeInside() {
       const row = episodeTarget(ns, value);
       const raw = db.prepare(`SELECT * FROM raw_conversations WHERE ${where} AND client=? AND session_key=?`)
         .get(...rawBoundary(ns), row.client, row.session_key);
       const actionId = 'episode-delete:' + hash([ns, row.id, row.revision]);
       cascade(ns, raw ?? row, { type: raw ? 'conversation' : 'episode', id: raw?.id ?? row.id }, actionId);
       return { forgotten: true };
-    }));
+    }
+    const check = () => precheck(ns, () => episodeTarget(ns, value), forgetEpisodeInside);
+    if (localRawPrivacy) {
+      const selected = check();
+      localRawPrivacy.beforeDelete(ns,selected.client,selected.session_key);
+    }
+    return retryUuidDelete(ns,check,() => transaction(db, forgetEpisodeInside));
   }
   function list(value) {
     object(value, ['namespace','limit','cursor']); const ns = rawNamespace(value.namespace), limit = value.limit ?? 20;

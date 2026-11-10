@@ -980,8 +980,8 @@
       "file": "core/raw-deletion-storage.mjs",
       "start": "  function cascadeInside(",
       "end": "  function remove(",
-      "sha256": "f0b9f76f3e312c2557b2803524d86ed1585c334f9bd01464a0421329a33c71f7",
-      "reason": "Local deletion checks Card dependencies and ordered forgotten receipt prerequisites in a read-only preflight before committing privacy fences."
+      "sha256": "0a907aef3737efdff03f1eded5ebd232b947092dff00c02b3859272d6b6dbb20",
+      "reason": "Local deletion runs and rolls back the real cascade and post-callback validation before committing privacy fences."
     },
     {
       "id": "raw-exclusion",
