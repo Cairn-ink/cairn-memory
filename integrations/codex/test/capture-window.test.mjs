@@ -22,7 +22,7 @@ test('parser copies row time, falls back to completed milliseconds, and keeps wi
   assert.equal(original.occurred_at, row.timestamp);
   delete row.timestamp; row.payload.completed_at_ms = 1577934245123;
   assert.equal(parse(row).occurred_at, '2020-01-02T03:04:05.123Z');
-  for (const time of ['', 'not-a-date', '2020-01-02', '2020-01-02T03:04:05.123456789000000000+00:00']) {
+  for (const time of ['', 'not-a-date', '2020-01-02', '2020-01-02T03:04:05.123456789000000+00:00']) {
     row.timestamp = time;
     assert.equal(parse(row).occurred_at, '2020-01-02T03:04:05.123Z');
   }

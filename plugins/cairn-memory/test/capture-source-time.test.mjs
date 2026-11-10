@@ -4,7 +4,7 @@ import { harness, row } from './capture-window-harness.mjs';
 import { transcriptWindow } from '../lib/transcript.mjs';
 import { conforms, sourceTimestamp } from '../lib/hosted-contract.mjs';
 
-const invalid = ['', 'not-a-date', '2026-11-10', '2026-11-10T00:00:00.123456789000000000+00:00',
+const invalid = ['', 'not-a-date', '2026-11-10', '2026-11-10T00:00:00.123456789000000+00:00',
   '2026-11-10T00:00:00.1234567890Z', '2026-13-10T00:00:00Z'];
 const valid = ['2026-11-10T00:00:00Z', '2026-11-10T00:00:00.123456789Z',
   '2026-11-10T00:00:00.123456+08:00', '2026-11-10T00:00:00-05:30'];

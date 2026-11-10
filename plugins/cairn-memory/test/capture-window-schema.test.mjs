@@ -12,6 +12,9 @@ test(`${label}: optional capture metadata accepts source time and bounded strict
     sent_at: '2026-01-02T03:04:05.000Z', window: { id: 'a'.repeat(64), slice: 1, slices: 2, initial: true } };
   assert.equal(conforms('capture-request', body), true);
   assert.equal(conforms('capture-request', { ...body, window: { ...body.window, slice: 1, slices: 1 } }), true);
+  for (const time of ['2026-01-02T03:04:05+08:00', '2026-01-02T03:04:05-05:30', '2026-01-02T03:04:05.123456789Z']) {
+    assert.equal(conforms('capture-request', { ...body, messages: [{ ...body.messages[0], occurred_at: time }] }), true);
+  }
   const legacy = structuredClone(body); delete legacy.sent_at; delete legacy.window; delete legacy.messages[0].occurred_at;
   assert.equal(conforms('capture-request', legacy), true);
   assert.equal(conforms('capture-request', { ...body, window: { ...body.window, slice: 4096, slices: 4096 } }), true);
@@ -19,7 +22,8 @@ test(`${label}: optional capture metadata accepts source time and bounded strict
     { id: 'x'.repeat(129) }, { unknown: true }]) {
     assert.equal(conforms('capture-request', { ...body, window: { ...body.window, ...patch } }), false);
   }
-  for (const time of ['invalid', 'x'.repeat(41)]) {
+  for (const time of ['', 'invalid', '2026-01-02', '2026-01-02T03:04:05.1234567890Z',
+    '2026-01-02T03:04:05.123456789000000+00:00', 'x'.repeat(41)]) {
     assert.equal(conforms('capture-request', { ...body, messages: [{ ...body.messages[0], occurred_at: time }] }), false);
     assert.equal(conforms('capture-request', { ...body, sent_at: time }), false);
   }
