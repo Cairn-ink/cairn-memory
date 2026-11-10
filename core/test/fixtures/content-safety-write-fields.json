@@ -1096,7 +1096,7 @@
     "literal:valid": 1
   },
   "integrations/client/state-lock.mjs": {
-    "key:pid": 1
+    "key:pid": 2
   },
   "core/role-context-evidence.mjs": {
     "key:id": 1
