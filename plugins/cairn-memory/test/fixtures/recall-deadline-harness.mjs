@@ -18,8 +18,8 @@ export const scenarios = {
   'unavailable-quota-lock': { holdQuotaLock: true, telemetry: true },
   // The schema rejection comes 50 ms after the first fetch, and the fallback
   // waits 5000 ms on the shared signal, so it is still in flight at the
-  // output-reservation cutoff. The 1500 ms lock hold puts the shared HTTP
-  // deadline (first fetch + 2500 ms) beyond the output reservation.
+  // process cap. The 1500 ms lock hold puts the shared HTTP deadline
+  // (first fetch + 2500 ms) beyond the remaining process budget.
   'schema-fallback': { lockMs: 1500, reply: 'old-schema' },
 };
 

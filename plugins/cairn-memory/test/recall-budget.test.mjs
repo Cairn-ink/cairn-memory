@@ -19,10 +19,10 @@ const silent = result => {
 };
 const capTime = result => result.elapsedMs - at(result, 'process-origin');
 
-test('ten unanswered loopback requests retain an output reserve after contention', async t => {
+test('ten unanswered loopback requests use the remaining process budget after contention', async t => {
   const exits = [];
   for (let run = 0; run < 10; run++) await t.test(`run ${run + 1}`, async () => {
-    // The output reservation now precedes the 3500 ms application cap.
+    // Fetch has no fixed output reservation; the application cap cancels it.
     const result = await invocation(t, { lockMs: 1500, neverAnswer: true });
     exits.push(result.elapsedMs);
     t.diagnostic(JSON.stringify({ run: run + 1, code: result.code, spawnExitMs: result.elapsedMs,
@@ -30,9 +30,9 @@ test('ten unanswered loopback requests retain an output reserve after contention
     silent(result);
     assert.equal(result.serverHeaders, 1);
     const aborted = at(result, 'recall-aborted') - at(result, 'process-origin');
-    assert.ok(aborted >= 3100 && aborted < 3400, 'output_reservation_deadline');
+    assert.ok(aborted >= 3400 && aborted < 3600, 'remaining_process_deadline');
     assert.ok(result.elapsedMs < 4000, 'host_margin');
-    assert.equal(result.events.find(event => event.kind === 'recall-aborted')?.source, 'output');
+    assert.equal(result.events.find(event => event.kind === 'recall-aborted')?.source, 'application');
   });
   t.diagnostic(JSON.stringify({ runs: exits.length, maxSpawnExitMs: Math.max(...exits) }));
 });
@@ -46,7 +46,7 @@ test('startup and imports count against the cap', async t => {
   assert.equal(result.events.filter(event => event.kind === 'recall-fetch').length, 0);
 });
 
-test('fetch timer allows 2500 ms while the output reserve bounds contended invocations', async t => {
+test('fetch timer allows 2500 ms while the process cap bounds contended invocations', async t => {
   const short = await invocation(t, { neverAnswer: true });
   silent(short); assert.equal(short.serverHeaders, 1);
   const elapsed = at(short, 'recall-aborted') - at(short, 'recall-fetch');
@@ -58,10 +58,10 @@ test('fetch timer allows 2500 ms while the output reserve bounds contended invoc
   const contended = await invocation(t, { lockMs: 1500, neverAnswer: true });
   silent(contended); assert.equal(contended.serverHeaders, 1);
   const reserved = at(contended, 'recall-aborted') - at(contended, 'process-origin');
-  assert.ok(reserved >= 3100 && reserved < 3400, 'reserved_output_time');
-  assert.equal(contended.events.filter(event => event.kind === 'output-timeout').length, 1);
-  assert.ok(at(contended, 'recall-aborted') - at(contended, 'recall-fetch') < 2400, 'output_reserve_wins');
-  assert.equal(contended.events.find(event => event.kind === 'recall-aborted').source, 'output');
+  assert.ok(reserved >= 3400 && reserved < 3600, 'remaining_process_time');
+  assert.equal(contended.events.filter(event => event.kind === 'output-timeout').length, 0);
+  assert.ok(at(contended, 'recall-aborted') - at(contended, 'recall-fetch') > 0, 'fetch_started_before_process_cap');
+  assert.equal(contended.events.find(event => event.kind === 'recall-aborted').source, 'application');
 });
 
 test('configured host timeouts reserve at least 500 ms after each recall cap', async () => {
