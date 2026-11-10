@@ -110,7 +110,9 @@ const durabilityRuntimeChanges = new Map([
     before: 'ee4bc6161d97bac44a8dc34a2058ed48e3dbbfeb105e32f6e66590b883b29b58',
     previousHostContainer: '47899f7e6881b7e27726f5145fe151c0f8068537045b3e26556eb9e53d87e14a',
     // Host-managed root gates allow readable containers; eligibility stays read-only.
-    current: 'b1c40477819aceb2bf374d598da25eb258c81f031a6f70646d28c154aefba152',
+    previousGateContention: 'b1c40477819aceb2bf374d598da25eb258c81f031a6f70646d28c154aefba152',
+    // Absolute caller deadline bounds acquisition setup and polling.
+    current: '1ffd9d275b20449bd73f6a08610d896a2ffd89b6637d20475e9ac8bcd9270dbf',
   }],
   // The merged worker retains capture windows/source times plus root replay
   // and frozen-generation dispatch; pin these combined bytes exactly once.
@@ -121,7 +123,9 @@ const durabilityRuntimeChanges = new Map([
     previousCombined: 'a22f205506062e00debe4971a825dfd3990240a005c7c2d7d180f34e4affa3fd',
     previousInstaller: '2fd5987edcf0c047d0ad78145b7f2887e20643ce6eca723871b41598ca2e13e4',
     // Acknowledged-capture diagnostics plus capture windows, root replay and frozen-generation dispatch.
-    current: 'b26a5823e39aaabb21e9224794801be7d80ede84a9c29122bc60e33745b825c6',
+    previousGateContention: 'b26a5823e39aaabb21e9224794801be7d80ede84a9c29122bc60e33745b825c6',
+    // Recovery uses the worker cap; hosted transport receives the existing request deadline.
+    current: '1e49dd2b5936a9c3df3c4b47efb1be9ee1217f0f0177528d40d78400faf901a2',
   }],
   ['integrations/codex/entry.mjs', {
     historical: '558a2f9f5cbed3c4e08146626708ba5ab4374e6938fa9c2e1cdc935d50580952',
@@ -151,7 +155,9 @@ const durabilityRuntimeChanges = new Map([
     // Retain the installer's superseded pause runtime alongside gate-only replay.
     previousInstallerPause: '8d15d24036533f5a235b5e54627cb4db3b94312f28874f9fdf24cd2897cb0635',
     // Root authority and rotation retain the gate in host-managed containers.
-    current: 'ef2f022848664bb436d7f59f4cc446a2d230e3aacf637707f20d09b66ac563ba',
+    previousGateContention: 'ef2f022848664bb436d7f59f4cc446a2d230e3aacf637707f20d09b66ac563ba',
+    // Caller deadlines cover unchanged publication, recovery and final admission; changed observations retain durable marker retries.
+    current: 'c116c69bd2e902d8ae230fe46c9db38b560e5a6d412b6577d08712e208dbec66',
   }],
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
@@ -159,7 +165,9 @@ const durabilityRuntimeChanges = new Map([
     previousCombined: '8079b851c499f57f2064c29380a3b8b9a137dd3bb9b4dd4b930b5b1b047f32d9',
     previousInstaller: '0377df55d80378aad167522116c58262e3b5e182b9c4b5da517e14670bb832e8',
     // Capture-stop notices plus pause-gated context delivery and deferred host publication.
-    current: 'a054b5da392fc2b4dce7bc7b0e2c9e161ba1bc7beb5a3518247b1c8575f9997b',
+    previousGateContention: 'a054b5da392fc2b4dce7bc7b0e2c9e161ba1bc7beb5a3518247b1c8575f9997b',
+    // Initial hosted observations and worker recovery share the installed process budget.
+    current: '0977b326b4d88ceda28b646e0cdaaa9af33b06ea67233bd5e72dd306ae61fd84',
   }],
   ['integrations/codex/hosted-lifecycle.mjs', {
     historical: '8b4a8e7ea1cef5473147bfe2ea6af9548894c52f08e44a656e545fcb9fc8c496',
@@ -167,7 +175,9 @@ const durabilityRuntimeChanges = new Map([
     previousInstallerDeadline: '5123350b18ee89a7557dbeec237e1e7790f1b7f21484dd393a97a6f66b009e94',
     previousPromptDeadline: '3771ad2a034c5cad4b9a2882d5a9306a7cefd704bcebc67893fc286b93937b24',
     // Recall retains its full deadline and cancellation after the final switch withholds output.
-    current: '513a735b9f14899f824374b7fe27fcbf0c06ce81d025588cd6c84c0e415be44a',
+    previousGateContention: '513a735b9f14899f824374b7fe27fcbf0c06ce81d025588cd6c84c0e415be44a',
+    // Capture and recall pass their existing deadlines through every publication and request/output gate.
+    current: '1333467801e667d2bad98080d57a2d01761a5b679a28badcea8fdb84a9d96b58',
   }],
 ]);
 // Capture metadata changes the contract/schema and worker, and extracts a pure
