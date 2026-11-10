@@ -123,7 +123,8 @@ async function telemetry(event) {
 async function dispatchActive(generation, start, signal, hosted) {
   if (hosted) {
     const current = await hosted.observe();
-    if (current.paused || current.generation !== hosted.generation) throw new Error("dispatch_not_started");
+    if (current.paused || (hosted.generation !== undefined && current.generation !== hosted.generation)) throw new Error("dispatch_not_started");
+    hosted.generation = current.generation;
   }
   const startLocal = guard => startIfActive(dataDir, generation, () => {
     checkRecall();
@@ -159,9 +160,8 @@ async function recall(hookInput) {
   let hosted;
   if (hostedConfig) {
     recallObservation = deferHostedPauseStatus(hostedConfig, token, recallSignal);
-    const remote = await recallObservation.observe();
-    if (remote.paused) return;
-    hosted = { generation: remote.generation, observe: () => recallObservation.observe() };
+    // Resolution and quota work must finish before the dispatch observation.
+    hosted = { observe: () => recallObservation.observe() };
   }
   const control = await readControlState(dataDir);
   checkRecall();
