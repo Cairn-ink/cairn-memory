@@ -8,7 +8,7 @@
     "integrations/client/control-state.mjs": "8664a54da21f5168b9168e8a76d902f8d1df59ee7e299e61ca4cfccd811e4be1",
     "integrations/client/file-lock.mjs": "41b02a82f01796b92c9f31cb53d575f000d8d0e16e284da5c1cb6bd940a568ea",
     "integrations/client/hosted-contract.mjs": "39ce7dcb60b91ab7bf815bd0085f278e9cc5d0f9798b9b5d27e7b7655fd217d1",
-    "integrations/client/hosted-pause.mjs": "c946fb5ab612b8a252bf21d4c18a12c69bd4abed9bda16ea5ad411c551f36993",
+    "integrations/client/hosted-pause.mjs": "c2cb8a1dce38e1a9ae2055094c9ef8b1ec65ba40e6ce0cbfbcee8bfa1f9e8086",
     "integrations/client/hosted-schemas.mjs": "fda2e6b4f6feda316300819e1a199dd25f7462b9f47e33bff950c3c4f95ba8ce",
     "integrations/client/identity.mjs": "f208808740aa9b2e13dfbb5899ce50de3a657a1c507441ad8d9877b2efe09de6",
     "integrations/client/pairing.mjs": "46a3cc1bb1e88ad1ab06c0096fb9c1dbee0d34b19b4c1435c9c07b496065af3c",

@@ -408,6 +408,14 @@ async function replayPendingUnderGate(config) {
     // Even identical visible state may lack its crash-completion receipt.
     await commitUnderGate(targetConfig, {generation:selected.generation,paused:selected.paused,enforced:true});
     await privateRemove(join(pendingDirectory(config), name));
+    // A publisher killed after exclusive publication can leave its staging
+    // link. Only this exact, now-dominated observation may be pruned: a live
+    // writer of the same state cannot lose knowledge already committed here.
+    for (const staging of await privateList(pendingDirectory(config))) {
+      if (staging.startsWith(name + '.tmp-') &&
+          /^\.tmp-[1-9]\d*-[a-f0-9-]{36}$/u.test(staging.slice(name.length)))
+        await privateRemove(join(pendingDirectory(config), staging));
+    }
     await syncDirectory(pendingDirectory(config));
   }
 }
