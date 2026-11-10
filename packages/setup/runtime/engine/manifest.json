@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "171a57727a068f622a95c0f0cf4451aa1e29f0b00cca6467ba482f423e33ce64",
-  "bytes": 1318240,
+  "sha256": "78f2ab820972d2db4ef144a76da4d57156ca2ab411ab254a4953942c2adeccbb",
+  "bytes": 1318601,
   "files": [
     "LICENSE",
     "README.md",
@@ -489,7 +489,7 @@
     "core/raw-source-schema.mjs": "eae8eb62c420a68f721ccc8d072f850a6f1c181ac26d010dfd2f7173126ae705",
     "core/raw-source-input.mjs": "e25f414941c0c22d933b1a888f53fefd0dbc4682989e311b08c74c36a2d1f300",
     "core/card-raw-sources.mjs": "aac5276812addd43e9bc28e1e063029bc39f941835ac60699e81d97dae66dac5",
-    "core/raw-deletion-storage.mjs": "2a6548f9d02da4b6f5e37373f4bc04b63c99263bb24930ad44d46bdf939d77e1",
+    "core/raw-deletion-storage.mjs": "4d4aba580a335928013091cacf4bb713e7d307bd42f8f5a9966975f37fc16be3",
     "core/raw-source-roots.mjs": "b0e2b20eda13514fbedcd968848328f1d9daff8c3900fc939a3dff400faa8559",
     "core/raw-input.mjs": "7a7588ef778f3c827dae4ba958e8ccd976b3b76757f3e3f8f0f4a2a90eff0dcc",
     "core/raw-options.mjs": "0f6096453772f324e5f171fb86ea5703c0ce17b959231f73448fbde3aacc62b7",
@@ -642,7 +642,7 @@
     "plugins/cairn-memory/lib/transcript.mjs": "9b049fa05f2ff0c26f4c9ef1a757e4c3846b51d72bfb968a126228424e998804",
     "integrations/client/runtime-usage.mjs": "8bf732bb36664b33aa238a40903986b16c112a44829412c32a11b01dcad08d4d",
     "integrations/client/state-lock.mjs": "ee4bc6161d97bac44a8dc34a2058ed48e3dbbfeb105e32f6e66590b883b29b58",
-    "docs/raw-local-journal.md": "35eb4c8fb7c05a48419cc09f18f53b342b4503e2882714903f5279f2895f8cff",
+    "docs/raw-local-journal.md": "9110b057f4031762e0bbbb3e15b32c518928eba490fe0ca713520042627bd5e0",
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
     "docs/context-read-local.md": "5ff66e329a4cb6c426b7df43eef24178e6755d181644afb490e162f1da3af265",
     "docs/defaults.md": "379822e03e1b9e0e869ebce88afd83c2bf03efaa9075acf7ef102f6ba8bc14a3",
