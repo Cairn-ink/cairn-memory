@@ -527,17 +527,17 @@
   {
     "path": "integrations/client/private-state.mjs",
     "source": "file = await open(",
-    "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
+    "reason": "Private runtime directory handles and explicit identity/config JSON state, including hosted-pause-pending/<target-sha256>.<generation>.<paused>.json content-free pause metadata; no database path."
   },
   {
     "path": "integrations/client/private-state.mjs",
     "source": "const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);",
-    "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
+    "reason": "Private runtime directory handles and explicit identity/config JSON state, including hosted-pause-pending/<target-sha256>.<generation>.<paused>.json content-free pause metadata; no database path."
   },
   {
     "path": "integrations/client/private-state.mjs",
     "source": "const file = await open(temporary, \"wx\", 0o600);",
-    "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
+    "reason": "Private runtime directory handles and explicit identity/config JSON state, including hosted-pause-pending/<target-sha256>.<generation>.<paused>.json content-free pause metadata; no database path."
   },
   {
     "path": "integrations/client/raw/local-host-preparation.mjs",
@@ -732,17 +732,17 @@
   {
     "path": "plugins/cairn-memory/lib/private-state.mjs",
     "source": "file = await open(",
-    "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
+    "reason": "Private runtime directory handles and explicit identity/config JSON state, including hosted-pause-pending/<target-sha256>.<generation>.<paused>.json content-free pause metadata; no database path."
   },
   {
     "path": "plugins/cairn-memory/lib/private-state.mjs",
     "source": "const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);",
-    "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
+    "reason": "Private runtime directory handles and explicit identity/config JSON state, including hosted-pause-pending/<target-sha256>.<generation>.<paused>.json content-free pause metadata; no database path."
   },
   {
     "path": "plugins/cairn-memory/lib/private-state.mjs",
     "source": "const file = await open(temporary, \"wx\", 0o600);",
-    "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
+    "reason": "Private runtime directory handles and explicit identity/config JSON state, including hosted-pause-pending/<target-sha256>.<generation>.<paused>.json content-free pause metadata; no database path."
   },
   {
     "path": "plugins/cairn-memory/scripts/hook.mjs",
@@ -952,7 +952,7 @@
   {
     "path": "integrations/client/private-state.mjs",
     "source": "import { lstat, mkdir, open, link, rename, unlink, realpath, readdir } from \"node:fs/promises\"",
-    "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
+    "reason": "Private runtime directory handles and explicit identity/config JSON state, including hosted-pause-pending/<target-sha256>.<generation>.<paused>.json content-free pause metadata; no database path."
   },
   {
     "path": "integrations/client/raw/local-host-preparation.mjs",
@@ -1027,7 +1027,7 @@
   {
     "path": "plugins/cairn-memory/lib/private-state.mjs",
     "source": "import { lstat, mkdir, open, link, rename, unlink, realpath, readdir } from \"node:fs/promises\"",
-    "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
+    "reason": "Private runtime directory handles and explicit identity/config JSON state, including hosted-pause-pending/<target-sha256>.<generation>.<paused>.json content-free pause metadata; no database path."
   },
   {
     "path": "plugins/cairn-memory/scripts/hook.mjs",

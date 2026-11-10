@@ -36,7 +36,7 @@ try {
     };
     syncBuiltinESMExports();
     await withWriteObserver(async ({ path, kind }) => {
-      if (kind === 'write' && path.endsWith('/1.true.json')) {
+      if (kind === 'write' && (path.endsWith('/1.true.json') || path.includes('/hosted-pause-pending/'))) {
         const release = wait('continue-publisher'); notify('durable'); await release;
       }
     }, () => observeHostedPause(a, 'synthetic-token'));

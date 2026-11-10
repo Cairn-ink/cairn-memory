@@ -48,7 +48,7 @@ for (const sink of ['request', 'output']) test(`intent committed after final jou
   await Promise.race([selected.promise, settled.then(()=>{throw new Error('final_selection_not_reached');})]);
   remote={paused:true,generation:2,enforced:true};
   const observing=withWriteObserver(async ({path,kind})=>{
-    if (kind==='write' && path.endsWith('/2.true.json')) durable.resolve();
+    if (kind==='write' && (path.endsWith('/2.true.json') || path.includes('/hosted-pause-pending/'))) durable.resolve();
   },()=>observeHostedPause(config,'synthetic-token'));
   const observationResult=observing.then(value=>({value}),error=>({error}));
   await durable.promise;
@@ -95,7 +95,7 @@ for (const sink of ['request', 'output']) test(`a cross-target publication fence
   await Promise.race([entered.promise, settled.then(() => { throw new Error('final_check_not_reached'); })]);
   revoked = true;
   observing = withWriteObserver(async ({ path, kind }) => {
-    if (kind === 'write' && path.endsWith('/1.true.json')) durable.resolve();
+    if (kind === 'write' && (path.endsWith('/1.true.json') || path.includes('/hosted-pause-pending/'))) durable.resolve();
   }, () => observeHostedPause(a, 'synthetic-token'));
   observing.catch(() => {});
   await durable.promise; release.resolve();
@@ -160,7 +160,7 @@ for (const sink of ['request', 'output']) test(`an aged publisher fences a young
   await held.promise;
   revoked = true;
   publisher = scope.run('publisher', () => withWriteObserver(async ({ path, kind }) => {
-    if (kind === 'write' && path.endsWith('/1.true.json')) { durable.resolve(); await continuePublisher.promise; }
+    if (kind === 'write' && (path.endsWith('/1.true.json') || path.includes('/hosted-pause-pending/'))) { durable.resolve(); await continuePublisher.promise; }
   }, () => observeHostedPause(a, 'synthetic-token')));
   publisher.catch(() => {});
   await waiter.promise; // P has a 250 ms deadline, starting at synthetic time 0.

@@ -105,7 +105,7 @@ test('resume keeps the hosted generation and only unblocks after publication', {
   }, f.observe);
   resuming.catch(() => {});
   await published.promise;
-  await assert.rejects(gate(f.config, 1, () => { starts++; }), /pause_unavailable/,
+  await assert.rejects(gate(f.config, 1, () => { starts++; }), /state_busy/,
     'visible_resume_without_completion_is_not_authority');
   release.resolve(); await resuming;
   assert.equal((await readControlState(f.config.root)).generation, local.generation);
@@ -183,7 +183,7 @@ test('the last local guard re-reads an intent after an asynchronous wait', { tim
   const durable = Promise.withResolvers(), continueObservation = Promise.withResolvers();
   t.after(() => continueObservation.resolve());
   const observing = withWriteObserver(async ({ path, kind }) => {
-    if (kind === 'write' && path.endsWith('/1.true.json')) {
+    if (kind === 'write' && (path.endsWith('/1.true.json') || path.includes('/hosted-pause-pending/'))) {
       durable.resolve(); await continueObservation.promise;
     }
   }, f.observe);
