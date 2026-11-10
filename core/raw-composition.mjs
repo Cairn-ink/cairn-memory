@@ -51,7 +51,11 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
         result = await capture(registration.input, registration, deadline);
         registration.assertEpochCurrent();
         // Raw retention also works with no extraction provider or failed preflight.
-        if (!registration.result()) registration.commitOnly();
+        if (!registration.result()) {
+          // A failed interpretation must not gain fresh retry provenance.
+          if (!result.ok) registration.checkFailureDeadline();
+          registration.commitOnly();
+        }
         search?.schedule(request.namespace);
         return result;
       } catch (error) {

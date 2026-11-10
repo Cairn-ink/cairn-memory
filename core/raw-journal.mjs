@@ -22,16 +22,11 @@ class RawEpochConflict extends MemoryStoreError {
 const RAW_EPOCH_ATTEMPTS = 4;
 export const isRawEpochConflict = error => error instanceof RawEpochConflict;
 export async function retryRawEpochConflict(work, { deadline } = {}) {
-  let epochFailed = false;
+  let before = deadline?.remainingMs(120_000);
   for (let attempt = 0; ; attempt++) {
-    let before;
-    try { before = deadline?.remainingMs(120_000); return await work(); }
+    try { return await work(); }
     catch (error) {
-      // Only a shared-budget expiry following an epoch refusal is contention.
-      // Other timeouts retain their original outcome and provenance.
-      if (epochFailed && error.code === 'model_timeout' && deadline?.expired()) throw new MemoryStoreError('storage_busy');
       if (!isRawEpochConflict(error)) throw error;
-      epochFailed = true;
       // Leave a full observed attempt's runway before starting another one.
       // Synchronous preparation can otherwise overrun a local process watchdog.
       if (deadline) {
@@ -42,6 +37,7 @@ export async function retryRawEpochConflict(work, { deadline } = {}) {
           throw timeout;
         }
         if (remaining <= before - remaining) throw new MemoryStoreError('storage_busy');
+        before = remaining;
       }
       if (attempt + 1 === RAW_EPOCH_ATTEMPTS) throw new MemoryStoreError('storage_busy');
     }
@@ -250,11 +246,11 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     return token;
   }
 
-  function commitInside(value) {
-    const { input,session,eventDigest,authority,fence,id,revision,sealedParts } = value, ns = input.namespace;
+  function validateRegistration(value) {
+    const { input,session,eventDigest,authority,fence,id,revision } = value, ns = input.namespace;
     const currentPolicy = policy(input), currentFence = durableFence(ns,input.client,session);
     const duplicate = replay(input,eventDigest);
-    if (duplicate) return duplicate;
+    if (duplicate) return { duplicate };
     const epochOnly = isEpochOnlyFenceChange(fence, currentFence);
     if (JSON.stringify(currentPolicy) !== JSON.stringify(authority) ||
         (JSON.stringify(currentFence) !== JSON.stringify(fence) && !epochOnly)) fail('revision_conflict');
@@ -262,6 +258,17 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     if(current)assertRegistrationSources(input,current.id);
     if ((current?.revision ?? null) !== revision || (current && current.id !== id)) fail('revision_conflict');
     if (epochOnly) throw new RawEpochConflict();
+    return { current, currentFence };
+  }
+  function assertRegistrationCurrent(token) {
+    const value = prepared.get(token);
+    if (!value) fail('invalid_input');
+    validateRegistration(value);
+  }
+  function commitInside(value) {
+    const { current, currentFence, duplicate } = validateRegistration(value);
+    if (duplicate) return duplicate;
+    const { input,session,eventDigest,authority,id,sealedParts } = value, ns = input.namespace;
     const now = clock();
     if (!current) db.prepare(`INSERT INTO raw_conversations(id,owner_id,scope,project_id,client,session_key,revision,first_received_at,last_received_at)
       VALUES(?,?,?,?,?,?,1,?,?)`).run(id,...rawBoundary(ns),input.client,session,now,now);
@@ -387,7 +394,7 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
   const getConversation = createRawReads({ db,identity,epoch,open,digest,partDigest });
   const listRawConversations = createRawConversationList({ db,identity,epoch });
   const sourceReader = sources ? createRawSourceReader({ db,identity,open,partDigest }) : undefined;
-  return Object.freeze({ prepareRegistration,commitRegistration,register,getConversation,listRawConversations,getRawUsage,
+  return Object.freeze({ prepareRegistration,assertRegistrationCurrent,commitRegistration,register,getConversation,listRawConversations,getRawUsage,
     sourceReader,
     getRawCaptureControl,setRawCaptureControl,closePending,
     sessionKey: (namespace, client, sessionId) => sessionKey(rawNamespace(namespace), rawClient(client), identifier(sessionId)) });

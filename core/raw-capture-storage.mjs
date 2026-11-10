@@ -97,7 +97,24 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     if (profile.sessionEpisodes && context.episodeContext.generation !== generation) fail('generation_conflict');
     deadline?.check();
     const token = await journal.prepareRegistration(input);
-    deadline?.check();
+    // On expiry, establish this registration's own refusal before the retry
+    // boundary checks the budget. A prior attempt supplies no provenance.
+    let epochConflict;
+    const checkFailureDeadline = () => {
+      if (!arrivalInputs.get(arrivalToken)?.decided) deadline?.check();
+    };
+    const checkDeadline = () => {
+      if (arrivalInputs.get(arrivalToken)?.decided) return;
+      if (deadline?.expired()) {
+        try { journal.assertRegistrationCurrent(token); }
+        catch (error) {
+          if (isRawEpochConflict(error)) { epochConflict = error; throw error; }
+          // Mixed conflicts cannot prove an epoch-only failure. Keep expiry.
+        }
+      }
+      deadline?.check();
+    };
+    checkDeadline();
     if (managed) authority.check(managed,input.namespace,input.client);
     // A same-event winner may have committed while sealing awaited. Select
     // observation before any model preflight; commit still checks atomically.
@@ -140,8 +157,6 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
             : { status: 'not-run', reason: 'no-eligible-first-part' };
     }
 
-    const checkDeadline = () => { if (!arrivalInputs.get(arrivalToken)?.decided) deadline?.check(); };
-    let epochConflict;
     function assertEpochCurrent() { if (epochConflict) throw epochConflict; }
     function commit() {
       if (!db.isTransaction) fail('raw_transaction_required');
@@ -208,6 +223,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
 
     function observeReplay(onlyRecorded = false) {
       if (!snapshot) fail('invalid_input');
+      // An already failed interpretation cannot acquire new retry provenance.
       const result = transaction(db, () => {
         if (onlyRecorded) {
           if (!binding(input)) return null;
@@ -221,13 +237,13 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
         if (committed.closed) return committed;
         if (!committed.observation) fail('invalid_input');
         return committed.observation;
-      }, checkDeadline);
+      }, onlyRecorded ? checkFailureDeadline : checkDeadline);
       if (result?.closed) fail(result.closed);
       if (result) accepted = true;
       return result;
     }
     return Object.freeze({ localPrivacy: Boolean(privacy), input: projection, hasProjection: Boolean(snapshot), replay,
-      emptyOutcome, commit, observeReplay, assertEpochCurrent, checkDeadline,
+      emptyOutcome, commit, observeReplay, assertEpochCurrent, checkDeadline, checkFailureDeadline,
       // A winner can commit even during a failing model preflight. Only an
       // unaccepted attempt may observe that winner; it never acquires work.
       observeFailedInterpretation: () => !accepted && snapshot ? observeReplay(true) : null,

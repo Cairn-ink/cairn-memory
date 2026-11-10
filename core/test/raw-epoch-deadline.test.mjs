@@ -43,7 +43,8 @@ for (const route of ['captureRaw', 'capture']) for (const conflicts of [0, 3]) f
  else {
   assert.equal(globalThis.epochReviewDeadlineStarts.length,1,'exactly one invocation deadline');
   assert.equal(extractedAt, undefined, 'expired invocation must not dispatch extraction');
-  assert.equal(result.error?.code, 'storage_busy');
+  // A later preflight expiry is its own failure, before epoch revalidation.
+  assert.equal(result.error?.code, preparation==='growing' ? 'model_timeout' : 'storage_busy');
   assert.ok(seals <= 2, 'another attempt must not get a renewed budget');
   assert.equal(f.db.prepare('SELECT count(*) n FROM raw_parts').get().n, 0);
  }
