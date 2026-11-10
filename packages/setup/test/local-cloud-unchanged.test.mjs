@@ -107,7 +107,9 @@ const durabilityRuntimeChanges = new Map([
   ['integrations/client/state-lock.mjs', {
     historical: 'ee4bc6161d97bac44a8dc34a2058ed48e3dbbfeb105e32f6e66590b883b29b58',
     before: 'ee4bc6161d97bac44a8dc34a2058ed48e3dbbfeb105e32f6e66590b883b29b58',
-    current: '47899f7e6881b7e27726f5145fe151c0f8068537045b3e26556eb9e53d87e14a',
+    previousHostContainer: '47899f7e6881b7e27726f5145fe151c0f8068537045b3e26556eb9e53d87e14a',
+    // Host-managed root gates allow readable containers; eligibility stays read-only.
+    current: 'b1c40477819aceb2bf374d598da25eb258c81f031a6f70646d28c154aefba152',
   }],
   // The merged worker retains capture windows/source times plus root replay
   // and frozen-generation dispatch; pin these combined bytes exactly once.
@@ -127,7 +129,9 @@ const durabilityRuntimeChanges = new Map([
     historical: 'ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64',
     before: 'ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64',
     previousCurrent: '7dc46417a129414937b0180482acf6bdf7f58c1816f93468e8df1d952057485b',
-    current: '7fd62ae5b862cfe77b393e06ef787508f89f7071879a84859357420893aff0c4',
+    previousHostContainer: '7fd62ae5b862cfe77b393e06ef787508f89f7071879a84859357420893aff0c4',
+    // Host containers may be readable or aliased; state files remain private.
+    current: 'df7adad56c4a0e40d072a69f4f67ccd62ec3e9b7970327443fb114f5a4715dff',
   }],
   // Merge portable exact-GET first-prompt authority with gate-only pause commits
   // and durable pending-marker replay; retain both parent current digests below.
@@ -139,7 +143,9 @@ const durabilityRuntimeChanges = new Map([
     previousGatedPublication: 'c946fb5ab612b8a252bf21d4c18a12c69bd4abed9bda16ea5ad411c551f36993',
     previousPortableFirstPrompt: '76cc819ac94a85ed1fc8a2d2dabd92bf9b3581ad82422119df279c054727639c',
     previousPendingReplay: 'c2cb8a1dce38e1a9ae2055094c9ef8b1ec65ba40e6ce0cbfbcee8bfa1f9e8086',
-    current: 'ab63b7ddb34a8f097255e4f702bd7cfaefd5155a63873d66b93f0d229a6995d2',
+    previousHostContainer: 'ab63b7ddb34a8f097255e4f702bd7cfaefd5155a63873d66b93f0d229a6995d2',
+    // Root authority and rotation retain the gate in host-managed containers.
+    current: 'ef2f022848664bb436d7f59f4cc446a2d230e3aacf637707f20d09b66ac563ba',
   }],
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
@@ -149,7 +155,9 @@ const durabilityRuntimeChanges = new Map([
   ['integrations/codex/hosted-lifecycle.mjs', {
     historical: '8b4a8e7ea1cef5473147bfe2ea6af9548894c52f08e44a656e545fcb9fc8c496',
     before: 'bd7bc299773cc389565a34bfd9a7131f68ad7bef934d3ce5a0ebeeea800bbe3a',
-    current: '3771ad2a034c5cad4b9a2882d5a9306a7cefd704bcebc67893fc286b93937b24',
+    previousPromptDeadline: '3771ad2a034c5cad4b9a2882d5a9306a7cefd704bcebc67893fc286b93937b24',
+    // Recall retains its full deadline and cancellation after the final switch withholds output.
+    current: '513a735b9f14899f824374b7fe27fcbf0c06ce81d025588cd6c84c0e415be44a',
   }],
 ]);
 // Capture metadata changes the contract/schema and worker, and extracts a pure
