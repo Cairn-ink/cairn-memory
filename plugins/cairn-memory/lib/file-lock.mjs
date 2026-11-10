@@ -47,9 +47,9 @@ async function reapDeadOwner(path, owner, processIsAlive, context, read, signal)
   signal?.throwIfAborted();
   if (processIsAlive(owner.pid, owner) !== false) return;
 
-  // A token-specific marker elects exactly one reaper. It prevents a
-  // delayed contender from unlinking a successor after another contender has
-  // already recovered this dead owner's lock.
+  // A token-specific marker elects one live reaper. Only a definitively dead
+  // reaper may be displaced, through the same election protocol on its marker.
+  // Recursive markers fence delayed contenders at every recovery level.
   const reaperPath = `${path}.reap-${owner.token}`;
   const reaperToken = randomUUID();
   const reaperOwner = { pid: process.pid, token: reaperToken, ...context };
@@ -58,16 +58,24 @@ async function reapDeadOwner(path, owner, processIsAlive, context, read, signal)
     mode: 0o600,
     flag: "wx",
   });
+  let elected = false;
   try {
-    signal?.throwIfAborted();
-    await link(reaperOwnerPath, reaperPath);
-  } catch (error) {
-    if (error?.code === "EEXIST") {
-      await unlink(reaperOwnerPath).catch(() => {});
-      return;
+    while (!elected) {
+      signal?.throwIfAborted();
+      try {
+        await link(reaperOwnerPath, reaperPath);
+        elected = true;
+      } catch (error) {
+        if (error?.code !== "EEXIST") throw error;
+        const reaper = await readOwner(reaperPath, read);
+        // Malformed/unknown and live ownership remain fail-closed. EPERM is
+        // live, exactly as for the original lock; elapsed time grants nothing.
+        if (!reaper || processIsAlive(reaper.pid, reaper) !== false) return;
+        await reapDeadOwner(reaperPath, reaper, processIsAlive, context, read, signal);
+      }
     }
-    await unlink(reaperOwnerPath).catch(() => {});
-    throw error;
+  } finally {
+    if (!elected) await unlink(reaperOwnerPath).catch(() => {});
   }
   const current = await readOwner(path, read);
   // Election commits this tiny recovery step. Cancellation must not strand a
@@ -82,9 +90,9 @@ async function reapDeadOwner(path, owner, processIsAlive, context, read, signal)
     await unlink(`${path}.owner-${owner.pid}-${owner.token}`).catch(() => {});
   }
   // Keep the elected marker permanently. A later contender can never mistake
-  // a successor lock for this dead owner's lock, even if the elected reaper
-  // itself is interrupted. The marker and its tiny owner file contain no
-  // content or path data.
+  // a successor lock for this dead owner's lock. If this reaper dies, a later
+  // contender may recover its marker before repeating the original token check.
+  // Markers and their tiny owner files contain no content or path data.
 }
 
 /**
