@@ -66,6 +66,9 @@ for (const name of ['capture.lock', 'state.lock', 'control.lock']) {
     await Promise.race([new Promise(resolve => second.process.once('message', resolve)),
       second.done.then(() => { throw Error('nested_reaper_exited'); })]);
     assert.equal(JSON.parse(await readFile(firstMarker, 'utf8')).pid, first.process.pid);
+    assert.equal(await withFileLock(path, () => { throw Error('live_nested_reaper_displaced'); },
+      { timeoutMs: 40, pollMs: 5, signal: AbortSignal.timeout(200) }),
+      false, 'live_nested_reaper_preserves_bounded_acquisition');
     second.process.kill('SIGKILL');
     assert.equal((await second.done).signal, 'SIGKILL');
     assert.equal(await withFileLock(path, () => { entered++; }, { timeoutMs: 400, pollMs: 5 }),
