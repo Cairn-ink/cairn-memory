@@ -114,6 +114,7 @@ const durabilityRuntimeChanges = new Map([
   ['integrations/codex/worker.mjs', {
     historical: '0fbb1295e596769035eca5e974efa4f355774a6c37d70f3442a3e78c4aa7264d',
     before: '0fbb1295e596769035eca5e974efa4f355774a6c37d70f3442a3e78c4aa7264d',
+    previousPauseWorker: '6453ea0e6d3c0f3a4eb70bfc4eb7c45e85251c48dcc4c3da89e177be834ff03e',
     current: 'a22f205506062e00debe4971a825dfd3990240a005c7c2d7d180f34e4affa3fd',
   }],
   ['integrations/codex/entry.mjs', {
@@ -121,16 +122,24 @@ const durabilityRuntimeChanges = new Map([
     before: '0182cc90faddafeea34b8ba11a4c96805f74140117c1ee4b4ad118ca47b0d331',
     current: '4bc207d972508f7e0ba7eea2ed69021188673d47cccfe6a375de1b8d88973ea4',
   }],
+  // Final admission needs synchronous owner-checked reads of pause metadata.
   ['integrations/client/private-state.mjs', {
     historical: 'ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64',
     before: 'ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64',
-    current: '7dc46417a129414937b0180482acf6bdf7f58c1816f93468e8df1d952057485b',
+    previousCurrent: '7dc46417a129414937b0180482acf6bdf7f58c1816f93468e8df1d952057485b',
+    current: '7fd62ae5b862cfe77b393e06ef787508f89f7071879a84859357420893aff0c4',
   }],
-  // Portable first-prompt publication also matches the exact GET observation.
+  // Merge portable exact-GET first-prompt authority with gate-only pause commits
+  // and durable pending-marker replay; retain both parent current digests below.
   ['integrations/client/hosted-pause.mjs', {
     historical: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
     before: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
-    current: '76cc819ac94a85ed1fc8a2d2dabd92bf9b3581ad82422119df279c054727639c',
+    previousCurrent: '365314ab54f794b34e4972de22d456b2c529a0f6d608c62a01f8558fe4a32892',
+    previousSynchronousAdmission: '24d0588a6316c89cc5c2d4c0cc2a8ee5a6bacd035c2187298e3480ac3c21a5b2',
+    previousGatedPublication: 'c946fb5ab612b8a252bf21d4c18a12c69bd4abed9bda16ea5ad411c551f36993',
+    previousPortableFirstPrompt: '76cc819ac94a85ed1fc8a2d2dabd92bf9b3581ad82422119df279c054727639c',
+    previousPendingReplay: 'c2cb8a1dce38e1a9ae2055094c9ef8b1ec65ba40e6ce0cbfbcee8bfa1f9e8086',
+    current: 'ab63b7ddb34a8f097255e4f702bd7cfaefd5155a63873d66b93f0d229a6995d2',
   }],
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
@@ -434,7 +443,8 @@ test('L06 version normalization preserves unrelated bytes and complete runtime g
 });
 test('L06 hosted runtime exceptions require packaged bytes and preserve all other comparisons', async () => {
   // Seven unpinned modules + recall (1) + durability (7) + capture (4),
-  // less the shared worker (1): eighteen unique runtime exceptions.
+  // less the shared worker (1): eighteen unique runtime exceptions. Merging
+  // synchronous metadata reads and pending replay changes pins, not membership.
   assert.equal(hostedRuntimeExceptions.length, 18);
   // Atomic output moved entry to whole-file pins; root replay and cancellable
   // admission add worker/state-lock. Immutable historical/before pins remain.

@@ -19,7 +19,7 @@ export async function interruptRotation(t, config, kind) {
       await acquired.promise;
       try {
         await assert.rejects(withWriteObserver(async ({ path, kind }) => {
-          if (kind === 'write' && path.endsWith('/1.true.json')) {
+          if (kind === 'write' && (path.endsWith('/1.true.json') || path.includes('/hosted-pause-pending/'))) {
             release.resolve(); await holder;
           }
         }, () => observeHostedPause(config, 'synthetic-token')), /control_busy/);

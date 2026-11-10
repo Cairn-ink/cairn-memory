@@ -25,7 +25,7 @@ const originalTimeout = globalThis.setTimeout;
 let entryObserved = false, forcedHardCap;
 globalThis.setTimeout = function (callback, milliseconds, ...args) {
   if (process.env.CAIRN_TEST_FORCE_HARD_CAP === 'true' &&
-      callback.toString().includes('process.exit(0)')) {
+      callback.toString().includes('process.exit(0)') && callback.toString().includes('setImmediate')) {
     forcedHardCap = callback;
     return originalTimeout(() => {}, milliseconds);
   }

@@ -681,22 +681,25 @@ and Codex retain their initial and pre-dispatch observations.
 Unavailable state blocks both operations. The foreground capture launcher does
 not fetch hosted state; its detached worker performs the observations.
 
-On Linux and macOS, a changed observation durably records a content-free
-`generation`/`paused` intent before attempting pause publication. Intent
-publication and the final authorization plus synchronous request start or context
-write share a gate, acquired before the local control lock. When the publisher
-acquires this gate, its durable intent is the commit point: later authorizations
-cannot use an older generation. Requests already started can finish. Local
-rotation and durable pause publication precede a matching completion receipt;
-uncompleted publication never authorizes work.
+On Linux and macOS, pause publication and final request or context-write
+admission share one filesystem gate, acquired before the local control lock.
+Pause authority is committed only under that gate. Once a pause is recorded on
+this machine, no request starts after that; work already admitted in another
+process may complete. Context not yet admitted is suppressed. A content-free
+pending marker keeps new admissions closed while pause publication waits,
+including after a process restart.
 
-Gate acquisition is bounded to 250 ms. If acquisition fails or times out, the
-validated intent is still journaled. A dispatcher already inside the gate can
-have selected the older intent; its synchronous start must pass a 250 ms
-admission deadline. This exceptional path does not provide the same atomic
-publication guarantee. Scheduling suspension between that last check and the
-actual start can extend the wall-clock interval. Later checks see the durable
-intent and fail closed. Lock failure never permits silently discarding it.
+Resume permits new work only after local publication. Local rotation and durable
+pause publication precede a matching completion receipt; incomplete publication
+never authorizes work. The publisher
+continues waiting until it holds the gate or its process budget ends. A live
+holder suspended by the operating system can delay publication indefinitely;
+the admission deadline is cooperative and cannot bound OS suspension or disk I/O.
+
+Final admission retains synchronous owner-checked reads of local authority and
+checks for pending observations. The unchanged path adds no network call or
+fsync. Network completion and the drain of an admitted output happen after the
+gate is released.
 
 A fixed high-water checkpoint and the latest immutable intent/receipt retain
 crash authority across restarts. Changed observations prune dominated records
@@ -706,6 +709,16 @@ and repeated failed rotations retain only the highest pending intent. Availabili
 diagnostics never authorize dispatch. Complete, unchanged observations add no
 durable writes before recall. Resume retains the hosted generation and permits
 work only after publication.
+
+Recall still aborts new work at 3,500 ms on the process clock, and output must
+start before 3,450 ms. An admitted pipe write may finish draining after the abort;
+only that pending write delays forced exit. A permanently blocked reader is
+abandoned at the backstop: 3,750 ms from the process clock origin, reserving
+100 ms for spawn-to-origin latency and 150 ms for exit before the host's
+4,000 ms timeout. First-prompt classification and diagnostics cannot use the drain
+window. These are cooperative
+timers: process suspension can delay them, and regular-file stdout is synchronous,
+so a slow file write blocks the event loop and cannot be preempted by a timer.
 
 The Claude plugin selects a portable capability on native Windows. On native
 Windows, pause is checked right before every send, and a request that had already
@@ -717,7 +730,8 @@ Capture cursors persist the hosted generation and target and establish a fresh
 EOF boundary when either changes, including after pause/resume and for old
 detached handoffs. Before any capture and only when hosted tags are absent, the
 first prompt can authorize bytes appended after one transcript-size snapshot at
-hook entry, using only that recall's validated active observation. A prompt record
+hook entry, using only that recall's validated active observation. This adds at
+most one stat, with no transcript read or extra network call. A prompt record
 already on disk at that snapshot is conservatively omitted. Later prompts never
 add or refresh these tags. A denied observation, busy capture lock, unknown byte
 boundary or insufficient recall cleanup time leaves the first capture to establish

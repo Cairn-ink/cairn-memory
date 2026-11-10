@@ -178,7 +178,7 @@ test('Codex final output guard rechecks an intent after its control-lock wait', 
   await Promise.race([entered.promise, pending.then(() => { throw new Error('final_output_gate_not_reached'); })]);
   remote = paused;
   observing = withWriteObserver(async ({ path, kind }) => {
-    if (kind === 'write' && path.endsWith('/1.true.json')) {
+    if (kind === 'write' && (path.endsWith('/1.true.json') || path.includes('/hosted-pause-pending/'))) {
       durable.resolve(); await continueObservation.promise;
     }
   }, () => observeHostedPause(config, 'synthetic-token'));

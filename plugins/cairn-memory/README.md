@@ -96,17 +96,23 @@ pre-dispatch observations. Paused, unavailable, unenforced or regressing
 observations block that operation. The foreground Stop/PreCompact launcher makes
 no hosted request; its detached worker performs the observations.
 
-On Linux and macOS, intent publication shares a gate with final authorization
-and the synchronous request/output start, ordered before the local control lock.
-A durable intent committed under that gate prevents later authorizations using
-an older generation. If gate acquisition fails or times out after 250 ms, the
-observation is still journaled, but an older dispatcher already inside its
-250 ms admission window can still start. Scheduling suspension after its last
-check can extend that wall-clock interval. Future checks reject the intent;
+On Linux and macOS, pause publication and final request/output admission share
+one filesystem gate, acquired before the local control lock. Pause authority is
+committed only under that gate. Once a pause is recorded on this machine, no
+request starts after that; work already admitted in another process may complete.
+A content-free pending marker keeps new admissions closed while pause publication
+waits, including after a process restart. A suspended holder can delay publication;
 resume permits work only after local publication. A high-water checkpoint and
 crash-safe pruning bound completed journal history without warm-path fsyncs.
 Shared observations apply across paired clients; the local daily cap remains
 specific to Codex.
+
+Recall aborts new work at 3,500 ms and admits output only before 3,450 ms.
+Only an admitted pipe write may drain until the 3,750 ms process-clock backstop,
+reserving 100 ms for spawn-to-origin latency and 150 ms for exit before the
+host's four-second timeout. First-prompt classification and diagnostics cannot
+use this drain window. These cooperative timers cannot preempt process suspension
+or a synchronous regular-file output write.
 
 On native Windows, pause is checked right before every send, and a request that
 had already started when you paused can finish. This mode uses process-local
@@ -119,6 +125,7 @@ first capture's EOF, even at generation zero. Before any capture and only when
 hosted tags are absent, the first prompt can instead authorize bytes appended
 after one transcript-size snapshot at hook entry. Authority comes only from that
 recall's validated active observation; a later prompt never adds or refreshes it.
+The prompt path adds at most one stat, with no transcript read or extra network call.
 A prompt record already on disk at that snapshot is conservatively omitted.
 A denied observation, busy capture lock, unknown byte boundary or insufficient
 recall cleanup time leaves the first capture to establish EOF. Stop still requires

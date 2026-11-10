@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { privateDirectory, privateList, privateRemove, privateRead, privateWrite, syncDirectory } from './private-state.mjs';
+import { privateDirectory, privateList, privateRemove, privateRead, privateReadSync, privateListSync, privateWrite, syncDirectory } from './private-state.mjs';
 import { stateLock } from './state-lock.mjs';
 import { rotateAutomaticBoundary } from './automatic-policy.mjs';
 import { conforms } from './hosted-contract.mjs';
@@ -96,9 +96,10 @@ export function deferHostedPauseStatus(config, token, signal) {
     },
   };
 }
-const pausePath = config => join(config.root, 'hosted-pause', hostedTargetId(config) + '.json');
+const replayTarget = Symbol('replayTarget');
+const pausePath = config => join(config.root, 'hosted-pause', (config[replayTarget] ?? hostedTargetId(config)) + '.json');
 const intentDirectory = config => pausePath(config) + '.intents';
-// One root gate serializes every target with root revocation publication.
+// One root gate orders normal publication/replay with every target decision.
 const gatePath = config => join(config.root, 'hosted-pause.gate');
 const highWaterPath = config => pausePath(config) + '.high-water';
 
@@ -111,29 +112,36 @@ const rotatedPath = root => join(root, 'hosted-pause-rotated.json');
 async function pendingRotation(root) {
   const pending = await privateRead(rotationPath(root), { missing: true });
   if (pending === undefined) return undefined;
-  if (!/^[a-f0-9-]{36}$/u.test(pending)) throw new Error('pause_unavailable');
   const completed = await privateRead(rotatedPath(root), { missing: true });
+  return rotationMismatch(pending, completed);
+}
+function rotationMismatch(pending, completed) {
+  if (!/^[a-f0-9-]{36}$/u.test(pending)) throw new Error('pause_unavailable');
   if (completed !== undefined && !/^[a-f0-9-]{36}$/u.test(completed)) throw new Error('pause_unavailable');
   return pending === completed ? undefined : pending;
 }
 // Call before reading a hosted cursor's local generation. Rotation keeps the
 // gate -> control order; failure denies adoption rather than exposing old bytes.
 // Portable clients retain their cursor tags and never require POSIX durability.
+async function rotateUnderGate(config) {
+  const pending = await pendingRotation(config.root);
+  if (!pending) return;
+  await syncDirectory(config.root);
+  await rotateAutomaticBoundary(config.root);
+  await privateWrite(rotatedPath(config.root), pending);
+}
 export async function completeHostedPauseRotation(config) {
-  if (!hostedPauseMode(config).barrier || !await pendingRotation(config.root)) return;
+  if (!hostedPauseMode(config).barrier) return;
+  if (!await pendingRotation(config.root) && !(await pendingMarkers(config)).length) return;
   await stateLock(gatePath(config), async () => {
-    const pending = await pendingRotation(config.root);
-    if (!pending) return;
-    // A concurrent publisher may have exposed its rename before directory sync.
-    await syncDirectory(config.root);
-    await rotateAutomaticBoundary(config.root);
-    await privateWrite(rotatedPath(config.root), pending);
+    await replayPendingUnderGate(config);
+    await rotateUnderGate(config);
   });
   if (await pendingRotation(config.root)) throw new Error('pause_unavailable');
 }
 
-// A timed-out publisher still journals. Limit every admitted critical section
-// at its synchronous side effect, including an uncooperative filesystem wait.
+// Admission and authoritative publication share the filesystem gate. The
+// admission deadline bounds entry cooperatively, not OS suspension or disk IO.
 const GATE_WINDOW_MS = 250;
 // Capability is selected once for each config, never from a lock failure.
 // Tests inject the platform without changing the host or its lock semantics.
@@ -190,9 +198,7 @@ async function pruneIntents(config, intent) {
   }
   await syncDirectory(directory);
 }
-async function highestIntent(config) {
-  const directory = intentDirectory(config);
-  const checkpoint = await privateRead(highWaterPath(config), { missing: true });
+function selectIntent(checkpoint, names) {
   let selected;
   if (checkpoint !== undefined) {
     const value = JSON.parse(checkpoint);
@@ -201,7 +207,6 @@ async function highestIntent(config) {
         typeof value.paused !== 'boolean') throw new Error('pause_unavailable');
     selected = { ...value, name: intentName(value) + '.json' };
   }
-  const names = await privateList(directory, { missing: true }) ?? [];
   for (const name of names) {
     if (!name.endsWith('.json')) continue; // Incomplete atomic-write temporaries.
     const match = /^(0|[1-9]\d*)\.(true|false)\.json$/u.exec(name);
@@ -211,16 +216,32 @@ async function highestIntent(config) {
     if (!selected || generation > selected.generation ||
         (generation === selected.generation && !paused)) selected = { name, generation, paused };
   }
-  if (!selected) return undefined;
+  return selected;
+}
+function checkedIntent(selected, bytes, names) {
   // Completed observations checkpoint their durable high water before pruning.
   // Keep its matching immutable intent/receipt so all crash stages use the
   // same validation. Successful transitions retain exactly two journal names.
-  const value = JSON.parse(await privateRead(join(directory, selected.name)));
+  const value = JSON.parse(bytes);
   if (Object.keys(value ?? {}).sort().join(',') !== 'generation,paused' ||
       value.generation !== selected.generation || value.paused !== selected.paused) {
     throw new Error('pause_unavailable');
   }
   return { ...value, needsPrune: names.some(name => olderIntentName(name, value)) };
+}
+async function highestIntent(config) {
+  const directory = intentDirectory(config);
+  const checkpoint = await privateRead(highWaterPath(config), { missing: true });
+  const names = await privateList(directory, { missing: true }) ?? [];
+  const selected = selectIntent(checkpoint, names);
+  return selected ? checkedIntent(selected, await privateRead(join(directory, selected.name)), names) : undefined;
+}
+function highestIntentSync(config) {
+  const directory = intentDirectory(config);
+  const checkpoint = privateReadSync(highWaterPath(config), { missing: true });
+  const names = privateListSync(directory, { missing: true }) ?? [];
+  const selected = selectIntent(checkpoint, names);
+  return selected ? checkedIntent(selected, privateReadSync(join(directory, selected.name)), names) : undefined;
 }
 function validateIntent(remote, intent) {
   if (intent && (remote.generation < intent.generation ||
@@ -239,16 +260,18 @@ async function writeOnce(path, bytes) {
 export async function withHostedPauseGate(config, generation, work, { signal, deadlineMs = Infinity, observation } = {}) {
   signal?.throwIfAborted();
   if (!hostedPauseMode(config).barrier) {
-    const check = async () => {
+    const check = () => {
       const state = volatileState(config);
       if (!state.valid || state.previous?.paused || state.previous?.generation !== generation ||
           (observation !== undefined && state.previous !== observation))
         throw new Error('pause_unavailable');
     };
+    check.beforeStart = check;
     await check();
     return work(check);
   }
   const check = async () => {
+    if ((await pendingMarkers(config)).length) throw new Error('pause_unavailable');
     if (await pendingRotation(config.root)) throw new Error('pause_unavailable');
     const { previous } = await readPause(config), intent = await highestIntent(config);
     if (!previous || !conforms('pause-state', previous) || !previous.enforced ||
@@ -260,8 +283,29 @@ export async function withHostedPauseGate(config, generation, work, { signal, de
     }
   };
   return stateLock(gatePath(config), async () => {
+    await replayPendingUnderGate(config);
     const deadline = Math.min(performance.now() + GATE_WINDOW_MS, deadlineMs);
     check.beforeStart = () => {
+      // A marker written during this holder's async checks denies admission.
+      // A marker arriving after this read cannot commit until we release the
+      // gate, so an invocation in this turn still precedes the commit.
+      if ((privateListSync(pendingDirectory(config), { missing:true }) ?? []).some(name => name.endsWith('.json')))
+        throw new Error('pause_unavailable');
+      // Retain the synchronous authority checks as a final local guard.
+      const bytes = privateReadSync(pausePath(config), { missing: true });
+      const previous = bytes === undefined ? null : JSON.parse(bytes);
+      const intent = highestIntentSync(config);
+      if (!previous || !conforms('pause-state', previous) || !previous.enforced ||
+          previous.paused || previous.generation !== generation) throw new Error('pause_unavailable');
+      validateIntent(previous, intent);
+      if (intent && privateReadSync(join(intentDirectory(config), intentName(previous) + '.complete'),
+        { missing: true }) !== intentBytes(previous)) throw new Error('pause_unavailable');
+      // Root is last and requires its exact rotation receipt when present.
+      // The shared gate excludes authoritative publication during these reads;
+      // incomplete crash recovery still denies. Neither path writes or syncs.
+      const pending = privateReadSync(rotationPath(config.root), { missing: true });
+      if (pending !== undefined && rotationMismatch(pending,
+        privateReadSync(rotatedPath(config.root), { missing: true }))) throw new Error('pause_unavailable');
       signal?.throwIfAborted();
       if (performance.now() >= deadline) throw new Error('pause_unavailable');
     };
@@ -295,76 +339,120 @@ async function observe(config, token, signal) {
     state.previous = remote; state.valid = true;
     return remote;
   }
-  const file = pausePath(config);
-  // Read-only on an unchanged observation. Record a changed, validated denial
-  // BEFORE attempting the pause lock: timeout, rotation failure and process
-  // death must never erase knowledge of a newer hosted generation.
-  {
-    const { previous } = await readPause(config);
-    validateTransition(remote, previous);
-    validateIntent(remote, await highestIntent(config));
-    if ((!previous && (remote.generation > 0 || remote.paused)) ||
-        (previous && (remote.generation !== previous.generation || remote.paused !== previous.paused))) {
-      const publish = async () => {
-        // Publish root revocation BEFORE target authority. A crash anywhere
-        // after this write forces every target to rotate or fail closed.
-        if ((!previous && (remote.generation > 0 || remote.paused)) ||
-            (previous && remote.generation !== previous.generation)) {
-          await privateWrite(rotationPath(config.root), randomUUID());
-        }
-        const directory = intentDirectory(config);
-        await privateDirectory(directory);
-        // Persist newly created ancestor entries too. A concurrent writer may
-        // already expose the directory/record while its sync is still pending.
-        await syncDirectory(config.root);
-        await syncDirectory(join(config.root, 'hosted-pause'));
-        // Identical exclusive publications are safe across processes. Even when
-        // the name exists, finish its directory sync before attempting the lock.
-        await privateWrite(join(directory, intentName(remote) + '.json'), intentBytes(remote), { exclusive: true });
-        // Bound pending history even when rotation/publication repeatedly fails.
-        // The durable maximum intent alone supersedes every older intent/receipt.
-        await pruneIntents(config, await highestIntent(config));
-      };
-      let entered = false;
-      try {
-        await stateLock(gatePath(config), async () => { entered = true; await publish(); });
-      } catch (error) {
-        // Never discard a validated observation because the shared gate failed.
-        // If publication itself failed, retain that failure rather than retrying
-        // a partially completed write as though it were an acquisition failure.
-        if (entered) throw error;
-        await publish();
-      }
+  const { previous } = await readPause(config);
+  validateTransition(remote, previous);
+  validateIntent(remote, await highestIntent(config));
+  const changed = !previous
+    ? remote.generation > 0 || remote.paused
+    : remote.generation !== previous.generation || remote.paused !== previous.paused;
+  let entered = false;
+  const publish = waitSignal => stateLock(gatePath(config), async () => {
+    entered = true;
+    await replayPendingUnderGate(config);
+    return commitUnderGate(config, remote);
+  }, { signal: waitSignal });
+  // Finish this first bounded attempt even if the caller aborts: a validated
+  // changed observation must either commit under the gate or leave its marker.
+  try { return await publish(); }
+  catch (error) {
+    // A failed publication is not an acquisition timeout. Never publish any
+    // authoritative record outside the gate, including the failure path.
+    if (entered || error.message !== 'state_busy' || !changed) throw error;
+    await privateDirectory(pendingDirectory(config));
+    await syncDirectory(config.root);
+    await privateWrite(join(pendingDirectory(config),
+      `${hostedTargetId(config)}.${intentName(remote)}.json`), intentBytes(remote), { exclusive: true });
+    await syncDirectory(config.root);
+    // A caller's process budget/abort may end this wait. Its durable marker is
+    // retained for the next holder; no network retry is needed to replay it.
+    for (;;) {
+      signal?.throwIfAborted();
+      entered = false;
+      try { return await publish(signal); }
+      catch (retry) { if (entered || retry.message !== 'state_busy') throw retry; }
     }
   }
-  await completeHostedPauseRotation(config);
+}
+
+// Paths identify the target exactly as the target journal does; file bodies
+// contain only generation and paused. Immutable names preserve concurrent newer
+// observations. Atomic-write staging names are not committed pending knowledge.
+const pendingDirectory = config => join(config.root, 'hosted-pause-pending');
+async function pendingMarkers(config) {
+  return (await privateList(pendingDirectory(config), { missing: true }) ?? []).filter(name => name.endsWith('.json'));
+}
+function markerState(name, bytes) {
+  const match = /^([a-f0-9]{64})\.(0|[1-9]\d*)\.(true|false)\.json$/u.exec(name);
+  if (!match || !Number.isSafeInteger(Number(match[2]))) throw new Error('pause_unavailable');
+  const value = JSON.parse(bytes);
+  if (Object.keys(value ?? {}).sort().join(',') !== 'generation,paused' ||
+      value.generation !== Number(match[2]) || value.paused !== (match[3] === 'true')) throw new Error('pause_unavailable');
+  return { target: match[1], remote: { ...value, enforced: true } };
+}
+const supersedes = (newer, older) => newer && (newer.generation > older.generation ||
+  (newer.generation === older.generation && (!newer.paused || older.paused)));
+async function replayPendingUnderGate(config) {
+  const names = await pendingMarkers(config);
+  // Resume wins ties. Replaying the strongest marker first avoids resurrecting
+  // a pause superseded by a validated resume at the same generation.
+  const markers = [];
+  for (const name of names) markers.push({ name, ...markerState(name,
+    await privateRead(join(pendingDirectory(config), name))) });
+  markers.sort((a,b) => b.remote.generation - a.remote.generation || Number(a.remote.paused) - Number(b.remote.paused));
+  for (const {name, target, remote} of markers) {
+    const targetConfig = { root: config.root, [replayTarget]: target };
+    const {previous} = await readPause(targetConfig);
+    if (previous && (!conforms('pause-state', previous) || !previous.enforced)) throw new Error('pause_unavailable');
+    const intent = await highestIntent(targetConfig);
+    let selected = remote;
+    for (const candidate of [previous, intent]) if (supersedes(candidate, selected)) selected = candidate;
+    // Even identical visible state may lack its crash-completion receipt.
+    await commitUnderGate(targetConfig, {generation:selected.generation,paused:selected.paused,enforced:true});
+    await privateRemove(join(pendingDirectory(config), name));
+    // A publisher killed after exclusive publication can leave its staging
+    // link. Only this exact, now-dominated observation may be pruned: a live
+    // writer of the same state cannot lose knowledge already committed here.
+    for (const staging of await privateList(pendingDirectory(config))) {
+      if (staging.startsWith(name + '.tmp-') &&
+          /^\.tmp-[1-9]\d*-[a-f0-9-]{36}$/u.test(staging.slice(name.length)))
+        await privateRemove(join(pendingDirectory(config), staging));
+    }
+    await syncDirectory(pendingDirectory(config));
+  }
+}
+async function commitUnderGate(config, remote) {
+  const file = pausePath(config);
+  const {previous} = await readPause(config);
+  validateTransition(remote, previous);
+  validateIntent(remote, await highestIntent(config));
+  const changed = !previous ? remote.generation > 0 || remote.paused
+    : remote.generation !== previous.generation || remote.paused !== previous.paused;
+  if (changed) {
+    // Root authority precedes target authority; both are exclusively under the
+    // gate, as are rotation and completion. Crash receipts remain binding.
+    if (!previous || remote.generation !== previous.generation)
+      await privateWrite(rotationPath(config.root), randomUUID());
+    const directory = intentDirectory(config);
+    await privateDirectory(directory);
+    await syncDirectory(config.root);
+    await syncDirectory(join(config.root, 'hosted-pause'));
+    await privateWrite(join(directory, intentName(remote) + '.json'), intentBytes(remote), { exclusive:true });
+    await pruneIntents(config, await highestIntent(config));
+  }
+  await rotateUnderGate(config);
   const observed = await stateLock(file + '.lock', async () => {
-    signal?.throwIfAborted();
-    const { bytes, previous } = await readPause(config);
+    const {bytes, previous} = await readPause(config);
     validateTransition(remote, previous);
     const intent = await highestIntent(config);
     validateIntent(remote, intent);
-    // Rotate the shared LOCAL barrier once per observed hosted pause. Do not
-    // clear a pause the user established locally; hosted state is a separate gate.
-    if ((!previous && (remote.generation > 0 || remote.paused)) ||
-        (previous && remote.generation !== previous.generation)) {
-      await completeHostedPauseRotation(config);
-    }
     const next = JSON.stringify(remote);
     const completion = intent ? join(intentDirectory(config), intentName(remote) + '.complete') : undefined;
-    const completed = completion ? await privateRead(completion, { missing: true }) : undefined;
-    // An interrupted directory sync may have left identical but uncommitted
-    // bytes. Re-publish those bytes durably before issuing the completion receipt.
+    const completed = completion ? await privateRead(completion, {missing:true}) : undefined;
     if (bytes !== next || (completion && completed === undefined)) await privateWrite(file, next);
-    // A visible rename is insufficient if publication's directory sync failed.
-    // This receipt is only written AFTER rotation and durable pause publication.
-    // A retry repairs an interrupted publication even when its bytes now match.
     if (completion) {
       await writeOnce(completion, intentBytes(remote));
-      const checkpoint = await privateRead(highWaterPath(config), { missing: true });
+      const checkpoint = await privateRead(highWaterPath(config), {missing:true});
       if (checkpoint !== intentBytes(remote) || intent.needsPrune) {
-        // Completed observations checkpoint authority before final compaction.
-        // A retry also finishes pruning interrupted after the checkpoint sync.
         await privateWrite(highWaterPath(config), intentBytes(remote));
         await pruneIntents(config, remote);
       }

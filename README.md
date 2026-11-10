@@ -435,8 +435,25 @@ Use `/cairn-memory:pause`, `/cairn-memory:resume`, and `/cairn-memory:status` to
 
 Paused text is not automatically backfilled. After resume, each session's first
 capture hook skips its current unprocessed history (including any early resumed
-text); later complete messages are captured. Requests already started before
-pause may finish. See the detailed pause boundaries in the privacy guide.
+text); later complete messages are captured. On Linux and macOS, once a pause is
+recorded on this machine, no request starts after that; work already admitted in
+another process may complete. A content-free pending marker keeps new admissions
+closed while pause publication waits, including after a process restart.
+
+Recall aborts new work at 3,500 ms. Only an admitted output write may drain until
+the 3,750 ms process-clock backstop before the host's four-second timeout;
+first-prompt classification and diagnostics cannot use that drain window.
+These timers cannot preempt process suspension or synchronous file output.
+On native Windows, pause checks use process-local observations before every send;
+a request already started can finish, and another process's pause observation
+does not revoke an older active response. A new session's first prompt can tag
+capture authority from its own validated active recall observation, using one
+transcript-size stat and no transcript read or extra network request. Only bytes
+appended after that snapshot qualify; an already-written prompt is omitted.
+Unknown authority, a busy cursor lock or insufficient cleanup time leaves capture
+to skip through its first EOF. Later prompts never refresh the tags, and Stop
+requires a fresh observation matching their generation and target. Windows
+coverage uses injection only. See the detailed pause boundaries in the privacy guide.
 
 Read the full [privacy and threat model](docs/privacy.md). Security reports belong in the private channel described in [SECURITY.md](SECURITY.md), not a public issue.
 

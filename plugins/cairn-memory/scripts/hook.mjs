@@ -47,9 +47,16 @@ const { INVALID_ENDPOINT, credentialDescription, readCredentialState, recordCred
 // this cannot preempt synchronous CPU or an uncooperative filesystem operation.
 const recallController = action === 'recall' ? new AbortController() : undefined;
 const recallEnd = recallController ? 3500 : undefined;
-// Measured warm gate + completed small stdout writes take about 5 ms.
-// Allow ten times that cost before starting output; never shorten the fetch.
+// Stop admitting output 50 ms before abort, without shortening the fetch.
+// This is admission headroom; an admitted pipe write uses its own drain cap.
 const OUTPUT_WRITE_MARGIN_MS = 50;
+// The host counts its four seconds from spawn. Reserve 100 ms for the interval
+// before Node's performance origin and 150 ms for exit/reaping. The backstop is
+// therefore 3,750 ms on Node's clock, not four seconds after module entry.
+// These allowances are checked with spawn-to-origin/exit measurements. Timers
+// cannot preempt a descheduled process or synchronous regular-file stdout.
+const RECALL_DRAIN_END_MS = 4000 - 100 - 150;
+let recallWritePending = false;
 // A stalled diagnostic fsync cannot keep the hook alive until the host kills it.
 // Publication is attempted immediately; persistence remains best effort on I/O
 // failure or forced exit, as it does on any process crash.
@@ -59,8 +66,15 @@ const recallTimer = recallController ? setTimeout(expireRecall, Math.max(0, reca
 // both timers in the same turn. Let abort rejections settle before exiting.
 const recallHardTimer = recallController ? setTimeout(() => {
   expireRecall();
-  setImmediate(() => process.exit(0));
+  setImmediate(() => { if (!recallWritePending) process.exit(0); });
 }, Math.max(0, recallEnd - performance.now())) : undefined;
+// Only an already admitted stdout write can use this drain window. Fetch and
+// diagnostics still abort/exit at the original cap. A permanently blocked pipe
+// is abandoned at this earlier-than-host backstop.
+const recallDrainTimer = recallController ? setTimeout(() => {
+  expireRecall();
+  process.exit(0);
+}, Math.max(0, RECALL_DRAIN_END_MS - performance.now())) : undefined;
 const recallSignal = recallController?.signal;
 function checkRecall() {
   if (recallController && performance.now() >= recallEnd && !recallSignal.aborted) expireRecall();
@@ -237,9 +251,16 @@ async function recall(hookInput) {
     checkRecall();
     outputSignal.throwIfAborted();
     if (performance.now() >= outputDeadline || process.stdout.writableNeedDrain || process.stdout.writableLength) return;
-    written = new Promise((resolve, reject) => process.stdout.write(
-      output, error => error ? reject(error) : resolve(),
-    ));
+    written = new Promise((resolve, reject) => {
+      recallWritePending = true;
+      try {
+        process.stdout.write(output, error => {
+          recallWritePending = false;
+          if (recallSignal.aborted) setImmediate(() => process.exit(0));
+          error ? reject(error) : resolve();
+        });
+      } catch (error) { recallWritePending = false; reject(error); }
+    });
     written.catch(() => {});
   }, { signal: outputSignal, guard });
   if (hosted) await withHostedPauseGate(hostedConfig, hosted.generation, outputLocal,
@@ -794,4 +815,5 @@ try {
   clearTimeout(recallTimer);
   clearTimeout(recallHardTimer);
   clearTimeout(startBoundaryTimer);
+  clearTimeout(recallDrainTimer);
 }

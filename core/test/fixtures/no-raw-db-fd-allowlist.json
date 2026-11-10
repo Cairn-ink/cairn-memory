@@ -1693,5 +1693,35 @@
     "path": "plugins/cairn-memory/scripts/hook.mjs",
     "source": "await writeFile(temporary, JSON.stringify(state), { mode: 0o600, flag: \"wx\" });",
     "reason": "Portable first-prompt publication writes only session cursor JSON to an exclusive temporary file before atomic rename; no SQLite file is opened."
+  },
+  {
+    "path": "integrations/client/private-state.mjs",
+    "source": "import { lstatSync, realpathSync, openSync, fstatSync, readFileSync, closeSync, readdirSync } from \"node:fs\"",
+    "reason": "Synchronous final admission reads only private content-free pause metadata, never a SQLite file."
+  },
+  {
+    "path": "integrations/client/private-state.mjs",
+    "source": "try { file = openSync(before.canonical, constants.O_RDONLY | constants.O_NOFOLLOW); }",
+    "reason": "Open only owner-checked regular pause metadata for final synchronous admission, never a SQLite file."
+  },
+  {
+    "path": "integrations/client/private-state.mjs",
+    "source": "return readFileSync(file, \"utf8\");",
+    "reason": "Read only the checked pause metadata handle, bounded to 64 KiB, never a SQLite file."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/private-state.mjs",
+    "source": "import { lstatSync, realpathSync, openSync, fstatSync, readFileSync, closeSync, readdirSync } from \"node:fs\"",
+    "reason": "Synchronous final admission reads only private content-free pause metadata, never a SQLite file."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/private-state.mjs",
+    "source": "try { file = openSync(before.canonical, constants.O_RDONLY | constants.O_NOFOLLOW); }",
+    "reason": "Open only owner-checked regular pause metadata for final synchronous admission, never a SQLite file."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/private-state.mjs",
+    "source": "return readFileSync(file, \"utf8\");",
+    "reason": "Read only the checked pause metadata handle, bounded to 64 KiB, never a SQLite file."
   }
 ]
