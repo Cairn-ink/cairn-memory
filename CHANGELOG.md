@@ -9,6 +9,12 @@ release.
 - Honour a hosted pause on the Claude Code client before recall and capture.
 - Honour a hosted pause when delivering Codex context output.
 - Send capture session windows and original message source times.
+- On native Windows, capture a new session from its first prompt onward. If
+  the host has already written that prompt when the prompt hook starts, that
+  prompt is not captured.
+- Hosted recall output that has already started writing may finish up to
+  3,750 ms after the prompt hook starts; no new recall work starts after
+  3,500 ms.
 
 ## 0.6.5 — Unreleased
 
