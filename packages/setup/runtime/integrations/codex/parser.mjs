@@ -1,4 +1,4 @@
-import { sourceTimestamp } from '../client/hosted-contract.mjs';
+import { sourceTimestamp } from '../client/source-time.mjs';
 import { normalizeBlocks, hash, PROFILE } from '../client/common-profile.mjs';
 
 export const CODEX_COMMIT = '36650394c5b38c2990ccf2a3457165ca3e9d9726';

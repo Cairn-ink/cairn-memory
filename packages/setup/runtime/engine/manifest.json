@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "744e6c0b4a983894d5afce139b52ad26baa4ff71a89ab4fceff747b9c6bdb9d1",
-  "bytes": 1300233,
+  "sha256": "9b1f611fde163e851cb72cc7654d0434c13e8cad96ae8c3868a340dc7002b301",
+  "bytes": 1297758,
   "files": [
     "LICENSE",
     "README.md",
@@ -382,6 +382,7 @@
     "integrations/client/raw/selection.mjs",
     "integrations/client/redact.mjs",
     "integrations/client/runtime-usage.mjs",
+    "integrations/client/source-time.mjs",
     "integrations/client/state-lock.mjs",
     "integrations/codex/parser.mjs",
     "integrations/codex/qualification.mjs",
@@ -391,9 +392,8 @@
     "licenses/tiktoken-LICENSE",
     "npm-shrinkwrap.json",
     "package.json",
-    "plugins/cairn-memory/lib/hosted-contract.mjs",
-    "plugins/cairn-memory/lib/hosted-schemas.mjs",
     "plugins/cairn-memory/lib/redact.mjs",
+    "plugins/cairn-memory/lib/source-time.mjs",
     "plugins/cairn-memory/lib/transcript.mjs"
   ],
   "sourceHashes": {
@@ -589,8 +589,9 @@
     "evaluation/live/diagnostics.mjs": "2cb6ec674503bfb979b0a700e9430bdf284adf5b0d5c4d0d338afbdbac6a1077",
     "integrations/client/control-state.mjs": "6d75cddef12008f1af6722e72acce5197805f1b656e2284a192e92e7e6465b8f",
     "integrations/client/file-lock.mjs": "afc42dcf45402c8c5576568d209c982e442eb9aa388b81907f40424f9d57f4c1",
-    "integrations/client/hosted-contract.mjs": "da5fb0bd104682a8d06d182fe5ab627a3fe8ed7d609c4ac5d381ffd0a1865d67",
-    "integrations/client/hosted-schemas.mjs": "9e7da8704e95b5886453f2bffc2a0028e049455d782899329ea0b0c5b264e3b0",
+    "integrations/client/source-time.mjs": "72985575d8f60d63432021ceda841efd335a3e812b8204cdfc11d6eee69b3410",
+    "integrations/client/hosted-contract.mjs": "07bb439a728f1be053cfa40f425d7e52e0a2b958a22dd72cd889f3f942fb12fd",
+    "integrations/client/hosted-schemas.mjs": "c9e2b4fc3e85e136594438ad58a24d15526296b12ab1d438ae930a91b8ec82d3",
     "integrations/client/pairing.mjs": "46a3cc1bb1e88ad1ab06c0096fb9c1dbee0d34b19b4c1435c9c07b496065af3c",
     "integrations/client/private-state.mjs": "7dc46417a129414937b0180482acf6bdf7f58c1816f93468e8df1d952057485b",
     "integrations/client/raw/bounds.mjs": "0a59bb7b9655ab3fe8a90704c4cb2f6cb802beb7d5e70c19561eaaffc8ff61f2",
@@ -626,14 +627,13 @@
     "integrations/client/raw/protocol.mjs": "b8bc52c7af71a945fc470188a51cd63b2904bea6898eec84b30805aefc98fb94",
     "integrations/client/common-profile.mjs": "8c9fab55e95e0eaf92f963155433ef357bc8d9bae1843c2c149182f363644ad5",
     "integrations/client/redact.mjs": "f4bcfdc8edd177060b62a75f9dbc229443328eb822e40d814f0a48684c253f88",
-    "integrations/codex/parser.mjs": "f44f24796390f2d2b5a63d933ec9d61194b6a854872146bdd61ec40d4b50ba55",
+    "integrations/codex/parser.mjs": "34995f489e59bc5692dabe6c67d72f999ff2063c8aaee2cfb11ed021d6b2e45c",
     "integrations/codex/source.mjs": "6bf982b4227d6a7834c02faa74690340c72b269ccf1e9a1242358135de37b580",
     "integrations/codex/session-source.mjs": "1341cc42eebf5a996be305f471393a717bfdd5eddd19fc3fd556fe8483fdfbc3",
     "integrations/codex/qualification.mjs": "d5bea045ed4c3fefd45e325f268833f1d535b075ab63ad5dd8dd0409c57dd380",
     "integrations/codex/schema-evidence.mjs": "1313d5789bbf8aa4a61be3bd4c1269793dbc0df543938e2a23fded3a2d4d518b",
-    "plugins/cairn-memory/lib/hosted-contract.mjs": "b13ca6b22e30507afc6df64cec55791d773fc010925aa43389a9d5661f0082a7",
-    "plugins/cairn-memory/lib/hosted-schemas.mjs": "b37536f2b9816f39d5c90062f9f1c9c14c50f0793bd80400798bd7cd7db5684f",
-    "plugins/cairn-memory/lib/transcript.mjs": "c970c4ce46d270f92779e8f8033dfbc95c660fe7abbd5f99bb77330e21b0344b",
+    "plugins/cairn-memory/lib/source-time.mjs": "c91f9fc9ff0b9392542d2f7aad3f190dfe2ab073a3ed5111aaec18ca3ec2fba2",
+    "plugins/cairn-memory/lib/transcript.mjs": "a1817bf9b9f484da4fc3eef82fd95ed0a6a320669491dae56e5e29d57523fc75",
     "integrations/client/runtime-usage.mjs": "8bf732bb36664b33aa238a40903986b16c112a44829412c32a11b01dcad08d4d",
     "integrations/client/state-lock.mjs": "ee4bc6161d97bac44a8dc34a2058ed48e3dbbfeb105e32f6e66590b883b29b58",
     "docs/raw-local-journal.md": "05d5119acede566c55c964f03a5d98cfe231a04cde2a16c08e88a001a15fec5e",
@@ -785,7 +785,7 @@
     "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b"
   },
   "generatedHashes": {
-    "package.json": "2130e014fe68f9341f4d1e511e471fc7967763795238710575a3ab85d32e93d9",
+    "package.json": "41807a10312427e449924ce4eccfddc77f0b416ebfaa4c73bfa4c23f680fc757",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8"
   }
 }
