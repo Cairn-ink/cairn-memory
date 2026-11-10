@@ -17,7 +17,6 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
   const failureReasons = new Set(['model_timeout', 'model_cancelled', 'source_unavailable', 'source_excluded',
     'context_budget_exceeded', 'token_count_unavailable', 'invalid_model_output', 'scope_changed',
     'dependency_limit_reached', 'source_budget_exceeded', 'store_closed', 'invalid_input', 'consolidation_failed']);
-  const attempts = new Map();
   const scans = new Map();
   for (const port of [relations, vectors]) if (port !== undefined && typeof port?.read !== 'function') fail('invalid_input');
   const configured = typeof model?.consolidate === 'function';
@@ -130,8 +129,6 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
         for (const cluster of eligible.values()) {
           check();
           if (cluster.memories.length > ENGINE_CARD_LIMITS.sources) { result.state = 'source_limit'; continue; }
-          const key = JSON.stringify([ns, cluster.key]);
-          if (now() - (attempts.get(key) ?? -Infinity) < ENGINE_CARD_LIMITS.debounceMs) { result.debounced++; continue; }
           let rawSpans, rawTimer;
           try {
             rawSpans = await Promise.race([storage.rawSpans(ns, cluster.memories, check),
@@ -158,16 +155,24 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
             rawSpans = shorter;
           }
           if (!fits()) { result.state = 'input_budget'; continue; }
-          if (!storage.claim(ns, cluster, new Date(now()).toISOString(), check)) { result.debounced++; continue; }
-          attempts.set(key, now());
-          if (attempts.size > 1024) attempts.delete(attempts.keys().next().value);
+          const attempt = storage.claim(ns, cluster, new Date(now()).toISOString(), check);
+          if (!attempt) { result.debounced++; continue; }
           result.modelCalls++;
-          const output = await callModel(model, 'consolidate', CONSOLIDATE_PROMPT, request(), {
-            deadline, validateFresh: () => { check(); storage.validate(ns, cluster.memories, check); }, failureCode: 'consolidation_failed' });
-          const value = validateConsolidation(output, memories, model); check();
-          if (value) {
-            const card = storage.commit(ns, cluster, value, new Date(now()).toISOString(), check);
-            if (card) result.built.push(card);
+          try {
+            const output = await callModel(model, 'consolidate', CONSOLIDATE_PROMPT, request(), {
+              deadline, validateFresh: () => { check(); storage.validate(ns, cluster.memories, check); }, failureCode: 'consolidation_failed' });
+            const value = validateConsolidation(output, memories, model); check();
+            if (value) {
+              const card = storage.commit(ns, cluster, value, new Date(now()).toISOString(), check);
+              if (card) result.built.push(card);
+            }
+            storage.finish(ns, attempt, value ? 'succeeded' : 'terminal', new Date(now()).toISOString());
+          } catch (error) {
+            let transient = false;
+            try { transient = ['model_timeout', 'model_cancelled', 'consolidation_transient'].includes(error?.code); }
+            catch { /* Unreadable failure framing is terminal. */ }
+            storage.finish(ns, attempt, transient ? 'transient' : 'terminal', new Date(now()).toISOString());
+            throw error;
           }
           // One generation per bounded worker pass, including invalid output.
           break;

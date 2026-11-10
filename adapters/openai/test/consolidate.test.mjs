@@ -41,3 +41,14 @@ test('consolidate rejects unknown citations, malformed output, invalid inputs an
     { code: 'context_budget_exceeded' });
   assert.equal(f.calls.length, 0);
 });
+
+
+test('consolidation preserves transient transport framing and keeps HTTP refusal terminal', async () => {
+  for (const status of [429, 503, 403]) {
+    const model = createOpenAIModel({ apiKey: 'synthetic-only', fetchImpl: async () => new Response('{}', { status }) });
+    await assert.rejects(model.consolidate(request(input)), error => status === 403
+      ? error.message === 'openai_request_failed' : error.code === 'consolidation_transient');
+  }
+  const model = createOpenAIModel({ apiKey: 'synthetic-only', fetchImpl: async () => { throw new TypeError('Synthetic network failure'); } });
+  await assert.rejects(model.consolidate(request(input)), { code: 'consolidation_transient' });
+});

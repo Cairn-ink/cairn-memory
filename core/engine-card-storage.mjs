@@ -28,7 +28,9 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
   const bind = (purpose, value) => keyed(identity.cursorSecret, purpose, [identity.storeId, value]);
   const has = table => Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table));
   const installed = () => has('card_applicability_reviews');
-  const available = () => installed() || upgrade && [18,20,21,22].includes(db.prepare('PRAGMA user_version').get().user_version);
+  // Schema22 has evidence reviews but lacks the organization layout required
+  // by Card readers. Leave it untouched until its owner upgrades the store.
+  const available = () => installed() && has('card_mocs') || upgrade && [18,20,21].includes(db.prepare('PRAGMA user_version').get().user_version);
   // Use the existing Card layout, only after an explicit engine maintenance
   // call. Managed stores never migrate; ordinary opening stays unchanged.
   function ensureLayout() { if (upgrade && !installed()) transaction(db, () => {
@@ -177,18 +179,37 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
         advance(ns); return false;
       }
       if (latest && Date.parse(timestamp) - Date.parse(latest.updated_at) < ENGINE_CARD_LIMITS.debounceMs) return false;
-      const prefix = 'engine-claim.' + bind('engine-card-claim-key-v1', cluster.key) + '.';
-      const previous = db.prepare(`SELECT method,created_at FROM card_operations WHERE ${where}
+      const fingerprint = bind('engine-card-attempt-v1', cluster.memories.map(memory => [memory.id, memory.revision])
+        .sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+      const prefix = 'engine-claim.sources.' + fingerprint + '.';
+      const previous = db.prepare(`SELECT * FROM card_operations WHERE ${where}
+        AND method='consolidateAttempt'
         AND action_id>=? AND action_id<? ORDER BY created_at DESC LIMIT 1`)
         .get(...boundary(ns), prefix, prefix + '\uffff');
-      if (previous && previous.method !== 'consolidateAttempt') fail('source_unavailable');
-      if (previous && Date.parse(timestamp) - Date.parse(previous.created_at) < ENGINE_CARD_LIMITS.debounceMs) return false;
+      const attemptNumber = previous ? JSON.parse(previous.result).attemptNumber + 1 : 1;
+      if (previous) {
+        const outcome = db.prepare(`SELECT result FROM card_operations WHERE ${where} AND action_id=?`)
+          .get(...boundary(ns), previous.action_id + '.outcome');
+        // A crash after reservation counts as a transient attempt too. At most
+        // three dispatches per exact source set, with ten then twenty minutes
+        // of backoff. Immutable outcomes survive process restarts.
+        if ((outcome && JSON.parse(outcome.result).outcome !== 'transient') || attemptNumber > 3 ||
+            Date.parse(timestamp) - Date.parse(previous.created_at) < ENGINE_CARD_LIMITS.debounceMs * 2 ** (attemptNumber - 2)) return false;
+      }
       // Sealed stores protect operation receipts against replacement. Reserve
-      // each new attempt with a fresh immutable row, indexed by cluster prefix.
+      // each new attempt with a fresh immutable row, indexed by source fingerprint.
+      const action = prefix + randomUUID(), target = cluster.memories[0].id;
       db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)')
-        .run(...boundary(ns), prefix + randomUUID(), 'consolidateAttempt', bind('engine-card-attempt-v1',
-          cluster.memories.map(memory => [memory.id, memory.revision])), cluster.memories[0].id, JSON.stringify({ claimedAt: timestamp }), timestamp);
-      return true;
+        .run(...boundary(ns), action, 'consolidateAttempt', fingerprint, target, JSON.stringify({ claimedAt: timestamp, attemptNumber }), timestamp);
+      return { action, fingerprint, target };
+    });
+  }
+  function finish(ns, attempt, outcome, timestamp) {
+    ready();
+    return transaction(db, () => {
+      db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)')
+        .run(...boundary(ns), attempt.action + '.outcome', 'consolidateOutcome', attempt.fingerprint,
+          attempt.target, JSON.stringify({ outcome }), timestamp);
     });
   }
   function retire(ns, id, timestamp, deleted = false) {
@@ -235,6 +256,6 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       return metadata;
     }, [ns]));
   }
-  return { available, snapshot, rawSpans, cards, retire, commit, claim, relations, pressureItems,
+  return { available, snapshot, rawSpans, cards, retire, commit, claim, finish, relations, pressureItems,
     validate(ns, memories, check) { return read(ns, () => { if (!sourcesCurrent(ns, memories.map(m => m.source), check)) fail('source_unavailable'); }); } };
 }

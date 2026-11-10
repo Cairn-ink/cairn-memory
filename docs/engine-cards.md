@@ -62,8 +62,13 @@ post-validated. The local guarded model charges the existing runtime budget for
 consolidation and stops on refusal. Memory text is never truncated to fit a
 request. Oversized clusters return `source_limit` or `input_budget` for later
 maintenance; they do not publish a partial Card.
-Before dispatch, a ten-minute claim in the existing Card operation ledger
-prevents concurrent hosts or a worker restart from repeating the same attempt.
+Before dispatch, the existing Card operation ledger reserves the exact source
+ID/revision fingerprint. Refusal or invalid output is terminal for that
+fingerprint, including after restart or a cluster label change. Explicit transient failures (timeout,
+network, rate limit or deadline) allow at most three attempts, with ten then
+twenty minutes of backoff. A reservation interrupted before its outcome is
+recorded consumes the same bounded allowance. Changed sources enable a fresh
+attempt; periodic maintenance alone never resets an exhausted fingerprint.
 
 An optional `cardRelations.read({namespace, memoryIds, memories, signal})` port
 returns `{from, to, kind, slot}` edges. Only endpoints in the cluster and equal
@@ -80,7 +85,10 @@ The context reader supplies this port automatically for its retained embeddings.
 Engine Cards use `private_cards`, canonical receipt bindings, Card epochs and
 the operation ledger. Ordinary opening and admission retain the existing layout.
 A triggered maintenance attempt installs the existing Card layout on an unmanaged
-minimal store; empty or ineligible workloads keep their layout. A managed or fenced store must already support Cards. On stores with sealed Card lineage, the same body/source
+schema18/20/21 store; empty or ineligible workloads keep their layout. Schema22
+maintenance returns `unsupported_store` without calling the model or writing a
+Card: its evidence tables predate the schema23 layout required by Card readers.
+A managed or fenced store must already support Cards. On stores with sealed Card lineage, the same body/source
 seal includes every source Memory revision and its receipt/Raw ancestry.
 Historical Memory values can support the timeline while their exact cited
 revisions remain unchanged. Engine metadata lives in a `consolidate` operation,

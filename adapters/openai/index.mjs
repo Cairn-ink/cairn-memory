@@ -267,7 +267,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
       countBodyTokens: countTokens(countBody) };
   }
 
-  async function post(path, body, maximum, signal, diagnose) {
+  async function post(path, body, maximum, signal, diagnose, consolidation = false) {
     checkAbort(signal, diagnose);
     try {
       const response = await fetchImpl(`https://api.openai.com/v1${path}`, {
@@ -277,6 +277,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
       checkAbort(signal);
       if (!response.ok || response.redirected || response.status < 200 || response.status >= 300) {
         response.body?.cancel().catch(() => {});
+        if (consolidation && (response.status === 429 || response.status >= 500)) fail('consolidation_transient');
         providerFailure();
       }
       return await readJSON(response, maximum, signal, diagnose);
@@ -284,6 +285,8 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
       diagnose(signal.aborted || error?.name === 'AbortError' ? 'model_cancelled' : 'transport_failure');
       checkAbort(signal);
       if (error?.name === 'AbortError') throw new DOMException('OpenAI request cancelled', 'AbortError');
+      if (consolidation && (error?.code === 'consolidation_transient' || error instanceof TypeError ||
+          ['TimeoutError', 'APIConnectionError'].includes(error?.name))) fail('consolidation_transient');
       providerFailure();
     }
   }
@@ -352,7 +355,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
       diagnose('request_bounds');
       fail('context_budget_exceeded');
     }
-    const counted = await post('/responses/input_tokens', countBody, 65536, signal, diagnose);
+    const counted = await post('/responses/input_tokens', countBody, 65536, signal, diagnose, method === 'consolidate');
     if (!record(counted) || counted.object !== 'response.input_tokens' || !count(counted.input_tokens)) {
       diagnose('token_count_response');
       fail('token_count_unavailable');
@@ -362,7 +365,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
       fail('context_budget_exceeded');
     }
     checkAbort(signal, diagnose);
-    const response = await post('/responses', generateBody, 262144, signal, diagnose);
+    const response = await post('/responses', generateBody, 262144, signal, diagnose, method === 'consolidate');
     checkAbort(signal, diagnose);
     const output = parseOutput(response, selected.contextWindow, selected.model, diagnose);
     if (method === 'consolidate' && !schemaAccepts(schema, output)) { diagnose('output_shape'); fail('invalid_model_output'); }

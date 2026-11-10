@@ -8,6 +8,10 @@ import { createEngineCardMaintenance } from '../engine-card-maintenance.mjs';
 import { assembleContext } from '../context-read-assembly.mjs';
 import { assembleThreeLayerContext } from '../context-read-three-layer.mjs';
 import { openMemoryCore } from '../index.mjs';
+import { DatabaseSync } from 'node:sqlite';
+import { installPrivateCards, installCardMemorySources } from '../private-card-schema.mjs';
+import { installPrivateEvidence } from '../private-evidence-schema.mjs';
+import { installPrivateOrganization } from '../private-organization-schema.mjs';
 
 test('long recurring topic builds in maintenance, read packs Card, fact read retains Memory, forget falls back', async t => {
   const f = engineCardFixture(t), memories = f.seed();
@@ -244,4 +248,124 @@ test('authored Cards retain their place beside higher-ranked source Memories in 
   for (const result of [assembleContext(args), assembleThreeLayerContext(args, raw)])
     assert.deepEqual(result.metered.items.filter(item => item.ref?.type === 'card' || item.ref?.type === 'memory')
       .map(item => item.ref.id), ['synthetic-memory', 'synthetic-card']);
+});
+
+
+for (const mode of ['refusal', 'invalid', 'empty', 'timeout', 'network', 'fetch-network', 'rate-limit', 'deadline'])
+  test(`unchanged ${mode} is bounded across cooldowns and restarts; source changes re-enable dispatch`, async t => {
+    const transient = ['timeout', 'network', 'fetch-network', 'rate-limit', 'deadline'].includes(mode);
+    const codes = { timeout: 'model_timeout', network: 'ECONNRESET', 'rate-limit': 'rate_limit_exceeded', deadline: 'deadline' };
+    const model = scriptedConsolidator(() => {
+      if (mode === 'fetch-network') throw new TypeError('Synthetic fetch transport failure');
+      if (mode === 'invalid') return { foreign: true };
+      if (mode === 'empty') return { currentState: [], timeline: [], contradictions: [] };
+      throw Object.assign(Error('Synthetic provider failure'), { code: codes[mode] });
+    });
+    const f = engineCardFixture(t, { model }); f.seed(8);
+    let clock = Date.UTC(2026, 5, 1), expected = 0;
+    // Each pass reopens the database and recreates both storage and worker.
+    const pass = async () => {
+      const db = new DatabaseSync(f.path); db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000');
+      try {
+        const storage = createEngineCardStorage({ db, upgrade: true, ready() {},
+          identity: db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
+        return await createEngineCardMaintenance({ storage, model, now: () => clock })
+          .maintain({ namespace: ns, budget: { maxMs: 5000 } });
+      } finally { db.close(); }
+    };
+    await pass(); assert.equal(model.calls.length, ++expected);
+    clock += 600001; await pass();
+    if (transient) expected++;
+    assert.equal(model.calls.length, expected);
+    // Growing backoff: ten more minutes is too early for attempt three.
+    clock += 600001; await pass(); assert.equal(model.calls.length, expected);
+    clock += 600001; await pass();
+    if (transient) expected++;
+    assert.equal(model.calls.length, expected);
+    for (let i = 0; i < 5; i++) { clock += 3600000; await pass(); }
+    assert.equal(model.calls.length, transient ? 3 : 1);
+    assert.equal(f.db.prepare('SELECT count(*) AS n FROM private_cards').get().n, 0);
+    f.add('Orion additional milestone: synthetic changed source evidence.', 61, 7);
+    await pass(); assert.equal(model.calls.length, ++expected, 'new fingerprint dispatches immediately');
+    await pass(); assert.equal(model.calls.length, expected, 'new fingerprint is also bounded');
+    const outcomes = f.db.prepare("SELECT result FROM card_operations WHERE method='consolidateOutcome'").all();
+    assert.equal(outcomes.length, expected);
+    assert.ok(outcomes.every(row => JSON.parse(row.result).outcome === (transient ? 'transient' : 'terminal')));
+  });
+
+test('schema22 maintenance skips without writing a Card or changing the layout', async t => {
+  const f = engineCardFixture(t); f.seed(8);
+  installPrivateCards(f.db); installCardMemorySources(f.db); installPrivateEvidence(f.db);
+  f.db.exec('PRAGMA user_version=22');
+  assert.ok(f.db.prepare("SELECT name FROM sqlite_schema WHERE name='card_applicability_reviews'").get());
+  const before = f.db.prepare('SELECT type,name,sql FROM sqlite_schema ORDER BY type,name').all();
+  const pass = ok(await f.pass());
+  assert.equal(pass.state, 'unsupported_store'); assert.equal(pass.modelCalls, 0);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 22);
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM private_cards').get().n, 0);
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM card_operations').get().n, 0);
+  assert.deepEqual(f.db.prepare('SELECT type,name,sql FROM sqlite_schema ORDER BY type,name').all(), before);
+});
+
+
+test('a revision-only source change re-enables a refused fingerprint and unfinished claims remain bounded', async t => {
+  const f = engineCardFixture(t, { model: scriptedConsolidator(() => { throw Error('Synthetic refusal'); }) });
+  f.seed(8);
+  const storage = createEngineCardStorage({ db: f.db, upgrade: true, ready() {},
+    identity: f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
+  let clock = Date.UTC(2026, 5, 1);
+  const pass = () => createEngineCardMaintenance({ storage, model: f.model, now: () => clock })
+    .maintain({ namespace: ns, budget: { maxMs: 5000 } });
+  await pass(); assert.equal(f.model.calls.length, 1);
+  // Identical source IDs and text, changed canonical revision only.
+  f.db.exec('UPDATE memories SET revision=revision+1');
+  await pass(); assert.equal(f.model.calls.length, 2);
+  for (let i = 0; i < 4; i++) { clock += 3600000; await pass(); }
+  assert.equal(f.model.calls.length, 2);
+  // Simulate restart after reservation but before provider outcome persistence.
+  f.add('Orion another synthetic source milestone.', 62, 8);
+  const crashStorage = { ...storage, finish() { throw Error('Synthetic process interruption'); } };
+  for (let i = 0; i < 6; i++) {
+    clock += 3600000;
+    await createEngineCardMaintenance({ storage: crashStorage, model: f.model, now: () => clock })
+      .maintain({ namespace: ns, budget: { maxMs: 5000 } });
+  }
+  assert.equal(f.model.calls.length, 5, 'unfinished reservations exhaust three attempts');
+});
+
+test('an expired model deadline persists a transient outcome and can recover after restart', async t => {
+  let stalled = true;
+  const model = scriptedConsolidator(({ input }) => stalled ? new Promise(() => {}) :
+    { currentState: [{ text: 'Orion recovered.', memoryIds: [input.memories[0].id] }], timeline: [], contradictions: [] });
+  const f = engineCardFixture(t, { model }); f.seed(8);
+  installPrivateCards(f.db); installCardMemorySources(f.db); installPrivateEvidence(f.db);
+  installPrivateOrganization(f.db); f.db.exec('PRAGMA user_version=23');
+  const storage = createEngineCardStorage({ db: f.db, upgrade: true, ready() {},
+    identity: f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
+  let clock = Date.UTC(2026, 5, 1);
+  const pass = maxMs => createEngineCardMaintenance({ storage, model, now: () => clock })
+    .maintain({ namespace: ns, budget: { maxMs } });
+  const expired = await pass(1000);
+  assert.equal(expired.state, 'deadline'); assert.equal(expired.reason, 'deadline');
+  assert.equal(model.calls.length, 1);
+  assert.equal(JSON.parse(f.db.prepare("SELECT result FROM card_operations WHERE method='consolidateOutcome'").get().result).outcome, 'transient');
+  stalled = false; clock += 600001;
+  assert.equal((await pass(5000)).built.length, 1); assert.equal(model.calls.length, 2);
+  clock += 3600000; await pass(5000); assert.equal(model.calls.length, 2);
+});
+
+test('changing a cluster label cannot reset an unchanged source fingerprint', async t => {
+  const f = engineCardFixture(t, { model: scriptedConsolidator(() => { throw Error('Synthetic refusal'); }) }); f.seed(8);
+  const canonical = createEngineCardStorage({ db: f.db, upgrade: true, ready() {},
+    identity: f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
+  let label = 'synthetic-topic-a', clock = Date.UTC(2026, 5, 1);
+  const storage = { ...canonical, snapshot(...args) {
+    const page = canonical.snapshot(...args);
+    return { ...page, memories: page.memories.map(memory => ({ ...memory, topics: [label] })) };
+  } };
+  const pass = () => createEngineCardMaintenance({ storage, model: f.model, now: () => clock })
+    .maintain({ namespace: ns, budget: { maxMs: 5000 } });
+  await pass(); assert.equal(f.model.calls.length, 1);
+  label = 'synthetic-topic-b'; clock += 3600000;
+  await pass(); assert.equal(f.model.calls.length, 1);
 });
