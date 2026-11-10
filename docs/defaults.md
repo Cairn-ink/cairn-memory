@@ -34,13 +34,17 @@ Re-sent copies (fork, resume or cursor reset) are not archived again. Extracted
 Memories are separate and keep their own forget. The installer uses its installed
 MCP database/owner/project; cloud mode or absent local installation is refused.
 
-Going back to 0.6.5 leaves captured Raw searchable in ordinary local stores;
-the new local tables remain intact and 0.6.5 ignores them. After 0.6.6 opens an
-attested content-safety store with Raw on, 0.6.5 refuses it with
-`unsupported_database`; reinstall 0.6.6 to recover access. Old setup leaves
-0.6.6 hooks using their retained engine. To stop them, turn capture off with
-0.6.6 before downgrading. A 0.6.5 uninstall removes the engine and keeps Raw,
-leaving any remaining hooks unable to capture.
+Going back to 0.6.5: an attested base-33 store with card lineage revision 1
+(physical 53, lineage 1) that 0.6.6 opened with Raw on is refused with
+`unsupported_database`; reinstall 0.6.6 to recover access. Attested lineage-0
+and ordinary local stores open in 0.6.5. Captured Raw stays searchable, with
+eligible excerpts readable through contextRead. Hidden conversations stay hidden
+in both current and history Raw search because 0.6.5 enforces the existing
+`raw_session_fences` rows. The new local tables remain intact and are ignored.
+0.6.5 itself does not capture automatically, so its engine does not use the new
+hide windows or fork fences for capture. Old setup leaves 0.6.6 hooks registered
+with their retained engine; turn capture off with 0.6.6 before downgrading to
+stop them.
 
 A local install retains submitted captures as Raw and maintains a searchable
 index. The MCP server exposes `find_memory_candidates`,

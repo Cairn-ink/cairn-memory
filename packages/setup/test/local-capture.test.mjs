@@ -80,8 +80,8 @@ async function fixture(t, { codex = true, failedQualification = false, cloud = f
     assert.equal(result.code, 0, result.stderr); assert.equal(result.stdout, '');
     t.diagnostic(`${event} native hook exit ${result.code}`);
   };
-  const append = async (path, text) => appendFile(path, JSON.stringify({ type: 'user', uuid: 'synthetic-' + Date.now(),
-    timestamp: new Date().toISOString(), promptSource: 'typed', message: { content: [{ type: 'text', text }] } }) + '\n', { mode: 0o600 });
+  const append = async (path, text, timestamp = new Date().toISOString()) => appendFile(path, JSON.stringify({ type: 'user', uuid: 'synthetic-' + Date.now(),
+    timestamp, promptSource: 'typed', message: { content: [{ type: 'text', text }] } }) + '\n', { mode: 0o600 });
   return { ws: ws.path, home, bin, root, env, pkg, setup, descriptor, native, hook, append, paths, calls };
 }
 async function mcp(f, t) {
@@ -150,7 +150,7 @@ const snapshotDatabase = (f, localOnly = false) => engineScript(f, `
   const {DatabaseSync}=await import('node:sqlite'),db=new DatabaseSync(path,{readOnly:true});
   try {
     const schema=db.prepare("SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL ORDER BY name").all()
-      .filter(row=>${localOnly ? "row.name.startsWith('local_raw_')" : 'true'});
+      .filter(row=>${localOnly ? "row.name.startsWith('local_raw_') || row.name === 'raw_session_fences'" : 'true'});
     const tables=schema.filter(row=>row.type==='table').map(({name})=>[name,
       db.prepare('SELECT * FROM "'+name.replaceAll('"','""')+'"').all().map(row=>JSON.stringify(row)).sort()]);
     console.log(JSON.stringify({schema,tables}));
@@ -164,6 +164,73 @@ async function oldPackage(f) {
   assert.equal(result.code, 0, result.stderr);
   const unpack = await run('tar', ['-xf', archive, '-C', f.ws]); assert.equal(unpack.code, 0, unpack.stderr);
   return join(f.ws, 'packages/setup');
+}
+
+async function attestedStore(f, lineage) {
+  const { database } = await f.descriptor();
+  if (lineage === 1) {
+    // Reuse the engine's inherited, frozen base-33 package and offline lineage
+    // migration fixture, exactly as existing-safety-startup.test.mjs does.
+    const created = await run(process.execPath, [fileURLToPath(new URL(
+      '../../../core/testing/create-existing-safety-store.mjs', import.meta.url)), database.path],
+    { env: f.env, cwd: f.ws });
+    assert.equal(created.code, 0, created.stderr); assert.equal(created.signal, null);
+  }
+  const attested = await engineScript(f, `const {openMemoryCore}=await import(engine+'core/index.mjs');
+    const core=openMemoryCore({path,${lineage === 0 ? "contentSafety:'s2h-v1'," : ''}raw:true,rawSearch:false});await core.close();
+    const {DatabaseSync}=await import('node:sqlite'),db=new DatabaseSync(path,{readOnly:true});
+    try {console.log(JSON.stringify({physical:db.prepare('PRAGMA user_version').get().user_version,
+      control:db.prepare('SELECT base_layout,suppression_revision,card_lineage_revision FROM content_safety_control').get(),
+      guard:!!db.prepare("SELECT 1 FROM sqlite_schema WHERE name='local_raw_uuid_delete_guard'").get()}));} finally {db.close();}`);
+  assert.deepEqual(attested, { physical: lineage === 1 ? 53 : 48, control: {
+    base_layout: 33, suppression_revision: 1, card_lineage_revision: lineage }, guard: true });
+}
+
+async function hiddenAndVisibleCapture(f, t) {
+  for (const [name, id, timestamp] of [
+    ['hidden', session, new Date().toISOString()],
+    ['visible', '33333333-3333-4333-8333-333333333333', '2001-01-01T00:00:00.000Z'],
+  ]) {
+    const transcript = join(f.home, '.claude/projects/' + name + '.jsonl');
+    await writeFile(transcript, '', { mode: 0o600 });
+    await f.hook('SessionStart', transcript, id);
+    await f.append(transcript, 'copper telescope ' + name + ' downgrade sentinel', timestamp);
+    await f.hook('Stop', transcript, id);
+  }
+  const reader = await mcp(f, t);
+  // Establish that both sessions were searchable before the real forget hides
+  // the near-save-time session; the old-dated control falls outside its window.
+  for (const name of ['hidden', 'visible']) {
+    let found;
+    for (let attempt = 0; attempt < 50; attempt++) {
+      found = JSON.stringify(await reader.search());
+      if (found.includes(name + ' downgrade sentinel')) break;
+      await delay(100);
+    }
+    assert.ok(found.includes(name + ' downgrade sentinel'), found);
+  }
+  const { memory } = await reader.call('remember_memory', { content: 'Synthetic downgrade hiding anchor.' });
+  await reader.call('forget_memory', { memoryId: memory.id, expectedRevision: memory.revision });
+  await reader.close();
+  const listed = (await f.setup(['raw', 'list'])).trim().split('\n').map(JSON.parse);
+  assert.equal(listed.length, 2);
+  assert.equal(listed.filter(row => row.hidden).length, 1);
+  const fences = await engineScript(f, `const {DatabaseSync}=await import('node:sqlite'),db=new DatabaseSync(path,{readOnly:true});
+    try {console.log(JSON.stringify({fences:db.prepare('SELECT count(*) n FROM raw_session_fences').get().n,
+      windows:db.prepare('SELECT count(*) n FROM local_raw_hide_windows').get().n}));} finally {db.close();}`);
+  assert.equal(fences.fences, 1); assert.equal(fences.windows, 1);
+}
+
+async function assertDowngradeSearch(f, t) {
+  const reader = await mcp(f, t);
+  await searchCaptured(reader);
+  for (const intent of ['current', 'history']) {
+    const found = JSON.stringify(await reader.call('read_memory_context', {
+      query: 'copper telescope', types: ['memory'], intent, semantic: false, deadlineMs: 5000 }));
+    assert.match(found, /visible downgrade sentinel/);
+    assert.doesNotMatch(found, /hidden downgrade sentinel/);
+  }
+  await reader.close();
 }
 
 test('fixture client guard rejects leaked Node bin and escaping clients before execution', async t => {
@@ -337,6 +404,11 @@ test('packed Claude transcript created after SessionStart captures its first tur
 test('packed hook → raw list → preview → delete → MCP empty → re-sent copies fenced', { timeout: 150000 }, async t => {
   if (!needCache(t)) return;
   const f = await fixture(t); await f.setup(['setup', '--local', '--owner', 'synthetic-raw-owner', '--project', 'synthetic-raw-project']);
+  const d = await f.descriptor(), vector = d.clients.claude.vector;
+  const executable = join(f.root, 'engine', vector.engineId, 'app/node_modules/cairn-memory-local-preview/bin/cairn-memory.mjs');
+  const help = await run(vector.node, [executable, 'raw', '--help'], { env: f.env, cwd: f.ws });
+  assert.equal(help.code, 0, help.stderr); assert.equal(help.signal, null);
+  assert.match(help.stdout, /raw list/); assert.match(help.stdout, /raw delete/);
   const transcript = join(f.home, '.claude/projects/delete.jsonl'); await writeFile(transcript, '', { mode: 0o600 });
   await f.hook('SessionStart', transcript); await f.append(transcript, 'copper telescope private delete sentinel'); await f.hook('Stop', transcript);
   const reader = await mcp(f, t); await searchCaptured(reader); await reader.close();
@@ -393,7 +465,7 @@ test('packed cloud client refuses local setup without local capture', async t =>
   const f = await fixture(t, { cloud: true, codex: false });
   await f.setup(['setup', '--local'], { expected: 2 });
   for (const args of [['raw','list'], ['raw','list','--client','claude'], ['raw','delete','unknown','--yes']])
-    assert.match(await f.setup(args, { expected: 2 }), /unavailable in cloud\s+mode/);
+    assert.match(await f.setup(args, { expected: 2 }), /unavailable\s+in\s+cloud\s+mode/);
   await assert.rejects(lstat(join(f.root, 'capture')), { code: 'ENOENT' });
   await assert.rejects(f.native('claude'), { code: 'ENOENT' });
 });
@@ -401,48 +473,54 @@ test('packed cloud client refuses local setup without local capture', async t =>
 test('packed raw management refuses an absent local installation', async t => {
   const f = await fixture(t, { codex: false });
   for (const args of [['raw','list'], ['raw','delete','unknown','--yes']])
-    assert.match(await f.setup(args, { expected: 2 }), /requires an installed local client/);
+    assert.match(await f.setup(args, { expected: 2 }), /requires\s+an\s+installed\s+local\s+client/);
   await assert.rejects(lstat(join(f.root, 'data')), { code: 'ENOENT' });
 });
 
-test('packed 0.6.5 → 0.6.6 upgrade, downgrade search and reinstall round trip', { timeout: 150000 }, async t => {
+for (const store of ['ordinary', 'attested lineage 0']) test(`packed ${store}: 0.6.5 reads captured Raw, keeps hidden search fenced, and reinstalls`, { timeout: 150000 }, async t => {
   if (!needCache(t)) return;
   const f = await fixture(t, { codex: false });
   const old = await oldPackage(f);
   await f.setup(['setup', '--local'], { packagePath: old });
   await assert.rejects(lstat(join(f.root, 'capture')), { code: 'ENOENT' });
+  const initial = await f.native('claude').catch(error => { if (error.code === 'ENOENT') return {}; throw error; });
+  assert.equal(initial.hooks?.Stop, undefined, '0.6.5 itself installs no automatic capture hook');
   const owner = (await f.descriptor()).ownerId;
-  await f.setup(); assert.equal((await f.descriptor()).ownerId, owner);
-  const transcript = join(f.home, '.claude/projects/upgrade.jsonl'); await writeFile(transcript, '', { mode: 0o600 });
-  await f.hook('SessionStart', transcript); await f.append(transcript, 'copper telescope retained through downgrade'); await f.hook('Stop', transcript);
+  await f.setup(['setup', '--local', '--no-capture']); assert.equal((await f.descriptor()).ownerId, owner);
+  if (store === 'attested lineage 0') await attestedStore(f, 0);
+  await f.setup(['config', '--local-capture', 'on']);
+  await hiddenAndVisibleCapture(f, t);
+  // Stop the newer hooks before going back, so all downgraded reads below are
+  // solely the old engine, with no retained newer capture process in play.
+  await f.setup(['config', '--local-capture', 'off']);
   const localTables = await snapshotDatabase(f, true);
   assert.ok(localTables.tables.length > 0);
   await f.setup(['setup', '--local'], { packagePath: old });
   // The descriptor now points MCP at the actual older engine, not a renamed new binary.
-  const reader = await mcp(f, t); await searchCaptured(reader); await reader.close();
-  assert.deepEqual(await snapshotDatabase(f, true), localTables, '0.6.5 ignores and preserves the new local tables');
-  assert.ok((await f.native('claude')).hooks.Stop, 'old setup leaves newer hooks registered');
-  await f.setup(); assert.match(await f.setup(['status']), /local capture: on/);
+  assert.match((await f.descriptor()).clients.claude.vector.engineId, /^0\.6\.5-/);
+  await assertDowngradeSearch(f, t);
+  assert.deepEqual(await snapshotDatabase(f, true), localTables, '0.6.5 preserves the new local tables and existing session fences');
+  assert.equal((await f.native('claude')).hooks?.Stop, undefined, '0.6.5 does not enable capture');
+  await f.setup();
+  await f.setup(['config', '--local-capture', 'on']);
+  assert.match(await f.setup(['status']), /local capture:\s+on/);
+  await assertDowngradeSearch(f, t);
 });
 
-test('packed attested store refuses 0.6.5 after 0.6.6 Raw open; reinstall restores access', { timeout: 150000 }, async t => {
+test('packed attested base-33 lineage-1 store refuses 0.6.5 after Raw open; reinstall restores access', { timeout: 150000 }, async t => {
   if (!needCache(t)) return;
   const f = await fixture(t, { codex: false });
   await f.setup(['setup','--local','--no-capture']);
-  const attested = await engineScript(f, `const {openMemoryCore}=await import(engine+'core/index.mjs');
-    const core=openMemoryCore({path,contentSafety:'s2h-v1',raw:true,rawSearch:false});await core.close();
-    const {DatabaseSync}=await import('node:sqlite'),db=new DatabaseSync(path,{readOnly:true});
-    try {console.log(JSON.stringify({control:db.prepare('SELECT base_layout,suppression_revision,card_lineage_revision FROM content_safety_control').get(),
-      guard:!!db.prepare("SELECT 1 FROM sqlite_schema WHERE name='local_raw_uuid_delete_guard'").get()}));} finally {db.close();}`);
-  t.diagnostic('attested downgrade fixture: '+JSON.stringify(attested));
-  assert.equal(attested.control.suppression_revision, 1); assert.equal(attested.guard, true);
+  await attestedStore(f, 1);
   await f.setup(['config','--local-capture','on']);
   const transcript = join(f.home, '.claude/projects/attested.jsonl'); await writeFile(transcript, '', { mode: 0o600 });
   await f.hook('SessionStart', transcript); await f.append(transcript, 'copper telescope attested downgrade sentinel'); await f.hook('Stop', transcript);
   const current = await mcp(f, t); await searchCaptured(current); await current.close();
   const before = await snapshotDatabase(f);
+  const hooksBefore = (await f.native('claude')).hooks;
   const old = await oldPackage(f); await f.setup(['setup','--local'], { packagePath: old });
   assert.match((await f.descriptor()).clients.claude.vector.engineId, /^0\.6\.5-/);
+  assert.deepEqual((await f.native('claude')).hooks, hooksBefore, '0.6.5 setup leaves newer capture hooks registered');
   const refusal = await engineScript(f, `const {openMemoryCore}=await import(engine+'core/index.mjs');
     try {const core=openMemoryCore({path,raw:true,rawSearch:false});await core.close();console.log(JSON.stringify({opened:true}));}
     catch(error){console.log(JSON.stringify({code:error.code}));}`);

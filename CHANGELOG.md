@@ -52,12 +52,16 @@
   and Cards sourced from it under the existing lineage rule. Re-sent copies
   (fork, resume or cursor reset) are not archived again. Extracted Memories are
   separate and keep their own forget.
-- Reinstalling 0.6.5 keeps captured Raw searchable in ordinary local stores and
-  leaves the new local tables intact, ignoring them. After 0.6.6 has opened an
-  attested content-safety store with Raw on, 0.6.5 refuses it with
-  `unsupported_database`; reinstall 0.6.6 to recover access. Its setup does not disable 0.6.6 hooks: they continue using the retained
-  engine. Disable capture with 0.6.6 first to stop it before downgrading. A 0.6.5
-  uninstall deletes the engine, so leftover hook commands cannot capture; Raw stays.
+- Going back to 0.6.5: an attested base-33 store with card lineage revision 1
+  (physical 53, lineage 1) that 0.6.6 opened with Raw on is refused with
+  `unsupported_database`; reinstall 0.6.6 to recover access. Attested lineage-0
+  and ordinary local stores open in 0.6.5: captured Raw stays searchable, with
+  eligible excerpts readable through contextRead. Hidden conversations stay
+  hidden in both current and history Raw search through existing
+  `raw_session_fences` rows. The new local tables remain intact. 0.6.5 itself
+  does not capture automatically, so its engine does not use the new hide windows
+  or fork fences for capture. Its setup leaves 0.6.6 hooks registered with their
+  retained engine; turn capture off with 0.6.6 before downgrading to stop them.
 - Engine bundle source sync: `9701e44e`. Release acceptance must compare the
   complete bundled engine against that commit, preserving the sync-commit rule.
 

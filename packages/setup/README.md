@@ -68,13 +68,17 @@ and Cards sourced from it under the existing lineage rule. Re-sent copies
 (fork, resume or cursor reset) are not archived again. Memories extracted from
 it are separate and keep their own forget.
 
-Going back to 0.6.5: ordinary local stores keep captured Raw searchable through
-0.6.5's Raw/contextRead tools. The new local tables remain intact; 0.6.5 ignores
-them. After 0.6.6 has opened an **attested content-safety store with Raw on**,
-0.6.5 refuses that store with `unsupported_database`. Reinstall 0.6.6 to recover
-access. Running 0.6.5 setup leaves 0.6.6 hooks registered and using their retained
-engine. Turn capture off with 0.6.6 before downgrading if you want it stopped.
-A 0.6.5 uninstall removes the engine, so leftover hooks cannot capture; Raw stays.
+Going back to 0.6.5: an **attested base-33 store with card lineage revision 1**
+(physical 53, lineage 1) that 0.6.6 opened with Raw on is refused with
+`unsupported_database`. Reinstall 0.6.6 to recover access. **Attested lineage-0
+and ordinary local stores open in 0.6.5.** Captured Raw stays searchable, with
+eligible excerpts readable through contextRead. Hidden conversations stay hidden
+in both current and history Raw search because 0.6.5 enforces the existing
+`raw_session_fences` rows. The new local tables remain intact and are ignored.
+0.6.5 itself does not capture automatically, so its engine does not use the new
+hide windows or fork fences for capture. Its setup leaves 0.6.6 hooks registered
+with their retained engine; turn capture off with 0.6.6 before downgrading to
+stop them.
 
 安裝器 **0.6.6 已備妥，尚未發布**。引擎同步自 `9701e44e`，發布驗收會依照
 既有同步規則，比對整份引擎封裝與該 commit 的內容。
@@ -120,13 +124,16 @@ npx @cairn-ink/memory raw delete <conversation-id> --yes
 判定來自該對話的 Cards。分支、續接或游標重設後重送的副本不會再次保存。
 從對話抽取的 Memories 是獨立資料，仍要各自執行 forget。
 
-降回 0.6.5 時，一般本機資料庫裡已保存的 Raw 仍可透過它的 Raw/contextRead
-工具搜尋，新增的本機資料表會完整保留，0.6.5 不會使用它們。但若 0.6.6 已經在
-**開啟 Raw 的情況下開過經驗證的 content-safety 資料庫**，0.6.5 會以
-`unsupported_database` 拒絕開啟；重裝 0.6.6 就能恢復存取。
-0.6.5 setup 不會關閉 0.6.6 的 hooks，它們會繼續使用保留的引擎；若要停止，
-請先用 0.6.6 關閉擷取再降版。0.6.5 解除安裝會移除引擎，讓留下的 hooks
-無法擷取，但 Raw 會保留。
+降回 0.6.5 時，若 0.6.6 已在開啟 Raw 的情況下開過
+**經驗證的 base-33、card lineage revision 1 資料庫**（physical 53、lineage 1），
+0.6.5 會以 `unsupported_database` 拒絕開啟；重裝 0.6.6 就能恢復存取。
+**經驗證的 lineage-0 資料庫與一般本機資料庫，0.6.5 都能開啟。** 已保存的 Raw
+仍可搜尋，符合讀取條件的片段也能透過 contextRead 閱讀。已隱藏的對話在
+current 與 history 兩種 Raw 搜尋中都會保持隱藏，因為 0.6.5 仍會遵守既有的
+`raw_session_fences` 記錄。新增的本機資料表會完整保留，0.6.5 不會使用它們。
+0.6.5 本身不會自動擷取，因此它的引擎不會在擷取時使用新的隱藏時間窗與
+分支封鎖規則。它的 setup 會保留 0.6.6 的 hooks，繼續使用原本保留的引擎；
+若要停止它們，請先用 0.6.6 關閉擷取再降版。
 
 ## Setup / 安裝
 
