@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
@@ -72,12 +72,12 @@ async function fixture(t, client, selected) {
     const row = client === 'claude-code' ? { type: 'user', uuid: 'synthetic-message-' + index, timestamp: null, promptSource: 'typed', message: { content: [{ type: 'text', text }] } }
       : { type: 'event_msg', timestamp: null, payload: { type: 'item_completed', thread_id: sessionId, turn_id: 'synthetic-turn-' + index,
         item: { type: 'UserMessage', id: 'native-message-' + index, content: [{ type: 'text', text }] } } };
-    writeFileSync(path, header + JSON.stringify(row) + '\n', { mode: 0o600 }); return { path, sessionId };
+    writeFileSync(path, client === 'codex' ? header : header + JSON.stringify(row) + '\n', { mode: 0o600 }); return { path, sessionId, row };
   });
   function invoke(action, index = 0, { key = true, expected = 0 } = {}) {
     const trace = join(workspace.path, 'host-' + phase++ + '.jsonl'), settings = trace + '.settings.json';
     const source = sources[index], args = [action, ...(['initialize','run'].includes(action)
-      ? ['--session', source.sessionId, '--source', source.path, ...(action === 'initialize' ? ['--start', 'beginning'] : [])] : [])];
+      ? ['--session', source.sessionId, '--source', source.path, ...(action === 'initialize' ? ['--start', client === 'codex' ? 'eof' : 'beginning'] : [])] : [])];
     writeFileSync(settings, JSON.stringify({ installed, profilePath, args, trace, scaffold, mode: 'memory', syntheticBinary: binary, preload: childPreload }), { mode: 0o600 });
     const result = spawnSync(process.execPath, [driver, settings], { cwd: workspace.path, encoding: 'utf8', timeout: 20000, maxBuffer: 262144,
       env: { PATH: dirname(process.execPath), HOME: home, TMPDIR: workspace.path, TMP: workspace.path, TEMP: workspace.path, NODE_TEST_CONTEXT: 'child-v8', CAIRN_SYNTHETIC_FIXTURE_ROOT: workspace.path,
@@ -88,6 +88,8 @@ async function fixture(t, client, selected) {
     assert.deepEqual(spawned.map(row => row.pid).sort(), closed.map(row => row.pid).sort());
     for (const row of closed) { assert.equal(row.code, 0); assert.equal(row.signal, null); }
     processReceipts.push({ phase: action, pid: result.pid, code: result.status, signal: result.signal, children: closed });
+    // Codex observes the header EOF before the first synthetic user record.
+    if (client === 'codex' && action === 'initialize') appendFileSync(source.path, JSON.stringify(source.row) + '\n');
     return JSON.parse(result.stdout);
   }
   function inspect() {
