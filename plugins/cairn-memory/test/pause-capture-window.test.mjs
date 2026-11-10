@@ -13,8 +13,8 @@ test('hosted pause blocks a session window; resumed EOF precedes correctly timed
   const f = await harness(t, { pauseState: () => remote });
   await f.write(''); await f.run('start-boundary'); await f.run('recall');
   const skipped = row('paused-window', time);
-  await appendFile(f.transcript, skipped);
   remote = { ...active, paused: true, generation: 1 };
+  await appendFile(f.transcript, skipped);
   await f.run('capture'); assert.equal(f.captures.length, 0, 'paused_window_zero_posts');
   remote = { ...active, generation: 2 };
   await f.run('capture'); assert.equal(f.captures.length, 0, 'resume_window_eof');
@@ -37,12 +37,10 @@ for (const pause of [false, true]) test(`POSIX new session start/prompt/Stop wit
   const prefix = row('copied-prefix', time);
   await f.write(prefix); await f.run('start-boundary'); await f.run('recall');
   assert.equal((await f.state()).startOffset, Buffer.byteLength(prefix));
+  if (pause) remote = { ...active, paused: true, generation: 1 };
   await appendFile(f.transcript, row('first-turn', time));
-  if (pause) {
-    remote = { ...active, paused: true, generation: 1 };
-    await f.run('capture'); assert.equal(f.captures.length, 0, 'posix_paused_zero_posts');
-    remote = { ...active, generation: 2 };
-  }
+  // No hook observes the pause; the resumed generation must revoke the range.
+  if (pause) remote = { ...active, generation: 2 };
   await f.run('capture');
   assert.deepEqual(ids(f), pause ? [] : ['first-turn'], 'posix_first_turn_boundary_precedence');
   if (pause) {
