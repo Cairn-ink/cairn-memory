@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — retain prepared Raw evidence
+
+- Default three-layer reads keep the validated Raw prefix when preparation
+  reaches its cutoff, with `partial` coverage. Incomplete search results and
+  individual candidate failures preserve other valid candidates. Late prepares
+  are ignored, and partial sets retain the existing batch authorization checks
+  before projection and final delivery.
+- Known limit: on the product reader, Raw invalidated between initial and final
+  validation yields the existing refusal (`reader_failed`) rather than a Memory-only
+  response; the local/facade reader rebuilds Memory-only.
+
 ## Unreleased — local Raw-only capture and conversation hiding
 
 - Several sessions saving at once no longer stop one of them from saving. Core `captureRaw` now retries conflicts caused only by a namespace epoch change, including changes from Memory writes. Retries share the original capture deadline. If contention persists after four total attempts or leaves too little time for another attempt, capture returns retryable `storage_busy` instead of permanently stopping saving. Other deadline expiries remain timeouts. Other conflicts still return `revision_conflict`.

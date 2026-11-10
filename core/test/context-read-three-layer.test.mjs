@@ -131,7 +131,7 @@ test('forgotten best-matching Raw never appears anywhere in a read', async t => 
   }
 });
 
-for (const path of [0, 1, 2]) for (const mutation of ['denied', 'suppressed', 'excluded']) test(`reader ${path}: Raw ${mutation} during token counting never retains text`, async t => {
+for (const path of [0, 1, 2]) for (const mutation of ['denied', 'suppressed', 'excluded']) test(`reader ${path}: partial Raw ${mutation} during token counting never retains text`, async t => {
   let armed = false, changed = false, mutate;
   const guarded = { ...counter, countTokens(text) {
     if (armed && !changed && text.includes('secret-orchid')) { changed = true; mutate(); }
@@ -139,6 +139,8 @@ for (const path of [0, 1, 2]) for (const mutation of ['denied', 'suppressed', 'e
   } };
   const f = await fixture(t, { portCounter: guarded });
   const source = await f.capture('secret-orchid telescope', { role: 'assistant' }); await f.build();
+  const search = f.rawPort.search;
+  f.rawPort.search = async input => ({ ...await search(input), coverage: { status: 'partial' } });
   if (mutation === 'denied') mutate = () => f.service.host.revoke();
   else if (mutation === 'suppressed') mutate = () => transaction(f.db, () => writeContentSuppressionInside(f.db,
     { namespace: ns, kind: 'raw', key: source.conversationId, matchMode: 'span', messageId: source.messageId, start: 0, end: source.text.length, reason: 'purge', actionId: 'synthetic-suppression' }));
@@ -163,15 +165,86 @@ test('Raw and Memory remain isolated by both owner and namespace', async t => {
     foreignSources.push(await f.capture('telescope public-synthetic', { namespace, sessionId: label, id: 'identical', ordinal: 2 }));
   }
   await f.build();
+  const search = f.rawPort.search;
+  f.rawPort.search = async input => ({ ...await search(input), coverage: { status: 'partial' } });
   for (const read of f.readers()) {
     const result = ok(await read(query('telescope')));
     assert.ok(!JSON.stringify(result).includes('foreign-synthetic'));
     for (const source of foreignSources) assert.ok(!JSON.stringify(result).includes(source.conversationId));
     assert.match(JSON.stringify(result.metered), /public-synthetic/);
-    assert.equal(result.diagnostics.coverage.raw, 'included');
+    assert.equal(result.diagnostics.coverage.raw, 'partial');
     assert.ok(result.metered.items.some(item => item.layer === 'Raw' || item.evidence?.length), 'Raw isolation is exercised without falling back');
   }
 });
+
+test('all readers deliver dated Raw from a partial search', async t => {
+  const f = await fixture(t);
+  await f.capture('telescope partial dated evidence', { occurredAt: '2026-01-01T08:00:00.000Z' }); await f.build();
+  const search = f.rawPort.search;
+  f.rawPort.search = async input => ({ ...await search(input), coverage: { status: 'partial' } });
+  for (const read of f.readers()) {
+    const result = ok(await read(query('telescope')));
+    assert.equal(result.diagnostics.coverage.raw, 'partial');
+    assert.equal(result.metered.items[0].layer, 'Raw'); assert.equal(result.metered.items[0].date, '2026-01-01T08:00Z');
+  }
+});
+
+for (const path of [0, 1, 2]) for (const mutation of ['forgotten', 'suppressed', 'excluded', 'denied'])
+  test(`reader ${path}: partial Raw ${mutation} after prepare never reaches assembly text projection`, async t => {
+    const extract = mutation === 'forgotten' ? ({ input }) => ({ items: input.messages.map(message => ({ content: message.content,
+      kind: 'fact', confidence: 1, sourceIndices: [message.index] })) }) : undefined;
+    const f = await fixture(t, { extract });
+    const source = await f.capture('secret-partial-orchid telescope', { occurredAt: '2026-01-01T08:00:00.000Z' }); await f.build();
+    const search = f.rawPort.search, prepare = f.rawPort.prepare, revalidate = f.rawPort.revalidate;
+    let changed = false;
+    f.rawPort.search = async input => ({ ...await search(input), coverage: { status: 'partial' } });
+    f.rawPort.prepare = async (...args) => {
+      const handle = await prepare(...args);
+      if (!changed) {
+        changed = true;
+        if (mutation === 'forgotten') {
+          const memory = f.db.prepare('SELECT id,revision FROM memories WHERE deleted=0').get();
+          ok(f.core.forget({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision }));
+        } else if (mutation === 'suppressed') transaction(f.db, () => writeContentSuppressionInside(f.db,
+          { namespace: ns, kind: 'raw', key: source.conversationId, matchMode: 'span', messageId: source.messageId,
+            start: 0, end: source.text.length, reason: 'purge', actionId: 'synthetic-partial-suppression' }));
+        else if (mutation === 'excluded') f.db.prepare('INSERT INTO raw_source_exclusions VALUES(?,?,?,?,?)')
+          .run(source.conversationId, source.messageId, 0, source.text.length, 1);
+        else f.service.host.revoke();
+      }
+      return handle;
+    };
+    f.rawPort.revalidate = handles => { assert.equal(handles.length, 1); return revalidate(handles); };
+    const result = await f.readers()[path](query('secret-partial-orchid telescope'));
+    assert.equal(changed, true);
+    assert.ok(!JSON.stringify(result).includes('secret-partial-orchid'));
+    if (result.ok) { assert.equal(result.value.diagnostics.coverage.raw, 'partial'); assert.equal(result.value.metered.items.length, 0); }
+  });
+
+for (const mutation of ['forgotten', 'suppressed', 'excluded', 'denied'])
+  test(`partial set batch validation blocks Raw ${mutation} between preparation and assembly`, async t => {
+    const f = await fixture(t, { extract: ({ input }) => ({ items: input.messages.map(message => ({ content: message.content,
+      kind: 'fact', confidence: 1, sourceIndices: [message.index] })) }) });
+    const source = await f.capture('secret-partial-batch telescope', { occurredAt: '2026-01-01T08:00:00.000Z' }); await f.build();
+    const search = f.rawPort.search, revalidate = f.rawPort.revalidate;
+    f.rawPort.search = async input => ({ ...await search(input), coverage: { status: 'partial' } });
+    const raw = await readRawChannel(f.rawPort, { ...channelInput(), query: 'secret-partial-batch telescope' }, {}, performance.now() + 1000);
+    assert.equal(raw.coverage, 'partial'); assert.equal(raw.items.length, 1);
+    if (mutation === 'forgotten') {
+      const memory = f.db.prepare('SELECT id,revision FROM memories WHERE deleted=0').get();
+      ok(f.core.forget({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision }));
+    } else if (mutation === 'suppressed') transaction(f.db, () => writeContentSuppressionInside(f.db,
+      { namespace: ns, kind: 'raw', key: source.conversationId, matchMode: 'span', messageId: source.messageId,
+        start: 0, end: source.text.length, reason: 'purge', actionId: 'synthetic-partial-batch-suppression' }));
+    else if (mutation === 'excluded') f.db.prepare('INSERT INTO raw_source_exclusions VALUES(?,?,?,?,?)')
+      .run(source.conversationId, source.messageId, 0, source.text.length, 1);
+    else f.service.host.revoke();
+    let batches = 0;
+    f.rawPort.revalidate = handles => { batches++; assert.equal(handles.length, 1); return revalidate(handles); };
+    const result = assembleThreeLayerContext(packedArgs({ prepared: [] }), raw);
+    assert.equal(batches, 1); assert.equal(result.diagnostics.coverage.raw, 'partial');
+    assert.deepEqual(result.metered.items, []); assert.ok(!JSON.stringify(result.metered).includes('secret-partial-batch'));
+  });
 
 const packedArgs = (patch = {}) => ({ prepared: fixedPrepared().slice(0, 2), counter, policy: { id: 'rank-first-whole-v1' },
   budget: { maxTokens: 6000, maxItems: 24 }, query: 'assembly telescope', readSet: [ns], representation: dated,
@@ -185,7 +258,7 @@ function syntheticRaw(texts) {
   return { items, coverage: 'included', rawSearch: { revalidate: handles => handles.map(handle => values[handle.index]) } };
 }
 
-test('absent, partial and timed-out Raw preserve the exact Memory-only dated projection and snapshot', async () => {
+test('absent, empty partial and timed-out Raw preserve the exact Memory-only dated projection and snapshot', async () => {
   const args = packedArgs(), baseline = assembleContext(args);
   for (const raw of [undefined, { items: [], coverage: 'partial' }]) {
     const value = assembleThreeLayerContext(args, raw);
@@ -194,11 +267,118 @@ test('absent, partial and timed-out Raw preserve the exact Memory-only dated pro
   const payload = contextInput('contextRead', query(), ['memory']).input;
   const partial = await readRawChannel({ search: async () => ({ coverage: { status: 'partial' }, candidates: [] }) }, payload, {}, performance.now() + 1000);
   assert.deepEqual(partial, { items: [], coverage: 'partial' });
+  // Incomplete search with candidates now retains its validated evidence.
+  const available = syntheticChannel(['assembly telescope dated prefix']);
+  available.service.search = async () => ({ coverage: { status: 'partial' }, candidates: available.candidates });
+  const prefix = await readRawChannel(available.service, payload, {}, performance.now() + 1000);
+  const assembled = assembleThreeLayerContext(args, prefix);
+  assert.equal(prefix.items.length, 1); assert.equal(assembled.diagnostics.coverage.raw, 'partial');
+  assert.ok(assembled.metered.items.some(item => item.layer === 'Raw' && item.date === '2026-01-01T00:00Z'));
   const absent = await readRawChannel(null, payload, {}, performance.now() + 1000);
   assert.deepEqual(absent, { items: [], coverage: 'unavailable' });
   const at = Date.now();
   const timeout = await readRawChannel({ search: () => new Promise(() => {}) }, payload, {}, performance.now() + 150);
   assert.deepEqual(timeout, { items: [], coverage: 'partial' }); assert.ok(Date.now() - at < 500);
+});
+
+function syntheticChannel(texts = ['assembly telescope first', 'assembly telescope second', 'assembly telescope third']) {
+  const raw = syntheticRaw(texts), candidates = raw.items.map(item => item.value);
+  const handles = raw.items.map(item => ({ ...item.handle, value: item.value }));
+  const service = { ...raw.rawSearch,
+    search: async () => ({ coverage: { status: 'complete' }, candidates }),
+    prepare: async candidate => handles[candidates.indexOf(candidate)] };
+  return { candidates, handles, service };
+}
+function channelClock(t) {
+  let time = 100;
+  const previous = Object.getOwnPropertyDescriptor(performance, 'now');
+  Object.defineProperty(performance, 'now', { configurable: true, value: () => time });
+  t.after(() => Object.defineProperty(performance, 'now', previous));
+  return ms => { time += ms; };
+}
+const channelInput = () => contextInput('contextRead', query(), ['memory']).input;
+
+for (const k of [0, 1, 2]) test(`Raw cutoff retains exactly ${k} validated candidates in rank order`, async t => {
+  const advance = channelClock(t), { candidates, handles, service } = syntheticChannel();
+  let prepares = 0, lateValueReads = 0;
+  service.prepare = async candidate => {
+    const index = candidates.indexOf(candidate); prepares++;
+    if (index === k) {
+      advance(400);
+      return { get value() { lateValueReads++; return candidate; } };
+    }
+    return handles[index];
+  };
+  const result = await readRawChannel(service, channelInput(), {}, 1100);
+  assert.equal(result.coverage, 'partial'); assert.equal(prepares, k + 1);
+  assert.deepEqual(result.items.map(item => item.handle), handles.slice(0, k));
+  assert.deepEqual(result.items.map(item => item.rank), Array.from({ length: k }, (_, i) => i + 1));
+  assert.equal(lateValueReads, 0, 'a prepare returned at cutoff is not inspected');
+});
+
+test('Raw timer snapshots a validated prefix while a prepare hangs and ignores its late result', async t => {
+  channelClock(t); t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { candidates, handles, service } = syntheticChannel();
+  let release, hung, prepares = 0, lateValueReads = 0;
+  const started = new Promise(resolve => { hung = resolve; });
+  service.prepare = candidate => {
+    prepares++;
+    if (candidate === candidates[0]) return handles[0];
+    hung(); return new Promise(resolve => { release = resolve; });
+  };
+  const reading = readRawChannel(service, channelInput(), {}, 1100);
+  await started; t.mock.timers.tick(400);
+  const result = await reading;
+  assert.equal(result.coverage, 'partial'); assert.deepEqual(result.items.map(item => item.handle), [handles[0]]);
+  const before = [...result.items]; Object.freeze(result.items);
+  release({ get value() { lateValueReads++; return candidates[1]; } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(result.items, before); assert.equal(lateValueReads, 0); assert.equal(prepares, 2);
+});
+
+for (const invalid of ['outside-readSet', 'identity-mismatch', 'prepare-throws']) test(`Raw skips only the ${invalid} candidate`, async () => {
+  const { candidates, handles, service } = syntheticChannel(); let prepares = 0;
+  if (invalid === 'outside-readSet') candidates[1] = { ...candidates[1], namespace: { ...ns, ownerId: 'foreign-owner' } };
+  service.prepare = async candidate => {
+    prepares++; const index = candidates.indexOf(candidate);
+    if (index === 1 && invalid === 'identity-mismatch') return { value: { ...candidate, messageId: 'wrong-turn' } };
+    if (index === 1 && invalid === 'prepare-throws') throw Error('synthetic prepare failure');
+    return handles[index];
+  };
+  const result = await readRawChannel(service, channelInput(), {}, performance.now() + 1000);
+  assert.equal(result.coverage, 'partial');
+  assert.deepEqual(result.items.map(item => item.handle), [handles[0], handles[2]]);
+  assert.deepEqual(result.items.map(item => item.rank), [1, 2]);
+  assert.equal(prepares, invalid === 'outside-readSet' ? 2 : 3);
+});
+
+for (const status of ['partial', 'unavailable', undefined]) test(`Raw uses candidates from non-complete search status ${status}`, async () => {
+  const { candidates, handles, service } = syntheticChannel();
+  service.search = async () => ({ coverage: { status }, candidates });
+  const result = await readRawChannel(service, channelInput(), {}, performance.now() + 1000);
+  assert.equal(result.coverage, 'partial'); assert.deepEqual(result.items.map(item => item.handle), handles);
+  const assembled = assembleThreeLayerContext(packedArgs({ prepared: [] }), result);
+  assert.equal(assembled.diagnostics.coverage.raw, 'partial'); assert.equal(assembled.metered.items.length, 3);
+  assert.equal(assembled.metered.items.filter(item => item.date).length, 2); assert.ok(assembled.validateRaw());
+});
+
+test('unsupported Raw store stays unavailable and complete empty search stays included and Memory-only', async () => {
+  const { candidates, service } = syntheticChannel(); let prepares = 0;
+  service.prepare = () => { prepares++; throw Error('must not prepare'); };
+  service.search = async () => ({ coverage: { status: 'unsupported_store' }, candidates });
+  assert.deepEqual(await readRawChannel(service, channelInput(), {}, performance.now() + 1000), { items: [], coverage: 'unsupported_store' });
+  service.search = async () => ({ coverage: { status: 'complete' }, candidates: [] });
+  const empty = await readRawChannel(service, channelInput(), {}, performance.now() + 1000);
+  assert.equal(empty.coverage, 'included'); assert.deepEqual(empty.items, []); assert.equal(prepares, 0);
+  const args = packedArgs(), result = assembleThreeLayerContext(args, empty);
+  assert.deepEqual(result.metered, assembleContext(args).metered); assert.equal(result.diagnostics.coverage.raw, 'included');
+});
+
+for (const error of [{ reason: 'deadline' }, { code: 'search_deadline' }, { code: 'read_timeout' }, { code: 'timeout' },
+  { name: 'AbortError' }, { code: 'unexpected' }]) test(`Raw search error ${JSON.stringify(error)} retains its coverage classification`, async () => {
+  const service = { search: async () => { throw Object.assign(Error('synthetic search failure'), error); } };
+  assert.deepEqual(await readRawChannel(service, channelInput(), {}, performance.now() + 1000),
+    { items: [], coverage: error.code === 'unexpected' ? 'unavailable' : 'partial' });
 });
 
 test('explicit raw:false skips configured Raw on all readers and retains dated Memory', async t => {
