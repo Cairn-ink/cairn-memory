@@ -24,5 +24,11 @@ export function captureWithDeadline(core, request, deadline) {
   invocationDeadlines.set(invocation, deadline);
   return core.captureRaw(request, invocation);
 }
+// Preserve the public capture facade while forwarding this invocation's budget.
+export function captureFacadeWithDeadline(core, request, deadline) {
+  const invocation = {};
+  invocationDeadlines.set(invocation, deadline);
+  return core.capture(request, invocation);
+}
 export const captureInvocationDeadline = (milliseconds, invocation) => invocationDeadlines.get(invocation) ??
   (milliseconds === undefined ? undefined : createCaptureDeadline(milliseconds));

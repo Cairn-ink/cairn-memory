@@ -28,7 +28,7 @@ import { ADMISSION_LEASE_MS } from './episode-schema.mjs';
 import { episodeOptions, episodeClient } from './episode-storage.mjs';
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createMemoryRuntime, readRecallJournalMode } from "./runtime.mjs";
-import { createCaptureDeadline } from './capture-deadline.mjs';
+import { captureInvocationDeadline, createCaptureDeadline } from './capture-deadline.mjs';
 import { uniqueIds, memoryGuards, placementProposal } from './placement-input.mjs';
 import { countTokens, modelPortValue } from './model-budget.mjs';
 import { isSourceContext } from './source-evidence.mjs';
@@ -1317,7 +1317,9 @@ export function createMemoryCore(input, internal) {
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission, inspectAdmission,
     inspectCaptureEvidence, discardCaptureEvidence,
-    applyPlacement, linkMocs, map, fetch, recall, sourceSnapshot, capture: input => capture(input), planCaptureBatches, keepEpisode, endEpisodeSession, classifyPlacement, rebuildIndex,
+    applyPlacement, linkMocs, map, fetch, recall, sourceSnapshot,
+    capture: (input, invocation) => capture(input, undefined, undefined, captureInvocationDeadline(undefined, invocation)),
+    planCaptureBatches, keepEpisode, endEpisodeSession, classifyPlacement, rebuildIndex,
     reviewRationale, getRationale, reviewDecisionBasis,
     close() {
       runtime.close();

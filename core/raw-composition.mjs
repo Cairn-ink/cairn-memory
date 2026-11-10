@@ -1,4 +1,4 @@
-import { captureInvocationDeadline } from './capture-deadline.mjs';
+import { captureFacadeWithDeadline, captureInvocationDeadline } from './capture-deadline.mjs';
 import { isRawEpochConflict, retryRawEpochConflict } from './raw-journal.mjs';
 import { createLocalRawSearch } from './local-raw-search.mjs';
 import { contentSafetyFacade } from './content-safety-boundary.mjs';
@@ -46,7 +46,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
       try {
         runtime.ready();
         const registration = await storage.prepareCapture(request, arrivalToken, deadline);
-        if (!registration) return await capture(request, undefined, deadline);
+        if (!registration) return await captureFacadeWithDeadline(core, request, deadline);
         let result;
         result = await capture(registration.input, registration, deadline);
         registration.assertEpochCurrent();
