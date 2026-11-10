@@ -16,8 +16,7 @@ import { assembleThreeLayerContext, queryExcerpt, countListQuestion, readRawChan
 import { fixedPrepared } from '../testing/context-read-assembly-fixture.mjs';
 import { ASSEMBLY_LIMITS, contextInput } from '../context-read-input.mjs';
 import { configured } from '../testing/context-product-owner-fixture.mjs';
-import { requestAuthority } from '../context-product-authority.mjs';
-import { credentialDigest } from '../context-product-control.mjs';
+import { accessDigest } from '../context-product-validation.mjs';
 import { transaction } from '../database.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 
@@ -58,11 +57,8 @@ async function fixture(t, { extract, portCounter = counter } = {}) {
       reader = openMemoryCore({ path: f.path, contextRead }); base.workspace.defer(() => reader.close());
       readOnly = openContextReader({ path: f.path, contextRead }); base.workspace.defer(() => readOnly.close());
       const facade = openContextProductFacade(f.path, {}); base.workspace.defer(() => facade.close());
-      const token = { opaque: 'synthetic-product' }, binding = { ownerId: ns.ownerId,
-        namespaces: { readSet: [ns] }, credentialDigest: credentialDigest(token) };
-      const enter = requestAuthority({ authorize: () => binding, isCurrent: () => true }, binding, {});
       product = openProductIndex({ path: f.path, facade, counter: portCounter, rawSearch: rawPort, maintenance: true,
-        authorize: (method, payload) => enter(method, payload, token),
+        authorize: () => ({ accessGenerations: accessDigest({ ownerId: ns.ownerId, namespaces: { readSet: [ns] } }), check() {}, envelope: work => work() }),
         ownerCoverage: { policy: 'recent-projects-v1', selectionRevision: 'synthetic', requestedNamespaces: 1, selectedNamespaces: 1, omittedNamespaces: 0 } });
       base.workspace.defer(() => product.close());
     }
