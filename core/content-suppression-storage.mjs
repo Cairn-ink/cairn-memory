@@ -64,14 +64,22 @@ export function writeContentSuppressionInside(db, { namespace: ns, kind, key = '
   if(!installing && relationLayout?.relationsRevision && ['owner','namespace','memory','receipt','raw'].includes(kind)){
     // Delete incident edges with their durable denial. A caller's temporary
     // authorization denial is enforced at read time and never edits the store.
-    const boundRevision=kind==='memory'&&['version','revision-through'].includes(matchMode)?JSON.parse(sourceVersion)[1]:-1;
+    let boundRevision=-1,relationMatchMode=matchMode;
+    if(kind==='memory'&&['version','revision-through'].includes(matchMode)){
+      let bound;try{bound=JSON.parse(sourceVersion);}catch{}
+      const tag=matchMode==='version'?'memory-revision-v1':'memory-revision-through-v1';
+      if(Array.isArray(bound)&&bound.length===2&&bound[0]===tag&&Number.isSafeInteger(bound[1])&&bound[1]>0)boundRevision=bound[1];
+      // Malformed versions are denied by serving. Remove their incident edges
+      // conservatively without binding an undefined value or exposing the tuple.
+      else relationMatchMode='incarnation';
+    }
     const targets=db.prepare(`SELECT m.id FROM memories m WHERE m.owner_id=?
       AND (?='owner' OR (m.scope=? AND m.project_id=?)) AND (
         ? IN ('owner','namespace') OR (?='memory' AND m.id=? AND (? NOT IN ('version','revision-through') OR
           (?='version' AND m.revision=?) OR (?='revision-through' AND m.revision<=?))) OR
         (?='receipt' AND m.id IN(SELECT memory_id FROM receipts WHERE id=?))
         ${relationLayout.rawLineage?"OR (?='raw' AND m.id IN(SELECT p.memory_id FROM receipts p JOIN raw_receipt_lineage l ON l.receipt_id=p.id WHERE l.conversation_id=? AND (?='' OR (l.message_id=? AND l.start<? AND l.end>?))))":''})`)
-      .all(ns.ownerId,matchMode,ns.scope,ns.projectId??'',kind,kind,key,matchMode,matchMode,boundRevision,matchMode,boundRevision,kind,key,
+      .all(ns.ownerId,matchMode,ns.scope,ns.projectId??'',kind,kind,key,relationMatchMode,relationMatchMode,boundRevision,relationMatchMode,boundRevision,kind,key,
         ...(relationLayout.rawLineage?[kind,key,messageId,messageId,end,start]:[]));
     if(targets.length){const ids=JSON.stringify(targets.map(target=>target.id));
       db.prepare(`DELETE FROM memory_relations WHERE from_memory_id IN(SELECT value FROM json_each(?))

@@ -6,7 +6,7 @@ import { safetyFixture, ns, ok, receipt } from '../testing/content-safety-s2h-fi
 import { transaction } from '../database.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 
-for(const base of [18,23,33])for(const blocked of ['suppressed','foreign-owner','foreign-namespace','denied'])test(`edge endpoints remain protected: base ${base}, ${blocked}`,async t=>{
+for(const base of [18,23,33])for(const blocked of ['suppressed','malformed-version','foreign-owner','foreign-namespace','denied'])test(`edge endpoints remain protected: base ${base}, ${blocked}`,async t=>{
  const f=safetyFixture(t,base);await f.migrate();const h=host();h.state.allowed=[ns];
  const core=openMemoryCore({path:f.path,contextRead:{version:'context-read-v1',authority:h.authority,counter:{id:'synthetic',countTokens:()=>1}}}),db=f.connect();
  t.after(()=>{core.close();db.close();});
@@ -17,7 +17,8 @@ for(const base of [18,23,33])for(const blocked of ['suppressed','foreign-owner',
   ...(!foreign?{conflictHints:[{memoryId:seed.id,expectedRevision:seed.revision,relation:'contradicts'}]}:{})})).memory;
  const read=async()=>h.call(core,'contextRead',{readSet:[ns],types:['memory'],intent:'history',query:'UniqueRelationSeed',semantic:false,budget:{}});
  const before=ok(await read());assert.equal(before.metered.items.length,foreign?1:2,'one-hop delivery stays within the authorized namespace');
- if(blocked==='suppressed'){transaction(db,()=>writeContentSuppressionInside(db,{namespace:ns,kind:'memory',key:peer.id,reason:'purge',actionId:'hide-peer'}));
+ if(['suppressed','malformed-version'].includes(blocked)){transaction(db,()=>writeContentSuppressionInside(db,{namespace:ns,kind:'memory',key:peer.id,reason:'purge',actionId:'hide-peer',
+  ...(blocked==='malformed-version'?{matchMode:'version',sourceVersion:'["Synthetic malformed source"]'}:{})}));
   assert.equal(db.prepare('SELECT count(*) n FROM memory_relations WHERE from_memory_id=? OR to_memory_id=?').get(peer.id,peer.id).n,0);}
  if(foreign)assert.throws(()=>db.prepare(`INSERT INTO memory_relations
   (id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,created_at)
