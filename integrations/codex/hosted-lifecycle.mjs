@@ -89,7 +89,7 @@ export async function recallContext(input, config, token, projectId, signal, ena
       hookEventName: 'UserPromptSubmit', additionalContext: context,
     } });
   }, { signal, guard }));
-  if (!output || signal.aborted || await enabled() !== true) return '';
+  if (!output || signal.aborted || await enabled() !== true || signal.aborted) return '';
   // The switch read is asynchronous: pause/generation or cancellation may change
   // during it. Re-check both under the control lock; nothing awaits after this.
   if (!await withHostedPauseGate(config, remote.generation,
