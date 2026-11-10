@@ -4,7 +4,7 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "9b1f611fde163e851cb72cc7654d0434c13e8cad96ae8c3868a340dc7002b301",
+  "sha256": "eecd050fc38e058b7ea8ff97fd3466f3a586efa500996f75c7fb5d482323d5c2",
   "bytes": 1297758,
   "files": [
     "LICENSE",
@@ -589,7 +589,7 @@
     "evaluation/live/diagnostics.mjs": "2cb6ec674503bfb979b0a700e9430bdf284adf5b0d5c4d0d338afbdbac6a1077",
     "integrations/client/control-state.mjs": "6d75cddef12008f1af6722e72acce5197805f1b656e2284a192e92e7e6465b8f",
     "integrations/client/file-lock.mjs": "afc42dcf45402c8c5576568d209c982e442eb9aa388b81907f40424f9d57f4c1",
-    "integrations/client/source-time.mjs": "72985575d8f60d63432021ceda841efd335a3e812b8204cdfc11d6eee69b3410",
+    "integrations/client/source-time.mjs": "002acf215bd6b79b3e4ace3e9d181a89dbf8efc48093a6e980c8417df64b9401",
     "integrations/client/hosted-contract.mjs": "07bb439a728f1be053cfa40f425d7e52e0a2b958a22dd72cd889f3f942fb12fd",
     "integrations/client/hosted-schemas.mjs": "c9e2b4fc3e85e136594438ad58a24d15526296b12ab1d438ae930a91b8ec82d3",
     "integrations/client/pairing.mjs": "46a3cc1bb1e88ad1ab06c0096fb9c1dbee0d34b19b4c1435c9c07b496065af3c",
@@ -632,7 +632,7 @@
     "integrations/codex/session-source.mjs": "1341cc42eebf5a996be305f471393a717bfdd5eddd19fc3fd556fe8483fdfbc3",
     "integrations/codex/qualification.mjs": "d5bea045ed4c3fefd45e325f268833f1d535b075ab63ad5dd8dd0409c57dd380",
     "integrations/codex/schema-evidence.mjs": "1313d5789bbf8aa4a61be3bd4c1269793dbc0df543938e2a23fded3a2d4d518b",
-    "plugins/cairn-memory/lib/source-time.mjs": "c91f9fc9ff0b9392542d2f7aad3f190dfe2ab073a3ed5111aaec18ca3ec2fba2",
+    "plugins/cairn-memory/lib/source-time.mjs": "b1c0b9ccf03ff76103ed759840b60effdfdc4b31e93f3dfd107ae876aa5dcb27",
     "plugins/cairn-memory/lib/transcript.mjs": "a1817bf9b9f484da4fc3eef82fd95ed0a6a320669491dae56e5e29d57523fc75",
     "integrations/client/runtime-usage.mjs": "8bf732bb36664b33aa238a40903986b16c112a44829412c32a11b01dcad08d4d",
     "integrations/client/state-lock.mjs": "ee4bc6161d97bac44a8dc34a2058ed48e3dbbfeb105e32f6e66590b883b29b58",

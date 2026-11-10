@@ -27,4 +27,3 @@ export function dateTime(value) {
   return Number(match[3]) <= 23 && Number(match[4]) <= 59 &&
     utcInstant(match[1] + "Z") && Number.isFinite(Date.parse(value));
 }
-
