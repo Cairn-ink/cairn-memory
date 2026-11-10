@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { link, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { performance } from "node:perf_hooks";
+// Absolute deadlines use the same process clock as their callers.
 
 const OWNER_PATTERN = /^([1-9][0-9]*)-([a-f0-9-]{36})$/;
 
