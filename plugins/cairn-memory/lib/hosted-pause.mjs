@@ -68,9 +68,9 @@ async function publishStatus(config, state, observedAt) {
     }
   } catch { /* Diagnostics cannot change the observation's result. */ }
 }
-export async function observeHostedPause(config, token, signal, { available } = {}) {
+export async function observeHostedPause(config, token, signal, { available, deadlineMs } = {}) {
   try {
-    const remote = await observe(config, token, signal);
+    const remote = await observe(config, token, signal, deadlineMs);
     const observedAt = new Date().toISOString();
     if (available) available(observedAt);
     else await publishStatus(config, 'available', observedAt);
@@ -83,12 +83,12 @@ export async function observeHostedPause(config, token, signal, { available } = 
 }
 // Recall can coalesce successful diagnostics after its fetch/decision. Privacy
 // barriers stay inside observe(), and failures are always published immediately.
-export function deferHostedPauseStatus(config, token, signal) {
+export function deferHostedPauseStatus(config, token, signal, { deadlineMs } = {}) {
   let pending;
   return {
     async observe() {
       try {
-        return await observeHostedPause(config, token, signal, { available: at => { pending = at; } });
+        return await observeHostedPause(config, token, signal, { available: at => { pending = at; }, deadlineMs });
       } catch (error) { pending = undefined; throw error; }
     },
     async publish() {
@@ -131,19 +131,26 @@ async function rotateUnderGate(config) {
   await withHostStateFile(join(config.root, 'control.json'), () => rotateAutomaticBoundary(config.root));
   await privateWrite(rotatedPath(config.root), pending, { hostParent: true });
 }
-export async function completeHostedPauseRotation(config) {
+export async function completeHostedPauseRotation(config, { signal, deadlineMs } = {}) {
   if (!hostedPauseMode(config).barrier) return;
   if (!await pendingRotation(config.root) && !(await pendingMarkers(config)).length) return;
   await stateLock(gatePath(config), async () => {
     await replayPendingUnderGate(config);
     await rotateUnderGate(config);
-  }, { hostParent: true });
+  }, { hostParent: true, signal, ...gateWait(deadlineMs) });
   if (await pendingRotation(config.root)) throw new Error('pause_unavailable');
 }
 
 // Admission and authoritative publication share the filesystem gate. The
 // admission deadline bounds entry cooperatively, not OS suspension or disk IO.
 const GATE_WINDOW_MS = 250;
+// Callers share their monotonic deadline across setup, acquisition and the final
+// start/write guard. Consumers without a budget retain the bounded default.
+function gateWait(deadlineMs) {
+  return deadlineMs === undefined ? {} : {
+    timeoutMs: Math.max(0, deadlineMs - performance.now()), deadlineMs,
+  };
+}
 // Capability is selected once for each config, never from a lock failure.
 // Tests inject the platform without changing the host or its lock semantics.
 const modes = new WeakMap(), volatileStates = new Map();
@@ -258,10 +265,12 @@ async function writeOnce(path, bytes) {
 // Re-read the durable intent at the decision boundary, including after local
 // control-lock waits. Callers pass check to the local gate as its guard. Work
 // only starts a request (returns its promise in an object) or emits output.
-export async function withHostedPauseGate(config, generation, work, { signal, deadlineMs = Infinity, observation } = {}) {
+export async function withHostedPauseGate(config, generation, work, { signal, deadlineMs = performance.now() + GATE_WINDOW_MS, observation } = {}) {
   signal?.throwIfAborted();
   if (!hostedPauseMode(config).barrier) {
     const check = () => {
+      signal?.throwIfAborted();
+      if (performance.now() >= deadlineMs) throw new Error('pause_unavailable');
       const state = volatileState(config);
       if (!state.valid || state.previous?.paused || state.previous?.generation !== generation ||
           (observation !== undefined && state.previous !== observation))
@@ -285,7 +294,7 @@ export async function withHostedPauseGate(config, generation, work, { signal, de
   };
   return stateLock(gatePath(config), async () => {
     await replayPendingUnderGate(config);
-    const deadline = Math.min(performance.now() + GATE_WINDOW_MS, deadlineMs);
+    const deadline = deadlineMs;
     check.beforeStart = () => {
       // A marker written during this holder's async checks denies admission.
       // A marker arriving after this read cannot commit until we release the
@@ -312,9 +321,9 @@ export async function withHostedPauseGate(config, generation, work, { signal, de
     };
     await check();
     return work(check);
-  }, { signal, hostParent: true });
+  }, { signal, hostParent: true, ...gateWait(deadlineMs) });
 }
-async function observe(config, token, signal) {
+async function observe(config, token, signal, deadlineMs) {
   signal?.throwIfAborted();
   const response = await fetch(config.endpoint + '/api/memory/pause-state', {
     headers: { authorization: `Bearer ${token}`, 'cache-control': 'no-store' },
@@ -347,14 +356,14 @@ async function observe(config, token, signal) {
     ? remote.generation > 0 || remote.paused
     : remote.generation !== previous.generation || remote.paused !== previous.paused;
   let entered = false;
-  const publish = waitSignal => stateLock(gatePath(config), async () => {
+  const publish = (waitSignal, waitDeadline) => stateLock(gatePath(config), async () => {
     entered = true;
     await replayPendingUnderGate(config);
     return commitUnderGate(config, remote);
-  }, { signal: waitSignal, hostParent: true });
+  }, { signal: waitSignal, hostParent: true, ...gateWait(waitDeadline) });
   // Finish this first bounded attempt even if the caller aborts: a validated
   // changed observation must either commit under the gate or leave its marker.
-  try { return await publish(); }
+  try { return await publish(changed ? undefined : signal, changed ? undefined : deadlineMs); }
   catch (error) {
     // A failed publication is not an acquisition timeout. Never publish any
     // authoritative record outside the gate, including the failure path.
@@ -368,8 +377,11 @@ async function observe(config, token, signal) {
     // retained for the next holder; no network retry is needed to replay it.
     for (;;) {
       signal?.throwIfAborted();
+      if (performance.now() >= deadlineMs) throw new Error('pause_unavailable');
       entered = false;
-      try { return await publish(signal); }
+      // Keep the short retry/marker protocol, but never reset the caller's cap.
+      try { return await publish(signal, deadlineMs === undefined ? undefined :
+        Math.min(deadlineMs, performance.now() + GATE_WINDOW_MS)); }
       catch (retry) { if (entered || retry.message !== 'state_busy') throw retry; }
     }
   }

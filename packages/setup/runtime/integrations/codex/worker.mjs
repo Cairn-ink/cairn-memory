@@ -83,7 +83,8 @@ async function prepared(binding, options, action) {
   await checkedPath(root, { directory: true });
   // Hosted cursor adoption uses the root's repaired generation on every target.
   // Stub/local workers retain their released behavior and do not read hosted state.
-  if (options.hosted) await completeHostedPauseRotation({ root });
+  if (options.hosted) await completeHostedPauseRotation({ root },
+    { signal: options.signal, deadlineMs: options.deadlineMs });
   const cp = cursorPath(root, targetId, sessionId);
   return stateLock(
     cp.replace(/\.json$/, ".lock"),
@@ -433,8 +434,9 @@ export async function runWorker(
   )
     throw new Error("invalid_worker_deadline");
   const started = now();
+  const deadlineMs = Math.min(options.deadlineMs ?? Infinity, performance.now() + overallMs);
   let lastCapture;
-  const result = await prepared(binding, { ...options, hosted: mode === 'hosted' }, async ({ s, save, batches, records, bytes, stat, digest }) => {
+  const result = await prepared(binding, { ...options, deadlineMs, hosted: mode === 'hosted' }, async ({ s, save, batches, records, bytes, stat, digest }) => {
     if (s.quotaRefusal && !s.quotaRefusal.latched) {
       try {
         const latch = await guard.refuse({ resetAt: s.quotaRefusal.resetAt });
@@ -519,6 +521,7 @@ export async function runWorker(
             startIfArmed(binding.root, s.generation, s.arm, () => {
               if (now() - started + requestMs > overallMs) throw new Error("deadline");
               began = true;
+              const requestDeadlineMs = Math.min(deadlineMs, performance.now() + requestMs);
               const timeout = new Promise((_, reject) => {
                 timer = setTimeout(() => {
                   abort.abort();
@@ -539,7 +542,7 @@ export async function runWorker(
                 sent_at: new Date(now()).toISOString(),
               };
               return Promise.race([transport.capture(body, { signal: abort.signal,
-                ...(mode === 'hosted' ? { generation: s.generation } : {}) }), timeout]);
+                ...(mode === 'hosted' ? { generation: s.generation, deadlineMs: requestDeadlineMs } : {}) }), timeout]);
             }),
           );
           if (!gate.ok) {

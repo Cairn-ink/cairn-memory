@@ -13,21 +13,22 @@ export function installedTransport(config, token, expectedRemoteGeneration) {
   let inFlight = 0;
   return {
     terminated: () => inFlight === 0,
-    async capture(body, { signal, generation }) {
+    async capture(body, { signal, generation, deadlineMs = performance.now() + 25000 }) {
       inFlight++;
       try {
-        const remote = await observeHostedPause(config, token, signal);
+        const remote = await observeHostedPause(config, token, signal, { deadlineMs });
         if (remote.paused || remote.generation !== expectedRemoteGeneration) {
           return { status: 'processing', eventId: body.event_id };
         }
         const local = await readControlState(config.root);
         const dispatch = async start => {
           // Quota-lock waits must not bypass the local pause/generation barrier.
-          const current = await observeHostedPause(config, token, signal);
+          const current = await observeHostedPause(config, token, signal, { deadlineMs });
           if (current.paused || current.generation !== expectedRemoteGeneration) throw new Error('dispatch_not_started');
           const active = await withHostedPauseGate(config, expectedRemoteGeneration,
             // A repaired root generation cannot authorize an older frozen body.
-            guard => startIfActive(config.root, generation ?? local.generation, start, { signal, guard }));
+            guard => startIfActive(config.root, generation ?? local.generation, start, { signal, guard }),
+            { signal, deadlineMs });
           if (!active.started) throw new Error('dispatch_not_started');
           return active.operation;
         };
@@ -48,8 +49,9 @@ export function installedTransport(config, token, expectedRemoteGeneration) {
 
 // `enabled` is the prompt-recall kill switch reader; it is required and is read
 // again as the last step, so switching off during an in-flight recall injects nothing.
-export async function recallContext(input, config, token, projectId, signal, enabled, afterRecall = async () => {}, deliver, { deadlineMs } = {}) {
-  const observation = deferHostedPauseStatus(config, token, signal);
+export async function recallContext(input, config, token, projectId, signal, enabled, afterRecall = async () => {}, deliver,
+  { deadlineMs = performance.now() + 3000 } = {}) {
+  const observation = deferHostedPauseStatus(config, token, signal, { deadlineMs });
   let remote, local, result;
   try {
     const query = prepareRecallQuery(input.prompt);
@@ -62,7 +64,8 @@ export async function recallContext(input, config, token, projectId, signal, ena
       const current = await observation.observe();
       if (current.paused || current.generation !== remote.generation) throw new Error('dispatch_not_started');
       const result = await withHostedPauseGate(config, remote.generation,
-        guard => startIfActive(config.root, local.generation, start, { signal, guard }));
+        guard => startIfActive(config.root, local.generation, start, { signal, guard }),
+        { signal, deadlineMs });
       if (!result.started) throw new Error('dispatch_not_started');
       return result.operation;
     };
@@ -88,7 +91,7 @@ export async function recallContext(input, config, token, projectId, signal, ena
     if (!signal.aborted) output = JSON.stringify({ hookSpecificOutput: {
       hookEventName: 'UserPromptSubmit', additionalContext: context,
     } });
-  }, { signal, guard }));
+  }, { signal, guard }), { signal, deadlineMs });
   if (!output || signal.aborted || await enabled() !== true || signal.aborted) return '';
   // The switch read is asynchronous: pause/generation or cancellation may change
   // during it. Re-check both under the control lock; nothing awaits after this.
@@ -97,6 +100,6 @@ export async function recallContext(input, config, token, projectId, signal, ena
       // Installed entry supplies synchronous delivery: lock cleanup and returned
       // values must never separate authorization from the actual stdout write.
       if (deliver) deliver(output);
-    }, { signal, guard })) || signal.aborted) return '';
+    }, { signal, guard }), { signal, deadlineMs }) || signal.aborted) return '';
   return deliver ? '' : output;
 }

@@ -109,10 +109,11 @@ async function reapDeadOwner(path, owner, processIsAlive, context, read, signal,
 export async function withFileLock(
   path,
   work,
-  { tryOnly = false, timeoutMs = 30_000, pollMs = 100, context, validateOwner = async () => {},
+  { tryOnly = false, timeoutMs = 30_000, deadlineMs = Infinity, pollMs = 100, context, validateOwner = async () => {},
     isAlive = processIsAlive, validatePath = async () => {}, read = readFile, signal } = {},
 ) {
   signal?.throwIfAborted();
+  if (performance.now() >= deadlineMs) return false;
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const token = randomUUID();
   const owner = { pid: process.pid, token, ...context };
@@ -122,9 +123,9 @@ export async function withFileLock(
     signal?.throwIfAborted();
     await writeFile(ownerPath, JSON.stringify(owner), { mode: 0o600, flag: 'wx' });
     ownerCreated = true;
-    // Preserve the existing acquisition window after owner publication. A caller's
-    // independent signal still cancels setup and is checked before acquisition.
-    const deadline = performance.now() + timeoutMs;
+    // The absolute caller deadline includes setup. Existing callers without one
+    // retain their acquisition window after owner publication.
+    const deadline = Math.min(performance.now() + timeoutMs, deadlineMs);
     while (!acquired && (tryOnly || performance.now() < deadline)) {
       signal?.throwIfAborted();
       try {
@@ -142,7 +143,7 @@ export async function withFileLock(
       }
     }
     signal?.throwIfAborted();
-    if (!acquired) return false;
+    if (!acquired || performance.now() >= deadlineMs) return false;
     await work();
     return true;
   } finally {

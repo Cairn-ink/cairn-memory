@@ -28,7 +28,7 @@ export async function checkStateLock(path, { liveness, hostParent = false, signa
   return live;
 }
 
-export async function stateLock(path, work, { liveness, timeoutMs = 250, signal, hostParent = false } = {}) {
+export async function stateLock(path, work, { liveness, timeoutMs = 250, deadlineMs = Infinity, signal, hostParent = false } = {}) {
   signal?.throwIfAborted();
   const live = liveness ?? await localLiveness();
   ownerAlive({ pid: process.pid, namespace: live.namespace, boot: live.boot }, live);
@@ -36,7 +36,7 @@ export async function stateLock(path, work, { liveness, timeoutMs = 250, signal,
   await checkedPath(path, { missing: true });
   let value;
   const acquired = await withFileLock(path, async () => { value = await work(live); }, {
-    timeoutMs, pollMs: 10, signal, context: { namespace: live.namespace, boot: live.boot },
+    timeoutMs, deadlineMs, pollMs: 10, signal, context: { namespace: live.namespace, boot: live.boot },
     isAlive: (_pid, owner) => ownerAlive(owner, live),
     validateOwner: async owner => { ownerAlive(owner, live); },
     validatePath: p => checkedPath(p, { missing: true }),

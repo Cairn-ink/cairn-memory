@@ -154,6 +154,9 @@ async function telemetry(event) {
 // Recheck the existing local barrier after asynchronous quota-state work.
 // The network start itself stays synchronous under the control lock.
 async function dispatchActive(generation, start, signal, hosted) {
+  const admissionDeadline = action === 'recall'
+    ? recallEnd - OUTPUT_WRITE_MARGIN_MS : hosted?.deadlineMs;
+  const admissionSignal = signal ?? hosted?.signal;
   if (hosted) {
     const current = await hosted.observe();
     if (current.paused || (hosted.generation !== undefined && current.generation !== hosted.generation)) throw new Error("dispatch_not_started");
@@ -190,9 +193,10 @@ async function dispatchActive(generation, start, signal, hosted) {
       else await publish();
       throw error;
     });
-  }, { signal, guard });
+  }, { signal: admissionSignal, guard });
   const dispatch = hosted
-    ? await withHostedPauseGate(hostedConfig, hosted.generation, startLocal)
+    ? await withHostedPauseGate(hostedConfig, hosted.generation, startLocal,
+        { signal: admissionSignal, deadlineMs: admissionDeadline })
     : await startLocal();
   if (!dispatch.started) throw new Error("dispatch_not_started");
   return dispatch.operation;
@@ -205,7 +209,8 @@ async function recall(hookInput) {
   if (query === undefined) return;
   let hosted;
   if (hostedConfig) {
-    recallObservation = deferHostedPauseStatus(hostedConfig, token, recallSignal);
+    recallObservation = deferHostedPauseStatus(hostedConfig, token, recallSignal,
+      { deadlineMs: recallEnd - OUTPUT_WRITE_MARGIN_MS });
     // Resolution and quota work must finish before the dispatch observation.
     hosted = { observe: () => recallObservation.observe() };
   }
@@ -413,6 +418,7 @@ async function writePortableFirstPrompt(path, state, guard) {
 const FIRST_PROMPT_MARGIN_MS = 10 * 60 * 1000;
 // Internal test copies lower this cap while retaining the legacy batch layout.
 const CAPTURE_WINDOW_SLICES = 4096;
+const HOSTED_CAPTURE_BUDGET_MS = 25_000;
 
 // Skip only a leading copied prefix, not older timestamps later in a new turn.
 function copiedPrefix(bytes, firstPromptAt) {
@@ -440,12 +446,17 @@ async function capture(hookInput, requestedGeneration) {
   if (!event) return;
   let hosted;
   if (hostedConfig) {
-    const observe = () => observeHostedPause(hostedConfig, token, AbortSignal.timeout(25_000));
+    // Share the existing capture duration across all hosted gate phases/batches.
+    // A long transcript retains its frozen remainder for the next eligible hook;
+    // contention must not multiply a detached worker's lifetime by batch count.
+    const deadlineMs = performance.now() + HOSTED_CAPTURE_BUDGET_MS;
+    const signal = AbortSignal.timeout(HOSTED_CAPTURE_BUDGET_MS);
+    const observe = () => observeHostedPause(hostedConfig, token, signal, { deadlineMs });
     const remote = await observe();
     if (remote.paused) return;
-    hosted = { generation: remote.generation, observe };
+    hosted = { generation: remote.generation, observe, signal, deadlineMs };
   }
-  if (hosted) await completeHostedPauseRotation(hostedConfig);
+  if (hosted) await completeHostedPauseRotation(hostedConfig, hosted);
   const control = await readControlState(dataDir);
   if (
     control.paused ||
@@ -455,6 +466,7 @@ async function capture(hookInput, requestedGeneration) {
   const statePath = captureCursorPath(dataDir, event.session_id);
   await withFileLock(`${statePath}.lock`, () =>
     captureLocked(event, statePath, control.generation, hosted),
+    hosted ? { signal: hosted.signal, deadlineMs: hosted.deadlineMs } : undefined,
   );
 }
 
@@ -657,7 +669,7 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
         },
         sent_at: new Date().toISOString(),
       },
-      25_000, true, (start) => dispatchActive(generation, start, undefined, hosted),
+      25_000, true, (start) => dispatchActive(generation, start, hosted?.signal, hosted), hosted?.signal,
     );
     // A concurrent/recovered capture still holding its short lease returns
     // processing. Do not advance the cursor: the next hook can retry safely.
