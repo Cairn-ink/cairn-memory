@@ -418,7 +418,7 @@ async function writePortableFirstPrompt(path, state, guard) {
 const FIRST_PROMPT_MARGIN_MS = 10 * 60 * 1000;
 // Internal test copies lower this cap while retaining the legacy batch layout.
 const CAPTURE_WINDOW_SLICES = 4096;
-const HOSTED_CAPTURE_BUDGET_MS = 25_000;
+const HOSTED_CAPTURE_REQUEST_MS = 25_000;
 
 // Skip only a leading copied prefix, not older timestamps later in a new turn.
 function copiedPrefix(bytes, firstPromptAt) {
@@ -446,11 +446,10 @@ async function capture(hookInput, requestedGeneration) {
   if (!event) return;
   let hosted;
   if (hostedConfig) {
-    // Share the existing capture duration across all hosted gate phases/batches.
-    // A long transcript retains its frozen remainder for the next eligible hook;
-    // contention must not multiply a detached worker's lifetime by batch count.
-    const deadlineMs = performance.now() + HOSTED_CAPTURE_BUDGET_MS;
-    const signal = AbortSignal.timeout(HOSTED_CAPTURE_BUDGET_MS);
+    // Initial observation and rotation share the existing observation duration.
+    // Each outgoing batch below receives its own request allowance.
+    const deadlineMs = performance.now() + HOSTED_CAPTURE_REQUEST_MS;
+    const signal = AbortSignal.timeout(HOSTED_CAPTURE_REQUEST_MS);
     const observe = () => observeHostedPause(hostedConfig, token, signal, { deadlineMs });
     const remote = await observe();
     if (remote.paused) return;
@@ -466,7 +465,6 @@ async function capture(hookInput, requestedGeneration) {
   const statePath = captureCursorPath(dataDir, event.session_id);
   await withFileLock(`${statePath}.lock`, () =>
     captureLocked(event, statePath, control.generation, hosted),
-    hosted ? { signal: hosted.signal, deadlineMs: hosted.deadlineMs } : undefined,
   );
 }
 
@@ -651,6 +649,13 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
   }
   const projectId = await clientProjectId(clientOptions, hookInput.cwd, binding);
   for (const [index, { batch, messages }] of sent.entries()) {
+    // Dispatch observation, admission and send share this batch's deadline.
+    // The cursor lock retains its default acquisition limit, and successful
+    // earlier batches never consume the next batch's request allowance.
+    const deadlineMs = performance.now() + HOSTED_CAPTURE_REQUEST_MS;
+    const signal = hosted ? AbortSignal.timeout(HOSTED_CAPTURE_REQUEST_MS) : undefined;
+    const request = hosted ? { generation: hosted.generation, signal, deadlineMs,
+      observe: () => observeHostedPause(hostedConfig, token, signal, { deadlineMs }) } : undefined;
     const group = Math.floor(index / CAPTURE_WINDOW_SLICES) * CAPTURE_WINDOW_SLICES;
     const windowStart = group === 0 ? offset : sent[group].start;
     const result = await post(
@@ -669,7 +674,7 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
         },
         sent_at: new Date().toISOString(),
       },
-      25_000, true, (start) => dispatchActive(generation, start, hosted?.signal, hosted), hosted?.signal,
+      HOSTED_CAPTURE_REQUEST_MS, true, (start) => dispatchActive(generation, start, signal, request), signal,
     );
     // A concurrent/recovered capture still holding its short lease returns
     // processing. Do not advance the cursor: the next hook can retry safely.
