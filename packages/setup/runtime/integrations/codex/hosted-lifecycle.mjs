@@ -5,7 +5,7 @@ import { hash } from '../client/common-profile.mjs';
 import { renderContext } from './context.mjs';
 
 export { observeHostedPause } from '../client/hosted-pause.mjs';
-import { observeHostedPause } from '../client/hosted-pause.mjs';
+import { observeHostedPause, deferHostedPauseStatus } from '../client/hosted-pause.mjs';
 
 export function installedTransport(config, token, expectedRemoteGeneration) {
   const targetId = hostedTargetId(config);
@@ -46,25 +46,33 @@ export function installedTransport(config, token, expectedRemoteGeneration) {
 
 // `enabled` is the prompt-recall kill switch reader; it is required and is read
 // again as the last step, so switching off during an in-flight recall injects nothing.
-export async function recallContext(input, config, token, projectId, signal, enabled) {
-  const query = prepareRecallQuery(input.prompt);
-  if (typeof enabled !== 'function' || query === undefined || signal.aborted) return '';
-  const remote = await observeHostedPause(config, token, signal);
-  const local = await readControlState(config.root);
-  if (remote.paused || local.paused) return '';
-  const post = createJsonPoster({ ...config, token, targetId: hostedTargetId(config), client: 'codex' });
-  const dispatch = async start => {
-    const current = await observeHostedPause(config, token, signal);
-    if (current.paused || current.generation !== remote.generation) throw new Error('dispatch_not_started');
-    const result = await startIfActive(config.root, local.generation, start);
-    if (!result.started) throw new Error('dispatch_not_started');
-    return result.operation;
-  };
-  const result = await post.reply('/api/memory/recall', { query, project_id: projectId, limit: 6,
-    session_id: hash('wire-session-v1','codex',input.session_id) }, 2500, undefined, signal, dispatch);
-  if (result.status !== 'complete' || !result.memories.length) return '';
-  const current = await observeHostedPause(config, token, signal);
-  if (current.paused || current.generation !== remote.generation) return '';
+export async function recallContext(input, config, token, projectId, signal, enabled, afterRecall = async () => {}) {
+  const observation = deferHostedPauseStatus(config, token, signal);
+  let remote, local, result;
+  try {
+    const query = prepareRecallQuery(input.prompt);
+    if (typeof enabled !== 'function' || query === undefined || signal.aborted) return '';
+    remote = await observation.observe();
+    local = await readControlState(config.root);
+    if (remote.paused || local.paused) return '';
+    const post = createJsonPoster({ ...config, token, targetId: hostedTargetId(config), client: 'codex' });
+    const dispatch = async start => {
+      const current = await observation.observe();
+      if (current.paused || current.generation !== remote.generation) throw new Error('dispatch_not_started');
+      const result = await startIfActive(config.root, local.generation, start);
+      if (!result.started) throw new Error('dispatch_not_started');
+      return result.operation;
+    };
+    result = await post.reply('/api/memory/recall', { query, project_id: projectId, limit: 6,
+      session_id: hash('wire-session-v1','codex',input.session_id) }, 2500, undefined, signal, dispatch);
+    if (result.status !== 'complete' || !result.memories.length) return '';
+    const current = await observation.observe();
+    if (current.paused || current.generation !== remote.generation) return '';
+  } finally {
+    await observation.publish();
+    // Host evidence is diagnostic too. Finish it before the final output gates.
+    await afterRecall();
+  }
   const eligible = result.memories.filter(memory=>memory.scope==='personal' ? memory.projectId===null :
     memory.scope==='project' && memory.projectId===projectId);
   const context = renderContext(eligible,token);
