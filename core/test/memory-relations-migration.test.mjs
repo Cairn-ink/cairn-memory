@@ -93,3 +93,39 @@ test('the earlier four-label package upgrades, retaining typed edges and discard
  `,path],{encoding:'utf8',timeout:30000});
  assert.equal(refused.status,0,refused.stderr);assert.equal(refused.stdout.trim(),'unsupported_database');assert.equal(hash(path),before);
 });
+
+test('relation layouts retain the earlier base guards against unexpected future feature objects',async t=>{
+ const {openReadDatabase}=await import('../read-database.mjs');
+ for(const sql of ["CREATE TABLE AsSeTs(id TEXT) STRICT",
+  "CREATE TRIGGER ROLE_PROFILE_extra AFTER INSERT ON memories BEGIN SELECT 1; END",
+  "CREATE TABLE card_current_extra(id TEXT) STRICT"]){
+  const workspace=createTestWorkspace(t,{prefix:'relation-layout-guard-'}),path=join(workspace.path,'store.sqlite');
+  const core=openMemoryCore({path,rawConversations:{mode:'off',readPolicy:()=>({generation:'synthetic',reason:null})}});await core.close();
+  const db=new DatabaseSync(path),storeId=db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get().store_id;
+  workspace.defer(()=>{if(db.isOpen)db.close();});
+  db.exec(sql);const before=db.prepare('SELECT * FROM sqlite_schema ORDER BY name').all();
+  for(const options of [{},{existingStore:{version:'schema29-existing-v1',storeId}}]){
+   assert.throws(()=>openMemoryCore({path,...options}),{code:'unsupported_database'});
+   assert.deepEqual(db.prepare('SELECT * FROM sqlite_schema ORDER BY name').all(),before);
+  }
+  assert.throws(()=>openReadDatabase(path),{code:'unsupported_database'});
+  assert.deepEqual(db.prepare('SELECT * FROM sqlite_schema ORDER BY name').all(),before);db.close();
+ }
+});
+
+test('relation layouts retain exact owned feature definitions when reopened',async t=>{
+ const {assetHost}=await import('../testing/asset-fixtures.mjs');
+ const {openReadDatabase}=await import('../read-database.mjs');
+ const workspace=createTestWorkspace(t,{prefix:'relation-owned-guard-'}),path=join(workspace.path,'store.sqlite');
+ const core=openMemoryCore({path,assets:assetHost().options});await core.close();
+ const db=new DatabaseSync(path);workspace.defer(()=>{if(db.isOpen)db.close();});
+ const storeId=db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get().store_id;
+ db.exec('DROP TRIGGER asset_no_replace; CREATE TRIGGER asset_no_replace BEFORE INSERT ON assets BEGIN SELECT 1; END;');
+ const before=db.prepare('SELECT * FROM sqlite_schema ORDER BY name').all();
+ for(const options of [{},{assets:assetHost().options},{existingStore:{version:'schema31-existing-v1',storeId}}]){
+  assert.throws(()=>openMemoryCore({path,...options}),{code:'unsupported_database'});
+  assert.deepEqual(db.prepare('SELECT * FROM sqlite_schema ORDER BY name').all(),before);
+ }
+ assert.throws(()=>openReadDatabase(path),{code:'unsupported_database'});
+ assert.deepEqual(db.prepare('SELECT * FROM sqlite_schema ORDER BY name').all(),before);
+});

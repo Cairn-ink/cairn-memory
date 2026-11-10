@@ -58,7 +58,7 @@ export function createBudgetedFetch({ budgetUsd, maxRequests = 40,
           options.body.length > 100000) throw 0;
       payload = JSON.parse(options.body);
       method = payload.text?.format?.name?.replace(/^cairn_/, '');
-      if (!Object.hasOwn(schemas, method)) throw 0;
+      if (!Object.hasOwn(schemas, method) && method !== 'relateMemories') throw 0;
       selected = profile[method];
       const keys = ['model', 'instructions', 'input', 'text', 'truncation'];
       if (selected.reasoning) keys.push('reasoning');

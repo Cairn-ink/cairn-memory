@@ -499,6 +499,12 @@ export function openDatabase(path, options = {}) {
       let layout = attestContentSafety(db);
       if(layout.relationsRevision===1){installMemoryRelations(db);layout=attestContentSafety(db);}
       if (layout.relationsRevision) {
+        if (layout.base < 33) assertNoCardCurrentDependencies(db);
+        if (layout.base < 32) assertNoRoleProfiles(db);
+        if (layout.base < 31) assertNoAssets(db);
+        if (!layout.suppressionRevision && layout.base >= 30) validateExistingStore(db, {
+          storeId: db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id,
+        }, layout);
         let altered=false;
         if(!layout.suppressionRevision){
           const upgradedOffset=layout.relationsRevision*100;
