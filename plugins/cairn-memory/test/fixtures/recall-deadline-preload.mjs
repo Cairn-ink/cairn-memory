@@ -36,10 +36,15 @@ globalThis.setTimeout = function (callback, milliseconds, ...args) {
   return originalTimeout(callback, milliseconds, ...args);
 };
 const originalLink = fsPromises.link;
-let contentionObserved = false;
+let contentionObserved = false, rootContentionObserved = false;
 fsPromises.link = async function (source, target) {
   try { return await originalLink(source, target); }
   catch (error) {
+    if (!rootContentionObserved && error.code === 'EEXIST' &&
+        String(target) === `${process.env.CLAUDE_PLUGIN_DATA}/hosted-pause.gate`) {
+      rootContentionObserved = true;
+      notify('root-gate-contended');
+    }
     if (!contentionObserved && error.code === 'EEXIST' &&
         String(target).startsWith(`${process.env.CLAUDE_PLUGIN_DATA}/hosted-quota/`) &&
         String(target).endsWith('.json.lock')) {

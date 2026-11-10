@@ -44,7 +44,7 @@ async function goldenControlTimeout(plugin) {
   await writeFile(path, source.replaceAll("timeoutMs: 250,", "timeoutMs: 30_000,"));
 
 }
-export async function observeStandalone(plugin) {
+export async function observeStandalone(plugin, { modes } = {}) {
   await goldenControlTimeout(plugin);
   const candidate = !(await readFile(join(plugin, "lib/version.mjs"), "utf8")).includes("0.1.1");
   const workspace = createTestWorkspace(null, { prefix: "cx2-golden-" });
@@ -95,7 +95,7 @@ export async function observeStandalone(plugin) {
       "concurrent-darwin",
       "concurrent-win32",
     ];
-    for (const mode of environments) {
+    for (const mode of environments.filter(mode => !modes || modes.includes(mode))) {
       for (const entry of ["hook", "launch-capture"]) {
         const directory = join(workspace.path, `${mode}-${entry}`);
         await mkdir(directory);
