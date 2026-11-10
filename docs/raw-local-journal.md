@@ -110,9 +110,10 @@ catches up on a later hook after preparation finishes. A final delete that
 changes the namespace epoch during another session's capture is retried; it
 does not permanently stop that session from saving. Same-namespace Memory
 writes can cause the same race. Core `captureRaw` makes at most four total
-attempts with fresh checks; persistent epoch-only contention returns retryable
-`storage_busy` so the host can defer the batch. Other conflicts retain their
-existing refusal behavior.
+attempts with fresh checks within one shared capture deadline. If epoch-only
+contention persists or leaves too little time for another attempt, capture returns
+retryable `storage_busy` so the host can defer the batch. Other deadline expiries
+remain timeouts. Other conflicts retain their existing refusal behavior.
 
 With no concurrent captures, one synthetic 10,008-message conversation took
 80 CLI passes and about 25 seconds to delete on a busy machine (one run on

@@ -21,11 +21,28 @@ class RawEpochConflict extends MemoryStoreError {
 // Short contention bursts retry in-call; persistent churn defers to the host.
 const RAW_EPOCH_ATTEMPTS = 4;
 export const isRawEpochConflict = error => error instanceof RawEpochConflict;
-export async function retryRawEpochConflict(work) {
+export async function retryRawEpochConflict(work, { deadline } = {}) {
+  let epochFailed = false;
   for (let attempt = 0; ; attempt++) {
-    try { return await work(); }
+    let before;
+    try { before = deadline?.remainingMs(120_000); return await work(); }
     catch (error) {
+      // Only a shared-budget expiry following an epoch refusal is contention.
+      // Other timeouts retain their original outcome and provenance.
+      if (epochFailed && error.code === 'model_timeout' && deadline?.expired()) throw new MemoryStoreError('storage_busy');
       if (!isRawEpochConflict(error)) throw error;
+      epochFailed = true;
+      // Leave a full observed attempt's runway before starting another one.
+      // Synchronous preparation can otherwise overrun a local process watchdog.
+      if (deadline) {
+        let remaining;
+        try { remaining = deadline.remainingMs(120_000); }
+        catch (timeout) {
+          if (timeout.code === 'model_timeout') throw new MemoryStoreError('storage_busy');
+          throw timeout;
+        }
+        if (remaining <= before - remaining) throw new MemoryStoreError('storage_busy');
+      }
       if (attempt + 1 === RAW_EPOCH_ATTEMPTS) throw new MemoryStoreError('storage_busy');
     }
   }

@@ -33,7 +33,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
   const binding = input => db.prepare(`SELECT * FROM raw_capture_events WHERE ${where}`).get(...key(input));
   const rawEvent = input => db.prepare(`SELECT result FROM raw_events WHERE ${where}`).get(...key(input));
 
-  async function prepare(request, ordinary = false, ordinaryOrder, unknownMessageIds = [], arrivalToken = {}) {
+  async function prepare(request, ordinary = false, ordinaryOrder, unknownMessageIds = [], arrivalToken = {}, deadline) {
     const managed = options.localAuthority;
     if (managed) {
       request = managedRequest(request, Boolean(profile.sessionEpisodes));
@@ -95,7 +95,9 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     const generation = db.prepare('SELECT generation FROM episode_controls WHERE owner_id=? AND scope=? AND project_id=?')
       .get(...rawBoundary(input.namespace))?.generation ?? 'initial';
     if (profile.sessionEpisodes && context.episodeContext.generation !== generation) fail('generation_conflict');
+    deadline?.check();
     const token = await journal.prepareRegistration(input);
+    deadline?.check();
     if (managed) authority.check(managed,input.namespace,input.client);
     // A same-event winner may have committed while sealing awaited. Select
     // observation before any model preflight; commit still checks atomically.
@@ -138,6 +140,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
             : { status: 'not-run', reason: 'no-eligible-first-part' };
     }
 
+    const checkDeadline = () => { if (!arrivalInputs.get(arrivalToken)?.decided) deadline?.check(); };
     let epochConflict;
     function assertEpochCurrent() { if (epochConflict) throw epochConflict; }
     function commit() {
@@ -147,12 +150,15 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       // before surfacing the refusal, so no rollback-to-fence crash gap exists.
       const closed = privacy?.fenceArrivalInside(input.namespace, input.client, sessionKey, rangeMessages);
       if (closed) { arrivalInputs.get(arrivalToken).decided = true; return { closed }; }
+      checkDeadline();
       if (managed) authority.check(managed,input.namespace,input.client);
       privacy?.assertModeInside(input.namespace, input.client, sessionKey, hostInterpretation ? 'host' : 'engine', true);
       privacy?.recordRangeInside(input.namespace, input.client, sessionKey, rangeMessages);
       let result;
+      checkDeadline();
       try { result = journal.commitRegistration(token); }
       catch (error) { if (isRawEpochConflict(error)) epochConflict = error; throw error; }
+      checkDeadline();
       const existing = binding(input);
       if (existing) {
         if (existing.binding_digest !== bindingDigest || existing.projection_digest !== projectionDigest) fail('event_payload_conflict');
@@ -215,18 +221,18 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
         if (committed.closed) return committed;
         if (!committed.observation) fail('invalid_input');
         return committed.observation;
-      });
+      }, checkDeadline);
       if (result?.closed) fail(result.closed);
       if (result) accepted = true;
       return result;
     }
     return Object.freeze({ localPrivacy: Boolean(privacy), input: projection, hasProjection: Boolean(snapshot), replay,
-      emptyOutcome, commit, observeReplay, assertEpochCurrent,
+      emptyOutcome, commit, observeReplay, assertEpochCurrent, checkDeadline,
       // A winner can commit even during a failing model preflight. Only an
       // unaccepted attempt may observe that winner; it never acquires work.
       observeFailedInterpretation: () => !accepted && snapshot ? observeReplay(true) : null,
       accept: () => { accepted = true; },
-      commitOnly: () => { const result = transaction(db, commit); if (result.closed) fail(result.closed); accepted = true; return result; },
+      commitOnly: () => { const result = transaction(db, commit, checkDeadline); if (result.closed) fail(result.closed); accepted = true; return result; },
       result: () => { const row = accepted && rawEvent(input); return row ? JSON.parse(row.result) : null; },
       setStaging: staging => db.prepare(`UPDATE raw_capture_events SET staging=? WHERE ${where}`).run(staging, ...key(input)),
     });
@@ -250,7 +256,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     if (input && !input.decided) privacy.fenceArrival(input.namespace, input.client,
       journal.sessionKey(input.namespace, input.client, input.sessionId), input.messages);
   }
-  async function prepareCapture(request, arrivalToken = {}) {
+  async function prepareCapture(request, arrivalToken = {}, deadline) {
     // Validate and detach before any asynchronous sealing or model work.
     object(request, ['namespace','client','sessionId','eventId','messages',
       ...(profile.sessionEpisodes ? ['episodeContext'] : ['causal'])]);
@@ -276,7 +282,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       eventId: snapshot.eventId, messages: messages.sort((a,b) => a.messageOrdinal - b.messageOrdinal), ...(snapshot.causal ? { causal: snapshot.causal } : {}),
       ...(profile.sessionEpisodes ? { episodeContext: structuredClone(request.episodeContext) } : {}) };
     const unknown = snapshot.messages.filter((message, index) => request.messages[index].occurredAt == null).map(message => message.id);
-    return prepare(rawRequest, true, snapshot.messages.map(message => message.id), unknown, arrivalToken);
+    return prepare(rawRequest, true, snapshot.messages.map(message => message.id), unknown, arrivalToken, deadline);
   }
   return Object.freeze({ ...journal, prepare, prepareCapture, fenceSession, fenceArrival,
     ...(authority ? { getLocalCaptureControl: authority.get, setLocalCaptureControl: authority.set } : {}) });

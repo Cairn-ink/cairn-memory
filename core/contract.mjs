@@ -1041,9 +1041,9 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  async function capture(input, keepInput, rawRegistration) {
+  async function capture(input, keepInput, rawRegistration, sharedDeadline) {
     try {
-      let deadline = sessionEpisodes || captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs);
+      let deadline = sharedDeadline ?? (sessionEpisodes || captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs));
       runtime.ready();
       if (!keepInput) object(input, ['namespace', 'client', 'eventId', 'sessionId', 'messages', ...(sessionEpisodes ? ['episodeContext'] : ['causal'])]);
       const ns = contractNamespace(input.namespace);
@@ -1052,7 +1052,7 @@ export function createMemoryCore(input, internal) {
       if ((captureEvidence || evidenceOnly) && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
       return success(await (keepInput ? keepEpisodeCapture : sessionEpisodes ? captureEpisodeMessages : captureMessages)({ model, captureQualification, captureSourcePolicy,
         runtime, ns, sessionEpisodes, keepInput, rawRegistration,
-        startAdmission: () => (deadline = captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs)),
+        startAdmission: () => (deadline = sharedDeadline ?? (captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs))),
         captureRationale, captureEvidence,
         deadline, input: { ...input, namespace },
         operations: { filterCaptureSources: sources => runtime.filterCaptureSources(ns, sources),
@@ -1302,7 +1302,7 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  internal?.attachCapture?.((input, registration) => capture(input, undefined, registration));
+  internal?.attachCapture?.((input, registration, deadline) => capture(input, undefined, registration, deadline));
   const contentReads = new Set(['get','list','map','fetch','recall','sourceSnapshot','getEpisode','listEpisodes','listMemoriesByTime',
     'sessionStartContext','getRationale','inspectAdmission','inspectCaptureEvidence','listReviewTransitions','listReviewConflicts']);
   return contentSafetyFacade({
