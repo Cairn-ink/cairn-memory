@@ -15,9 +15,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { config, ns as keepNamespace, request, splitRaw } from '../testing/raw-capture-fixtures.mjs';
 import { consumer, empty, episodeInput, legacyKeep } from '../testing/raw-deletion-review-fixtures.mjs';
 import { interpretation } from '../testing/episode-capture-helpers.mjs';
-import { searchFixture } from '../testing/raw-search-fixtures.mjs';
-import { installRawSearchTestClock } from '../testing/raw-search-clock.mjs';
-import { defaultRawOptions } from '../local-defaults.mjs';
+import { installRawSearchTestClock, rawSearchTestWait } from '../testing/raw-search-clock.mjs';
 import { createLocalUuidFence } from '../local-authority-uuid.mjs';
 
 const start = Date.parse('2020-01-01T00:00:00.000Z');
@@ -458,9 +456,9 @@ for (const path of ['conversation', 'episode']) test(`old finite other-root KEEP
   }
   assert.equal(createLocalUuidFence(current).matches(internal, client, [{ id: 'target-message' }]), false);
   assert.equal(current.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n, 0);
-  const search = await searchFixture({ ...f, db: current, port: defaultRawOptions().port });
-  const maintained = await search.maintain();
-  const found = await search.search({ query: 'later', intent: 'history' });
+  await rawSearchTestWait(1010);
+  const maintained = ok(await core.maintainRawSearch({ namespace }));
+  const found = ok(await core.searchRaw({ namespace, query: 'later', intent: 'history' }));
   assert.ok(found.candidates.some(hit => hit.conversationId === target.id), JSON.stringify({ maintained, found, raw }));
   ok(await core.captureRaw(request(splitRaw('Synthetic later continuation.', { id: 'after-refusal', ordinal: 3 })[0],
     { namespace, client, sessionId: 'target', eventId: 'after-refusal-raw' }, 'episode')));
