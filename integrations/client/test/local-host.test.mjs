@@ -2,7 +2,9 @@ import './fixtures/local-host-observer.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, readFileSync, writeFileSync, unlinkSync, renameSync, mkdirSync, symlinkSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 const { hostFixture } = await import('./fixtures/local-host-workspace.mjs');
 const { createLocalRawHost, withLocalHostDependencies } = await import('../raw/local-host.mjs');
 import { withWriteObserver } from '../private-state.mjs';
@@ -182,16 +184,42 @@ for(const failure of [false,true])test(`local updated Codex schedules once, neve
   await finishQualification(f.profile.installation.qualificationConfigPath,host);
 });
 
-for(const unsafe of ['writable','directory','foreign'])test(`unsafe local Codex ${unsafe} never launches and status explains rerun setup`,async t=>{
+for(const unsafe of ['writable','directory'])test(`unsafe local Codex ${unsafe} never launches and status explains rerun setup`,async t=>{
   const f=await hostFixture(t,{client:'codex'});await f.call('prepare');
   const {localCodexQualificationStatus}=await import('../raw/local-codex-qualification.mjs');
   if(unsafe==='writable')chmodSync(f.binary,0o720);
   if(unsafe==='directory'){unlinkSync(f.binary);mkdirSync(f.binary,{mode:0o700});}
-  const fs=await import('node:fs'),{syncBuiltinESMExports}=await import('node:module'),original=fs.promises.stat;
-  if(unsafe==='foreign'){fs.promises.stat=async(path,...args)=>{const value=await original(path,...args);if(path===f.binary)value.uid=process.getuid()+1;return value;};syncBuiltinESMExports();}
-  let launched=0,result;
-  try {result=await f.call('initialize',undefined,{launchQualification:async()=>{launched++;}});}
-  finally {fs.promises.stat=original;syncBuiltinESMExports();}
+  let launched=0;
+  const result=await f.call('initialize',undefined,{launchQualification:async()=>{launched++;}});
   assert.equal(result.status,'blocked');assert.equal(launched,0);
   const status=await localCodexQualificationStatus(f.profile.installation.qualificationConfigPath);assert.equal(status.status,'failed');assert.equal(status.reason,'unsafe_binary');assert.match(status.message,/rerun setup/);
+});
+
+// Install the callback-stat fault before the module captures its promisified API.
+test('unsafe local Codex foreign never launches and status explains rerun setup',async t=>{
+  const workspace=createTestWorkspace(t,{prefix:'foreign-binary-guard-'});
+  const fixture=new URL('./fixtures/local-host-workspace.mjs',import.meta.url).href;
+  const qualification=new URL('../raw/local-codex-qualification.mjs',import.meta.url).href;
+  const source=`import assert from 'node:assert/strict';import fs from 'node:fs';import {syncBuiltinESMExports} from 'node:module';
+let binary,checks=0;const original=fs.stat;
+fs.stat=function(path,...args){const callback=args.pop();return original.call(this,path,...args,(error,value)=>{
+  if(!error&&path===binary){value.uid=process.getuid()+1;checks++;}callback(error,value);
+});};syncBuiltinESMExports();
+const {hostFixture}=await import(${JSON.stringify(fixture)});
+const {localCodexQualificationStatus}=await import(${JSON.stringify(qualification)});
+const f=await hostFixture(null,{client:'codex'});
+try{
+  binary=f.binary;await f.call('prepare');let launched=0;
+  const result=await f.call('initialize',undefined,{launchQualification:async()=>{launched++;}});
+  assert.ok(checks>0,'the production callback-stat boundary was exercised');
+  assert.equal(result.status,'blocked');assert.equal(result.worker,null);assert.equal(launched,0);
+  const status=await localCodexQualificationStatus(f.profile.installation.qualificationConfigPath);
+  assert.equal(status.status,'failed');assert.equal(status.reason,'unsafe_binary');assert.match(status.message,/rerun setup/);
+  process.stdout.write('foreign-binary-refused');
+}finally{await f.workspace.cleanup();}`;
+  const child=spawnSync(process.execPath,['--input-type=module','-e',source],{encoding:'utf8',timeout:20000,
+    env:{NODE_TEST_CONTEXT:'child-v8',CAIRN_SYNTHETIC_FIXTURE_ROOT:workspace.path,NODE_NO_WARNINGS:'1',
+      PATH:dirname(process.execPath),HOME:workspace.path,TMPDIR:workspace.path,TMP:workspace.path,TEMP:workspace.path}});
+  assert.equal(child.error,undefined);assert.equal(child.signal,null);assert.equal(child.status,0,child.stderr);
+  assert.equal(child.stdout,'foreign-binary-refused');
 });
