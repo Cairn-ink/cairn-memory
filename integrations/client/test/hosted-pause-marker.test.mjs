@@ -55,7 +55,8 @@ for(const sink of ['request','output'])test(`cross-process publication after fin
  await publisher.event('done');
  finish.resolve();await before.operation;assert.equal(delivered,true,'earlier_operation_completed_after_commit');
  let postCommitStarts=0;
- await assert.rejects(withHostedPauseGate(b,0,guard=>startIfActive(root,local.generation,()=>{postCommitStarts++;},{guard})),/pause_unavailable/);
+ const afterCommit=await withHostedPauseGate(b,0,guard=>startIfActive(root,local.generation,()=>{postCommitStarts++;},{guard}));
+ assert.equal(afterCommit.started,false,'old_local_generation_revoked_after_commit');
  assert.equal(postCommitStarts,0,'zero_starts_after_commit');
  t.diagnostic(JSON.stringify({crash:false,pendingToCommitMs:performance.now()-pendingAt}));
  for(const child of children){assert.deepEqual(await child.done,{code:0,signal:null});assert.equal(child.stderr(),'');}
