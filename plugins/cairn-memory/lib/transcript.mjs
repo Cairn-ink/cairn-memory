@@ -1,4 +1,4 @@
-import { sourceTimestamp } from "./hosted-contract.mjs";
+import { sourceTimestamp } from "./source-time.mjs";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { redactSecrets } from "./redact.mjs";
