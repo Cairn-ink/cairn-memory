@@ -1,4 +1,4 @@
-import { deferred } from '../../../tools/testing/deferred.mjs';
+import { deferred as createDeferred } from '../../../tools/testing/deferred.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -18,7 +18,7 @@ for (const sink of ['request', 'output']) test(`intent committed after final jou
   t.mock.method(globalThis, 'fetch', async () => Response.json(remote));
   await observeHostedPause(config, 'synthetic-token');
   const local = await readControlState(root);
-  const selected = deferred(), release = deferred(), durable = deferred();
+  const selected = createDeferred(), release = createDeferred(), durable = createDeferred();
   t.after(() => release.resolve());
   const originalOpen = fs.open;
   let completionReads = 0, selectedFinal = false, gatePresent = false, publicationAttempts = 0;
@@ -75,7 +75,7 @@ for (const sink of ['request', 'output']) test(`a cross-target publication fence
   t.mock.method(globalThis, 'fetch', async url => Response.json(revoked && url.startsWith(a.endpoint + '/')
     ? { paused: true, generation: 1, enforced: true } : active));
   await observeHostedPause(a, 'synthetic-token'); await observeHostedPause(b, 'synthetic-token');
-  const entered = deferred(), release = deferred(), durable = deferred();
+  const entered = createDeferred(), release = createDeferred(), durable = createDeferred();
   let held = false, starts = 0;
   const original = fs.open;
   const mock = t.mock.method(fs, 'open', async function(path, ...args) {
@@ -120,17 +120,17 @@ for (const sink of ['request', 'output']) test(`an aged publisher fences a young
   await observeHostedPause(a, 'synthetic-token');
   await observeHostedPause(b, 'synthetic-token');
   let delivered = false;
-  const finish = deferred();
+  const finish = createDeferred();
   const before = await withHostedPauseGate(b, 0, guard => startIfActive(root, 'initial',
     () => finish.promise.then(() => { delivered = true; }), { guard }));
   assert.equal(before.started, true, 'operation_admitted_before_publication');
   let clock = 0;
   t.mock.method(performance, 'now', () => clock);
   const gate = join(root, 'hosted-pause.gate');
-  const held = deferred(), releaseOld = deferred();
-  const waiter = deferred(), releaseWaiter = deferred();
-  const selected = deferred(), releaseFinal = deferred();
-  const durable = deferred(), continuePublisher = deferred();
+  const held = createDeferred(), releaseOld = createDeferred();
+  const waiter = createDeferred(), releaseWaiter = createDeferred();
+  const selected = createDeferred(), releaseFinal = createDeferred();
+  const durable = createDeferred(), continuePublisher = createDeferred();
   let publisher, sender, hits = 0, starts = 0;
   const nativeLink = fs.link, nativeOpen = fs.open;
   const linkMock = t.mock.method(fs, 'link', async function(source, destination) {
@@ -194,7 +194,7 @@ for (const sink of ['request', 'output']) test(`a cross-process aged publisher f
   const a = { root, endpoint: 'http://127.0.0.1:1' }, b = { root, endpoint: 'http://127.0.0.1:2' };
   t.mock.method(globalThis, 'fetch', async () => Response.json({ paused: false, generation: 0, enforced: true }));
   await observeHostedPause(a, 'synthetic-token'); await observeHostedPause(b, 'synthetic-token');
-  const finish = deferred(); let delivered = false;
+  const finish = createDeferred(); let delivered = false;
   const before = await withHostedPauseGate(b, 0, guard => startIfActive(root, 'initial',
     () => finish.promise.then(() => { delivered = true; }), { guard }));
   assert.equal(before.started, true);
@@ -210,13 +210,13 @@ for (const sink of ['request', 'output']) test(`a cross-process aged publisher f
     child.on('message', message => { messages.set(message.kind, message); waiting.get(message.kind)?.resolve(message); });
     const event = kind => {
       if (messages.has(kind)) return Promise.resolve(messages.get(kind));
-      const deferred = deferred(); waiting.set(kind, deferred);
+      const deferred = createDeferred(); waiting.set(kind, deferred);
       return Promise.race([deferred.promise, done.then(() => { throw new Error('handoff_child_closed_before_' + kind); })]);
     };
     const send = (kind, time) => child.send({ kind, time });
     const result = { child, done, event, send, stderr: () => stderr }; children.push(result); return result;
   }
-  const held = deferred(), release = deferred();
+  const held = createDeferred(), release = createDeferred();
   const old = stateLock(join(root, 'hosted-pause.gate'), async () => { held.resolve(); await release.promise; });
   t.after(async () => {
     release.resolve(); finish.resolve();

@@ -1,4 +1,4 @@
-import { deferred } from '../../../../tools/testing/deferred.mjs';
+import { deferred as createDeferred } from '../../../../tools/testing/deferred.mjs';
 // Separate processes share real pause files and locks; only their clocks and
 // rendezvous are synthetic. No durable write or fsync is replaced.
 import fs from 'node:fs/promises';
@@ -18,7 +18,7 @@ process.on('message', ({ kind, time }) => {
   commands.get(kind)?.resolve();
 });
 function wait(kind) {
-  const deferred = deferred(); commands.set(kind, deferred); return deferred.promise;
+  const deferred = createDeferred(); commands.set(kind, deferred); return deferred.promise;
 }
 const notify = (kind, details = {}) => process.send({ kind, ...details });
 try {
