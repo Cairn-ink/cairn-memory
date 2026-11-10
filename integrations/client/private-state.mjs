@@ -8,6 +8,9 @@ import { randomUUID } from "node:crypto";
 
 // A deterministic test seam at durable state writes; inert outside its async scope.
 const writeObservers = new AsyncLocalStorage();
+// Restrict the host-container exception to one explicitly scoped state file.
+const hostStateFiles = new AsyncLocalStorage();
+export const withHostStateFile = (path, work) => hostStateFiles.run(path, work);
 export const withWriteObserver = (observer, work) => writeObservers.run(observer, work);
 export async function notifyWrite(path, kind = "write") {
   await writeObservers.getStore()?.({ path, kind });
@@ -47,6 +50,28 @@ export async function checkedPath(
     throw new Error("state_permissions");
   }
   return info;
+}
+
+// Plugin data roots are host-managed containers. Their authority files and
+// locks remain owner-only; the container may be readable or a host profile alias.
+export async function hostDirectory(path, { create = true } = {}) {
+  if (!isAbsolute(path) || resolve(path) !== path) throw new Error("invalid_state_path");
+  let canonical, info;
+  try { canonical = await realpath(path); info = await lstat(canonical); }
+  catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    if (!create) {
+      await hostDirectory(dirname(path), { create: false });
+      return undefined;
+    }
+    await mkdir(path, { recursive: true, mode: 0o700 });
+    await notifyWrite(path, "directory");
+    canonical = await realpath(path); info = await lstat(canonical);
+  }
+  if (!info.isDirectory()) throw new Error("invalid_state_type");
+  if (typeof process.getuid === "function" && info.uid !== process.getuid()) throw new Error("state_owner");
+  if ((info.mode & 0o022) !== 0) throw new Error("state_permissions");
+  return canonical;
 }
 
 export async function privateDirectory(path) {
@@ -156,9 +181,11 @@ export async function syncDirectory(path) {
 export async function privateWrite(
   path,
   bytes,
-  { exclusive = false, checkpoint = async () => {} } = {},
+  { exclusive = false, checkpoint = async () => {}, hostParent = false } = {},
 ) {
-  await privateDirectory(dirname(path));
+  hostParent ||= hostStateFiles.getStore() === path;
+  const parent = hostParent ? await hostDirectory(dirname(path)) : dirname(path);
+  if (!hostParent) await privateDirectory(parent);
   await checkedPath(path, { missing: true });
   const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
   const file = await open(temporary, "wx", 0o600);
@@ -177,7 +204,7 @@ export async function privateWrite(
         if (error.code !== "EEXIST") throw error;
       }
     } else await rename(temporary, path);
-    await syncDirectory(dirname(path));
+    await syncDirectory(parent);
     await checkpoint("published");
     await notifyWrite(path);
   } finally {
