@@ -712,6 +712,15 @@ diagnostics never authorize dispatch. Complete, unchanged observations add no
 durable writes before recall. Resume retains the hosted generation and permits
 work only after publication.
 
+Recall still aborts new work at 3,500 ms on the process clock, and output must
+start before 3,450 ms. An admitted pipe write may finish draining after the abort;
+only that pending write delays forced exit. A permanently blocked reader is
+abandoned at the backstop: 3,750 ms from the process clock origin, reserving
+100 ms for spawn-to-origin latency and 150 ms for exit before the host's
+4,000 ms timeout. Diagnostics cannot use the drain window. These are cooperative
+timers: process suspension can delay them, and regular-file stdout is synchronous,
+so a slow file write blocks the event loop and cannot be preempted by a timer.
+
 The Claude plugin selects a portable capability on native Windows. On native
 Windows, pause is checked right before every send, and a request that had already
 started when you paused can finish. Observation authority there is
