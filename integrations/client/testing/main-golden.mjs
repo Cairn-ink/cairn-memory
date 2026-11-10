@@ -44,7 +44,7 @@ async function goldenControlTimeout(plugin) {
   await writeFile(path, source.replaceAll("timeoutMs: 250,", "timeoutMs: 30_000,"));
 
 }
-export async function observeStandalone(plugin, { modes } = {}) {
+export async function observeStandalone(plugin, { modes, telemetry } = {}) {
   await goldenControlTimeout(plugin);
   const candidate = !(await readFile(join(plugin, "lib/version.mjs"), "utf8")).includes("0.1.1");
   const workspace = createTestWorkspace(null, { prefix: "cx2-golden-" });
@@ -292,7 +292,7 @@ export async function observeStandalone(plugin, { modes } = {}) {
           CAIRN_TEST_REQUESTS: requestsFile,
           CLAUDE_PLUGIN_OPTION_API_ENDPOINT: "https://synthetic.invalid",
           CLAUDE_PLUGIN_OPTION_API_TOKEN: "synthetic-token",
-          ...(concurrent ? { CLAUDE_PLUGIN_OPTION_TELEMETRY: "false" } : {}),
+          ...(concurrent || telemetry === false ? { CLAUDE_PLUGIN_OPTION_TELEMETRY: "false" } : {}),
         };
         async function run(action, index = 0, scriptEntry = entry) {
           const args = [join(plugin, `scripts/${scriptEntry}.mjs`)];

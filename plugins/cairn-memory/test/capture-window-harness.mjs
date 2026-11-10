@@ -13,7 +13,7 @@ export const row = (id, timestamp = oldTime, extra = {}) => JSON.stringify({
   message: { content: `Synthetic ${id}` }, ...extra,
 }) + '\n';
 
-export async function harness(t, { fail = () => false, holdRecall, hookPath, observedAt, groupingLimit, mutateRuntime, strictTimes = false, portable = false, pauseState = () => ({ paused: false, generation: 0, enforced: true }) } = {}) {
+export async function harness(t, { fail = () => false, holdRecall, holdCapture, hookPath, observedAt, groupingLimit, mutateRuntime, strictTimes = false, portable = false, pauseState = () => ({ paused: false, generation: 0, enforced: true }) } = {}) {
   const workspace = createTestWorkspace(t, { prefix: 'capture-window-' });
   const dataDir = join(workspace.path, 'data'), transcript = join(workspace.path, 'transcript.jsonl');
   await mkdir(dataDir, { mode: 0o700 });
@@ -42,6 +42,7 @@ export async function harness(t, { fail = () => false, holdRecall, hookPath, obs
       response.end(JSON.stringify({ memories: [] }));
     } else {
       captures.push(body);
+      await holdCapture?.(body, captures.length);
       const invalidTime = strictTimes && body.messages?.some(m => m.occurred_at !== undefined &&
         (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/.test(m.occurred_at) ||
           m.occurred_at.length > 40 || !Number.isFinite(Date.parse(m.occurred_at))));
