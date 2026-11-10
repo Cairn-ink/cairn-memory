@@ -135,7 +135,7 @@ or `--cloud`; local mode has no automatic capture or recall in 0.6.3.
 
 Installer **0.6.3**, with Codex 0.164.0–0.166.0 format requalification, was
 published on 2026-11-03, so `npx @cairn-ink/memory setup` uses it; a checkout
-can also run `node packages/setup/bin/memory.mjs setup`. The plugin is 0.3.5.
+can also run `node packages/setup/bin/memory.mjs setup`. The plugin is 0.3.6.
 Requires Node ≥22.16 and at least one CLI on PATH. Cloud setup asks about new tools,
 updates connected tools, and uses one browser sign-in when connecting both.
 The default server is cairn.ink. Conflicting servers or memory IDs present a

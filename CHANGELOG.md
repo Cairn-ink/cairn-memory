@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.6 — 2026-11-10: hosted pause and capture session windows
+
+Plugin and marketplace 0.3.6. Protocol stays 0.3.0. The installer version is not
+bumped here; the Codex changes reach installs through the next installer
+release.
+
+- Honour a hosted pause on the Claude Code client before recall and capture.
+- Honour a hosted pause when delivering Codex context output.
+- Send capture session windows and original message source times.
+
 ## 0.3.5 — 2026-11-09: hosted recall pre-fetch durability
 
 Plugin and marketplace 0.3.5. Protocol stays 0.3.0. The installer version is not
