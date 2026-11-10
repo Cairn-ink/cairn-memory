@@ -127,12 +127,13 @@ const durabilityRuntimeChanges = new Map([
     previousCurrent: '7dc46417a129414937b0180482acf6bdf7f58c1816f93468e8df1d952057485b',
     current: '7fd62ae5b862cfe77b393e06ef787508f89f7071879a84859357420893aff0c4',
   }],
-  // Re-read publication authority synchronously beside request/output entry.
+  // Serialize all pause commits with admission; replay durable pending observations under the gate.
   ['integrations/client/hosted-pause.mjs', {
     historical: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
     before: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
     previousCurrent: '365314ab54f794b34e4972de22d456b2c529a0f6d608c62a01f8558fe4a32892',
-    current: '24d0588a6316c89cc5c2d4c0cc2a8ee5a6bacd035c2187298e3480ac3c21a5b2',
+    previousSynchronousAdmission: '24d0588a6316c89cc5c2d4c0cc2a8ee5a6bacd035c2187298e3480ac3c21a5b2',
+    current: 'c946fb5ab612b8a252bf21d4c18a12c69bd4abed9bda16ea5ad411c551f36993',
   }],
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
