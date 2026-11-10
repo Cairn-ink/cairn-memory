@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "b74af553d5fca297ea1c54229c7279045b432aa6a0f93c2a66c97125158fb352",
-  "bytes": 1297362,
+  "sha256": "744e6c0b4a983894d5afce139b52ad26baa4ff71a89ab4fceff747b9c6bdb9d1",
+  "bytes": 1300233,
   "files": [
     "LICENSE",
     "README.md",
@@ -391,6 +391,8 @@
     "licenses/tiktoken-LICENSE",
     "npm-shrinkwrap.json",
     "package.json",
+    "plugins/cairn-memory/lib/hosted-contract.mjs",
+    "plugins/cairn-memory/lib/hosted-schemas.mjs",
     "plugins/cairn-memory/lib/redact.mjs",
     "plugins/cairn-memory/lib/transcript.mjs"
   ],
@@ -629,6 +631,8 @@
     "integrations/codex/session-source.mjs": "1341cc42eebf5a996be305f471393a717bfdd5eddd19fc3fd556fe8483fdfbc3",
     "integrations/codex/qualification.mjs": "d5bea045ed4c3fefd45e325f268833f1d535b075ab63ad5dd8dd0409c57dd380",
     "integrations/codex/schema-evidence.mjs": "1313d5789bbf8aa4a61be3bd4c1269793dbc0df543938e2a23fded3a2d4d518b",
+    "plugins/cairn-memory/lib/hosted-contract.mjs": "b13ca6b22e30507afc6df64cec55791d773fc010925aa43389a9d5661f0082a7",
+    "plugins/cairn-memory/lib/hosted-schemas.mjs": "b37536f2b9816f39d5c90062f9f1c9c14c50f0793bd80400798bd7cd7db5684f",
     "plugins/cairn-memory/lib/transcript.mjs": "c970c4ce46d270f92779e8f8033dfbc95c660fe7abbd5f99bb77330e21b0344b",
     "integrations/client/runtime-usage.mjs": "8bf732bb36664b33aa238a40903986b16c112a44829412c32a11b01dcad08d4d",
     "integrations/client/state-lock.mjs": "ee4bc6161d97bac44a8dc34a2058ed48e3dbbfeb105e32f6e66590b883b29b58",
@@ -781,7 +785,7 @@
     "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b"
   },
   "generatedHashes": {
-    "package.json": "4f8fdac2f17c8e78cc986fefe7cd41ed97ddbf775c1cbe68a603457fba5a418c",
+    "package.json": "2130e014fe68f9341f4d1e511e471fc7967763795238710575a3ab85d32e93d9",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8"
   }
 }
