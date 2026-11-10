@@ -36,7 +36,7 @@ for(const sink of ['request','output'])test(`cross-process publication after fin
  }
  const held=Promise.withResolvers(),release=Promise.withResolvers();
  const old=stateLock(join(root,'hosted-pause.gate'),async()=>{held.resolve();await release.promise;});
- t.after(async()=>{release.resolve();finish.resolve();await fs.writeFile(join(root,'release-sender'),'go',{mode:0o600});for(const c of children)if(c.child.exitCode===null&&c.child.signalCode===null)c.child.kill('SIGKILL');await Promise.allSettled([old,...children.map(c=>c.done)]);await new Promise(resolve=>server.close(resolve));globalThis.fetch=nativeFetch;});
+ workspace.defer(async()=>{release.resolve();finish.resolve();await fs.writeFile(join(root,'release-sender'),'go',{mode:0o600});for(const c of children)if(c.child.exitCode===null&&c.child.signalCode===null)c.child.kill('SIGKILL');await Promise.allSettled([old,...children.map(c=>c.done)]);await new Promise(resolve=>server.close(resolve));globalThis.fetch=nativeFetch;});
  await held.promise;
  const publisher=launch('publisher');await publisher.event('waiter');release.resolve();await old;
  const sender=launch('sender');
