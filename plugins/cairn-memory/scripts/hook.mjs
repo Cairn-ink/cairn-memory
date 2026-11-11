@@ -36,6 +36,7 @@ const { prepareRecallQuery } = await import("../lib/recall-query.mjs");
 const { resolveClient, clientProjectId, parsePairingRecord } = await import("../lib/pairing.mjs");
 const { VERSION } = await import("../lib/version.mjs");
 const { checkStateLock } = await import("../lib/state-lock.mjs");
+const { canonicalHostRoot } = await import("../lib/private-state.mjs");
 const { optionalHostSessionId } = await import("../lib/hosted-contract.mjs");
 const { inspectAutomaticPolicy } = await import("../lib/automatic-policy.mjs");
 const { hostedPauseStatus, completeHostedPauseRotation, observeHostedPause, deferHostedPauseStatus, withHostedPauseGate, hostedPauseMode } = await import("../lib/hosted-pause.mjs");
@@ -777,13 +778,19 @@ try {
     }
   } else {
     dataDir = binding.root;
-    credentialDir = process.env.CLAUDE_PLUGIN_DATA ?? dataDir;
     if (endpoint.startsWith("http")) {
       hostedConfig = { root: resolve(dataDir), endpoint };
-      hostedPauseMode(hostedConfig, process.platform);
+      if (hostedPauseMode(hostedConfig, process.platform).barrier) {
+        // One canonical root per process: the pause gate, its authority files,
+        // control, cursors, quota and cleanup all use it. The configured path
+        // is only re-checked under the gate; a retargeted alias fails closed.
+        hostedConfig.lexicalRoot = hostedConfig.root;
+        dataDir = hostedConfig.root = await canonicalHostRoot(hostedConfig.lexicalRoot);
+      }
       quotaTarget = { root: dataDir, targetId: hostedTargetId({ endpoint, token }) };
       post = createJsonPoster({ endpoint, token, ...quotaTarget });
     }
+    credentialDir = process.env.CLAUDE_PLUGIN_DATA ?? dataDir;
     if (["status", "pause", "resume"].includes(action)) {
       await control();
     } else {
