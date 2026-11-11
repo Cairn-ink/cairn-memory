@@ -596,3 +596,37 @@ for (const publish of [true, false]) test(`a missing Card releases a succeeded f
   for (let i = 0; i < 3; i++) { clock += 3600000; assert.equal((await deniedPass()).modelCalls, 0); }
   assert.equal(denied.model.calls.length, 1); assert.deepEqual(deniedStorage.cards(ns), []);
 });
+
+
+test('a multi-filed Card tries every exact carry destination when the first is occupied', async t => {
+  const f = engineCardFixture(t); f.seed(8);
+  const canonical = createEngineCardStorage({ db: f.db, upgrade: true, ready() {},
+    identity: f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
+  let topics = ['synthetic-topic-a'], clock = Date.UTC(2026, 5, 1), omitted;
+  const attempted = [];
+  const storage = { ...canonical, snapshot(...args) {
+    const page = canonical.snapshot(...args);
+    return { ...page, memories: page.memories.map(memory => ({ ...memory, topics })) };
+  }, cards(...args) { return canonical.cards(...args).filter(card => card.id !== omitted); },
+  carry(namespace, card, destination, check) {
+    attempted.push(destination.key);
+    return canonical.carry(namespace, card, destination, check);
+  } };
+  const pass = () => createEngineCardMaintenance({ storage, model: f.model, now: () => clock })
+    .maintain({ namespace: ns, budget: { maxMs: 5000 } });
+  const first = (await pass()).built[0]; assert.ok(first);
+  const before = f.db.prepare('SELECT * FROM private_cards WHERE id=?').get(first.id);
+  topics = ['synthetic-topic-b', 'synthetic-topic-c'];
+  const occupied = canonical.commit(ns, { key: 'moc:' + topics[0], memories: storage.snapshot(ns, 512, () => {}).memories },
+    { body: before.body }, new Date(clock).toISOString(), () => {});
+  assert.ok(occupied); omitted = occupied.id; clock += 3600000;
+  const result = await pass();
+  assert.deepEqual(attempted, topics.map(topic => 'moc:' + topic), 'occupied first destination does not hide the free exact match');
+  const carried = canonical.cards(ns).find(card => card.id === first.id);
+  assert.ok(carried); assert.equal(carried.status, 'current'); assert.equal(carried.clusterKey, 'moc:' + topics[1]);
+  assert.deepEqual(carried.sourceRevisions, first.sourceRevisions);
+  assert.deepEqual(f.db.prepare('SELECT * FROM private_cards WHERE id=?').get(first.id), before, 'carry preserves the original Card');
+  assert.equal(canonical.cards(ns).find(card => card.id === occupied.id).clusterKey, 'moc:' + topics[0]);
+  assert.equal(result.deleted, 0); assert.equal(result.modelCalls, 0); assert.deepEqual(result.built, []);
+  assert.equal(f.model.calls.length, 1);
+});

@@ -12,7 +12,7 @@ import { validateContextProductLayout } from './context-product-schema.mjs';
 import { openReadDatabase } from './read-database.mjs';
 import { readTransaction, isConnectionDiscarded, isStorageBusy, busyTimeoutOption } from './database.mjs';
 import { ownData } from './local-authority-input.mjs';
-import { deepFreeze } from './private-card-input.mjs';
+import { deepFreeze, withEngineCardDelivery } from './private-card-input.mjs';
 import { verifyPrivateGrant } from './private-card-facade.mjs';
 import { cardDependencyFence } from './card-current-storage.mjs';
 import { createPrivateCardStorage } from './private-card-storage.mjs';
@@ -94,7 +94,7 @@ export function openContextCore(baseOptions, contextRead, openBase) {
         return result;
       },
     };
-    return Object.freeze({ ...base, ...context.methods, ...engineMethods, close() { context.close(); return base.close(); } });
+    return withEngineCardDelivery(Object.freeze({ ...base, ...context.methods, ...engineMethods, close() { context.close(); return base.close(); } }), base);
   } catch (error) { try { base.close(); } catch { /* Preserve the initialization refusal. */ } throw error; }
 }
 export function openContextReader(value) {

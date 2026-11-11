@@ -205,3 +205,24 @@ export function validateCardCall(method, input, raw = false, currentDependencies
 
 export const ENGINE_CARD_LIMITS = Object.freeze({ memories: 512, sources: 96, rawUnits: 400,
   rawTotalUnits: 8000, scanMemories: 4096, scanBytes: 8388608, debounceMs: 600000, maxCards: 1, maxTokens: 250 });
+
+// Keep the canonical engine projection private to method identities. Every
+// composition that adds a promise boundary must finalize its completed handle
+// with this helper; ordinary handles gain neither a method nor a public port.
+const engineCardDeliveries = new WeakMap();
+export function withEngineCardDelivery(api, source, delivery = engineCardDeliveries.get(source?.maintainCards)) {
+  if (!api.maintainCards) return api;
+  if (!delivery) fail('invalid_input');
+  const method = api.maintainCards;
+  async function maintainCards(input) {
+    try {
+      const result = await method(input);
+      // The entire wrapped chain (including failure reactions and composition
+      // work) has settled. No async work may follow this synchronous projection.
+      if (result?.ok) delivery.project(input, result.value);
+      return result;
+    } catch (error) { return delivery.failure(error); }
+  }
+  engineCardDeliveries.set(maintainCards, delivery);
+  return Object.freeze({ ...api, maintainCards });
+}

@@ -19,7 +19,7 @@ import { existingStoreOption } from './existing-store.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { types } from 'node:util';
 import { composeRawCore } from './raw-composition.mjs';
-import { privateCardOptions, cardNamespace, ENGINE_CARD_LIMITS } from './private-card-input.mjs';
+import { privateCardOptions, cardNamespace, ENGINE_CARD_LIMITS, withEngineCardDelivery } from './private-card-input.mjs';
 import { createPrivateCardFacade } from './private-card-facade.mjs';
 import { contextInput, assembleSessionContext } from './session-context.mjs';
 import { rangeInput, rangeOrder, validateRangeAnchor, rangePage, envelopeText } from './episode-reads.mjs';
@@ -237,11 +237,11 @@ function openWithRoleContext(input, roleContext) {
       const core = buildCore(base);
       const search = localRawSearchManager(roleContext?.rawSearch) ?? createLocalRawSearch(base.path, defaultRawOptions().port);
       search.unsupportedStore();
-      return Object.freeze({ ...core, ...(rawSearch === false
+      return withEngineCardDelivery(Object.freeze({ ...core, ...(rawSearch === false
         ? { getRawSearchStatus: search.methods.getRawSearchStatus } : search.methods), close() {
         const stopped = search.close(), result = core.close();
         return Promise.resolve(stopped).then(() => result);
-      } });
+      } }), core);
     }
   }
   if (!Object.hasOwn(descriptor, 'value')) throw new MemoryStoreError('invalid_input');
@@ -1320,7 +1320,7 @@ export function createMemoryCore(input, internal) {
   internal?.attachCapture?.((input, registration, deadline) => capture(input, undefined, registration, deadline));
   const contentReads = new Set(['get','list','map','fetch','recall','sourceSnapshot','getEpisode','listEpisodes','listMemoriesByTime',
     'sessionStartContext','getRationale','inspectAdmission','inspectCaptureEvidence','listReviewTransitions','listReviewConflicts']);
-  return contentSafetyFacade({
+  return withEngineCardDelivery(contentSafetyFacade({
     ...(engineConfigured ? {
       async maintainCards(input) { try { runtime.ready(); return success(await (await loadEngineCards()).maintain(input)); } catch (error) { return failure(error); } },
       getEngineCardStatus(input) { try {
@@ -1360,10 +1360,11 @@ export function createMemoryCore(input, internal) {
     },
     validate: (method,args,result,scopes) => {
       if (!result?.ok) return;
-      if (method === 'maintainCards') engineCards.deliver(publicNamespace(scopes[0]), result.value);
-      else if (contentReads.has(method)) runtime.assertContentOutput(result.value,scopes);
+      if (contentReads.has(method)) runtime.assertContentOutput(result.value,scopes);
     }, noOwner: ['close',
-    'getPrivateCardCapabilities','getAssetCapabilities','getMethodPackageCapabilities'] });
+    'getPrivateCardCapabilities','getAssetCapabilities','getMethodPackageCapabilities'] }), null, {
+      project: (input, value) => engineCards.deliver(cardNamespace(input.namespace), value), failure,
+    });
   } catch (error) {
     try { runtime.close(); } catch { /* Preserve the construction failure. */ }
     throw error;

@@ -2,6 +2,11 @@ import test from 'node:test';
 import { createHook } from 'node:async_hooks';
 import assert from 'node:assert/strict';
 import { openMemoryCore } from '../index.mjs';
+import { openMemoryCore as openContractCore } from '../contract.mjs';
+import { openRawCaptureCore } from '../raw-capture.mjs';
+import { defaultRawOptions } from '../local-defaults.mjs';
+import { withEngineCardDelivery } from '../private-card-input.mjs';
+import { cardHost } from '../testing/raw-source-fixtures.mjs';
 import { contentSafetyFacade } from '../content-safety-boundary.mjs';
 import { transaction } from '../database.mjs';
 import { createEngineCardStorage } from '../engine-card-storage.mjs';
@@ -11,10 +16,12 @@ import { writeContentSuppressionInside } from '../content-suppression-storage.mj
 import { scriptedConsolidator } from '../testing/engine-card-fixture.mjs';
 import { safetyFixture, ns, ok, receipt } from '../testing/content-safety-s2h-fixture.mjs';
 
-async function ready(t, migrated = true, namespace = ns) {
-  const fixture = safetyFixture(t, 23);
+async function ready(t, migrated = true, namespace = ns, composition = {}) {
+  const fixture = safetyFixture(t, composition.rawLayout ? 33 : 23);
   if (migrated) await fixture.migrate();
-  const core = openMemoryCore({ path: fixture.path, model: scriptedConsolidator() });
+  const core = (composition.open ?? openMemoryCore)({ path: fixture.path, model: scriptedConsolidator(),
+    ...composition.options,
+    ...(composition.context ? { contextRead: { version: 'context-read-v1', authority: cardHost().options.authority } } : {}) });
   const db = fixture.connect();
   t.after(() => { core.close(); db.close(); });
   const memories = Array.from({ length: 8 }, (_, i) => {
@@ -203,4 +210,107 @@ for (const migrated of [false, true]) test(`public maintenance delivery rechecks
   assert.equal(refs.some(ref => ref.memoryId === source.id), false, 'neither the forgotten identity nor its bound revision is delivered');
   const value = ok(result);
   assert.deepEqual(value.built, []); assert.equal(value.state, 'refused'); assert.equal(value.reason, 'source_unavailable');
+});
+
+
+// Include every method-bearing composition, including the default local MCP
+// profile and the internal compatibility entry. Re-exports use the same method.
+const compositions = [
+  { name: 'plain core' },
+  { name: 'contract entry', open: openContractCore },
+  { name: 'context reads', context: true },
+  { name: 'default Raw', rawLayout: true, options: { raw: true } },
+  { name: 'explicit Raw', rawLayout: true, options: { rawConversations: defaultRawOptions(), rawSearch: false } },
+  { name: 'Raw compatibility', rawLayout: true, open: options => openRawCaptureCore(options, defaultRawOptions()) },
+  { name: 'context and default Raw (local MCP)', context: true, rawLayout: true, options: { raw: true } },
+  { name: 'context and explicit Raw', context: true, rawLayout: true, options: { rawConversations: defaultRawOptions(), rawSearch: false } },
+  { name: 'Raw unsupported fallback', suppressionOnly: true, options: { raw: true } },
+  { name: 'context and Raw unsupported fallback', suppressionOnly: true, context: true, options: { raw: true } },
+];
+
+// Identify the outer method's last synchronously registered promise reaction.
+// This works for async/await and for the facade's then/catch chain: inject at
+// the reaction's entry, after all inner workers/facades have settled, before
+// the outer method resumes. Never inject at the public promise's resolution,
+// which is already beyond the engine's synchronous delivery boundary.
+function beforePublicContinuation(t, invoke, work) {
+  const promises = [];
+  let collecting = true, target, worker, workerReturned = false, ran = false, hookError;
+  const hook = createHook({
+    init(id, type, _trigger, resource) {
+      if (type !== 'PROMISE') return;
+      const stack = new Error().stack;
+      if (!worker && /at Object\.maintain \(.*engine-card-maintenance\.mjs:/u.test(stack)) worker = id;
+      if (!collecting) return;
+      const frame = stack.split('\n').find(line =>
+        /\/core\/[^/]+\.mjs:\d+:\d+\)/u.test(line));
+      promises.push({ id, resource, frame: frame?.replace(/:\d+:\d+\)/u, ')') });
+    },
+    promiseResolve(id) { if (id === worker) workerReturned = true; },
+    before(id) {
+      if (id !== target) return;
+      hook.disable(); ran = true;
+      try { assert.equal(workerReturned, true, 'innermost worker has returned'); work(); } catch (error) { hookError = error; }
+    },
+  });
+  t.after(() => hook.disable());
+  hook.enable();
+  const pending = invoke();
+  collecting = false;
+  const outer = promises.find(promise => promise.resource === pending);
+  assert.ok(outer?.frame, 'identified the returned public promise');
+  target = promises.filter(promise => promise.frame === outer.frame).at(-1).id;
+  return { pending, check() { hook.disable(); assert.ifError(hookError); assert.equal(ran, true, 'last outer continuation ran'); } };
+}
+
+for (const migrated of [false, true]) for (const composition of compositions) {
+  if (composition.suppressionOnly && !migrated) continue;
+  test(`late forget at final public continuation: ${composition.name}, ${migrated ? 'suppression' : 'legacy'}`, async t => {
+    const { core, db, memories } = await ready(t, migrated, ns, composition), source = memories[0];
+    let committed;
+    const race = beforePublicContinuation(t,
+      () => core.maintainCards({ namespace: ns, budget: { maxMs: 5000 } }), () => {
+        committed = db.prepare("SELECT id FROM private_cards WHERE state='confirmed' AND revision=1").get();
+        assert.ok(committed, 'innermost worker returned a committed Card before the last public continuation');
+        assert.equal(ok(core.forget({ namespace: ns, memoryId: source.id, expectedRevision: source.revision })).forgotten, true);
+      });
+    const result = await race.pending;
+    race.check(); assert.ok(committed);
+    const refs = result.value?.built?.flatMap(card => card.sourceRevisions) ?? [];
+    assert.equal(refs.some(ref => ref.memoryId === source.id), false, 'forgotten id and its bound revision are absent');
+    assert.equal(JSON.stringify(result).includes(source.id), false, 'no forgotten identity anywhere in the acknowledgement');
+    const value = ok(result);
+    assert.deepEqual(value.built, []); assert.equal(value.state, 'refused'); assert.equal(value.reason, 'source_unavailable');
+  });
+}
+
+
+for (const layers of [1, 2, 3]) test(`projection throws at outer layer ${layers}: error result contains no partial acknowledgement`, async () => {
+  let projections = 0;
+  const engine = createEngineCardMaintenance({ model: scriptedConsolidator(), storage: {
+    deliver(_namespace, built) {
+      if (++projections === layers) {
+        built.pop(); // Deliberately leave a partial acknowledgement before throwing.
+        throw Error('synthetic projection refusal');
+      }
+      return built;
+    },
+  } });
+  const failure = { ok: false, error: { code: 'storage_error', retryable: false } };
+  let api = withEngineCardDelivery({ async maintainCards() {
+    return { ok: true, value: { built: ['synthetic-card-a', 'synthetic-card-b'].map(id => ({ id,
+      sourceRevisions: [{ memoryId: 'synthetic-source', revision: 1 }] })) } };
+  } }, null, { project: (input, value) => engine.deliver(input.namespace, value), failure: () => structuredClone(failure) });
+  for (let layer = 1; layer < layers; layer++) {
+    const base = api;
+    api = withEngineCardDelivery({ async maintainCards(input) {
+      const result = await base.maintainCards(input);
+      return result;
+    } }, base);
+  }
+  const result = await api.maintainCards({ namespace: ns });
+  assert.equal(projections, layers, 'every layer retained the very same engine projection');
+  assert.deepEqual(result, failure, 'a throwing final projection returns only the error envelope');
+  assert.equal(Object.hasOwn(result, 'value'), false);
+  assert.equal(JSON.stringify(result).includes('synthetic-source'), false);
 });

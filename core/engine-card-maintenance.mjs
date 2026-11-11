@@ -28,8 +28,9 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
         modelCalls: previous.modelCalls, deleted: previous.deleted, debounced: previous.debounced,
         ...(previous.reason ? { reason: previous.reason } : {}) } : null };
   }
-  // Both the worker and final public facade use this synchronous, fresh
-  // snapshot. No await may separate the public check from returning the DTO.
+  // The worker and every outer public composition share this synchronous,
+  // fresh projection through withEngineCardDelivery. No engine await follows
+  // the outermost projection before its public promise resolves.
   function deliver(ns, result) {
     if (result.built.length) {
       const committed = result.built.length;
@@ -128,10 +129,12 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
           if (card.status === 'current' && sameSources) { eligible.delete(cluster.key); continue; }
           // Search before staling against the old key: another eligible set
           // may already occupy that topic while these exact sources moved on.
+          // An occupied exact match must not hide another free destination.
           const destination = card.status === 'current' && [...eligible.values()].find(candidate =>
             candidate.key !== card.clusterKey && candidate.memories.length === card.sourceRevisions.length && candidate.memories.every(memory =>
-              card.sourceRevisions.some(ref => ref.memoryId === memory.id && ref.revision === memory.revision)));
-          if (destination && storage.carry(ns, card, destination, check)) {
+              card.sourceRevisions.some(ref => ref.memoryId === memory.id && ref.revision === memory.revision)) &&
+            storage.carry(ns, card, candidate, check));
+          if (destination) {
             eligible.delete(destination.key); continue;
           }
           if (!cluster) {

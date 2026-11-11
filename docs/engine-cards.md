@@ -100,13 +100,19 @@ with `origin: 'engine'`, `builtAt`, `clusterKey` and `sourceRevisions`.
 
 When an eligible topic changes key, its current Card follows the complete,
 exact set of source IDs and revisions if every source and the Card remain
-eligible and the destination has no current Card. This also applies when the
-old topic remains eligible with a different set of Memories. Carrying changes
+eligible and the destination has no current Card. Maintenance tries every
+eligible destination with that exact source set until one carry succeeds; an
+occupied first destination does not hide a later free destination. This also
+applies when the old topic remains eligible with a different set of Memories. Carrying changes
 only the routing metadata: the Card keeps its ID, body, source bindings, lineage,
 revisions and build time, without a model request. A different source set or an
 ineligible Card requires the normal trigger and rebuild path; an occupied
 destination keeps its own Card. Eligibility and destination occupancy are checked
 again inside the carry transaction.
+
+Known limit: carry searches only the oldest 129 confirmed engine Cards in the
+namespace. A newer Card beyond that page is rebuilt by the backstop on the next
+pass, using one model call and a new Card ID.
 
 The existing source invalidation increments the Card revision. Such a Card has
 status `stale` and is refused by both current and history reads. Suppressed,
@@ -120,11 +126,27 @@ Maintenance rechecks the committed Card and each listed source revision before
 acknowledging a build. If a source becomes ineligible between commit and worker
 delivery, a committed Card can yield an empty `built` array with `state: 'refused'`
 and `reason: 'source_unavailable'`; its committed provenance remains recorded.
-The public facade repeats this same fresh eligibility check after the last
-await, synchronously with final delivery, on both legacy and suppression-enabled
-stores. A source forgotten after the worker returns therefore also produces an
-empty `built` with `refused` / `source_unavailable`, without returning its ID or
-revision.
+The outermost engine-owned public method repeats the same `engineCards.deliver`
+projection on both legacy and suppression-enabled stores. The contract, Raw
+facade, unsupported-Raw fallback and context-read composition all use the shared
+`withEngineCardDelivery` finalizer, retaining the same projection through method
+identity. Each finalizer awaits the entire wrapped method, including its promise
+failure reactions and synchronous composition work such as reopening context
+capabilities. It then projects synchronously and returns: no await, promise
+reaction or asynchronous engine work follows that final projection before the
+public promise resolves. A projection exception returns an error result with no
+partial acknowledgement. A source forgotten after the worker returns therefore
+also produces an empty `built` with `refused` / `source_unavailable`, without
+returning its ID or revision. New engine compositions that wrap this method must
+finalize their completed handle with the same helper.
+
+This guarantee ends when the engine resolves its public method. A host that
+awaits the result and later serializes it across MCP stdio, a Worker message or
+another protocol/process boundary controls that later interval; the engine
+cannot re-check after handing the value to its caller. The current MCP timer
+consumes the acknowledgement internally rather than publishing it as a tool
+result. Product-index/Worker APIs expose context-index maintenance, not
+`maintainCards`.
 
 Engine Cards enter the existing candidate ranking. Packing an engine Card removes its exact
 source Memory revisions from that pack; a Card that does not fit removes
