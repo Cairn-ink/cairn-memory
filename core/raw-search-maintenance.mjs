@@ -266,7 +266,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
           // Canonical capture or denial won the race. Discard this quantum's
           // positive work and retry on the host's next turn; source movement
           // is neither an index failure nor evidence of a stalled maintainer.
-          pending=null;eligibleWork=false;staged.length=0;checkpoint=cleanupCheckpoint;
+          pending=null;settledPending=false;eligibleWork=false;staged.length=0;checkpoint=cleanupCheckpoint;
         }
         // Also close callback races when a full inventory fence is unavailable
         // at the work ceiling. No callback follows this exact batch snapshot.
