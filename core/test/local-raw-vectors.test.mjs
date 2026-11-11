@@ -165,6 +165,8 @@ test('slow embedding settlement makes progress while capture remains independent
   const started=new Promise(resolve=>{began=resolve;});
   provider.embedder.embed=async(...args)=>{began();await new Promise(resolve=>{release=resolve;setTimeout(resolve,500);});return base(...args);};
   const f=fixture(t,provider);ok(await f.core.capture(input(1)));await f.tick();
+  // Drain the bootstrap discovery cursor before requesting vector work.
+  await f.tick();
   const pending=f.tick();await Promise.race([started,delay(1000).then(()=>{throw Error('embedding_did_not_start');})]);
   const captured=await Promise.race([f.core.capture(input(2)),delay(200).then(()=>{throw Error('capture_waited_for_embedding');})]);ok(captured);
   await delay(60);release();await pending;

@@ -194,6 +194,11 @@ export function createRawSearchAuthority(database, options) {
     const control=db.prepare(`SELECT paused,enabled FROM episode_controls WHERE ${where}`).get(...boundary(ns));
     return !!control?.paused || control?.enabled===0;
   }
+  // Query text belongs to the whole selected read set. Check every namespace
+  // in one fresh canonical snapshot, including namespaces with no index rows.
+  function queryAllowed(at=Infinity) {
+    return read(()=>!options.readSet.map(ns=>paused(ns)).some(Boolean),at);
+  }
   // Permanent denials win over reversible pause, including during cleanup.
   function disposition(source) {
     return read(()=>{
@@ -662,6 +667,6 @@ export function createRawSearchAuthority(database, options) {
     deadline(at);resetContentSuppressionRequestInside(db);
   }
   return { reset,refresh,resume:()=>resumeAt,read,identity:{storeId:identity.store_id,fileIdentity:database.fileIdentity,ownerId:options.ownerId,readSet:options.readSet},
-    bind,authorize,inventory,recent,disposition,check,open,validate,fingerprint,fence,checkFence,cacheKey,
+    bind,authorize,inventory,recent,disposition,queryAllowed,check,open,validate,fingerprint,fence,checkFence,cacheKey,
     inspect:(ref,intent='history')=>read(()=>inspectInside(ref,intent)) };
 }
