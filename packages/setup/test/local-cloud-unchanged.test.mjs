@@ -112,7 +112,9 @@ const durabilityRuntimeChanges = new Map([
     // Host-managed root gates allow readable containers; eligibility stays read-only.
     previousGateContention: 'b1c40477819aceb2bf374d598da25eb258c81f031a6f70646d28c154aefba152',
     // Absolute caller deadline bounds acquisition setup and polling.
-    current: '1ffd9d275b20449bd73f6a08610d896a2ffd89b6637d20475e9ac8bcd9270dbf',
+    previousCallerDeadline: '1ffd9d275b20449bd73f6a08610d896a2ffd89b6637d20475e9ac8bcd9270dbf',
+    // Host-root locks are taken only at the canonical root path.
+    current: 'a7dbbf6c805fce74039a224f19e720d5740506c1fcd41129bea8ecb6a60c7c84',
   }],
   // The merged worker retains capture windows/source times plus root replay
   // and frozen-generation dispatch; pin these combined bytes exactly once.
@@ -139,7 +141,9 @@ const durabilityRuntimeChanges = new Map([
     previousCurrent: '7dc46417a129414937b0180482acf6bdf7f58c1816f93468e8df1d952057485b',
     previousHostContainer: '7fd62ae5b862cfe77b393e06ef787508f89f7071879a84859357420893aff0c4',
     // Host containers may be readable or aliased; state files remain private.
-    current: 'df7adad56c4a0e40d072a69f4f67ccd62ec3e9b7970327443fb114f5a4715dff',
+    previousReadableContainer: 'df7adad56c4a0e40d072a69f4f67ccd62ec3e9b7970327443fb114f5a4715dff',
+    // Host roots resolve once per process; root-level writes refuse a non-canonical path.
+    current: '14a576ec9f24c568e15cefff540f3771ecb2b974248ef73b4cee5124c83c365e',
   }],
   // Merge portable exact-GET first-prompt authority with gate-only pause commits
   // and durable pending-marker replay; retain both parent current digests below.
@@ -157,7 +161,9 @@ const durabilityRuntimeChanges = new Map([
     // Root authority and rotation retain the gate in host-managed containers.
     previousGateContention: 'ef2f022848664bb436d7f59f4cc446a2d230e3aacf637707f20d09b66ac563ba',
     // Caller deadlines cover unchanged publication, recovery and final admission; changed observations retain durable marker retries.
-    current: 'c116c69bd2e902d8ae230fe46c9db38b560e5a6d412b6577d08712e208dbec66',
+    previousCallerDeadline: 'c116c69bd2e902d8ae230fe46c9db38b560e5a6d412b6577d08712e208dbec66',
+    // The gate and its records use the pinned canonical root; a changed configured path fails closed.
+    current: '15a0c3f7f0e36d6fb9b5a7c337e2f08bc1bfa05b4a751c6a393266409da3fac4',
   }],
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
