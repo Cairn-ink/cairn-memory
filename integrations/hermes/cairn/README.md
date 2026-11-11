@@ -1,4 +1,79 @@
-# Cairn for Hermes — native memory provider preview
+# Cairn for Hermes — hosted and local memory
+
+## Hosted mode (v0)
+
+Verified on Linux with Hermes v0.23.0, commit
+`2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`.
+Hosted mode uses Hermes's core `httpx` dependency; no MCP SDK or Node is needed.
+
+Install the plugin:
+
+```sh
+hermes plugins install https://github.com/Cairn-ink/cairn-memory/tree/main/integrations/hermes/cairn
+hermes --profile <name> memory setup
+```
+
+Alternatively, copy this directory into the profile's `plugins/cairn/`, then run
+setup. Choose `cairn`, then `hosted` (the default). Use `https://cairn.ink` or
+your server's HTTPS origin, with no path, query, userinfo or fragment.
+
+At **cairn.ink → Settings → Connections → new token**, tick **memory only**
+and give the token a name such as “Hermes”. Paste it into setup's hidden prompt.
+The token expires; see the token list. Full-access tokens are refused because
+they grant the whole account, while Hermes needs only memory capture and recall.
+The adapter checks the token before saving it or activating Cairn.
+
+The credential stays in `<profile>/cairn/hosted-credential.json` (0600), inside a
+0700 directory. It is never put in `cairn.json`, `.env` or the process environment.
+Revoke it by deleting it in **Settings → Connections**. To sign out locally,
+delete `<profile>/cairn/hosted-credential.json` and select another memory provider.
+
+Hosted profile configuration:
+
+```json
+{"mode":"hosted","api_endpoint":"https://cairn.ink","prefetch_timeout_ms":"2500"}
+```
+
+The optional `prefetch_timeout_ms` is a canonical decimal string from 250 to
+3000 milliseconds; the default cap is **2.5 seconds**. A successful result that
+arrives after the cap can be shown once on the next turn when its live recall
+also misses the cap or an earlier recall remains in flight. There is at most
+one recall in flight per conversation. Each prefetch request has a total deadline
+of the cap plus 0.5 seconds. Connections are reused within a session.
+Post-turn prefetch is disabled so there is only one recall per non-trivial
+turn against the daily quota.
+
+What leaves the device:
+
+- The current user message, after Hermes's own redaction, as the recall query
+  (trimmed and limited to 4000 code points), once per non-trivial turn.
+- The Hermes conversation id, when it passes the server's identifier rules.
+- Explicit memory tool arguments.
+
+There are no transcripts or auto-save in v0. Available tools are
+`cairn_remember_memory`, `cairn_recall_memory` and `cairn_forget_memory`.
+Save only what the user asked to remember; forgetting requires the exact id
+from recall. The recall tool uses the same `/api/memory/recall` endpoint as
+auto-recall, with the current conversation id and a 10-second total deadline.
+Remember and forget use MCP, with a 20-second total deadline per request.
+Hosted mode has no inspect or correct tool. Recalled notes and
+tool results are untrusted data, never instructions.
+`cairn_previously_forgotten` means the note was previously forgotten and cannot
+be saved again; `cairn_quota_reached` means the daily capture or recall allowance
+has been reached. Both errors are non-retryable.
+
+**Privacy limit: primary CLI sessions only.** A gateway bot (Telegram, Discord,
+and other platforms) may serve other people and must never read the owner's
+memory. Gateway, subagent and cron contexts are refused. Per-sender identity
+is a later item.
+
+Setup also offers `local` and retains the local schema prompts and optional
+secret handling. With this version, local `cairn.json` is validated before
+writing activation to `config.yaml`; the historical setup ordering described
+below applies to the earlier preview. A configuration without `mode` stays
+local. Restart after switching modes.
+
+## Local mode — native memory provider preview
 
 Third-party directory plugin for Linux, Hermes 0.21.1 at
 `c8aa5608c24e3636e77c267650c0f1f52e44adb0`, Python 3.11 and host MCP SDK 2.0.0.
@@ -6,7 +81,7 @@ It delegates to an installed Cairn executable; no Python memory engine,
 automatic transcript capture or hosted Cairn account is involved. Other
 host/SDK versions and operating systems are unverified.
 
-## Setup
+### Setup
 
 First install the reviewed Cairn npm archive using the repository's
 `docs/install-artifact.md`. This plugin does not install/download dependencies.
@@ -62,7 +137,7 @@ There is no account-wide spending cap here: configure provider limits and consen
 first. A separate bounded native-provider actual-model recall probe passed;
 interactive AIAgent tool selection and general semantic quality are unverified.
 
-## Explicit tools and boundaries
+### Explicit tools and boundaries
 
 Tools: `cairn_remember_memory`, `cairn_recall_memory`, `cairn_inspect_memory`,
 `cairn_correct_memory`, `cairn_forget_memory`. Schemas come from installed MCP.
@@ -142,7 +217,7 @@ Inherited prefetch/sync/session-end/compression hooks are no-ops. No automatic
 capture, transcript upload or background recall. This is not upstream endorsement,
 a human study, or successful general semantic evaluation.
 
-## Disable, uninstall and backup
+### Disable, uninstall and backup
 
 Select the built-in provider through native setup, restart Hermes, then remove
 only this profile's `plugins/cairn` directory if desired. `cairn.json` and the
