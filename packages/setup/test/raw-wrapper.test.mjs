@@ -8,11 +8,11 @@ import { createProgressFilter } from '../lib/local-raw.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { newDescriptor, executableFor } from '../lib/local-descriptor.mjs';
 
-async function fixture(t, script, { clock = false } = {}) {
+async function fixture(t, script, { clock = false, discoveryDelay = 0 } = {}) {
   const ws = createTestWorkspace(t, { prefix: 'raw-wrapper-' });
   const home = join(ws.path, 'home'), root = join(home, 'local'), bin = join(ws.path, 'bin');
   for (const path of [home, root, bin, join(root, 'data')]) await mkdir(path, { mode: 0o700 });
-  await writeFile(join(bin, 'claude'), `#!${process.execPath}\nconsole.log('[]');\n`, { mode: 0o700 });
+  await writeFile(join(bin, 'claude'), `#!${process.execPath}\nsetTimeout(()=>console.log('[]'),${discoveryDelay});\n`, { mode: 0o700 });
   const descriptor = newDescriptor(root, '0.6.6');
   const id = '0.6.6-0123456789ab', executable = executableFor(root, id);
   await mkdir(join(executable, '..'), { recursive: true, mode: 0o700 });
@@ -25,10 +25,25 @@ async function fixture(t, script, { clock = false } = {}) {
   const harness = join(ws.path, 'main.mjs'), observed = join(ws.path, 'timers.json');
   await writeFile(harness, `import {main} from ${JSON.stringify(new URL('../lib/setup.mjs', import.meta.url).href)};
     import {writeFileSync} from 'node:fs';
-    const timers=[], real=setTimeout;
-    if(${clock})globalThis.setTimeout=(fn,ms,...args)=>{
-      if(ms>=120000){timers.push(ms);return real(fn,ms/1000,...args);}return real(fn,ms,...args);
-    };
+    import childProcess from 'node:child_process';
+    import {syncBuiltinESMExports} from 'node:module';
+    const timers=[], real=setTimeout, spawn=childProcess.spawn;
+    let rawWatchdogPending=false;
+    if(${clock}){
+      // Only the timer armed directly after this fixture's Raw spawn is sped up.
+      childProcess.spawn=(node,args,...rest)=>{
+        const child=spawn(node,args,...rest);
+        if(args?.[0]===${JSON.stringify(executable)})rawWatchdogPending=true;
+        return child;
+      };
+      syncBuiltinESMExports();
+      globalThis.setTimeout=(fn,ms,...args)=>{
+        if(rawWatchdogPending && (ms===120000 || ms===630000)){
+          rawWatchdogPending=false;timers.push(ms);return real(fn,ms/1000,...args);
+        }
+        return real(fn,ms,...args);
+      };
+    }
     process.exitCode=await main(process.argv.slice(2),{interactive:false});
     writeFileSync(${JSON.stringify(observed)},JSON.stringify(timers));`);
   const run = (args = ['raw', 'delete', 'synthetic-conversation', '--yes']) => new Promise((resolve, reject) => {
@@ -115,4 +130,15 @@ test('installer discards an oversized Unicode diagnostic and forwards only the f
   assert.equal(result.code, 3); assert.equal(result.signal, null);
   assert.equal(result.stdout, JSON.stringify(retry) + '\n');
   assert.equal(result.stderr, '128/1,008 prepared\n');
+});
+
+test('Raw test clock preserves the real discovery deadline for a slow synthetic client', async t => {
+  const f = await fixture(t, `console.log(${JSON.stringify(JSON.stringify(retry))});process.exitCode=3;`,
+    { clock: true, discoveryDelay: 200 });
+  const result = await f.run();
+  assert.equal(result.code, 3, result.stdout + result.stderr);
+  assert.equal(result.signal, null);
+  assert.equal(result.stdout, JSON.stringify(retry) + '\n');
+  assert.equal(result.stderr, '');
+  assert.deepEqual(await f.timers(), [630000], 'only the Raw watchdog is accelerated');
 });

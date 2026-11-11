@@ -19,10 +19,10 @@ async function fixture(t) {
   const qualification = join(engine, 'integrations/codex/qualification.mjs');
   await mkdir(dirname(qualification), { recursive: true, mode: 0o700 });
   await writeFile(qualification, 'export async function resolveCLI(){return null;}');
-  const output = [];
+  const output = [], env = { HOME: home, PATH: '/usr/bin:/bin', TMPDIR: ws.path };
   const configure = (client = 'claude') => configureCapture(root, descriptor, [client], {
-    env: { HOME: home, PATH: '/usr/bin:/bin', TMPDIR: ws.path }, write: value => output.push(value), t: key => key });
-  return { root, home, descriptor, configure, output };
+    env, write: value => output.push(value), t: key => key });
+  return { root, home, descriptor, configure, output, env };
 }
 function intercept(t, name, replacement) {
   const original = fs[name]; fs[name] = replacement(original); syncBuiltinESMExports();
@@ -151,4 +151,40 @@ for (const retained of [false, true]) test(`orphan uninstall with retained captu
   assert.deepEqual(opens, []);
   if (retained) assert.equal(await readFile(settings, 'utf8'), before);
   else await assert.rejects(lstat(settings), { code: 'ENOENT' });
+});
+
+for (const client of ['claude', 'codex']) test(`${client} final capture request contains only the exact metadata schema`, async t => {
+  const f = await fixture(t);
+  const credential = 'obviously-fake-provider-credential-for-tests';
+  const transcript = 'Synthetic conversation body that must stay out of the request';
+  f.env.OPENAI_API_KEY = credential;
+  const sourceRoot = join(f.home, client === 'claude' ? '.claude/projects' : '.codex/sessions');
+  await mkdir(sourceRoot, { recursive: true, mode: 0o700 });
+  await writeFile(join(sourceRoot, 'synthetic.jsonl'), JSON.stringify({ text: transcript }) + '\n', { mode: 0o600 });
+  await f.configure(client);
+  const path = join(f.root, `capture-${client}-request.json`);
+  assert.equal((await lstat(path)).mode & 0o777, 0o600);
+  assert.equal((await lstat(f.root)).mode & 0o777, 0o700);
+  const text = await readFile(path, 'utf8'), request = JSON.parse(text);
+  assert.deepEqual(Object.keys(request).sort(), [
+    'version', 'installationDirectory', 'databasePath', 'namespace', 'client',
+    'sourceRoot', 'clientConfigPath', 'usageRoot', 'installation', 'rawMode',
+    'rawCapBytes', 'dailyCap', 'providerApiKeyEnv', 'interpretationConsent',
+    'plaintextRawConsent', 'foregroundConsent',
+  ].sort());
+  assert.deepEqual(Object.keys(request.namespace).sort(), ['ownerId', 'scope', 'projectId'].sort());
+  assert.deepEqual(request.namespace, { ownerId: f.descriptor.ownerId, scope: 'personal', projectId: null });
+  assert.deepEqual(Object.keys(request.installation), client === 'claude' ? ['pluginRoot'] : ['qualificationConfigPath']);
+  const support = join(f.root, 'capture-support', client);
+  assert.deepEqual(request.installation, client === 'claude' ? { pluginRoot: support } :
+    { qualificationConfigPath: join(support, 'installation.json') });
+  assert.equal(request.sourceRoot, sourceRoot);
+  assert.equal(request.providerApiKeyEnv, 'OPENAI_API_KEY');
+  assert.equal(request.interpretationConsent, false);
+  assert.equal(request.plaintextRawConsent, true);
+  assert.equal(request.foregroundConsent, true);
+  for (const forbidden of [credential, transcript]) {
+    assert.equal(text.includes(forbidden), false);
+    assert.equal(f.output.join('\n').includes(forbidden), false);
+  }
 });
