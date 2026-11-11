@@ -766,6 +766,10 @@
       "kind": "gated",
       "operation": "read"
     },
+    "filterRelationFacts": {
+      "kind": "gated",
+      "operation": "read"
+    },
     "finishAdmission": {
       "kind": "gated",
       "operation": "write",

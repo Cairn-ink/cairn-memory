@@ -924,6 +924,7 @@
       "failInitialClassification",
       "fetchPage",
       "filterCaptureSources",
+      "filterRelationFacts",
       "finishAdmission",
       "finishCapturedAdmission",
       "finishOrdered",
@@ -2833,6 +2834,10 @@
     "findCandidates": {
       "kind": "read",
       "entry": "findCandidates"
+    },
+    "filterRelationFacts": {
+      "kind": "capture-protocol",
+      "reason": "Namespace-gated read applies admission suppression to extracted facts before relation discovery and model counting; scripted-port regressions cover ordinary and causal capture with original fact bindings."
     },
     "finishAdmission": {
       "kind": "write",
