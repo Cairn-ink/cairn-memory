@@ -16,6 +16,32 @@ const MAX_PROGRESS_LENGTH = 96;
 const count = '(?:0|[1-9]\\d{0,2}(?:,\\d{3}){0,5})';
 const progressPattern = new RegExp(`^${count}/${count} prepared$`);
 
+// Decode complete lines only. Oversized lines are discarded through their
+// newline without accumulating them; arbitrary diagnostics never escape.
+export function createProgressFilter(forward) {
+  let diagnostic = '', dropping = false, progressLines = 0;
+  const progress = text => {
+    if (progressLines >= MAX_PROGRESS_LINES || text.length > MAX_PROGRESS_LENGTH) return;
+    if (text === 'storage busy; waiting to retry' || text === CONTINUE || progressPattern.test(text)) {
+      progressLines++; forward(text + '\n');
+    }
+  };
+  return {
+    get bufferedLength() { return diagnostic.length; },
+    push(chunk) {
+      for (const character of chunk) {
+        if (character === '\n') {
+          if (!dropping) progress(diagnostic);
+          diagnostic = ''; dropping = false;
+        } else if (!dropping) {
+          if (diagnostic.length + character.length > MAX_PROGRESS_LENGTH) { diagnostic = ''; dropping = true; }
+          else diagnostic += character;
+        }
+      }
+    },
+  };
+}
+
 export function validateRawOptions(options, selection) {
   const [, operation, ...ids] = selection.argv;
   if (!['list', 'delete'].includes(operation) ||
@@ -34,27 +60,9 @@ async function invoke(vector, args, client, deleting, { env, write, onChild }) {
     const kill = () => { failed = true; try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); } };
     const timer = setTimeout(() => { timedOut = true; kill(); },
       deleting ? DELETE_WATCHDOG_MS : INSPECT_WATCHDOG_MS);
-    // Decode complete lines only. Oversized lines are discarded through their
-    // newline without accumulating them; arbitrary diagnostics never escape.
-    let diagnostic = '', dropping = false, progressLines = 0;
-    const progress = text => {
-      if (progressLines >= MAX_PROGRESS_LINES || text.length > MAX_PROGRESS_LENGTH) return;
-      if (text === 'storage busy; waiting to retry' || text === CONTINUE || progressPattern.test(text)) {
-        progressLines++; process.stderr.write(text + '\n');
-      }
-    };
+    const progress = createProgressFilter(text => process.stderr.write(text));
     child.stderr?.setEncoding('utf8');
-    child.stderr?.on('data', chunk => {
-      for (const character of chunk) {
-        if (character === '\n') {
-          if (!dropping) progress(diagnostic);
-          diagnostic = ''; dropping = false;
-        } else if (!dropping) {
-          if (diagnostic.length === MAX_PROGRESS_LENGTH) { diagnostic = ''; dropping = true; }
-          else diagnostic += character;
-        }
-      }
-    });
+    child.stderr?.on('data', chunk => progress.push(chunk));
     const tracking = Promise.resolve(onChild(child.pid)).catch(kill);
     const line = text => {
       if (!text || failed) return;

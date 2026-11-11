@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
+import { createProgressFilter } from '../lib/local-raw.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { newDescriptor, executableFor } from '../lib/local-descriptor.mjs';
 
@@ -77,4 +79,40 @@ test('installer forwards only exact bounded engine stderr forms and leaves stdou
   const lines = result.stderr.trimEnd().split('\n');
   assert.deepEqual(lines.slice(0, 3), ['storage busy; waiting to retry', '128/1,008 prepared', 'rerun the same command to continue']);
   assert.equal(lines.length, 4096); assert.ok(lines.slice(3).every(line => line === '1/2 prepared'));
+});
+
+// Split the supplementary character inside its UTF-8 encoding, followed by a
+// large incomplete line delivered in separate chunks before a valid notice.
+function unicodeDiagnosticChunks() {
+  const emoji = Buffer.from('😀');
+  return [Buffer.from('x'.repeat(95)), emoji.subarray(0, 2), emoji.subarray(2),
+    ...Array.from({ length: 64 }, () => Buffer.from('y'.repeat(4096)))];
+}
+
+test('stderr filter bounds every decoded chunk across supplementary Unicode and recovers after newline', () => {
+  const forwarded = [], filter = createProgressFilter(text => forwarded.push(text));
+  const decoder = new StringDecoder('utf8');
+  for (const bytes of unicodeDiagnosticChunks()) {
+    filter.push(decoder.write(bytes));
+    assert.ok(filter.bufferedLength <= 96, `buffered ${filter.bufferedLength} code units`);
+    assert.deepEqual(forwarded, []);
+  }
+  filter.push(decoder.end());
+  assert.ok(filter.bufferedLength <= 96);
+  filter.push('\n128/1,008 prepared\n');
+  assert.deepEqual(forwarded, ['128/1,008 prepared\n']);
+  assert.equal(filter.bufferedLength, 0);
+});
+
+test('installer discards an oversized Unicode diagnostic and forwards only the following progress line', async t => {
+  const f = await fixture(t, `${unicodeDiagnosticChunks.toString()}
+    for (const bytes of unicodeDiagnosticChunks()) {
+      await new Promise(resolve => process.stderr.write(bytes, resolve));
+    }
+    process.stderr.write('\\n128/1,008 prepared\\n');
+    console.log(${JSON.stringify(JSON.stringify(retry))});process.exitCode=3;`);
+  const result = await f.run();
+  assert.equal(result.code, 3); assert.equal(result.signal, null);
+  assert.equal(result.stdout, JSON.stringify(retry) + '\n');
+  assert.equal(result.stderr, '128/1,008 prepared\n');
 });
