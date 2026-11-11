@@ -24,6 +24,7 @@ export function createMemoryRelationStorage({ db, advanceEpoch, enabled = true, 
   const safe = (ns,memory,memo) => memory && memoryRelationEligible(db,ns,{type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision},memo);
   function rememberedTime(ns,fingerprint) {
     if(cachedContentLayout(db)?.relationsRevision!==2){
+      if(!pendingTimes.has(timeKey(ns,fingerprint)))return undefined;
       const memory=db.prepare(`SELECT * FROM memories WHERE ${where} AND fingerprint=? AND deleted=0`).get(...boundary(ns),fingerprint);
       return memory&&safe(ns,memory)?pendingTime(ns,memory):undefined;
     }

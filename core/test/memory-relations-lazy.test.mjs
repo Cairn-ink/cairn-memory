@@ -3,7 +3,7 @@ import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, chmodSync, lstatSync } from 'node:fs';
+import { chmodSync, lstatSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync, backup } from 'node:sqlite';
 import { openMemoryCore } from '../index.mjs';
@@ -16,6 +16,7 @@ import { host } from '../testing/context-read-core-fixture.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { measureContentRead } from '../testing/content-safety-cost-meter.mjs';
 
+import { memoryRelationsArchive } from '../testing/memory-relations-archive.mjs';
 const root=new URL('../../',import.meta.url).pathname;
 const schema=db=>db.prepare('SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY name').all();
 const physical=db=>db.prepare('PRAGMA user_version').get().user_version;
@@ -23,9 +24,7 @@ const receipt=eventId=>({client:'synthetic',sessionId:'session',eventId,role:'us
 const model={contextWindow:8192,countTokens:()=>1,extract:({input})=>({items:input.messages.map((m,i)=>({content:m.content,kind:'fact',confidence:.9,sourceIndices:[i]}))})};
 const request=(eventId,content)=>({namespace:ns,client:'synthetic',sessionId:'session',eventId,messages:[{id:eventId,role:'user',content}]});
 function archive(t){
- const w=createTestWorkspace(t,{prefix:'lazy-relations-'}),baseline=join(w.path,'baseline');mkdirSync(baseline);
- const a=spawnSync('git',['archive','35a29c14','--','core','plugins/cairn-memory/lib'],{cwd:root,maxBuffer:64*1024*1024});
- assert.equal(a.status,0,String(a.stderr));assert.equal(spawnSync('tar',['-xC',baseline],{input:a.stdout}).status,0);
+ const w=createTestWorkspace(t,{prefix:'lazy-relations-'}),baseline=memoryRelationsArchive(w.path);
  return {w,baseline};
 }
 function previous(baseline,path,code){

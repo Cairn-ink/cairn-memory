@@ -1,14 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { openMemoryCore } from '../index.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 
-const root=fileURLToPath(new URL('../../',import.meta.url)),revision='35a29c14';
+import { memoryRelationsArchive } from '../testing/memory-relations-archive.mjs';
 const model={contextWindow:8192,countTokens:()=>1,extract:({input})=>({items:[{content:input.messages[0].content,kind:'fact',confidence:.9,sourceIndices:[0]}]})};
 async function firstWrite(core){
  for(const [eventId,content] of [['lazy-one','My breakfast is oats.'],['lazy-two','My breakfast is eggs.']]){
@@ -18,11 +16,7 @@ async function firstWrite(core){
 }
 const ns={ownerId:'synthetic-migration',scope:'personal',projectId:null};
 function previous(t){
- const available=spawnSync('git',['cat-file','-e',revision+'^{commit}'],{cwd:root});
- if(available.status!==0){t.skip('Previous engine archive is unavailable in this checkout');return null;}
- const workspace=createTestWorkspace(t,{prefix:'memory-relation-migration-'}),baseline=join(workspace.path,'baseline');mkdirSync(baseline,{mode:0o700});
- const archive=spawnSync('git',['archive',revision,'--','core','plugins/cairn-memory/lib'],{cwd:root,maxBuffer:64*1024*1024,timeout:30000});assert.equal(archive.status,0,String(archive.error??archive.stderr));
- const unpack=spawnSync('tar',['-xC',baseline],{input:archive.stdout});assert.equal(unpack.status,0,String(unpack.stderr));
+ const workspace=createTestWorkspace(t,{prefix:'memory-relation-migration-'}),baseline=memoryRelationsArchive(workspace.path);
  const path=join(workspace.path,'store.sqlite');
  const child=spawnSync(process.execPath,['--input-type=module','-e',`
  import {openMemoryCore} from ${JSON.stringify(join(baseline,'core/index.mjs'))};
@@ -42,7 +36,7 @@ function hash(path){
  assert.equal(child.status,0,child.stderr);return child.stdout.trim();
 }
 test('additive migration retains both caller sources; previous engine refuses without changing bytes',async t=>{
- const f=previous(t);if(!f)return;
+ const f=previous(t);
  const core=openMemoryCore({path:f.path,model});
  const untouched=new DatabaseSync(f.path);assert.equal(untouched.prepare('PRAGMA user_version').get().user_version,18);untouched.close();
  const result=core.get({namespace:ns,memoryId:f.a.id});assert.equal(result.ok,true,JSON.stringify(result));
@@ -63,7 +57,7 @@ test('additive migration retains both caller sources; previous engine refuses wi
  assert.equal(old.status,0,old.stderr);assert.equal(old.stdout.trim(),'unsupported_database');assert.equal(hash(f.path),before);
 });
 test('migration collision rolls back the rename, legacy rows, layout and all new objects',async t=>{
- const f=previous(t);if(!f)return;
+ const f=previous(t);
  let db=new DatabaseSync(f.path);db.exec('CREATE TABLE memory_relations(preserved TEXT)');
  const schema=db.prepare('SELECT * FROM sqlite_schema ORDER BY name').all();db.close();
  const opened=openMemoryCore({path:f.path,model});await firstWrite(opened);await opened.close();
@@ -76,10 +70,7 @@ test('migration collision rolls back the rename, legacy rows, layout and all new
 });
 
 for(const writer of ['capture','explicit-hint'])test('the earlier four-label package upgrades lazily on '+writer+', retaining typed edges and discarding obsolete rule assertions',async t=>{
- const workspace=createTestWorkspace(t,{prefix:'relation-package-upgrade-'}),baseline=join(workspace.path,'previous');mkdirSync(baseline);
- const archive=spawnSync('git',['archive','02e2f9b2','--','core','plugins/cairn-memory/lib'],{cwd:root,maxBuffer:64*1024*1024,timeout:30000});
- if(archive.status!==0){t.skip('Previous relation package archive unavailable');return;}
- assert.equal(spawnSync('tar',['-xC',baseline],{input:archive.stdout}).status,0);
+ const workspace=createTestWorkspace(t,{prefix:'relation-package-upgrade-'}),baseline=memoryRelationsArchive(workspace.path,'four-label');
  const path=join(workspace.path,'store.sqlite');
  const child=spawnSync(process.execPath,['--input-type=module','-e',`
   import {openMemoryCore} from ${JSON.stringify(join(baseline,'core/index.mjs'))};

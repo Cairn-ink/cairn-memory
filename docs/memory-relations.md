@@ -74,6 +74,10 @@ reason. An earlier member without a direct typed edge to the current member has
 `metadata.relations` retains bounded direct edge labels, dates and known reasons.
 `get().relations` and legacy recall relation labels remain additive and are absent
 when empty. The compatibility source name `relations-one-hop-v1` remains accepted.
+An explicit conflict hint on a store without a relation layout keeps the
+`memory_conflicts` table and the existing `get().conflicts` projection. It does
+not install a graph or add `get().relations`; those labels appear after a
+relation layout is installed and eligible edges are present.
 
 Every traversed endpoint passes the canonical content predicate in the authorized
 read transaction. Forgotten, suppressed, excluded, denied or foreign memories

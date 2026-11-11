@@ -77,6 +77,12 @@ const instant=value=>{
 };
 export async function relateCapturedMemories(input){
  if(!input.items.length)return [];
+ // An unkeyed batch without a recognized subject cannot create an edge. Decide
+ // before opening suppression/discovery snapshots so ordinary capture keeps its SQL.
+ try {
+  if(typeof modelPortValue(input.model,'relateMemories','model_not_configured')!=='function'
+   &&input.items.every(item=>!topic(item.content).subject))return [];
+ }catch{}
  // Keep admission's complete batch for suppression accounting. Relation work
  // sees only admissible facts; compact port indices map back to that batch.
  const indices=input.operations.filterRelationFacts?.(input.items)??input.items.map((_,index)=>index);
