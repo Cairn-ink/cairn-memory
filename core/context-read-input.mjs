@@ -13,6 +13,8 @@ export function contextSources(value, enabled = CONTEXT_SOURCES, allowEmpty = fa
   if (new Set(selected).size !== selected.length || selected.some(id => !enabled.includes(id))) fail('invalid_input');
   return Object.freeze(CONTEXT_SOURCES.filter(id => selected.includes(id)));
 }
+// Only default assembly reads rebuilding an embedded index may borrow this time.
+export const FIRST_READ_GRACE_MS = 2000;
 export const CONTEXT_VERSION = 'context-read-v1';
 export const CONTEXT_METHODS = Object.freeze(['findCandidates', 'refreshContextIndex', 'fetchCandidateEvidence', 'contextRead']);
 export const ASSEMBLY_REPRESENTATIONS = Object.freeze(['representation-v2', 'representation-v2-dated']);

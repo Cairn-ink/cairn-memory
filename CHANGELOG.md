@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — first context read and busy-machine fallback
+
+- Start the local context index's existing maintenance lane immediately after
+  open, including lexical-only configurations, without blocking open.
+- Give default embedded assembly reads up to 2,000 ms of extra time only while
+  their sidecar is unpublished or invalidated; explicit and warm deadlines stay
+  unchanged. Managed product maintenance remains host-driven.
+- Reserve 200 ms for packing and canonical validation before optional Memory
+  source dates. A skipped or late date batch retains undated Memory items and
+  sets the existing deadline stop diagnostic on both readers. Raw partial
+  coverage and mandatory final safety validation remain in force.
+
 ## Unreleased — batch Raw preparation
 
 - Document and pin the mixed-reader Raw grant-sampling known limit; final whole-set stored-state checks remain enforced.

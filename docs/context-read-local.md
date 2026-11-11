@@ -537,3 +537,31 @@ coalesced snapshots are supported. Late asynchronous completions
 are discarded. Hosts must keep synchronous service calls bounded and own any
 underlying operation until it settles. No permanent connection refusal is
 created by the read's timeout. `raw:false` skips Raw search entirely.
+
+## First reads and deadline degradation
+
+The default local composition used by MCP and the installed local client starts
+context-index maintenance on the next timer turn after open, including when no
+embedding provider is configured. It calls the existing authorized
+`refreshContextIndex` lane with the fixed host read set, resumes its checkpoints,
+and cancels pending work on close. Open schedules the turn without index I/O.
+Library hosts that compose `openMemoryCore` directly supply their own authorized
+maintenance driver; a configuration containing only an authority cannot infer
+that host's read set or credentials. Managed readers keep their host pump.
+
+A writable embedded `contextRead` with no explicit `deadlineMs` can use
+`FIRST_READ_GRACE_MS` (2,000 ms) when reconciliation observes an unpublished or
+invalidated index. Its default total window is 3,000 ms, bounded by the existing
+5,000 ms maximum. An already published, current index keeps exactly the 1,000 ms
+window. An explicit deadline receives no grace. `findCandidates` is unchanged.
+
+Optional Memory source-date resolution reserves `SOURCE_DATE_RESERVE_MS`
+(200 ms) for packing and canonical final validation. If too little time remains,
+or the batch crosses its earlier cutoff, the read retains the prepared Memories
+without their dates. The existing `diagnostics.stops.deadline` marks this
+omission; there is no new diagnostics or item key. Crossing the full read deadline
+still uses the deadline result. Raw search/preparation keeps its validated
+prefix and existing `coverage.raw:'partial'` behavior. Final canonical validation
+continues to check every delivered Memory/Card and its namespace, grants,
+forgetting, exclusion and suppression state. Incomplete or late validation
+returns no items.

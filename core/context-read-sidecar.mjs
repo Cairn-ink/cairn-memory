@@ -505,11 +505,11 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     writeSqlMs: 0, beginMs: 0, commitMs: 0, writeTransactions: 0, rowWrites: 0, journalPeakBytes: 0,
     fenceSqlMs: 0, fenceTransactionMs: 0, checkpointTransactionMs: 0, publicationTransactionMs: 0 });
 
-  function reconcile(input, { isCurrent } = {}) {
+  function reconcile(input, { isCurrent, onRebuilding } = {}) {
     const m = metrics(); activeMetrics = m;
-    try { return reconcileInside(input, m, isCurrent); } finally { activeMetrics = undefined; }
+    try { return reconcileInside(input, m, isCurrent, onRebuilding); } finally { activeMetrics = undefined; }
   }
-  function reconcileInside(input, m, isCurrent) {
+  function reconcileInside(input, m, isCurrent, onRebuilding) {
     if (readOnly) fail('invalid_input');
     const p = projection(input), budget = input.budget;
     if (!Number.isInteger(budget?.maxItems) || budget.maxItems < 1 || budget.maxItems > 1024 ||
@@ -520,6 +520,9 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       checkpoint: durable?.checkpoint ?? 0, sequence: (durable?.sequence ?? 0) + 1,
       base_sequence: durable?.published ? durable.sequence : durable?.base_sequence ?? 0,
       reason: durable ? 'reconcile' : rebuildReason ?? 'missing' } : durable;
+    // Reuse the build-state observation already needed by reconciliation.
+    // A warm publication never changes the caller's budget.
+    if (!g.published) onRebuilding?.(budget);
     const matching = () => captured === JSON.stringify(fence(p));
     // Merge two ordered metadata streams. Only changed tuples enter the bounded
     // pending buffer. Scan positions are checkpointed with those deltas, or at

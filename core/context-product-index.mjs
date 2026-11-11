@@ -161,15 +161,15 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
           date,sources,sourceAccess:item.type==='memory'?item.provenance.sourceAccess:'unsupported',sourcesComplete:item.type==='memory' && item.provenance.coverage.status==='complete',fence:bind('snapshot-item',cardLineageItemInside(db,item))});
         if(dated&&item.type==='memory')dateEntries.push({item:items.at(-1),rows:sourceRows});
       }
-      if(dated&&!resolveMemorySourceDates(db,dateEntries,p.deadlineAt))items.length=0;
-      return {generations,items,unavailable};
+      const datesComplete=!dated||resolveMemorySourceDates(db,dateEntries,p.deadlineAt,now);
+      return {generations,items,unavailable,datesComplete};
     });
     const generationsFor=items=>prepared.generations.map(g=>({memory:g.memory,...(items.some(i=>i.type==='card')?{card:g.card,...(g.lineage?{lineage:g.lineage}:{})}:{})}));
     const snapshotValue=items=>({v:1,scope:bind('snapshot-scope',p.readSet),intent:p.intent,
       refs:items.map(({ref,ns})=>[ns,ref.type,ref.memoryId??ref.cardId,ref.revision,...(ref.type==='card'?[ref.bodyRevision]:[])]),
       generations:generationsFor(items),access:access.accessGenerations,fences:items.map(i=>i.fence)});
     const candidateDetails={count:c.items.length,channels:c.channels,coverage:c.coverage,trace:c.trace};
-    const decorate=diagnostics=>({...diagnostics,omitted:{...diagnostics.omitted,unavailable:prepared.unavailable},candidates:candidateDetails});
+    const decorate=diagnostics=>({...diagnostics,stops:{...diagnostics.stops,deadline:diagnostics.stops.deadline||!prepared.datesComplete},omitted:{...diagnostics.omitted,unavailable:prepared.unavailable},candidates:candidateDetails});
     const assembleRead=raw=>assembleThreeLayerContext({query:p.query,readSet:p.readSet,prepared:prepared.items,counter,policy:p.policy,budget:p.budget,representation:p.representation,deadlineAt:p.deadlineAt,
       responseBytes:p.representation==='representation-v2-dated'?({meteredBytes,diagnostics,selected})=>
         completeResponseBytes(success({metered:null,snapshot:null,diagnostics:decorate(diagnostics)}),meteredBytes,
@@ -186,6 +186,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       if(Buffer.byteLength(JSON.stringify(result))>65536)fail('context_item_too_large');
     };
     const complete=()=>{
+      if(delivered.length&&now()>=p.deadlineAt)fail('index_unavailable');
       if(delivered.length && !same(canonicalFence(p.readSet,[...new Set(delivered.map(i=>i.type))]),generationsFor(delivered)))fail('snapshot_stale');
       for(const item of delivered){
         let current;
@@ -193,6 +194,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         catch(e){if(['evidence_unavailable','revision_conflict'].includes(e.code))fail('snapshot_stale');throw e;}
         if(bind('snapshot-item',cardLineageItemInside(db,current))!==item.fence)fail('snapshot_stale');
       }
+      if(delivered.length&&now()>=p.deadlineAt)fail('index_unavailable');
       return result;
     };
     return prepareOnly?{complete,result,prepare}:final(p,access,c.observed.publication,complete,'snapshot_stale',prepare);

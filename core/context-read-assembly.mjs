@@ -48,6 +48,8 @@ export function receiptSourceRows(db, memoryId, probeRaw, cachedRows, cachedMemo
     : db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(memoryId);
 }
 
+// Reserve for whole-item packing, response checks and canonical final validation.
+export const SOURCE_DATE_RESERVE_MS = 200;
 const date = instant => instant.slice(0, 16) + 'Z';
 export function sourceDateFields(source, representation) {
   return representation !== 'representation-v2-dated' ? {} : source.date ? { date: source.date }
@@ -59,11 +61,20 @@ export function sourceDateFields(source, representation) {
 // crypto or host callback participates. One statement serves the whole read,
 // including multiple namespaces; neither a receipt id nor a message id alone
 // can cross the namespace join. Null Raw times never become capture times.
-export function resolveMemorySourceDates(db, entries, deadlineAt) {
+export function resolveMemorySourceDates(db, entries, deadlineAt, now = () => performance.now()) {
   const wanted = entries.flatMap(({ item, rows }) => rows.filter(row => row.source_time_available)
     .map(row => [row.id, item.ref.memoryId, item.ref.namespace.ownerId,
       item.ref.namespace.scope, item.ref.namespace.projectId ?? '']));
-  if (wanted.length && performance.now() >= deadlineAt) return false;
+  const cutoff = deadlineAt - SOURCE_DATE_RESERVE_MS;
+  const undated = () => {
+    for (const { item } of entries) {
+      item.date = null;
+      delete item.sortDate; delete item.receiptDate;
+      for (const source of item.sources) { delete source.date; delete source.dates; }
+    }
+    return false;
+  };
+  if (now() >= cutoff) return undated();
   const times = new Map();
   if (wanted.length) {
     if (!db.isTransaction) fail('raw_transaction_required');
@@ -78,7 +89,7 @@ export function resolveMemorySourceDates(db, entries, deadlineAt) {
       CROSS JOIN raw_messages m ON m.conversation_id=c.id AND m.message_id=l.message_id
         AND m.message_id=r.event_id AND m.role=r.role
       WHERE m.occurred_at IS NOT NULL LIMIT 4097`).all(JSON.stringify(wanted));
-    if (performance.now() >= deadlineAt) return false;
+    if (now() >= cutoff) return undated();
     if (found.length > 4096) fail('context_item_too_large');
     for (const row of found) {
       if (!times.has(row.id)) times.set(row.id, new Set());
