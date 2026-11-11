@@ -1358,7 +1358,11 @@ export function createMemoryCore(input, internal) {
       // receipts, counts or content survive this projection.
       return result?.ok===true&&result.value?.classification?.status==='failed';
     },
-    validate: (method,args,result,scopes) => { if(contentReads.has(method)&&result?.ok)runtime.assertContentOutput(result.value,scopes); }, noOwner: ['close',
+    validate: (method,args,result,scopes) => {
+      if (!result?.ok) return;
+      if (method === 'maintainCards') engineCards.deliver(publicNamespace(scopes[0]), result.value);
+      else if (contentReads.has(method)) runtime.assertContentOutput(result.value,scopes);
+    }, noOwner: ['close',
     'getPrivateCardCapabilities','getAssetCapabilities','getMethodPackageCapabilities'] });
   } catch (error) {
     try { runtime.close(); } catch { /* Preserve the construction failure. */ }

@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { createHook } from 'node:async_hooks';
 import assert from 'node:assert/strict';
 import { openMemoryCore } from '../index.mjs';
 import { contentSafetyFacade } from '../content-safety-boundary.mjs';
@@ -10,15 +11,15 @@ import { writeContentSuppressionInside } from '../content-suppression-storage.mj
 import { scriptedConsolidator } from '../testing/engine-card-fixture.mjs';
 import { safetyFixture, ns, ok, receipt } from '../testing/content-safety-s2h-fixture.mjs';
 
-async function ready(t) {
+async function ready(t, migrated = true, namespace = ns) {
   const fixture = safetyFixture(t, 23);
-  await fixture.migrate();
+  if (migrated) await fixture.migrate();
   const core = openMemoryCore({ path: fixture.path, model: scriptedConsolidator() });
   const db = fixture.connect();
   t.after(() => { core.close(); db.close(); });
   const memories = Array.from({ length: 8 }, (_, i) => {
     const content = `Orion synthetic milestone ${i}: shared implementation evidence marker${i}.`;
-    const memory = ok(core.admit({ namespace: ns, memory: { content, kind: 'fact' },
+    const memory = ok(core.admit({ namespace, memory: { content, kind: 'fact' },
       receipts: [{ ...receipt(content), sessionId: 'synthetic-' + i }] })).memory;
     db.prepare('UPDATE memories SET created_at=? WHERE id=?')
       .run(new Date(Date.UTC(2026, 0, 1 + i * 10)).toISOString(), memory.id);
@@ -168,4 +169,38 @@ test('maintenance delivery checks every listed Memory revision independently of 
     assert.deepEqual(delivered[0].sourceRevisions, denied.sourceRevisions.filter((_, position) => position !== index),
       'only the denied bound source is omitted at every position');
   }
+});
+
+
+for (const migrated of [false, true]) test(`public maintenance delivery rechecks after the worker resolves and before the public continuation: ${migrated ? 'suppression' : 'legacy'}`, async t => {
+  const personal = { ...ns, scope: 'personal', projectId: null };
+  const control = await ready(t, migrated, personal);
+  const eligible = ok(await control.core.maintainCards({ namespace: personal, budget: { maxMs: 5000 } }));
+  assert.equal(eligible.built.length, 1, 'eligible personal sources survive the final namespace normalization');
+  const { core, db, memories } = await ready(t, migrated), source = memories[0];
+  let worker, forgotten, hookError, committed;
+  const hook = createHook({
+    init(id, type) {
+      if (!worker && type === 'PROMISE' && /at Object\.maintain \(.*engine-card-maintenance\.mjs:/u.test(new Error().stack)) worker = id;
+    },
+    promiseResolve(id) {
+      if (id !== worker) return;
+      hook.disable();
+      try {
+        committed = db.prepare("SELECT id FROM private_cards WHERE state='confirmed' AND revision=1").get();
+        forgotten = core.forget({ namespace: ns, memoryId: source.id, expectedRevision: source.revision });
+      } catch (error) { hookError = error; }
+    },
+  });
+  t.after(() => hook.disable());
+  hook.enable();
+  const result = await core.maintainCards({ namespace: ns, budget: { maxMs: 5000 } });
+  hook.disable();
+  assert.ifError(hookError); assert.ok(worker, 'hook identified the worker promise');
+  assert.ok(committed, 'the worker committed and completed its own delivery check before resolving');
+  assert.equal(ok(forgotten).forgotten, true, 'forget runs after the worker returns, before public delivery');
+  const refs = result.value?.built?.flatMap(card => card.sourceRevisions) ?? [];
+  assert.equal(refs.some(ref => ref.memoryId === source.id), false, 'neither the forgotten identity nor its bound revision is delivered');
+  const value = ok(result);
+  assert.deepEqual(value.built, []); assert.equal(value.state, 'refused'); assert.equal(value.reason, 'source_unavailable');
 });

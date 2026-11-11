@@ -69,6 +69,10 @@ network, rate limit or deadline) allow at most three attempts, with ten then
 twenty minutes of backoff. A reservation interrupted before its outcome is
 recorded consumes the same bounded allowance. Changed sources enable a fresh
 attempt; periodic maintenance alone never resets an exhausted fingerprint.
+A successful outcome blocks duplicate work while a current Card for that exact
+fingerprint exists, even under another topic key. If the Card is missing or no
+longer eligible, maintenance can rebuild it once. Publishing no Card ends that
+attempt without opening a retry loop; refusal still blocks unchanged sources.
 
 An optional `cardRelations.read({namespace, memoryIds, memories, signal})` port
 returns `{from, to, kind, slot}` edges. Only endpoints in the cluster and equal
@@ -94,6 +98,16 @@ Historical Memory values can support the timeline while their exact cited
 revisions remain unchanged. Engine metadata lives in a `consolidate` operation,
 with `origin: 'engine'`, `builtAt`, `clusterKey` and `sourceRevisions`.
 
+When an eligible topic changes key, its current Card follows the complete,
+exact set of source IDs and revisions if every source and the Card remain
+eligible and the destination has no current Card. This also applies when the
+old topic remains eligible with a different set of Memories. Carrying changes
+only the routing metadata: the Card keeps its ID, body, source bindings, lineage,
+revisions and build time, without a model request. A different source set or an
+ineligible Card requires the normal trigger and rebuild path; an occupied
+destination keeps its own Card. Eligibility and destination occupancy are checked
+again inside the carry transaction.
+
 The existing source invalidation increments the Card revision. Such a Card has
 status `stale` and is refused by both current and history reads. Suppressed,
 excluded, forgotten, denied or foreign sources also make the Card ineligible.
@@ -101,6 +115,16 @@ After at least ten minutes, a later worker pass re-evaluates the trigger. A
 rebuild inserts a fresh Card row and source set, retaining the old row and seal.
 If the trigger no longer holds, maintenance deletes the stale Card body while
 retaining its row and lineage records.
+
+Maintenance rechecks the committed Card and each listed source revision before
+acknowledging a build. If a source becomes ineligible between commit and worker
+delivery, a committed Card can yield an empty `built` array with `state: 'refused'`
+and `reason: 'source_unavailable'`; its committed provenance remains recorded.
+The public facade repeats this same fresh eligibility check after the last
+await, synchronously with final delivery, on both legacy and suppression-enabled
+stores. A source forgotten after the worker returns therefore also produces an
+empty `built` with `refused` / `source_unavailable`, without returning its ID or
+revision.
 
 Engine Cards enter the existing candidate ranking. Packing an engine Card removes its exact
 source Memory revisions from that pack; a Card that does not fit removes

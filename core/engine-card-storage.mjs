@@ -231,17 +231,35 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       const prefix = 'engine-claim.sources.' + fingerprint + '.';
       const previous = db.prepare(`SELECT * FROM card_operations WHERE ${where}
         AND method='consolidateAttempt'
-        AND action_id>=? AND action_id<? ORDER BY created_at DESC LIMIT 1`)
+        AND action_id>=? AND action_id<? ORDER BY created_at DESC,rowid DESC LIMIT 1`)
         .get(...boundary(ns), prefix, prefix + '\uffff');
       const attemptNumber = previous ? JSON.parse(previous.result).attemptNumber + 1 : 1;
       if (previous) {
         const outcome = db.prepare(`SELECT result FROM card_operations WHERE ${where} AND action_id=?`)
           .get(...boundary(ns), previous.action_id + '.outcome');
-        // A crash after reservation counts as a transient attempt too. At most
-        // three dispatches per exact source set, with ten then twenty minutes
-        // of backoff. Immutable outcomes survive process restarts.
-        if ((outcome && JSON.parse(outcome.result).outcome !== 'transient') || attemptNumber > 3 ||
-            Date.parse(timestamp) - Date.parse(previous.created_at) < ENGINE_CARD_LIMITS.debounceMs * 2 ** (attemptNumber - 2)) return false;
+        const completed = outcome && JSON.parse(outcome.result).outcome;
+        if (completed === 'succeeded') {
+          // Success reserves the sources only while their current Card exists,
+          // including a Card carried to another key or omitted by the scan.
+          const current = db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id
+            AND o.owner_id=c.owner_id AND o.scope=c.scope AND o.project_id=c.project_id AND o.action_id=c.id
+            WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state='confirmed' AND c.revision=1
+            AND o.method='consolidate' AND json_array_length(o.result,'$.sourceRevisions')=?`);
+          for (const row of current.iterate(...boundary(ns), cluster.memories.length)) {
+            check();
+            const metadata = engineCardMetadataInside(db, ns, row);
+            if (metadata && cluster.memories.every(memory => metadata.sourceRevisions.some(ref =>
+                ref.memoryId === memory.id && ref.revision === memory.revision)) &&
+                engineCardRevisionsInside(db, ns, row) && contentReadSafety(db, { identity, namespace: ns,
+                  intent: 'history', method: 'getCard', ref: cardReference(ns, row) }).allowed) return false;
+          }
+        } else {
+          // A crash after reservation counts as a transient attempt too. At
+          // most three dispatches, with ten then twenty minutes of backoff.
+          // Refusal remains terminal; immutable outcomes survive restarts.
+          if ((completed && completed !== 'transient') || attemptNumber > 3 ||
+              Date.parse(timestamp) - Date.parse(previous.created_at) < ENGINE_CARD_LIMITS.debounceMs * 2 ** (attemptNumber - 2)) return false;
+        }
       }
       // Sealed stores protect operation receipts against replacement. Reserve
       // each new attempt with a fresh immutable row, indexed by source fingerprint.

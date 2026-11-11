@@ -420,7 +420,7 @@ for (const change of ['relabel', 'move']) test(`a built Card survives a topic ${
   assert.ok(read.metered.items.some(item => item.ref.type === 'card' && item.ref.id === first.id));
 });
 
-test('a forgotten source prevents carrying a built Card across a topic relabel', async t => {
+test('forgetting changes the source fingerprint and rebuilds the remaining topic after a relabel', async t => {
   const f = engineCardFixture(t), memories = f.seed(9);
   const canonical = createEngineCardStorage({ db: f.db, upgrade: true, ready() {},
     identity: f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
@@ -531,4 +531,68 @@ test('a relabel carry checks for a destination Card omitted by the bounded routi
   assert.equal(routed[0].id, destination.id);
   assert.equal(result.state, 'ready'); assert.equal(result.modelCalls, 0);
   assert.deepEqual(result.built, []); assert.equal(f.model.calls.length, 1);
+});
+
+
+test('a Card follows its exact sources when its old MOC remains eligible with replacement Memories', async t => {
+  const f = engineCardFixture(t), filed = f.file(f.seed(8), 'Orion');
+  const first = ok(await f.pass()).built[0]; assert.ok(first);
+  const before = f.db.prepare('SELECT * FROM private_cards WHERE id=?').get(first.id);
+  let destination;
+  for (let i = 0; i < filed.memories.length; i += 5) {
+    const batch = filed.memories.slice(i, i + 5);
+    const placed = ok(f.core.applyPlacement({ namespace: ns,
+      expectedIndexRevision: ok(f.core.map({ namespace: ns })).indexRevision,
+      expectedMemoryRevisions: batch.map(memory => ({ memoryId: memory.id, revision: memory.revision })),
+      proposal: { items: batch.map(memory => ({ memoryId: memory.id, parentIds: destination ? [destination] : [],
+        ...(!destination ? { newL1: { title: 'Synthetic destination', parentL2Ids: [] } } : {}) })) } }));
+    destination ??= placed.createdMocs.find(moc => moc.level === 'L1').id;
+    assert.deepEqual(placed.memories.map(memory => memory.revision), batch.map(memory => memory.revision),
+      'a filed-to-filed move keeps the exact revisions');
+  }
+  const replacements = f.seed(8, 'Lyra');
+  for (let i = 0; i < replacements.length; i += 5) {
+    const batch = replacements.slice(i, i + 5);
+    ok(f.core.applyPlacement({ namespace: ns,
+      expectedIndexRevision: ok(f.core.map({ namespace: ns })).indexRevision,
+      expectedMemoryRevisions: batch.map(memory => ({ memoryId: memory.id, revision: memory.revision })),
+      proposal: { items: batch.map(memory => ({ memoryId: memory.id, parentIds: [filed.mocId] })) } }));
+  }
+  const result = ok(await f.pass());
+  const metadata = JSON.parse(f.db.prepare("SELECT result FROM card_operations WHERE method='consolidate' AND action_id=?").get(first.id).result);
+  assert.equal(metadata.clusterKey, 'moc:' + destination, 'carry precedes staling against the still-eligible old key');
+  assert.deepEqual(metadata.sourceRevisions, first.sourceRevisions);
+  assert.deepEqual(f.db.prepare('SELECT * FROM private_cards WHERE id=?').get(first.id), before,
+    'carry keeps the same id, body, revisions and build time');
+  assert.equal(result.built.length, 1, JSON.stringify(result));
+  assert.equal(result.built[0].clusterKey, 'moc:' + filed.mocId);
+  assert.equal(result.modelCalls, 1); assert.equal(f.model.calls.length, 2);
+  assert.equal(ok(await f.pass()).modelCalls, 0);
+});
+
+for (const publish of [true, false]) test(`a missing Card releases a succeeded fingerprint for one rebuild: publish=${publish}`, async t => {
+  const f = engineCardFixture(t); f.seed(8);
+  const canonical = createEngineCardStorage({ db: f.db, upgrade: true, ready() {},
+    identity: f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
+  let clock = Date.UTC(2026, 5, 1);
+  const pass = storage => createEngineCardMaintenance({ storage, model: f.model, now: () => clock })
+    .maintain({ namespace: ns, budget: { maxMs: 5000 } });
+  const first = (await pass(canonical)).built[0]; assert.ok(first);
+  canonical.retire(ns, first.id, new Date(clock).toISOString(), true);
+  assert.deepEqual(canonical.cards(ns), []);
+  const storage = publish ? canonical : { ...canonical, commit() { return null; } };
+  const passes = [];
+  for (let i = 0; i < 3; i++) { clock += 3600000; passes.push(await pass(storage)); }
+  assert.deepEqual(passes.map(result => result.modelCalls), [1, 0, 0], 'one repair across three passes, even if no Card is published');
+  assert.deepEqual(passes.map(result => result.built.length), [Number(publish), 0, 0]);
+  assert.equal(f.model.calls.length, 2);
+  if (publish) assert.notEqual(passes[0].built[0].id, first.id);
+  const denied = engineCardFixture(t, { model: scriptedConsolidator(() => { throw Error('Synthetic refusal'); }) }); denied.seed(8);
+  const deniedStorage = createEngineCardStorage({ db: denied.db, upgrade: true, ready() {},
+    identity: denied.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
+  const deniedPass = () => createEngineCardMaintenance({ storage: deniedStorage, model: denied.model, now: () => clock })
+    .maintain({ namespace: ns, budget: { maxMs: 5000 } });
+  assert.equal((await deniedPass()).state, 'refused');
+  for (let i = 0; i < 3; i++) { clock += 3600000; assert.equal((await deniedPass()).modelCalls, 0); }
+  assert.equal(denied.model.calls.length, 1); assert.deepEqual(deniedStorage.cards(ns), []);
 });

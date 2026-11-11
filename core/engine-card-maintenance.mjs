@@ -28,6 +28,18 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
         modelCalls: previous.modelCalls, deleted: previous.deleted, debounced: previous.debounced,
         ...(previous.reason ? { reason: previous.reason } : {}) } : null };
   }
+  // Both the worker and final public facade use this synchronous, fresh
+  // snapshot. No await may separate the public check from returning the DTO.
+  function deliver(ns, result) {
+    if (result.built.length) {
+      const committed = result.built.length;
+      result.built = storage.deliver(ns, result.built);
+      if (result.built.length !== committed) {
+        result.built = []; result.state = 'refused'; result.reason = 'source_unavailable';
+      }
+    }
+    return result;
+  }
   async function maintain(input) {
     object(input, ['namespace', 'budget']); const ns = cardNamespace(input.namespace);
     const budget = input.budget ?? {}; object(budget, ['maxItems', 'maxMs']);
@@ -112,22 +124,22 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
         for (const card of cards) {
           check();
           const cluster = eligible.get(card.clusterKey);
+          const sameSources = cluster && JSON.stringify(card.sourceRevisions) === JSON.stringify(cardMemoryRevisions(cluster.memories));
+          if (card.status === 'current' && sameSources) { eligible.delete(cluster.key); continue; }
+          // Search before staling against the old key: another eligible set
+          // may already occupy that topic while these exact sources moved on.
+          const destination = card.status === 'current' && [...eligible.values()].find(candidate =>
+            candidate.key !== card.clusterKey && candidate.memories.length === card.sourceRevisions.length && candidate.memories.every(memory =>
+              card.sourceRevisions.some(ref => ref.memoryId === memory.id && ref.revision === memory.revision)));
+          if (destination && storage.carry(ns, card, destination, check)) {
+            eligible.delete(destination.key); continue;
+          }
           if (!cluster) {
-            // A topic key can change without changing any source revision.
-            // Carry only a readable Card with the complete, exact source set.
-            const destination = card.status === 'current' && [...eligible.values()].find(candidate =>
-              candidate.memories.length === card.sourceRevisions.length && candidate.memories.every(memory =>
-                card.sourceRevisions.some(ref => ref.memoryId === memory.id && ref.revision === memory.revision)));
-            if (destination && storage.carry(ns, card, destination, check)) {
-              eligible.delete(destination.key); continue;
-            }
             if (now() - Date.parse(card.row.updated_at) >= ENGINE_CARD_LIMITS.debounceMs) {
               storage.retire(ns, card.id, timestamp, true); result.deleted++;
             }
             continue;
           }
-          const sameSources = JSON.stringify(card.sourceRevisions) === JSON.stringify(cardMemoryRevisions(cluster.memories));
-          if (card.status === 'current' && sameSources) { eligible.delete(cluster.key); continue; }
           const newlyStale = card.row.revision === 1;
           if (newlyStale) storage.retire(ns, card.id, timestamp);
           if (newlyStale || now() - Date.parse(card.row.updated_at) < ENGINE_CARD_LIMITS.debounceMs) {
@@ -170,11 +182,11 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
             const output = await callModel(model, 'consolidate', CONSOLIDATE_PROMPT, request(), {
               deadline, validateFresh: () => { check(); storage.validate(ns, cluster.memories, check); }, failureCode: 'consolidation_failed' });
             const value = validateConsolidation(output, memories, model); check();
-            if (value) {
-              const card = storage.commit(ns, cluster, value, new Date(now()).toISOString(), check);
-              if (card) result.built.push(card);
-            }
-            storage.finish(ns, attempt, value ? 'succeeded' : 'terminal', new Date(now()).toISOString());
+            const card = value && storage.commit(ns, cluster, value, new Date(now()).toISOString(), check);
+            if (card) result.built.push(card);
+            // Valid output without a committed Card must not reopen a missing
+            // fingerprint on every subsequent maintenance pass.
+            storage.finish(ns, attempt, card ? 'succeeded' : 'terminal', new Date(now()).toISOString());
           } catch (error) {
             let transient = false;
             try { transient = ['model_timeout', 'model_cancelled', 'consolidation_transient'].includes(error?.code); }
@@ -186,11 +198,7 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
           break;
         }
       }, { fresh: true });
-      if (result.built.length) {
-        const committed = result.built.length;
-        result.built = storage.deliver(ns, result.built);
-        if (result.built.length !== committed) fail('source_unavailable');
-      }
+      deliver(ns, result);
     } catch (error) {
       result.built = [];
       let code;
@@ -200,5 +208,5 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
     } finally { active = false; last = { namespace: JSON.stringify(ns), value: structuredClone(result) }; }
     return result;
   }
-  return { status, maintain };
+  return { status, maintain, deliver };
 }
