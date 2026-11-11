@@ -1,0 +1,154 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs, { mkdir, writeFile, readFile, lstat, readdir, symlink, chmod, link } from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
+import { join, dirname } from 'node:path';
+import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
+import { configureCapture } from '../lib/local-capture.mjs';
+import { newDescriptor, executableFor } from '../lib/local-descriptor.mjs';
+
+async function fixture(t) {
+  const ws = createTestWorkspace(t, { prefix: 'capture-metadata-' }), root = join(ws.path, 'local'), home = join(ws.path, 'home');
+  await mkdir(root, { mode: 0o700 }); await mkdir(home, { mode: 0o700 });
+  const descriptor = newDescriptor(root, '0.6.6');
+  descriptor.engine = { id: '0.6.6-0123456789ab' };
+  const engine = dirname(dirname(executableFor(root, descriptor.engine.id)));
+  const cli = join(engine, 'integrations/client/raw/local-setup-cli.mjs');
+  await mkdir(dirname(cli), { recursive: true, mode: 0o700 });
+  await writeFile(cli, `console.log(JSON.stringify({status:process.argv[2]==='init'?'initialized':'active'}));`);
+  const qualification = join(engine, 'integrations/codex/qualification.mjs');
+  await mkdir(dirname(qualification), { recursive: true, mode: 0o700 });
+  await writeFile(qualification, 'export async function resolveCLI(){return null;}');
+  const output = [];
+  const configure = (client = 'claude') => configureCapture(root, descriptor, [client], {
+    env: { HOME: home, PATH: '/usr/bin:/bin', TMPDIR: ws.path }, write: value => output.push(value), t: key => key });
+  return { root, home, descriptor, configure, output };
+}
+function intercept(t, name, replacement) {
+  const original = fs[name]; fs[name] = replacement(original); syncBuiltinESMExports();
+  t.after(() => { fs[name] = original; syncBuiltinESMExports(); });
+}
+const targets = root => [join(root, 'capture-settings.json'), join(root, 'capture-support/codex/installation.json'), join(root, 'capture-claude-request.json')];
+
+for (const index of [0, 1, 2]) for (const suffix of ['', '-wal', '-shm', '-journal']) {
+  test(`metadata write ${index} refuses a symlink to store${suffix}`, async t => {
+    const f = await fixture(t), target = targets(f.root)[index];
+    await mkdir(join(f.root, 'data'), { mode: 0o700 });
+    await writeFile(f.descriptor.database.path + suffix, 'synthetic store sentinel', { mode: 0o600 });
+    await mkdir(dirname(target), { recursive: true, mode: 0o700 });
+    await symlink(f.descriptor.database.path + suffix, target);
+    await assert.rejects(f.configure(index === 1 ? 'codex' : 'claude'), error => error.key === 'local_recovery_required');
+    assert.equal(await readFile(f.descriptor.database.path + suffix, 'utf8'), 'synthetic store sentinel');
+  });
+}
+for (const index of [0, 1, 2]) test(`metadata write ${index} refuses a direct store collision even with a non-SQLite filename`, async t => {
+  const f = await fixture(t), target = targets(f.root)[index];
+  f.descriptor.database.path = target;
+  await assert.rejects(f.configure(index === 1 ? 'codex' : 'claude'), error => error.key === 'local_recovery_required');
+  await assert.rejects(lstat(target), { code: 'ENOENT' });
+});
+
+for (const index of [0, 1, 2]) test(`metadata write ${index} refuses a hard link to a store with an arbitrary filename`, async t => {
+  const f = await fixture(t), target = targets(f.root)[index];
+  f.descriptor.database.path = join(f.home, 'synthetic-store');
+  await writeFile(f.descriptor.database.path, '{}\n', { mode: 0o600 });
+  await mkdir(dirname(target), { recursive: true, mode: 0o700 });
+  await link(f.descriptor.database.path, target);
+  await assert.rejects(f.configure(index === 1 ? 'codex' : 'claude'), error => error.key === 'local_recovery_required');
+  assert.equal((await lstat(target)).ino, (await lstat(f.descriptor.database.path)).ino);
+});
+
+test('capture request uses exclusive create and private file/directory modes and never emits its content', async t => {
+  const f = await fixture(t), seen = [];
+  intercept(t, 'open', original => async (path, flags, mode) => {
+    const handle = await original(path, flags, mode);
+    if (String(path).includes('capture-claude-request.json.tmp-')) {
+      seen.push({ flags, mode, file: (await handle.stat()).mode & 0o777,
+        directory: (await lstat(dirname(path))).mode & 0o777 });
+    }
+    return handle;
+  });
+  await f.configure();
+  assert.deepEqual(seen, [{ flags: 'wx', mode: 0o600, file: 0o600, directory: 0o700 }]);
+  assert.equal((await lstat(join(f.root, 'capture-claude-request.json'))).mode & 0o777, 0o600);
+  const request = JSON.parse(await readFile(join(f.root, 'capture-claude-request.json'), 'utf8'));
+  assert.equal(request.version, 'local-raw-setup-request-v1');
+  assert.doesNotMatch(f.output.join('\n'), new RegExp(f.descriptor.ownerId));
+});
+
+test('capture refuses a directory whose mode is not private', async t => {
+  const f = await fixture(t); await chmod(f.root, 0o755);
+  await assert.rejects(f.configure()); await assert.rejects(lstat(join(f.root, 'capture-claude-request.json')), { code: 'ENOENT' });
+});
+
+test('capture checks the request directory owner before writing', async t => {
+  const f = await fixture(t);
+  intercept(t, 'lstat', original => async (path, ...args) => {
+    const stat = await original(path, ...args);
+    if (path === f.root) Object.defineProperty(stat, 'uid', { value: process.getuid() + 1 });
+    return stat;
+  });
+  await assert.rejects(f.configure()); await assert.rejects(lstat(join(f.root, 'capture-claude-request.json')), { code: 'ENOENT' });
+});
+
+for (const index of [0, 1, 2]) test(`metadata write ${index} removes its temporary and leaves no partial final after a write failure`, async t => {
+  const f = await fixture(t), target = targets(f.root)[index];
+  let injected = false;
+  intercept(t, 'open', original => async (path, ...args) => {
+    const handle = await original(path, ...args);
+    if (String(path).startsWith(target)) {
+      const write = handle.writeFile.bind(handle);
+      handle.writeFile = async () => { injected = true; await write('partial'); throw new Error('injected metadata write failure'); };
+    }
+    return handle;
+  });
+  await assert.rejects(f.configure(index === 1 ? 'codex' : 'claude'), /injected metadata write failure/);
+  assert.equal(injected, true);
+  await assert.rejects(lstat(target), { code: 'ENOENT' });
+  assert.deepEqual((await readdir(dirname(target))).filter(name => name.startsWith(target.split('/').at(-1) + '.tmp-')), []);
+});
+
+test('capture request cleans up if rename fails after a successful write', async t => {
+  const f = await fixture(t), target = targets(f.root)[2]; let injected = false;
+  intercept(t, 'rename', original => async (from, to) => {
+    if (to === target) { injected = true; throw new Error('injected before rename'); }
+    return original(from, to);
+  });
+  await assert.rejects(f.configure(), /injected before rename/); assert.equal(injected, true);
+  await assert.rejects(lstat(target), { code: 'ENOENT' });
+  assert.deepEqual((await readdir(f.root)).filter(name => name.startsWith('capture-claude-request.json.tmp-')), []);
+});
+
+test('next capture run removes stale request temps from earlier dead processes for both clients', async t => {
+  const f = await fixture(t);
+  const stale = ['claude', 'codex'].map(client => join(f.root, `capture-${client}-request.json.tmp-2147483647`));
+  for (const path of stale) await writeFile(path, 'sensitive synthetic stale metadata', { mode: 0o600 });
+  await f.configure();
+  for (const path of stale) await assert.rejects(lstat(path), { code: 'ENOENT' });
+});
+
+test('existing Codex installation stub content stays unchanged', async t => {
+  const f = await fixture(t), target = targets(f.root)[1];
+  await mkdir(dirname(target), { recursive: true, mode: 0o700 });
+  await writeFile(target, '{"synthetic":true}\n', { mode: 0o600 });
+  await f.configure('codex');
+  assert.equal(await readFile(target, 'utf8'), '{"synthetic":true}\n');
+});
+
+for (const retained of [false, true]) test(`orphan uninstall with retained capture=${retained} never writes metadata without a descriptor`, async t => {
+  const f = await fixture(t);
+  if (retained) await f.configure();
+  const settings = join(f.root, 'capture-settings.json');
+  const before = retained ? await readFile(settings, 'utf8') : null;
+  const opens = [];
+  intercept(t, 'open', original => async (path, flags, ...args) => {
+    if (flags === 'wx') opens.push(path);
+    return original(path, flags, ...args);
+  });
+  await configureCapture(f.root, null, ['claude'], {
+    env: { HOME: f.home, PATH: '/usr/bin:/bin', TMPDIR: f.home }, write: () => {}, t: key => key,
+  }, { uninstall: true });
+  assert.deepEqual(opens, []);
+  if (retained) assert.equal(await readFile(settings, 'utf8'), before);
+  else await assert.rejects(lstat(settings), { code: 'ENOENT' });
+});

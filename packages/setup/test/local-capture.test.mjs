@@ -1,3 +1,4 @@
+import './capture-metadata.test.mjs';
 import './raw-wrapper.test.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';

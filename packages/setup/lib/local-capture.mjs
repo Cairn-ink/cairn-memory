@@ -1,10 +1,10 @@
 // Installer orchestration only. Authority, hook merging and capture belong to
 // the installed engine; keep its identity and pinned runtime across uninstall.
 import { spawn } from 'node:child_process';
-import { mkdir, open, rename, lstat } from 'node:fs/promises';
+import { mkdir, open, rename, lstat, readdir, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { boundedJSON, canonicalPath, executableFor, ownedDirectory, validPath, engineIdPattern } from './local-descriptor.mjs';
+import { boundedJSON, canonicalPath, executableFor, ownedDirectory, validPath, engineIdPattern, pidIsDead } from './local-descriptor.mjs';
 import { SetupError } from './errors.mjs';
 
 export const RAW_CAP = 200000000;
@@ -23,12 +23,50 @@ export async function captureSettings(root) {
   }
   return value;
 }
-async function save(root, settings) {
-  const temporary = file(root) + `.tmp-${process.pid}`;
-  const handle = await open(temporary, 'wx', 0o600);
-  try { await handle.writeFile(JSON.stringify(settings, null, 2) + '\n'); await handle.sync(); }
-  finally { await handle.close(); }
-  await rename(temporary, file(root));
+// All three writes are installer metadata. Refuse aliases of the store and
+// its sidecars before opening any file, including existing symlink targets.
+async function metadataPath(path, database) {
+  const resolved = await canonicalPath(path), store = await canonicalPath(database);
+  const stores = await Promise.all([database, store].flatMap(base =>
+    ['', '-wal', '-shm', '-journal'].map(suffix => canonicalPath(base + suffix))));
+  if ([store, ...stores].includes(resolved) || /\.(?:sqlite3?|db)(?:-(?:wal|shm|journal))?$/iu.test(resolved)) fail();
+  if (await exists(path)) {
+    const stat = await lstat(path);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) fail();
+  }
+}
+async function atomicMetadata(path, database, create, text) {
+  await ownedDirectory(dirname(path));
+  if (await canonicalPath(dirname(path)) !== dirname(path)) fail();
+  await metadataPath(path, database);
+  const temporary = path + `.tmp-${process.pid}`;
+  await metadataPath(temporary, database);
+  let handle, created = false;
+  try {
+    handle = await create(temporary); created = true;
+    await handle.writeFile(text); await handle.sync();
+    await handle.close(); handle = undefined;
+    await metadataPath(path, database);
+    await rename(temporary, path);
+  } finally {
+    try { await handle?.close(); }
+    finally { if (created) await rm(temporary, { force: true }); }
+  }
+}
+async function save(root, settings, database) {
+  await atomicMetadata(file(root), database,
+    temporary => open(temporary, 'wx', 0o600), JSON.stringify(settings, null, 2) + '\n');
+}
+async function staleRequests(root, database) {
+  await ownedDirectory(root);
+  for (const name of await readdir(root)) {
+    const match = /^capture-(?:claude|codex)-request\.json\.tmp-([1-9]\d*)$/u.exec(name);
+    if (match && pidIsDead(Number(match[1]))) {
+      const path = join(root, name);
+      await metadataPath(path, database);
+      await rm(path, { force: true });
+    }
+  }
 }
 async function directory(path) {
   await mkdir(path, { recursive: true, mode: 0o700 });
@@ -86,8 +124,10 @@ async function requestFor(root, descriptor, client, receipt, context) {
   await directory(support);
   if (client === 'codex') {
     const config = join(support, 'installation.json');
+    await metadataPath(config, descriptor.database.path);
     if (!await exists(config)) {
-      const handle = await open(config, 'wx', 0o600); try { await handle.writeFile('{}\n'); } finally { await handle.close(); }
+      await atomicMetadata(config, descriptor.database.path,
+        temporary => open(temporary, 'wx', 0o600), '{}\n');
     }
     await boundedJSON(config, 65536, { privateFile: true });
     await directory(join(support, 'qualification'));
@@ -102,6 +142,12 @@ async function requestFor(root, descriptor, client, receipt, context) {
     interpretationConsent: false, plaintextRawConsent: true, foregroundConsent: true };
 }
 export async function configureCapture(root, descriptor, selected, context, { enabled, uninstall = false } = {}) {
+  if (!descriptor && !uninstall) fail();
+  await directory(root);
+  if (descriptor) {
+    await metadataPath(file(root), descriptor.database.path);
+    await staleRequests(root, descriptor.database.path);
+  }
   const settings = await captureSettings(root);
   for (const client of selected) {
     let receipt = settings.clients[client];
@@ -109,13 +155,15 @@ export async function configureCapture(root, descriptor, selected, context, { en
     receipt ??= settings.clients[client] = { enabled: true, noticed: false, engineId: descriptor.engine.id, node: descriptor.node };
     if (enabled !== undefined) receipt.enabled = enabled;
     // Uninstall disables without changing the user's retained setup preference.
-    await save(root, settings);
+    // Orphan recovery has no trusted store path. Disable retained hooks using
+    // their receipts, but never write metadata without a descriptor.
+    if (descriptor) await save(root, settings, descriptor.database.path);
     const installation = join(root, 'capture', client);
     let outcome;
     if (!uninstall && !receipt.noticed) {
       context.write(context.t('local_capture_notice', { client: client === 'claude' ? 'Claude Code' : 'Codex' }));
       if (client === 'codex') context.write(context.t('local_capture_codex_approval'));
-      receipt.noticed = true; await save(root, settings);
+      receipt.noticed = true; await save(root, settings, descriptor.database.path);
     }
     if (uninstall || !receipt.enabled) {
       outcome = await exists(join(installation, 'installation.json')) ?
@@ -131,12 +179,12 @@ export async function configureCapture(root, descriptor, selected, context, { en
       }
       if (!outcome) {
         const requestPath = join(root, `capture-${client}-request.json`);
-        // Only installer-owned request metadata, never engine authority files.
+        // Sensitive paths, namespace and consent metadata only; requestFor
+        // never includes conversation text, credentials or transcript bytes.
+        await metadataPath(requestPath, descriptor.database.path);
         if (await exists(requestPath)) await boundedJSON(requestPath, 65536, { privateFile: true });
-        const temporary = requestPath + `.tmp-${process.pid}`;
-        const handle = await open(temporary, 'wx', 0o600);
-        try { await handle.writeFile(JSON.stringify(request) + '\n'); await handle.sync(); } finally { await handle.close(); }
-        await rename(temporary, requestPath);
+        await atomicMetadata(requestPath, descriptor.database.path,
+          temporary => open(temporary, 'wx', 0o600), JSON.stringify(request) + '\n');
         outcome = enabled === true && await exists(join(installation, 'installation.json')) ?
           await invoke(root, receipt, ['activate', '--installation', installation], context) :
           await invoke(root, receipt, ['setup', '--request', requestPath], context);
