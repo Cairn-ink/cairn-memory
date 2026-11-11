@@ -30,6 +30,8 @@ test('C05 title channel includes current L1 and L2 members and preserves unfiled
   const card = f.card('Independently authored member'); f.cardTopic(card, 'needle cardtopic', 'rootquery cards');
   const unfiled = f.admit('needle unfiled');
   const value = ok(await f.find({ types: ['memory', 'card'] }));
+  assert.equal(value.items.length, 3, 'C05 candidates must be present before evidence fetch');
+  assert.equal(ok(f.call('fetchCandidateEvidence', { readSet: [ns], refs: value.items.map(item => item.ref), intent: 'current' })).items.length, 3);
   assert.ok(ids(value).includes(placed.memories[0].id)); assert.ok(ids(value).includes(card.cardId)); assert.ok(ids(value).includes(unfiled.id));
   const root = ok(await f.find({ query: 'rootquery', types: ['memory', 'card'] }));
   assert.ok(ids(root).includes(memory.id)); assert.ok(ids(root).includes(card.cardId));
@@ -149,6 +151,9 @@ test('C05 total lexical failure reports unavailable sources and never complete-e
 test('C04/C08 inconsistent foreign incident edges across physical batches leave all relation bytes identical', async t => {
   const f = sourcesFixture(t, { cards: true, sources: ['relations-one-hop-v1'] }), foreign = { ...ns, ownerId: 'foreign-existing-data' };
   const seed = f.admit('needle seed'), local = f.admit('Local endpoint'); await f.relate(local, seed);
+  const selected = ok(await f.find());
+  assert.equal(selected.items.length, 2, 'C08 candidates must be present before evidence fetch');
+  assert.equal(ok(f.call('fetchCandidateEvidence', { readSet: [ns], refs: selected.items.map(item => item.ref), intent: 'current' })).items.length, 2);
   const card = f.card('Independent direct Card'), foreignCard = f.card('Foreign Card', { namespace: foreign });
   const aliens = Array.from({ length: 257 }, (_, i) => f.admit('Foreign endpoint ' + i, foreign));
   const db = new DatabaseSync(f.path, { timeout: STORAGE_BUSY_TIMEOUT_MS }); t.after(() => db.close());

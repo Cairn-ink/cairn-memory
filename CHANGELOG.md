@@ -2,10 +2,13 @@
 
 ## Unreleased — first context read and busy-machine fallback
 
-- Start the local context index's existing maintenance lane immediately after
-  open, including lexical-only configurations, without blocking open.
+- Start local lexical-only context maintenance on the next timer turn after
+  open, with 25 ms cooperative slices. Configurations with an embedder retain
+  the existing 1,000 ms first delay and cadence. Unchanged lexical completion
+  backs off to 30-second observations; new work resumes one-second turns.
 - Give default embedded assembly reads up to 2,000 ms of extra time only while
-  their sidecar is unpublished or invalidated; explicit and warm deadlines stay
+  their sidecar is unpublished or invalidated and its remaining metadata fits
+  the 1,024-item quantum; larger rebuilds, explicit and warm deadlines stay
   unchanged. Managed product maintenance remains host-driven.
 - Reserve 200 ms for packing and canonical validation before optional Memory
   source dates. A skipped or late date batch retains undated Memory items and

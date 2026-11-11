@@ -541,18 +541,35 @@ created by the read's timeout. `raw:false` skips Raw search entirely.
 ## First reads and deadline degradation
 
 The default local composition used by MCP and the installed local client starts
-context-index maintenance on the next timer turn after open, including when no
-embedding provider is configured. It calls the existing authorized
+lexical-only context-index maintenance on the next timer turn after open when
+no embedder is configured in core. With an embedder, the first turn waits exactly
+1,000 ms, followed by 1,000 ms after each settled turn, as before. It calls the existing authorized
 `refreshContextIndex` lane with the fixed host read set, resumes its checkpoints,
-and cancels pending work on close. Open schedules the turn without index I/O.
+and cancels pending work on close, joining an active refresh before closing core.
+Open schedules the turn without index I/O. Lexical-only turns retain the
+1,024-item quantum but use a 25 ms cooperative time slice, matching the local
+Raw maintenance slice and leaving frequent opportunities for foreground work.
+Once a lexical turn reports complete with no transformed items, observations
+back off to 30 seconds. These observations detect new capture/invalidation
+fences and resume one-second active turns without a new notification API.
+Semantic turns retain their existing 16-item / 1,000 ms budget and cadence.
+These are cooperative slices: a synchronous SQLite statement, checkpoint or
+lock wait can overrun them (the existing busy timeout is 5,000 ms).
 Library hosts that compose `openMemoryCore` directly supply their own authorized
 maintenance driver; a configuration containing only an authority cannot infer
 that host's read set or credentials. Managed readers keep their host pump.
 
 A writable embedded `contextRead` with no explicit `deadlineMs` can use
 `FIRST_READ_GRACE_MS` (2,000 ms) when reconciliation observes an unpublished or
-invalidated index. Its default total window is 3,000 ms, bounded by the existing
-5,000 ms maximum. An already published, current index keeps exactly the 1,000 ms
+invalidated index whose remaining metadata fits the 1,024-item foreground
+quantum. The checkpoint observation uses a bounded union of remaining canonical
+and sidecar keys, including removals and unchanged tuples conservatively; it
+never loads text and is skipped on warm stores and explicit-deadline reads.
+A larger rebuild keeps the original foreground slice and returns
+`index_unavailable` if still unpublished; background turns resume its checkpoint.
+Exactly 1,024 remaining tuples can finish the terminal metadata scan and publish
+without exceeding the transform quantum. When eligible, the default total
+window is 3,000 ms, bounded by the existing 5,000 ms maximum. An already published, current index keeps exactly the 1,000 ms
 window. An explicit deadline receives no grace. `findCandidates` is unchanged.
 
 Optional Memory source-date resolution reserves `SOURCE_DATE_RESERVE_MS`

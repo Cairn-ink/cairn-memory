@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { receiptSourceTimeProbe } from '../context-read-assembly.mjs';
 
 // Exercise the actual bounded batch function with synthetic synchronous I/O.
 // The old literal is frozen independently of the new projection selector.
@@ -14,13 +15,13 @@ assert.ok(start >= 0 && end > start);
 const namespace = { ownerId: 'synthetic-owner', scope: 'project', projectId: 'synthetic-project' };
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
-function batch(enabled, rawLineage, suppressionRevision = 1) {
+function batch(enabled, rawLineage, suppressionRevision = 1, sourceDates = false) {
   const sql = [], args = [], db = { isTransaction: true, prepare(text) {
     sql.push(text); return { all(...values) { args.push(values); return []; } };
   } };
-  const run = new Function('db', 'cachedContentLayout', 'where', 'boundary', 'memoReceiptEventTime',
-    'return (' + source.slice(start, end) + ');')(db, () => ({ rawLineage, suppressionRevision }), where, boundary, enabled);
-  const memo = {}, refs = [{ type: 'memory', namespace, memoryId: 'synthetic-memory' }];
+  const run = new Function('db', 'cachedContentLayout', 'where', 'boundary', 'memoReceiptEventTime', 'receiptSourceTimeProbe',
+    'return (' + source.slice(start, end) + ');')(db, () => ({ rawLineage, suppressionRevision }), where, boundary, enabled, receiptSourceTimeProbe);
+  const memo = { sourceDates }, refs = [{ type: 'memory', namespace, memoryId: 'synthetic-memory' }];
   run(namespace, refs, memo);
   run(namespace, refs, memo); // Memo reuse must not add a statement.
   return { sql, args };
@@ -37,4 +38,11 @@ for (const rawLineage of [false, true]) test(`memo receipt projection keeps SQL 
   assert.match(one.sql[0], /ORDER BY created_at,id LIMIT 17/);
   assert.deepEqual(batch(false, rawLineage, 0).sql, [], 'legacy batching remains inactive');
   assert.deepEqual(batch(true, rawLineage, 0).sql, [], 'legacy fallback is unchanged');
+});
+
+test('source-date batching supplies its sliced SQL dependency without adding statements', () => {
+  const value = batch(true, true, 1, true);
+  assert.equal(value.sql.length, 1);
+  assert.match(value.sql[0], /AS source_time_receipts/);
+  assert.ok(value.sql[0].includes(receiptSourceTimeProbe));
 });

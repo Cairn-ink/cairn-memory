@@ -520,9 +520,32 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       checkpoint: durable?.checkpoint ?? 0, sequence: (durable?.sequence ?? 0) + 1,
       base_sequence: durable?.published ? durable.sequence : durable?.base_sequence ?? 0,
       reason: durable ? 'reconcile' : rebuildReason ?? 'missing' } : durable;
-    // Reuse the build-state observation already needed by reconciliation.
-    // A warm publication never changes the caller's budget.
-    if (!g.published) onRebuilding?.(budget);
+    // Observe only the unpublished checkpoint's remaining key union. Stop at
+    // maxItems + 1: an upper bound suffices, including unchanged/removal work.
+    // Warm reads, explicit deadlines and background maintenance add no probes.
+    let fitsQuantum = false;
+    if (!g.published && onRebuilding) {
+      let remaining = 0;
+      for (let phase = g.phase; phase < p.streams.length && remaining <= budget.maxItems; phase++) {
+        const stream = p.streams[phase], after = phase === g.phase ? g.last_key : '';
+        const limit = budget.maxItems + 1 - remaining;
+        const observedAt = performance.now();
+        m.projectionLookups++;
+        const rows = canonicalRead(() => canonical.prepare(stream.type === 'memory'
+          ? `SELECT id FROM memories INDEXED BY index_memory_keyset WHERE ${where} AND id>? ORDER BY id LIMIT ?`
+          : `SELECT id FROM private_cards INDEXED BY private_card_scope WHERE ${where} AND state=? AND id>? ORDER BY id LIMIT ?`)
+          .all(...boundary(stream.ns), ...(stream.type === 'card' ? [stream.state] : []), after, limit));
+        const previous = sideRead(() => side.prepare(`SELECT id FROM documents
+          WHERE generation=? AND stream=? AND id>? ORDER BY id LIMIT ?`).all(p.id, phase, after, limit));
+        m.canonicalRows += rows.length; m.sidecarRows += previous.length;
+        m.projectionBytes += Buffer.byteLength(JSON.stringify(rows));
+        m.sidecarBytes += Buffer.byteLength(JSON.stringify(previous));
+        m.projectionMs += performance.now() - observedAt;
+        remaining += new Set([...rows, ...previous].map(row => row.id)).size;
+      }
+      fitsQuantum = remaining <= budget.maxItems;
+      onRebuilding(budget, { progress: { phase: g.phase, lastKey: g.last_key }, remaining });
+    }
     const matching = () => captured === JSON.stringify(fence(p));
     // Merge two ordered metadata streams. Only changed tuples enter the bounded
     // pending buffer. Scan positions are checkpointed with those deltas, or at
@@ -565,7 +588,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       pending = []; pendingUnits = 0;
       return true;
     }
-    while (!g.published && phase < p.streams.length && performance.now() - started < budget.maxMs && m.transformed < budget.maxItems) {
+    while (!g.published && phase < p.streams.length && performance.now() - started < budget.maxMs && (m.transformed < budget.maxItems || fitsQuantum)) {
       if (!matching()) break;
       const stream = p.streams[phase], maximum = stream.type === 'card' ? 1 : batchSize;
       const scanStarted = performance.now();
@@ -588,7 +611,8 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
         const changed = order < 0 || order === 0 && (row.revision !== old.revision || row.body_revision !== old.body_revision || row.eligible !== old.eligible);
         m.deltaDetectionMs += performance.now() - detectionStarted;
         if (changed) {
-          if (m.transformed >= budget.maxItems || pending.length >= batchSize) break;
+          if (m.transformed >= budget.maxItems) { fitsQuantum = false; break; }
+          if (pending.length >= batchSize) break;
           m.transformed++;
           const text = row.eligible ? canonicalRead(() => textFor(stream, row.id, m)) : null;
           if (pendingUnits + (text?.length ?? 0) > 2_000_000 && !checkpoint()) break;

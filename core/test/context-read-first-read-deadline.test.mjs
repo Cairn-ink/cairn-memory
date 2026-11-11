@@ -89,13 +89,16 @@ for (const state of ['never-built', 'invalidated', 'slow-open']) for (const expl
 });
 test('warm embedded store retains the exact default deadline (unchanged)', async t => {
   const f = await fixture(t); await f.build(); const clock = controlledClock(t);
+  let remainingProbes = 0;
   statements(t, (statement, sql) => {
+    if (sql.startsWith('SELECT id FROM memories INDEXED BY index_memory_keyset')) remainingProbes++;
     if (!sql.startsWith('WITH wanted AS')) return;
     const all = statement.all.bind(statement);
     statement.all = (...args) => { const rows = all(...args); clock.advance(1100); return rows; };
   });
   const result = await f.readers[0](query({}));
   assert.ok(!result.ok || result.value.metered.items.length === 0);
+  assert.equal(remainingProbes, 0, 'warm reads add no remaining-work probe');
 });
 for (const reader of [0, 1]) test(`${reader ? 'product' : 'embedded'} final validation cannot complete: delivers nothing`, async t => {
   const f = await fixture(t); await f.build(); const clock = controlledClock(t); let reads = 0;
@@ -107,6 +110,7 @@ for (const reader of [0, 1]) test(`${reader ? 'product' : 'embedded'} final vali
   const result = await f.readers[reader](query({ deadlineMs: 1000 }));
   assert.ok(!result.ok || result.value.metered.items.length === 0, 'late canonical validation must not deliver selected text');
   assert.ok(reads > 2);
+  if (!reader) assert.equal(result.error.details.candidates.coverage.stops.deadline, true);
 });
 
 test('first-read grace refuses work beyond the bounded default window (unchanged deadline refusal)', async t => {
@@ -119,4 +123,58 @@ test('first-read grace refuses work beyond the bounded default window (unchanged
   const result = await f.readers[0](query({}));
   assert.equal(delayed, true);
   assert.ok(!result.ok || result.value.metered.items.length === 0);
+});
+
+// Charge deterministic time for transforming each canonical text, rather than
+// sleeps or SQL wall time. Compare default behavior to main's explicit slice.
+for (const remaining of [1023, 1024, 1025]) test(`first read with ${remaining} remaining items only gets grace when it can publish`, async t => {
+  const workspace = createTestWorkspace(t);
+  const clock = controlledClock(t);
+  let charge = false;
+  statements(t, (statement, sql) => {
+    if (!sql.startsWith('SELECT content AS text')) return;
+    const get = statement.get.bind(statement);
+    statement.get = (...args) => { const row = get(...args); if (charge) clock.advance(2); return row; };
+  });
+  const outcomes = [];
+  for (const explicit of [true, false]) {
+    charge = false;
+    const path = join(workspace.path, 'synthetic-' + explicit + '.sqlite');
+    const access = createContextReadAccess(ns, false, { maintenance: true });
+    const core = openMemoryCore({ path, contextRead: { ...access.configuration, counter: { id: 'synthetic', countTokens: () => 1 } } });
+    try {
+      ok(core.admit({ namespace: ns, memory: { content: 'telescope', kind: 'fact' }, receipts: [{
+        client: 'synthetic', sessionId: 'synthetic', eventId: 'synthetic', role: 'user', excerpt: 'telescope' }] }));
+      // Clone synthetic independent admissions in one fixture transaction to
+      // avoid thousands of durable admission commits on shared test machines.
+      const writer = new DatabaseSync(path);
+      try {
+        const memory = writer.prepare('SELECT * FROM memories').get();
+        const receipt = writer.prepare('SELECT * FROM receipts').get();
+        const insert = (table, row) => writer.prepare(`INSERT INTO ${table}(${Object.keys(row).join(',')}) VALUES(${Object.keys(row).map(() => '?').join(',')})`);
+        const memories = insert('memories', memory), receipts = insert('receipts', receipt);
+        writer.exec('BEGIN');
+        for (let i = 1; i < remaining; i++) {
+          const id = 'synthetic-' + String(i).padStart(4, '0');
+          memories.run(...Object.values({ ...memory, id, fingerprint: id }));
+          receipts.run(...Object.values({ ...receipt, id, memory_id: id }));
+        }
+        writer.exec('COMMIT');
+      } finally { writer.close(); }
+      charge = true; const started = clock.now();
+      const result = await access.call(core, 'contextRead', query(explicit ? { deadlineMs: 1000 } : {}));
+      outcomes.push({ result, ms: clock.now() - started });
+    } finally { charge = false; await core.close(); }
+  }
+  assert.equal(outcomes[0].ms, 1000);
+  assert.equal(outcomes[0].result.ok, false);
+  assert.equal(outcomes[0].result.error.code, 'index_unavailable');
+  if (remaining > 1024) {
+    assert.equal(outcomes[1].ms, outcomes[0].ms);
+    assert.equal(outcomes[1].result.ok, false);
+    assert.equal(outcomes[1].result.error.code, outcomes[0].result.error.code);
+  } else {
+    assert.equal(outcomes[1].ms, remaining * 2);
+    assert.ok(ok(outcomes[1].result).metered.items.length > 0);
+  }
 });

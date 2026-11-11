@@ -379,10 +379,14 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         const time = performance.now();
         const remaining = Math.floor(deadlineAt - time);
         if (remaining < 1 && !graceMs) throw Object.assign(new MemoryStoreError('index_unavailable'), { reason: 'timeout' });
-        maintenance = storage.reconcile({ ...projection, budget: { maxItems: 1024, maxMs: Math.max(1, remaining) } }, { isCurrent: access.check, onRebuilding(budget) {
+        maintenance = storage.reconcile({ ...projection, budget: { maxItems: 1024, maxMs: Math.max(1, remaining) } }, { isCurrent: access.check, onRebuilding: graceMs ? (budget, observation) => {
+          if (observation.remaining > budget.maxItems) {
+            if (performance.now() >= deadlineAt) throw Object.assign(new MemoryStoreError('index_unavailable'), { reason: 'timeout' });
+            return;
+          }
           deadlineAt += graceMs;
           budget.maxMs = Math.max(1, Math.min(CONTEXT_LIMITS.deadlineMs, Math.floor(deadlineAt - performance.now())));
-        } });
+        } : undefined });
         diagnostics.trace.timings.maintenanceMs = performance.now() - time;
         diagnostics.trace.maintenance = maintenance.metrics;
       }
@@ -609,11 +613,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     cardDetailInside: (ns, id, readSet, options) => cards.cardDetailInside(ns, id, readSet, options), receiptRefInside: (ns, memory, row) => receipt.refInside(ns, memory, row) });
   // context-read facade: end memo receipt projection
   async function contextRead(original, token) {
-    let candidates;
+    let candidates, deadlineAt;
     try {
       ready();
       const { payload, input } = contextInput('contextRead', original, supportedTypes, options.sources);
-      let deadlineAt = performance.now() + input.deadlineMs;
+      deadlineAt = performance.now() + input.deadlineMs;
       const access = authorize('contextRead', input, payload, token);
       if (!options.counter) return failure(new MemoryStoreError('invalid_input'), { counter: 'absent' });
       const searched = await searchCandidates(input, access, deadlineAt, true,
@@ -765,8 +769,10 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       });
     } catch (error) {
       const finalTrace = candidates && error.code === 'index_unavailable' && options.localStatus ? { ...candidates.trace, localEmbedder: sampleLocalStatus(options.localStatus) } : candidates?.trace;
+      const finalCoverage = candidates && error.code === 'index_unavailable' && performance.now() >= deadlineAt
+        ? { ...candidates.coverage, stops: { ...candidates.coverage.stops, deadline: true } } : candidates?.coverage;
       return failure(error, candidates && error.code === 'index_unavailable' ? { candidates: {
-        channels: candidates.channels, coverage: candidates.coverage, trace: finalTrace } } : undefined);
+        channels: candidates.channels, coverage: finalCoverage, trace: finalTrace } } : undefined);
     }
   }
   function fetchCandidateEvidence(original, token, productPayload) {
