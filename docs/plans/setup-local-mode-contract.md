@@ -1673,7 +1673,7 @@ only when execution is authorized, then require `build-runtime.mjs --check`.
 For 0.6.6, pin the engine source cut and compare every archive entry against
 that cut. Document every deliberate installer difference rather than claiming
 archive byte-identity under §19's historical 0.6.5 rule. Check every current-release
-sync reference. The 0.6.6 bundle source sync is `b75d88e7`. Executable engine
+sync reference. The 0.6.6 bundle source sync is `b2d29993`. Executable engine
 sources match that cut; the archive includes the installer’s updated
 `docs/defaults.md` and is not byte-identical to the cut archive. Regenerate and
 verify before release.

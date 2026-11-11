@@ -56,7 +56,7 @@ Known limits in this release:
   does not capture automatically, so its engine does not use the new hide windows
   or fork fences for capture. Its setup leaves 0.6.6 hooks registered with their
   retained engine; turn capture off with 0.6.6 before downgrading to stop them.
-- Engine bundle source sync: `b75d88e7`. Executable engine sources match this
+- Engine bundle source sync: `b2d29993`. Executable engine sources match this
   cut; the archive includes the installer’s updated `docs/defaults.md` and is
   not byte-identical to the cut archive.
 

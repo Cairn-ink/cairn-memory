@@ -17,7 +17,7 @@ behaviour. Existing cloud-mode Codex users must rerun setup to install the
 updated runtime.
 
 Installer **0.6.6 is prepared and unpublished**. The engine bundle is synced
-from commit `b75d88e7`. Executable engine sources match this cut. The archive
+from commit `b2d29993`. Executable engine sources match this cut. The archive
 includes the installer’s updated `docs/defaults.md`, so it is not byte-identical
 to the cut archive.
 
@@ -97,7 +97,7 @@ hide windows or fork fences for capture. Its setup leaves 0.6.6 hooks registered
 with their retained engine; turn capture off with 0.6.6 before downgrading to
 stop them.
 
-安裝器 **0.6.6 已備妥，尚未發布**。引擎同步自 `b75d88e7`，可執行的引擎
+安裝器 **0.6.6 已備妥，尚未發布**。引擎同步自 `b2d29993`，可執行的引擎
 原始碼與此版本一致。封裝內含安裝器更新的 `docs/defaults.md`，因此不與該版本的
 封裝逐位元組相同。
 
