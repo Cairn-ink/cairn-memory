@@ -240,8 +240,14 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
       }
       unit.evidence.push(excerpt);
     }
-    for (const unit of units) {
+    // Build the same projection for initial units and for a Card's surviving
+    // sources. Recompute identity and chronology rather than retaining fields
+    // from a group that still included a covered Memory.
+    const buildUnit = unit => {
       unit.memories.sort((a, b) => a.rank - b.rank);
+      unit.id = unit.memories.length ? JSON.stringify(unit.memories[0].ref) : unit.evidence[0].key;
+      unit.rank = unit.memories[0]?.rank ?? args.prepared.length + unit.evidence[0].rank;
+      unit.turns = [...new Set([...unit.memories.flatMap(item => item.turnIds ?? []), ...unit.evidence.map(item => item.key)])];
       const bodies = [];
       for (const memory of unit.memories) if (!bodies.some(body => body === memory.text ||
         overlap(new Set(tokenizeT1(body)), new Set(tokenizeT1(memory.text))) >= .6)) bodies.push(memory.text);
@@ -280,7 +286,9 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
       unit.sessions = [...new Set([...unit.evidence.map(item => item.session), ...unit.memories.flatMap(item =>
         item.turnIds?.length ? item.turnIds.map(turn => { const [namespace, conversation] = JSON.parse(turn); return JSON.stringify([namespace, conversation]); })
           : item.sessionIds ?? [])])];
-    }
+      return unit;
+    };
+    units.forEach(buildUnit);
     const documents = units.map(unit => ({ id: unit.id, text: unit.lexicalText })), bm = createBM25(documents), terms = tokenizeT1(args.query);
     const scores = units.map(unit => scoreBM25(terms, termFrequencies(unit.lexicalText), bm) ?? 0), max = Math.max(1e-12, ...scores);
     units.forEach((unit, i) => { unit.bm25 = scores[i] / max; unit.prior = unit.memories[0]?.type === 'memory' ? 61 / (60 + unit.rank) : 0; });
@@ -293,10 +301,7 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
         const members = unit.memories.filter(item => item.type !== 'memory' || !covered.has(memoryPackKey(item.ref)));
         if (members.length === unit.memories.length) return [unit];
         if (!members.length && !unit.evidence.length) return [];
-        const wire = members.length ? memoryWire(members[0], args.representation, [...new Set(members.map(m => m.text))].join('\n'))
-          : { layer: 'Raw', ...unit.evidence[0].wire };
-        if (members.length && unit.evidence.length) wire.evidence = unit.evidence.map(e => e.wire);
-        return [{ ...unit, memories: members, wire }];
+        return [buildUnit({ memories: members, evidence: unit.evidence.slice() })];
       });
     };
     const payload = proposed => ({ framing: ASSEMBLY_FRAMING, items: [...deduped(proposed)]
