@@ -446,3 +446,31 @@ test('raw delete reports done when another deleter finishes before the progress 
   assert.equal(result.rows[0].conversationId,source.conversationId);
   assert.equal(result.stderr,'');await deleted(fixture);
 });
+
+
+test('raw delete succeeds when another real deleter finishes during its yield',async t=>{
+  const {f,local,source,argv}=await largeConversation(t,129);
+  const schedule=globalThis.setTimeout;let during=false;
+  globalThis.setTimeout=function(callback,milliseconds,...args){
+    if(milliseconds===250&&!during){
+      during=true;
+      schedule(()=>{
+        for(let pass=0;pass<4;pass++){
+          const row=f.db.prepare('SELECT revision FROM raw_conversations WHERE id=?').get(source.conversationId);
+          if(!row)break;
+          const result=local.deleteConversation({namespace:ns,conversationId:source.conversationId,expectedRevision:row.revision,
+            actionId:'synthetic-other-delete-'+pass,retainMemories:true});
+          assert.ok(result.ok||result.error.retryable,JSON.stringify(result));
+        }
+        assert.equal(f.db.prepare('SELECT count(*) n FROM raw_conversations WHERE id=?').get(source.conversationId).n,0);
+      },50);
+    }
+    return schedule(callback,milliseconds,...args);
+  };
+  let result;try{result=await command(argv);}finally{globalThis.setTimeout=schedule;}
+  assert.equal(during,true);assert.equal(result.code,0,result.output);
+  assert.equal(result.rows.length,1);assert.equal(result.rows[0].ok,true);assert.equal(result.rows[0].dryRun,false);
+  assert.equal(result.rows[0].conversationId,source.conversationId);
+  const missing=await command(['delete',...args(f),'--conversation','synthetic-never-seen','--yes']);
+  assert.equal(missing.code,1);assert.equal(missing.rows[0].error.code,'conversation_not_found');
+});

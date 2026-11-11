@@ -145,7 +145,7 @@
   },
   "core/episode-capture.mjs": {
     "key:classificationEventId": 1,
-    "key:episodeId": 3,
+    "key:episodeId": 4,
     "key:eventId": 7,
     "key:id": 14,
     "key:memoryIds": 2,
@@ -1641,7 +1641,7 @@
   },
   "adapters/mcp/raw-command.mjs": {
     "key:actionId": 1,
-    "key:conversationId": 2
+    "key:conversationId": 3
   },
   "core/local-authority-uuid.mjs": {
     "key:ownerId": 2,
