@@ -7,7 +7,8 @@ import { createServer } from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { observeHostedPause, withHostedPauseGate, completeHostedPauseRotation } from '../hosted-pause.mjs';
-import { withWriteObserver } from '../private-state.mjs';
+import { withWriteObserver, privateWrite } from '../private-state.mjs';
+import { stateLock } from '../state-lock.mjs';
 import { hostedTargetId } from '../transport-hosted.mjs';
 
 // Two host roots and a configured path that reaches the first one through a
@@ -145,4 +146,17 @@ test('admission re-checks the configured path under the gate before start', asyn
   await retarget();
   await assert.rejects(withHostedPauseGate(config, 0, guard => { guard.beforeStart(); starts++; }), /pause_unavailable/);
   assert.equal(starts, 1, 'a changed alias is refused before start');
+});
+
+test('host-root locks and authority writes refuse a non-canonical root path', async t => {
+  const { a, configured } = await aliasedRoots(t, 'ancestor');
+  let ran = false;
+  await assert.rejects(stateLock(join(configured, 'hosted-pause.gate'), async () => { ran = true; },
+    { hostParent: true }), /state_path_changed/);
+  await assert.rejects(privateWrite(join(configured, 'hosted-pause-rotation.json'), 'synthetic', { hostParent: true }),
+    /state_path_changed/);
+  assert.equal(ran, false, 'no work under a lock taken through an alias');
+  assert.deepEqual(await readdir(a), [], 'nothing written through the alias');
+  await stateLock(join(a, 'hosted-pause.gate'), async () => { ran = true; }, { hostParent: true });
+  assert.equal(ran, true, 'the canonical root is unchanged');
 });
