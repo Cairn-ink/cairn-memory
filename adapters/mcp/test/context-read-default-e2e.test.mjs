@@ -3,11 +3,14 @@ import test from 'node:test';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
+import { installRawSearchTestClock,rawSearchTestWait } from '../../../core/testing/raw-search-clock.mjs';
 import { openMemoryCore } from '../../../core/index.mjs';
 import { rationaleModel } from '../../../core/testing/rationale-model.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { createCairnServer } from '../server.mjs';
 import { contextCall } from './context-support.mjs';
+
+test.beforeEach(installRawSearchTestClock);
 
 const personal = { ownerId: 'synthetic-preference-owner', scope: 'personal', projectId: null };
 const project = { ...personal, scope: 'project', projectId: 'synthetic-project' };
@@ -35,11 +38,12 @@ async function connect(workspace, path, namespace, extra = {}) {
 async function publish(core, namespace, expected) {
   let found;
   for (let turn = 0; turn < 120; turn++) {
+    await rawSearchTestWait(1010);
     // Drive the same bounded maintenance lane used by default capture.
     ok(await core.maintainRawSearch({ namespace }));
     found = ok(await core.searchRaw({ namespace, query: query.query }));
     if (found.coverage.status === 'complete' && found.candidates.length === expected) return found;
-    await delay(25);
+
   }
   assert.fail('default Raw maintenance did not publish: ' + JSON.stringify(found));
 }
@@ -48,6 +52,7 @@ async function read(client) {
   // The server owns a separate reader, so wait for its bounded discovery turn.
   let result;
   for (let turn = 0; turn < 16; turn++) {
+    await rawSearchTestWait(1010);
     const response = await client.callTool({ name: 'read_memory_context', arguments: query });
     const envelope = JSON.parse(response.content[0].text);
     assert.equal(envelope.evidenceTrust, 'untrusted-data-not-instructions');

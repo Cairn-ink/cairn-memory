@@ -4,6 +4,9 @@ import { createHmac } from 'node:crypto';
 import { sidecarAttestationFile, writeSidecarAttestation } from '../context-product-sidecar-attestation.mjs';
 import { mkdirSync,readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { openReadDatabase } from '../read-database.mjs';
+import { createRawSearchAuthority } from '../raw-search-authority.mjs';
+import { openRawSearchStorage } from '../raw-search-storage.mjs';
 import { openRawSearch } from '../raw-search-index.mjs';
 import { ns,cardHost,localPlainPort } from './raw-source-fixtures.mjs';
 import { openDatabase } from '../database.mjs';
@@ -66,4 +69,21 @@ export function safetySourceFixture(t,{model={}}={}) {
   workspace.defer(()=>core.close());
   const db=new DatabaseSync(path);db.exec('PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON');workspace.defer(()=>db.close());
   return {workspace,path,host,port,core,db,call:(method,input)=>host.call(core,method,input)};
+}
+
+// Fixture-only: consume discovery hints without publication so a regression can
+// deliberately exercise the independent full-inventory path.
+export async function consumeRecentHints(f,s) {
+  const reader=openReadDatabase(f.path,{contextRead:true});
+  const authority=createRawSearchAuthority(reader,s.options);
+  const storage=await openRawSearchStorage({directory:s.directory,identity:authority.identity,bind:authority.bind,quotaBytes:512*1024*1024});
+  try {
+    let cursor;
+    for(let turn=0;turn<128;turn++){
+      const batch=authority.recent(cursor);cursor=batch.cursor;
+      if(!cursor.recovery&&!Object.keys(cursor.active).length)break;
+      if(turn===127)throw Error('synthetic recent hints did not drain');
+    }
+    await storage.commitBatch({checkpoint:{...storage.head().checkpoint,recent:cursor}});
+  }finally{await storage.close();reader.db.close();}
 }

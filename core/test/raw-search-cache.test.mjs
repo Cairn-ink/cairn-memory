@@ -71,7 +71,7 @@ async function embeddedFixture(t,patch={}) {
 }
 function observeLoads(t) {
   const prepare=DatabaseSync.prototype.prepare;let loads=0;
-  DatabaseSync.prototype.prepare=function(sql){if(sql.includes('SELECT s.*,h.sequence'))loads++;return prepare.call(this,sql);};
+  DatabaseSync.prototype.prepare=function(sql){if(sql.startsWith('SELECT * FROM segments WHERE published=1 ORDER BY id DESC'))loads++;return prepare.call(this,sql);};
   t.after(()=>{DatabaseSync.prototype.prepare=prepare;});return ()=>loads;
 }
 test('local warm search reuses fp32 and hints; coverage and status reveal no cache state',async t=>{

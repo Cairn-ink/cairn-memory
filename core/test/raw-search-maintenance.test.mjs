@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 test.beforeEach(installRawSearchTestClock);
 import { sourceFixture,savedSource,ns,ok,request,splitRaw } from '../testing/raw-source-fixtures.mjs';
-import { searchFixture } from '../testing/raw-search-fixtures.mjs';
+import { searchFixture,consumeRecentHints } from '../testing/raw-search-fixtures.mjs';
 import { createFakeEmbedder } from '../context-read-embedder.mjs';
 
 test('append/replay, restart and no-change reconciliation do not reopen unchanged text',async t=>{
@@ -24,7 +24,7 @@ test('denial cleanup, quota and owner purge change no canonical Raw usage',async
   ok(f.core.deleteConversation({namespace:ns,conversationId:source.conversationId,
     expectedRevision:source.expectedConversationRevision,actionId:'delete'}));
   assert.equal((await s.search({query:'copper',intent:'history'})).candidates.length,0);
-  await s.tick();assert.equal(s.indexCount(),0);assert.equal((await s.service.status()).indexed,null);
+  for(let i=0;i<4&&s.indexCount();i++)await s.tick();assert.equal(s.indexCount(),0);assert.equal((await s.service.status()).indexed,null);
   await s.service.purge();assert.equal((await s.service.status()).indexed,null);
 });
 test('explicit embedding refresh uses shared selected port and query identity; partial degrades',async t=>{
@@ -97,9 +97,14 @@ test('canonical movement during an opener discards a quantum and permits the nex
     }
     return open(input);
   };
-  const s=await searchFixture(f),first=await s.maintain();
+  const s=await searchFixture(f);await consumeRecentHints(f,s);
+  const first=await s.maintain();
   assert.equal(first.error,null);assert.equal(first.maintenance.phase,'idle');assert.equal(s.indexCount(),0);
-  const next=await s.tick();assert.equal(next.error,null);assert.equal(s.indexCount(),2);
+  const next=await s.tick();assert.equal(next.error,null);
+  // The new hint publishes first; the discarded ordinary source is repaired
+  // by the next independent background opportunity.
+  for(let i=0;i<4&&s.indexCount()<2;i++)await s.tick();
+  assert.equal(s.indexCount(),2);
   assert.equal((await s.search({query:'copper'})).candidates.length,2);
 });
 
@@ -124,6 +129,6 @@ test('embedding refresh advances beyond a fully embedded first page',async t=>{
   for(let i=1;i<=3;i++)ok(await f.core.captureRaw(request(splitRaw('Synthetic copper '+i,{id:'vector-'+i,ordinal:i})[0],{eventId:'vector-'+i})));
   const s=await searchFixture(f,{embedder:port,policy:{family:'local',maxBatchDocuments:1,maxRequests:20,maxConcurrent:1,maxUsd:0}});
   await s.maintain();
-  for(let i=0;i<6;i++)await s.tick({maxItems:1,embeddings:true});
+  for(let i=0;i<12;i++)await s.tick({maxItems:1,embeddings:true});
   assert.equal((await s.search({query:'copper'})).semantic.state,'ready');
 });
