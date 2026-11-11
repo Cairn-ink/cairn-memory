@@ -423,13 +423,14 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         preflight?.release?.();
         if (preflight?.state === 'ready' && preflight.eligible > 0) {
           controller = new AbortController(); controllers.add(controller);
+          const embeddingGuard = storage.embeddingGuard(input.readSet, deadlineAt);
           const guard = () => { access.check();
             if (sourceState) read(() => assertSourcesInside(input, sourceState, internal ? 'snapshot_stale' : 'cursor_stale'));
             storage.assertState(projection, current);
-            storage.assertEmbeddingAllowed(input.readSet, deadlineAt); };
+            embeddingGuard(); };
           time = performance.now();
           try {
-            storage.assertEmbeddingAllowed(input.readSet, deadlineAt);
+            embeddingGuard();
             let vectors,invoked=false;
             assertContentPort({before:true});
             try { vectors = await dispatch(options.embedder, [input.query], { signal: controller.signal, deadlineAt, guard,onInvoke:()=>{invoked=true;} }); }

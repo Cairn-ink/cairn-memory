@@ -31,6 +31,6 @@ test('default read without an embedder performs no episode-control reads',async 
   const prepare=DatabaseSync.prototype.prepare,statements=[];
   const spy=t.mock.method(DatabaseSync.prototype,'prepare',function(sql){statements.push(sql);return Reflect.apply(prepare,this,[sql]);});
   const result=await f.call('contextRead',query({budget:{maxTokens:4000,maxItems:12}}));spy.mock.restore();
-  ok(result);assert.equal(statements.filter(sql=>sql.includes('episode_controls')).length,0);
+  ok(result);assert.equal(statements.filter(sql=>sql.includes('episode_controls')||sql.includes('data_version')).length,0);
   t.diagnostic('NO_EMBEDDER_STATEMENTS '+statements.length);
 });

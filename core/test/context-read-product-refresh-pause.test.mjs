@@ -26,3 +26,8 @@ test('product refresh pause inside beforeDispatch leaves vectors unrefreshed unt
   const publication=published(s),result=await s.refresh();assert.deepEqual(published(s),publication,'pause preserves vectors and publications');assert.equal(s.view[6],before);assert.equal(result.progress.embedded,0);
   control(db,ns);assert.equal((await s.refresh()).status,'complete');assert.ok(s.view[6]>before);
 });
+
+for(const mode of [2,3,4])test(`product refresh observes control writer mode ${mode} at beforeDispatch`,async t=>{
+  const s=await semanticFixture(t);await stale(s,t);const before=s.view[6],publication=published(s);s.view[8]=mode;
+  const result=await s.refresh();assert.equal(s.view[6],before);assert.equal(result.progress.embedded,0);assert.deepEqual(published(s),publication);
+});

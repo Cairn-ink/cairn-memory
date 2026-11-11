@@ -1,3 +1,4 @@
+import { episodeControlGeneration } from './episode-control-generation.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { hasCardLineage, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { assertContentPort, inertContentPortValue, hasContentPortBoundary } from './content-safety-boundary.mjs';
@@ -826,17 +827,18 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       // before transport. Unbranded direct callers retain the conservative
       // canonical candidate guard after text selection.
       const namespaces = p.readSet.filter(ns => rows.some(row => equal(p.streams[row.stream].ns, ns)));
-      const dispatch = engineGuard(() => canonicalRead(() => {
-        if (checkCandidates && (lineage || !isBudgetEmbeddingPort(embedder))) {
+      const embeddingGuard = contextEmbeddingGuard(canonical, canonicalRead, namespaces, started + maxMs);
+      const dispatch = engineGuard(() => {
+        embeddingGuard();
+        if (checkCandidates && (lineage || !isBudgetEmbeddingPort(embedder))) canonicalRead(() => {
           const memo=createContentReadMemo(canonical);
           for (const row of rows) {
             const stream=p.streams[row.stream];
             if (stream.type==='card' ? !cardEligible(stream.ns,row,p.intent,m,p.readSet) :
                 !candidateAllowed(ref(stream,row),p.intent,p.readSet,memo)) unavailable('stale_index');
           }
-        }
-        assertContextEmbeddingAllowedInside(canonical, namespaces, started + maxMs);
-      }));
+        });
+      });
       dispatch();
       let vectors;
       const budgetPort=isBudgetEmbeddingPort(embedder);
@@ -987,7 +989,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
   }
   return Object.freeze({ reconcile, lexicalPage, lexical: (...args) => lexicalPage(...args).rows,
     refreshVectors, semanticPreflight, state, assertState, assertFile: checkFile,
-    assertEmbeddingAllowed: (readSet, deadlineAt) => canonicalRead(() => assertContextEmbeddingAllowedInside(canonical, readSet, deadlineAt)),
+    embeddingGuard: (readSet, deadlineAt) => contextEmbeddingGuard(canonical, canonicalRead, readSet, deadlineAt),
     close() { if (!closed) { closed = true; if (side.isOpen) side.close(); } } });
 }
 
@@ -1040,4 +1042,25 @@ export function assertContextEmbeddingAllowedInside(db, readSet, deadlineAt = In
     denied ||= row?.paused === 1 || row?.enabled === 0;
   }
   if (denied) fail('namespace_paused');
+}
+
+// Run outside canonicalRead: data_version must not be pinned by a read snapshot.
+// Record versions before the decision so a concurrent commit cannot be hidden
+// between the control read and a later probe. Each closure is one dispatch.
+export function contextEmbeddingGuard(db, read, readSet, deadlineAt = Infinity) {
+  let version, generation;
+  const check = () => { if (performance.now() >= deadlineAt) fail('timeout'); };
+  return () => {
+    check();
+    if (db.isTransaction) fail('storage_error');
+    const probe = db.prepare('PRAGMA data_version');
+    check();
+    const nextVersion = probe.get().data_version;
+    check();
+    const nextGeneration = episodeControlGeneration(db);
+    if (version === nextVersion && generation === nextGeneration) return;
+    read(() => assertContextEmbeddingAllowedInside(db, readSet, deadlineAt));
+    version = nextVersion;
+    generation = nextGeneration;
+  };
 }

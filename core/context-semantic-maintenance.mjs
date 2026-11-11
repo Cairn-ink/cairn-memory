@@ -11,7 +11,7 @@ import { fail } from './validation.mjs';
 
 const same=(a,b)=>canonicalJson(a)===canonicalJson(b);
 export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandles}) {
-  const paths=new Map(),views=new Map(),preparing=new Map();let closed=false;
+  const paths=new Map(),views=new Map(),preparing=new Map(),embeddingGuards=new WeakMap();let closed=false;
   const coverage=readSet=>({policy:'recent-projects-v1',selectionRevision:'semantic-service',requestedNamespaces:readSet.length,selectedNamespaces:readSet.length,omittedNamespaces:0});
   const viewKey=(path,writable,journalMode)=>JSON.stringify([path,writable,journalMode]);
   async function prepare(path,writable=false,journalMode=c.host.configuration.semanticSidecarJournalMode??'DELETE') {
@@ -194,7 +194,9 @@ export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandle
     const v=open(metadata.path);
     // Preserve the Worker's existing protocol and pinned loader bytes. The
     // reader recovers the fixed pause reason from a fresh canonical decision.
-    try { v.storage.assertEmbeddingAllowed(p.readSet,p.deadlineAt); }
+    let guard=embeddingGuards.get(input);
+    if(!guard){guard=v.storage.embeddingGuard(p.readSet,p.deadlineAt);embeddingGuards.set(input,guard);}
+    try { guard(); }
     catch(error) { if(error.code==='namespace_paused')fail('budget_denied');throw error; }
     v.facade.port.read(()=>{
       const layout=cachedContentLayout(v.facade.port.db);
