@@ -98,6 +98,11 @@ test('r4 write inventory has a closed operation and terminal-target classificati
     assert.equal(contentWriteMethodClass(method),value.operation==='write'?'write':'read',facade+'.'+method+' dispatch class');
     if(value.operation==='write'){assert.ok(CONTENT_WRITE_METHODS.includes(method));listed.add(method);assert.equal(value.terminalField,CONTENT_TERMINAL_FIELDS[method]??null);}
   }
+  // Configured-only engine writer; ordinary facade method inventories stay fixed.
+  assert.equal(contentWriteMethodClass('maintainCards'),'write');
+  assert.equal(CONTENT_TERMINAL_FIELDS.maintainCards??null,null);
+  assert.equal(listed.has('maintainCards'),false);
+  listed.add('maintainCards');
   assert.deepEqual([...listed].sort(),[...CONTENT_WRITE_METHODS].sort());
 });
 

@@ -128,7 +128,7 @@ export function createRawSearchAuthority(database, options) {
       event.projection_digest === createHash('sha256').update(JSON.stringify(['raw-capture-host-empty-v1',
         event.session_key,event.event_id,first,event.binding_digest])).digest('hex');
   }
-  function inspectInside(ref,intent = 'history') {
+  function inspectInside(ref,intent = 'history',capture) {
     namespace(ref.namespace); ref = rawSourceRef(ref,ref.namespace);
     const ns = ref.namespace, state = sources.budget();
     const view = sources.resolve(ns,ref,state);
@@ -184,6 +184,7 @@ export function createRawSearchAuthority(database, options) {
       unknown ? {kind:'history-only',reason:'unresolved-currentness'} : {kind:'current-eligible-linked',reason:'current-memory-links'};
     if (hostAncestryOnly && classification.kind === 'current-eligible-bare') classification.reason = 'host-session-ancestry';
     if (intent === 'current' && classification.kind === 'history-only') fail('source_unavailable');
+    capture?.(view,state.payloads);
     return { ref,manifest:view.manifest,role:view.message.role,ordinal:view.message.ordinal,occurredAt:view.message.occurred_at,
       currentness:historical ? 'historical' : unknown || !links.length ? 'unknown' : 'current',classification,
       suppression:contentSuppressionFenceInside(db,ns.ownerId),dispatch,links:links.map(row=>({receiptId:row.receipt_id,memoryId:row.id,
@@ -464,8 +465,8 @@ export function createRawSearchAuthority(database, options) {
     deadline(at);
     return bindWithin('raw-search-cache-key-v2',[identity.store_id,options.ownerId,options.readSet,publication.generation,publication.sequence,publication.revision,metadata],at);
   };
-  function checkInside(source,intent) {
-    const next=inspectInside(source.ref,intent);
+  function checkInside(source,intent,capture) {
+    const next=inspectInside(source.ref,intent,capture);
     if(!matches(source,next))fail('source_unavailable');
     return next;
   }
@@ -488,6 +489,39 @@ export function createRawSearchAuthority(database, options) {
     const text = result.parts.map(part => part.text).join('');
     if (result.nextCursor || text.length !== source.ref.span.end-source.ref.span.start) fail('source_unavailable');
     return text;
+  }
+  function prepareBatch(entries,intent,at) {
+    const checked=new Map(),allowed=[];
+    // Only engine-owned canonical work runs under SHARED. Each distinct source
+    // is initially checked once, including contributors outside the projected
+    // ranges. Live opening guards and registration revalidate after release.
+    read(()=>{
+      for(const entry of entries){
+        deadline(at);
+        let valid=!!entry;
+        for(const source of entry?.sources??[]){
+          const key=JSON.stringify(source.ref);
+          if(!checked.has(key))try{
+            let snapshot;
+            checkInside(source,intent,(view,payloads)=>{snapshot={view,payloads};});
+            checked.set(key,snapshot);
+          }catch(error){
+            if(['source_busy','search_deadline'].includes(error?.code))throw error;
+            checked.set(key,null);
+          }
+          // Every source is required. Once one fails, the remaining sources
+          // cannot rescue this entry and must not consume its peers' budget.
+          if(!checked.get(key)){valid=false;break;}
+        }
+        allowed.push(valid);
+      }
+    },at);
+    const reader=createRawSourceReader({db,identity,partDigest,open:openRaw});
+    return { allowed, open(source,check) {
+      const snapshot=checked.get(JSON.stringify(source.ref));
+      if(!snapshot)fail('source_unavailable');
+      return reader.openSnapshot(source.ref,snapshot.view,snapshot.payloads,check);
+    } };
   }
   function validate(entries,at=Infinity,{dropDenied=false,inventoryCheckpoint}={}) {
     if(dropDenied){
@@ -521,6 +555,6 @@ export function createRawSearchAuthority(database, options) {
     deadline(at);resetContentSuppressionRequestInside(db);
   }
   return { reset,refresh,resume:()=>resumeAt,read,identity:{storeId:identity.store_id,fileIdentity:database.fileIdentity,ownerId:options.ownerId,readSet:options.readSet},
-    bind,authorize,inventory,check,open,validate,fingerprint,fence,checkFence,cacheKey,
+    bind,authorize,inventory,check,open,prepareBatch,validate,fingerprint,fence,checkFence,cacheKey,
     inspect:(ref,intent='history')=>read(()=>inspectInside(ref,intent)) };
 }
