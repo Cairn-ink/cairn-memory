@@ -1,3 +1,4 @@
+import { openMemoryCore } from '../../../core/index.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -182,7 +183,10 @@ test('RR06 source-close rejection zeroes the key and exposes only fixed failure 
 async function capturedFixture(t,client) {
   const f = await hostFixture(t,{ client });
   assert.equal((await f.call('prepare')).status,'ready');
-  assert.equal((await f.call('initialize',{ ...f.selection,start:'beginning' })).status,'ready');
+  const source=readFileSync(f.sourcePath,'utf8');
+  if(client==='codex')writeFileSync(f.sourcePath,source.slice(0,source.indexOf('\n')+1),{mode:0o600});
+  assert.equal((await f.call('initialize',{ ...f.selection,start:client==='codex'?'eof':'beginning' })).status,'ready');
+  if(client==='codex')writeFileSync(f.sourcePath,source,{mode:0o600});
   const node = join(f.workspace.path,'synthetic-capture-node.mjs');
   writeFileSync(node,`#!${process.execPath}
 import{spawn}from'node:child_process';
@@ -194,7 +198,7 @@ for(const signal of['SIGTERM','SIGINT'])process.on(signal,()=>child.kill(signal)
     configPath:f.configPath,expectedAuthority:f.config.authority,home:f.profile.home,env:{ CAIRN_SYNTHETIC_API_KEY:'synthetic_key_secret' } });
   const result = await worker.run({ ...f.selection,pluginRoot:client === 'claude-code' ? f.pluginRoot:null,
     formatAuthority:client === 'codex' ? { format:FORMAT,sessionId:f.selection.sessionId,creatorVersion:'0.162.0',qualifiedCreatorVersion:'0.162.0' }:null });
-  assert.equal(result.completedRecords,client === 'codex' ? 2:1,JSON.stringify(result)); assert.equal(result.completedParts,1);
+  assert.equal(result.completedRecords,1,JSON.stringify(result)); assert.equal(result.completedParts,1);
   assert.equal(cursor(f).issuedOrdinal,1); assert.equal(cursor(f).pending,null);
   const db = new DatabaseSync(f.databasePath,{ readOnly:true });
   try { assert.equal(db.prepare("SELECT count(*) n FROM admission_claims WHERE state='completed'").get().n,1);
@@ -205,6 +209,7 @@ for(const signal of['SIGTERM','SIGINT'])process.on(signal,()=>child.kill(signal)
 function deleteCaptured(f) {
   const conversation = ok(f.core.listRawConversations({ namespace:f.namespace,client:f.client })).conversations[0];
   assert.ok(conversation);
+  // Retained/off handles recover the guard through durable bounded preflight.
   ok(f.core.deleteConversation({ namespace:f.namespace,conversationId:conversation.id,expectedRevision:conversation.revision,actionId:randomUUID() }));
 }
 function publications(f) {

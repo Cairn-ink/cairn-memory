@@ -1,4 +1,5 @@
 import { createHash, createHmac } from 'node:crypto';
+import { CARD_DEPENDENCY_LIMIT } from './private-card-schema.mjs';
 import { fail } from './validation.mjs';
 import { rawSourceKey } from './raw-source-input.mjs';
 import { cardLineageRevision, cachedContentLayout } from './content-safety-schema.mjs';
@@ -21,12 +22,12 @@ export function createRawCardInvalidation(db) {
     for (const value of values) {
       const rows = db.prepare(`SELECT DISTINCT c.id,c.revision FROM card_raw_bindings b JOIN private_cards c ON c.id=b.card_id
         WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state IN ('draft','confirmed') AND b.conversation_id=?
-        ${value.messageId ? 'AND b.message_id=? AND b.start<? AND b.end>?' : ''} ORDER BY c.id LIMIT 129`)
+        ${value.messageId ? 'AND b.message_id=? AND b.start<? AND b.end>?' : ''} ORDER BY c.id LIMIT ${CARD_DEPENDENCY_LIMIT+1}`)
         .all(...boundary(ns),value.conversationId,...(value.messageId ? [value.messageId,value.end,value.start] : []));
-      if (rows.length > 128) fail('dependency_limit_reached');
+      if (rows.length > CARD_DEPENDENCY_LIMIT) fail('dependency_limit_reached');
       const queue = db.prepare('INSERT OR IGNORE INTO card_raw_pending_invalidations(card_id,revision) VALUES(?,?)');
       for (const row of rows) queue.run(row.id,row.revision);
-      if (db.prepare('SELECT card_id FROM card_raw_pending_invalidations LIMIT 129').all().length > 128) fail('dependency_limit_reached');
+      if (db.prepare(`SELECT card_id FROM card_raw_pending_invalidations LIMIT ${CARD_DEPENDENCY_LIMIT+1}`).all().length > CARD_DEPENDENCY_LIMIT) fail('dependency_limit_reached');
     }
   }
   function mutate(ns, actionId, work) {
@@ -43,8 +44,8 @@ export function createRawCardInvalidation(db) {
       const result = work();
       if (owner) {
         let changed = false;
-        const pending = db.prepare('SELECT card_id,revision FROM card_raw_pending_invalidations ORDER BY card_id LIMIT 129').all();
-        if (pending.length > 128) fail('dependency_limit_reached');
+        const pending = db.prepare(`SELECT card_id,revision FROM card_raw_pending_invalidations ORDER BY card_id LIMIT ${CARD_DEPENDENCY_LIMIT+1}`).all();
+        if (pending.length > CARD_DEPENDENCY_LIMIT) fail('dependency_limit_reached');
         for (const { card_id: id,revision } of pending) {
           const row = db.prepare('SELECT state,revision FROM private_cards WHERE id=?').get(id);
           // Receipt triggers defer these Cards into the same SQL queue, so
@@ -153,8 +154,8 @@ export function createCardRawSources(db, identity, { mutableRevision = true } = 
   function checkFanout(refs, cardId) {
     for (const id of new Set(refs.filter(ref => ref.type === 'raw').map(ref => ref.conversationId))) {
       const rows = db.prepare(`SELECT DISTINCT c.id FROM card_raw_bindings b JOIN private_cards c ON c.id=b.card_id
-        WHERE b.conversation_id=? AND c.state IN ('draft','confirmed') AND c.id!=? LIMIT 128`).all(id,cardId);
-      if (rows.length >= 128) fail('dependency_limit_reached');
+        WHERE b.conversation_id=? AND c.state IN ('draft','confirmed') AND c.id!=? LIMIT ${CARD_DEPENDENCY_LIMIT}`).all(id,cardId);
+      if (rows.length >= CARD_DEPENDENCY_LIMIT) fail('dependency_limit_reached');
     }
   }
   const bindingId = ref => bind('raw-card-binding-v1', [ref.namespace,rawSourceKey(ref)]);

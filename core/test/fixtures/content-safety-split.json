@@ -928,7 +928,7 @@
     },
     {
       "file": "core/content-safety-schema.mjs",
-      "sha256": "461210f6a71b902ded6aaca22572af53bad060953306f4bf235a7b9375d668c2",
+      "sha256": "c8f9e0bcf08902576a82510f357528ddfdbfa32365e986771a9a76006582c4b1",
       "reason": "Reviewed Card lineage: exact lineage tuple/DDL attestation and synchronous canonical snapshot registration; feature accessors expose only privately attested revisions and add no fact-only writer."
     },
     {
@@ -943,7 +943,7 @@
       "file": "core/runtime.mjs",
       "start": "  function correct(",
       "end": "  function forgetMutation(",
-      "sha256": "92e113f7eabbdad87f5bcaa7ed8384226c6c31e7620c932fa4b89587318d000d",
+      "sha256": "89139a583446f96ff0364240b6ab46cad99979e68144a194b04e76bc63b5992c",
       "reason": "PR 1 passes each corrected receipt its matching optional receipt time; canonical post-state acknowledgement and terminal fact guards remain in this exact region."
     },
     {
@@ -951,7 +951,7 @@
       "file": "core/runtime.mjs",
       "start": "  function forgetMutationInside(",
       "end": "  function forget(ns,",
-      "sha256": "771259cb3f097d71e10ba96ffb8121d182c55222b5749944c0fb1deba6e48f31"
+      "sha256": "42f79ceb9335dc5617e13a1706855ed7588f73ecaaaac6cd318dd8b8a499ae6d"
     },
     {
       "id": "remove-receipts",
@@ -980,7 +980,8 @@
       "file": "core/raw-deletion-storage.mjs",
       "start": "  function cascadeInside(",
       "end": "  function remove(",
-      "sha256": "63eb5ba06ede3bac8595ed1dceb17b310037a6da6ddab6cc38267867414f7f1c"
+      "sha256": "c56a1768d1cb527b0fcff3fe739cc227d7e8292507c4730aa2e8a93aa976c52a",
+      "reason": "Local deletion probes before its first fence and final cascade; already fenced middle passes only advance owed UUID jobs."
     },
     {
       "id": "raw-exclusion",
@@ -1177,6 +1178,7 @@
     },
     "core/content-safety-schema.mjs": {
       "exports": [
+        "LOCAL_RAW_PRIVACY_DDL",
         "attestContentSafety",
         "bindContentSafetyConnection",
         "cachedContentLayout",
@@ -1197,7 +1199,8 @@
         "receiptEventTimeEnabled": "Feature accessor for privately attested receipt-event-time metadata, not a content safety gate. The separate static gate permits only runtime, context-product-schema and context-read-facade consumers.",
         "cardLineageRevision": "Reads the lineage bit only from the module-private set of attested layouts; no SQL or mutation capability.",
         "registerContentReadSnapshot": "Registers the native synchronous read-transaction seam without importing SQLite into the CLI/configuration graph; no fact writer.",
-        "withCanonicalContentSnapshot": "Runs the trusted canonical read callback in the registered synchronous snapshot, preserving the final lineage fence without an await or fact insertion."
+        "withCanonicalContentSnapshot": "Runs the trusted canonical read callback in the registered synchronous snapshot, preserving the final lineage fence without an await or fact insertion.",
+        "LOCAL_RAW_PRIVACY_DDL": "Attestor-owned immutable local privacy declarations shared with the local installer; this data-only export executes no SQL."
       }
     },
     "core/content-suppression-evidence.mjs": {

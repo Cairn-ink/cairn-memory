@@ -37,6 +37,8 @@ import { createRawCardInvalidation } from './card-raw-sources.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { createRawDeletionStorage } from './raw-deletion-storage.mjs';
 import { createRawLineageStorage, isSourceSnapshotOverflow, SOURCE_SNAPSHOT_MS } from './raw-lineage-storage.mjs';
+import { installLocalRawPrivacy } from './local-authority-schema.mjs';
+import { createLocalRawPrivacyStorage } from './local-authority-storage.mjs';
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
 const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
@@ -70,6 +72,8 @@ export function createMemoryRuntime(input, internal) {
   const db = openDatabase(input.path, { ...(busyTimeoutMs !== undefined ? { busyTimeoutMs } : {}), privateCards: Boolean(privateCards), currentDependencies: Boolean(privateCards?.currentDependencies) || Boolean(input.contentSafety && internal?.rawCapture), methodPackages: Boolean(methodPackages), assets: Boolean(assets), roleProfiles: Boolean(roleProfiles), rawCapture: Boolean(internal?.rawCapture),
     rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore, storeFence: input.storeFence, contentSafety: input.contentSafety });
   try {
+  if (internal?.localRawPrivacy) transaction(db, () => installLocalRawPrivacy(db));
+  const localRawPrivacy = internal?.localRawPrivacy ? createLocalRawPrivacyStorage(db) : null;
   const rawLineage = createRawLineageStorage(db);
   const sourceRoots = createRawSourceRoots(db);
   const rawCards = createRawCardInvalidation(db);
@@ -346,6 +350,7 @@ export function createMemoryRuntime(input, internal) {
         AND fingerprint = ? AND deleted = 0 AND id != ?`)
         .get(...boundary(ns), value.fingerprint, id);
       if (other) fail("memory_conflict");
+      localRawPrivacy?.hideMemoryInside(ns, current);
       sourceRoots.touchMemory(ns, id);
       const suppression = { reason: 'correction_supersession', actionId: 'memory-correct-'+id+'-'+expectedRevision };
       writeContentSuppressionInside(db, { namespace: ns, kind: 'memory', key: id, matchMode: 'revision-through',
@@ -384,6 +389,7 @@ export function createMemoryRuntime(input, internal) {
       const current = activeRow(ns, id);
       if (!current) return { forgotten: false, indexRevision: epoch(ns) };
       if (expectedRevision !== undefined && current.revision !== expectedRevision) fail("revision_conflict");
+      localRawPrivacy?.hideMemoryInside(ns, current);
       sourceRoots.touchMemory(ns, id);
       suppress(ns, current.fingerprint);
       const suppression = { reason: suppressionReason, actionId: 'memory-forget-'+id };
@@ -778,7 +784,7 @@ export function createMemoryRuntime(input, internal) {
     forgetMutation, rawCapture, sourceAuthority: rawLineage, sourceRoots, assertEpisodeRead, episodeProjection,
     deleteEpisode: (ns, input) => sourceRoots.enabled() ? deletion.forgetEpisode(ns, input) : undefined });
   stagedEvidence.setEpisodes(episodes);
-  deletion = createRawDeletionStorage({ db, roots: sourceRoots, episodes, forgetMutation, removeReceipts, advanceEpoch });
+  deletion = createRawDeletionStorage({ db, localRawPrivacy, roots: sourceRoots, episodes, forgetMutation, removeReceipts, advanceEpoch });
   const admissionStorage = createAdmissionStorage({
     db, admitMutation, validateReceiptTimes, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
     classificationJournal, episodes, proceduralStorage, assertSources: rawLineage.assertReceipts, sourceRoots, memoryAncestry, privacyMemoryDenied,
@@ -891,17 +897,17 @@ export function createMemoryRuntime(input, internal) {
     episodeCaptureState(ns, input) { ready(); return episodes.captureState(ns, input); },
     pendingEpisodeSession(ns, input) { ready(); return episodes.pendingSession(ns, input); },
     episodeDraftSnapshot(ns, input) { ready(); return episodes.draftSnapshot(ns, input); },
-    startEpisodeAttempt(ns, input) { ready(); return episodes.startAttempt(ns, input); },
+    startEpisodeAttempt(ns, input, deadline) { ready(); return episodes.startAttempt(ns, input, deadline); },
     settleEpisodeAttempt(ns, input) { ready(); return episodes.settleAttempt(ns, input); },
     episodeSessionKey(ns, client, sessionId) { ready(); return episodes.sessionKey(ns, client, sessionId); },
     reserveEpisodeBatch(ns, input, registration) { ready(); return episodes.reserveBatch(ns, input, registration); },
     setEpisodePolicy(ns,input) { ready(); return episodes.setPolicy(ns,input); },
-    claimEpisodeWriter(ns, input) { ready(); return episodes.claimWriter(ns, input); },
+    claimEpisodeWriter(ns, input, deadline) { ready(); return episodes.claimWriter(ns, input, deadline); },
     releaseEpisodeWriter(ns, input) { ready(); return episodes.releaseWriter(ns, input); },
-    claimEpisodeDraft(ns, input) { ready(); return episodes.claimDraft(ns, input); },
+    claimEpisodeDraft(ns, input, deadline) { ready(); return episodes.claimDraft(ns, input, deadline); },
     episodeDraftOutcome(ns, input) { ready(); return episodes.draftOutcome(ns, input); },
     failEpisodeDraft(ns, input) { ready(); return episodes.failDraft(ns, input); },
-    commitEpisodeDraft(ns, input) { ready(); return episodes.commitDraft(ns, input); },
+    commitEpisodeDraft(ns, input, deadline) { ready(); return episodes.commitDraft(ns, input, deadline); },
     getEpisode(ns, input, pages) { ready(); return episodes.inspect(ns, input, pages); },
     forgetEpisode(ns, input) { ready(); return episodes.forget(ns, input); },
     correctEpisode(ns, input) { ready(); return episodes.correct(ns, input); },
@@ -949,7 +955,7 @@ export function createMemoryRuntime(input, internal) {
     },
     rebuildIndex(ns, input) { ready(); return indexStorage.rebuildIndex(ns, input); },
     inspectAdmission(ns, input) { ready(); return admissionStorage.inspectAdmission(ns, input); },
-    claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },
+    claimAdmission(ns, input, deadline) { ready(); return admissionStorage.claimAdmission(ns, input, undefined, undefined, deadline); },
     filterCaptureSources(ns, sources) { ready(); return captureSourceRead(ns, () => rawLineage.filter(ns, sources)); },
     assertCaptureSources(ns, sources) { ready(); return captureSourceRead(ns, () => rawLineage.assertReceipts(ns, sources)); },
     captureSnapshot(ns, input, qualification, policy) {

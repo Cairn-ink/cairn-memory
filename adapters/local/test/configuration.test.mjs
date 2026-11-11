@@ -13,6 +13,14 @@ test('B3 validated personal authority uses public null at every public control b
   assert.equal(f.core.getCaptureControl({ namespace: parsed.authority.namespace }).ok, true);
   assert.equal(Object.isFrozen(parsed.authority.namespace), true);
 });
+test('local config keeps absent v1 interpretation and validates the explicit fixed mode', t => {
+  const f = fixture(t);
+  assert.equal(configuration(f.config).interpretation,undefined);
+  assert.equal(configuration({...f.config,interpretation:'engine'}).interpretation,'engine');
+  assert.equal(configuration({...f.config,interpretation:'raw-only'}).interpretation,'raw-only');
+  for (const interpretation of [null,false,'host','unknown']) assert.throws(() => configuration({...f.config,interpretation}));
+  assert.throws(() => configuration({...f.config,interpretation:'raw-only',raw:{...f.config.raw,mode:'off'}}));
+});
 
 test('B3 closed own-data configuration rejects unknown, missing, accessor and proxy fields', t => {
   const f = fixture(t);
@@ -45,6 +53,21 @@ test('B3 readonly preflight refuses missing, old, wrong and symlink DB without c
   await assert.rejects(preflight({ ...f.config, authority: { ...f.config.authority, storeId: 'foreign-store' } }));
   chmodSync(f.databasePath, 0o644); await assert.rejects(preflight(f.config)); chmodSync(f.databasePath, 0o600);
   chmodSync(f.config.usage.root, 0o755); await assert.rejects(preflight(f.config));
+});
+
+for(const errcode of [5,6,261,262,14,10,7]) test(`preflight bounds its timeout and classifies SQLite errcode ${errcode}`,async t=>{
+  const f=fixture(t),prepare=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;
+    const timeouts=[];let injections=0;
+    DatabaseSync.prototype.exec=function(sql,...args){
+      if(sql.startsWith('PRAGMA busy_timeout='))timeouts.push(Number(sql.slice(sql.indexOf('=')+1)));
+      return exec.call(this,sql,...args);
+    };
+    DatabaseSync.prototype.prepare=function(){injections++;throw Object.assign(Error('synthetic sqlite'),{code:'ERR_SQLITE_ERROR',errcode});};
+    try {await assert.rejects(preflight(f.config,{deadline:performance.now()+1000}),
+      {code:[5,6,261,262].includes(errcode)?'storage_busy':'invalid_local_capture_configuration'});}
+    finally {DatabaseSync.prototype.prepare=prepare;DatabaseSync.prototype.exec=exec;}
+    assert.equal(injections,1);assert.equal(timeouts.length,1);
+    assert.ok(timeouts[0]>=0&&timeouts[0]<=1000,'timeout stays within the remaining deadline');
 });
 
 test('B3 preflight checks only bound owner cap, never rewrites either owner', async t => {

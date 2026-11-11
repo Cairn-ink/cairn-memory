@@ -1683,5 +1683,15 @@
     "path": "core/local-raw-search.mjs",
     "source": "import { mkdir } from 'node:fs/promises'",
     "reason": "Creates private search sidecar directories only; mkdir does not open or close a database file descriptor."
+  },
+  {
+    "path": "integrations/client/raw/local-codex-qualification.mjs",
+    "source": "import { realpathSync, stat as statCallback, lutimes as lutimesCallback } from 'node:fs'",
+    "reason": "Metadata only: realpathSync resolves host/config fixture boundaries; promisified stat/lutimes inspect the bound host or update observed-host cache JSON timestamps. None opens database or sidecar data descriptors."
+  },
+  {
+    "path": "integrations/client/raw/local-session-start.mjs",
+    "source": "import { readdir, unlink } from 'node:fs/promises'",
+    "reason": "Lists and removes only authority-bound session-start JSON markers under the private starts directory; never database files or sidecars."
   }
 ]

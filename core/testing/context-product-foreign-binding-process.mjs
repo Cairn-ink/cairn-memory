@@ -54,9 +54,19 @@ if(mode==='run'){
   function admitOne(text,ns=personal){const c=api.openMemoryCore({path});try{assert.equal(c.admit({namespace:ns,memory:{content:text,kind:'fact'},receipts:[{client:'synthetic',sessionId:'restart',eventId:text,role:'user',excerpt:text}]}).ok,true);}finally{c.close();}}
   if(mode==='write'){admitOne('Post-builder restart canary');emit('wrote');process.disconnect?.();}
   else if(mode==='build'){
+    // Fixture setup deadline only: the first calls also pay Worker start and the sidecar open.
+    // It is not a product budget (5000 is the largest deadline the refresh input accepts); the
+    // restart and pump phases below keep their own 1000 ms quanta.
+    const BUILD_SETUP_MS=5000;
+    // Setup turns only: a slow runner may still miss the deadline, so at most two read_timeout turns
+    // are retried inside the existing loop, each printed as build_retry. No other error is retried.
+    // The fault variable replaces the first N setup replies so the test can pin exactly that policy.
+    const [faultCode,faultCount='1']=(process.env.CAIRN_TEST_FOREIGN_BINDING_BUILD_FAULT??'').split(':');
+    let setupRetries=0,faultsLeft=faultCode?Number(faultCount):0;
+    const buildTurn=async input=>{const r=await h.refreshContextIndex(input,c.token);return faultsLeft-->0?{ok:false,error:{code:faultCode}}:r;};
     admitOne('Synthetic restart admission canary');admitOne('Synthetic project canary',readSet[1]);
     const c=configured(t,path,readSet,{service:true}),h=await c.open();
-    for(const intent of (caseArg==='copy-checkpoint'?['current']:['current','history'])){let complete=false;for(let n=0;n<40&&!complete;n++){const r=await h.refreshContextIndex({readSet,types:['memory'],intent,mode:'lexical',budget:{maxItems:caseArg==='copy-checkpoint'?1:32,maxMs:1000}},c.token);emit('build_result',{intent,n,status:r.value?.status,error:r.error?.code});assert.equal(r.ok,true);complete=r.value.status==='complete';if(caseArg==='copy-checkpoint'){assert.equal(complete,false);break;}}if(caseArg!=='copy-checkpoint')assert.equal(complete,true);}
+    for(const intent of (caseArg==='copy-checkpoint'?['current']:['current','history'])){let complete=false;for(let n=0;n<40&&!complete;n++){const r=await buildTurn({readSet,types:['memory'],intent,mode:'lexical',budget:{maxItems:caseArg==='copy-checkpoint'?1:32,maxMs:BUILD_SETUP_MS}});emit('build_result',{intent,n,status:r.value?.status,error:r.error?.code});if(!r.ok&&r.error?.code==='read_timeout'&&setupRetries<2){setupRetries++;emit('build_retry',{intent,n,retry:setupRetries});continue;}assert.equal(r.ok,true);complete=r.value.status==='complete';if(caseArg==='copy-checkpoint'){assert.equal(complete,false);break;}}if(caseArg!=='copy-checkpoint')assert.equal(complete,true);}
     const closing=async()=>{await cleanup();if(killArg==='sigterm'){process.kill(process.pid,'SIGTERM');}else{process.disconnect();}};
     if(killArg==='sigterm')process.once('SIGTERM',()=>void closing());else process.once('message',()=>void closing());
     process.send({built:true});

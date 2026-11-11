@@ -249,8 +249,10 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     stagedEvidence.serializeView(input.view, true); // Validate before registration, including overlaps.
     const identity = sessionKey(ns, input.client, input.sessionId);
     const reserve = () => {
-      sourceRoots?.assertSession(ns, input.client, input.sessionId);
+      if (!registration?.localPrivacy) sourceRoots?.assertSession(ns, input.client, input.sessionId);
       const registeredRaw = registration?.commit();
+      if (registeredRaw?.closed) return registeredRaw;
+      if (registration?.localPrivacy) sourceRoots?.assertSession(ns, input.client, input.sessionId);
       if (registeredRaw?.observation) return { rawReplay: registeredRaw.observation };
       let row = db.prepare(`SELECT * FROM session_episodes WHERE ${where} AND client=? AND session_key=?`)
         .get(...boundary(ns), input.client, identity);
@@ -329,7 +331,8 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         ...(input.acquireWriter ? captureWriter(read(ns, row.id)) : {}) };
     };
     const result = transaction(db, () => sourceRoots ? sourceRoots.mutateSources(ns,
-      input.view.messages.map(message => ({ client: input.client, sessionId: input.sessionId, eventId: message.id })), reserve) : reserve());
+      input.view.messages.map(message => ({ client: input.client, sessionId: input.sessionId, eventId: message.id })), reserve) : reserve(), registration?.checkDeadline);
+    if (result.closed) fail(result.closed);
     registration?.accept();
     return result;
   }
@@ -450,12 +453,13 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       return { overlap: fresh.length === 0, processing: fresh.length === 0 && unfinished, episodeId: row?.id };
     });
   }
-  function claimWriter(ns, input) {
+  function claimWriter(ns, input, deadline) {
+    deadline?.check();
     return transaction(db, () => {
       assertControl(ns, input.generation);
       const row = live(ns, input.episodeId);
       return acquireWriter(row);
-    });
+    }, deadline?.check);
   }
   function writer(row, token) {
     if (row.writer_token !== token || row.writer_expires_at <= Date.now()) fail('stale_episode');
@@ -464,7 +468,8 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     return transaction(db, () => ({ released: Boolean(db.prepare(`UPDATE session_episodes SET writer_token=NULL,writer_expires_at=NULL
       WHERE ${where} AND id=? AND writer_token=?`).run(...boundary(ns), input.episodeId, input.token).changes) }));
   }
-  function claimDraft(ns, input) {
+  function claimDraft(ns, input, deadline) {
+    deadline?.check();
     return transaction(db, () => {
       const row = live(ns, input.episodeId); writer(row, input.writerToken);
       if (!['batch','end','lazy'].includes(input.trigger) || !Number.isSafeInteger(input.watermark) || input.watermark < 1 || input.watermark > row.observed) fail('invalid_input');
@@ -479,7 +484,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         .run(row.id, marker, input.watermark, token, Date.now()+ADMISSION_LEASE_MS, row.revision, row.source_fence, input.generation, input.deferAttempt ? 0 : 1);
       if (!input.deferAttempt) db.prepare('UPDATE session_episodes SET attempted=max(attempted,?) WHERE id=?').run(input.watermark, row.id);
       return { token, revision: row.revision, sourceFence: row.source_fence, watermark: input.watermark, skipReason };
-    });
+    }, deadline?.check);
   }
   function attempt(ns, input) {
     const row = live(ns, input.episodeId);
@@ -500,12 +505,13 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     }
     return { row, claim };
   }
-  function startAttempt(ns, input) {
+  function startAttempt(ns, input, deadline) {
+    deadline?.check();
     return transaction(db, () => {
       const { row, claim } = attempt(ns, input);
       db.prepare('UPDATE episode_attempts SET started=1 WHERE episode_id=? AND token=?').run(row.id, claim.token);
       db.prepare('UPDATE session_episodes SET attempted=max(attempted,?) WHERE id=?').run(claim.watermark, row.id);
-    });
+    }, deadline?.check);
   }
   function failDraft(ns, input) {
     if (!['episode_failed','episode_timeout','invalid_model_output','context_budget_exceeded','capacity','expired','generation_conflict','missing_evidence'].includes(input.code)) fail('invalid_input');
@@ -550,7 +556,8 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       if (!isStorageBusy(error)) throw error;
     } finally { db.exec(`PRAGMA busy_timeout=${timeout}`); }
   }
-  function commitDraft(ns, input) {
+  function commitDraft(ns, input, deadline) {
+    deadline?.check();
     return transaction(db, () => mutateSources(ns, null, () => {
       stagedEvidence.touch(ns);
       const { row, claim } = attempt(ns, input), old = JSON.parse(row.record);
@@ -738,7 +745,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
             input.classificationEventId, Date.now());
       }
       return { revision: row.revision+1 };
-    }));
+    }), deadline?.check);
   }
   function draftReceipt(ns, source) {
     const origin = live(ns, source.origin_episode_id);
