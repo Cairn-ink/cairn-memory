@@ -13,7 +13,6 @@
   "core/relation-limits.mjs",
   "core/episode-schema.mjs",
   "core/episode-storage.mjs",
-  "core/episode-control-generation.mjs",
   "core/episode-reads.mjs",
   "core/session-context.mjs",
   "core/episode-input.mjs",

@@ -1,4 +1,4 @@
-import { episodeControlGeneration } from './episode-control-generation.mjs';
+import { episodeControlGeneration } from './episode-schema.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { hasCardLineage, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { assertContentPort, inertContentPortValue, hasContentPortBoundary } from './content-safety-boundary.mjs';
