@@ -780,7 +780,9 @@ try {
     dataDir = binding.root;
     if (endpoint.startsWith("http")) {
       hostedConfig = { root: resolve(dataDir), endpoint };
-      if (hostedPauseMode(hostedConfig, process.platform).barrier) {
+      // A non-absolute root keeps its existing refusals; resolving it here
+      // would turn an empty or relative plugin data path into a usable root.
+      if (hostedPauseMode(hostedConfig, process.platform).barrier && isAbsolute(dataDir)) {
         // One canonical root per process: the pause gate, its authority files,
         // control, cursors, quota and cleanup all use it. The configured path
         // is only re-checked under the gate; a retargeted alias fails closed.
