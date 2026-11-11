@@ -39,6 +39,7 @@
   - While new turns keep arriving, the local MCP server keeps indexing: about one small index write per second and roughly 3% of one CPU core.
   - Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
   - Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.
+  - With an embedding model configured, a semantic Raw search can still send the search text to that provider while saving is paused or disabled for that store; fixed in the next release.
   - A later release indexes newly saved conversations first.
 - Default reads keep the Raw excerpts they already validated when a read reaches
   its time limit, marked partial, instead of dropping them.
