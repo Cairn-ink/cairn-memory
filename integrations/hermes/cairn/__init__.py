@@ -6,16 +6,15 @@ import json
 import os
 from pathlib import Path
 import re
-import subprocess
 import sys
 import tempfile
 import threading
 import uuid
 
-import psutil
-
 from agent.memory_provider import MemoryProvider
 from hermes_constants import get_hermes_home
+
+from . import hosted
 
 TOOLS = frozenset({"remember_memory", "recall_memory", "inspect_memory", "correct_memory", "forget_memory"})
 TIMEOUT_SECONDS = 45
@@ -32,6 +31,8 @@ def configured_tools(config):
 
 
 def stop_process(process):
+    import psutil
+
     # The SDK creates a separate session for Node; killing only our group leaks it.
     try:
         parent = psutil.Process(process.pid)
@@ -62,9 +63,13 @@ def configuration(home):
 
 
 def validate_config(value):
+    if isinstance(value, dict) and value.get("mode") == "hosted":
+        return hosted.validate_config(value)
     required = {"node_path", "executable_path"}
-    optional = {"capture_qualification", "capture_deadline_ms", "classification_recovery", "recall_context"}
+    optional = {"capture_qualification", "capture_deadline_ms", "classification_recovery", "recall_context", "mode"}
     if not isinstance(value, dict) or not required <= set(value) or not set(value) <= required | optional:
+        raise ValueError("cairn_invalid_configuration")
+    if "mode" in value and value["mode"] != "local":
         raise ValueError("cairn_invalid_configuration")
     if "capture_qualification" in value and value["capture_qualification"] != "source-bound-v2":
         raise ValueError("cairn_invalid_configuration")
@@ -126,22 +131,37 @@ class CairnMemoryProvider(MemoryProvider):
         self._closed = False
         self._lock = threading.Lock()
         self._process = None
+        self._hosted = None
 
     @property
     def name(self):
         return "cairn"
 
     def is_available(self):
-        if sys.platform != "linux" or importlib.util.find_spec("mcp") is None:
+        if self._closed:
             return False
         try:
-            configuration(get_hermes_home().resolve())
+            home = get_hermes_home().resolve()
+            config = configuration(home)
+            if config.get("mode") == "hosted":
+                if self._hosted is None and self._home is None:
+                    self._hosted = hosted.HostedMemoryProvider()
+                hosted.read_credential(home, config["api_endpoint"])
+                return True
+            if sys.platform != "linux" or importlib.util.find_spec("mcp") is None:
+                return False
             return True
-        except ValueError:
+        except (OSError, ValueError, TypeError):
             return False
 
     def unavailable_reason(self):
-        return "Cairn requires Linux, the host MCP SDK and explicit installed Node/Cairn paths; run hermes memory setup."
+        return "Run hermes memory setup: hosted needs a memory-only token; local needs Linux, the host MCP SDK and installed Node/Cairn paths."
+
+    def post_setup(self, hermes_home, config):
+        if self._closed:
+            print("Cairn provider is shut down; restart Hermes and run memory setup.")
+            return
+        hosted.post_setup(self, hermes_home, config)
 
     def get_config_schema(self):
         try:
@@ -173,6 +193,8 @@ class CairnMemoryProvider(MemoryProvider):
                                     "secret": True, "required": False, "env_var": "CAIRN_MEMORY_OPENAI_API_KEY"}]
 
     def save_config(self, values, hermes_home):
+        if self._closed:
+            raise ValueError("cairn_unsupported_context")
         validated = validate_config(values)
         home = Path(hermes_home).resolve()
         home.mkdir(parents=True, exist_ok=True)
@@ -180,10 +202,17 @@ class CairnMemoryProvider(MemoryProvider):
             temporary = Path(file.name)
             json.dump(validated, file)
         temporary.replace(home / "cairn.json")
+        if validated.get("mode") == "hosted" and self._hosted is None and self._home is None:
+            self._hosted = hosted.HostedMemoryProvider()
 
     def get_tool_schemas(self):
         if self._closed:
             return []
+        if self._hosted is not None:
+            return self._hosted.get_tool_schemas()
+        if self._schemas is None and configuration(get_hermes_home().resolve()).get("mode") == "hosted":
+            self._hosted = hosted.HostedMemoryProvider()
+            return self._hosted.get_tool_schemas()
         if self._schemas is None:
             # Hermes registers routing before initialize: discovery must never open real memory.
             self._home = get_hermes_home().resolve()
@@ -200,14 +229,25 @@ class CairnMemoryProvider(MemoryProvider):
 
     def initialize(self, session_id, **kwargs):
         self._ready = False
+        if self._closed:
+            raise ValueError("cairn_unsupported_context")
+        if self._hosted is not None:
+            return self._hosted.initialize(session_id, **kwargs)
         if self._closed or kwargs.get("platform") != "cli" or kwargs.get("agent_context") != "primary":
             raise ValueError("cairn_unsupported_context")
         home = Path(kwargs["hermes_home"]).resolve()
+        if self._home is None and configuration(home).get("mode") == "hosted":
+            self._hosted = hosted.HostedMemoryProvider()
+            return self._hosted.initialize(session_id, **kwargs)
         if self._home is None or home != self._home or configuration(home) != self._config:
             raise ValueError("cairn_profile_binding_changed")
         self._ready = True
 
     def handle_tool_call(self, tool_name, args, **kwargs):
+        if self._closed:
+            return error("cairn_not_initialized")
+        if self._hosted is not None:
+            return self._hosted.handle_tool_call(tool_name, args, **kwargs)
         if not self._ready or self._closed:
             return error("cairn_not_initialized")
         if kwargs.get("platform", "cli") != "cli" or kwargs.get("agent_context", "primary") != "primary":
@@ -233,6 +273,8 @@ class CairnMemoryProvider(MemoryProvider):
             return error("cairn_transport_failed")
 
     def _request(self, operation, database, owner, **fields):
+        import subprocess
+
         # Isolate SDK diagnostics and its inherited environment from the Hermes process.
         with self._lock:
             if self._closed or self._process is not None:
@@ -262,11 +304,40 @@ class CairnMemoryProvider(MemoryProvider):
                 self._process = None
 
     def shutdown(self):
+        if self._closed:
+            return
+        if self._hosted is not None:
+            self._closed = True
+            self._ready = False
+            return self._hosted.shutdown()
         with self._lock:
             self._closed = True
             self._ready = False
             if self._process is not None and self._process.poll() is None:
                 stop_process(self._process)
+
+    def system_prompt_block(self):
+        if self._closed:
+            return ""
+        return self._hosted.system_prompt_block() if self._hosted is not None else ""
+
+    def prefetch(self, query, *, session_id=""):
+        if self._closed:
+            return ""
+        return self._hosted.prefetch(query, session_id=session_id) if self._hosted is not None else ""
+
+    def on_session_switch(self, new_session_id, **kwargs):
+        if not self._closed and self._hosted is not None:
+            self._hosted.on_session_switch(new_session_id, **kwargs)
+
+    def recall_status(self):
+        if self._closed:
+            return None
+        return self._hosted.recall_status() if self._hosted is not None else None
+
+    def queue_prefetch(self, query, *, session_id=""):
+        # One recall per turn against the hosted daily quota; no post-turn duplicate.
+        pass
 
 
 def register(ctx):

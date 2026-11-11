@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import fsPromises, { readFile, writeFile, mkdir, readdir, lstat, chmod, chown, symlink, rm, cp, copyFile, realpath } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
+import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as delay } from 'node:timers/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { join, dirname, delimiter } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
+import { assertFixtureClients, fixtureBinaryGuard } from './fixture-clients.mjs';
 import { engineCacheComplete, skipMissingEngineCache } from './engine-cache.mjs';
 
 runTest('local mode contract', async parent => {
@@ -32,6 +34,22 @@ const engine = { id: engineId, package: manifest.package.name, packageVersion: m
 const cacheSkip = 'Engine install requires a primed CAIRN_SETUP_NPM_CACHE; no network is used by local-mode tests.';
 const needCache = t => { if (!engineCacheComplete(process.env.CAIRN_SETUP_NPM_CACHE)) { return skipMissingEngineCache(t, cacheSkip); } return true; };
 const json = async path => JSON.parse(await readFile(path, 'utf8'));
+function databaseSnapshot(path, info) {
+  let database;
+  try {
+    database = new DatabaseSync(path, { readOnly: true });
+    const schema = database.prepare('SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY name').all();
+    const tables = schema.filter(row => row.type === 'table' && !row.name.startsWith('sqlite_'));
+    return { schema, userVersion: database.prepare('PRAGMA user_version').get(),
+      rows: tables.map(({ name }) => [name, database.prepare('SELECT * FROM "' + name.replaceAll('"', '""') + '"')
+        .all().map(row => JSON.stringify(row)).sort()]) };
+  } catch (error) {
+    // A few uninstall fixtures use a non-database sentinel with this suffix.
+    // Preserve its metadata without opening a raw descriptor to inspect bytes.
+    if (!error.message.includes('file is not a database')) throw error;
+    return { sentinelSize: info.size, mtimeMs: info.mtimeMs, ino: info.ino };
+  } finally { database?.close(); }
+}
 async function files(root) {
   const result = {};
   try {
@@ -39,7 +57,12 @@ async function files(root) {
       const path = join(root, entry.name);
       if (entry.isDirectory()) result[entry.name + '/'] = { directory: true, mode: (await lstat(path)).mode & 0o777 };
       if (entry.isDirectory()) for (const [key, value] of Object.entries(await files(path))) result[entry.name + '/' + key] = value;
-      else result[entry.name] = { bytes: (await readFile(path)).toString('base64'), mode: (await lstat(path)).mode & 0o777 };
+      else {
+        const info = await lstat(path), sqlite = /\.sqlite(?:-(?:wal|shm|journal))?$/.test(path);
+        result[entry.name] = { mode: info.mode & 0o777,
+          ...(path.endsWith('.sqlite') ? { database: databaseSnapshot(path, info) } : sqlite ?
+            { size: info.size, mtimeMs: info.mtimeMs, ino: info.ino } : { bytes: (await readFile(path)).toString('base64') }) };
+      }
     }
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
   return result;
@@ -53,7 +76,7 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
   for (const [client, enabled, initial] of [['claude', claude, claudeState], ['codex', codex, codexState]]) {
     paths[client] = join(ws.path, client + '.json'); calls[client] = join(ws.path, client + '.jsonl');
     await writeFile(paths[client], JSON.stringify(initial)); await writeFile(calls[client], '');
-    if (enabled) await writeFile(join(bin, client), `#!${process.execPath}\nprocess.env.FAKE_STATE=${JSON.stringify(paths[client])};process.env.FAKE_CALLS=${JSON.stringify(calls[client])};\n` +
+    if (enabled) await writeFile(join(bin, client), `#!${process.execPath}\n${fixtureBinaryGuard(ws.path)}process.env.FAKE_STATE=${JSON.stringify(paths[client])};process.env.FAKE_CALLS=${JSON.stringify(calls[client])};\n` +
       await readFile(new URL(`./fake-${client}.mjs`, import.meta.url), 'utf8'), { mode: 0o755 });
   }
   const moduleURL = pathToFileURL(join(testedPackageRoot, 'lib/setup.mjs')).href;
@@ -103,6 +126,7 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
     PATH: bin, TMPDIR: ws.path,
     CAIRN_SETUP_NPM_CACHE: process.env.CAIRN_SETUP_NPM_CACHE, CAIRN_SETUP_NPM_OFFLINE: '1' };
   const run = async (args = ['setup', '--local'], options = {}) => {
+    assertFixtureClients({ ...env, ...options.env }, ws.path);
     const child = spawn(nodeExecutable, [harness, ...args], { cwd: ws.path,
       env: { ...env, ...options.env, LOCAL_TEST_OPTIONS: JSON.stringify(options) }, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '', stderr = '';
@@ -462,10 +486,10 @@ test('L17 explicit default database is valid; other database paths inside the ro
   assert.equal(refused.code, 2, refused.display); assert.deepEqual(await f.inventory(), before);
 });
 
-test('L04/L17 noninteractive local flags persist identity and allow a new project after uninstall', async t => {
+test('L04/L17 noninteractive local flags with capture off persist identity and allow a new project after uninstall', async t => {
   if (!needCache(t)) return;
   const f = await localFixture(t), db = join(f.ws, 'external.sqlite');
-  const first = await f.run(['setup', '--local', '--owner', 'synthetic-local-owner', '--project', 'synthetic-project', '--db', db]);
+  const first = await f.run(['setup', '--local', '--no-capture', '--owner', 'synthetic-local-owner', '--project', 'synthetic-project', '--db', db]);
   assert.equal(first.code, 0, first.display); assert.equal(first.prompts.length, 0);
   const installed = await f.descriptor(); assert.equal(installed.state, 'installed');
   assert.equal(installed.ownerId, 'synthetic-local-owner'); assert.equal(installed.projectId, 'synthetic-project');
@@ -768,17 +792,12 @@ test('L23 recovery rm command round-trips with shell metacharacters', async t =>
   assert.equal(removed.status, 0, removed.stderr); await assert.rejects(lstat(join(f.root, '.setup.lock')), { code: 'ENOENT' });
   assert.equal((await f.run(['setup', '--local', '--dry-run'])).code, 0);
 });
-test('L23 manual TOML parses through the real Codex binary in a private home', async t => {
+test('L23 manual TOML parses through a fixture Codex binary in a private home', async t => {
   const f = await localFixture(t, { suffix: ' space $ ` " \' \\' });
-  const { access } = await import('node:fs/promises'); let executable;
-  for (const directory of (process.env.PATH ?? '').split(delimiter)) {
-    try { const path = join(directory, 'codex'); await access(path, 1); executable = path; break; } catch { /* Next PATH directory. */ }
-  }
-  if (!executable) { t.skip('Real codex binary is not on PATH; fake TOML checks remain covered separately.'); return; }
   const { vector } = await seed(f, { register: false }); await f.config(codexSnippet(f.root, vector));
-  const result = spawnSync(executable, ['mcp', 'list', '--json'], { env: { ...f.env, PATH: process.env.PATH, TMPDIR: f.ws }, cwd: f.ws,
+  const clients = assertFixtureClients(f.env, f.ws);
+  const result = spawnSync(clients.codex, ['mcp', 'list', '--json'], { env: f.env, cwd: f.ws,
     encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 20000 });
-  if (result.error?.code === 'EPERM') { t.skip('Sandbox blocks real Codex child pipes (EPERM).'); return; }
   assert.equal(result.status, 0, result.stderr);
   const entry = JSON.parse(result.stdout).find(entry => entry.name === 'cairn-local');
   assert.equal(entry.transport.command, vector.node); assert.deepEqual(entry.transport.args, codexAddArguments(f.root, vector).slice(5));
