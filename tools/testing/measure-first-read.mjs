@@ -7,6 +7,7 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 
 const root = resolve(process.argv.find(arg => arg.startsWith('--engine-root='))?.slice(14) ?? fileURLToPath(new URL('../../', import.meta.url)));
+const { DatabaseSync } = await import('node:sqlite');
 const { openMemoryCore } = await import(pathToFileURL(join(root, 'core/index.mjs')));
 const { createContextReadAccess } = await import(pathToFileURL(join(root, 'adapters/mcp/context-read-access.mjs')));
 const { createLocalRawSearch } = await import(pathToFileURL(join(root, 'core/local-raw-search.mjs')));
@@ -51,10 +52,17 @@ if (process.argv.includes('--child')) {
   try {
     const core = openMemoryCore({ path: seedPath, raw: true, rawSearch: false, model });
     try {
-      for (let i = 0; i < 500; i++) ok(await core.capture({ namespace: ns, client: 'codex', sessionId: 'synthetic-corpus', eventId: 'synthetic-' + i,
+      for (let i = 0; i < 500; i++) ok(await core.capture({ namespace: ns, client: 'codex', sessionId: 'synthetic-corpus-' + Math.floor(i / 10), eventId: 'synthetic-' + i,
         messages: [{ id: 'synthetic-' + i, role: 'user', occurredAt: '2026-01-01T00:00:00.000Z',
           content: `Synthetic telescope observation ${i}. ` + 'The synthetic observatory records a cobalt telescope and a quiet sky. 合成觀測資料。 '.repeat(45) }] }));
     } finally { await core.close(); }
+    const inspection = new DatabaseSync(seedPath, { readOnly: true });
+    let corpusCounts;
+    try {
+      corpusCounts = Object.fromEntries(['memories', 'receipts', 'raw_conversations', 'raw_messages'].map(table =>
+        [table, inspection.prepare('SELECT count(*) AS n FROM ' + table).get().n]));
+    } finally { inspection.close(); }
+    if (JSON.stringify(Object.values(corpusCounts)) !== JSON.stringify([500, 500, 50, 500])) throw Error('synthetic_corpus_count_mismatch');
     const samples = [];
     for (let i = 0; i < 5; i++) {
       const path = join(scratch, 'sample-' + i + '.sqlite'); cpSync(seedPath, path);
@@ -69,6 +77,6 @@ if (process.argv.includes('--child')) {
       });
       samples.push(value);
     }
-    console.log(JSON.stringify({ node: process.version, memories: 500, synthetic: true, corpusBytes: statSync(seedPath).size, samples }, null, 2));
+    console.log(JSON.stringify({ node: process.version, memories: 500, synthetic: true, corpusBytes: statSync(seedPath).size, corpusCounts, samples }, null, 2));
   } finally { rmSync(scratch, { recursive: true, force: true }); }
 }
