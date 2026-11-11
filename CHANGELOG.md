@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — engine-generated topic Cards
+
+- When a consolidation model is configured, the engine builds topic Cards during
+  maintenance to summarize a topic's current state, history and contradictions.
+  Cards follow their Memories when a topic is relabeled or refiled, without
+  regenerating the summary when the sources stay the same.
+- A forgotten, suppressed or excluded source hides its Card from reads.
+  Maintenance rebuilds the Card from eligible sources when the topic still
+  qualifies, or removes its stale body when it no longer does.
+- There is no separate generation toggle. Generation is available only when the
+  configured model implements `consolidate`; hosts can leave that method
+  unconfigured to keep it off. See [Engine Cards](docs/engine-cards.md).
+- Dated reads retain every surviving Memory's source dates and sort by the
+  surviving sources when a topic Card replaces part of a shared-source group.
+
 ## Unreleased — batch Raw preparation
 
 - Document and pin the mixed-reader Raw grant-sampling known limit; final whole-set stored-state checks remain enforced.
@@ -16,6 +31,15 @@
   candidate's existing authorization request. Completed
   candidates retain independent outcomes and cutoff delivery; fresh batch and
   final checks still precede Raw projection and delivery.
+
+## Unreleased — source dates on delivered Memories
+
+- Context reads attach the date of each Memory's source message, taken from its
+  receipts, so a client can tell when a fact was said even when no Raw excerpt
+  is delivered. Source entries gain an optional `date` or `dates`; the item's
+  existing `date` keeps its meaning. Stores without source dates produce the
+  same output as before and run no extra statement.
+
 ## 0.6.6 — Unreleased
 
 - `setup --local` installs automatic plaintext conversation Raw capture by default

@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import { assertContentPort } from './content-safety-boundary.mjs';
-import { assembleContext, ASSEMBLY_FRAMING, meteredText, sourceDateFields } from './context-read-assembly.mjs';
+import { assembleContext, ASSEMBLY_FRAMING, meteredText, cardSourceKeys, memoryPackKey, sourceDateFields } from './context-read-assembly.mjs';
 import { ASSEMBLY_DEFAULTS, ASSEMBLY_LIMITS, CONTEXT_VERSION, namespaceKey } from './context-read-input.mjs';
 import { createBM25, scoreBM25 } from './context-read-bm25.mjs';
 import { tokenizeT1, termFrequencies } from './context-read-tokenize.mjs';
@@ -162,6 +162,7 @@ function memoryWire(item, representation, body = item.text) {
     const value = canonical(item.metadata[key]);
     if (!Object.hasOwn(defaults, key) || !same(value, canonical(defaults[key]))) metadata[key] = value;
   }
+  if (item.metadata.origin === 'engine') for (const key of ['builtAt', 'clusterKey', 'status']) metadata[key] = item.metadata[key];
   return { ref: { ns: item.ns, type: item.type, id: item.ref.memoryId ?? item.ref.cardId, rev: item.ref.revision,
     ...(item.type === 'card' ? { bodyRev: item.ref.bodyRevision } : {}), f: item.fence.slice(0, 8) }, rank: item.rank,
     ...(representation === 'representation-v2-dated' && item.date ? { date: item.date } : {}), body,
@@ -177,8 +178,8 @@ const overlap = (a, b) => {
 };
 const datedOrder = (a, b) => a.date && b.date ? binary(a.date, b.date) || a.rank - b.rank : a.date ? -1 : b.date ? 1 : a.rank - b.rank;
 
-// Cards intentionally have no candidate/admission hook yet. Existing explicit
-// card reads retain their established projection; no Document Cards are added.
+// Cards share ordinary ranking. Their bound Memory sources are removed only
+// from a trial pack that actually contains the Card and fits its budget.
 export function assembleThreeLayerContext(args, raw = unavailable('unavailable')) {
   const fallback = coverage => {
     const value = assembleContext({ ...args, responseBytes: args.responseBytes && (trial => args.responseBytes({ ...trial,
@@ -239,8 +240,14 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
       }
       unit.evidence.push(excerpt);
     }
-    for (const unit of units) {
+    // Build the same projection for initial units and for a Card's surviving
+    // sources. Recompute identity and chronology rather than retaining fields
+    // from a group that still included a covered Memory.
+    const buildUnit = unit => {
       unit.memories.sort((a, b) => a.rank - b.rank);
+      unit.id = unit.memories.length ? JSON.stringify(unit.memories[0].ref) : unit.evidence[0].key;
+      unit.rank = unit.memories[0]?.rank ?? args.prepared.length + unit.evidence[0].rank;
+      unit.turns = [...new Set([...unit.memories.flatMap(item => item.turnIds ?? []), ...unit.evidence.map(item => item.key)])];
       const bodies = [];
       for (const memory of unit.memories) if (!bodies.some(body => body === memory.text ||
         overlap(new Set(tokenizeT1(body)), new Set(tokenizeT1(memory.text))) >= .6)) bodies.push(memory.text);
@@ -279,15 +286,27 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
       unit.sessions = [...new Set([...unit.evidence.map(item => item.session), ...unit.memories.flatMap(item =>
         item.turnIds?.length ? item.turnIds.map(turn => { const [namespace, conversation] = JSON.parse(turn); return JSON.stringify([namespace, conversation]); })
           : item.sessionIds ?? [])])];
-    }
+      return unit;
+    };
+    units.forEach(buildUnit);
     const documents = units.map(unit => ({ id: unit.id, text: unit.lexicalText })), bm = createBM25(documents), terms = tokenizeT1(args.query);
     const scores = units.map(unit => scoreBM25(terms, termFrequencies(unit.lexicalText), bm) ?? 0), max = Math.max(1e-12, ...scores);
     units.forEach((unit, i) => { unit.bm25 = scores[i] / max; unit.prior = unit.memories[0]?.type === 'memory' ? 61 / (60 + unit.rank) : 0; });
     const selected = [], remaining = [...units], sessions = new Set(), turns = new Set();
     const stops = { budget: false, items: false, deadline: false }, breadth = countListQuestion(args.query);
-    const payload = proposed => ({ framing: ASSEMBLY_FRAMING, items: [...proposed]
+    const deduped = proposed => {
+      const covered = cardSourceKeys(proposed.flatMap(unit => unit.memories));
+      if (!covered.size) return proposed;
+      return proposed.flatMap(unit => {
+        const members = unit.memories.filter(item => item.type !== 'memory' || !covered.has(memoryPackKey(item.ref)));
+        if (members.length === unit.memories.length) return [unit];
+        if (!members.length && !unit.evidence.length) return [];
+        return [buildUnit({ memories: members, evidence: unit.evidence.slice() })];
+      });
+    };
+    const payload = proposed => ({ framing: ASSEMBLY_FRAMING, items: [...deduped(proposed)]
       .sort(args.representation === 'representation-v2-dated' ? datedOrder : (a, b) => a.rank - b.rank).map(unit => unit.wire) });
-    const memories = proposed => proposed.flatMap(unit => unit.memories);
+    const memories = proposed => deduped(proposed).flatMap(unit => unit.memories);
     const diagnostics = (proposed, used) => ({ version: CONTEXT_VERSION, policy: { id: args.policy.id }, representation: args.representation,
       counter: { id: counter.id }, items: memories(proposed).map(item => ({ ref: item.ref, metadata: item.metadata })),
       budget: { ...args.budget, used }, omitted: { items: units.length - proposed.length, bodies: units.length - proposed.length,
@@ -315,6 +334,9 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
         return score(b) - score(a) || a.rank - b.rank || binary(a.id, b.id);
       });
       const unit = remaining.shift();
+      const covered = cardSourceKeys(unit.memories), cardRank = Math.min(...unit.memories.filter(item => item.type === 'card').map(item => item.rank));
+      if (covered.size && selected.some(other => other.memories.some(item => item.type === 'memory' &&
+        item.rank < cardRank && covered.has(memoryPackKey(item.ref))))) continue;
       if (!fits([...selected, unit]).fits) { stops.budget = true; continue; }
       selected.push(unit); unit.sessions.forEach(session => sessions.add(session)); unit.turns.forEach(turn => turns.add(turn));
     }

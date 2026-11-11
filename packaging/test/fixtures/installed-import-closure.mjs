@@ -21,6 +21,12 @@ export function installedImportClosure(root, entries) {
     assert.ok(stat.isFile(), 'closure requires regular files');
     return path;
   }
+  // Optional in-process APIs retain their complete archive closure. A static
+  // import to either module still wins through the eager graph below.
+  const deferredImports = new Map([
+    ['core/contract.mjs', new Set(['core/engine-card-maintenance.mjs'])],
+    ['core/runtime.mjs', new Set(['core/engine-card-storage.mjs'])],
+  ]);
   const start = entries.map(entry => {
     const path = target('', './' + entry); assert.notEqual(path, null); return path;
   });
@@ -55,7 +61,8 @@ export function installedImportClosure(root, entries) {
     for (const match of [...imports, ...assets]) {
       const next = target(path, match[1]); if (next === null) continue;
       const worker = workerOffsets.has(match.index), child = childOffsets.has(match.index);
-      const lazy = worker || child;
+      const dynamic = /^import\s*\(/.test(match[0]);
+      const lazy = worker || child || dynamic && deferredImports.get(path)?.has(next) === true;
       edges.push({ path: next, lazy }); queue.push(next);
       if (worker) workerEntries.add(next);
       if (child) childEntries.add(next);

@@ -113,7 +113,9 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
   function cardMetadata(card) {
     return { type: 'card', ref: { type: 'card', namespace: card.namespace, cardId: card.id,
       revision: card.revision, bodyRevision: card.bodyRevision }, state: card.state,
-    support: card.support, origin: card.origin };
+    support: card.support, origin: card.origin,
+    ...(card.origin === 'engine' ? { builtAt: card.builtAt, clusterKey: card.clusterKey,
+      status: card.status, sourceRevisions: card.sourceRevisions } : {}) };
   }
   const cardEligible = (ns, card, intent, memo) => Boolean(card && contentReadSafety(db, { identity, namespace: ns, intent, memo,
     ref: { type: 'card', namespace: ns, cardId: card.id, revision: card.revision, bodyRevision: card.bodyRevision },

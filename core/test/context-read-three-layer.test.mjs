@@ -14,7 +14,7 @@ import { openContextProductFacade } from '../context-read-facade.mjs';
 import { openProductIndex } from '../context-product-index.mjs';
 import { assembleContext, meteredText, completeResponseBytes } from '../context-read-assembly.mjs';
 import { assembleThreeLayerContext, queryExcerpt, countListQuestion, readRawChannel } from '../context-read-three-layer.mjs';
-import { fixedPrepared } from '../testing/context-read-assembly-fixture.mjs';
+import { fixedPrepared, controlledClock } from '../testing/context-read-assembly-fixture.mjs';
 import { ASSEMBLY_LIMITS, contextInput, contextOptions } from '../context-read-input.mjs';
 import { configured } from '../testing/context-product-owner-fixture.mjs';
 import { accessDigest } from '../context-product-validation.mjs';
@@ -603,6 +603,94 @@ test('Memories sharing a source turn and its Raw count as one item while snapsho
   assert.equal(result.metered.items[0].evidence.length, 1);
   assert.equal(JSON.parse(result.snapshot).length, 2);
   assert.match(result.metered.items[0].body, /winter telescope/); assert.match(result.metered.items[0].body, /rain damage/);
+});
+
+
+// Keep receipt/item dates distinct from the ordering dates, and keep Raw later
+// than every Memory so retaining it cannot mask a removed member's old date.
+function cardDedupeUnit(coveredIndex) {
+  const raw = syntheticRaw(['assembly telescope retained evidence']);
+  raw.items[0].value.occurredAt = '2026-04-01T00:00:00.000Z';
+  const template = fixedPrepared()[0];
+  const members = ['alpha', 'beta', 'gamma'].map((name, index) => {
+    const covered = index === coveredIndex;
+    const date = covered ? '2026-01-01T00:00Z' : '2026-03-01T00:00Z';
+    const receiptDate = covered ? '2026-01-02T00:00Z' : '2026-03-04T00:00Z';
+    return { ...template, ref: { ...template.ref, memoryId: 'synthetic-member-' + name }, rank: index + 2,
+      text: ['assembly telescope winter preference', 'assembly telescope warranty covers rain', 'assembly telescope lens cleaning'][index],
+      date, sortDate: date, receiptDate, turnIds: [raw.items[0].key],
+      sources: [{ index: 0, role: 'user', excerpt: 'synthetic source ' + name, date: receiptDate },
+        { index: 1, role: 'assistant', excerpt: 'synthetic history ' + name, dates: [date, receiptDate] }] };
+  });
+  const peer = { ...template, ref: { ...template.ref, memoryId: 'synthetic-peer' }, rank: 5,
+    text: 'assembly telescope unrelated comparison', date: '2026-02-01T00:00Z', sources: [] };
+  const card = { ...template, type: 'card', rank: 1,
+    ref: { type: 'card', namespace: ns, cardId: 'synthetic-card', revision: 1, bodyRevision: 1 },
+    text: 'assembly telescope topic summary', date: '2026-05-01T00:00Z', sources: [],
+    metadata: { state: 'confirmed', support: 'supported', origin: 'engine', builtAt: '2026-05-01T00:00:00.000Z',
+      clusterKey: 'synthetic-topic', status: 'current' }, sourceMemoryRefs: [members[coveredIndex].ref] };
+  const build = prepared => assembleThreeLayerContext(packedArgs({ prepared }), raw);
+  return { raw, members, peer, card, build };
+}
+
+for (const coveredIndex of [0, 1, 2]) {
+  for (const assertion of ['source dates', 'sort date and position', 'removed reference'])
+    test(`engine Card partial dedupe, covered member ${coveredIndex}: ${assertion}`, () => {
+      const { members, peer, card, build } = cardDedupeUnit(coveredIndex);
+      const survivors = members.filter((_, index) => index !== coveredIndex);
+      const expected = build([...survivors, peer]);
+      const actual = build([card, ...members, peer]);
+      assert.ok(actual.selected.some(item => item.type === 'card'), 'Card is admitted');
+      assert.equal(actual.diagnostics.coverage.raw, 'included', 'mixed assembly did not fall back');
+      const unitOf = value => value.metered.items.find(item => item.ref.id === survivors[0].ref.memoryId);
+      const unit = unitOf(actual), baseline = unitOf(expected);
+      assert.ok(unit); assert.ok(baseline);
+      if (assertion === 'source dates') {
+        assert.equal(baseline.sources.length, 4, 'both surviving Memories contribute date and dates');
+        assert.deepEqual(unit.sources, baseline.sources);
+        assert.equal(unit.sourcesComplete, baseline.sourcesComplete);
+        assert.equal(unit.date, baseline.date, 'item date retains receipt/Raw precedence');
+      } else if (assertion === 'sort date and position') {
+        assert.deepEqual(actual.metered.items.filter(item => item.ref.type === 'memory').map(item => item.ref.id),
+          expected.metered.items.map(item => item.ref.id));
+        assert.equal(actual.metered.items[0].ref.id, peer.ref.memoryId, 'surviving March unit follows February peer');
+        assert.deepEqual(unit, baseline, 'rebuild matches initial construction including item date and retained Raw');
+      } else {
+        assert.ok(!JSON.stringify(unit).includes(members[coveredIndex].ref.memoryId));
+        assert.ok(!JSON.stringify(unit).includes('2026-01-'), 'removed dates are absent');
+        assert.ok(!actual.snapshot.includes(members[coveredIndex].ref.memoryId));
+        assert.deepEqual(actual.selected.filter(item => item.type === 'memory').map(item => item.ref.memoryId).sort(),
+          [...survivors, peer].map(item => item.ref.memoryId).sort());
+      }
+    });
+}
+
+test('coalesced dated unit without a Card preserves its complete serialized projection', t => {
+  controlledClock(t);
+  const { raw, members, peer, build } = cardDedupeUnit(0);
+  const value = build([...members, peer]);
+  assert.equal(value.metered.items.length, 2);
+  assert.equal(value.metered.items[0].sources.length, 6);
+  assert.equal(value.metered.items[0].date, '2026-01-02T00:00Z');
+  const ref = memory => ({ ns: 0, type: 'memory', id: memory.ref.memoryId, rev: 1, f: memory.fence.slice(0, 8) });
+  const sourceDates = source => source.date ? { date: source.date } : { dates: source.dates };
+  const expected = { framing: value.metered.framing, items: [
+    { ref: ref(members[0]), rank: 2, date: '2026-01-02T00:00Z', body: members.map(item => item.text).join('\n'),
+      sources: [...members[0].sources.map(source => ({ index: source.index, ...sourceDates(source),
+        role: source.role, excerpt: source.excerpt })),
+      ...members.slice(1).flatMap(memory => memory.sources.map(source => ({ memory: ref(memory), index: source.index,
+        ...sourceDates(source), role: source.role })))], sourcesComplete: false,
+      evidence: [{ ref: { ns: 0, type: 'raw', conversationId: raw.items[0].value.conversationId,
+        messageId: raw.items[0].value.messageId }, role: 'assistant', occurredAt: '2026-04-01T00:00:00.000Z',
+        date: '2026-04-01T00:00Z', start: 0, end: raw.items[0].value.ranges[0].text.length,
+        body: raw.items[0].value.ranges[0].text }] },
+    { ref: ref(peer), rank: 5, date: peer.date, body: peer.text, sources: [] },
+  ] };
+  assert.equal(meteredText(value.metered), meteredText(expected), 'exact no-Card wire bytes');
+  // Recorded on the unchanged production implementation and compared again
+  // after the shared construction refactor with deterministic diagnostics.
+  t.diagnostic('NO_CARD_BYTES ' + Buffer.from(JSON.stringify({ metered: value.metered,
+    snapshot: value.snapshot, selected: value.selected, diagnostics: value.diagnostics })).toString('base64'));
 });
 
 
