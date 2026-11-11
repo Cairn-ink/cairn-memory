@@ -21591,8 +21591,8 @@
     {
       "key": "[\"native\",\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,12,true,\"contextRead\",\"hit\"]",
       "counts": [
-        529,
-        46,
+        539,
+        47,
         69
       ]
     },
@@ -21607,8 +21607,8 @@
     {
       "key": "[\"native\",\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,12,true,\"findCandidates\",\"hit\"]",
       "counts": [
-        389,
-        43,
+        399,
+        44,
         14
       ]
     },
@@ -21623,16 +21623,16 @@
     {
       "key": "[\"native\",\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,12,true,\"refreshContextIndex\",\"refresh\"]",
       "counts": [
-        628,
-        68,
+        638,
+        69,
         19
       ]
     },
     {
       "key": "[\"native\",\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,24,true,\"contextRead\",\"hit\"]",
       "counts": [
-        529,
-        46,
+        539,
+        47,
         69
       ]
     },
@@ -21647,8 +21647,8 @@
     {
       "key": "[\"native\",\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,24,true,\"findCandidates\",\"hit\"]",
       "counts": [
-        389,
-        43,
+        399,
+        44,
         14
       ]
     },
@@ -21663,8 +21663,8 @@
     {
       "key": "[\"native\",\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,24,true,\"refreshContextIndex\",\"refresh\"]",
       "counts": [
-        952,
-        92,
+        962,
+        93,
         19
       ]
     },
@@ -21751,8 +21751,8 @@
     {
       "key": "[\"native\",\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,12,true,\"contextRead\",\"hit\"]",
       "counts": [
-        529,
-        46,
+        539,
+        47,
         69
       ]
     },
@@ -21767,8 +21767,8 @@
     {
       "key": "[\"native\",\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,12,true,\"findCandidates\",\"hit\"]",
       "counts": [
-        389,
-        43,
+        399,
+        44,
         14
       ]
     },
@@ -21783,16 +21783,16 @@
     {
       "key": "[\"native\",\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,12,true,\"refreshContextIndex\",\"refresh\"]",
       "counts": [
-        628,
-        68,
+        638,
+        69,
         19
       ]
     },
     {
       "key": "[\"native\",\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,24,true,\"contextRead\",\"hit\"]",
       "counts": [
-        529,
-        46,
+        539,
+        47,
         69
       ]
     },
@@ -21807,8 +21807,8 @@
     {
       "key": "[\"native\",\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,24,true,\"findCandidates\",\"hit\"]",
       "counts": [
-        389,
-        43,
+        399,
+        44,
         14
       ]
     },
@@ -21823,8 +21823,8 @@
     {
       "key": "[\"native\",\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,24,true,\"refreshContextIndex\",\"refresh\"]",
       "counts": [
-        952,
-        92,
+        962,
+        93,
         19
       ]
     },
@@ -21911,8 +21911,8 @@
     {
       "key": "[\"native\",\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,12,true,\"contextRead\",\"hit\"]",
       "counts": [
-        793,
-        46,
+        803,
+        47,
         69
       ]
     },
@@ -21927,8 +21927,8 @@
     {
       "key": "[\"native\",\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,12,true,\"findCandidates\",\"hit\"]",
       "counts": [
-        521,
-        43,
+        531,
+        44,
         14
       ]
     },
@@ -21943,16 +21943,16 @@
     {
       "key": "[\"native\",\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,12,true,\"refreshContextIndex\",\"refresh\"]",
       "counts": [
-        628,
-        68,
+        638,
+        69,
         19
       ]
     },
     {
       "key": "[\"native\",\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,24,true,\"contextRead\",\"hit\"]",
       "counts": [
-        793,
-        46,
+        803,
+        47,
         69
       ]
     },
@@ -21967,8 +21967,8 @@
     {
       "key": "[\"native\",\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,24,true,\"findCandidates\",\"hit\"]",
       "counts": [
-        521,
-        43,
+        531,
+        44,
         14
       ]
     },
@@ -21983,8 +21983,8 @@
     {
       "key": "[\"native\",\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,24,true,\"refreshContextIndex\",\"refresh\"]",
       "counts": [
-        952,
-        92,
+        962,
+        93,
         19
       ]
     },
@@ -21999,8 +21999,8 @@
     {
       "key": "[\"native\",\"enabled embedded local guard v18 2\",18,2,null,\"contextRead\",\"hit\"]",
       "counts": [
-        348,
-        48,
+        359,
+        49,
         32
       ]
     },
@@ -22023,16 +22023,16 @@
     {
       "key": "[\"native\",\"enabled embedded local guard v18 2\",18,2,null,\"findCandidates\",\"hit\"]",
       "counts": [
-        299,
-        45,
+        310,
+        46,
         16
       ]
     },
     {
       "key": "[\"native\",\"enabled embedded local guard v18 2\",18,2,null,\"refreshContextIndex\",\"cold\"]",
       "counts": [
-        474,
-        67,
+        496,
+        69,
         30
       ]
     },
@@ -22055,8 +22055,8 @@
     {
       "key": "[\"native\",\"enabled embedded local guard v18 4\",18,4,null,\"contextRead\",\"hit\"]",
       "counts": [
-        386,
-        48,
+        397,
+        49,
         40
       ]
     },
@@ -22079,16 +22079,16 @@
     {
       "key": "[\"native\",\"enabled embedded local guard v18 4\",18,4,null,\"findCandidates\",\"hit\"]",
       "counts": [
-        299,
-        45,
+        310,
+        46,
         16
       ]
     },
     {
       "key": "[\"native\",\"enabled embedded local guard v18 4\",18,4,null,\"refreshContextIndex\",\"cold\"]",
       "counts": [
-        738,
-        105,
+        782,
+        109,
         48
       ]
     },
@@ -22111,8 +22111,8 @@
     {
       "key": "[\"native\",\"enabled embedded local guard v23 2\",23,2,null,\"contextRead\",\"hit\"]",
       "counts": [
-        348,
-        48,
+        359,
+        49,
         32
       ]
     },
@@ -22135,16 +22135,16 @@
     {
       "key": "[\"native\",\"enabled embedded local guard v23 2\",23,2,null,\"findCandidates\",\"hit\"]",
       "counts": [
-        299,
-        45,
+        310,
+        46,
         16
       ]
     },
     {
       "key": "[\"native\",\"enabled embedded local guard v23 2\",23,2,null,\"refreshContextIndex\",\"cold\"]",
       "counts": [
-        474,
-        67,
+        496,
+        69,
         30
       ]
     },
@@ -22167,8 +22167,8 @@
     {
       "key": "[\"native\",\"enabled embedded local guard v23 4\",23,4,null,\"contextRead\",\"hit\"]",
       "counts": [
-        386,
-        48,
+        397,
+        49,
         40
       ]
     },
@@ -22191,16 +22191,16 @@
     {
       "key": "[\"native\",\"enabled embedded local guard v23 4\",23,4,null,\"findCandidates\",\"hit\"]",
       "counts": [
-        299,
-        45,
+        310,
+        46,
         16
       ]
     },
     {
       "key": "[\"native\",\"enabled embedded local guard v23 4\",23,4,null,\"refreshContextIndex\",\"cold\"]",
       "counts": [
-        738,
-        105,
+        782,
+        109,
         48
       ]
     },
@@ -22223,8 +22223,8 @@
     {
       "key": "[\"native\",\"enabled embedded local guard v33 2\",33,2,null,\"contextRead\",\"hit\"]",
       "counts": [
-        392,
-        48,
+        403,
+        49,
         32
       ]
     },
@@ -22247,16 +22247,16 @@
     {
       "key": "[\"native\",\"enabled embedded local guard v33 2\",33,2,null,\"findCandidates\",\"hit\"]",
       "counts": [
-        310,
-        45,
+        321,
+        46,
         16
       ]
     },
     {
       "key": "[\"native\",\"enabled embedded local guard v33 2\",33,2,null,\"refreshContextIndex\",\"cold\"]",
       "counts": [
-        474,
-        67,
+        496,
+        69,
         30
       ]
     },
@@ -22279,8 +22279,8 @@
     {
       "key": "[\"native\",\"enabled embedded local guard v33 4\",33,4,null,\"contextRead\",\"hit\"]",
       "counts": [
-        474,
-        48,
+        485,
+        49,
         40
       ]
     },
@@ -22303,16 +22303,16 @@
     {
       "key": "[\"native\",\"enabled embedded local guard v33 4\",33,4,null,\"findCandidates\",\"hit\"]",
       "counts": [
-        310,
-        45,
+        321,
+        46,
         16
       ]
     },
     {
       "key": "[\"native\",\"enabled embedded local guard v33 4\",33,4,null,\"refreshContextIndex\",\"cold\"]",
       "counts": [
-        738,
-        105,
+        782,
+        109,
         48
       ]
     },
@@ -22335,8 +22335,8 @@
     {
       "key": "[\"native\",\"enabled embedded semantic v18 12\",18,12,null,\"contextRead\",\"hit\"]",
       "counts": [
-        525,
-        46,
+        535,
+        47,
         69
       ]
     },
@@ -22359,16 +22359,16 @@
     {
       "key": "[\"native\",\"enabled embedded semantic v18 12\",18,12,null,\"findCandidates\",\"hit\"]",
       "counts": [
-        286,
-        43,
+        296,
+        44,
         14
       ]
     },
     {
       "key": "[\"native\",\"enabled embedded semantic v18 12\",18,12,null,\"refreshContextIndex\",\"cold\"]",
       "counts": [
-        604,
-        68,
+        614,
+        69,
         19
       ]
     },
@@ -22391,8 +22391,8 @@
     {
       "key": "[\"native\",\"enabled embedded semantic v18 24\",18,24,null,\"contextRead\",\"hit\"]",
       "counts": [
-        525,
-        46,
+        535,
+        47,
         69
       ]
     },
@@ -22415,16 +22415,16 @@
     {
       "key": "[\"native\",\"enabled embedded semantic v18 24\",18,24,null,\"findCandidates\",\"hit\"]",
       "counts": [
-        286,
-        43,
+        296,
+        44,
         14
       ]
     },
     {
       "key": "[\"native\",\"enabled embedded semantic v18 24\",18,24,null,\"refreshContextIndex\",\"cold\"]",
       "counts": [
-        904,
-        92,
+        914,
+        93,
         19
       ]
     },
@@ -22447,8 +22447,8 @@
     {
       "key": "[\"native\",\"enabled embedded semantic v23 12\",23,12,null,\"contextRead\",\"hit\"]",
       "counts": [
-        525,
-        46,
+        535,
+        47,
         69
       ]
     },
@@ -22471,16 +22471,16 @@
     {
       "key": "[\"native\",\"enabled embedded semantic v23 12\",23,12,null,\"findCandidates\",\"hit\"]",
       "counts": [
-        286,
-        43,
+        296,
+        44,
         14
       ]
     },
     {
       "key": "[\"native\",\"enabled embedded semantic v23 12\",23,12,null,\"refreshContextIndex\",\"cold\"]",
       "counts": [
-        604,
-        68,
+        614,
+        69,
         19
       ]
     },
@@ -22503,8 +22503,8 @@
     {
       "key": "[\"native\",\"enabled embedded semantic v23 24\",23,24,null,\"contextRead\",\"hit\"]",
       "counts": [
-        525,
-        46,
+        535,
+        47,
         69
       ]
     },
@@ -22527,16 +22527,16 @@
     {
       "key": "[\"native\",\"enabled embedded semantic v23 24\",23,24,null,\"findCandidates\",\"hit\"]",
       "counts": [
-        286,
-        43,
+        296,
+        44,
         14
       ]
     },
     {
       "key": "[\"native\",\"enabled embedded semantic v23 24\",23,24,null,\"refreshContextIndex\",\"cold\"]",
       "counts": [
-        904,
-        92,
+        914,
+        93,
         19
       ]
     },
@@ -22559,8 +22559,8 @@
     {
       "key": "[\"native\",\"enabled embedded semantic v33 12\",33,12,null,\"contextRead\",\"hit\"]",
       "counts": [
-        789,
-        46,
+        799,
+        47,
         69
       ]
     },
@@ -22583,16 +22583,16 @@
     {
       "key": "[\"native\",\"enabled embedded semantic v33 12\",33,12,null,\"findCandidates\",\"hit\"]",
       "counts": [
-        297,
-        43,
+        307,
+        44,
         14
       ]
     },
     {
       "key": "[\"native\",\"enabled embedded semantic v33 12\",33,12,null,\"refreshContextIndex\",\"cold\"]",
       "counts": [
-        604,
-        68,
+        614,
+        69,
         19
       ]
     },
@@ -22615,8 +22615,8 @@
     {
       "key": "[\"native\",\"enabled embedded semantic v33 24\",33,24,null,\"contextRead\",\"hit\"]",
       "counts": [
-        789,
-        46,
+        799,
+        47,
         69
       ]
     },
@@ -22639,16 +22639,16 @@
     {
       "key": "[\"native\",\"enabled embedded semantic v33 24\",33,24,null,\"findCandidates\",\"hit\"]",
       "counts": [
-        297,
-        43,
+        307,
+        44,
         14
       ]
     },
     {
       "key": "[\"native\",\"enabled embedded semantic v33 24\",33,24,null,\"refreshContextIndex\",\"cold\"]",
       "counts": [
-        904,
-        92,
+        914,
+        93,
         19
       ]
     },
