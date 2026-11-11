@@ -12,8 +12,10 @@ import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { createFakeEmbedder } from '../context-read-embedder.mjs';
 import { openContextCore } from '../context-read-facade.mjs';
 import { openMemoryCore } from '../index.mjs';
+import { installRawSearchTestClock } from '../testing/raw-search-clock.mjs';
 
 test('review 2: lookup and refresh expose sanitized rebuild reasons and publication states', async t => {
+  installRawSearchTestClock(t);
   for (const method of ['findCandidates', 'refreshContextIndex']) for (const reason of ['missing', 'corrupt', 'wrong-store', 'incompatible']) {
     const f = coreFixture(t); f.admit('apple rebuild');
     if (reason !== 'missing') {
@@ -50,6 +52,7 @@ test('review 2: incomplete refresh reports item-budget stops and no unverified c
 });
 
 test('review 2: deadline exhaustion during a metadata scan is reported on both rebuilding paths', async t => {
+  installRawSearchTestClock(t);
   const originalPrepare = DatabaseSync.prototype.prepare, descriptor = Object.getOwnPropertyDescriptor(performance, 'now');
   const now = performance.now.bind(performance); let offset = 0;
   try {

@@ -178,8 +178,10 @@ export async function openRawSearch(value) {
         coverage.scanned=null;coverage.expanded=null;
         // Final predicates share one canonical snapshot. A newly denied hit is
         // dropped without refusing the allowed remainder of the page.
-        candidates=authority.validate(candidates.map(candidate=>({sources:candidateSources.get(candidate.id),
-          intent:input.intent,access,value:candidate})),deadlineAt,{dropDenied:true});
+        const validated=authority.validate(candidates.map(candidate=>({sources:candidateSources.get(candidate.id),
+          intent:input.intent,access,value:candidate})),deadlineAt,{dropDenied:true,inventoryCheckpoint:snapshot.checkpoint});
+        candidates=validated.values;
+        if(!validated.coverageComplete){coverage.status='partial';coverage.causes.push('index_incomplete');}
         const output=immutable({version:RAW_SEARCH_VERSION,publication,candidates,coverage,semantic},()=>expired(deadlineAt));
         if(cacheProof&&!borrowed&&(vectors||snapshot.partial)){
           residency?.release();residency=null;
