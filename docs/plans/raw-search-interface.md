@@ -28,13 +28,27 @@ bounded candidate pool runs out. Returned candidates receive a final predicate
 check in one fresh canonical snapshot; a newly denied candidate is dropped.
 Search performs no full-store canonical census, commitment rebuild or eligibility
 memo pass. A stale index remains usable for sources that still pass these checks.
+Until the local index has caught up with newly saved conversations, search reports
+partial coverage.
+
+Coverage is `complete` only when ranking stays within its limits and the published
+checkpoint proves a completed inventory cycle at the current canonical fence.
+Search reuses that fence only while its cached store version is current; a missing
+or stale cached fence conservatively reports `partial` without rebuilding it.
+The fixed cause `index_incomplete` indicates that this inventory proof is missing;
+it contains no counts, identifiers or source text. Validated hits found so far are
+still returned, and context reads retain that evidence with Raw coverage `partial`.
+Existing causes remain `work_limit`, `turn_limit`, `partial_turn`, `inventory_limit`,
+`snapshot_byte_limit`, `vector_byte_limit` and `deadline`. Partial coverage must
+never be interpreted as proof that no matching saved source exists.
 
 Corpus statistics, ranking competition, session terms and vector readiness may
 include ineligible rows from the caller's namespace. Their scores can influence
 allowed results. Statistic isolation, an eligible-only corpus, population-wide
 commitment validation and retained eligibility progress are not guarantees.
 Ineligible text and identifiers are never returned as search hits. Maintenance
-may retain commitment checks for publishing; search does not depend on them.
+retains commitment checks for publishing; search uses only a current cached
+fence to certify complete inventory coverage.
 
 The handle provides the following unchanged methods and result fields:
 
