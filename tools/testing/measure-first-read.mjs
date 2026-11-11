@@ -1,6 +1,6 @@
 /** Synthetic public-capture benchmark. Each sample opens in a fresh process. */
-import { fork } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, rmSync, statSync, unlinkSync } from 'node:fs';
+import { fork, execFileSync } from 'node:child_process';
+import { existsSync, mkdtempSync, rmSync, statSync, unlinkSync } from 'node:fs';
 import { tmpdir, loadavg } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -65,7 +65,11 @@ if (process.argv.includes('--child')) {
     if (JSON.stringify(Object.values(corpusCounts)) !== JSON.stringify([500, 500, 50, 500])) throw Error('synthetic_corpus_count_mismatch');
     const samples = [];
     for (let i = 0; i < 5; i++) {
-      const path = join(scratch, 'sample-' + i + '.sqlite'); cpSync(seedPath, path);
+      const path = join(scratch, 'sample-' + i + '.sqlite');
+      // Keep raw copy descriptors in a child that never loads SQLite.
+      execFileSync(process.execPath, ['--input-type=module', '-e',
+        "import { copyFileSync } from 'node:fs'; copyFileSync(process.argv[1], process.argv[2]);", seedPath, path],
+      { env: {}, stdio: 'ignore' });
       for (const suffix of ['.context-read-v1.sqlite', '.context-read-v1.sqlite-journal', '.context-read-v1.sqlite-wal', '.context-read-v1.sqlite-shm']) {
         if (existsSync(path + suffix)) unlinkSync(path + suffix);
       }
