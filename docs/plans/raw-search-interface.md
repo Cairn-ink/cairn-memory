@@ -42,6 +42,60 @@ Existing causes remain `work_limit`, `turn_limit`, `partial_turn`, `inventory_li
 `snapshot_byte_limit`, `vector_byte_limit` and `deadline`. Partial coverage must
 never be interpreted as proof that no matching saved source exists.
 
+Recent saves have an independent journal lane before full inventory proof or
+embedding work. Each recent turn examines at most 64 physical discovery/drain
+headers and attempts at most four saved part keys. Row positions are decimal
+strings with HMAC identity anchors bound to the store, file and read set. A
+signed checkpoint commits cursor offsets together with publications. Save
+transactions gain no SQL, schema objects or synchronous indexing. The journal is
+a discovery hint; every recent source receives live admission, guarded canonical
+opening and final source-scoped batch validation. Unrelated appends do not
+invalidate that batch. One of every four busy admitted turns is reserved for
+independent denial cleanup and full reconciliation; unused recent turns also
+serve background work. Provider waits do not block the recent lexical lane.
+
+Namespace pause or disable refuses publication, search, opening and final
+validation. Cleanup and inventory retain an existing publication when pause is
+its only refusal, so resume restores visibility without a full walk. Forgotten,
+excluded, fenced, suppressed and deleted sources are still removed during pause.
+Turning off future automatic capture alone retains readable saved prefixes.
+
+Search reads one authenticated sidecar transaction: up to 256 newest
+publications, capped at 4 MiB of hints, followed by ordinary oldest-first rows.
+The union is deduplicated and shares the existing 8 MiB hint, 128 MiB vector and
+50,000-row limits. Cache shape uses the identical selection policy. Recent rows
+receive visibility without a ranking boost. They can age out of the recent
+window and fall outside the ordinary slice; large hints can end visibility even
+sooner. These limits and incomplete reconciliation continue to report `partial`.
+
+Anchor loss, identity mismatch, a regressed tip or incompatible cursor starts
+recovery from at most 64 newest physical journal headers. Live arrivals take
+priority. Sources older than that tail rely on the full walk, which has no
+eventual guarantee while saves continue. This weaker recovery guarantee is
+separate from normal live-feed service. Direct parts-only writes also rely on
+full reconciliation. On a stable store with a sustained recent backlog, cleanup
+revisits may take approximately four times as many admitted turns; empty recent
+turns can improve that rate. Deadlines, contention and host admission make this
+conditional, not a time bound.
+
+Before manual canonical VACUUM, an in-place restore, explicit-rowid imports or
+other journal rewrites, stop readers and maintenance and discard the derived
+Raw search sidecar using the host's owner purge, then reopen to bootstrap the
+newest tail and rebuild. Purge clears the signed checkpoint and publications;
+canonical data and permanent denials remain. Anchor checks alone cannot detect
+every in-place rewrite that preserves a surviving identity. No new DDL, sidecar
+format or canonical migration is introduced. Older supported engines may ignore
+the new checkpoint fields and keep their original freshness and source-control
+semantics; reopening validates continuity again. Existing older-engine layout
+restrictions still apply.
+
+“About a minute” is an operational target requiring a supervised host, admitted
+recent turns, bounded aggregate journal traffic and available crypto, storage and
+quota. This mechanism is not a measured latency promise. At 50k or more parts
+there is no finite full-reconciliation guarantee. Save and read latency under
+contention, including the host's service interval, must be requalified before
+advertising the target; that measurement is separate from this implementation.
+
 Corpus statistics, ranking competition, session terms and vector readiness may
 include ineligible rows from the caller's namespace. Their scores can influence
 allowed results. Statistic isolation, an eligible-only corpus, population-wide
@@ -79,9 +133,10 @@ The handle provides the following unchanged methods and result fields:
   No callback or await may follow that boundary. A mismatch refuses the preparation.
 - `maintain({maxItems?, maxMs?, embeddings?}, token)` runs one bounded quantum
   under the existing version-1 `maintenanceTurn` broker. The host owns scheduling,
-  supervision and joined disposal; no indexing timer or pump is created. Denial
-  reconciliation precedes positive refresh. Canonical denials and access are
-  checked at Raw openers and provider `beforeDispatch`, including after waits.
+  supervision and joined disposal; no indexing timer or pump is created. Recent
+  lexical work precedes reserved reconciliation and optional embedding refresh.
+  Canonical denials and access are checked at Raw openers and provider
+  `beforeDispatch`, including after waits.
 - `status()` and maintenance acknowledgements expose eligible/indexed/embedded
   counts as `null`, coverage as `unknown`, and fixed errors. `purge()` deletes
   derived owner rows and vacuums. `close()` joins active work and disposes connections.
