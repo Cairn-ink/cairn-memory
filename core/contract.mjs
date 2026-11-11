@@ -938,7 +938,7 @@ export function createMemoryCore(input, internal) {
         return page ? [{ namespace, indexRevision: page.epoch, suppressionEpoch: page.suppressionEpoch }] : [];
       }), includeQualification);
       const storage = { map: (request) => mapPage(request, navigation), fetch, validateFresh,
-        ...(runtime.relationMode() ? { expandRelations: refs => runtime.expandRelationRefs(namespaces, refs) } : {}),
+        expandRelations: refs => runtime.expandRelationRefs(namespaces, refs),
         recentReceipts: (ref, limit) => runtime.recentReceipts(namespaces[ref.namespaceIndex], ref, limit),
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
@@ -966,7 +966,7 @@ export function createMemoryCore(input, internal) {
         };
       }
       const value = await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
-        limit: count, ...storage, includeQualification, contextMode, selectionMode, diagnostics });
+        limit: count, ...storage, relationMode: () => runtime.relationMode(), includeQualification, contextMode, selectionMode, diagnostics });
       if (diagnostics) {
         const journalMode = readRecallJournalMode(runtime);
         const ms = value => Math.round(Math.max(0, value) * 10) / 10;

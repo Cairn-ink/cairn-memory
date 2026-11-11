@@ -302,7 +302,8 @@ test('CJ1 journal insert fault rolls back staged admission and ordered relations
   assert.equal(ordered.error.code, 'storage_error');
   assert.equal(judgments, 1);
   assert.equal(db.prepare('SELECT count(*) AS n FROM memories').get().n, beforeCount);
-  assert.equal(db.prepare('SELECT count(*) AS n FROM memory_relations').get().n,0);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version,18);
+  assert.equal(db.prepare("SELECT count(*) AS n FROM sqlite_schema WHERE name='memory_relations'").get().n,0);
   assert.deepEqual(receipts(db, original.id), beforeReceipts);
   assert.equal(ok(core.get({ namespace, memoryId: original.id })).memory.state, 'active');
   assert.equal(db.prepare("SELECT high_water FROM capture_streams WHERE stream_id='synthetic-stream'")

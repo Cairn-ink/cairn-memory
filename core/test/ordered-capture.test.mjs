@@ -63,7 +63,7 @@ test('ordered capture retains both endpoints, binds the new receipt, and never i
   const previous=await first(core),result=ok(await core.capture(capture(2))),replacement=result.admission.memories[0].id;
   assert.equal(detail(core,previous).memory.state,'active');assert.equal(detail(core,replacement).memory.state,'active');
   assert.deepEqual(result.reconciliation,noChange);assert.equal(legacyCalls,0);
-  assert.deepEqual(calls.map(call=>call.method),['extract','relateMemories','extract','relateMemories']);
+  assert.deepEqual(calls.map(call=>call.method),['extract','extract','relateMemories']);
   const edge=db.prepare('SELECT * FROM memory_relations').get();
   assert.equal(edge.from_memory_id,replacement);assert.equal(edge.to_memory_id,previous);assert.equal(edge.relation,'supersedes');assert.equal(edge.decided_by,'llm');
   assert.equal(db.prepare('SELECT memory_id FROM receipts WHERE id=?').get(edge.receipt_id).memory_id,replacement);
@@ -147,7 +147,7 @@ test('O3 namespace and stream scopes are exact; foreign memories are never candi
     const result = ok(await core.capture(capture(1)));
     assert.deepEqual(result.reconciliation, noChange);
     assert.equal(detail(core, old, foreign).memory.state, 'active');
-    assert.deepEqual(calls.filter(call=>call.method==='relateMemories').at(-1).input.candidates,[[]]);
+    assert.equal(calls.filter(call=>call.method==='relateMemories').length,0);
   }
 });
 

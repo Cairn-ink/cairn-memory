@@ -1,8 +1,8 @@
 # Memory threads
 
 Capture links facts about the same topic within a namespace. Both facts and
-their receipts remain stored. Relations are always enabled; no read-side model
-or opt-in setting is required.
+their receipts remain stored. Relations are enabled by default; no read-side
+model or opt-in setting is required.
 
 Without a relation model, a conservative lexical rule emits only `same_thread`.
 It checks the subject as well as the topic. This neutral label makes no claim
@@ -11,13 +11,15 @@ lexical/vector union, capped at eight candidates per fact, and admission accepts
 at most five outgoing edges. Uncertain matches are omitted.
 
 When the extraction model supplies `relateMemories`, capture makes one relation
-request per batch. The model may label a pair `supersedes`, `contradicts`,
+request per batch with eligible candidates. The model may label a pair `supersedes`, `contradicts`,
 `refines` or `causes`, or leave it unrelated. A typed decision replaces a neutral
 edge for that pair. An unrelated decision adds no edge. A failed, malformed or
 timed-out request falls back to the neutral rule and never prevents admission.
-Causal captures retain their high-water and receipt provenance but no longer
-invoke the older `reconcile` port or automatically retire Memory rows. Pending
-review transitions already stored by an earlier engine remain resolvable.
+Causal captures retain their high-water and receipt provenance. A relation
+decision or installed relation layout preserves both Memory rows instead of
+automatically retiring a predecessor. Without either, main's older `reconcile`
+port remains reachable. Pending review transitions already stored by an earlier
+engine remain resolvable.
 Candidates and model results are untrusted data. Unknown IDs, duplicate decisions,
 invalid labels or confidence values are discarded. Low-confidence supersession
 is omitted. Provider diagnostics contain closed codes, never Memory text.
@@ -143,3 +145,8 @@ The `index_memory_keyset` name and columns, `openDatabase` entry point, and
 `raw-control-storage` exports are unchanged. No host configuration change is
 required to receive threads. Hosts that enumerate relation labels or render
 context metadata should accept the additive neutral label and thread annotation.
+
+A committed lazy upgrade invalidates readers in the same JavaScript runtime.
+Plain legacy readers in another process or realm must reopen after that upgrade
+to deliver threads; their original read path has no schema polling statement.
+Host-managed upgrades require quiescence and reopening of all connections.

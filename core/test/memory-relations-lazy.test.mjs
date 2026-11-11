@@ -189,11 +189,43 @@ test('legacy recall without a relation layout retains main SQL, transaction coun
  const core=openMemoryCore({path,model:{contextWindow:8192,countTokens:()=>1,select,rank}});w.defer(()=>core.close());
  const input={readSet:[ns],query:'orchard',limit:2};
  const after=await measureContentRead('recall','legacy',()=>core.recall(input));ok(after.result);
- const before=JSON.parse(previous(baseline,reference,`
+ const baselineRead=JSON.parse(previous(baseline,reference,`
  import {measureContentRead} from ${JSON.stringify(new URL('../testing/content-safety-cost-meter.mjs',import.meta.url).pathname)};
  const ref=${JSON.stringify(ref)},select=${select.toString()},rank=${rank.toString()};
  const c=openMemoryCore({path:process.argv[1],model:{contextWindow:8192,countTokens:()=>1,select,rank}});
- const row=await measureContentRead('recall','legacy',()=>c.recall(${JSON.stringify(input)}));console.log(JSON.stringify(row));await c.close();`));
+ const row=await measureContentRead('recall','legacy',()=>c.recall(${JSON.stringify(input)}));
+ const diagnostic=await c.recall({...${JSON.stringify(input)},diagnostics:true});if(!diagnostic.ok)throw Error(JSON.stringify(diagnostic));
+ console.log(JSON.stringify({row,storageCalls:diagnostic.value.diagnostics.storageCalls}));await c.close();`));
+ const before=baselineRead.row;
  ok(before.result);assert.deepEqual(after.sql,before.sql);assert.equal(after.statements,before.statements);assert.equal(after.begin,before.begin);
  assert.equal(JSON.stringify(after.result),JSON.stringify(before.result));
+ assert.equal(ok(await core.recall({...input,diagnostics:true})).diagnostics.storageCalls,baselineRead.storageCalls);
+});
+
+
+test('a cross-process first relation requires reopening a plain legacy reader',async t=>{
+ const f=memoryThreadFixture(t),first=await f.capture('My breakfast is oats.');
+ const old=ok(f.core.get({namespace:ns,memoryId:first.admission.memories[0].id})).memory;
+ const select=()=>({refs:[{namespaceIndex:0,memoryId:old.id,revision:old.revision}]}),
+  rank=({input})=>({refs:input.candidates.slice(0,1).map(candidate=>({namespaceIndex:candidate.namespaceIndex,memoryId:candidate.memory.id,revision:candidate.memory.revision}))});
+ const options={path:f.path,memoryRelations:false,model:{contextWindow:8192,countTokens:()=>1,select,rank}};
+ let reader=openMemoryCore(options);
+ try{
+ // A child bypasses same-runtime peer notifications. Main's plain legacy read
+ // has no schema poll; the host reopens connections after an external upgrade.
+ const newest=JSON.parse(previous(root,f.path,`
+ const model={contextWindow:8192,countTokens:()=>1,extract:({input})=>({items:input.messages.map((message,index)=>({content:message.content,kind:'fact',confidence:.9,sourceIndices:[index]}))})};
+ const c=openMemoryCore({path:process.argv[1],model});
+ const result=await c.capture(${JSON.stringify(request('peer-edge','My breakfast is eggs.'))});
+ if(!result.ok)throw Error(JSON.stringify(result));console.log(JSON.stringify(result.value.admission.memories[0]));await c.close();`));
+ const input={readSet:[ns],query:'breakfast',limit:2};
+ const beforeReopen=ok(await reader.recall(input));
+ assert.equal(beforeReopen.memories[0].memory.id,old.id);
+ assert.ok(beforeReopen.memories.every(item=>!item.relations?.length));
+ await reader.close();reader=openMemoryCore(options);
+ const result=ok(await reader.recall(input));
+ assert.equal(result.memories[0].memory.id,newest.id);
+ assert.ok(result.memories.some(item=>item.memory.id===old.id));
+ assert.equal(result.memories[0].relations[0].relation,'same_thread');
+ }finally{await reader.close();}
 });

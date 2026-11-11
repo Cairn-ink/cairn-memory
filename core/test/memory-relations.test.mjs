@@ -39,7 +39,7 @@ for(const filing of [false,true])test(`capture derives current from retained cha
   const pack=await f.read();assert.equal(pack.metered.items.length,Math.min(i+1,4));
   assert.equal((pack.metered.items.find(item=>item.metadata?.thread?.status==='current')??pack.metered.items[0]).body,`My breakfast is value ${i}.`);
  }
- assert.equal(f.calls.length,9);
+ assert.equal(f.calls.length,8);
  assert.ok(f.db.prepare('SELECT count(*) n FROM memory_relations').get().n>0);
  const newest=ok(f.core.get({namespace:ns,memoryId:ids.at(-1)})).memory;
  ok(f.core.forget({namespace:ns,memoryId:newest.id,expectedRevision:newest.revision}));
@@ -78,7 +78,7 @@ test('keyless rule emits only neutral links, including Traditional Chinese',()=>
 test('capture candidates and database edges cannot cross owner or namespace',async t=>{
  const f=fixture(t);await f.capture('My breakfast is oats.',{...ns,ownerId:'other-owner'});
  await f.capture('My breakfast is eggs.',{...ns,scope:'project',projectId:'other-project'});
- await f.capture('My breakfast is pancakes.');assert.deepEqual(f.calls.at(-1).candidates,[[]]);
+ await f.capture('My breakfast is pancakes.');assert.equal(f.calls.length,0);
  await f.capture('My breakfast is toast.');
  const all=f.db.prepare('SELECT id,revision,owner_id,scope FROM memories ORDER BY id').all();
  const rows=[all.find(row=>row.owner_id==='other-owner'),all.find(row=>row.owner_id===ns.ownerId&&row.scope==='personal')];
@@ -150,7 +150,7 @@ test('causal capture uses the same relation decision and preserves receipt prove
  const f=fixture(t);let oldCalls=0;f.model.reconcile=()=>{oldCalls++;throw Error('legacy path');};
  for(let i=1;i<=2;i++)ok(await f.core.capture({namespace:ns,client:'synthetic',sessionId:'s',eventId:'causal-'+i,
   causal:{streamId:'stream',sequence:i},messages:[{id:'causal-message-'+i,role:'user',content:'My breakfast is causal value '+i+'.'}]}));
- assert.equal(oldCalls,0);assert.equal(f.calls.length,2);
+ assert.equal(oldCalls,0);assert.equal(f.calls.length,1);
  assert.equal(f.db.prepare('SELECT count(*) n FROM receipt_causality').get().n,2);
  assert.equal(f.db.prepare("SELECT count(*) n FROM memory_relations WHERE relation='supersedes'").get().n,1);
  assert.equal((await f.read()).metered.items.length,2);
@@ -217,7 +217,7 @@ test('a candidate forgotten by the token counter is never sent to the relation m
   return 1;
  };
  const second=await f.capture('My breakfast is new value.');
- assert.equal(fired,true);assert.equal(second.admission.memories.length,1);assert.equal(f.calls.length,1);
+ assert.equal(fired,true);assert.equal(second.admission.memories.length,1);assert.equal(f.calls.length,0);
  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version,18);
  assert.equal(f.db.prepare("SELECT count(*) n FROM sqlite_schema WHERE name='memory_relations'").get().n,0);
 });
@@ -239,6 +239,8 @@ test('a relation timeout reserves admission time and admits without edges',async
  const diagnostics=[];
  const f=fixture(t,{coreOptions:{captureDeadlineMs:2000},options:{onDiagnostic:value=>diagnostics.push(value),
   relateMemories:({signal})=>new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(Error('cancelled')),{once:true}))}});
+ ok(f.core.admit({namespace:ns,memory:{content:'The breakfast ledger is archived.',kind:'fact'},
+  receipts:[{client:'synthetic',sessionId:'s',eventId:'ledger',role:'user',excerpt:'The breakfast ledger is archived.'}]}));
  const result=await f.capture('My breakfast is oats.');
  assert.equal(result.admission.memories.length,1);assert.equal(f.db.prepare('PRAGMA user_version').get().user_version,18);
  assert.equal(f.db.prepare("SELECT count(*) n FROM sqlite_schema WHERE name='memory_relations'").get().n,0);

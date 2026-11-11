@@ -1,4 +1,3 @@
-import { seedLegacyHeldTransition } from '../testing/legacy-held-transition-fixture.mjs';
 import { CARD_METHODS, CARD_READS } from '../private-card-input.mjs';
 import { CARD_CURRENT_METHODS } from '../card-current-input.mjs';
 import { METHOD_METHODS, METHOD_READS } from '../method-package-input.mjs';
@@ -38,8 +37,8 @@ test('r4 write acknowledgement: explicit promotion rolls back a suppressed held 
   const capture=event=>({namespace:ns,client:'synthetic',sessionId:'ordered',eventId:event,causal:{streamId:'stream',sequence:event==='first'?1:2},messages:[{id:event,role:'user',content:'Synthetic direct source'}]});
   const previous=ok(await f.core.capture(capture('first'))).admission.memories[0];
   content='Synthetic chosen replacement';kind='decision';
-  const replacement=ok(await f.core.capture(capture('second'))).admission.memories[0];
-  seedLegacyHeldTransition(f.db,previous.id,replacement.id);
+  model.reconcile=()=>({transitions:[{replacementIndex:0,predecessorIndex:0,evidenceIndices:[0],relation:'supersedes',valueChange:'changed',adoption:'explicit'}]});
+  ok(await f.core.capture(capture('second')));
   assert.equal(f.db.prepare("SELECT count(*) n FROM confirmation_supersessions WHERE status='pending'").get().n,1);
   fact(f.db,'memory',previous.id);
   unchanged(f.db,()=>f.core.admit({namespace:ns,memory:{content,kind},receipts:[receipt('explicit-promotion')]}));
@@ -197,9 +196,9 @@ test('r4 terminal rejection and its verified replay exempt only their own held r
   const model={...rationaleModel(),extract:()=>({items:[{content,kind,confidence:.8,sourceIndices:[0]}]})};
   const f=await setup(t,{model,decisionReview:'required-v1'});
   const capture=event=>({namespace:ns,client:'synthetic',sessionId:'rejection',eventId:event,causal:{streamId:'stream',sequence:event==='first'?1:2},messages:[{id:event,role:'user',content:'Synthetic direct source'}]});
-  const previous=ok(await f.core.capture(capture('first'))).admission.memories[0];content='Synthetic held rejection';kind='decision';
+  ok(await f.core.capture(capture('first')));content='Synthetic held rejection';kind='decision';
+  model.reconcile=()=>({transitions:[{replacementIndex:0,predecessorIndex:0,evidenceIndices:[0],relation:'supersedes',valueChange:'changed',adoption:'explicit'}]});
   const replacement=ok(await f.core.capture(capture('second'))).admission.memories[0];
-  seedLegacyHeldTransition(f.db,previous.id,replacement.id);
   fact(f.db,'memory',replacement.id);
   const input={namespace:ns,memoryId:replacement.id,expectedRevision:replacement.revision,actionId:'reject-own'};
   const result=ok(f.core.reject(input));assert.equal(result.forgotten,true);

@@ -9,7 +9,7 @@ for(const tier of [1,2])for(const changes of [1,2,4,8])test(`tier ${tier}: ${cha
  const f=memoryThreadFixture(t,{tier}),row=await measureThreadChain(f,changes);
  assert.equal(row.latest,true);assert.equal(row.markedCurrent,true);assert.equal(row.retracted,true);assert.equal(row.dated,true);
  assert.equal(row.members,Math.min(changes+1,4));
- if(tier===2)assert.equal(f.calls.length,changes+1);
+ if(tier===2)assert.equal(f.calls.length,changes);
 });
 test('neutral matching abstains on different subjects and negation scopes',()=>{
  const pairs=syntheticThreadPairs();

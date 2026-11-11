@@ -73,6 +73,10 @@ export async function relateCapturedMemories({model,items,operations,deadline,va
   ...ruleRelation(fact,candidates[fact.factIndex]).map(edge=>({...edge,factIndex:fact.factIndex,
    candidateRevision:candidates[fact.factIndex].find(row=>row.id===edge.candidateId).revision,decidedBy:'rule',eventTime:fact.eventTime}))]);
  try{
+  const keyed=typeof modelPortValue(model,'relateMemories','model_not_configured')==='function';
+  // A neutral edge requires a recognized subject on both ends. When no fact
+  // has one, discovery cannot produce an edge and must not add read statements.
+  if(!keyed&&facts.every(fact=>!topic(fact.content).subject))return fallback();
   const lexical=operations.relationCandidates(items);
   const otherFacts=(rows,index)=>rows.filter(candidate=>candidate.content!==items[index].content).slice(0,8);
   candidates=lexical.map(otherFacts);
@@ -87,7 +91,9 @@ export async function relateCapturedMemories({model,items,operations,deadline,va
    if(current.length!==expected.size||current.some(candidate=>JSON.stringify(candidate)!==JSON.stringify(expected.get(candidate.id))))throw Error('stale_memory_relations');
   };
   assertFresh();
-  const keyed=typeof modelPortValue(model,'relateMemories','model_not_configured')==='function';
+  // There is nothing to label without an existing eligible endpoint. Preserve
+  // the ordinary capture's model request count and retain only its clock hint.
+  if(candidates.every(rows=>!rows.length))return fallback();
   let request={facts,candidates};
   // Retain admission time even when relation discovery times out. The parent
   // capture deadline still owns the transaction and all source fences.

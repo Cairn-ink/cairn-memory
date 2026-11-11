@@ -1,4 +1,3 @@
-import { seedLegacyHeldTransition } from '../testing/legacy-held-transition-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -129,8 +128,7 @@ test('retained canonical old fingerprint plus missing receipt proves correction 
   content = 'Synthetic replacement decision.';
   model.extract = () => ({ items: [{ content, kind: 'decision', confidence: 0.8, sourceIndices: [0] }] });
   model.reconcile = () => ({ transitions: [{ replacementIndex: 0, predecessorIndex: 0, evidenceIndices: [0], relation: 'supersedes', valueChange: 'changed', adoption: 'explicit' }] });
-  const replacement=ok(await f.core.capture(capture(2))).admission.memories[0];
-  seedLegacyHeldTransition(f.db,first.id,replacement.id);
+  ok(await f.core.capture(capture(2)));
   assert.equal(f.db.prepare('SELECT count(*) n FROM confirmation_supersessions').get().n, 1);
   ok(f.core.correct({ namespace: ns, memoryId: first.id, expectedRevision: first.revision,
     content: 'Synthetic in-place correction.', kind: 'context', receipt: receipt('corrected') }));
