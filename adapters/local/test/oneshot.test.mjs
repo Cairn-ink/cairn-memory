@@ -744,7 +744,14 @@ for (const timing of ['original','rewritten','before-forget','deleted']) test(`C
   assert.equal((await f.capture(f.wire('control','fresh',-172800000))).status,200);
   if(timing==='before-forget') { const copy=f.wire('fork','copied');copy.event_id='fork-before';assert.equal((await f.capture(copy)).status,200); }
   ok(f.mutate('forget',f.remember()));
-  if(timing==='deleted')ok(f.privacyCore.deleteConversation({namespace:ns,conversationId:original.body.raw.conversationId,expectedRevision:original.body.raw.revision,actionId:'delete-original'}));
+  if(timing==='deleted') {
+    const input={namespace:ns,conversationId:original.body.raw.conversationId,expectedRevision:original.body.raw.revision,actionId:'delete-original'};
+    // Forget already committed this session fence and owes its UUID job. The
+    // bounded preparation pass returns progress; the next pass probes deletion.
+    assert.deepEqual(f.privacyCore.deleteConversation(input),{ok:false,error:{code:'local_raw_privacy_write_failed',retryable:true}});
+    assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages WHERE conversation_id=?').get(input.conversationId).n,1);
+    ok(f.privacyCore.deleteConversation(input));
+  }
   const fork=f.wire('fork','copied',timing==='original'?0:-86400000);
   assert.equal((await f.capture(fork)).body.error,'conversation_deleted');
   assert.equal((await f.capture(f.wire('fork','fresh-after-fence',-172800000,2))).body.error,'conversation_deleted');

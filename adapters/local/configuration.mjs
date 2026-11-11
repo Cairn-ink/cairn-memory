@@ -75,13 +75,14 @@ export function requestForTarget(value, config) {
   } catch { throw new LocalCaptureError('invalid_capture_v2'); }
 }
 
-export async function preflight(config) {
+export async function preflight(config, { deadline = performance.now() + config.timeouts.captureMs } = {}) {
   let db;
   try {
     const { DatabaseSync } = await import('node:sqlite');
     await checkedPath(config.usage.root, { directory: true });
     const before = await checkedPath(config.databasePath);
     db = new DatabaseSync(config.databasePath, { readOnly: true });
+    db.exec(`PRAGMA busy_timeout=${Math.min(5000, Math.max(0, Math.floor(deadline - performance.now())))}`);
     const layout = attestContentSafety(db);
     if (layout.base < 33) assertNoCardCurrentDependencies(db);
     if (layout.base < 32) assertNoRoleProfiles(db);
@@ -92,6 +93,10 @@ export async function preflight(config) {
     if (db.prepare('PRAGMA application_id').get().application_id !== 0x43414952 || ![29,30,31,32,33].includes(layout.base) ||
         db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id !== config.authority.storeId ||
         db.prepare('SELECT 1 FROM raw_owner_usage WHERE owner_id=? AND cap_bytes!=?').get(config.authority.namespace.ownerId, config.raw.capBytes)) invalid();
-  } catch { invalid(); }
+  } catch (error) {
+    if (error?.code === 'ERR_SQLITE_ERROR' && Number.isInteger(error.errcode) && [5,6].includes(error.errcode & 0xff))
+      throw new LocalCaptureError('storage_busy');
+    invalid();
+  }
   finally { db?.close(); }
 }

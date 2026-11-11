@@ -2034,12 +2034,23 @@ attached to Memory is dated inside `evidence`; identical body text uses
 Saved text remains untrusted data. Signed snapshots cover the selected canonical
 Memories/Cards; Raw evidence is inline and does not expand snapshot fetch.
 
-`diagnostics.coverage.raw` reports `included`, `unavailable` or `partial`.
-Unavailable, incomplete or timed-out Raw uses the exact existing Memory-only
-assembly. Raw work has a subdeadline reserving Memory assembly time. All admitted
+`diagnostics.coverage.raw` reports `included`, `unavailable`, `unsupported_store`
+or `partial`. Incomplete search and preparation cutoffs retain the validated
+candidate prefix with `partial` coverage, including its Raw evidence and dates.
+Invalid or failed candidates are skipped individually. Preparation remains
+serial, limited to the first 24 search candidates; late prepares are ignored
+and the timer returns a snapshot of the prefix collected so far. Empty Raw sets
+use the existing Memory-only assembly; a complete search with zero candidates
+still reports `included`. Unavailable services and unsupported stores retain
+their respective coverage values. Raw work has a subdeadline reserving Memory
+assembly time. Every nonempty Raw set, including partial sets, is batch-revalidated
+before any Raw text projection. All admitted
 Raw handles are batch-revalidated after host counting/authority callbacks,
-before canonical final delivery. Failed validation discards Raw and rebuilds
-Memory-only output without holding a SQLite transaction across an asynchronous
-operation. The semantic publication gate still covers synchronous assembly and
-final validation; Raw preparation happens before entering it. Hosts own late
-underlying operations and must bound synchronous service calls.
+before canonical final delivery. No SQLite transaction is held across an
+asynchronous operation. The semantic publication gate still covers synchronous
+assembly and final validation; Raw preparation happens before entering it.
+Hosts own late underlying operations and must bound synchronous service calls.
+
+Known limit: on the product reader, Raw invalidated between initial and final
+validation yields the existing refusal (`reader_failed`) rather than a Memory-only
+response; the local/facade reader rebuilds Memory-only.

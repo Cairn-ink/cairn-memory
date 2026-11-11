@@ -15,3 +15,20 @@ export function createCaptureDeadline(milliseconds) {
   };
   return Object.freeze({ expired, check, remainingMs });
 }
+
+// A trusted local host includes opening work through an explicit private token.
+// Caller data cannot forge it, and unrelated captures inherit no budget.
+const invocationDeadlines = new WeakMap();
+export function captureWithDeadline(core, request, deadline) {
+  const invocation = {};
+  invocationDeadlines.set(invocation, deadline);
+  return core.captureRaw(request, invocation);
+}
+// Preserve the public capture facade while forwarding this invocation's budget.
+export function captureFacadeWithDeadline(core, request, deadline) {
+  const invocation = {};
+  invocationDeadlines.set(invocation, deadline);
+  return core.capture(request, invocation);
+}
+export const captureInvocationDeadline = (milliseconds, invocation) => invocationDeadlines.get(invocation) ??
+  (milliseconds === undefined ? undefined : createCaptureDeadline(milliseconds));

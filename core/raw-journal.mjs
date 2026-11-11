@@ -14,6 +14,43 @@ import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { createRawSourceReader } from './raw-source-reader.mjs';
 import { createLocalAuthorityStorage } from './local-authority-storage.mjs';
 
+// Private provenance survives internal error envelopes through the registration.
+class RawEpochConflict extends MemoryStoreError {
+  constructor() { super('storage_busy'); }
+}
+// Short contention bursts retry in-call; persistent churn defers to the host.
+const RAW_EPOCH_ATTEMPTS = 4;
+export const isRawEpochConflict = error => error instanceof RawEpochConflict;
+export async function retryRawEpochConflict(work, { deadline } = {}) {
+  let before = deadline?.remainingMs(120_000);
+  for (let attempt = 0; ; attempt++) {
+    try { return await work(); }
+    catch (error) {
+      if (!isRawEpochConflict(error)) throw error;
+      // Leave a full observed attempt's runway before starting another one.
+      // Synchronous preparation can otherwise overrun a local process watchdog.
+      if (deadline) {
+        let remaining;
+        try { remaining = deadline.remainingMs(120_000); }
+        catch (timeout) {
+          if (timeout.code === 'model_timeout') throw new MemoryStoreError('storage_busy');
+          throw timeout;
+        }
+        if (remaining <= before - remaining) throw new MemoryStoreError('storage_busy');
+        before = remaining;
+      }
+      if (attempt + 1 === RAW_EPOCH_ATTEMPTS) throw new MemoryStoreError('storage_busy');
+    }
+  }
+}
+
+// Keep every non-epoch fence field in the comparison, including future fields.
+function isEpochOnlyFenceChange(prepared, current) {
+  const { epoch: before, ...beforeFence } = prepared;
+  const { epoch: after, ...afterFence } = current;
+  return before !== after && JSON.stringify(beforeFence) === JSON.stringify(afterFence);
+}
+
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const clock = () => new Date().toISOString();
 const freeze = value => {
@@ -209,15 +246,29 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     return token;
   }
 
-  function commitInside(value) {
-    const { input,session,eventDigest,authority,fence,id,revision,sealedParts } = value, ns = input.namespace;
+  function validateRegistration(value) {
+    const { input,session,eventDigest,authority,fence,id,revision } = value, ns = input.namespace;
     const currentPolicy = policy(input), currentFence = durableFence(ns,input.client,session);
     const duplicate = replay(input,eventDigest);
-    if (duplicate) return duplicate;
-    if (JSON.stringify(currentPolicy) !== JSON.stringify(authority) || JSON.stringify(currentFence) !== JSON.stringify(fence)) fail('revision_conflict');
+    if (duplicate) return { duplicate };
+    const epochOnly = isEpochOnlyFenceChange(fence, currentFence);
+    if (JSON.stringify(currentPolicy) !== JSON.stringify(authority) ||
+        (JSON.stringify(currentFence) !== JSON.stringify(fence) && !epochOnly)) fail('revision_conflict');
     const current = conversation(ns,input.client,session);
     if(current)assertRegistrationSources(input,current.id);
     if ((current?.revision ?? null) !== revision || (current && current.id !== id)) fail('revision_conflict');
+    if (epochOnly) throw new RawEpochConflict();
+    return { current, currentFence };
+  }
+  function assertRegistrationCurrent(token) {
+    const value = prepared.get(token);
+    if (!value) fail('invalid_input');
+    validateRegistration(value);
+  }
+  function commitInside(value) {
+    const { current, currentFence, duplicate } = validateRegistration(value);
+    if (duplicate) return duplicate;
+    const { input,session,eventDigest,authority,id,sealedParts } = value, ns = input.namespace;
     const now = clock();
     if (!current) db.prepare(`INSERT INTO raw_conversations(id,owner_id,scope,project_id,client,session_key,revision,first_received_at,last_received_at)
       VALUES(?,?,?,?,?,?,1,?,?)`).run(id,...rawBoundary(ns),input.client,session,now,now);
@@ -283,8 +334,10 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     catch (error) { db.exec(`ROLLBACK TO ${name}; RELEASE ${name}`); throw error; }
   }
   async function register(input) {
-    const token = await prepareRegistration(input);
-    return transaction(db,() => commitRegistration(token));
+    return retryRawEpochConflict(async () => {
+      const token = await prepareRegistration(input);
+      return transaction(db,() => commitRegistration(token));
+    });
   }
 
   function closePendingInside({ ownerId,client,namespace,sessionKey: session,reason }) {
@@ -341,7 +394,7 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
   const getConversation = createRawReads({ db,identity,epoch,open,digest,partDigest });
   const listRawConversations = createRawConversationList({ db,identity,epoch });
   const sourceReader = sources ? createRawSourceReader({ db,identity,open,partDigest }) : undefined;
-  return Object.freeze({ prepareRegistration,commitRegistration,register,getConversation,listRawConversations,getRawUsage,
+  return Object.freeze({ prepareRegistration,assertRegistrationCurrent,commitRegistration,register,getConversation,listRawConversations,getRawUsage,
     sourceReader,
     getRawCaptureControl,setRawCaptureControl,closePending,
     sessionKey: (namespace, client, sessionId) => sessionKey(rawNamespace(namespace), rawClient(client), identifier(sessionId)) });

@@ -91,11 +91,12 @@ function recordDraftFailure(runtime, ns, failure) {
 }
 
 async function interpret({ runtime, ns, model, episodeId, generation, writerToken,
-  trigger, watermark, staging, onPendingFailure }) {
+  trigger, watermark, staging, onPendingFailure, deadline }) {
   let owned, started = false, retryable = false;
   try {
+    deadline?.check();
     const claim = runtime.claimEpisodeDraft(ns, { episodeId, generation, writerToken,
-      trigger, watermark, deferAttempt: true });
+      trigger, watermark, deferAttempt: true }, deadline);
     if (claim.consumed) return { id: episodeId, status: 'not-run', reason: 'consumed' };
     owned = { episodeId, token: claim.token };
     if (claim.skipReason) fail(claim.skipReason);
@@ -104,14 +105,14 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
     const planned = episodeRequest(model, snapshot);
     let checks = 0;
     const output = await callModel(model, 'interpretEpisode', system, planned.input, {
-      failureCode: 'episode_failed', validateFresh: () => {
+      failureCode: 'episode_failed', deadline, validateFresh: () => {
         // Check the actual prepared request, not a freshly filtered replacement.
         runtime.assertCaptureSources(ns, planned.receipts);
         runtime.episodeDraftSnapshot(ns, owned);
         // callModel checks once during preparation and again immediately before
         // invoking the port. Consume only at that second check, with no await.
         if (++checks === 2) {
-          runtime.startEpisodeAttempt(ns, owned);
+          runtime.startEpisodeAttempt(ns, owned, deadline);
           started = true;
         }
       },
@@ -126,11 +127,12 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
         result = { ...output, disposition: { ...planned.stepGuard,
           action: output.disposition.action, anchors: output.disposition.anchors } };
       }
+      deadline?.check();
       committed = runtime.commitEpisodeDraft(ns, { ...owned, result, sources: planned.refs,
         dispositions: planned.dispositions, priorOmitted: planned.priorOmitted,
         ...(trigger === 'batch' ? { classificationEventId: snapshot.targetEventId } : {}),
         modelMetadata: { adapter: null, model: null, profile: null, ...model.episodeMetadata,
-          promptVersion: 'interpret-episode-v1', digest: promptDigest, portVersion: 'episode-v1' } });
+          promptVersion: 'interpret-episode-v1', digest: promptDigest, portVersion: 'episode-v1' } }, deadline);
     } catch (error) {
       if (['invalid_input', 'invalid_text', 'episode_step_conflict'].includes(error.code)) {
         fail('invalid_model_output');
@@ -175,12 +177,13 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
   }
 }
 
-async function auxiliary({ runtime, ns, model, episodeId, generation, trigger }) {
+async function auxiliary({ runtime, ns, model, episodeId, generation, trigger, deadline }) {
+  deadline?.check();
   const state = runtime.episodeCaptureState(ns, { episodeId });
   if (!state || (state.observed <= state.attempted && !state.unfinishedAttempt)) {
     return { id: episodeId, status: 'not-run', reason: 'no-undrafted-evidence' };
   }
-  const writer = runtime.claimEpisodeWriter(ns, { episodeId, generation });
+  const writer = runtime.claimEpisodeWriter(ns, { episodeId, generation }, deadline);
   if (writer.processing) return { id: episodeId, status: 'processing' };
   try {
     // Acquiring the writer recovers expired attempts even when there is no new draft.
@@ -188,7 +191,7 @@ async function auxiliary({ runtime, ns, model, episodeId, generation, trigger })
       return { id: episodeId, status: 'not-run', reason: 'no-undrafted-evidence' };
     }
     return await interpret({ runtime, ns, model, episodeId, generation, writerToken: writer.token,
-      trigger, watermark: state.observed });
+      trigger, watermark: state.observed, deadline });
   } finally { runtime.releaseEpisodeWriter(ns, { episodeId, token: writer.token }); }
 }
 
@@ -205,6 +208,7 @@ export async function endEpisode({ runtime, ns, model, input }) {
 
 export async function captureEpisodeMessages(options) {
   const { runtime, ns, model, input, startAdmission, captureQualification, captureSourcePolicy } = options;
+  const sharedDeadline = options.rawRegistration ? options.deadline : undefined;
   const snapshot = episodeSnapshot(input);
   // Before staging, lazy interpretation or any claim: an oversized batch is an input error.
   checkExtractionFits(model, extractionRequest(snapshot, { captureQualification, captureSourcePolicy, episode: true }));
@@ -217,31 +221,31 @@ export async function captureEpisodeMessages(options) {
   // every duplicate/processing return and any lazy provider work.
   let registered = options.rawRegistration
     ? runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true }, options.rawRegistration) : undefined;
-  if (registered?.rawReplay) return registered.rawReplay;
-  const checked = registered ?? runtime.validateEpisodeBatch(ns, batch);
-  if (checked.processing) return { processing: true,
-    episode: { status: 'processing' }, admission: { status: 'processing' } };
-  if (checked.overlap) return { duplicate: true, overlap: true,
-    episode: { id: checked.episodeId, status: 'not-run', reason: 'overlap' },
-    admission: { status: 'covered' } };
-  let lazy;
-  if (!checked.duplicate) {
-    const pending = runtime.pendingEpisodeSession(ns, batch);
-    if (pending) lazy = await auxiliary({ runtime, ns, model, episodeId: pending,
-      generation: batch.generation, trigger: 'lazy' });
-  }
-  registered ??= runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true });
-  const episodeId = registered.episodeId;
-  if (registered.processing) return { processing: true,
-    episode: { id: episodeId, status: 'processing' }, admission: { status: 'processing' } };
-  if (registered.overlap) return { duplicate: true, overlap: true,
-    episode: { id: episodeId, status: 'not-run', reason: 'overlap' },
-    admission: { status: 'covered' } };
-  if (registered.messageIds?.length) {
-    snapshot.messages = snapshot.messages.filter(message => registered.messageIds.includes(message.id));
-  }
-  const writerToken = registered.token;
   try {
+    if (registered?.rawReplay) return registered.rawReplay;
+    const checked = registered ?? runtime.validateEpisodeBatch(ns, batch);
+    if (checked.processing) return { processing: true,
+      episode: { status: 'processing' }, admission: { status: 'processing' } };
+    if (checked.overlap) return { duplicate: true, overlap: true,
+      episode: { id: checked.episodeId, status: 'not-run', reason: 'overlap' },
+      admission: { status: 'covered' } };
+    let lazy;
+    if (!checked.duplicate) {
+      const pending = runtime.pendingEpisodeSession(ns, batch);
+      if (pending) lazy = await auxiliary({ runtime, ns, model, episodeId: pending,
+        generation: batch.generation, trigger: 'lazy', deadline: sharedDeadline });
+    }
+    registered ??= runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true });
+    const episodeId = registered.episodeId;
+    if (registered.processing) return { processing: true,
+      episode: { id: episodeId, status: 'processing' }, admission: { status: 'processing' } };
+    if (registered.overlap) return { duplicate: true, overlap: true,
+      episode: { id: episodeId, status: 'not-run', reason: 'overlap' },
+      admission: { status: 'covered' } };
+    if (registered.messageIds?.length) {
+      snapshot.messages = snapshot.messages.filter(message => registered.messageIds.includes(message.id));
+    }
+    const writerToken = registered.token;
     let pendingFailure;
     const state = runtime.episodeCaptureState(ns, {
       episodeId, client: batch.client, eventId: batch.eventId });
@@ -253,10 +257,10 @@ export async function captureEpisodeMessages(options) {
     if (due && writerToken) episode = await interpret({ runtime, ns, model, episodeId,
       generation: batch.generation,
       writerToken, trigger: 'batch', watermark: registered.position, staging: registered.staging,
-      onPendingFailure: failure => { pendingFailure = failure; } });
+      onPendingFailure: failure => { pendingFailure = failure; }, deadline: sharedDeadline });
     const deadline = startAdmission?.();
     const claim = runtime.claimAdmission(ns, { client: batch.client, eventId: batch.eventId,
-      payloadDigest: batch.payloadDigest, leaseMs: 125000 });
+      payloadDigest: batch.payloadDigest, leaseMs: 125000 }, sharedDeadline);
     // Only the HMAC session identity can enter newly admitted receipts.
     snapshot.sessionId = registered.sessionKey;
     const result = await captureMessages({ ...options, deadline,
@@ -275,7 +279,9 @@ export async function captureEpisodeMessages(options) {
       ...(result.duplicate ? { admission: { status: 'completed',
         memoryIds: result.memoryIds, suppressedCount: result.suppressedCount } }
         : result.processing ? { admission: { status: 'processing' } } : {}) };
-  } finally { if (writerToken) runtime.releaseEpisodeWriter(ns, { episodeId, token: writerToken }); }
+  } finally {
+    if (registered?.token) runtime.releaseEpisodeWriter(ns, { episodeId: registered.episodeId, token: registered.token });
+  }
 }
 
 export async function keepEpisodeCapture(options) {

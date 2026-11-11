@@ -980,7 +980,8 @@
       "file": "core/raw-deletion-storage.mjs",
       "start": "  function cascadeInside(",
       "end": "  function remove(",
-      "sha256": "e6be635a8989b62f19eb3002c3c3f549d1813907dde10bf917cc3c076ac9987a"
+      "sha256": "c56a1768d1cb527b0fcff3fe739cc227d7e8292507c4730aa2e8a93aa976c52a",
+      "reason": "Local deletion probes before its first fence and final cascade; already fenced middle passes only advance owed UUID jobs."
     },
     {
       "id": "raw-exclusion",

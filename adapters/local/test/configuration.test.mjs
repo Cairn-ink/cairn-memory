@@ -55,6 +55,21 @@ test('B3 readonly preflight refuses missing, old, wrong and symlink DB without c
   chmodSync(f.config.usage.root, 0o755); await assert.rejects(preflight(f.config));
 });
 
+for(const errcode of [5,6,261,262,14,10,7]) test(`preflight bounds its timeout and classifies SQLite errcode ${errcode}`,async t=>{
+  const f=fixture(t),prepare=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;
+    const timeouts=[];let injections=0;
+    DatabaseSync.prototype.exec=function(sql,...args){
+      if(sql.startsWith('PRAGMA busy_timeout='))timeouts.push(Number(sql.slice(sql.indexOf('=')+1)));
+      return exec.call(this,sql,...args);
+    };
+    DatabaseSync.prototype.prepare=function(){injections++;throw Object.assign(Error('synthetic sqlite'),{code:'ERR_SQLITE_ERROR',errcode});};
+    try {await assert.rejects(preflight(f.config,{deadline:performance.now()+1000}),
+      {code:[5,6,261,262].includes(errcode)?'storage_busy':'invalid_local_capture_configuration'});}
+    finally {DatabaseSync.prototype.prepare=prepare;DatabaseSync.prototype.exec=exec;}
+    assert.equal(injections,1);assert.equal(timeouts.length,1);
+    assert.ok(timeouts[0]>=0&&timeouts[0]<=1000,'timeout stays within the remaining deadline');
+});
+
 test('B3 preflight checks only bound owner cap, never rewrites either owner', async t => {
   const f = fixture(t), db = new DatabaseSync(f.databasePath);
   try {

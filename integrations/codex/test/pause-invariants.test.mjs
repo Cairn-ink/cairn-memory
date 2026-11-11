@@ -1,4 +1,6 @@
 import test from 'node:test';
+// Run shared status races through this suite's existing CI entry.
+import '../../client/test/hosted-pause-status.test.mjs';
 import assert from 'node:assert/strict';
 import { appendFile, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -114,4 +116,178 @@ for (const [name, pause, resume] of [
   await appendFile(f.path, item('First turn'));
   await run(f);
   assert.deepEqual(sent(f), ['First turn']);
+});
+
+// Hosted observations use the same shared pause module in both distributions.
+async function hostedFixture(t) {
+  const { createTestWorkspace } = await import('../../../tools/testing/workspace.mjs');
+  const { mkdir } = await import('node:fs/promises');
+  const { hostedTargetId } = await import('../../client/transport-hosted.mjs');
+  const ws = createTestWorkspace(t), root = join(ws.path, 'state');
+  await mkdir(root, { mode: 0o700 });
+  const config = { root, endpoint: 'http://127.0.0.1:1' };
+  const pause = join(root, 'hosted-pause', hostedTargetId(config) + '.json');
+  return { config, pause };
+}
+
+test('unchanged validated hosted observation never republishes pause bytes', async t => {
+  const { observeHostedPause } = await import('../../client/hosted-pause.mjs');
+  const { withWriteObserver } = await import('../../client/private-state.mjs');
+  const f = await hostedFixture(t), value = { paused: false, generation: 0, enforced: true };
+  let observations = 0;
+  t.mock.method(globalThis, 'fetch', async () => { observations++; return Response.json(value); });
+  await observeHostedPause(f.config, 'synthetic-token');
+  const writes = [];
+  await withWriteObserver(event => writes.push(event), () => observeHostedPause(f.config, 'synthetic-token'));
+  assert.equal(observations, 2, 'unchanged_still_fetches');
+  assert.equal(writes.filter(event => event.kind === 'write' && event.path === f.pause).length, 0);
+  assert.equal(await readFile(f.pause, 'utf8'), JSON.stringify(value));
+});
+
+test('pause equality is byte equality after locked validation, including noncanonical old bytes', async t => {
+  const { observeHostedPause } = await import('../../client/hosted-pause.mjs');
+  const { withWriteObserver } = await import('../../client/private-state.mjs');
+  const f = await hostedFixture(t), value = { paused: false, generation: 0, enforced: true };
+  t.mock.method(globalThis, 'fetch', async () => Response.json(value));
+  await observeHostedPause(f.config, 'synthetic-token');
+  await writeFile(f.pause, JSON.stringify(value, null, 2));
+  const writes = [];
+  await withWriteObserver(event => writes.push(event), () => observeHostedPause(f.config, 'synthetic-token'));
+  assert.equal(writes.filter(event => event.kind === 'write' && event.path === f.pause).length, 1);
+  assert.equal(await readFile(f.pause, 'utf8'), JSON.stringify(value));
+});
+
+test('changed hosted generation publishes and rotates before recall dispatch', async t => {
+  const { observeHostedPause } = await import('../../client/hosted-pause.mjs');
+  const { recallContext } = await import('../hosted-lifecycle.mjs');
+  const f = await hostedFixture(t);
+  let generation = 0, recalls = 0, dispatched;
+  t.mock.method(globalThis, 'fetch', async url => {
+    if (url.endsWith('/pause-state')) return Response.json({ paused: false, generation, enforced: true });
+    recalls++;
+    dispatched = { remote: JSON.parse(await readFile(f.pause, 'utf8')),
+      local: await readControlState(f.config.root) };
+    return Response.json({ memories: [] });
+  });
+  await observeHostedPause(f.config, 'synthetic-token');
+  const before = await readControlState(f.config.root); generation = 1;
+  assert.equal(await recallContext({ prompt: 'Synthetic question', session_id: 's' }, f.config,
+    'synthetic-token', 'synthetic-project-id', new AbortController().signal, async () => true), '');
+  assert.equal(recalls, 1);
+  assert.equal(dispatched.remote.generation, 1, 'generation_published_before_dispatch');
+  assert.notEqual(dispatched.local.generation, before.generation, 'boundary_rotated_before_dispatch');
+});
+
+test('second hosted observation still durably pauses and blocks recall dispatch', async t => {
+  const { recallContext } = await import('../hosted-lifecycle.mjs');
+  const f = await hostedFixture(t); let observations = 0, recalls = 0;
+  t.mock.method(globalThis, 'fetch', async url => {
+    if (!url.endsWith('/pause-state')) { recalls++; return Response.json({ memories: [] }); }
+    observations++;
+    return Response.json({ paused: observations === 2, generation: observations === 2 ? 1 : 0, enforced: true });
+  });
+  assert.equal(await recallContext({ prompt: 'Synthetic question', session_id: 's' }, f.config,
+    'synthetic-token', 'synthetic-project-id', new AbortController().signal, async () => true), '');
+  assert.equal(observations, 2); assert.equal(recalls, 0);
+  assert.deepEqual(JSON.parse(await readFile(f.pause, 'utf8')), { paused: true, generation: 1, enforced: true });
+});
+
+test('successful recall coalesces status after fetch and refreshes the observation time once', async t => {
+  const { hostedPauseStatus } = await import('../../client/hosted-pause.mjs');
+  const { withWriteObserver } = await import('../../client/private-state.mjs');
+  const { recallContext } = await import('../hosted-lifecycle.mjs');
+  const f = await hostedFixture(t), writes = [];
+  let observations = 0, atFetch;
+  t.mock.method(globalThis, 'fetch', async url => {
+    if (url.endsWith('/pause-state')) { observations++; return Response.json({ paused: false, generation: 0, enforced: true }); }
+    atFetch = await hostedPauseStatus(f.config);
+    return Response.json({ memories: [] });
+  });
+  const start = Date.now();
+  assert.equal(await withWriteObserver(event => writes.push(event), () => recallContext(
+    { prompt: 'Synthetic question', session_id: 's' }, f.config, 'synthetic-token',
+    'synthetic-project-id', new AbortController().signal, async () => true)), '');
+  assert.equal(observations, 2);
+  assert.deepEqual(atFetch, { state: 'not yet observed' }, 'available_status_not_before_fetch');
+  assert.equal(writes.filter(event => event.kind === 'write' && event.path.includes('/hosted-pause-status/')).length, 1);
+  assert.ok(writes.some(event => event.kind === 'write' && event.path.endsWith('.available.json')),
+    'success_diagnostic_is_an_atomic_observation_record');
+  const status = await hostedPauseStatus(f.config);
+  assert.equal(status.state, 'available'); assert.equal(status.stale, false);
+  assert.ok(Date.parse(status.observedAt) >= start);
+  assert.ok(Date.parse(status.observedAt) <= Date.now());
+});
+
+test('interruption immediately after fetch leaves the previous status and stale rule intact', async t => {
+  const { hostedPauseStatus } = await import('../../client/hosted-pause.mjs');
+  const { privateWrite, withWriteObserver } = await import('../../client/private-state.mjs');
+  const { hostedTargetId } = await import('../../client/transport-hosted.mjs');
+  const { recallContext } = await import('../hosted-lifecycle.mjs');
+  const f = await hostedFixture(t), controller = new AbortController(), writes = [];
+  const statusFile = join(f.config.root, 'hosted-pause-status', hostedTargetId(f.config) + '.json');
+  const previous = { version: 1, state: 'unavailable', observedAt: new Date(Date.now() - 300001).toISOString() };
+  await privateWrite(statusFile, JSON.stringify(previous));
+  let recalls = 0;
+  t.mock.method(globalThis, 'fetch', async url => {
+    if (url.endsWith('/pause-state')) return Response.json({ paused: false, generation: 0, enforced: true });
+    recalls++; controller.abort(new Error('synthetic_interruption'));
+    return Response.json({ memories: [] });
+  });
+  assert.equal(await withWriteObserver(event => writes.push(event), () => recallContext(
+    { prompt: 'Synthetic question', session_id: 's' }, f.config, 'synthetic-token',
+    'synthetic-project-id', controller.signal, async () => true)), '');
+  assert.equal(recalls, 1);
+  assert.equal(writes.filter(event => event.kind === 'write' && event.path === statusFile).length, 0);
+  assert.equal(await readFile(statusFile, 'utf8'), JSON.stringify(previous));
+  assert.deepEqual(await hostedPauseStatus(f.config), { state: 'unavailable', observedAt: previous.observedAt, stale: true });
+  assert.equal(JSON.parse(await readFile(f.pause, 'utf8')).paused, false);
+});
+
+test('unavailable observation publishes immediately and cancels any deferred success', async t => {
+  const { deferHostedPauseStatus, hostedPauseStatus } = await import('../../client/hosted-pause.mjs');
+  const f = await hostedFixture(t);
+  let available = true;
+  t.mock.method(globalThis, 'fetch', async () => available ?
+    Response.json({ paused: false, generation: 0, enforced: true }) : new Response('', { status: 503 }));
+  const observation = deferHostedPauseStatus(f.config, 'synthetic-token', new AbortController().signal);
+  await observation.observe(); available = false;
+  await assert.rejects(observation.observe(), /pause_unavailable/);
+  const beforeFlush = await hostedPauseStatus(f.config);
+  assert.equal(beforeFlush.state, 'unavailable', 'unavailable_is_immediate');
+  assert.equal(beforeFlush.stale, false);
+  await observation.publish();
+  assert.deepEqual(await hostedPauseStatus(f.config), beforeFlush);
+});
+
+test('deferred success cannot erase a newer unavailable observation from another observer', async t => {
+  const { deferHostedPauseStatus, observeHostedPause, hostedPauseStatus } = await import('../../client/hosted-pause.mjs');
+  const f = await hostedFixture(t);
+  let available = true;
+  t.mock.method(globalThis, 'fetch', async () => available ?
+    Response.json({ paused: false, generation: 0, enforced: true }) : new Response('', { status: 503 }));
+  const observation = deferHostedPauseStatus(f.config, 'synthetic-token', new AbortController().signal);
+  await observation.observe(); available = false;
+  await assert.rejects(observeHostedPause(f.config, 'synthetic-token'), /pause_unavailable/);
+  const newer = await hostedPauseStatus(f.config);
+  await observation.publish();
+  assert.equal(newer.state, 'unavailable');
+  assert.deepEqual(await hostedPauseStatus(f.config), newer);
+});
+
+test('deferred status keeps observation time rather than inventing freshness at publication', async t => {
+  const { deferHostedPauseStatus, hostedPauseStatus } = await import('../../client/hosted-pause.mjs');
+  const f = await hostedFixture(t), NativeDate = Date;
+  let now = NativeDate.now();
+  class Clock extends NativeDate {
+    constructor(...args) { super(...(args.length ? args : [now])); }
+    static now() { return now; }
+  }
+  globalThis.Date = Clock;
+  t.after(() => { globalThis.Date = NativeDate; });
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ paused: false, generation: 0, enforced: true }));
+  const observation = deferHostedPauseStatus(f.config, 'synthetic-token', new AbortController().signal);
+  await observation.observe(); const observedAt = new Date().toISOString();
+  now += 300001;
+  await observation.publish();
+  assert.deepEqual(await hostedPauseStatus(f.config), { state: 'available', observedAt, stale: true });
 });

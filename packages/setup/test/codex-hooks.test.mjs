@@ -1223,3 +1223,17 @@ test('exec resume of an interactive transcript skips capture/recall unless opted
   assert.equal(f.requests.filter(r=>r.route.endsWith('/capture')).length,1);
   assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,1);
 });
+
+test('prompt diagnostics publish after recall dispatch and before the hook returns', async t => {
+  const f = await memoryRuntime(t), events = [];
+  const { withWriteObserver } = await import('../../../integrations/client/private-state.mjs');
+  let atFetch;
+  f.delay(async route => { if (route.endsWith('/recall')) atFetch = events.length; });
+  await withWriteObserver(event => { if (event.kind === 'write') events.push(event.path); },
+    () => f.invoke('UserPromptSubmit', { prompt: 'Synthetic question' }));
+  assert.ok(Number.isInteger(atFetch), 'recall_reached');
+  for (const match of ['/hosted-pause-status/', '/qualification/observed-']) {
+    assert.ok(!events.slice(0, atFetch).some(path => path.includes(match)), 'no_prefetch_diagnostics');
+    assert.ok(events.slice(atFetch).some(path => path.includes(match)), 'postfetch_diagnostic_published');
+  }
+});

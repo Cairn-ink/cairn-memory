@@ -1,3 +1,4 @@
+import { createCaptureDeadline, captureWithDeadline } from '../../core/capture-deadline.mjs';
 import { openMemoryCore } from '../../core/index.mjs';
 import { classifyRawAcknowledgement } from '../../integrations/client/raw/protocol.mjs';
 import { guardedModel } from './guarded-model.mjs';
@@ -32,6 +33,7 @@ export function captureReply(result, request) {
 }
 
 export async function captureLocal(config, request, { signal, env, fetchImpl, captureMs = config.timeouts.captureMs, onClose = () => {} } = {}) {
+  const deadline = createCaptureDeadline(captureMs);
   let core;
   const rawOnly = config.interpretation === 'raw-only';
   const guarded = rawOnly ? null : guardedModel(config, { core: () => core, signal, env, fetchImpl });
@@ -45,9 +47,15 @@ export async function captureLocal(config, request, { signal, env, fetchImpl, ca
     const input = { namespace: config.authority.namespace, client: request.client, sessionId: request.session_id, eventId: request.event_id,
       messages: request.messages.map(message => ({ id: message.id, role: message.role, occurredAt: message.occurred_at,
         messageOrdinal: message.message_ordinal, content: message.content, part: { ...message.part } })) };
-    const result = await core.captureRaw(input);
+    const result = await captureWithDeadline(core, input, deadline);
     await guarded?.settled();
     return captureReply(result, request);
+  } catch (error) {
+    // Assignment completes only after the opener returns. Later capture and
+    // cleanup errors retain their existing transport-uncertain behavior.
+    if (!core && error?.code === 'ERR_SQLITE_ERROR' && Number.isInteger(error.errcode) && [5,6].includes(error.errcode & 0xff))
+      return { status: 409, body: { error: 'storage_busy' } };
+    throw error;
   } finally {
     await guarded?.settled(); core?.close(); onClose(() => {});
   }
