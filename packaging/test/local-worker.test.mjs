@@ -68,7 +68,9 @@ else {
     assert.equal(result.error,undefined); assert.equal(result.status,0,result.stderr); assert.equal(result.signal,null);
     assert.doesNotMatch(result.stdout+result.stderr,/synthetic_source_secret|synthetic_key_secret/); return JSON.parse(result.stdout);
   };
-  assert.equal(invoke('initialize',{ start:'beginning' }).status,'ready');
+  if(client==='codex')writeFileSync(sourcePath,header,{mode:0o600});
+  assert.equal(invoke('initialize',{ start:client==='codex'?'eof':'beginning' }).status,'ready');
+  if(client==='codex')writeFileSync(sourcePath,header+JSON.stringify(row)+'\n',{mode:0o600});
   assert.equal(invoke('run').reason,'uncertain'); const pending = cursor().pending; assert.equal(pending.attempts,1);
   assert.equal(invoke('run',{ key:false,clock:pending.nextEligibleAt-1 }).dispatchedParts,0);
   writeFileSync(modePath,'memory'); const recovered = invoke('run',{ key:false,clock:pending.nextEligibleAt+1 });

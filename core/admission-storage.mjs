@@ -97,8 +97,10 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
       retryCleanup.delete(cleanupKey(ns, input));
     }
     const serialized = stagedView === undefined ? null : stagedEvidence.serializeView(stagedView);
+    let rawRefusal = false;
     const result = transaction(db, () => {
       const registeredRaw = registration?.commit();
+      if (registeredRaw?.closed) { rawRefusal = true; return registeredRaw; }
       if (registeredRaw?.observation) return { rawReplay: registeredRaw.observation };
       const now = time(ns, input, serialized !== null);
       const row = read(ns, input);
@@ -142,7 +144,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
       if (!reuseStaged && serialized && !registered && !capacity) stagedEvidence.insert(ns, input, serialized, now);
       if (serialized && !registered) registration?.setStaging(capacity ? 'not-staged' : 'staged');
       return { token, ...prepared, ...(registered ? { episodePolicy } : {}) };
-    }, deadline?.check);
+    }, () => { if (!rawRefusal) deadline?.check(); });
     if (result.closed) fail(result.closed);
     registration?.accept();
     return result;

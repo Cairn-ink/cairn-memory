@@ -105,7 +105,10 @@ test('default keyless MCP reads dated captured Memory and Raw, forgets and isola
     assert.ok(!afterWire.includes(denied), 'forgotten evidence anywhere in output: ' + denied);
   }
   assert.match(JSON.stringify(after.metered), /I like egg pancakes/);
-  assert.equal((await publish(core, personal, 1)).candidates[0].messageId, day1.id);
+  // Local forget fences the entire source session in both intents, including
+  // its day-1 Raw. The independent day-1 Memory above remains readable.
+  await publish(core, personal, 0);
+  assert.equal(ok(await core.searchRaw({namespace:personal,query:query.query,intent:'history'})).candidates.length,0);
 
   const combined = await connect(workspace, path, project, { contextReadPersonal: true });
   const combinedRead = await read(combined);

@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { fixture } from './clients.test.mjs';
+import { messages } from '../lib/messages.mjs';
 import { KNOWN_FORMATS } from '../runtime/integrations/codex/qualification.mjs';
 
 // Extract immutable historical git objects, never current source, with the same
@@ -117,7 +118,8 @@ const durabilityRuntimeChanges = new Map([
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
     before: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
-    current: '66ea40d717169c09fb1789dcfec105585d41446341f8c1b0851e73077a40bbbe',
+    // Merged capture-stop notices and deferred host publication change the installed runtime bytes.
+    current: '0377df55d80378aad167522116c58262e3b5e182b9c4b5da517e14670bb832e8',
   }],
   ['integrations/codex/hosted-lifecycle.mjs', {
     historical: '8b4a8e7ea1cef5473147bfe2ea6af9548894c52f08e44a656e545fcb9fc8c496',
@@ -133,6 +135,10 @@ const hostedRuntimeExceptions = [
   'integrations/codex/parser.mjs',
   'integrations/codex/qualification.mjs',
   'integrations/codex/schema-evidence.mjs',
+  // Installer 0.6.5 (capture stop notice) adds these hook runtime files. Its
+  // installed.mjs change is covered by the durability pin below, listed once.
+  'integrations/codex/installed-state.mjs',
+  'integrations/codex/worker.mjs',
   ...recallRuntimeChanges.keys(),
   ...durabilityRuntimeChanges.keys(),
 ];
@@ -321,6 +327,44 @@ async function inventory(root, normalize = false, options) {
   return fileInventory(await entries(root), normalize, join(root, '.codex'), options);
 }
 const normalized = (text, home) => normalizeRuntime(text.replace(/(Cairn\.ink Memory(?: setup| status| 安裝程式)? )\d+\.\d+\.\d+(?:-[\w.]+)?/gu, '$1<version>'), home);
+// The immutable comparator keeps historical stdout byte-for-byte. Only current
+// status blocks (also printed by --dry-run) get the approved 0.6.5 B/C delta.
+const captureTimestamp = String.raw`\d{4,6}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01]) (?:[01]\d|2[0-3]):[0-5]\d`;
+const captureStatusLine = new RegExp('^(?:' + ['en','zh'].flatMap(language => [
+  escapePattern(messages.codex_last_capture_none[language]),
+  escapePattern(messages.codex_last_capture[language]).replace(escapePattern('{date}'), captureTimestamp),
+]).join('|') + ')(?:\n|$)', 'mu');
+const indentedExecLine = new RegExp('^  (' + ['en','zh'].map(language =>
+  escapePattern(messages.codex_exec_enabled[language])).join('|') + ')(?=\n|$)', 'mu');
+const currentHostedOutput = text => text.replace(captureStatusLine, '').replace(indentedExecLine, '$1');
+for (const language of ['en','zh']) test(`L06/L33/L24 current-only B/C output exception rejects unrelated line edits (${language})`, () => {
+  const exec = messages.codex_exec_enabled[language];
+  const before = `header\n  existing sibling\n${exec}\n  existing tail\n`;
+  for (const date of [null,'1970-01-01 00:00','2026-11-04 17:42','275760-09-13 08:00']) {
+    const line = date === null ? messages.codex_last_capture_none[language] :
+      messages.codex_last_capture[language].replace('{date}',date);
+    const after = before.replace(exec+'\n','  '+exec+'\n'+line+'\n');
+    const equal = text => assert.equal(currentHostedOutput(text),before);
+    equal(after);
+    for (const damaged of [
+      after+'unrelated added line\n',
+      after.replace('  existing sibling\n',''),
+      after.replace('existing tail','changed tail'),
+      after.replace(exec+'\n','changed exec\n'),
+      after.replace('  '+exec+'\n','   '+exec+'\n'),
+      after.replace(line+'\n',line+' changed\n'),
+      after.replace(line+'\n',' '+line+'\n'),
+      after.replace(line+'\n',line+'\n'+line+'\n'),
+      after.replace('header\n','header\n\n'),
+    ]) assert.throws(()=>equal(damaged), {code:'ERR_ASSERTION'});
+    if(date !== null) for(const invalid of ['not a timestamp','2026-13-04 17:42','2026-11-04 24:00','2026-11-04 17:99'])
+      assert.throws(()=>equal(after.replace(date,invalid)), {code:'ERR_ASSERTION'});
+    // Historical stdout is passed straight to the old normalizer; B and C
+    // bytes in historical data must remain visible to the comparison.
+    assert.notEqual(normalized(after,'/synthetic/.codex'),normalized(before,'/synthetic/.codex'));
+  }
+});
+
 test('L06 version normalization preserves unrelated bytes and complete runtime generations', () => {
   const home = '/synthetic/.codex';
   const oldRuntime = home + '/cairn/runtime/0.5.3-0123456789ab';
@@ -367,7 +411,8 @@ test('L06 version normalization preserves unrelated bytes and complete runtime g
     normalized('Cairn.ink Memory setup 0.5.3\nunrelated 0.5.3', home));
 });
 test('L06 hosted runtime exceptions require packaged bytes and preserve all other comparisons', async () => {
-  assert.equal(hostedRuntimeExceptions.length, 13);
+  assert.equal(hostedRuntimeExceptions.length, 15);
+  assert.equal(new Set(hostedRuntimeExceptions).size, hostedRuntimeExceptions.length);
   assert.equal(recallRuntimeChanges.size, 2);
   assert.equal(durabilityRuntimeChanges.size, 4);
   const home = '/synthetic/.codex';
@@ -631,7 +676,7 @@ for (const { scenario, args, label } of cells) test(`${label} hosted baseline: $
     await restore(); const start = await f.calls(), orderedStart = (await f.orderedCalls()).length;
     const disabled = await run({ args, choices, fixedNow, disableLocalMode: true });
     assert.equal(disabled.code, baseline.code, disabled.stdout);
-    assert.equal(normalized(disabled.stdout, f.codexHome), normalized(baseline.stdout, f.codexHome));
+    assert.equal(normalized(currentHostedOutput(disabled.stdout), f.codexHome), normalized(baseline.stdout, f.codexHome));
     assert.deepEqual(disabled.prompts, baseline.prompts);
     const disabledCalls = await f.calls();
     assert.deepEqual(mutating(disabledCalls, start), mutations);
@@ -644,7 +689,7 @@ for (const { scenario, args, label } of cells) test(`${label} hosted baseline: $
   const beforeRouted = await f.calls(), routedOrdered = (await f.orderedCalls()).length;
   const routed = await run({ args, choices, fixedNow, disableLocalMode: false });
   assert.equal(routed.code, baseline.code, routed.stdout);
-  assert.equal(normalized(routed.stdout, f.codexHome), normalized(baseline.stdout, f.codexHome));
+  assert.equal(normalized(currentHostedOutput(routed.stdout), f.codexHome), normalized(baseline.stdout, f.codexHome));
   assert.deepEqual(routed.prompts, baseline.prompts);
   assert.deepEqual(mutating(await f.calls(), beforeRouted), mutations);
   assert.deepEqual((await f.orderedCalls()).slice(routedOrdered).filter(callsThatMutate).map(call => normalizedCall(call, f.codexHome)), orderedMutations);

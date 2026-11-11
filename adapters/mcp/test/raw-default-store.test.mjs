@@ -13,6 +13,9 @@ import { cardHost } from '../../../core/testing/raw-source-fixtures.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { createCairnServer } from '../server.mjs';
 import { contextCall } from './context-support.mjs';
+import { fixture as captureFixture } from '../../local/test/fixtures/workspace.mjs';
+import { captureLocal } from '../../local/capture.mjs';
+import { configuration } from '../../local/configuration.mjs';
 
 async function connect(t, server) {
   t.after(() => server.close());
@@ -23,6 +26,26 @@ async function connect(t, server) {
   await server.connect(a); await client.connect(b);
   return client;
 }
+
+for (const action of ['forget_memory','correct_memory']) test(`MCP ${action} fences both local source sessions for explicit-tool receipts`,async t => {
+  // The local v2 wire requires a project identifier of at least 16 characters.
+  const namespace = {...ns,projectId:'synthetic-local-project'};
+  const f = captureFixture(t,{namespace,client:'claude-code'}); f.config.interpretation = 'raw-only';
+  for (const session of ['synthetic-one','synthetic-two']) {
+    const input = f.request(session); input.session_id = session; input.messages[0].occurred_at = new Date().toISOString();
+    assert.equal((await captureLocal(configuration(f.config),input,{env:{},signal:new AbortController().signal})).status,200);
+  }
+  const client = await connect(t,createCairnServer({path:f.databasePath,namespace,client:'claude-code',model:rationaleModel(),contextSemantic:false}));
+  const remembered = ok(await contextCall(client,'remember_memory',{content:'Synthetic explicit remembered fact',kind:'fact'}));
+  const memory = remembered.memory;
+  ok(await contextCall(client,action,{memoryId:memory.id,expectedRevision:memory.revision,
+    ...(action === 'correct_memory' ? {content:'Synthetic replacement fact',kind:'fact'} : {})}));
+  const db = new DatabaseSync(f.databasePath,{readOnly:true});
+  try {
+    assert.equal(db.prepare('SELECT count(*) n FROM local_raw_hide_windows').get().n,1);
+    assert.equal(db.prepare('SELECT count(*) n FROM raw_session_fences').get().n,2);
+  } finally { db.close(); }
+});
 
 test('MCP defaults retain submitted Raw while --no-raw leaves capture Memory-only', async t => {
   const workspace = createTestWorkspace(t);
