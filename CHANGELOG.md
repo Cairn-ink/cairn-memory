@@ -34,15 +34,12 @@
   10,000-message conversation in the concurrent-saving workload described in
   the [local Raw guide](docs/raw-local-journal.md).
 - Several sessions saving at once no longer stop one of them from saving.
-
-**Search catches up after saving.** Each turn is saved to the local store as soon as it ends. Raw search covers a newly saved conversation only after the local index reaches it. That indexing runs while Claude Code or Codex has the Cairn MCP server open: a few minutes for about 1,000 saved messages, about an hour for 10,000. While you keep working, each new save restarts the indexing pass, so a conversation saved during a busy session may not be searchable until you pause. Until the index has caught up, search reports partial coverage instead of claiming it found everything. Memories, and conversations the index already covers, are not affected and stay searchable as before.
-
-Known limits in this release:
-- While new turns keep arriving, the local MCP server keeps indexing: about one small index write per second and roughly 3% of one CPU core.
-- Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
-- Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.
-- A later release indexes newly saved conversations first.
-
+- **Search catches up after saving.** Each turn is saved to the local store as soon as it ends. Raw search covers a newly saved conversation only after the local index reaches it. That indexing runs while Claude Code or Codex has the Cairn MCP server open: a few minutes for about 1,000 saved messages, about an hour for 10,000. While you keep working, each new save restarts the indexing pass, so a conversation saved during a busy session may not be searchable until you pause. Until the index has caught up, search reports partial coverage instead of claiming it found everything. Memories, and conversations the index already covers, are not affected and stay searchable as before.
+  Known limits in this release:
+  - While new turns keep arriving, the local MCP server keeps indexing: about one small index write per second and roughly 3% of one CPU core.
+  - Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
+  - Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.
+  - A later release indexes newly saved conversations first.
 - Default reads keep the Raw excerpts they already validated when a read reaches
   its time limit, marked partial, instead of dropping them.
 - Deletion removes the conversation's Raw messages and index rows and its Episodes, and invalidates dependent Cards under the existing lineage rule. Confirmed authored Card bodies may remain stored. Re-sent copies (fork, resume or cursor reset) are not archived again. Extracted Memories are kept; use each Memory's own forget operation to remove it.
