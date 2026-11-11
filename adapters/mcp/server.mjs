@@ -576,7 +576,7 @@ function startContextMaintenance(core, access) {
 function supportsRawContext() {
   try {
     contextOptions({ version:'context-read-v1', authority:{authorize(){},isCurrent(){}},
-      rawSearch:{async search(){},async prepare(){},revalidate(){}} });
+      rawSearch:{async search(){},async prepareMany(){},revalidate(){}} });
     return true;
   } catch { return false; }
 }

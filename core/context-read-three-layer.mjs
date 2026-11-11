@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import { assertContentPort } from './content-safety-boundary.mjs';
-import { assembleContext, ASSEMBLY_FRAMING, meteredText } from './context-read-assembly.mjs';
+import { assembleContext, ASSEMBLY_FRAMING, meteredText, sourceDateFields } from './context-read-assembly.mjs';
 import { ASSEMBLY_DEFAULTS, ASSEMBLY_LIMITS, CONTEXT_VERSION, namespaceKey } from './context-read-input.mjs';
 import { createBM25, scoreBM25 } from './context-read-bm25.mjs';
 import { tokenizeT1, termFrequencies } from './context-read-tokenize.mjs';
@@ -34,22 +34,59 @@ export async function readRawChannel(rawSearch, input, token, deadlineAt) {
       if (expired()) return snapshot('partial');
       if (result.coverage?.status === 'unsupported_store') return unavailable('unsupported_store');
       let dropped = result.coverage?.status !== 'complete';
-      for (const candidate of result.candidates.slice(0, 24)) {
-        if (expired()) return snapshot('partial');
-        if (!input.readSet.some(ns => same(ns, candidate.namespace))) { dropped = true; continue; }
+      const candidates = result.candidates.slice(0, 24).filter(candidate => {
+        if (input.readSet.some(ns => same(ns, candidate.namespace))) return true;
+        dropped = true; return false;
+      });
+      let completed = 0;
+      const processed = new Set();
+      const onPrepared = (handle, index) => {
+        if (expired()) return;
+        if (!Number.isInteger(index) || index < 0 || index >= candidates.length || processed.has(index)) { dropped = true; return; }
+        processed.add(index); completed++;
+        const candidate = candidates[index];
         try {
-          const handle = await port(() => rawSearch.prepare(candidate, { intent: 'current' }, token));
-          if (expired()) return snapshot('partial');
-          // prepare validates its delivery. Read only identity metadata here;
-          // one fresh batch validation precedes all text projection below.
+          // Read only identity metadata here; one fresh batch validation
+          // precedes all text projection below. Late handles are never read.
+          if (!handle) { dropped = true; return; }
           const value = port(() => handle.value);
           if (!value || !input.readSet.some(ns => same(ns, value.namespace)) ||
               !same(value.namespace, candidate.namespace) || value.conversationId !== candidate.conversationId ||
-              value.messageId !== candidate.messageId) { dropped = true; continue; }
-          if (expired()) return snapshot('partial');
+              value.messageId !== candidate.messageId) { dropped = true; return; }
+          if (expired()) return;
           items.push({ handle, value, key: turnKey(value), rank: items.length + 1 });
         } catch { dropped = true; }
+      };
+      // This loop is shared by local, facade and Worker readers. Keep the
+      // original per-candidate failure and checked-prefix delivery semantics.
+      const singles = async () => {
+        for (let index = 0; index < candidates.length; index++) {
+          if (expired()) return;
+          if (processed.has(index)) continue;
+          try {
+            const handle = await port(() => rawSearch.prepare(candidates[index], { intent: 'current' }, token));
+            onPrepared(handle, index);
+          } catch { onPrepared(null, index); }
+        }
+      };
+      if (candidates.length) {
+        if (typeof rawSearch.prepareMany === 'function') {
+          try {
+            const batch = await port(() => rawSearch.prepareMany(candidates, { intent: 'current', deadlineAt: cutoff, onPrepared }, token));
+            if (expired()) return snapshot('partial');
+            dropped ||= !batch.complete || completed !== candidates.length;
+          } catch (error) {
+            // A host may expose an optional batch method it cannot honour.
+            // Recover the unprocessed suffix through its existing port.
+            if (typeof rawSearch.prepare !== 'function') throw error;
+            await singles();
+          }
+        } else {
+          if (typeof rawSearch.prepare !== 'function') fail('invalid_input');
+          await singles();
+        }
       }
+      if (expired()) return snapshot('partial');
       return snapshot(dropped ? 'partial' : 'included');
     } catch (error) { return unavailable(error?.reason === 'deadline' ||
       ['search_deadline', 'read_timeout', 'timeout'].includes(error?.code) || error?.name === 'AbortError' ? 'partial' : 'unavailable'); }
@@ -129,7 +166,7 @@ function memoryWire(item, representation, body = item.text) {
     ...(item.type === 'card' ? { bodyRev: item.ref.bodyRevision } : {}), f: item.fence.slice(0, 8) }, rank: item.rank,
     ...(representation === 'representation-v2-dated' && item.date ? { date: item.date } : {}), body,
     ...(Object.keys(metadata).length ? { metadata } : {}),
-    sources: item.sources.map(source => ({ index: source.index, role: source.role,
+    sources: item.sources.map(source => ({ index: source.index, ...sourceDateFields(source, representation), role: source.role,
       ...(source.excerpt === body ? { sameAsBody: true } : { excerpt: source.excerpt }) })),
     ...(item.sourceAccess !== 'available' ? { sourceAccess: item.sourceAccess } : {}),
     ...(!item.sourcesComplete ? { sourcesComplete: false } : {}) };
@@ -209,13 +246,33 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
         overlap(new Set(tokenizeT1(body)), new Set(tokenizeT1(memory.text))) >= .6)) bodies.push(memory.text);
       unit.wire = unit.memories.length ? memoryWire(unit.memories[0], args.representation, bodies.join('\n'))
         : { layer: 'Raw', ...unit.evidence[0].wire };
+      if (args.representation === 'representation-v2-dated' && unit.memories.length > 1) {
+        // Coalescing retains the original bodies/excerpts. Date-only entries
+        // keep secondary Memories' source dates, qualified by their own ref so
+        // receipt indexes never silently refer to the primary Memory instead.
+        for (const memory of unit.memories.slice(1)) {
+          let ref;
+          for (const source of memory.sources) {
+            if (!source.date && !source.dates?.length) continue;
+            ref ??= memoryWire(memory, args.representation).ref;
+            unit.wire.sources.push({ memory: ref, index: source.index,
+              ...sourceDateFields(source, args.representation), role: source.role });
+            unit.wire.sourcesComplete = false;
+          }
+        }
+      }
       unit.evidence.sort((a, b) => datedOrder({ date: a.date, rank: a.rank }, { date: b.date, rank: b.rank }));
       if (unit.memories.length && unit.evidence.length) unit.wire.evidence = unit.evidence.map(item => {
         if (item.wire.body !== unit.wire.body) return item.wire;
         const { body, ...ref } = item.wire; return { ...ref, sameAsBody: true };
       });
-      unit.date = [...unit.memories.map(item => item.date), ...unit.evidence.map(item => item.date)].filter(Boolean).sort(binary)[0];
-      if (args.representation === 'representation-v2-dated' && unit.date) unit.wire.date = unit.date.slice(0, 16) + 'Z';
+      unit.date = [...unit.memories.map(item => item.sortDate ?? item.date), ...unit.evidence.map(item => item.date)].filter(Boolean).sort(binary)[0];
+      // Preserve the date this unit already delivered from receipts/attached
+      // Raw. Lineage-only dates fill the previously undated case.
+      const existingDate = [...unit.memories.map(item => Object.hasOwn(item, 'receiptDate') ? item.receiptDate : item.date),
+        ...unit.evidence.map(item => item.date)].filter(Boolean).sort(binary)[0];
+      const itemDate = existingDate ?? unit.memories.map(item => item.date).filter(Boolean).sort(binary)[0];
+      if (args.representation === 'representation-v2-dated' && itemDate) unit.wire.date = itemDate.slice(0, 16) + 'Z';
       unit.lexicalText = [...bodies, ...unit.evidence.map(item => item.wire.body)].join(' ');
       unit.terms = new Set(tokenizeT1(unit.lexicalText));
       unit.cost = countTokens(counter, JSON.stringify(unit.wire));

@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased — batch Raw preparation
+
+- Document and pin the mixed-reader Raw grant-sampling known limit; final whole-set stored-state checks remain enforced.
+
+- Preserve prepare-only host ports and candidate-based authorizers; optional
+  batches retain candidates from every live proof and reject known oversized
+  ranges before source inspection.
+
+- Recheck live Raw source predicates and caller grants around each part opener
+  and revalidate handles at registration after the initial snapshot releases.
+
+- Default three-layer reads prepare the first 24 Raw candidates together,
+  sharing publication and a canonical source snapshot while preserving each
+  candidate's existing authorization request. Completed
+  candidates retain independent outcomes and cutoff delivery; fresh batch and
+  final checks still precede Raw projection and delivery.
 ## 0.6.6 — Unreleased
 
 - `setup --local` installs automatic plaintext conversation Raw capture by default

@@ -13,6 +13,9 @@ const publicCodes = new Set(['invalid_input','invalid_query','invalid_read_set',
 const pageAllowanceMs=100;
 const expired = at => {if(performance.now()>=at)rawSearchDeadline();};
 const interrupted = error => ['source_busy','search_deadline'].includes(error?.code);
+// Opaque handles may cross readers only within the exact same host authority,
+// physical canonical file, owner and read set. Tickets remain reader-local.
+const preparedByAuthority = new WeakMap();
 const emptyPartial = () => immutable({version:RAW_SEARCH_VERSION,publication:null,candidates:[],
   coverage:{status:'partial',scanned:null,expanded:null,causes:['deadline']},semantic:{state:'unknown',reason:null}});
 const safeFailure = error => { fail(publicCodes.has(error?.code) ? error.code : 'raw_search_unavailable'); };
@@ -53,6 +56,8 @@ export async function openRawSearch(value) {
     const dispatch=options.embedder&&contextBudget({budgetConfigured:true,policy:options.policy,embedder:options.embedder});
     const releaseResidency=embedding.selectRawVectorResidency();
     const instance=randomUUID();
+    let sharedPrepared=preparedByAuthority.get(options.authority);
+    if(!sharedPrepared)preparedByAuthority.set(options.authority,sharedPrepared=new WeakMap());
     let closed=false,serial=0;
     const operations=new Set();
     const ready=()=>{if(closed)fail('store_closed');database.assertFile();};
@@ -66,6 +71,19 @@ export async function openRawSearch(value) {
       map.set(key,{...entry,expires:performance.now()+5000});
     }
     const checkSources=(sources,intent,at=Infinity)=>{for(const source of sources)authority.check(source,intent,at);};
+    function retainPrepared(ticket,entry) {
+      retain(prepared,ticket,entry,RAW_SEARCH_LIMITS.preparations);
+      sharedPrepared.set(entry.handle,{identity:authority.identity,resolve(at){
+        ready();
+        const live=prepared.get(ticket);
+        if(!live||live.handle!==entry.handle||live.expires<performance.now())fail('source_unavailable');
+        // Each issuing reader runs its own access callbacks and live guards
+        // before the validating reader's final whole-set canonical snapshot.
+        return {...live,access(){live.access(()=>{
+          ready();expired(at);checkSources(live.sources,live.intent,at);
+        });}};
+      }});
+    }
     async function retry(work,at,onExhausted) {
       while(true)try{expired(at);return await work(at);}catch(error){
         if(!interrupted(error))throw error;
@@ -196,6 +214,9 @@ export async function openRawSearch(value) {
     const classify=(candidate,settings,token)=>retry(at=>classifyAttempt(candidate,settings,token,at),performance.now()+1000,
       ()=>immutable({kind:'denied',reason:'source-or-authority-unavailable'}));
     const prepare=(candidate,settings,token)=>retry(at=>prepareAttempt(candidate,settings,token,at),performance.now()+1000,refused);
+    const preparedOutput=(source,classification,ranges,check)=>immutable({namespace:source.ref.namespace,
+      conversationId:source.ref.conversationId,messageId:source.ref.messageId,ordinal:source.ordinal,
+      role:source.role,occurredAt:source.occurredAt,classification,ranges},check);
     function candidateEntry(candidate,intent) {
       const entry=searches.get(candidate?.proof);
       if(!entry||entry.expires<performance.now()||entry.intent!==intent||!entry.candidates.some(row=>same(row,candidate)))fail('stale_publication');
@@ -235,12 +256,68 @@ export async function openRawSearch(value) {
         ranges.push({source:row.source.ref,text,classification:row.source.classification});
       }
       const source=rows[0].source;
-      const output=immutable({namespace:source.ref.namespace,conversationId:source.ref.conversationId,messageId:source.ref.messageId,
-        ordinal:source.ordinal,role:source.role,occurredAt:source.occurredAt,classification:candidate.classification,ranges});
+      const output=preparedOutput(source,candidate.classification,ranges);
       const ticket=authority.bind('raw-search-prepared-v1',[candidate.proof,++serial]);
       const handle=Object.freeze({value:output,ticket,validate(){return revalidate([ticket])[0];}});
-      retain(prepared,ticket,{sources:entry.sources,intent,access,value:output,handle},RAW_SEARCH_LIMITS.preparations);
+      retainPrepared(ticket,{sources:entry.sources,intent,access,value:output,handle});
       try{revalidate([ticket]);}catch(error){prepared.delete(ticket);throw error;}return handle;
+    }
+    async function prepareMany(candidates,{intent='current',deadlineAt=performance.now()+1000,onPrepared=()=>{}}={},token) {
+      if(!Array.isArray(candidates)||candidates.length>24||!['current','history'].includes(intent)||
+          typeof deadlineAt!=='number'||Number.isNaN(deadlineAt)||typeof onPrepared!=='function')fail('invalid_input');
+      const at=Math.min(deadlineAt,performance.now()+1000),handles=[];
+      if(!candidates.length)return {handles,complete:true};
+      const check=()=>{expired(at);if(closed)fail('store_closed');};
+      try {
+        check();
+        // Authenticate each issuing proof independently. Known unpreparable
+        // ranges must not spend the shared snapshot's opening budget.
+        const entries=candidates.map(candidate=>{
+          try {
+            check();
+            const entry=candidateEntry(candidate,intent);
+            const rows=entry.sources.filter(source=>candidate.ranges.some(ref=>same(ref,source.ref)))
+              .sort((a,b)=>a.ref.span.start-b.ref.span.start);
+            if(!rows.length||rows.length!==candidate.ranges.length||rows.length>1024)fail('source_unavailable');
+            if(rows.reduce((bytes,source)=>bytes+source.bytes,0)>256*1024)fail('source_budget_exceeded');
+            // Preserve the existing host authorization protocol. Authorization
+            // is metadata-only; the shared canonical snapshot follows it.
+            const access=authority.authorize('rawSearchSource',{candidate,intent},token,check);access();check();
+            return {...entry,rows,access};
+          }catch(error){if(interrupted(error))throw error;return null;}
+        });
+        const publication=storage.publication({shape:false,deadlineAt:at});
+        const binding=authority.bind('raw-search-publication-v1',[authority.identity,publication.sequence]);
+        for(let i=0;i<entries.length;i++)if(candidates[i]?.publication!==binding)entries[i]=null;
+        const batch=authority.prepareBatch(entries,intent,at);
+        for(let index=0;index<candidates.length;index++){
+          check();let handle=null;
+          try {
+            const candidate=candidates[index],entry=entries[index];
+            if(!batch.allowed[index])fail('source_unavailable');
+            const {rows,access}=entry;
+            const ranges=[];
+            for(const source of rows){
+              // The captured bytes outlive the snapshot. Recheck live source
+              // predicates after host callbacks and around every part opener.
+              const guard=()=>{check();access();authority.check(source,intent,at);check();};
+              const text=await batch.open(source,guard);check();
+              ranges.push({source:source.ref,text,classification:source.classification});
+            }
+            const output=preparedOutput(rows[0],candidate.classification,ranges,check);
+            check();
+            const ticket=authority.bind('raw-search-prepared-v1',[candidate.proof,++serial]);
+            handle=Object.freeze({value:output,ticket,validate(){return revalidate([ticket])[0];}});
+            retainPrepared(ticket,{sources:entry.sources,intent,access,value:output,handle});
+            try{revalidate([ticket]);}catch(error){prepared.delete(ticket);handle=null;throw error;}
+          }catch(error){if(interrupted(error))throw error;}
+          check();handles.push(handle);onPrepared(handle,index);
+        }
+        return {handles,complete:true};
+      }catch(error){
+        if(!interrupted(error))throw error;
+        return {handles:handles.slice(),complete:false};
+      }
     }
     async function prepareSource(ref,{intent='current'}={},token) {
       if(!['current','history'].includes(intent))fail('invalid_input');
@@ -253,7 +330,7 @@ export async function openRawSearch(value) {
         ranges:[{source:source.ref,text,classification:source.classification}]});
       const ticket=authority.bind('raw-search-source-prepared-v1',[instance,++serial,source.ref]);
       const handle=Object.freeze({value:output,ticket,validate(){return revalidate([ticket])[0];}});
-      retain(prepared,ticket,{sources:[source],intent,access,value:output,handle},RAW_SEARCH_LIMITS.preparations);
+      retainPrepared(ticket,{sources:[source],intent,access,value:output,handle});
       revalidate([ticket]);return handle;
     }
     function revalidate(handles) {
@@ -263,8 +340,18 @@ export async function openRawSearch(value) {
       const at=performance.now()+1000;let busy=0;
       try {
         ready();if(!Array.isArray(handles)||handles.length>RAW_SEARCH_LIMITS.preparations)fail('invalid_input');
-        const entries=handles.map(handle=>{const entry=prepared.get(typeof handle==='string'?handle:handle?.ticket);
-          if(!entry||entry.expires<performance.now()||typeof handle!=='string'&&entry.handle!==handle)fail('source_unavailable');return entry;});
+        const entries=handles.map(handle=>{
+          const own=prepared.get(typeof handle==='string'?handle:handle?.ticket);
+          if(own&&(typeof handle==='string'||own.handle===handle)){
+            if(own.expires<performance.now())fail('source_unavailable');return own;
+          }
+          if(typeof handle!=='string'){
+            const reader=sharedPrepared.get(handle);
+            if(!reader||!same(reader.identity,authority.identity))fail('source_unavailable');
+            return reader.resolve(at);
+          }
+          fail('source_unavailable');
+        });
         while(true)try{return authority.validate(entries,at);}catch(error){
           if(!interrupted(error))throw error;
           cache.drop();authority.reset();
@@ -284,7 +371,7 @@ export async function openRawSearch(value) {
         maintenance:{phase:progress.phase,quantum:progress.quantum,noProgress:progress.noProgress,pending:progress.pending,
           checkpoint:authority.bind('raw-search-progress-v1',progress.checkpointAdvances),lastActualWork:progress.lastActualWork}};
     };
-    return Object.freeze({search:tracked(search),prepare:tracked(prepare),prepareSource:tracked(prepareSource),classify:tracked(classify),validate:revalidate,revalidate,
+    return Object.freeze({search:tracked(search),prepare:tracked(prepare),prepareMany:tracked(prepareMany),prepareSource:tracked(prepareSource),classify:tracked(classify),validate:revalidate,revalidate,
       maintain:tracked(async(input,token)=>{const access=authority.authorize('rawSearchMaintenance',{},token);
         cache.maintain();
         await maintenance.maintain(input,access);return status();}),

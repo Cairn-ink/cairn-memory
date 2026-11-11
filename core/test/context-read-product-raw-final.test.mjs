@@ -49,6 +49,7 @@ function fixture(mutation, coverage) {
     evidence: { itemsInside: () => [item] }, canonicalFence: () => [{ memory: 1 }],
     bind: (kind, value) => JSON.stringify([kind, value]), encode: () => 'synthetic-snapshot',
     cardLineageItemInside: (_db, value) => value, citedRawTurns: () => [], receiptEventDate: () => null,
+    receiptSourceRows: () => [], resolveMemorySourceDates: () => true,
     assembleThreeLayerContext, completeResponseBytes, ASSEMBLY_LIMITS, namespaceKey, fail,
     success: value => ({ ok: true, value }), same: (a, b) => JSON.stringify(a) === JSON.stringify(b),
     counter: { id: 'synthetic-quarter-bytes', countTokens(text) {
