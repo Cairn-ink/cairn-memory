@@ -4,6 +4,18 @@ import { spawn } from 'node:child_process';
 import { readDescriptor, vectorArguments, withLocalLock } from './local-descriptor.mjs';
 import { SetupError } from './errors.mjs';
 
+// The engine owns a 600-second retry budget. Allow another 30 seconds for
+// SQLite close/checkpoint and process shutdown. Metadata list/preview have no
+// retry loop; two minutes leaves ample room for their bounded storage work.
+const ENGINE_DELETE_BUDGET_MS = 600000;
+const DELETE_WATCHDOG_MS = ENGINE_DELETE_BUDGET_MS + 30000;
+const INSPECT_WATCHDOG_MS = 120000;
+const CONTINUE = 'rerun the same command to continue';
+const MAX_PROGRESS_LINES = 4096; // More than the engine's 10-minute/250ms loop.
+const MAX_PROGRESS_LENGTH = 96;
+const count = '(?:0|[1-9]\\d{0,2}(?:,\\d{3}){0,5})';
+const progressPattern = new RegExp(`^${count}/${count} prepared$`);
+
 export function validateRawOptions(options, selection) {
   const [, operation, ...ids] = selection.argv;
   if (!['list', 'delete'].includes(operation) ||
@@ -13,14 +25,36 @@ export function validateRawOptions(options, selection) {
     throw new SetupError('local_raw_arguments', 2);
 }
 
-async function invoke(vector, args, client, { env, write, onChild }) {
+async function invoke(vector, args, client, deleting, { env, write, onChild }) {
   return new Promise(resolve => {
     const child = spawn(vector.node, args, { detached: process.platform !== 'win32',
       env: { HOME: env.HOME, PATH: env.PATH ?? '/usr/bin:/bin', TMPDIR: env.TMPDIR, LANG: 'C.UTF-8' },
-      stdio: ['ignore', 'pipe', 'ignore'] });
-    let buffer = '', failed = false;
+      stdio: ['ignore', 'pipe', 'pipe'] });
+    let buffer = '', failed = false, timedOut = false;
     const kill = () => { failed = true; try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); } };
-    const timer = setTimeout(kill, 120000);
+    const timer = setTimeout(() => { timedOut = true; kill(); },
+      deleting ? DELETE_WATCHDOG_MS : INSPECT_WATCHDOG_MS);
+    // Decode complete lines only. Oversized lines are discarded through their
+    // newline without accumulating them; arbitrary diagnostics never escape.
+    let diagnostic = '', dropping = false, progressLines = 0;
+    const progress = text => {
+      if (progressLines >= MAX_PROGRESS_LINES || text.length > MAX_PROGRESS_LENGTH) return;
+      if (text === 'storage busy; waiting to retry' || text === CONTINUE || progressPattern.test(text)) {
+        progressLines++; process.stderr.write(text + '\n');
+      }
+    };
+    child.stderr?.setEncoding('utf8');
+    child.stderr?.on('data', chunk => {
+      for (const character of chunk) {
+        if (character === '\n') {
+          if (!dropping) progress(diagnostic);
+          diagnostic = ''; dropping = false;
+        } else if (!dropping) {
+          if (diagnostic.length === MAX_PROGRESS_LENGTH) { diagnostic = ''; dropping = true; }
+          else diagnostic += character;
+        }
+      }
+    });
     const tracking = Promise.resolve(onChild(child.pid)).catch(kill);
     const line = text => {
       if (!text || failed) return;
@@ -47,8 +81,10 @@ async function invoke(vector, args, client, { env, write, onChild }) {
       clearTimeout(timer); line(buffer); await tracking;
       try { await onChild(null); } catch { failed = true; }
       if (failed || !Number.isInteger(code)) {
-        write.literal(JSON.stringify({ ok: false, error: { code: 'raw_command_failed', retryable: false } }));
-        resolve(1);
+        const resumable = timedOut && deleting;
+        if (resumable) process.stderr.write(CONTINUE + '\n');
+        write.literal(JSON.stringify({ ok: false, error: { code: 'raw_command_failed', retryable: resumable } }));
+        resolve(resumable ? 3 : 1);
       } else resolve(code);
     });
   });
@@ -69,6 +105,6 @@ export async function rawLocal(options, selection, detection, context) {
     const [executable, ...flags] = vectorArguments(detection.root, vector);
     return invoke(vector, [executable, 'raw', operation, ...flags,
       ...(operation === 'delete' ? ['--conversation', id, ...(options.yes ? ['--yes'] : [])] : [])],
-    selection.client, { ...context, onChild });
+    selection.client, operation === 'delete' && options.yes === true, { ...context, onChild });
   });
 }

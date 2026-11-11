@@ -1,3 +1,4 @@
+import './raw-wrapper.test.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, writeFile, appendFile, mkdir, lstat, copyFile, symlink, unlink } from 'node:fs/promises';
@@ -459,6 +460,38 @@ test('packed hook → raw list → preview → delete → MCP empty → re-sent 
   await appendFile(fork, resent);
   await f.hook('Stop', fork, '22222222-2222-4222-8222-222222222222'); await checkEmpty();
   assert.equal((await fences()).sessions, 2, 'UUID-fenced copy terminally fences its fork session');
+});
+
+test('packed installer forwards multi-pass deletion progress for 320 Claude UUID messages', { timeout: 150000 }, async t => {
+  if (!needCache(t)) return;
+  const f = await fixture(t, { codex: false }); await f.setup();
+  const transcript = join(f.home, '.claude/projects/large-delete.jsonl');
+  await writeFile(transcript, '', { mode: 0o600 }); await f.hook('SessionStart', transcript);
+  await f.append(transcript, 'synthetic large deletion message'); await f.hook('Stop', transcript);
+  // Match the engine's largeConversation fixture: one real capture supplies the
+  // schema-valid row; synthetic UUID rows exercise bounded deletion preparation
+  // without timing ten separate native hook runs on a loaded machine.
+  await engineScript(f, `const {DatabaseSync}=await import('node:sqlite'),{randomUUID}=await import('node:crypto');
+    const db=new DatabaseSync(path);
+    try {
+      const row=db.prepare('SELECT * FROM raw_messages').get(),keys=Object.keys(row);
+      const insert=db.prepare('INSERT INTO raw_messages('+keys.join(',')+') VALUES('+keys.map(()=>'?').join(',')+')');
+      db.exec('BEGIN');
+      try {
+        for(let n=2;n<=320;n++)insert.run(...keys.map(key=>key==='message_id'?randomUUID():key==='ordinal'?n*2:row[key]));
+        db.exec('COMMIT');
+      } catch(error){db.exec('ROLLBACK');throw error;}
+      console.log(JSON.stringify({seeded:320}));
+    } finally {db.close();}`);
+  const row = JSON.parse((await f.setup(['raw', 'list'])).trim());
+  assert.equal(row.messageCount, 320, 'all UUID messages present before deletion');
+  const result = await run(process.execPath, [join(f.ws, 'setup.mjs'), 'raw', 'delete', row.id, '--yes'], { env: f.env, cwd: f.ws });
+  assert.equal(result.code, 0, result.stdout + result.stderr); assert.equal(result.signal, null);
+  assert.equal(JSON.parse(result.stdout).dryRun, false);
+  const progress = result.stderr.trimEnd().split('\n');
+  assert.ok(progress.length >= 2, 'more than one bounded preparation pass');
+  assert.ok(progress.every(line => /^(?:0|[1-9]\d{0,2}(?:,\d{3})*)\/320 prepared$/.test(line)), result.stderr);
+  assert.equal((await f.setup(['raw', 'list'])).trim(), '');
 });
 
 test('packed cloud client refuses local setup without local capture', async t => {
