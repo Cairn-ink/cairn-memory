@@ -192,6 +192,10 @@ export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandle
     const p=input.projection;
     if(!p||!same(p.readSet,metadata.readSet)||p.readSet[0].ownerId!==state.ownerId||input.kind==='refresh'&&!metadata.maintenance)fail('authority_required');
     const v=open(metadata.path);
+    // Preserve the Worker's existing protocol and pinned loader bytes. The
+    // reader recovers the fixed pause reason from a fresh canonical decision.
+    try { if(input.kind==='query')v.storage.assertEmbeddingAllowed(p.readSet,p.deadlineAt); }
+    catch(error) { if(error.code==='namespace_paused')fail('budget_denied');throw error; }
     v.facade.port.read(()=>{
       const layout=cachedContentLayout(v.facade.port.db);
       if(!layout)fail('evidence_unavailable');

@@ -983,6 +983,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
   }
   return Object.freeze({ reconcile, lexicalPage, lexical: (...args) => lexicalPage(...args).rows,
     refreshVectors, semanticPreflight, state, assertState, assertFile: checkFile,
+    assertEmbeddingAllowed: (readSet, deadlineAt) => canonicalRead(() => assertContextEmbeddingAllowedInside(canonical, readSet, deadlineAt)),
     close() { if (!closed) { closed = true; if (side.isOpen) side.close(); } } });
 }
 
@@ -1019,4 +1020,20 @@ export function contextSourceFences(db, readSet, types, sources, features) {
     }
     return value;
   });
+}
+
+// Provider text is governed by a fresh canonical control snapshot, independent
+// of sidecar publication and namespace content epochs. Call only before sends.
+export function assertContextEmbeddingAllowedInside(db, readSet, deadlineAt = Infinity) {
+  const check = () => { if (performance.now() >= deadlineAt) fail('timeout'); };
+  let denied = false;
+  for (const ns of readSet) {
+    check();
+    const statement = db.prepare('SELECT paused,enabled FROM episode_controls WHERE owner_id=? AND scope=? AND project_id=?');
+    check();
+    const row = statement.get(ns.ownerId, ns.scope, ns.projectId ?? '');
+    check();
+    denied ||= row?.paused === 1 || row?.enabled === 0;
+  }
+  if (denied) fail('namespace_paused');
 }

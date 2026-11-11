@@ -36,7 +36,7 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const bytes = envelope => Buffer.byteLength(JSON.stringify(envelope));
 const success = value => ({ ok: true, value });
 const states = new Set(['ready', 'unavailable', 'disabled', 'absent', 'timeout', 'provider_error', 'rate_limited',
-  'budget_denied', 'stale_index', 'dimension_mismatch', 'partial_coverage']);
+  'budget_denied', 'stale_index', 'dimension_mismatch', 'partial_coverage', 'namespace_paused']);
 const channel = (state, causes = state === 'ready' ? [] : [state]) => ({ state, causes: [...new Set(causes)] });
 const maintenanceReasons = new Map([['missing', 'missing'], ['corrupt', 'corrupt'], ['wrong_store', 'wrong-store'],
   ['wrong-store', 'wrong-store'], ['incompatible', 'incompatible']]);
@@ -425,9 +425,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           controller = new AbortController(); controllers.add(controller);
           const guard = () => { access.check();
             if (sourceState) read(() => assertSourcesInside(input, sourceState, internal ? 'snapshot_stale' : 'cursor_stale'));
-            storage.assertState(projection, current); };
+            storage.assertState(projection, current);
+            storage.assertEmbeddingAllowed(input.readSet, deadlineAt); };
           time = performance.now();
           try {
+            storage.assertEmbeddingAllowed(input.readSet, deadlineAt);
             let vectors,invoked=false;
             assertContentPort({before:true});
             try { vectors = await dispatch(options.embedder, [input.query], { signal: controller.signal, deadlineAt, guard,onInvoke:()=>{invoked=true;} }); }
