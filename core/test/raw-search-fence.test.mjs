@@ -165,7 +165,9 @@ test('search remains available when the maintenance commitment exceeds its popul
     .run(ns.ownerId,ns.scope,ns.projectId??'');
   assert.throws(()=>authority.fence(),{code:'source_budget_exceeded'});
   const result=await s.search({query:'copper'});
-  assert.equal(result.coverage.status,'complete');assert.equal(result.semantic.state,'ready');
+  // Search remains available without certifying the changed inventory.
+  assert.equal(result.coverage.status,'partial');assert.ok(result.coverage.causes.includes('index_incomplete'));
+  assert.equal(result.semantic.state,'ready');
   const candidate=result.candidates.find(c=>c.messageId==='sibling');assert.ok(candidate);
   const prepared=await s.prepare(candidate);
   f.db.prepare('INSERT INTO raw_source_exclusions VALUES(?,?,?,?,1)').run(source.conversationId,source.messageId,0,source.text.length);

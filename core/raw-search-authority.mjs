@@ -523,13 +523,22 @@ export function createRawSearchAuthority(database, options) {
       return reader.openSnapshot(source.ref,snapshot.view,snapshot.payloads,check);
     } };
   }
-  function validate(entries,at=Infinity,{dropDenied=false}={}) {
+  function validate(entries,at=Infinity,{dropDenied=false,inventoryCheckpoint}={}) {
     if(dropDenied){
       entries.forEach(entry=>entry.access());
-      return read(()=>entries.flatMap(entry=>{
-        try{for(const source of entry.sources)checkInside(source,entry.intent);return [entry.value];}
-        catch(error){if(!['source_unavailable','source_excluded','raw_crypto_unavailable','source_budget_exceeded'].includes(error.code))throw error;return [];}
-      }),at);
+      return read(()=>{
+        const values=entries.flatMap(entry=>{
+          try{for(const source of entry.sources)checkInside(source,entry.intent);return [entry.value];}
+          catch(error){if(!['source_unavailable','source_excluded','raw_crypto_unavailable','source_budget_exceeded'].includes(error.code))throw error;return [];}
+        });
+        if(!inventoryCheckpoint)return values;
+        // Coverage and candidates share the final snapshot, after all authority
+        // callbacks. Only maintenance builds fences: search may reuse a cached
+        // full-population fence at this exact store version, never rebuild it.
+        const coverageComplete=inventoryCheckpoint.coverageComplete===true&&!!cachedFence&&
+          cachedFence.version===versionInside()&&inventoryCheckpoint.fence===cachedFence.value;
+        return {values,coverageComplete};
+      },at);
     }
     const inside=()=>{
       for(const entry of entries)for(const source of entry.sources)checkInside(source,entry.intent);

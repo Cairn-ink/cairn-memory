@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
+import { assertFixtureClients, fixtureBinaryGuard } from './fixture-clients.mjs';
 import { fakeAuthServer, secret } from './fake-auth-server.mjs';
 import { wireChild } from './http-wire.mjs';
 import { readInstallation } from '../runtime/integrations/codex/installed-state.mjs';
@@ -33,7 +34,7 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
   await writeFile(codexState, JSON.stringify({ version: '0.160.1',
     formatEvidence: fileURLToPath(new URL('../../../integrations/codex/test/fixtures/', import.meta.url)) }));
   async function addClaude() {
-    await writeFile(join(bin, 'claude'), `#!${process.execPath}\nprocess.env.FAKE_STATE=${JSON.stringify(claudeState)};process.env.FAKE_CALLS=${JSON.stringify(claudeCalls)};\n` +
+    await writeFile(join(bin, 'claude'), `#!${process.execPath}\n${fixtureBinaryGuard(ws.path)}process.env.FAKE_STATE=${JSON.stringify(claudeState)};process.env.FAKE_CALLS=${JSON.stringify(claudeCalls)};\n` +
       await readFile(new URL('./fake-claude.mjs', import.meta.url), 'utf8'), { mode: 0o755 });
   }
   async function addCodex() {
@@ -41,7 +42,7 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
     // Both collectors inspect this same fake in the immutable-baseline matrix.
     const markers = [...new Set([...evidence.serdeMarkers, ...SERDE_MARKERS])];
     const embedded = qualified ? '\n/*\n' + Object.values(evidence.hooks).map(value => JSON.stringify(value, null, 2)).join('\n') + '\n' + markers.join('\n') + '\n*/\n' : '';
-    await writeFile(join(bin, 'codex'), `#!${process.execPath}\nprocess.env.FAKE_STATE=${JSON.stringify(codexState)};process.env.FAKE_CALLS=${JSON.stringify(codexCalls)};\n` +
+    await writeFile(join(bin, 'codex'), `#!${process.execPath}\n${fixtureBinaryGuard(ws.path)}process.env.FAKE_STATE=${JSON.stringify(codexState)};process.env.FAKE_CALLS=${JSON.stringify(codexCalls)};\n` +
       await readFile(new URL('./fake-codex.mjs', import.meta.url), 'utf8') + embedded, { mode: 0o755 });
   }
   if (claude) await addClaude(); if (codex) await addCodex();
@@ -104,6 +105,7 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
       assert.equal(inspection.managedPaths.length, 2);
     }
     if (module) await makeHarness(module, selectedHarness, mapHistoricalManagedPaths ? inspection.managedPaths : undefined);
+    assertFixtureClients({ PATH: bin }, ws.path);
     const child = spawn(process.execPath, [selectedHarness, ...args], { cwd: ws.path,
       env: { HOME: home, CODEX_HOME: codexHome, PATH: bin, LANG: 'en_US.UTF-8', TMPDIR: tmpdir ?? neutralParent,
         TEST_INSPECTION: JSON.stringify(inspection),
