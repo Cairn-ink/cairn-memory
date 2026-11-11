@@ -1,5 +1,70 @@
 # Local engine defaults
 
+Installer 0.6.6 `setup --local` installs automatic plaintext conversation Raw
+capture by default, without a key or model calls. Each selected client gets one
+notice. Both clients share the 200,000,000-byte cap and the MCP database/namespace.
+Use `setup --local --no-capture` or `config --local-capture off`; enable with
+`config --local-capture on` (optionally `--client claude|codex`). Off removes hooks
+and keeps data. Status is read-only and shows on/off/blocked with the reason.
+Codex requires approval in `/hooks`; if its format is unqualified, capture waits
+for qualification with its hooks installed. After a Codex update, capture resumes
+once background qualification passes; rerun setup if it stays pending or failed.
+Status reads the engine's last observed qualification state and reason without
+launching qualification. New Claude sessions capture from their first turn.
+A fork or resume of a hidden conversation stays hidden; Codex forks aren't saved
+locally. Re-enabling skips off-period text and,
+for an already-running Claude Code conversation, the first turn after re-enabling.
+
+
+Forgetting or correcting a memory hides conversations with messages within
+30 minutes before or after when it was saved. This can hide unrelated
+conversations and miss others about the same subject. To remove a conversation:
+
+```sh
+npx @cairn-ink/memory raw list [--client claude|codex]
+npx @cairn-ink/memory raw delete <conversation-id> [--yes]
+```
+
+List prints metadata only, never text. Delete requires one explicit id without
+wildcards and previews counts, client and time range by default. `--yes` deletes
+the selected conversation. Unknown ids fail without changes.
+
+Deletion removes the conversation's Raw messages and index rows and its Episodes, and invalidates dependent Cards under the existing lineage rule. Confirmed authored Card bodies may remain stored. Re-sent copies (fork, resume or cursor reset) are not archived again. Extracted Memories are kept; use each Memory's own forget operation to remove it.
+
+The installer uses its installed
+MCP database/owner/project; cloud mode or absent local installation is refused.
+
+`raw delete <conversation-id> --yes` finishes in one command and shows progress
+counts. The command retries automatically for up to about 10 minutes. If it stops before completion, run the same command again to continue.
+While a large conversation is being deleted, saving in other sessions
+pauses and catches up afterwards: about 11–15 seconds for a 10,000-message
+conversation in the concurrent-saving workload described in the
+[local Raw guide](raw-local-journal.md).
+
+Several sessions saving at once no longer stop one of them from saving. Default
+reads keep the Raw excerpts they already validated when a read reaches its time
+limit, marked partial, instead of dropping them.
+
+**Search catches up after saving.** Each turn is saved to the local store as soon as it ends. Raw search covers a newly saved conversation only after the local index reaches it. That indexing runs while Claude Code or Codex has the Cairn MCP server open: a few minutes for about 1,000 saved messages, about an hour for 10,000. While you keep working, each new save restarts the indexing pass, so a conversation saved during a busy session may not be searchable until you pause. Until the index has caught up, search reports partial coverage instead of claiming it found everything. Memories, and conversations the index already covers, are not affected and stay searchable as before.
+
+Known limits in this release:
+- While new turns keep arriving, the local MCP server keeps indexing: about one small index write per second and roughly 3% of one CPU core.
+- Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
+- Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.
+- A later release indexes newly saved conversations first.
+
+Going back to 0.6.5: an attested base-33 store with card lineage revision 1
+(physical 53, lineage 1) that 0.6.6 opened with Raw on is refused with
+`unsupported_database`; reinstall 0.6.6 to recover access. Attested lineage-0
+and ordinary local stores open in 0.6.5. Captured Raw stays searchable, with
+eligible excerpts readable through contextRead. Hidden conversations stay hidden
+in both current and history Raw search because 0.6.5 enforces the existing
+`raw_session_fences` rows. The new local tables remain intact and are ignored.
+0.6.5 itself does not capture automatically, so its engine does not use the new
+hide windows or fork fences for capture. Old setup leaves 0.6.6 hooks registered
+with their retained engine; turn capture off with 0.6.6 before downgrading to
+stop them.
+
 A local install retains submitted captures as Raw and maintains a searchable
 index. The MCP server exposes `find_memory_candidates`,
 `fetch_memory_candidate_evidence`, and `read_memory_context` alongside the old
@@ -51,7 +116,7 @@ retained-profile server is a read-only host with its own authority boundaries.
 | Local embedding model | Uses an explicitly installed local embedding pack | Off; no model is downloaded automatically | Local model disk and CPU; no embedding API charge | Use the complete `--context-embedder local` group, or supply a local `contextRead.embedder` and policy. `--no-context-semantic` disables semantic reads; see [the local model guide](local-embedder-bge-m3.md). |
 | Memory decision review | Holds selected inferred decisions for explicit review | Off | Local review metadata; existing capture model work | Core `decisionReview:'required-v1'`; omit to disable new review holds. There is no MCP startup flag. |
 | Attested content-safety layout | Enables the separately versioned content-safety schema and suppression facts | Off for new stores unless explicitly selected; installed protections remain enforced | Local schema/fact metadata; no provider call | Core `contentSafety:'s2h-v1'` for supported new stores; existing stores use the explicit offline safety migration. There is no default-on migration CLI flag. |
-| Automatic transcript hooks | Submits selected conversation messages without an explicit MCP capture call | Off in the standalone MCP server | When separately installed: Raw disk plus configured capture model calls | No MCP flag installs hooks. Use the separate documented local/client setup and its enable/disable controls. |
+| Automatic transcript hooks | Submits selected conversation messages without an explicit MCP capture call | Off in the standalone MCP server | When separately installed: Raw disk plus configured capture model calls | No MCP flag installs hooks. Installer `setup --local` installs Raw-only hooks by default; use `--no-capture` or `config --local-capture off\|on`. Standalone engine setup remains separate. |
 
 For local Raw selections, forget/correct terminally hide every source session
 whose event-time range overlaps ±30 minutes around an old receipt's creation
@@ -61,7 +126,7 @@ windows also fence later arrivals; both Raw search intents enforce the fence.
 Hiding anchors on when the memory was saved or corrected; the saving turn
 normally has a captured message nearby. A conversation with no captured message
 near that time, no range crossing the window and no named receipt is not hidden.
-You can delete it directly. This is a known limit for delayed memory saves.
+Use `raw delete` to remove it. This is a known limit for delayed memory saves.
 
 If an existing attested layout cannot hold the Raw capabilities, `raw:true`
 opens Memory-only and reports `raw:'unsupported_store'` in Raw search status;

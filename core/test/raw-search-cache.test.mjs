@@ -123,16 +123,17 @@ test('publication movement between an optional key read and payload snapshot lea
   const authority=createRawSearchAuthority(reader,s.options),storage=await openRawSearchStorage({directory:s.directory,
     identity:authority.identity,bind:authority.bind,quotaBytes:512*1024*1024});
   const checkpoint=(await storage.status()).checkpoint,prepare=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;
-  let target,armed=false,moved;
+  let target,armed=false,moved,moves=0;
   DatabaseSync.prototype.prepare=function(sql){
-    if(sql==='SELECT * FROM header WHERE singleton=1'){target=this;armed=true;}
+    // The competing publication's own header reads must not re-arm this hook.
+    if(!moves&&sql==='SELECT * FROM header WHERE singleton=1'){target=this;armed=true;}
     return prepare.call(this,sql);
   };
   DatabaseSync.prototype.exec=function(sql){const result=exec.call(this,sql);
-    if(armed&&this===target&&sql==='COMMIT'){armed=false;moved=storage.commitBatch({checkpoint});}
+    if(armed&&this===target&&sql==='COMMIT'){armed=false;moves++;moved=storage.commitBatch({checkpoint});}
     return result;
   };
-  try{const result=await s.search(input);assert.ok(moved);await moved;
+  try{const result=await s.search(input);assert.ok(moved);await moved;assert.equal(moves,1);
     assert.equal(result.semantic.state,'ready');assert.equal(result.candidates.length,1);assertReleased(port);
   }finally{DatabaseSync.prototype.prepare=prepare;DatabaseSync.prototype.exec=exec;await moved;await storage.close();reader.db.close();}
 });
@@ -197,13 +198,14 @@ for(const scope of ['owner','namespace'])test(`Raw handle inventory and warm cac
   for(const intent of ['current','history']){const candidate=(await s.search({query:'copper',intent})).candidates[0];
     entries.push({intent,candidate,prepared:await s.prepare(candidate,intent)});}
   const before=opens;
-  const gated=['search','prepare','prepareSource','classify','validate','revalidate'],lifecycle=['maintain','status','purge','close'];
+  const gated=['search','prepare','prepareMany','prepareSource','classify','validate','revalidate'],lifecycle=['maintain','status','purge','close'];
   assert.deepEqual(Object.keys(s.service).sort(),[...gated,...lifecycle].sort());
   transaction(f.db,()=>scope==='owner'?suppressOwnerInside(f.db,{ownerId:ns.ownerId,reason:'account_erasure',actionId:'synthetic-erasure'}):
     writeContentSuppressionInside(f.db,{namespace:ns,kind:'namespace',matchMode:'namespace',reason:'privacy_erase',actionId:'synthetic-erasure'}));
   for(const {intent,candidate,prepared} of entries){
     assert.equal((await s.search({query:'copper',intent})).candidates.length,0);
     await assert.rejects(s.prepare(candidate,intent),{code:'raw_search_unavailable'});
+    assert.deepEqual(await s.service.prepareMany([candidate],{intent},s.host.token),{handles:[null],complete:true});
     await assert.rejects(s.service.prepareSource(candidate.ranges[0],{intent},s.host.token),{code:'raw_search_unavailable'});
     assert.deepEqual(await s.service.classify(candidate,{intent},s.host.token),{kind:'denied',reason:'source-or-authority-unavailable'});
     for(const method of ['validate','revalidate'])assert.throws(()=>s.service[method]([prepared]),{code:'raw_search_unavailable'});

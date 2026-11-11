@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { assembleContext, ASSEMBLY_FRAMING, completeResponseBytes, meteredText, receiptEventDate } from '../context-read-assembly.mjs';
+import { assembleContext, ASSEMBLY_FRAMING, completeResponseBytes, meteredText, receiptEventDate, receiptSourceRows } from '../context-read-assembly.mjs';
 import { ASSEMBLY_DEFAULTS, ASSEMBLY_LIMITS, CONTEXT_LIMITS, contextInput, namespaceKey } from '../context-read-input.mjs';
 import { assembleThreeLayerContext, citedRawTurns } from '../context-read-three-layer.mjs';
 import { deepFreeze } from '../private-card-input.mjs';
@@ -60,7 +60,7 @@ function reader(kind, canonical, rows, counter) {
     canonicalFence: () => [{ memory: 1 }], cachedContentLayout: () => null,
     db: { prepare: () => ({ all: id => rows.get(id) }) },
     evidence: { itemsInside: (_ns, refs) => refs.map(ref => canonical.find(item => item.ref.memoryId === ref.memoryId)) },
-    namespaceKey, receiptEventDate, validateSourceReceipt: (_id, row) => row, createHash,
+    namespaceKey, receiptEventDate, receiptSourceRows, resolveMemorySourceDates: () => true, validateSourceReceipt: (_id, row) => row, createHash,
     citedRawTurns, cardLineageItemInside: (_db, item) => item.ref, bind,
     encode: (_purpose, value) => JSON.stringify(value), ASSEMBLY_LIMITS, CONTEXT_LIMITS,
     assembleThreeLayerContext(args, raw) { assemblies++; return assembleThreeLayerContext({ ...args, now: () => 0 }, raw); },

@@ -14,6 +14,47 @@ const freeze = value => { if (value && typeof value === 'object') { Object.value
 export function createRawSourceReader({ db, identity, open, partDigest }) {
   const safetyIdentity = { storeId: identity.store_id, cursorSecret: identity.cursor_secret };
   const sources = createCardRawSources(db, safetyIdentity);
+  async function openPart(ns, part, message, payload, guard = () => {}) {
+    const value = { id: part.message_id, role: message.role, occurredAt: message.occurred_at,
+      messageOrdinal: message.ordinal, part: { index: part.part_index, start: part.start,
+        totalUnits: message.total_units, totalBytes: message.total_bytes } };
+    const context = freeze(rawContext({ ...ns, projectId: ns.projectId ?? '' }, message.client, message.session_key,
+      part.conversation_id, value, part.end));
+    try {
+      let result;
+      try { result = await assertContentPort({ invoke: async () => inertContentPortValue(await open({ ownerId: ns.ownerId,
+        context, ...rawSealed({ format: part.format, keyVersion: part.key_version, sealed: Buffer.from(payload) }) }), 'raw_crypto_unavailable') }); }
+      catch { fail('raw_crypto_unavailable'); }
+      finally { guard(); }
+      object(result, ['text']); const text = rawText(result.text);
+      if (text.length !== part.end-part.start || Buffer.byteLength(text) !== part.byte_count ||
+          partDigest({ ...value, content: text }) !== part.digest) fail('raw_crypto_unavailable');
+      return text;
+    } catch { fail('raw_crypto_unavailable'); }
+  }
+  // Internal canonical batch seam: the authority supplies views and sealed
+  // payloads captured together after initial source checks. The supplied guard
+  // rechecks live state; no transaction spans an asynchronous crypto callback.
+  async function openSnapshot(ref, view, payloads, check) {
+    check();
+    if (!view.parts.length || view.parts.length > 20 ||
+        view.parts.reduce((bytes, part) => bytes + part.byte_count, 0) > 64000) fail('source_budget_exceeded');
+    const parts = [];
+    for (const part of view.parts) {
+      check();
+      const text = await openPart(ref.namespace, part, view.message, payloads.get(partKey(part)), check);
+      const start = Math.max(ref.span.start, part.start), end = Math.min(ref.span.end, part.end);
+      const slice = text.slice(start-part.start, end-part.start);
+      if (!slice.isWellFormed()) fail('source_unavailable');
+      parts.push({ start, end, text: slice });
+    }
+    const output = { source: ref, parts, coverage: { status: 'complete', completeness: 'selected-raw-span',
+      conversationCoverage: 'unknown', included: parts.length, omitted: 0 }, nextCursor: null };
+    if (size(output) > 65536) fail('context_item_too_large');
+    const text = parts.map(part => part.text).join('');
+    if (text.length !== ref.span.end-ref.span.start) fail('source_unavailable');
+    return text;
+  }
   function read(work) {
     if (db.isTransaction) fail('raw_transaction_active');
     db.exec('BEGIN');
@@ -66,21 +107,7 @@ export function createRawSourceReader({ db, identity, open, partDigest }) {
     for (const part of pending) {
       deadline();
       const index = anchors.findIndex(anchor => anchor.conversationId === part.conversation_id && anchor.messageId === part.message_id);
-      const message = views[index].message, value = { id: part.message_id, role: message.role, occurredAt: message.occurred_at,
-        messageOrdinal: message.ordinal, part: { index: part.part_index,start: part.start,totalUnits: message.total_units,totalBytes: message.total_bytes } };
-      const context = freeze(rawContext({ ...ns, projectId: ns.projectId ?? '' }, message.client,message.session_key,
-        part.conversation_id,value,part.end));
-      let text;
-      try {
-        let result;
-        try { result = await assertContentPort({invoke:async()=>inertContentPortValue(await open({ ownerId: ns.ownerId, context, ...rawSealed({ format: part.format,keyVersion: part.key_version,
-          sealed: Buffer.from(state.payloads.get(partKey(part))) }) }), 'raw_crypto_unavailable')}); }
-        catch { fail('raw_crypto_unavailable'); }
-        finally { portGuard?.(); }
-        object(result,['text']); text = rawText(result.text);
-        if (text.length !== part.end-part.start || Buffer.byteLength(text) !== part.byte_count ||
-            partDigest({ ...value,content: text }) !== part.digest) fail('raw_crypto_unavailable');
-      } catch { fail('raw_crypto_unavailable'); }
+      const text = await openPart(ns, part, views[index].message, state.payloads.get(partKey(part)), portGuard);
       deadline(); opened.set(partKey(part),text);
     }
     let output;
@@ -126,5 +153,5 @@ export function createRawSourceReader({ db, identity, open, partDigest }) {
       deadline(); return output;
     } };
   }
-  return { prepare };
+  return { prepare, openSnapshot };
 }
