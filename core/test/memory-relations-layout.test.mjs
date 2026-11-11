@@ -7,6 +7,7 @@ import { attestContentSafety, receiptEventTimeEnabled, contentSafetyDDL } from '
 import { installMemoryRelations, previousRelationDDL } from '../memory-relations-schema.mjs';
 import { migrateCardLineage } from '../content-safety-migration.mjs';
 import { upgradeLayoutBase } from '../layout-base-upgrade.mjs';
+import { installLocalRawPrivacy } from '../local-authority-schema.mjs';
 import { safetyFixture, copySqliteFixture, quiescence, ns, ok, receipt } from '../testing/content-safety-s2h-fixture.mjs';
 import { migrateEventTime } from '../testing/receipt-event-time-fixture.mjs';
 import { host } from '../testing/context-read-core-fixture.mjs';
@@ -91,4 +92,25 @@ for(const installed of [false,true])test(`embedded capabilities omit unsupported
  if(installed){const db=openDatabase(f.path);install(db,2);db.close();}
  const core=openMemoryCore({path:f.path,contextRead:{version:'context-read-v1',authority:h.authority}});t.after(()=>core.close());
  assert.equal(ok(core.getContextReadCapabilities()).unsupported.includes('relations'),!installed);
+});
+
+for(const localFirst of [false,true])test(`complete lineage inventory opens with both relations and local Raw privacy: local first=${localFirst}`,async t=>{
+ const f=safetyFixture(t,33);await migrateEventTime(f);
+ let db=openDatabase(f.path);
+ const suppressionDomain=db.prepare('SELECT suppression_domain FROM content_safety_control').get().suppression_domain;db.close();
+ copySqliteFixture(f.path,f.backupPath);
+ await migrateCardLineage({path:f.path,backupPath:f.backupPath,expected:{storeId:f.storeId,base:33,suppressionDomain},quiescence});
+ db=openDatabase(f.path);
+ try{
+  if(localFirst)transaction(db,()=>installLocalRawPrivacy(db));
+  install(db,2);
+  if(!localFirst)transaction(db,()=>installLocalRawPrivacy(db));
+  assert.equal(attestContentSafety(db).relationsRevision,2);
+ }finally{db.close();}
+ const core=openMemoryCore({path:f.path});
+ try{assert.deepEqual(ok(core.list({namespace:ns})).memories,[]);}
+ finally{await core.close();}
+ // The combined package must still refuse one extra, undeclared schema object.
+ db=openDatabase(f.path);db.exec('CREATE TABLE unreviewed_object(value TEXT)');db.close();
+ assert.throws(()=>openMemoryCore({path:f.path}),{code:'unsupported_database'});
 });

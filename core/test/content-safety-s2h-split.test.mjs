@@ -2,6 +2,7 @@ import { assertContentCostDiscovery, assertContentCostDeferrals, assertRawProduc
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { assertSplitGraph, assertSplitInventory, splitFixture, splitSources } from '../testing/content-safety-split-audit.mjs';
 import { additionalSplitFacades, composedSplitFacades } from '../testing/content-safety-split-facades.mjs';
 import { mutatedSplitSources, splitMutations, splitRevisionMutations } from '../testing/content-safety-split-mutations.mjs';
@@ -64,6 +65,8 @@ test('S2h-2 split: enumerate public exports and facades; no fact-only writer is 
   t.diagnostic('R3_COST_DISCOVERY '+JSON.stringify(assertContentCostDiscovery({...inventory,runtime:methods(runtime)})));
   for (const [name, reason] of Object.entries(splitFixture.additions)) assert.ok(reason.length > 20, name);
   for (const [file, pin] of Object.entries(splitFixture.moduleExports)) {
+    if (pin.sha256) assert.equal(createHash('sha256').update(readFileSync(new URL('../../' + file, import.meta.url))).digest('hex'),
+      pin.sha256, 'review runtime module implementation: ' + file);
     const module = await import(new URL('../../' + file, import.meta.url));
     assert.deepEqual(Object.keys(module).sort(), pin.exports, 'review module export inventory: ' + file);
     for (const [name, reason] of Object.entries(pin.additions)) {

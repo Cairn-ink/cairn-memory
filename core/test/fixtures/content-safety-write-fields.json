@@ -403,7 +403,7 @@
   "core/context-read-facade.mjs": {
     "key:actionId": 1,
     "key:batchRefs": 5,
-    "key:id": 2,
+    "key:id": 3,
     "key:sessionIds": 1,
     "key:storeId": 6,
     "key:targetId": 1,
@@ -467,7 +467,7 @@
     "literal:stepId": 1
   },
   "core/database.mjs": {
-    "key:storeId": 1
+    "key:storeId": 2
   },
   "core/existing-store.mjs": {
     "key:storeId": 1,
@@ -713,7 +713,7 @@
     "key:eventId": 5,
     "key:id": 5,
     "key:invalidRef": 1,
-    "key:memoryId": 16,
+    "key:memoryId": 21,
     "key:ownerId": 9,
     "key:projectId": 11,
     "key:receiptId": 1,
@@ -880,7 +880,8 @@
     "literal:id": 1,
     "literal:maxRefs": 1,
     "literal:memoryId": 1,
-    "literal:parentId": 1
+    "literal:parentId": 1,
+    "key:candidateId": 1
   },
   "integrations/client/control-state.mjs": {
     "key:valid": 4,
@@ -1408,7 +1409,7 @@
   },
   "core/context-product-index.mjs": {
     "key:catalogId": 1,
-    "key:id": 4,
+    "key:id": 5,
     "key:ownerId": 2,
     "key:sessionIds": 1,
     "key:storeId": 4,
@@ -1653,5 +1654,31 @@
   },
   "integrations/client/raw/local-session-start.mjs": {
     "literal:state_invalid": 1
+  },
+  "core/memory-relations-storage.mjs": {
+    "key:memoryId": 3,
+    "key:id": 3,
+    "key:receipt_id": 2,
+    "key:memory_id": 1
+  },
+  "core/memory-relations.mjs": {
+    "key:candidateId": 2
+  },
+  "core/memory-relations-read.mjs": {
+    "key:memoryId": 2,
+    "key:id": 5,
+    "key:currentMemoryId": 1
+  },
+  "core/memory-relations-vectors.mjs": {
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "key:id": 1
+  },
+  "core/memory-relations-erasure.mjs": {
+    "key:sessionId": 1,
+    "key:eventId": 1,
+    "key:messageId": 1,
+    "key:ownerId": 1,
+    "key:projectId": 1
   }
 }

@@ -918,17 +918,17 @@
   "implementations": [
     {
       "file": "core/content-suppression-storage.mjs",
-      "sha256": "9578c16663871f6c8cdf51b09c304483cd4cbe7d0726a5f1a88b7fd44117f878",
+      "sha256": "17a957ab9f65eba77c4da6e509845d9c93d2839880f865ea13c4c6bbe768cfe9",
       "reason": "The retry reset clears only this connection’s request-local denial memos. Canonical writers, insertion capabilities and their separately pinned regions retain their exact bytes."
     },
     {
       "file": "core/content-safety-migration.mjs",
-      "sha256": "cfa4de31c06a67b0677faa77287fe5c353c670cbf3320855c6414200892cd0cf",
+      "sha256": "b412065a38744c7e9dc126b22ea19d29ce7cd26eaa3cd3fbfe4bb2e7688ed213",
       "reason": "Reviewed Card lineage: offline lineage installation preserves canonical denial populations and the suppression domain, then seals classified retained Card bodies under the existing backup/quiescence transaction."
     },
     {
       "file": "core/content-safety-schema.mjs",
-      "sha256": "c8f9e0bcf08902576a82510f357528ddfdbfa32365e986771a9a76006582c4b1",
+      "sha256": "0fd6c2e59f0ffaa54d167fb8ab0fece809e0a5e17ac9e8dcb4739641e2e9e578",
       "reason": "Reviewed Card lineage: exact lineage tuple/DDL attestation and synchronous canonical snapshot registration; feature accessors expose only privately attested revisions and add no fact-only writer."
     },
     {
@@ -988,14 +988,14 @@
       "file": "core/raw-lineage-storage.mjs",
       "start": "  function excludeMemory(",
       "end": "  function filter(",
-      "sha256": "f3a97554af8c1752c981c1acf8dc4eb06689a249dca81d8467ba01c3634fc573"
+      "sha256": "79266fcf23be63dddd4863adf0eeaf3a3a7f9076e3205ef522a3aa32792680df"
     },
     {
       "id": "pristine-creation",
       "file": "core/database.mjs",
       "start": "export function openDatabase(",
       "end": null,
-      "sha256": "6d48893fb40b6a01adb4a5ffc122222ad042b91ef0c28f15345c8ebc8429bb9a"
+      "sha256": "4fafa84660729832155384b788304a7dcee4a187e86537c6c87649baa5369583"
     }
   ],
   "imports": [
@@ -1184,6 +1184,7 @@
         "cachedContentLayout",
         "cardLineageRevision",
         "checkInstalledContentSafety",
+        "contentLayoutCheckpoint",
         "contentSafetyBudgetError",
         "contentSafetyConnection",
         "contentSafetyDDL",
@@ -1407,6 +1408,79 @@
       "additions": {
         "isBudgetEmbeddingPort": "Recognizes only fixed ledger wrappers through a module-private WeakSet; their real embedder still receives its single E1 fence."
       }
+    },
+    "core/memory-relations-erasure.mjs": {
+      "additions": {},
+      "sha256": "81dbe565ab52d93186d9dc0d8b10eb82fc71a4897d9a9d944f6ae58e00a99c48",
+      "exports": [
+        "purgeUnreadableMemoryRelations"
+      ]
+    },
+    "core/memory-relations-read.mjs": {
+      "additions": {},
+      "sha256": "288e9cc5db45777415050e95e1804f1556e06089aacc1d81aa4e88b3359cbb2f",
+      "exports": [
+        "THREAD_MEMBER_CAP",
+        "deliverMemoryRelations",
+        "memoryRelationLabels",
+        "memoryRelationsPresent",
+        "observeRelationPresence",
+        "relationEpochColumn",
+        "relationNeighbors"
+      ]
+    },
+    "core/memory-relations-safety.mjs": {
+      "additions": {},
+      "sha256": "172b9a4fca1cc6e5c76e6440f306d7d7397e11513857b5bb25aafacedfff2b20",
+      "exports": [
+        "memoryRelationEligible"
+      ]
+    },
+    "core/memory-relations-schema.mjs": {
+      "additions": {},
+      "sha256": "cb6c881d1c8d81dd2babdb5e7e642c8af87853813441e83f135ad8b58096f95a",
+      "exports": [
+        "installMemoryRelations",
+        "previousRelationDDL",
+        "relationDDL",
+        "validateMemoryRelations"
+      ]
+    },
+    "core/memory-relations-storage.mjs": {
+      "additions": {},
+      "sha256": "ca310efee58f3a2c68f4409b5eddb5306438bd68c674db4b71739a5f306c10a5",
+      "exports": [
+        "createMemoryRelationStorage",
+        "restoreInitialRelations",
+        "snapshotInitialRelations"
+      ]
+    },
+    "core/memory-relations-time.mjs": {
+      "additions": {},
+      "sha256": "deda5110c1b81f24dbebce1b15c8715b5f0786aa8ec81ecbd40bde5c85d328e6",
+      "exports": [
+        "memoryRelationStatedTime",
+        "memoryRelationTime"
+      ]
+    },
+    "core/memory-relations-vectors.mjs": {
+      "additions": {},
+      "sha256": "5e2b3e8ae06e28be82be3ee0c2c9a3826f356c76f086f3323489f56c03380923",
+      "exports": [
+        "unionMemoryRelationCandidates",
+        "withMemoryRelationVectors"
+      ]
+    },
+    "core/memory-relations.mjs": {
+      "additions": {},
+      "sha256": "c0d8aea6d3681a9c05de8ef738fa8eecaedd4b2149e72a62cbfa6edf2c935019",
+      "exports": [
+        "SAME_THREAD_THRESHOLD",
+        "relateCapturedMemories",
+        "relationJaccard",
+        "ruleRelation",
+        "sameThreadScore"
+      ]
     }
   }
 }

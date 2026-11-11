@@ -37,6 +37,10 @@ dates independently of the direction or type of an edge; a late capture of an
 older message stays earlier. Attaching an older receipt to an exact-content
 fact retains that fact's latest trusted support date.
 
+A memory captured before the store's first link, and not an endpoint of that
+link, keeps only its capture date. A backdated import can therefore order a
+thread by capture time for those memories. Live captures are unaffected.
+
 A default context read that selects any member resolves its connected thread.
 It brings the current member and up to three earlier members, choosing the most
 recent earlier members first. Four members leave room for the present value,

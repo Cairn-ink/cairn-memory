@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Memory threads connect facts about the same topic and deliver the current
+  fact with bounded, dated history. Relations are enabled by default; set
+  `memoryRelations:false` to disable discovery and new relation writes.
+- The first committed link upgrades the store layout in one direction. Older
+  engine versions then refuse the store with `unsupported_database`. Rolling
+  back the installer means reinstalling the newer version to use that store;
+  disabling relations does not downgrade an installed layout.
+
 ## Unreleased — retain prepared Raw evidence
 
 - Default three-layer reads keep the validated Raw prefix when preparation

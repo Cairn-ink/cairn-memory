@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "791390c8df54f60cb7d5255648ee82d82cb7350d696bbd792c1468adec7b0847",
-  "bytes": 1349120,
+  "sha256": "508ae9e642d25f9601490b64eed925857d17ba523cfb3a272cb48450197fe092",
+  "bytes": 1349318,
   "files": [
     "LICENSE",
     "README.md",
@@ -410,7 +410,7 @@
     "plugins/cairn-memory/lib/transcript.mjs"
   ],
   "sourceHashes": {
-    "core/content-write-context.mjs": "cad4cc7f52a24842e64766aeb9ba986aa6810fab66e691cc0b2600dda829f7e8",
+    "core/content-write-context.mjs": "fff305ea7cb91047fe3fa8a36b397222ea055cead1cf8dcb35cfaa308967060a",
     "core/content-write-changes.mjs": "876f6fa7bc67c69031ef8ccc645eab9b321713803b77f9203ac30ca783e88caa",
     "core/content-write-safety.mjs": "e63fb793b5ecf3aa93d776f4b9e07893ae892c601b78c8a99168b7805f1bb47a",
     "core/admission-storage.mjs": "17dc027f19f00a114d17962792e6a1b39be08c094b4153541f98e3630edd789d",
@@ -655,7 +655,7 @@
     "docs/raw-local-journal.md": "393964c0a17f4dce2855be74e80d387cbbfc26c189d6b3e2bbf5ccfeef5f187b",
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
     "docs/context-read-local.md": "c251bc62c3971fc5c213832366664b57c6b82f27dbfe7b27fdae28b7a96092b1",
-    "docs/defaults.md": "379822e03e1b9e0e869ebce88afd83c2bf03efaa9075acf7ef102f6ba8bc14a3",
+    "docs/defaults.md": "cf3c30d3dadfdba9ae7d7e6db1836fca540c748f258f8385e68d88d818e78a98",
     "docs/method-packages-local.md": "3912f7d95956e74be91d031c6eeba1ead4ca194fdb15854d0ded05de196a3815",
     "docs/assets-local.md": "4553ca1854b9d4862ac76ae25ce90e451c6ee875d806b84c51d4c00e6b828c5c",
     "docs/v1-preview-integration.md": "1eb1dee0919262ccd1a20f44187652899ee5a7fa0f282b0b512d027e060b3ccc",
@@ -801,7 +801,7 @@
     "core/memory-relations-read.mjs": "288e9cc5db45777415050e95e1804f1556e06089aacc1d81aa4e88b3359cbb2f",
     "core/prompts/relate-memories.md": "342926ce5d2d456c4e9d6272443334729d3828871129790624c0c65261c86c76",
     "core/memory-relations-vectors.mjs": "5e2b3e8ae06e28be82be3ee0c2c9a3826f356c76f086f3323489f56c03380923",
-    "docs/memory-relations.md": "005e55e8612a08c5eed3bea2e07ceadd77405497040dbeda9e12fdbe9a92f969",
+    "docs/memory-relations.md": "7c829fc7d5aa5197680048986efb20c7d5c2c9ca40c08be64c240a4588a5914c",
     "core/memory-relations-time.mjs": "deda5110c1b81f24dbebce1b15c8715b5f0786aa8ec81ecbd40bde5c85d328e6",
     "core/memory-relations-safety.mjs": "172b9a4fca1cc6e5c76e6440f306d7d7397e11513857b5bb25aafacedfff2b20",
     "core/memory-relations-erasure.mjs": "81dbe565ab52d93186d9dc0d8b10eb82fc71a4897d9a9d944f6ae58e00a99c48",
