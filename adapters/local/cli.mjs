@@ -39,10 +39,13 @@ try {
     if (error.code !== 'storage_busy') throw error;
     reply = { status: 409, body: { error: 'storage_busy' } };
   }
-  const remaining = Math.floor(config.timeouts.processMs - (performance.now() - started));
+  // Leave time for closing the store and delivering an explicit busy reply.
+  const remaining = Math.floor(config.timeouts.processMs - (performance.now() - started) - 250);
   if (remaining < 1) stop(124, 'local_capture_deadline');
   reply ??= await captureLocal(config, request, { signal: controller.signal,
     captureMs: Math.min(config.timeouts.captureMs, remaining), onClose: value => { close = value; } });
+  // Synchronous preparation can delay timers; never acknowledge past startup's budget.
+  if (performance.now() - started >= config.timeouts.processMs) stop(124, 'local_capture_deadline');
   if (Buffer.byteLength(JSON.stringify(reply.body)) > 65536) throw new Error();
   const output = JSON.stringify(reply) + '\n';
   if (Buffer.byteLength(output) > 262144) throw new Error();

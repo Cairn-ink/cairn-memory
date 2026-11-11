@@ -105,9 +105,26 @@ progress before any message is deleted. One command finishes on its own and
 shows progress counts. Only if it stops after about 10 minutes, run the same
 command again to continue. All source rows remain until the required hashes
 are durable. While a long delete runs, Claude Code and Codex conversation
-saving pauses and catches up afterwards. On a busy machine, saving paused for
-about 11–15 seconds and the whole delete took about 12–19 seconds for a
-10,000-message conversation. Longer conversations take proportionally longer.
+saving waits while UUID preparation is pending, keeps its batch ready, and
+catches up on a later hook after preparation finishes. A final delete that
+changes the namespace epoch during another session's capture is retried; it
+does not permanently stop that session from saving. Same-namespace Memory
+writes can cause the same race. Core `captureRaw` makes at most four total
+attempts with fresh checks within one shared capture deadline. If epoch-only
+contention persists or leaves too little time for another attempt, capture returns
+retryable `storage_busy` so the host can defer the batch. Other deadline expiries
+remain timeouts. Other conflicts retain their existing refusal behavior.
+
+With no concurrent captures, one synthetic 10,008-message conversation took
+80 CLI passes and about 25 seconds to delete on a busy machine (one run on
+Node 22.16.0). About 20 seconds of that time comes from the CLI yielding
+for 250 ms between passes (80 × 250 ms). This measured the whole command;
+no saving-pause duration was measured in that run. An earlier concurrent-capture
+measurement needed 41 passes because captures also advanced UUID hashing: saving
+waited about
+11–15 seconds and the whole delete took about 12–19 seconds. Those timings
+apply to that concurrent workload. Longer conversations require more passes;
+load and other writers affect wall time.
 
 Local deletion runs the whole deletion and rolls it back before the first
 privacy fence and again after UUID preparation. Already-fenced middle passes

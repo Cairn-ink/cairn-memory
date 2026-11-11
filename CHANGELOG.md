@@ -29,6 +29,8 @@ release.
 
 ## Unreleased — local Raw-only capture and conversation hiding
 
+- Several sessions saving at once no longer stop one of them from saving. Core `captureRaw` now retries conflicts caused only by a namespace epoch change, including changes from Memory writes. Retries share the original capture deadline. If contention persists after four total attempts or leaves too little time for another attempt, capture returns retryable `storage_busy` instead of permanently stopping saving. Other deadline expiries remain timeouts. Other conflicts still return `revision_conflict`.
+
 - Local Codex capture re-qualifies an updated binary in the background, refuses capture while waiting, and reports qualification status with rerun-setup guidance. A failed first qualification no longer prevents installing local hooks.
 - Local Raw captures new Claude sessions from their first turn even when the transcript appears after session start. Forks and resumes of hidden conversations stay hidden, including Claude copies with changed timestamps; Codex forked sessions are not saved locally.
 

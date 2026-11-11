@@ -63,8 +63,8 @@ test('concurrent captureLocal defers with busy during a thousand-message CLI del
       if(complete){uuidComplete=true;record({kind:'uuid-complete-commit'});}
       return result;
     };
-    // Keep pending work stable through three capture attempts. A final delete
-    // during asynchronous sealing legitimately changes the namespace epoch.
+    // Keep UUID work pending through three explicit busy replies. The separate
+    // final-delete regression below deterministically crosses its epoch commit.
     const writeDelete=process.stderr.write;let heldDelete=false;
     process.stderr.write=function(chunk,...args){const result=writeDelete.call(this,chunk,...args);
       if(!heldDelete&&String(chunk).includes('prepared')){heldDelete=true;
@@ -96,8 +96,8 @@ test('concurrent captureLocal defers with busy during a thousand-message CLI del
         await delay(250);
       }
       process.send({paused:true});await stopped;
-      // The first successful attempt follows the completed deletion, avoiding
-      // an unrelated namespace-revision race while retaining the 200 check.
+      // After deletion drains, check successful delivery and replay every
+      // deferred request. Final-commit overlap has its own deterministic case.
       const result=await captureLocal(config,pending,{env:{}});
       process.send({result,eventId:pending.event_id,at:process.hrtime.bigint().toString()});
       const replay=[];
@@ -181,4 +181,34 @@ test('delete helper reports an early child exit with its code and output',async 
     return true;
   });
   assert.equal((await deletion.done).code,23);
+});
+
+test('capture prepared before another conversation final CLI delete saves after its epoch advance', {timeout:60000}, async t => {
+  const f = fixture(t), id = await seed(f,1);
+  let seals = 0;
+  // Run the real CLI to completion inside the first asynchronous seal. The
+  // capture therefore commits strictly after the final delete advanced epoch.
+  const core = openMemoryCore({path:f.databasePath,rawSearch:false,rawConversations:{mode:'raw-v1',capBytes:200000000,interpretation:'host',
+    port:{version:'raw-seal-v1',async sealRaw({text}) {
+      if (++seals === 1) {
+        const child = spawn(process.execPath,[join(root,'adapters/mcp/cli.mjs'),'raw','delete','--db',f.databasePath,'--owner',f.namespace.ownerId,'--conversation',id,'--yes'],{stdio:['ignore','pipe','pipe']});
+        let stdout='',stderr='';child.stdout.on('data',b=>stdout+=b);child.stderr.on('data',b=>stderr+=b);
+        const ended=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',(code,signal)=>resolve({code,signal}));});
+        assert.equal(ended.code,0,JSON.stringify({ended,stdout,stderr}));assert.equal(ended.signal,null);
+      }
+      return {format:'local-plain-v1',keyVersion:null,sealed:Buffer.from(text)};
+    },async openRaw({sealed}) {return {text:Buffer.from(sealed).toString()};}},readPolicy:()=>({generation:'synthetic',reason:null})}});
+  f.workspace.defer(()=>core.close());
+  const input={namespace:f.namespace,client:'claude-code',sessionId:'other-session',eventId:'final-delete-race',messages:[{
+    id:'other-message',role:'user',occurredAt:'2020-01-01T00:00:00.000Z',messageOrdinal:1,content:'Synthetic concurrent capture',
+    part:{index:0,start:0,totalUnits:28,totalBytes:28}}]};
+  input.messages[0].part.totalUnits=input.messages[0].content.length;input.messages[0].part.totalBytes=Buffer.byteLength(input.messages[0].content);
+  const result=await core.captureRaw(input);
+  assert.equal(result.ok,true,JSON.stringify(result));assert.equal(result.value.raw.parts[0].saved,true);assert.equal(seals,2);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM raw_conversations WHERE id=?').get(id).n,0);
+  assert.equal(rows(f.db),1);assert.equal(f.db.prepare('SELECT count(*) n FROM raw_parts').get().n,1);
+  assert.deepEqual((await core.captureRaw(input)).value.raw,result.value.raw);assert.equal(rows(f.db),1);
+  const deleted={...input,sessionId:'deletion-session',eventId:'deleted-session',messages:[{...input.messages[0],id:'late-delete',messageOrdinal:2}]};
+  assert.deepEqual(await core.captureRaw(deleted),{ok:false,error:{code:'conversation_deleted',retryable:false}});
+  assert.equal(seals,2,'deleted session is refused before sealing');assert.equal(rows(f.db),1);
 });
