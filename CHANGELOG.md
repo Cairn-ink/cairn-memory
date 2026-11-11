@@ -16,6 +16,15 @@
   candidate's existing authorization request. Completed
   candidates retain independent outcomes and cutoff delivery; fresh batch and
   final checks still precede Raw projection and delivery.
+
+## Unreleased — source dates on delivered Memories
+
+- Context reads attach the date of each Memory's source message, taken from its
+  receipts, so a client can tell when a fact was said even when no Raw excerpt
+  is delivered. Source entries gain an optional `date` or `dates`; the item's
+  existing `date` keeps its meaning. Stores without source dates produce the
+  same output as before and run no extra statement.
+
 ## 0.6.6 — Unreleased
 
 - `setup --local` installs automatic plaintext conversation Raw capture by default
