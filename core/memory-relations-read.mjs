@@ -1,6 +1,7 @@
+import { memoryRelationEligible } from './memory-relations-safety.mjs';
 import { performance } from 'node:perf_hooks';
 import { cachedContentLayout, contentSafetyConnection } from './content-safety-schema.mjs';
-import { contentReadSafety, createContentReadMemo } from './content-safety.mjs';
+import { createContentReadMemo } from './content-safety.mjs';
 import { memoryRelationTime } from './memory-relations-time.mjs';
 
 export const THREAD_MEMBER_CAP = 4;
@@ -36,19 +37,20 @@ export function relationNeighbors(db,ns,id,limit=256){
  ORDER BY created_at DESC,id LIMIT ?`).all(id,...boundary(ns),limit,id,...boundary(ns),limit,limit);
 }
 const timeOrder=(a,b)=>(a.time??'').localeCompare(b.time??'')||a.captureOrder-b.captureOrder;
-export function deliverMemoryRelations(db,input,candidates,deadlineAt=Infinity){
- if(!memoryRelationsPresent(db))return candidates;
+export function deliverMemoryRelations(db,input,candidates,deadlineAt=Infinity,validateSeeds=false){
+ const present=memoryRelationsPresent(db);
+ if(!present&&!validateSeeds)return candidates;
  const memo=createContentReadMemo(db),safeCache=new Map(),neighborCache=new Map();
  const expired=()=>performance.now()>=deadlineAt;
  const safe=ref=>{
   const key=refKey(ref);if(safeCache.has(key))return safeCache.get(key);
   const value=!expired()&&(!input.readSet||input.readSet.some(ns=>JSON.stringify(boundary(ns))===JSON.stringify(boundary(ref.namespace))))
-   &&contentReadSafety(db,{namespace:ref.namespace,ref,intent:'history',memo}).allowed;
+   &&memoryRelationEligible(db,ref.namespace,ref,memo);
   safeCache.set(key,value);return value;
  };
  const neighbors=ref=>{
   const key=refKey(ref);if(neighborCache.has(key))return neighborCache.get(key);
-  const rows=expired()?[]:relationNeighbors(db,ref.namespace,ref.memoryId).filter(row=>safe(refOf(ref.namespace,{id:row.other_id,revision:row.other_revision})));
+  const rows=expired()||!present?[]:relationNeighbors(db,ref.namespace,ref.memoryId).filter(row=>safe(refOf(ref.namespace,{id:row.other_id,revision:row.other_revision})));
   neighborCache.set(key,rows);return rows;
  };
  const selected=[],visited=new Set(),cap=24;
@@ -99,8 +101,8 @@ export function deliverMemoryRelations(db,input,candidates,deadlineAt=Infinity){
 export function memoryRelationLabels(db,ref,deadlineAt=Infinity){
  if(ref.type!=='memory'||!memoryRelationsPresent(db))return [];
  const memo=createContentReadMemo(db),ns=ref.namespace;
- return relationNeighbors(db,ns,ref.memoryId,5).filter(row=>performance.now()<deadlineAt&&contentReadSafety(db,{namespace:ns,
-  ref:refOf(ns,{id:row.other_id,revision:row.other_revision}),intent:'history',memo}).allowed).map(row=>{
+ if(!memoryRelationEligible(db,ns,ref,memo))return [];
+ return relationNeighbors(db,ns,ref.memoryId,5).filter(row=>performance.now()<deadlineAt&&memoryRelationEligible(db,ns,refOf(ns,{id:row.other_id,revision:row.other_revision}),memo)).map(row=>{
    const outgoing=row.from_memory_id===ref.memoryId;
    return {memoryId:row.other_id,revision:row.other_revision,relation:row.relation,
     direction:outgoing?'outgoing':'incoming',label:row.relation==='supersedes'&&!outgoing?'superseded by':row.relation==='refines'&&!outgoing?'refined by':row.relation==='causes'&&!outgoing?'caused by':row.relation,

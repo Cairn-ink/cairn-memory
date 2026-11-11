@@ -28,17 +28,22 @@ function topic(text) {
    ??value.match(/^我的(.+?)(?:是|改成|換成)/u)?.[1];
  const named=owned?null:value.match(/^(?!(?:i|it|this|that|he|she|they)\b)(.{2,80}?)\s+(?:is|was|are|were|changed to)\b/u)?.[1]
    ??value.match(/^([^。！？.!?]{2,80}?)(?:是|改成|換成)/u)?.[1];
- const property=owned??named?.replace(/^the\s+/u,'');
- const subject=/\b(?:think|believe|said|says)\b|認為|覺得/u.test(value)?null:named?'topic':possessive?'relative:'+possessive:relative?'relative:'+(relative[1]??relative[2]):/^(?:i\b|my\b|me\b|我)/u.test(value)?'self':null;
+ const ownedEntity=owned&&/^(?:brother|sister|mother|father|friend|partner|wife|husband|cat|dog|manager|colleague|boss|哥哥|弟弟|姊姊|姐姐|妹妹|媽媽|爸爸|朋友|伴侶|同事|主管|貓|狗)(?:\s.*|\p{Script=Han}{1,4})?$/u.test(owned);
+ const predicate=value.replace(/^.*?(?:\bis\b|\bwas\b|是)/u,'').trim();
+ const slot=/\b(?:manager|colleague|coworker|boss)\b|同事|主管/u.test(predicate)?'work-role':
+  /\ballergic\b|過敏/u.test(predicate)?'allergy':/\b(?:vegetarian|vegan)\b|素食/u.test(predicate)?'diet':null;
+ const property=owned&&!ownedEntity?owned:(named||ownedEntity)&&slot?slot:null;
+ const subject=/\b(?:think|believe|said|says)\b|認為|覺得/u.test(value)?null:named||ownedEntity?'entity:'+(named??'my '+owned).replace(/^the\s+/u,''):possessive?'relative:'+possessive:relative?'relative:'+(relative[1]??relative[2]):/^(?:i\b|my\b|me\b|我)/u.test(value)?'self':null;
  const tail=value;
  const object=tail.match(/(?:喜歡|愛吃|偏好|改吃)(.+)/u)?.[1];
- const tokens=new Set(tokenizeT1((object??tail).replace(noise,' ')).filter(token=>token.length>1)
+ const tokens=new Set(tokenizeT1((object??tail).replace(noise,' ')).filter(token=>token.length>1&&!/^(?:food|things?|stuff|something|anything|everything|people|life|time|work|good|bad|daily|東西|事情|食物|生活)$/u.test(token))
   // Local inflection normalization; the frozen retrieval tokenizer is unchanged.
   .map(token=>/^[a-z]{5,}$/u.test(token)?token.replace(/(?:ing|ed)$/u,'').replace(/e$/u,''):token));
  // A preference about buying/price/preparation is not the consumption claim.
  const focus=value.match(/\b(buying|buy|price|cost|cooking)\b|價格|價錢|買|煎/u)?.[0]??null;
  const destination=value.match(/\bto\s+([a-z]+)\b|去(\p{Script=Han}{2})(?=[。！？了，,]|$)/u)?.[0]??null;
- return {subject,property,tokens,focus,destination};
+ const preference=/^(?:i\b|我)/u.test(value)&&/\b(?:like|love|enjoy|prefer|eat|drink|stopped|avoid)\b|喜歡|愛吃|吃|喝|戒掉/u.test(value);
+ return {subject,property,tokens,focus,destination,preference};
 }
 export function relationJaccard(left,right){
  const a=topic(left).tokens,b=topic(right).tokens,union=new Set([...a,...b]);
@@ -48,10 +53,12 @@ export function sameThreadScore(left,right){
  const a=topic(left),b=topic(right);
  if(!a.subject||a.subject!==b.subject||a.focus!==b.focus)return 0;
  if(a.destination&&b.destination&&a.destination!==b.destination)return 0;
- if(a.property&&b.property)return a.property===b.property?1:0;
+ if(a.property||b.property)return a.property===b.property?1:0;
+ if(a.subject.startsWith('entity:'))return 0;
  const common=[...a.tokens].filter(token=>b.tokens.has(token));
  // Require a specific anchor, not just a shared generic noun or a pronoun.
- if(common.length<2&&!common.some(token=>/\p{Script=Han}{2}/u.test(token)))return 0;
+ if(common.length<2&&!common.some(token=>/\p{Script=Han}{2}/u.test(token))
+  &&!(a.preference&&b.preference&&common.some(token=>/^[a-z]{3,}$/u.test(token))))return 0;
  return common.length/Math.max(1,Math.min(a.tokens.size,b.tokens.size));
 }
 export function ruleRelation(fact,candidates){
@@ -68,10 +75,12 @@ export async function relateCapturedMemories({model,items,operations,deadline,va
  if(!items.length)return [];
  const facts=items.map((item,factIndex)=>({factIndex,content:item.content,
   eventTime:instant(item.receiptTimes?.filter(Boolean).sort().at(-1))??new Date().toISOString()}));
- let candidates=items.map(()=>[]);
- const fallback=()=>facts.flatMap(fact=>[{factIndex:fact.factIndex,eventTime:fact.eventTime,timingOnly:true},
+ let candidates=items.map(()=>[]),interpreted=false;
+ const fallback=()=>{const result=facts.flatMap(fact=>[{factIndex:fact.factIndex,eventTime:fact.eventTime,timingOnly:true},
   ...ruleRelation(fact,candidates[fact.factIndex]).map(edge=>({...edge,factIndex:fact.factIndex,
    candidateRevision:candidates[fact.factIndex].find(row=>row.id===edge.candidateId).revision,decidedBy:'rule',eventTime:fact.eventTime}))]);
+  return interpreted?Object.defineProperty(result,'decisionComplete',{value:true}):result;
+ };
  try{
   const keyed=typeof modelPortValue(model,'relateMemories','model_not_configured')==='function';
   // A neutral edge requires a recognized subject on both ends. When no fact
@@ -82,6 +91,10 @@ export async function relateCapturedMemories({model,items,operations,deadline,va
   candidates=lexical.map(otherFacts);
   candidates=await unionMemoryRelationCandidates(operations.relationNamespace,items,lexical,operations.resolveRelationCandidates,operations.relationIdentity,deadline,validateFresh);
   candidates=candidates.map(otherFacts);
+  // Optional relation interpretation must not fall back to predecessor retirement
+  // after a candidate changes while the provider is running. Admission still
+  // validates source, lease and stream high-water; insertion rechecks endpoints.
+  interpreted=keyed&&candidates.some(rows=>rows.length);
   const assertFresh=()=>{
    validateFresh?.();
    if(typeof operations.resolveRelationCandidates!=='function')return;
@@ -139,7 +152,9 @@ export async function relateCapturedMemories({model,items,operations,deadline,va
     if(relation==='supersedes'&&edge.confidence<0.6)continue;
     result.push({factIndex:fact.factIndex,candidateId:candidate.id,candidateRevision:candidate.revision,
      relation,confidence:edge.confidence,decidedBy:'llm',eventTime:time,
-     reason:typeof edge.reason==='string'&&edge.reason.isWellFormed()?Array.from(edge.reason.replace(/\0/g,'')).slice(0,600).join(''):null});
+     // A retained reason may depend only on this edge's two endpoints.
+     // Batch decisions remain useful, but their untracked prose is discarded.
+     reason:request.facts.length===1&&request.candidates.length===1&&request.candidates[0].length===1&&typeof edge.reason==='string'&&edge.reason.isWellFormed()?Array.from(edge.reason.replace(/\0/g,'')).slice(0,600).join(''):null});
    }
   }
   // An explicit unrelated decision still completes relation interpretation.

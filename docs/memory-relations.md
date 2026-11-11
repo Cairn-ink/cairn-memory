@@ -67,9 +67,10 @@ when empty. The compatibility source name `relations-one-hop-v1` remains accepte
 Every traversed endpoint passes the canonical content predicate in the authorized
 read transaction. Forgotten, suppressed, excluded, denied or foreign memories
 cannot enter the thread or its labels. Revision changes invalidate incident
-edges. Durable Memory/receipt/Raw suppression removes incident edges in its
-transaction. Forgetting the latest member therefore restores the preceding
-eligible value. Temporary caller denial never edits another caller's graph.
+edges. Durable Memory, receipt, namespace, owner and Raw suppression, and Raw
+exclusion, remove incident edges, reasons and relation times for every memory
+they make unreadable, in the same transaction. Forgetting the latest member
+therefore restores the preceding eligible value. Temporary caller denial never edits another caller's graph.
 
 The local traversal is bounded by the read deadline and a component ceiling.
 An incomplete traversal does not assert a current member. Empty graphs use the
@@ -101,6 +102,12 @@ ignored. `reason` is optional for existing custom ports and bounded to 600
 characters; the OpenAI adapter requests a string or null. Requests share the
 existing model input/output and embedding budgets and reserve time for admission.
 
+A model reason is retained only when the entire request contains exactly one
+new fact and one candidate, the edge's two endpoints. Decisions from larger
+batches keep their dated links and labels but discard all reason prose. This
+avoids retaining text derived from a non-endpoint candidate; forgetting,
+suppression and Raw exclusion remove endpoint edges, reasons and relation times.
+
 ## Layout and compatibility
 
 The second relation package uses inherited physical layout plus 200 and
@@ -125,14 +132,15 @@ reopen its connections before relation writes are enabled. The internal
 `installMemoryRelations(db)` installer requires a caller-owned writer transaction;
 it is not called by the managed opener.
 
+The first committed, validated link triggers a one-way layout upgrade.
 Set `memoryRelations: false` in `openMemoryCore` before the first edge to disable
 relation discovery and new relation writes. This does not remove an installed
 layout. A store that has only been opened by the new engine, without gaining any
 relation, remains readable by main. After the first edge, older engines refuse
 with `unsupported_database`; hosts can inspect `PRAGMA user_version` and resolve
 the inherited-plus-package layout, or use the internal layout attestation's
-`relationsRevision`. Downgrading after the first relation requires reinstalling
-the newer version, as with the lineage layout; there is no downgrade conversion.
+`relationsRevision`. Rolling back the installer after the first link means
+reinstalling the newer version to use that store; there is no downgrade conversion.
 
 Legacy conflict rows migrate to user-decided contradiction edges and
 `memory_conflicts` remains a compatibility view. Existing conflict hint limits
@@ -147,6 +155,7 @@ required to receive threads. Hosts that enumerate relation labels or render
 context metadata should accept the additive neutral label and thread annotation.
 
 A committed lazy upgrade invalidates readers in the same JavaScript runtime.
-Plain legacy readers in another process or realm must reopen after that upgrade
-to deliver threads; their original read path has no schema polling statement.
+An already-open plain legacy reader in another process or realm omits threads
+until it closes and reopens after that upgrade; its original read path has no
+schema polling statement.
 Host-managed upgrades require quiescence and reopening of all connections.

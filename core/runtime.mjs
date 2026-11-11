@@ -978,8 +978,8 @@ export function createMemoryRuntime(input, internal) {
     discardCaptureEvidence(ns, input) { ready(); return stagedEvidence.discard(ns, input); },
     assertCaptureEvidence(ns, input, deadline) { ready(); return input[captureDispatch]
       ? admissionStorage.beginCaptureDispatch(ns, input, deadline) : admissionStorage.assertCaptureEvidence(ns, input); },
-    expandRelationRefs(namespaces, refs) { ready(); if(!memoryRelationsPresent(db))return refs; return readTransaction(db,()=>{
-      const expanded=deliverMemoryRelations(db,{intent:'current'},refs.map((ref,index)=>({ref:{type:'memory',namespace:namespaces[ref.namespaceIndex],memoryId:ref.memoryId,revision:ref.revision},rank:index+1})),Infinity);
+    expandRelationRefs(namespaces, refs) { ready(); return readTransaction(db,()=>{
+      const expanded=deliverMemoryRelations(db,{intent:'current',readSet:namespaces},refs.filter(ref=>Number.isSafeInteger(ref.namespaceIndex)&&namespaces[ref.namespaceIndex]).map((ref,index)=>({ref:{type:'memory',namespace:namespaces[ref.namespaceIndex],memoryId:ref.memoryId,revision:ref.revision},rank:index+1})),Infinity,true);
       return expanded.map(item=>({namespaceIndex:namespaces.findIndex(ns=>JSON.stringify(boundary(ns))===JSON.stringify(boundary(item.ref.namespace))),memoryId:item.ref.memoryId,revision:item.ref.revision}));
     }); },
     relationCandidates(ns, facts) { ready(); return memoryRelationStorage.candidates(ns, facts); },

@@ -1,7 +1,8 @@
+import { memoryRelationEligible } from './memory-relations-safety.mjs';
 import { memoryRelationTime } from './memory-relations-time.mjs';
 import { randomUUID } from 'node:crypto';
 import { readTransaction } from './database.mjs';
-import { contentReadSafety, createContentReadMemo } from './content-safety.mjs';
+import { createContentReadMemo } from './content-safety.mjs';
 import { installMemoryRelations } from './memory-relations-schema.mjs';
 import { cachedContentLayout, installedContentLayout, attestContentSafety, contentLayoutCheckpoint } from './content-safety-schema.mjs';
 import { createBM25 } from './context-read-bm25.mjs';
@@ -16,17 +17,19 @@ export function createMemoryRelationStorage({ db, advanceEpoch, enabled = true, 
   const pendingTimes=new Map(),timeKey=(ns,fingerprint)=>JSON.stringify([boundary(ns),fingerprint]);
   const pendingTime=(ns,memory)=>{
     const time=pendingTimes.get(timeKey(ns,memory.fingerprint));
-    return time?.memory_id===memory.id?time:undefined;
+    return time?.memory_id===memory.id&&db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(time.receipt_id,memory.id)?time:undefined;
   };
   const row = (ns,id) => db.prepare(`SELECT * FROM memories WHERE ${where} AND id=? AND deleted=0 AND review_state!='awaiting'`)
     .get(...boundary(ns),id);
-  const safe = (ns,memory,memo) => memory && contentReadSafety(db,{namespace:ns,intent:'history',memo,
-    ref:{type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision}}).allowed;
+  const safe = (ns,memory,memo) => memory && memoryRelationEligible(db,ns,{type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision},memo);
   function rememberedTime(ns,fingerprint) {
-    if(cachedContentLayout(db)?.relationsRevision!==2)return pendingTimes.get(timeKey(ns,fingerprint));
+    if(cachedContentLayout(db)?.relationsRevision!==2){
+      const memory=db.prepare(`SELECT * FROM memories WHERE ${where} AND fingerprint=? AND deleted=0`).get(...boundary(ns),fingerprint);
+      return memory&&safe(ns,memory)?pendingTime(ns,memory):undefined;
+    }
     return db.prepare(`SELECT t.* FROM memory_relation_times t JOIN memories m
       ON m.id=t.memory_id AND m.revision=t.revision WHERE m.owner_id=? AND m.scope=? AND m.project_id=?
-      AND m.fingerprint=? AND m.deleted=0`).get(...boundary(ns),fingerprint);
+      AND m.fingerprint=? AND m.deleted=0 AND EXISTS(SELECT 1 FROM receipts p WHERE p.id=t.receipt_id AND p.memory_id=m.id)`).get(...boundary(ns),fingerprint);
   }
   function candidates(ns,facts) {
     return readTransaction(db,()=>{
@@ -56,12 +59,12 @@ export function createMemoryRelationStorage({ db, advanceEpoch, enabled = true, 
       const from=row(ns,entry.memoryId);
       if(!safe(ns,from,memo))continue;
       const timing=proposals.find(p=>p.factIndex===entry.factIndex&&p.timingOnly);
-      if(timing&&entry.insertedReceiptIds[0]){
+      if(timing&&entry.insertedReceiptIds[0]&&db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(entry.insertedReceiptIds[0],from.id)){
         // Exact-content receipt attachment changes the revision. Retain the
         // latest trusted support date before that mutation's revision trigger
         // removes the old row; a late older receipt must not rewind the fact.
         const currentTime=db.prepare('SELECT * FROM memory_relation_times WHERE memory_id=? AND revision=?').get(from.id,from.revision);
-        const previous=[entry.previousRelationTime,currentTime].filter(time=>time?.memory_id===from.id)
+        const previous=[entry.previousRelationTime,currentTime].filter(time=>time?.memory_id===from.id&&db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(time.receipt_id,from.id))
           .sort((a,b)=>b.event_time.localeCompare(a.event_time))[0];
         const retain=previous&&previous.event_time>timing.eventTime&&db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(previous.receipt_id,from.id);
         db.prepare(`INSERT INTO memory_relation_times VALUES(?,?,?,?) ON CONFLICT(memory_id)
@@ -174,13 +177,13 @@ export function snapshotInitialRelations(db,ns,ids,owned={edges:[],times:[]}){
 }
 export function restoreInitialRelations(db,ns,snapshot){
  for(const time of snapshot.times??[]){
-  const memory=db.prepare('SELECT revision FROM memories WHERE id=? AND deleted=0').get(time.memory_id);
-  if(memory)db.prepare('INSERT OR REPLACE INTO memory_relation_times VALUES(?,?,?,?)').run(time.memory_id,memory.revision,time.event_time,time.receipt_id);
+  const memory=db.prepare(`SELECT id,revision FROM memories WHERE ${where} AND id=? AND deleted=0`).get(...boundary(ns),time.memory_id);
+  if(memory&&memoryRelationEligible(db,ns,{type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision})&&db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(time.receipt_id,memory.id))db.prepare('INSERT OR REPLACE INTO memory_relation_times VALUES(?,?,?,?)').run(time.memory_id,memory.revision,time.event_time,time.receipt_id);
  }
  for(const edge of snapshot.edges??[]){
   const get=db.prepare(`SELECT * FROM memories WHERE owner_id=? AND scope=? AND project_id=? AND id=? AND deleted=0`);
   const from=get.get(...boundary(ns),edge.from_memory_id),to=get.get(...boundary(ns),edge.to_memory_id);
-  if(!from||!to)continue;
+  if(!from||!to||![from,to].every(memory=>memoryRelationEligible(db,ns,{type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision})))continue;
   db.prepare(`INSERT OR IGNORE INTO memory_relations
    (id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,receipt_id,event_time,created_at,reason)
    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`).run(edge.id,from.id,from.revision,to.id,to.revision,edge.relation,

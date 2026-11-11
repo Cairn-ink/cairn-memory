@@ -386,5 +386,7 @@
   "core/prompts/relate-memories.md",
   "core/memory-relations-vectors.mjs",
   "docs/memory-relations.md",
-  "core/memory-relations-time.mjs"
+  "core/memory-relations-time.mjs",
+  "core/memory-relations-safety.mjs",
+  "core/memory-relations-erasure.mjs"
 ]
