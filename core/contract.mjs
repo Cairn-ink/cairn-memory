@@ -1079,6 +1079,7 @@ export function createMemoryCore(input, internal) {
           relationMode: () => runtime.relationMode(),
           relationNamespace: ns, relationIdentity: runtime.identity,
           relationCandidates: facts => runtime.relationCandidates(ns, facts),
+          filterRelationFacts: facts => runtime.filterRelationFacts(ns, facts),
           resolveRelationCandidates: refs => runtime.resolveRelationCandidates(ns, refs),
           finishAdmission: (value, memoryRelations) => captureRelations(finishAdmissionValidated(captureKey(value), true, deadline,
             keepInput || sessionEpisodes ? undefined : captureQualifiedDuplicates, memoryRelations)),

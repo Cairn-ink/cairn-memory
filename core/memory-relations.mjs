@@ -28,7 +28,8 @@ function topic(text) {
    ??value.match(/^我的(.+?)(?:是|改成|換成)/u)?.[1];
  const named=owned?null:value.match(/^(?!(?:i|it|this|that|he|she|they)\b)(.{2,80}?)\s+(?:is|was|are|were|changed to)\b/u)?.[1]
    ??value.match(/^([^。！？.!?]{2,80}?)(?:是|改成|換成)/u)?.[1];
- const ownedEntity=owned&&/^(?:brother|sister|mother|father|friend|partner|wife|husband|cat|dog|manager|colleague|boss|哥哥|弟弟|姊姊|姐姐|妹妹|媽媽|爸爸|朋友|伴侶|同事|主管|貓|狗)(?:\s.*|\p{Script=Han}{1,4})?$/u.test(owned);
+ const ownedProperty=owned&&(owned.includes('的')||/^my\s+.+?(?:['’]s|s['’])\s+\S/iu.test(text.normalize('NFKC')));
+ const ownedEntity=owned&&!ownedProperty&&/^(?:brother|sister|mother|father|friend|partner|wife|husband|cat|dog|manager|colleague|boss|哥哥|弟弟|姊姊|姐姐|妹妹|媽媽|爸爸|朋友|伴侶|同事|主管|貓|狗)(?:\s.*|\p{Script=Han}{1,4})?$/u.test(owned);
  const predicate=value.replace(/^.*?(?:\bis\b|\bwas\b|是)/u,'').trim();
  const slot=/\b(?:manager|colleague|coworker|boss)\b|同事|主管/u.test(predicate)?'work-role':
   /\ballergic\b|過敏/u.test(predicate)?'allergy':/\b(?:vegetarian|vegan)\b|素食/u.test(predicate)?'diet':null;
@@ -43,7 +44,9 @@ function topic(text) {
  const focus=value.match(/\b(buying|buy|price|cost|cooking)\b|價格|價錢|買|煎/u)?.[0]??null;
  const destination=value.match(/\bto\s+([a-z]+)\b|去(\p{Script=Han}{2})(?=[。！？了，,]|$)/u)?.[0]??null;
  const preference=/^(?:i\b|我)/u.test(value)&&/\b(?:like|love|enjoy|prefer|eat|drink|stopped|avoid)\b|喜歡|愛吃|吃|喝|戒掉/u.test(value);
- return {subject,property,tokens,focus,destination,preference};
+ const englishObject=value.match(/\b(?:like|love|enjoy|prefer|eat|drink|stopped|avoid)\s+(?:(?:eating|drinking)\s+)?(.+)/u)?.[1];
+ const singleEnglishObject=/^[a-z]+[\s.!?]*$/u.test((englishObject??'').replace(/^(?:a|an|the)\s+/u,'').trim());
+ return {subject,property,tokens,focus,destination,preference,singleEnglishObject};
 }
 export function relationJaccard(left,right){
  const a=topic(left).tokens,b=topic(right).tokens,union=new Set([...a,...b]);
@@ -58,7 +61,8 @@ export function sameThreadScore(left,right){
  const common=[...a.tokens].filter(token=>b.tokens.has(token));
  // Require a specific anchor, not just a shared generic noun or a pronoun.
  if(common.length<2&&!common.some(token=>/\p{Script=Han}{2}/u.test(token))
-  &&!(a.preference&&b.preference&&common.some(token=>/^[a-z]{3,}$/u.test(token))))return 0;
+  &&!(a.preference&&b.preference&&a.singleEnglishObject&&b.singleEnglishObject
+   &&common.some(token=>/^[a-z]{3,}$/u.test(token))))return 0;
  return common.length/Math.max(1,Math.min(a.tokens.size,b.tokens.size));
 }
 export function ruleRelation(fact,candidates){
@@ -71,7 +75,23 @@ const instant=value=>{
  const normalized=new Date(value).toISOString();
  return normalized.slice(0,19)===value.slice(0,19)?normalized:null;
 };
-export async function relateCapturedMemories({model,items,operations,deadline,validateFresh}){
+export async function relateCapturedMemories(input){
+ if(!input.items.length)return [];
+ // Keep admission's complete batch for suppression accounting. Relation work
+ // sees only admissible facts; compact port indices map back to that batch.
+ const indices=input.operations.filterRelationFacts?.(input.items)??input.items.map((_,index)=>index);
+ const items=indices.map(index=>input.items[index]);
+ if(!items.length)return Object.defineProperty([],'decisionComplete',{value:true});
+ const validateFresh=()=>{
+  input.validateFresh?.();
+  const current=input.operations.filterRelationFacts?.(items);
+  if(current&&current.length!==items.length)throw Error('stale_memory_relations');
+ };
+ const result=await relateEligibleMemories({...input,items,validateFresh});
+ const mapped=result.map(edge=>({...edge,factIndex:indices[edge.factIndex]}));
+ return result.decisionComplete?Object.defineProperty(mapped,'decisionComplete',{value:true}):mapped;
+}
+async function relateEligibleMemories({model,items,operations,deadline,validateFresh}){
  if(!items.length)return [];
  const facts=items.map((item,factIndex)=>({factIndex,content:item.content,
   eventTime:instant(item.receiptTimes?.filter(Boolean).sort().at(-1))??new Date().toISOString()}));

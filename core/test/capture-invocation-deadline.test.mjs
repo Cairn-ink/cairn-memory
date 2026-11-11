@@ -212,6 +212,9 @@ test('D3 ordered high-water and relation edges roll back after actual in-transac
   const prior = first.admission.memories[0];
   const before = count(db, 'receipts');
   const priorBefore = { ...db.prepare('SELECT currentness,revision FROM memories WHERE id=?').get(prior.id) };
+  const relationSchema = () => db.prepare(`SELECT type,name,sql FROM sqlite_schema
+    WHERE name GLOB 'memory_relation*' OR name='memory_conflicts' ORDER BY name`).all();
+  const schemaBefore = relationSchema(), layoutBefore = db.prepare('PRAGMA user_version').get().user_version;
   assert.deepEqual(priorBefore, { currentness: 'current', revision: prior.revision });
   assert.equal(count(db, 'memory_supersessions'), 0);
   let inside;
@@ -246,7 +249,8 @@ test('D3 ordered high-water and relation edges roll back after actual in-transac
       .get().high_water, 1);
     assert.deepEqual({ ...db.prepare('SELECT currentness,revision FROM memories WHERE id=?').get(prior.id) }, priorBefore);
     assert.equal(count(db, 'memory_supersessions'), 0);
-    assert.equal(count(db, 'memory_relations'), 0);
+    assert.deepEqual(relationSchema(), schemaBefore, 'lazy relation DDL rolls back with the first edge');
+    assert.equal(db.prepare('PRAGMA user_version').get().user_version, layoutBefore);
     assert.equal(ok(core.get({ namespace, memoryId: prior.id })).memory.state, 'active');
     assert.equal(count(db, 'memories'), 1);
     assert.equal(count(db, 'receipts'), before);

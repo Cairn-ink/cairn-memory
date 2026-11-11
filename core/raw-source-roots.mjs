@@ -1,5 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { fail } from './validation.mjs';
+import { cachedContentLayout } from './content-safety-schema.mjs';
+import { purgeUnreadableMemoryRelations } from './memory-relations-erasure.mjs';
 
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId || ''];
@@ -179,7 +181,10 @@ export function createRawSourceRoots(db, { readMemo } = {}) {
     });
   }
   function mutateEpisodeSources(ns, episodeId, work) {
-    if (!enabled()) return work();
+    const trackRoots = enabled(), layout = cachedContentLayout(db);
+    // Relations can already depend on exact keep proof on a lineage-only
+    // store. Its cleanup must not enable deletion's root/CAS bookkeeping.
+    if (!trackRoots && !(layout?.relationsRevision && layout.rawLineage)) return work();
     if (!db.isTransaction) fail('raw_transaction_required');
     const owner = !episodeMutation;
     if (owner) episodeMutation = { namespace: JSON.stringify(boundary(ns)), before: new Map(), receipts: new Map() };
@@ -219,15 +224,21 @@ export function createRawSourceRoots(db, { readMemo } = {}) {
           if (!row) fail('raw_lineage_unavailable');
           reached.push({ client: row.client, sessionKey: row.session_key });
         }
+        let changedAuthority = false;
         for (const { row, before, roots } of context.receipts.values()) {
           const current = db.prepare('SELECT * FROM receipts WHERE id=?').get(row.id);
           if (before !== JSON.stringify(current ? receipt(ns, current) : null)) {
+            changedAuthority = true;
             reached.push(...roots, ...memoryRoots(ns, row.memory_id));
           }
         }
         // Changed consumers already receive their ordinary save/invalidate
         // revision. Preserve the caller's one-step episode revision result.
-        touchRoots(ns, reached, changed);
+        if (trackRoots) touchRoots(ns, reached, changed);
+        // Exact keep proof can disappear without revising the Memory or its
+        // receipts. Erase derived rows only after the outer source mutation
+        // settles, in its existing transaction, without installing a layout.
+        if (changedAuthority && cachedContentLayout(db)?.relationsRevision) purgeUnreadableMemoryRelations(db, ns);
       }
       return result;
     } finally { if (owner) episodeMutation = undefined; }

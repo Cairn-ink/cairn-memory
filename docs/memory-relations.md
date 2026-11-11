@@ -9,6 +9,10 @@ It checks the subject as well as the topic. This neutral label makes no claim
 about agreement, negation, replacement or causation. Discovery retains the
 lexical/vector union, capped at eight candidates per fact, and admission accepts
 at most five outgoing edges. Uncertain matches are omitted.
+Single-word English objects match only when complete on both sides: coffee
+and stopping coffee can link; coffee and coffee tables remain independent.
+An owned entity's named property, such as a dog's name, stays the same topic
+when its value changes. Sharing an entity alone does not link unrelated properties.
 
 When the extraction model supplies `relateMemories`, capture makes one relation
 request per batch with eligible candidates. The model may label a pair `supersedes`, `contradicts`,
@@ -23,6 +27,9 @@ engine remain resolvable.
 Candidates and model results are untrusted data. Unknown IDs, duplicate decisions,
 invalid labels or confidence values are discarded. Low-confidence supersession
 is omitted. Provider diagnostics contain closed codes, never Memory text.
+Extracted facts denied by admission's forgotten-fingerprint policy are removed
+before relation discovery, token counting or dispatch. Their original admission
+indices and suppression counts remain intact.
 
 ## Dates and delivery
 
@@ -75,6 +82,9 @@ edges. Durable Memory, receipt, namespace, owner and Raw suppression, and Raw
 exclusion, remove incident edges, reasons and relation times for every memory
 they make unreadable, in the same transaction. Forgetting the latest member
 therefore restores the preceding eligible value. Temporary caller denial never edits another caller's graph.
+Episode deletion and source replacement also remove those derived rows when
+they destroy a legacy kept memory's exact source proof, even if its memory row
+and receipts survive unchanged.
 
 The local traversal is bounded by the read deadline and a component ceiling.
 An incomplete traversal does not assert a current member. Empty graphs use the

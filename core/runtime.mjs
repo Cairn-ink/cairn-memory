@@ -32,7 +32,7 @@ import { createQualificationStorage } from './claim-qualification-storage.mjs';
 import { sourceEvidence, isSourceContext } from './source-evidence.mjs';
 import { createQualifiedTransitionStorage } from './qualified-transition-storage.mjs';
 import { createRationaleStorage } from './rationale-storage.mjs';
-import { fail, object, receiptEventTime } from "./validation.mjs";
+import { fail, object, receiptEventTime, fingerprint } from "./validation.mjs";
 import { privateCardOptions } from './private-card-input.mjs';
 import { createPrivateCardStorage } from './private-card-storage.mjs';
 import { createRawCardInvalidation } from './card-raw-sources.mjs';
@@ -989,6 +989,8 @@ export function createMemoryRuntime(input, internal) {
       return expanded.map(item=>({namespaceIndex:namespaces.findIndex(ns=>JSON.stringify(boundary(ns))===JSON.stringify(boundary(item.ref.namespace))),memoryId:item.ref.memoryId,revision:item.ref.revision}));
     }); },
     relationCandidates(ns, facts) { ready(); return memoryRelationStorage.candidates(ns, facts); },
+    filterRelationFacts(ns, facts) { ready(); return readTransaction(db, () => facts.flatMap((fact, index) =>
+      isSuppressed(ns, fingerprint(fact.content)) ? [] : [index])); },
     resolveRelationCandidates(ns, refs) { ready(); return memoryRelationStorage.resolve(ns, refs); },
     finishAdmission(ns, input) { ready(); return admissionStorage.finishAdmission(ns, input); },
     finishCapturedAdmission(ns, input, deadline, captureQualifiedDuplicates) {
