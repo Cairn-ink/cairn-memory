@@ -825,15 +825,19 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       // The trusted budget wrapper invokes its existing namespace/owner fence
       // before transport. Unbranded direct callers retain the conservative
       // canonical candidate guard after text selection.
-      const dispatch = !checkCandidates || !lineage&&isBudgetEmbeddingPort(embedder) ? () => {} : engineGuard(() => canonicalRead(() => {
-        const memo=createContentReadMemo(canonical);
-        for (const row of rows) {
-          const stream=p.streams[row.stream];
-          if (stream.type==='card' ? !cardEligible(stream.ns,row,p.intent,m,p.readSet) :
-              !candidateAllowed(ref(stream,row),p.intent,p.readSet,memo)) unavailable('stale_index');
+      const namespaces = p.readSet.filter(ns => rows.some(row => equal(p.streams[row.stream].ns, ns)));
+      const dispatch = engineGuard(() => canonicalRead(() => {
+        if (checkCandidates && (lineage || !isBudgetEmbeddingPort(embedder))) {
+          const memo=createContentReadMemo(canonical);
+          for (const row of rows) {
+            const stream=p.streams[row.stream];
+            if (stream.type==='card' ? !cardEligible(stream.ns,row,p.intent,m,p.readSet) :
+                !candidateAllowed(ref(stream,row),p.intent,p.readSet,memo)) unavailable('stale_index');
+          }
         }
+        assertContextEmbeddingAllowedInside(canonical, namespaces, started + maxMs);
       }));
-      if(checkCandidates && (lineage||!isBudgetEmbeddingPort(embedder)))dispatch();
+      dispatch();
       let vectors;
       const budgetPort=isBudgetEmbeddingPort(embedder);
       assertContentPort({before:true});

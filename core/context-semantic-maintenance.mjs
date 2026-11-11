@@ -194,7 +194,7 @@ export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandle
     const v=open(metadata.path);
     // Preserve the Worker's existing protocol and pinned loader bytes. The
     // reader recovers the fixed pause reason from a fresh canonical decision.
-    try { if(input.kind==='query')v.storage.assertEmbeddingAllowed(p.readSet,p.deadlineAt); }
+    try { v.storage.assertEmbeddingAllowed(p.readSet,p.deadlineAt); }
     catch(error) { if(error.code==='namespace_paused')fail('budget_denied');throw error; }
     v.facade.port.read(()=>{
       const layout=cachedContentLayout(v.facade.port.db);
