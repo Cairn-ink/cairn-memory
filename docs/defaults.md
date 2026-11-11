@@ -14,7 +14,6 @@ launching qualification. New Claude sessions capture from their first turn.
 A fork or resume of a hidden conversation stays hidden; Codex forks aren't saved
 locally. Re-enabling skips off-period text and,
 for an already-running Claude Code conversation, the first turn after re-enabling.
-Hook latency: `<latency to be measured>`.
 
 
 Forgetting or correcting a memory hides conversations with messages within
@@ -31,8 +30,19 @@ wildcards and previews counts, client and time range by default. `--yes` removes
 that conversation's Raw messages and index rows, its Episodes, and Cards sourced
 from it under the existing lineage rule. Unknown ids fail without changes.
 Re-sent copies (fork, resume or cursor reset) are not archived again. Extracted
-Memories are separate and keep their own forget. The installer uses its installed
+Memories are kept and keep their own forget. The installer uses its installed
 MCP database/owner/project; cloud mode or absent local installation is refused.
+
+`raw delete <conversation-id> --yes` finishes in one command and shows progress
+counts. Only if it stops after about 10 minutes, run the same command again to
+continue. While a large conversation is being deleted, saving in other sessions
+pauses and catches up afterwards: about 11–15 seconds for a 10,000-message
+conversation in the concurrent-saving workload described in the
+[local Raw guide](raw-local-journal.md).
+
+Several sessions saving at once no longer stop one of them from saving. Default
+reads keep the Raw excerpts they already validated when a read reaches its time
+limit, marked partial, instead of dropping them.
 
 Going back to 0.6.5: an attested base-33 store with card lineage revision 1
 (physical 53, lineage 1) that 0.6.6 opened with Raw on is refused with

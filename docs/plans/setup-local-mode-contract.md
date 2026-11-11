@@ -1670,17 +1670,20 @@ cloud-unchanged test's allowed exceptions are unchanged.
 
 Release version is 0.6.6. Regenerate `runtime/engine/` from the release branch
 only when execution is authorized, then require `build-runtime.mjs --check`.
-Retain §19's sync-commit identity rule with a newly recorded bundle sync commit,
-not its historical 0.6.5 pin. Release acceptance compares the entire bundled
-engine to that commit and checks every current-release sync reference. The current
-0.6.6 bundle source sync is `83cee2e3`. Do not claim the archive is current before regeneration and verification.
+For 0.6.6, pin the engine source cut and compare every archive entry against
+that cut. Document every deliberate installer difference rather than claiming
+archive byte-identity under §19's historical 0.6.5 rule. Check every current-release
+sync reference. The 0.6.6 bundle source sync is `b75d88e7`. Executable engine
+sources match that cut; the archive includes the installer’s updated
+`docs/defaults.md` and is not byte-identical to the cut archive. Regenerate and
+verify before release.
 
 English and Traditional Chinese setup documentation, defaults and the 0.6.6
 changelog cover capture scope, default, controls, cap, forget-by-time limits,
 Codex approval, and reinstalling 0.6.5 with an exact account of retained Raw and
 already-installed hooks. Downgrade behavior requires installed-package evidence;
 do not infer that running 0.6.5 disables hooks installed by 0.6.6. Hook timing
-remains `<latency to be measured>` until measured. Release text contains no
+is omitted until measured. Release text contains no
 forward promises, internal identifiers or workstation paths.
 
 Synthetic packed-installer tests cover both clients' native hooks, notice once,

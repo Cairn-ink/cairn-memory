@@ -17,14 +17,14 @@ behaviour. Existing cloud-mode Codex users must rerun setup to install the
 updated runtime.
 
 Installer **0.6.6 is prepared and unpublished**. The engine bundle is synced
-from commit `83cee2e3`; release acceptance compares the complete engine archive
-to that source commit, following the existing sync-commit rule.
+from commit `b75d88e7`. Executable engine sources match this cut. The archive
+includes the installer’s updated `docs/defaults.md`, so it is not byte-identical
+to the cut archive.
 
 `setup --local` now installs automatic Raw capture by default for each selected
 tool. It saves conversation text from that tool's sessions on this computer as
 plaintext in the same local store used by `cairn-local`, without a key or model
-calls. Both tools share the 200,000,000-byte Raw cap. Hook latency:
-`<latency to be measured>`.
+calls. Both tools share the 200,000,000-byte Raw cap.
 
 Turn capture off with `setup --local --no-capture` or
 `config --local-capture off`; turn it back on with `config --local-capture on`.
@@ -66,7 +66,18 @@ local client and refuse cloud mode. They use the same store and namespace as MCP
 Deletion removes the conversation's Raw messages and index rows, its Episodes,
 and Cards sourced from it under the existing lineage rule. Re-sent copies
 (fork, resume or cursor reset) are not archived again. Memories extracted from
-it are separate and keep their own forget.
+it are kept and keep their own forget.
+
+`raw delete <conversation-id> --yes` finishes in one command and shows progress
+counts. Only if it stops after about 10 minutes, run the same command again to
+continue. While a large conversation is being deleted, saving in other sessions
+pauses and catches up afterwards: about 11–15 seconds for a 10,000-message
+conversation in the concurrent-saving workload described in the
+[local Raw guide](../../docs/raw-local-journal.md).
+
+Several sessions saving at once no longer stop one of them from saving. Default
+reads keep the Raw excerpts they already validated when a read reaches its time
+limit, marked partial, instead of dropping them.
 
 Going back to 0.6.5: an **attested base-33 store with card lineage revision 1**
 (physical 53, lineage 1) that 0.6.6 opened with Raw on is refused with
@@ -80,13 +91,13 @@ hide windows or fork fences for capture. Its setup leaves 0.6.6 hooks registered
 with their retained engine; turn capture off with 0.6.6 before downgrading to
 stop them.
 
-安裝器 **0.6.6 已備妥，尚未發布**。引擎同步自 `83cee2e3`，發布驗收會依照
-既有同步規則，比對整份引擎封裝與該 commit 的內容。
+安裝器 **0.6.6 已備妥，尚未發布**。引擎同步自 `b75d88e7`，可執行的引擎
+原始碼與此版本一致。封裝內含安裝器更新的 `docs/defaults.md`，因此不與該版本的
+封裝逐位元組相同。
 
 `setup --local` 現在預設替所選工具安裝自動 Raw 擷取，把這台電腦上該工具的
 對話文字，以明文存進 `cairn-local` 使用的同一份資料庫，不需要金鑰，也不
-呼叫模型。兩個工具共用 200,000,000-byte 的 Raw 上限。Hook 耗時：
-`<latency to be measured>`。
+呼叫模型。兩個工具共用 200,000,000-byte 的 Raw 上限。
 
 用 `setup --local --no-capture` 或 `config --local-capture off` 關閉，
 `config --local-capture on` 重新開啟。可加 `--client claude` 或
@@ -122,7 +133,15 @@ npx @cairn-ink/memory raw delete <conversation-id> --yes
 
 刪除會移除該對話的 Raw 訊息與索引列、Episodes，以及依既有來源關聯規則
 判定來自該對話的 Cards。分支、續接或游標重設後重送的副本不會再次保存。
-從對話抽取的 Memories 是獨立資料，仍要各自執行 forget。
+從對話抽取的 Memories 會保留，仍要各自執行 forget。
+
+`raw delete <conversation-id> --yes` 會在一次執行中完成刪除，並顯示進度數量。
+只有在執行約 10 分鐘後停止時，才需要重跑同一個指令來繼續。刪除大型對話時，
+其他工作階段會暫停保存，完成後再補存；依[本機 Raw 指南](../../docs/raw-local-journal.md)
+的同時保存情境，一段 10,000 則訊息的對話約會讓保存暫停 11–15 秒。
+
+多個工作階段同時保存，不再導致其中一個停止保存。預設讀取到達時間上限時，
+會保留已驗證的 Raw 片段並標示為 partial，不會把這些片段丟掉。
 
 降回 0.6.5 時，若 0.6.6 已在開啟 Raw 的情況下開過
 **經驗證的 base-33、card lineage revision 1 資料庫**（physical 53、lineage 1），

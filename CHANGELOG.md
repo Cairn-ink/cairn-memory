@@ -21,16 +21,25 @@
 - After a Codex update, capture resumes once background qualification passes.
 - Re-enabling keeps identity/data/fences and skips off-period text. Claude Code
   skips the first turn of an already-running conversation after re-enabling;
-  subsequent turns resume. Hook latency: `<latency to be measured>`.
+  subsequent turns resume.
 - `raw list [--client claude|codex]` lists metadata without text. Use
   `raw delete <conversation-id>` to preview counts, client and time range;
   add `--yes` to delete. One explicit id only, no wildcards; unknown ids fail
   without changes. Both commands use the installed local MCP store and namespace
   and refuse cloud mode or an absent local installation.
+- `raw delete <conversation-id> --yes` finishes in one command and shows progress
+  counts. Only if it stops after about 10 minutes, run the same command again
+  to continue. While a large conversation is being deleted, saving in other
+  sessions pauses and catches up afterwards: about 11–15 seconds for a
+  10,000-message conversation in the concurrent-saving workload described in
+  the [local Raw guide](docs/raw-local-journal.md).
+- Several sessions saving at once no longer stop one of them from saving.
+- Default reads keep the Raw excerpts they already validated when a read reaches
+  its time limit, marked partial, instead of dropping them.
 - Delete removes the conversation's Raw messages and index rows, its Episodes,
   and Cards sourced from it under the existing lineage rule. Re-sent copies
-  (fork, resume or cursor reset) are not archived again. Extracted Memories are
-  separate and keep their own forget.
+  (fork, resume or cursor reset) are not archived again. Memories extracted from
+  the conversation are kept and keep their own forget.
 - Going back to 0.6.5: an attested base-33 store with card lineage revision 1
   (physical 53, lineage 1) that 0.6.6 opened with Raw on is refused with
   `unsupported_database`; reinstall 0.6.6 to recover access. Attested lineage-0
@@ -41,8 +50,9 @@
   does not capture automatically, so its engine does not use the new hide windows
   or fork fences for capture. Its setup leaves 0.6.6 hooks registered with their
   retained engine; turn capture off with 0.6.6 before downgrading to stop them.
-- Engine bundle source sync: `83cee2e3`. Release acceptance must compare the
-  complete bundled engine against that commit, preserving the sync-commit rule.
+- Engine bundle source sync: `b75d88e7`. Executable engine sources match this
+  cut; the archive includes the installer’s updated `docs/defaults.md` and is
+  not byte-identical to the cut archive.
 
 ## Unreleased — retain prepared Raw evidence
 
