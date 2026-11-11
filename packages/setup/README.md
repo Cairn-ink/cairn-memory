@@ -77,6 +77,14 @@ Several sessions saving at once no longer stop one of them from saving. Default
 reads keep the Raw excerpts they already validated when a read reaches its time
 limit, marked partial, instead of dropping them.
 
+**Search catches up after saving.** Each turn is saved to the local store as soon as it ends. Raw search covers a newly saved conversation only after the local index reaches it. That indexing runs while Claude Code or Codex has the Cairn MCP server open: a few minutes for about 1,000 saved messages, about an hour for 10,000. While you keep working, each new save restarts the indexing pass, so a conversation saved during a busy session may not be searchable until you pause. Until the index has caught up, search reports partial coverage instead of claiming it found everything. Memories, and conversations the index already covers, are not affected and stay searchable as before.
+
+Known limits in this release:
+- While new turns keep arriving, the local MCP server keeps indexing: about one small index write per second and roughly 3% of one CPU core.
+- Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
+- Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.
+- A later release indexes newly saved conversations first.
+
 Going back to 0.6.5: an **attested base-33 store with card lineage revision 1**
 (physical 53, lineage 1) that 0.6.6 opened with Raw on is refused with
 `unsupported_database`. Reinstall 0.6.6 to recover access. **Attested lineage-0
@@ -139,6 +147,14 @@ npx @cairn-ink/memory raw delete <conversation-id> --yes
 
 多個工作階段同時保存，不再導致其中一個停止保存。預設讀取到達時間上限時，
 會保留已驗證的 Raw 片段並標示為 partial，不會把這些片段丟掉。
+
+**保存後，搜尋需要時間追上。** 每一輪對話結束時就會存進本機資料庫，但 Raw 搜尋要等本機索引處理到這段對話，才找得到它。索引只在 Claude Code 或 Codex 開著 Cairn MCP 伺服器時進行：約 1,000 則已保存訊息需要幾分鐘，10,000 則約需一小時。持續使用時，每次新的保存都會讓索引從頭再跑一次，所以忙碌工作階段中保存的對話，可能要等你停下來後才搜得到。索引追上之前，搜尋會回報 partial（部分涵蓋），不會聲稱已經找遍全部內容。Memories 與索引已涵蓋的對話不受影響，照常可以搜尋。
+
+本版已知限制：
+- 只要新的對話持續進來，本機 MCP 伺服器就會持續建索引：大約每秒一次小量索引寫入，約佔一個 CPU 核心的 3%。
+- 約 50,000 則訊息以上的歷史可能永遠建不完索引，搜尋會一直回報 partial。
+- 由不自行維護索引的讀取端處理的搜尋（例如設定了 embedding 模型時的純關鍵字搜尋），即使索引已建完，也可能持續回報 partial；搜尋結果仍會照常回傳。
+- 之後的版本會優先為新保存的對話建索引。
 
 降回 0.6.5 時，若 0.6.6 已在開啟 Raw 的情況下開過
 **經驗證的 base-33、card lineage revision 1 資料庫**（physical 53、lineage 1），
