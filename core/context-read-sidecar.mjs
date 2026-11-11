@@ -48,6 +48,7 @@ function protectedFile(path, required = true, value = stat(path)) {
     unavailable('unsafe_file');
   return value;
 }
+export function assertContextReadVectorFile(path) { protectedFile(path); }
 function walHeader(path, observer) {
   protectedFile(path);
   let result;

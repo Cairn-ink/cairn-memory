@@ -1,10 +1,21 @@
 import { resolve } from 'node:path';
-import { relationDDL, previousRelationDDL, validateMemoryRelations } from './memory-relations-schema.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { resolveContentLayout } from './content-safety-layout.mjs';
 import { fail } from './validation.mjs';
 import { cardLineageDDL, authoredInvalidationDDL } from './card-lineage-schema.mjs';
 import { lineageBaseDeclarations, extendedReceiptDeclarations } from './card-lineage-base-schema.mjs';
+
+// The database entry registers relation storage support. Standalone model ports
+// need the safety boundary, but must not link relation DDL or writer cleanup.
+let memoryRelationHooks;
+export function registerMemoryRelationHooks(hooks) { memoryRelationHooks = hooks; }
+function relationHooks() {
+  if (!memoryRelationHooks) fail('unsupported_database');
+  return memoryRelationHooks;
+}
+export function purgeUnreadableMemoryRelationsInside(db, namespace, owner = false) {
+  return relationHooks().purgeUnreadableMemoryRelations(db, namespace, owner);
+}
 
 // One exact package, owned by the attestor and reused by the local installer.
 export const LOCAL_RAW_PRIVACY_DDL = Object.freeze([
@@ -259,6 +270,7 @@ function verifyCompleteCardSchema(db,layout,eventTime) {
   wanted.get('card_memory_revision_invalidation').sql=authoredInvalidationDDL(layout.base);
   for(const [name,row]of expectedSchema(layout.base,eventTime,true,1))wanted.set(name,{name,...row});
   if(layout.relationsRevision){
+    const { relationDDL, previousRelationDDL } = relationHooks();
     wanted.delete('memory_conflicts');wanted.delete('right_memory_conflicts');
     for(const sql of (layout.relationsRevision===1?previousRelationDDL:relationDDL).match(/CREATE (?:TABLE|INDEX|VIEW)[\s\S]*?;|CREATE TRIGGER[\s\S]*?^END;/gm)){
       const [,type,name]=sql.match(/^CREATE (TABLE|INDEX|VIEW|TRIGGER) (\w+)/);wanted.set(name,{name,type:type.toLowerCase(),sql});
@@ -367,7 +379,7 @@ export function attestContentSafety(db, physical) {
   try {
     if (physical === undefined) physical = db.prepare('PRAGMA user_version').get().user_version;
     const layout = resolveContentLayout(physical);
-    if(layout.relationsRevision)validateMemoryRelations(db);
+    if(layout.relationsRevision)relationHooks().validateMemoryRelations(db);
     // The schema rows and their cookie share one statement snapshot. Compare
     // with the final header without adding any opener statements.
     const scanned = metadataRows(db.prepare(safetyObjects));

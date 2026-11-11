@@ -1,5 +1,4 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { lstatSync } from 'node:fs';
 import { cosine, loadVector, validateVector, reserveSharedVectors } from './context-read-embedder.mjs';
 import { REPRESENTATION_VERSION } from './context-read-tokenize.mjs';
 
@@ -15,8 +14,8 @@ export async function unionMemoryRelationCandidates(ns,facts,lexical,resolve,ide
  const path=config.path+'.context-read-v1.sqlite';
  let side,reservation,timer;
  try{
-  const stat=lstatSync(path);
-  if(!stat.isFile()||stat.isSymbolicLink()||(stat.mode&0o077))return fallback();
+  const { assertContextReadVectorFile }=await import('./context-read-sidecar.mjs');
+  assertContextReadVectorFile(path);
   const {DatabaseSync}=await import('node:sqlite');
   side=new DatabaseSync(path,{readOnly:true,timeout:0});
   side.exec('PRAGMA query_only=ON; PRAGMA trusted_schema=OFF;');

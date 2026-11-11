@@ -40,7 +40,7 @@ const timeOrder=(a,b)=>(a.time??'').localeCompare(b.time??'')||a.captureOrder-b.
 export function deliverMemoryRelations(db,input,candidates,deadlineAt=Infinity,validateSeeds=false){
  const present=memoryRelationsPresent(db);
  if(!present&&!validateSeeds)return candidates;
- const memo=createContentReadMemo(db),safeCache=new Map(),neighborCache=new Map();
+ const memo=createContentReadMemo(db),safeCache=new Map(),neighborCache=new Map(),rawNeighborCache=new Map();
  const expired=()=>performance.now()>=deadlineAt;
  const safe=ref=>{
   const key=refKey(ref);if(safeCache.has(key))return safeCache.get(key);
@@ -48,9 +48,14 @@ export function deliverMemoryRelations(db,input,candidates,deadlineAt=Infinity,v
    &&memoryRelationEligible(db,ref.namespace,ref,memo);
   safeCache.set(key,value);return value;
  };
+ const rawNeighbors=ref=>{
+  const key=refKey(ref);if(rawNeighborCache.has(key))return rawNeighborCache.get(key);
+  const rows=expired()||!present?[]:relationNeighbors(db,ref.namespace,ref.memoryId);
+  rawNeighborCache.set(key,rows);return rows;
+ };
  const neighbors=ref=>{
   const key=refKey(ref);if(neighborCache.has(key))return neighborCache.get(key);
-  const rows=expired()||!present?[]:relationNeighbors(db,ref.namespace,ref.memoryId).filter(row=>safe(refOf(ref.namespace,{id:row.other_id,revision:row.other_revision})));
+  const rows=rawNeighbors(ref).filter(row=>safe(refOf(ref.namespace,{id:row.other_id,revision:row.other_revision})));
   neighborCache.set(key,rows);return rows;
  };
  const selected=[],visited=new Set(),cap=24;
@@ -59,6 +64,11 @@ export function deliverMemoryRelations(db,input,candidates,deadlineAt=Infinity,v
   const key=refKey(seed.ref);
   if(visited.has(key))continue;
   if(seed.ref.type!=='memory'){selected.push(seed);visited.add(key);continue;}
+  // Ordinary retrieval still owns an independent Memory's body when its Raw
+  // receipts are unavailable. Require receipt proof only for relation delivery;
+  // a graph in another namespace must not hide an unrelated ordinary candidate.
+  // Explicit ref expansion keeps its stricter seed validation below.
+  if(!validateSeeds&&!rawNeighbors(seed.ref).length){selected.push(seed);visited.add(key);continue;}
   if(!safe(seed.ref))continue;
   const first=neighbors(seed.ref);
   if(!first.length){selected.push(seed);visited.add(key);continue;}

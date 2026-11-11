@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { fail } from './validation.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
-import { purgeUnreadableMemoryRelations } from './memory-relations-erasure.mjs';
+import { purgeUnreadableMemoryRelationsInside as purgeUnreadableMemoryRelations } from './content-safety-schema.mjs';
 
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId || ''];

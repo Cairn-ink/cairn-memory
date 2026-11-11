@@ -1,4 +1,4 @@
-import { purgeUnreadableMemoryRelations } from './memory-relations-erasure.mjs';
+import { purgeUnreadableMemoryRelationsInside as purgeUnreadableMemoryRelations } from './content-safety-schema.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { bindContentSafetyConnection, cachedContentLayout, contentSafetyConnection, contentSafetyBudgetError, installedContentLayout, withContentSafetyLayoutInside } from './content-safety-schema.mjs';

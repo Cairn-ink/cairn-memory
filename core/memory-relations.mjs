@@ -114,14 +114,16 @@ async function relateEligibleMemories({model,items,operations,deadline,validateF
   // Optional relation interpretation must not fall back to predecessor retirement
   // after a candidate changes while the provider is running. Admission still
   // validates source, lease and stream high-water; insertion rechecks endpoints.
-  interpreted=keyed&&candidates.some(rows=>rows.length);
   const assertFresh=()=>{
    validateFresh?.();
    if(typeof operations.resolveRelationCandidates!=='function')return;
    const expected=new Map(candidates.flat().map(candidate=>[candidate.id,candidate]));
    if(!expected.size)return;
    const current=operations.resolveRelationCandidates([...expected.values()]);
-   if(current.length!==expected.size||current.some(candidate=>JSON.stringify(candidate)!==JSON.stringify(expected.get(candidate.id))))throw Error('stale_memory_relations');
+   if(current.length!==expected.size||current.some(candidate=>JSON.stringify(candidate)!==JSON.stringify(expected.get(candidate.id)))){
+    interpreted=keyed;
+    throw Error('stale_memory_relations');
+   }
   };
   assertFresh();
   // There is nothing to label without an existing eligible endpoint. Preserve

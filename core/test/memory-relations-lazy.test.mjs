@@ -176,6 +176,32 @@ test('lazy layout retains main ordered fallback with 32768 receipts',async t=>{
  assert.equal(result.ok,true,'ordered_receipt_bound '+JSON.stringify(result));assert.equal(result.value.reconciliation.reason,'unordered_sources');assert.ok(maximum<=5,'materialized '+maximum+' receipt rows');assert.equal(calls,0);assert.equal(physical(db),34);assert.equal(db.prepare("SELECT count(*) n FROM sqlite_schema WHERE name='memory_relations'").get().n,0);
 });
 
+for(const outcome of ['provider failure','malformed output','unrelated decision','stale candidate'])test(`ordered capture without a layout: ${outcome}`,async t=>{
+ let relations=0,reconciliations=0;
+ const f=memoryThreadFixture(t,{model:{
+  relateMemories({input}){
+   relations++;
+   if(outcome==='provider failure')throw Error('synthetic relation failure');
+   if(outcome==='stale candidate')f.db.prepare('UPDATE memories SET revision=revision+1 WHERE id=?').run(input.candidates[0][0].id);
+   return outcome==='malformed output'?{}:{facts:[{factIndex:0,edges:[]}]};
+  },
+  reconcile(){
+   reconciliations++;
+   return {transitions:[{replacementIndex:0,predecessorIndex:0,evidenceIndices:[0],
+    relation:'supersedes',valueChange:'changed',adoption:'explicit'}]};
+  },
+ }});
+ const first=await f.capture('Deadline Friday',{causal:{streamId:'synthetic',sequence:1}});
+ const second=await f.capture('Deadline Monday',{causal:{streamId:'synthetic',sequence:2}});
+ const decided=outcome==='unrelated decision'||outcome==='stale candidate';
+ assert.equal(relations,1);
+ assert.equal(reconciliations,decided?0:1);
+ assert.deepEqual(second.reconciliation,{status:decided?'complete_no_change':'applied',reason:null,retiredCount:decided?0:1});
+ assert.equal(ok(f.core.get({namespace:ns,memoryId:first.admission.memories[0].id})).memory.state,decided?'active':'historical');
+ assert.equal(f.db.prepare("SELECT count(*) n FROM sqlite_schema WHERE name='memory_relations'").get().n,0,
+  'failed or unrelated decisions never install a relation layout');
+});
+
 
 test('legacy recall without a relation layout retains main SQL, transaction counts and delivered bytes',async t=>{
  const {w,baseline}=archive(t),path=join(w.path,'store.sqlite');

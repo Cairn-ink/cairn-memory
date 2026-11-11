@@ -1,4 +1,7 @@
 import './content-write-safety.mjs';
+import { relationDDL, previousRelationDDL, validateMemoryRelations } from './memory-relations-schema.mjs';
+import { purgeUnreadableMemoryRelations } from './memory-relations-erasure.mjs';
+import { registerMemoryRelationHooks } from './content-safety-schema.mjs';
 import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheInside } from './content-suppression-storage.mjs';
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
@@ -370,6 +373,7 @@ export function readTransaction(db, work, acquisition) {
   return value;
 }
 registerContentReadSnapshot((db,work)=>readTransaction(db,()=>{checkInstalledContentSafety(db);return work();}));
+registerMemoryRelationHooks({ relationDDL, previousRelationDDL, validateMemoryRelations, purgeUnreadableMemoryRelations });
 
 // Reviewed read-only mode: keep transaction fences and statement counts, acquiring
 // SHARED on the first SELECT. Writers must retain BEGIN IMMEDIATE.

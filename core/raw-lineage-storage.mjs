@@ -1,4 +1,4 @@
-import { purgeUnreadableMemoryRelations } from './memory-relations-erasure.mjs';
+import { purgeUnreadableMemoryRelationsInside as purgeUnreadableMemoryRelations } from './content-safety-schema.mjs';
 import { bindContentSafetyConnection, cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
 import { hasContentSuppressionRequestInside, contentSuppressionTargetMatches, writeContentSuppressionInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHash, createHmac } from 'node:crypto';
