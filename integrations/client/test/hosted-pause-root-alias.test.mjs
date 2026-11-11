@@ -52,8 +52,9 @@ for (const layout of ['root', 'ancestor']) test(`retargeting the configured ${la
   await observeHostedPause({ root: a, endpoint }, 'synthetic-only');
   await observeHostedPause({ root: b, endpoint }, 'synthetic-only');
   const ready = join(base, 'sender-ready');
+  // Inherit the suite's isolated environment, as the other pause fixtures do.
   const child = fork(new URL('./fixtures/hosted-pause-alias-sender.mjs', import.meta.url), [b, endpoint, ready], {
-    env: { PATH: process.env.PATH, HOME: base }, stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+    stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
   });
   let stderr = '', message;
   child.stderr.on('data', value => { stderr += value; });
