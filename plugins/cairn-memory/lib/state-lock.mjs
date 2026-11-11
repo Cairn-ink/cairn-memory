@@ -21,8 +21,10 @@ export async function checkStateLock(path, { liveness, hostParent = false, signa
   signal?.throwIfAborted();
   const live = liveness ?? await localLiveness();
   ownerAlive({ pid: process.pid, namespace: live.namespace, boot: live.boot }, live);
-  if (hostParent) await hostDirectory(dirname(path), { create: false });
-  else await checkedPath(dirname(path), { directory: true, missing: true });
+  if (hostParent) {
+    const parent = await hostDirectory(dirname(path), { create: false });
+    if (parent !== undefined && parent !== dirname(path)) throw new Error('state_path_changed');
+  } else await checkedPath(dirname(path), { directory: true, missing: true });
   await checkedPath(path, { missing: true });
   signal?.throwIfAborted();
   return live;
@@ -32,7 +34,11 @@ export async function stateLock(path, work, { liveness, timeoutMs = 250, deadlin
   signal?.throwIfAborted();
   const live = liveness ?? await localLiveness();
   ownerAlive({ pid: process.pid, namespace: live.namespace, boot: live.boot }, live);
-  await (hostParent ? hostDirectory(dirname(path)) : privateDirectory(dirname(path)));
+  // A host-root lock is taken only at the canonical root, so every alias of one
+  // root shares one gate and a retargeted alias cannot reach another root's.
+  if (hostParent) {
+    if (await hostDirectory(dirname(path)) !== dirname(path)) throw new Error('state_path_changed');
+  } else await privateDirectory(dirname(path));
   await checkedPath(path, { missing: true });
   let value;
   const acquired = await withFileLock(path, async () => { value = await work(live); }, {

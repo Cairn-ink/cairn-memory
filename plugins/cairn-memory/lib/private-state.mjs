@@ -75,6 +75,36 @@ export async function hostDirectory(path, { create = true } = {}) {
   return canonical;
 }
 
+// One canonical path per configured host root and process. The gate, its
+// authority files and local state use this pin; the configured spelling is only
+// re-checked, so a retargeted symlink fails closed instead of switching roots.
+const rootPins = new Map();
+async function canonicalPath(path) {
+  // A missing root is created later below its canonical parent.
+  const tail = [];
+  for (let existing = path; ; existing = dirname(existing)) {
+    try { return join(await realpath(existing), ...tail); }
+    catch (error) {
+      if (error.code !== "ENOENT" || dirname(existing) === existing) throw error;
+      tail.unshift(basename(existing));
+    }
+  }
+}
+export async function canonicalHostRoot(path) {
+  if (!isAbsolute(path) || resolve(path) !== path) throw new Error("invalid_state_path");
+  if (!rootPins.has(path)) {
+    const canonical = await canonicalPath(path);
+    if (!rootPins.has(path)) rootPins.set(path, canonical);
+  }
+  return rootPins.get(path);
+}
+// Synchronous, so a holder can re-check between its last await and its start
+// or commit. Both the pin and the configured path must still name the pin.
+export function sameCanonicalRoot(root, configured = root) {
+  try { return realpathSync(root) === root && realpathSync(configured) === root; }
+  catch { return false; }
+}
+
 export async function privateDirectory(path) {
   if (!(await checkedPath(path, { directory: true, missing: true }))) {
     await mkdir(path, { recursive: true, mode: 0o700 });
@@ -186,6 +216,9 @@ export async function privateWrite(
 ) {
   hostParent ||= hostStateFiles.getStore() === path;
   const parent = hostParent ? await hostDirectory(dirname(path)) : dirname(path);
+  // Root authority is written only through the canonical root, never an alias
+  // that a later retarget could point at another root's files.
+  if (hostParent && parent !== dirname(path)) throw new Error("state_path_changed");
   if (!hostParent) await privateDirectory(parent);
   await checkedPath(path, { missing: true });
   const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
