@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import { openMemoryCore } from '../index.mjs';
 import { contentSafetyFacade } from '../content-safety-boundary.mjs';
 import { transaction } from '../database.mjs';
+import { createEngineCardStorage } from '../engine-card-storage.mjs';
+import { createEngineCardMaintenance } from '../engine-card-maintenance.mjs';
 import { contentSafetyInventory } from '../content-safety-migration.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 import { scriptedConsolidator } from '../testing/engine-card-fixture.mjs';
 import { safetyFixture, ns, ok, receipt } from '../testing/content-safety-s2h-fixture.mjs';
 
-async function setup(t) {
+async function ready(t) {
   const fixture = safetyFixture(t, 23);
   await fixture.migrate();
   const core = openMemoryCore({ path: fixture.path, model: scriptedConsolidator() });
@@ -22,6 +24,11 @@ async function setup(t) {
       .run(new Date(Date.UTC(2026, 0, 1 + i * 10)).toISOString(), memory.id);
     return memory;
   });
+  return { core, db, memories };
+}
+
+async function setup(t) {
+  const { core, db, memories } = await ready(t);
   const result = ok(await core.maintainCards({ namespace: ns, budget: { maxMs: 5000 } }));
   assert.equal(result.built.length, 1, JSON.stringify(result));
   return { core, db, memories, acknowledgement: result.built[0] };
@@ -106,4 +113,59 @@ test('native acknowledgement guard resolves generated Card ids and validates eve
   transaction(db, () => writeContentSuppressionInside(db, { namespace: ns, kind: 'card', key: acknowledgement.id,
     reason: 'privacy_erase', actionId: 'synthetic-card-denial' }));
   for (const ledger of [false, true]) refused(db, acknowledgement, 'suppressed generated Card', ledger);
+});
+
+
+for (const denial of ['forget', 'suppress-source', 'suppress-card'])
+  test(`maintenance delivery omits sources denied after Card commit: ${denial}`, async t => {
+    const { core, db, memories } = await ready(t);
+    const source = memories[0];
+    const canonical = createEngineCardStorage({ db, ready() {},
+      identity: db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
+    let committed;
+    const storage = { ...canonical, finish(...args) {
+      canonical.finish(...args);
+      const row = db.prepare("SELECT id,revision FROM private_cards WHERE state='confirmed'").get();
+      assert.ok(row, 'Card commit completed before the delivery race');
+      assert.equal(db.isTransaction, false);
+      committed = row;
+      if (denial === 'forget') ok(core.forget({ namespace: ns, memoryId: source.id, expectedRevision: source.revision }));
+      else transaction(db, () => writeContentSuppressionInside(db, { namespace: ns,
+        kind: denial === 'suppress-card' ? 'card' : 'memory',
+        key: denial === 'suppress-card' ? row.id : source.id,
+        reason: 'privacy_erase', actionId: 'synthetic-delivery-denial' }));
+    } };
+    const result = await createEngineCardMaintenance({ storage, model: scriptedConsolidator() })
+      .maintain({ namespace: ns, budget: { maxMs: 5000 } });
+    assert.ok(committed);
+    const listed = result.built.flatMap(card => card.sourceRevisions ?? []);
+    assert.equal(listed.some(ref => ref.memoryId === source.id), false, 'denied source id and its bound revision must not be delivered');
+    assert.deepEqual(result.built, [], 'an ineligible Card has no delivered source list');
+    assert.equal(result.state, 'refused');
+    assert.equal(result.reason, 'source_unavailable');
+    assert.equal(db.prepare("SELECT count(*) n FROM card_operations WHERE method='consolidate'").get().n, 1,
+      'delivery filtering does not rewrite committed provenance');
+  });
+
+test('maintenance delivery checks every listed Memory revision independently of Card eligibility', async t => {
+  const { core, db, acknowledgement } = await setup(t);
+  const content = 'Synthetic independent delivery revision';
+  const held = ok(core.admit({ namespace: ns, memory: { content, kind: 'fact' }, receipts: [receipt(content)] })).memory;
+  transaction(db, () => writeContentSuppressionInside(db, { namespace: ns, kind: 'memory', key: held.id,
+    matchMode: 'version', sourceVersion: JSON.stringify(['memory-revision-v1', held.revision]),
+    reason: 'privacy_erase', actionId: 'synthetic-delivery-version-denial' }));
+  db.prepare('UPDATE memories SET revision=revision+1 WHERE id=?').run(held.id);
+  const storage = createEngineCardStorage({ db, ready() {},
+    identity: db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
+  for (const index of acknowledgement.sourceRevisions.keys()) {
+    const current = structuredClone(acknowledgement);
+    current.sourceRevisions[index] = { memoryId: held.id, revision: held.revision + 1 };
+    assert.deepEqual(storage.deliver(ns, [current]), [current], 'current bound revision remains eligible');
+    const denied = structuredClone(current);
+    denied.sourceRevisions[index].revision = held.revision;
+    const delivered = storage.deliver(ns, [denied]);
+    assert.equal(delivered.length, 1, 'the real Card remains eligible');
+    assert.deepEqual(delivered[0].sourceRevisions, denied.sourceRevisions.filter((_, position) => position !== index),
+      'only the denied bound source is omitted at every position');
+  }
 });

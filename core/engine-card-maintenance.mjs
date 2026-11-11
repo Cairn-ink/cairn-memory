@@ -186,7 +186,13 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
           break;
         }
       }, { fresh: true });
+      if (result.built.length) {
+        const committed = result.built.length;
+        result.built = storage.deliver(ns, result.built);
+        if (result.built.length !== committed) fail('source_unavailable');
+      }
     } catch (error) {
+      result.built = [];
       let code;
       try { const proposed = error?.code; if (failureReasons.has(proposed)) code = proposed; } catch { /* Port exception properties are untrusted. */ }
       result.state = code === 'model_timeout' ? 'deadline' : 'refused';

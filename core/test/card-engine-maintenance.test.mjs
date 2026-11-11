@@ -481,3 +481,54 @@ test('carrying a sealed Card preserves its body lineage and original successful 
   assert.ok(ok(f.call('getCard', { cardId: first.id })).card);
   assert.equal(model.calls.length, 1);
 });
+
+test('a source forgotten just before the relabel carry transaction cannot change its routing', async t => {
+  const f = engineCardFixture(t), memories = f.seed(8);
+  const canonical = createEngineCardStorage({ db: f.db, upgrade: true, ready() {},
+    identity: f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
+  let topic = 'synthetic-topic-a', forgetBeforeCarry = false;
+  const storage = { ...canonical, snapshot(...args) {
+    const page = canonical.snapshot(...args);
+    return { ...page, memories: page.memories.map(memory => ({ ...memory, topics: [topic] })) };
+  }, carry(...args) {
+    if (forgetBeforeCarry) {
+      forgetBeforeCarry = false;
+      ok(f.core.forget({ namespace: ns, memoryId: memories[0].id, expectedRevision: memories[0].revision }));
+    }
+    return canonical.carry(...args);
+  } };
+  const pass = () => createEngineCardMaintenance({ storage, model: f.model })
+    .maintain({ namespace: ns, budget: { maxMs: 5000 } });
+  const first = (await pass()).built[0]; assert.ok(first);
+  topic = 'synthetic-topic-b'; forgetBeforeCarry = true;
+  const result = await pass();
+  const metadata = JSON.parse(f.db.prepare("SELECT result FROM card_operations WHERE action_id=? AND method='consolidate'").get(first.id).result);
+  assert.equal(metadata.clusterKey, first.clusterKey, 'forgotten source must prevent the routing write inside carry');
+  assert.equal(result.state, 'refused'); assert.equal(result.reason, 'source_unavailable');
+  assert.equal(f.model.calls.length, 1); assert.deepEqual(result.built, []);
+});
+
+test('a relabel carry checks for a destination Card omitted by the bounded routing snapshot', async t => {
+  const f = engineCardFixture(t); f.seed(8);
+  const canonical = createEngineCardStorage({ db: f.db, upgrade: true, ready() {},
+    identity: f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
+  let topic = 'synthetic-topic-a', clock = Date.UTC(2026, 5, 1), omitted;
+  const storage = { ...canonical, snapshot(...args) {
+    const page = canonical.snapshot(...args);
+    return { ...page, memories: page.memories.map(memory => ({ ...memory, topics: [topic] })) };
+  }, cards(...args) { return canonical.cards(...args).filter(card => card.id !== omitted); } };
+  const pass = () => createEngineCardMaintenance({ storage, model: f.model, now: () => clock })
+    .maintain({ namespace: ns, budget: { maxMs: 5000 } });
+  const first = (await pass()).built[0]; assert.ok(first);
+  topic = 'synthetic-topic-b';
+  const cluster = { key: 'moc:' + topic, memories: storage.snapshot(ns, 1024, () => {}).memories };
+  const body = f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(first.id).body;
+  const destination = canonical.commit(ns, cluster, { body }, new Date(clock).toISOString(), () => {});
+  assert.ok(destination); omitted = destination.id; clock += 3600000;
+  const result = await pass();
+  const routed = canonical.cards(ns).filter(card => card.status === 'current' && card.clusterKey === cluster.key);
+  assert.equal(routed.length, 1, 'relabel must not duplicate an existing readable destination Card');
+  assert.equal(routed[0].id, destination.id);
+  assert.equal(result.state, 'ready'); assert.equal(result.modelCalls, 0);
+  assert.deepEqual(result.built, []); assert.equal(f.model.calls.length, 1);
+});

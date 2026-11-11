@@ -1,6 +1,6 @@
 import { randomUUID, createHmac, createHash } from 'node:crypto';
 import { readTransaction, transaction } from './database.mjs';
-import { inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { withContentSuppressionRequest, inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, sourceReadSafety, receiptReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { createPrivateCardStorage } from './private-card-storage.mjs';
 import { createCardRawSources } from './card-raw-sources.mjs';
@@ -154,6 +154,22 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       return { ...metadata, row, status: current ? 'current' : 'stale' };
     }); });
   }
+  // Delivery owns a fresh suppression scope and one canonical read snapshot;
+  // the commit snapshot cannot authorize references returned after a host hook.
+  function deliver(ns, built) {
+    return withContentSuppressionRequest(() => read(ns, () => {
+      const memo = createContentReadMemo(db);
+      return built.flatMap(card => {
+        const sourceRevisions = card.sourceRevisions.filter(ref => contentReadSafety(db, {
+          identity, namespace: ns, intent: 'history', memo,
+          ref: memoryReference(ns, { id: ref.memoryId, revision: ref.revision }) }).allowed);
+        const row = db.prepare(`SELECT * FROM private_cards WHERE ${where} AND id=?`).get(...boundary(ns), card.id);
+        if (!row || !contentReadSafety(db, { identity, namespace: ns, intent: 'history', method: 'getCard', memo,
+          ref: { ...cardReference(ns, row), revision: card.revision } }).allowed) return [];
+        return [{ ...card, sourceRevisions }];
+      });
+    }), { fresh: true });
+  }
   function advance(ns) {
     db.prepare(`INSERT INTO card_epochs VALUES(?,?,?,2) ON CONFLICT(owner_id,scope,project_id)
       DO UPDATE SET generation=generation+1`).run(...boundary(ns));
@@ -287,6 +303,6 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       return metadata;
     }, [ns]));
   }
-  return { available, snapshot, rawSpans, cards, carry, retire, commit, claim, finish, relations, pressureItems,
+  return { available, snapshot, rawSpans, cards, carry, retire, commit, claim, finish, relations, pressureItems, deliver,
     validate(ns, memories, check) { return read(ns, () => { if (!sourcesCurrent(ns, memories.map(m => m.source), check)) fail('source_unavailable'); }); } };
 }
