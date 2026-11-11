@@ -127,6 +127,14 @@ export async function runProgress({ options,identity,context,opened,cursor,opera
         try { operation.check(); } catch (stopped) { reason = stopped.reason; }
         return finish(uncertain || ['cancelled','work_limit'].includes(reason) ? 'waiting' : 'blocked',reason,true);
       }
+      if (response.status === 409 && response.body.error === 'storage_busy') {
+        // An explicit temporary refusal is not an uncertain dispatch or a
+        // successful receipt. Keep the exact projection/ordinal ready for the
+        // next hook; bounded privacy maintenance must not exhaust retry leases.
+        const next = clone(cursor);
+        next.pending = { ...next.pending,state:'prepared',attempts:0,lastAttemptAt:null,nextEligibleAt:null };
+        await persist(next); return finish('waiting','processing',true);
+      }
       const closedAt = timestamp(cursor.pending.lastAttemptAt), observed = clone(cursor);
       observed.pending.nextEligibleAt = closedAt+125000;
       await persist(observed);

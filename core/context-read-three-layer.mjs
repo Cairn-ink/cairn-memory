@@ -23,39 +23,40 @@ export async function readRawChannel(rawSearch, input, token, deadlineAt) {
   const at = performance.now(), cutoff = Math.min(deadlineAt - 50, at + Math.max(0, (deadlineAt - at) * .4));
   if (cutoff <= at) return unavailable('partial');
   let timer, stopped = false;
+  const items = [];
+  // Snapshot at every stop: an in-flight prepare may settle after the timer.
+  const snapshot = coverage => items.length || coverage === 'included'
+    ? { items: items.slice(), coverage, rawSearch } : unavailable(coverage);
   const expired = () => stopped || performance.now() >= cutoff;
   const work = async () => {
     try {
       const result = await port(() => rawSearch.search({ query: input.query, intent: 'current' }, token));
-      if (expired()) return unavailable('partial');
+      if (expired()) return snapshot('partial');
       if (result.coverage?.status === 'unsupported_store') return unavailable('unsupported_store');
-      // Partial retrieval is deliberately a Memory-only fallback, not a claim
-      // that the available prefix represents the complete Raw channel.
-      if (result.coverage?.status !== 'complete') return unavailable('partial');
-      const items = [];
-      let dropped = false;
+      let dropped = result.coverage?.status !== 'complete';
       for (const candidate of result.candidates.slice(0, 24)) {
-        if (expired()) return unavailable('partial');
+        if (expired()) return snapshot('partial');
         if (!input.readSet.some(ns => same(ns, candidate.namespace))) { dropped = true; continue; }
         try {
           const handle = await port(() => rawSearch.prepare(candidate, { intent: 'current' }, token));
-          if (expired()) return unavailable('partial');
+          if (expired()) return snapshot('partial');
           // prepare validates its delivery. Read only identity metadata here;
           // one fresh batch validation precedes all text projection below.
           const value = port(() => handle.value);
           if (!value || !input.readSet.some(ns => same(ns, value.namespace)) ||
               !same(value.namespace, candidate.namespace) || value.conversationId !== candidate.conversationId ||
               value.messageId !== candidate.messageId) { dropped = true; continue; }
+          if (expired()) return snapshot('partial');
           items.push({ handle, value, key: turnKey(value), rank: items.length + 1 });
         } catch { dropped = true; }
       }
-      return dropped ? unavailable('partial') : { items, coverage: 'included', rawSearch };
+      return snapshot(dropped ? 'partial' : 'included');
     } catch (error) { return unavailable(error?.reason === 'deadline' ||
       ['search_deadline', 'read_timeout', 'timeout'].includes(error?.code) || error?.name === 'AbortError' ? 'partial' : 'unavailable'); }
   };
   try {
     return await Promise.race([work(), new Promise(resolve => {
-      timer = setTimeout(() => { stopped = true; resolve(unavailable('partial')); }, Math.max(0, cutoff - performance.now()));
+      timer = setTimeout(() => { stopped = true; resolve(snapshot('partial')); }, Math.max(0, cutoff - performance.now()));
     })]);
   } finally { stopped = true; clearTimeout(timer); }
 }
