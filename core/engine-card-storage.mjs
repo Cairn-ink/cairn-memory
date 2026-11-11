@@ -158,6 +158,37 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
     db.prepare(`INSERT INTO card_epochs VALUES(?,?,?,2) ON CONFLICT(owner_id,scope,project_id)
       DO UPDATE SET generation=generation+1`).run(...boundary(ns));
   }
+  function carry(ns, card, cluster, check) {
+    ready(); check();
+    return transaction(db, () => inContentSuppressionRequestInside(db, () => {
+      check();
+      const row = db.prepare(`SELECT * FROM private_cards WHERE ${where} AND id=?`).get(...boundary(ns), card.id);
+      if (!row || !engineCardRevisionsInside(db, ns, row)) return false;
+      const metadata = engineCardMetadataInside(db, ns, row);
+      if (metadata.sourceRevisions.length !== cluster.memories.length || !cluster.memories.every(memory =>
+        metadata.sourceRevisions.some(ref => ref.memoryId === memory.id && ref.revision === memory.revision)) ||
+        !sourcesCurrent(ns, cluster.memories.map(memory => memory.source), check) ||
+        !contentReadSafety(db, { identity, namespace: ns, intent: 'history', method: 'getCard',
+          ref: cardReference(ns, row) }).allowed) return false;
+      // A concurrent carry to this destination is idempotent. A different
+      // destination means this worker's routing snapshot is no longer current.
+      if (metadata.clusterKey !== card.clusterKey && metadata.clusterKey !== cluster.key) fail('scope_changed');
+      const existing = db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id
+        AND o.owner_id=c.owner_id AND o.scope=c.scope AND o.project_id=c.project_id AND o.action_id=c.id
+        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state='confirmed' AND c.revision=1 AND c.id!=?
+        AND o.method='consolidate' AND json_extract(o.result,'$.clusterKey')=?
+        ORDER BY c.created_at DESC,c.id DESC LIMIT 1`).get(...boundary(ns), card.id, cluster.key);
+      if (existing && contentReadSafety(db, { identity, namespace: ns, intent: 'history', method: 'getCard',
+        ref: cardReference(ns, existing) }).allowed) return false;
+      // Keep the body, bindings, seal, revisions and original build time intact;
+      // only the canonical routing metadata and its binding change atomically.
+      db.prepare(`UPDATE card_operations SET payload_binding=?,result=? WHERE ${where}
+        AND action_id=? AND method='consolidate' AND target_id=?`)
+        .run(bind('engine-card-cluster-v1', cluster.key), JSON.stringify({ ...metadata, clusterKey: cluster.key }),
+          ...boundary(ns), card.id, card.id);
+      advance(ns); check(); return true;
+    }, [ns]));
+  }
   function claim(ns, cluster, timestamp, check) {
     ensureLayout();
     ready(); check();
@@ -256,6 +287,6 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       return metadata;
     }, [ns]));
   }
-  return { available, snapshot, rawSpans, cards, retire, commit, claim, finish, relations, pressureItems,
+  return { available, snapshot, rawSpans, cards, carry, retire, commit, claim, finish, relations, pressureItems,
     validate(ns, memories, check) { return read(ns, () => { if (!sourcesCurrent(ns, memories.map(m => m.source), check)) fail('source_unavailable'); }); } };
 }

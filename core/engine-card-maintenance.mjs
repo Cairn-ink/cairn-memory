@@ -113,6 +113,14 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
           check();
           const cluster = eligible.get(card.clusterKey);
           if (!cluster) {
+            // A topic key can change without changing any source revision.
+            // Carry only a readable Card with the complete, exact source set.
+            const destination = card.status === 'current' && [...eligible.values()].find(candidate =>
+              candidate.memories.length === card.sourceRevisions.length && candidate.memories.every(memory =>
+                card.sourceRevisions.some(ref => ref.memoryId === memory.id && ref.revision === memory.revision)));
+            if (destination && storage.carry(ns, card, destination, check)) {
+              eligible.delete(destination.key); continue;
+            }
             if (now() - Date.parse(card.row.updated_at) >= ENGINE_CARD_LIMITS.debounceMs) {
               storage.retire(ns, card.id, timestamp, true); result.deleted++;
             }

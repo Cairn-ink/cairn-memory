@@ -12,6 +12,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { installPrivateCards, installCardMemorySources } from '../private-card-schema.mjs';
 import { installPrivateEvidence } from '../private-evidence-schema.mjs';
 import { installPrivateOrganization } from '../private-organization-schema.mjs';
+import { lineageFixture, receipt } from '../testing/card-lineage-fixture.mjs';
+import { withContentWriteOperation } from '../content-write-context.mjs';
 
 test('long recurring topic builds in maintenance, read packs Card, fact read retains Memory, forget falls back', async t => {
   const f = engineCardFixture(t), memories = f.seed();
@@ -368,4 +370,114 @@ test('changing a cluster label cannot reset an unchanged source fingerprint', as
   await pass(); assert.equal(f.model.calls.length, 1);
   label = 'synthetic-topic-b'; clock += 3600000;
   await pass(); assert.equal(f.model.calls.length, 1);
+});
+
+for (const change of ['relabel', 'move']) test(`a built Card survives a topic ${change} without another model request`, async t => {
+  const f = engineCardFixture(t), seeded = f.seed(8);
+  const filed = change === 'move' ? f.file(seeded, 'Orion') : null;
+  const canonical = createEngineCardStorage({ db: f.db, upgrade: true, ready() {},
+    identity: f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
+  let topic = filed?.mocId ?? 'synthetic-topic-a', clock = Date.UTC(2026, 5, 1);
+  const storage = { ...canonical, snapshot(...args) {
+    const page = canonical.snapshot(...args);
+    return filed ? page : { ...page, memories: page.memories.map(memory => ({ ...memory, topics: [topic] })) };
+  } };
+  // Recreate the worker each time to exercise persisted identity across restarts.
+  const pass = () => createEngineCardMaintenance({ storage, model: f.model, now: () => clock })
+    .maintain({ namespace: ns, budget: { maxMs: 5000 } });
+  const first = (await pass()).built[0]; assert.ok(first);
+  const before = f.db.prepare('SELECT * FROM private_cards WHERE id=?').get(first.id);
+  const bindings = f.db.prepare('SELECT * FROM card_memory_bindings WHERE card_id=? ORDER BY memory_id').all(first.id);
+  const revisions = f.db.prepare('SELECT id,revision FROM memories ORDER BY id').all();
+  topic = 'synthetic-topic-b';
+  if (filed) {
+    f.db.prepare(`INSERT INTO mocs SELECT ?,owner_id,scope,project_id,level,?,?,1,created_at,updated_at
+      FROM mocs WHERE id=?`).run(topic, 'Synthetic destination', 'synthetic destination', filed.mocId);
+    f.db.prepare('UPDATE moc_memory_refs SET moc_id=?,moc_revision=1 WHERE moc_id=?').run(topic, filed.mocId);
+  }
+  assert.deepEqual(f.db.prepare('SELECT id,revision FROM memories ORDER BY id').all(), revisions);
+  clock += 3600000;
+  const moved = await pass(); assert.equal(moved.state, 'ready', JSON.stringify(moved));
+  const cards = canonical.cards(ns);
+  assert.equal(cards.length, 1, 'the Card remains available after its old cluster key disappears');
+  assert.equal(cards[0].status, 'current'); assert.equal(cards[0].clusterKey, 'moc:' + topic);
+  assert.equal(cards[0].id, first.id); assert.deepEqual(cards[0].sourceRevisions, first.sourceRevisions);
+  assert.deepEqual(f.db.prepare('SELECT * FROM private_cards WHERE id=?').get(first.id), before);
+  assert.deepEqual(f.db.prepare('SELECT * FROM card_memory_bindings WHERE card_id=? ORDER BY memory_id').all(first.id), bindings);
+  assert.equal(moved.deleted, 0); assert.equal(moved.modelCalls, 0); assert.equal(moved.built.length, 0);
+  await pass();
+  assert.equal(f.model.calls.length, 1); assert.equal(canonical.cards(ns).length, 1);
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM private_cards').get().n, 1);
+  // This worker upgraded the layout outside the public maintenance facade.
+  // Open a reader against that installed layout before checking product reads.
+  const reader = openMemoryCore({ path: f.path, contextRead: { version: 'context-read-v1', authority: f.trusted.authority,
+    counter: { id: 'synthetic', countTokens: f.model.countTokens } } });
+  f.workspace.defer(() => reader.close());
+  ok(await f.trusted.call(reader, 'refreshContextIndex', { readSet: [ns], types: ['memory', 'card'], intent: 'current',
+    budget: { maxItems: 1024, maxMs: 5000 } }));
+  const read = ok(await f.trusted.call(reader, 'contextRead', { readSet: [ns], types: ['memory', 'card'], intent: 'current',
+    query: 'Orion current state', semantic: false, deadlineMs: 5000, budget: { maxItems: 12, maxTokens: 3000 } }));
+  assert.ok(read.metered.items.some(item => item.ref.type === 'card' && item.ref.id === first.id));
+});
+
+test('a forgotten source prevents carrying a built Card across a topic relabel', async t => {
+  const f = engineCardFixture(t), memories = f.seed(9);
+  const canonical = createEngineCardStorage({ db: f.db, upgrade: true, ready() {},
+    identity: f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
+  let topic = 'synthetic-topic-a', clock = Date.UTC(2026, 5, 1);
+  const storage = { ...canonical, snapshot(...args) {
+    const page = canonical.snapshot(...args);
+    return { ...page, memories: page.memories.map(memory => ({ ...memory, topics: [topic] })) };
+  } };
+  const pass = () => createEngineCardMaintenance({ storage, model: f.model, now: () => clock })
+    .maintain({ namespace: ns, budget: { maxMs: 5000 } });
+  const first = (await pass()).built[0]; assert.ok(first);
+  ok(f.core.forget({ namespace: ns, memoryId: memories[0].id, expectedRevision: memories[0].revision }));
+  topic = 'synthetic-topic-b';
+  clock = Date.parse(f.db.prepare('SELECT updated_at FROM private_cards WHERE id=?').get(first.id).updated_at) + 3600000;
+  const rebuilt = await pass(); assert.equal(rebuilt.state, 'ready', JSON.stringify(rebuilt));
+  const cards = canonical.cards(ns);
+  assert.equal(cards.length, 1); assert.equal(cards[0].status, 'current');
+  assert.equal(cards[0].clusterKey, 'moc:' + topic); assert.notEqual(cards[0].id, first.id);
+  assert.equal(cards[0].sourceRevisions.length, 8);
+  assert.equal(cards[0].sourceRevisions.some(ref => ref.memoryId === memories[0].id), false);
+  assert.equal(f.db.prepare('SELECT state FROM private_cards WHERE id=?').get(first.id).state, 'deleted');
+  assert.equal(f.model.calls.length, 2);
+  await pass(); assert.equal(f.model.calls.length, 2);
+});
+
+test('carrying a sealed Card preserves its body lineage and original successful outcome', async t => {
+  const model = scriptedConsolidator(), f = await lineageFixture(t, { options: { model } });
+  for (let i = 0; i < 8; i++) {
+    const memory = ok(f.core.admit({ namespace: ns, memory: { content: 'Orion sealed milestone ' + i, kind: 'fact' },
+      receipts: [{ ...receipt('synthetic-milestone-' + i), sessionId: 'synthetic-conversation-' + i % 3 }] })).memory;
+    f.db.prepare('UPDATE memories SET created_at=? WHERE id=?')
+      .run(new Date(Date.UTC(2026, 0, 1 + i * 3)).toISOString(), memory.id);
+  }
+  const canonical = createEngineCardStorage({ db: f.db, identity: f.identity, ready() {} });
+  let topic = 'synthetic-topic-a', clock = Date.UTC(2026, 5, 1);
+  const storage = { ...canonical, snapshot(...args) {
+    const page = canonical.snapshot(...args);
+    return { ...page, memories: page.memories.map(memory => ({ ...memory, topics: [topic] })) };
+  } };
+  const pass = () => withContentWriteOperation('maintainCards', [ns], () =>
+    createEngineCardMaintenance({ storage, model, now: () => clock })
+      .maintain({ namespace: ns, budget: { maxMs: 5000 } }));
+  const first = (await pass()).built[0]; assert.ok(first);
+  const body = f.row(first.id);
+  const headers = f.db.prepare('SELECT * FROM card_body_provenance WHERE card_id=? ORDER BY provenance_revision').all(first.id);
+  const sources = f.db.prepare('SELECT * FROM card_body_sources WHERE card_id=? ORDER BY source_kind,source_key,source_version').all(first.id);
+  const outcomes = f.db.prepare("SELECT * FROM card_operations WHERE method='consolidateOutcome' ORDER BY action_id").all();
+  assert.equal(headers[0].completeness, 'complete'); assert.ok(sources.length);
+  topic = 'synthetic-topic-b'; clock += 3600000;
+  const carried = await pass(); assert.equal(carried.state, 'ready', JSON.stringify(carried));
+  const cards = canonical.cards(ns); assert.equal(cards.length, 1);
+  assert.equal(cards[0].id, first.id); assert.equal(cards[0].status, 'current');
+  assert.equal(cards[0].clusterKey, 'moc:' + topic); assert.deepEqual(cards[0].sourceRevisions, first.sourceRevisions);
+  assert.deepEqual(f.row(first.id), body);
+  assert.deepEqual(f.db.prepare('SELECT * FROM card_body_provenance WHERE card_id=? ORDER BY provenance_revision').all(first.id), headers);
+  assert.deepEqual(f.db.prepare('SELECT * FROM card_body_sources WHERE card_id=? ORDER BY source_kind,source_key,source_version').all(first.id), sources);
+  assert.deepEqual(f.db.prepare("SELECT * FROM card_operations WHERE method='consolidateOutcome' ORDER BY action_id").all(), outcomes);
+  assert.ok(ok(f.call('getCard', { cardId: first.id })).card);
+  assert.equal(model.calls.length, 1);
 });
