@@ -24,6 +24,32 @@
   individual candidate failures preserve other valid candidates. Late prepares
   are ignored, and partial sets retain the existing batch authorization checks
   before projection and final delivery.
+- Known limit: on the product reader, Raw invalidated between initial and final
+  validation yields the existing refusal (`reader_failed`) rather than a Memory-only
+  response; the local/facade reader rebuilds Memory-only.
+
+## Unreleased — local Raw-only capture and conversation hiding
+
+- Several sessions saving at once no longer stop one of them from saving. Core `captureRaw` now retries conflicts caused only by a namespace epoch change, including changes from Memory writes. Retries share the original capture deadline. If contention persists after four total attempts or leaves too little time for another attempt, capture returns retryable `storage_busy` instead of permanently stopping saving. Other deadline expiries remain timeouts. Other conflicts still return `revision_conflict`.
+
+- Local Codex capture re-qualifies an updated binary in the background, refuses capture while waiting, and reports qualification status with rerun-setup guidance. A failed first qualification no longer prevents installing local hooks.
+- Local Raw captures new Claude sessions from their first turn even when the transcript appears after session start. Forks and resumes of hidden conversations stay hidden, including Claude copies with changed timestamps; Codex forked sessions are not saved locally.
+
+- Local capture can be turned back on with `activate` or an identical `setup`
+  request after disable/uninstall. Restore hooks and ready host authority while
+  preserving store, target, keys, data and all forget/correct fences.
+- Existing sessions rearm lazily at the next qualified hook's complete EOF with
+  durable retry receipts. Off-period text is skipped; Claude Code also skips the
+  first resumed turn. Codex supports the prompt hook as the first boundary.
+  Explicit rearm remains only for standalone external-authority recovery.
+- Local foreground setup accepts plaintext Raw capture without interpretation
+  consent. Raw-only capture needs no key or provider and advances the worker;
+  the owner Raw cap applies, while the daily model-cost cap does not.
+- Local forget/correct atomically record permanent content-free windows of
+  ±30 minutes around old receipt creation times and fence whole overlapping or
+  receipt-named sessions. Later matching arrivals are fenced before storage.
+  Unknown event times are handled conservatively; both Raw search intents hide
+  fenced sessions. Hosted selections retain their existing behavior and schema.
 
 ## 0.6.5 — Unreleased
 
@@ -422,7 +448,7 @@ unchanged.
   brand-new-only; setup never migrates existing files. Daily limits count model
   port calls, not USD; owner Raw cap becomes durable on first real capture.
 - Publish foreground 160-second hooks last and revoke SQL first on disable;
-  preserve identity and require existing explicit rearm after re-enabling.
+  preserve identity and lazily rearm established sessions after re-enabling.
   Hosted defaults, trust, credentials and provider algorithms remain unchanged.
 - Separate exact generated-command keyless checks from installed synthetic
   provider/ancestry instrumentation; native, semantic and product gates remain.

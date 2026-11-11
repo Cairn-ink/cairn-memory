@@ -1,5 +1,6 @@
 // v19 was never implemented. v20 is only the explicit local note/Card slice.
 export const PRIVATE_CARD_SCHEMA_VERSION = 21;
+export const CARD_DEPENDENCY_LIMIT = 128;
 export function installPrivateCards(db) {
   db.exec(`
     CREATE TABLE card_notes (
@@ -91,8 +92,8 @@ export function installCardMemoryInvalidation(db, rawSources = false) {
       SELECT CASE WHEN (SELECT count(*) FROM (
         SELECT DISTINCT c.id FROM private_cards c JOIN card_memory_bindings b ON b.card_id=c.id
         WHERE b.memory_id=OLD.id AND c.owner_id=OLD.owner_id AND c.scope=OLD.scope
-          AND c.project_id=OLD.project_id AND c.state IN ('draft','confirmed') LIMIT 129
-      ))>128 THEN RAISE(ABORT,'card_dependency_limit_reached') END;
+          AND c.project_id=OLD.project_id AND c.state IN ('draft','confirmed') LIMIT ${CARD_DEPENDENCY_LIMIT+1}
+      ))>${CARD_DEPENDENCY_LIMIT} THEN RAISE(ABORT,'card_dependency_limit_reached') END;
       ${rawSources ? `INSERT OR IGNORE INTO card_raw_pending_invalidations(card_id,revision)
       SELECT DISTINCT c.id,c.revision FROM card_memory_bindings b INDEXED BY card_memory_dependents
       CROSS JOIN private_cards c ON c.id=b.card_id
@@ -101,8 +102,8 @@ export function installCardMemoryInvalidation(db, rawSources = false) {
           SELECT 1 FROM card_raw_mutation_context x WHERE x.owner_id=c.owner_id AND x.scope=c.scope AND x.project_id=c.project_id)
         AND EXISTS(SELECT 1 FROM card_raw_bindings r WHERE r.card_id=c.id);
       SELECT CASE WHEN (SELECT count(*) FROM (
-        SELECT 1 FROM card_raw_pending_invalidations LIMIT 129
-      ))>128 THEN RAISE(ABORT,'card_dependency_limit_reached') END;` : ''}
+        SELECT 1 FROM card_raw_pending_invalidations LIMIT ${CARD_DEPENDENCY_LIMIT+1}
+      ))>${CARD_DEPENDENCY_LIMIT} THEN RAISE(ABORT,'card_dependency_limit_reached') END;` : ''}
       INSERT INTO card_effects
         (effect_id,owner_id,scope,project_id,kind,entity_type,entity_id,revision,action_id,ordinal)
       SELECT lower(hex(randomblob(16))),c.owner_id,c.scope,c.project_id,

@@ -28,7 +28,7 @@ import { ADMISSION_LEASE_MS } from './episode-schema.mjs';
 import { episodeOptions, episodeClient } from './episode-storage.mjs';
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createMemoryRuntime, readRecallJournalMode } from "./runtime.mjs";
-import { createCaptureDeadline } from './capture-deadline.mjs';
+import { captureInvocationDeadline, createCaptureDeadline } from './capture-deadline.mjs';
 import { uniqueIds, memoryGuards, placementProposal } from './placement-input.mjs';
 import { countTokens, modelPortValue } from './model-budget.mjs';
 import { isSourceContext } from './source-evidence.mjs';
@@ -175,7 +175,7 @@ function failure(error) {
   if (isStorageBusy(error)) code = "storage_busy";
   if (["invalid_identifier", "invalid_text", "invalid_memory", "invalid_receipt",
     "invalid_revision", "invalid_limit"].includes(code)) code = "invalid_input";
-  return { ok: false, error: { code, retryable: code === "storage_busy" } };
+  return { ok: false, error: { code, retryable: code === "storage_busy" || code === 'local_raw_privacy_write_failed' } };
 }
 
 // Validate the trusted opt-in before composition can snapshot any constructor fields.
@@ -225,7 +225,7 @@ function openWithRoleContext(input, roleContext) {
   if (!descriptor && raw !== true) return buildCore(base);
   if (!descriptor) {
     try { return composeRawCore(buildCore, base, defaultRawOptions(), {
-      sources: false, lineage: true, deletion: true, localControls: true,
+      sources: false, lineage: true, deletion: true, localControls: true, localRawPrivacy: true,
       rawTextReaders: false,
       captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch), searchEmbedding: roleContext,
     }); } catch (error) {
@@ -252,6 +252,7 @@ function openWithRoleContext(input, roleContext) {
   const coreOptions = Object.create(Object.getPrototypeOf(input), fields);
   return composeRawCore(buildCore, coreOptions, options, {
     sources: Boolean(coreOptions.privateCards), lineage: true, deletion: true, localControls: true,
+    localRawPrivacy: Boolean(options.localAuthority),
     captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch), searchEmbedding: roleContext,
   });
 }
@@ -1040,9 +1041,9 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  async function capture(input, keepInput, rawRegistration) {
+  async function capture(input, keepInput, rawRegistration, sharedDeadline) {
     try {
-      let deadline = sessionEpisodes || captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs);
+      let deadline = sharedDeadline ?? (sessionEpisodes || captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs));
       runtime.ready();
       if (!keepInput) object(input, ['namespace', 'client', 'eventId', 'sessionId', 'messages', ...(sessionEpisodes ? ['episodeContext'] : ['causal'])]);
       const ns = contractNamespace(input.namespace);
@@ -1051,7 +1052,7 @@ export function createMemoryCore(input, internal) {
       if ((captureEvidence || evidenceOnly) && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
       return success(await (keepInput ? keepEpisodeCapture : sessionEpisodes ? captureEpisodeMessages : captureMessages)({ model, captureQualification, captureSourcePolicy,
         runtime, ns, sessionEpisodes, keepInput, rawRegistration,
-        startAdmission: () => (deadline = captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs)),
+        startAdmission: () => (deadline = sharedDeadline ?? (captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs))),
         captureRationale, captureEvidence,
         deadline, input: { ...input, namespace },
         operations: { filterCaptureSources: sources => runtime.filterCaptureSources(ns, sources),
@@ -1301,7 +1302,7 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  internal?.attachCapture?.((input, registration) => capture(input, undefined, registration));
+  internal?.attachCapture?.((input, registration, deadline) => capture(input, undefined, registration, deadline));
   const contentReads = new Set(['get','list','map','fetch','recall','sourceSnapshot','getEpisode','listEpisodes','listMemoriesByTime',
     'sessionStartContext','getRationale','inspectAdmission','inspectCaptureEvidence','listReviewTransitions','listReviewConflicts']);
   return contentSafetyFacade({
@@ -1316,7 +1317,9 @@ export function createMemoryCore(input, internal) {
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission, inspectAdmission,
     inspectCaptureEvidence, discardCaptureEvidence,
-    applyPlacement, linkMocs, map, fetch, recall, sourceSnapshot, capture: input => capture(input), planCaptureBatches, keepEpisode, endEpisodeSession, classifyPlacement, rebuildIndex,
+    applyPlacement, linkMocs, map, fetch, recall, sourceSnapshot,
+    capture: (input, invocation) => capture(input, undefined, undefined, captureInvocationDeadline(undefined, invocation)),
+    planCaptureBatches, keepEpisode, endEpisodeSession, classifyPlacement, rebuildIndex,
     reviewRationale, getRationale, reviewDecisionBasis,
     close() {
       runtime.close();

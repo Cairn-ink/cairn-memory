@@ -15,6 +15,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { config, ns as keepNamespace, request, splitRaw } from '../testing/raw-capture-fixtures.mjs';
 import { consumer, empty, episodeInput, legacyKeep } from '../testing/raw-deletion-review-fixtures.mjs';
 import { interpretation } from '../testing/episode-capture-helpers.mjs';
+import { installRawSearchTestClock, rawSearchTestWait } from '../testing/raw-search-clock.mjs';
+import { createLocalUuidFence } from '../local-authority-uuid.mjs';
 
 const start = Date.parse('2020-01-01T00:00:00.000Z');
 const content = 'Synthetic saved preference.';
@@ -50,7 +52,10 @@ async function fixture(t, { client = RAW_CLIENTS[0], sameSession = false, episod
   }
   t.mock.timers.setTime(start + 120_000);
   const capture = ok(await core.capture({ namespace: ns, client, sessionId: 'target', eventId: 'target-event',
-    messages: [{ id: 'target-message', role: 'user', content: body }] }));
+    // Local correction now fences nearby/unknown-time arrivals. This deletion
+    // fixture needs an independent, known outside-window source conversation.
+    messages: [{ id: 'target-message', role: 'user', content: body,
+      ...(correctBody ? { occurredAt: new Date(start - 7_200_000).toISOString() } : {}) }] }));
   if (episodes) {
     // Exercise the existing unqualified episode admission seam after ordinary capture.
     const runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
@@ -390,6 +395,7 @@ test('unparseable low-sorting receipt clock stays dependent', async t => {
 });
 
 for (const path of ['conversation', 'episode']) test(`old finite other-root KEEP refuses through ${path} deletion`, async t => {
+  installRawSearchTestClock(t);
   t.mock.timers.enable({ apis: ['Date'], now: start });
   const f = safetyFixture(t), client = RAW_CLIENTS[0], namespace = keepNamespace;
   const model = { ...rationaleModel(), extract: empty, interpretEpisode: interpretation };
@@ -426,6 +432,10 @@ for (const path of ['conversation', 'episode']) test(`old finite other-root KEEP
   const episode = ok(await core.capture(episodeInput(client, 'target'))).episode;
   const raw = ok(await core.captureRaw(request(splitRaw('Synthetic later source.', { id: 'target-message', ordinal: 2 })[0],
     { namespace, client, sessionId: 'target', eventId: 'later-raw' }, 'episode')));
+  // The legacy target-message receipt intentionally has unresolved ancestry.
+  // Use a sibling with complete Raw ancestry to prove conversation visibility.
+  ok(await core.captureRaw(request(splitRaw('Synthetic searchable source.', { id: 'searchable-message', ordinal: 3 })[0],
+    { namespace, client, sessionId: 'target', eventId: 'searchable-raw' }, 'episode')));
   const roots = createRawSourceRoots(current), internal = { ...namespace, projectId: namespace.projectId || '' };
   const receipts = current.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at').all(memoryId);
   const keep = roots.receipt(internal, receipts[0]);
@@ -435,6 +445,14 @@ for (const path of ['conversation', 'episode']) test(`old finite other-root KEEP
   const target = current.prepare('SELECT * FROM raw_conversations WHERE id=?').get(raw.raw.conversationId);
   assert.ok(keep.possibleRoots.every(root => root.sessionKey !== target.session_key));
   assert.equal(Date.parse(target.first_received_at), start + 180_000);
+  let visible;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    await rawSearchTestWait(1010);
+    ok(await core.maintainRawSearch({ namespace }));
+    visible = ok(await core.searchRaw({ namespace, query: 'searchable', intent: 'history' }));
+    if (visible.candidates.some(hit => hit.conversationId === target.id)) break;
+  }
+  assert.ok(visible.candidates.some(hit => hit.conversationId === target.id), JSON.stringify(visible));
   const snapshot = () => current.prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name").all()
     .map(({ name }) => [name, current.prepare('SELECT * FROM "' + name + '"').all()]);
   const key = { namespace, conversationId: target.id, expectedRevision: target.revision };
@@ -445,4 +463,16 @@ for (const path of ['conversation', 'episode']) test(`old finite other-root KEEP
       expectedRevision: current.prepare('SELECT revision FROM session_episodes WHERE id=?').get(episode.id).revision });
   assert.deepEqual([preview.error?.code, result.error?.code], ['raw_lineage_unavailable', 'raw_lineage_unavailable']);
   assert.deepEqual(snapshot(), before);
+  for (const table of ['raw_session_fences', 'local_raw_uuid_jobs']) {
+    assert.equal(current.prepare(`SELECT count(*) n FROM ${table} WHERE session_key=?`).get(target.session_key).n, 0);
+  }
+  assert.equal(createLocalUuidFence(current).matches(internal, client, [{ id: 'target-message' }]), false);
+  assert.equal(current.prepare('SELECT count(*) n FROM local_raw_uuid_fences').get().n, 0);
+  const found = ok(await core.searchRaw({ namespace, query: 'searchable', intent: 'history' }));
+  assert.ok(found.candidates.some(hit => hit.conversationId === target.id), JSON.stringify(found));
+  ok(await core.captureRaw(request(splitRaw('Synthetic later continuation.', { id: 'after-refusal', ordinal: 4 })[0],
+    { namespace, client, sessionId: 'target', eventId: 'after-refusal-raw' }, 'episode')));
+  ok(await core.capture({ ...episodeInput(client, 'target', 'after-refusal-episode'), eventId: 'after-refusal-episode' }));
+  ok(await core.captureRaw(request(splitRaw('Synthetic copied source.', { id: 'target-message' })[0],
+    { namespace, client, sessionId: 'after-refusal-fork', eventId: 'after-refusal-fork' }, 'episode')));
 });

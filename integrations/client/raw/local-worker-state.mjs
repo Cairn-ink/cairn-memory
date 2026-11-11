@@ -76,6 +76,9 @@ export function validateCursor(value, identity, client) {
       cursor.epoch !== 0 || !integer(cursor.offset) || !integer(cursor.issuedOrdinal) || !digest(cursor.authorityCommitment) ||
       !digest(source.identity) || !digest(anchor.commitment) || anchor.end !== cursor.offset || anchor.start !== Math.max(0,cursor.offset-4096) ||
       cursor.blockedReason !== null && !reasons.includes(cursor.blockedReason)) fault('state_invalid');
+  // Historical Codex beginning cursors (including pending dispatches) must
+  // never import old turns. Preserve their identity and refuse before recovery.
+  if (client === 'codex' && cursor.offset === 0) fault('codex_boundary_required');
   if (cursor.authorityCommitment !== identity.authorityCommitment) fault('authority_changed');
   const selection = exact(cursor.selection,client === 'claude-code' ? ['ownSkillTurn','awaitingUserBoundary'] : []);
   if (client === 'claude-code' && (typeof selection.ownSkillTurn !== 'boolean' || typeof selection.awaitingUserBoundary !== 'boolean')) fault('state_invalid');
@@ -108,7 +111,7 @@ export async function readSession(identity, client, rearming = false) {
     const cursor = validateCursor(JSON.parse(cursorText),identity,client);
     if (!rearming) await assertSessionRearm(identity,cursor);
     return cursor;
-  } catch (error) { if (error.reason === 'authority_changed') throw error; fault('state_invalid'); }
+  } catch (error) { if (['authority_changed','codex_boundary_required'].includes(error.reason)) throw error; fault('state_invalid'); }
 }
 export async function writeCursor(identity, cursor) {
   const text = JSON.stringify(cursor);

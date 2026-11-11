@@ -7,9 +7,14 @@ import { workerFixture } from './fixtures/local-worker-workspace.mjs';
 import { claude, codex } from './fixtures/raw-fixtures.mjs';
 import { withWriteObserver } from '../private-state.mjs';
 
-for (const client of ['claude-code','codex']) for (const start of ['eof','beginning']) test(`B4b ${client} initializes ${start} with opaque durable identity, without dispatch`,async t => {
+for (const client of ['claude-code','codex']) for (const start of ['eof','beginning']) test(`B4b ${client} initialization ${start} preserves opaque identity and never dispatches`,async t => {
   const f = workerFixture(t,{ client }), worker = createLocalRawWorker(f.options);
-  const result = await worker.initialize({ ...f.context,start }); assert.equal(result.status,'ready'); assert.equal(result.reason,'initialized');
+  const result = await worker.initialize({ ...f.context,start });
+  if(client==='codex' && start==='beginning'){
+    assert.equal(result.status,'blocked');assert.equal(result.reason,'invalid_input');
+    assert.equal(existsSync(join(f.stateRoot,'root.json')),false);assert.equal(f.calls().length,0);return;
+  }
+  assert.equal(result.status,'ready'); assert.equal(result.reason,'initialized');
   assert.equal(result.dispatchedParts,0); assert.equal(Object.isFrozen(result),true); assert.equal(Object.isFrozen(worker),true);
   const cursor = f.cursor(); assert.equal(cursor.offset,start === 'eof' ? statSync(f.sourcePath).size : 0); assert.equal(cursor.issuedOrdinal,0);
   assert.equal(cursor.pending,null); assert.match(cursor.sessionKey,/^[a-f0-9]{64}$/); assert.match(cursor.wireSessionId,/^localv2_[a-f0-9]{64}$/);

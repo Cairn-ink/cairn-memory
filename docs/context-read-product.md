@@ -2067,8 +2067,11 @@ their respective coverage values. Raw work has a subdeadline reserving Memory
 assembly time. Every nonempty Raw set, including partial sets, is batch-revalidated
 before any Raw text projection. All admitted
 Raw handles are batch-revalidated after host counting/authority callbacks,
-before canonical final delivery. Failed validation discards Raw and rebuilds
-Memory-only output without holding a SQLite transaction across an asynchronous
-operation. The semantic publication gate still covers synchronous assembly and
-final validation; Raw preparation happens before entering it. Hosts own late
-underlying operations and must bound synchronous service calls.
+before canonical final delivery. No SQLite transaction is held across an
+asynchronous operation. The semantic publication gate still covers synchronous
+assembly and final validation; Raw preparation happens before entering it.
+Hosts own late underlying operations and must bound synchronous service calls.
+
+Known limit: on the product reader, Raw invalidated between initial and final
+validation yields the existing refusal (`reader_failed`) rather than a Memory-only
+response; the local/facade reader rebuilds Memory-only.

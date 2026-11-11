@@ -47,6 +47,8 @@ if(result.url.startsWith('file:')){const path=fileURLToPath(result.url);
 if(!path.startsWith(data.allowed+'/'))throw Error('installed_host_source_fallback');
 appendFileSync(data.trace,JSON.stringify({kind:'module',path})+'\\n');}return result}
 `),{parentURL:import.meta.url,data:{allowed:dirname(installed),trace}});
+const {registerLocalQualificationTestRoot,awaitLocalQualificationTestChildren}=await import(pathToFileURL(join(installed,'integrations/client/raw/local-codex-qualification.mjs')));
+const unregister=registerLocalQualificationTestRoot(dirname(settings.syntheticBinary));
 const {withLocalHostDependencies}=await import(pathToFileURL(join(installed,'integrations/client/raw/local-host.mjs')));
 const {runLocalHostCli}=await import(pathToFileURL(join(installed,'integrations/client/raw/local-host-cli.mjs')));
 const qualification=await import(pathToFileURL(join(installed,'integrations/codex/qualification.mjs')));
@@ -58,5 +60,6 @@ const detectHost=async()=>{
 const {result,exitCode}=await withLocalHostDependencies({detectHost,...(settings.deadlineMs?{deadlineMs:settings.deadlineMs}:{}),
   checkpoint:stage=>{if(stage==='after_dispatch'&&settings.abortAfterDispatch)process.emit('SIGTERM')}},
   ()=>runLocalHostCli(['--profile',profilePath,...args]));
+await awaitLocalQualificationTestChildren();unregister();
 assert.equal(children.size,0,'actual capture child close precedes host result');
 process.stdout.write(JSON.stringify(result)+'\n');process.exitCode=exitCode;

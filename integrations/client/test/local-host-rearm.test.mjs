@@ -10,7 +10,195 @@ import { createLocalRawWorker } from '../raw/local-worker.mjs';
 import { withWriteObserver } from '../private-state.mjs';
 import { runLocalHostCli } from '../raw/local-host-cli.mjs';
 import { FORMAT } from '../../codex/parser.mjs';
-import { claude, codex } from './fixtures/raw-fixtures.mjs';
+import { claude, codex, sessionId } from './fixtures/raw-fixtures.mjs';
+import { lazyFixture } from './fixtures/local-setup-workspace.mjs';
+import { stateLock } from '../state-lock.mjs';
+import promises from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
+import { spawnSync } from 'node:child_process';
+
+for (const client of ['claude-code','codex']) test(`lazy ${client} legacy rearm_required with history completes by activate, not a new explicit action`,async t => {
+  const f = await lazyFixture(t,client); await f.hook(); f.append('Synthetic legacy captured'); await f.hook('Stop');
+  await f.invoke('disable'); f.append('Synthetic legacy off');
+  const current = f.control(); assert.equal(f.core.setLocalCaptureControl({namespace:f.request.namespace,client,targetId:current.targetId,
+    expectedStoreId:current.storeId,expectedRevision:current.revision,automaticCaptureEnabled:true,rawNoticeVersion:current.rawNoticeVersion}).ok,true);
+  const path = join(f.request.installationDirectory,'installation.json'),record = JSON.parse(readFileSync(path));
+  writeFileSync(path,JSON.stringify({...record,phase:'rearm_required'}));
+  const { createLocalRawHost } = await import('../raw/local-host.mjs');
+  const host = createLocalRawHost({profilePath:join(f.request.installationDirectory,'host-profile.json')});
+  const before = readFileSync(f.cursorPath());
+  assert.equal((await f.scoped(()=>host.rearm({sessionId,sourcePath:f.sourcePath,expectedRevision:0,actionId:randomUUID()}))).reason,'rearm_refused');
+  assert.deepEqual(readFileSync(f.cursorPath()),before);
+  assert.equal((await f.invoke('activate')).status,'active'); assert.equal((await f.hook('Stop')).status,'ready');
+  assert.equal(f.cursor().issuedOrdinal,1); assert.equal(f.cursor().offset,statSync(f.sourcePath).size);
+});
+
+for (const client of ['claude-code','codex']) test(`lazy ${client} source reads are bounded anchors/header, never an off-period scan`,async t => {
+  const f = await lazyFixture(t,client); await f.hook(); const oldEOF = statSync(f.sourcePath).size;
+  await f.invoke('disable'); f.append('Synthetic paused '+ 'x'.repeat(200000)); await f.invoke('activate');
+  const source = statSync(f.sourcePath),eof = source.size,open = promises.open,reads = [];
+  try {
+    promises.open = async (...args) => {
+      const handle = await open(...args),info = await handle.stat();
+      if (info.dev === source.dev && info.ino === source.ino) {
+        const read = handle.read.bind(handle);
+        handle.read = async (buffer,offset,length,position) => { reads.push({start:position,end:position+length}); return read(buffer,offset,length,position); };
+      }
+      return handle;
+    }; syncBuiltinESMExports();
+    assert.equal((await f.hook('Stop')).status,'ready');
+  } finally { promises.open = open; syncBuiltinESMExports(); }
+  assert.ok(reads.length>0);
+  for (const {start,end} of reads) assert.ok(end <= Math.max(oldEOF,client === 'codex' ? 4096:0) || start >= eof-4096,
+    `unexpected off-period read [${start},${end})`);
+  assert.equal(f.cursor().offset,eof); assert.equal(f.cursor().issuedOrdinal,0);
+});
+
+for (const client of ['claude-code','codex']) test(`lazy ${client} predecessor history stays bounded and discarded authority refuses`,async t => {
+  const f = await lazyFixture(t,client); await f.hook(); await f.invoke('disable'); await f.invoke('activate');
+  const path = join(f.request.installationDirectory,'host-profile.json.activation.json'),record = JSON.parse(readFileSync(path));
+  const oldest = record.predecessors[0];
+  record.predecessors = [oldest,...Array.from({length:63},(_,index)=>({...oldest,expectedControlRevision:100+index}))];
+  writeFileSync(path,JSON.stringify(record));
+  await f.invoke('disable'); assert.equal((await f.invoke('activate')).status,'active');
+  const after = JSON.parse(readFileSync(path)); assert.equal(after.predecessors.length,64);
+  assert.ok(!after.predecessors.some(authority=>JSON.stringify(authority)===JSON.stringify(oldest)));
+  const cursor = readFileSync(f.cursorPath()); assert.equal((await f.hook('Stop')).status,'blocked'); assert.deepEqual(readFileSync(f.cursorPath()),cursor);
+});
+
+for (const client of ['claude-code','codex']) for (const stage of ['pending','cursor','committed'])
+test(`lazy ${client} actual SIGKILL after ${stage} recovers the same boundary`,async t => {
+  const f = await lazyFixture(t,client); await f.hook(); await f.invoke('disable'); f.append('Synthetic off'); await f.invoke('activate');
+  const path = f.cursorPath(),key = readFileSync(join(f.request.installationDirectory,'identity.key')),eof = statSync(f.sourcePath).size;
+  const settings = join(f.root,'lazy-crash.json'); writeFileSync(settings,JSON.stringify({request:f.request,sourcePath:f.sourcePath,cursorPath:path,stage}),{mode:0o600});
+  const script = `import{readFileSync}from'node:fs';const s=JSON.parse(readFileSync(process.argv[1]));
+const{withWriteObserver}=await import(${JSON.stringify(fileURLToPath(new URL('../private-state.mjs',import.meta.url)))});
+const{withLocalHostDependencies}=await import(${JSON.stringify(fileURLToPath(new URL('../raw/local-host.mjs',import.meta.url)))});
+const{runLocalRawHook}=await import(${JSON.stringify(fileURLToPath(new URL('../raw/local-hook.mjs',import.meta.url)))});
+const{binaryIdentity}=await import(${JSON.stringify(fileURLToPath(new URL('../../codex/qualification.mjs',import.meta.url)))});
+const binary=s.request.installationDirectory.replace(/installation$/,'codex');
+await withLocalHostDependencies({detectHost:async()=>({binaryPath:binary,identity:await binaryIdentity(binary),kind:'cli'})},()=>
+withWriteObserver(({path})=>{if(path!==s.cursorPath&&path!==s.cursorPath.replace(/\\.json$/,'.rearm.json'))return;
+const stage=path===s.cursorPath?'cursor':JSON.parse(readFileSync(path)).phase;if(stage===s.stage)process.kill(process.pid,'SIGKILL')},()=>
+runLocalRawHook({installationDirectory:s.request.installationDirectory,event:'Stop',payload:{hook_event_name:'Stop',session_id:${JSON.stringify(sessionId)},transcript_path:s.sourcePath}})));
+throw Error('synthetic lazy crash not reached');`;
+  const result = spawnSync(process.execPath,['--input-type=module','-e',script,settings],{encoding:'utf8',timeout:15000,
+    env:{PATH:'/usr/bin:/bin',HOME:join(f.request.installationDirectory,'home'),TMPDIR:f.root,NODE_NO_WARNINGS:'1',NODE_DISABLE_COMPILE_CACHE:'1'}});
+  assert.equal(result.error,undefined); assert.equal(result.status,null,result.stderr); assert.equal(result.signal,'SIGKILL');
+  f.append('Synthetic after actual crash'); const resumed = await f.hook('Stop'); assert.ok(['ready','progress'].includes(resumed.status));
+  const receipt = JSON.parse(readFileSync(path.replace(/\.json$/,'.rearm.json')));
+  assert.equal(receipt.phase,'committed'); assert.equal(receipt.revision,1); assert.equal(receipt.replacementCursor.offset,eof);
+  assert.deepEqual(readFileSync(join(f.request.installationDirectory,'identity.key')),key);
+  t.diagnostic(JSON.stringify({client,stage,status:result.status,signal:result.signal}));
+});
+
+for (const client of ['claude-code','codex']) for (const stage of ['pending','cursor','committed'])
+test(`lazy ${client} failure before ${stage} rename leaves a retryable old or frozen state`,async t => {
+  const f = await lazyFixture(t,client); await f.hook(); await f.invoke('disable'); f.append('Synthetic off'); await f.invoke('activate');
+  const cursorPath = f.cursorPath(),receiptPath = cursorPath.replace(/\.json$/,'.rearm.json'),before = f.cursor(),eof = statSync(f.sourcePath).size;
+  const rename = promises.rename; let fired = false;
+  try {
+    promises.rename = async (from,to) => {
+      if (!fired && (stage === 'cursor' ? to === cursorPath : to === receiptPath && JSON.parse(readFileSync(from)).phase === stage)) {
+        fired = true; throw Error('synthetic failure before lazy rename');
+      }
+      return rename(from,to);
+    }; syncBuiltinESMExports();
+    assert.equal((await f.hook('Stop')).status,'blocked'); assert.equal(fired,true);
+  } finally { promises.rename = rename; syncBuiltinESMExports(); }
+  f.append('Synthetic appended after interruption');
+  assert.equal((await f.hook('Stop')).status,'ready');
+  const receipt = JSON.parse(readFileSync(receiptPath)); assert.equal(receipt.phase,'committed'); assert.equal(receipt.revision,1);
+  assert.equal(receipt.replacementCursor.offset,stage === 'pending' ? statSync(f.sourcePath).size:eof);
+  assert.equal(f.cursor().issuedOrdinal,before.issuedOrdinal);
+  f.append('Synthetic later capture'); assert.equal((await f.hook('Stop')).status,'progress');
+  assert.equal(JSON.parse(readFileSync(receiptPath)).revision,1);
+});
+
+for (const client of ['claude-code','codex']) test(`lazy ${client} pending receipt blocks direct workers; a later fence prevents completing the cursor`,async t => {
+  const f = await lazyFixture(t,client); await f.hook(); await f.invoke('disable'); f.append('Synthetic off'); await f.invoke('activate');
+  const path = f.cursorPath(),receiptPath = path.replace(/\.json$/,'.rearm.json'); let fired = false;
+  await withWriteObserver(({path:written}) => { if (!fired && written === path) { fired = true; throw Error('synthetic cursor cut'); } },()=>f.hook('Stop'));
+  assert.equal(fired,true); assert.equal(JSON.parse(readFileSync(receiptPath)).phase,'pending');
+  const configPath = join(f.request.installationDirectory,'capture.json'),config = JSON.parse(readFileSync(configPath));
+  const direct = createLocalRawWorker({stateRoot:join(f.request.installationDirectory,'state'),identityKeyPath:join(f.request.installationDirectory,'identity.key'),
+    nodeExecutable:process.execPath,runtimeRoot:root,configPath,expectedAuthority:config.authority,home:join(f.request.installationDirectory,'home'),env:{}});
+  const result = await direct.run({sessionId,sourcePath:f.sourcePath,pluginRoot:client === 'claude-code' ? f.request.installation.pluginRoot:null,
+    formatAuthority:client === 'codex' ? {format:FORMAT,sessionId,creatorVersion:'0.162.0',qualifiedCreatorVersion:'0.162.0'}:null});
+  assert.equal(result.reason,'state_invalid');
+  const {ok} = await import('./fixtures/local-setup-workspace.mjs');
+  ok(f.core.fenceSession({namespace:f.request.namespace,client,sessionId:f.cursor().wireSessionId}));
+  const cursorBytes = readFileSync(path),receiptBytes = readFileSync(receiptPath);
+  assert.equal((await f.hook('Stop')).status,'blocked'); assert.deepEqual(readFileSync(path),cursorBytes); assert.deepEqual(readFileSync(receiptPath),receiptBytes);
+});
+
+for (const client of ['claude-code','codex']) for (const stage of ['pending','cursor','committed'])
+test(`lazy ${client} durable ${stage} crash retries its one frozen boundary and receipt`,async t => {
+  const f = await lazyFixture(t,client); await f.hook();
+  f.append('Synthetic captured prefix'); assert.equal((await f.hook('Stop')).status,'progress');
+  const before = f.cursor(),key = readFileSync(join(f.request.installationDirectory,'identity.key'));
+  await f.invoke('disable'); f.append('Synthetic paused content'); await f.invoke('activate');
+  const frozenEOF = statSync(f.sourcePath).size,path = f.cursorPath(),receiptPath = path.replace(/\.json$/,'.rearm.json'); let fired = false;
+  const failed = await withWriteObserver(({path:written}) => {
+    if (fired || ![path,receiptPath].includes(written)) return;
+    const record = JSON.parse(readFileSync(written));
+    if (stage === 'cursor' ? written === path : written === receiptPath && record.phase === stage) {
+      fired = true; throw Error('synthetic lazy durable write ambiguity');
+    }
+  },() => f.hook('Stop'));
+  assert.equal(fired,true); assert.equal(failed.status,'blocked');
+  const receipt = JSON.parse(readFileSync(receiptPath)); assert.equal(receipt.replacementCursor.offset,frozenEOF);
+  f.append('Synthetic append after crash');
+  const resumed = await f.hook('Stop'); assert.ok(['ready','progress'].includes(resumed.status),JSON.stringify(resumed));
+  const committed = JSON.parse(readFileSync(receiptPath)); assert.equal(committed.phase,'committed');
+  assert.equal(committed.actionId,receipt.actionId); assert.equal(committed.revision,1);
+  assert.equal(committed.replacementCursor.offset,frozenEOF); assert.equal(committed.replacementCursor.issuedOrdinal,before.issuedOrdinal);
+  await f.hook('Stop'); const progressed = readFileSync(path);
+  await f.hook('Stop'); assert.deepEqual(readFileSync(path),progressed);
+  assert.equal(f.cursor().issuedOrdinal,before.issuedOrdinal+1);
+  assert.equal(f.cursor().sessionKey,before.sessionKey); assert.deepEqual(readFileSync(join(f.request.installationDirectory,'identity.key')),key);
+  const db = new DatabaseSync(f.request.databasePath,{readOnly:true});
+  try {
+    const text = db.prepare('SELECT sealed FROM raw_parts WHERE saved=1 ORDER BY rowid').all().map(row=>Buffer.from(row.sealed).toString()).join('');
+    assert.equal(text,'Synthetic captured prefixSynthetic append after crash'); assert.equal(db.prepare('SELECT count(*) n FROM raw_messages').get().n,2);
+  } finally { db.close(); }
+});
+
+for (const client of ['claude-code','codex']) test(`lazy ${client} known bounded predecessors survive several off/on cycles and hold the session lock`,async t => {
+  const f = await lazyFixture(t,client); await f.hook(); const before = f.cursor();
+  for (let i=0;i<3;i++) { await f.invoke('disable'); f.append('Synthetic off '+i); assert.equal((await f.setup()).status,'active'); }
+  await stateLock(f.cursorPath().replace(/\.json$/,'.lock'),async () => assert.equal((await f.hook('Stop')).status,'busy'));
+  assert.equal((await f.hook('Stop')).status,'ready'); assert.equal(f.cursor().sessionKey,before.sessionKey);
+  assert.equal(f.cursor().issuedOrdinal,0); assert.equal(f.cursor().offset,statSync(f.sourcePath).size);
+  const profilePath = join(f.request.installationDirectory,'host-profile.json');
+  const { createLocalRawHost } = await import('../raw/local-host.mjs');
+  assert.equal((await createLocalRawHost({profilePath}).rearm({sessionId,sourcePath:f.sourcePath,expectedRevision:0,actionId:randomUUID()})).reason,'rearm_refused');
+});
+
+for (const client of ['claude-code','codex']) for (const damage of ['partial','unknown','pending','deleted'])
+test(`lazy ${client} ${damage} boundary refuses without sending content or rewriting its cursor`,async t => {
+  const f = await lazyFixture(t,client); await f.hook();
+  await f.invoke('disable'); f.append('Synthetic paused'); await f.invoke('activate');
+  if (damage === 'partial') appendFileSync(f.sourcePath,'{"incomplete":');
+  if (damage === 'unknown') { const cursor = f.cursor(); cursor.authorityCommitment = 'a'.repeat(64); writeFileSync(f.cursorPath(),JSON.stringify(cursor)); }
+  if (damage === 'pending') {
+    // A structurally valid pending cursor with no authoritative SQL high-water
+    // remains a refusal; lazy rearm never reads its projected content.
+    const cursor = f.cursor(); cursor.issuedOrdinal = 1;
+    cursor.pending = {projection:{version:1,profile:'raw-producer-v1',client,wireSessionId:cursor.wireSessionId,generation:'initial',epoch:0,
+      range:{start:cursor.offset,end:statSync(f.sourcePath).size},messageOrdinal:1,role:'user',sourceIdentity:'b'.repeat(64),contentIdentity:'c'.repeat(64),
+      totalUnits:10,totalBytes:10,part:{index:1,start:1,end:10},eventId:'d'.repeat(64)},attempts:0,nextEligibleAt:null,lastAttemptAt:null,state:'prepared'};
+    writeFileSync(f.cursorPath(),JSON.stringify(cursor));
+  }
+  if (damage === 'deleted') {
+    const {ok} = await import('./fixtures/local-setup-workspace.mjs');
+    ok(f.core.fenceSession({namespace:f.request.namespace,client,sessionId:f.cursor().wireSessionId}));
+  }
+  const before = readFileSync(f.cursorPath()); assert.equal((await f.hook('Stop')).status,'blocked');
+  assert.deepEqual(readFileSync(f.cursorPath()),before);
+  const db = new DatabaseSync(f.request.databasePath,{readOnly:true});
+  try { assert.equal(db.prepare('SELECT count(*) n FROM raw_parts').get().n,0); } finally { db.close(); }
+});
 
 const root = resolve(fileURLToPath(new URL('../../../',import.meta.url)));
 const ok = result => { assert.equal(result.ok,true,JSON.stringify(result)); return result.value; };
