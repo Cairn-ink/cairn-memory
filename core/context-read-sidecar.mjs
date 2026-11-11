@@ -828,8 +828,8 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       // canonical candidate guard after text selection.
       const namespaces = p.readSet.filter(ns => rows.some(row => equal(p.streams[row.stream].ns, ns)));
       const embeddingGuard = contextEmbeddingGuard(canonical, canonicalRead, namespaces, started + maxMs);
-      const dispatch = engineGuard(() => {
-        embeddingGuard();
+      const dispatch = engineGuard((phase = 'pre-send') => {
+        embeddingGuard(phase);
         if (checkCandidates && (lineage || !isBudgetEmbeddingPort(embedder))) canonicalRead(() => {
           const memo=createContentReadMemo(canonical);
           for (const row of rows) {
@@ -1050,7 +1050,9 @@ export function assertContextEmbeddingAllowedInside(db, readSet, deadlineAt = In
 export function contextEmbeddingGuard(db, read, readSet, deadlineAt = Infinity) {
   let version, generation;
   const check = () => { if (performance.now() >= deadlineAt) fail('timeout'); };
-  return () => {
+  return (phase = 'pre-send') => {
+    // Settlement and cleanup retain their other guards, but no text can be sent.
+    if (phase === 'post-send') return;
     check();
     if (db.isTransaction) fail('storage_error');
     const probe = db.prepare('PRAGMA data_version');

@@ -424,17 +424,17 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         if (preflight?.state === 'ready' && preflight.eligible > 0) {
           controller = new AbortController(); controllers.add(controller);
           const embeddingGuard = storage.embeddingGuard(input.readSet, deadlineAt);
-          const guard = () => { access.check();
+          const guard = (phase = 'pre-send') => { access.check();
             if (sourceState) read(() => assertSourcesInside(input, sourceState, internal ? 'snapshot_stale' : 'cursor_stale'));
             storage.assertState(projection, current);
-            embeddingGuard(); };
+            embeddingGuard(phase); };
           time = performance.now();
           try {
             embeddingGuard();
             let vectors,invoked=false;
             assertContentPort({before:true});
             try { vectors = await dispatch(options.embedder, [input.query], { signal: controller.signal, deadlineAt, guard,onInvoke:()=>{invoked=true;} }); }
-            finally { try { guard(); } finally { if(invoked)assertContentPort(); } }
+            finally { try { guard('post-send'); } finally { if(invoked)assertContentPort(); } }
             if (!Array.isArray(vectors) || vectors.length !== 1) throw Object.assign(new Error(), { code: 'provider_error' });
             const query = validateVector(vectors[0], options.embedder);
             const scoring = storage.semanticPreflight(projection, options.embedder, { deadlineAt });

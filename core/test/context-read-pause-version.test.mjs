@@ -5,6 +5,9 @@ import { coreFixture, query, refresh, policy, ns, ok } from '../testing/context-
 import { fixture, request, drain } from '../testing/context-read-fixture.mjs';
 import { createFakeEmbedder } from '../context-read-embedder.mjs';
 import { createEpisodeStorage } from '../episode-storage.mjs';
+import { contextBudget } from '../context-read-budget.mjs';
+import { contextEmbeddingGuard } from '../context-read-sidecar.mjs';
+import { readTransaction } from '../database.mjs';
 import { control } from '../testing/context-semantic-pause-fixture.mjs';
 
 for (const operation of ['query','refresh']) for (const writer of ['external','engine']) for (const disabled of [false,true]) {
@@ -63,6 +66,30 @@ test('stable semantic query reuses one control decision and probes outside snaps
   const decisions=observed.filter(r=>r.sql.includes('episode_controls')),probes=observed.filter(r=>r.sql==='PRAGMA data_version');
   assert.equal(decisions.length,1,'one fresh whole-read-set decision per dispatch');
   assert.ok(decisions.every(r=>r.transaction));
-  assert.ok(probes.length>1,'budget and transport guards exercise the cached decision');
+  assert.equal(probes.length,5,'initial, estimation pair, pre-transmit and adapter probes only');
   assert.ok(probes.every(r=>!r.transaction),'data_version is never pinned by a read snapshot');
+});
+
+for (const writer of ['external', 'engine']) test(`last pre-transmit signal hook observes ${writer} pause before embedder entry`, async t => {
+  const f = fixture(t), db = new DatabaseSync(f.path);
+  t.after(() => db.close());
+  const episodes = createEpisodeStorage({db, rawCapture:{closePending(){}}, advanceEpoch:()=>{}});
+  let entries = 0, changed = false;
+  const embedder = {id:`synthetic-last-send-${writer}`, revision:'one', embed(){entries++;return [[1]];}};
+  const dispatch = contextBudget({budgetConfigured:true, embedder, policy:policy()});
+  const canonical = writer === 'external' ? f.db : db;
+  const guard = contextEmbeddingGuard(canonical, work=>readTransaction(canonical,work), [ns]);
+  guard();
+  const signal = new AbortController().signal;
+  Object.defineProperty(signal, 'aborted', {get(){
+    if (!changed) {
+      changed = true;
+      if (writer === 'external') control(db,ns,{paused:1});
+      else episodes.setControl(ns,{expectedGeneration:'initial',paused:true},false);
+    }
+    return false;
+  }});
+  await assert.rejects(dispatch(embedder,['synthetic text'],{signal,deadlineAt:Infinity,guard}),{code:'namespace_paused'});
+  assert.equal(changed,true);
+  assert.equal(entries,0,'the last pre-send guard prevents embedder entry');
 });
