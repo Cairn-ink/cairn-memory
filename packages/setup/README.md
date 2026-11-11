@@ -63,14 +63,12 @@ never text; `--client claude|codex` filters the list. Delete accepts one explici
 id without wildcards. It previews counts, client and time range unless `--yes`
 is given. An unknown id fails without changes. Both commands require an installed
 local client and refuse cloud mode. They use the same store and namespace as MCP.
-Deletion removes the conversation's Raw messages and index rows, its Episodes,
-and Cards sourced from it under the existing lineage rule. Re-sent copies
-(fork, resume or cursor reset) are not archived again. Memories extracted from
-it are kept and keep their own forget.
+
+Deletion removes the conversation's Raw messages and index rows and its Episodes, and invalidates dependent Cards under the existing lineage rule. Confirmed authored Card bodies may remain stored. Re-sent copies (fork, resume or cursor reset) are not archived again. Extracted Memories are kept; use each Memory's own forget operation to remove it.
 
 `raw delete <conversation-id> --yes` finishes in one command and shows progress
-counts. Only if it stops after about 10 minutes, run the same command again to
-continue. While a large conversation is being deleted, saving in other sessions
+counts. The command retries automatically for up to about 10 minutes. If it stops before completion, run the same command again to continue.
+While a large conversation is being deleted, saving in other sessions
 pauses and catches up afterwards: about 11–15 seconds for a 10,000-message
 conversation in the concurrent-saving workload described in the
 [local Raw guide](../../docs/raw-local-journal.md).
@@ -131,12 +129,11 @@ npx @cairn-ink/memory raw delete <conversation-id> --yes
 會報錯且不改動資料。這兩個指令需要已安裝的本機工具，雲端模式不能使用，
 資料庫與命名空間都沿用 MCP 的設定。
 
-刪除會移除該對話的 Raw 訊息與索引列、Episodes，以及依既有來源關聯規則
-判定來自該對話的 Cards。分支、續接或游標重設後重送的副本不會再次保存。
-從對話抽取的 Memories 會保留，仍要各自執行 forget。
+刪除會移除該對話的 Raw 訊息與索引列、Episodes，並依既有來源關聯規則讓相依 Cards 的來源支持失效。已確認、由使用者撰寫的 Card 本文可能仍保留在資料庫。分支、續接或游標重設後重送的副本不會再次保存。從對話抽取的 Memories 會保留；若要移除，仍須各自執行 forget。
 
 `raw delete <conversation-id> --yes` 會在一次執行中完成刪除，並顯示進度數量。
-只有在執行約 10 分鐘後停止時，才需要重跑同一個指令來繼續。刪除大型對話時，
+指令會自動重試，最長約 10 分鐘。若停止時尚未完成，請重跑同一個指令來繼續。
+刪除大型對話時，
 其他工作階段會暫停保存，完成後再補存；依[本機 Raw 指南](../../docs/raw-local-journal.md)
 的同時保存情境，一段 10,000 則訊息的對話約會讓保存暫停 11–15 秒。
 

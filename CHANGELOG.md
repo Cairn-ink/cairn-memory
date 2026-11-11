@@ -28,18 +28,15 @@
   without changes. Both commands use the installed local MCP store and namespace
   and refuse cloud mode or an absent local installation.
 - `raw delete <conversation-id> --yes` finishes in one command and shows progress
-  counts. Only if it stops after about 10 minutes, run the same command again
-  to continue. While a large conversation is being deleted, saving in other
+  counts. The command retries automatically for up to about 10 minutes. If it stops before completion, run the same command again to continue.
+  While a large conversation is being deleted, saving in other
   sessions pauses and catches up afterwards: about 11–15 seconds for a
   10,000-message conversation in the concurrent-saving workload described in
   the [local Raw guide](docs/raw-local-journal.md).
 - Several sessions saving at once no longer stop one of them from saving.
 - Default reads keep the Raw excerpts they already validated when a read reaches
   its time limit, marked partial, instead of dropping them.
-- Delete removes the conversation's Raw messages and index rows, its Episodes,
-  and Cards sourced from it under the existing lineage rule. Re-sent copies
-  (fork, resume or cursor reset) are not archived again. Memories extracted from
-  the conversation are kept and keep their own forget.
+- Deletion removes the conversation's Raw messages and index rows and its Episodes, and invalidates dependent Cards under the existing lineage rule. Confirmed authored Card bodies may remain stored. Re-sent copies (fork, resume or cursor reset) are not archived again. Extracted Memories are kept; use each Memory's own forget operation to remove it.
 - Going back to 0.6.5: an attested base-33 store with card lineage revision 1
   (physical 53, lineage 1) that 0.6.6 opened with Raw on is refused with
   `unsupported_database`; reinstall 0.6.6 to recover access. Attested lineage-0

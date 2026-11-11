@@ -26,16 +26,17 @@ npx @cairn-ink/memory raw delete <conversation-id> [--yes]
 ```
 
 List prints metadata only, never text. Delete requires one explicit id without
-wildcards and previews counts, client and time range by default. `--yes` removes
-that conversation's Raw messages and index rows, its Episodes, and Cards sourced
-from it under the existing lineage rule. Unknown ids fail without changes.
-Re-sent copies (fork, resume or cursor reset) are not archived again. Extracted
-Memories are kept and keep their own forget. The installer uses its installed
+wildcards and previews counts, client and time range by default. `--yes` deletes
+the selected conversation. Unknown ids fail without changes.
+
+Deletion removes the conversation's Raw messages and index rows and its Episodes, and invalidates dependent Cards under the existing lineage rule. Confirmed authored Card bodies may remain stored. Re-sent copies (fork, resume or cursor reset) are not archived again. Extracted Memories are kept; use each Memory's own forget operation to remove it.
+
+The installer uses its installed
 MCP database/owner/project; cloud mode or absent local installation is refused.
 
 `raw delete <conversation-id> --yes` finishes in one command and shows progress
-counts. Only if it stops after about 10 minutes, run the same command again to
-continue. While a large conversation is being deleted, saving in other sessions
+counts. The command retries automatically for up to about 10 minutes. If it stops before completion, run the same command again to continue.
+While a large conversation is being deleted, saving in other sessions
 pauses and catches up afterwards: about 11–15 seconds for a 10,000-message
 conversation in the concurrent-saving workload described in the
 [local Raw guide](raw-local-journal.md).
