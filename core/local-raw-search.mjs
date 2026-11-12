@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { openRawSearch } from './raw-search-index.mjs';
 import { rawNamespace } from './raw-input.mjs';
 import { fail, object } from './validation.mjs';
+import { rawSearchRequestState } from './raw-search-request-scope.mjs';
 
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -97,6 +98,15 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
       embeddings: Boolean(embedder) }, entry.token).finally(() => { entry.maintaining = null; });
     return entry.maintaining;
   }
+  function readerRoutes(entry) {
+    return rawSearchRequestState(entry, () => {
+      // Proof keys and reader references only; the invocation owns retention.
+      const state = { prepared: new Map(), searches: new Map(), routes: new Map(), close() {
+        state.routes.clear();
+      } };
+      return state;
+    })?.routes ?? entry.readers;
+  }
   async function search(entry, service, request) {
     const { semantic, ...input } = request;
     if (semantic !== undefined && typeof semantic !== 'boolean') fail('invalid_input');
@@ -105,8 +115,9 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
     // Native readers each retain four search proofs. Remember which reader
     // issued a proof so copied candidates keep the native preparation contract.
     if (result.candidates.length) {
-      entry.readers.set(result.candidates[0].proof, reader);
-      while (entry.readers.size > 8) entry.readers.delete(entry.readers.keys().next().value);
+      const routes = readerRoutes(entry);
+      routes.set(result.candidates[0].proof, reader);
+      while (routes.size > 8) routes.delete(routes.keys().next().value);
     }
     entry.semantic = result.semantic;
     return result;
@@ -145,7 +156,7 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
         },
         async prepare(candidate, settings) {
           if (!entry.readSet.some(ns => same(ns, candidate?.namespace))) fail('authority_required');
-          const service = entry.readers.get(candidate?.proof);
+          const service = readerRoutes(entry).get(candidate?.proof);
           if (!service || ![entry.service, entry.lexical?.service].includes(service)) fail('stale_publication');
           const handle = await service.prepare(candidate, settings, entry.token);
           handles.set(handle, service); return handle;
@@ -158,7 +169,7 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
           // native reader authenticates every proof in its own partition.
           const groups = [];
           for (const candidate of candidates) {
-            const reader = entry.readSet.some(ns => same(ns, candidate?.namespace)) ? entry.readers.get(candidate?.proof) : null;
+            const reader = entry.readSet.some(ns => same(ns, candidate?.namespace)) ? readerRoutes(entry).get(candidate?.proof) : null;
             const service = [entry.service, entry.lexical?.service].includes(reader) ? reader : null;
             if (!groups.length || groups.at(-1).service !== service) groups.push({ service, candidates: [], start: groups.reduce((n, group) => n + group.candidates.length, 0) });
             groups.at(-1).candidates.push(candidate);

@@ -182,10 +182,12 @@ test('SDK discover probe then legacy initialize builds two servers without dispo
   transport.start = async () => {};
   const client = new Client({ name: 'synthetic-probe-client', version: '1' });
   t.after(() => client.close());
-  await client.connect(transport, { prior: { kind: 'legacy' } });
-  assert.equal(host.inspect().sdkServers, 1, 'discarded probe server is gone');
-  assert.equal(host.inspect().connections, 1); assert.equal(host.inspect().runtime.cores, 1);
-  ok(await call(client, 'remember_memory', { content: 'synthetic post-probe write', kind: 'fact' }));
+  await assert.doesNotReject(async () => {
+    await client.connect(transport, { prior: { kind: 'legacy' } });
+    assert.equal(host.inspect().sdkServers, 1, 'discarded probe server is gone');
+    assert.equal(host.inspect().connections, 1); assert.equal(host.inspect().runtime.cores, 1);
+    ok(await call(client, 'remember_memory', { content: 'synthetic post-probe write', kind: 'fact' }));
+  }, 'discarding an SDK probe must preserve the shared runtime for the replacement server');
   await handle.close(); await handle.close();
   assert.equal(host.inspect().sdkServers, 0); assert.equal(host.inspect().runtime.cores, 1);
 });

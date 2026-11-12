@@ -12,7 +12,7 @@ test('revocation refuses late provider results and subsequent provider invocatio
   const provider = router.protect(Object.freeze({ dimensions: 1, async embed() { assert.equal(this.dimensions, 1); calls++; await gate.promise; return [[1]]; } }));
   const pending = a.run(() => provider.embed(['synthetic']));
   a.revoke(); gate.resolve();
-  await assert.rejects(pending, { code: 'authority_required' });
+  await assert.rejects(pending, { code: 'authority_required' }, 'revoked owner must reject its late provider result');
   a.run(() => assert.throws(() => provider.embed(['synthetic']), { code: 'authority_required' }));
   assert.deepEqual(await b.run(() => provider.embed(['synthetic'])), [[1]]);
   assert.equal(calls, 2);
