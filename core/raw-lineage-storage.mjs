@@ -212,7 +212,29 @@ export function assertEpisodeSourceProof(ns, sources, facts, budget = { remainin
 /** Schema-presence driven: current option-off writers enforce retained fences. */
 // Writer-only enumeration: at most 128 memories and five receipts per
 // memory per batch; overflow continues with four-plus-one receipt pages.
-function* writerReceiptInputs(db, check, ns) {
+// The schema already exists here, so SQLite cannot change the main encoding.
+// JSON string tuples decode to the exact UTF-8 bytes of well-formed inputs.
+// Exclude only rows whose five-field JavaScript recheck cannot match: a stored
+// NUL must survive SQL regardless of runtime-specific TEXT truncation.
+// Weak keys keep this connection-local without retaining closed connections.
+const receiptEncoding=new WeakMap();
+function* writerReceiptInputs(db, check, ns, receipts) {
+  const tuples=receipts.map(receipt=>[receipt.client,receipt.sessionId,receipt.eventId,receipt.role,receipt.excerpt]);
+  let filter='',args=[];
+  // In Unicode mode the surrogate range matches unpaired code units only.
+  // NUL, replacement characters and malformed inputs use the original SQL.
+  if(!tuples.some(tuple=>tuple.some(value=>/[\u0000\uFFFD\uD800-\uDFFF]/u.test(value)))) {
+    if(!receiptEncoding.has(db))receiptEncoding.set(db,db.prepare('PRAGMA encoding').get().encoding);
+    if(receiptEncoding.get(db)==='UTF-8') {
+      filter=` AND (EXISTS (SELECT 1 FROM json_each(?) source
+        WHERE client=json_extract(source.value,'$[0]') COLLATE BINARY AND session_id=json_extract(source.value,'$[1]') COLLATE BINARY
+          AND event_id=json_extract(source.value,'$[2]') COLLATE BINARY AND role=json_extract(source.value,'$[3]') COLLATE BINARY
+          AND excerpt=json_extract(source.value,'$[4]') COLLATE BINARY)
+        OR instr(CAST(client AS BLOB),x'00')>0 OR instr(CAST(session_id AS BLOB),x'00')>0
+        OR instr(CAST(event_id AS BLOB),x'00')>0 OR instr(CAST(role AS BLOB),x'00')>0 OR instr(CAST(excerpt AS BLOB),x'00')>0)`;
+      args=[JSON.stringify(tuples)];
+    }
+  }
   for (const deleted of [0,1]) {
     let after;
     while (true) {
@@ -225,27 +247,31 @@ function* writerReceiptInputs(db, check, ns) {
       const keys=memories.slice(0,sourcePageSize);
       if(keys.length) {
         check();
-        const inputs=db.prepare(`SELECT r.*,
+        const inputs=db.prepare(`SELECT r.*,wanted.key AS wanted_entry,
           json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted
           FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN (
             SELECT rowid FROM receipts INDEXED BY memory_receipts
-            WHERE memory_id=json_extract(wanted.value,'$[0]') ORDER BY created_at,id LIMIT 5)
+            WHERE memory_id=json_extract(wanted.value,'$[0]')${filter} ORDER BY created_at,id LIMIT 5)
           ORDER BY wanted.key,r.created_at,r.id`)
-          .all(JSON.stringify(keys.map(memory=>[memory.id,memory.revision,memory.deleted])));
+          .all(JSON.stringify(keys.map(memory=>[memory.id,memory.revision,memory.deleted])),...args);
+        // Decoded memory ids can collide; preserve each wanted entry's metadata.
         const byMemory=new Map();
         for(const row of inputs) {
-          const rows=byMemory.get(row.memory_id)??[];rows.push(row);byMemory.set(row.memory_id,rows);
+          const rows=byMemory.get(row.wanted_entry)??[];rows.push(row);byMemory.set(row.wanted_entry,rows);
         }
-        for(const memory of keys) {
-          const rows=byMemory.get(memory.id)??[];
+        for(const [entry,memory] of keys.entries()) {
+          const rows=byMemory.get(entry)??[];
           yield* rows.slice(0,sourceReceiptPageSize);
           if(rows.length<=sourceReceiptPageSize)continue;
+          // The witness counts filtered rows; both pages use the same predicate.
+          // NUL-free UTF-8 cursor keys round-trip unchanged; writers use UUID/ISO.
+          // (created_at,id) is total because id is UNIQUE, including ties.
           let receiptAfter=rows[sourceReceiptPageSize-1];
           while(true) {
             check();
             const page=db.prepare(`SELECT r.*,? AS memory_revision,? AS memory_deleted FROM receipts r INDEXED BY memory_receipts
-              WHERE memory_id=? AND (created_at,id)>(?,?) ORDER BY created_at,id LIMIT 5`)
-              .all(memory.revision,memory.deleted,memory.id,receiptAfter.created_at,receiptAfter.id);
+              WHERE memory_id=? AND (created_at,id)>(?,?)${filter} ORDER BY created_at,id LIMIT 5`)
+              .all(memory.revision,memory.deleted,memory.id,receiptAfter.created_at,receiptAfter.id,...args);
             const next=page.slice(0,sourceReceiptPageSize);
             yield* next;
             if(page.length<=sourceReceiptPageSize)break;
@@ -266,7 +292,7 @@ function matchingReceiptInputs(db, check, ns, receipts) {
   return function* (receipt,index) {
     if(index===0) {
       const firstKey=receiptKey(receipt);
-      for(const row of writerReceiptInputs(db,check,ns)) {
+      for(const row of writerReceiptInputs(db,check,ns,receipts)) {
         check();
         const rowKey=key(row.client,row.session_id,row.event_id,row.role,row.excerpt);
         matches.get(rowKey)?.push(row);
