@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { transaction } from '../database.mjs';
+import { installedContentLayout } from '../content-safety-schema.mjs';
 import { createRawLineageStorage, isSourceSnapshotOverflow } from '../raw-lineage-storage.mjs';
 import { createLegacyReceiptWalk, isSourceSnapshotOverflow as legacyOverflow } from '../testing/receipt-walk-reference.mjs';
 import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
@@ -60,6 +61,16 @@ for(const layout of [18,53])for(const seed of seeds)test(`receipt walk equivalen
       const source=i===12?controls.overflow:receipt('extra-'+i);
       db.prepare(`INSERT INTO receipts(id,memory_id,receipt_key,client,session_id,event_id,role,excerpt,created_at)
         VALUES(?,?,?,?,?,?,?,?,?)`).run('extra-'+i,parent.id,i===12?'bad-overflow-key':digest(source),source.client,source.sessionId,source.eventId,source.role,source.excerpt,'z'+String(i).padStart(2,'0'));
+    }
+    // Random-sized receipt groups cross continuation pages at equal timestamps.
+    for(let group=0;group<8;group++){
+      const parent=add(receipt('tie-parent-'+group)),count=9+rnd(9);
+      for(let i=0;i<count;i++){
+        const source=receipt('tie-'+group+'-'+i);sources.push(source);
+        db.prepare(`INSERT INTO receipts(id,memory_id,receipt_key,client,session_id,event_id,role,excerpt,created_at)
+          VALUES(?,?,?,?,?,?,?,?,?)`).run('tie-'+group+'-'+String(i).padStart(3,'0'),parent.id,
+            i===count-1?'bad-tie-key':digest(source),source.client,source.sessionId,source.eventId,source.role,source.excerpt,'equal-receipt-time');
+      }
     }
     if(layout===53){
       const source=receipt('raw-ancestry'),parent=add(source);
@@ -145,4 +156,112 @@ for(const layout of [18,53])for(const seed of seeds)test(`receipt walk equivalen
   assert.ok(accepted>0);if(layout===53)assert.ok(refused>0);
   for(const state of ['deleted','forgotten','suppressed','withheld','memory-fact','receipt-fact'])assert.ok(states.get(state)>0,state);
   t.diagnostic(JSON.stringify({node:process.version,layout,seed,cases,snapshotComparisons,accepted,refused,states:Object.fromEntries(states)}));
+});
+
+
+async function precedenceFixture(t) {
+  const f=eventTimeSafetyFixture(t,33);await f.migrate();
+  const db=f.connect();t.after(()=>db.close());installedContentLayout(db);return db;
+}
+function precedenceMemory(db,i,{revision=1}={}) {
+  const id='memory-'+String(i).padStart(5,'0');
+  db.prepare(`INSERT INTO memories(id,owner_id,scope,project_id,fingerprint,content,kind,origin,confidence,revision,deleted,created_at,updated_at)
+    VALUES(?,?,?,?,?,?,'fact','explicit',1,?,0,'time','time')`).run(id,ns.ownerId,ns.scope,ns.projectId,id,'Synthetic '+id,revision);
+  return id;
+}
+function precedenceReceipt(db,id,source,{key=digest(source),rid='receipt-'+id}={}) {
+  db.prepare(`INSERT INTO receipts(id,memory_id,receipt_key,client,session_id,event_id,role,excerpt,created_at)
+    VALUES(?,?,?,?,?,?,?,?,'time')`).run(rid,id,key,source.client,source.sessionId,source.eventId,source.role,source.excerpt);
+}
+const errorOutcome=error=>({code:error.code,errcode:error.errcode??null});
+function chargedDecision(t,db,create,batch,{at=Infinity,injected,fromWalk=false}={}) {
+  const storage=create(db),native=db.prepare.bind(db);let executions=0,started=!fromWalk;
+  const trace=[];
+  const hook=t.mock.method(db,'prepare',sql=>{
+    const statement=native(sql);
+    for(const method of ['get','all','run','iterate']) {
+      const execute=statement[method].bind(statement);
+      statement[method]=(...args)=>{
+        if(sql.startsWith('SELECT id,revision,deleted,updated_at FROM memories'))started=true;
+        if(started){executions++;trace.push(sql);if(executions===at)throw Object.assign(Error('synthetic statement interruption'),injected);}
+        return execute(...args);
+      };
+    }
+    return statement;
+  });
+  let outcome;
+  try{transaction(db,()=>storage.assertReceipts(ns,batch));outcome={code:'accept',errcode:null};}
+  catch(error){assert.equal(typeof error.code,'string');outcome=errorOutcome(error);}
+  finally{hook.mock.restore();}
+  return {outcome,executions,trace};
+}
+function fillPrecedence(db,target,{lateError=false,second,lateRefusal=false}={}) {
+  transaction(db,()=>{for(let i=0;i<140;i++){
+    const id=precedenceMemory(db,i,{revision:lateError&&i===139?9007199254740993n:1});
+    const source=second&&i===0?second:i===(lateRefusal?138:0)?target:receipt('filler-'+i);
+    precedenceReceipt(db,id,source,{key:second&&i===0||source===target&&(!lateError||!second)?'inconsistent-key':digest(source)});
+  }});
+}
+
+test('first receipt refusal precedes later statement budgets and interrupts at every index',async t=>{
+  const db=await precedenceFixture(t),target=receipt('early');fillPrecedence(db,target);
+  const reference=chargedDecision(t,db,createLegacyReceiptWalk,[target]);
+  assert.equal(reference.outcome.code,'source_excluded');
+  const candidate=chargedDecision(t,db,createRawLineageStorage,[target]);
+  assert.deepEqual(candidate.outcome,reference.outcome);
+  // Include the entire call, plus one index beyond either uninterrupted trace.
+  const last=Math.max(reference.executions,candidate.executions)+1;
+  for(const injected of [{code:'source_budget_exceeded',errcode:null},{code:'ERR_SQLITE_ERROR',errcode:9}]) {
+    const outcomes=[];
+    for(let at=1;at<=last;at++){
+      const old=chargedDecision(t,db,createLegacyReceiptWalk,[target],{at,injected});
+      const actual=chargedDecision(t,db,createRawLineageStorage,[target],{at,injected});
+      for(const result of [old,actual]){
+        assert.ok([reference.outcome.code,injected.code].includes(result.outcome.code),JSON.stringify({at,injected,result}));
+        if(result.outcome.code===injected.code)assert.deepEqual(result.outcome,injected);
+        assert.notEqual(result.outcome.code,'accept');
+      }
+      outcomes.push({at,reference:old.outcome,current:actual.outcome});
+    }
+    const atThird=chargedDecision(t,db,createRawLineageStorage,[target],{at:3,injected,fromWalk:true});
+    assert.deepEqual(atThird.outcome,reference.outcome,'third charged statement after enumeration starts');
+    t.diagnostic(JSON.stringify({injected,last,outcomes,third:atThird.outcome}));
+  }
+});
+
+test('first receipt refusal precedes a later non-representable revision',async t=>{
+  const db=await precedenceFixture(t),target=receipt('early');fillPrecedence(db,target,{lateError:true});
+  for(const create of [createLegacyReceiptWalk,createRawLineageStorage]){
+    const result=chargedDecision(t,db,create,[target]);assert.deepEqual(result.outcome,{code:'source_excluded',errcode:null});
+    t.diagnostic(JSON.stringify({implementation:create.name,outcome:result.outcome}));
+  }
+});
+
+test('nine equal-timestamp receipts retain the malformed final key',async t=>{
+  const db=await precedenceFixture(t),target=receipt('equal-last');
+  transaction(db,()=>{const id=precedenceMemory(db,0);for(let i=0;i<9;i++){
+    const source=i===8?target:receipt('equal-'+i);
+    precedenceReceipt(db,id,source,{rid:'receipt-'+i,key:i===8?'inconsistent-key':digest(source)});
+  }});
+  for(const create of [createLegacyReceiptWalk,createRawLineageStorage])assert.equal(chargedDecision(t,db,create,[target]).outcome.code,'source_excluded');
+});
+
+test('first receipt later read error precedes second receipt early refusal',async t=>{
+  const db=await precedenceFixture(t),first=receipt('first'),second=receipt('second');
+  fillPrecedence(db,first,{lateError:true,second});
+  const old=chargedDecision(t,db,createLegacyReceiptWalk,[first,second]);
+  const actual=chargedDecision(t,db,createRawLineageStorage,[first,second]);
+  assert.equal(old.outcome.code,'ERR_OUT_OF_RANGE');assert.deepEqual(actual.outcome,old.outcome);
+  t.diagnostic(JSON.stringify({reference:old.outcome,current:actual.outcome}));
+});
+
+test('first receipt late refusal precedes second receipt early refusal',async t=>{
+  const db=await precedenceFixture(t),first=receipt('late-first'),second=receipt('early-second');
+  fillPrecedence(db,first,{second,lateRefusal:true});
+  for(const create of [createLegacyReceiptWalk,createRawLineageStorage]){
+    const result=chargedDecision(t,db,create,[first,second]);assert.equal(result.outcome.code,'source_excluded');
+    // Reaching the continuation page proves the early second receipt did not refuse inline.
+    assert.ok(result.trace.some(sql=>sql.includes('AND updated_at=? AND id>?')));
+    t.diagnostic(JSON.stringify({implementation:create.name,outcome:result.outcome,executions:result.executions}));
+  }
 });
