@@ -389,5 +389,14 @@
   "core/engine-card-maintenance.mjs",
   "core/engine-card-output.mjs",
   "core/engine-card-storage.mjs",
-  "docs/engine-cards.md"
+  "docs/engine-cards.md",
+  "integrations/openclaw/README.md",
+  "integrations/openclaw/package.json",
+  "integrations/openclaw/openclaw.plugin.json",
+  "integrations/openclaw/src/config.mjs",
+  "integrations/openclaw/src/hosted.mjs",
+  "integrations/openclaw/src/index.mjs",
+  "integrations/openclaw/src/setup.mjs",
+  "integrations/openclaw/src/terminal.mjs",
+  "integrations/openclaw/src/tools.mjs"
 ]

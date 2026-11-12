@@ -1713,5 +1713,10 @@
     "path": "packages/setup/lib/local-capture.mjs",
     "source": "temporary => open(temporary, 'wx', 0o600), JSON.stringify(request) + '\\n');",
     "reason": "Sensitive installer capture request metadata temp, exclusively created 0600 in an owner-checked 0700 directory with cleanup; canonical store/sidecar aliases refused."
+  },
+  {
+    "path": "integrations/openclaw/src/setup.mjs",
+    "source": "import { mkdir, rmdir, unlink, lstat } from \"node:fs/promises\"",
+    "reason": "Local setup inspects its private credential directory and removes only its newly created secret or empty directory on rollback; secret file I/O uses the OpenClaw SDK and never a database path."
   }
 ]
