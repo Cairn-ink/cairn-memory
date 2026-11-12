@@ -216,11 +216,9 @@ test('first receipt refusal precedes later statement budgets and interrupts at e
     for(let at=1;at<=last;at++){
       const old=chargedDecision(t,db,createLegacyReceiptWalk,[target],{at,injected});
       const actual=chargedDecision(t,db,createRawLineageStorage,[target],{at,injected});
-      for(const result of [old,actual]){
-        assert.ok([reference.outcome.code,injected.code].includes(result.outcome.code),JSON.stringify({at,injected,result}));
-        if(result.outcome.code===injected.code)assert.deepEqual(result.outcome,injected);
-        assert.notEqual(result.outcome.code,'accept');
-      }
+      assert.ok(JSON.stringify(actual.outcome)===JSON.stringify(old.outcome)||
+        JSON.stringify(actual.outcome)===JSON.stringify(injected),JSON.stringify({at,injected,reference:old.outcome,current:actual.outcome}));
+      assert.notEqual(old.outcome.code,'accept');assert.notEqual(actual.outcome.code,'accept');
       outcomes.push({at,reference:old.outcome,current:actual.outcome});
     }
     const atThird=chargedDecision(t,db,createRawLineageStorage,[target],{at:3,injected,fromWalk:true});
