@@ -6,6 +6,9 @@ import { mkdirSync,readFileSync,readdirSync } from 'node:fs';
 import { join,relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
+import { eventTimeSafetyFixture } from '../testing/receipt-event-time-fixture.mjs';
+import { transaction } from '../database.mjs';
+import { createRawLineageStorage } from '../raw-lineage-storage.mjs';
 
 const revision='fd5c59ef8e67cc58bb855a95f8910c668150bfa3';
 const root=fileURLToPath(new URL('../../',import.meta.url));
@@ -13,13 +16,15 @@ const pins=JSON.parse(readFileSync(new URL('./fixtures/card-lineage-off-wide-bas
 const receiptWalkPins=JSON.parse(readFileSync(new URL('./fixtures/card-lineage-off-wide-receipt-walk.json',import.meta.url),'utf8'));
 // Match the whitespace-only normalization used by the SQL trace recorder.
 const normalizeSQL=sql=>sql.replace(/\s+/g,' ').trim();
-// Exact texts observed in the listed cells. The current walk emits the first
-// two; the archived batch variant occurs only in the archived baseline's trace,
+// Exact texts observed in the listed cells and the filter-off witness. The
+// archived batch variant occurs only in the archived baseline's trace,
 // which runs only when the baseline revision is in the local history.
 // Seek and overflow pages are not observed here and receive no exemption.
 const currentReceiptWalkSQLTexts=new Set([
   "SELECT id,revision,deleted,updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id=? AND scope=? AND project_id=? AND deleted=? ORDER BY updated_at DESC,id LIMIT ?",
-  "SELECT r.*, json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN ( SELECT rowid FROM receipts INDEXED BY memory_receipts WHERE memory_id=json_extract(wanted.value,'$[0]') ORDER BY created_at,id LIMIT 5) ORDER BY wanted.key,r.created_at,r.id",
+  "SELECT r.*,wanted.key AS wanted_entry, json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN ( SELECT rowid FROM receipts INDEXED BY memory_receipts WHERE memory_id=json_extract(wanted.value,'$[0]') AND (EXISTS (SELECT 1 FROM json_each(?) source WHERE client=json_extract(source.value,'$[0]') COLLATE BINARY AND session_id=json_extract(source.value,'$[1]') COLLATE BINARY AND event_id=json_extract(source.value,'$[2]') COLLATE BINARY AND role=json_extract(source.value,'$[3]') COLLATE BINARY AND excerpt=json_extract(source.value,'$[4]') COLLATE BINARY) OR instr(CAST(client AS BLOB),x'00')>0 OR instr(CAST(session_id AS BLOB),x'00')>0 OR instr(CAST(event_id AS BLOB),x'00')>0 OR instr(CAST(role AS BLOB),x'00')>0 OR instr(CAST(excerpt AS BLOB),x'00')>0) ORDER BY created_at,id LIMIT 5) ORDER BY wanted.key,r.created_at,r.id",
+  "SELECT id,revision,deleted,updated_at, (SELECT encoding FROM pragma_encoding) AS receipt_encoding FROM memories INDEXED BY namespace_memories WHERE owner_id=? AND scope=? AND project_id=? AND deleted=? ORDER BY updated_at DESC,id LIMIT ?",
+  "SELECT r.*,wanted.key AS wanted_entry, json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN ( SELECT rowid FROM receipts INDEXED BY memory_receipts WHERE memory_id=json_extract(wanted.value,'$[0]') ORDER BY created_at,id LIMIT 5) ORDER BY wanted.key,r.created_at,r.id",
 ]);
 const archivedReceiptWalkSQLTexts=new Set([
   "SELECT r.*, json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted FROM json_each(?) wanted CROSS JOIN receipts r INDEXED BY memory_receipts ON r.memory_id=json_extract(wanted.value,'$[0]') LIMIT 5",
@@ -137,6 +142,25 @@ for(const base of [23,33])for(const mode of ['open','workload'])for(const eventT
       calls:current.calls.length,statements:current.statements.length,tables:current.dump.length}));
   });
 }
+
+test('filter-off receipt batch is an exact current exemption',async t=>{
+  const f=eventTimeSafetyFixture(t,33);await f.migrate();
+  const db=f.connect();t.after(()=>db.close());
+  const namespace={ownerId:'synthetic-owner',scope:'project',projectId:'synthetic-project'};
+  db.prepare(`INSERT INTO memories(id,owner_id,scope,project_id,fingerprint,content,kind,origin,confidence,revision,deleted,created_at,updated_at)
+    VALUES('parent',?,?,?,'parent','Synthetic','fact','explicit',1,1,0,'time','time')`)
+    .run(namespace.ownerId,namespace.scope,namespace.projectId);
+  const statements=[],prepare=db.prepare.bind(db);
+  const hook=t.mock.method(db,'prepare',sql=>{statements.push([normalizeSQL(sql)]);return prepare(sql);});
+  try {
+    transaction(db,()=>createRawLineageStorage(db).assertReceipts(namespace,[{
+      client:'synthetic',sessionId:'session',eventId:'event',role:'user',excerpt:'\uFFFD',
+    }]));
+  } finally {hook.mock.restore();}
+  const batches=statements.filter(([sql])=>sql.includes('FROM json_each(?) wanted CROSS JOIN receipts'));
+  assert.equal(batches.length,1);assert.equal(batches[0][0],"SELECT r.*,wanted.key AS wanted_entry, json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN ( SELECT rowid FROM receipts INDEXED BY memory_receipts WHERE memory_id=json_extract(wanted.value,'$[0]') ORDER BY created_at,id LIMIT 5) ORDER BY wanted.key,r.created_at,r.id");
+  observeReceiptWalkSQL(statements,'current');
+});
 
 test('receipt enumeration exemptions are a closed set over the listed traces',t=>{
   // The current code's texts are required in every mode, and it emits no other exempt text.
