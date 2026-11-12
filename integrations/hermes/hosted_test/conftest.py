@@ -13,6 +13,7 @@ import uuid
 import pytest
 
 from agent.memory_manager import MemoryManager
+from hermes_cli.config import save_env_value
 from plugins.memory import load_memory_provider
 
 
@@ -185,6 +186,8 @@ def install(tmp_path, monkeypatch, cloud):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     managers = []
     providers = []
+    monkeypatch.setenv("CAIRN_MEMORY_TOKEN", "")
+    monkeypatch.setenv("CAIRN_MEMORY_OPENAI_API_KEY", "")
 
     def make(name="profile", *, configured=True, initialize=True, cap="250"):
         home = tmp_path / name
@@ -200,8 +203,7 @@ def install(tmp_path, monkeypatch, cloud):
             return home, provider, None, hosted
         provider.save_config({"mode": "hosted", "api_endpoint": cloud.endpoint,
                               "prefetch_timeout_ms": cap}, str(home))
-        hosted.write_credential(home, {"endpoint": cloud.endpoint, "token": "synthetic-memory-token",
-                                      "token_id": "synthetic-token-id", "expires_at": None})
+        save_env_value("CAIRN_MEMORY_TOKEN", "synthetic-memory-token")
         (home / "config.yaml").write_text("memory:\n  provider: cairn\n")
         assert provider.is_available()
         manager = MemoryManager()

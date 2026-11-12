@@ -5,13 +5,10 @@ from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass
 import getpass
 import json
-import os
 from pathlib import Path
 import re
-import stat
 import threading
 import time
-import uuid
 import warnings
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
@@ -19,8 +16,10 @@ from urllib.parse import urlsplit
 import httpx
 
 from agent.memory_provider import MemoryProvider, RecallStatus, spawn_context_thread
+from agent.secret_scope import get_secret, UnscopedSecretError
+from hermes_constants import reset_hermes_home_override, set_hermes_home_override
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 MCP_PROTOCOL_VERSION = "2025-06-18"
 DEFAULT_ENDPOINT = "https://cairn.ink"
 SESSION_ID = re.compile(r"[A-Za-z0-9._:-]{1,200}")
@@ -224,66 +223,24 @@ def valid_expiry(value):
         return False
 
 
-def validate_credential(value, endpoint):
-    if (not isinstance(value, dict) or set(value) != {"endpoint", "token", "token_id", "expires_at"}
-            or value["endpoint"] != endpoint
-            or not isinstance(value["token"], str) or not value["token"]
-            or not all(33 <= ord(c) <= 126 for c in value["token"])
-            or not isinstance(value["token_id"], str)
-            or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", value["token_id"])
-            or not valid_expiry(value["expires_at"])):
-        raise ValueError("cairn_invalid_credential")
-    return dict(value)
+def valid_token(token):
+    return isinstance(token, str) and bool(token) and all(33 <= ord(c) <= 126 for c in token)
 
 
-def read_credential(home, endpoint):
-    """Open both components without following symlinks, including during a rename race."""
-    directory = os.open(Path(home) / "cairn", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+def profile_token():
     try:
-        descriptor = os.open("hosted-credential.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
-                             dir_fd=directory)
-        with os.fdopen(descriptor, encoding="utf-8") as file:
-            if not stat.S_ISREG(os.fstat(file.fileno()).st_mode):
-                raise ValueError("cairn_invalid_credential")
-            return validate_credential(json.load(file), endpoint)
-    finally:
-        os.close(directory)
-
-
-def write_credential(home, credential):
-    validate_credential(credential, credential["endpoint"])
-    path = Path(home) / "cairn"
-    path.mkdir(mode=0o700, parents=True, exist_ok=True)
-    directory = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    temporary = ".credential-" + uuid.uuid4().hex
-    try:
-        os.fchmod(directory, 0o700)
-        try:
-            existing = os.stat("hosted-credential.json", dir_fd=directory, follow_symlinks=False)
-        except FileNotFoundError:
-            existing = None
-        if existing is not None and not stat.S_ISREG(existing.st_mode):
-            raise ValueError("cairn_invalid_credential")
-        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-                             0o600, dir_fd=directory)
-        with os.fdopen(descriptor, "w", encoding="utf-8") as file:
-            os.fchmod(file.fileno(), 0o600)
-            json.dump(credential, file)
-            file.flush()
-            os.fsync(file.fileno())
-        os.replace(temporary, "hosted-credential.json", src_dir_fd=directory, dst_dir_fd=directory)
-    finally:
-        try:
-            os.unlink(temporary, dir_fd=directory)
-        except FileNotFoundError:
-            pass
-        os.close(directory)
+        token = get_secret("CAIRN_MEMORY_TOKEN")
+    except UnscopedSecretError:
+        raise ValueError("cairn_missing_secret") from None
+    if not valid_token(token):
+        raise ValueError("cairn_missing_secret")
+    return token
 
 
 def check_credential(endpoint, token):
     """Never propagate response bodies, transport diagnostics, or the pasted secret."""
     try:
-        if not isinstance(token, str) or not token or not all(33 <= ord(c) <= 126 for c in token):
+        if not valid_token(token):
             return None, "Invalid or revoked token."
         client = DeadlineClient(headers={"Authorization": "Bearer " + token})
         try:
@@ -306,28 +263,51 @@ def check_credential(endpoint, token):
                 or not isinstance(scopes, list) or len(scopes) != 2
                 or sorted(scopes) != ["memory:capture", "memory:recall"]):
             return None, "Invalid memory token response. Nothing saved."
-        credential = {"endpoint": endpoint, "token": token, "token_id": value.get("token_id"),
-                      "expires_at": value.get("expires_at", "invalid")}
-        return validate_credential(credential, endpoint), ""
+        if (not isinstance(value.get("token_id"), str)
+                or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", value["token_id"])
+                or not valid_expiry(value.get("expires_at", "invalid"))):
+            return None, "Invalid memory token response. Nothing saved."
+        return value, ""
     except Exception:
         return None, "Cairn transport failure. Nothing saved."
 
 
-def post_setup(provider, hermes_home, config):
-    from hermes_cli.config import save_config
-    from hermes_cli.memory_setup import _prompt_schema_fields, _write_env_vars
+def prompt_local_fields(schema, values):
+    """Collect this plugin's fields without persisting any partial answers."""
+    env_writes = {}
+    for field in schema:
+        if not all(values.get(key) == value for key, value in field.get("when", {}).items()):
+            continue
+        key = field["key"]
+        description = field.get("description", key)
+        if field.get("secret"):
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", getpass.GetPassWarning)
+                value = getpass.getpass(description + " (blank to keep): ")
+            if value:
+                env_writes[field["env_var"]] = value
+        else:
+            default = values.get(key) or field.get("default")
+            suffix = f" [{default}]" if default else ""
+            value = input(description + suffix + ": ").strip() or default
+            if value:
+                values[key] = value
+    return env_writes
 
+
+def post_setup(provider, hermes_home, config):
+    from hermes_cli.config import save_config, save_env_value
+
+    home_scope = set_hermes_home_override(hermes_home)
     try:
         mode = input("Cairn mode: hosted or local [hosted]: ").strip() or "hosted"
         if mode == "local":
             values = config.get("memory", {}).get("cairn", {})
             values = dict(values) if isinstance(values, dict) else {}
-            env_writes = {}
-            if not _prompt_schema_fields("cairn", provider.get_config_schema(), values, env_writes):
-                return
+            env_writes = prompt_local_fields(provider.get_config_schema(), values)
             provider.save_config(values, hermes_home)
-            if env_writes:
-                _write_env_vars(env_writes, hermes_home=hermes_home)
+            for key, value in env_writes.items():
+                save_env_value(key, value)
         elif mode == "hosted":
             endpoint = input(f"Cairn endpoint [{DEFAULT_ENDPOINT}]: ").strip() or DEFAULT_ENDPOINT
             endpoint_origin(endpoint)
@@ -340,8 +320,8 @@ def post_setup(provider, hermes_home, config):
                 print(message)
                 return
             values = validate_config({"mode": "hosted", "api_endpoint": endpoint})
-            write_credential(hermes_home, credential)
             provider.save_config(values, hermes_home)
+            save_env_value("CAIRN_MEMORY_TOKEN", token)
         else:
             print("Choose hosted or local. Nothing saved.")
             return
@@ -354,6 +334,8 @@ def post_setup(provider, hermes_home, config):
             print("Revoke the token by deleting it at cairn.ink → Settings → Connections.")
     except (ValueError, OSError, EOFError, KeyboardInterrupt, getpass.GetPassWarning):
         print("Cairn setup failed. Check the endpoint, credential and profile permissions; retry memory setup.")
+    finally:
+        reset_hermes_home_override(home_scope)
 
 
 def tool_schemas():
@@ -455,13 +437,13 @@ class HostedMemoryProvider(MemoryProvider):
         home = Path(kwargs["hermes_home"]).resolve()
         try:
             config = validate_config(json.loads((home / "cairn.json").read_text(encoding="utf-8")))
-            credential = read_credential(home, config["api_endpoint"])
-            if self._home is not None and (home != self._home or config != self._config or credential["token"] != self._token):
+            token = profile_token()
+            if self._home is not None and (home != self._home or config != self._config or token != self._token):
                 raise ValueError
         except (OSError, ValueError, TypeError):
             raise ValueError("cairn_invalid_configuration") from None
         self._home, self._config = home, config
-        self._endpoint, self._token = endpoint_origin(config["api_endpoint"]), credential["token"]
+        self._endpoint, self._token = endpoint_origin(config["api_endpoint"]), token
         if self._client is None:
             self._client = DeadlineClient(headers={
                 "Content-Type": "application/json", "Accept": "application/json, text/event-stream",
