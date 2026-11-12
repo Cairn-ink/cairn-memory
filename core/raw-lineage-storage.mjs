@@ -260,13 +260,21 @@ function* writerReceiptInputs(db, check, ns) {
 }
 function matchingReceiptInputs(db, check, ns, receipts) {
   const key=(client,session,event,role,excerpt)=>JSON.stringify([client,session,event,role,excerpt]);
+  const receiptKey=receipt=>key(receipt.client,receipt.sessionId,receipt.eventId,receipt.role,receipt.excerpt);
   const matches=new Map();
-  for(const receipt of receipts)matches.set(key(receipt.client,receipt.sessionId,receipt.eventId,receipt.role,receipt.excerpt),[]);
-  if(matches.size)for(const row of writerReceiptInputs(db,check,ns)) {
-    check();
-    matches.get(key(row.client,row.session_id,row.event_id,row.role,row.excerpt))?.push(row);
-  }
-  return receipt=>matches.get(key(receipt.client,receipt.sessionId,receipt.eventId,receipt.role,receipt.excerpt));
+  for(const receipt of receipts.slice(1))matches.set(receiptKey(receipt),[]);
+  return function* (receipt,index) {
+    if(index===0) {
+      const firstKey=receiptKey(receipt);
+      for(const row of writerReceiptInputs(db,check,ns)) {
+        check();
+        const rowKey=key(row.client,row.session_id,row.event_id,row.role,row.excerpt);
+        matches.get(rowKey)?.push(row);
+        // Suspend the walk until the first receipt's existing validator runs.
+        if(rowKey===firstKey)yield row;
+      }
+    } else yield* matches.get(receiptKey(receipt));
+  };
 }
 
 export function createRawLineageStorage(db, { readMemo } = {}) {
@@ -402,12 +410,12 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
       if(snapshot && (!hasContentSuppressionRequestInside(db) || !covered || !facts ||
           facts.some(fact=>fact.kind==='raw')))sourceSnapshotOverflow();
       if (contentSuppressionReasonInside(db, ns)) fail('source_excluded');
-      // Retain matches once, then validate in the original receipt/row order.
+      // Validate receipt one as the walk streams; retain later receipts' matches.
       // Snapshot enumeration, overflow and validated handling stay unchanged.
       const matches=snapshot ? undefined : matchingReceiptInputs(db,check,ns,receipts);
-      for (const receipt of receipts) {
+      for (const [index,receipt] of receipts.entries()) {
         check();
-        for (const row of snapshot ? snapshotReceiptInputs(ns) : matches(receipt)) {
+        for (const row of snapshot ? snapshotReceiptInputs(ns) : matches(receipt,index)) {
           check();
           if(row.client!==receipt.client || row.session_id!==receipt.sessionId || row.event_id!==receipt.eventId ||
             row.role!==receipt.role || row.excerpt!==receipt.excerpt)continue;
