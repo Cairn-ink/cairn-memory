@@ -92,8 +92,8 @@ later:
 What did we decide about the database migration last week?
 ```
 
-Search over saved conversations catches up in the background, so the last few
-minutes may not show up yet.
+Search over saved conversations catches up in the background, so your most
+recent turns may not show up yet.
 
 ![Illustrated example: save a short-report preference with the text it was saved from, then correct it to detailed reports or forget it.](docs/images/memory-workflow.png)
 
@@ -157,21 +157,23 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
   sent to Cairn, and no Cairn account is involved. Setup downloads the engine's
   packages from npm.
 - **Saved conversations.** Local mode saves the text of your Claude Code and
-  Codex conversations into that database automatically, up to 200 MB, with no
-  model and no key. Turn it off with `npx @cairn-ink/memory config --local-capture off`,
+  Codex conversations into that database automatically, up to 200 MB. Saving
+  needs no account, no key and no model calls. Turn it off with
+  `npx @cairn-ink/memory config --local-capture off`,
   or install with `npx @cairn-ink/memory setup --local --no-capture`.
   `npx @cairn-ink/memory raw list` lists saved conversations without their text.
   `npx @cairn-ink/memory raw delete <conversation-id>` previews what would be
   removed, and adding `--yes` deletes it. Memories saved from that conversation
   stay until you forget them.
-- **Model keys.** Saving, keyword search, inspecting, correcting and forgetting
-  use no model. If `OPENAI_API_KEY` is set in the environment your tool starts
-  the memory server with, the engine uses it automatically. It embeds your
-  saved memories and conversations in the background for semantic search, and
-  `recall_memory` sends the text it selects. All of that text goes to OpenAI.
-  Without the key, nothing is sent to a model provider.
-  [Defaults, costs and off switches](docs/defaults.md) lists the spending limit
-  and how to turn semantic search off.
+- **Model keys.** Saving conversations never calls a model, and keyword search,
+  inspecting, correcting and forgetting use no model either. If the memory
+  server can see an `OPENAI_API_KEY`, your memories and search text are sent to
+  OpenAI for semantic search, estimated at most about US$1 per server run, and
+  `recall_memory` sends the text it selects. Pausing or turning off saving does
+  not stop these requests yet. Saved conversations are sent only if you opt in
+  with `--raw-semantic`. To keep everything on your computer, register the
+  server with `--no-context-semantic`, or do not give it a key.
+  [Defaults, costs and off switches](docs/defaults.md) has the details.
 - **Cloud.** Conversation text and prompts go to cairn.ink after best-effort
   masking. The Claude Code plugin sends content-free usage statistics by
   default, and you can turn them off. Codex keeps its sign-in in an unencrypted
@@ -209,16 +211,22 @@ Your own interactive sessions keep using memory as before.
 
 This is a developer preview. Know these limits before you rely on it:
 
-- **Search catches up after saving.** Local mode indexes new conversations in
-  the background while Claude Code or Codex is open: a few minutes for about
-  1,000 saved messages, about an hour for 10,000. Until then, search reports
-  partial coverage. Histories of about 50,000 messages or more may never finish
-  indexing.
+- **Search catches up after saving.** Each turn is saved as soon as it ends,
+  and Local mode indexes it in the background while Claude Code or Codex is
+  open: about 15 minutes for 1,000 saved messages, roughly 2 hours for 10,000.
+  Every new save restarts the pass, so a conversation from a busy session may
+  not be searchable until you pause. Until the index catches up, search still
+  returns results, but recent conversations can be missing, so an empty answer
+  does not mean nothing was saved. Histories of about 50,000 messages or more
+  may never finish indexing.
 - **Local recall is on request.** Local mode does not add memories to your
   prompts by itself. Your agent searches when you ask.
 - **Platforms.** Local setup is tested on Linux and WSL. macOS runs the same
   code but is untested. On native Windows `setup --local` refuses to run, so
   use WSL or the [source-checkout guide for PowerShell](docs/windows-install.md).
+- **Config directories.** Local setup stops without connecting a tool if
+  `~/.claude` or `~/.codex` is a symbolic link, and it does not support a
+  custom `CLAUDE_CONFIG_DIR` yet.
 - **Semantic recall needs a key.** Without an OpenAI key, `recall_memory`
   returns `model_not_configured`, and keyword search still works. A fully local
   model path is not verified yet.
