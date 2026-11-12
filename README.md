@@ -26,6 +26,14 @@ them. Cairn.ink Memory gives both tools one shared memory. Each memory keeps
 the text it was saved from, so when one is wrong or out of date you can see
 where it came from, then correct it or forget it.
 
+- **Every memory has a source.** Each one keeps the text it was saved from, so
+  you can check it before you trust it.
+- **You can change it.** Correct a memory when things change, or forget it.
+- **One memory for both tools.** Claude Code and Codex read and write the same
+  store.
+- **Your choice of home.** A database on your computer with no account, or
+  cairn.ink when you want the same memory on every computer.
+
 This is a developer preview. See the [current limits](#status) and the full
 [known limitations](docs/limitations.md).
 
@@ -101,6 +109,20 @@ minutes may not show up yet.
 The source text kept with a memory is called a **Source Receipt**. It shows what
 was submitted when the memory was saved or corrected. It does not prove that
 the memory is true. [All tools and parameters](docs/standalone-mcp.md#tools)
+
+## How it works
+
+Cairn.ink Memory keeps what your agents learn in three layers, like the three
+stones of a cairn.
+
+| Layer | What it holds | Local mode | Cloud mode |
+| --- | --- | --- | --- |
+| **Conversations** | What was said, as searchable text | Saved automatically on your computer | Sent to cairn.ink |
+| **Memories** | The preferences, decisions and facts worth keeping, each with its Source Receipt | Saved when you or your agent ask | Extracted from your conversations automatically, or saved on request |
+| **Cards** | Topic pages that pull related memories together into a map | Not built by default | The map you browse on cairn.ink |
+
+In Local mode, a lookup returns memories together with dated excerpts from the
+conversations behind them, so an answer arrives with its evidence.
 
 ## Cloud mode
 
