@@ -204,6 +204,20 @@ test('saved capture off skips unsafe Claude capture directory on later setup', a
   await assert.rejects(lstat(join(directory, 'settings.json')), { code: 'ENOENT' });
 });
 
+for (const lang of ['en', 'zh']) test(`blocked capture setup ends with honest saving outcome (${lang})`, async t => {
+  if (!needCache(t)) return;
+  const f = await localFixture(t, { codex: false }), directory = join(f.home, '.claude');
+  await mkdir(directory, { mode: 0o755 });
+  await writeFile(join(directory, 'settings.json'), '{"hooks":42}\n', { mode: 0o600 });
+  const result = await f.run(['setup', '--local', '--client', 'claude', '--lang', lang]);
+  assert.equal(result.code, 2, result.display);
+  const last = result.display.trimEnd().split('\n').at(-1);
+  assert.equal(last, translator(lang)('local_capture_setup_off', { client: 'Claude Code', reason: 'not_installed' }));
+  assert.ok(!result.display.includes(translator(lang)('local_done')));
+  const status = await f.run(['status', '--client', 'claude', '--lang', lang]);
+  assert.match(status.display, /not_installed/);
+});
+
 // Use the unpacked setup fixture so these cases never need to pack a release.
 for (const mode of [0o700, 0o750, 0o755, null]) test(`Claude config directory ${mode === null ? 'missing' : mode.toString(8)} installs capture without chmod`, async t => {
   if (!needCache(t)) return;

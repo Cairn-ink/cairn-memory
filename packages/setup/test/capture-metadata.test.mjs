@@ -330,3 +330,38 @@ for (const client of ['claude', 'codex']) for (const kind of ['real', 'leaf-syml
     assert.equal(dirname(request.clientConfigPath), directory);
   } else await assert.rejects(f.configure(client), { key: 'local_root_invalid', code: 2 });
 });
+
+// Exercise every engine setup status/reason through the same orchestration and
+// catalogue used by setup, and compare its last line with status's observation.
+for (const lang of ['en', 'zh']) for (const outcome of [
+  { status: 'active' }, { status: 'disabled' }, { status: 'prepared' }, { status: 'busy' }, { status: 'declined' },
+  ...['invalid_input','declined','not_installed','prepared','rearm_required','recovery_required',
+    'configuration_conflict','configuration_changed','unsafe_path','store_invalid','authority_bound','authority_changed',
+    'qualification_required','runtime_unavailable','busy','cancelled','source_refused','event_refused','unexpected_failure',
+    'child_unavailable','unknown_reason'].map(reason => ({ status: 'blocked', reason })),
+  ...['qualified','pending','failed'].map(status => ({ status: 'active', qualification: { status, reason: 'qualification_required' } })),
+  { status: 'active', legacyCodex: true },
+]) test(`setup outcome ${lang} ${JSON.stringify(outcome)}`, async t => {
+  const { finishCaptureSetup, captureStatus } = await import('../lib/local-capture.mjs');
+  const { translator } = await import('../lib/messages.mjs');
+  const f = await fixture(t), client = outcome.qualification || outcome.legacyCodex ? 'codex' : 'claude';
+  const cli = join(dirname(dirname(executableFor(f.root, f.descriptor.engine.id))), 'integrations/client/raw/local-setup-cli.mjs');
+  await writeFile(cli, `console.log(JSON.stringify(process.argv[2] === 'init' ? {status:'initialized'} : ${JSON.stringify(outcome)}));`);
+  const output = [], context = { env: f.env, write: value => output.push(value), t: translator(lang) };
+  const summary = await configureCapture(f.root, f.descriptor, [client], context);
+  const observed = output.find(line => (lang === 'en' ? /local capture: (?:on|off|blocked) \(/ : /本機擷取：/).test(line));
+  output.length = 0;
+  await captureStatus(f.root, client, context);
+  assert.equal(output.find(line => (lang === 'en' ? /local capture: (?:on|off|blocked) \(/ : /本機擷取：/).test(line)), observed);
+  const code = finishCaptureSetup(summary, context), last = output.at(-1);
+  const on = outcome.status === 'active' && client === 'claude' || outcome.qualification?.status === 'qualified';
+  const temporary = outcome.status === 'active' && outcome.qualification?.status === 'pending';
+  assert.equal(code, on || temporary ? 0 : 2);
+  if (on) assert.ok(output.some(line => line === translator(lang)('local_done')));
+  else {
+    assert.ok(!output.includes(translator(lang)('local_done')));
+    assert.equal(last, translator(lang)(temporary ? 'local_capture_setup_waiting' : 'local_capture_setup_off', {
+      client: client === 'claude' ? 'Claude Code' : 'Codex', reason: summary[0].reason }));
+    assert.ok(observed.includes(summary[0].reason));
+  }
+});

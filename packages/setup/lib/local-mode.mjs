@@ -9,7 +9,7 @@ import { localRoot, requestedRoot, canonicalPath, readDescriptor, writeDescripto
 import { readClaudeServers, registerClaude, detachClaude } from './local-claude.mjs';
 import { registerCodex, detachCodex, checkCodexLock, codexCapabilities } from './local-codex.mjs';
 import { shellArgument } from './output.mjs';
-import { configureCapture, captureStatus, captureSettings, retainedCapture, clientConfigDirectory, captureRequested } from './local-capture.mjs';
+import { configureCapture, captureStatus, captureSettings, retainedCapture, clientConfigDirectory, captureRequested, finishCaptureSetup } from './local-capture.mjs';
 import { SetupError } from './errors.mjs';
 import { rawLocal, validateRawOptions } from './local-raw.mjs';
 
@@ -361,10 +361,10 @@ async function setupLocal(options, selection, detection, context) {
 
     }
     // Keep the setup journal until capture orchestration is durable too.
-    await configureCapture(root, descriptor, descriptor.operation.clients, { ...context, onChild: updateChild },
+    const capture = await configureCapture(root, descriptor, descriptor.operation.clients, { ...context, onChild: updateChild },
       { enabled: options.noCapture ? false : undefined });
     descriptor.state = 'installed'; descriptor.operation = null; await writeDescriptor(root, descriptor);
-    write(t('local_done')); write(t('next_reopen')); return manual ? 1 : 0;
+    return finishCaptureSetup(capture, context) || (manual ? 1 : 0);
   });
 }
 export async function localStatus(detection, { write, t, env = process.env, verbose, emittedEnvironmentCauses = new Set() }) {

@@ -2,6 +2,8 @@
 
 ## 0.6.6 — Unreleased
 
+- Local setup reports conversation saving as OFF and exits with code 2 when requested capture is blocked or fails; pending background format qualification reports when saving will start automatically.
+
 - Local capture setup accepts Claude Code's and Codex's own configuration directories when they aren't writable by other users (for example mode 0755).
 - Local capture accepts the additional hook fields that current Claude Code versions send; earlier builds ignored those turns.
 

@@ -165,7 +165,7 @@ export async function configureCapture(root, descriptor, selected, context, { en
     await metadataPath(file(root), descriptor.database.path);
     await staleRequests(root, descriptor.database.path);
   }
-  const settings = await captureSettings(root);
+  const settings = await captureSettings(root), outcomes = [];
   for (const client of selected) {
     let receipt = settings.clients[client];
     if (!receipt && uninstall) continue;
@@ -209,15 +209,26 @@ export async function configureCapture(root, descriptor, selected, context, { en
         if (outcome.status === 'prepared') outcome = await invoke(root, receipt, ['activate', '--installation', installation], context);
       }
     }
-    // The engine installs hooks even while qualification is pending/failed.
-    // Its cache-only DTO is the sole qualification authority for setup and status.
-    if (client === 'codex' && outcome.status === 'active') {
+    // Read the same cache-only observation as status, including after a failed
+    // action. Never report capture from an intermediate action result.
+    if (!uninstall && receipt.enabled) {
       outcome = await invoke(root, receipt, ['status', '--installation', installation], { ...context, timeout: 10000 });
     }
-    showCapture(client, outcome, context);
+    const summary = showCapture(client, outcome, context);
+    outcomes.push({ client, requested: !uninstall && receipt.enabled, ...summary });
     // A disable refusal must stop uninstall before engine/MCP detachment.
     if ((uninstall || !receipt.enabled) && outcome.status !== 'disabled') fail();
   }
+  return outcomes;
+}
+export function finishCaptureSetup(outcomes, { write, t }) {
+  const inactive = outcomes.filter(value => value.requested && value.state !== 'on');
+  if (!inactive.length) { write(t('local_done')); write(t('next_reopen')); return 0; }
+  write(t('next_reopen'));
+  write(inactive.map(value => t(value.temporary ? 'local_capture_setup_waiting' : 'local_capture_setup_off', {
+    client: value.client === 'claude' ? 'Claude Code' : 'Codex', reason: value.reason,
+  })).join(' '));
+  return inactive.some(value => !value.temporary) ? 2 : 0;
 }
 function showCapture(client, outcome, { write, t }) {
   // A retained older runtime may omit the DTO. Keep capture status waiting
@@ -227,8 +238,8 @@ function showCapture(client, outcome, { write, t }) {
   const waiting = verdict && verdict.status !== 'qualified';
   const state = outcome.status === 'active' && !waiting ? 'on' : outcome.status === 'disabled' ? 'off' : 'blocked';
   const allowedReasons = new Set(['not_installed','prepared','rearm_required','recovery_required','configuration_conflict','configuration_changed',
-    'unsafe_path','store_invalid','authority_bound','authority_changed','qualification_required','runtime_unavailable','busy','cancelled','child_unavailable','unexpected_failure']);
-  const reason = waiting ? 'qualification_required' : state === 'blocked' ? (allowedReasons.has(outcome.reason) ? outcome.reason : 'not_installed') : state;
+    'invalid_input','declined','source_refused','event_refused','unsafe_path','store_invalid','authority_bound','authority_changed','qualification_required','runtime_unavailable','busy','cancelled','child_unavailable','unexpected_failure']);
+  const reason = waiting ? 'qualification_required' : state === 'blocked' ? (allowedReasons.has(outcome.reason) ? outcome.reason : outcome.status === 'prepared' ? 'prepared' : outcome.status === 'busy' ? 'busy' : outcome.status === 'declined' ? 'declined' : 'not_installed') : state;
   write(t('local_capture_status', { client: client === 'claude' ? 'Claude Code' : 'Codex', state, reason }));
   if (client === 'codex') {
     write(t('local_capture_codex_approval'));
@@ -239,6 +250,7 @@ function showCapture(client, outcome, { write, t }) {
       write(t(waiting ? 'local_capture_qualification' : 'local_capture_last_qualified'));
     } else if (outcome.reason === 'qualification_required') write(t('local_capture_qualification'));
   }
+  return { state, reason, temporary: outcome.status === 'active' && outcome.qualification?.status === 'pending' };
 }
 export async function captureStatus(root, client, context) {
   const receipt = (await captureSettings(root)).clients[client];
