@@ -13,6 +13,12 @@ export async function createContextReadHost(configuration) {
   return { ...host, rawSearch: {
     async search() { return { candidates: [candidate], coverage: { status: 'complete' } }; },
     async prepare() { const handle = Object.freeze({ value }); handles.add(handle); return handle; },
+    async prepareMany(candidates, { onPrepared }) {
+      const prepared = candidates.map((_, index) => {
+        const handle = Object.freeze({ value }); handles.add(handle); onPrepared(handle, index); return handle;
+      });
+      return { handles: prepared, complete: true };
+    },
     revalidate(selected) { return selected.map(handle => { if (!handles.has(handle)) throw Error('source_unavailable'); return value; }); },
   }, close() { handles.clear(); } };
 }
