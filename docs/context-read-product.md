@@ -2082,8 +2082,9 @@ Product assembly uses the same 200 ms source-date reserve as embedded assembly.
 If optional source-date work cannot fit, prepared Memory items remain available
 without their dates, with the existing `diagnostics.stops.deadline:true`.
 Raw excerpts retain their validated prefix with `coverage.raw:'partial'`.
-Canonical final validation remains mandatory; incomplete or late validation
-cannot deliver selected items. No item or diagnostics keys are added.
+Canonical final validation always runs to completion for selected items.
+Validation failures refuse delivery; elapsed time alone does not discard
+validated items. No item or diagnostics keys are added.
 
 Managed product readers remain ready-only: the host starts and drives its
 existing context index maintainer/maintenance pump before admitting reads.

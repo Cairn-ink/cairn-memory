@@ -359,7 +359,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     } catch (error) { lease.invalidate(error); throw error; }
     finally { lease.release(); }
   }
-  async function searchCandidates(input, access, deadlineAt, internal = false, graceMs = 0) {
+  async function searchCandidates(input, access, deadlineAt, internal = false) {
+    const graceMs = internal ? access.firstReadGraceMs ?? 0 : 0;
     let diagnostics, controller, lease, sourceState;
     try {
       diagnostics = { channels: { lexical: channel('unavailable'), semantic: channel(input.semantic ? options.embedder ? 'unavailable' : 'absent' : 'disabled',
@@ -618,10 +619,10 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       ready();
       const { payload, input } = contextInput('contextRead', original, supportedTypes, options.sources);
       deadlineAt = performance.now() + input.deadlineMs;
-      const access = authorize('contextRead', input, payload, token);
+      const access = { ...authorize('contextRead', input, payload, token),
+        firstReadGraceMs: Object.hasOwn(payload, 'deadlineMs') ? 0 : Math.min(FIRST_READ_GRACE_MS, ASSEMBLY_LIMITS.deadlineMs - input.deadlineMs) };
       if (!options.counter) return failure(new MemoryStoreError('invalid_input'), { counter: 'absent' });
-      const searched = await searchCandidates(input, access, deadlineAt, true,
-        Object.hasOwn(payload, 'deadlineMs') ? 0 : Math.min(FIRST_READ_GRACE_MS, ASSEMBLY_LIMITS.deadlineMs - input.deadlineMs));
+      const searched = await searchCandidates(input, access, deadlineAt, true);
       deadlineAt = searched.deadlineAt ?? deadlineAt;
       access.check();
       if (!searched.ok) {
@@ -746,7 +747,6 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       if (bytes(result) > CONTEXT_LIMITS.responseBytes) fail('context_item_too_large');
       // No host callback, count or await follows this authoritative read.
       return read(() => {
-        if (delivered.length && performance.now() >= deadlineAt) fail('index_unavailable');
         if (searched.sourceState) {
           assertSourcesInside(input, searched.sourceState, 'snapshot_stale');
           const witnessBudget = sourceBudget(Infinity);
@@ -764,15 +764,12 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           }
           if (bind('snapshot-item', cardLineageItemInside(db,current)) !== item.fence) fail('snapshot_stale');
         }
-        if (delivered.length && performance.now() >= deadlineAt) fail('index_unavailable');
         return result;
       });
     } catch (error) {
       const finalTrace = candidates && error.code === 'index_unavailable' && options.localStatus ? { ...candidates.trace, localEmbedder: sampleLocalStatus(options.localStatus) } : candidates?.trace;
-      const finalCoverage = candidates && error.code === 'index_unavailable' && performance.now() >= deadlineAt
-        ? { ...candidates.coverage, stops: { ...candidates.coverage.stops, deadline: true } } : candidates?.coverage;
       return failure(error, candidates && error.code === 'index_unavailable' ? { candidates: {
-        channels: candidates.channels, coverage: finalCoverage, trace: finalTrace } } : undefined);
+        channels: candidates.channels, coverage: candidates.coverage, trace: finalTrace } } : undefined);
     }
   }
   function fetchCandidateEvidence(original, token, productPayload) {

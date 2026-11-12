@@ -5,7 +5,8 @@
 - Start local lexical-only context maintenance on the next timer turn after
   open, with 25 ms cooperative slices. Configurations with an embedder retain
   the existing 1,000 ms first delay and cadence. Unchanged lexical completion
-  backs off to 30-second observations; new work resumes one-second turns.
+  backs off to 30-second observations; unfinished lexical work yields 25 ms
+  between turns.
 - Give default embedded assembly reads up to 2,000 ms of extra time only while
   their sidecar is unpublished or invalidated and its remaining metadata fits
   the 1,024-item quantum; larger rebuilds, explicit and warm deadlines stay
@@ -13,7 +14,11 @@
 - Reserve 200 ms for packing and canonical validation before optional Memory
   source dates. A skipped or late date batch retains undated Memory items and
   sets the existing deadline stop diagnostic on both readers. Raw partial
-  coverage and mandatory final safety validation remain in force.
+  coverage remains in force. Final safety validation always completes for
+  selected items; validation failures refuse delivery, while elapsed time alone
+  never discards validated items.
+- Preserve foreground lexical reads when a background checkpoint commits during
+  sidecar probing, retaining the existing file identity, protection and WAL checks.
 
 ## Unreleased — batch Raw preparation
 

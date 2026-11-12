@@ -30,6 +30,7 @@ export function startLocalContextMaintenance(core, access, { semantic = false } 
         // no new capture hook or maintenance authority is needed.
         if (!semantic && result?.ok) {
           const progress = JSON.stringify(result.value.progress.lexical);
+          if (result.value.status !== 'complete') nextDelay = 25;
           if (result.value.status === 'complete' && result.value.progress.transformed === 0 &&
               progress === previousProgress) nextDelay = 30_000;
           previousProgress = progress;

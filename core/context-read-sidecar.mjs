@@ -47,11 +47,27 @@ function protectedFile(path, required = true, value = stat(path)) {
     unavailable('unsafe_file');
   return value;
 }
-function walHeader(path, observer) {
+function walHeader(path, observer, concurrentProof) {
   protectedFile(path);
   let result;
   try { result = probeRollbackJournal(path, observer ? { observe: observer.journalProbe } : {}); }
-  catch (error) { if (observer && error?.code === 'ERR_SQLITE_ERROR') throw error; unavailable('unsafe_file'); }
+  catch (error) {
+    // A lexical checkpoint can commit while the isolated SQLite probe runs.
+    // For writable embedded sidecars only, repeat the SQLite-only header probe
+    // against the original identity/protection proof. Further checkpoints may
+    // change timestamps; replacement, protection changes and WAL still refuse.
+    if (concurrentProof && error?.message === 'sqlite_journal_probe_changed') {
+      try {
+        const retried = probeRollbackJournal(path, { allowConcurrentWrites: true });
+        const matches = (actual, expected) => ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink']
+          .every(key => actual?.[key] === expected?.[key]);
+        if (retried.mode === 'delete' && matches(protectedFile(path), concurrentProof.main) &&
+            matches(stat(dirname(path)), concurrentProof.directory)) return false;
+      } catch { /* Preserve the original unsafe-file refusal. */ }
+    }
+    if (observer && error?.code === 'ERR_SQLITE_ERROR') throw error;
+    unavailable('unsafe_file');
+  }
   if (result.stage === 'open') unavailable('unsafe_file');
   // nolock SQLite refuses WAL with CANTOPEN before it can create companions.
   // Other malformed/inaccessible files fail closed through ordinary validation.
@@ -281,7 +297,8 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
   }
   function open() {
     const initial = protectedFile(sidecarPath, false);
-    if (initial && !readOnly && walHeader(sidecarPath)) unavailable('incompatible');
+    if (initial && !readOnly && walHeader(sidecarPath, undefined,
+      { main: initial, directory: stat(dirname(sidecarPath)) })) unavailable('incompatible');
     auxiliaries(sidecarPath, readOnly);
     if (!initial) {
       if (readOnly) unavailable('missing');

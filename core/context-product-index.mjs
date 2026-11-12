@@ -186,7 +186,6 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       if(Buffer.byteLength(JSON.stringify(result))>65536)fail('context_item_too_large');
     };
     const complete=()=>{
-      if(delivered.length&&now()>=p.deadlineAt)fail('index_unavailable');
       if(delivered.length && !same(canonicalFence(p.readSet,[...new Set(delivered.map(i=>i.type))]),generationsFor(delivered)))fail('snapshot_stale');
       for(const item of delivered){
         let current;
@@ -194,7 +193,6 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         catch(e){if(['evidence_unavailable','revision_conflict'].includes(e.code))fail('snapshot_stale');throw e;}
         if(bind('snapshot-item',cardLineageItemInside(db,current))!==item.fence)fail('snapshot_stale');
       }
-      if(delivered.length&&now()>=p.deadlineAt)fail('index_unavailable');
       return result;
     };
     return prepareOnly?{complete,result,prepare}:final(p,access,c.observed.publication,complete,'snapshot_stale',prepare);

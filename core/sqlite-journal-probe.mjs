@@ -73,12 +73,13 @@ const fingerprint = path => {
   const s = lstatSync(path, { bigint: true });
   return [s.dev, s.ino, s.size, s.mtimeNs, s.ctimeNs].join(':');
 };
-export function probeRollbackJournal(path, { observe } = {}) {
+export function probeRollbackJournal(path, { observe, allowConcurrentWrites = false } = {}) {
   if (observe) return observe(() => runProbe(path, true));
-  return runProbe(path, false);
+  return runProbe(path, false, allowConcurrentWrites);
 }
-function runProbe(path, structured) {
+function runProbe(path, structured, allowConcurrentWrites = false) {
   const before = fingerprint(path);
+  const initial = allowConcurrentWrites ? sqliteFileStat(path) : null;
   if (cache.get(path) === before) return structured ? { value: { mode: 'delete' }, events: [], complete: true, cached: true } : { mode: 'delete' };
   const uri = pathToFileURL(path);
   uri.searchParams.set('mode', 'ro'); uri.searchParams.set('nolock', '1');
@@ -88,7 +89,14 @@ function runProbe(path, structured) {
   if (!structured) {
     if (result.error || result.status !== 0 || result.signal) throw new Error('sqlite_journal_probe_failed');
     const value = JSON.parse(result.stdout);
-    if (fingerprint(path) !== before) throw new Error('sqlite_journal_probe_changed');
+    if (fingerprint(path) !== before) {
+      // A writable embedded sidecar can make progress during this isolated
+      // header-only query. Never cache this observation. Only a DELETE result
+      // with the same file identity and protection can tolerate those writes.
+      if (!allowConcurrentWrites || value.mode !== 'delete' || !sameProof(sqliteFileStat(path), initial))
+        throw new Error('sqlite_journal_probe_changed');
+      return value;
+    }
     if (value.mode === 'delete') {
       if (cache.size >= 64) cache.clear();
       cache.set(path, before);

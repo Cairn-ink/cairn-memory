@@ -549,9 +549,10 @@ and cancels pending work on close, joining an active refresh before closing core
 Open schedules the turn without index I/O. Lexical-only turns retain the
 1,024-item quantum but use a 25 ms cooperative time slice, matching the local
 Raw maintenance slice and leaving frequent opportunities for foreground work.
+While lexical work remains, turns yield for 25 ms before resuming.
 Once a lexical turn reports complete with no transformed items, observations
 back off to 30 seconds. These observations detect new capture/invalidation
-fences and resume one-second active turns without a new notification API.
+fences and resume the short lexical cadence without a new notification API.
 Semantic turns retain their existing 16-item / 1,000 ms budget and cadence.
 These are cooperative slices: a synchronous SQLite statement, checkpoint or
 lock wait can overrun them (the existing busy timeout is 5,000 ms).
@@ -568,17 +569,18 @@ never loads text and is skipped on warm stores and explicit-deadline reads.
 A larger rebuild keeps the original foreground slice and returns
 `index_unavailable` if still unpublished; background turns resume its checkpoint.
 Exactly 1,024 remaining tuples can finish the terminal metadata scan and publish
-without exceeding the transform quantum. When eligible, the default total
-window is 3,000 ms, bounded by the existing 5,000 ms maximum. An already published, current index keeps exactly the 1,000 ms
+without exceeding the transform quantum. When eligible, the default preparation
+and packing deadline is 3,000 ms, bounded by the existing 5,000 ms maximum. An already published, current index keeps exactly the 1,000 ms
 window. An explicit deadline receives no grace. `findCandidates` is unchanged.
 
 Optional Memory source-date resolution reserves `SOURCE_DATE_RESERVE_MS`
 (200 ms) for packing and canonical final validation. If too little time remains,
 or the batch crosses its earlier cutoff, the read retains the prepared Memories
 without their dates. The existing `diagnostics.stops.deadline` marks this
-omission; there is no new diagnostics or item key. Crossing the full read deadline
-still uses the deadline result. Raw search/preparation keeps its validated
+omission; there is no new diagnostics or item key. Candidate preparation and
+packing retain their deadline checks. Raw search/preparation keeps its validated
 prefix and existing `coverage.raw:'partial'` behavior. Final canonical validation
-continues to check every delivered Memory/Card and its namespace, grants,
-forgetting, exclusion and suppression state. Incomplete or late validation
-returns no items.
+always runs to completion for every selected Memory/Card and checks its namespace,
+grants, forgetting, exclusion and suppression state. Its outcome determines
+delivery: failed validation refuses the result; elapsed time alone never drops
+validated items. No callback or await follows that authoritative validation.
