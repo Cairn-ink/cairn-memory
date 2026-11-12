@@ -428,11 +428,11 @@
     "key:ids": 1,
     "key:memoryId": 2,
     "key:storeId": 1,
-    "literal:gid": 1,
+    "literal:gid": 2,
     "literal:id": 4,
     "literal:owner_id": 1,
     "literal:project_id": 1,
-    "literal:uid": 1
+    "literal:uid": 2
   },
   "core/contract.mjs": {
     "key:actionId": 1,
