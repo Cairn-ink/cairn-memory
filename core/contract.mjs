@@ -56,7 +56,7 @@ import {
 const CORE_OPTIONS = Object.freeze(['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy',
   'captureRationale','captureEvidence','captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes',
   'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence','contentSafety','busyTimeoutMs',
-  'cardRelations','cardVectors']);
+  'memoryRelations','cardRelations','cardVectors']);
 const OPEN_OPTIONS = Object.freeze([...CORE_OPTIONS, 'rawConversations', 'raw', 'rawSearch']);
 
 const keepAdmissionKey = Symbol('keepAdmissionKey');
@@ -263,6 +263,7 @@ export function createMemoryCore(input, internal) {
   const captureQualifiedDuplicates = qualifiedDuplicatesOption(input);
   object(input, CORE_OPTIONS);
   const busyTimeoutMs = busyTimeoutOption(input);
+  if(Object.hasOwn(input,'memoryRelations') && typeof input.memoryRelations!=='boolean')fail('invalid_input');
   const privateCards = privateCardOptions(input.privateCards);
   const methodPackages = methodPackageOptions(input.methodPackages);
   if (privateCards?.currentDependencies && !methodPackages) fail('invalid_input');
@@ -311,6 +312,7 @@ export function createMemoryCore(input, internal) {
   if (input.contentSafety !== undefined && input.contentSafety !== 's2h-v1') fail('invalid_input');
   const runtime = (internal?.createRuntime ?? createMemoryRuntime)({ path: input.path,
     ...(busyTimeoutMs !== undefined ? { busyTimeoutMs } : {}),
+    ...(input.memoryRelations !== undefined ? { memoryRelations: input.memoryRelations } : {}),
     ...(input.contentSafety !== undefined ? { contentSafety: input.contentSafety } : {}),
     ...(input.existingStore ? { existingStore: input.existingStore } : {}),
     ...(input.storeFence ? { storeFence: input.storeFence } : {}),
@@ -451,6 +453,7 @@ export function createMemoryCore(input, internal) {
       const receipts = page.receipts.slice(0, count);
       const exhausted = page.receiptComplete;
       return { memory: page.memory, receipts, ...(page.procedural ? { procedural: page.procedural } : {}), placements: page.placements, conflicts: page.conflicts,
+        ...(page.relations?.length ? { relations: page.relations } : {}),
         ...(input.includeQualification === true ? { qualification: page.qualification } : {}),
         ...(page.supersession ? { supersession: page.supersession } : {}),
         nextReceiptCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch,
@@ -637,7 +640,7 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  function finishAdmissionValidated(input, captureInitial, deadline, qualifiedDuplicates) {
+  function finishAdmissionValidated(input, captureInitial, deadline, qualifiedDuplicates, memoryRelations) {
     return invoke(() => {
       runtime.ready();
       object(input, ['namespace', 'client', 'eventId', 'payloadDigest', 'token', 'items']);
@@ -645,7 +648,7 @@ export function createMemoryCore(input, internal) {
       const key = admissionKey(input);
       const token = contractId(input.token);
       const items = admissionItems(input.items, captureInitial && Boolean(sessionEpisodes));
-      return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items }, deadline, qualifiedDuplicates) :
+      return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items, memoryRelations }, deadline, qualifiedDuplicates) :
         runtime.finishAdmission(ns, { ...key, token, items });
     });
   }
@@ -670,7 +673,7 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  function applyInitialPlacement(input, deadline) {
+  function applyInitialPlacement(input, deadline, relationSnapshot) {
     return invoke(() => {
       runtime.ready();
       const ns = contractNamespace(input.namespace);
@@ -679,7 +682,7 @@ export function createMemoryCore(input, internal) {
       const guards = memoryGuards(input.expectedMemoryRevisions,
         proposal.items.map(item => item.memoryId));
       return runtime.applyInitialPlacement(ns, key, contractId(input.token), proposal, guards,
-        contractRevision(input.expectedIndexRevision), deadline);
+        contractRevision(input.expectedIndexRevision), deadline, relationSnapshot);
     });
   }
 
@@ -951,6 +954,7 @@ export function createMemoryCore(input, internal) {
         return page ? [{ namespace, indexRevision: page.epoch, suppressionEpoch: page.suppressionEpoch }] : [];
       }), includeQualification);
       const storage = { map: (request) => mapPage(request, navigation), fetch, validateFresh,
+        expandRelations: refs => runtime.expandRelationRefs(namespaces, refs),
         recentReceipts: (ref, limit) => runtime.recentReceipts(namespaces[ref.namespaceIndex], ref, limit),
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
@@ -959,7 +963,7 @@ export function createMemoryCore(input, internal) {
           ...(isSourceContext(contextMode) ? { sourceEvidence: candidate.item } : {}),
         })), selected, namespaces.map((namespace) => ({ namespace,
           indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch,
-          suppressionEpoch: navigation.pages.get(namespaceBinding(namespace)).suppressionEpoch })), includeQualification, contextMode),
+          suppressionEpoch: navigation.pages.get(namespaceBinding(namespace)).suppressionEpoch })), includeQualification, contextMode, count),
       };
       if (diagnostics) for (const name of Object.keys(storage)) {
         const call = storage[name];
@@ -978,7 +982,7 @@ export function createMemoryCore(input, internal) {
         };
       }
       const value = await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
-        limit: count, ...storage, includeQualification, contextMode, selectionMode, diagnostics });
+        limit: count, ...storage, relationMode: () => runtime.relationMode(), includeQualification, contextMode, selectionMode, diagnostics });
       if (diagnostics) {
         const journalMode = readRecallJournalMode(runtime);
         const ms = value => Math.round(Math.max(0, value) * 10) / 10;
@@ -1064,6 +1068,11 @@ export function createMemoryCore(input, internal) {
       const ns = contractNamespace(input.namespace);
       const namespace = publicNamespace(ns);
       const captureKey = value => keepInput ? { ...value, [keepAdmissionKey]: true } : value;
+      let relationSnapshot;
+      const captureRelations = result => {
+        if (result.ok) relationSnapshot = result.value.relationSnapshot;
+        return result;
+      };
       if ((captureEvidence || evidenceOnly) && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
       return success(await (keepInput ? keepEpisodeCapture : sessionEpisodes ? captureEpisodeMessages : captureMessages)({ model, captureQualification, captureSourcePolicy,
         runtime, ns, sessionEpisodes, keepInput, rawRegistration,
@@ -1081,15 +1090,25 @@ export function createMemoryCore(input, internal) {
           claimAdmission: (value, sources) => invoke(() => runtime.claimCapturedAdmission(ns, {
           ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS,
         }, deadline, rawRegistration, sources)),
-          finishAdmission: value => finishAdmissionValidated(captureKey(value), true, deadline,
-            keepInput || sessionEpisodes ? undefined : captureQualifiedDuplicates),
+          relationEnabled: () => runtime.relationWritesEnabled(),
+          relationMode: () => runtime.relationMode(),
+          relationNamespace: ns, relationIdentity: runtime.identity,
+          relationCandidates: facts => runtime.relationCandidates(ns, facts),
+          filterRelationFacts: facts => {
+            const control = runtime.getCaptureControl(ns);
+            if (control.paused || !control.enabled) throw new MemoryStoreError('capture_disabled');
+            return runtime.filterRelationFacts(ns, facts);
+          },
+          resolveRelationCandidates: refs => runtime.resolveRelationCandidates(ns, refs),
+          finishAdmission: (value, memoryRelations) => captureRelations(finishAdmissionValidated(captureKey(value), true, deadline,
+            keepInput || sessionEpisodes ? undefined : captureQualifiedDuplicates, memoryRelations)),
           abandonAdmission: (value, retryable) => retryable
             ? invoke(() => runtime.abandonAdmission(ns, { ...admissionKey(captureKey(value)),
               token: contractId(value.token), retryable: true }))
             : abandonAdmission(captureKey(value)), get, map, isAwaiting: id => runtime.isAwaiting(ns, id),
           beginInitialClassification: value => beginInitialClassification(captureKey(value), deadline),
           failInitialClassification: value => failInitialClassification(captureKey(value)),
-          applyInitialPlacement: value => applyInitialPlacement(captureKey(value), deadline),
+          applyInitialPlacement: value => applyInitialPlacement(captureKey(value), deadline, relationSnapshot),
           claimCaptureEvidence: (value, sources) => invoke(() => runtime.claimCaptureEvidence(ns, {
             ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS, view: value.view,
           }, deadline, rawRegistration, sources)),
@@ -1111,12 +1130,14 @@ export function createMemoryCore(input, internal) {
           classifyPlacement: value => classifyPlacementValidated(value, deadline), applyPlacement,
           ordered: {
             claim: (snapshot, sources) => invoke(() => runtime.claimOrdered(ns, snapshot, deadline, rawRegistration, sources)),
-            prepare(snapshot, order, extracted) {
+            prepare(snapshot, order, extracted, relationMode) {
               return invoke(() => {
                 const items = admissionItems(extracted.map(({ sourceIndices, receiptTimes, ...item }) =>
                   receiptTimes ? { ...item, receipts: item.receipts.map((receipt, index) =>
                     ({ ...receipt, occurredAt: receiptTimes[index] })) } : item));
-                return { items, discovery: runtime.discoverOrdered(ns, snapshot, order, items) };
+                // Relations carry their own revision checks. The causal stream still
+                // fences its event/high-water and lease inside final admission.
+                return { items, discovery: relationMode ? {candidates:[],reason:null,relationMode:true} : runtime.discoverOrdered(ns, snapshot, order, items) };
               });
             },
             assertPrepared(snapshot, order, prepared) {
@@ -1126,8 +1147,8 @@ export function createMemoryCore(input, internal) {
                 if (JSON.stringify(current) !== JSON.stringify(prepared.discovery)) fail('revision_conflict');
               });
             },
-            finish: (snapshot, token, order, prepared, judged) =>
-              invoke(() => runtime.finishOrdered(ns, snapshot, token, order, prepared, judged, deadline)),
+            finish: (snapshot, token, order, prepared, judged, memoryRelations) =>
+              captureRelations(invoke(() => runtime.finishOrdered(ns, snapshot, token, order, prepared, judged, deadline, memoryRelations))),
           } } }));
     } catch (error) { return failure(error); }
   }

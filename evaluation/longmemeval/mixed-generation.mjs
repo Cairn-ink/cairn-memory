@@ -326,11 +326,12 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
 const RETAINED_ATTEMPT_STAGE_LIMIT = 64;
 
 export function summarizeAttemptsForOrdinal(attempts, ordinal) {
-  const summary = { requests: 0, reservedMicroUsd: 0, knownActualMicroUsd: 0,
+  const summary = { requests: 0, relationRequests: 0, reservedMicroUsd: 0, knownActualMicroUsd: 0,
     unknownActualCount: 0, retainedStageCount: 0, omittedStageCount: 0, stages: [] };
   for (const item of attempts) {
     if (item.ordinal !== ordinal) continue;
     summary.requests++;
+    if (['cairn-relation-count', 'cairn-relation-generation'].includes(item.stage)) summary.relationRequests++;
     summary.reservedMicroUsd += item.reservedMicroUsd;
     summary.knownActualMicroUsd += item.actualMicroUsd ?? 0;
     if (item.actualMicroUsd === null) summary.unknownActualCount++;

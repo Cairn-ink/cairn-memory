@@ -201,6 +201,8 @@ export async function mergePublicPilotRuns(options) {
     for (const [key, value] of Object.entries(run.report.truncation)) truncation[key] = (truncation[key] ?? 0) + numeric(value);
     callbackFailures += numeric(run.report.summary.progressCallbackFailures);
   }
+  cost.relationRequests = (cost.byStage['cairn-relation-count']?.requests ?? 0)
+    + (cost.byStage['cairn-relation-generation']?.requests ?? 0);
   const summary = {
     fixedN: cases.length,
     generated: cases.filter((item) => item.generation.status === 'completed').length,

@@ -142,6 +142,17 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
       const left = a.type === 'memory' && (a.sortDate ?? a.date), right = b.type === 'memory' && (b.sortDate ?? b.date);
       return left && right ? (left < right ? -1 : left > right ? 1 : 0) : left ? -1 : right ? 1 : 0;
     });
+    // Rank/date orders threads among other results. Within each thread the
+    // current member is always first, followed by the newest eligible history.
+    const groups = new Map();
+    for (const item of included) {
+      const key = item.threadKey ?? item;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(item);
+    }
+    included.splice(0, included.length, ...[...groups.values()].flatMap(group => group[0].threadKey
+      ? group.sort((a, b) => a.metadata.thread.status === 'current' ? -1 : b.metadata.thread.status === 'current' ? 1
+        : (b.metadata.thread.eventTime ?? '').localeCompare(a.metadata.thread.eventTime ?? '') || (b.threadOrder ?? 0) - (a.threadOrder ?? 0)) : group));
     const items = included.map((item, itemIndex) => {
       const chosen = selection.get(item), sourceDetails = [];
       // Dated provenance belongs to the body even when an excerpt cannot fit.
@@ -171,6 +182,8 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
         const value = canonical(item.metadata[key]);
         if (!Object.hasOwn(defaults, key) || JSON.stringify(value) !== JSON.stringify(canonical(defaults[key]))) metadata[key] = value;
       }
+      if(item.metadata.relations?.length)metadata.relations=canonical(item.metadata.relations);
+      if(item.metadata.thread)metadata.thread=canonical(item.metadata.thread);
       if (item.metadata.origin === 'engine') for (const key of ['builtAt', 'clusterKey', 'status']) metadata[key] = item.metadata[key];
       details.push({ ref: item.ref, metadata: item.metadata, body: { tokens: chosen.tokens }, sources: sourceDetails });
       const ref = { ns: item.ns, type: item.type, id: item.ref.memoryId ?? item.ref.cardId, rev: item.ref.revision,
@@ -205,6 +218,17 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
   let accepted = payload(selected, dateOrder);
   const emptyText = meteredText(accepted.metered), emptyUsed = count(emptyText, true);
   if (emptyUsed > budget.maxTokens || !fitsBytes(accepted, emptyText, emptyUsed, selected)) fail('context_item_too_large');
+  const threaded=prepared.some(item=>item.threadKey);
+  const unitCount=selection=>threaded?new Set([...selection.keys()].map(item=>item.threadKey??item)).size:selection.size;
+  // Currency wins admission to a tight token budget, including history reads.
+  let visits=prepared;
+  if(threaded){
+    const groups=new Map();
+    for(const item of prepared){const key=item.threadKey??item;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(item);}
+    visits=[...groups.values()].sort((a,b)=>(a[0].threadRank??a[0].rank)-(b[0].threadRank??b[0].rank)).flatMap(group=>group[0].threadKey?
+      group.sort((a,b)=>a.metadata.thread.status==='current'?-1:b.metadata.thread.status==='current'?1:
+        (b.metadata.thread.eventTime??'').localeCompare(a.metadata.thread.eventTime??'')||(b.threadOrder??0)-(a.threadOrder??0)):group);
+  }
   function visit(item, source) {
     if (expired()) return;
     if (!source && item.type === 'card' && item.metadata.origin === 'engine') {
@@ -212,8 +236,10 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
       if ([...selected.keys()].some(entry => entry.type === 'memory' && entry.rank < item.rank && covered.has(memoryPackKey(entry.ref)))) return;
     }
     if (!source && hasEngineCards && item.type === 'memory' && cardSourceKeys([...selected.keys()]).has(memoryPackKey(item.ref))) return;
-    if (!source && selected.size >= budget.maxItems && !(item.type === 'card' && item.metadata.origin === 'engine')) { stops.items = true; return; }
+    if (!source && unitCount(selected) >= budget.maxItems && !(item.type === 'card' && item.metadata.origin === 'engine') && ![...selected.keys()].some(other=>item.threadKey&&other.threadKey===item.threadKey)) { stops.items = true; return; }
     if (source && !selected.has(item)) return;
+    if (!source && item.metadata.thread?.status==='earlier' && ![...selected.keys()].some(other=>
+      other.threadKey===item.threadKey&&other.metadata.thread?.status==='current')) return;
     const tokens = count(source ? source.excerpt : item.text);
     if (stops.deadline) return;
     const trial = new Map(selected), current = selected.get(item);
@@ -221,7 +247,9 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
     if (!source && item.type === 'card' && item.metadata.origin === 'engine') {
       const covered = cardSourceKeys([...trial.keys()]);
       for (const entry of trial.keys()) if (entry.type === 'memory' && covered.has(memoryPackKey(entry.ref))) trial.delete(entry);
-      if (trial.size > budget.maxItems) { stops.items = true; return; }
+      const currentThreads = new Set([...trial.keys()].filter(entry => entry.metadata.thread?.status === 'current').map(entry => entry.threadKey));
+      for (const entry of trial.keys()) if (entry.threadKey && !currentThreads.has(entry.threadKey)) trial.delete(entry);
+      if (unitCount(trial) > budget.maxItems) { stops.items = true; return; }
     }
     const value = payload(trial, dateOrder), text = meteredText(value.metered), used = count(text);
     if (stops.deadline) return;
@@ -230,7 +258,7 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
         selected.clear(); for (const [entry, value] of trial) selected.set(entry, value);
       } else selected.set(item, trial.get(item));
       accepted = value;
-      if (selected.size >= budget.maxItems) stops.items = true;
+      if (unitCount(selected) >= budget.maxItems) stops.items = true;
       return;
     }
     stops.budget = true;
@@ -242,13 +270,13 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
     if (minimum !== null && (minimum > budget.maxTokens || !fitsBytes(minimumValue, minimumText, minimum, minimal))) oversized++;
   }
   if (policy.id !== 'coverage-first-v1') {
-    for (const item of prepared) {
+    for (const item of visits) {
       visit(item);
       if (selected.has(item)) for (const source of policy.id === 'rank-first-first-source-v1' ? item.sources.slice(0, 1) : item.sources) visit(item, source);
       if (stops.deadline) break;
     }
   } else {
-    for (const item of prepared) { visit(item); if (stops.deadline) break; }
+    for (const item of visits) { visit(item); if (stops.deadline) break; }
     if (!stops.deadline) for (const item of prepared) if (selected.has(item)) {
       for (const source of item.sources) visit(item, source);
       if (stops.deadline) break;

@@ -177,6 +177,7 @@ export function validateContextProductLayout(db, layout = attestContentSafety(db
   const indexSql = db.prepare("SELECT sql FROM sqlite_schema WHERE type='index' AND name=?");
   const keys = db.prepare('SELECT name,"desc",coll FROM pragma_index_xinfo(?) WHERE key=1 ORDER BY seqno');
   for (const [name, first] of Object.entries(tables)) {
+    if (name === 'memory_conflicts' && layout.relationsRevision) continue;
     if (Boolean(present.get(name)) !== (version >= first)) fail('unsupported_database');
     if (version < first || !layouts[name]) continue;
     const expected = layouts[name].findLast(([first]) => version >= first)[1];

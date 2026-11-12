@@ -766,6 +766,10 @@
       "kind": "gated",
       "operation": "read"
     },
+    "filterRelationFacts": {
+      "kind": "gated",
+      "operation": "read"
+    },
     "finishAdmission": {
       "kind": "gated",
       "operation": "write",
@@ -974,6 +978,26 @@
     "validateEpisodeBatch": {
       "kind": "gated",
       "operation": "read"
+    },
+    "expandRelationRefs": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "relationCandidates": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "resolveRelationCandidates": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "relationWritesEnabled": {
+      "kind": "no-owner-content",
+      "reason": "Reads cached relation policy/layout only; zero executed SQL proved directly."
+    },
+    "relationMode": {
+      "kind": "no-owner-content",
+      "reason": "Reads cached relation policy/layout only; zero executed SQL proved directly."
     }
   },
   "legacy": {

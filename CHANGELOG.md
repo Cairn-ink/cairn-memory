@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- Memory threads connect facts about the same topic and deliver the current
+  fact with bounded, dated history. Relations are enabled by default; set
+  `memoryRelations:false` to disable discovery and new relation writes.
+- For a keyed capture with eligible candidates, relations add one model request
+  (two OpenAI HTTP requests) and up to 1,024 output tokens, even if no link is
+  selected. Offline synthetic measurements add 748 input tokens with one
+  candidate and 1,115 with eight; no eligible candidate adds zero. Set
+  `memoryRelations:false` in `openMemoryCore` to avoid this request and relation
+  vector work. See the [capture cost table](docs/memory-relations.md).
+- The first committed link upgrades the store layout in one direction. Older
+  engine versions then refuse the store with `unsupported_database`. Rolling
+  back the installer means reinstalling the newer version to use that store;
+  disabling relations does not downgrade an installed layout.
 ## Unreleased — nothing sent to an embedding provider while saving is paused
 
 - With an embedding model configured, Memory and Card search no longer sends the

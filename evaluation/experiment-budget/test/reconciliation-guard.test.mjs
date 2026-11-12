@@ -279,7 +279,10 @@ test('R4 actual core ordered capture through actual adapter and combined guard a
     return Response.json(generated(output));
   }); t.after(() => guard.close());
   const model = createOpenAIModel({ apiKey: secret, fetchImpl: guard.cairnFetch });
-  const core = openMemoryCore({ path: join(f.root, 'memory.sqlite'), model }); t.after(() => core.close());
+  // This gate isolates the legacy reconciliation port; product pilots keep
+  // relations enabled. Record the explicit isolation in test output.
+  const memoryRelations = false; t.diagnostic(JSON.stringify({ memoryRelations, isolates: 'legacy-reconciliation' }));
+  const core = openMemoryCore({ path: join(f.root, 'memory.sqlite'), model, memoryRelations }); t.after(() => core.close());
   const namespace = { ownerId: 'synthetic-owner', scope: 'personal', projectId: null };
   const capture = (sequence, content) => ({ namespace, client: 'synthetic', eventId: `event-${sequence}`, sessionId: 'session',
     causal: { streamId: 'synthetic-source', sequence }, messages: [{ id: `message-${sequence}`, role: 'user', content }] });

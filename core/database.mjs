@@ -1,9 +1,12 @@
 import './content-write-safety.mjs';
+import { relationDDL, previousRelationDDL, validateMemoryRelations } from './memory-relations-schema.mjs';
+import { purgeUnreadableMemoryRelations } from './memory-relations-erasure.mjs';
+import { registerMemoryRelationHooks } from './content-safety-schema.mjs';
 import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheInside } from './content-suppression-storage.mjs';
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
-import { SAFETY_SCHEMA_VERSIONS, resolveContentLayout, assertContentFeatures } from './content-safety-layout.mjs';
-import { attestContentSafety, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection } from './content-safety-schema.mjs';
+import { RELATION_LAYOUTS, SAFETY_SCHEMA_VERSIONS, resolveContentLayout, assertContentFeatures } from './content-safety-layout.mjs';
+import { attestContentSafety, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection, contentLayoutCheckpoint } from './content-safety-schema.mjs';
 import { validateContextProductLayout } from './context-product-schema.mjs';
 import { installCardCurrentDependencies, validateCardCurrentDependencies, assertNoCardCurrentDependencies } from './card-current-schema.mjs';
 import { installRoleProfiles, validateRoleProfiles, assertNoRoleProfiles } from './role-profile-schema.mjs';
@@ -11,6 +14,7 @@ import { installAssets, validateAssets, assertNoAssets } from './asset-schema.mj
 import { types } from 'node:util';
 import { createExclusiveSqliteFile } from './sqlite-journal-probe.mjs';
 import { storeFenceOption,pinStoreFile,assertStoreIdentity,noncreatingStoreURI } from './store-fence.mjs';
+import { installMethodPackages } from './method-package-schema.mjs';
 import { migrateMethodPrerequisites } from './method-package-migration.mjs';
 import { randomBytes, randomUUID } from "node:crypto";
 import { installRawDeletion, RAW_DELETION_SCHEMA_VERSION } from './raw-deletion-schema.mjs';
@@ -45,11 +49,11 @@ export const APPLICATION_ID = 0x43414952;
 const VERSION = CONFIRMATION_SCHEMA_VERSION;
 // Existing layouts accepted without an upgrade by the ordinary opener.
 export const READ_SCHEMA_VERSIONS = Object.freeze([VERSION, 20, PRIVATE_CARD_SCHEMA_VERSION,
-  PRIVATE_EVIDENCE_SCHEMA_VERSION, PRIVATE_ORGANIZATION_SCHEMA_VERSION, LOCAL_AUTHORITY_SCHEMA_VERSION, 30, 31, 32, 33, ...SAFETY_SCHEMA_VERSIONS]);
+  PRIVATE_EVIDENCE_SCHEMA_VERSION, PRIVATE_ORGANIZATION_SCHEMA_VERSION, LOCAL_AUTHORITY_SCHEMA_VERSION, 30, 31, 32, 33, ...SAFETY_SCHEMA_VERSIONS, ...RELATION_LAYOUTS.filter(v=>![24,25,26,27,28].includes(v%100))]);
 // Context reads also validate existing pre-control Raw stores. The retained
 // topic reader's narrower supported-version list remains unchanged.
 export const CONTEXT_READ_SCHEMA_VERSIONS = Object.freeze([...new Set([...READ_SCHEMA_VERSIONS,
-  RAW_SCHEMA_VERSION, RAW_CAPTURE_SCHEMA_VERSION, RAW_LINEAGE_SCHEMA_VERSION, RAW_DELETION_SCHEMA_VERSION, RAW_SOURCE_SCHEMA_VERSION])]);
+  RAW_SCHEMA_VERSION, RAW_CAPTURE_SCHEMA_VERSION, RAW_LINEAGE_SCHEMA_VERSION, RAW_DELETION_SCHEMA_VERSION, RAW_SOURCE_SCHEMA_VERSION, ...RELATION_LAYOUTS])]);
 
 function createVersion3(db) {
   db.exec(`
@@ -369,6 +373,7 @@ export function readTransaction(db, work, acquisition) {
   return value;
 }
 registerContentReadSnapshot((db,work)=>readTransaction(db,()=>{checkInstalledContentSafety(db);return work();}));
+registerMemoryRelationHooks({ relationDDL, previousRelationDDL, validateMemoryRelations, purgeUnreadableMemoryRelations });
 
 // Reviewed read-only mode: keep transaction fences and statement counts, acquiring
 // SHARED on the first SELECT. Writers must retain BEGIN IMMEDIATE.
@@ -378,6 +383,7 @@ export function transaction(db, work, check, { deferred = false } = {}) {
   const execute = () => {
     db.exec(deferred ? "BEGIN" : "BEGIN IMMEDIATE");
     let contentWrite;
+    const restoreLayout = contentLayoutCheckpoint(db);
     try {
       const result = inContentSuppressionRequestInside(db, () => {
         checkInstalledContentSafety(db);
@@ -389,9 +395,11 @@ export function transaction(db, work, check, { deferred = false } = {}) {
       contentWrite = null;
       check?.();
       db.exec("COMMIT");
+      restoreLayout.commit();
       return result;
     } catch (error) {
       if(db.isTransaction)db.exec("ROLLBACK");
+      restoreLayout();
       if (error?.code === 'ERR_SQLITE_ERROR' && error.message === 'card_dependency_limit_reached') {
         fail('dependency_limit_reached');
       }
@@ -438,6 +446,7 @@ export function openDatabase(path, options = {}) {
   if (existingStore !== undefined) {
     const option = existingStoreOption(existingStore), location = existingStorePath(path);
     const db = new DatabaseSync(location.uri, { timeout });
+    bindContentSafetyConnection(db,db,path);
     try {
       location.check();
       db.exec('PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;');
@@ -481,6 +490,7 @@ export function openDatabase(path, options = {}) {
   try {
     // URI mode=rw is mandatory for fences: no mkdir or creation fallback.
     db = new DatabaseSync(fence ? noncreatingStoreURI(path) : path, { timeout });
+    bindContentSafetyConnection(db,db,path);
     db.exec("PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;");
     transaction(db, () => {
       if (fence) {
@@ -492,6 +502,29 @@ export function openDatabase(path, options = {}) {
           db.prepare('PRAGMA user_version').get().user_version !== 0 ||
           db.prepare('SELECT count(*) n FROM sqlite_schema').get().n !== 0)) fail('unsupported_database');
       const layout = attestContentSafety(db);
+      if (layout.relationsRevision) {
+        if (layout.base < 33) assertNoCardCurrentDependencies(db);
+        if (layout.base < 32) assertNoRoleProfiles(db);
+        if (layout.base < 31) assertNoAssets(db);
+        if (!layout.suppressionRevision && layout.base >= 30) validateExistingStore(db, {
+          storeId: db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id,
+        }, layout);
+        let altered=false;
+        if(!layout.suppressionRevision){
+          const upgradedOffset=layout.relationsRevision*100;
+          const target=currentDependencies?33:roleProfiles?32:assets?31:methodPackages?30:localControls?29:rawSources?28:rawDeletion?27:rawLineage?26:rawCapture?25:rawConversations?24:privateCards?23:layout.base;
+          for(const [version,install] of [[20,installPrivateCards],[21,installCardMemorySources],[22,installPrivateEvidence],
+            [23,installPrivateOrganization],[24,installRawJournal],[25,installRawCapture],[26,installRawLineage],
+            [27,installRawDeletion],[28,installRawSources],[29,installLocalAuthority],[30,installMethodPackages],
+            [31,installAssets],[32,installRoleProfiles],[33,installCardCurrentDependencies]]){
+            if(layout.base<version&&target>=version){install(db);db.exec(`PRAGMA user_version=${version+upgradedOffset}`);altered=true;}
+          }
+        }
+        const upgraded=altered?attestContentSafety(db):layout;
+        validateContextProductLayout(db, upgraded);
+        assertContentFeatures(upgraded, { privateCards, rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls, methodPackages, assets, roleProfiles, currentDependencies });
+        return;
+      }
       if (layout.suppressionRevision) {
         if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID) fail('unsupported_database');
         assertContentFeatures(layout, { privateCards, rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls, methodPackages, assets, roleProfiles, currentDependencies });

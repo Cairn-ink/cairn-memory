@@ -18,7 +18,8 @@ function files(path, maxBytes, timeout) {
 
 /** Counts only. All failures replace the entire report with one generic code.
  * Supported installed-cell providers can be added at the observation admission
- * seam later; S3 admits only first-install physical 18/23/33, with no safety DDL.
+ * seam later; first install admits logical bases 18/23/33, including their
+ * relation packages, with no suppression DDL.
  * Budgets cap all examined rows, materialized bytes, file bytes and elapsed time.
  */
 export async function preflightContentSafetyV1({ path, budget = {} } = {}) {

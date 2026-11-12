@@ -1,3 +1,4 @@
+import { snapshotInitialRelations, restoreInitialRelations } from './memory-relations-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety, receiptReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { contentSuppressionRequestFenceInside, contentSuppressionReasonInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
@@ -247,6 +248,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       const filingRevisions = new Map([...nextRevision].filter(([id, revision]) =>
         revision !== memories.get(id).revision));
       const filingEdges = rationaleStorage.snapshotFilingEdges(ns, filingRevisions.keys());
+      const initialRelations=initialClassification?snapshotInitialRelations(db,ns,filingRevisions.keys(),initialClassification.relationSnapshot):[];
 
       const now = new Date().toISOString();
       for (const l1 of newL1.values()) {
@@ -281,6 +283,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         if (revision !== expected.get(item.memoryId)) memory.updated_at = now;
       }
       rationaleStorage.restoreFilingEdges(ns, filingEdges, filingRevisions);
+      if(initialClassification)restoreInitialRelations(db,ns,initialRelations);
 
       const insertSource = db.prepare(`INSERT INTO moc_title_sources
         (moc_id, memory_id, memory_revision) VALUES (?, ?, ?)`);

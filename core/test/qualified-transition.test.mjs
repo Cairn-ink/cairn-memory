@@ -230,10 +230,10 @@ for (const qualifiedOld of [true, false]) test(`T6 direct legacy supersession fe
     receipts: [receipt('Additional replacement source')] }), 'qualified_transition_required'));
 });
 
-for (const qualifiedSide of ['predecessor', 'replacement']) test(`T6 ordered capture fences qualified ${qualifiedSide}, commits evidence and durable unresolved replay`, async (t) => {
+for (const qualifiedSide of ['predecessor', 'replacement']) test(`T6 ordered capture retains qualified ${qualifiedSide}, commits relations and durable replay`, async (t) => {
   const model = { contextWindow: 8192, countTokens: () => 1,
     extract: ({ input: value }) => ({ items: [{ content: value.messages[0].content, kind: 'fact', confidence: 0.8, sourceIndices: [0] }] }),
-    reconcile: () => ({ transitions: [{ replacementIndex: 0, predecessorIndex: 0, evidenceIndices: [0], relation: 'supersedes', valueChange: 'changed', adoption: 'explicit' }] }) };
+    relateMemories: ({input}) => ({facts:input.facts.map(fact=>({factIndex:fact.factIndex,eventTime:null,edges:input.candidates[fact.factIndex].map(candidate=>({candidateId:candidate.id,relation:'supersedes',confidence:.95}))}))}) };
   const { core, db, path, closeAll } = fixture(t, model);
   const capture = { namespace, client: 'synthetic', sessionId: 'session', eventId: 'ordered', causal: { streamId: 'synthetic-stream', sequence: 2 },
     messages: [{ id: 'monday', role: 'user', content: 'Project Alpha deadline is Monday.' }] };
@@ -251,24 +251,24 @@ for (const qualifiedSide of ['predecessor', 'replacement']) test(`T6 ordered cap
       receipts: [receipt(text)], qualification: qualification(text, 'Monday') }] })).memories[0];
     bind(core, replacement);
   }
-  const before = detail(core, old);
+  const stable=value=>{const {relations,...rest}=value;return rest;};
+  const before = stable(detail(core, old));
   const result = ok(await core.capture(capture));
-  assert.deepEqual(result.reconciliation, { status: 'unresolved', reason: 'qualified_transition_required', retiredCount: 0 });
-  assert.deepEqual(detail(core, old), before); const next = result.admission.memories[0]; assert.equal(detail(core, next).memory.state, 'active');
+  assert.deepEqual(result.reconciliation, { status:'complete_no_change',reason:null,retiredCount:0 });
+  assert.deepEqual(stable(detail(core, old)), before); const next = result.admission.memories[0]; assert.equal(detail(core, next).memory.state, 'active');
   const replay = { duplicate: true, memoryIds: [next.id], suppressedCount: 0, reconciliation: result.reconciliation };
   const state = snapshot(db); assert.deepEqual(ok(await core.capture(capture)), replay); assert.deepEqual(snapshot(db), state);
   closeAll(); const cold = openMemoryCore({ path }); t.after(() => cold.close());
-  assert.deepEqual(ok(await cold.capture(capture)), replay); assert.deepEqual(detail(cold, old), before);
+  assert.deepEqual(ok(await cold.capture(capture)), replay); assert.deepEqual(stable(detail(cold, old)), before);
 });
 
-test('T6 mixed retirement batch preflights qualified second edge before any unqualified retirement', async (t) => {
+test('T6 mixed qualified facts acquire typed relations without automatic retirement', async (t) => {
   let reconciled = 0;
   const model = { contextWindow: 8192, countTokens: () => 1,
     extract: ({ input: value }) => ({ items: value.messages.map((m, i) => ({ content: m.content, kind: 'fact', confidence: 0.8, sourceIndices: [i] })) }),
-    reconcile: ({ input: value }) => { reconciled++;
-      return { transitions: ['Alpha', 'Beta'].map((project, i) => ({ replacementIndex: i,
-        predecessorIndex: value.candidates.findIndex((c) => c.content.includes(project)), evidenceIndices: [i],
-        relation: 'supersedes', valueChange: 'changed', adoption: 'explicit' })) }; } };
+    relateMemories: ({input})=>{if(input.candidates.some(rows=>rows.length))reconciled++;
+      return {facts:input.facts.map((fact,index)=>({factIndex:fact.factIndex,eventTime:null,edges:input.candidates[index].filter(candidate=>
+        candidate.content.includes(fact.content.includes('Alpha')?'Alpha':'Beta')).map(candidate=>({candidateId:candidate.id,relation:'supersedes',confidence:.95}))}))};} };
   const { core, db } = fixture(t, model);
   const capture = (sequence, day) => ({ namespace, client: 'synthetic', sessionId: 'session', eventId: `batch-${sequence}`,
     causal: { streamId: 'batch-stream', sequence }, messages: ['Alpha', 'Beta'].map((project) => ({
@@ -276,11 +276,12 @@ test('T6 mixed retirement batch preflights qualified second edge before any unqu
   const first = ok(await core.capture(capture(1, 'Friday'))).admission.memories;
   const beta = first.find((m) => detail(core, m).memory.content.includes('Beta'));
   attachTrustedQualification(core, db, beta, 'Friday'); bind(core, beta);
-  const before = first.map((m) => detail(core, m));
+  const stable=value=>{const {relations,...rest}=value;return rest;};
+  const before = first.map(m=>stable(detail(core,m)));
   const result = ok(await core.capture(capture(2, 'Monday')));
   assert.equal(reconciled, 1);
-  assert.deepEqual(result.reconciliation, { status: 'unresolved', reason: 'qualified_transition_required', retiredCount: 0 });
-  assert.deepEqual(first.map((m) => detail(core, m)), before);
+  assert.deepEqual(result.reconciliation, { status:'complete_no_change',reason:null,retiredCount:0 });
+  assert.deepEqual(first.map(m=>stable(detail(core,m))), before);
   assert.equal(db.prepare('SELECT count(*) n FROM memory_supersessions').get().n, 0);
   assert.equal(result.admission.memories.length, 2);
   assert.ok(result.admission.memories.every((m) => detail(core, m).memory.state === 'active'));

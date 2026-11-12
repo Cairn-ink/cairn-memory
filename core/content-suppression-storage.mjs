@@ -1,3 +1,4 @@
+import { purgeUnreadableMemoryRelationsInside as purgeUnreadableMemoryRelations } from './content-safety-schema.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { bindContentSafetyConnection, cachedContentLayout, contentSafetyConnection, contentSafetyBudgetError, installedContentLayout, withContentSafetyLayoutInside } from './content-safety-schema.mjs';
@@ -60,6 +61,10 @@ export function writeContentSuppressionInside(db, { namespace: ns, kind, key = '
     incarnation,match_mode,source_version,message_key,span_start,span_end,reason,action_id,recorded_at,evidence_origin,cleanup_status,cleanup_attempt)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'pending',0)`).run(ns.ownerId, factId, Number(epoch >> 32n), Number(epoch & 0xffffffffn),
     ...target.slice(1, 11), reason, actionId, recordedAt, origin);
+  const relationLayout=cachedContentLayout(db);
+  if(!installing && relationLayout?.relationsRevision && ['owner','namespace','memory','receipt','raw'].includes(kind)){
+    purgeUnreadableMemoryRelations(db,ns,matchMode==='owner');
+  }
   return { factId, epoch };
 }
 export function suppressOwnerInside(db, { ownerId, reason, actionId, recordedAt }) {

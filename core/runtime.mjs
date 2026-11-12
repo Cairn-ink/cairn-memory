@@ -1,3 +1,4 @@
+import { deliverMemoryRelations, memoryRelationLabels, relationEpochColumn, observeRelationPresence, memoryRelationsPresent } from './memory-relations-read.mjs';
 import { captureSnapshot } from './capture-input.mjs';
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
 import { registerContentWriteBoundary } from './content-write-context.mjs';
@@ -22,6 +23,7 @@ import { createMocStorage } from "./moc-storage.mjs";
 import { createAdmissionStorage } from "./admission-storage.mjs";
 import { createClassificationJournalStorage } from './classification-journal-storage.mjs';
 import { createStagedEvidenceStorage } from './staged-evidence-storage.mjs';
+import { createMemoryRelationStorage } from './memory-relations-storage.mjs';
 import { createConflictStorage } from "./conflict-storage.mjs";
 import { createIndexStorage } from "./index-storage.mjs";
 import { createSupersessionStorage } from "./supersession-storage.mjs";
@@ -30,7 +32,7 @@ import { createQualificationStorage } from './claim-qualification-storage.mjs';
 import { sourceEvidence, isSourceContext } from './source-evidence.mjs';
 import { createQualifiedTransitionStorage } from './qualified-transition-storage.mjs';
 import { createRationaleStorage } from './rationale-storage.mjs';
-import { fail, object, receiptEventTime } from "./validation.mjs";
+import { fail, object, receiptEventTime, fingerprint } from "./validation.mjs";
 import { privateCardOptions } from './private-card-input.mjs';
 import { createPrivateCardStorage } from './private-card-storage.mjs';
 import { createRawCardInvalidation } from './card-raw-sources.mjs';
@@ -60,8 +62,9 @@ export function readRecallJournalMode(runtime) {
 
 /** Shared persistence runtime used by both the legacy and envelope facades. */
 export function createMemoryRuntime(input, internal) {
-  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "methodPackages", "assets", "roleProfiles", "existingStore", "storeFence", "contentSafety", "busyTimeoutMs"]);
+  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "methodPackages", "assets", "roleProfiles", "existingStore", "storeFence", "contentSafety", "busyTimeoutMs", "memoryRelations"]);
   const busyTimeoutMs = busyTimeoutOption(input);
+  if(Object.hasOwn(input,'memoryRelations') && typeof input.memoryRelations!=='boolean')fail('invalid_input');
   const privateCards = privateCardOptions(input.privateCards);
   const methodPackages = methodPackageOptions(input.methodPackages);
   if (privateCards?.currentDependencies && !methodPackages) fail('invalid_input');
@@ -122,14 +125,16 @@ export function createMemoryRuntime(input, internal) {
       // Fold the fresh denial fence into this existing canonical read. In
       // particular, caller-queued microtasks must be observed before a model
       // invocation resumes; this adds no statement or E1 allowance.
-      const row=db.prepare(`SELECT n.epoch,coalesce(f.epoch_hi,0) epoch_hi,coalesce(f.epoch_lo,0) epoch_lo
+      const row=db.prepare(`SELECT n.epoch${relationEpochColumn(db)},coalesce(f.epoch_hi,0) epoch_hi,coalesce(f.epoch_lo,0) epoch_lo
         FROM (SELECT 1) anchor LEFT JOIN namespace_epochs n ON n.owner_id=? AND n.scope=? AND n.project_id=?
         LEFT JOIN owner_suppression_epochs f ON f.owner_id=?`).get(...boundary(ns),ns.ownerId);
+      observeRelationPresence(db,row);
       if(`${row.epoch_hi}:${row.epoch_lo}`!==proof.epoch)fail('evidence_unavailable');
       return row.epoch??1;
     }
-    return db.prepare(`SELECT epoch FROM namespace_epochs WHERE
-      owner_id = ? AND scope = ? AND project_id = ?`).get(...boundary(ns))?.epoch ?? 1;
+    const row=db.prepare(`SELECT epoch${relationEpochColumn(db)} FROM namespace_epochs WHERE
+      owner_id = ? AND scope = ? AND project_id = ?`).get(...boundary(ns));
+    observeRelationPresence(db,row);return row?.epoch??1;
   }
 
   function advanceEpoch(ns) {
@@ -562,12 +567,13 @@ export function createMemoryRuntime(input, internal) {
       sql += " ORDER BY created_at ASC, id ASC LIMIT ?";
       params.push(count + 1);
       const original = db.prepare(sql).all(...params), scanned = original.slice(0, count), procedural = safeProcedural(ns, id);
+      const relations=memoryRelationLabels(db,{type:'memory',namespace:ns,memoryId:id,revision:memory.revision});
       return { receiptComplete: original.length <= count, receiptScan: scanned.at(-1)?.cursor_row, memory: { ...metadataDto(memory), content: memory.content },
         receipts: safeReceipts(ns, scanned).map(receipt => ({ id: receipt.id, client: receipt.client,
           sessionId: receipt.session_id, eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt, createdAt: receipt.created_at })),
         ...(procedural ? { procedural } : {}),
         placements: mocStorage.placementRefs(ns, id),
-        conflicts: conflictStorage.inspect(ns, id),
+        conflicts: conflictStorage.inspect(ns, id), ...(relations.length?{relations}:{}),
         ...(includeQualification ? { qualification: safeQualification(ns, memory) } : {}),
         ...(memory.currentness === 'historical'
           ? { supersession: supersessionStorage.inspect(ns, id) } : {}), epoch: currentEpoch };
@@ -698,18 +704,24 @@ export function createMemoryRuntime(input, internal) {
     }, undefined, { deferred: true });
   }
 
-  function recallSnapshot(candidates, selected, namespaces = [], includeQualification = false, contextMode) {
+  function recallSnapshot(candidates, selected, namespaces = [], includeQualification = false, contextMode, selectionLimit=12) {
     ready();
     return transaction(db, () => {
       // This transaction is the return linearization point across the read set.
       const rows = candidates.map(({ namespace, memoryId, revision }) => {
         const row = currentRow(namespace, memoryId);
-        if (!safeMemory(namespace, row) || row.revision !== revision) fail('revision_conflict');
+        if (!safeMemory(namespace, row, selected.length?'current':'history') || row.revision !== revision) fail('revision_conflict');
         return row;
       });
       for (const { namespace, indexRevision, suppressionEpoch } of namespaces) {
         indexStorage.assertAvailable(namespace);
         if (epoch(namespace) !== indexRevision || cachedContentLayout(db)?.suppressionRevision && suppressionEpoch !== undefined && suppressionEpoch !== contentSuppressionRequestFenceInside(db, namespace.ownerId)) fail('index_revision_conflict');
+      }
+      if(selected.length&&cachedContentLayout(db)?.relationsRevision){
+        const seeds=selected.map(index=>({ref:{type:'memory',namespace:candidates[index].namespace,memoryId:rows[index].id,revision:rows[index].revision},rank:index+1}));
+        const expanded=deliverMemoryRelations(db,{intent:'current'},seeds,Infinity);
+        selected=expanded.map(item=>candidates.findIndex(candidate=>candidate.memoryId===item.ref.memoryId&&candidate.revision===item.ref.revision))
+          .filter(index=>index>=0).slice(0,selectionLimit);
       }
       if (isSourceContext(contextMode)) {
         const sources = rows.map((row, index) => {
@@ -725,14 +737,18 @@ export function createMemoryRuntime(input, internal) {
         const capped = candidates[index].receiptOrder === 'recent';
         const receipts = capped ? receiptRecent(candidates[index].namespace, rows[index], candidates[index].receiptLimit)
           : receiptPrefix(candidates[index].namespace, rows[index], 0, candidates[index].receiptLimit);
+        const relations=memoryRelationLabels(db,{type:'memory',namespace:candidates[index].namespace,memoryId:memory.id,revision:memory.revision});
         return { memory, receipts, receiptCount: memory.receiptCount,
+          ...(relations.length?{relations}:{}),
           ...(capped ? { receiptsOmitted: memory.receiptCount - receipts.length } : {}),
           ...(includeQualification ? { qualification: qualifications[index] } : {}) };
       });
     }, undefined, { deferred: true });
   }
 
-  const conflictStorage = createConflictStorage({ db, activeRow: currentRow, rawRow: activeRow, advanceEpoch,
+  const memoryRelationStorage = createMemoryRelationStorage({ db, advanceEpoch,
+    enabled: input.memoryRelations !== false, managed: input.existingStore !== undefined || input.storeFence !== undefined });
+  const conflictStorage = createConflictStorage({ upgradeRelations: input.memoryRelations !== false && input.existingStore === undefined && input.storeFence === undefined, db, activeRow: currentRow, rawRow: activeRow, advanceEpoch,
     dropHeldWork: (id, reason) => dropHeldWork(db, id, reason) });
   const rationaleStorage = createRationaleStorage({ db, currentRow, readSourceEvidence, epoch, advanceEpoch });
   const qualificationStorage = createQualificationStorage({ db, receiptKey,
@@ -786,10 +802,10 @@ export function createMemoryRuntime(input, internal) {
   stagedEvidence.setEpisodes(episodes);
   deletion = createRawDeletionStorage({ db, localRawPrivacy, roots: sourceRoots, episodes, forgetMutation, removeReceipts, advanceEpoch });
   const admissionStorage = createAdmissionStorage({
-    db, admitMutation, validateReceiptTimes, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
+    db, admitMutation, validateReceiptTimes, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence, memoryRelationStorage,
     classificationJournal, episodes, proceduralStorage, assertSources: rawLineage.assertReceipts, sourceRoots, memoryAncestry, privacyMemoryDenied,
   });
-  const orderedStorage = createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
+  const orderedStorage = createOrderedCaptureStorage({ db, memoryRelationStorage, admissionStorage, epoch, activeRow,
     supersessionStorage, receiptKey, isSuppressed });
 
   const resolveHeld = createHeldReviewResolver({ db, activeRow, supersessionStorage, conflictStorage });
@@ -921,8 +937,13 @@ export function createMemoryRuntime(input, internal) {
     episodeRange(ns, operation, filter, cursor) { ready(); return episodeReads(ns, operation, filter, cursor); },
     privateCards: privateCards ? cardStorage : undefined,
     ...(internal?.engineCards ? {
-      engineCardAvailable() { ready(); return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_applicability_reviews'").get()) ||
-        !input.existingStore && !input.storeFence && [18,20,21,22].includes(db.prepare('PRAGMA user_version').get().user_version); },
+      engineCardAvailable() {
+        ready();
+        if (db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_applicability_reviews'").get()) return true;
+        if (input.existingStore || input.storeFence) return false;
+        const layout = installedContentLayout(db);
+        return !layout.suppressionRevision && [18,20,21,22].includes(layout.base);
+      },
       async engineCardStorage() {
         ready();
         const { createEngineCardStorage } = await import('./engine-card-storage.mjs');
@@ -937,6 +958,8 @@ export function createMemoryRuntime(input, internal) {
     previewDeleteConversation(input) { ready(); return deletion.preview(input); },
     deleteConversation(input) { ready(); return deletion.remove(input); },
     listRawEffects(input) { ready(); return deletion.list(input); },
+    relationWritesEnabled() { ready(); return memoryRelationStorage.enabled(); },
+    relationMode() { ready(); return cachedContentLayout(db,{refresh:false})?.relationsRevision === 2; },
     identity, ready, admit, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recentReceipts, recallSnapshot, sourceSnapshot,
@@ -949,9 +972,9 @@ export function createMemoryRuntime(input, internal) {
     discoverOrdered(ns, snapshot, order, items) {
       ready(); return orderedStorage.discover(ns, snapshot, order, items);
     },
-    finishOrdered(ns, snapshot, token, order, prepared, judged, deadline) {
+    finishOrdered(ns, snapshot, token, order, prepared, judged, deadline, memoryRelations) {
       ready(); return orderedStorage.finish(ns, snapshot, token, order, prepared.discovery,
-        prepared.items, judged.decisions, judged.reason, deadline);
+        prepared.items, judged.decisions, judged.reason, deadline, memoryRelations);
     },
     rebuildIndex(ns, input) { ready(); return indexStorage.rebuildIndex(ns, input); },
     inspectAdmission(ns, input) { ready(); return admissionStorage.inspectAdmission(ns, input); },
@@ -976,9 +999,18 @@ export function createMemoryRuntime(input, internal) {
     discardCaptureEvidence(ns, input) { ready(); return stagedEvidence.discard(ns, input); },
     assertCaptureEvidence(ns, input, deadline) { ready(); return input[captureDispatch]
       ? admissionStorage.beginCaptureDispatch(ns, input, deadline) : admissionStorage.assertCaptureEvidence(ns, input); },
+    expandRelationRefs(namespaces, refs) { ready(); return readTransaction(db,()=>{
+      const expanded=deliverMemoryRelations(db,{intent:'current',readSet:namespaces},refs.filter(ref=>Number.isSafeInteger(ref.namespaceIndex)&&namespaces[ref.namespaceIndex]).map((ref,index)=>({ref:{type:'memory',namespace:namespaces[ref.namespaceIndex],memoryId:ref.memoryId,revision:ref.revision},rank:index+1})),Infinity,true);
+      return expanded.map(item=>({namespaceIndex:namespaces.findIndex(ns=>JSON.stringify(boundary(ns))===JSON.stringify(boundary(item.ref.namespace))),memoryId:item.ref.memoryId,revision:item.ref.revision}));
+    }); },
+    relationCandidates(ns, facts) { ready(); return memoryRelationStorage.candidates(ns, facts); },
+    filterRelationFacts(ns, facts) { ready(); return readTransaction(db, () => facts.flatMap((fact, index) =>
+      isSuppressed(ns, fingerprint(fact.content)) ? [] : [index])); },
+    resolveRelationCandidates(ns, refs) { ready(); return memoryRelationStorage.resolve(ns, refs); },
     finishAdmission(ns, input) { ready(); return admissionStorage.finishAdmission(ns, input); },
     finishCapturedAdmission(ns, input, deadline, captureQualifiedDuplicates) {
       ready(); return admissionStorage.finishAdmission(ns, input, { initialClassification: true,
+        admitted: entries => ({ relationSnapshot: memoryRelationStorage.insert(ns, entries, input.memoryRelations) }),
         ...(captureQualifiedDuplicates ? { captureQualifiedDuplicates } : {}) }, deadline);
     },
     beginInitialClassification(ns, input, admitted, selected, deadline) {
@@ -987,9 +1019,9 @@ export function createMemoryRuntime(input, internal) {
     failInitialClassification(ns, input, token) {
       ready(); return classificationJournal.failAttempt(ns, input, token);
     },
-    applyInitialPlacement(ns, input, token, proposal, guards, index, deadline) {
+    applyInitialPlacement(ns, input, token, proposal, guards, index, deadline, relationSnapshot) {
       ready(); return mocStorage.applyPlacement(ns, proposal, guards, index,
-        { client: input.client, eventId: input.eventId, token, deadline });
+        { client: input.client, eventId: input.eventId, token, deadline, relationSnapshot });
     },
     abandonAdmission(ns, input) { ready(); return admissionStorage.abandonAdmission(ns, input); },
     applyPlacement(ns, proposal, guards, index) {
@@ -1007,7 +1039,7 @@ export function createMemoryRuntime(input, internal) {
     assertEpoch(ns, index, suppressionEpoch) { ready(); return mocStorage.assertEpoch(ns, index, suppressionEpoch); },
     epoch(ns) { ready(); return epoch(ns); },
     close() { if (!closed) { if (db.isOpen) db.close(); closed = true; } },
-  }, { check: assertContentScope, noOwner: ['ready','close','assertContentScope','assertContentOutput','contentPortGuard'] });
+  }, { check: assertContentScope, noOwner: ['ready','close','relationWritesEnabled','relationMode','assertContentScope','assertContentOutput','contentPortGuard'] });
   }
   const runtime = createRuntimeFacade();
   // Include the facade's entry/delivery attestation in these two error

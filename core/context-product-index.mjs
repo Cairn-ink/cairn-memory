@@ -1,3 +1,5 @@
+import { memoryRelationTime } from './memory-relations-time.mjs';
+import { deliverMemoryRelations, memoryRelationLabels } from './memory-relations-read.mjs';
 import { isEngineCard } from './content-safety.mjs';
 import { hasCardLineage, cardLineageItemInside } from './card-lineage.mjs';
 import { admissionRequired } from './context-product-admission.mjs';
@@ -142,20 +144,23 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     const prepared=read(()=>{
       const generations=canonicalFence(p.readSet,p.types),items=[],dateEntries=[]; let unavailable=0;
       const dated=p.representation==='representation-v2-dated';
-      for(const candidate of c.items) {
+      for(const candidate of deliverMemoryRelations(db,p,c.items,p.deadlineAt)) {
         const ref=candidate.ref; let item;
-        try {item=evidence.itemsInside(ref.namespace,[ref],p.intent,p.readSet)[0];}
+        try {item=evidence.itemsInside(ref.namespace,[ref],candidate.thread?.status==='earlier'?'history':p.intent,p.readSet)[0];}
         catch(e) {if(['evidence_unavailable','revision_conflict'].includes(e.code)){unavailable++;continue;}throw e;}
         const sourceRows=item.type==='memory' && item.provenance.sourceAccess==='available'
           ? receiptSourceRows(db,ref.memoryId,dated&&cachedContentLayout(db)?.rawLineage)
             .filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)):[];
-        const date=receiptEventDate(sourceRows);
+        const relations=memoryRelationLabels(db,ref,p.deadlineAt);
+        const stated=candidate.thread?.eventTime??null;
+        const eventTime=stated??(relations.length?memoryRelationTime(db,{id:ref.memoryId,revision:ref.revision}):null);
+        const date=stated?stated.slice(0,16)+'Z':receiptEventDate(sourceRows)??(eventTime?eventTime.slice(0,16)+'Z':null);
         const sources=sourceRows.map((row,index)=>{
           const {role,excerpt}=validateSourceReceipt(ref.memoryId,row,source=>createHash('sha256').update(JSON.stringify(source)).digest('hex'));
           return {index,role,excerpt};
         });
-        items.push({type:item.type,ref,ns:p.readSet.findIndex(ns=>namespaceKey(ns)===namespaceKey(ref.namespace)),rank:candidate.rank,
-          metadata:item.type==='memory'?{state:item.state,reviewState:item.reviewState,filing:item.filing,kind:item.kind,origin:item.origin,confidence:item.confidence}
+        items.push({type:item.type,ref,threadKey:candidate.threadKey,threadOrder:candidate.threadOrder,threadRank:candidate.threadRank,ns:p.readSet.findIndex(ns=>namespaceKey(ns)===namespaceKey(ref.namespace)),rank:candidate.rank,
+          metadata:item.type==='memory'?{state:item.state,reviewState:item.reviewState,filing:item.filing,kind:item.kind,origin:item.origin,confidence:item.confidence,...(relations.length?{relations}:{}),...(candidate.thread?{thread:candidate.thread}:{})}
             :{state:item.state,support:item.support,origin:item.origin,...(item.origin==='engine'?{builtAt:item.builtAt,clusterKey:item.clusterKey,status:item.status}:{})},text:item.type==='memory'?item.content:item.title+'\n'+item.body,
           ...(item.type==='card' && item.origin==='engine'?cardPackSources(item):{}),
           turnIds:citedRawTurns(db,ref.namespace,sourceRows,rawChannel),
@@ -191,9 +196,10 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       if(delivered.length && !same(canonicalFence(p.readSet,[...new Set(delivered.map(i=>i.type))]),generationsFor(delivered)))fail('snapshot_stale');
       for(const item of delivered){
         let current;
-        try{current=evidence.itemsInside(item.ref.namespace,[item.ref],p.intent,p.readSet)[0];}
+        try{current=evidence.itemsInside(item.ref.namespace,[item.ref],item.metadata.thread?.status==='earlier'?'history':p.intent,p.readSet)[0];}
         catch(e){if(['evidence_unavailable','revision_conflict'].includes(e.code))fail('snapshot_stale');throw e;}
         if(bind('snapshot-item',cardLineageItemInside(db,current))!==item.fence)fail('snapshot_stale');
+        if(item.metadata.relations?.length&&!same(item.metadata.relations,memoryRelationLabels(db,item.ref)))fail('snapshot_stale');
       }
       return result;
     };

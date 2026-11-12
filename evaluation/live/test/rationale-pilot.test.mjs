@@ -76,6 +76,10 @@ test('RP1 exact options and source pins fail without key discovery, model calls 
 
 test('RP2 installed sixteen-arm schedule retains evidence, cold replay, forgetting and immutable intent', { skip: !enabled, timeout: 180000 }, async () => {
   const f = setup(); const report = await runRationalePilot(f.options);
+  assert.equal(report.memoryRelations, true);
+  assert.equal(report.budgetAfter.relationRequests, report.attempt.relationRequests);
+  assert.ok(report.attempt.relationRequests > 0);
+  assert.equal(report.attempt.relationRequests, report.traces.filter(trace => trace.method === 'cairn_relateMemories').length);
   assert.equal(report.status, 'completed', JSON.stringify(report));
   assert.equal(report.cases.length, 16); assert.equal(report.semanticReviewRequired, true);
   assert.equal(report.cases.filter(record => record.arm === 'candidate').length, 8);

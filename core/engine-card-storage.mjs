@@ -1,3 +1,4 @@
+import { installedContentLayout, attestContentSafety } from './content-safety-schema.mjs';
 import { randomUUID, createHmac, createHash } from 'node:crypto';
 import { readTransaction, transaction } from './database.mjs';
 import { withContentSuppressionRequest, inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
@@ -30,23 +31,32 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
   const installed = () => has('card_applicability_reviews');
   // Schema22 has evidence reviews but lacks the organization layout required
   // by Card readers. Leave it untouched until its owner upgrades the store.
-  const available = () => installed() && has('card_mocs') || upgrade && [18,20,21].includes(db.prepare('PRAGMA user_version').get().user_version);
+  const unmanagedLayout = () => {
+    const layout = installedContentLayout(db);
+    return layout.suppressionRevision ? null : layout;
+  };
+  const available = () => installed() && has('card_mocs') || upgrade && [18,20,21].includes(unmanagedLayout()?.base);
   // Use the existing Card layout, only after an explicit engine maintenance
   // call. Managed stores never migrate; ordinary opening stays unchanged.
   function ensureLayout() { if (upgrade && !installed()) transaction(db, () => {
-    const version = db.prepare('PRAGMA user_version').get().user_version;
+    const layout = unmanagedLayout(), version = layout?.base;
     if (![18,20,21,22].includes(version)) return;
     if (version < 20) installPrivateCards(db);
     if (version < 21) installCardMemorySources(db);
     if (version < 22) installPrivateEvidence(db);
     installPrivateOrganization(db);
-    db.exec('PRAGMA user_version=23');
+    db.exec(`PRAGMA user_version=${23 + (layout.relationsRevision ?? 0) * 100}`);
+    if (layout.relationsRevision) attestContentSafety(db);
   }); }
   const raw = createCardRawSources(db, identity);
   const writers = createPrivateCardStorage({ db, identity, ready }).engineCardWriters();
   const receiptRef = createCardReceiptSources(db, bind).retainedRefInside;
   const memoryReference = (ns, memory) => ({ type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision });
   const cardReference = (ns, row) => ({ type: 'card', namespace: ns, cardId: row.id, revision: row.revision, bodyRevision: row.body_revision });
+  function assertSavingInside(ns) {
+    const control = db.prepare(`SELECT paused,enabled FROM episode_controls WHERE ${where}`).get(...boundary(ns));
+    if (control?.paused === 1 || control?.enabled === 0) fail('source_unavailable');
+  }
   function sourcesCurrent(ns, refs, check = () => {}) {
     const memo = createContentReadMemo(db);
     return refs.every(ref => { check(); return db.prepare(`SELECT revision FROM memories WHERE ${where} AND id=? AND deleted=0`)
@@ -290,7 +300,7 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
   function commit(ns, cluster, value, timestamp, check) {
     ready(); check();
     return transaction(db, () => inContentSuppressionRequestInside(db, () => {
-      check();
+      check(); assertSavingInside(ns);
       const refs = cluster.memories.map(m => m.source);
       if (!sourcesCurrent(ns, refs, check)) fail('source_unavailable');
       for (const ref of refs) if (db.prepare(`SELECT count(*) AS n FROM (SELECT DISTINCT c.id
@@ -322,5 +332,5 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
     }, [ns]));
   }
   return { available, snapshot, rawSpans, cards, carry, retire, commit, claim, finish, relations, pressureItems, deliver,
-    validate(ns, memories, check) { return read(ns, () => { if (!sourcesCurrent(ns, memories.map(m => m.source), check)) fail('source_unavailable'); }); } };
+    validate(ns, memories, check) { return read(ns, () => { assertSavingInside(ns); if (!sourcesCurrent(ns, memories.map(m => m.source), check)) fail('source_unavailable'); }); } };
 }

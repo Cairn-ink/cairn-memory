@@ -12,7 +12,7 @@ const where = "owner_id = ? AND scope = ? AND project_id = ? AND client = ? AND 
 const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, input.eventId];
 
 /** Content-free job state around the shared admission mutation transaction. */
-export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes, isSuppressed, activeRow, epoch,
+export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes, isSuppressed, activeRow, epoch, memoryRelationStorage,
   conflictStorage, stagedEvidence, classificationJournal, episodes, proceduralStorage, assertSources, sourceRoots, memoryAncestry = () => '', privacyMemoryDenied = row => {
     if(!cachedContentLayout(db)?.suppressionRevision)return false;
     const namespace={ownerId:row.owner_id,scope:row.scope,projectId:row.project_id};
@@ -190,7 +190,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
       const ids = new Set();
       let suppressedCount = 0;
       const activeItems = [];
-      for (const item of input.items) {
+      for (const [factIndex, item] of input.items.entries()) {
         // Timed items use this same instant for validation and created_at, even
         // when suppression would otherwise skip the item without attaching.
         const receiptNow = item.receiptTimes?.some(time => time != null) ? new Date().toISOString() : undefined;
@@ -202,15 +202,17 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
           continue;
         }
         conflictStorage.validateTargets(ns, item.conflictHints);
-        activeItems.push({ item, receiptNow });
+        activeItems.push({ item, receiptNow, factIndex });
       }
-      const entries = activeItems.map(({ item, receiptNow }) => {
+      const entries = activeItems.map(({ item, receiptNow, factIndex }) => {
+        const previousRelationTime = hooks?.initialClassification
+          ? memoryRelationStorage?.rememberedTime(ns, item.fingerprint) : undefined;
         const result = admitMutation(ns, item, { automatic: true,
           ...(hooks?.captureQualifiedDuplicates ? { captureQualifiedDuplicates: hooks.captureQualifiedDuplicates } : {}) }, receiptNow);
         const memoryId = result.memory.id;
         if (item.procedural !== undefined) proceduralStorage.write(result.memory, item.procedural, 'model', item.receipts);
         ids.add(memoryId);
-        return { memoryId, hints: item.conflictHints, item,
+        return { memoryId, memoryRevision: result.memory.revision, factIndex, hints: item.conflictHints, item, previousRelationTime,
           insertedReceiptIds: result.insertedReceiptIds };
       });
       conflictStorage.insertBatch(ns, entries, "inferred-hint");

@@ -1,8 +1,21 @@
+import { resolve } from 'node:path';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { resolveContentLayout } from './content-safety-layout.mjs';
 import { fail } from './validation.mjs';
 import { cardLineageDDL, authoredInvalidationDDL } from './card-lineage-schema.mjs';
 import { lineageBaseDeclarations, extendedReceiptDeclarations } from './card-lineage-base-schema.mjs';
+
+// The database entry registers relation storage support. Standalone model ports
+// need the safety boundary, but must not link relation DDL or writer cleanup.
+let memoryRelationHooks;
+export function registerMemoryRelationHooks(hooks) { memoryRelationHooks = hooks; }
+function relationHooks() {
+  if (!memoryRelationHooks) fail('unsupported_database');
+  return memoryRelationHooks;
+}
+export function purgeUnreadableMemoryRelationsInside(db, namespace, owner = false) {
+  return relationHooks().purgeUnreadableMemoryRelations(db, namespace, owner);
+}
 
 // One exact package, owned by the attestor and reused by the local installer.
 export const LOCAL_RAW_PRIVACY_DDL = Object.freeze([
@@ -216,7 +229,7 @@ CREATE TRIGGER safety_${table}_identity BEFORE UPDATE ON ${table}
 `;
   }
   // Split only complete CREATE statements: trigger bodies contain semicolons.
-  const statements = receiptAndRaw.match(/CREATE TRIGGER[\s\S]*?END;/g);
+  const statements = receiptAndRaw.match(/CREATE TRIGGER[\s\S]*?\bEND;(?=\s*(?:CREATE|$))/g);
   for (const statement of statements) {
     if (statement.includes(' ON receipts') || statement.includes(' ON memories') ||
         base >= 20 && (statement.includes(' ON card_notes') || statement.includes(' ON private_cards')) ||
@@ -234,7 +247,7 @@ function expectedSchema(base, receiptEventTime = false, attestedFeatures = false
   if (!expected.has(key)) {
     // Comparison needs no SQLite handle: use the closed normative declarations.
     const sql = contentSafetyDDL(base, receiptEventTime, attestedFeatures) + (lineage ? cardLineageDDL : '');
-    const declarations = sql.match(/CREATE (?:TABLE|(?:UNIQUE )?INDEX)[\s\S]*?;|CREATE TRIGGER[\s\S]*?END;/g);
+    const declarations = sql.match(/CREATE (?:TABLE|(?:UNIQUE )?INDEX)[\s\S]*?;|CREATE TRIGGER[\s\S]*?\bEND;(?=\s*(?:CREATE|$))/g);
     expected.set(key, new Map(declarations.map(sql => {
       const [, type, name] = sql.match(/^CREATE (?:UNIQUE )?(TABLE|INDEX|TRIGGER) (\w+)/);
       return [name, { type: type.toLowerCase(), sql: normalize(sql) }];
@@ -256,6 +269,13 @@ function verifyCompleteCardSchema(db,layout,eventTime) {
   if(eventTime)wanted.get('receipts').sql=extendedReceiptDeclarations[layout.base];
   wanted.get('card_memory_revision_invalidation').sql=authoredInvalidationDDL(layout.base);
   for(const [name,row]of expectedSchema(layout.base,eventTime,true,1))wanted.set(name,{name,...row});
+  if(layout.relationsRevision){
+    const { relationDDL, previousRelationDDL } = relationHooks();
+    wanted.delete('memory_conflicts');wanted.delete('right_memory_conflicts');
+    for(const sql of (layout.relationsRevision===1?previousRelationDDL:relationDDL).match(/CREATE (?:TABLE|INDEX|VIEW)[\s\S]*?;|CREATE TRIGGER[\s\S]*?^END;/gm)){
+      const [,type,name]=sql.match(/^CREATE (TABLE|INDEX|VIEW|TRIGGER) (\w+)/);wanted.set(name,{name,type:type.toLowerCase(),sql});
+    }
+  }
   // Local Raw adds one closed, optional package to the inherited schema. Admit
   // the entire exact package or none of it; never ignore a name/prefix family.
   // Metadata only: read-only openers execute no DDL or repair writes.
@@ -291,8 +311,18 @@ const metadataRows = statement => typeof statement.iterate === 'function' ? [...
 // All serving adapters share the native connection's attestation and refusal.
 const connections = new WeakMap();
 export function contentSafetyConnection(db) { return connections.get(db) ?? db; }
-export function bindContentSafetyConnection(adapter, db) {
+// Local peers learn of a committed optional layout without polling unrelated
+// stores. Weak references do not keep closed runtimes or stores alive.
+const layoutPeers=new Map(),peerStores=new WeakMap(),dirtyLayouts=new WeakMap();
+const peerCleanup=new FinalizationRegistry(({key,ref})=>{
+ const peers=layoutPeers.get(key);peers?.delete(ref);if(!peers?.size)layoutPeers.delete(key);
+});
+export function bindContentSafetyConnection(adapter, db, path) {
   const native = contentSafetyConnection(db), previous = connections.get(adapter);
+  if(typeof path==='string'&&path!==':memory:'&&!peerStores.has(native)){
+    const key=resolve(path),ref=new WeakRef(native),peers=layoutPeers.get(key)??new Set();
+    peers.add(ref);layoutPeers.set(key,peers);peerStores.set(native,key);peerCleanup.register(native,{key,ref});
+  }
   if (previous && previous !== native) fail('unsupported_database');
   // Registration must never clear a refusal observed before association.
   if (refused.has(adapter)) refused.add(native);
@@ -349,6 +379,7 @@ export function attestContentSafety(db, physical) {
   try {
     if (physical === undefined) physical = db.prepare('PRAGMA user_version').get().user_version;
     const layout = resolveContentLayout(physical);
+    if(layout.relationsRevision)relationHooks().validateMemoryRelations(db);
     // The schema rows and their cookie share one statement snapshot. Compare
     // with the final header without adding any opener statements.
     const scanned = metadataRows(db.prepare(safetyObjects));
@@ -415,10 +446,39 @@ export function attestContentSafety(db, physical) {
     fail('unsupported_database');
   }
 }
-/** Trusted adapters can reuse the opener's attestation without any new SQL. */
-export function cachedContentLayout(db) {
-  if (refused.has(contentSafetyConnection(db))) fail('unsupported_database');
-  return layouts.get(contentSafetyConnection(db))?.layout;
+/** Unchanged stores reuse attestation without SQL. A committed local relation
+ * install invalidates peers once, so their next snapshot can reattest. */
+export function cachedContentLayout(db, { refresh = true } = {}) {
+  const native=contentSafetyConnection(db);
+  if (refused.has(native)) fail('unsupported_database');
+  const physical=dirtyLayouts.get(native);
+  if(refresh&&physical!==undefined){
+    const layout=attestContentSafety(db);
+    if(layout.physical===physical)dirtyLayouts.delete(native);
+  }
+  return layouts.get(native)?.layout;
+}
+// A successful optional DDL write can refresh the cache inside a transaction.
+// Its owner must restore this checkpoint after rolling that transaction back.
+export function contentLayoutCheckpoint(db, { optional = false } = {}) {
+  const native=contentSafetyConnection(db),before=layouts.get(native),wasRefused=refused.has(native),pending=dirtyLayouts.get(native);
+  const rollback = () => {
+    const changed=layouts.get(native)!==before;
+    if(before)layouts.set(native,before);else layouts.delete(native);
+    if((changed||optional)&&!wasRefused)refused.delete(native);
+    if(pending!==undefined)dirtyLayouts.set(native,pending);
+  };
+  rollback.commit=()=>{
+    const after=layouts.get(native);
+    if(after?.layout.relationsRevision!==2||after.layout.physical===before?.layout.physical)return;
+    const key=peerStores.get(native),peers=layoutPeers.get(key);
+    for(const ref of peers??[]){
+      const peer=ref.deref();
+      if(!peer?.isOpen){peers.delete(ref);continue;}
+      if(peer!==native)dirtyLayouts.set(peer,after.layout.physical);
+    }
+  };
+  return rollback;
 }
 export function installedContentLayout(db) {
   if (refused.has(contentSafetyConnection(db))) fail('unsupported_database');

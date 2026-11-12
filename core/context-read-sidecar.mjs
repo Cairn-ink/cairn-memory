@@ -1,3 +1,4 @@
+import { relationEpochColumn, observeRelationPresence } from './memory-relations-read.mjs';
 import { episodeControlGeneration } from './episode-schema.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { hasCardLineage, cardLineageNamespaceInside } from './card-lineage.mjs';
@@ -48,6 +49,7 @@ function protectedFile(path, required = true, value = stat(path)) {
     unavailable('unsafe_file');
   return value;
 }
+export function assertContextReadVectorFile(path) { protectedFile(path); }
 function walHeader(path, observer) {
   protectedFile(path);
   let result;
@@ -376,12 +378,13 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
         const proof=cachedContentSuppressionRequestInside(canonical,ns.ownerId);
         let memory;
         if(proof?.layout.suppressionRevision){
-          const row=canonical.prepare(`SELECT n.epoch,coalesce(f.epoch_hi,0) epoch_hi,coalesce(f.epoch_lo,0) epoch_lo
+          const row=canonical.prepare(`SELECT n.epoch${relationEpochColumn(canonical)},coalesce(f.epoch_hi,0) epoch_hi,coalesce(f.epoch_lo,0) epoch_lo
             FROM (SELECT 1) anchor LEFT JOIN namespace_epochs n ON n.owner_id=? AND n.scope=? AND n.project_id=?
             LEFT JOIN owner_suppression_epochs f ON f.owner_id=?`).get(...boundary(ns),ns.ownerId);
-          if(`${row.epoch_hi}:${row.epoch_lo}`!==proof.epoch)fail('evidence_unavailable');
+          observeRelationPresence(canonical,row);
+        if(`${row.epoch_hi}:${row.epoch_lo}`!==proof.epoch)fail('evidence_unavailable');
           memory=row.epoch??1;
-        }else memory=canonical.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch??1;
+        }else {const row=canonical.prepare(`SELECT epoch${relationEpochColumn(canonical)} FROM namespace_epochs WHERE ${where}`).get(...boundary(ns));observeRelationPresence(canonical,row);memory=row?.epoch??1;}
         return {memory,...(p.types.includes('card') ? { card: canonical.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1, ...cardDependencyFence(canonical, ns, p.readSet), ...cardLineageNamespaceInside(canonical,ns) } : {})};
       });
       if(candidateWorklist) {

@@ -1,3 +1,5 @@
+import { reconcileCapture } from './ordered-capture.mjs';
+import { relateCapturedMemories } from './memory-relations.mjs';
 import { readFileSync } from 'node:fs';
 import { isStorageBusy } from './database.mjs';
 import { isCaptureSourceBusy, isPreDispatchToken } from './capture-source-safety.mjs';
@@ -6,7 +8,6 @@ import { callModel } from './model-call.mjs';
 import { fittingCap, prefixUnits, requestFits } from './model-packing.mjs';
 import { boundedText, fail, MemoryStoreError } from './validation.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
-import { reconcileCapture } from './ordered-capture.mjs';
 import { qualifyExtractedItems } from './automatic-qualification.mjs';
 import { qualifyCandidateItems } from './qualification-candidates.mjs';
 import { reviewCapturedRationale } from './automatic-rationale.mjs';
@@ -119,6 +120,9 @@ export async function captureMessages({ model, input, operations, captureQualifi
   // The default Raw capture registration already supplies each message's
   // explicit or receive time; captureRaw and Raw-free captures keep their input.
   let snapshot = episodeRun?.snapshot ?? captureSnapshot(input, captureQualification, captureSourcePolicy);
+  // Legacy receipt layouts omit dates from their admission/hash snapshot. Keep
+  // the validated source clock separately for relation chronology.
+  const relationSourceTimes=new Map(snapshot.messages.map(message=>[message.id,message.occurredAt??null]));
   if (!episodeRun && snapshot.messages.some(message => message.occurredAt !== undefined)) {
     snapshot = runtime.captureSnapshot(ns, snapshot, captureQualification, captureSourcePolicy);
   }
@@ -199,21 +203,26 @@ export async function captureMessages({ model, input, operations, captureQualifi
     // Join only each receipt's own trusted message; session clocks and Raw never enter here.
     for (const item of items) {
       const times = item.receipts.map(receipt =>
-        snapshot.messages.find(message => message.id === receipt.eventId)?.occurredAt ?? null);
+        relationSourceTimes.get(receipt.eventId) ?? null);
       if (times.some(time => time !== null)) item.receiptTimes = times;
     }
     deadline?.check();
+    const memoryRelations = operations.relationEnabled?.() === false ? []
+      : await relateCapturedMemories({ model, items, operations, deadline, validateFresh: assertSources });
     if (snapshot.causal) {
-      const prepared = unwrap(operations.ordered.prepare(snapshot, claim.order, items));
+      const relationMode = operations.relationMode?.() || memoryRelations.decisionComplete === true || memoryRelations.some(edge=>!edge.timingOnly);
+      const prepared = unwrap(operations.ordered.prepare(snapshot, claim.order, items, relationMode));
       deadline?.check();
-      const judged = captureQualification
-        ? { decisions: [], reason: items.length ? 'qualification_requires_identity' : null }
+      // Causal streams retain receipt/order provenance. Automatic relation
+      // decisions now use the same batch port as every other capture.
+      const judged = captureQualification || relationMode
+        ? { decisions: [], reason: captureQualification && items.length ? 'qualification_requires_identity' : null }
         : await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery, deadline, validateFresh: () => { assertSources(); unwrap(operations.ordered.assertPrepared(snapshot, claim.order, prepared)); }, sourceView });
       deadline?.check();
-      finished = unwrap(operations.ordered.finish(snapshot, claim.token, claim.order, prepared, judged));
+      finished = unwrap(operations.ordered.finish(snapshot, claim.token, claim.order, prepared, judged, memoryRelations));
     } else finished = unwrap(operations.finishAdmission({ ...owned, items: items.map(({ receiptTimes, ...item }) =>
       receiptTimes ? { ...item, receipts: item.receipts.map((receipt, index) =>
-        ({ ...receipt, occurredAt: receiptTimes[index] })) } : item) }));
+        ({ ...receipt, occurredAt: receiptTimes[index] })) } : item) }, memoryRelations));
   } catch (error) {
     // A failed or stale cleanup cannot replace the original error or release a successor's claim.
     try { operations.abandonAdmission(owned, (isCaptureSourceBusy(error) && !stagedDispatched) || Boolean(episodeRun &&

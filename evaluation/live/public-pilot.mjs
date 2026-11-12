@@ -550,7 +550,7 @@ const notify = async (callback, progress) => {
 // ---------------------------------------------------------------------------
 
 const ledgerSummary = (state) => ({ limitMicroUsd: state.limitMicroUsd, requestCap: state.requestCap,
-  reservedMicroUsd: state.reservedMicroUsd, requestCount: state.requestCount, state: state.state });
+  reservedMicroUsd: state.reservedMicroUsd, requestCount: state.requestCount, relationRequests: state.relationRequests ?? 0, state: state.state });
 
 export const projectCaseReservation = (plan, stages) => {
   const cairnReservation = experimentPolicy().cairnCount.reservedMicroUsd;
@@ -1275,7 +1275,8 @@ export async function runPublicPilot(options) {
     interpretation: PUBLIC_PILOT_INTERPRETATION, pilot: pilot.identity, caseIds, limits, judgeTimeoutMs, caps,
     stages: session.stages, summary, official,
     cost: { byStage: cost, reservedMicroUsd: totalReserved, knownActualMicroUsd: totalKnown,
-      unknownCostRequests: totalUnknown, requests: totalRequests, ledger: runUsage().ledger },
+      unknownCostRequests: totalUnknown, requests: totalRequests,
+      relationRequests: (cost['cairn-relation-count']?.requests ?? 0) + (cost['cairn-relation-generation']?.requests ?? 0), ledger: runUsage().ledger },
     latency: { ...latency, totalMs: elapsedMs(started) }, truncation,
     receiptExcerptBoundUtf16: RECEIPT_EXCERPT_BOUND_UTF16,
   });

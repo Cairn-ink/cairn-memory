@@ -84,8 +84,9 @@ export async function upgradeLayoutBase(input) {
         if (source.dev !== current.dev || source.ino !== current.ino) fail('unsupported_database');
         if (db.prepare('PRAGMA journal_mode').get().journal_mode !== 'delete') fail('unsafe_database_file');
         if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID ||
-            db.prepare('PRAGMA user_version').get().user_version !== 18) fail('unsupported_database');
+            ![18,118,218].includes(db.prepare('PRAGMA user_version').get().user_version)) fail('unsupported_database');
         const layout = attestContentSafety(db);
+        const relationOffset=layout.relationsRevision*100;
         if (layout.suppressionRevision || layout.attestedFeatures ||
             db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id !== storeId) fail('unsupported_database');
         validateContextProductLayout(db, layout); verifyIntegrity(db);
@@ -98,17 +99,17 @@ export async function upgradeLayoutBase(input) {
         installCardMemorySources(db);
         installPrivateEvidence(db);
         installPrivateOrganization(db);
-        db.exec('PRAGMA user_version = 23;');
+        db.exec(`PRAGMA user_version = ${23+relationOffset};`);
         for (const [version, install] of [[24, installRawJournal], [25, installRawCapture],
           [26, installRawLineage], [27, installRawDeletion], [28, installRawSources], [29, installLocalAuthority]]) {
-          install(db); db.exec(`PRAGMA user_version = ${version};`);
+          install(db); db.exec(`PRAGMA user_version = ${version+relationOffset};`);
         }
         migrateMethodPrerequisites(db);
-        installAssets(db); db.exec('PRAGMA user_version=31'); validateAssets(db);
-        installRoleProfiles(db); db.exec('PRAGMA user_version=32'); validateRoleProfiles(db);
-        installCardCurrentDependencies(db); db.exec('PRAGMA user_version=33'); validateCardCurrentDependencies(db);
+        installAssets(db); db.exec(`PRAGMA user_version=${31+relationOffset}`); validateAssets(db);
+        installRoleProfiles(db); db.exec(`PRAGMA user_version=${32+relationOffset}`); validateRoleProfiles(db);
+        installCardCurrentDependencies(db); db.exec(`PRAGMA user_version=${33+relationOffset}`); validateCardCurrentDependencies(db);
         verifyIntegrity(db);
-        if (db.prepare('PRAGMA user_version').get().user_version !== 33) fail('unsupported_database');
+        if (db.prepare('PRAGMA user_version').get().user_version !== 33+relationOffset) fail('unsupported_database');
         const after = rowCounts(db, tables);
         if (tables.some(name => counts[name] !== after[name])) fail('unsupported_database');
         return Object.freeze({ storeId, fromBase: 18, toBase: 33, counts: Object.freeze(counts) });

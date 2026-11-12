@@ -19,8 +19,8 @@ const graph = value => ({ root: pick(value.root, ['memoryId', 'revision']),
   edges: value.edges.map(edge => pick(edge, ['from', 'to', 'relation', 'fromReceipt', 'toReceipt', 'interpretationStatus'])) });
 const envelope = (value, project) => value == null ? null : value.ok === true ? { ok: true, value: project(value.value) }
   : { ok: false, error: pick(value.error, ['code', 'retryable']) };
-const budget = value => value == null ? null : pick(value, ['requestCount', 'reservedMicroUsd', 'knownUsageMicroUsd',
-  'unknownCostRequests', 'unsettled', 'limitMicroUsd', 'requestCap', 'state']);
+const budget = value => value == null ? null : { ...pick(value, ['requestCount', 'reservedMicroUsd', 'knownUsageMicroUsd',
+  'unknownCostRequests', 'unsettled', 'limitMicroUsd', 'requestCap', 'state']), relationRequests: value.relationRequests ?? 0 };
 const proposal = trace => {
   let candidates = null, edges = null;
   try {
@@ -45,11 +45,13 @@ export function exportRationaleEvidence(report) {
     if (Object.keys(expected[index]).some(key => record[key] !== expected[index][key])) fail();
   }
   const result = { version: 1, id: report.id, status: report.status, semanticReview: 'required-not-inferred',
+    memoryRelations: report.memoryRelations !== false, relationRequestCap: report.relationRequestCap,
     fixtureSha256: report.fixtureSha256, artifactSha256: report.provenance?.artifactSha256,
     runnerSha256: report.pins?.['evaluation/live/rationale-pilot.mjs'],
     limits: pick(report.limits, ['requests', 'microUsd', 'reservationMicroUsd']),
     budgetBefore: budget(report.budgetBefore), budgetAfter: budget(report.budgetAfter),
-    attempt: report.attempt == null ? null : pick(report.attempt, ['requests', 'reservedMicroUsd', 'halted', 'readOnly']),
+    attempt: report.attempt == null ? null : { ...pick(report.attempt, ['requests', 'reservedMicroUsd', 'halted', 'readOnly']),
+      relationRequests: report.attempt.relationRequests ?? 0 },
     cases: report.cases.map(record => ({ ...pick(record, ['id', 'caseId', 'arm', 'status', 'coldStatus', 'durationMs']),
       captures: record.captures.map(result => envelope(result, value => ({
         admission: value.admission == null ? null : { memories: value.admission.memories.map(memory) },
@@ -71,7 +73,7 @@ export function exportRationaleEvidence(report) {
       cold: { inspectedCount: record.coldRecords.length, graphCount: record.coldGraphs.length,
         replays: record.replays.map(item => ({ event: item.event, ...envelope(item.replay, value => pick(value, ['duplicate'])) })),
         forgotten: record.forgotten.map(result => ({ ok: result.ok, ...(result.ok ? {} : { error: pick(result.error, ['code', 'retryable']) }) })) },
-      transport: { requests: record.traces.length, unavailableResponses: record.traces.filter(trace => !trace.responseAvailable).length },
+      transport: { requests: record.traces.length, relationRequests: record.traces.filter(trace => trace.method === 'cairn_relateMemories').length, unavailableResponses: record.traces.filter(trace => !trace.responseAvailable).length },
     })) };
   const encoded = JSON.stringify(result);
   if (redactSecrets(encoded) !== encoded || /\/(?:tmp|home|Users|workspace)\/|[A-Za-z]:\\|Bearer\s/iu.test(encoded)) fail();

@@ -918,11 +918,13 @@
       "episodeRange",
       "episodeSessionKey",
       "epoch",
+      "expandRelationRefs",
       "failEpisodeDraft",
       "failEpisodeKeep",
       "failInitialClassification",
       "fetchPage",
       "filterCaptureSources",
+      "filterRelationFacts",
       "finishAdmission",
       "finishCapturedAdmission",
       "finishOrdered",
@@ -953,9 +955,13 @@
       "rebuildIndex",
       "recallSnapshot",
       "recentReceipts",
+      "relationCandidates",
+      "relationMode",
+      "relationWritesEnabled",
       "releaseEpisodeCorrection",
       "releaseEpisodeWriter",
       "reserveEpisodeBatch",
+      "resolveRelationCandidates",
       "resolveReview",
       "sessionContextSnapshot",
       "setCapturePaused",
@@ -2829,6 +2835,10 @@
       "kind": "read",
       "entry": "findCandidates"
     },
+    "filterRelationFacts": {
+      "kind": "capture-protocol",
+      "reason": "Namespace-gated read applies admission suppression to extracted facts before relation discovery and model counting; scripted-port regressions cover ordinary and causal capture with original fact bindings."
+    },
     "finishAdmission": {
       "kind": "write",
       "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
@@ -3433,6 +3443,29 @@
     "openRawSearch": {
       "kind": "exempt",
       "reason": "Optional Raw search handle construction returns no retained content and exposes no fact writer; returned methods are covered by the Raw privacy and erasure tests."
+    },
+    "expandRelationRefs": {
+      "kind": "parent-gate",
+      "parents": [
+        "recall"
+      ],
+      "reason": "Scoped recall expansion validates every ref even with no graph; direct isolation tests cover canonical eligibility."
+    },
+    "relationCandidates": {
+      "kind": "capture-protocol",
+      "reason": "Capture discovery/resolution use canonical receipt ancestry and exact namespaces; direct negative tests cover all boundaries."
+    },
+    "resolveRelationCandidates": {
+      "kind": "capture-protocol",
+      "reason": "Capture discovery/resolution use canonical receipt ancestry and exact namespaces; direct negative tests cover all boundaries."
+    },
+    "relationWritesEnabled": {
+      "kind": "exempt",
+      "reason": "Cached policy/layout only; direct zero-statement tests include pending peer invalidation."
+    },
+    "relationMode": {
+      "kind": "exempt",
+      "reason": "Cached policy/layout only; direct zero-statement tests include pending peer invalidation."
     }
   },
   "unmigratedGate": {

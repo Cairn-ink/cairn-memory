@@ -1,3 +1,4 @@
+import { MEMORY_RELATION_REQUEST_CAP } from '../experiment-budget/request-guard.mjs';
 export const QUALIFICATION_PILOT_LIMITS = Object.freeze({ requests: 100, microUsd: 1_000_000,
   reservationMicroUsd: 5000 });
 export const CANDIDATE_QUALIFICATION_LIMITS = Object.freeze({ requests: 36, microUsd: 180000,
@@ -19,21 +20,21 @@ const integer = value => Number.isSafeInteger(value) && value >= 0;
 
 /** Additional one-shot cap only; send must use the existing durable campaign guard. */
 export function createQualificationPilotAttempt(options) {
-  return createAttempt(options, QUALIFICATION_PILOT_LIMITS, ['cairn_extract', 'cairn_qualify', 'cairn_classify']);
+  return createAttempt(options, QUALIFICATION_PILOT_LIMITS, ['cairn_extract', 'cairn_qualify', 'cairn_classify', 'cairn_relateMemories']);
 }
 
 export function createCandidateQualificationAttempt(options) {
-  return createAttempt(options, CANDIDATE_QUALIFICATION_LIMITS, ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify']);
+  return createAttempt(options, CANDIDATE_QUALIFICATION_LIMITS, ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify', 'cairn_relateMemories']);
 }
 
 export function createSourceSupportAttempt(options) {
   return createAttempt(options, SOURCE_SUPPORT_LIMITS,
-    ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify', 'cairn_select', 'cairn_rank']);
+    ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify', 'cairn_relateMemories', 'cairn_select', 'cairn_rank']);
 }
 
 export function createRationaleAttempt(options) {
   return createAttempt(options, RATIONALE_LIMITS,
-    ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify', 'cairn_relate', 'cairn_select', 'cairn_rank']);
+    ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify', 'cairn_relateMemories', 'cairn_relate', 'cairn_select', 'cairn_rank']);
 }
 
 export function createSourceScanAttempt(options) {
@@ -64,9 +65,9 @@ function createAttempt(options, limits, methods, modelReservations = null) {
     || !integer(initial.requestCap) || initial.requestCap - expected.requestCount < limits.requests
     || initial.limitMicroUsd - expected.reservedMicroUsd < limits.microUsd) fail('insufficient_budget');
   const before = structuredClone(expected);
-  let halted = null, requests = 0, reservedMicroUsd = 0, readOnly = false, queue = Promise.resolve();
+  let halted = null, requests = 0, relationRequests = 0, reservedMicroUsd = 0, readOnly = false, queue = Promise.resolve();
   const halt = code => { halted ??= code; return new Error(halted); };
-  const getState = () => ({ before: structuredClone(before), requests, reservedMicroUsd, halted, readOnly });
+  const getState = () => ({ before: structuredClone(before), requests, relationRequests, relationRequestCap: MEMORY_RELATION_REQUEST_CAP, reservedMicroUsd, halted, readOnly });
   const checkState = () => { if (!matches(readState())) fail('unexpected_accounting'); };
   function request(path, body, requestOptions = {}) {
     const pending = queue.then(async () => {
@@ -86,8 +87,15 @@ function createAttempt(options, limits, methods, modelReservations = null) {
           || !methods.includes(parsed?.text?.format?.name)) fail('request_rejected');
         const reservation = modelReservations === null ? 5000 : modelReservations[parsed.model];
         await checkPins(); checkState();
-        if (requests >= limits.requests || reservedMicroUsd + reservation > limits.microUsd) fail('attempt_limit');
-        requests++; reservedMicroUsd += reservation;
+        const relation = parsed.text.format.name === 'cairn_relateMemories';
+        if (relation && relationRequests >= MEMORY_RELATION_REQUEST_CAP) fail('relation_request_cap_exceeded');
+        // Relation sends have their own finite allowance. Preserve the old
+        // methods' request and reservation headroom; the durable send guard
+        // still enforces the campaign's total money and request limits.
+        const ordinaryReserved = reservedMicroUsd - relationRequests * (limits.reservationMicroUsd ?? 0);
+        if (!relation && (requests - relationRequests >= limits.requests
+          || ordinaryReserved + reservation > limits.microUsd)) fail('attempt_limit');
+        requests++; if (relation) relationRequests++; reservedMicroUsd += reservation;
         entry = { sequence: requests, endpoint: path, method: parsed.text.format.name,
           reservedMicroUsd: reservation, status: 'reserved' };
         await persist(`request-${requests}-reserved`, entry);
@@ -101,7 +109,7 @@ function createAttempt(options, limits, methods, modelReservations = null) {
         await checkPins(); checkState();
         return response;
       } catch (error) {
-        const code = ['unexpected_accounting', 'attempt_limit', 'request_rejected', 'transport_failed',
+        const code = ['unexpected_accounting', 'attempt_limit', 'relation_request_cap_exceeded', 'request_rejected', 'transport_failed',
           'read_only_request', 'operator_halted'].includes(error?.message) ? error.message : 'guard_pin_or_persistence_failed';
         halt(code);
         try { await persist(`request-${requests}-halted`, { ...(entry ?? {}), ...getState() }); } catch { /* Keep original error. */ }

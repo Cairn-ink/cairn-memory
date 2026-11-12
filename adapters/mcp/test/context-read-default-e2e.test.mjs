@@ -83,9 +83,13 @@ test('default keyless MCP reads dated captured Memory and Raw, forgets and isola
   const before = await read(client);
   assert.equal(before.diagnostics.representation, 'representation-v2-dated');
   assert.equal(before.diagnostics.coverage.raw, 'included');
-  assert.deepEqual(before.metered.items.map(item => item.date), ['2026-01-01T08:00Z', '2026-01-03T08:00Z']);
-  assert.match(JSON.stringify(before.metered.items[0]), /I like egg pancakes/);
-  assert.match(JSON.stringify(before.metered.items[1]), /I no longer like egg pancakes because of gutter oil/);
+  assert.deepEqual(before.metered.items.map(item => item.date), ['2026-01-03T08:00Z', '2026-01-01T08:00Z']);
+  assert.deepEqual(before.metered.items.map(item => item.ref.id), [firstMemories[1], firstMemories[0]]);
+  assert.deepEqual(before.metered.items.map(item => item.metadata.thread.status), ['current', 'earlier']);
+  assert.equal(before.metered.items[1].metadata.thread.relation, 'same_thread');
+  assert.equal(before.metered.items[1].metadata.thread.currentMemoryId, firstMemories[1]);
+  assert.match(JSON.stringify(before.metered.items[0]), /I no longer like egg pancakes because of gutter oil/);
+  assert.match(JSON.stringify(before.metered.items[1]), /I like egg pancakes/);
   assert.ok(before.metered.items.some(item => item.ref.type === 'memory'));
   assert.ok(before.metered.items.some(item => item.ref.type === 'raw' || item.evidence?.some(evidence => evidence.ref.type === 'raw')));
 
@@ -93,11 +97,13 @@ test('default keyless MCP reads dated captured Memory and Raw, forgets and isola
   const rawUnavailable = await connect(workspace, path, personal, { rawSearch: false });
   for (const result of [await read(rawDisabled, { coverage: 'unavailable' }),
     await read(rawUnavailable, { coverage: 'unavailable' })]) {
-    assert.deepEqual(result.metered.items.map(item => item.date), ['2026-01-01T08:00Z', '2026-01-03T08:00Z']);
-    assert.deepEqual(result.metered.items.map(item => item.sources[0].date), ['2026-01-01T08:00Z', '2026-01-03T08:00Z']);
+    assert.deepEqual(result.metered.items.map(item => item.date), ['2026-01-03T08:00Z', '2026-01-01T08:00Z']);
+    assert.deepEqual(result.metered.items.map(item => item.sources[0].date), ['2026-01-03T08:00Z', '2026-01-01T08:00Z']);
+    assert.deepEqual(result.metered.items.map(item => item.ref.id), [firstMemories[1], firstMemories[0]]);
+    assert.deepEqual(result.metered.items.map(item => item.metadata.thread.status), ['current', 'earlier']);
     assert.ok(result.metered.items.every(item => item.ref.type === 'memory' && !item.evidence));
-    assert.match(JSON.stringify(result.metered.items[0]), /I like egg pancakes/);
-    assert.match(JSON.stringify(result.metered.items[1]), /I no longer like egg pancakes because of gutter oil/);
+    assert.match(JSON.stringify(result.metered.items[0]), /I no longer like egg pancakes because of gutter oil/);
+    assert.match(JSON.stringify(result.metered.items[1]), /I like egg pancakes/);
   }
 
   const second = await connect(workspace, path, project);
@@ -110,7 +116,10 @@ test('default keyless MCP reads dated captured Memory and Raw, forgets and isola
   }
   await publish(core, project, 2);
   const isolated = await read(second), isolatedWire = allOutput(isolated);
-  assert.deepEqual(isolated.metered.items.map(item => item.date), ['2026-01-01T08:00Z', '2026-01-03T08:00Z']);
+  assert.deepEqual(isolated.metered.items.map(item => item.date), ['2026-01-03T08:00Z', '2026-01-01T08:00Z']);
+  assert.deepEqual(isolated.metered.items.map(item => item.metadata.thread.status), ['current', 'earlier']);
+  assert.equal(isolated.metered.items[1].metadata.thread.currentMemoryId, secondMemories[1]);
+  assert.equal(isolated.metered.items[1].metadata.thread.relation, 'same_thread');
   for (const id of [...firstMemories, ...firstConversations]) assert.ok(!isolatedWire.includes(id), 'foreign reference: ' + id);
   assert.ok(isolated.metered.items.every(item => secondMemories.includes(item.ref.id)));
 
@@ -121,6 +130,9 @@ test('default keyless MCP reads dated captured Memory and Raw, forgets and isola
     assert.ok(!afterWire.includes(denied), 'forgotten evidence anywhere in output: ' + denied);
   }
   assert.match(JSON.stringify(after.metered), /I like egg pancakes/);
+  assert.deepEqual(after.metered.items.map(item => item.ref.id), [firstMemories[0]]);
+  assert.equal(after.metered.items[0].metadata?.thread, undefined);
+  assert.equal(after.metered.items[0].metadata?.relations, undefined);
   // Local forget fences the entire source session in both intents, including
   // its day-1 Raw. The independent day-1 Memory above remains readable.
   await publish(core, personal, 0);

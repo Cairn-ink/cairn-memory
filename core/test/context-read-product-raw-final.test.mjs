@@ -49,6 +49,9 @@ function fixture(mutation, coverage) {
     evidence: { itemsInside: () => [item] }, canonicalFence: () => [{ memory: 1 }],
     bind: (kind, value) => JSON.stringify([kind, value]), encode: () => 'synthetic-snapshot',
     cardLineageItemInside: (_db, value) => value, citedRawTurns: () => [], receiptEventDate: () => null,
+    // No relation layout: preserve the canonical candidates and omit labels.
+    deliverMemoryRelations: (_db, _input, candidates) => candidates,
+    memoryRelationLabels: () => [], memoryRelationTime: () => null,
     receiptSourceRows: () => [], resolveMemorySourceDates: () => true,
     assembleThreeLayerContext, completeResponseBytes, ASSEMBLY_LIMITS, namespaceKey, fail,
     success: value => ({ ok: true, value }), same: (a, b) => JSON.stringify(a) === JSON.stringify(b),

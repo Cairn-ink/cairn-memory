@@ -162,6 +162,8 @@ function memoryWire(item, representation, body = item.text) {
     const value = canonical(item.metadata[key]);
     if (!Object.hasOwn(defaults, key) || !same(value, canonical(defaults[key]))) metadata[key] = value;
   }
+  if(item.metadata.relations?.length)metadata.relations=canonical(item.metadata.relations);
+  if(item.metadata.thread)metadata.thread=canonical(item.metadata.thread);
   if (item.metadata.origin === 'engine') for (const key of ['builtAt', 'clusterKey', 'status']) metadata[key] = item.metadata[key];
   return { ref: { ns: item.ns, type: item.type, id: item.ref.memoryId ?? item.ref.cardId, rev: item.ref.revision,
     ...(item.type === 'card' ? { bodyRev: item.ref.bodyRevision } : {}), f: item.fence.slice(0, 8) }, rank: item.rank,
@@ -224,8 +226,9 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
     const units = [];
     for (const memory of [...args.prepared].sort((a, b) => a.rank - b.rank)) {
       check(); const turns = memory.turnIds ?? [];
-      const linked = units.filter(unit => turns.some(turn => unit.turns.includes(turn)));
-      const unit = linked[0] ?? { id: JSON.stringify(memory.ref), rank: memory.rank, memories: [], turns: [], evidence: [] };
+      const linked = units.filter(unit => memory.threadKey?unit.threadKey===memory.threadKey:
+        !unit.threadKey && !memory.metadata.relations?.length && unit.memories.every(item=>!item.metadata.relations?.length) && turns.some(turn => unit.turns.includes(turn)));
+      const unit = linked[0] ?? { id: memory.threadKey??JSON.stringify(memory.ref), threadKey:memory.threadKey, rank: memory.threadRank??memory.rank, memories: [], turns: [], evidence: [] };
       if (!linked.length) units.push(unit);
       unit.memories.push(memory);
       for (const other of linked.slice(1)) { unit.memories.push(...other.memories); units.splice(units.indexOf(other), 1); }
@@ -244,16 +247,17 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
     // sources. Recompute identity and chronology rather than retaining fields
     // from a group that still included a covered Memory.
     const buildUnit = unit => {
-      unit.memories.sort((a, b) => a.rank - b.rank);
+      unit.memories.sort((a, b) => unit.threadKey ? (a.metadata.thread?.status==='current'?-1:b.metadata.thread?.status==='current'?1:(b.metadata.thread?.eventTime??'').localeCompare(a.metadata.thread?.eventTime??'')||(b.threadOrder??0)-(a.threadOrder??0)) : a.rank - b.rank);
       unit.id = unit.memories.length ? JSON.stringify(unit.memories[0].ref) : unit.evidence[0].key;
-      unit.rank = unit.memories[0]?.rank ?? args.prepared.length + unit.evidence[0].rank;
+      unit.rank = unit.memories[0]?.threadRank ?? unit.memories[0]?.rank ?? args.prepared.length + unit.evidence[0].rank;
       unit.turns = [...new Set([...unit.memories.flatMap(item => item.turnIds ?? []), ...unit.evidence.map(item => item.key)])];
       const bodies = [];
       for (const memory of unit.memories) if (!bodies.some(body => body === memory.text ||
         overlap(new Set(tokenizeT1(body)), new Set(tokenizeT1(memory.text))) >= .6)) bodies.push(memory.text);
-      unit.wire = unit.memories.length ? memoryWire(unit.memories[0], args.representation, bodies.join('\n'))
+      const primary=unit.memories.find(item=>item.metadata.thread?.status==='current')??unit.memories[0];
+      unit.wire = unit.memories.length ? memoryWire(primary, args.representation, unit.threadKey?primary.text:bodies.join('\n'))
         : { layer: 'Raw', ...unit.evidence[0].wire };
-      if (args.representation === 'representation-v2-dated' && unit.memories.length > 1) {
+      if (!unit.threadKey && args.representation === 'representation-v2-dated' && unit.memories.length > 1) {
         // Coalescing retains the original bodies/excerpts. Date-only entries
         // keep secondary Memories' source dates, qualified by their own ref so
         // receipt indexes never silently refer to the primary Memory instead.
@@ -279,10 +283,11 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
       const existingDate = [...unit.memories.map(item => Object.hasOwn(item, 'receiptDate') ? item.receiptDate : item.date),
         ...unit.evidence.map(item => item.date)].filter(Boolean).sort(binary)[0];
       const itemDate = existingDate ?? unit.memories.map(item => item.date).filter(Boolean).sort(binary)[0];
-      if (args.representation === 'representation-v2-dated' && itemDate) unit.wire.date = itemDate.slice(0, 16) + 'Z';
+      if (!unit.threadKey && args.representation === 'representation-v2-dated' && itemDate) unit.wire.date = itemDate.slice(0, 16) + 'Z';
       unit.lexicalText = [...bodies, ...unit.evidence.map(item => item.wire.body)].join(' ');
       unit.terms = new Set(tokenizeT1(unit.lexicalText));
-      unit.cost = countTokens(counter, JSON.stringify(unit.wire));
+      if(unit.threadKey)unit.wires=unit.memories.map(item=>item===primary?unit.wire:memoryWire(item,args.representation));
+      unit.cost = countTokens(counter, JSON.stringify(unit.wires??unit.wire));
       unit.sessions = [...new Set([...unit.evidence.map(item => item.session), ...unit.memories.flatMap(item =>
         item.turnIds?.length ? item.turnIds.map(turn => { const [namespace, conversation] = JSON.parse(turn); return JSON.stringify([namespace, conversation]); })
           : item.sessionIds ?? [])])];
@@ -301,11 +306,12 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
         const members = unit.memories.filter(item => item.type !== 'memory' || !covered.has(memoryPackKey(item.ref)));
         if (members.length === unit.memories.length) return [unit];
         if (!members.length && !unit.evidence.length) return [];
-        return [buildUnit({ memories: members, evidence: unit.evidence.slice() })];
+        if (unit.threadKey && !members.some(item => item.metadata.thread?.status === 'current')) return [];
+         return [buildUnit({ threadKey: unit.threadKey, memories: members, evidence: unit.evidence.slice() })];
       });
     };
     const payload = proposed => ({ framing: ASSEMBLY_FRAMING, items: [...deduped(proposed)]
-      .sort(args.representation === 'representation-v2-dated' ? datedOrder : (a, b) => a.rank - b.rank).map(unit => unit.wire) });
+      .sort(args.representation === 'representation-v2-dated' ? datedOrder : (a, b) => a.rank - b.rank).flatMap(unit => unit.wires??[unit.wire]) });
     const memories = proposed => deduped(proposed).flatMap(unit => unit.memories);
     const diagnostics = (proposed, used) => ({ version: CONTEXT_VERSION, policy: { id: args.policy.id }, representation: args.representation,
       counter: { id: counter.id }, items: memories(proposed).map(item => ({ ref: item.ref, metadata: item.metadata })),
@@ -337,7 +343,15 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
       const covered = cardSourceKeys(unit.memories), cardRank = Math.min(...unit.memories.filter(item => item.type === 'card').map(item => item.rank));
       if (covered.size && selected.some(other => other.memories.some(item => item.type === 'memory' &&
         item.rank < cardRank && covered.has(memoryPackKey(item.ref))))) continue;
-      if (!fits([...selected, unit]).fits) { stops.budget = true; continue; }
+      let trial=fits([...selected,unit]);
+      while(!trial.fits&&unit.threadKey&&unit.memories.length>1){
+        const oldest=unit.memories.filter(item=>item.metadata.thread.status!=='current').sort((a,b)=>
+          (a.metadata.thread.eventTime??'').localeCompare(b.metadata.thread.eventTime??'')||(a.threadOrder??0)-(b.threadOrder??0))[0];
+        unit.memories=unit.memories.filter(item=>item!==oldest);
+        unit.wires=unit.wires.filter(wire=>wire.ref.id!==(oldest.ref.memoryId??oldest.ref.cardId));
+        stops.budget=true;trial=fits([...selected,unit]);
+      }
+      if (!trial.fits) { stops.budget = true; continue; }
       selected.push(unit); unit.sessions.forEach(session => sessions.add(session)); unit.turns.forEach(turn => turns.add(turn));
     }
     stops.items = remaining.length > 0;

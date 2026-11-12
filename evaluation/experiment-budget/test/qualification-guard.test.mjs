@@ -242,3 +242,35 @@ test('QG3 cancellation settles unknown and prevents busy close from losing reser
   await assert.rejects(pending, guardError('request_aborted')); assert.equal(signal.aborted, true);
   assert.deepEqual(guard.getState().attempts.map((a) => [a.outcome, a.reservedMicroUsd]), [['unknown', 20]]);
 });
+
+for (const kind of ['baseline', 'qualification', 'candidate', 'rationale']) test(`relation HTTP has its own cap and census in ${kind} guard`, async t => {
+ const f = fixture({ requestCap: 1000, limitMicroUsd: 1000000 });
+ let sends = 0;
+ const fetchImpl = async () => { sends++; return Response.json({ object: 'response.input_tokens', input_tokens: 100 }); };
+ let guard;
+ if (kind === 'baseline') guard = guards.createExperimentRequestGuard({ ledger: f.ledger, policy: f.configured, fetchImpl });
+ else if (kind === 'qualification') guard = makeGuard(f, fetchImpl);
+ else if (kind === 'candidate') guard = guards.createCandidateQualificationExperimentRequestGuard({ ledger: f.ledger, policy: f.configured, fetchImpl,
+  candidateQualificationExtension: guards.authorizeCandidateQualificationExtension({ ...f.authorization, authorizationId: 'synthetic-candidate' }) });
+ else guard = guards.createRationaleExperimentRequestGuard({ ledger: f.ledger, policy: f.configured, fetchImpl,
+  rationaleExtension: guards.authorizeRationaleExtension({ ...f.authorization, authorizationId: 'synthetic-rationale' }) });
+ t.after(() => guard.close());
+ const relationInput = { facts: [{ factIndex: 0, content: 'Synthetic breakfast change', eventTime: '2025-01-01T00:00:00.000Z' }], candidates: [[]] };
+ const relationBody = { ...body(false), input: [{ role: 'user', content: [{ type: 'input_text', text: JSON.stringify(relationInput) }] }],
+  text: { format: { name: 'cairn_relateMemories', type: 'json_schema', strict: true, schema: schemasFor('relateMemories', relationInput) } } };
+ const invalid = structuredClone(relationBody); invalid.text.format.schema = {};
+ await assert.rejects(guard.cairnFetch(urls.count, request(invalid)), guardError('unsupported_request'));
+ assert.equal(guard.getState().relationRequests, 0);
+ for (let i = 0; i < guards.MEMORY_RELATION_REQUEST_CAP; i++) await guard.cairnFetch(urls.count, request(relationBody));
+ const before = guard.getState();
+ assert.equal(before.relationRequests, guards.MEMORY_RELATION_REQUEST_CAP);
+ assert.equal(before.requestCount, sends);
+ await assert.rejects(guard.cairnFetch(urls.count, request(relationBody)), guardError('relation_request_cap_exceeded'));
+ assert.equal(sends, guards.MEMORY_RELATION_REQUEST_CAP); assert.deepEqual(guard.getState(), before);
+ const extractionInput = { messages: [{ index: 0, role: 'user', content: 'Synthetic breakfast' }] };
+ const extraction = { ...body(false), input: [{ role: 'user', content: [{ type: 'input_text', text: JSON.stringify(extractionInput) }] }],
+  text: { format: { name: 'cairn_extract', type: 'json_schema', strict: true, schema: schemasFor('extract', extractionInput) } } };
+ await guard.cairnFetch(urls.count, request(extraction));
+ assert.equal(guard.getState().relationRequests, before.relationRequests);
+ assert.equal(guard.getState().requestCount, before.requestCount + 1);
+});

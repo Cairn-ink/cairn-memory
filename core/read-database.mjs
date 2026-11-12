@@ -57,7 +57,7 @@ export function openReadDatabase(path, options = {}) {
       wal = topicJournalMode(native, path, topicPolicy, { deferQueryErrors: true }) === 'WAL';
     }
     if (!nativeObserver && topicPolicy) db = topicPolicy.database(native, wal);
-    bindContentSafetyConnection(db, native);
+    bindContentSafetyConnection(db, native, path);
     const current = identity(path);
     if (initial.dev !== current.dev || initial.ino !== current.ino) fail('unsafe_database_file');
     nativeObserver?.openDiagnostic?.mark('canonicalConfigured');

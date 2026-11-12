@@ -4,21 +4,21 @@
     "start": null,
     "end": null,
     "purpose": "finite family mapping; no feature inferred from the integer",
-    "sha256": "fb9d00957c5a224b1a414c2c5baa5726fa39ea2323331a9f7e325f4a9e3f3655"
+    "sha256": "abef0e018505f466d27a701f964048dd795a467c1a28eff15fd8fe8e3147bc18"
   },
   {
     "file": "core/content-safety-schema.mjs",
     "start": null,
     "end": null,
     "purpose": "control tuple, exact DDL and cached attestation",
-    "sha256": "c8f9e0bcf08902576a82510f357528ddfdbfa32365e986771a9a76006582c4b1"
+    "sha256": "0fd6c2e59f0ffaa54d167fb8ab0fece809e0a5e17ac9e8dcb4739641e2e9e578"
   },
   {
     "file": "core/content-safety-migration.mjs",
     "start": null,
     "end": null,
     "purpose": "offline migration selects and installs the attested tuple",
-    "sha256": "cfa4de31c06a67b0677faa77287fe5c353c670cbf3320855c6414200892cd0cf"
+    "sha256": "b412065a38744c7e9dc126b22ea19d29ce7cd26eaa3cd3fbfe4bb2e7688ed213"
   },
   {
     "file": "core/validation.mjs",
@@ -67,7 +67,7 @@
     "start": "    return success(structuredClone({ version: CONTEXT_VERSION",
     "end": "  }, findCandidates",
     "purpose": "public embedded capabilities projection",
-    "sha256": "31e83a531289bdb1db368b335894c3f4bd1e20db47167e896b9245173fe8d65e"
+    "sha256": "a90683beb0bf8e7ed91d1db49344a86251383c375446236ac470510943e07cb2"
   },
   {
     "file": "core/context-product-worker.mjs",
@@ -95,6 +95,13 @@
     "start": "        const layout = attestContentSafety(db);",
     "end": "        validateContextProductLayout(db, layout);",
     "purpose": "metadata/validator refusal guard: offline base upgrade requires an unfeatured base-18 store; no behavioural feature consumer",
-    "sha256": "f83f06feb0626ff29fd25f5c2776e9c903acd16b6558d0e1a01dcc55eb7bf138"
+    "sha256": "4c91cacb1526d602e290a7f0008b579087d9dea798136c88347cec3e5166769f"
+  },
+  {
+    "file": "core/memory-relations-time.mjs",
+    "start": null,
+    "end": null,
+    "sha256": "deda5110c1b81f24dbebce1b15c8715b5f0786aa8ec81ecbd40bde5c85d328e6",
+    "purpose": "Trusted source-time fallback for neutral and typed thread chronology"
   }
 ]

@@ -6,6 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { openMemoryCore } from '../contract.mjs';
 import { openMemoryStore } from '../index.mjs';
+import { installMemoryThreadLayout } from '../testing/install-memory-thread-layout.mjs';
 
 const namespace = { ownerId: 'conflict-test', scope: 'personal', projectId: null };
 const foreign = { ...namespace, ownerId: 'foreign' };
@@ -36,7 +37,7 @@ function fixture(t) {
 const relationTable = (db) => {
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
   return tables.find(({ name }) => db.prepare(`PRAGMA table_info("${name}")`).all()
-    .some(({ name: column }) => column === 'left_memory_id'))?.name ?? 'memory_conflicts';
+    .some(({ name: column }) => ['left_memory_id','from_memory_id'].includes(column)))?.name ?? 'memory_conflicts';
 };
 const snapshot = (db) => db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all()
   .map(({ name }) => [name, db.prepare(`SELECT * FROM "${name}" ORDER BY rowid`).all()]);
@@ -47,8 +48,9 @@ function place(c, m, parentIds = [], title) {
   expectedIndexRevision: epoch(c) }));
 }
 
-test('K01 symmetric source-attributed hints, canonical replay, link epochs and reopen', (t) => {
+for (const installed of [false, true]) test('K01 symmetric source-attributed hints, canonical replay, link epochs and reopen; relation layout=' + installed, (t) => {
   const { core, db, path } = fixture(t);
+  if (installed) installMemoryThreadLayout(path);
   const a = admit(core, 'Synthetic A');
   const b = admit(core, 'Synthetic B');
   const beforeA = detail(core, a);
@@ -57,7 +59,20 @@ test('K01 symmetric source-attributed hints, canonical replay, link epochs and r
   assert.deepEqual(admit(core, 'Synthetic A', [hint(b)]), a);
   assert.ok(epoch(core) > beforeEpoch);
   assert.equal(core.list({ namespace, limit: 1, cursor }).ok, false);
-  assert.deepEqual(detail(core, a), { ...beforeA, conflicts: [projection(b)] });
+  const { relations, ...legacyDetail } = detail(core, a);
+  assert.deepEqual(legacyDetail, { ...beforeA, conflicts: [projection(b)] });
+  if (installed) {
+    assert.equal(relations.length, 1);
+    assert.equal(relations[0].memoryId, b.id);
+    assert.equal(relations[0].relation, 'contradicts');
+    assert.equal(relations[0].decidedBy, 'user');
+    assert.equal(db.prepare("SELECT type FROM sqlite_schema WHERE name='memory_conflicts'").get().type, 'view');
+  } else {
+    // Hint-only stores keep main's table and projection until a graph is installed.
+    assert.equal(relations, undefined);
+    assert.equal(db.prepare("SELECT type FROM sqlite_schema WHERE name='memory_conflicts'").get().type, 'table');
+    assert.equal(db.prepare("SELECT count(*) n FROM sqlite_schema WHERE name='memory_relations'").get().n, 0);
+  }
   assert.deepEqual(detail(core, b).conflicts, [projection(a)]);
   const state = snapshot(db);
   admit(core, 'Synthetic A', [hint(b)]);

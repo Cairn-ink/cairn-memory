@@ -1,3 +1,4 @@
+import { purgeUnreadableMemoryRelationsInside as purgeUnreadableMemoryRelations } from './content-safety-schema.mjs';
 import { bindContentSafetyConnection, cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
 import { hasContentSuppressionRequestInside, contentSuppressionTargetMatches, writeContentSuppressionInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHash, createHmac } from 'node:crypto';
@@ -618,6 +619,10 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
         writeContentSuppressionInside(db, { namespace: ns, kind: 'raw', key: anchor.conversationId, matchMode: 'span',
           messageId: anchor.messageId, start: anchor.start, end: anchor.end, ...suppression });
         insert.run(anchor.conversationId, anchor.messageId, anchor.start, anchor.end, generation);
+        if(cachedContentLayout(db)?.relationsRevision && !cachedContentLayout(db)?.suppressionRevision){
+          purgeUnreadableMemoryRelations(db,ns);
+        }
+
       }
     });
   }

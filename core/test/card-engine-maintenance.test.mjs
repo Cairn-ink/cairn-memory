@@ -630,3 +630,38 @@ test('a multi-filed Card tries every exact carry destination when the first is o
   assert.equal(result.deleted, 0); assert.equal(result.modelCalls, 0); assert.deepEqual(result.built, []);
   assert.equal(f.model.calls.length, 1);
 });
+
+test('Card maintenance on a relation store upgrades only its base and preserves the relation package', async t => {
+  const { installMemoryThreadLayout } = await import('../testing/install-memory-thread-layout.mjs');
+  const f = engineCardFixture(t), memories = f.seed(8);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 18, 'opening does not install relations or Cards');
+  installMemoryThreadLayout(f.path);
+  f.db.prepare(`INSERT INTO memory_relations(id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,created_at)
+    VALUES('card-relation-preservation',?,?,?,?,'same_thread',1,'user','now')`).run(memories[1].id, memories[1].revision, memories[0].id, memories[0].revision);
+  assert.equal(ok(f.core.getEngineCardStatus({ namespace: ns })).state, 'ready');
+  const pass = ok(await f.pass()); assert.equal(pass.built.length, 1, JSON.stringify(pass));
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 223);
+  assert.equal(f.db.prepare('SELECT relation FROM memory_relations WHERE id=?').get('card-relation-preservation').relation, 'same_thread');
+  ok(await f.refresh()); assert.ok(ok(await f.read('Orion current state')).metered.items.some(item => item.ref.type === 'card'));
+});
+
+for (const setting of [{ paused: 1 }, { enabled: 0 }]) test(`relation-store Card maintenance sends no model text while saving is stopped ${JSON.stringify(setting)}`, async t => {
+  const { installMemoryThreadLayout } = await import('../testing/install-memory-thread-layout.mjs');
+  const { control } = await import('../testing/context-semantic-pause-fixture.mjs');
+  const f = engineCardFixture(t); f.seed(8); installMemoryThreadLayout(f.path);
+  let inputCounts = 0; const counter = f.model.countTokens;
+  f.model.countTokens = text => { if (text.includes('Orion')) inputCounts++; return counter(text); };
+  control(f.db, ns, setting);
+  const pass = ok(await f.pass()); assert.equal(pass.built.length, 0);
+  assert.equal(f.model.calls.length, 0); assert.equal(inputCounts, 0);
+});
+
+test('relation-store Card model preflight pause prevents generation', async t => {
+  const { installMemoryThreadLayout } = await import('../testing/install-memory-thread-layout.mjs');
+  const { control } = await import('../testing/context-semantic-pause-fixture.mjs');
+  const f = engineCardFixture(t); f.seed(8); installMemoryThreadLayout(f.path);
+  let preflights = 0;
+  f.model.fitsConsolidationRequest = () => { preflights++; control(f.db, ns, { paused: 1 }); return true; };
+  const pass = ok(await f.pass()); assert.equal(pass.built.length, 0);
+  assert.equal(preflights, 1); assert.equal(f.model.calls.length, 0);
+});

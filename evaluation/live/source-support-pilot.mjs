@@ -1,3 +1,4 @@
+import { MEMORY_RELATION_REQUEST_CAP } from '../experiment-budget/request-guard.mjs';
 import { createHash } from 'node:crypto';
 import { accessSync, constants, lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -30,7 +31,7 @@ const canonicalPath = (value, directory = false) => {
   if (stat.isSymbolicLink() || !(directory ? stat.isDirectory() : stat.isFile())) fail('unsafe_source_support_path');
   return value;
 };
-const budget = state => ({ requestCount: state.requestCount, reservedMicroUsd: state.reservedMicroUsd,
+const budget = state => ({ relationRequests: state.relationRequests ?? 0, requestCount: state.requestCount, reservedMicroUsd: state.reservedMicroUsd,
   knownUsageMicroUsd: state.attempts.reduce((sum, item) => sum + (item.actualMicroUsd ?? 0), 0),
   unknownCostRequests: state.attempts.filter(item => item.actualMicroUsd === null).length,
   unsettled: state.attempts.filter(item => item.outcome === null).length,
@@ -82,7 +83,7 @@ async function execute(options) {
     : Array.isArray(value) ? value.map(scrub) : value && typeof value === 'object'
       ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key.replaceAll(apiKey, '[REDACTED-KEY]'), scrub(item)])) : value;
   const evidence = (name, value) => writeQualifiedEvidence(directory, name, scrub(value));
-  const report = { version: 1, id: ID, status: 'not_run', semanticReviewRequired: true,
+  const report = { version: 1, id: ID, status: 'not_run', semanticReviewRequired: true, memoryRelations: true, relationRequestCap: MEMORY_RELATION_REQUEST_CAP,
     limits: SOURCE_SUPPORT_LIMITS, pins, provenance, fixtureSha256: FIXTURE_SHA, capabilitySha256,
     budgetBefore: null, budgetAfter: null, attempt: null, traces: [],
     cases: fixture.cases.map(item => ({ id: item.id, status: 'not_run', capture: null, recall: null,
@@ -101,10 +102,10 @@ async function execute(options) {
       persist: evidence,
       send: async (route, body, requestOptions) => {
         if (!activeRecord || !['capture', 'recall'].includes(activePhase)
-          || activeRecord.traces.filter(trace => trace.phase === activePhase).length >= 6
+          || (JSON.parse(body).text?.format?.name !== 'cairn_relateMemories' && activeRecord.traces.filter(trace => trace.phase === activePhase && trace.method !== 'cairn_relateMemories').length >= 6)
           || Buffer.byteLength(body) > 100000) fail('request_bounds');
         const method = JSON.parse(body).text?.format?.name;
-        if (!(activePhase === 'capture' ? ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify']
+        if (!(activePhase === 'capture' ? ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify', 'cairn_relateMemories']
           : ['cairn_select', 'cairn_rank']).includes(method)) fail('phase_method_mismatch');
         const trace = { caseId: activeRecord.id, phase: activePhase, sequence: activeRecord.traces.length + 1, method: JSON.parse(body).text.format.name,
           requestBody: JSON.parse(body), providerResponse: null, responseAvailable: false };
@@ -230,6 +231,7 @@ async function execute(options) {
     report.attempt = attempt?.getState() ?? null;
     try { verifyCapability(); } catch { report.status = 'halted'; report.capabilityError = 'capability_changed'; }
     try { report.budgetAfter = budget(ledger.getState()); } catch { report.status = 'halted'; report.accountingError = 'accounting_failed'; }
+    if (report.budgetAfter) report.budgetAfter.relationRequests = report.attempt?.relationRequests ?? 0;
     try { if (session) session.close(); } catch { report.status = 'halted'; report.cleanupError = 'cleanup_failed'; }
     try { ledger.close(); } catch { report.status = 'halted'; report.cleanupError = 'cleanup_failed'; }
     try { evidence('final-report', report); } catch { report.status = 'halted'; report.evidenceError = 'persistence_failed'; }
