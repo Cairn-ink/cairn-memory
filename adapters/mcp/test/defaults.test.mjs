@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { parseConfiguration } from '../cli.mjs';
 import { createCairnServer } from '../server.mjs';
@@ -109,4 +110,10 @@ test('automatic embedding refresh supports a Raw-free Memory-only store; semanti
     }
     await client.close(); await server.close();
   }
+});
+
+// Public defaults and setup disclosure must explain both transmission and opt-out.
+test('defaults text discloses semantic sends and explicit Raw opt-in', () => {
+  const text = readFileSync(new URL('../../../docs/defaults.md',import.meta.url),'utf8');
+  for (const literal of ['Raw document and query embeddings are both off','raw_semantic_not_enabled','--raw-semantic','--no-context-semantic','memories and search text','estimated US$1 per server run']) assert.ok(text.includes(literal),literal);
 });

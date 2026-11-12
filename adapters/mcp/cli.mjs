@@ -25,7 +25,11 @@ const help = `Cairn Memory — local stdio MCP developer preview
 Defaults: Raw retention and Raw search maintenance are on (--no-raw disables retention).
 Preferred memory reads: find_memory_candidates and read_memory_context (contextRead is on).
 --no-context-read removes these tools; --no-context-semantic keeps reads BM25-only.
-OPENAI_API_KEY automatically selects bounded OpenAI embeddings when present.
+With OPENAI_API_KEY available to the Cairn MCP server, memories and search text
+go to OpenAI for semantic search, up to an estimated US$1 per server run.
+Saved conversations are sent only with --raw-semantic or an explicit
+--context-embedder configuration. Raw document and query embeddings are off by default.
+To stay fully local, use --no-context-semantic, or do not give the server a key.
 See docs/defaults.md for costs, options and every default.
 
 Usage:
@@ -178,6 +182,8 @@ It cannot verify database permissions, credentials or model availability.
 --context-read context-read-v1 adds find_memory_candidates and
 fetch_memory_candidate_evidence and read_memory_context by default. Read sets are fixed at startup; personal
 reads require project scope and --context-read-personal. Semantic defaults on with OPENAI_API_KEY; otherwise reads use BM25.
+Raw needs --raw-semantic or an explicit --context-embedder group for document
+and query embedding. --no-context-semantic overrides both.
 Background turns refresh configured embeddings. Explicit provider overrides
 require all five provider options together. Hosted uses rrf-k10.
 Context --check-config performs no key lookup, database opening or provider creation.

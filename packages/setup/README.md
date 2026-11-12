@@ -228,8 +228,11 @@ Node 路徑變動時，重跑 `setup --local`。
 `find_memory_candidates`, `fetch_memory_candidate_evidence`, and
 `read_memory_context`. Automatic hooks fill Raw without a model; setup does not register `capture_memory`. Saving, inspecting, correcting and forgetting
 need no model key. Semantic recall needs a model key; without one it reports
-`model_not_configured`. If `OPENAI_API_KEY` is in the tool's environment, the
-engine will use it for recall and send selected text to that provider.
+`model_not_configured`. With `OPENAI_API_KEY` available to the Cairn MCP server, memories and search text
+go to OpenAI for semantic search, up to an estimated US$1 per server run. Saved
+conversations are sent only if you opt in with `--raw-semantic` (or explicitly
+configure `--context-embedder`). To stay fully local, use `--no-context-semantic`,
+or do not give the server a key.
 Local storage does not mean all processing is offline. Setup sends no user data;
 it reads the Claude registration configuration file `~/.claude.json` with a
 4 MiB bound and extracts only `type`/`command`/`args` from the named `cairn` and
@@ -241,9 +244,11 @@ authentication fields. Unrelated entries and file contents are never printed.
 也可使用預設開啟、附日期的 contextRead 工具 `find_memory_candidates`、
 `fetch_memory_candidate_evidence`、`read_memory_context`。自動 hooks 不需要模型就能保存 Raw，setup 不會註冊 `capture_memory`。
 保存、查看、更正與遺忘不需要模型金鑰；語意回想需要模型金鑰，
-沒有時回報 `model_not_configured`。若工具的環境已有 `OPENAI_API_KEY`，
-引擎會用它回想，並把選取的文字傳給該模型供應商，本機儲存不代表所有處理
-都離線。安裝器不會傳送你的資料；它會讀取上限 4 MiB 的 Claude 註冊設定檔
+沒有時回報 `model_not_configured`。若 Cairn MCP server 的環境有 `OPENAI_API_KEY`，語意搜尋會把記憶與搜尋文字
+傳給 OpenAI，每次 server 執行的預估費用上限為 US$1。已保存的對話只有在你用
+`--raw-semantic`（或明確設定 `--context-embedder`）啟用後才會傳送。
+要完全在本機處理，請用 `--no-context-semantic`，或不要提供金鑰給 server。
+本機儲存不代表所有處理都離線。安裝器不會傳送你的資料；它會讀取上限 4 MiB 的 Claude 註冊設定檔
 `~/.claude.json`，只取出 `cairn`、`cairn-local` MCP 項目的
 `type`／`command`／`args`，不存取憑證儲存區，也不使用驗證欄位。
 無關項目與檔案內容不會印出。
@@ -332,7 +337,10 @@ and dated three-layer contextRead with its preferred tools by default.
 Use `--no-raw`, `--no-raw-search` or `--no-context-read` in the server registration
 to disable them. Library `openMemoryCore` keeps Raw off unless `raw:true` is
 supplied; stores whose attested layout cannot hold Raw run Memory-only. It uses BM25 without a key;
-`OPENAI_API_KEY` enables bounded embeddings. See [defaults and off switches](../../docs/defaults.md).
+`OPENAI_API_KEY` enables bounded Memory and Card embeddings. Raw document and
+query embeddings require `--raw-semantic` or an explicit `--context-embedder`
+configuration; otherwise Raw uses BM25. `--no-context-semantic` disables all
+semantic search. See [defaults and off switches](../../docs/defaults.md).
 
 這兩個工具之間不能混用本機與雲端；遇到衝突或讀不到設定時，安裝器不改動設定。
 從雲端切換時，依畫面指令順序操作，只移除實際存在的項目：

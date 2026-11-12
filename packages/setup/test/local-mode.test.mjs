@@ -594,6 +594,7 @@ for (const lang of ['zh', 'en']) test('L01/L04 fresh local, exact argv, durable 
   assert.equal((await lstat(join(f.root, 'installation.json'))).mode & 0o777, 0o600);
   const screen = result.display.replaceAll(version, '<version>').replace(/[ \t]+$/gmu, '');
   for (const line of screen.trimEnd().split('\n')) if (!result.literals.includes(line)) assert.ok(columns(line) <= 80, line);
+  for (const literal of ['OPENAI_API_KEY', '--raw-semantic', '--no-context-semantic', 'US$1']) assert.ok(screen.includes(literal), literal);
   const snapshot = new URL(`./snapshots/local-setup-${lang}.txt`, import.meta.url);
   if (process.env.UPDATE_SETUP_SNAPSHOTS === '1') await writeFile(snapshot, screen);
   assert.equal(screen, await readFile(snapshot, 'utf8'));

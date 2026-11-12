@@ -2,6 +2,9 @@
 
 ## 0.6.6 — Unreleased
 
+- Raw document and query embeddings now require `--raw-semantic` or an explicit `--context-embedder`; setup discloses that an MCP OpenAI key sends memories and search text to OpenAI for semantic search, up to an estimated US$1 per server run. Use `--no-context-semantic` or omit the key to stay fully local.
+- Codex CLI 0.167.0 and 0.167.2 are now qualified for automatic capture. Earlier installers report `format_changed` for them and keep saving off; rerun setup to pick up the new qualification.
+
 - Local setup reports conversation saving as OFF and exits with code 2 when requested capture is blocked or fails; pending background format qualification reports when saving will start automatically.
 
 - Local capture setup accepts Claude Code's and Codex's own configuration directories when they aren't writable by other users (for example mode 0755).
