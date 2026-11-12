@@ -1,3 +1,4 @@
+import { isEngineCard } from './content-safety.mjs';
 import { hasCardLineage, cardLineageItemInside } from './card-lineage.mjs';
 import { admissionRequired } from './context-product-admission.mjs';
 import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
@@ -7,11 +8,11 @@ import { performance } from 'node:perf_hooks';
 import { randomUUID, createHash } from 'node:crypto';
 import { productSidecar } from './context-product-sidecar.mjs';
 import { digest } from './context-product-validation.mjs';
-import { contextInput, namespaceKey, ASSEMBLY_DEFAULTS, ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_LIMITS } from './context-read-input.mjs';
+import { contextInput, contextRawSearch, namespaceKey, ASSEMBLY_DEFAULTS, ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_LIMITS } from './context-read-input.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { deadline, PRODUCT_PROFILE } from './context-product-control.mjs';
 import { fuseCandidates } from './context-read-fusion.mjs';
-import { receiptEventDate, completeResponseBytes } from './context-read-assembly.mjs';
+import { receiptEventDate, completeResponseBytes, cardPackSources, receiptSourceRows, resolveMemorySourceDates } from './context-read-assembly.mjs';
 import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from './context-read-three-layer.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { TOKENIZER_VERSION, REPRESENTATION_VERSION } from './context-read-tokenize.mjs';
@@ -31,6 +32,7 @@ const trace = semantic => ({requested:semantic?'hybrid':'lexical',effective:'lex
   tokenizer:TOKENIZER_VERSION,representation:REPRESENTATION_VERSION,
   timings:{maintenanceMs:0,lexicalMs:0,semanticPreflightMs:0,embeddingMs:0,fusionMs:0}});
 export function openProductIndex({ path, facade, authorize, ownerCoverage, observer, sqlite, sidecarJournalMode, maintenance, counter, rawSearch, semantic, operation, now = () => performance.now(), storageOptions = {}, attribution }) {
+  rawSearch = contextRawSearch(rawSearch ?? undefined);
   const { db:canonicalDatabase,read:canonicalRead,evidence,bind,encode,identity,features,canonicalFence } = facade.port;
   const db=canonicalDatabase;
   const read=attribution ? work=>canonicalRead(()=>inContentSuppressionRequestInside(db,work),attribution) : canonicalRead;
@@ -138,13 +140,15 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
   function assemble(p,access,c,prepareOnly=false,rawChannel={items:[],coverage:'unavailable'}) {
     if (!counter) fail('token_count_unavailable');
     const prepared=read(()=>{
-      const generations=canonicalFence(p.readSet,p.types),items=[]; let unavailable=0;
+      const generations=canonicalFence(p.readSet,p.types),items=[],dateEntries=[]; let unavailable=0;
+      const dated=p.representation==='representation-v2-dated';
       for(const candidate of c.items) {
         const ref=candidate.ref; let item;
         try {item=evidence.itemsInside(ref.namespace,[ref],p.intent,p.readSet)[0];}
         catch(e) {if(['evidence_unavailable','revision_conflict'].includes(e.code)){unavailable++;continue;}throw e;}
         const sourceRows=item.type==='memory' && item.provenance.sourceAccess==='available'
-          ? db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)):[];
+          ? receiptSourceRows(db,ref.memoryId,dated&&cachedContentLayout(db)?.rawLineage)
+            .filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)):[];
         const date=receiptEventDate(sourceRows);
         const sources=sourceRows.map((row,index)=>{
           const {role,excerpt}=validateSourceReceipt(ref.memoryId,row,source=>createHash('sha256').update(JSON.stringify(source)).digest('hex'));
@@ -152,11 +156,14 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         });
         items.push({type:item.type,ref,ns:p.readSet.findIndex(ns=>namespaceKey(ns)===namespaceKey(ref.namespace)),rank:candidate.rank,
           metadata:item.type==='memory'?{state:item.state,reviewState:item.reviewState,filing:item.filing,kind:item.kind,origin:item.origin,confidence:item.confidence}
-            :{state:item.state,support:item.support,origin:item.origin},text:item.type==='memory'?item.content:item.title+'\n'+item.body,
+            :{state:item.state,support:item.support,origin:item.origin,...(item.origin==='engine'?{builtAt:item.builtAt,clusterKey:item.clusterKey,status:item.status}:{})},text:item.type==='memory'?item.content:item.title+'\n'+item.body,
+          ...(item.type==='card' && item.origin==='engine'?cardPackSources(item):{}),
           turnIds:citedRawTurns(db,ref.namespace,sourceRows,rawChannel),
           sessionIds:sourceRows.map(row=>JSON.stringify(['receipt',namespaceKey(ref.namespace),row.client,row.session_id])),
           date,sources,sourceAccess:item.type==='memory'?item.provenance.sourceAccess:'unsupported',sourcesComplete:item.type==='memory' && item.provenance.coverage.status==='complete',fence:bind('snapshot-item',cardLineageItemInside(db,item))});
+        if(dated&&item.type==='memory')dateEntries.push({item:items.at(-1),rows:sourceRows});
       }
+      if(dated&&!resolveMemorySourceDates(db,dateEntries,p.deadlineAt))items.length=0;
       return {generations,items,unavailable};
     });
     const generationsFor=items=>prepared.generations.map(g=>({memory:g.memory,...(items.some(i=>i.type==='card')?{card:g.card,...(g.lineage?{lineage:g.lineage}:{})}:{})}));
@@ -411,14 +418,14 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       // The request's zero owner epoch proves every retained candidate has no
       // fact to match. Delivery still independently fences facts added during
       // semantic callbacks; a safety layout alone is not a populated fact set.
-      if((hasCardLineage(db) || c.suppressionEpoch && c.suppressionEpoch !== '0:0') && ranked.some(candidate=>hasCardLineage(db)&&candidate.ref.type==='card'||contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId}))) ranked=read(()=>ranked.filter(candidate=>{
+      if(ranked.some(candidate=>candidate.ref.type==='card'&&isEngineCard(candidate.ref.cardId)) || (hasCardLineage(db) || c.suppressionEpoch && c.suppressionEpoch !== '0:0') && ranked.some(candidate=>hasCardLineage(db)&&candidate.ref.type==='card'||contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId}))) ranked=read(()=>ranked.filter(candidate=>{
         try{evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);return true;}
         catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
       }));
       const fusionStarted=performance.now(),lexical=c.lexical,fused=fuseCandidates(lexical.rows,ranked,{preset:'rrf-k10',limit:24,semanticState:channel,coverageComplete:preflight?.status==='complete'});
       detail.timings.fusionMs=performance.now()-fusionStarted;
       c.items=fused.rows.map((row,i)=>({ref:row.ref,rank:i+1,fusionScore:row.fusionScore,channels:row.channels}));
-      if((hasCardLineage(db) || c.suppressionEpoch && c.suppressionEpoch !== '0:0') && c.items.some(candidate=>hasCardLineage(db)&&candidate.ref.type==='card'||contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId})))c.items=read(()=>c.items.filter(candidate=>{
+      if(c.items.some(candidate=>candidate.ref.type==='card'&&isEngineCard(candidate.ref.cardId)) || (hasCardLineage(db) || c.suppressionEpoch && c.suppressionEpoch !== '0:0') && c.items.some(candidate=>hasCardLineage(db)&&candidate.ref.type==='card'||contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId})))c.items=read(()=>c.items.filter(candidate=>{
         try{evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);return true;}
         catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
       }));

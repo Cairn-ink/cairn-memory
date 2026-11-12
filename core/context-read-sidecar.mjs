@@ -6,7 +6,7 @@ import { isBudgetEmbeddingPort } from './context-read-budget.mjs';
 import { withContentSuppressionReadInside, contentSuppressionReasonInside, inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { contentSuppressionFenceInside, contentSuppressionRequestFenceInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { bindContentSafetyConnection, checkInstalledContentSafety, cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
-import { contentReadSafety, memoryReadEligible, createContentReadMemo } from './content-safety.mjs';
+import { contentReadSafety, isEngineCard, memoryReadEligible, createContentReadMemo } from './content-safety.mjs';
 import { createCardCurrentStorage, cardDependencyFence } from './card-current-storage.mjs';
 import { lstatSync, unlinkSync } from 'node:fs';
 import { probeRollbackJournal, createExclusiveSqliteFile, protectedDeleteJournal, sameJournal } from './sqlite-journal-probe.mjs';
@@ -457,7 +457,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     return result;
   }
   function textFor(stream, id, metrics, proof) {
-    if(stream.type==='card'&&hasCardLineage(canonical)) {
+    if(stream.type==='card'&&(hasCardLineage(canonical)||isEngineCard(id))) {
       const row=canonical.prepare(`SELECT id,revision,body_revision,state FROM private_cards WHERE ${where} AND id=?`).get(...boundary(stream.ns),id);
       if(!row||!cardEligible(stream.ns,row,proof?.intent??'history',metrics,[stream.ns]))unavailable('stale_index');
     }
@@ -765,7 +765,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     const current = generation(p);
     if (!fresh(p, current,pending?()=>{result=pending.finish();}:undefined,pending) ||
         current.sequence !== g.sequence || current.incarnation !== g.incarnation) unavailable('stale_index');
-    if(result.rows.length && (hasCardLineage(canonical)||suppressionEpoch!==undefined && suppressionEpoch!=='0:0' &&
+    if(result.rows.length && (result.rows.some(({ref})=>ref.type==='card'&&isEngineCard(ref.cardId))||hasCardLineage(canonical)||suppressionEpoch!==undefined && suppressionEpoch!=='0:0' &&
         !cachedContentSuppressionRequestInside(canonical,p.readSet[0].ownerId))) {
       // Direct internal sidecar callers have no facade's final evidence pass.
       result.rows=canonicalRead(()=>{const memo=createContentReadMemo(canonical);
@@ -987,7 +987,17 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       } };
     } finally {if(!retained)residency?.release();}
   }
-  return Object.freeze({ reconcile, lexicalPage, lexical: (...args) => lexicalPage(...args).rows,
+  function cardVectors({ namespace, memories }, port) {
+    if (!authorizedProjection?.readSet.some(ns => JSON.stringify(boundary(ns)) === JSON.stringify(boundary(namespace))) ||
+        !Array.isArray(memories) || memories.length > 4096) return [];
+    const rows = sideRead(() => side.prepare(`SELECT v.id AS memoryId,v.revision,hex(v.data) AS data
+      FROM vectors v JOIN json_each(?) m ON v.id=json_extract(m.value,'$.memoryId') AND v.revision=json_extract(m.value,'$.revision')
+      WHERE v.store_id=? AND v.namespace=? AND v.type='memory' AND v.embedder_id=? AND v.embedder_revision=?
+      AND v.dimensions=? AND v.normalization=? AND v.representation=? GROUP BY v.id,v.revision LIMIT 512`)
+      .all(JSON.stringify(memories), identity.storeId, JSON.stringify(namespace), port.id, port.revision, port.dimensions, port.normalization, REPRESENTATION_VERSION));
+    return rows.map(row => ({ memoryId: row.memoryId, revision: row.revision, vector: loadVector(Buffer.from(row.data, 'hex'), port) }));
+  }
+  return Object.freeze({ reconcile, lexicalPage, lexical: (...args) => lexicalPage(...args).rows, cardVectors,
     refreshVectors, semanticPreflight, state, assertState, assertFile: checkFile,
     embeddingGuard: (readSet, deadlineAt) => contextEmbeddingGuard(canonical, canonicalRead, readSet, deadlineAt),
     close() { if (!closed) { closed = true; if (side.isOpen) side.close(); } } });
