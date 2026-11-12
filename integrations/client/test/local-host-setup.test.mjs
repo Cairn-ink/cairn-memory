@@ -420,3 +420,21 @@ for(const unsafe of ['writable-parent','foreign-parent'])test(`Claude missing fi
   finally {fs.promises.lstat=original;syncBuiltinESMExports();}
   assert.equal(existsSync(join(f.request.installationDirectory,'state','starts')),false);
 });
+
+for (const client of ['claude-code','codex']) for (const mode of [0o700,0o750,0o755]) test(`${client} native lock accepts safe client directory ${mode.toString(8)}`,async t => {
+  const f = await setupFixture(t,{client});
+  const { dirname } = await import('node:path');
+  const { chmod, lstat } = await import('node:fs/promises');
+  const { stateLock } = await import('../state-lock.mjs');
+  const parent = dirname(f.clientConfigPath), lock = f.clientConfigPath+'.cairn-local.lock';
+  await chmod(parent,mode);
+  assert.equal((await f.setup()).status,'prepared');
+  assert.equal((await f.invoke('activate')).status,'active');
+  assert.equal((await f.invoke('status')).status,'active');
+  assert.equal((await f.invoke('disable')).status,'disabled');
+  assert.equal((await f.invoke('status')).status,'disabled');
+  assert.equal((await f.invoke('activate')).status,'active');
+  assert.equal((await lstat(parent)).mode & 0o777,mode);
+  // Unspecified callers still require a private parent.
+  if (mode !== 0o700) await assert.rejects(stateLock(lock,()=>assert.fail('private lock entered')),/state_permissions/);
+});

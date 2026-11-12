@@ -191,6 +191,7 @@ for (const mode of [0o700, 0o750, 0o755, null]) test(`Claude config directory ${
   };
   const result = await run(['setup', '--local', '--client', 'claude']);
   assert.match(result.display, /Claude Code local capture: on/);
+  assert.equal((await json(join(f.root, 'capture/claude/installation.json'))).phase, 'active');
   assert.equal((await lstat(config)).mode & 0o777, mode ?? 0o700);
   const settings = await json(join(config, 'settings.json'));
   assert.deepEqual(Object.keys(settings.hooks).sort(), ['PreCompact', 'SessionStart', 'Stop']);
@@ -208,14 +209,18 @@ for (const mode of [0o700, 0o750, 0o755, null]) test(`Claude config directory ${
   const before = await readFile(join(config, 'settings.json'), 'utf8');
   await run(['setup', '--local', '--client', 'claude']);
   assert.equal(await readFile(join(config, 'settings.json'), 'utf8'), before);
+    assert.match((await run(['status', '--client', 'claude'])).display, /Claude Code local capture: on/);
   assert.match((await run(['status', '--client', 'claude'])).display, /Claude Code local capture: on/);
   if (mode === 0o755) {
     assert.match((await run(['config', '--local-capture', 'off', '--client', 'claude'])).display, /Claude Code local capture: off/);
     assert.deepEqual((await json(join(config, 'settings.json'))).hooks, {});
+    assert.match((await run(['status', '--client', 'claude'])).display, /Claude Code local capture: off/);
     assert.match((await run(['config', '--local-capture', 'on', '--client', 'claude'])).display, /Claude Code local capture: on/);
     assert.equal(await readFile(join(config, 'settings.json'), 'utf8'), before);
+    assert.match((await run(['status', '--client', 'claude'])).display, /Claude Code local capture: on/);
     await run(['uninstall', '--local', '--client', 'claude', '--yes']);
     assert.deepEqual((await json(join(config, 'settings.json'))).hooks, {});
+    assert.match((await run(['status', '--client', 'claude'])).display, /Claude Code local capture: off/);
   }
   assert.equal((await lstat(config)).mode & 0o777, mode ?? 0o700);
 });
@@ -273,6 +278,7 @@ for (const custom of [false, true]) for (const mode of [0o700, 0o750, 0o755, nul
   };
   const result = await run(['setup', '--local', '--client', 'codex']);
   assert.match(result.display, /Codex local capture: on/);
+  assert.equal((await json(join(f.root, 'capture/codex/installation.json'))).phase, 'active');
   assert.equal((await lstat(config)).mode & 0o777, mode ?? 0o700);
   const settings = await json(join(config, 'hooks.json'));
   assert.deepEqual(Object.keys(settings.hooks).sort(), ['PreCompact', 'SessionStart', 'Stop', 'UserPromptSubmit']);
@@ -290,14 +296,18 @@ for (const custom of [false, true]) for (const mode of [0o700, 0o750, 0o755, nul
   const before = await readFile(join(config, 'hooks.json'), 'utf8');
   await run(['setup', '--local', '--client', 'codex']);
   assert.equal(await readFile(join(config, 'hooks.json'), 'utf8'), before);
+    assert.match((await run(['status', '--client', 'codex'])).display, /Codex local capture: on/);
   assert.match((await run(['status', '--client', 'codex'])).display, /Codex local capture: on/);
   if (mode === 0o755) {
     assert.match((await run(['config', '--local-capture', 'off', '--client', 'codex'])).display, /Codex local capture: off/);
     assert.deepEqual((await json(join(config, 'hooks.json'))).hooks, {});
+    assert.match((await run(['status', '--client', 'codex'])).display, /Codex local capture: off/);
     assert.match((await run(['config', '--local-capture', 'on', '--client', 'codex'])).display, /Codex local capture: on/);
     assert.equal(await readFile(join(config, 'hooks.json'), 'utf8'), before);
+    assert.match((await run(['status', '--client', 'codex'])).display, /Codex local capture: on/);
     await run(['uninstall', '--local', '--client', 'codex', '--yes']);
     assert.deepEqual((await json(join(config, 'hooks.json'))).hooks, {});
+    assert.match((await run(['status', '--client', 'codex'])).display, /Codex local capture: off/);
   }
   assert.equal((await lstat(config)).mode & 0o777, mode ?? 0o700);
 });

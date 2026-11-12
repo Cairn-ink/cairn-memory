@@ -235,7 +235,7 @@ async function activate(root,signal) {
       await nativeWrite(request.clientConfigPath,text,before,request.client);
       if ((await host(root).status({ signal })).status !== 'ready') fail('authority_changed');
       await publish(root,record,'active'); return result('active');
-    });
+    },{ checkDirectory:directory });
   });
 }
 async function disable(root,signal) {
@@ -250,7 +250,7 @@ async function disable(root,signal) {
       await stateLock(request.clientConfigPath+'.cairn-local.lock',async () => {
         const before = await nativeSnapshot(request.clientConfigPath,request.client),text = mergeNative(before.text,request,false);
         if (text !== before.text) await nativeWrite(request.clientConfigPath,text,before,request.client);
-      });
+      },{ checkDirectory:directory });
     } catch (error) { await publish(root,record,'disabled'); throw error; }
     await publish(root,record,'disabled'); return result('disabled');
   });
