@@ -55,7 +55,7 @@ for (const client of ['claude-code','codex']) for (const [kind,value] of Object.
 for (const client of ['claude-code','codex']) test(`${client} ignores native task and cron rows and accepts an unknown source`,async t => {
   const f = await lazyFixture(t,client);
   const extra = {background_tasks:[{id:'synthetic-task',status:'running',future:{cost:3},progress:0.25}],
-    session_crons:[{id:'synthetic-cron',schedule:'synthetic',future:[{enabled:true}],count:2}],source:'future-native-source'+'x'.repeat(70000)};
+    session_crons:[{id:'synthetic-cron',schedule:'synthetic',future:[{enabled:true}],count:2}],source:'future-native-source'};
   assert.equal((await f.hook('SessionStart',extra)).status,'ready');
   f.append('Synthetic task row turn');
   assert.equal((await f.hook('Stop',extra)).status,'progress');
@@ -96,6 +96,9 @@ const refused = {
   'malformed session':p=>({...p,session_id:'\ud800'}),
   'relative transcript':p=>({...p,transcript_path:'relative.jsonl'}),
   'non-string source':p=>({...p,source:42}),
+  'oversized source':p=>({...p,source:'x'.repeat(65537)}),
+  'populated array':p=>Object.assign([],p),
+  'null-prototype array':p=>Object.assign(Object.setPrototypeOf([],null),p),
   'proxy':p=>new Proxy(p,{getPrototypeOf(){assert.fail('proxy reflected');}}),
   'array':()=>[],
   'null':()=>null,
@@ -180,4 +183,12 @@ test('a refused SessionStart provides no position for a later Stop to recover',a
   f.append('Synthetic later initialized turn');
   assert.equal((await f.hook('Stop')).status,'progress');
   assert.deepEqual(rows(f),{messages:1,text:'Synthetic later initialized turn'});
+});
+
+for (const client of ['claude-code','codex']) for (const source of [null,'x'.repeat(65536)]) test(`${client} accepts ${source === null ? 'null as absent' : '65536 source characters'}`,async t => {
+  const f = await lazyFixture(t,client);
+  assert.equal((await f.hook('SessionStart',{source})).status,'ready');
+  f.append('Synthetic bounded source turn');
+  assert.equal((await f.hook('Stop',{source})).status,'progress');
+  assert.deepEqual(rows(f),{messages:1,text:'Synthetic bounded source turn'});
 });

@@ -11,7 +11,7 @@ import { absolute, exact, locations, runtime, checkSignal, fail, failure } from 
 
 const hookResult = (status,reason = null) => Object.freeze({ version:'local-raw-hook-v1',status,reason });
 function payload(value,event,client) {
-  if (!value || typeof value !== 'object' || types.isProxy(value) ||
+  if (!value || typeof value !== 'object' || types.isProxy(value) || Array.isArray(value) ||
       ![Object.prototype,null].includes(Object.getPrototypeOf(value))) fail('event_refused');
   const input = {};
   // Read only the fields capture uses; native clients may add arbitrary data.
@@ -24,8 +24,8 @@ function payload(value,event,client) {
   if (!events(client).includes(event) || input.hook_event_name !== event || typeof input.session_id !== 'string' ||
       !input.session_id || input.session_id.length > 200 || input.session_id.trim() !== input.session_id ||
       !input.session_id.isWellFormed() || /[\x00-\x1f\x7f]/.test(input.session_id) || !absolute(input.transcript_path)) fail('event_refused');
-  if (Object.hasOwn(input,'source') && typeof input.source !== 'string') fail('event_refused');
-  return { sessionId:input.session_id,sourcePath:input.transcript_path,source:input.source };
+  if (input.source != null && (typeof input.source !== 'string' || input.source.length > 65536)) fail('event_refused');
+  return { sessionId:input.session_id,sourcePath:input.transcript_path,source:input.source ?? undefined };
 }
 async function source(record,path,allowMissing = false) {
   const root = record.request.sourceRoot;
