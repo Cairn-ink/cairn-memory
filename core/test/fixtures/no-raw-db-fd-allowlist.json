@@ -1743,5 +1743,25 @@
     "path": "integrations/client/raw/local-session-start.mjs",
     "source": "import { readdir, unlink } from 'node:fs/promises'",
     "reason": "Lists and removes only authority-bound session-start JSON markers under the private starts directory; never database files or sidecars."
+  },
+  {
+    "path": "packages/setup/lib/local-capture.mjs",
+    "source": "import { mkdir, open, rename, lstat, readdir, rm } from 'node:fs/promises'",
+    "reason": "Installer metadata filesystem import; only settings, Codex support stub and capture request temps use exclusive create behind store/sidecar and private-directory checks."
+  },
+  {
+    "path": "packages/setup/lib/local-capture.mjs",
+    "source": "temporary => open(temporary, 'wx', 0o600), JSON.stringify(settings, null, 2) + '\\n');",
+    "reason": "Installer settings JSON temp, exclusively created 0600 then atomically renamed; checked against canonical store/sidecar paths, never opens the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/local-capture.mjs",
+    "source": "temporary => open(temporary, 'wx', 0o600), '{}\\n');",
+    "reason": "Installer Codex support stub temp, exclusively created 0600 then atomically renamed; checked against canonical store/sidecar paths, never opens the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/local-capture.mjs",
+    "source": "temporary => open(temporary, 'wx', 0o600), JSON.stringify(request) + '\\n');",
+    "reason": "Sensitive installer capture request metadata temp, exclusively created 0600 in an owner-checked 0700 directory with cleanup; canonical store/sidecar aliases refused."
   }
 ]

@@ -94,7 +94,7 @@ test('preparing a hit uses authenticated retained refs without decoding the rank
   await s.maintain();const hit=(await s.search({query:'copper'})).candidates[0];
   const prepare=DatabaseSync.prototype.prepare;
   DatabaseSync.prototype.prepare=function(sql){
-    assert.ok(!sql.startsWith('SELECT s.*,h.sequence'),'preparation must not scan the ranking index');
+    assert.ok(!sql.startsWith('SELECT s.*,h.sequence')&&!sql.startsWith('SELECT * FROM segments WHERE published=1 ORDER BY id '),'preparation must not scan the ranking index');
     return prepare.call(this,sql);
   };
   t.after(()=>{DatabaseSync.prototype.prepare=prepare;});

@@ -108,9 +108,9 @@ for(const family of costGateFamilies())for(const base of [18,23,33])for(const se
  for(const n of [12,24]){
   const cells=[];
   for(const [safety,facts]of costGatePopulations()){
-   const f=costFamilyFixture(t,base,family);if(safety)await f.migrate();const db=f.connect();let ports=0;
+   const f=costFamilyFixture(t,base,family);if(safety)await f.migrate();const db=f.connect();let ports=0,embedderCalls=0;
    const core=openMemoryCore({path:f.path,contextRead:{version:'context-read-v1',authority,counter:{id:'same-scope-counter',countTokens(){ports++;return 1;}},
-    ...(semantic?{embedder:{id:'same-scope-fake',revision:'1',dimensions:2,normalization:'l2',embed(texts){ports++;return texts.map(()=>[1,0]);}},policy:{family:'local',maxRequests:10000,maxUsd:1,maxConcurrent:1,estimateUsd:()=>0}}:{})}});t.after(()=>{core.close();db.close();});
+    ...(semantic?{embedder:{id:'same-scope-fake',revision:'1',dimensions:2,normalization:'l2',embed(texts){ports++;embedderCalls++;return texts.map(()=>[1,0]);}},policy:{family:'local',maxRequests:10000,maxUsd:1,maxConcurrent:1,estimateUsd:()=>0}}:{})}});t.after(()=>{core.close();db.close();});
    for(let i=0;i<n;i++)ok(core.admit({namespace:ns,memory:{content:'Synthetic same-scope evidence '+i,kind:'fact'},receipts:[receipt('same-scope-'+i)]}));
    if(facts)transaction(db,()=>{for(let i=0;i<facts;i++)writeContentSuppressionInside(db,{namespace:ns,kind:'memory',key:'unrelated-'+i,reason:'purge',actionId:'fact-'+i});});
    assertCostGateCell(db,base,safety,facts,ns.ownerId,{family,testName:t.name,n,semantic});
@@ -120,7 +120,7 @@ for(const family of costGateFamilies())for(const base of [18,23,33])for(const se
     ['findCandidates','lexical-absent',{...p,query:'absentterm',semantic:false,limit:12,deadlineMs:5000}],
     ['contextRead','lexical-absent',{...p,query:'absentterm',semantic:false,budget:{maxTokens:4000,maxItems:12},deadlineMs:5000}]];
    const records=[];
-   for(const [method,variant,input]of tasks){const row=await measureContentRead(method,variant,()=>core[method](input,{}),()=>ports);
+   for(const [method,variant,input]of tasks){const before=embedderCalls;const row=await measureContentRead(method,variant,()=>core[method](input,{}),()=>ports);
     if(facts&&method==='refreshContextIndex'){assert.equal(row.result.ok,false);assert.equal(row.result.error.code,'index_unavailable');assert.equal(row.result.error.details,undefined,'no population from a maintenance refusal');}
     else{assert.equal(row.result.ok,true,JSON.stringify(row.result));if(variant==='lexical-absent')assert.deepEqual(method==='contextRead'?row.result.value.metered.items:row.result.value.items,[]);}
     if(base===33&&safety&&facts&&semantic&&variant==='hit') {
@@ -128,7 +128,7 @@ for(const family of costGateFamilies())for(const base of [18,23,33])for(const se
       assert.equal(channels.semantic.state,'partial_coverage','preserve conservative Raw-capable same-scope readiness');
       assert.equal(row.ports,method==='contextRead'?50:0,'no additional provider dispatch on v48');
     }
-    records.push({...row,result:undefined});
+    records.push({...row,result:undefined,embedderCalls:embedderCalls-before});
    }
    assertCostGateCases('embedded-same-scope',records);cells.push({base,n,semantic,safety,facts,records});
   }

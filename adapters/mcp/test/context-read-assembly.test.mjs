@@ -34,7 +34,7 @@ test('MCP projects dated partial Raw evidence and preserves partial coverage in 
   const value = { namespace: ns, conversationId: 'synthetic-partial-conversation', messageId: 'synthetic-partial-turn',
     role: 'assistant', occurredAt: '2026-01-01T08:00:00.000Z', ranges: [{ source: { span: { start: 0, end: text.length } }, text }] };
   const handle = { value }, rawSearch = { search: async () => ({ coverage: { status: 'partial' }, candidates: [value] }),
-    prepare: async () => handle, revalidate: handles => { assert.deepEqual(handles, [handle]); return [value]; } };
+    prepareMany: async (_candidates, { onPrepared }) => { onPrepared(handle, 0); return { handles: [handle], complete: true }; }, revalidate: handles => { assert.deepEqual(handles, [handle]); return [value]; } };
   const raw = await readRawChannel(rawSearch, { query: 'telescope', readSet: [ns] }, {}, performance.now() + 1000);
   const assembled = assembleThreeLayerContext({ prepared: [], query: 'telescope', readSet: [ns],
     representation: 'representation-v2-dated', counter: { id: 'synthetic', countTokens: text => text.length },
