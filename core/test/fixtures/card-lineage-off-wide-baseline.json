@@ -855,7 +855,7 @@
         ]
       ],
       "statements": 3867,
-      "sql": "afcf18099c971d587be29bd56825f2b0340e106300d17f3b8d3c49d76d209f1d",
+      "sql": "759e80015e98ac80447ace505ab5dc526e05183c38a529677aeaa1af73fe0325",
       "tables": [
         [
           "admission_claims",
@@ -1995,7 +1995,7 @@
         ]
       ],
       "statements": 8660,
-      "sql": "8fd8df620e85f67a17e4f6c6cbac255be5e976ef5f575e95539192e74ac7f7d8",
+      "sql": "e0703338b0bd207dd606510ea15fe258d30a33428bdd06f339a64fe08384e3f8",
       "tables": [
         [
           "admission_claims",
@@ -3773,7 +3773,7 @@
         ]
       ],
       "statements": 11326,
-      "sql": "e28c5325046d654f15d58984c5ce30e9228872ac1b650233f9cf77f8c2583502",
+      "sql": "874363e7acd3731365c106b1f03712ffb60c721b6b0370019ed8109d42d66c3d",
       "tables": [
         [
           "admission_claims",
@@ -5841,7 +5841,7 @@
         ]
       ],
       "statements": 20693,
-      "sql": "6d12abc0f89d04883be41216e829200e7603f5922803ccb40eceaaeaf7d0f8aa",
+      "sql": "d65e80fb0a6d8cbf631a668ae13d286284feb7e0aa4379be372f80fd3ea95927",
       "tables": [
         [
           "admission_claims",
@@ -6424,5 +6424,55 @@
     "openContextIndexMaintainer",
     "openContentSuppressionReader",
     "openRawCaptureCore"
+  ],
+  "sqlRevisions": [
+    {
+      "key": "workload:23",
+      "index": 201,
+      "old": "SELECT id, revision, content, deleted, currentness FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
+      "new": "SELECT id, revision, content, deleted, currentness, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
+    },
+    {
+      "key": "workload:23",
+      "index": 3771,
+      "old": "SELECT id, revision, content, deleted, currentness FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
+      "new": "SELECT id, revision, content, deleted, currentness, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
+    },
+    {
+      "key": "workload:33",
+      "index": 884,
+      "old": "SELECT id, revision, content, deleted, currentness FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
+      "new": "SELECT id, revision, content, deleted, currentness, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
+    },
+    {
+      "key": "workload:33",
+      "index": 11071,
+      "old": "SELECT id, revision, content, deleted, currentness FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
+      "new": "SELECT id, revision, content, deleted, currentness, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
+    },
+    {
+      "key": "workload:52",
+      "index": 855,
+      "old": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
+      "new": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
+    },
+    {
+      "key": "workload:52",
+      "index": 8328,
+      "old": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
+      "new": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
+    },
+    {
+      "key": "workload:53",
+      "index": 1599,
+      "old": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state,EXISTS( SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
+      "new": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state,EXISTS( SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
+    },
+    {
+      "key": "workload:53",
+      "index": 19852,
+      "old": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state,EXISTS( SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
+      "new": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state,EXISTS( SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
+    }
   ]
 }

@@ -824,14 +824,18 @@ It reads receipts in stable opaque-ID order, which is not event chronology, and
 uses the greatest distinct literal query-token overlap across the generated body
 and those four excerpts. A receipt supplies the existing 120-code-point select
 preview only when it scores strictly above the body; the first stable-ID receipt
-wins a receipt tie, while a body tie keeps the body preview. The default scans
-at most 1,024 current physical memories per namespace and scores at most 4,096
-excerpts of at most 800 UTF-16 units. An embedded trusted caller may opt into
-`openMemoryCore({ sourceCandidatePolicy: 'bounded-keyset-v1' })` for explicit
-source-context recall only. It keyset-scans at most 20,000 current physical rows
-per authorized namespace in pages of at most 256, checks one ID-only sentinel,
-and retains the top 1,024 by the same score and ID order. Projection-excluded
-rows consume the physical bound without exposing text or receipts to scoring.
+wins a receipt tie, while a body tie keeps the body preview. All recall modes scan nondeleted physical rows newest first on the existing
+`namespace_memories` index, with a 1,024-row floor, a fixed 300 ms monotonic
+budget and a 20,000-row cap. The floor and its placement share one
+normal-timeout deferred transaction. Tail pages use timeout zero, restored
+synchronously, and visit at most 256 rows or 25 ms before releasing SHARED.
+The floor filters currentness and review state in one content statement,
+with an unscored 1,025th row detecting a tail. It retains ordinary recall
+statement costs when exhausted. Tail pages apply those filters after physical
+traversal. Active-generation membership and canonical safety gate scoring;
+rejected tail rows still consume time and rows. The best 1,024 candidates are retained by overlap then ID. Body-only
+recall scores no receipts; source modes score up to four excerpts of at most
+800 UTF-16 units per eligible memory. There is no candidate-policy option.
 The selector sees only a winning 120-code-point
 preview for each candidate actually packed into the existing at-most-100-item,
 4,000-token pages over at most two rounds, not all four excerpts, receipt IDs or
@@ -851,12 +855,19 @@ receipt five or later cannot help that memory reach selection. Existing epoch,
 revision and final-snapshot checks prevent stale later use and finalization;
 they cannot retract a preview after a model request has already begun.
 
-The opt-in policy additionally binds its 20,000-row cap, 256-row page and
-1,024-candidate top bound in private recall cursors. A physical cap with another
-current row or any eligible candidate discarded by top-K retention is explicitly
-incomplete; it never triggers complete-map source ranking. This constructor
-policy adds no public map, MCP, HTTP, Hermes or persisted schema field and
-provides no semantic-accuracy guarantee.
+The `literal-recency-keyset-overlap-v4` policy binds the cap, page size and
+top bound in private recall cursors, together with a signed scan boundary
+(visited rows, last recency key and stop cause). A continuation rebuilds exactly
+that prefix without the time budget and rejects changed epochs or a busy tail.
+Older policy cursors fail validation. The floor, its safety checks and placement
+share one normal-timeout deferred read. Tail pages and final placement use
+try-once reads with timeout zero, restored synchronously after each read.
+There are no restarts: epoch movement discards the tail and returns the floor
+under its original epochs, subject to existing delivery freshness checks.
+Tail placement also rechecks those epochs and falls back to the floor on BUSY
+or movement. Budget/cap exhaustion, a busy tail, movement or top-K pruning sets `scanExhausted:false` and ordinary
+incomplete coverage; it never adds an error, partial reason or retry status.
+No public map, MCP, HTTP, Hermes or persisted schema field is added.
 
 Complete retained sources must fit the existing budgets or fail; no context
 expansion, dropped conditions or inferred authority is allowed. Inspection can

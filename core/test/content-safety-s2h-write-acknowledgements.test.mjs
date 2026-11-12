@@ -301,6 +301,8 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // schema (required key and property). This opaque window identity is transport
   // metadata, not writer authority or a new acknowledgement/terminal field.
   // Lock liveness preflight adds key:pid (1 -> 2): process metadata, never content or writer identity.
+  // Recall's recency keyset adds one private last-position id in the signed
+  // cursor boundary. It adds no writer acknowledgement or terminal exemption.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};
