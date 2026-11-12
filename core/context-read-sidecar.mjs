@@ -830,7 +830,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       const embeddingGuard = contextEmbeddingGuard(canonical, canonicalRead, namespaces, started + maxMs);
       const dispatch = engineGuard((phase = 'pre-send') => {
         embeddingGuard(phase);
-        if (checkCandidates && (lineage || !isBudgetEmbeddingPort(embedder))) canonicalRead(() => {
+        if (checkCandidates && !(!lineage&&isBudgetEmbeddingPort(embedder))) canonicalRead(() => {
           const memo=createContentReadMemo(canonical);
           for (const row of rows) {
             const stream=p.streams[row.stream];
