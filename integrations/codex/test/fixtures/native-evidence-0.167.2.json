@@ -1,0 +1,346 @@
+{
+  "version": "0.167.2",
+  "isolation": {
+    "networkNamespace": "fresh",
+    "interfaces": [
+      "lo"
+    ],
+    "loopbackUp": true,
+    "externalRoutes": 0
+  },
+  "scriptSha256": "3847469e75dda9d71b6f2a216cc963d409a7b9bcde5fdb045b7119e9439b247d",
+  "isolationScriptSha256": "4935f93410d4a5fadc1dbfd75b5f73fed4859c82d8c28a943f2fa8a3c453a5b8",
+  "exits": [
+    {
+      "code": 0,
+      "signal": null
+    },
+    {
+      "code": 0,
+      "signal": null
+    },
+    {
+      "code": 0,
+      "signal": null
+    },
+    {
+      "code": 0,
+      "signal": null
+    },
+    {
+      "code": 0,
+      "signal": null
+    }
+  ],
+  "cases": [
+    {
+      "name": "final",
+      "path": "native-rollout-0.167.2-final.jsonl",
+      "sha256": "39f6075852417765f0a3b904781362fb5bb6a8c5765ec4d7c0955a9068adb45f",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Synthetic question final."
+        },
+        {
+          "role": "assistant",
+          "content": "Synthetic answer final."
+        }
+      ],
+      "unsupportedFormat": 0,
+      "nativeSha256": "11cd400dcc6608edf6a1875ad04a292668fba7491d8cfd2cb0e22fd10137744e"
+    },
+    {
+      "name": "two-turns",
+      "path": "native-rollout-0.167.2-two-turns.jsonl",
+      "sha256": "ce4caa0dc7efdfe9aa911debccbe8c4b291bfc46d9a3c3ebc034aa04d49b5049",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Synthetic question two-turns."
+        },
+        {
+          "role": "assistant",
+          "content": "Synthetic answer two-turns."
+        },
+        {
+          "role": "user",
+          "content": "Synthetic question two-turns."
+        },
+        {
+          "role": "assistant",
+          "content": "Synthetic answer two-turns."
+        }
+      ],
+      "unsupportedFormat": 0,
+      "nativeSha256": "b3a4536413864b2c82de661e81aa4f9ef1d12a2a97b592bc5e70f37033bd67eb"
+    },
+    {
+      "name": "partial-final",
+      "path": "native-rollout-0.167.2-partial-final.jsonl",
+      "sha256": "5f243d033f873c0c56914b5c4c2343ba8c58b370d7917aee444486281c2469a7",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Synthetic question partial-final."
+        },
+        {
+          "role": "assistant",
+          "content": "First stable section."
+        },
+        {
+          "role": "assistant",
+          "content": "Second terminal section."
+        }
+      ],
+      "unsupportedFormat": 0,
+      "nativeSha256": "8b15e4477364303a3c25767e376827b04193b598e7b472b923093b9105b043ce"
+    },
+    {
+      "name": "resume",
+      "path": "native-rollout-0.167.2-resume.jsonl",
+      "sha256": "1a5d27469ee5b3737aefc94bd0fd2498693d43124ac08694a0fec15a750f9f6d",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Synthetic question resume."
+        },
+        {
+          "role": "assistant",
+          "content": "Synthetic answer resume."
+        },
+        {
+          "role": "user",
+          "content": "Synthetic question resume."
+        },
+        {
+          "role": "assistant",
+          "content": "Synthetic answer resume."
+        }
+      ],
+      "unsupportedFormat": 0,
+      "nativeSha256": "6553b3c6338611fb4fe9bc439d5010e8604b5aaae3f96367e98d2a28f318c31c"
+    },
+    {
+      "name": "interrupted",
+      "path": "native-rollout-0.167.2-interrupted.jsonl",
+      "sha256": "6518aae1b9fdc30286e7db6020e43a98fb0bf5bf7f203b4295aac6593245011b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Synthetic question interrupted."
+        }
+      ],
+      "unsupportedFormat": 0,
+      "nativeSha256": "7f627185e2dacb0ea102a446cb24aa6588ed5a6b8ff5142aaecef3957b1791f6"
+    },
+    {
+      "name": "tool",
+      "path": "native-rollout-0.167.2-tool.jsonl",
+      "sha256": "2cbaf0dbebaf6f90910adbf0a8a490ae4dd8e26dc6a7aa02273a9fdcb982c5f0",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Synthetic question tool."
+        },
+        {
+          "role": "assistant",
+          "content": "Synthetic answer tool."
+        }
+      ],
+      "unsupportedFormat": 0,
+      "nativeSha256": "d5a245ad7a22177cca57c885bf3807d3d7f1668fb8905de7daa04f6e8607eba5"
+    },
+    {
+      "name": "hooks-recall",
+      "path": "native-rollout-0.167.2-hooks-recall.jsonl",
+      "sha256": "00043a10d1844cf3250923d5ba98d1cb9e28ed8d5720c394724362d9a23c0012",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Synthetic question hooks-recall."
+        },
+        {
+          "role": "assistant",
+          "content": "Synthetic answer hooks-recall."
+        }
+      ],
+      "unsupportedFormat": 0,
+      "nativeSha256": "4df1bbc636ed494e0fb9b587e8295dbc9f0e8b22e8961ac372e3f5d1b561c1e5"
+    },
+    {
+      "name": "compaction-before",
+      "path": "native-rollout-0.167.2-compaction-before.jsonl",
+      "sha256": "900dd54c50b39886f93d120813521a3865d6d4d6d862737ac1b325dbd0b28d97",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Synthetic question compaction-before."
+        },
+        {
+          "role": "assistant",
+          "content": "Synthetic answer compaction-before."
+        },
+        {
+          "role": "user",
+          "content": "Synthetic question compaction-after."
+        },
+        {
+          "role": "assistant",
+          "content": "Synthetic answer compaction-after."
+        }
+      ],
+      "unsupportedFormat": 0,
+      "nativeSha256": "6e5fbc41d67bc4f7c954a8048aeea06a5d656ca95d2801de08477f3db4d957be"
+    }
+  ],
+  "bestEffort": [
+    {
+      "case": "h",
+      "produced": true
+    },
+    {
+      "case": "f2",
+      "produced": false,
+      "reason": "No public replace_dynamic_tools RPC in generated protocol; initial tools and invocation do not prove replacement."
+    }
+  ],
+  "hookLifecycle": {
+    "notifications": 20,
+    "persisted": false,
+    "started": 10,
+    "completed": 10,
+    "absentRolloutEvents": [
+      "hook_started",
+      "hook_completed"
+    ]
+  },
+  "inventory": {
+    "topLevel": [
+      "compacted",
+      "event_msg",
+      "response_item",
+      "session_meta",
+      "token_usage_record",
+      "turn_context",
+      "world_state"
+    ],
+    "eventMsg": [
+      "item_completed",
+      "task_complete",
+      "task_started",
+      "thread_settings_applied",
+      "token_count",
+      "turn_aborted"
+    ],
+    "item": [
+      "AgentMessage",
+      "ContextCompaction",
+      "DynamicToolCall",
+      "UserMessage",
+      "function_call",
+      "function_call_output",
+      "message"
+    ],
+    "content": [
+      "Text",
+      "input_text",
+      "output_text",
+      "text"
+    ]
+  },
+  "absent": [
+    "security_risk_score",
+    "dynamic_tools_updated"
+  ],
+  "mockRequests": 13,
+  "unexpected": [],
+  "modelCalls": 0,
+  "files": [
+    {
+      "path": "binary-0.167.2/format.json",
+      "sha256": "e979b364fd678291cf48786b5f29a2daf72a54a3e19a2730c1abe4a679d0e3ca",
+      "bytes": 68615
+    },
+    {
+      "path": "binary-0.167.2/qualification.json",
+      "sha256": "a123e9637ac83adb610d80f43d294af89f74df12029f8e19748b5c7101e4aec7",
+      "bytes": 705
+    },
+    {
+      "path": "binary-0.167.2/marker-presence.json",
+      "sha256": "55ed5a0c86f6f87fae78fc2d15dc743402e3254d5ea782e51834d7d872fb72b7",
+      "bytes": 1204
+    },
+    {
+      "path": "native-rollout-0.167.2-final.jsonl",
+      "sha256": "39f6075852417765f0a3b904781362fb5bb6a8c5765ec4d7c0955a9068adb45f",
+      "bytes": 8946
+    },
+    {
+      "path": "native-rollout-0.167.2-two-turns.jsonl",
+      "sha256": "ce4caa0dc7efdfe9aa911debccbe8c4b291bfc46d9a3c3ebc034aa04d49b5049",
+      "bytes": 14322
+    },
+    {
+      "path": "native-rollout-0.167.2-partial-final.jsonl",
+      "sha256": "5f243d033f873c0c56914b5c4c2343ba8c58b370d7917aee444486281c2469a7",
+      "bytes": 10045
+    },
+    {
+      "path": "native-rollout-0.167.2-resume.jsonl",
+      "sha256": "1a5d27469ee5b3737aefc94bd0fd2498693d43124ac08694a0fec15a750f9f6d",
+      "bytes": 14296
+    },
+    {
+      "path": "native-rollout-0.167.2-interrupted.jsonl",
+      "sha256": "6518aae1b9fdc30286e7db6020e43a98fb0bf5bf7f203b4295aac6593245011b",
+      "bytes": 6828
+    },
+    {
+      "path": "native-rollout-0.167.2-tool.jsonl",
+      "sha256": "2cbaf0dbebaf6f90910adbf0a8a490ae4dd8e26dc6a7aa02273a9fdcb982c5f0",
+      "bytes": 12016
+    },
+    {
+      "path": "native-rollout-0.167.2-hooks-recall.jsonl",
+      "sha256": "00043a10d1844cf3250923d5ba98d1cb9e28ed8d5720c394724362d9a23c0012",
+      "bytes": 9472
+    },
+    {
+      "path": "native-rollout-0.167.2-compaction-before.jsonl",
+      "sha256": "900dd54c50b39886f93d120813521a3865d6d4d6d862737ac1b325dbd0b28d97",
+      "bytes": 26617
+    },
+    {
+      "path": "native-hooks-0.167.2.json",
+      "sha256": "56261d4a5243870d549abde91c6bc614d963e4be139351dd9ef2d679eca1d819",
+      "bytes": 22091
+    },
+    {
+      "path": "seeded-readback-0.167.2.json",
+      "sha256": "5a3ba151da5ab5e52d74d0c62c84fe2d3d511f8feb415a82f987d20a9eeb5d86",
+      "bytes": 8964
+    }
+  ],
+  "seededReadback": {
+    "scriptSha256": "68759982737b5b0ebecd646cd221f040a73c269dacab6e8be73e8b288c4bdfae",
+    "isolationScriptSha256": "4935f93410d4a5fadc1dbfd75b5f73fed4859c82d8c28a943f2fa8a3c453a5b8",
+    "exits": [
+      {
+        "code": 0,
+        "signal": null
+      },
+      {
+        "code": 0,
+        "signal": null
+      }
+    ],
+    "modelCalls": 0,
+    "mockRequests": 0
+  },
+  "normalization": {
+    "scriptSha256": "f144903a181ea6c5c8d6d1287f9318b54b4bb6ca7b2b42ef4b0d0a27f492886c",
+    "note": "Path strings/keys become placeholders; git metadata values become synthetic scalars; native noncanonical context prose becomes synthetic excluded context. All rows, keys, discriminators and canonical completed messages are retained. Native and normalized rollout hashes are both recorded."
+  }
+}
