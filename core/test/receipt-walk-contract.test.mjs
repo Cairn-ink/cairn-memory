@@ -128,8 +128,8 @@ for(const layout of [18,53])test(`wanted tuple UTF-8 bindings and filter-off SQL
     }
     // Once per native connection, across separate storage instances and calls.
     const second=trace(t,db,createRawLineageStorage,[wanted]);
-    assert.equal(first.sql.filter(row=>row.sql==='PRAGMA encoding').length,1);
-    assert.equal(second.sql.filter(row=>row.sql==='PRAGMA encoding').length,0);
+    assert.equal(first.sql.filter(row=>row.sql.includes('FROM pragma_encoding')&&row.rows>0).length,1);
+    assert.equal(second.sql.filter(row=>row.sql.includes('FROM pragma_encoding')).length,0);
   } else assert.equal(filtered.length,0);
   const baselineText="SELECT r.*,wanted.key AS wanted_entry, json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN ( SELECT rowid FROM receipts INDEXED BY memory_receipts WHERE memory_id=json_extract(wanted.value,'$[0]') ORDER BY created_at,id LIMIT 5) ORDER BY wanted.key,r.created_at,r.id";
   for(const value of ['\0x','l\0r','x\0','\uFFFD','\uD800','\uDC00'])for(const field of ['client','sessionId','eventId','excerpt']) {
