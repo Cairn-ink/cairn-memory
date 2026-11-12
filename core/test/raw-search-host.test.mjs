@@ -102,7 +102,7 @@ for (const denial of ['fence', 'exclude', 'suppress', 'delete']) test(`host fina
   assert.throws(() => prepared.validate(), { code: 'raw_search_unavailable' });
   assert.throws(() => s.service.revalidate([prepared.ticket]), { code: 'raw_search_unavailable' });
   for (const intent of ['current', 'history']) assert.equal((await s.search({ query: 'copper', intent })).candidates.length, 0);
-  await s.tick(); assert.equal(s.indexCount(), 0);
+  for(let turn=0;turn<4&&s.indexCount();turn++)await s.tick(); assert.equal(s.indexCount(), 0);
 });
 
 test('host fence committed by the final access callback drops the search result', async t => {

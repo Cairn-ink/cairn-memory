@@ -1,3 +1,4 @@
+import { episodeControlGeneration } from './episode-schema.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { hasCardLineage, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { assertContentPort, inertContentPortValue, hasContentPortBoundary } from './content-safety-boundary.mjs';
@@ -825,15 +826,20 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       // The trusted budget wrapper invokes its existing namespace/owner fence
       // before transport. Unbranded direct callers retain the conservative
       // canonical candidate guard after text selection.
-      const dispatch = !checkCandidates || !lineage&&isBudgetEmbeddingPort(embedder) ? () => {} : engineGuard(() => canonicalRead(() => {
-        const memo=createContentReadMemo(canonical);
-        for (const row of rows) {
-          const stream=p.streams[row.stream];
-          if (stream.type==='card' ? !cardEligible(stream.ns,row,p.intent,m,p.readSet) :
-              !candidateAllowed(ref(stream,row),p.intent,p.readSet,memo)) unavailable('stale_index');
-        }
-      }));
-      if(checkCandidates && (lineage||!isBudgetEmbeddingPort(embedder)))dispatch();
+      const namespaces = p.readSet.filter(ns => rows.some(row => equal(p.streams[row.stream].ns, ns)));
+      const embeddingGuard = contextEmbeddingGuard(canonical, canonicalRead, namespaces, started + maxMs);
+      const dispatch = engineGuard((phase = 'pre-send') => {
+        embeddingGuard(phase);
+        if (checkCandidates && !(!lineage&&isBudgetEmbeddingPort(embedder))) canonicalRead(() => {
+          const memo=createContentReadMemo(canonical);
+          for (const row of rows) {
+            const stream=p.streams[row.stream];
+            if (stream.type==='card' ? !cardEligible(stream.ns,row,p.intent,m,p.readSet) :
+                !candidateAllowed(ref(stream,row),p.intent,p.readSet,memo)) unavailable('stale_index');
+          }
+        });
+      });
+      dispatch();
       let vectors;
       const budgetPort=isBudgetEmbeddingPort(embedder);
       assertContentPort({before:true});
@@ -993,6 +999,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
   }
   return Object.freeze({ reconcile, lexicalPage, lexical: (...args) => lexicalPage(...args).rows, cardVectors,
     refreshVectors, semanticPreflight, state, assertState, assertFile: checkFile,
+    embeddingGuard: (readSet, deadlineAt) => contextEmbeddingGuard(canonical, canonicalRead, readSet, deadlineAt),
     close() { if (!closed) { closed = true; if (side.isOpen) side.close(); } } });
 }
 
@@ -1029,4 +1036,43 @@ export function contextSourceFences(db, readSet, types, sources, features) {
     }
     return value;
   });
+}
+
+// Provider text is governed by a fresh canonical control snapshot, independent
+// of sidecar publication and namespace content epochs. Call only before sends.
+export function assertContextEmbeddingAllowedInside(db, readSet, deadlineAt = Infinity) {
+  const check = () => { if (performance.now() >= deadlineAt) fail('timeout'); };
+  let denied = false;
+  for (const ns of readSet) {
+    check();
+    const statement = db.prepare('SELECT paused,enabled FROM episode_controls WHERE owner_id=? AND scope=? AND project_id=?');
+    check();
+    const row = statement.get(ns.ownerId, ns.scope, ns.projectId ?? '');
+    check();
+    denied ||= row?.paused === 1 || row?.enabled === 0;
+  }
+  if (denied) fail('namespace_paused');
+}
+
+// Run outside canonicalRead: data_version must not be pinned by a read snapshot.
+// Record versions before the decision so a concurrent commit cannot be hidden
+// between the control read and a later probe. Each closure is one dispatch.
+export function contextEmbeddingGuard(db, read, readSet, deadlineAt = Infinity) {
+  let version, generation;
+  const check = () => { if (performance.now() >= deadlineAt) fail('timeout'); };
+  return (phase = 'pre-send') => {
+    // Settlement and cleanup retain their other guards, but no text can be sent.
+    if (phase === 'post-send') return;
+    check();
+    if (db.isTransaction) fail('storage_error');
+    const probe = db.prepare('PRAGMA data_version');
+    check();
+    const nextVersion = probe.get().data_version;
+    check();
+    const nextGeneration = episodeControlGeneration(db);
+    if (version === nextVersion && generation === nextGeneration) return;
+    read(() => assertContextEmbeddingAllowedInside(db, readSet, deadlineAt));
+    version = nextVersion;
+    generation = nextGeneration;
+  };
 }

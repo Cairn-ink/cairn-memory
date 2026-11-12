@@ -36,7 +36,7 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const bytes = envelope => Buffer.byteLength(JSON.stringify(envelope));
 const success = value => ({ ok: true, value });
 const states = new Set(['ready', 'unavailable', 'disabled', 'absent', 'timeout', 'provider_error', 'rate_limited',
-  'budget_denied', 'stale_index', 'dimension_mismatch', 'partial_coverage']);
+  'budget_denied', 'stale_index', 'dimension_mismatch', 'partial_coverage', 'namespace_paused']);
 const channel = (state, causes = state === 'ready' ? [] : [state]) => ({ state, causes: [...new Set(causes)] });
 const maintenanceReasons = new Map([['missing', 'missing'], ['corrupt', 'corrupt'], ['wrong_store', 'wrong-store'],
   ['wrong-store', 'wrong-store'], ['incompatible', 'incompatible']]);
@@ -438,15 +438,18 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         preflight?.release?.();
         if (preflight?.state === 'ready' && preflight.eligible > 0) {
           controller = new AbortController(); controllers.add(controller);
-          const guard = () => { access.check();
+          const embeddingGuard = storage.embeddingGuard(input.readSet, deadlineAt);
+          const guard = (phase = 'pre-send') => { access.check();
             if (sourceState) read(() => assertSourcesInside(input, sourceState, internal ? 'snapshot_stale' : 'cursor_stale'));
-            storage.assertState(projection, current); };
+            storage.assertState(projection, current);
+            embeddingGuard(phase); };
           time = performance.now();
           try {
+            embeddingGuard();
             let vectors,invoked=false;
             assertContentPort({before:true});
             try { vectors = await dispatch(options.embedder, [input.query], { signal: controller.signal, deadlineAt, guard,onInvoke:()=>{invoked=true;} }); }
-            finally { try { guard(); } finally { if(invoked)assertContentPort(); } }
+            finally { try { guard('post-send'); } finally { if(invoked)assertContentPort(); } }
             if (!Array.isArray(vectors) || vectors.length !== 1) throw Object.assign(new Error(), { code: 'provider_error' });
             const query = validateVector(vectors[0], options.embedder);
             const scoring = storage.semanticPreflight(projection, options.embedder, { deadlineAt });

@@ -396,10 +396,11 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         else {
           diagnostic.queryEmbeddingBudgetMs=Number(sub-t)/1e6;const started=performance.now();
           try {
-            const result=await semantic.call('embed',{texts:[p.query],kind:'query',expected:snapshot.policy,projection:{readSet:p.readSet,types:p.types,intent:p.intent,suppressionEpoch:c.suppressionEpoch,accessDigest:c.observed.publication.accessDigest,lexicalValidationDigest:digest(c.observed.publication),vectorValidationDigest:digest(preflight.record)}},sub);
+            storage.assertEmbeddingAllowed(p.readSet,p.deadlineAt);
+            const result=await semantic.call('embed',{texts:[p.query],kind:'query',expected:snapshot.policy,projection:{readSet:p.readSet,types:p.types,intent:p.intent,deadlineAt:p.deadlineAt,suppressionEpoch:c.suppressionEpoch,accessDigest:c.observed.publication.accessDigest,lexicalValidationDigest:digest(c.observed.publication),vectorValidationDigest:digest(preflight.record)}},sub);
             diagnostic.queryEmbeddingAttempts=1;
             ranked=vectors.rank(preflight,result.vectors[0]);p.vectorPublication=preflight.record.publicationId;p.semanticSnapshot=snapshot;
-          }catch(error){if(error.safetyFence)throw error;attribution?.captureFailure(error);reason=['not_enabled','purge_pending','backfill_ceiling','ledger_unavailable','price_unavailable','timeout','provider_error','rate_limited','budget_denied','dimension_mismatch','provider_unavailable'].includes(error.code)?error.code:'provider_error';diagnostic.queryEmbeddingAttempts=error.attempts??0;}
+          }catch(error){if(error.safetyFence)throw error;error=storage.embeddingError(p.readSet,p.deadlineAt,error);attribution?.captureFailure(error);reason=['not_enabled','purge_pending','backfill_ceiling','ledger_unavailable','price_unavailable','timeout','provider_error','rate_limited','budget_denied','dimension_mismatch','provider_unavailable','namespace_paused'].includes(error.code)?error.code:'provider_error';diagnostic.queryEmbeddingAttempts=error.attempts??0;}
           diagnostic.queryEmbeddingMs=diagnostic.queryEmbeddingAttempts?performance.now()-started:0;detail.timings.embeddingMs=diagnostic.queryEmbeddingMs;
         }
       }
@@ -495,7 +496,8 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
             let suppressionEpoch;
             const texts=read(()=>{const layout=cachedContentLayout(db);if(!layout)fail('evidence_unavailable');suppressionEpoch=layout.suppressionRevision?contentSuppressionRequestFenceInside(db,p.readSet[0].ownerId):undefined;return rows.map(r=>{const item=evidence.itemsInside(r.ref.namespace,[r.ref],p.intent,p.readSet)[0];return item.type==='memory'?item.content:item.title+'\n'+item.body;});});
             while(texts.length>1&&Buffer.byteLength(JSON.stringify(texts))>240000){texts.pop();rows.pop();}
-            const result=await semantic.call('embed',{texts,kind:'refresh',expected:snapshot.policy,projection:{readSet:p.readSet,types:p.types,intent:p.intent,suppressionEpoch,accessDigest:observed.publication.accessDigest,lexicalValidationDigest:digest(observed.publication)},maxUsd:dollars(usd(p.budget.maxUsd)-spent)},providerCutoff);
+            storage.assertEmbeddingAllowed(p.readSet,p.deadlineAt);
+            const result=await semantic.call('embed',{texts,kind:'refresh',expected:snapshot.policy,projection:{readSet:p.readSet,types:p.types,intent:p.intent,deadlineAt:p.deadlineAt,suppressionEpoch,accessDigest:observed.publication.accessDigest,lexicalValidationDigest:digest(observed.publication)},maxUsd:dollars(usd(p.budget.maxUsd)-spent)},providerCutoff);
             attempts+=rows.length;spent+=usd(result.chargedUsd);
             const guard=await semantic.snapshot();
             if(guard.policy?.purgeEpoch!==snapshot.policy.purgeEpoch||!guard.policy?.semantic){reason='purge_pending';return;}
@@ -505,11 +507,12 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
           },'embedding-item');
         }catch(error) {
           if(error.safetyFence)throw error;
+          error=storage.embeddingError(p.readSet,p.deadlineAt,error);
           if(error.code==='budget_denied'&&!error.attempts&&rows.length>1){maximum=Math.max(1,Math.floor(rows.length/2));continue;}
           attempts+=(error.attempts??0)?rows.length:0;reason=error.code;break;
         }
       }
-      if((!reason||attempts>0)&&quantum.admit('vector-scan')&&quantum.admit('vector-verification')) {
+      if(reason!=='namespace_paused'&&(!reason||attempts>0)&&quantum.admit('vector-scan')&&quantum.admit('vector-verification')) {
         let release;
         try{release=semantic.gate.enter(snapshot.policy);vectors.certify(p,observed.publication,snapshot,quantum);}catch(error){attribution?.captureFailure(error);reason=error.reason==='validation_invalid'||error.code==='index_unavailable'?'validation_invalid':error.code==='read_timeout'?'timeout':error.code;}finally{release?.();}
       }
