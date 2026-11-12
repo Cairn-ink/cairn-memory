@@ -12,6 +12,15 @@
 
 ## Unreleased — engine-generated topic Cards
 
+- Five current Memories on one topic from one conversation now qualify for a
+  Card, alongside the existing recurrence and change-chain conditions, with
+  the same budget pressure requirement. Trigger results include `dictated`;
+  status describes the conditions in plain words. The first Card can build on
+  the next eligible maintenance pass without a ten-minute wait; rebuilds keep
+  their existing debounce.
+- Packing an engine Card now replaces only source Memories cited in its body.
+  Sources omitted from a short summary remain available as Memory candidates.
+
 - When a consolidation model is configured, the engine builds topic Cards during
   maintenance to summarize a topic's current state, history and contradictions.
   Cards follow their Memories when a topic is relabeled or refiled, without

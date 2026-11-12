@@ -45,9 +45,16 @@ export function cardTrigger(memories, relations, tokens) {
   const conversations = new Set(memories.flatMap(m => m.conversations));
   const recurring = memories.length >= 8 && conversations.size >= 3 &&
     dates.length >= 2 && Math.max(...dates) - Math.min(...dates) >= 14 * 86400000;
+  const perConversation = new Map();
+  for (const memory of memories) {
+    if (memory.currentness !== 'current') continue;
+    for (const conversation of new Set(memory.conversations))
+      perConversation.set(conversation, (perConversation.get(conversation) ?? 0) + 1);
+  }
+  const dictated = [...perConversation.values()].some(count => count >= 5);
   const chain = relations === undefined ? null : chainLength(memories, relations);
   const pressure = memories.length >= 5 || tokens >= 1200;
-  return { eligible: pressure && (recurring || chain >= 3), recurring, chain, pressure,
+  return { eligible: pressure && (recurring || chain >= 3 || dictated), recurring, dictated, chain, pressure,
     memories: memories.length, conversations: conversations.size, tokens };
 }
 

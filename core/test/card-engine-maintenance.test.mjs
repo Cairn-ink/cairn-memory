@@ -25,7 +25,9 @@ test('long recurring topic builds in maintenance, read packs Card, fact read ret
   ok(await f.refresh());
   const read = ok(await f.read('what is the current state of Orion'));
   assert.ok(read.metered.items.some(item => item.ref.type === 'card'), JSON.stringify(read));
-  assert.equal(read.metered.items.some(item => item.ref.type === 'memory'), false, 'all thirty sources deduped');
+  assert.ok(read.metered.items.some(item => item.ref.type === 'memory'), 'uncited cluster sources remain candidates');
+  const packedBody = read.metered.items.find(item => item.ref.type === 'card').body;
+  assert.ok(read.metered.items.filter(item => item.ref.type === 'memory').every(item => !packedBody.includes(item.ref.id)));
   const fact = ok(await f.read('what does Orion marker17 record'));
   assert.equal(fact.metered.items[0].ref.id, memories[17].id);
   assert.equal(fact.metered.items[0].ref.type, 'memory');
@@ -40,11 +42,11 @@ test('long recurring topic builds in maintenance, read packs Card, fact read ret
   assert.equal(ok(await f.pass()).built.length, 0, 'rebuild is debounced');
 });
 
-test('five memories, short histories, one conversation and missing pressure do not build', async t => {
+test('five spread memories, short histories and missing pressure do not build', async t => {
   const f = engineCardFixture(t); f.seed(5);
   assert.equal(ok(await f.pass()).built.length, 0); assert.equal(f.model.calls.length, 0);
   assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 18);
-  const memories = Array.from({ length: 8 }, (_, i) => ({ id: String(i), date: new Date(2026, 0, i + 1).toISOString(), conversations: ['a'] }));
+  const memories = Array.from({ length: 8 }, (_, i) => ({ id: String(i), date: new Date(2026, 0, i + 1).toISOString(), conversations: ['conversation-' + i], currentness: 'current' }));
   assert.equal(cardTrigger(memories, undefined, 100).eligible, false);
   assert.equal(cardTrigger(memories.slice(0, 4), [{ from: '0', to: '1', kind: 'supersedes', slot: 's' },
     { from: '1', to: '2', kind: 'supersedes', slot: 's' }, { from: '2', to: '3', kind: 'supersedes', slot: 's' }], 1199).eligible, false);
@@ -76,7 +78,7 @@ test('writable existing-store pins reuse installed Cards without a schema upgrad
 for (const present of [true, false]) test(`slot changed four times: relations port ${present ? 'present' : 'absent'}`, async t => {
   let edges;
   const f = engineCardFixture(t, present ? { cardRelations: { read() { return edges; } } } : {});
-  const memories = Array.from({ length: 5 }, (_, i) => f.add('Orion slot value ' + i, 0, 0));
+  const memories = Array.from({ length: 5 }, (_, i) => f.add('Orion slot value ' + i, 0, i));
   edges = memories.slice(1).map((memory, i) => ({ from: memory.id, to: memories[i].id, kind: 'supersedes', slot: 'orion-status' }));
   const pass = ok(await f.pass()); assert.equal(pass.built.length, present ? 1 : 0, JSON.stringify(pass));
   assert.equal(f.model.calls.length, present ? 1 : 0);
@@ -196,7 +198,7 @@ test('both packers dedupe source revisions only after a Card fits, including Mem
     ns: 0, rank: 2, text: 'Orion source milestone.', fence: 'synthetic-fence', sources: [], sourceAccess: 'available',
     sourcesComplete: true, turnIds: [turn], sessionIds: [],
     metadata: { state: 'active', reviewState: 'none', filing: { status: 'unfiled' }, kind: 'fact', origin: 'explicit', confidence: 1 } };
-  const card = { ...memory, type: 'card', rank: 1, text: 'Orion current state is ready.', turnIds: [],
+  const card = { ...memory, type: 'card', rank: 1, text: 'Orion current state is ready. [source]', turnIds: [],
     ref: { type: 'card', namespace: ns, cardId: 'engine-card.synthetic', revision: 1, bodyRevision: 1 },
     sourceMemoryRefs: [{ ...memory.ref, namespace: { projectId: ns.projectId, scope: ns.scope, ownerId: ns.ownerId } }],
     metadata: { state: 'confirmed', origin: 'engine', support: { status: 'eligible', applicability: 'current' },

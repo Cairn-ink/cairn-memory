@@ -1325,10 +1325,11 @@ export function createMemoryCore(input, internal) {
       async maintainCards(input) { try { runtime.ready(); return success(await (await loadEngineCards()).maintain(input)); } catch (error) { return failure(error); } },
       getEngineCardStatus(input) { try {
         runtime.ready();
-        if (engineCards) return success(engineCards.status(input));
+        const trigger = 'At least five current Memories from one conversation, or eight Memories across three conversations and fourteen days, or three changes on one slot; plus five Memories or 1,200 packed tokens of pressure.';
+        if (engineCards) return success({ ...engineCards.status(input), trigger });
         object(input, ['namespace']); cardNamespace(input.namespace);
         return success({ configured: true, state: runtime.engineCardAvailable() ? 'ready' : 'unsupported_store',
-          limits: ENGINE_CARD_LIMITS, lastPass: null });
+          trigger, limits: ENGINE_CARD_LIMITS, lastPass: null });
       } catch (error) { return failure(error); } },
     } : {}),
     ...createMethodPackageFacade(runtime.methodPackages, methodPackages, runtime.ready,assets),

@@ -8,7 +8,8 @@ Generation is available by default when the model implements `consolidate`.
 There is no authoring confirmation or generation toggle. Capture never builds a
 Card. The existing MCP maintenance loop calls `maintainCards`; embedded hosts can
 call the same method in their maintenance worker. `getEngineCardStatus` reports
-the last bounded pass. These methods are present only when the model implements
+the trigger in plain words and the last bounded pass. These methods are present
+only when the model implements
 `consolidate`; ordinary handles retain their established method surface.
 Writable pinned stores reuse installed Card tables without upgrading their schema.
 
@@ -23,13 +24,26 @@ of at least 0.65 when both retained vectors exist, otherwise positive BM25 term
 overlap. Configured context readers reuse their retained vectors without making
 an embedding call for clustering.
 
-A cluster needs both recurrence and budget pressure. Recurrence means at least
-8 memories, 3 conversations and 14 days, or a chain of at least 3 supersedes or
-contradicts edges on one slot. Pressure means at least 5 memories or 1,200 tokens
+A cluster needs one of three conditions plus budget pressure: at least
+8 memories, 3 conversations and 14 days; a chain of at least 3 supersedes or
+contradicts edges on one slot; or at least 5 current Memories from one
+conversation (dictated). The trigger result includes `dictated` alongside
+`recurring`, `chain` and `pressure`. The Card uses the whole topic cluster,
+including Memories from other conversations. Pressure means at least 5 memories
+or 1,200 tokens
 of packed Memory/receipt text, including framing and metadata, measured with the
 configured tokenizer and existing packer. These thresholds
 correspond to the product's 12 item / 3,000 token pack. There is no sliding time
 window or importance sum.
+
+A topic with no previous Card can build on the next eligible maintenance pass
+after the fifth Memory lands, with no ten-minute wait. Capture itself does not
+schedule a pass. The MCP loop arms a pass one second after the previous pass
+finishes (or after startup); embedded hosts choose their worker cadence. When
+more items arrive, the next pass marks the earlier Card stale and hides it; a pass at least ten minutes after that staling can build a
+fresh Card. Further additions during that wait do not restart it. The old row
+and seal remain. Scan expiry and failed-attempt backoff keep their existing
+timing; an incomplete scan can require multiple passes.
 
 Receipt event dates take precedence; legacy memories without those dates use
 their recorded creation date. This fallback is an arrival date, not a recovered
@@ -148,8 +162,11 @@ consumes the acknowledgement internally rather than publishing it as a tool
 result. Product-index/Worker APIs expose context-index maintenance, not
 `maintainCards`.
 
-Engine Cards enter the existing candidate ranking. Packing an engine Card removes its exact
-source Memory revisions from that pack; a Card that does not fit removes
+Engine Cards enter the existing candidate ranking. Packing an engine Card removes only its exact
+source Memory revisions cited in the rendered body from that pack; uncited
+cluster Memories remain ordinary candidates subject to the same ranking and
+pack budget. All cluster sources still bind the Card for invalidation and
+read safety; a Card that does not fit removes
 nothing. Authored Cards keep their existing packing behavior. A lower-ranked engine Card does not displace a higher-ranked source Memory
 already selected for a specific fact. This also applies when Memory and Raw are assembled together. Single
 fact matches continue to use ordinary Memory candidates. Ranking is unchanged.
