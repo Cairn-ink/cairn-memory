@@ -136,3 +136,11 @@ long-history retrieval and the boundaries of individual client tests.
   [backup, upgrade and deletion boundaries](../packaging/README.md),
   [architecture](architecture.md), [dependency notices](../packaging/THIRD_PARTY_NOTICES.md)
   and [security reporting](../SECURITY.md).
+
+## Status
+
+The released hosted plugin and local developer preview have different readiness
+levels. The local install lifecycle is verified, but source-support quality still
+fails; broad promotion is not yet cleared. No first-ten-user result or star
+target is presented as achieved. See [Known limitations](limitations.md), [ROADMAP.md](../ROADMAP.md) and the
+[proposed adoption experiment](plans/local-memory-plg.md).

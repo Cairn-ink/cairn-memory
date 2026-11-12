@@ -20,9 +20,12 @@
   <a href="README.md">English</a> · 繁體中文
 </p>
 
-Claude Code 和 Codex 每次開新對話都從零開始，同樣的偏好和專案決定只好一講再講。
-Cairn.ink Memory 讓這兩個工具共用一份記憶。每筆記憶都留著存入時的原文，
+Claude Code 和 Codex 開新對話時，常常不知道你之前講過的偏好和專案決定，只好一講
+再講。Cairn.ink Memory 讓這兩個工具共用一份記憶。每筆記憶都留著存入時的原文，
 哪天記錯了或過時了，你可以看它是怎麼來的，再修改它或叫它忘記。
+
+這是開發者預覽版，請先看[目前狀態](#目前狀態)和完整的
+[已知限制（英文）](docs/limitations.md)。
 
 ## 安裝
 
@@ -36,7 +39,7 @@ npx @cairn-ink/memory setup
 | | **本機** | **雲端** |
 | --- | --- | --- |
 | 帳號 | 不需要 | 需要 [cairn.ink](https://cairn.ink) 帳號，用瀏覽器登入一次 |
-| 記憶放在哪 | 這台電腦上的一個 SQLite 檔 | cairn.ink |
+| 記憶放在哪 | 這台電腦上的 SQLite 資料庫 | cairn.ink |
 | 自動保存什麼 | 你和 Claude Code、Codex 的對話，以明文保存 | 你的對話，由 cairn.ink 整理成記憶 |
 | 存一筆記憶 | 你開口，agent 才存 | 自動，也可以請 agent 存 |
 | 怎麼找回來 | 你問，agent 才去查 | 每次提問自動帶入相關記憶 |
@@ -118,18 +121,22 @@ Codex 的規則，以及外掛的隱私約定。
 
 ## 你的資料
 
-- **本機。** 所有資料都在一個明文的 SQLite 檔裡，預設是
-  `~/.cairn-memory/data/memory.sqlite`。不會傳任何東西給 Cairn，也不需要 Cairn
-  帳號。安裝時會從 npm 下載引擎需要的套件。
+- **本機。** 你的記憶和已保存的對話放在一個明文的 SQLite 資料庫，預設是
+  `~/.cairn-memory/data/memory.sqlite`；旁邊的資料夾 `memory.sqlite.raw-search`
+  放搜尋用的索引，同樣是明文。不會傳任何東西給 Cairn，也不需要 Cairn 帳號。
+  安裝時會從 npm 下載引擎需要的套件。
 - **已保存的對話。** 本機模式會自動把你和 Claude Code、Codex 的對話文字存進
-  這個檔案，上限 200 MB，不呼叫模型，也不需要金鑰。要關掉，跑
+  這個資料庫，上限 200 MB，不呼叫模型，也不需要金鑰。要關掉，跑
   `npx @cairn-ink/memory config --local-capture off`，或安裝時用
   `npx @cairn-ink/memory setup --local --no-capture`。
   `npx @cairn-ink/memory raw list` 會列出已保存的對話，不顯示內容。
   `npx @cairn-ink/memory raw delete <conversation-id>` 會先預覽要刪掉什麼，
-  加上 `--yes` 才真的刪除。
-- **模型金鑰。** 保存、關鍵字搜尋、查看、修改、忘記都不呼叫模型。如果工具的
-  環境裡有 `OPENAI_API_KEY`，引擎會用它做語意搜尋和回想，相關文字會送到 OpenAI。
+  加上 `--yes` 才真的刪除。從那段對話存下來的記憶會留著，要另外叫它忘記。
+- **模型金鑰。** 保存、關鍵字搜尋、查看、修改、忘記都不呼叫模型。如果工具啟動
+  記憶 server 的環境裡有 `OPENAI_API_KEY`，引擎會自動使用它：在背景替已保存的
+  記憶和對話建立語意搜尋用的向量，`recall_memory` 也會送出它挑選的文字。這些
+  文字都會送到 OpenAI。沒有金鑰時，不會送任何東西給模型供應商。花費上限和
+  關閉語意搜尋的方式，見[預設功能、成本與開關（英文）](docs/defaults.md)。
 - **雲端。** 對話文字和提問會在盡力遮蔽後送到 cairn.ink。Claude Code 外掛預設
   會傳不含內容的使用統計，可以關閉。Codex 的登入資訊存在未加密、只有你的
   使用者帳號讀得到的檔案裡。
@@ -139,7 +146,7 @@ Codex 的規則，以及外掛的隱私約定。
   30 分鐘內有訊息的對話一起隱藏。這可能藏到無關的對話，也可能漏掉相關的對話，
   要刪掉特定一段對話請用 `raw delete`。
 - **解除安裝。** `npx @cairn-ink/memory uninstall --local` 會斷開工具的連接，
-  記憶檔會留著。解除雲端模式，你在 cairn.ink 上的記憶也會留著。
+  資料會留在硬碟上。解除雲端模式，你在 cairn.ink 上的記憶也會留著。
 
 [本機資料、備份與刪除（英文）](docs/local-from-source.md#local-privacy-and-control) ·
 [隱私與威脅模型（英文）](docs/privacy.md) ·

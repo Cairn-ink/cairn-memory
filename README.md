@@ -20,10 +20,14 @@
   English · <a href="README.zh-TW.md">繁體中文</a>
 </p>
 
-Claude Code and Codex start every session from zero, so you keep repeating the
-same preferences and project decisions. Cairn.ink Memory gives both tools one
-shared memory. Each memory keeps the text it was saved from, so when one is
-wrong or out of date you can see where it came from, then correct it or forget it.
+A new Claude Code or Codex session often does not know the preferences and
+project decisions from your earlier conversations, so you end up repeating
+them. Cairn.ink Memory gives both tools one shared memory. Each memory keeps
+the text it was saved from, so when one is wrong or out of date you can see
+where it came from, then correct it or forget it.
+
+This is a developer preview. See the [current limits](#status) and the full
+[known limitations](docs/limitations.md).
 
 ## Install
 
@@ -37,7 +41,7 @@ first asks: where should your memory live?
 | | **Local** | **Cloud** |
 | --- | --- | --- |
 | Account | None | A [cairn.ink](https://cairn.ink) account, one browser sign-in |
-| Where memory lives | A SQLite file on this computer | cairn.ink |
+| Where memory lives | A SQLite database on this computer | cairn.ink |
 | Saved automatically | Your Claude Code and Codex conversations, as plain text | Your conversations, which cairn.ink turns into memories |
 | Saving a memory | Your agent saves one when you ask | Automatic, or ask your agent |
 | Getting it back | Your agent searches when you ask | Relevant memories are added to each prompt |
@@ -125,20 +129,27 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
 
 ## Your data
 
-- **Local.** Everything is in one plaintext SQLite file, by default
-  `~/.cairn-memory/data/memory.sqlite`. Nothing is sent to Cairn, and no Cairn
-  account is involved. Setup downloads the engine's packages from npm.
+- **Local.** Your memories and saved conversations are in a plaintext SQLite
+  database, by default `~/.cairn-memory/data/memory.sqlite`, with plaintext
+  search indexes in a folder beside it (`memory.sqlite.raw-search`). Nothing is
+  sent to Cairn, and no Cairn account is involved. Setup downloads the engine's
+  packages from npm.
 - **Saved conversations.** Local mode saves the text of your Claude Code and
-  Codex conversations into that file automatically, up to 200 MB, with no model
-  and no key. Turn it off with `npx @cairn-ink/memory config --local-capture off`,
+  Codex conversations into that database automatically, up to 200 MB, with no
+  model and no key. Turn it off with `npx @cairn-ink/memory config --local-capture off`,
   or install with `npx @cairn-ink/memory setup --local --no-capture`.
   `npx @cairn-ink/memory raw list` lists saved conversations without their text.
   `npx @cairn-ink/memory raw delete <conversation-id>` previews what would be
-  removed, and adding `--yes` deletes it.
+  removed, and adding `--yes` deletes it. Memories saved from that conversation
+  stay until you forget them.
 - **Model keys.** Saving, keyword search, inspecting, correcting and forgetting
-  use no model. If `OPENAI_API_KEY` is set in your tool's environment, the
-  engine uses it for semantic search and recall, and sends the text involved to
-  OpenAI.
+  use no model. If `OPENAI_API_KEY` is set in the environment your tool starts
+  the memory server with, the engine uses it automatically. It embeds your
+  saved memories and conversations in the background for semantic search, and
+  `recall_memory` sends the text it selects. All of that text goes to OpenAI.
+  Without the key, nothing is sent to a model provider.
+  [Defaults, costs and off switches](docs/defaults.md) lists the spending limit
+  and how to turn semantic search off.
 - **Cloud.** Conversation text and prompts go to cairn.ink after best-effort
   masking. The Claude Code plugin sends content-free usage statistics by
   default, and you can turn them off. Codex keeps its sign-in in an unencrypted
@@ -151,7 +162,7 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
   saved. This can hide an unrelated conversation and miss a related one, so use
   `raw delete` to remove a specific conversation.
 - **Uninstalling.** `npx @cairn-ink/memory uninstall --local` disconnects the
-  tools and keeps your memory file. Uninstalling Cloud keeps your memories on
+  tools and keeps your data on disk. Uninstalling Cloud keeps your memories on
   cairn.ink.
 
 [Local data, backup and deletion](docs/local-from-source.md#local-privacy-and-control) ·
