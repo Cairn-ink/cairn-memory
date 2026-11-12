@@ -35,7 +35,7 @@ for (const position of [0, 1, 2]) test(`forget source ${position} of three purge
   assert.equal(f.db.prepare(`SELECT count(*) n FROM card_operations WHERE ${methods} AND (target_id=? OR payload_binding=? OR instr(action_id,?)>0 OR instr(result,?)>0)`)
     .get(victim.id, attempt.fingerprint, attempt.fingerprint, victim.id).n, 0);
   const retained = f.db.prepare('SELECT state,revision,body FROM private_cards WHERE id=?').get(card.id);
-  assert.equal(retained.state, 'confirmed'); assert.equal(retained.revision, 2); assert.equal(retained.body, 'Synthetic consolidated topic.');
+  assert.equal(retained.state, 'deleted'); assert.equal(retained.revision, 2); assert.equal(retained.body, null);
   assert.throws(() => reserve(s, value), error => error.code === 'source_unavailable');
   settle(s, attempt); assert.deepEqual(rows(f.db), []);
   await f.pass(); assert.deepEqual(rows(f.db), []); assert.equal(f.model.calls.length, 0);

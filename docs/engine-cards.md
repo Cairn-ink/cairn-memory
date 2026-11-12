@@ -90,8 +90,16 @@ namespace checkpoint stores only a rowid watermark and commits with the deletes;
 reopening resumes it, and reaching the end restarts the scan. Other namespaces'
 payloads are not loaded or changed. This uses the existing layout and makes no
 model or embedding requests. Erasure also removes the namespace's checkpoint.
-Canonical Card rows, routing receipts, bindings and sealed lineage continue
-through the existing Card invalidation and retirement path described below.
+Forget also removes the title and body of every engine Card bound to that
+Memory before the forget transaction commits, including stale Cards and older
+rows kept by rebuilds. It uses the ordinary Card purge path: the row becomes
+deleted, its revision advances, and its live source bindings are removed.
+Namespace purge and owner erasure do the same for all their engine Cards in
+the suppression transaction. Authored Cards keep their existing behavior.
+Card identities, routing metadata, keyed digests and sealed lineage records
+without text remain as provenance. Attempt and outcome bookkeeping disappears
+at once with the text. Forget makes no model or embedding request. Later
+maintenance can build a fresh Card from the topic's remaining eligible Memories.
 
 An optional `cardRelations.read({namespace, memoryIds, memories, signal})` port
 returns `{from, to, kind, slot}` edges. Only endpoints in the cluster and equal
@@ -138,6 +146,8 @@ status `stale` and is refused by both current and history reads. Suppressed,
 excluded, forgotten, denied or foreign sources also make the Card ineligible.
 After at least ten minutes, a later worker pass re-evaluates the trigger. A
 rebuild inserts a fresh Card row and source set, retaining the old row and seal.
+Forgetting a bound source purges text from both rows immediately as described
+above; stale status alone does not erase text.
 If the trigger no longer holds, maintenance deletes the stale Card body while
 retaining its row and lineage records.
 

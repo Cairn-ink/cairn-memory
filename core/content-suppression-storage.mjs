@@ -3,6 +3,7 @@ import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { bindContentSafetyConnection, cachedContentLayout, contentSafetyConnection, contentSafetyBudgetError, installedContentLayout, withContentSafetyLayoutInside } from './content-safety-schema.mjs';
 import { fail, identifier } from './validation.mjs';
 import { purgeEngineCardOperationsInside } from './private-card-schema.mjs';
+import { purgeEngineCardsInside } from './engine-card-purge.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const reasons = new Set(['user_forget', 'correction_supersession', 'purge', 'privacy_erase', 'account_erasure']);
@@ -36,7 +37,10 @@ export function writeContentSuppressionInside(db, { namespace: ns, kind, key = '
     identifier(messageId);
     if (![start,end].every(Number.isSafeInteger) || start < 0 || end <= start) fail('invalid_input');
   }
-  if (['owner', 'namespace'].includes(matchMode)) purgeEngineCardOperationsInside(db, ns);
+  if (['owner', 'namespace'].includes(matchMode)) {
+    purgeEngineCardsInside(db, ns, actionId);
+    purgeEngineCardOperationsInside(db, ns);
+  }
   const incarnation = ['owner', 'namespace'].includes(matchMode) ? '' : key;
   const target = [...boundary(ns), kind, key, incarnation, matchMode, sourceVersion, messageId, start, end, reason, actionId];
   const secret = db.prepare('SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1').get();
