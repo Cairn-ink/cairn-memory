@@ -212,7 +212,7 @@ for(const layout of [18,53])for(const seed of seeds)test(`receipt walk equivalen
     let starts=0,batches=0;const prepare=db.prepare.bind(db);
     const hook=t.mock.method(db,'prepare',sql=>{
       const statement=prepare(sql),all=statement.all.bind(statement);
-      if(sql.startsWith('SELECT id,revision,deleted,updated_at FROM memories'))statement.all=(...args)=>{if(args.length===5)starts++;return all(...args);};
+      if(/^SELECT id,revision,deleted,updated_at(?:, \(SELECT encoding FROM pragma_encoding\) AS receipt_encoding)? FROM memories/.test(sql))statement.all=(...args)=>{if(args.length===5)starts++;return all(...args);};
       if(sql.includes('FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN'))statement.all=(...args)=>{
         const result=all(...args);assert.ok(result.length<=128*5,'per-memory bounded batch');batches++;return result;
       };
@@ -286,7 +286,7 @@ function chargedDecision(t,db,create,batch,{at=Infinity,injected,fromWalk=false}
     for(const method of ['get','all','run','iterate']) {
       const execute=statement[method].bind(statement);
       statement[method]=(...args)=>{
-        if(sql.startsWith('SELECT id,revision,deleted,updated_at FROM memories'))started=true;
+        if(/^SELECT id,revision,deleted,updated_at(?:, \(SELECT encoding FROM pragma_encoding\) AS receipt_encoding)? FROM memories/.test(sql))started=true;
         if(started){executions++;trace.push(sql);if(executions===at)throw Object.assign(Error('synthetic statement interruption'),injected);}
         return execute(...args);
       };
@@ -326,8 +326,9 @@ test('first receipt refusal precedes later statement budgets and interrupts at e
       outcomes.push({at,reference:old.outcome,current:actual.outcome});
     }
     const atThird=chargedDecision(t,db,createRawLineageStorage,[target],{at:3,injected,fromWalk:true});
-    assert.deepEqual(atThird.outcome,process.env.RECEIPT_WALK_BASELINE==='1'?injected:reference.outcome,
-      'third charged statement after enumeration starts (reference control keeps its original reads)');
+    const oldThird=chargedDecision(t,db,createLegacyReceiptWalk,[target],{at:3,injected,fromWalk:true});
+    assert.deepEqual(oldThird.outcome,reference.outcome,'the reference refuses before the third walk statement');
+    assert.deepEqual(atThird.outcome,oldThird.outcome,'third charged statement after enumeration starts');
     t.diagnostic(JSON.stringify({injected,last,outcomes,third:atThird.outcome}));
   }
 });
