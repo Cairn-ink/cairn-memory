@@ -1,6 +1,6 @@
 # @cairn-ink/memory
 
-Cairn Memory is Cairn.ink's AI memory toolkit for Claude Code and Codex, with
+**Cairn.ink Memory** is Cairn.ink's AI memory toolkit for Claude Code and Codex, with
 local MCP tools or cloud automatic memory.
 
 [Cairn.ink](https://cairn.ink) ·
