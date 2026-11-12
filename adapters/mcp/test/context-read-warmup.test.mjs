@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
@@ -237,4 +238,93 @@ for (const mode of ['paused', 'disabled', 'second-process', 'enabled']) test(`co
     if (reference) unlinkSync(path + '.context-read-v1.sqlite');
   }
   if (mode === 'enabled') assert.deepEqual(records[1], records[0]);
+});
+
+// Force the first read across main's deadline while it still fits the grace.
+// The optional detached checkout supplies main's actual core for local parity;
+// CI uses the unchanged explicit deadline path as the main reference.
+for (const mode of ['paused', 'disabled', 'second-process', 'enabled']) test(`forced first-read grace preserves provider rules when saving ${mode}`, async t => {
+  const clock = controlledClock(t), workspace = createTestWorkspace(t), path = join(workspace.path, 'memory.sqlite');
+  const seed = openMemoryCore({ path });
+  for (let i = 0; i < 40; i++) assert.equal(seed.admit({ namespace: ns,
+    memory: { content: 'Synthetic telescope ' + i, kind: 'fact' }, receipts: [{ client: 'synthetic', sessionId: 'synthetic',
+      eventId: 'synthetic-' + i, role: 'user', excerpt: 'Synthetic telescope' }] }).ok, true);
+  await seed.close();
+  const setControl = setting => {
+    const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      import { DatabaseSync } from 'node:sqlite';
+      const db = new DatabaseSync(process.argv[1]);
+      try { db.prepare('INSERT INTO episode_controls(owner_id,scope,project_id,generation,paused,enabled) VALUES(?,?,?,?,?,?) ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET paused=excluded.paused,enabled=excluded.enabled')
+        .run('synthetic-owner','personal','','synthetic',Number(process.argv[2]),Number(process.argv[3])); }
+      finally { db.close(); }
+    `, path, String(Number(setting === 'paused')), String(Number(setting !== 'disabled'))], { encoding: 'utf8', env: {}, timeout: 10000 });
+    assert.equal(child.error, undefined); assert.equal(child.status, 0, child.stderr);
+  };
+  if (mode === 'paused' || mode === 'disabled') setControl(mode);
+  const records = [];
+  for (const reference of mode === 'enabled' ? [true, false] : [false]) {
+    clock.advance(-clock.now());
+    const referenceRoot = reference ? process.env.CAIRN_TEST_MAIN_ROOT : undefined;
+    const opener = referenceRoot ? (await import(pathToFileURL(join(referenceRoot, 'core/index.mjs')))).openMemoryCore : openMemoryCore;
+    const accessFactory = referenceRoot ? (await import(pathToFileURL(join(referenceRoot, 'adapters/mcp/context-read-access.mjs')))).createContextReadAccess : createContextReadAccess;
+    const access = accessFactory(ns, false, { maintenance: true }), calls = [];
+    const embedder = { id: 'synthetic-forced-grace', revision: '1', dimensions: 2, normalization: 'l2',
+      async embed(texts) { calls.push({ at: clock.now(), count: texts.length }); return texts.map(() => [1, 0]); } };
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const core = opener({ path, contextRead: { ...access.configuration, counter, embedder,
+      policy: { family: 'hosted', maxRequests: 100, maxUsd: 1, estimateUsd: () => 0 } } });
+    let closed = false, active, timer, driver;
+    if (reference) {
+      const arm = () => { if (!closed) timer = setTimeout(() => {
+        active = Promise.resolve(access.call(core, 'refreshContextIndex', { readSet: [ns], types: ['memory'], intent: 'current',
+          budget: { maxItems: 16, maxMs: 1000 } })).finally(() => { active = null; arm(); });
+      }, 1000); };
+      arm(); driver = { async close() { closed = true; clearTimeout(timer); await active; } };
+    } else driver = startLocalContextMaintenance(core, access, { semantic: true });
+    try {
+      let delayed = false;
+      const prepare = DatabaseSync.prototype.prepare;
+      const spy = t.mock.method(DatabaseSync.prototype, 'prepare', function(sql) {
+        const statement = Reflect.apply(prepare, this, [sql]);
+        if (sql.startsWith('SELECT content AS text')) {
+          const get = statement.get.bind(statement);
+          statement.get = (...args) => { const row = get(...args); if (!delayed) { delayed = true; clock.advance(1100); } return row; };
+        }
+        return statement;
+      });
+      let read;
+      try {
+        read = await access.call(core, 'contextRead', { readSet: [ns], types: ['memory'], intent: 'current', query: 'telescope',
+          raw: false, semantic: false, ...(reference && !referenceRoot ? { deadlineMs: 1000 } : {}) });
+      } finally { spy.mock.restore(); }
+      assert.equal(delayed, true); assert.equal(clock.now(), 1100);
+      const side = new DatabaseSync(path + '.context-read-v1.sqlite', { readOnly: true });
+      let published;
+      try { published = side.prepare('SELECT published FROM generations').get().published; } finally { side.close(); }
+      if (reference) {
+        assert.ok(!read.ok || read.value.metered.items.length === 0, 'main cold read exhausts its normal deadline');
+        assert.equal(published, 0);
+      } else {
+        assert.equal(read.ok, true, JSON.stringify(read)); assert.ok(read.value.metered.items.length > 0);
+        assert.equal(published, 1, 'grace publishes the full cold projection');
+      }
+      assert.deepEqual(calls, [], 'the first read only builds lexical data');
+      if (mode === 'second-process') setControl('paused');
+      // Deliver the already overdue first timer, then the same post-settlement
+      // cadence on both cores. Provider timestamps include the first read time.
+      t.mock.timers.tick(1100); await flush();
+      for (let turn = 0; turn < 5; turn++) { clock.advance(1000); t.mock.timers.tick(1000); await flush(); }
+      t.diagnostic('FORCED_GRACE ' + JSON.stringify({ mode, reference, actualMain: Boolean(referenceRoot), published, calls }));
+      if (mode !== 'enabled') assert.deepEqual(calls, [], 'paused or disabled text never enters the provider after grace');
+      records.push(calls);
+    } finally { await driver.close(); await core.close(); t.mock.timers.reset(); }
+    if (reference) unlinkSync(path + '.context-read-v1.sqlite');
+  }
+  if (mode === 'enabled') {
+    const [main, branch] = records;
+    assert.ok(main.length > 0); assert.equal(branch.length, main.length, 'same provider request count as main');
+    assert.equal(main.reduce((n, call) => n + call.count, 0), 40);
+    assert.equal(branch.reduce((n, call) => n + call.count, 0), 40);
+    assert.ok(branch.every(call => call.at >= main[0].at), 'no provider entry earlier than main after forced first-read grace');
+  }
 });
