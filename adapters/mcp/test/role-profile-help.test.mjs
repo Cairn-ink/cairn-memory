@@ -46,21 +46,27 @@ test('default help changes are exact and preserve every pinned safety line', () 
   const defaults = 'Defaults: Raw retention and Raw search maintenance are on (--no-raw disables retention).\n' +
     'Preferred memory reads: find_memory_candidates and read_memory_context (contextRead is on).\n' +
     '--no-context-read removes these tools; --no-context-semantic keeps reads BM25-only.\n' +
-    'OPENAI_API_KEY automatically selects bounded OpenAI embeddings when present.\n' +
+    "With OPENAI_API_KEY available to the Cairn MCP server, memories and search text\n" +
+    "go to OpenAI for semantic search, up to an estimated US$1 per server run.\n" +
+    "Saved conversations are sent only with --raw-semantic or an explicit\n" +
+    "--context-embedder configuration. Raw document and query embeddings are off by default.\n" +
+    "To stay fully local, use --no-context-semantic, or do not give the server a key.\n" +
     'See docs/defaults.md for costs, options and every default.\n\n';
   const original = reviewedHelp();
   const current = original.replace('\n\nUsage:', '\n\n' + defaults + 'Usage:')
-    .replace('--context-read context-read-v1 [--context-read-personal]', '[--context-read context-read-v1 | --no-context-read] [--context-read-personal]')
+    .replace('--context-read context-read-v1 [--context-read-personal]', '[--context-read context-read-v1 | --no-context-read] [--context-read-personal] [--raw-semantic]')
     .replace('fetch_memory_candidate_evidence only. Read sets are fixed at startup; personal\n' +
       'reads require project scope and --context-read-personal. Semantic defaults to false.\n' +
       'Only explicit context refresh embeds documents. All five provider options are\n' +
       'required together; a key alone never constructs an embedder. Hosted uses rrf-k10.',
       'fetch_memory_candidate_evidence and read_memory_context by default. Read sets are fixed at startup; personal\n' +
       'reads require project scope and --context-read-personal. Semantic defaults on with OPENAI_API_KEY; otherwise reads use BM25.\n' +
+      'Raw needs --raw-semantic or an explicit --context-embedder group for document\n' +
+      'and query embedding. --no-context-semantic overrides both.\n' +
       'Background turns refresh configured embeddings. Explicit provider overrides\n' +
       'require all five provider options together. Hosted uses rrf-k10.');
   compareHelp(current);
-  for (const changed of [current.replace('--no-context-read', '--context-read-off'), current.replace('bounded OpenAI', 'unbounded OpenAI'),
+  for (const changed of [current.replace('--no-context-read', '--context-read-off'), current.replace('estimated US$1', 'estimated US$2'),
     current.replace(defaults, defaults + defaults), defaults + current.replace(defaults, ''),
     current.replace('drained readers and closed old handles.', 'closed old handles.')]) {
     if (changed !== current) assert.throws(() => compareHelp(changed));
