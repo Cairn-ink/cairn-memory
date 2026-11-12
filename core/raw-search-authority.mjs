@@ -128,7 +128,7 @@ export function createRawSearchAuthority(database, options) {
       event.projection_digest === createHash('sha256').update(JSON.stringify(['raw-capture-host-empty-v1',
         event.session_key,event.event_id,first,event.binding_digest])).digest('hex');
   }
-  function inspectInside(ref,intent = 'history',capture) {
+  function inspectInside(ref,intent = 'history',capture,ignorePause = false) {
     namespace(ref.namespace); ref = rawSourceRef(ref,ref.namespace);
     const ns = ref.namespace, state = sources.budget();
     const view = sources.resolve(ns,ref,state);
@@ -139,7 +139,7 @@ export function createRawSearchAuthority(database, options) {
     for(const part of view.parts)if(part.start<ref.span.start||part.end>ref.span.end){
       const anchor={conversationId:ref.conversationId,messageId:ref.messageId,span:{start:part.start,end:part.end,precision:'exact'}};
       const full=sources.inspect(ns,anchor,state);
-      dispatch.push(inspectInside(sources.refFor(ns,anchor,full),'history'));
+      dispatch.push(inspectInside(sources.refFor(ns,anchor,full),'history',undefined,ignorePause));
     }
     if (db.prepare(`SELECT 1 FROM raw_session_fences WHERE ${where} AND client=? AND session_key=?`)
       .get(...boundary(ns),view.message.client,view.message.session_key)) fail('source_unavailable');
@@ -184,11 +184,34 @@ export function createRawSearchAuthority(database, options) {
       unknown ? {kind:'history-only',reason:'unresolved-currentness'} : {kind:'current-eligible-linked',reason:'current-memory-links'};
     if (hostAncestryOnly && classification.kind === 'current-eligible-bare') classification.reason = 'host-session-ancestry';
     if (intent === 'current' && classification.kind === 'history-only') fail('source_unavailable');
+    if (!ignorePause && paused(ns)) throw Object.assign(new MemoryStoreError('source_unavailable'),{disposition:'paused'});
     capture?.(view,state.payloads);
     return { ref,manifest:view.manifest,role:view.message.role,ordinal:view.message.ordinal,occurredAt:view.message.occurred_at,
       currentness:historical ? 'historical' : unknown || !links.length ? 'unknown' : 'current',classification,
       suppression:contentSuppressionFenceInside(db,ns.ownerId),dispatch,links:links.map(row=>({receiptId:row.receipt_id,memoryId:row.id,
         revision:row.revision,start:row.start,end:row.end,precision:row.precision,currentness:row.currentness,reviewState:row.review_state})) };
+  }
+  function paused(ns) {
+    const control=db.prepare(`SELECT paused,enabled FROM episode_controls WHERE ${where}`).get(...boundary(ns));
+    return !!control?.paused || control?.enabled===0;
+  }
+  // Query text belongs to the whole selected read set. Check every namespace
+  // in one fresh canonical snapshot, including namespaces with no index rows.
+  function queryAllowed(at=Infinity) {
+    return read(()=>!options.readSet.map(ns=>paused(ns)).some(Boolean),at);
+  }
+  // Permanent denials win over reversible pause, including during cleanup.
+  function disposition(source) {
+    return read(()=>{
+      try {
+        const next=inspectInside(source.ref,'history',undefined,true);
+        if(!matches(source,next))return 'remove';
+        return paused(source.ref.namespace)?'paused':'allowed';
+      } catch(error) {
+        if(!['source_unavailable','source_excluded','raw_crypto_unavailable'].includes(error.code))throw error;
+        return 'remove';
+      }
+    });
   }
   function describe(part,ns) {
     const anchor = { conversationId:part.conversation_id,messageId:part.message_id,
@@ -216,9 +239,129 @@ export function createRawSearchAuthority(database, options) {
       try { return { key:[part.conversation_id,part.message_id,part.part_index],source:read(()=>describe(part,ns)) }; }
       catch (error) {
         if (!['source_unavailable','source_excluded','raw_crypto_unavailable','source_budget_exceeded'].includes(error.code)) throw error;
-        return { key:[part.conversation_id,part.message_id,part.part_index] };
+        return { key:[part.conversation_id,part.message_id,part.part_index],disposition:error.disposition };
       }
     }),complete:rows.length < limit };
+  }
+
+  // The journal is a selector, never permission. Row positions cross JSON as
+  // decimal strings and enter SQLite as integers without Number conversion.
+  const journalColumns='CAST(rowid AS TEXT) AS position,owner_id,scope,project_id,client,event_id,conversation_id,digest';
+  const journalBinding=bind('raw-search-journal-binding-v1',[database.fileIdentity,options.ownerId,options.readSet]);
+  const eventAnchor=row=>bind('raw-search-journal-anchor-v1',[journalBinding,row.position,row.owner_id,row.scope,
+    row.project_id,row.client,row.event_id,row.conversation_id,row.digest]);
+  const journalRow=position=>db.prepare(`SELECT ${journalColumns} FROM raw_events WHERE rowid=?`).get(BigInt(position));
+  const anchored=entry=>{
+    if(entry.position==='0')return entry.anchor===null;
+    const row=journalRow(entry.position);
+    return !!row&&eventAnchor(row)===entry.anchor;
+  };
+  const eventNamespace=row=>options.readSet.find(ns=>row.owner_id===ns.ownerId&&row.scope===ns.scope&&row.project_id===(ns.projectId??''));
+  function recent(previous,{limit=4,at=Infinity}={}) {
+    return read(()=>{
+      const tip=db.prepare(`SELECT ${journalColumns} FROM raw_events ORDER BY rowid DESC LIMIT 1`).get();
+      let cursor=previous&&structuredClone(previous),recovered=false;
+      const validPosition=value=>typeof value==='string'&&/^(0|[1-9][0-9]{0,18})$/.test(value)&&BigInt(value)<=9223372036854775807n;
+      if(!cursor||cursor.version!==1||cursor.binding!==journalBinding||!validPosition(cursor.examined)||
+          !cursor.active||typeof cursor.active!=='object'||Array.isArray(cursor.active)||!Number.isInteger(cursor.streak)||cursor.streak<0||cursor.streak>3||
+          !Number.isSafeInteger(cursor.round)||cursor.round<0||
+          cursor.recovery&&(!validPosition(cursor.recovery.before)||!Number.isInteger(cursor.recovery.remaining)||cursor.recovery.remaining<1||cursor.recovery.remaining>64)||
+          Object.keys(cursor.active).length>options.readSet.length||
+          Object.entries(cursor.active).some(([name,entry])=>!options.readSet.some(ns=>JSON.stringify(ns)===name)||
+            !entry||!validPosition(entry.position)||!validPosition(entry.through)||BigInt(entry.position)>BigInt(entry.through)||
+            entry.partOffset!==null&&(!Number.isInteger(entry.partOffset)||entry.partOffset<0||entry.partOffset>24)||!anchored(entry))||
+          !anchored({position:cursor.examined,anchor:cursor.anchor})||BigInt(cursor.examined)>BigInt(tip?.position??'0')) {
+        cursor={version:1,binding:journalBinding,examined:tip?.position??'0',anchor:tip?eventAnchor(tip):null,
+          active:{},recovery:tip?{before:tip.position,remaining:64}:null,round:0,streak:0};
+        recovered=true;
+      }
+      let headers=0,attempts=0;
+      const rows=[],seen=new Set(),anchors=[];
+      const remember=row=>{
+        const ns=eventNamespace(row);if(!ns)return;
+        const name=JSON.stringify(ns),old=cursor.active[name];
+        if(old)old.through=row.position;
+        else cursor.active[name]={position:row.position,anchor:eventAnchor(row),partOffset:0,through:row.position};
+      };
+      // Discovery cannot overwrite an unresolved event, including a parked pause.
+      const discovery=db.prepare(`SELECT ${journalColumns} FROM raw_events WHERE rowid>? AND rowid<=? ORDER BY rowid LIMIT 32`)
+        .all(BigInt(cursor.examined),BigInt(tip?.position??'0'));
+      for(const row of discovery){remember(row);cursor.examined=row.position;cursor.anchor=eventAnchor(row);headers++;}
+      const drain=()=>{
+        const names=options.readSet.map(ns=>JSON.stringify(ns));let idle=0;
+        while(attempts<limit&&headers<64&&idle<names.length&&performance.now()<at){
+          const name=names[cursor.round++%names.length],entry=cursor.active[name];
+          if(!entry){idle++;continue;}
+          const ns=options.readSet.find(ns=>JSON.stringify(ns)===name);
+          if(paused(ns)){idle++;continue;}
+          if(entry.partOffset===null){
+            if(entry.position===entry.through){delete cursor.active[name];idle=0;continue;}
+            const row=db.prepare(`SELECT ${journalColumns} FROM raw_events WHERE rowid>? AND rowid<=? ORDER BY rowid LIMIT 1`)
+              .get(BigInt(entry.position),BigInt(entry.through));
+            if(!row){delete cursor.active[name];idle=0;continue;}
+            headers++;entry.position=row.position;entry.anchor=eventAnchor(row);
+            if(eventNamespace(row)&&JSON.stringify(eventNamespace(row))===name)entry.partOffset=0;
+            if(entry.partOffset===null)continue;
+          }
+          const header=journalRow(entry.position);
+          if(!header||eventAnchor(header)!==entry.anchor)fail('source_changed');
+          // Load one bounded result at a time; physical headers were bounded
+          // before namespace filtering. Unsupported payloads get full repair.
+          anchors.push({position:header.position,anchor:eventAnchor(header)});
+          const payload=db.prepare('SELECT result FROM raw_events WHERE rowid=? AND length(CAST(result AS BLOB))<=1048576').get(BigInt(entry.position));
+          let event;try{event=payload&&JSON.parse(payload.result);}catch{}
+          if(!event||event.conversationId!==header.conversation_id||!Array.isArray(event.parts)||event.parts.length>24){entry.partOffset=null;continue;}
+          if(entry.partOffset>=event.parts.length){entry.partOffset=null;continue;}
+          const part=event.parts[entry.partOffset];attempts++;idle=0;
+          if(part&&typeof part==='object'&&part.saved===true&&typeof part.messageId==='string'&&Number.isSafeInteger(part.index)&&part.index>=0){
+            const live=db.prepare(`SELECT p.conversation_id,p.message_id,p.part_index,p.start,p.end FROM raw_parts p
+              JOIN raw_conversations c ON c.id=p.conversation_id WHERE p.conversation_id=? AND p.message_id=? AND p.part_index=?
+              AND c.owner_id=? AND c.scope=? AND c.project_id=? AND c.client=? AND p.saved=1`)
+              .get(header.conversation_id,part.messageId,part.index,...boundary(ns),header.client);
+            if(live){
+              const key=[live.conversation_id,live.message_id,live.part_index];
+              try{const source=describe(live,ns);if(!seen.has(JSON.stringify(key))){rows.push({key,source});seen.add(JSON.stringify(key));}}
+              catch(error){
+                if(error.disposition==='paused'){idle++;continue;}
+                if(!['source_unavailable','source_excluded','raw_crypto_unavailable','source_budget_exceeded'].includes(error.code))throw error;
+                // A resource refusal is retryable, never proof of consumption.
+                if(['source_budget_exceeded','raw_crypto_unavailable'].includes(error.code))throw error;
+              }
+            }
+          }
+          entry.partOffset++;
+          if(entry.partOffset===event.parts.length)entry.partOffset=null;
+        }
+      };
+      drain();
+      // Lend idle drain capacity back to discovery, bounding physical headers
+      // before any owner/namespace filtering, including foreign-only traffic.
+      if(discovery.length===32&&headers<64&&attempts<limit){
+        const extra=db.prepare(`SELECT ${journalColumns} FROM raw_events WHERE rowid>? AND rowid<=? ORDER BY rowid LIMIT ?`)
+          .all(BigInt(cursor.examined),BigInt(tip?.position??'0'),64-headers);
+        for(const row of extra){remember(row);cursor.examined=row.position;cursor.anchor=eventAnchor(row);headers++;}
+        drain();
+      }
+      // Recovery is newest first, and only after live intervals had a chance.
+      // It visits at most 64 headers total across its durable continuation.
+      while(cursor.recovery&&attempts<limit&&headers<64&&performance.now()<at){
+        const recovery=cursor.recovery;
+        const row=db.prepare(`SELECT ${journalColumns} FROM raw_events WHERE rowid<=? ORDER BY rowid DESC LIMIT 1`).get(BigInt(recovery.before));
+        if(!row||recovery.remaining===0){cursor.recovery=null;break;}
+        headers++;recovery.remaining--;recovery.before=(BigInt(row.position)-1n).toString();
+        const ns=eventNamespace(row);
+        if(ns){const name=JSON.stringify(ns),old=cursor.active[name];
+          if(old){old.position=row.position;old.anchor=eventAnchor(row);old.partOffset=0;}
+          else cursor.active[name]={position:row.position,anchor:eventAnchor(row),partOffset:0,through:row.position};
+          drain();
+        }
+        if(!recovery.remaining)cursor.recovery=null;
+      }
+      // Keep even completed positions anchored until their next use. They are
+      // removed on the next drain, so a paused namespace retains its horizon.
+      cursor.round%=options.readSet.length;
+      return {cursor,rows,recovered,headers,attempts,anchors};
+    },at);
   }
   const fingerprint = source => bind('raw-search-manifest-v1',source);
   // This connection is read-only for its entire lifetime. SQLite's native
@@ -413,6 +556,7 @@ export function createRawSearchAuthority(database, options) {
         scan(`SELECT e.* FROM json_each(?) seek CROSS JOIN owner_suppression_epochs e ON e.owner_id=seek.value
           ORDER BY e.owner_id LIMIT 50001`,[],epochKeys):[];
       return {ns,conversations,parts,exclusions,fences,lineage,ancestors,receipts,maps,controls,facts,suppressions,
+        pause:read(()=>db.prepare(`SELECT generation,paused,enabled FROM episode_controls WHERE ${where}`).get(...args)),
         exclusion:read(()=>db.prepare(`SELECT generation FROM raw_exclusion_clocks WHERE ${where}`).get(...args))};
     });
     const schema=scan('SELECT type,name,tbl_name,sql FROM sqlite_master WHERE 1 ORDER BY type,name LIMIT 50001',[]);
@@ -463,7 +607,7 @@ export function createRawSearchAuthority(database, options) {
   // returned source is checked afresh, so cache keys need no canonical census.
   const cacheKey = (publication,metadata,at=Infinity) => {
     deadline(at);
-    return bindWithin('raw-search-cache-key-v2',[identity.store_id,options.ownerId,options.readSet,publication.generation,publication.sequence,publication.revision,metadata],at);
+    return bindWithin('raw-search-cache-key-v3-recent-union',[identity.store_id,options.ownerId,options.readSet,publication.generation,publication.sequence,publication.revision,metadata],at);
   };
   function checkInside(source,intent,capture) {
     const next=inspectInside(source.ref,intent,capture);
@@ -523,7 +667,7 @@ export function createRawSearchAuthority(database, options) {
       return reader.openSnapshot(source.ref,snapshot.view,snapshot.payloads,check);
     } };
   }
-  function validate(entries,at=Infinity,{dropDenied=false,inventoryCheckpoint}={}) {
+  function validate(entries,at=Infinity,{dropDenied=false,inventoryCheckpoint,journal}={}) {
     if(dropDenied){
       entries.forEach(entry=>entry.access());
       return read(()=>{
@@ -541,6 +685,8 @@ export function createRawSearchAuthority(database, options) {
       },at);
     }
     const inside=()=>{
+      if(journal&&(!anchored({position:journal.cursor.examined,anchor:journal.cursor.anchor})||
+          [...Object.values(journal.cursor.active),...journal.anchors].some(entry=>!anchored(entry))))fail('source_changed');
       for(const entry of entries)for(const source of entry.sources)checkInside(source,entry.intent);
     };
     // Each callback sees only its own freshly checked sources. The final
@@ -555,6 +701,6 @@ export function createRawSearchAuthority(database, options) {
     deadline(at);resetContentSuppressionRequestInside(db);
   }
   return { reset,refresh,resume:()=>resumeAt,read,identity:{storeId:identity.store_id,fileIdentity:database.fileIdentity,ownerId:options.ownerId,readSet:options.readSet},
-    bind,authorize,inventory,check,open,prepareBatch,validate,fingerprint,fence,checkFence,cacheKey,
+    bind,authorize,inventory,recent,disposition,queryAllowed,check,open,prepareBatch,validate,fingerprint,fence,checkFence,cacheKey,
     inspect:(ref,intent='history')=>read(()=>inspectInside(ref,intent)) };
 }

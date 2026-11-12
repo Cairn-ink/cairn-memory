@@ -150,6 +150,12 @@ export async function callModel(model, method, system, input,
     check();
     if (aborted || error?.code === 'model_timeout') reject('model_timeout');
     if (error?.name === 'AbortError') reject('model_cancelled');
+    // Consolidation retries only explicit transient provider framing. Other
+    // calls retain their existing error contract; messages never cross ports.
+    if (method === 'consolidate' && (['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENETUNREACH',
+      'EAI_AGAIN', 'rate_limit_exceeded', 'rate_limit', '429', 'network_error', 'deadline',
+      'model_deadline', 'model_rate_limited', 'consolidation_transient', 'rate_limited'].includes(error?.code) ||
+      ['TimeoutError', 'APIConnectionError', 'RateLimitError', 'TypeError'].includes(error?.name))) reject('consolidation_transient', 'provider_failure');
     // Trusted adapters can reject exact provider framing or malformed output.
     // Do not forward arbitrary provider errors, payloads or authority codes.
     if (error instanceof MemoryStoreError && ['context_budget_exceeded',

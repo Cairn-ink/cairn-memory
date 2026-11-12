@@ -1,6 +1,13 @@
 import { randomBytes } from 'node:crypto';
 import { fail } from './validation.mjs';
 
+// Only numeric invalidation state is shared; decisions belong to one dispatch.
+const generations = new WeakMap();
+export const episodeControlGeneration = db => generations.get(db) ?? 0;
+export function advanceEpisodeControlGeneration(db) {
+  generations.set(db, episodeControlGeneration(db) + 1);
+}
+
 export const EPISODE_SCHEMA_VERSION = 17;
 export const ADMISSION_LEASE_MS = 125_000;
 export const STAGED_PAYLOAD_MAX_BYTES = 128 * 1024;

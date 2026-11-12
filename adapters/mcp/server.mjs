@@ -199,7 +199,9 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
   snapshotConfigured = false, recallContextConfigured = false, recallContext, recoveryConfigured = false,
   stagingConfigured = false, contextSemantic = false, retainedRaw = false, contextReadSources: sources }) {
   let disposed = false, disposing;
-  const refresh = context ? startLocalContextMaintenance(core, context, { semantic: contextSemantic }) : null;
+  const refresh = (context || typeof model?.consolidate === 'function')
+    ? startLocalContextMaintenance(core, context ?? { readSet: [binding] },
+      { cards: typeof model?.consolidate === 'function', semantic: contextSemantic }) : null;
   const dispose = () => {
     if (disposed) return disposing;
     disposed = true;
@@ -553,6 +555,7 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
     throw error;
   }
 }
+
 
 function supportsRawContext() {
   try {

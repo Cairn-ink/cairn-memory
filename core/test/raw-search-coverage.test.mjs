@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { openMemoryCore } from '../index.mjs';
 import { defaultRawOptions } from '../local-defaults.mjs';
 import { sourceFixture, savedSource, ns, ok, request, splitRaw } from '../testing/raw-source-fixtures.mjs';
-import { searchFixture } from '../testing/raw-search-fixtures.mjs';
+import { searchFixture,consumeRecentHints } from '../testing/raw-search-fixtures.mjs';
 import { installRawSearchTestClock, rawSearchTestWait } from '../testing/raw-search-clock.mjs';
 import { rawSessionKeys } from '../raw-source-roots.mjs';
 import { readRawChannel, assembleThreeLayerContext } from '../context-read-three-layer.mjs';
@@ -43,6 +43,7 @@ async function prefixFixture(t) {
   const target = await savedSource(f, 'copper telescope target', { sessionId: 'target', eventId: 'target' });
   assert.equal(target.conversationId, 'z-target');
   const s = await searchFixture(f);
+  await consumeRecentHints(f,s);
   await s.maintain({ maxMs: 5000 });
   assert.equal(s.indexCount(), 4);
   return { f, s, target };
