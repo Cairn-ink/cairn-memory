@@ -11,9 +11,24 @@ const revision='fd5c59ef8e67cc58bb855a95f8910c668150bfa3';
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const pins=JSON.parse(readFileSync(new URL('./fixtures/card-lineage-off-wide-baseline.json',import.meta.url),'utf8'));
 const receiptWalkPins=JSON.parse(readFileSync(new URL('./fixtures/card-lineage-off-wide-receipt-walk.json',import.meta.url),'utf8'));
-const receiptWalkSQL=([sql])=>sql.startsWith('SELECT id,revision,deleted,updated_at FROM memories INDEXED BY namespace_memories') ||
-  sql.includes('FROM json_each(?) wanted CROSS JOIN receipts r') ||
-  sql.startsWith('SELECT r.*,? AS memory_revision,? AS memory_deleted FROM receipts r INDEXED BY memory_receipts');
+// Match the whitespace-only normalization used by the SQL trace recorder.
+const normalizeSQL=sql=>sql.replace(/\s+/g,' ').trim();
+// Exact texts observed in the listed cells, including the archived batch variant.
+// Seek and overflow pages are not observed here and receive no exemption.
+const receiptWalkSQLTexts=new Set([
+  "SELECT id,revision,deleted,updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id=? AND scope=? AND project_id=? AND deleted=? ORDER BY updated_at DESC,id LIMIT ?",
+  "SELECT r.*, json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN ( SELECT rowid FROM receipts INDEXED BY memory_receipts WHERE memory_id=json_extract(wanted.value,'$[0]') ORDER BY created_at,id LIMIT 5) ORDER BY wanted.key,r.created_at,r.id",
+  "SELECT r.*, json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted FROM json_each(?) wanted CROSS JOIN receipts r INDEXED BY memory_receipts ON r.memory_id=json_extract(wanted.value,'$[0]') LIMIT 5",
+]);
+const receiptWalkSQL=([sql])=>receiptWalkSQLTexts.has(normalizeSQL(sql));
+const observedReceiptWalkSQL=new Set();
+const observeReceiptWalkSQL=statements=>{
+  for(const row of statements)if(receiptWalkSQL(row)) {
+    const sql=normalizeSQL(row[0]);
+    assert.ok(receiptWalkSQLTexts.has(sql),'every exempt SQL text is explicitly listed');
+    observedReceiptWalkSQL.add(sql);
+  }
+};
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const summary=record=>({calls:record.calls.map(([method,result,start,end])=>[method,hash(result),start??null,end??null]),
   statements:record.statements.length,sql:hash(record.statements),tables:record.dump.map(([name,rows])=>[name,rows.length,hash(rows)]),
@@ -49,10 +64,12 @@ for(const base of [23,33])for(const mode of ['open','workload'])for(const eventT
     const workspace=createTestWorkspace(t,{prefix:'lineage-off-wide-'});
     const oldPath=join(workspace.path,'old.sqlite'),newPath=join(workspace.path,'new.sqlite');
     const baseline=archive(workspace.path),current=run(root,newPath,mode,cell),actual=summary(current);
+    if(receiptWalkPins.records[key])observeReceiptWalkSQL(current.statements);
     if(baseline) {
       const old=run(baseline.path,oldPath,mode,cell);
       assert.deepEqual(current.effectWitnesses,old.effectWitnesses,'complete observed effect rows, including rolled-back writes');
       if(receiptWalkPins.records[key]) {
+        observeReceiptWalkSQL(old.statements);
         assert.equal(JSON.stringify(current.calls.map(([method,result])=>[method,result])),
           JSON.stringify(old.calls.map(([method,result])=>[method,result])),'exact serialized calls and errors');
         assert.ok(current.statements.length<=old.statements.length,'receipt batching only reduces SQL');
@@ -100,3 +117,14 @@ for(const base of [23,33])for(const mode of ['open','workload'])for(const eventT
       calls:current.calls.length,statements:current.statements.length,tables:current.dump.length}));
   });
 }
+
+test('receipt enumeration exemptions are a closed set over the listed traces',t=>{
+  assert.deepEqual([...observedReceiptWalkSQL].sort(),[...receiptWalkSQLTexts].sort(),
+    'every listed SQL text occurs in the listed cells; no dead exemptions');
+  for(const sql of receiptWalkSQLTexts) {
+    assert.equal(receiptWalkSQL([sql+' AND 1=1']),false,'an extended SQL text is not exempt');
+    assert.equal(receiptWalkSQL(['EXPLAIN '+sql]),false,'a containing SQL text is not exempt');
+  }
+  t.diagnostic(JSON.stringify({exactReceiptEnumerationTexts:receiptWalkSQLTexts.size,
+    observedReceiptEnumerationTexts:observedReceiptWalkSQL.size}));
+});
