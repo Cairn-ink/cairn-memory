@@ -937,8 +937,13 @@ export function createMemoryRuntime(input, internal) {
     episodeRange(ns, operation, filter, cursor) { ready(); return episodeReads(ns, operation, filter, cursor); },
     privateCards: privateCards ? cardStorage : undefined,
     ...(internal?.engineCards ? {
-      engineCardAvailable() { ready(); return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_applicability_reviews'").get()) ||
-        !input.existingStore && !input.storeFence && [18,20,21,22].includes(db.prepare('PRAGMA user_version').get().user_version); },
+      engineCardAvailable() {
+        ready();
+        if (db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_applicability_reviews'").get()) return true;
+        if (input.existingStore || input.storeFence) return false;
+        const layout = installedContentLayout(db);
+        return !layout.suppressionRevision && [18,20,21,22].includes(layout.base);
+      },
       async engineCardStorage() {
         ready();
         const { createEngineCardStorage } = await import('./engine-card-storage.mjs');

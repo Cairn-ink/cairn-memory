@@ -18,7 +18,8 @@ When the extraction model supplies `relateMemories`, capture makes one relation
 request per batch with eligible candidates. The model may label a pair `supersedes`, `contradicts`,
 `refines` or `causes`, or leave it unrelated. A typed decision replaces a neutral
 edge for that pair. An unrelated decision adds no edge. A failed, malformed or
-timed-out request falls back to the neutral rule and never prevents admission.
+timed-out provider request falls back to the neutral rule. Saving-control and
+content-safety refusals still stop the affected operation.
 Causal captures retain their high-water and receipt provenance. A relation
 decision or installed relation layout preserves both Memory rows instead of
 automatically retiring a predecessor. Without either, main's older `reconcile`
@@ -26,7 +27,9 @@ port remains reachable. Pending review transitions already stored by an earlier
 engine remain resolvable.
 Candidates and model results are untrusted data. Unknown IDs, duplicate decisions,
 invalid labels or confidence values are discarded. Low-confidence supersession
-is omitted. Provider diagnostics contain closed codes, never Memory text.
+is omitted. Provider diagnostics contain closed codes, never Memory text. Relation model
+requests, token preflight and vector work recheck saving controls before dispatch;
+paused or disabled saving prevents those sends.
 Extracted facts denied by admission's forgotten-fingerprint policy are removed
 before relation discovery, token counting or dispatch. Their original admission
 indices and suppression counts remain intact.
@@ -54,8 +57,8 @@ recent earlier members first. Four members leave room for the present value,
 the preceding change and recent supporting context. All text, dates, labels,
 reasons and sources count against the existing token and response-byte budgets.
 The thread counts as one item for the item budget. The current member is packed
-first under tight budgets. History delivery orders the selected members by date
-and capture order. A thread is never coalesced into a single unlabeled Raw body.
+first under tight budgets. Delivery puts the current member first, followed by earlier members from
+newest to oldest, using capture order to break ties. A thread is never coalesced into a single unlabeled Raw body.
 
 Each delivered member has `metadata.thread`:
 
@@ -96,6 +99,16 @@ existing read path and exact epoch SQL while the layout is absent. Once installe
 an edge-presence bit rides an existing epoch statement,
 without a new statement or wire annotation. Standalone facts keep their original
 representation, including after deletion removes a thread's last edge.
+
+## Host-visible changes
+
+Items inside a thread are delivered current-first in both current and history
+reads, including dated reads. Earlier members follow from newest to oldest.
+A host that assumed the array followed retrieval `rank` must preserve this
+thread order and use `metadata.thread.status` to identify the present value;
+`rank` remains retrieval metadata and can differ from array order. Ranking or
+chronology still places each thread among other results. Source dates, Card
+source replacement and the ordinary ordering of unrelated results are retained.
 
 ## Model port
 
@@ -150,10 +163,40 @@ reopen its connections before relation writes are enabled. The internal
 `installMemoryRelations(db)` installer requires a caller-owned writer transaction;
 it is not called by the managed opener.
 
+Topic Card maintenance can upgrade the inherited Card base while retaining an
+installed relation package and its edges. It never installs relations on opening
+or upgrades a managed store implicitly.
+
 The first committed, validated link triggers a one-way layout upgrade.
 Set `memoryRelations: false` in `openMemoryCore` before the first edge to disable
 relation discovery and new relation writes. This does not remove an installed
-layout. A store that has only been opened by the new engine, without gaining any
+layout.
+
+The extra labeling request is the cost of keeping neutral topic discovery and
+model interpretation separate. An eligible candidate costs a request even when
+the model decides to link nothing. This offline measurement uses a deterministic
+fake model port, the engine's `modelRequestText` envelope and `countTokens`, and
+the OpenAI adapter's local `o200k_base` tokenizer. Each synthetic capture extracts
+one fact; earlier Memories are seeded before measurement. No provider is called.
+
+| Capture | Model requests off → on (increase) | Input tokens off → on (increase) | Output-token ceiling off → on (increase) |
+|---|---:|---:|---:|
+| No eligible candidate, no link | 2 → 2 (+0) | 970 → 970 (+0) | 2,048 → 2,048 (+0) |
+| One candidate, model chooses no link | 2 → 3 (+1) | 970 → 1,718 (+748) | 2,048 → 3,072 (+1,024) |
+| One earlier Memory linked | 2 → 3 (+1) | 970 → 1,718 (+748) | 2,048 → 3,072 (+1,024) |
+| Eight candidates (the per-fact limit) | 2 → 3 (+1) | 970 → 2,085 (+1,115) | 2,048 → 3,072 (+1,024) |
+
+Reproduce with `node tools/testing/run.mjs --script tools/testing/measure-memory-relations-cost.mjs`.
+These input counts describe the shipped synthetic text, not a fixed price:
+longer text and additional extracted facts change the input, up to the existing
+6,000-token request bound. Each relation request reserves at most 1,024 output
+tokens. With the OpenAI adapter, one model request entails two HTTP requests,
+a token preflight and a generation. Optional relation query embeddings consume
+the configured embedding budget separately; this table has no embedder configured.
+`memoryRelations: false` avoids discovery, relation interpretation and its vector
+work while retaining previously stored threads for reads.
+
+A store that has only been opened by the new engine, without gaining any
 relation, remains readable by main. After the first edge, older engines refuse
 with `unsupported_database`; hosts can inspect `PRAGMA user_version` and resolve
 the inherited-plus-package layout, or use the internal layout attestation's

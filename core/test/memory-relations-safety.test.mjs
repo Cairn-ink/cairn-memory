@@ -75,8 +75,9 @@ test('Raw exclusion removes incident edges and never brings a surviving derived 
  const [ancestor,derived]=f.db.prepare('SELECT * FROM memories ORDER BY content').all();
  const visible=ok(f.core.admit({namespace:sourceNamespace,memory:{content:'UniqueVisibleThread independent fact',kind:'fact'},receipts:[receipt('independent-thread')]})).memory;
  installMemoryThreadLayout(f.path);
- f.db.prepare(`INSERT INTO memory_relations(id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,created_at)
-  VALUES('raw-thread',?,?,?,?,'same_thread',1,'user','now')`).run(visible.id,visible.revision,derived.id,derived.revision);
+ f.db.prepare(`INSERT INTO memory_relations(id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,created_at,reason)
+  VALUES('raw-thread',?,?,?,?,'same_thread',1,'user','now','PrivateRawReason synthetic explanation')`).run(visible.id,visible.revision,derived.id,derived.revision);
+ f.db.prepare('INSERT INTO memory_relation_times VALUES(?,?,?,?)').run(derived.id,derived.revision,'2001-04-05T06:07:08.000Z',f.db.prepare('SELECT id FROM receipts WHERE memory_id=?').get(derived.id).id);
  const h=host();h.state.allowed=[sourceNamespace];
  const reader=openMemoryCore({path:f.path,contextRead:{version:'context-read-v1',authority:h.authority,counter:{id:'synthetic',countTokens:()=>1}}});t.after(()=>reader.close());
  const read=()=>h.call(reader,'contextRead',{readSet:[sourceNamespace],types:['memory'],intent:'current',query:'UniqueVisibleThread',semantic:false,budget:{}});
@@ -84,7 +85,7 @@ test('Raw exclusion removes incident edges and never brings a surviving derived 
  ok(f.core.forget({namespace:sourceNamespace,memoryId:ancestor.id,expectedRevision:ancestor.revision}));
  assert.equal(f.db.prepare('SELECT deleted FROM memories WHERE id=?').get(derived.id).deleted,0);
  assert.equal(f.db.prepare('SELECT count(*) n FROM memory_relations WHERE from_memory_id=? OR to_memory_id=?').get(derived.id,derived.id).n,0);
- const result=ok(await read());assert.ok(!JSON.stringify(result).includes(derived.id));assert.doesNotMatch(JSON.stringify(result),/Shared derived private fact/);
+ const result=ok(await read());assert.ok(!JSON.stringify(result).includes(derived.id));assert.doesNotMatch(JSON.stringify(result),/Shared derived private fact|PrivateRawReason|2001-04-05/);
 });
 
 test('first-install safety preflight accepts the relation package and preserves logical base capabilities',async t=>{

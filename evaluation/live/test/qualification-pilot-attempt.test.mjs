@@ -168,3 +168,16 @@ test('QP5 throwing signal accessor latches attempt and cannot bypass later no-re
   await assert.rejects(f.gate.request('/responses', body())); assert.equal(f.sends(), 0);
   assert.ok(!JSON.stringify(f.events).includes('synthetic-private-accessor'));
 });
+
+test('relation attempts use a separate cap, count both HTTP routes and keep ordinary allowance', async () => {
+ const f = fixture();
+ const cap = f.gate.getState().relationRequestCap;
+ for (let i = 0; i < cap; i++) await f.gate.request(i % 2 ? '/responses' : '/responses/input_tokens', body('relateMemories'));
+ assert.equal(f.gate.getState().relationRequests, cap);
+ await f.gate.request('/responses', body('extract'));
+ assert.equal(f.gate.getState().requests, cap + 1);
+ assert.equal(f.gate.getState().relationRequests, cap);
+ await assert.rejects(f.gate.request('/responses', body('relateMemories')), /relation_request_cap_exceeded/);
+ assert.equal(f.sends(), cap + 1);
+ assert.equal(f.gate.getState().halted, 'relation_request_cap_exceeded');
+});

@@ -142,6 +142,17 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
       const left = a.type === 'memory' && (a.sortDate ?? a.date), right = b.type === 'memory' && (b.sortDate ?? b.date);
       return left && right ? (left < right ? -1 : left > right ? 1 : 0) : left ? -1 : right ? 1 : 0;
     });
+    // Rank/date orders threads among other results. Within each thread the
+    // current member is always first, followed by the newest eligible history.
+    const groups = new Map();
+    for (const item of included) {
+      const key = item.threadKey ?? item;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(item);
+    }
+    included.splice(0, included.length, ...[...groups.values()].flatMap(group => group[0].threadKey
+      ? group.sort((a, b) => a.metadata.thread.status === 'current' ? -1 : b.metadata.thread.status === 'current' ? 1
+        : (b.metadata.thread.eventTime ?? '').localeCompare(a.metadata.thread.eventTime ?? '') || (b.threadOrder ?? 0) - (a.threadOrder ?? 0)) : group));
     const items = included.map((item, itemIndex) => {
       const chosen = selection.get(item), sourceDetails = [];
       // Dated provenance belongs to the body even when an excerpt cannot fit.
@@ -236,6 +247,8 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
     if (!source && item.type === 'card' && item.metadata.origin === 'engine') {
       const covered = cardSourceKeys([...trial.keys()]);
       for (const entry of trial.keys()) if (entry.type === 'memory' && covered.has(memoryPackKey(entry.ref))) trial.delete(entry);
+      const currentThreads = new Set([...trial.keys()].filter(entry => entry.metadata.thread?.status === 'current').map(entry => entry.threadKey));
+      for (const entry of trial.keys()) if (entry.threadKey && !currentThreads.has(entry.threadKey)) trial.delete(entry);
       if (unitCount(trial) > budget.maxItems) { stops.items = true; return; }
     }
     const value = payload(trial, dateOrder), text = meteredText(value.metered), used = count(text);

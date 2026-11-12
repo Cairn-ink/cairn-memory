@@ -1,3 +1,4 @@
+import { MEMORY_RELATION_REQUEST_CAP } from '../experiment-budget/request-guard.mjs';
 import { createHash } from 'node:crypto';
 import { accessSync, constants, lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -34,7 +35,7 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object'
   ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 const checkpoint = state => ({ requestCount: state.requestCount, reservedMicroUsd: state.reservedMicroUsd });
-const summary = state => ({ ...checkpoint(state), runId: state.runId, limitMicroUsd: state.limitMicroUsd,
+const summary = state => ({ relationRequests: state.relationRequests ?? 0, ...checkpoint(state), runId: state.runId, limitMicroUsd: state.limitMicroUsd,
   requestCap: state.requestCap, state: state.state,
   knownUsageMicroUsd: state.attempts.reduce((sum, item) => sum + (item.actualMicroUsd ?? 0), 0),
   unknownCostRequests: state.attempts.filter(item => item.actualMicroUsd === null).length,
@@ -93,7 +94,7 @@ async function executeQualificationPilot(options) {
   const evidence = (name, value) => writeQualifiedEvidence(directory, name, value);
   const ledger = reopenExperimentBudget(ledgerOptions);
   let session, proxy, attempt, activeClient;
-  const report = { version: 1, id: 'qualification-pilot-v1', status: 'not_run', semanticReviewRequired: true,
+  const report = { version: 1, id: 'qualification-pilot-v1', status: 'not_run', semanticReviewRequired: true, memoryRelations: true, relationRequestCap: MEMORY_RELATION_REQUEST_CAP,
     fixtureSha256: FIXTURE_SHA, pins, provenance, budgetBefore: null, budgetAfter: null,
     cases: fixture.cases.map(item => ({ id: item.id, status: 'not_run',
       events: { initial: { status: 'not_run' }, later: { status: 'not_run' } } })) };
@@ -223,6 +224,7 @@ async function executeQualificationPilot(options) {
     try { if (attempt) await attempt.drain(); } catch { report.status = 'halted'; }
     try { report.budgetAfter = summary(ledger.getState()); } catch { report.status = 'halted'; report.accountingError = 'accounting_failed'; }
     report.attempt = attempt?.getState() ?? null;
+    if (report.budgetAfter) report.budgetAfter.relationRequests = report.attempt?.relationRequests ?? 0;
     try { if (session) session.close(); } catch { report.status = 'halted'; report.cleanupError = 'cleanup_failed'; }
     try { ledger.close(); } catch { report.status = 'halted'; report.cleanupError = 'cleanup_failed'; }
     try { evidence('final-report', report); } catch { report.status = 'halted'; report.evidenceError = 'persistence_failed'; }

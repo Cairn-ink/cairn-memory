@@ -9,13 +9,25 @@ import { prepareMixedSourceCase } from '../mixed-source.mjs';
 import { officialJudgeRequest } from '../official-scoring.mjs';
 import { scoreMixedGeneration } from '../mixed-scoring.mjs';
 import { freeze, hash, reportSnapshot } from '../mixed-validation.mjs';
-import { completionOnce, trackedTransport } from '../mixed-transport.mjs';
+import { completionOnce, trackedTransport, unknownCurrentAttempt } from '../mixed-transport.mjs';
 import { evaluatorRow, sourceRow, syntheticMixedFixture } from '../testing/mixed-fixture.mjs';
 
 const descriptors = () => ({ nativeArtifact: { sourceTreeSha256: '1'.repeat(64),
   dependencyLockSha256: '2'.repeat(64) },
 nativeConfiguration: { configurationSha256: '3'.repeat(64), configuration: {} },
 cairnRuntimeArtifactSha256: '4'.repeat(64) });
+
+test('relation count preflight settles separately while an unpriced generation remains unknown', () => {
+  const count = { ordinal: 0, stage: 'cairn-relation-count', outcome: 'succeeded',
+    reservedMicroUsd: 1, actualMicroUsd: null };
+  const generation = { ...count, stage: 'cairn-relation-generation' };
+  assert.equal(unknownCurrentAttempt({ attempts: () => [count] }), null);
+  assert.equal(unknownCurrentAttempt({ attempts: () => [count, generation] }), generation);
+  const summary = summarizeAttemptsForOrdinal([count, generation,
+    { ...generation, ordinal: 1 }], 0);
+  assert.equal(summary.relationRequests, 2);
+  assert.equal(summary.requests, 2);
+});
 
 test('D1/D2 attempt diagnostics retain the first 64 and count every outcome and price', () => {
   const attempt = (ordinal, index, outcome, actualMicroUsd) => ({ ordinal,

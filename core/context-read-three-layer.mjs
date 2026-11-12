@@ -247,7 +247,7 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
     // sources. Recompute identity and chronology rather than retaining fields
     // from a group that still included a covered Memory.
     const buildUnit = unit => {
-      unit.memories.sort((a, b) => unit.threadKey ? (a.metadata.thread?.status==='current'?-1:b.metadata.thread?.status==='current'?1:(a.threadOrder??0)-(b.threadOrder??0)) : a.rank - b.rank);
+      unit.memories.sort((a, b) => unit.threadKey ? (a.metadata.thread?.status==='current'?-1:b.metadata.thread?.status==='current'?1:(b.metadata.thread?.eventTime??'').localeCompare(a.metadata.thread?.eventTime??'')||(b.threadOrder??0)-(a.threadOrder??0)) : a.rank - b.rank);
       unit.id = unit.memories.length ? JSON.stringify(unit.memories[0].ref) : unit.evidence[0].key;
       unit.rank = unit.memories[0]?.threadRank ?? unit.memories[0]?.rank ?? args.prepared.length + unit.evidence[0].rank;
       unit.turns = [...new Set([...unit.memories.flatMap(item => item.turnIds ?? []), ...unit.evidence.map(item => item.key)])];

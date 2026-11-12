@@ -17,24 +17,24 @@ export function createChecklistSelectionLiveSession(options) {
 // A parent-only provider boundary for explicitly authorized capture experiments.
 // It never creates a ledger or implies the later operator's smaller per-run cap.
 export function createQualificationLiveSession(options) {
-  return createSession(options, 'qualificationExtension', ['cairn_extract', 'cairn_classify', 'cairn_qualify'],
+  return createSession(options, 'qualificationExtension', ['cairn_extract', 'cairn_classify', 'cairn_relateMemories', 'cairn_qualify'],
     createQualificationExperimentRequestGuard, 'qualification');
 }
 
 export function createCandidateQualificationLiveSession(options) {
-  return createSession(options, 'candidateQualificationExtension', ['cairn_extract', 'cairn_classify', 'cairn_qualifyCandidates'],
+  return createSession(options, 'candidateQualificationExtension', ['cairn_extract', 'cairn_classify', 'cairn_relateMemories', 'cairn_qualifyCandidates'],
     createCandidateQualificationExperimentRequestGuard, 'candidate_qualification');
 }
 
 export function createSourceSupportLiveSession(options) {
   return createSession(options, 'candidateQualificationExtension',
-    ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify', 'cairn_select', 'cairn_rank'],
+    ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify', 'cairn_relateMemories', 'cairn_select', 'cairn_rank'],
     createCandidateQualificationExperimentRequestGuard, 'source_support');
 }
 
 export function createRationaleLiveSession(options) {
   return createSession(options, 'rationaleExtension',
-    ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify', 'cairn_relate', 'cairn_select', 'cairn_rank'],
+    ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify', 'cairn_relateMemories', 'cairn_relate', 'cairn_select', 'cairn_rank'],
     createRationaleExperimentRequestGuard, 'rationale');
 }
 

@@ -131,6 +131,7 @@ test('PP10: merging two disjoint completed runs sums the paired report and never
   }
   assert.equal(merged.cost.requests, first.cost.requests + second.cost.requests);
   assert.equal(merged.cost.requests, callsBefore);
+  assert.equal(merged.cost.relationRequests, first.cost.relationRequests + second.cost.relationRequests);
   assert.equal(merged.cost.reservedMicroUsd, first.cost.reservedMicroUsd + second.cost.reservedMicroUsd);
   assert.equal(merged.cost.byStage.answer.requests, 12);
   assert.equal(merged.cost.byStage.judge.requests, 9);

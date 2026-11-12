@@ -259,7 +259,8 @@ for (const setting of [{ paused: 1 }, { enabled: 0 }]) test(`relation model and 
  const extract = f.model.extract;
  f.model.extract = request => { const output = extract(request); if (armed) control(f.db, ns, setting); return output; };
  const before = embeddings; armed = true;
- await f.capture('My breakfast is eggs.');
+ const stopped = await f.core.capture({ namespace: ns, client: 'synthetic', sessionId: 's', eventId: 'stopped-batch', messages: [{ id: 'stopped-message', role: 'user', content: 'My breakfast is eggs.' }] });
+ assert.equal(stopped.error?.code, 'capture_disabled');
  assert.equal(f.calls.length, 0, 'no relation model request after saving stops');
  assert.equal(embeddings, before, 'no relation vector request after saving stops');
 });
@@ -275,6 +276,72 @@ test('a pause during relation token preflight prevents model dispatch', async t 
   }
   return 1;
  };
- await f.capture('My breakfast is eggs.');
- assert.equal(paused, true); assert.equal(f.calls.length, 0);
+ let classifications = 0;
+ f.model.classify = () => { classifications++; return { items: [] }; };
+ const stopped = await f.core.capture({ namespace: ns, client: 'synthetic', sessionId: 's', eventId: 'paused-preflight',
+  messages: [{ id: 'paused-message', role: 'user', content: 'My breakfast is eggs.' }] });
+ assert.equal(stopped.error?.code, 'capture_disabled');
+ assert.equal(paused, true); assert.equal(f.calls.length, 0); assert.equal(classifications, 0);
+});
+
+for (const intent of ['current', 'history']) for (const representation of ['representation-v2', 'representation-v2-dated']) test(`host receives current first within a thread: ${intent}, ${representation}`, async t => {
+ const f = fixture(t);
+ await f.capture('My breakfast is oats.', ns, '2025-01-01T00:00:00.000Z');
+ await f.capture('My breakfast is eggs.', ns, '2025-02-01T00:00:00.000Z');
+ await f.read(intent);
+ const result = ok(await f.trusted.call(f.core, 'contextRead', { readSet: [ns], types: ['memory'], intent, representation, query: 'breakfast', semantic: false, budget: {} }));
+ assert.equal(result.metered.items.length, 2);
+ assert.equal(result.metered.items[0].metadata.thread.status, 'current');
+ assert.equal(result.metered.items[0].body, 'My breakfast is eggs.');
+});
+
+test('relation vector beforeDispatch observes a pause and capture starts no later model stage', async t => {
+ const { control } = await import('../testing/context-semantic-pause-fixture.mjs');
+ const fake = createFakeEmbedder(); let armed = false, sends = 0, classifications = 0, f;
+ f = fixture(t, { contextOptions: { embedder: { ...fake, embed(texts, controls) {
+  if (armed) control(f.db, ns, { paused: 1 });
+  controls.beforeDispatch(); sends++; return fake.embed(texts, controls);
+ } }, policy: { family: 'local', maxRequests: 1000, maxUsd: 1, estimateUsd: () => 0 } } });
+ await f.capture('My breakfast is oats.');
+ ok(await f.trusted.call(f.core, 'refreshContextIndex', { readSet: [ns], types: ['memory'], intent: 'current', budget: { maxItems: 1024, maxMs: 5000 } }));
+ const before = sends; armed = true;
+ f.model.classify = () => { classifications++; return { items: [] }; };
+ const stopped = await f.core.capture({ namespace: ns, client: 'synthetic', sessionId: 's', eventId: 'vector-pause',
+  messages: [{ id: 'vector-message', role: 'user', content: 'My breakfast is eggs.' }] });
+ assert.equal(stopped.error?.code, 'capture_disabled');
+ assert.equal(sends, before); assert.equal(f.calls.length, 0); assert.equal(classifications, 0);
+});
+
+for (const rawIncluded of [false, true]) test(`engine Card replacement cannot leave an earlier-only thread, Raw=${rawIncluded}`, () => {
+ const ref = id => ({ type: 'memory', namespace: ns, memoryId: id, revision: 1 });
+ const prepared = ['earlier', 'current'].map((status, index) => ({ type: 'memory', ref: ref(status), ns: 0,
+  rank: index ? 3 : 1, threadRank: 1, threadKey: 'synthetic-thread', threadOrder: index, text: 'breakfast ' + status,
+  turnIds: ['shared-turn'], sessionIds: [], date: null, sources: [], sourceAccess: 'available', sourcesComplete: true, fence: '0'.repeat(64),
+  metadata: { state: 'active', reviewState: 'none', filing: { status: 'unfiled' }, kind: 'fact', origin: 'explicit', confidence: 1,
+   thread: { currentMemoryId: 'current', currentRevision: 1, status, eventTime: null, relation: index ? null : 'same_thread', direction: null, reason: null } } }));
+ const card = { ...prepared[0], type: 'card', rank: 2, threadRank: undefined, threadKey: undefined,
+  ref: { type: 'card', namespace: ns, cardId: 'topic-card', revision: 1, bodyRevision: 1 }, text: 'breakfast topic summary',
+  metadata: { state: 'confirmed', support: 'supported', origin: 'engine', builtAt: '2025-03-01T00:00:00.000Z', clusterKey: 'synthetic-topic', status: 'current' },
+  sourceMemoryRefs: [prepared[1].ref] };
+ const value = { namespace: ns, conversationId: 'conversation', messageId: 'message', role: 'user', occurredAt: null,
+  ranges: [{ text: 'breakfast source', source: { span: { start: 0, end: 16 } } }] };
+ const raw = rawIncluded ? { items: [{ handle: {}, value, key: 'shared-turn', rank: 1 }], coverage: 'included', rawSearch: { revalidate: () => [value] } } : undefined;
+ const result = assembleThreeLayerContext({ prepared: [...prepared, card], query: 'breakfast', readSet: [ns], counter: { id: 'synthetic', countTokens: () => 1 },
+  policy: { id: 'rank-first-whole-v1' }, budget: { maxItems: 24, maxTokens: 6000 }, deadlineAt: performance.now() + 10000, snapshotOf: () => null }, raw);
+ assert.ok(result.metered.items.some(item => item.ref.type === 'card'));
+ assert.ok(result.metered.items.every(item => !item.metadata?.thread));
+});
+
+test('a relation provider failure after pausing saving cannot fall through to classification', async t => {
+ const { control } = await import('../testing/context-semantic-pause-fixture.mjs');
+ let f, relationRequests = 0, classifications = 0;
+ f = fixture(t, { options: { relateMemories: () => {
+  relationRequests++; control(f.db, ns, { paused: 1 }); throw Error('synthetic provider failure');
+ } } });
+ await f.capture('My breakfast is oats.');
+ f.model.classify = () => { classifications++; return { items: [] }; };
+ const stopped = await f.core.capture({ namespace: ns, client: 'synthetic', sessionId: 's', eventId: 'provider-pause',
+  messages: [{ id: 'provider-message', role: 'user', content: 'My breakfast is eggs.' }] });
+ assert.equal(stopped.error?.code, 'capture_disabled');
+ assert.equal(relationRequests, 1); assert.equal(classifications, 0);
 });

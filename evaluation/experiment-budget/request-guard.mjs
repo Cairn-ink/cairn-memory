@@ -39,6 +39,20 @@ import { installedCoreDeadlinePredicateFor } from './installed-core-deadline.mjs
 import { inspectMem0WireRequest, inspectMem0WireResponse, mem0WireProfile,
   Mem0WireError } from './mem0-wire.mjs';
 
+// Each guard execution has an independent relation HTTP allowance. Count and
+// generation each consume one slot; ordinary extraction/qualification ceilings
+// and the durable campaign's total money/request bounds remain authoritative.
+export const MEMORY_RELATION_REQUEST_CAP = 128;
+function memoryRelationCensus() {
+  let requests = 0;
+  const related = body => body?.text?.format?.name === 'cairn_relateMemories';
+  return {
+    check(body) { if (related(body) && requests >= MEMORY_RELATION_REQUEST_CAP) fail('relation_request_cap_exceeded'); },
+    reserved(body) { if (related(body)) requests++; },
+    snapshot() { return { relationRequests: requests, relationRequestCap: MEMORY_RELATION_REQUEST_CAP }; },
+  };
+}
+
 const BINDING_FILENAME = 'experiment-request-policy.json';
 const EXTENSION_FILENAME = 'experiment-extraction-extension.json';
 const RECONCILIATION_FILENAME = 'experiment-reconciliation-extension.json';
@@ -459,12 +473,12 @@ function validateCairnBody(body, channel, generation, reconciliation = false, qu
   const match = (modelControl ? (qualificationMethod === BASIS_MODELS_KIND.method
     ? /^cairn_(reviewBasis)$/u : /^cairn_(relate)$/u)
     : qualificationMethod === CHECKLIST_SELECTION_KIND.method ? /^cairn_(selectChecklist)$/u
-    : qualificationMethod === RATIONALE_KIND.method ? /^cairn_(extract|classify|select|rank|qualifyCandidates|relate)$/u
-    : qualificationMethod === CANDIDATE_QUALIFICATION_KIND.method ? /^cairn_(extract|classify|select|rank|qualifyCandidates)$/u
-    : qualificationMethod === QUALIFICATION_KIND.method ? /^cairn_(extract|classify|select|rank|qualify)$/u
-    : reconciliation ? /^cairn_(extract|classify|select|rank|reconcile)$/u
-    : /^cairn_(extract|classify|select|rank)$/u).exec(format.name);
-  if (!modelControl && ['reconcile', 'qualify', 'qualifyCandidates', 'relate'].includes(match?.[1])
+    : qualificationMethod === RATIONALE_KIND.method ? /^cairn_(extract|classify|select|rank|qualifyCandidates|relate|relateMemories)$/u
+    : qualificationMethod === CANDIDATE_QUALIFICATION_KIND.method ? /^cairn_(extract|classify|select|rank|qualifyCandidates|relateMemories)$/u
+    : qualificationMethod === QUALIFICATION_KIND.method ? /^cairn_(extract|classify|select|rank|qualify|relateMemories)$/u
+    : reconciliation ? /^cairn_(extract|classify|select|rank|reconcile|relateMemories)$/u
+    : /^cairn_(extract|classify|select|rank|relateMemories)$/u).exec(format.name);
+  if (!modelControl && ['reconcile', 'qualify', 'qualifyCandidates', 'relate', 'relateMemories'].includes(match?.[1])
     && body.model !== DEFAULT_MODEL) fail('unsupported_request');
   let input;
   try { input = JSON.parse(body.input[0].content[0].text); } catch { fail('unsupported_request'); }
@@ -999,6 +1013,7 @@ export function createBasisModelsExperimentRequestGuard(options) {
 
 function constructGuard(options, extension = null, reconciliation = null, qualification = null,
   qualificationKind = QUALIFICATION_KIND) {
+  const relationCensus = memoryRelationCensus();
   const policy = validateConstructor(options);
   const ledgerConfiguration = structuredClone(options.ledger);
   let ledger;
@@ -1058,7 +1073,9 @@ function constructGuard(options, extension = null, reconciliation = null, qualif
     // Recheck the new capability after those callbacks, before any reservation.
     if (reconciliation || qualification) verifyCapabilities();
     const attemptId = randomUUID();
+    relationCensus.check(snapshot.body);
     ledger.reserve({ attemptId, channel: CHANNELS[kind], reservedMicroUsd: channel.reservedMicroUsd });
+    relationCensus.reserved(snapshot.body);
     inFlight += 1;
     const controller = new AbortController();
     const externalAbort = () => controller.abort('request_aborted');
@@ -1155,7 +1172,7 @@ function constructGuard(options, extension = null, reconciliation = null, qualif
     },
     getState() {
       if (closed) fail('guard_closed');
-      return ledger.getState();
+      return { ...ledger.getState(), ...relationCensus.snapshot() };
     },
     close() {
       if (closed) return;
@@ -3121,6 +3138,7 @@ function createPairExperimentRequestGuard(options, adaptive) {
 
 function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinnedBaseline = null,
   transportDiagnostics = null, pairProfile = null) {
+  const relationCensus = memoryRelationCensus();
   const policy = validateConstructor(options);
   const ledgerConfiguration = structuredClone(options.ledger);
   let ledger;
@@ -3217,14 +3235,17 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
     diagnosticMethod = 'unknown') => {
     if (closed) fail('guard_closed');
     if (halted) fail('paid_work_halted');
+    if (snapshot.body?.text?.format?.name === 'cairn_relateMemories') stage = kind === 'cairnCount' ? 'cairn-relation-count' : 'cairn-relation-generation';
     if (scoped) requireScope(stage === 'judge' ? 'judge' : stage === 'answer' ? 'answer' : 'cairn');
     // Snapshotting caller-owned request/header objects can execute accessors.
     // Recheck the capability and the shared ledger after those callbacks, before reserving.
     if (unsettled(scoped ? guardedVerify() : verify())) { halted = true; fail('paid_work_halted'); }
     const attemptId = randomUUID();
     const startedAt = Date.now();
+    relationCensus.check(snapshot.body);
     try { ledger.reserve({ attemptId, channel: CHANNELS[kind], reservedMicroUsd: channel.reservedMicroUsd }); }
     catch (error) { if (scoped) halted = true; throw error; }
+    relationCensus.reserved(snapshot.body);
     inFlightIds.add(attemptId);
     const record = { attemptId, stage, ledgerChannel: CHANNELS[kind], model: channel.model,
       endpoint: channel.endpoint, reservedMicroUsd: channel.reservedMicroUsd,
@@ -3410,9 +3431,9 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
       validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration', false,
         pairProfile?.pair ? CANDIDATE_QUALIFICATION_KIND.method : null, false,
         pairProfile?.pair ? pairArms.get(caseScope.caseId) : null, pairProfile?.adaptive ?? false);
-      const method = kind === 'cairnCount' ? 'unknown' : ({ cairn_extract: 'extract',
+      const method = snapshot.body.text.format.name === 'cairn_relateMemories' ? 'relateMemories' : kind === 'cairnCount' ? 'unknown' : ({ cairn_extract: 'extract',
         cairn_classify: 'classify', cairn_select: 'select', cairn_rank: 'rank',
-        cairn_qualifyCandidates: 'qualifyCandidates' })[
+        cairn_qualifyCandidates: 'qualifyCandidates', cairn_relateMemories: 'relateMemories' })[
         snapshot.body.text.format.name] ?? 'unknown';
       return await send(CHANNELS[kind], kind, channel, snapshot,
         kind === 'cairnGeneration' ? snapshot.body.max_output_tokens : 0, caseScope, method);
@@ -3502,7 +3523,12 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
     ...(pairProfile?.pair ? { qualifiedSourcePairCapability: caseCapability }
       : { caseDeadlineCapability: caseCapability }),
     ...(transportCollector ? { transportDiagnostics() {
-      return observeTransport(() => transportCollector.snapshot());
+      const snapshot = observeTransport(() => transportCollector.snapshot());
+      const scope = activeScope ?? lastScopeSnapshot;
+      const relationRequests = scope ? records.filter(record => record.caseId === scope.caseId && record.phase === scope.phase
+        && ['cairn-relation-count', 'cairn-relation-generation'].includes(record.stage)).length : 0;
+      return snapshot === null ? null : deepFreeze({ ...snapshot, relationRequests,
+        relationRequestCap: MEMORY_RELATION_REQUEST_CAP });
     } } : {}),
   } : {};
 
@@ -3518,7 +3544,7 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
     async hostFetch() { fail('unsupported_request'); },
     getState() {
       if (closed) fail('guard_closed');
-      return ledger.getState();
+      return { ...ledger.getState(), ...relationCensus.snapshot() };
     },
     attempts() {
       return Object.freeze(records.map((record) => deepFreeze(structuredClone(record))));
@@ -3539,6 +3565,7 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
 
 function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, benchmarkExtension,
   capability, fetchImpl, installedDeadline, bound: ledger, baseline }) {
+  const relationCensus = memoryRelationCensus();
   const storage = new AsyncLocalStorage();
   const inFlightIds = new Set();
   const records = [];
@@ -3656,9 +3683,11 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
     requireScope(scope.arm, scope.phase);
     const mem0 = requestRecord !== null;
     const reservedMicroUsd = mem0 ? requestRecord.reservedMicroUsd : channel.reservedMicroUsd;
+    relationCensus.check(snapshot.body);
     const record = reserve(scope, mem0 ? (kind === 'embedding' ? 'host-embedding'
       : 'host-completion') : CHANNELS[kind], reservedMicroUsd, stage, channel.model,
     channel.endpoint);
+    relationCensus.reserved(snapshot.body);
     const controller = new AbortController();
     let termination = null;
     let settled = false;
@@ -3841,7 +3870,9 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
     validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration', false,
       capability.manifest.cairn.comparisonProfile === 'indexed-evidence-v1'
         ? null : CANDIDATE_QUALIFICATION_KIND.method, false, 'cairn', true, true);
-    return { stage: kind === 'cairnCount' ? 'cairn-count' : 'cairn-generation', kind,
+    return { stage: snapshot.body.text.format.name === 'cairn_relateMemories'
+      ? (kind === 'cairnCount' ? 'cairn-relation-count' : 'cairn-relation-generation')
+      : kind === 'cairnCount' ? 'cairn-count' : 'cairn-generation', kind,
       channel, snapshot, requestedOutputTokens: kind === 'cairnGeneration'
         ? snapshot.body.max_output_tokens : 0 };
   });
@@ -3935,7 +3966,7 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
     quotaSnapshot() { return detached({ version: 'mixed-source-pair-quota-v1',
       phaseUsed, phaseCaps: capability.limits.phaseCaps, scopes: scopeUsage }); },
     attempts() { return detached(records); },
-    getState() { if (closed) fail('guard_closed'); return ledger.getState(); },
+    getState() { if (closed) fail('guard_closed'); return { ...ledger.getState(), ...relationCensus.snapshot() }; },
     isHalted() { return halted; },
     close() {
       if (closed) return;

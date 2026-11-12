@@ -81,11 +81,12 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
           memories: cardMemoryRevisions(snapshot.memories) };
         const portRead = async port => {
           let timer; const controller = new AbortController();
+          storage.validate(ns, snapshot.memories, check);
           try {
             const value = await Promise.race([assertContentPort({ invoke: () => port.read({ ...structuredClone(request), signal: controller.signal }) }),
               new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(Object.assign(Error('deadline'), { code: 'model_timeout' })); }, deadline.remainingMs()); })]);
             return assertContentPort({ invoke: () => inertContentPortValue(value, 'invalid_input') });
-          } finally { clearTimeout(timer); assertContentPort(); }
+          } finally { clearTimeout(timer); assertContentPort(); storage.validate(ns, snapshot.memories, check); }
         };
         const edges = relations ? await portRead(relations) : storage.relations(request);
         if (edges !== undefined && (!Array.isArray(edges) || edges.length > 2048)) fail('invalid_input');
@@ -164,12 +165,16 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
             ['supersedes', 'contradicts'].includes(edge.kind)).slice(0, 192).map(({ from, to, kind, slot }) => ({ from, to, kind, slot }));
           const request = () => ({ memories, rawSpans, ...(relevantRelations?.length ? { relations: relevantRelations } : {}) });
           const fits = () => {
-            if (countTokens(model, modelRequestText(CONSOLIDATE_PROMPT, request())) > MODEL_INPUT_TOKENS) return false;
+            storage.validate(ns, cluster.memories, check);
+            const tokens = countTokens(model, modelRequestText(CONSOLIDATE_PROMPT, request()));
+            storage.validate(ns, cluster.memories, check);
+            if (tokens > MODEL_INPUT_TOKENS) return false;
             const fit = modelPortValue(model, 'fitsConsolidationRequest', 'invalid_input');
+            storage.validate(ns, cluster.memories, check);
             if (typeof fit !== 'function') return true;
             try { return assertContentPort({ invoke: () => Reflect.apply(fit, model,
               [{ system: CONSOLIDATE_PROMPT, input: structuredClone(request()), maxOutputTokens: 1024 }]) }) === true; }
-            finally { assertContentPort(); }
+            finally { assertContentPort(); storage.validate(ns, cluster.memories, check); }
           };
           while (rawSpans.length && !fits()) {
             const shorter = rawSpans.map(span => { const points = [...span.text];

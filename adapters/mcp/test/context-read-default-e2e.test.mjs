@@ -97,11 +97,13 @@ test('default keyless MCP reads dated captured Memory and Raw, forgets and isola
   const rawUnavailable = await connect(workspace, path, personal, { rawSearch: false });
   for (const result of [await read(rawDisabled, { coverage: 'unavailable' }),
     await read(rawUnavailable, { coverage: 'unavailable' })]) {
-    assert.deepEqual(result.metered.items.map(item => item.date), ['2026-01-01T08:00Z', '2026-01-03T08:00Z']);
-    assert.deepEqual(result.metered.items.map(item => item.sources[0].date), ['2026-01-01T08:00Z', '2026-01-03T08:00Z']);
+    assert.deepEqual(result.metered.items.map(item => item.date), ['2026-01-03T08:00Z', '2026-01-01T08:00Z']);
+    assert.deepEqual(result.metered.items.map(item => item.sources[0].date), ['2026-01-03T08:00Z', '2026-01-01T08:00Z']);
+    assert.deepEqual(result.metered.items.map(item => item.ref.id), [firstMemories[1], firstMemories[0]]);
+    assert.deepEqual(result.metered.items.map(item => item.metadata.thread.status), ['current', 'earlier']);
     assert.ok(result.metered.items.every(item => item.ref.type === 'memory' && !item.evidence));
-    assert.match(JSON.stringify(result.metered.items[0]), /I like egg pancakes/);
-    assert.match(JSON.stringify(result.metered.items[1]), /I no longer like egg pancakes because of gutter oil/);
+    assert.match(JSON.stringify(result.metered.items[0]), /I no longer like egg pancakes because of gutter oil/);
+    assert.match(JSON.stringify(result.metered.items[1]), /I like egg pancakes/);
   }
 
   const second = await connect(workspace, path, project);

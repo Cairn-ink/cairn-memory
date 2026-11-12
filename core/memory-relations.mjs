@@ -189,6 +189,10 @@ async function relateEligibleMemories({model,items,operations,deadline,validateF
   // Keep this orchestration marker out of the persisted edge proposals.
   return Object.defineProperty(result,'decisionComplete',{value:true});
  }catch(error){
+  // Saving controls are authoritative cancellation, not an optional model
+  // failure. Falling through would let capture start classification afterward.
+  if(error?.code==='capture_disabled')throw error;
+  validateFresh?.();
   emitDiagnostic(model,'relateMemories','core_validation','invalid_memory_relations');
   return fallback();
  }

@@ -17,7 +17,7 @@ function authenticatedPrior(guard, ordinal) {
 
 export function unknownCurrentAttempt(guard, allowedLocalOrdinals = new Set()) {
   return guard.attempts().find(attempt => {
-    const reserveOnly = attempt.stage === 'cairn-count' && attempt.outcome === 'succeeded'
+    const reserveOnly = ['cairn-count', 'cairn-relation-count'].includes(attempt.stage) && attempt.outcome === 'succeeded'
       || attempt.stage === 'mem0-embedding' && attempt.outcome === 'failed';
     return attempt.outcome === null || (attempt.outcome === 'unknown'
       || attempt.actualMicroUsd === null && !reserveOnly)
