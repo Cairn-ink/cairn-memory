@@ -48,11 +48,27 @@ function protectedFile(path, required = true, value = stat(path)) {
     unavailable('unsafe_file');
   return value;
 }
-function walHeader(path, observer) {
+function walHeader(path, observer, concurrentProof) {
   protectedFile(path);
   let result;
   try { result = probeRollbackJournal(path, observer ? { observe: observer.journalProbe } : {}); }
-  catch (error) { if (observer && error?.code === 'ERR_SQLITE_ERROR') throw error; unavailable('unsafe_file'); }
+  catch (error) {
+    // A lexical checkpoint can commit while the isolated SQLite probe runs.
+    // For writable embedded sidecars only, repeat the SQLite-only header probe
+    // against the original identity/protection proof. Further checkpoints may
+    // change timestamps; replacement, protection changes and WAL still refuse.
+    if (concurrentProof && error?.message === 'sqlite_journal_probe_changed') {
+      try {
+        const retried = probeRollbackJournal(path, { allowConcurrentWrites: true });
+        const matches = (actual, expected) => ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink']
+          .every(key => actual?.[key] === expected?.[key]);
+        if (retried.mode === 'delete' && matches(protectedFile(path), concurrentProof.main) &&
+            matches(stat(dirname(path)), concurrentProof.directory)) return false;
+      } catch { /* Preserve the original unsafe-file refusal. */ }
+    }
+    if (observer && error?.code === 'ERR_SQLITE_ERROR') throw error;
+    unavailable('unsafe_file');
+  }
   if (result.stage === 'open') unavailable('unsafe_file');
   // nolock SQLite refuses WAL with CANTOPEN before it can create companions.
   // Other malformed/inaccessible files fail closed through ordinary validation.
@@ -282,7 +298,8 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
   }
   function open() {
     const initial = protectedFile(sidecarPath, false);
-    if (initial && !readOnly && walHeader(sidecarPath)) unavailable('incompatible');
+    if (initial && !readOnly && walHeader(sidecarPath, undefined,
+      { main: initial, directory: stat(dirname(sidecarPath)) })) unavailable('incompatible');
     auxiliaries(sidecarPath, readOnly);
     if (!initial) {
       if (readOnly) unavailable('missing');
@@ -506,11 +523,11 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     writeSqlMs: 0, beginMs: 0, commitMs: 0, writeTransactions: 0, rowWrites: 0, journalPeakBytes: 0,
     fenceSqlMs: 0, fenceTransactionMs: 0, checkpointTransactionMs: 0, publicationTransactionMs: 0 });
 
-  function reconcile(input, { isCurrent } = {}) {
+  function reconcile(input, { isCurrent, onRebuilding } = {}) {
     const m = metrics(); activeMetrics = m;
-    try { return reconcileInside(input, m, isCurrent); } finally { activeMetrics = undefined; }
+    try { return reconcileInside(input, m, isCurrent, onRebuilding); } finally { activeMetrics = undefined; }
   }
-  function reconcileInside(input, m, isCurrent) {
+  function reconcileInside(input, m, isCurrent, onRebuilding) {
     if (readOnly) fail('invalid_input');
     const p = projection(input), budget = input.budget;
     if (!Number.isInteger(budget?.maxItems) || budget.maxItems < 1 || budget.maxItems > 1024 ||
@@ -521,6 +538,32 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       checkpoint: durable?.checkpoint ?? 0, sequence: (durable?.sequence ?? 0) + 1,
       base_sequence: durable?.published ? durable.sequence : durable?.base_sequence ?? 0,
       reason: durable ? 'reconcile' : rebuildReason ?? 'missing' } : durable;
+    // Observe only the unpublished checkpoint's remaining key union. Stop at
+    // maxItems + 1: an upper bound suffices, including unchanged/removal work.
+    // Warm reads, explicit deadlines and background maintenance add no probes.
+    let fitsQuantum = false;
+    if (!g.published && onRebuilding) {
+      let remaining = 0;
+      for (let phase = g.phase; phase < p.streams.length && remaining <= budget.maxItems; phase++) {
+        const stream = p.streams[phase], after = phase === g.phase ? g.last_key : '';
+        const limit = budget.maxItems + 1 - remaining;
+        const observedAt = performance.now();
+        m.projectionLookups++;
+        const rows = canonicalRead(() => canonical.prepare(stream.type === 'memory'
+          ? `SELECT id FROM memories INDEXED BY index_memory_keyset WHERE ${where} AND id>? ORDER BY id LIMIT ?`
+          : `SELECT id FROM private_cards INDEXED BY private_card_scope WHERE ${where} AND state=? AND id>? ORDER BY id LIMIT ?`)
+          .all(...boundary(stream.ns), ...(stream.type === 'card' ? [stream.state] : []), after, limit));
+        const previous = sideRead(() => side.prepare(`SELECT id FROM documents
+          WHERE generation=? AND stream=? AND id>? ORDER BY id LIMIT ?`).all(p.id, phase, after, limit));
+        m.canonicalRows += rows.length; m.sidecarRows += previous.length;
+        m.projectionBytes += Buffer.byteLength(JSON.stringify(rows));
+        m.sidecarBytes += Buffer.byteLength(JSON.stringify(previous));
+        m.projectionMs += performance.now() - observedAt;
+        remaining += new Set([...rows, ...previous].map(row => row.id)).size;
+      }
+      fitsQuantum = remaining <= budget.maxItems;
+      onRebuilding(budget, { progress: { phase: g.phase, lastKey: g.last_key }, remaining });
+    }
     const matching = () => captured === JSON.stringify(fence(p));
     // Merge two ordered metadata streams. Only changed tuples enter the bounded
     // pending buffer. Scan positions are checkpointed with those deltas, or at
@@ -563,7 +606,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       pending = []; pendingUnits = 0;
       return true;
     }
-    while (!g.published && phase < p.streams.length && performance.now() - started < budget.maxMs && m.transformed < budget.maxItems) {
+    while (!g.published && phase < p.streams.length && performance.now() - started < budget.maxMs && (m.transformed < budget.maxItems || fitsQuantum)) {
       if (!matching()) break;
       const stream = p.streams[phase], maximum = stream.type === 'card' ? 1 : batchSize;
       const scanStarted = performance.now();
@@ -586,7 +629,8 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
         const changed = order < 0 || order === 0 && (row.revision !== old.revision || row.body_revision !== old.body_revision || row.eligible !== old.eligible);
         m.deltaDetectionMs += performance.now() - detectionStarted;
         if (changed) {
-          if (m.transformed >= budget.maxItems || pending.length >= batchSize) break;
+          if (m.transformed >= budget.maxItems) { fitsQuantum = false; break; }
+          if (pending.length >= batchSize) break;
           m.transformed++;
           const text = row.eligible ? canonicalRead(() => textFor(stream, row.id, m)) : null;
           if (pendingUnits + (text?.length ?? 0) > 2_000_000 && !checkpoint()) break;

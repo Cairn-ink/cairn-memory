@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased — first context read and busy-machine fallback
+
+- Start local lexical-only context maintenance on the next timer turn after
+  open, with 25 ms cooperative slices. Configurations with an embedder retain
+  the existing 1,000 ms first delay and cadence. Unchanged lexical completion
+  backs off to 30-second observations; unfinished lexical work yields 25 ms
+  between turns.
+- Give default embedded assembly reads up to 2,000 ms of extra time only while
+  their sidecar is unpublished or invalidated and its remaining metadata fits
+  the 1,024-item quantum; larger rebuilds, explicit and warm deadlines stay
+  unchanged. Managed product maintenance remains host-driven.
+- Reserve 200 ms for packing and canonical validation before optional Memory
+  source dates. A skipped or late date batch retains undated Memory items and
+  sets the existing deadline stop diagnostic on both readers. Raw partial
+  coverage remains in force. Final safety validation always completes for
+  selected items; validation failures refuse delivery, while elapsed time alone
+  never discards validated items.
+- Preserve foreground lexical reads when a background checkpoint commits during
+  sidecar probing, retaining the existing file identity, protection and WAL checks.
+- Host-visible with an embedding provider configured: on a cold store the first
+  embedding request can leave up to about two seconds sooner after open, because
+  the first read now publishes the lexical projection within its extra time.
+  Request and document counts are unchanged, nothing is sent while saving is
+  paused or disabled, and `--no-context-semantic` turns embedding off.
+
 ## Unreleased — nothing sent to an embedding provider while saving is paused
 
 - With an embedding model configured, Memory and Card search no longer sends the

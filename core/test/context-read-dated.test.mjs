@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from '../context-read-three-layer.mjs';
 import { receiptSourceRows, resolveMemorySourceDates, assembleContext, meteredText, receiptEventDate, completeResponseBytes } from '../context-read-assembly.mjs';
 
-import { ASSEMBLY_REPRESENTATIONS, ASSEMBLY_LIMITS, ASSEMBLY_DEFAULTS, CONTEXT_LIMITS, contextInput, namespaceKey } from '../context-read-input.mjs';
+import { FIRST_READ_GRACE_MS, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_LIMITS, ASSEMBLY_DEFAULTS, CONTEXT_LIMITS, contextInput, namespaceKey } from '../context-read-input.mjs';
 import { assemblyQuery, fixedPrepared, ns, ok } from '../testing/context-read-assembly-fixture.mjs';
 import { host, receipt } from '../testing/context-read-core-fixture.mjs';
 import { openMemoryCore, openContextReader } from '../index.mjs';
@@ -292,13 +292,13 @@ function enclosingReader(kind, definitions, port, { unavailable = 0, localStatus
   const access = { accessGenerations: safety ? 'a'.repeat(43) : 'access', check() {} };
   const counter = { id: port.id, countTokens(text) { counts.push(text); return port.countTokens(text); } };
   const dependencies = { counter, options: { counter, ...(localStatus ? { localStatus: {} } : {}) }, supportedTypes: ['memory'],
-    performance: { now: () => 0 }, ready() {}, contextInput, authorize: () => access,
+    now: () => 0, performance: { now: () => 0 }, ready() {}, contextInput, authorize: () => access,
     searchCandidates: async () => ({ ok: true, horizon: candidates, check() {} }), read: work => work(),
     canonicalFence: () => [{ memory: 1 }], cardDependencyFence: () => ({}),
     db: { prepare(sql) { assert.match(sql, /^SELECT \* FROM receipts/); return { all: id => rows.get(id) }; } },
     evidence: { itemsInside: (_ns, refs) => refs.map(ref => { const item = canonical.get(ref.memoryId); if (!item) fail('evidence_unavailable'); return item; }) },
     cachedContentLayout: () => safety ? { suppressionRevision: 1 } : null, createContentReadMemo, cardLineageItemInside,
-    namespaceKey, receiptEventDate, receiptSourceRows, resolveMemorySourceDates, validateSourceReceipt, createHash, bind, encode, ASSEMBLY_LIMITS, CONTEXT_LIMITS,
+    FIRST_READ_GRACE_MS, namespaceKey, receiptEventDate, receiptSourceRows, resolveMemorySourceDates: (...args) => resolveMemorySourceDates(...args, () => 0), validateSourceReceipt, createHash, bind, encode, ASSEMBLY_LIMITS, CONTEXT_LIMITS,
     readRawChannel, citedRawTurns, assembleThreeLayerContext: (args, raw) => assembleThreeLayerContext({ ...args, now: () => 0 }, raw),
     success: value => ({ ok: true, value }), failure: error => ({ ok: false, error: { code: error.code } }), MemoryStoreError, fail, deepFreeze,
     same: (a, b) => JSON.stringify(a) === JSON.stringify(b), bytes: size,

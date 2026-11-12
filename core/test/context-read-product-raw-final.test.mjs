@@ -40,7 +40,7 @@ function fixture(mutation, coverage) {
   } }, binding, {})('contextRead', {}, token);
   const publication = { publicationId: 'synthetic-publication' };
   const dependencies = {
-    db: {}, read: work => {
+    now: () => performance.now(), db: {}, read: work => {
       assert.equal(insideRead, false);
       insideRead = true;
       try { return work(); } finally { insideRead = false; }

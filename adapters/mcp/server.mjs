@@ -17,7 +17,7 @@ import { createContextReadAccess } from './context-read-access.mjs';
 import { contextReadSources } from './context-read-sources-configuration.mjs';
 import { registerContextReadSourcesTools, contextSourcesToolResponse } from './context-read-sources-tools.mjs';
 import { createLocalRawSearch } from '../../core/local-raw-search.mjs';
-import { defaultRawOptions } from '../../core/local-defaults.mjs';
+import { defaultRawOptions, startLocalContextMaintenance } from '../../core/local-defaults.mjs';
 import { registerContextReadTools, CONTEXT_TOOL_NAMES } from './context-read-tools.mjs';
 import { contextToolResponse } from './context-read-transport.mjs';
 // U5c-1 registration and authority boundary.
@@ -156,7 +156,7 @@ export function createCairnServer(options = {}) {
   const assets=assetsConfigured?createAssetReadAccess(binding):null;
   const methods=methodsConfigured?createMethodReadAccess(binding,options.methodReadPersonal===true):null;
   const context=contextConfigured?createContextReadAccess(binding,options.contextReadPersonal===true,
-    { maintenance:Boolean(options.contextEmbedding) && options.contextSemantic !== false || typeof model?.consolidate === 'function' }):null;
+    { maintenance: true }):null;
   const roles = roleAttribution ? createRoleProfileAccess(binding, context.readSet, roleAttribution) : null;
   // Programmatic hosts retain retrieval while their local tokenizer loads.
   let contextCounter = context ? options.contextCounter : null, contextCounterReady;
@@ -199,8 +199,9 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
   snapshotConfigured = false, recallContextConfigured = false, recallContext, recoveryConfigured = false,
   stagingConfigured = false, contextSemantic = false, retainedRaw = false, contextReadSources: sources }) {
   let disposed = false, disposing;
-  const refresh = (context && contextSemantic || typeof model?.consolidate === 'function')
-    ? startContextMaintenance(core, context ?? { readSet: [binding] }, { cards: typeof model?.consolidate === 'function', semantic: contextSemantic }) : null;
+  const refresh = (context || typeof model?.consolidate === 'function')
+    ? startLocalContextMaintenance(core, context ?? { readSet: [binding] },
+      { cards: typeof model?.consolidate === 'function', semantic: contextSemantic }) : null;
   const dispose = () => {
     if (disposed) return disposing;
     disposed = true;
@@ -555,32 +556,6 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
   }
 }
 
-/** Bounded embedding refresh; no provider call holds up capture or tool delivery. */
-function startContextMaintenance(core, access, { cards = false, semantic = true } = {}) {
-  const { readSet } = access;
-  const capabilities = core.getContextReadCapabilities?.();
-  let types = capabilities?.ok ? capabilities.value.types : ['memory'];
-  let closed = false, active, timer;
-  const arm = () => {
-    if (closed) return;
-    timer = setTimeout(() => {
-      active = (async () => {
-        if (cards) for (const namespace of readSet) {
-          if (closed) return;
-          const pass = await core.maintainCards({ namespace, budget: { maxItems: 512, maxMs: 30000 } });
-          if (!pass.ok || pass.value.state === 'refused') return;
-        }
-        if (cards) { const current = core.getContextReadCapabilities?.(); if (current?.ok) types = current.value.types; }
-        if (!closed && access.call && (semantic || cards)) await access.call(core, 'refreshContextIndex', {
-          readSet, types, intent: 'current', budget: { maxItems: 16, maxMs: 1000 },
-        });
-      })().catch(() => {}).finally(() => { active = null; arm(); });
-    }, 1000);
-    timer.unref();
-  };
-  arm();
-  return { async close() { closed = true; clearTimeout(timer); await active; } };
-}
 
 function supportsRawContext() {
   try {

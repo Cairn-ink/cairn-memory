@@ -2075,3 +2075,22 @@ Hosts own late underlying operations and must bound synchronous service calls.
 Known limit: on the product reader, Raw invalidated between initial and final
 validation yields the existing refusal (`reader_failed`) rather than a Memory-only
 response; the local/facade reader rebuilds Memory-only.
+
+## Source-date deadlines and maintenance ownership
+
+Product assembly uses the same 200 ms source-date reserve as embedded assembly.
+If optional source-date work cannot fit, prepared Memory items remain available
+without their dates, with the existing `diagnostics.stops.deadline:true`.
+Raw excerpts retain their validated prefix with `coverage.raw:'partial'`.
+Canonical final validation always runs to completion for selected items.
+Validation failures refuse delivery; elapsed time alone does not discard
+validated items. No item or diagnostics keys are added.
+
+Managed product readers remain ready-only: the host starts and drives its
+existing context index maintainer/maintenance pump before admitting reads.
+Reader open starts no competing builder and retains the host's request,
+credential and operation cutoffs. The local default composition starts its
+existing authorized maintenance lane after open without waiting for a read.
+The embedded first-build grace described in
+[local context reads](context-read-local.md#first-reads-and-deadline-degradation)
+does not extend managed host cutoffs.

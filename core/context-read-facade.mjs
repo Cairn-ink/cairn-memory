@@ -30,7 +30,7 @@ import { receiptEventDate, completeResponseBytes, cardPackSources, receiptSource
 import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from './context-read-three-layer.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { CONTEXT_VERSION, CONTEXT_METHODS, CONTEXT_LIMITS, SOURCE_LIMITS, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_DEFAULTS, DEFAULT_ASSEMBLY_POLICY,
-  contextOptions, contextInput, contextRefs, namespaceKey } from './context-read-input.mjs';
+  FIRST_READ_GRACE_MS, contextOptions, contextInput, contextRefs, namespaceKey } from './context-read-input.mjs';
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const bytes = envelope => Buffer.byteLength(JSON.stringify(envelope));
@@ -375,6 +375,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     finally { lease.release(); }
   }
   async function searchCandidates(input, access, deadlineAt, internal = false) {
+    const graceMs = internal ? access.firstReadGraceMs ?? 0 : 0;
     let diagnostics, controller, lease, sourceState;
     try {
       diagnostics = { channels: { lexical: channel('unavailable'), semantic: channel(input.semantic ? options.embedder ? 'unavailable' : 'absent' : 'disabled',
@@ -393,8 +394,15 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       if (!readOnly) {
         const time = performance.now();
         const remaining = Math.floor(deadlineAt - time);
-        if (remaining < 1) throw Object.assign(new MemoryStoreError('index_unavailable'), { reason: 'timeout' });
-        maintenance = storage.reconcile({ ...projection, budget: { maxItems: 1024, maxMs: remaining } }, { isCurrent: access.check });
+        if (remaining < 1 && !graceMs) throw Object.assign(new MemoryStoreError('index_unavailable'), { reason: 'timeout' });
+        maintenance = storage.reconcile({ ...projection, budget: { maxItems: 1024, maxMs: Math.max(1, remaining) } }, { isCurrent: access.check, onRebuilding: graceMs ? (budget, observation) => {
+          if (observation.remaining > budget.maxItems) {
+            if (performance.now() >= deadlineAt) throw Object.assign(new MemoryStoreError('index_unavailable'), { reason: 'timeout' });
+            return;
+          }
+          deadlineAt += graceMs;
+          budget.maxMs = Math.max(1, Math.min(CONTEXT_LIMITS.deadlineMs, Math.floor(deadlineAt - performance.now())));
+        } : undefined });
         diagnostics.trace.timings.maintenanceMs = performance.now() - time;
         diagnostics.trace.maintenance = maintenance.metrics;
       }
@@ -505,7 +513,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         sampleTrace(diagnostics.trace);
         access.check(); storage.assertState(projection, current);
         const horizon = deepFreeze({ items: candidateItems, ...diagnostics });
-        return { ok: true, horizon, ...(sourceState ? { sourceState } : {}), check() {
+        return { ok: true, horizon, deadlineAt, ...(sourceState ? { sourceState } : {}), check() {
           access.check();
           if (sourceState) read(() => assertSourcesInside(input, sourceState, 'snapshot_stale'));
           const resumed = acquireSidecar(projection, access);
@@ -624,14 +632,16 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     cardDetailInside: (ns, id, readSet, options) => cards.cardDetailInside(ns, id, readSet, options), receiptRefInside: (ns, memory, row) => receipt.refInside(ns, memory, row) });
   // context-read facade: end memo receipt projection
   async function contextRead(original, token) {
-    let candidates;
+    let candidates, deadlineAt;
     try {
       ready();
       const { payload, input } = contextInput('contextRead', original, supportedTypes, options.sources);
-      const deadlineAt = performance.now() + input.deadlineMs;
-      const access = authorize('contextRead', input, payload, token);
+      deadlineAt = performance.now() + input.deadlineMs;
+      const access = { ...authorize('contextRead', input, payload, token),
+        firstReadGraceMs: Object.hasOwn(payload, 'deadlineMs') ? 0 : Math.min(FIRST_READ_GRACE_MS, ASSEMBLY_LIMITS.deadlineMs - input.deadlineMs) };
       if (!options.counter) return failure(new MemoryStoreError('invalid_input'), { counter: 'absent' });
       const searched = await searchCandidates(input, access, deadlineAt, true);
+      deadlineAt = searched.deadlineAt ?? deadlineAt;
       access.check();
       if (!searched.ok) {
         return deepFreeze({ ...searched, error: { ...searched.error,
@@ -706,7 +716,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             dependencyCount: item.support?.currentDependency ? item.support.currentDependency.versions?.length ?? 0 : null });
           if (dated && type === 'memory') dateEntries.push({ item: items.at(-1), rows: sourceRows });
         }
-        if (dated && !resolveMemorySourceDates(db, dateEntries, deadlineAt)) { items.length = 0; deadline = true; }
+        if (dated && !resolveMemorySourceDates(db, dateEntries, deadlineAt)) deadline = true;
         return { generations, items, unavailable };
       });
       const scope = bind('snapshot-scope', input.readSet);

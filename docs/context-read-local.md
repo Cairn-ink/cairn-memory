@@ -188,6 +188,12 @@ Explicit provider overrides require all five options together. Otherwise
 `OPENAI_API_KEY` selects bounded OpenAI embeddings automatically in MCP;
 `--no-context-semantic` disables them.
 
+Timing after open: the semantic timer keeps its 1,000 ms first delay and cadence.
+On a cold store the first read can publish the lexical projection within its
+extra time, so the first embedding request may leave up to about two seconds
+sooner than when that read timed out unpublished. The number of requests and
+documents is the same, and nothing is sent while saving is paused or disabled.
+
 ```sh
 cairn-memory --db /absolute/private/memory.sqlite --owner OWNER \
   --context-read context-read-v1 \
@@ -537,3 +543,50 @@ coalesced snapshots are supported. Late asynchronous completions
 are discarded. Hosts must keep synchronous service calls bounded and own any
 underlying operation until it settles. No permanent connection refusal is
 created by the read's timeout. `raw:false` skips Raw search entirely.
+
+## First reads and deadline degradation
+
+The default local composition used by MCP and the installed local client starts
+lexical-only context-index maintenance on the next timer turn after open when
+no embedder is configured in core. With an embedder, the first turn waits exactly
+1,000 ms, followed by 1,000 ms after each settled turn, as before. It calls the existing authorized
+`refreshContextIndex` lane with the fixed host read set, resumes its checkpoints,
+and cancels pending work on close, joining an active refresh before closing core.
+Open schedules the turn without index I/O. Lexical-only turns retain the
+1,024-item quantum but use a 25 ms cooperative time slice, matching the local
+Raw maintenance slice and leaving frequent opportunities for foreground work.
+While lexical work remains, turns yield for 25 ms before resuming.
+Once a lexical turn reports complete with no transformed items, observations
+back off to 30 seconds. These observations detect new capture/invalidation
+fences and resume the short lexical cadence without a new notification API.
+Semantic turns retain their existing 16-item / 1,000 ms budget and cadence.
+These are cooperative slices: a synchronous SQLite statement, checkpoint or
+lock wait can overrun them (the existing busy timeout is 5,000 ms).
+Library hosts that compose `openMemoryCore` directly supply their own authorized
+maintenance driver; a configuration containing only an authority cannot infer
+that host's read set or credentials. Managed readers keep their host pump.
+
+A writable embedded `contextRead` with no explicit `deadlineMs` can use
+`FIRST_READ_GRACE_MS` (2,000 ms) when reconciliation observes an unpublished or
+invalidated index whose remaining metadata fits the 1,024-item foreground
+quantum. The checkpoint observation uses a bounded union of remaining canonical
+and sidecar keys, including removals and unchanged tuples conservatively; it
+never loads text and is skipped on warm stores and explicit-deadline reads.
+A larger rebuild keeps the original foreground slice and returns
+`index_unavailable` if still unpublished; background turns resume its checkpoint.
+Exactly 1,024 remaining tuples can finish the terminal metadata scan and publish
+without exceeding the transform quantum. When eligible, the default preparation
+and packing deadline is 3,000 ms, bounded by the existing 5,000 ms maximum. An already published, current index keeps exactly the 1,000 ms
+window. An explicit deadline receives no grace. `findCandidates` is unchanged.
+
+Optional Memory source-date resolution reserves `SOURCE_DATE_RESERVE_MS`
+(200 ms) for packing and canonical final validation. If too little time remains,
+or the batch crosses its earlier cutoff, the read retains the prepared Memories
+without their dates. The existing `diagnostics.stops.deadline` marks this
+omission; there is no new diagnostics or item key. Candidate preparation and
+packing retain their deadline checks. Raw search/preparation keeps its validated
+prefix and existing `coverage.raw:'partial'` behavior. Final canonical validation
+always runs to completion for every selected Memory/Card and checks its namespace,
+grants, forgetting, exclusion and suppression state. Its outcome determines
+delivery: failed validation refuses the result; elapsed time alone never drops
+validated items. No callback or await follows that authoritative validation.
