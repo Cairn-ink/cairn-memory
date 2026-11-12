@@ -1,5 +1,9 @@
 # Fresh six-type qualification pilot
 
+> Historical candidate-routing configuration: current recall uses the
+> [default recency keyset scan](../defaults.md) in every mode. The old
+> ID-prefix limit and candidate-policy constructor option no longer apply.
+
 Status: **terminal, non-halted, but mechanically incomplete and not scoreable
 as a paired comparison**. Generation, scoring, and aggregate accounting were
 reviewed after the one-shot run. This six-case observation is not a leaderboard

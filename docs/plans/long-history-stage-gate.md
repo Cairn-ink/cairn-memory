@@ -1,5 +1,11 @@
 # Long-history stage gate: capture, cold recall and answer evidence
 
+> Candidate discovery in this plan is superseded by the default recency keyset
+> scan in [defaults](../defaults.md): 1,024-row floor, fixed 400 ms budget,
+> 20,000-row cap and score/ID top-1,024 retention for all recall modes.
+> The former candidate-policy constructor option is removed. Historical
+> observations and other contracts below remain records of their original version.
+
 Status: acceptance frozen before implementation; offline development only.
 Base: `882fff3ce1ea2ee80975bcacfc9f1254d349b1b8` (includes #271 and SE-2).
 Worktree: `long-history-stage-gate`; branch: `test/long-history-stage-gate`.

@@ -3,12 +3,13 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
+import { installRecallScanClock } from '../testing/recall-scan-clock.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { openMemoryCore } from '../contract.mjs';
 import { openMemoryStore } from '../index.mjs';
 import { createMemoryRuntime } from '../runtime.mjs';
 import { createMockRecallModel } from '../testing/mock-recall-model.mjs';
-import { createQueryScore, QUERY_SCAN_LIMIT, QUERY_CANDIDATE_VERSION,
+import { createQueryScore, QUERY_CANDIDATES, QUERY_CANDIDATE_VERSION,
   SOURCE_QUERY_CANDIDATE_VERSION, SOURCE_QUERY_RECEIPT_LIMIT } from '../query-candidates.mjs';
 
 const ns = { ownerId: 'candidate-tests', scope: 'personal', projectId: null };
@@ -23,6 +24,7 @@ const rank = ({ input }) => ({ refs: input.candidates.slice(0, input.limit).map(
 })) });
 const workspaces = new WeakMap();
 function fixture(t, wanted = [], options = {}) {
+  installRecallScanClock(t);
   const workspace = createTestWorkspace(t, { prefix: 'cairn-query-candidates-' });
   workspaces.set(t, workspace);
   const path = join(workspace.path, 'memory.sqlite');
@@ -80,7 +82,8 @@ function seed(db, count, content = (i) => `Unrelated note ${i}`, state = () => '
 const recall = (core, query = 'Lantern', readSet = [ns]) => core.recall({ readSet, query, limit: 12 });
 
 test('distinct whole Unicode query runs score full bodies with stable literal semantics', () => {
-  assert.equal(QUERY_SCAN_LIMIT, 1024);
+  assert.equal(QUERY_CANDIDATES.top, 1024);
+  assert.equal(QUERY_CANDIDATES.scan, 20000);
   assert.ok(QUERY_CANDIDATE_VERSION);
   assert.equal(SOURCE_QUERY_CANDIDATE_VERSION, 'literal-current-memory-source-overlap-v1');
   assert.equal(SOURCE_QUERY_RECEIPT_LIMIT, 4);
@@ -410,15 +413,16 @@ test('current 1023/1024/1025 boundaries skip preceding and interleaved history/t
     const page = runtime.queryCandidateRows({ ...ns, projectId: '' }, {
       score: (body) => { scored.push(body); return score(body); }, memoryLabel: (body) => body,
     });
-    assert.equal(scored.length, Math.min(count, 1024));
-    assert.equal(scored.includes('Lantern surviving evidence'), count <= 1024);
+    assert.equal(scored.length, count);
+    assert.equal(scored.includes('Lantern surviving evidence'), true);
     assert.equal(page.rows.length, Math.min(count, 1024));
     assert.equal(page.scanExhausted, count <= 1024);
     const expected = Array.from({ length: Math.min(count, 1024) }, (_, i) => id(prefix + 3 * i + 1));
+    if (count === 1025) { expected.pop(); expected.push(id(target)); expected.sort(); }
     assert.deepEqual(page.rows.map(({ item }) => item.ref.memoryId).sort(), expected);
     const result = ok(await recall(f.core));
-    assert.deepEqual(result.memories.map(({ memory }) => memory.id), count <= 1024 ? [id(target)] : []);
-    if (count <= 1024) assert.equal(result.memories[0].receipts[0].excerpt, 'Lantern surviving evidence');
+    assert.deepEqual(result.memories.map(({ memory }) => memory.id), [id(target)]);
+    assert.equal(result.memories[0].receipts[0].excerpt, 'Lantern surviving evidence');
     assert.equal(result.coverage, 'budget_exhausted', 'candidate pages remain incomplete even when the current scan ends');
     assert.equal(result.namespaces[0].mapExhausted, false);
     assert.equal(f.model.calls.filter((call) => call.method === 'select').length, 2);
@@ -443,10 +447,10 @@ test('many retired records cannot starve a single current sourced target, includ
   const db = new DatabaseSync(f.path);
   workspaces.get(t).defer(() => db.close());
   const plan = db.prepare(`EXPLAIN QUERY PLAN SELECT id,revision,content,deleted,currentness
-    FROM memories INDEXED BY capture_current_memories
+    FROM memories INDEXED BY namespace_memories
     WHERE owner_id=? AND scope=? AND project_id=? AND deleted=0 AND currentness='current'
-    ORDER BY id LIMIT ?`).all(ns.ownerId, ns.scope, '', 1025);
-  assert.ok(plan.some(({ detail }) => detail.includes('SEARCH memories USING INDEX capture_current_memories')));
+    ORDER BY updated_at DESC,id ASC LIMIT ?`).all(ns.ownerId, ns.scope, '', 1025);
+  assert.ok(plan.some(({ detail }) => detail.includes('SEARCH memories USING INDEX namespace_memories')));
   assert.ok(plan.every(({ detail }) => !detail.includes('TEMP B-TREE')));
 });
 
@@ -466,12 +470,12 @@ test('projection-rejected current rows consume allowance and a current sentinel 
       return 1;
     };
     const result = ok(await recall(f.core));
-    assert.deepEqual(result.memories.map(({ memory }) => memory.id), target === 1024 ? [id(target)] : []);
-    assert.equal(result.coverage, 'budget_exhausted');
+    assert.deepEqual(result.memories.map(({ memory }) => memory.id), [id(target)]);
+    assert.equal(result.coverage, 'complete');
     assert.equal(f.model.calls.filter((call) => call.method === 'select').length, 1);
-    assert.equal(envelopes[0].exhausted, false);
+    assert.equal(envelopes[0].exhausted, true);
     assert.equal(envelopes[0].nextCursor, null);
-    assert.equal(envelopes[0].items.length, target === 1024 ? 1 : 0);
+    assert.equal(envelopes[0].items.length, 1);
   }
 });
 
@@ -661,7 +665,7 @@ test('candidate pages obey token packing as well as the 100 item ceiling', async
   assert.equal(result.coverage, 'budget_exhausted');
 });
 
-test('current scan scores at most 1024 bodies, excludes sentinel, and uses the partial namespace index', (t) => {
+test('recency scan scores all 1025 bodies, bounds receipts, and uses the namespace index', (t) => {
   const f = fixture(t);
   seed(f.db, 1025, (i) => `記憶 body ${i}`, () => 'current', i => `bounded base receipt ${i}`);
   const runtime = createMemoryRuntime({ path: f.path });
@@ -670,17 +674,17 @@ test('current scan scores at most 1024 bodies, excludes sentinel, and uses the p
   const page = runtime.queryCandidateRows({ ...ns, projectId: '' }, {
     score: (body) => { scored.push(body); return 0; }, memoryLabel: (body) => body,
   });
-  assert.equal(scored.length, 1024);
-  assert.equal(scored.at(-1), '記憶 body 1024');
-  assert.equal(scored.includes('記憶 body 1025'), false);
-  const expectedBytes = Array.from({ length: 1024 }, (_, i) => Buffer.byteLength(`記憶 body ${i + 1}`)).reduce((a, b) => a + b, 0);
+  assert.equal(scored.length, 1025);
+  assert.equal(scored.at(-1), '記憶 body 1');
+  assert.equal(scored.includes('記憶 body 1025'), true);
+  const expectedBytes = Array.from({ length: 1025 }, (_, i) => Buffer.byteLength(`記憶 body ${i + 1}`)).reduce((a, b) => a + b, 0);
   assert.equal(scored.reduce((sum, body) => sum + Buffer.byteLength(body), 0), expectedBytes);
   assert.equal(page.scanExhausted, false);
   const plan = f.db.prepare(`EXPLAIN QUERY PLAN SELECT id,revision,content,deleted,currentness
-    FROM memories INDEXED BY capture_current_memories
+    FROM memories INDEXED BY namespace_memories
     WHERE owner_id=? AND scope=? AND project_id=? AND deleted=0 AND currentness='current'
-    ORDER BY id LIMIT ?`).all(ns.ownerId, ns.scope, '', 1025);
-  assert.ok(plan.some(({ detail }) => detail.includes('SEARCH memories USING INDEX capture_current_memories')));
+    ORDER BY updated_at DESC,id ASC LIMIT ?`).all(ns.ownerId, ns.scope, '', 1025);
+  assert.ok(plan.some(({ detail }) => detail.includes('SEARCH memories USING INDEX namespace_memories')));
   assert.ok(plan.every(({ detail }) => !detail.includes('TEMP B-TREE')));
   const insert = f.db.prepare(`INSERT INTO receipts
     (id,memory_id,receipt_key,client,session_id,event_id,role,excerpt,created_at)
@@ -702,11 +706,11 @@ test('current scan scores at most 1024 bodies, excludes sentinel, and uses the p
     score: value => { if (!value.startsWith('記憶 body')) sourceScored.push(value); return 0; },
     memoryLabel: value => value, sourceReceiptLimit: SOURCE_QUERY_RECEIPT_LIMIT,
   });
-  assert.equal(sourceScored.length, 4096);
-  assert.equal(sourceScored.filter(value => value.startsWith('bounded base receipt')).length, 1024);
+  assert.equal(sourceScored.length, 4100);
+  assert.equal(sourceScored.filter(value => value.startsWith('bounded base receipt')).length, 1025);
   assert.equal(sourceScored.some(value => value.startsWith('fifth excluded receipt')), false);
   assert.ok(sourceScored.every(value => value.length <= 800));
-  const expectedSourceBytes = Array.from({ length: 1024 }, (_, offset) => offset + 1)
+  const expectedSourceBytes = Array.from({ length: 1025 }, (_, offset) => offset + 1)
     .flatMap(i => [`bounded base receipt ${i}`, ...Array.from({ length: 3 }, (_, offset) =>
       `bounded receipt ${offset + 1} for memory ${i}`)])
     .reduce((sum, value) => sum + Buffer.byteLength(value), 0);
@@ -721,10 +725,10 @@ test('current scan scores at most 1024 bodies, excludes sentinel, and uses the p
   // I/O, nor the auxiliary current-placement, projection and receipt lookup work.
 });
 
-test('missing current partial index fails closed before selection, including reopen', async (t) => {
+test('missing recency namespace index fails closed before selection, including reopen', async (t) => {
   const f = fixture(t);
   admit(f.core, 'Lantern private evidence');
-  f.db.exec('DROP INDEX capture_current_memories');
+  f.db.exec('DROP INDEX namespace_memories');
   const check = async (core) => {
     assert.deepEqual(await recall(core), { ok: false, error: { code: 'storage_error', retryable: false } });
     assert.equal(f.model.calls.length, 0);
@@ -736,7 +740,7 @@ test('missing current partial index fails closed before selection, including reo
   await check(reopened);
   const db = new DatabaseSync(f.path);
   workspaces.get(t).defer(() => db.close());
-  assert.equal(db.prepare("SELECT count(*) n FROM sqlite_master WHERE name='capture_current_memories'").get().n, 0);
+  assert.equal(db.prepare("SELECT count(*) n FROM sqlite_master WHERE name='namespace_memories'").get().n, 0);
 });
 
 test('stale or missing placement falls back to true unfiled and multiparent uses one real edge', async (t) => {

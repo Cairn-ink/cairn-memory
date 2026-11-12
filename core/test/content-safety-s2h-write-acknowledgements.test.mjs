@@ -297,6 +297,8 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // manager. Ordinary Raw capture reconstructs existing message/event/session
   // identities before journal registration. Pin these existing projections;
   // neither adds acknowledgement fields or changes the native write guard.
+  // Recall's recency keyset adds one private last-position id in the signed
+  // cursor boundary. It adds no writer acknowledgement or terminal exemption.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};

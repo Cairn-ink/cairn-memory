@@ -1,5 +1,11 @@
 # Real-model long-history feasibility pilot
 
+> Candidate discovery in this plan is superseded by the default recency keyset
+> scan in [defaults](../defaults.md): 1,024-row floor, fixed 400 ms budget,
+> 20,000-row cap and score/ID top-1,024 retention for all recall modes.
+> The former candidate-policy constructor option is removed. Historical
+> observations and other contracts below remain records of their original version.
+
 Status: one-shot real-model diagnostic completed; public
 [result report](../evidence/long-history-live-pilot.md) drafted, final report
 review and delivery pending. Frozen runtime/fixture commit:
