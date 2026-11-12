@@ -1,4 +1,7 @@
 import { withRawSearchRequestScope } from '../../core/raw-search-request-scope.mjs';
+import { withContextReadBudgetScope } from '../../core/context-read-budget.mjs';
+import { withContextReadRankingPartition } from '../../core/context-read-facade.mjs';
+import { createLocalAuthorityRouter } from './local-authority-router.mjs';
 import { contextOptions } from '../../core/context-read-input.mjs';
 import { cardCurrentHostConfiguration } from './card-current-configuration.mjs';
 import { registerCardCurrentTools } from './card-current-tools.mjs';
@@ -70,6 +73,14 @@ async function classifyUnfiledMemories({ core, namespace, model, refs }) {
 }
 
 export function createCairnServer(options = {}) {
+  const runtime = createLocalCairnRuntime(options);
+  try { return runtime.server({ ownsRuntime: true }); }
+  catch (error) { void runtime.close(); throw error; }
+}
+
+/** Adapter-owned runtime. Connection factories never own its resources. */
+export function createLocalCairnRuntime(options = {}) {
+  const router = createLocalAuthorityRouter(), maintenanceKey = Object.freeze({});
   object(options, ['path', 'namespace', 'model', 'captureQualification', 'captureRationale',
     'captureEvidence', 'captureEvidenceAccess', 'sourceSnapshot', 'recallContext', 'classificationRecovery',
     'captureDeadlineMs', 'sessionEpisodesAccess', 'client', 'sessionId', 'readClient', 'sessionEpisodes', 'privateCards', 'methodPackages', 'methodReadPersonal',
@@ -78,7 +89,7 @@ export function createCairnServer(options = {}) {
     if (Object.hasOwn(options, name) && typeof options[name] !== 'boolean') throw Error('invalid_mcp_configuration');
   }
   if (Object.hasOwn(options, 'contextRead') && !['context-read-v1', false].includes(options.contextRead)) throw Error('invalid_mcp_configuration');
-  const { path, namespace, model } = options;
+  const { path, namespace } = options, model = router.protect(options.model);
   const contextConfigured = options.contextRead !== false;
   if (contextConfigured && options.contextRead !== undefined && options.contextRead !== 'context-read-v1' || Object.hasOwn(options,'contextReadPersonal') &&
       (!contextConfigured || options.contextReadPersonal !== true || namespace?.scope !== 'project') ||
@@ -153,12 +164,23 @@ export function createCairnServer(options = {}) {
   identifier(binding.ownerId);
   if (binding.scope === 'project') identifier(binding.projectId);
   else if (binding.scope !== 'personal' || binding.projectId !== null) throw new Error('invalid_mcp_configuration');
-  const cards = cardsConfigured ? createScopedCardAccess(binding, { actorId:'local-mcp-service', currentDependencies: cardCurrent, readSet: methodsConfigured && options.methodReadPersonal ? [{ ownerId: binding.ownerId, scope: 'personal', projectId: null }, binding] : [binding] }) : null;
-  const assets=assetsConfigured?createAssetReadAccess(binding):null;
-  const methods=methodsConfigured?createMethodReadAccess(binding,options.methodReadPersonal===true):null;
-  const context=contextConfigured?createContextReadAccess(binding,options.contextReadPersonal===true,
-    { maintenance:Boolean(options.contextEmbedding) && options.contextSemantic !== false || typeof model?.consolidate === 'function' }):null;
-  const roles = roleAttribution ? createRoleProfileAccess(binding, context.readSet, roleAttribution) : null;
+  const embedding = options.contextEmbedding ? { ...options.contextEmbedding, embedder: router.protect(options.contextEmbedding.embedder) } : undefined;
+  function authorities(maintenance = false) {
+    const cards = cardsConfigured ? createScopedCardAccess(binding, { actorId:'local-mcp-service', currentDependencies: cardCurrent, readSet: methodsConfigured && options.methodReadPersonal ? [{ ownerId: binding.ownerId, scope: 'personal', projectId: null }, binding] : [binding] }) : null;
+    const assets=assetsConfigured?createAssetReadAccess(binding):null;
+    const methods=methodsConfigured?createMethodReadAccess(binding,options.methodReadPersonal===true):null;
+    const context=contextConfigured?createContextReadAccess(binding,options.contextReadPersonal===true,
+      { refresh: maintenance }):null;
+    const roles = roleAttribution ? createRoleProfileAccess(binding, context.readSet, roleAttribution) : null;
+    const ports = { context: context?.configuration.authority, cards: cards?.configuration.authority,
+      methods: methods?.configuration.authority, roles: roles?.configuration.authority,
+      assets: assets ? (roles ? roleProfileAssetConfiguration(assets, roles) : assets.configuration).authority : undefined };
+    return { cards, methods, assets, context, roles, route: router.register(ports) };
+  }
+  const maintenance = authorities(true);
+  const { cards, methods, assets, context, roles } = maintenance;
+  const routed = (kind, configuration) => ({ ...configuration, authority: router.authority(kind) });
+  const inMaintenance = work => withContextReadBudgetScope(maintenanceKey, () => maintenance.route.run(work));
   // Programmatic hosts retain retrieval while their local tokenizer loads.
   let contextCounter = context ? options.contextCounter : null, contextCounterReady;
   if (context) {
@@ -174,34 +196,62 @@ export function createCairnServer(options = {}) {
   // The dated reader's optional Raw port is supplied by this owner boundary.
   // Older readers retain their existing grammar until that reader is installed.
   const rawSearch = context && options.raw !== false && options.rawSearch !== false && supportsRawContext()
-    ? createLocalRawSearch(path, defaultRawOptions().port,
-      options.contextSemantic === false ? undefined : options.contextEmbedding) : null;
+    ? inMaintenance(() => createLocalRawSearch(path, defaultRawOptions().port,
+      options.contextSemantic === false ? undefined : embedding)) : null;
   const rawPort = rawSearch?.contextPort(context.readSet);
-  const core = openMemoryCore({ path, model, raw: options.raw !== false, ...(options.rawSearch === false ? { rawSearch: false } : {}), ...(context?{contextRead:{...context.configuration,...(options.contextSemantic === false ? {} : options.contextEmbedding),counter:contextCounter,...(rawPort ? {rawSearch:rawPort} : {}),...(sources ? { sources } : {})}}:{}),
-    ...(roles ? { roleProfiles: roles.configuration } : {}),
-    ...(assets?{assets:roles ? roleProfileAssetConfiguration(assets, roles) : assets.configuration}:{}),
-    ...(methods?{methodPackages:methods.configuration}:{}), ...(cards ? { privateCards: cards.configuration } : {}),
+  const core = inMaintenance(() => openMemoryCore({ path, model, raw: options.raw !== false, ...(options.rawSearch === false ? { rawSearch: false } : {}), ...(context?{contextRead:{...routed('context', context.configuration),...(options.contextSemantic === false ? {} : embedding),counter:contextCounter,...(rawPort ? {rawSearch:rawPort} : {}),...(sources ? { sources } : {})}}:{}),
+    ...(roles ? { roleProfiles: routed('roles', roles.configuration) } : {}),
+    ...(assets?{assets:routed('assets', roles ? roleProfileAssetConfiguration(assets, roles) : assets.configuration)}:{}),
+    ...(methods?{methodPackages:routed('methods', methods.configuration)}:{}), ...(cards ? { privateCards: routed('cards', cards.configuration) } : {}),
     ...(configured ? { captureQualification } : {}),
     ...(deadlineConfigured ? { captureDeadlineMs } : {}),
     ...(rationaleConfigured ? { captureRationale: options.captureRationale } : {}),
-    ...(stagingConfigured ? { captureEvidence: options.captureEvidence } : {}) });
-  const server = buildCairnServer({ path, model, binding, cards, methods, assets, context, roles, core, client, sessionId, captureSessionId, readClient,
+    ...(stagingConfigured ? { captureEvidence: options.captureEvidence } : {}) }));
+  let closed = false, disposed = false, closing;
+  const refresh = inMaintenance(() => (context && Boolean(options.contextEmbedding) && options.contextSemantic !== false || typeof model?.consolidate === 'function')
+    ? startContextMaintenance(maintenance.route.core(core), context ?? { readSet: [binding] },
+      { cards: typeof model?.consolidate === 'function', semantic: Boolean(options.contextEmbedding) && options.contextSemantic !== false }) : null);
+  if (rawSearch) inMaintenance(() => rawSearch.start());
+  else if (core.getRawSearchStatus) inMaintenance(() => { void core.getRawSearchStatus({ namespace: binding }); });
+  const hasRawManager = Boolean(rawSearch || core.maintainRawSearch);
+  function close() {
+    if (closing) return closing;
+    closed = true; maintenance.route.revoke();
+    for (const port of [cards, methods, assets, context, roles]) port?.revoke();
+    return closing = Promise.resolve(refresh?.close()).then(() => core.close()).then(() => { disposed = true; });
+  }
+  return {
+    close,
+    ready: contextCounterReady ?? Promise.resolve(true),
+    inspect: () => ({ state: disposed ? 'closed' : closed ? 'closing' : 'active', cores: disposed ? 0 : 1,
+      rawManagers: !disposed && hasRawManager ? 1 : 0, rawMaintenanceTimers: !disposed && hasRawManager && path !== ':memory:' ? 1 : 0,
+      refreshers: !disposed && refresh ? 1 : 0 }),
+    server({ ownsRuntime = false, key = Object.freeze({}), lifecycle = {} } = {}) {
+      if (closed) throw Error('local_runtime_closed');
+      const connection = authorities();
+      const { cards, methods, assets, context, roles } = connection;
+      const server = buildCairnServer({ path, model, binding, cards, methods, assets, context, roles, core: connection.route.core(core), client, sessionId, captureSessionId, readClient,
     episodesAccess, configured, rationaleConfigured, evidenceAccess, snapshotConfigured,
-    recallContextConfigured, recallContext, recoveryConfigured, stagingConfigured, contextSemantic: Boolean(options.contextEmbedding) && options.contextSemantic !== false, ...(sources ? { contextReadSources: sources } : {}) });
-  if (rawSearch) rawSearch.start();
-  else if (core.getRawSearchStatus) void core.getRawSearchStatus({ namespace: binding });
-  if (context) Object.defineProperty(server, 'contextCounterReady', { value: contextCounterReady });
-  return server;
+    recallContextConfigured, recallContext, recoveryConfigured, stagingConfigured, contextSemantic: Boolean(options.contextEmbedding) && options.contextSemantic !== false, ...(sources ? { contextReadSources: sources } : {}), ownsCore: false, maintenance: false,
+      lifecycle: { ...lifecycle, run(work) {
+        const invoke = () => withContextReadBudgetScope(key, () => withContextReadRankingPartition(key, () => connection.route.run(work)));
+        return lifecycle.run ? lifecycle.run(invoke) : invoke();
+      }, revoke() { connection.route.revoke(); lifecycle.revoke?.(); },
+      dispose() { lifecycle.dispose?.(); if (ownsRuntime) return close(); } } });
+      if (context) Object.defineProperty(server, 'contextCounterReady', { value: contextCounterReady });
+      return server;
+    },
+  };
 }
 
 /** Internal registration seam; public constructors never accept a core override. */
 export function buildCairnServer({ path, model, binding, cards, methods, assets, context, roles, core, client, sessionId, captureSessionId, readClient,
   episodesAccess = false, configured = false, rationaleConfigured = false, evidenceAccess = false,
   snapshotConfigured = false, recallContextConfigured = false, recallContext, recoveryConfigured = false,
-  stagingConfigured = false, contextSemantic = false, retainedRaw = false, contextReadSources: sources }) {
+  stagingConfigured = false, contextSemantic = false, retainedRaw = false, contextReadSources: sources, ownsCore = true, maintenance = true, lifecycle = {} }) {
   let disposed = false, disposing;
   const rawRequests = new Set();
-  const refresh = (context && contextSemantic || typeof model?.consolidate === 'function')
+  const refresh = maintenance && (context && contextSemantic || typeof model?.consolidate === 'function')
     ? startContextMaintenance(core, context ?? { readSet: [binding] }, { cards: typeof model?.consolidate === 'function', semantic: contextSemantic }) : null;
   const dispose = () => {
     if (disposed) return disposing;
@@ -212,7 +262,8 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
     assets?.revoke();
     context?.revoke();
     roles?.revoke();
-    disposing = Promise.resolve(refresh?.close()).then(() => core.close());
+    lifecycle.revoke?.();
+    disposing = Promise.resolve(refresh?.close()).then(() => ownsCore ? core.close() : lifecycle.dispose?.());
     return disposing;
   };
   try {
@@ -268,17 +319,25 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
     assets?.revoke();
     context?.revoke();
     roles?.revoke();
+    lifecycle.revoke?.();
     try { await close(); } finally { await dispose(); }
   };
+  const registerTool = (name, configuration, handler) => server.registerTool(name, configuration,
+    (input, extra) => (lifecycle.run ?? (work => work()))(() => handler(input, extra)));
   const tool = (name, description, inputSchema, action, readOnlyHint = false, destructiveHint = false) => {
-    server.registerTool(name, { description, inputSchema,
+    registerTool(name, { description, inputSchema,
       annotations: { readOnlyHint, destructiveHint,
         openWorldHint: ['recall_memory', 'capture_memory', 'classify_unfiled_memories', 'keep_session_episode', 'find_memory_candidates', 'read_memory_context'].includes(name) } },
     (input, extra) => withRawSearchRequestScope(async scope => {
       rawRequests.add(scope);
       try {
       let result;
-      try { result = await action(input); } catch { result = error('memory_operation_failed'); }
+      try {
+        const unwrapped = context && CONTEXT_TOOL_NAMES.includes(name) && lifecycle.continuations ? lifecycle.continuations.unwrap(input) : { input };
+        result = lifecycle.closed?.() ? error('authority_required') : unwrapped.error ?? await action(unwrapped.input);
+        if (lifecycle.closed?.()) result = error('authority_required');
+        if (context && CONTEXT_TOOL_NAMES.includes(name) && lifecycle.continuations) result = lifecycle.continuations.wrap(result);
+      } catch { result = error('memory_operation_failed'); }
       if (roles && name === 'read_role_task_context') return roleTaskToolResponse(result);
       if(context&&CONTEXT_TOOL_NAMES.includes(name))return (sources ? contextSourcesToolResponse : contextToolResponse)(result, { assembly: name === 'read_memory_context' });
       const methodTool=methods&&METHOD_TOOL_NAMES.includes(name)||assets&&ASSET_TOOL_NAMES.includes(name);
