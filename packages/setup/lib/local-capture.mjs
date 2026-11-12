@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, open, rename, lstat, readdir, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { boundedJSON, canonicalPath, executableFor, ownedDirectory, validPath, engineIdPattern, pidIsDead } from './local-descriptor.mjs';
+import { boundedJSON, canonicalPath, executableFor, ownedDirectory, localFilesystemError, validPath, engineIdPattern, pidIsDead } from './local-descriptor.mjs';
 import { SetupError } from './errors.mjs';
 
 export const RAW_CAP = 200000000;
@@ -73,6 +73,23 @@ async function directory(path) {
   await ownedDirectory(path);
   if (await canonicalPath(path) !== path) fail();
 }
+// Client-owned configuration can be readable by others, but never writable.
+export async function claudeConfigDirectory(env, { create = false } = {}) {
+  const path = env.CLAUDE_CONFIG_DIR ?? join(await canonicalPath(env.HOME), '.claude');
+  try {
+    if (await canonicalPath(path) !== path) throw new SetupError('local_root_invalid', 2);
+    if (create) await mkdir(path, { recursive: true, mode: 0o700 });
+    let stat;
+    try { stat = await lstat(path); }
+    catch (error) { if (!create && error.code === 'ENOENT') return path; throw error; }
+    if (!stat.isDirectory() || stat.isSymbolicLink() || (stat.mode & 0o022) ||
+        (process.getuid && stat.uid !== process.getuid())) {
+      throw new SetupError('local_root_invalid', 2, { code: 'insecure_directory' });
+    }
+    if (await canonicalPath(path) !== path) throw new SetupError('local_root_invalid', 2);
+    return path;
+  } catch (error) { throw localFilesystemError(error, 'local_root_invalid'); }
+}
 // Output is a bounded content-free engine DTO, never a child diagnostic. Kill
 // the process group so a timed-out format probe cannot leave a schema child.
 export async function engineChild(node, args, { env = process.env, onChild = async () => {}, timeout = 170000 } = {}) {
@@ -111,9 +128,9 @@ async function qualification(root, receipt, context) {
 }
 async function requestFor(root, descriptor, client, receipt, context) {
   const home = await canonicalPath(context.env.HOME);
-  const nativeHome = client === 'claude' ? await canonicalPath(context.env.CLAUDE_CONFIG_DIR ?? join(home, '.claude')) :
+  const nativeHome = client === 'claude' ? await claudeConfigDirectory(context.env, { create: true }) :
     await canonicalPath(context.env.CODEX_HOME ?? join(home, '.codex'));
-  await directory(nativeHome);
+  if (client === 'codex') await directory(nativeHome);
   const sourceRoot = join(nativeHome, client === 'claude' ? 'projects' : 'sessions');
   await mkdir(sourceRoot, { recursive: true, mode: 0o700 });
   if (await canonicalPath(sourceRoot) !== sourceRoot) fail(); // The engine validates source ownership/mode.
@@ -152,6 +169,7 @@ export async function configureCapture(root, descriptor, selected, context, { en
   for (const client of selected) {
     let receipt = settings.clients[client];
     if (!receipt && uninstall) continue;
+    if (client === 'claude' && !uninstall && (enabled ?? receipt?.enabled ?? true)) await claudeConfigDirectory(context.env);
     receipt ??= settings.clients[client] = { enabled: true, noticed: false, engineId: descriptor.engine.id, node: descriptor.node };
     if (enabled !== undefined) receipt.enabled = enabled;
     // Uninstall disables without changing the user's retained setup preference.

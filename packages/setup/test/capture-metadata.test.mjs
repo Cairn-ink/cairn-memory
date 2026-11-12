@@ -188,3 +188,45 @@ for (const client of ['claude', 'codex']) test(`${client} final capture request 
     assert.equal(f.output.join('\n').includes(forbidden), false);
   }
 });
+
+for (const custom of [false, true]) for (const mode of [0o700, 0o750, 0o755]) test(`Claude client directory accepts mode ${mode.toString(8)} without chmod (custom=${custom})`, async t => {
+  const f = await fixture(t), path = join(f.home, custom ? 'claude-config' : '.claude');
+  if (custom) f.env.CLAUDE_CONFIG_DIR = path;
+  await mkdir(path, { mode }); await chmod(path, mode);
+  await f.configure();
+  assert.equal((await lstat(path)).mode & 0o777, mode);
+  assert.ok(f.output.includes('local_capture_status'));
+});
+
+test('Codex client directory still requires mode 0700', async t => {
+  const f = await fixture(t), path = join(f.home, '.codex');
+  await mkdir(path, { mode: 0o755 }); await chmod(path, 0o755);
+  await assert.rejects(f.configure('codex'), { key: 'local_root_invalid', code: 2 });
+  assert.equal((await lstat(path)).mode & 0o777, 0o755);
+});
+
+for (const leaf of ['capture', 'capture-usage', 'capture-support', 'capture-support/claude']) test(`private ${leaf} still requires mode 0700`, async t => {
+  const f = await fixture(t), path = join(f.root, leaf);
+  await mkdir(path, { recursive: true, mode: 0o700 }); await chmod(path, 0o755);
+  await assert.rejects(f.configure(), { key: 'local_root_invalid', code: 2 });
+  assert.equal((await lstat(path)).mode & 0o777, 0o755);
+  await assert.rejects(lstat(join(f.root, 'capture-claude-request.json')), { code: 'ENOENT' });
+});
+
+for (const client of ['claude-code', 'codex']) for (const mode of [0o700, 0o755]) test(`${client} native settings snapshot/write directory mode ${mode.toString(8)}`, async t => {
+  const { nativeSnapshot, nativeWrite } = await import('../../../integrations/client/raw/local-setup-files.mjs');
+  const f = await fixture(t), directory = join(f.home, 'client-config'), path = join(directory, 'settings.json');
+  await mkdir(directory, { mode }); await chmod(directory, mode);
+  await writeFile(path, '{}\n', { mode: 0o600 });
+  if (client === 'codex' && mode !== 0o700) {
+    await assert.rejects(nativeSnapshot(path, client), { reason: 'unsafe_path' });
+    await assert.rejects(nativeSnapshot(path), { reason: 'unsafe_path' });
+    assert.equal(await readFile(path, 'utf8'), '{}\n');
+  } else {
+    const before = await nativeSnapshot(path, client), text = '{"hooks":{}}\n';
+    await nativeWrite(path, text, before, client);
+    assert.equal((await nativeSnapshot(path, client)).text, text);
+    assert.equal((await lstat(path)).mode & 0o777, 0o600);
+  }
+  assert.equal((await lstat(directory)).mode & 0o777, mode);
+});

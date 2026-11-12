@@ -92,6 +92,9 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
     import{SetupError}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/errors.mjs')).href)};
     const mkdtemp=fsPromises.mkdtemp;fsPromises.mkdtemp=(path,...args)=>{if(String(path).startsWith('/tmp/cairn-codex-inspect-'))throw Object.assign(new Error('unowned inspection parent'),{code:'EACCES'});return mkdtemp(path,...args);};syncBuiltinESMExports();
     const config=JSON.parse(process.env.LOCAL_TEST_OPTIONS),answers=config.answers??[];
+    if(config.foreignClaudeOwner){const original=fsPromises.lstat;fsPromises.lstat=async(path,...args)=>{
+      const stat=await original(path,...args);if(path===process.env.HOME+'/.claude')Object.defineProperty(stat,'uid',{value:process.getuid()+1});return stat;
+    };syncBuiltinESMExports();}
     const output=line=>writeSync(1,String(line)+'\\n');
     output.literal=line=>{for(const part of String(line).split('\\n'))writeSync(1,JSON.stringify({literal:part})+'\\n');};
     const answer=async q=>{output(JSON.stringify({prompt:q}));
@@ -163,6 +166,86 @@ async function seed(f, { state = 'installed', selected = ['claude', 'codex'], re
   }
   return { d, vector };
 }
+
+// Use the unpacked setup fixture so these cases never need to pack a release.
+for (const mode of [0o700, 0o750, 0o755, null]) test(`Claude config directory ${mode === null ? 'missing' : mode.toString(8)} installs capture without chmod`, async t => {
+  if (!needCache(t)) return;
+  const f = await localFixture(t, { codex: false }), config = join(f.home, '.claude');
+  if (mode !== null) { await mkdir(config, { mode }); await chmod(config, mode); }
+  const run = async args => {
+    const result = await f.run(args);
+    t.diagnostic(`${args.join(' ')} exit ${result.code}`);
+    assert.equal(result.code, 0, result.display + result.stderr);
+    return result;
+  };
+  const result = await run(['setup', '--local', '--client', 'claude']);
+  assert.match(result.display, /Claude Code local capture: on/);
+  assert.equal((await lstat(config)).mode & 0o777, mode ?? 0o700);
+  const settings = await json(join(config, 'settings.json'));
+  assert.deepEqual(Object.keys(settings.hooks).sort(), ['PreCompact', 'SessionStart', 'Stop']);
+  const { hookCommand } = await import('../../../integrations/client/raw/local-setup-files.mjs');
+  for (const event of ['SessionStart', 'Stop', 'PreCompact']) {
+    assert.deepEqual(settings.hooks[event], [{ hooks: [{ type: 'command',
+      command: hookCommand(join(f.root, 'capture/claude'), event).replace(
+        fileURLToPath(new URL('../../../', import.meta.url)).replace(/\/$/, ''),
+        join(f.root, 'engine', (await f.descriptor()).engine.id, 'app/node_modules/cairn-memory-local-preview')),
+      timeout: 160 }] }]);
+  }
+  for (const directory of ['', 'capture', 'capture/claude', 'capture-usage', 'capture-support', 'capture-support/claude']) {
+    assert.equal((await lstat(join(f.root, directory))).mode & 0o777, 0o700, directory);
+  }
+  const before = await readFile(join(config, 'settings.json'), 'utf8');
+  await run(['setup', '--local', '--client', 'claude']);
+  assert.equal(await readFile(join(config, 'settings.json'), 'utf8'), before);
+  assert.match((await run(['status', '--client', 'claude'])).display, /Claude Code local capture: on/);
+  if (mode === 0o755) {
+    assert.match((await run(['config', '--local-capture', 'off', '--client', 'claude'])).display, /Claude Code local capture: off/);
+    assert.deepEqual((await json(join(config, 'settings.json'))).hooks, {});
+    assert.match((await run(['config', '--local-capture', 'on', '--client', 'claude'])).display, /Claude Code local capture: on/);
+    assert.equal(await readFile(join(config, 'settings.json'), 'utf8'), before);
+    await run(['uninstall', '--local', '--client', 'claude', '--yes']);
+    assert.deepEqual((await json(join(config, 'settings.json'))).hooks, {});
+  }
+  assert.equal((await lstat(config)).mode & 0o777, mode ?? 0o700);
+});
+
+for (const unsafe of ['775', '777', 'symlink', 'symlink-component', 'file', 'foreign-owner', 'private-root']) test(`Claude unsafe directory ${unsafe} refuses before setup writes`, async t => {
+  const f = await localFixture(t, { codex: false }), config = join(f.home, '.claude');
+  let inventory;
+  if (unsafe === 'private-root') { await mkdir(f.root, { mode: 0o755 }); await chmod(f.root, 0o755); }
+  else if (unsafe === 'file') await writeFile(config, 'synthetic sentinel', { mode: 0o600 });
+  else if (unsafe.startsWith('symlink')) {
+    const target = join(f.home, 'client-config'); await mkdir(target, { mode: 0o700 });
+    if (unsafe === 'symlink') await symlink(target, config);
+    else {
+      const alias = join(f.home, 'alias'); await symlink(target, alias);
+      await mkdir(join(target, 'config'), { mode: 0o700 });
+      f.env.CLAUDE_CONFIG_DIR = join(alias, 'config');
+    }
+  } else {
+    await mkdir(config, { mode: 0o700 });
+    await writeFile(join(config, 'settings.json'), '{"synthetic":"unchanged"}\n', { mode: 0o600 });
+    if (unsafe !== 'foreign-owner') await chmod(config, parseInt(unsafe, 8));
+  }
+  // Inventory records symlinks themselves; it never follows them.
+  async function snapshot(path) {
+    const result = {};
+    for (const entry of await readdir(path, { withFileTypes: true })) {
+      const child = join(path, entry.name), stat = await lstat(child);
+      result[entry.name] = { mode: stat.mode, uid: stat.uid,
+        value: entry.isSymbolicLink() ? await fsPromises.readlink(child) :
+          entry.isDirectory() ? await snapshot(child) : await readFile(child, 'utf8') };
+    }
+    return result;
+  }
+  inventory = await snapshot(f.home);
+  const result = await f.run(['setup', '--local', '--client', 'claude'], { foreignClaudeOwner: unsafe === 'foreign-owner' });
+  t.diagnostic(`unsafe ${unsafe} setup exit ${result.code}`);
+  assert.equal(result.code, 2, result.display + result.stderr);
+  assert.match(result.display, /The local memory directory is unsafe/);
+  assert.deepEqual(await snapshot(f.home), inventory);
+  assert.equal((await f.calls('claude')).some(args => args[0] === 'mcp' && args[1] === 'add'), false);
+});
 
 test('descriptor strict JSON, exact keys, bounds, vectors and published references', async t => {
   const f = await localFixture(t), { d, vector } = await seed(f, { state: 'pending', register: false });
