@@ -622,8 +622,8 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  function admissionItems(input, episode = false) {
-    return denseArray(input, 0, 5).map((item) => {
+  function admissionItems(input, episode = false, limit = 5) {
+    return denseArray(input, 0, limit).map((item) => {
       object(item, ['content', 'kind', 'confidence', 'receipts', 'conflictHints', 'qualification', ...(episode ? ['procedural'] : [])]);
       if (typeof item.confidence !== 'number' || !Number.isFinite(item.confidence) ||
           item.confidence < 0 || item.confidence > 1) throw new MemoryStoreError('invalid_input');
@@ -644,7 +644,7 @@ export function createMemoryCore(input, internal) {
       const ns = contractNamespace(input.namespace);
       const key = admissionKey(input);
       const token = contractId(input.token);
-      const items = admissionItems(input.items, captureInitial && Boolean(sessionEpisodes));
+      const items = admissionItems(input.items, captureInitial && Boolean(sessionEpisodes), captureInitial ? 20 : 5);
       return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items }, deadline, qualifiedDuplicates) :
         runtime.finishAdmission(ns, { ...key, token, items });
     });
@@ -675,7 +675,7 @@ export function createMemoryCore(input, internal) {
       runtime.ready();
       const ns = contractNamespace(input.namespace);
       const key = admissionKey(input);
-      const proposal = placementProposal(input.proposal);
+      const proposal = placementProposal(input.proposal, undefined, 20);
       const guards = memoryGuards(input.expectedMemoryRevisions,
         proposal.items.map(item => item.memoryId));
       return runtime.applyInitialPlacement(ns, key, contractId(input.token), proposal, guards,
@@ -735,16 +735,18 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  function applyPlacement(input) {
+  function applyPlacementValidated(input, limit) {
     return invoke(() => {
       runtime.ready();
       object(input, ['namespace', 'proposal', 'expectedMemoryRevisions', 'expectedIndexRevision']);
       const ns = contractNamespace(input.namespace);
-      const proposal = placementProposal(input.proposal);
+      const proposal = placementProposal(input.proposal, undefined, limit);
       const guards = memoryGuards(input.expectedMemoryRevisions, proposal.items.map((item) => item.memoryId));
       return runtime.applyPlacement(ns, proposal, guards, contractRevision(input.expectedIndexRevision));
     });
   }
+
+  function applyPlacement(input) { return applyPlacementValidated(input, 5); }
 
   function linkMocs(input) {
     return invoke(() => {
@@ -1108,14 +1110,14 @@ export function createMemoryCore(input, internal) {
             runtime.assertEpoch(ns, page.epoch, page.suppressionEpoch);
             return { refs: found.slice(0, 6), scanExhausted: page.scanExhausted, candidatesTruncated: found.length > 6 };
           }),
-          classifyPlacement: value => classifyPlacementValidated(value, deadline), applyPlacement,
+          classifyPlacement: value => classifyPlacementValidated(value, deadline), applyPlacement: value => applyPlacementValidated(value, 20),
           ordered: {
             claim: (snapshot, sources) => invoke(() => runtime.claimOrdered(ns, snapshot, deadline, rawRegistration, sources)),
             prepare(snapshot, order, extracted) {
               return invoke(() => {
                 const items = admissionItems(extracted.map(({ sourceIndices, receiptTimes, ...item }) =>
                   receiptTimes ? { ...item, receipts: item.receipts.map((receipt, index) =>
-                    ({ ...receipt, occurredAt: receiptTimes[index] })) } : item));
+                    ({ ...receipt, occurredAt: receiptTimes[index] })) } : item), false, 20);
                 return { items, discovery: runtime.discoverOrdered(ns, snapshot, order, items) };
               });
             },

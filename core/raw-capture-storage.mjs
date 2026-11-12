@@ -1,3 +1,4 @@
+import { capturedSuppressedCount } from './admission-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety } from './content-safety.mjs';
 import { createHash } from 'node:crypto';
@@ -208,7 +209,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
             !ordered.reconciliation) fail('capture_order_conflict');
         reconciliation = JSON.parse(ordered.reconciliation);
       }
-      const memoryIds = JSON.parse(admission.memory_ids), suppressedCount = admission.suppressed_count;
+      const memoryIds = JSON.parse(admission.memory_ids), suppressedCount = capturedSuppressedCount(db, input.namespace, input, admission);
       if(cachedContentLayout(db)?.suppressionRevision)for(const memoryId of memoryIds){
         const row=db.prepare('SELECT revision FROM memories WHERE id=?').get(memoryId);
         if(!row||!contentReadSafety(db,{namespace:input.namespace,ref:{type:'memory',namespace:input.namespace,memoryId,revision:row.revision},intent:'history'}).allowed)fail('memory_suppressed');
