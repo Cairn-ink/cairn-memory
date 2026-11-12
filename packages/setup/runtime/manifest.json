@@ -16,7 +16,7 @@
     "integrations/client/recall-query.mjs": "87d606696185da8c0455889c9cf359116f82f70b3a92a1153629026b5406f765",
     "integrations/client/redact.mjs": "f4bcfdc8edd177060b62a75f9dbc229443328eb822e40d814f0a48684c253f88",
     "integrations/client/runtime-usage.mjs": "8bf732bb36664b33aa238a40903986b16c112a44829412c32a11b01dcad08d4d",
-    "integrations/client/state-lock.mjs": "a838890c11c0952b07cca82a35444c5eabf4b9990152bd1425a6bc10be04e8f8",
+    "integrations/client/state-lock.mjs": "ee4bc6161d97bac44a8dc34a2058ed48e3dbbfeb105e32f6e66590b883b29b58",
     "integrations/client/transport-hosted.mjs": "5b62b4fac2d2c9b6bc21195b867bcd821b7866b327d0ba2436df7bcbbb957be4",
     "integrations/codex/context.mjs": "e3bb925f6f3d5ad81414ace302bf7f6cc16d235a785a0c68e39703809f992a1a",
     "integrations/codex/cursor.mjs": "d7f19621809e89c1b0a1420c08a358f19f4c1471e3cbeadf8b2789cd672c3e8b",
