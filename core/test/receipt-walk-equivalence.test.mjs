@@ -3,15 +3,16 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { transaction } from '../database.mjs';
 import { installedContentLayout } from '../content-safety-schema.mjs';
-import { createRawLineageStorage, isSourceSnapshotOverflow } from '../raw-lineage-storage.mjs';
+import { createRawLineageStorage as patchedReceiptWalk, isSourceSnapshotOverflow } from '../raw-lineage-storage.mjs';
 import { createLegacyReceiptWalk, isSourceSnapshotOverflow as legacyOverflow } from '../testing/receipt-walk-reference.mjs';
 import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import { eventTimeSafetyFixture } from '../testing/receipt-event-time-fixture.mjs';
 import { writeContentSuppressionInside, withContentSuppressionRequest, contentSuppressionRequestInside } from '../content-suppression-storage.mjs';
 
+const createRawLineageStorage=process.env.RECEIPT_WALK_BASELINE==='1'?createLegacyReceiptWalk:patchedReceiptWalk;
 const ns={ownerId:'synthetic-owner',scope:'project',projectId:'synthetic-project'};
 // The final seed was randomly drawn once and retained for replay.
-const seeds=[1,0x12345678,0xdeadbeef,0xffffffff,0xa577354];
+const seeds=[1,0x12345678,0xdeadbeef,0xffffffff,173503316,3104539138,3606551382];
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const receipt=i=>({client:'synthetic',sessionId:'session-'+i,eventId:'event-'+i,role:'user',excerpt:i===0?'':'Synthetic excerpt '+i});
 const decide=work=>{try{work();return 'accept';}catch(error){assert.equal(typeof error.code,'string');return error.code;}};
@@ -81,6 +82,82 @@ for(const layout of [18,53])for(const seed of seeds)test(`receipt walk equivalen
       sources.push(source);
     }
   });
+  const adversarial=[];
+  transaction(db,()=>{
+    for(const field of ['client','sessionId','eventId','excerpt'])for(const value of
+      ['\ud800','\udfff','\uFFFD','\0x','l\0r','x\0','e\u0301','é','\u{1f680}','trailing ','Case','case','','\uFEFFbom']) {
+      const incoming={...receipt('unicode-'+adversarial.length),[field]:value};
+      const stored=add(incoming,'deleted');
+      const row=db.prepare('SELECT * FROM receipts WHERE id=?').get(stored.rid);
+      const readBack={client:row.client,sessionId:row.session_id,eventId:row.event_id,role:row.role,excerpt:row.excerpt};
+      assert.ok(!/[\ud800-\udfff]/u.test(readBack[field]),'stored text has no lone surrogate');
+      adversarial.push({field,value,incoming,readBack});
+    }
+  });
+  // Source bytes remain adversarial; paging keys are valid NUL-free UTF-8.
+  // Engine writers use UUID ids and ISO timestamps (pinned by the contract test).
+  transaction(db,()=>{
+    const columns={client:'client',sessionId:'session_id',eventId:'event_id',excerpt:'excerpt'};
+    for(const [field,column] of Object.entries(columns))for(const hex of ['80','E282','C0AF','FF']) {
+      const incoming={...receipt('invalid-'+adversarial.length),[field]:'placeholder'};
+      const stored=add(incoming,'deleted');
+      db.prepare(`UPDATE receipts SET ${column}=CAST(x'${hex}' AS TEXT) WHERE id=?`).run(stored.rid);
+      const row=db.prepare('SELECT * FROM receipts WHERE id=?').get(stored.rid);
+      const readBack={client:row.client,sessionId:row.session_id,eventId:row.event_id,role:row.role,excerpt:row.excerpt};
+      assert.ok(readBack[field].includes('\uFFFD'));
+      adversarial.push({field,value:'invalid UTF-8 '+hex,incoming:readBack,readBack});
+    }
+  });
+  const roleRefusals=[];
+  for(const role of ['\ud800','\udfff','user\0suffix','u\u0301ser','úser','\u{1f680}','user ','User','']) {
+    const incoming={...receipt('role-near'),role};
+    const attempt=storage=>transaction(db,()=>decide(()=>{
+      // The engine rejects these stored roles before either validator runs.
+      db.prepare('UPDATE receipts SET role=? WHERE id=?').run(role,rows[0].rid);
+      storage.assertReceipts(ns,[incoming]);
+    }));
+    roleRefusals.push({incoming,attempt});
+  }
+  const interleaved=[];
+  transaction(db,()=>{
+    for(const badIndex of [-1,4,8,12,20]) {
+      const parent=add(receipt('interleaved-parent-'+badIndex)),batch=[];
+      for(let i=0;i<43;i++) {
+        const source=receipt('interleaved-'+badIndex+'-'+i),matching=i%2===0;
+        if(matching)batch.push(source);
+        const key=matching&&batch.length-1===badIndex?'invalid-witness-key':digest(source);
+        db.prepare(`INSERT INTO receipts(id,memory_id,receipt_key,client,session_id,event_id,role,excerpt,created_at)
+          VALUES(?,?,?,?,?,?,?,?,?)`).run('interleaved-'+badIndex+'-'+String(i).padStart(3,'0'),parent.id,key,
+            source.client,source.sessionId,source.eventId,source.role,source.excerpt,'same-created-at');
+      }
+      interleaved.push({badIndex,batch});
+    }
+  });
+  const collisionCases=[];
+  transaction(db,()=>{
+    // Memory ids remain inside the equivalence domain even when decoding is
+    // many-to-one. Only receipt cursor keys must round-trip through the driver.
+    for(const kind of ['invalid','NUL'])for(let group=0;group<6;group++) {
+      const prefix='collision-'+kind+'-'+group+'-',good=prefix+(kind==='invalid'?'\uFFFD':'');
+      const revision=1+rnd(3),deleted=rnd(2),source=receipt('collision-source-'+kind+'-'+group);
+      const count=1+rnd(12),batch=[];
+      const insert=db.prepare(`INSERT INTO memories(id,owner_id,scope,project_id,fingerprint,content,kind,origin,confidence,revision,deleted,created_at,updated_at)
+        VALUES(?,?,?,?,?,?,'fact','explicit',1,?,?, 'time','time')`);
+      insert.run(good,ns.ownerId,ns.scope,ns.projectId,good,deleted?null:'Synthetic',revision,deleted);
+      const raw=Buffer.concat([Buffer.from(prefix),Buffer.from(kind==='invalid'?[0x80]:[0,0x78])]).toString('hex');
+      db.prepare(`INSERT INTO memories(id,owner_id,scope,project_id,fingerprint,content,kind,origin,confidence,revision,deleted,created_at,updated_at)
+        VALUES(CAST(x'${raw}' AS TEXT),?,?,?,?,'Synthetic','fact','explicit',1,?,0,'time','time')`)
+        .run(ns.ownerId,ns.scope,ns.projectId,prefix+'raw',1+rnd(3));
+      for(let i=0;i<count;i++) {
+        const value={...source,eventId:source.eventId+'-'+i};batch.push(value);
+        db.prepare(`INSERT INTO receipts(id,memory_id,receipt_key,client,session_id,event_id,role,excerpt,created_at)
+          VALUES(?,?,?,?,?,?,?,?,? )`).run(prefix+String(i).padStart(3,'0'),good,digest(value),value.client,value.sessionId,value.eventId,value.role,value.excerpt,'same-time');
+      }
+      if(layout===53&&group%2===0)writeContentSuppressionInside(db,{namespace:ns,kind:'memory',key:good,matchMode:'version',
+        sourceVersion:JSON.stringify(['memory-revision-v1',revision]),reason:'purge',actionId:prefix+'suppression'});
+      collisionCases.push({kind,group,revision,deleted,count,batch});
+    }
+  });
   const snapshotCases=[];
   transaction(db,()=>{
     for(const kind of ['validated','deleted','overflow','ancestry']) {
@@ -91,18 +168,40 @@ for(const layout of [18,53])for(const seed of seeds)test(`receipt walk equivalen
       snapshotCases.push({kind,namespace,source});
     }
   });
-  const legacy=createLegacyReceiptWalk(db),current=createRawLineageStorage(db);let cases=0,accepted=0,refused=0;
+  const legacy=createLegacyReceiptWalk(db),current=process.env.RECEIPT_WALK_BASELINE==='1'?createLegacyReceiptWalk(db):createRawLineageStorage(db);let cases=0,accepted=0,refused=0;
   const compare=(batch,label)=>{
     const old=transaction(db,()=>decide(()=>legacy.assertReceipts(ns,batch)));
     const actual=transaction(db,()=>decide(()=>current.assertReceipts(ns,batch)));
     assert.equal(actual,old,JSON.stringify({layout,seed,label,batch}));cases++;if(old==='accept')accepted++;else refused++;
     return actual;
   };
+  for(const {kind,group,batch} of collisionCases) {
+    compare(batch,'decoded memory collision '+kind+'-'+group);
+    compare([receipt('absent-collision'),...batch],'absent first decoded memory collision '+kind+'-'+group);
+    for(const value of batch)compare([value],'single decoded memory collision '+kind+'-'+group);
+  }
+  const adversarialResults=[];
+  for(const {field,value,incoming,readBack} of adversarial) {
+    const decisions=[compare([incoming],'adversarial incoming '+field+JSON.stringify(value)),
+      compare([readBack],'adversarial stored readback '+field+JSON.stringify(value)),
+      compare([incoming,readBack,incoming],'adversarial repeated '+field+JSON.stringify(value))];
+    adversarialResults.push({field,value,readBack:readBack[field],decisions});
+  }
+  for(const {incoming,attempt} of roleRefusals) {
+    assert.equal(attempt(current),attempt(legacy));
+    const decision=compare([incoming],'role near miss '+JSON.stringify(incoming.role));
+    adversarialResults.push({field:'role',value:incoming.role,storeDecision:attempt(legacy),decisions:[decision]});
+  }
+  for(const {badIndex,batch} of interleaved)assert.equal(compare(batch,'interleaved witness '+badIndex),
+    layout===18||badIndex===-1?'accept':'source_excluded');
+  t.diagnostic(JSON.stringify({adversarialResults}));
   for(const [label,source]of Object.entries(controls)){
     const result=compare([source],label);
     assert.equal(result,layout===18||['foreign','safe','near','withheld','empty','historical','awaiting','suppressed'].includes(label)?'accept':'source_excluded',label);
   }
   for(const source of sources)compare([source],'single');
+  assert.equal(compare([receipt('absent-first'),controls.deleted],'absent first receipt retains later refusal'),
+    layout===18?'accept':'source_excluded');
   compare([],'empty batch');compare([controls.safe,controls.safe],'duplicate batch');
   for(let i=0;i<80;i++)compare(Array.from({length:1+rnd(7)},()=>rnd(4)===0?controls.safe:sources[rnd(sources.length)]),'random-'+i);
   // A second call observes writes made after an earlier call; no cross-call set.
@@ -145,13 +244,13 @@ for(const layout of [18,53])for(const seed of seeds)test(`receipt walk equivalen
   }));
   for(const {kind,namespace,source} of snapshotCases) {
     const old=snapshotDecision(legacy,legacyOverflow,namespace,[source,source]);
-    const actual=snapshotDecision(current,isSourceSnapshotOverflow,namespace,[source,source]);
+    const actual=snapshotDecision(current,process.env.RECEIPT_WALK_BASELINE==='1'?legacyOverflow:isSourceSnapshotOverflow,namespace,[source,source]);
     assert.deepEqual(actual,old,JSON.stringify({layout,seed,kind,route:'snapshot'}));
     assert.equal(old.decision,layout===18||kind==='validated'||kind==='ancestry'&&layout!==53?'accept':kind==='deleted'?'source_excluded':'source_budget_exceeded');
     snapshotComparisons++;
   }
   const old=snapshotDecision(legacy,legacyOverflow,ns,[controls.safe]);
-  const actual=snapshotDecision(current,isSourceSnapshotOverflow,ns,[controls.safe]);
+  const actual=snapshotDecision(current,process.env.RECEIPT_WALK_BASELINE==='1'?legacyOverflow:isSourceSnapshotOverflow,ns,[controls.safe]);
   assert.deepEqual(actual,old,JSON.stringify({layout,seed,route:'generated snapshot'}));snapshotComparisons++;
   assert.ok(accepted>0);if(layout===53)assert.ok(refused>0);
   for(const state of ['deleted','forgotten','suppressed','withheld','memory-fact','receipt-fact'])assert.ok(states.get(state)>0,state);
@@ -227,7 +326,8 @@ test('first receipt refusal precedes later statement budgets and interrupts at e
       outcomes.push({at,reference:old.outcome,current:actual.outcome});
     }
     const atThird=chargedDecision(t,db,createRawLineageStorage,[target],{at:3,injected,fromWalk:true});
-    assert.deepEqual(atThird.outcome,reference.outcome,'third charged statement after enumeration starts');
+    assert.deepEqual(atThird.outcome,process.env.RECEIPT_WALK_BASELINE==='1'?injected:reference.outcome,
+      'third charged statement after enumeration starts (reference control keeps its original reads)');
     t.diagnostic(JSON.stringify({injected,last,outcomes,third:atThird.outcome}));
   }
 });
