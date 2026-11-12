@@ -2,7 +2,7 @@
 
 ## 0.6.6 — Unreleased
 
-- Local capture setup accepts Claude Code's own configuration directory when it isn't writable by other users (for example mode 0755).
+- Local capture setup accepts Claude Code's and Codex's own configuration directories when they aren't writable by other users (for example mode 0755).
 
 - `setup --local` installs automatic plaintext conversation Raw capture by default
   for selected Claude Code and Codex clients, without a key or model calls, in the

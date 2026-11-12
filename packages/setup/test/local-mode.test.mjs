@@ -11,6 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { assertFixtureClients, fixtureBinaryGuard } from './fixture-clients.mjs';
 import { engineCacheComplete, skipMissingEngineCache } from './engine-cache.mjs';
+import { SERDE_MARKERS } from '../../../integrations/codex/schema-evidence.mjs';
 
 runTest('local mode contract', async parent => {
 const pending = [];
@@ -76,8 +77,15 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
   for (const [client, enabled, initial] of [['claude', claude, claudeState], ['codex', codex, codexState]]) {
     paths[client] = join(ws.path, client + '.json'); calls[client] = join(ws.path, client + '.jsonl');
     await writeFile(paths[client], JSON.stringify(initial)); await writeFile(calls[client], '');
-    if (enabled) await writeFile(join(bin, client), `#!${process.execPath}\n${fixtureBinaryGuard(ws.path)}process.env.FAKE_STATE=${JSON.stringify(paths[client])};process.env.FAKE_CALLS=${JSON.stringify(calls[client])};\n` +
-      await readFile(new URL(`./fake-${client}.mjs`, import.meta.url), 'utf8'), { mode: 0o755 });
+    if (enabled) {
+      let source = `#!${process.execPath}\n${fixtureBinaryGuard(ws.path)}process.env.FAKE_STATE=${JSON.stringify(paths[client])};process.env.FAKE_CALLS=${JSON.stringify(calls[client])};\n` +
+        await readFile(new URL(`./fake-${client}.mjs`, import.meta.url), 'utf8');
+      if (client === 'codex' && initial.formatEvidence) {
+        const evidence = await json(new URL('../../../integrations/codex/test/fixtures/binary-0.162.0/format.json', import.meta.url));
+        source += '\n/*\n' + Object.values(evidence.hooks).map(value => JSON.stringify(value, null, 2)).join('\n') + '\n' + SERDE_MARKERS.join('\n') + '\n*/\n';
+      }
+      await writeFile(join(bin, client), source, { mode: 0o755 });
+    }
   }
   const moduleURL = pathToFileURL(join(testedPackageRoot, 'lib/setup.mjs')).href;
   const harness = join(ws.path, 'harness.mjs');
@@ -94,6 +102,9 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
     const config=JSON.parse(process.env.LOCAL_TEST_OPTIONS),answers=config.answers??[];
     if(config.foreignClaudeOwner){const original=fsPromises.lstat;fsPromises.lstat=async(path,...args)=>{
       const stat=await original(path,...args);if(path===process.env.HOME+'/.claude')Object.defineProperty(stat,'uid',{value:process.getuid()+1});return stat;
+    };syncBuiltinESMExports();}
+    if(config.foreignCodexOwner){const original=fsPromises.lstat;fsPromises.lstat=async(path,...args)=>{
+      const stat=await original(path,...args);if(path===process.env.CODEX_HOME)Object.defineProperty(stat,'uid',{value:process.getuid()+1});return stat;
     };syncBuiltinESMExports();}
     const output=line=>writeSync(1,String(line)+'\\n');
     output.literal=line=>{for(const part of String(line).split('\\n'))writeSync(1,JSON.stringify({literal:part})+'\\n');};
@@ -245,6 +256,91 @@ for (const unsafe of ['775', '777', 'symlink', 'symlink-component', 'file', 'for
   assert.match(result.display, /The local memory directory is unsafe/);
   assert.deepEqual(await snapshot(f.home), inventory);
   assert.equal((await f.calls('claude')).some(args => args[0] === 'mcp' && args[1] === 'add'), false);
+});
+
+for (const custom of [false, true]) for (const mode of [0o700, 0o750, 0o755, null]) test(`Codex config directory ${mode === null ? 'missing' : mode.toString(8)} installs capture without chmod (custom=${custom})`, async t => {
+  if (!needCache(t)) return;
+  const f = await localFixture(t, { claude: false, codexState: { version: '0.162.0',
+    formatEvidence: fileURLToPath(new URL('../../../integrations/codex/test/fixtures/', import.meta.url)) } }), config = custom ? join(f.home, 'codex-config') : f.codexHome;
+  if (custom) f.env.CODEX_HOME = config;
+  else delete f.env.CODEX_HOME;
+  if (mode !== null) { await mkdir(config, { mode }); await chmod(config, mode); }
+  const run = async args => {
+    const result = await f.run(args);
+    t.diagnostic(`${args.join(' ')} exit ${result.code}`);
+    assert.equal(result.code, 0, result.display + result.stderr);
+    return result;
+  };
+  const result = await run(['setup', '--local', '--client', 'codex']);
+  assert.match(result.display, /Codex local capture: on/);
+  assert.equal((await lstat(config)).mode & 0o777, mode ?? 0o700);
+  const settings = await json(join(config, 'hooks.json'));
+  assert.deepEqual(Object.keys(settings.hooks).sort(), ['PreCompact', 'SessionStart', 'Stop', 'UserPromptSubmit']);
+  const { hookCommand } = await import('../../../integrations/client/raw/local-setup-files.mjs');
+  for (const event of ['SessionStart', 'UserPromptSubmit', 'Stop', 'PreCompact']) {
+    assert.deepEqual(settings.hooks[event], [{ hooks: [{ type: 'command',
+      command: hookCommand(join(f.root, 'capture/codex'), event).replace(
+        fileURLToPath(new URL('../../../', import.meta.url)).replace(/\/$/, ''),
+        join(f.root, 'engine', (await f.descriptor()).engine.id, 'app/node_modules/cairn-memory-local-preview')),
+      timeout: 160 }] }]);
+  }
+  for (const directory of ['', 'capture', 'capture/codex', 'capture-usage', 'capture-support', 'capture-support/codex']) {
+    assert.equal((await lstat(join(f.root, directory))).mode & 0o777, 0o700, directory);
+  }
+  const before = await readFile(join(config, 'hooks.json'), 'utf8');
+  await run(['setup', '--local', '--client', 'codex']);
+  assert.equal(await readFile(join(config, 'hooks.json'), 'utf8'), before);
+  assert.match((await run(['status', '--client', 'codex'])).display, /Codex local capture: on/);
+  if (mode === 0o755) {
+    assert.match((await run(['config', '--local-capture', 'off', '--client', 'codex'])).display, /Codex local capture: off/);
+    assert.deepEqual((await json(join(config, 'hooks.json'))).hooks, {});
+    assert.match((await run(['config', '--local-capture', 'on', '--client', 'codex'])).display, /Codex local capture: on/);
+    assert.equal(await readFile(join(config, 'hooks.json'), 'utf8'), before);
+    await run(['uninstall', '--local', '--client', 'codex', '--yes']);
+    assert.deepEqual((await json(join(config, 'hooks.json'))).hooks, {});
+  }
+  assert.equal((await lstat(config)).mode & 0o777, mode ?? 0o700);
+});
+
+for (const unsafe of ['775', '777', 'symlink', 'symlink-component', 'file', 'foreign-owner', 'private-root', 'custom-writable']) test(`Codex unsafe directory ${unsafe} refuses before setup writes`, async t => {
+  const f = await localFixture(t, { claude: false }), config = f.codexHome;
+  let inventory;
+  if (unsafe === 'custom-writable') {
+    f.env.CODEX_HOME = join(f.home, 'custom-config');
+    await mkdir(f.env.CODEX_HOME, { mode: 0o775 }); await chmod(f.env.CODEX_HOME, 0o775);
+  } else if (unsafe === 'private-root') { await mkdir(f.root, { mode: 0o755 }); await chmod(f.root, 0o755); }
+  else if (unsafe === 'file') await writeFile(config, 'synthetic sentinel', { mode: 0o600 });
+  else if (unsafe.startsWith('symlink')) {
+    const target = join(f.home, 'client-config'); await mkdir(target, { mode: 0o700 });
+    if (unsafe === 'symlink') await symlink(target, config);
+    else {
+      const alias = join(f.home, 'alias'); await symlink(target, alias);
+      await mkdir(join(target, 'config'), { mode: 0o700 });
+      f.env.CODEX_HOME = join(alias, 'config');
+    }
+  } else {
+    await mkdir(config, { mode: 0o700 });
+    await writeFile(join(config, 'hooks.json'), '{"synthetic":"unchanged"}\n', { mode: 0o600 });
+    if (unsafe !== 'foreign-owner') await chmod(config, parseInt(unsafe, 8));
+  }
+  // Inventory records symlinks themselves; it never follows them.
+  async function snapshot(path) {
+    const result = {};
+    for (const entry of await readdir(path, { withFileTypes: true })) {
+      const child = join(path, entry.name), stat = await lstat(child);
+      result[entry.name] = { mode: stat.mode, uid: stat.uid,
+        value: entry.isSymbolicLink() ? await fsPromises.readlink(child) :
+          entry.isDirectory() ? await snapshot(child) : await readFile(child, 'utf8') };
+    }
+    return result;
+  }
+  inventory = await snapshot(f.home);
+  const result = await f.run(['setup', '--local', '--client', 'codex'], { foreignCodexOwner: unsafe === 'foreign-owner' });
+  t.diagnostic(`unsafe ${unsafe} setup exit ${result.code}`);
+  assert.equal(result.code, 2, result.display + result.stderr);
+  assert.match(result.display, unsafe === 'file' ? /Cannot inspect Codex/ : /The local memory directory is unsafe/);
+  assert.deepEqual(await snapshot(f.home), inventory);
+  assert.equal((await f.calls('codex')).some(call => call.args[0] === 'mcp' && call.args[1] === 'add'), false);
 });
 
 test('descriptor strict JSON, exact keys, bounds, vectors and published references', async t => {

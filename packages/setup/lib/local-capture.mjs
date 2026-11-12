@@ -74,8 +74,9 @@ async function directory(path) {
   if (await canonicalPath(path) !== path) fail();
 }
 // Client-owned configuration can be readable by others, but never writable.
-export async function claudeConfigDirectory(env, { create = false } = {}) {
-  const path = env.CLAUDE_CONFIG_DIR ?? join(await canonicalPath(env.HOME), '.claude');
+export async function clientConfigDirectory(client, env, { create = false } = {}) {
+  const path = client === 'claude' ? env.CLAUDE_CONFIG_DIR ?? join(await canonicalPath(env.HOME), '.claude') :
+    env.CODEX_HOME ?? join(await canonicalPath(env.HOME), '.codex');
   try {
     if (await canonicalPath(path) !== path) throw new SetupError('local_root_invalid', 2);
     if (create) await mkdir(path, { recursive: true, mode: 0o700 });
@@ -127,10 +128,7 @@ async function qualification(root, receipt, context) {
   return engineChild(receipt.node, ['--input-type=module', '-e', script], { ...context, timeout: 90000 });
 }
 async function requestFor(root, descriptor, client, receipt, context) {
-  const home = await canonicalPath(context.env.HOME);
-  const nativeHome = client === 'claude' ? await claudeConfigDirectory(context.env, { create: true }) :
-    await canonicalPath(context.env.CODEX_HOME ?? join(home, '.codex'));
-  if (client === 'codex') await directory(nativeHome);
+  const nativeHome = await clientConfigDirectory(client, context.env, { create: true });
   const sourceRoot = join(nativeHome, client === 'claude' ? 'projects' : 'sessions');
   await mkdir(sourceRoot, { recursive: true, mode: 0o700 });
   if (await canonicalPath(sourceRoot) !== sourceRoot) fail(); // The engine validates source ownership/mode.
@@ -169,7 +167,7 @@ export async function configureCapture(root, descriptor, selected, context, { en
   for (const client of selected) {
     let receipt = settings.clients[client];
     if (!receipt && uninstall) continue;
-    if (client === 'claude' && !uninstall && (enabled ?? receipt?.enabled ?? true)) await claudeConfigDirectory(context.env);
+    if (!uninstall && (enabled ?? receipt?.enabled ?? true)) await clientConfigDirectory(client, context.env);
     receipt ??= settings.clients[client] = { enabled: true, noticed: false, engineId: descriptor.engine.id, node: descriptor.node };
     if (enabled !== undefined) receipt.enabled = enabled;
     // Uninstall disables without changing the user's retained setup preference.

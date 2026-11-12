@@ -37,12 +37,12 @@ export function json(text) {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw Error(); return parsed;
   } catch { fail('configuration_conflict'); }
 }
-// Claude owns its config directory and may make it readable by other users.
-// Keep the private-directory rule for Codex and all existing default callers.
-export async function nativeSnapshot(path, client = 'codex') {
+// Clients own their config directories and may make them readable by others.
+// Keep the private-directory rule for callers without a client.
+export async function nativeSnapshot(path, client) {
   let file;
   try {
-    if (!absolute(path)) fail('unsafe_path'); await directory(dirname(path),client !== 'claude-code');
+    if (!absolute(path)) fail('unsafe_path'); await directory(dirname(path),!['claude-code','codex'].includes(client));
     let initial;
     try { initial = await lstat(path); } catch (error) { if (error.code === 'ENOENT') return { text:'',identity:null }; throw error; }
     if (!initial.isFile() || initial.isSymbolicLink() || initial.uid !== process.getuid() || initial.nlink !== 1 || (initial.mode & 0o022) || initial.size > 1048576) fail('unsafe_path');
@@ -55,7 +55,7 @@ export async function nativeSnapshot(path, client = 'codex') {
   finally { await file?.close(); }
 }
 export const sameSnapshot = (a,b) => a.text === b.text && JSON.stringify(a.identity) === JSON.stringify(b.identity);
-export async function nativeWrite(path, text, before, client = 'codex') {
+export async function nativeWrite(path, text, before, client) {
   const temporary = path + '.cairn-local-' + randomUUID() + '.tmp'; let file;
   try {
     file = await open(temporary,'wx',before.mode ?? 0o600); await file.writeFile(text); await file.sync(); await file.close(); file = undefined;

@@ -9,7 +9,7 @@ import { localRoot, requestedRoot, canonicalPath, readDescriptor, writeDescripto
 import { readClaudeServers, registerClaude, detachClaude } from './local-claude.mjs';
 import { registerCodex, detachCodex, checkCodexLock, codexCapabilities } from './local-codex.mjs';
 import { shellArgument } from './output.mjs';
-import { configureCapture, captureStatus, captureSettings, retainedCapture, claudeConfigDirectory } from './local-capture.mjs';
+import { configureCapture, captureStatus, captureSettings, retainedCapture, clientConfigDirectory } from './local-capture.mjs';
 import { SetupError } from './errors.mjs';
 import { rawLocal, validateRawOptions } from './local-raw.mjs';
 
@@ -267,7 +267,7 @@ async function setupLocal(options, selection, detection, context) {
     codexCapable = await codexCapabilities(env);
     if (codexCapable && !await codexPrecheck(detection, context, { add: true })) return 2;
   }
-  if (selected.includes('claude') && !options.noCapture) await claudeConfigDirectory(env);
+  if (!options.noCapture) for (const client of selected) await clientConfigDirectory(client, env);
   progress.localOperation = true; progress.localAction = 'setup';
   await ownedLocalTree(detection.root);
   // CAIRN_SETUP_NPM_CACHE is caller-supplied test storage, not an owned
