@@ -15,7 +15,7 @@ import { installPrivateOrganization } from '../private-organization-schema.mjs';
 import { lineageFixture, receipt } from '../testing/card-lineage-fixture.mjs';
 import { withContentWriteOperation } from '../content-write-context.mjs';
 
-test('long recurring topic builds in maintenance, read packs Card, fact read retains Memory, forget falls back', async t => {
+test('long recurring topic builds in maintenance, read packs Card, fact read promotes its Card, forget falls back', async t => {
   const f = engineCardFixture(t), memories = f.seed(12);
   assert.equal(f.model.calls.length, 0, 'admission does not consolidate');
   const pass = ok(await f.pass()); assert.equal(pass.state, 'ready', JSON.stringify(pass)); assert.equal(pass.built.length, 1, JSON.stringify(pass));
@@ -25,12 +25,12 @@ test('long recurring topic builds in maintenance, read packs Card, fact read ret
   ok(await f.refresh());
   const read = ok(await f.read('what is the current state of Orion'));
   assert.ok(read.metered.items.some(item => item.ref.type === 'card'), JSON.stringify(read));
-  assert.ok(read.metered.items.some(item => item.ref.type === 'memory'), 'uncited cluster sources remain candidates');
+  assert.equal(read.metered.items.some(item => item.ref.type === 'memory'), false, 'all twelve source lines are cited');
   const packedBody = read.metered.items.find(item => item.ref.type === 'card').body;
   assert.ok(read.metered.items.filter(item => item.ref.type === 'memory').every(item => !packedBody.includes(item.ref.id)));
   const fact = ok(await f.read('what does Orion marker7 record'));
-  assert.equal(fact.metered.items[0].ref.id, memories[7].id);
-  assert.equal(fact.metered.items[0].ref.type, 'memory');
+  assert.equal(fact.metered.items[0].ref.id, card.id);
+  assert.equal(fact.metered.items[0].ref.type, 'card');
   const without = ok(await f.read('what is the current state of Orion', { types: ['memory'] }));
   t.diagnostic(JSON.stringify({ withCardTokens: read.diagnostics.budget.used, withoutCardTokens: without.diagnostics.budget.used }));
   ok(f.core.forget({ namespace: ns, memoryId: memories[0].id, expectedRevision: memories[0].revision }));
@@ -110,16 +110,15 @@ test('MOC L1 separates topics, vector seed threshold and BM25 fallback are deter
     { from: 'b', to: 'c', kind: 'supersedes', slot: 'y' }]), 1, 'different slots do not form a chain');
 });
 
-test('output drops uncited sentences, refuses foreign citations and excess tokens, preserves unresolved contradictions', () => {
-  const model = scriptedConsolidator(), memories = [{ id: 'a', date: '2026-01-01' }, { id: 'b', date: '2026-02-01' }];
-  const output = { currentState: [{ text: 'Supported.', memoryIds: ['b'] }, { text: 'Invented.', memoryIds: [] }],
-    timeline: [{ text: 'Older value.', date: '2026-01-01', memoryIds: ['a'] }],
-    contradictions: [{ text: 'Values still conflict.', memoryIds: ['a', 'b'] }] };
+test('output uses only source content and valid timeline IDs, refusing malformed shapes', () => {
+  const model = scriptedConsolidator(), memories = [{ id: 'a', date: '2026-01-01', content: 'Original source.' },
+    { id: 'b', date: '2026-02-01', content: 'Later source.' }];
+  const output = { currentState: [{ text: 'ok', memoryIds: ['b'] }],
+    timeline: [{ text: 'Model wording.', date: '2026-01-01', memoryIds: ['a'] }], contradictions: [] };
   const value = validateConsolidation(output, memories, model);
-  assert.doesNotMatch(value.body, /Invented/); assert.match(value.body, /Open contradictions/); assert.match(value.body, /2026-01-01/);
-  assert.throws(() => validateConsolidation({ ...output, currentState: [{ text: 'Foreign.', memoryIds: ['foreign'] }] }, memories, model));
-  assert.equal(validateConsolidation({ currentState: [{ text: 'No support.', memoryIds: [] }], timeline: [], contradictions: [] }, memories, model), null);
-  assert.throws(() => validateConsolidation({ ...output, currentState: [{ text: 'x '.repeat(950), memoryIds: ['a'] }] }, memories, model));
+  assert.equal(value.body, '2026-02-01: Later source. [b]\nTimeline: 2026-01-01: Original source. [a]');
+  assert.equal(validateConsolidation({ ...output, timeline: [{ text: 'Ignored.', date: '', memoryIds: ['a', 'foreign'] }] }, memories, model).outOfDateIds.length, 0);
+  assert.throws(() => validateConsolidation({ ...output, timeline: 'malformed' }, memories, model), { code: 'invalid_model_output' });
 });
 
 test('keyless status, worker limits, provider refusal and source races never store a Card', async t => {
@@ -164,7 +163,7 @@ test('filed topics share one namespace but keep exact independent source sets', 
   const f = engineCardFixture(t), large = f.file(f.seed(), 'Orion'), small = f.file(f.seed(5, 'Vega'), 'Vega');
   const pass = ok(await f.pass()); assert.equal(pass.built.length, 1, JSON.stringify(pass));
   assert.equal(pass.built[0].clusterKey, 'moc:' + large.mocId + '#0');
-  assert.equal(f.model.calls[0].memories.length, 12);
+  assert.equal(f.model.calls[0].memories.length, 24);
   assert.ok(f.model.calls[0].memories.every(memory => !small.memories.some(source => source.id === memory.id)));
   assert.equal(ok(await f.pass()).built.length, 1);
 });
@@ -175,18 +174,7 @@ test('model deadline is a budget result and does not permanently refuse the next
   const expired = ok(await f.pass({ maxMs: 250 })); assert.equal(expired.state, 'deadline'); assert.equal(expired.reason, 'deadline');
   waiting = false;
   const recovered = ok(await f.pass()); assert.equal(recovered.built.length, 1, JSON.stringify(recovered));
-  const raw = engineCardFixture(t); raw.seed(8);
-  const canonical = createEngineCardStorage({ db: raw.db,
-    identity: raw.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get(), ready() {}, upgrade: true });
-  let rawWaiting = true;
-  const worker = createEngineCardMaintenance({ model: raw.model, storage: { ...canonical,
-    rawSpans: () => rawWaiting ? new Promise(() => {}) : [] } });
-  const rawExpired = await worker.maintain({ namespace: ns, budget: { maxMs: 250 } });
-  assert.equal(rawExpired.state, 'deadline'); assert.equal(rawExpired.reason, 'deadline');
-  assert.equal(raw.model.calls.length, 0);
-  rawWaiting = false;
-  const rawRecovered = await worker.maintain({ namespace: ns, budget: { maxMs: 5000 } });
-  assert.equal(rawRecovered.built.length, 1, JSON.stringify(rawRecovered));
+
 });
 
 test('both packers dedupe source revisions only after a Card fits, including Memory coalesced with Raw', () => {
@@ -255,14 +243,13 @@ test('authored Cards retain their place beside higher-ranked source Memories in 
 });
 
 
-for (const mode of ['refusal', 'invalid', 'empty', 'timeout', 'network', 'fetch-network', 'rate-limit', 'deadline'])
+for (const mode of ['refusal', 'invalid', 'timeout', 'network', 'fetch-network', 'rate-limit', 'deadline'])
   test(`unchanged ${mode} is bounded across cooldowns and restarts; source changes re-enable dispatch`, async t => {
     const transient = ['timeout', 'network', 'fetch-network', 'rate-limit', 'deadline'].includes(mode);
     const codes = { timeout: 'model_timeout', network: 'ECONNRESET', 'rate-limit': 'rate_limit_exceeded', deadline: 'deadline' };
     const model = scriptedConsolidator(() => {
       if (mode === 'fetch-network') throw new TypeError('Synthetic fetch transport failure');
       if (mode === 'invalid') return { foreign: true };
-      if (mode === 'empty') return { currentState: [], timeline: [], contradictions: [] };
       throw Object.assign(Error('Synthetic provider failure'), { code: codes[mode] });
     });
     const f = engineCardFixture(t, { model }); f.seed(8);

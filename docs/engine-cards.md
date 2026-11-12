@@ -1,7 +1,7 @@
 # Engine Cards
 
 A Memory is an atomic claim with an event time. An engine Card consolidates the
-current state and history of one topic. It is derived, untrusted recollection,
+dated Memories of one topic, with out-of-date statements separated from current lines. It is derived, untrusted recollection,
 never an additional fact or execution permission.
 
 Generation is available by default when the model implements `consolidate`.
@@ -60,31 +60,39 @@ otherwise the receipt's client and session identity.
 
 `consolidate({system, input: {memories, rawSpans}, maxOutputTokens, signal})`
 uses the ordinary model port. A memory contains `id`, `revision`, `content`,
-`date` and `currentness`. Optional readable Raw spans contain `memoryId`, `date`
-and `text`; each is at most 400 units, with at most 8,000 units per request.
-When available, an additional `relations` array supplies up to 192 same-topic
-edges; `supersedes` points from a newer claim to an older claim.
-Unreadable spans are omitted. A missing or denied source cannot authorize a
-Card even when an optional Raw read fails.
+`date` and `currentness`. The part's own Memories always come first, followed by
+other Memories from the same original cluster, newest first, up to 24 total.
+Context is added only while the existing input and adapter envelopes still fit.
+`rawSpans` is an empty array; no Raw text is sent. When available, `relations`
+supplies up to 192 same-part edges; `supersedes` points from newer to older.
 
-The output has three arrays: `currentState` and `contradictions` contain
-`{text, memoryIds}`, and `timeline` contains `{date, text, memoryIds}`.
-Each entry is a single sentence. Current state renders as one paragraph, followed
-by the dated timeline and unresolved contradictions. The engine drops uncited
-sentences, rejects foreign IDs and malformed output, and requires a supported
-current-state sentence. The rendered body, including citation tags, is at most
-600 tokens. The prompt asks for at most eight current-state sentences, four
-timeline entries and two contradictions, broad current-item coverage, and each
-memory ID cited once on the sentence it best supports. If the cleaned body is too
-large, the engine removes whole entries: oldest timeline first, then current-state
-sentences from the end (keeping one), then contradictions from the end. A sole
-current-state sentence that cannot fit is refused. Returned entries exactly match
-the rendered body. Timeline dates must agree with a cited source. Model text is inert.
+The model identifies only out-of-date Memories: later statements that change,
+replace, remove, cancel or negate the same thing. Daily records remain true for
+their own dates; different days, things and list items do not replace each other.
+The change statement itself remains current. Uncertain cases stay current.
+The closed output still has three arrays: `currentState` and `contradictions`
+contain `{text, memoryIds}`, and `timeline` contains `{date, text, memoryIds}`.
+The prompt asks for one `currentState` entry with text `ok` and the latest ID,
+empty `contradictions`, and one timeline entry per out-of-date Memory.
+Malformed shapes are refused. A timeline entry counts only when every ID belongs
+to the request; an entry containing a foreign ID is ignored in full. Only these
+IDs are used: model text and dates are never stored or delivered. Zero marked
+Memories is an ordinary successful result; all marked means no Card.
+
+The body is built from the part's original Memories, sorted by event date with
+ID breaking ties. Every current line is `<YYYY-MM-DD>: <content> [<memory id>]`.
+If any sources are marked out of date, a final `Timeline: ` line holds those same
+dated verbatim entries separated by `; `. Control characters and square brackets
+in content become spaces; whitespace collapses. Nothing is paraphrased or
+shortened. The body cap is **850 tokens**, including dates and citation tags.
+The offline 15–40 word synthetic corpus with UUID IDs needs 750 tokens for twelve
+stored lines. When the cap is exceeded, whole current lines are removed oldest
+first; their uncited Memories remain ordinary candidates. If no current line
+fits, no Card is published. Timeline entries are never shortened or dropped to fit.
 
 The OpenAI adapter uses a closed structured-output schema with source-ID enums.
 Each pass makes at most one generation, through the existing 6,000 input / 1,024
-provider output envelope and model deadline. The tighter Card body limit is
-post-validated. The local guarded model charges the existing runtime budget for
+provider output envelope and model deadline. The verbatim Card body is fitted locally after validation. The local guarded model charges the existing runtime budget for
 consolidation and stops on refusal. Memory text is never truncated to fit a
 request. Parts may still exceed the input envelope and return `input_budget`.
 `ENGINE_CARD_LIMITS.sources` remains 96; `source_limit` is unreachable through
@@ -176,13 +184,32 @@ consumes the acknowledgement internally rather than publishing it as a tool
 result. Product-index/Worker APIs expose context-index maintenance, not
 `maintainCards`.
 
-Engine Cards enter the existing candidate ranking. A Card citing a Memory among
+Engine Cards enter the existing candidate ranking. A Card citing a Memory on a current line among
 the first `budget.maxItems` ranked Memory candidates is considered immediately
 before its best-ranked cited Memory. In mixed Memory/Raw assembly its unit
 borrows that Memory unit's lexical score and rank prior, without a size penalty
 in scoring; budget fit still applies. Packing the Card removes only exact source
-Memory revisions cited in its rendered body. Uncited cluster Memories remain
+Memory revisions cited in its stored body, including Timeline entries. Uncited cluster Memories remain
 ordinary candidates; all cluster sources still bind invalidation and read safety.
+For `intent: 'current'`, the delivered body contains the title and current lines,
+without the `Timeline:` line or citation tags. Counts and budget checks meter
+this delivered text. History delivers the stored title and body unchanged;
+evidence reads also remain unchanged. Promotion uses only current-line citations,
+so a Timeline-only hit never promotes a Card. Covered-source detection always
+uses the stored body, preventing out-of-date entries from returning beside it.
+Stored lineage fingerprints, snapshot fences, signed snapshot references and
+`bodyRev` continue to bind the canonical stored Card. Projection does not mutate
+that body or advance its revision. Final canonical refetch and signed-response
+byte checks remain in place.
+
+A later statement alone does not rewrite an existing Card: until maintenance
+identifies the change and rebuilds, an older Card can still deliver that line.
+When a build marks an ID appearing on another current Card's current lines in
+the same namespace, it retires that Card through the existing staling path.
+Retirement hides it immediately; a later pass rebuilds after the ordinary
+ten-minute debounce, with at most one generation per pass. Context is bounded,
+so changes outside the selected context can remain unrecognized.
+
 A Card that does not fit removes nothing. A Card without a cited Memory in the
 window retains ordinary ranking and cannot displace a better-ranked source
 Memory already selected. Authored Cards and Memory ranking are unchanged. All
@@ -195,4 +222,4 @@ The authored Card API and its confirmation authority remain available separately
 
 Run the offline synthetic exercise with
 `node tools/testing/measure-engine-cards.mjs`. It prints exact pack tokens for
-the scripted model and local tokenizer, without provider access.
+stored and current-delivered bodies for parts of 5, 8 and 12 realistic synthetic Memories, with the local tokenizer and no provider access.

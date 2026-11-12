@@ -27,7 +27,7 @@ test('configured model builds Cards in default maintenance with authoring tools 
     assert.fail(JSON.stringify(result));
   };
   const packed = await until(items => items.some(item => item.ref.type === 'card'));
-  assert.ok(packed.value.items.some(item => item.ref.type === 'memory'), 'uncited sources remain available');
+  assert.equal(packed.value.items.some(item => item.ref.type === 'memory'), false, 'twelve verbatim sources fit');
   const body = packed.value.items.find(item => item.ref.type === 'card').body;
   assert.ok(packed.value.items.filter(item => item.ref.type === 'memory').every(item => !body.includes(item.ref.id)));
   assert.equal(f.model.calls.length, 1);

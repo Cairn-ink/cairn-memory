@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assembleContext } from '../context-read-assembly.mjs';
 import { assembleThreeLayerContext } from '../context-read-three-layer.mjs';
-import { engineCardFixture, scriptedConsolidator, realisticCardOutput, ns, ok } from '../testing/engine-card-fixture.mjs';
+import { engineCardFixture, scriptedConsolidator, ns, ok } from '../testing/engine-card-fixture.mjs';
 import { openMemoryCore } from '../index.mjs';
 import { validateConsolidation } from '../engine-card-output.mjs';
 
@@ -13,8 +13,8 @@ function fixture() {
     text: `Orion group ${i} prepares the community garden workshop and confirms the volunteer schedule.`,
     sources: [], sourceAccess: 'available', sourcesComplete: true, turnIds: [], sessionIds: [], fence: 'synthetic-fence', date: null,
     metadata: { state: 'active', reviewState: 'none', filing: { status: 'unfiled' }, kind: 'fact', origin: 'explicit', confidence: 1 } }));
-  const sources = memories.slice(2, 14), outputMemories = sources.map(item => ({ id: item.ref.memoryId, date: '2026-01-01' }));
-  const body = validateConsolidation(realisticCardOutput(outputMemories), outputMemories, model).body;
+  const sources = memories.slice(2, 14), outputMemories = sources.map(item => ({ id: item.ref.memoryId, date: '2026-01-01', content: item.text }));
+  const body = validateConsolidation({ currentState: [{ text: 'ok', memoryIds: [outputMemories.at(-1).id] }], timeline: [], contradictions: [] }, outputMemories, model).body;
   const card = { ...memories[0], type: 'card', rank: 17, text: body,
     ref: { type: 'card', namespace: ns, cardId: 'synthetic-card', revision: 1, bodyRevision: 1 },
     metadata: { state: 'confirmed', origin: 'engine' }, sourceMemoryRefs: sources.map(item => item.ref) };
@@ -35,8 +35,10 @@ for (const mixed of [false, true]) {
     const cited = f.memories.filter(memory => f.card.text.includes(memory.ref.memoryId));
     assert.ok(cited.length >= 7);
     for (const memory of cited) assert.ok(!items.some(item => item.ref.id === memory.ref.memoryId));
-    for (const memory of f.memories.filter(memory => !cited.includes(memory)))
+    for (const memory of f.memories.filter(memory => !cited.includes(memory) &&
+        f.card.sourceMemoryRefs.some(ref => ref.memoryId === memory.ref.memoryId)))
       assert.ok(items.some(item => item.ref.id === memory.ref.memoryId), memory.ref.memoryId);
+    for (const memory of f.memories.slice(0, 2)) assert.ok(items.some(item => item.ref.id === memory.ref.memoryId));
     assert.ok(items.length <= 12); assert.ok(value.diagnostics.budget.used <= 6000);
     assert.deepEqual(f.memories.map(m => m.rank), Array.from({ length: 16 }, (_, i) => i + 1));
     if (mixed) assert.ok(items.some(item => item.ref.type === 'raw'), 'exercise mixed units, not fallback');
@@ -54,16 +56,18 @@ for (const mixed of [false, true]) {
       assert.ok(coalesced.selected.some(item => item.ref.memoryId === f.memories[12].ref.memoryId));
       assert.ok(!coalesced.metered.items.some(item => item.ref.type === 'card'));
     }
+    f.card.text += `\nTimeline: 2026-01-01: Orion old fact [${f.memories[2].ref.memoryId}]`;
+    assert.ok(!pack(f).metered.items.some(item => item.ref.type === 'card'), 'Timeline hit never promotes');
     // A selected out-of-window source still blocks its lower-ranked Card.
     f.memories[0].text = 'oversized '.repeat(10000);
     assert.ok(!pack(f).metered.items.some(item => item.ref.type === 'card'));
   });
   test(`${mixed ? 'three-layer' : 'Memory'} promotion still requires budget fit and leaves authored ordering intact`, () => {
     const f = fixture();
-    const tiny = pack(f, { ...f.args, budget: { maxItems: 12, maxTokens: 500 } });
+    const tiny = pack(f, { ...f.args, budget: { maxItems: 12, maxTokens: 350 } });
     assert.ok(!tiny.metered.items.some(item => item.ref.type === 'card'));
     assert.equal(tiny.diagnostics.stops.budget, true);
-    assert.ok(tiny.diagnostics.budget.used <= 500);
+    assert.ok(tiny.diagnostics.budget.used <= 350);
     assert.ok(tiny.metered.items.some(item => item.ref.id === f.memories[2].ref.memoryId));
     f.card.metadata.origin = 'authored';
     const authored = pack(f, { ...f.args, budget: { maxItems: 24, maxTokens: 10000 } });
@@ -73,7 +77,7 @@ for (const mixed of [false, true]) {
 }
 
 for (const mixed of [false, true]) for (const change of ['revision', 'forget', 'namespace']) test(`${mixed ? 'three-layer' : 'Memory'} promotion preserves canonical ${change} fences`, async t => {
-  const f = engineCardFixture(t, { raw: mixed, model: scriptedConsolidator(({ input }) => realisticCardOutput(input.memories)) });
+  const f = engineCardFixture(t, { raw: mixed, model: scriptedConsolidator() });
   const memories = f.seed(9), card = ok(await f.pass()).built[0]; assert.ok(card);
   ok(await f.refresh());
   let reader = f.core;

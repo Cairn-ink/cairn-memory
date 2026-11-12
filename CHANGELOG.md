@@ -12,10 +12,13 @@
 
 ## Unreleased — engine-generated topic Cards
 
-- Engine Cards fit complete supported sentences within 600 body tokens and divide
+- Engine Cards bundle dated verbatim Memories within 850 body tokens and divide
   large topics into event-ordered parts of at most 12 with independent reuse and
   rebuilds. A Card citing a Memory in the read's item window takes that hit's
-  position and replaces its cited sources when it fits the pack budget.
+  position and replaces its cited sources when it fits the pack budget. The model
+  marks out-of-date IDs only; current reads omit their Timeline and all citation
+  tags while retaining their coverage. Same-namespace Cards carrying an old
+  current line are retired for a later debounced rebuild.
 
 - Five current Memories in a topic part, whatever their conversations, qualify for a
   Card, alongside the existing recurrence and change-chain conditions, with
@@ -24,12 +27,12 @@
   the next eligible maintenance pass without a ten-minute wait; rebuilds keep
   their existing debounce.
 - Packing an engine Card now replaces only source Memories cited in its body.
-  Sources omitted from a short summary remain available as Memory candidates.
+  Sources omitted by whole-line fitting remain available as Memory candidates.
 
 - When a consolidation model is configured, the engine builds topic Cards during
-  maintenance to summarize a topic's current state, history and contradictions.
+  maintenance to bundle a topic's current and out-of-date Memories.
   Cards follow their Memories when a topic is relabeled or refiled, without
-  regenerating the summary when the sources stay the same.
+  regenerating the body when the sources stay the same.
 - A forgotten, suppressed or excluded source hides its Card from reads.
   Maintenance rebuilds the Card from eligible sources when the topic still
   qualifies, or removes its stale body when it no longer does.

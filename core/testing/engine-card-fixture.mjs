@@ -16,11 +16,10 @@ export function scriptedConsolidator(hook) {
       const superseded = new Set((request.input.relations ?? []).filter(edge => edge.kind === 'supersedes').map(edge => edge.to));
       const memory = request.input.memories.filter(memory => !superseded.has(memory.id))
         .sort((a, b) => b.date.localeCompare(a.date))[0] ?? request.input.memories[0];
-      const topic = memory.content.split(/\s/u)[0];
-      return { currentState: [{ text: `${topic} current state: ${memory.content}`, memoryIds: [memory.id] }],
+      return { currentState: [{ text: 'ok', memoryIds: [memory.id] }],
         timeline: request.input.memories.filter(memory => superseded.has(memory.id))
           .sort((a, b) => a.date.localeCompare(b.date) || a.content.localeCompare(b.content))
-          .map(memory => ({ date: memory.date.slice(0, 10), text: memory.content, memoryIds: [memory.id] })), contradictions: [] };
+          .map(memory => ({ date: memory.date.slice(0, 10), text: 'changed', memoryIds: [memory.id] })), contradictions: [] };
     } };
 }
 
@@ -65,16 +64,18 @@ export function engineCardFixture(t, { model = scriptedConsolidator(), ...coreOp
       intent: 'current', budget: { maxItems: 1024, maxMs: 5000 } }) };
 }
 
-// Ordinary complete sentences and UUID citations exercise model-sized output.
-export function realisticCardOutput(memories) {
-  const entry = (index, text) => ({ text, memoryIds: [memories[index % memories.length].id] });
-  return {
-    currentState: Array.from({ length: 8 }, (_, i) => entry(i,
-      `Orion group ${i} coordinates the community garden workshop with local volunteers and prepares the planting materials before the next scheduled public planning meeting.`)),
-    timeline: Array.from({ length: 4 }, (_, i) => ({ ...entry(i + 8,
-      `Orion group ${i} previously reserved the public library meeting room and shared the initial workshop schedule with the participating neighborhood volunteers.`),
-      date: memories[(i + 8) % memories.length].date.slice(0, 10) })),
-    contradictions: Array.from({ length: 2 }, (_, i) => entry(i,
-      `Orion group ${i} has conflicting reports about volunteer availability for the weekend workshop and still needs confirmation from the community planning coordinator.`))
-  };
+// Synthetic ordinary Memories, 15–40 words, with deterministic UUID-sized IDs.
+export function realisticCardMemories(count) {
+  const facts = [
+    'Orion volunteers prepare the community garden before the spring planting workshop and check the shared supply cupboard.',
+    'Orion coordinators reserve the public library room for the next planning meeting with local volunteers and send a reminder containing the arrival instructions.',
+    'Orion organizers collect participant dietary preferences before ordering lunch for the community workshop and ask volunteers to confirm additional accessibility needs with the library coordinator before the next scheduled meeting.',
+    'Orion facilitators share the planting guide with new volunteers and invite questions before the workshop begins, then check that everyone has the right tools, understands the safety instructions, and locates the spare materials.'
+  ];
+  return Array.from({ length: count }, (_, i) => {
+    const hex = createHash('sha256').update('synthetic-fact-' + i).digest('hex');
+    return { id: `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`,
+      revision: 1, currentness: 'current', content: facts[i % facts.length].replace('Orion', 'Orion group ' + i),
+      date: new Date(Date.UTC(2026, 0, i + 1)).toISOString() };
+  });
 }

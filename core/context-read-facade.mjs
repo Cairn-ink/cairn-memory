@@ -728,8 +728,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       // Sample host status once. Dated trials and final delivery must use the
       // same candidate trace; the v2 sampling point remains after assembly.
       const datedCandidates = input.representation === 'representation-v2-dated' ? candidateDetails() : null;
+      // Wire-only Card projection retains canonical stored-body fences and bodyRevision.
       const assemble = raw => assembleThreeLayerContext({ prepared: prepared.items, counter: options.counter, policy: input.policy,
-        query: input.query, readSet: input.readSet,
+        query: input.query, readSet: input.readSet, intent: input.intent,
         budget: input.budget, representation: input.representation, deadlineAt,
         responseBytes: datedCandidates ? ({ meteredBytes, diagnostics, selected }) => completeResponseBytes(success({ metered: null, snapshot: null,
           diagnostics: { ...diagnostics, omitted: { ...diagnostics.omitted, unavailable: prepared.unavailable },

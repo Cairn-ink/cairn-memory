@@ -94,6 +94,6 @@ export function partitionCardClusters(clusters) {
     const memories = [...cluster.memories].sort((a, b) => Date.parse(a.date) - Date.parse(b.date) ||
       a.id.localeCompare(b.id));
     return Array.from({ length: Math.ceil(memories.length / 12) }, (_, index) =>
-      ({ ...cluster, key: `${cluster.key}#${index}`, memories: memories.slice(index * 12, (index + 1) * 12) }));
+      ({ ...cluster, key: `${cluster.key}#${index}`, contextMemories: memories, memories: memories.slice(index * 12, (index + 1) * 12) }));
   });
 }

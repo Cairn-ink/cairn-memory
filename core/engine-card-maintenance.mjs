@@ -7,7 +7,7 @@ import { cardNamespace } from './private-card-input.mjs';
 import { object, fail } from './validation.mjs';
 import { CONSOLIDATE_PROMPT, validateConsolidation } from './engine-card-output.mjs';
 import { ENGINE_CARD_LIMITS, cardTrigger, clusterMemories, partitionCardClusters, chainLength, cardMemoryRevisions } from './engine-card-clusters.mjs';
-import { assembleContext } from './context-read-assembly.mjs';
+import { assembleContext, cardSourceKeys, memoryPackKey } from './context-read-assembly.mjs';
 
 /** Called only by a bounded maintenance pass, never admission/capture. The model
  * port uses the same callModel envelope, tokenizer, deadline and guarded adapter
@@ -153,17 +153,12 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
         for (const cluster of eligible.values()) {
           check();
           if (cluster.memories.length > ENGINE_CARD_LIMITS.sources) { result.state = 'source_limit'; continue; }
-          let rawSpans, rawTimer;
-          try {
-            rawSpans = await Promise.race([storage.rawSpans(ns, cluster.memories, check),
-              new Promise((_, reject) => { rawTimer = setTimeout(() => reject(Object.assign(Error('deadline'),
-                { code: 'model_timeout' })), deadline.remainingMs()); })]);
-          } finally { clearTimeout(rawTimer); }
-          const memories = cluster.memories.map(({ id, revision, content, date, currentness }) => ({ id, revision, content, date, currentness }));
+          const requestSources = [...cluster.memories];
+          const memories = requestSources.map(({ id, revision, content, date, currentness }) => ({ id, revision, content, date, currentness }));
           const ids = new Set(memories.map(memory => memory.id));
           const relevantRelations = edges?.filter(edge => ids.has(edge?.from) && ids.has(edge?.to) &&
             ['supersedes', 'contradicts'].includes(edge.kind)).slice(0, 192).map(({ from, to, kind, slot }) => ({ from, to, kind, slot }));
-          const request = () => ({ memories, rawSpans, ...(relevantRelations?.length ? { relations: relevantRelations } : {}) });
+          const request = () => ({ memories, rawSpans: [], ...(relevantRelations?.length ? { relations: relevantRelations } : {}) });
           const fits = () => {
             if (countTokens(model, modelRequestText(CONSOLIDATE_PROMPT, request())) > MODEL_INPUT_TOKENS) return false;
             const fit = modelPortValue(model, 'fitsConsolidationRequest', 'invalid_input');
@@ -172,11 +167,16 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
               [{ system: CONSOLIDATE_PROMPT, input: structuredClone(request()), maxOutputTokens: 1024 }]) }) === true; }
             finally { assertContentPort(); }
           };
-          while (rawSpans.length && !fits()) {
-            const shorter = rawSpans.map(span => { const points = [...span.text];
-              return { ...span, text: points.slice(0, Math.max(1, Math.floor(points.length / 2))).join('') }; });
-            if (shorter.every((span, index) => span.text.length === rawSpans[index].text.length)) break;
-            rawSpans = shorter;
+          // Own sources always go first. Newest same-topic context follows,
+          // bounded by both the existing adapter envelope and 24 Memories.
+          if (fits()) for (const memory of [...(cluster.contextMemories ?? [])]
+            .filter(memory => !ids.has(memory.id)).sort((a, b) => Date.parse(b.date) - Date.parse(a.date) || a.id.localeCompare(b.id))) {
+            check();
+            if (memories.length >= 24) break;
+            const { id, revision, content, date, currentness } = memory;
+            memories.push({ id, revision, content, date, currentness });
+            if (!fits()) { memories.pop(); continue; }
+            requestSources.push(memory);
           }
           if (!fits()) { result.state = 'input_budget'; continue; }
           const attempt = storage.claim(ns, cluster, new Date(now()).toISOString(), check);
@@ -184,10 +184,18 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
           result.modelCalls++;
           try {
             const output = await callModel(model, 'consolidate', CONSOLIDATE_PROMPT, request(), {
-              deadline, validateFresh: () => { check(); storage.validate(ns, cluster.memories, check); }, failureCode: 'consolidation_failed' });
-            const value = validateConsolidation(output, memories, model); check();
-            const card = value && storage.commit(ns, cluster, value, new Date(now()).toISOString(), check);
+              deadline, validateFresh: () => { check(); storage.validate(ns, requestSources, check); }, failureCode: 'consolidation_failed' });
+            const value = validateConsolidation(output, memories, model, cluster.memories); check();
+            const card = value.body && storage.commit(ns, cluster, value, new Date(now()).toISOString(), check);
             if (card) result.built.push(card);
+            // Context can identify an old current line in another Card. Reuse
+            // ordinary staling and its debounce; one generation ends this pass.
+            for (const other of cards.filter(card => card.status === 'current')) {
+              const covered = cardSourceKeys([{ type: 'card', metadata: { origin: 'engine' }, text: other.row.body,
+                sourceMemoryRefs: other.sourceRevisions.map(ref => ({ namespace: ns, ...ref })) }], true);
+              if (requestSources.some(memory => value.outOfDateIds.includes(memory.id) && covered.has(memoryPackKey({
+                namespace: ns, memoryId: memory.id, revision: memory.revision })))) storage.retire(ns, other.id, new Date(now()).toISOString());
+            }
             // Valid output without a committed Card must not reopen a missing
             // fingerprint on every subsequent maintenance pass.
             storage.finish(ns, attempt, card ? 'succeeded' : 'terminal', new Date(now()).toISOString());

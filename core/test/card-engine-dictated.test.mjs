@@ -1,11 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
-import { engineCardFixture, scriptedConsolidator, realisticCardOutput, ns, ok } from '../testing/engine-card-fixture.mjs';
+import { engineCardFixture, scriptedConsolidator, realisticCardMemories, ns, ok } from '../testing/engine-card-fixture.mjs';
 import { cardTrigger, partitionCardClusters } from '../engine-card-clusters.mjs';
 import { createEngineCardStorage } from '../engine-card-storage.mjs';
 import { createEngineCardMaintenance } from '../engine-card-maintenance.mjs';
-import { validateConsolidation } from '../engine-card-output.mjs';
+import { validateConsolidation, normalizedMemoryText } from '../engine-card-output.mjs';
 import { assembleContext, cardSourceKeys, memoryPackKey } from '../context-read-assembly.mjs';
 import { assembleThreeLayerContext } from '../context-read-three-layer.mjs';
 
@@ -134,12 +133,12 @@ test('both packers retain uncited cluster Memories when a body omits items, acro
 });
 
 test('host read retains ordinary Memories omitted by whole-entry fitting', async t => {
-  const model = scriptedConsolidator(({ input }) => realisticCardOutput(input.memories));
+  const model = scriptedConsolidator();
   const f = engineCardFixture(t, { model });
-  const memories = Array.from({ length: 12 }, (_, i) => f.add(facts[i % facts.length].replace('Orion', 'Orion group ' + i), i, i));
+  const memories = Array.from({ length: 12 }, (_, i) => f.add((facts[i % facts.length] + ' ').repeat(4).trim(), i, i));
   const pass = ok(await f.pass()); assert.equal(pass.built.length, 1, JSON.stringify(pass));
   const body = f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(pass.built[0].id).body;
-  assert.ok(model.countTokens(body) <= 600);
+  assert.ok(model.countTokens(body) <= 850);
   const omitted = memories.filter(memory => !body.includes(memory.id)); assert.ok(omitted.length);
   ok(await f.refresh());
   const read = ok(await f.read('what is the current state of Orion', { budget: { maxItems: 24, maxTokens: 6000 } }));
@@ -147,49 +146,15 @@ test('host read retains ordinary Memories omitted by whole-entry fitting', async
   for (const memory of omitted) assert.ok(read.metered.items.some(item => item.ref.type === 'memory' && item.ref.id === memory.id), memory.id);
 });
 
-const render = value => {
-  const tagged = entry => `${entry.text} [${entry.memoryIds.join(',')}]`;
-  return [value.currentState.map(tagged).join(' '),
-    ...(value.timeline.length ? ['Timeline: ' + value.timeline.map(e => `${e.date}: ${tagged(e)}`).join('; ')] : []),
-    ...(value.contradictions.length ? ['Open contradictions: ' + value.contradictions.map(tagged).join(' ')] : [])].join('\n');
-};
-const syntheticMemories = count => Array.from({ length: count }, (_, i) => {
-  const hex = createHash('sha256').update('synthetic-fact-' + i).digest('hex');
-  return { id: `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`,
-    date: new Date(Date.UTC(2026, 0, i + 1)).toISOString() };
-});
-for (const count of [7, 9, 12]) test(`realistic ${count}-Memory output fits whole entries in priority order`, t => {
-  const model = completeModel(), memories = syntheticMemories(count), output = realisticCardOutput(memories);
-  assert.equal(output.currentState.length, 8); assert.equal(output.timeline.length, 4); assert.equal(output.contradictions.length, 2);
-  for (const entry of output.currentState) assert.ok(entry.text.split(/\s+/u).length >= 12 && entry.text.split(/\s+/u).length <= 25);
-  assert.ok(model.countTokens(render(output)) > 600);
-  const expected = structuredClone(output); expected.timeline.sort((a, b) => a.date.localeCompare(b.date));
-  while (model.countTokens(render(expected)) > 600) {
-    if (expected.timeline.length) expected.timeline.shift();
-    else if (expected.currentState.length > 1) expected.currentState.pop();
-    else expected.contradictions.pop();
-  }
-  const value = validateConsolidation(output, memories, model), { body, ...entries } = value;
-  assert.deepEqual(entries, expected); assert.equal(body, render(entries)); assert.ok(model.countTokens(body) <= 600);
-  assert.ok(value.timeline.length < 4); assert.equal(output.timeline.length, 4, 'input remains intact');
-  t.diagnostic(JSON.stringify({ memories: count, bodyTokens: model.countTokens(body), replaced: cardSourceKeys([{ type: 'card',
-    metadata: { origin: 'engine' }, text: body, sourceMemoryRefs: memories.map(m => ({ namespace: ns, memoryId: m.id, revision: 1 })) }]).size }));
-});
-
-test('fitting removes current tails before contradiction tails and refuses an oversized sole sentence', () => {
-  const memories = syntheticMemories(12), model = completeModel(), output = realisticCardOutput(memories);
-  for (const entry of [...output.currentState, ...output.timeline, ...output.contradictions]) entry.memoryIds = memories.map(m => m.id);
-  const value = validateConsolidation(output, memories, model);
-  assert.equal(value.timeline.length, 0); assert.equal(value.currentState.length, 1);
-  assert.ok(value.contradictions.length < 2); assert.equal(value.body, render(value));
-  assert.deepEqual(value.currentState, output.currentState.slice(0, 1));
-  assert.deepEqual(value.contradictions, output.contradictions.slice(0, value.contradictions.length));
-  assert.throws(() => validateConsolidation({ currentState: [{ text: 'x '.repeat(950).trim() + '.',
-    memoryIds: memories.map(m => m.id) }], timeline: [], contradictions: [] }, memories, model), { code: 'invalid_model_output' });
+for (const count of [5, 8, 12]) test(`${count} verbatim dated Memories fit without rewriting`, () => {
+  const memories = realisticCardMemories(count), model = completeModel();
+  const { body } = validateConsolidation(output(memories), [...memories].reverse(), model);
+  assert.deepEqual(body.split('\n'), memories.map(m => `${m.date.slice(0, 10)}: ${normalizedMemoryText(m.content)} [${m.id}]`));
+  assert.ok(model.countTokens(body) <= 850);
 });
 
 for (const count of [13, 30]) test(`${count} Memories form bounded parts and generate once per pass`, async t => {
-  const f = engineCardFixture(t, { model: scriptedConsolidator(({ input }) => realisticCardOutput(input.memories)) });
+  const f = engineCardFixture(t, { model: scriptedConsolidator() });
   const memories = f.seed(count), filed = f.file(memories, 'Orion');
   const parts = partitionCardClusters([{ key: 'topic', memories: memories.map((m, i) =>
     ({ ...m, date: new Date(Date.UTC(2026, 0, i + 1)).toISOString() })) }]);
@@ -201,7 +166,7 @@ for (const count of [13, 30]) test(`${count} Memories form bounded parts and gen
   }
   assert.equal(ok(await f.pass()).modelCalls, 0);
   assert.deepEqual(built.map(c => c.sourceRevisions.length), count === 13 ? [12] : [12, 12, 6]);
-  assert.ok(f.model.calls.every(call => call.memories.length <= 12));
+  assert.ok(f.model.calls.every(call => call.memories.length <= 24));
 });
 
 test('appending changes only the final part; forgetting an early source hides and rebuilds shifted parts', async t => {

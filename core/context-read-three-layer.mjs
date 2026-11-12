@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import { assertContentPort } from './content-safety-boundary.mjs';
-import { assembleContext, ASSEMBLY_FRAMING, meteredText, cardSourceKeys, engineCardHits, memoryPackKey, sourceDateFields } from './context-read-assembly.mjs';
+import { assembleContext, ASSEMBLY_FRAMING, meteredText, cardSourceKeys, engineCardHits, deliveredCardText, memoryPackKey, sourceDateFields } from './context-read-assembly.mjs';
 import { ASSEMBLY_DEFAULTS, ASSEMBLY_LIMITS, CONTEXT_VERSION, namespaceKey } from './context-read-input.mjs';
 import { createBM25, scoreBM25 } from './context-read-bm25.mjs';
 import { tokenizeT1, termFrequencies } from './context-read-tokenize.mjs';
@@ -249,8 +249,8 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
       unit.rank = unit.memories[0]?.rank ?? args.prepared.length + unit.evidence[0].rank;
       unit.turns = [...new Set([...unit.memories.flatMap(item => item.turnIds ?? []), ...unit.evidence.map(item => item.key)])];
       const bodies = [];
-      for (const memory of unit.memories) if (!bodies.some(body => body === memory.text ||
-        overlap(new Set(tokenizeT1(body)), new Set(tokenizeT1(memory.text))) >= .6)) bodies.push(memory.text);
+      for (const memory of unit.memories) if (!bodies.some(body => body === deliveredCardText(memory, args.intent) ||
+        overlap(new Set(tokenizeT1(body)), new Set(tokenizeT1(deliveredCardText(memory, args.intent)))) >= .6)) bodies.push(deliveredCardText(memory, args.intent));
       unit.wire = unit.memories.length ? memoryWire(unit.memories[0], args.representation, bodies.join('\n'))
         : { layer: 'Raw', ...unit.evidence[0].wire };
       if (args.representation === 'representation-v2-dated' && unit.memories.length > 1) {
