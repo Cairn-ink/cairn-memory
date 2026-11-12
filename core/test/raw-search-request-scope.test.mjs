@@ -5,7 +5,7 @@ import { installRawSearchTestClock } from '../testing/raw-search-clock.mjs';
 import { sourceFixture, savedSource, ns, ok, localPlainPort } from '../testing/raw-source-fixtures.mjs';
 import { searchFixture } from '../testing/raw-search-fixtures.mjs';
 import { openRawSearch } from '../raw-search-index.mjs';
-import { createRawSearchRequestScope, withRawSearchRequestScope } from '../raw-search-request-scope.mjs';
+import { createRawSearchRequestScope, withRawSearchRequestScope, rawSearchRequestState } from '../raw-search-request-scope.mjs';
 import { readRawChannel, assembleThreeLayerContext } from '../context-read-three-layer.mjs';
 import { transaction } from '../database.mjs';
 
@@ -42,6 +42,55 @@ test('four concurrent scopes retain 24 candidates each through final revalidatio
     assert.ok(result.metered.items.some(item => item.ref.type === 'raw'));
     assert.equal(result.validateRaw(), true);
   })));
+});
+
+test('each scope keeps the existing 72-entry capacity and releases evicted routes', async t => {
+  const f = sourceFixture(t); await savedSource(f, 'Synthetic copper bounded scope.');
+  const s = await searchFixture(f); await s.maintain();
+  await withRawSearchRequestScope(async scope => {
+    const candidate = (await s.search({ query: 'copper' })).candidates[0], handles = [];
+    for (let i = 0; i < 73; i++) handles.push(await s.prepare(candidate));
+    assert.equal(scope.inspect().prepared, 72); assert.equal(scope.inspect().routes, 72);
+    assert.throws(() => s.service.revalidate([handles[0]]), { code: 'raw_search_unavailable' });
+    assert.equal(s.service.revalidate(handles.slice(1)).length, 72);
+  });
+});
+
+test("one scope cannot evict another scope's search proofs", async t => {
+  const f = sourceFixture(t); await savedSource(f, 'Synthetic copper proof.');
+  const s = await searchFixture(f); await s.maintain();
+  await withRawSearchRequestScope(async () => {
+    const candidate = (await s.search({ query: 'copper' })).candidates[0];
+    await withRawSearchRequestScope(async () => {
+      for (let i = 0; i < 8; i++) await s.search({ query: 'copper' });
+    });
+    const handle = await s.prepare(candidate);
+    assert.equal(handle.validate().ranges[0].text, 'Synthetic copper proof.');
+  });
+});
+
+test('maintenance gets a separate empty scope and finalizes it before returning', async t => {
+  const f = sourceFixture(t); await savedSource(f, 'Synthetic copper maintenance.');
+  const owner = {}; let armed = false, cleaned = 0;
+  const s = await searchFixture(f, { setupHost(host) {
+    const authorize = host.authority.authorize;
+    host.authority.authorize = (request, token) => {
+      if (armed && request.method === 'rawSearchMaintenance') {
+        const state = rawSearchRequestState(owner, () => ({ prepared: new Map(), searches: new Map(), routes: new Set(),
+          close() { cleaned++; } }));
+        assert.ok(state); assert.equal(state.prepared.size, 0); assert.equal(state.searches.size, 0);
+      }
+      return authorize(request, token);
+    };
+  } });
+  await s.maintain();
+  await withRawSearchRequestScope(async scope => {
+    await s.search({ query: 'copper' });
+    const before = scope.inspect(); armed = true;
+    await s.tick();
+    assert.equal(cleaned, 1, 'maintenance must finalize its own scope before returning');
+    assert.deepEqual(scope.inspect(), before, 'maintenance must not append state to its caller');
+  });
 });
 
 for (const outcome of ['success', 'refusal', 'disconnect', 'failure'])

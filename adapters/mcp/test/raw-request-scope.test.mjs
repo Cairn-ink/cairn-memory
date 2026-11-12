@@ -27,7 +27,7 @@ test('local tool scope closes on ' + outcome, { timeout: 10000 }, async t => {
   t.after(() => server.close());
   const controller = new AbortController();
   const operation = tools.get('inspect_memory')({ memoryId: 'synthetic' }, { signal: controller.signal });
-  await entered.promise;
+  await Promise.race([entered.promise, operation.then(() => { throw Error('tool_action_did_not_enter_scoped_work'); })]);
   if (outcome === 'abort' || outcome === 'disconnect') {
     if (outcome === 'abort') controller.abort(); else await server.close();
     assert.equal(state.prepared.size, 0, 'disconnect cleanup precedes action settlement');

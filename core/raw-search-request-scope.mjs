@@ -8,6 +8,14 @@ const requests = new AsyncLocalStorage();
 export function createRawSearchRequestScope() {
   const states = new Map();
   let closed = false;
+  let residue = { prepared: 0, searches: 0, routes: 0 };
+  const counts = () => {
+    let prepared = 0, searches = 0, routes = 0;
+    for (const state of states.values()) {
+      prepared += state.prepared.size; searches += state.searches.size; routes += state.routes.size;
+    }
+    return { prepared, searches, routes };
+  };
   return Object.freeze({
     run(work) {
       if (closed) fail('source_unavailable');
@@ -17,16 +25,14 @@ export function createRawSearchRequestScope() {
       if (closed) return;
       closed = true;
       for (const state of states.values()) state.close();
-      states.clear();
+      // Preserve only numeric cleanup evidence after dropping the resource map.
+      residue = counts(); states.clear();
     },
     // Content-free lifecycle observation; no text, tickets or handles escape.
     inspect() {
-      let prepared = 0, searches = 0, routes = 0;
-      for (const state of states.values()) {
-        prepared += state.prepared.size; searches += state.searches.size;
-        routes += state.routes.size;
-      }
-      return { closed, services: states.size, prepared, searches, routes };
+      const live = counts();
+      return { closed, services: states.size, prepared: live.prepared + residue.prepared,
+        searches: live.searches + residue.searches, routes: live.routes + residue.routes };
     },
   });
 }

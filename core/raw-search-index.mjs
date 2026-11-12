@@ -82,6 +82,18 @@ export async function openRawSearch(value) {
       map.set(key,{...entry,expires:performance.now()+5000});
     }
     const checkSources=(sources,intent,at=Infinity)=>{for(const source of sources)authority.check(source,intent,at);};
+    // Scoped routing is metadata-only: the module-level authority WeakMap
+    // must not become a second strong owner of invocation text or handles.
+    function scopedPreparedRoute(stateRef, ticket, handleRef) {
+      return { identity: authority.identity, resolve(at) {
+        ready();
+        const live = stateRef.deref()?.prepared.get(ticket), handle = handleRef.deref();
+        if (!live || !handle || live.handle !== handle || live.expires < performance.now()) fail('source_unavailable');
+        return { ...live, access() { live.access(() => {
+          ready(); expired(at); checkSources(live.sources, live.intent, at);
+        }); } };
+      } };
+    }
     function retainPrepared(ticket,entry) {
       const state = requestState(), { prepared } = state;
       retain(prepared,ticket,entry,RAW_SEARCH_LIMITS.preparations, id => {
@@ -89,7 +101,11 @@ export async function openRawSearch(value) {
         if (state.routes) { sharedPrepared.delete(handle); state.routes.delete(handle); }
         prepared.delete(id);
       });
-      state.routes?.add(entry.handle);
+      if (state.routes) {
+        state.routes.add(entry.handle);
+        sharedPrepared.set(entry.handle, scopedPreparedRoute(new WeakRef(state), ticket, new WeakRef(entry.handle)));
+        return;
+      }
       sharedPrepared.set(entry.handle,{identity:authority.identity,resolve(at){
         ready();
         const live=prepared.get(ticket);

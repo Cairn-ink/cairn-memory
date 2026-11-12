@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
+import { mkdirSync, unlinkSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { sourceFixture, savedSource } from '../testing/raw-source-fixtures.mjs';
@@ -17,7 +18,9 @@ const base = '405893c957ee582fecd1a48265351a73be6bb190';
 let workspace, original;
 test.before(async () => {
   workspace = createTestWorkspace(null, { prefix: 'r1-base-parity-' });
-  execFileSync('tar', ['-x', '-C', workspace.path], { input: execFileSync('git', ['archive', base, 'core', 'tools/testing']) });
+  const archive = join(workspace.path, 'base.tar');
+  execFileSync('git', ['archive', '--output', archive, base, 'core', 'tools/testing']);
+  execFileSync('tar', ['-xf', archive, '-C', workspace.path]); unlinkSync(archive);
   const load = path => import(pathToFileURL(join(workspace.path, path)).href);
   original = { ...await load('core/raw-search-index.mjs'), ...await load('core/index.mjs'),
     budget: (await load('core/context-read-budget.mjs')).contextBudget };
@@ -26,12 +29,14 @@ test.after(async () => workspace?.cleanup());
 test.beforeEach(installRawSearchTestClock);
 const code = work => { try { work(); return 'ready'; } catch (error) { return error.code; } };
 const normalized = value => JSON.parse(JSON.stringify(value, (key, item) =>
-  ['proof', 'ticket', 'nextCursor', 'snapshot'].includes(key) ? item ? '<opaque>' : item : key === 'timings' ? '<timings>' : item));
+  ['proof', 'ticket', 'nextCursor', 'snapshot', 'lastActualWork'].includes(key) ? item ? '<opaque>' : item : key === 'timings' ? '<timings>' : item));
 
 test('unscoped Raw outputs, all prepared paths, retention, expiry and refusal codes equal the base', async t => {
   const f = sourceFixture(t); await savedSource(f, 'Synthetic copper hosted parity.');
-  const current = await searchFixture(f); await current.maintain();
-  const previous = await original.openRawSearch(current.options); f.workspace.defer(() => previous.close());
+  const current = await searchFixture(f);
+  const directory = join(f.workspace.path, 'base-index'); mkdirSync(directory, { mode: 0o700 });
+  const previous = await original.openRawSearch({ ...current.options, directory }); f.workspace.defer(() => previous.close());
+  assert.deepEqual(normalized(await current.maintain()), normalized(await previous.maintain(undefined, current.host.token)));
   const run = async service => {
     const found = await service.search({ query: 'copper' }, current.host.token), candidate = found.candidates[0];
     assert.ok(candidate);

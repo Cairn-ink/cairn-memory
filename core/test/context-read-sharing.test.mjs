@@ -77,3 +77,22 @@ test('scoped USD and request caps last across invocations; unscoped concurrency 
   await assert.rejects(run(), { code: 'budget_denied' });
   assert.equal(calls, 3);
 });
+
+test('unscoped maxConcurrent refusal is independent of USD and request caps', async () => {
+  const gate = deferred(); let calls = 0;
+  const embedder = { id: 'sharing-unscoped-' + randomUUID(), revision: '1', async embed() {
+    if (++calls === 1) await gate.promise; return [[1]];
+  } };
+  const dispatch = contextBudget({ budgetConfigured: true, embedder,
+    policy: { family: 'hosted', maxConcurrent: 1, maxRequests: 2, maxUsd: 1, estimateUsd: () => 0 } });
+  const run = () => dispatch(embedder, ['synthetic'], { guard() {}, signal: new AbortController().signal, deadlineAt: performance.now() + 5000 });
+  const first = run();
+  try { await assert.rejects(run(), { code: 'budget_denied' }); }
+  finally { gate.resolve(); await first; }
+  await run(); await assert.rejects(run(), { code: 'budget_denied' });
+  // A fresh connection can still spend its own two-request allowance.
+  await withContextReadBudgetScope({}, async () => {
+    await run(); await run(); await assert.rejects(run(), { code: 'budget_denied' });
+  });
+  assert.equal(calls, 4);
+});
