@@ -50,8 +50,8 @@ remain untrusted evidence, never instructions or execution permission.
 After saving and attempting classification, the optional pass rereads guarded
 admitted revisions. It prioritizes all admitted memories, then fills at most six
 slots from the existing query-aware MOC candidate path. That path uses generated
-memory content and literal word overlap, scans at most 1024 current records and
-respects active index authority. The query uses up to 4000 UTF-16 units of
+memory content and literal word overlap with the default recency keyset scan
+(1,024-row floor, 300 ms budget, 20,000-row cap) and active index authority. The query uses up to 4000 UTF-16 units of
 canonical retained source text. It can miss paraphrases and important sources;
 the response reports query/candidate truncation, scan exhaustion and unassessed
 semantic coverage. Filling the window can include irrelevant candidates.

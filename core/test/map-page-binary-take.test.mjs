@@ -27,7 +27,8 @@ const descendingScan = `      const capacity = Math.min(count, page.rows.length)
         const pageEnded = take === page.rows.length;
         const exhausted = pageEnded && page.scanExhausted !== false;
         const value = { items: selected.filter((row) => row.item).map((row) => row.item),
-          nextCursor: pageEnded ? null : encodeCursor({ ...binding, e: page.epoch, a: { offset: offset + take } }),
+          nextCursor: pageEnded ? null : encodeCursor({ ...binding, e: page.epoch, a: { offset: offset + take,
+            ...(navigation ? { scanBoundary: page.scanBoundary } : {}) } }),
           exhausted, truncatedBy: exhausted ? null : take < capacity ? 'token_budget' : 'page_limit',
           indexRevision: page.epoch,
           invalidRefs: selected.filter((row) => row.invalidRef).map((row) => row.invalidRef) };

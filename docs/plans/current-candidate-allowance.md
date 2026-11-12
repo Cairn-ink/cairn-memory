@@ -1,5 +1,11 @@
 # Current-memory candidate allowance
 
+> Candidate discovery in this plan is superseded by the default recency keyset
+> scan in [defaults](../defaults.md): 1,024-row floor, fixed 400 ms budget,
+> 20,000-row cap and score/ID top-1,024 retention for all recall modes.
+> The former candidate-policy constructor option is removed. Historical
+> observations and other contracts below remain records of their original version.
+
 Dependent base: query-candidates `d1381aed856effd4448236a872cf3ecaced92fe9`.
 This slice supersedes Q1's raw-row allowance, not its frozen experimental result.
 Retaining history must not consume the allowance for finding current memories.
