@@ -98,6 +98,19 @@ for(const layout of [18,53])for(const seed of seeds)test(`receipt walk equivalen
   compare([receipt('own-write')],'before own write');
   transaction(db,()=>add(receipt('own-write'),'deleted'));
   assert.equal(compare([receipt('own-write')],'after own write'),layout===18?'accept':'source_excluded');
+  if(layout===53 && process.env.RECEIPT_WALK_BASELINE!=='1'){
+    let starts=0,batches=0;const prepare=db.prepare.bind(db);
+    const hook=t.mock.method(db,'prepare',sql=>{
+      const statement=prepare(sql),all=statement.all.bind(statement);
+      if(sql.startsWith('SELECT id,revision,deleted,updated_at FROM memories'))statement.all=(...args)=>{if(args.length===5)starts++;return all(...args);};
+      if(sql.includes('FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN'))statement.all=(...args)=>{
+        const result=all(...args);assert.ok(result.length<=128*5,'per-memory bounded batch');batches++;return result;
+      };
+      return statement;
+    });
+    try{transaction(db,()=>current.assertReceipts(ns,[controls.safe,controls.foreign,controls.near]));}finally{hook.mock.restore();}
+    assert.equal(starts,2,'one namespace walk: one initial page for each deleted range');assert.ok(batches>0);
+  }
   let snapshotComparisons=0;
   const snapshotDecision=(storage,overflow,namespace,batch)=>withContentSuppressionRequest(()=>transaction(db,()=>{
     const proof=contentSuppressionRequestInside(db,[namespace]);
