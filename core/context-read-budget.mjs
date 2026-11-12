@@ -39,15 +39,34 @@ function portError(error) {
   return safe;
 }
 
+// An opaque object identifies a connection-lifetime ledger. The host gives
+// maintenance a different object. Only counters are retained, never payloads.
+const ledgerScope = new AsyncLocalStorage();
+const scopedLedgers = new WeakMap();
+export function withContextReadBudgetScope(scope, work) {
+  if (!scope || typeof scope !== 'object') throw TypeError('invalid_budget_scope');
+  return ledgerScope.run(scope, work);
+}
+function ledgerFor(binding) {
+  const scope = ledgerScope.getStore();
+  let selected = ledgers;
+  if (scope) {
+    selected = scopedLedgers.get(scope);
+    if (!selected) scopedLedgers.set(scope, selected = new Map());
+  }
+  let ledger = selected.get(binding);
+  if (!ledger) selected.set(binding, ledger = { requests: 0, usd: 0, active: 0 });
+  return ledger;
+}
+
 export function contextBudget(options) {
   if (!options.budgetConfigured) return null;
   const { policy } = options;
   const local = policy.family === 'local' && policy.maxBatchDocuments === 1;
   const port = options.embedder;
   const binding = JSON.stringify([port?.id, port?.revision]);
-  let ledger = ledgers.get(binding);
-  if (!ledger) { ledger = { requests: 0, usd: 0, active: 0 }; ledgers.set(binding, ledger); }
   async function dispatch(port, texts, { signal, deadlineAt, guard, onInvoke }) {
+    const ledger = ledgerFor(binding);
     // Hosts may call this engine guard before transmitting. Resume its own
     // request proof; a host callback itself still gets a fresh caller scope.
     // The final canonical guard must follow every mutable signal hook.

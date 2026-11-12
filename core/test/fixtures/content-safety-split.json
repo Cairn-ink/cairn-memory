@@ -1402,9 +1402,11 @@
       "exports": [
         "consumeLocalReservation",
         "contextBudget",
-        "isBudgetEmbeddingPort"
+        "isBudgetEmbeddingPort",
+        "withContextReadBudgetScope"
       ],
       "additions": {
+        "withContextReadBudgetScope": "Selects an opaque connection or maintenance ledger containing counters only; adds no SQL, authority grant, provider payload retention or fact writer.",
         "isBudgetEmbeddingPort": "Recognizes only fixed ledger wrappers through a module-private WeakSet; their real embedder still receives its single E1 fence."
       }
     }

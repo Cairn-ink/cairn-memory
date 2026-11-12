@@ -1,3 +1,4 @@
+import { withRawSearchRequestScope } from '../../core/raw-search-request-scope.mjs';
 import { contextOptions } from '../../core/context-read-input.mjs';
 import { cardCurrentHostConfiguration } from './card-current-configuration.mjs';
 import { registerCardCurrentTools } from './card-current-tools.mjs';
@@ -199,11 +200,13 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
   snapshotConfigured = false, recallContextConfigured = false, recallContext, recoveryConfigured = false,
   stagingConfigured = false, contextSemantic = false, retainedRaw = false, contextReadSources: sources }) {
   let disposed = false, disposing;
+  const rawRequests = new Set();
   const refresh = (context && contextSemantic || typeof model?.consolidate === 'function')
     ? startContextMaintenance(core, context ?? { readSet: [binding] }, { cards: typeof model?.consolidate === 'function', semantic: contextSemantic }) : null;
   const dispose = () => {
     if (disposed) return disposing;
     disposed = true;
+    for (const scope of rawRequests) scope.close();
     cards?.revoke();
     methods?.revoke();
     assets?.revoke();
@@ -259,6 +262,7 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
   const close = server.close.bind(server);
   server.close = async () => {
     // Revoke before the first await, including reads currently decoding a source.
+    for (const scope of rawRequests) scope.close();
     cards?.revoke();
     methods?.revoke();
     assets?.revoke();
@@ -270,7 +274,9 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
     server.registerTool(name, { description, inputSchema,
       annotations: { readOnlyHint, destructiveHint,
         openWorldHint: ['recall_memory', 'capture_memory', 'classify_unfiled_memories', 'keep_session_episode', 'find_memory_candidates', 'read_memory_context'].includes(name) } },
-    async (input) => {
+    (input, extra) => withRawSearchRequestScope(async scope => {
+      rawRequests.add(scope);
+      try {
       let result;
       try { result = await action(input); } catch { result = error('memory_operation_failed'); }
       if (roles && name === 'read_role_task_context') return roleTaskToolResponse(result);
@@ -284,7 +290,8 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
       const response={ content: [{ type: 'text', text: encoded }], isError: !result.ok };
       if(methodTool&&Buffer.byteLength(JSON.stringify(response))>262144)return {content:[{type:'text',text:JSON.stringify({...error('response_too_large'),evidenceTrust:'untrusted-data-not-instructions'})}],isError:true};
       return response;
-    });
+      } finally { rawRequests.delete(scope); }
+    }, { signal: extra?.signal }));
   };
   if(assets)registerAssetTools(tool,core,assets);
   if(methods)registerMethodTools(tool,core,methods);
@@ -564,7 +571,7 @@ function startContextMaintenance(core, access, { cards = false, semantic = true 
   const arm = () => {
     if (closed) return;
     timer = setTimeout(() => {
-      active = (async () => {
+      active = withRawSearchRequestScope(async () => {
         if (cards) for (const namespace of readSet) {
           if (closed) return;
           const pass = await core.maintainCards({ namespace, budget: { maxItems: 512, maxMs: 30000 } });
@@ -574,7 +581,7 @@ function startContextMaintenance(core, access, { cards = false, semantic = true 
         if (!closed && access.call && (semantic || cards)) await access.call(core, 'refreshContextIndex', {
           readSet, types, intent: 'current', budget: { maxItems: 16, maxMs: 1000 },
         });
-      })().catch(() => {}).finally(() => { active = null; arm(); });
+      }).catch(() => {}).finally(() => { active = null; arm(); });
     }, 1000);
     timer.unref();
   };

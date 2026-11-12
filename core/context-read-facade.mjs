@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { cardLineageItemInside, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade, assertContentPort, contentAuthorityPort } from './content-safety-boundary.mjs';
@@ -63,6 +64,14 @@ function metadata(port) {
   if (!port) return null;
   const { id, revision, dimensions, normalization } = port;
   return { id, revision, dimensions, normalization };
+}
+
+// Hosts keep this opaque key for the connection lifetime. No key selects the
+// legacy single partition; the key is not serialized into engine cursors.
+const rankingPartition = new AsyncLocalStorage();
+export function withContextReadRankingPartition(key, work) {
+  if (!key || typeof key !== 'object') throw TypeError('invalid_ranking_partition');
+  return rankingPartition.run(key, work);
 }
 
 export function openContextCore(baseOptions, contextRead, openBase) {
@@ -132,8 +141,16 @@ function createContextFacade(path, options, { readOnly, ...busyOptions }) {
 function initializeContextFacade(path, options, { readOnly, database }) {
   if(options.authority)options={...options,authority:contentAuthorityPort(options.authority)};
   let closed = false;
-  let retainedSourceBytes = 0;
-  const rankings = new Map(), controllers = new Set(), indexes = new Map(), dispatch = contextBudget(options);
+  const defaultRankings = { rankings: new Map(), retainedSourceBytes: 0 };
+  let rankingPartitions = new WeakMap();
+  const rankingState = () => {
+    const key = rankingPartition.getStore();
+    if (!key) return defaultRankings;
+    let state = rankingPartitions.get(key);
+    if (!state) rankingPartitions.set(key, state = { rankings: new Map(), retainedSourceBytes: 0 });
+    return state;
+  };
+  const controllers = new Set(), indexes = new Map(), dispatch = contextBudget(options);
   const memoryOnly = path === ':memory:';
   const guardTimeouts = new WeakSet();
   const guardAuxiliaries = () => {
@@ -302,10 +319,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   // U5c-2 retained state includes identities, witnesses, fences and diagnostics;
   // the scan corpora never enter a ranking. Oldest eviction never renews TTL.
   function dropRanking(id) {
-    retainedSourceBytes -= rankings.get(id)?.sourceBytes ?? 0; rankings.delete(id);
+    const state = rankingState();
+    state.retainedSourceBytes -= state.rankings.get(id)?.sourceBytes ?? 0; state.rankings.delete(id);
   }
   function expireRankings() {
-    for (const [id, ranking] of rankings) if (Date.now() >= ranking.expires) dropRanking(id);
+    for (const [id, ranking] of rankingState().rankings) if (Date.now() >= ranking.expires) dropRanking(id);
   }
   const requestBinding = input => bind('ranking-request', [input.readSet, input.query, input.types, input.intent, input.semantic, ...(options.sources ? [input.sources] : [])]);
   const accessBinding = access => bind('access', access.accessGenerations);
@@ -359,7 +377,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     } catch { fail('invalid_cursor'); }
     if (!token || token.v !== 1 || token.b !== requestBinding(input) || !Number.isInteger(token.p) || token.p < 1 || token.p > (options.sources ? 32 : 24)) fail('invalid_cursor');
     expireRankings();
-    const ranking = rankings.get(token.r);
+    const ranking = rankingState().rankings.get(token.r);
     if (!ranking || token.e !== ranking.expires || token.c !== ranking.configuration || token.a !== accessBinding(access) ||
         token.g !== ranking.index || token.p >= ranking.items.length || Date.now() >= token.e) fail('cursor_stale');
     if (ranking.configuration !== rankingConfiguration(ranking.trace, ranking.sourceState, ranking.items)) fail('cursor_stale');
@@ -524,8 +542,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       const sourceBytes = ranking.sourceBytes ?? 0;
       if (sourceBytes > SOURCE_LIMITS.retainedBytes) fail('context_item_too_large');
       // Evict before transferring request-local state into retained ownership.
-      while (rankings.size >= 128 || retainedSourceBytes + sourceBytes > SOURCE_LIMITS.retainedBytes) dropRanking(rankings.keys().next().value);
-      rankings.set(ranking.id, ranking); retainedSourceBytes += sourceBytes;
+      const state = rankingState();
+      while (state.rankings.size >= 128 || state.retainedSourceBytes + sourceBytes > SOURCE_LIMITS.retainedBytes) dropRanking(state.rankings.keys().next().value);
+      state.rankings.set(ranking.id, ranking); state.retainedSourceBytes += sourceBytes;
       access.check();
       if (sourceState) read(() => assertSourcesInside(input, sourceState, 'cursor_stale'));
       storage.assertState(projection, current);
@@ -873,6 +892,6 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       }, noOwner: ['getContextReadCapabilities'], failure: facadeFailure }), close() {
     if (closed) return;
     closed = true; for (const controller of controllers) assertContentPort({invoke:()=>controller.abort()});
-    rankings.clear(); retainedSourceBytes = 0; for (const entry of indexes.values()) entry.storage.close(); indexes.clear(); if (db?.isOpen) db.close();
+    defaultRankings.rankings.clear(); defaultRankings.retainedSourceBytes = 0; rankingPartitions = new WeakMap(); for (const entry of indexes.values()) entry.storage.close(); indexes.clear(); if (db?.isOpen) db.close();
   } };
 }
