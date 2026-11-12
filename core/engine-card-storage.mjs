@@ -1,3 +1,4 @@
+import { contextEmbeddingGuard } from './context-read-sidecar.mjs';
 import { randomUUID, createHmac, createHash } from 'node:crypto';
 import { readTransaction, transaction } from './database.mjs';
 import { withContentSuppressionRequest, inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
@@ -321,6 +322,10 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       return metadata;
     }, [ns]));
   }
-  return { available, snapshot, rawSpans, cards, carry, retire, commit, claim, finish, relations, pressureItems, deliver,
+  // Each pass owns a versioned canonical decision. Probes must run outside
+  // validation snapshots, including the final synchronous transport fence.
+  const pauseGuard = (ns, deadlineAt) => contextEmbeddingGuard(db,
+    work => { ready(); return readTransaction(db, work); }, [ns], deadlineAt);
+  return { pauseGuard, available, snapshot, rawSpans, cards, carry, retire, commit, claim, finish, relations, pressureItems, deliver,
     validate(ns, memories, check) { return read(ns, () => { if (!sourcesCurrent(ns, memories.map(m => m.source), check)) fail('source_unavailable'); }); } };
 }
