@@ -220,33 +220,37 @@ export function assertEpisodeSourceProof(ns, sources, facts, budget = { remainin
 const receiptEncoding=new WeakMap();
 function* writerReceiptInputs(db, check, ns, receipts) {
   const tuples=receipts.map(receipt=>[receipt.client,receipt.sessionId,receipt.eventId,receipt.role,receipt.excerpt]);
-  let filter='',args=[];
   // In Unicode mode the surrogate range matches unpaired code units only.
   // NUL, replacement characters and malformed inputs use the original SQL.
-  if(!tuples.some(tuple=>tuple.some(value=>/[\u0000\uFFFD\uD800-\uDFFF]/u.test(value)))) {
-    if(!receiptEncoding.has(db))receiptEncoding.set(db,db.prepare('PRAGMA encoding').get().encoding);
-    if(receiptEncoding.get(db)==='UTF-8') {
-      filter=` AND (EXISTS (SELECT 1 FROM json_each(?) source
+  const eligible=!tuples.some(tuple=>tuple.some(value=>/[\u0000\uFFFD\uD800-\uDFFF]/u.test(value)));
+  const predicate=` AND (EXISTS (SELECT 1 FROM json_each(?) source
         WHERE client=json_extract(source.value,'$[0]') COLLATE BINARY AND session_id=json_extract(source.value,'$[1]') COLLATE BINARY
           AND event_id=json_extract(source.value,'$[2]') COLLATE BINARY AND role=json_extract(source.value,'$[3]') COLLATE BINARY
           AND excerpt=json_extract(source.value,'$[4]') COLLATE BINARY)
         OR instr(CAST(client AS BLOB),x'00')>0 OR instr(CAST(session_id AS BLOB),x'00')>0
         OR instr(CAST(event_id AS BLOB),x'00')>0 OR instr(CAST(role AS BLOB),x'00')>0 OR instr(CAST(excerpt AS BLOB),x'00')>0)`;
-      args=[JSON.stringify(tuples)];
-    }
-  }
+  const wanted=eligible?JSON.stringify(tuples):undefined;
   for (const deleted of [0,1]) {
     let after;
     while (true) {
       check();
-      const select=(clause,args,limit)=>db.prepare(`SELECT id,revision,deleted,updated_at FROM memories INDEXED BY namespace_memories
+      const select=(clause,args,limit)=>{
+        // The uncorrelated table-valued PRAGMA runs once on the first nonempty
+        // page. Empty ranges do not evaluate the projection. Cache its result
+        // before any receipt filter, without adding a statement or a row.
+        const encoding=eligible&&!receiptEncoding.has(db)?', (SELECT encoding FROM pragma_encoding) AS receipt_encoding':'';
+        const rows=db.prepare(`SELECT id,revision,deleted,updated_at${encoding} FROM memories INDEXED BY namespace_memories
         WHERE owner_id=? AND scope=? AND project_id=? AND deleted=? ${clause}
         ORDER BY updated_at DESC,id LIMIT ?`).all(...boundary(ns),deleted,...args,limit);
+        if(encoding&&rows.length)receiptEncoding.set(db,rows[0].receipt_encoding);
+        return rows;
+      };
       const memories=after ? select('AND updated_at=? AND id>?',[after.updated_at,after.id],129) : select('',[],129);
       if(after && memories.length<129)memories.push(...select('AND updated_at<?',[after.updated_at],129-memories.length));
       const keys=memories.slice(0,sourcePageSize);
       if(keys.length) {
         check();
+        const filter=eligible&&receiptEncoding.get(db)==='UTF-8'?predicate:'',args=filter?[wanted]:[];
         const inputs=db.prepare(`SELECT r.*,wanted.key AS wanted_entry,
           json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted
           FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN (
