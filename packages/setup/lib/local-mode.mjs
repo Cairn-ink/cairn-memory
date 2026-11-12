@@ -269,7 +269,13 @@ async function setupLocal(options, selection, detection, context) {
   }
   const capturePreferences = await captureSettings(detection.root);
   for (const client of selected) if (captureRequested(options.noCapture ? false : undefined, capturePreferences.clients[client])) {
-    await clientConfigDirectory(client, env);
+    try { await clientConfigDirectory(client, env); }
+    catch (error) {
+      if (!(error instanceof SetupError)) throw error;
+      write(t(error.key, error.params));
+      write(t('local_capture_setup_off', { client: client === 'claude' ? 'Claude Code' : 'Codex', reason: 'unsafe_path' }));
+      return 2;
+    }
   }
   progress.localOperation = true; progress.localAction = 'setup';
   await ownedLocalTree(detection.root);

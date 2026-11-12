@@ -438,3 +438,21 @@ for (const client of ['claude-code','codex']) for (const mode of [0o700,0o750,0o
   // Unspecified callers still require a private parent.
   if (mode !== 0o700) await assert.rejects(stateLock(lock,()=>assert.fail('private lock entered')),/state_permissions/);
 });
+
+for (const kind of ['readable','symlink','foreign']) test(`native settings lock refuses ${kind} lock file`,async t => {
+  const f = await setupFixture(t);
+  const { nativeSettingsLock } = await import('../raw/local-settings-lock.mjs');
+  const fs = (await import('node:fs')).default;
+  const { syncBuiltinESMExports } = await import('node:module');
+  const { writeFile, symlink } = await import('node:fs/promises');
+  const lock = f.clientConfigPath+'.cairn-local.lock';
+  if (kind === 'symlink') await symlink(f.clientConfigPath,lock);
+  else await writeFile(lock,'{}',{ mode:kind === 'readable' ? 0o644:0o600 });
+  const original = fs.promises.lstat;
+  if (kind === 'foreign') {
+    fs.promises.lstat = async (path,...args) => { const info = await original(path,...args); if (path === lock) info.uid = process.getuid()+1; return info; };
+    syncBuiltinESMExports();
+  }
+  try { await assert.rejects(nativeSettingsLock(lock,f.request,()=>assert.fail('unsafe lock entered')),/state_permissions|state_symlink|state_owner/); }
+  finally { fs.promises.lstat = original; syncBuiltinESMExports(); }
+});

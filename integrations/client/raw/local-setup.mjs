@@ -11,11 +11,12 @@ import { randomUUID } from 'node:crypto';
 import { ownData } from '../../../core/local-authority-input.mjs';
 import { checkedPath, privateRead, privateWrite, privateDirectory, syncDirectory } from '../private-state.mjs';
 import { stateLock } from '../state-lock.mjs';
+import { nativeSettingsLock } from './local-settings-lock.mjs';
 import { createLocalRawHost } from './local-host.mjs';
 import { activateHostAuthority } from './local-host-rearm.mjs';
 import { localCodexQualificationStatus } from './local-codex-qualification.mjs';
 import { absolute, exact, setupRequest, consented, locations, runtime, runtimeRoot, sha, fail, result, failure, checkSignal } from './local-setup-input.mjs';
-import { directory, nativeDirectory, nativeSnapshot, nativeWrite, mergeNative, events, hookCommand } from './local-setup-files.mjs';
+import { directory, nativeSnapshot, nativeWrite, mergeNative, events, hookCommand } from './local-setup-files.mjs';
 
 const phases = ['preparing','prepared','activation_pending','active','disabling','disabled','reenabling','rearm_required'];
 const bytes = value => JSON.stringify(value,null,2)+'\n';
@@ -227,7 +228,7 @@ async function activate(root,signal) {
     const ready = await host(root).status({ signal });
     if (ready.status !== 'ready') fail('recovery_required');
     await qualification(request);
-    return stateLock(request.clientConfigPath+'.cairn-local.lock',async () => {
+    return nativeSettingsLock(request.clientConfigPath+'.cairn-local.lock',request,async () => {
       checkSignal(signal); const before = await nativeSnapshot(request.clientConfigPath,request);
       if (record.phase === 'active') { if (!registered(before.text,request)) fail('configuration_changed'); return result('active'); }
       const text = mergeNative(before.text,request,true);
@@ -235,7 +236,7 @@ async function activate(root,signal) {
       await nativeWrite(request.clientConfigPath,text,before,request);
       if ((await host(root).status({ signal })).status !== 'ready') fail('authority_changed');
       await publish(root,record,'active'); return result('active');
-    },{ checkDirectory:path => nativeDirectory(path,request) });
+    });
   });
 }
 async function disable(root,signal) {
@@ -247,10 +248,10 @@ async function disable(root,signal) {
     record = await publish(root,record,'disabling');
     await clearSessionStarts(locations(root).state);
     try {
-      await stateLock(request.clientConfigPath+'.cairn-local.lock',async () => {
+      await nativeSettingsLock(request.clientConfigPath+'.cairn-local.lock',request,async () => {
         const before = await nativeSnapshot(request.clientConfigPath,request),text = mergeNative(before.text,request,false);
         if (text !== before.text) await nativeWrite(request.clientConfigPath,text,before,request);
-      },{ checkDirectory:path => nativeDirectory(path,request) });
+      });
     } catch (error) { await publish(root,record,'disabled'); throw error; }
     await publish(root,record,'disabled'); return result('disabled');
   });

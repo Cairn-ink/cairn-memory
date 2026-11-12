@@ -298,6 +298,7 @@ for (const unsafe of ['775', '777', 'symlink', 'symlink-component', 'file', 'for
   t.diagnostic(`unsafe ${unsafe} setup exit ${result.code}`);
   assert.equal(result.code, 2, result.display + result.stderr);
   assert.match(result.display, /The local memory directory is unsafe/);
+  if (unsafe === '775') assert.equal(result.display.trim().split('\n').at(-1), 'Claude Code: conversation saving is OFF (unsafe_path).');
   assert.deepEqual(await snapshot(f.home), inventory);
   assert.equal((await f.calls('claude')).some(args => args[0] === 'mcp' && args[1] === 'add'), false);
 });
