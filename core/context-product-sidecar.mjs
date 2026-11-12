@@ -12,7 +12,7 @@ import { performance } from 'node:perf_hooks';
 import { dirname } from 'node:path';
 import { createExclusiveSqliteFile, probeRollbackJournal, sqliteFileStat, protectedDeleteJournal, sameJournal } from './sqlite-journal-probe.mjs';
 import { readTransaction } from './database.mjs';
-import { contextCardEligible, contextReadDeleteJournal } from './context-read-sidecar.mjs';
+import { contextEmbeddingGuard, assertContextEmbeddingAllowedInside, contextCardEligible, contextReadDeleteJournal } from './context-read-sidecar.mjs';
 import { cardDependencyFence } from './card-current-storage.mjs';
 import { termFrequencies, tokenizeT1, TOKENIZER_VERSION, REPRESENTATION_VERSION } from './context-read-tokenize.mjs';
 import { scoreBM25, rankScores } from './context-read-bm25.mjs';
@@ -1404,6 +1404,15 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   }
 
   return {
+    embeddingGuard: (readSet, deadlineAt) => contextEmbeddingGuard(canonical, canonicalRead, readSet, deadlineAt),
+    assertEmbeddingAllowed: (readSet, deadlineAt) => canonicalRead(() => assertContextEmbeddingAllowedInside(canonical, readSet, deadlineAt)),
+    embeddingError(readSet, deadlineAt, error) {
+      if (error.code === 'budget_denied') {
+        try { canonicalRead(() => assertContextEmbeddingAllowedInside(canonical, readSet, deadlineAt)); }
+        catch (denial) { denial.attempts=error.attempts;return denial; }
+      }
+      return error;
+    },
     visibleCounts,
     vectorFence(p,lexical) {
       return recordBindings(lexical,target(projection(p),lexical.accessDigest))===null&&
