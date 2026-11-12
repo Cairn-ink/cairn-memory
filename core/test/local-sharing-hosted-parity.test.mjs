@@ -19,7 +19,7 @@ let workspace, original;
 test.before(async () => {
   workspace = createTestWorkspace(null, { prefix: 'r1-base-parity-' });
   const archive = join(workspace.path, 'base.tar');
-  execFileSync('git', ['archive', '--output', archive, base, 'core', 'tools/testing']);
+  execFileSync('git', ['archive', '--output', archive, base, 'core', 'tools/testing', 'plugins/cairn-memory/lib/redact.mjs']);
   execFileSync('tar', ['-xf', archive, '-C', workspace.path]); unlinkSync(archive);
   const load = path => import(pathToFileURL(join(workspace.path, path)).href);
   original = { ...await load('core/raw-search-index.mjs'), ...await load('core/index.mjs'),
