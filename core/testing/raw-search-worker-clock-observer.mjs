@@ -11,7 +11,7 @@ const observer=`{
   Object.defineProperty(performance,'now',{configurable:true,value:()=>now});
   const prepare=DatabaseSync.prototype.prepare;
   DatabaseSync.prototype.prepare=function(sql){const statement=prepare.call(this,sql);
-    const boundary=sql==='PRAGMA query_only'?'opening':sql.startsWith('SELECT s.*,h.sequence')?'search':null;
+    const boundary=sql==='PRAGMA query_only'?'opening':sql.startsWith('SELECT * FROM segments WHERE published=1 ORDER BY id DESC')?'search':null;
     if(boundary&&!crossed.has(boundary)){crossed.add(boundary);now+=1001;}
     return statement;
   };

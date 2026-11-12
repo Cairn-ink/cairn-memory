@@ -111,7 +111,7 @@ test('measurement hooks retain internal error codes and operation deadline overs
       const prepare=DatabaseSync.prototype.prepare;let mode='error',crossed=false;
       DatabaseSync.prototype.prepare=function(sql){const stmt=prepare.call(this,sql);
         if(mode==='status'&&sql==='SELECT * FROM header WHERE singleton=1')throw Object.assign(Error('synthetic_status_failure'),{code:'synthetic_status_failure'});
-        if(!crossed&&sql.startsWith('SELECT s.*,h.sequence')){crossed=true;
+        if(!crossed&&sql.startsWith('SELECT * FROM segments WHERE published=1 ORDER BY id DESC')){crossed=true;
           if(mode==='error')throw Object.assign(Error('synthetic_internal_failure'),{code:'synthetic_internal_failure'});
           now+=1007;
         }return stmt;};
@@ -211,7 +211,7 @@ test('retry refresh deadline and later attempt failure retain origin, final code
     const {measurementError,takeInternalErrors,takeInternalErrorCounts}=await import(${JSON.stringify(url('../../tools/testing/raw-search-phase-ledger.mjs'))});
     test('retry chain',async t=>{const f=sourceFixture(t);await savedSource(f,'Synthetic copper.');const s=await searchFixture(f);await s.maintain();
       takeInternalErrors();takeInternalErrorCounts();const prepare=DatabaseSync.prototype.prepare;let attempts=0;
-      DatabaseSync.prototype.prepare=function(sql){if(sql.startsWith('SELECT s.*,h.sequence')){
+      DatabaseSync.prototype.prepare=function(sql){if(sql.startsWith('SELECT * FROM segments WHERE published=1 ORDER BY id DESC')){
         attempts++;throw Object.assign(Error('synthetic_attempt'),{code:attempts===1?'source_busy':'unsupported_database'});
       }return prepare.call(this,sql);};
       try{let failure;await assert.rejects(s.search({query:'copper'}),error=>{failure=error;return error.code==='raw_search_unavailable';});
@@ -234,7 +234,7 @@ test('cold window scopes handled partials across samples and warm operations',as
   const {fileURLToPath}=await import('node:url');
   const workspace=createTestWorkspace(t),recordPath=join(workspace.path,'fixture.json');
   const url=path=>new URL(path,import.meta.url).href;
-  const seed=`const {performance}=await import('node:perf_hooks');Object.defineProperty(performance,'now',{configurable:true,value:()=>100});
+  const seed=`const {performance}=await import('node:perf_hooks');let now=100;Object.defineProperty(performance,'now',{configurable:true,value:()=>now});
     const {measureRawSearch}=await import(${JSON.stringify(url('../../tools/testing/measure-raw-search.mjs'))});
     await measureRawSearch({diagnostic(){}},{sizes:[3],rawCapBytes:12000});
     const {readFileSync}=await import('node:fs'),{join}=await import('node:path');
@@ -245,7 +245,9 @@ test('cold window scopes handled partials across samples and warm operations',as
     const host=rawSearchHost(),service=await openRawSearch({version:'raw-search-v1',enabled:true,backend:'local',
       path:join(record.path,'canonical.sqlite'),directory:join(record.path,'index'),ownerId:ns.ownerId,readSet:[ns],
       authority:host.authority,crypto:localPlainPort(),maintenanceTurn:broker()});
-    try{await service.maintain({maxItems:16,maxMs:5000},host.token);}finally{await service.close();}`;
+    try{for(let turn=0;turn<4;turn++){now+=1010;await service.maintain({maxItems:16,maxMs:5000},host.token);}
+      if(!(await service.search({query:'copper telescope'},host.token)).candidates.length)throw Error('synthetic_index_not_ready');
+    }finally{await service.close();}`;
   for(const mode of ['sample','warm','later-sample']){
     const seedRun=spawnSync(process.execPath,['--input-type=module','-e',seed],{encoding:'utf8',timeout:30000,
       env:{...process.env,CAIRN_RAW_MEASURE_PROFILE:'fixture-only',CAIRN_RAW_MEASURE_FIXTURE_OUTPUT:recordPath}});
@@ -268,7 +270,7 @@ test('cold window scopes handled partials across samples and warm operations',as
         return {...result,source:source.replace(before,"if(globalThis.syntheticFactory())throw Object.assign(Error('synthetic_factory'),{code:'unsupported_database'});"+before)};}});
       globalThis.syntheticFactory=()=>++opens===2&&${JSON.stringify(mode)}==='sample';
       const prepare=DatabaseSync.prototype.prepare;
-      DatabaseSync.prototype.prepare=function(sql){const statement=prepare.call(this,sql);if(sql.startsWith('SELECT s.*,h.sequence')&&new Error().stack.includes('at searchAttempt')){
+      DatabaseSync.prototype.prepare=function(sql){const statement=prepare.call(this,sql);if(sql.startsWith('SELECT * FROM segments WHERE published=1 ORDER BY id DESC')&&new Error().stack.includes('at searchAttempt')){
         reads++;if(reads===(${JSON.stringify(mode)}==='later-sample'?5:1))now+=1001;
         if((${JSON.stringify(mode)}==='warm'&&reads===2)||(${JSON.stringify(mode)}==='later-sample'&&reads===13))throw Object.assign(Error('synthetic_warm'),{code:'unsupported_database'});
       }return statement;};`);

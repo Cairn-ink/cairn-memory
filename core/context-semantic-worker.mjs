@@ -295,7 +295,7 @@ async function embed(input,op,metadata) {
   // A provider can invoke this engine callback from a pre-existing async
   // resource. Restore both private scopes before any synchronous caller hook.
   function checkDispatch(){return request?withContentPortBoundary(request.guard,()=>contentRequest.run(request,dispatchCheck)):dispatchCheck();}
-  function beforeDispatch(){if(transmitted)fail('budget_denied');checkDispatch();transmitted=true;}
+  function beforeDispatch(){if(transmitted)fail('budget_denied');checkDispatch();maintenance.recheckPause(input);transmitted=true;}
   const settleInputTokens=value=>{
     if(usage!==undefined||!Number.isSafeInteger(value)||value<0||value>bound){protocolFailure=true;fail('provider_error');}usage=value;
   };

@@ -126,17 +126,24 @@ export async function openRawSearch(value) {
         const guard=()=>{ready();expired(deadlineAt);access();};
         let semantic={state:'bm25-only',reason:options.embedder?'partial_coverage':'disabled'},queryVector=null;
         const port=options.embedder;let query=input.queryVector;
+        let queryAllowed=!port||authority.queryAllowed(deadlineAt);
+        const queryGuard=()=>{
+          guard();
+          if(!authority.queryAllowed(deadlineAt)){queryAllowed=false;fail('namespace_paused');}
+        };
+        if(!queryAllowed)semantic={state:'bm25-only',reason:'namespace_paused'};
         const chunks=scopedRows.reduce((n,row)=>{expired(deadlineAt);return n+row.chunks.length;},0);
         const complete=!snapshot.partial&&scopedRows.every(row=>same(row.embedder,metadata)&&row.chunks.every(c=>c.vector));
-        if(port&&!query&&complete&&scopedRows.length&&embedding.semanticCapacity(chunks,port).eligible){
+        if(port&&queryAllowed&&!query&&complete&&scopedRows.length&&embedding.semanticCapacity(chunks,port).eligible){
           try{
             if(Buffer.byteLength(input.query)+64>8192)fail('provider_error');
-            const result=await dispatch(port,[input.query],{signal:new AbortController().signal,deadlineAt,guard});
+            const result=await dispatch(port,[input.query],{signal:new AbortController().signal,deadlineAt,guard:queryGuard});
             if(!Array.isArray(result)||result.length!==1)fail('invalid_vector');
             query={input:input.query,embedder:metadata,vector:result[0]};
-          }catch(error){guard();semantic={state:'bm25-only',reason:['budget_denied','timeout','rate_limited'].includes(error.code)?error.code:'provider_error'};}
+          }catch(error){guard();if(interrupted(error))throw error;
+            semantic={state:'bm25-only',reason:!queryAllowed?'namespace_paused':['budget_denied','timeout','rate_limited'].includes(error.code)?error.code:'provider_error'};}
         }
-        if(port&&query&&query.input===input.query&&same(query.embedder,metadata)&&embedding.semanticCapacity(chunks,port).eligible&&complete){
+        if(port&&queryAllowed&&query&&query.input===input.query&&same(query.embedder,metadata)&&embedding.semanticCapacity(chunks,port).eligible&&complete){
           try {
             // Another search may have populated the same reader while this
             // operation awaited its query provider. Reuse that reservation.

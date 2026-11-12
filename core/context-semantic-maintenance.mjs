@@ -11,7 +11,7 @@ import { fail } from './validation.mjs';
 
 const same=(a,b)=>canonicalJson(a)===canonicalJson(b);
 export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandles}) {
-  const paths=new Map(),views=new Map(),preparing=new Map();let closed=false;
+  const paths=new Map(),views=new Map(),preparing=new Map(),embeddingGuards=new WeakMap();let closed=false;
   const coverage=readSet=>({policy:'recent-projects-v1',selectionRevision:'semantic-service',requestedNamespaces:readSet.length,selectedNamespaces:readSet.length,omittedNamespaces:0});
   const viewKey=(path,writable,journalMode)=>JSON.stringify([path,writable,journalMode]);
   async function prepare(path,writable=false,journalMode=c.host.configuration.semanticSidecarJournalMode??'DELETE') {
@@ -192,6 +192,12 @@ export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandle
     const p=input.projection;
     if(!p||!same(p.readSet,metadata.readSet)||p.readSet[0].ownerId!==state.ownerId||input.kind==='refresh'&&!metadata.maintenance)fail('authority_required');
     const v=open(metadata.path);
+    // Preserve the Worker's existing protocol and pinned loader bytes. The
+    // reader recovers the fixed pause reason from a fresh canonical decision.
+    let guard=embeddingGuards.get(input);
+    if(!guard){guard=v.storage.embeddingGuard(p.readSet,p.deadlineAt);embeddingGuards.set(input,guard);}
+    try { guard(); }
+    catch(error) { if(error.code==='namespace_paused')fail('budget_denied');throw error; }
     v.facade.port.read(()=>{
       const layout=cachedContentLayout(v.facade.port.db);
       if(!layout)fail('evidence_unavailable');
@@ -213,6 +219,14 @@ export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandle
       }
     });
   }
+  // The transport callback runs this after validation and mutable host hooks,
+  // outside their snapshots. Reuse only the current dispatch's versioned guard.
+  function recheckPause(input) {
+    const guard=embeddingGuards.get(input);
+    if(!guard)fail('budget_denied');
+    try { guard(); }
+    catch(error) { if(error.code==='namespace_paused')fail('budget_denied');throw error; }
+  }
   function portGuard(message,metadata) {
     if(!message.contentFence)return undefined;
     const f=message.contentFence,v=open(metadata.path),db=v.facade.port.db,layout=cachedContentLayout(db);
@@ -226,7 +240,7 @@ export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandle
       if((row?`${row.epoch_hi}:${row.epoch_lo}`:'0:0')!==f.suppressionEpoch)fail('evidence_unavailable');
     };
   }
-  return {prepare,prepareTargets,targets,validate,catalog,purge,transmission,portGuard,close(){
+  return {prepare,prepareTargets,targets,validate,catalog,purge,transmission,recheckPause,portGuard,close(){
     closed=true;let failure;
     for(const v of views.values())for(const close of [()=>v.storage.close(),()=>v.facade.close()])try{close();}catch(error){failure??=error;}
     views.clear();if(failure)throw failure;

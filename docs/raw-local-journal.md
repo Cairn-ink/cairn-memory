@@ -13,6 +13,32 @@ turns. Ordinary capture retains its receive-time fallback when `occurredAt`
 is missing; explicit `occurredAt` wins. Separate session range metadata records
 whether any message lacked a real event time. See [all defaults and costs](defaults.md).
 
+New saves use a bounded recent search lane while background reconciliation
+continues. Namespace pause temporarily refuses search, source opening and final
+delivery; resume restores retained eligible publications without waiting for the
+full walk. Permanent denials still take effect while paused. Disabling future
+automatic capture alone leaves the saved prefix readable.
+
+Recent visibility uses the newest 256 publications within a 4 MiB hint slice,
+merged with ordinary rows under the shared search limits. A result can age out or
+hit the byte sublimit before the full index becomes searchable. Coverage stays
+`partial` until current full reconciliation and retrieval prove completion;
+partial results are not proof of absence. Recovery after a lost journal anchor
+examines only the newest 64 headers. Older sources depend on full reconciliation,
+which may not finish while saves continue. Reserved cleanup can revisit a stable
+store about four times more slowly under sustained recent work; this is
+conditional, not a deletion-latency bound.
+
+The mechanism adds no save-path SQL or schema migration. A minute-level freshness
+target still requires save/read latency qualification under contention and a
+supervised host with regular admitted turns. At 50k or more parts, full
+reconciliation has no finite guarantee. Before manual canonical VACUUM, restore
+in place or explicit-rowid imports, stop Raw search readers and maintenance,
+purge the owner's derived search sidecar and reopen to rebuild. Purge clears its
+cursor and publications without changing canonical Raw or permanent denials.
+See the [Raw search interface](plans/raw-search-interface.md) for limits and
+older-engine compatibility.
+
 Local forget and correct hide whole source conversations from both current and
 history Raw search. Each operation snapshots the old receipts inside its write
 transaction and records permanent windows of **30 minutes before and after each

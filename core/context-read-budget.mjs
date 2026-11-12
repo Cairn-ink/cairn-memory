@@ -51,10 +51,11 @@ export function contextBudget(options) {
     // Hosts may call this engine guard before transmitting. Resume its own
     // request proof; a host callback itself still gets a fresh caller scope.
     // The final canonical guard must follow every mutable signal hook.
-    const beforeDispatch = engineGuard(function beforeDispatch() {
+    const checkDispatch = engineGuard(function checkDispatch(phase) {
       if (isSignalAborted(signal) || performance.now() >= deadlineAt) throw refused('timeout');
-      guard();
+      guard(phase);
     });
+    const beforeDispatch = () => checkDispatch('pre-send');
     guard();
     const usd = local ? 0 : assertContentPort({invoke:()=>{try{const value=policy.estimateUsd(Object.freeze([...texts]));return typeof value==='number'?value:NaN;}catch(error){throw portError(error);}}});
     guard();
@@ -101,8 +102,8 @@ export function contextBudget(options) {
       listenSignal(signal,true,aborted);
       timer = setTimeout(aborted, Math.max(0, deadlineAt - performance.now()));
     });
-    try { const result = await Promise.race([operation, timeout]); beforeDispatch(); return result; }
-    catch (error) { guard(); throw error; }
+    try { const result = await Promise.race([operation, timeout]); checkDispatch('post-send'); return result; }
+    catch (error) { guard('post-send'); throw error; }
     finally { clearTimeout(timer); listenSignal(signal,false,aborted); }
   }
   // The only marked ports execute this ledger's fixed dispatch implementation.
@@ -112,7 +113,7 @@ export function contextBudget(options) {
     let invoked=false;
     const wrapper=Object.freeze({didInvoke:()=>invoked,id:port.id,revision:port.revision,dimensions:port.dimensions,
       normalization:port.normalization,embed:(texts, extra)=>{invoked=false;return dispatch(port,texts,{...controls,
-        onInvoke:()=>{invoked=true;},guard:()=>{controls.guard();extra.beforeDispatch();}});}});
+        onInvoke:()=>{invoked=true;},guard:phase=>{controls.guard(phase);extra.beforeDispatch(phase);}});}});
     enginePorts.add(wrapper);return wrapper;
   };
   return dispatch;
