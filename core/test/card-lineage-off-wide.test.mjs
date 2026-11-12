@@ -10,6 +10,10 @@ import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 const revision='fd5c59ef8e67cc58bb855a95f8910c668150bfa3';
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const pins=JSON.parse(readFileSync(new URL('./fixtures/card-lineage-off-wide-baseline.json',import.meta.url),'utf8'));
+const receiptWalkPins=JSON.parse(readFileSync(new URL('./fixtures/card-lineage-off-wide-receipt-walk.json',import.meta.url),'utf8'));
+const receiptWalkSQL=([sql])=>sql.startsWith('SELECT id,revision,deleted,updated_at FROM memories INDEXED BY namespace_memories') ||
+  sql.includes('FROM json_each(?) wanted CROSS JOIN receipts r') ||
+  sql.startsWith('SELECT r.*,? AS memory_revision,? AS memory_deleted FROM receipts r INDEXED BY memory_receipts');
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const summary=record=>({calls:record.calls.map(([method,result,start,end])=>[method,hash(result),start??null,end??null]),
   statements:record.statements.length,sql:hash(record.statements),tables:record.dump.map(([name,rows])=>[name,rows.length,hash(rows)]),
@@ -48,12 +52,24 @@ for(const base of [23,33])for(const mode of ['open','workload'])for(const eventT
     if(baseline) {
       const old=run(baseline.path,oldPath,mode,cell);
       assert.deepEqual(current.effectWitnesses,old.effectWitnesses,'complete observed effect rows, including rolled-back writes');
-      assert.equal(JSON.stringify(current.calls),JSON.stringify(old.calls),'exact serialized calls and errors');
-      assert.deepEqual(current.statements,old.statements,'executed SQL sequence, including opening');
+      if(receiptWalkPins.records[key]) {
+        assert.equal(JSON.stringify(current.calls.map(([method,result])=>[method,result])),
+          JSON.stringify(old.calls.map(([method,result])=>[method,result])),'exact serialized calls and errors');
+        assert.ok(current.statements.length<=old.statements.length,'receipt batching only reduces SQL');
+        for(const [i,call] of current.calls.entries())if(call.length===4) {
+          const previous=old.calls[i];
+          assert.ok(call[3]-call[2]<=previous[3]-previous[2],call[0]+' statement count cannot rise');
+        }
+        assert.deepEqual(current.statements.filter(row=>!receiptWalkSQL(row)),old.statements.filter(row=>!receiptWalkSQL(row)),
+          'every SQL execution and binding outside receipt enumeration, including all transactions');
+      } else {
+        assert.equal(JSON.stringify(current.calls),JSON.stringify(old.calls),'exact serialized calls and errors');
+        assert.deepEqual(current.statements,old.statements,'executed SQL sequence, including opening');
+      }
       assert.deepEqual(current.dump,old.dump,'every table population');
       assert.deepEqual(summary(old),pins.records[key],'frozen pins come only from the archived baseline');
     }
-    assert.equal(pins.revision,revision);assert.deepEqual(actual,pins.records[key]);
+    assert.equal(pins.revision,revision);assert.deepEqual(actual,receiptWalkPins.records[key]??pins.records[key]);
     assert.ok(current.statements.every(entry=>entry.length===3&&Array.isArray(entry[2])),'SQL execution includes bound arguments');
     assert.equal(current.statements.some(([sql])=>/card_body_|card_operations_owner_action/.test(sql)),false,'no extended lineage scan');
     if(mode==='workload') {
