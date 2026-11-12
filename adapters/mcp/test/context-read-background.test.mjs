@@ -8,8 +8,9 @@ import { openMemoryCore } from '../../../core/index.mjs';
 import { createContextReadAccess } from '../context-read-access.mjs';
 import { startLocalContextMaintenance } from '../../../core/local-defaults.mjs';
 import { controlledClock } from '../../../core/testing/context-read-assembly-fixture.mjs';
+import { assertContextReadCanonicalDelete, openContextReadSidecar } from '../../../core/context-read-sidecar.mjs';
 import { DatabaseSync } from 'node:sqlite';
-import { existsSync, lstatSync, renameSync } from 'node:fs';
+import { existsSync, lstatSync, renameSync, chmodSync, linkSync } from 'node:fs';
 
 const ns = { ownerId: 'synthetic-owner', scope: 'personal', projectId: null };
 const counter = { id: 'synthetic', countTokens: () => 1 };
@@ -149,5 +150,56 @@ for (const change of ['wal', 'replacement']) test(`a changing sidecar probe stil
     assert.equal(changedInode === originalInode, change === 'wal');
     assert.equal(existsSync(sidecar + '-wal'), false);
     assert.equal(existsSync(sidecar + '-shm'), false);
+  } finally { childProcess.spawnSync = spawn; syncBuiltinESMExports(); }
+});
+
+for (const change of ['replacement', 'file-protection', 'directory-protection', 'link-identity', 'wal']) test(`second concurrent header probe refuses ${change}`, async t => {
+  const workspace = createTestWorkspace(t), path = join(workspace.path, 'memory.sqlite');
+  const access = createContextReadAccess(ns, false, { maintenance: true });
+  const core = openMemoryCore({ path, contextRead: { ...access.configuration, counter } });
+  ok(core.admit({ namespace: ns, memory: { content: 'Synthetic telescope', kind: 'fact' }, receipts: [{ client: 'synthetic', sessionId: 'synthetic', eventId: 'synthetic', role: 'user', excerpt: 'telescope' }] }));
+  ok(await access.call(core, 'refreshContextIndex', { readSet: [ns], types: ['memory'], intent: 'current', budget: { maxItems: 1024, maxMs: 5000 } }));
+  await core.close();
+  const reader = openMemoryCore({ path, contextRead: { ...access.configuration, counter } }); workspace.defer(() => reader.close());
+  const sidecar = path + '.context-read-v1.sqlite', spawn = childProcess.spawnSync;
+  // Invalidate the header cache without altering its identity or protection.
+  const initial = new DatabaseSync(sidecar); initial.exec('PRAGMA user_version=1'); initial.close();
+  let probes = 0;
+  childProcess.spawnSync = (command, args, options) => {
+    const header = args[2]?.includes('PRAGMA journal_mode') && args[3]?.includes('.context-read-v1.sqlite');
+    // Change the second child's input after the retry captured its baseline,
+    // so its actual header result (including WAL refusal) sees the change.
+    if (header && probes === 1) {
+      if (change === 'replacement') renameSync(sidecar, sidecar + '.previous');
+      if (change === 'file-protection') chmodSync(sidecar, 0o640);
+      else if (change === 'directory-protection') chmodSync(workspace.path, 0o750);
+      else if (change === 'link-identity') linkSync(sidecar, sidecar + '.linked');
+      else { const writer = new DatabaseSync(sidecar); writer.exec(change === 'wal' ? 'PRAGMA journal_mode=WAL' : 'CREATE TABLE synthetic(value TEXT)'); writer.close(); }
+    }
+    const result = spawn(command, args, options);
+    if (header && ++probes === 1) { const writer = new DatabaseSync(sidecar); writer.exec('PRAGMA user_version=2'); writer.close(); }
+    return result;
+  };
+  syncBuiltinESMExports();
+  try {
+    const result = await access.call(reader, 'findCandidates', query);
+    assert.equal(probes, 2); assert.equal(result.ok, false); assert.equal(result.error.code, 'index_unavailable');
+  } finally { childProcess.spawnSync = spawn; syncBuiltinESMExports(); chmodSync(workspace.path, 0o700); }
+});
+
+for (const caller of ['managed', 'read-only']) test(`${caller} caller retains strict changing-header refusal`, t => {
+  const workspace = createTestWorkspace(t), path = join(workspace.path, 'memory.sqlite');
+  const db = new DatabaseSync(path); db.exec('CREATE TABLE synthetic(value TEXT)'); chmodSync(path, 0o600); workspace.defer(() => db.close());
+  const spawn = childProcess.spawnSync; let probes = 0;
+  childProcess.spawnSync = (command, args, options) => {
+    const result = spawn(command, args, options);
+    if (args[2]?.includes('PRAGMA journal_mode')) { probes++; db.exec('PRAGMA user_version=1'); }
+    return result;
+  };
+  syncBuiltinESMExports();
+  try {
+    if (caller === 'managed') assert.throws(() => assertContextReadCanonicalDelete(path), /index_unavailable/);
+    else assert.throws(() => openContextReadSidecar({ path, db, readOnly: true }), /index_unavailable/);
+    assert.equal(probes, 1, 'strict caller never retries with concurrent writes allowed');
   } finally { childProcess.spawnSync = spawn; syncBuiltinESMExports(); }
 });

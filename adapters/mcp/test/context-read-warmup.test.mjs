@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { openMemoryCore } from '../../../core/index.mjs';
@@ -182,4 +183,58 @@ test('server close joins a configured provider that settles after shutdown start
     try { assert.equal(side.prepare('SELECT count(*) AS n FROM vectors').get().n, 0, 'revoked refresh cannot publish late vectors'); }
     finally { side.close(); }
   } finally { if (settle) settle(); await server.close(); t.mock.timers.reset(); }
+});
+
+// First read publishes a cold lexical projection before the semantic timer.
+for (const mode of ['paused', 'disabled', 'second-process', 'enabled']) test(`cold first-read publication respects saving ${mode} at the semantic timer`, async t => {
+  controlledClock(t);
+  const workspace = createTestWorkspace(t), path = join(workspace.path, 'memory.sqlite');
+  const seed = openMemoryCore({ path });
+  assert.equal(seed.admit({ namespace: ns, memory: { content: 'Synthetic telescope', kind: 'fact' }, receipts: [{
+    client: 'synthetic', sessionId: 'synthetic', eventId: 'synthetic', role: 'user', excerpt: 'Synthetic telescope' }] }).ok, true);
+  await seed.close();
+  const setControl = setting => {
+    const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      import { DatabaseSync } from 'node:sqlite';
+      const db = new DatabaseSync(process.argv[1]);
+      try { db.prepare('INSERT INTO episode_controls(owner_id,scope,project_id,generation,paused,enabled) VALUES(?,?,?,?,?,?) ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET paused=excluded.paused,enabled=excluded.enabled')
+        .run('synthetic-owner','personal','','synthetic', Number(process.argv[2]), Number(process.argv[3])); }
+      finally { db.close(); }
+    `, path, String(Number(setting === 'paused')), String(Number(setting !== 'disabled'))], { encoding: 'utf8', env: {}, timeout: 10000 });
+    assert.equal(child.error, undefined); assert.equal(child.status, 0, child.stderr);
+  };
+  if (mode === 'paused' || mode === 'disabled') setControl(mode);
+  const records = [];
+  for (const reference of mode === 'enabled' ? [true, false] : [false]) {
+    let now = 0;
+    const calls = [], embedder = { id: 'synthetic-cold', revision: '1', dimensions: 2, normalization: 'l2',
+      async embed(texts) { calls.push({ at: now, count: texts.length }); return texts.map(() => [1, 0]); } };
+    const access = createContextReadAccess(ns, false, { maintenance: true });
+    const core = openMemoryCore({ path, contextRead: { ...access.configuration, counter, embedder,
+      policy: { family: 'hosted', maxRequests: 100, maxUsd: 1, estimateUsd: () => 0 } } });
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    let closed = false, timer, active;
+    const arm = () => { if (!closed) timer = setTimeout(() => {
+      active = Promise.resolve(access.call(core, 'refreshContextIndex', { readSet: [ns], types: ['memory'], intent: 'current',
+        budget: { maxItems: 16, maxMs: 1000 } })).finally(() => { active = null; arm(); });
+    }, 1000); };
+    // Reference is main's unchanged semantic schedule, on the same cold read.
+    let driver;
+    if (reference) { arm(); driver = { async close() { closed = true; clearTimeout(timer); await active; } }; }
+    else driver = startLocalContextMaintenance(core, access, { semantic: true });
+    try {
+      const read = await access.call(core, 'contextRead', { readSet: [ns], types: ['memory'], intent: 'current', query: 'telescope', raw: false, semantic: false });
+      assert.equal(read.ok, true, JSON.stringify(read)); assert.equal(read.value.metered.items.length, 1);
+      const side = new DatabaseSync(path + '.context-read-v1.sqlite', { readOnly: true });
+      try { assert.equal(side.prepare('SELECT published FROM generations').get().published, 1); } finally { side.close(); }
+      assert.deepEqual(calls, [], 'first read never enters the provider');
+      if (mode === 'second-process') setControl('paused');
+      for (const ms of [999, 1, 1000, 1000]) { now += ms; t.mock.timers.tick(ms); await flush(); if (now < 1000) assert.deepEqual(calls, []); }
+      if (mode === 'enabled') assert.deepEqual(calls, [{ at: 1000, count: 1 }]);
+      else assert.deepEqual(calls, [], 'paused or disabled stored text never enters the provider');
+      records.push(calls);
+    } finally { await driver.close(); await core.close(); t.mock.timers.reset(); }
+    if (reference) unlinkSync(path + '.context-read-v1.sqlite');
+  }
+  if (mode === 'enabled') assert.deepEqual(records[1], records[0]);
 });

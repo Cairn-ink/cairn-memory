@@ -100,17 +100,17 @@ test('warm embedded store retains the exact default deadline (unchanged)', async
   assert.ok(!result.ok || result.value.metered.items.length === 0);
   assert.equal(remainingProbes, 0, 'warm reads add no remaining-work probe');
 });
-for (const reader of [0, 1]) test(`${reader ? 'product' : 'embedded'} final validation cannot complete: delivers nothing`, async t => {
+for (const reader of [0, 1]) for (const invalid of [false, true]) test(`${reader ? 'product' : 'embedded'} late final validation ${invalid ? 'fails and refuses delivery' : 'completes and delivers selected items'}`, async t => {
   const f = await fixture(t); await f.build(); const clock = controlledClock(t); let reads = 0;
   statements(t, (statement, sql) => {
     if (!sql.startsWith('SELECT *') || !sql.includes(' FROM memories WHERE ')) return;
     const get = statement.get.bind(statement);
-    statement.get = (...args) => { const row = get(...args); if (++reads > 2) clock.advance(1100); return row; };
+    statement.get = (...args) => { const row = get(...args); if (++reads > 2) { clock.advance(1100); if (invalid) return undefined; } return row; };
   });
   const result = await f.readers[reader](query({ deadlineMs: 1000 }));
-  assert.ok(!result.ok || result.value.metered.items.length === 0, 'late canonical validation must not deliver selected text');
+  if (invalid) assert.ok(!result.ok || result.value.metered.items.length === 0, 'failed validation refuses delivery');
+  else assert.equal(ok(result).metered.items.length, 2, 'validated selected items survive the deadline');
   assert.ok(reads > 2);
-  if (!reader) assert.equal(result.error.details.candidates.coverage.stops.deadline, true);
 });
 
 test('first-read grace refuses work beyond the bounded default window (unchanged deadline refusal)', async t => {
