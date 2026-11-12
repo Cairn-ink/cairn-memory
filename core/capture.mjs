@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { isStorageBusy } from './database.mjs';
 import { isCaptureSourceBusy, isPreDispatchToken } from './capture-source-safety.mjs';
-import { captureSnapshot, extractedItems, retainedSourceView } from './capture-input.mjs';
+import { captureSnapshot, extractedItems, retainedSourceView, extractionLimit } from './capture-input.mjs';
 import { callModel } from './model-call.mjs';
 import { fittingCap, prefixUnits, requestFits } from './model-packing.mjs';
 import { boundedText, fail, MemoryStoreError } from './validation.mjs';
@@ -44,9 +44,22 @@ async function classifyAdmission(model, namespace, admission, operations, key, d
     }
     const mapped = unwrap(operations.map({ namespace, purpose: 'classification' }));
     deadline?.check();
-    const classified = unwrap(await operations.classifyPlacement({ namespace,
-      memoryIds: guards.map((guard) => guard.memoryId), expectedMemoryRevisions: guards,
-      mapRevision: mapped.indexRevision }));
+    // Placement requests retain their five-memory schema and output budget.
+    const classified = { proposal: { items: [] }, basedOn: { memoryRevisions: [], indexRevision: mapped.indexRevision } };
+    for (let start = 0; start < guards.length; start += 5) {
+      const group = guards.slice(start, start + 5);
+      const part = unwrap(await operations.classifyPlacement({ namespace,
+        memoryIds: group.map(guard => guard.memoryId), expectedMemoryRevisions: group,
+        mapRevision: mapped.indexRevision }));
+      classified.proposal.items.push(...part.proposal.items);
+      classified.basedOn.memoryRevisions.push(...part.basedOn.memoryRevisions);
+      if (part.classificationTruncated) {
+        classified.classificationTruncated ??= { memoriesShortened: 0, catalogItemsOmitted: 0 };
+        classified.classificationTruncated.memoriesShortened += part.classificationTruncated.memoriesShortened;
+        classified.classificationTruncated.catalogItemsOmitted = Math.max(
+          classified.classificationTruncated.catalogItemsOmitted, part.classificationTruncated.catalogItemsOmitted);
+      }
+    }
     deadline?.check();
     const apply = keep ? operations.applyPlacement : operations.applyInitialPlacement;
     const placed = unwrap(apply({ ...(keep ? { namespace } : { ...key, token: attemptToken }),
@@ -183,7 +196,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
           }
         } });
     let items = catalog ? extractedWindowItems(output, snapshot, catalog,
-      reason => emitDiagnostic(model, 'extract', 'core_validation', reason)) : extractedItems(output, snapshot,
+      reason => emitDiagnostic(model, 'extract', 'core_validation', reason), extractionLimit(request.input.messages)) : extractedItems(output, snapshot,
       retained ? sourceMessages : sourceMessages.map(message => ({ ...message, content: boundedText(message.content, 800, true) })),
       reason => emitDiagnostic(model, 'extract', 'core_validation', reason), selected);
     if (!catalog && snapshot.causal) for (const item of items) item.sourceIndices = item.sourceIndices.map(index => allowed[index]);

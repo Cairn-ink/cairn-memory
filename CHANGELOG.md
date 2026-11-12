@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — capture instructions and capacity
+
+- Extraction instructions prioritize each distinct user statement, including
+  tasks, commitments, purchases and amounts. Assistant messages support memories
+  only for requested work or accepted or confirmed agreements; chatter and
+  satisfaction closings are excluded by instruction.
+- Each extraction has an item ceiling of five to twenty, based on
+  supplied user messages and a proportional output-token budget. Existing batch
+  planning and source receipts remain in place. Calls with five or fewer user
+  messages keep the existing five-item ceiling and request shape.
+
 ## Unreleased — nothing sent to an embedding provider while saving is paused
 
 - With an embedding model configured, Memory and Card search no longer sends the

@@ -3,10 +3,35 @@ import { captureSourceBusy, isPreDispatchToken, postDispatchToken, preDispatchTo
 import { inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety } from './content-safety.mjs';
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { transaction, isStorageBusy } from "./database.mjs";
 import { fail, identifier } from "./validation.mjs";
 import { localAuthorityGuard } from './local-authority-guard.mjs';
+
+// Existing admission schemas cap each suppressed_count at five. Larger captures
+// keep their exact total in source-free supplemental rows in this same table;
+// no Memory identities, receipts or schema changes are needed for the counter.
+const suppressionCounterKey = (ns, input, part) => createHash('sha256').update(JSON.stringify([
+  'capture-suppression-counter-v1', ns.ownerId, ns.scope, ns.projectId ?? '', input.client,
+  input.keepActionId ? 'keep' : 'capture', input.keepActionId ?? input.eventId, part,
+])).digest('hex');
+const counterClient = 'capture-suppression-counter-v1';
+
+export function capturedSuppressedCount(db, ns, input, row) {
+  let count = row.suppressed_count;
+  if (count !== 5) return count;
+  for (let part = 1; part <= 3; part++) {
+    const extra = db.prepare(`SELECT state,memory_ids,suppressed_count,payload_digest FROM admission_claims
+      WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND event_id=?`)
+      .get(ns.ownerId, ns.scope, ns.projectId ?? '', counterClient, suppressionCounterKey(ns, input, part));
+    if (!extra) break;
+    if (extra.state !== 'completed' || extra.memory_ids !== '[]' || extra.payload_digest !== row.payload_digest ||
+        !Number.isInteger(extra.suppressed_count) || extra.suppressed_count < 1 || extra.suppressed_count > 5) fail('storage_error');
+    count += extra.suppressed_count;
+    if (extra.suppressed_count < 5) break;
+  }
+  return count;
+}
 
 const where = "owner_id = ? AND scope = ? AND project_id = ? AND client = ? AND event_id = ?";
 const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, input.eventId];
@@ -56,14 +81,14 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
     let result;
     try {
       inContentSuppressionRequestInside(db,()=>{
-      const row = db.prepare(`SELECT state, memory_ids, suppressed_count FROM admission_claims WHERE ${where}`)
+      const row = db.prepare(`SELECT state, memory_ids, suppressed_count, payload_digest FROM admission_claims WHERE ${where}`)
         .get(...key(ns, input));
       if (!row) result = { status: 'absent', classification: { status: 'unknown' } };
       else if (row.state === 'pending' || row.state === 'reserved') result = { status: 'pending', classification: { status: 'unknown' } };
       else {
         let ids;
         try { ids = JSON.parse(row.memory_ids); } catch { fail('storage_error'); }
-        if (!Array.isArray(ids) || ids.length > 5 ||
+        if (!Array.isArray(ids) || ids.length > 20 ||
           !Number.isInteger(row.suppressed_count) || row.suppressed_count < 0 ||
           row.suppressed_count > 5 || new Set(ids).size !== ids.length) fail('storage_error');
         try { ids.forEach(identifier); } catch { fail('storage_error'); }
@@ -77,7 +102,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
             filing: { status: current.filing_status } } : { status: 'closed' };
         });
         result = { status: 'completed', classification: { status: 'unknown' },
-          suppressedCount: row.suppressed_count, members };
+          suppressedCount: capturedSuppressedCount(db, ns, input, row), members };
       }
       if (input.includeInitialClassification === true) result.initialClassification =
         row?.state === 'completed' ? classificationJournal.inspect(ns, input) : { status: 'unknown' };
@@ -114,7 +139,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
         if(cachedContentLayout(db)?.suppressionRevision)for(const id of memoryIds){const current=activeRow(ns,id);
           if(!current||!contentReadSafety(db,{namespace:ns,ref:{type:'memory',namespace:ns,memoryId:id,revision:current.revision},intent:'history'}).allowed)fail('memory_suppressed');}
         return { duplicate: true, memoryIds,
-          suppressedCount: row.suppressed_count, ...hooks?.replay() };
+          suppressedCount: capturedSuppressedCount(db, ns, input, row), ...hooks?.replay() };
       }
       if (row) sourceRoots?.bindJob(ns, input, sources);
       const prepared = hooks?.prepare(row);
@@ -221,7 +246,12 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
       const memories = memoryIds.map((id) => ({ id, revision: activeRow(ns, id).revision }));
       db.prepare(`UPDATE ${table(input)} SET state = 'completed', token = NULL,
         lease_expires_at = NULL, memory_ids = ?, suppressed_count = ? WHERE ${predicate(input)}`)
-        .run(JSON.stringify(memoryIds), suppressedCount, ...values(ns, input));
+        .run(JSON.stringify(memoryIds), Math.min(5, suppressedCount), ...values(ns, input));
+      for (let remaining = suppressedCount - 5, part = 1; remaining > 0; remaining -= 5, part++) {
+        db.prepare(`INSERT INTO admission_claims(owner_id,scope,project_id,client,event_id,payload_digest,state,memory_ids,suppressed_count)
+          VALUES(?,?,?,?,?,?,'completed','[]',?)`).run(ns.ownerId, ns.scope, ns.projectId, counterClient,
+          suppressionCounterKey(ns, input, part), input.payloadDigest, Math.min(5, remaining));
+      }
       hooks?.complete?.();
       episodes.admitted(ns, input, entries);
       if (!input.keepActionId) stagedEvidence.mark(ns, input, 'admitted');

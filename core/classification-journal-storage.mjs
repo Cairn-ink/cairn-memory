@@ -11,7 +11,7 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 function refs(value) {
   let parsed;
   try { parsed = typeof value === 'string' ? JSON.parse(value) : value; } catch { fail('storage_error'); }
-  if (!Array.isArray(parsed) || parsed.length > 5) fail('storage_error');
+  if (!Array.isArray(parsed) || parsed.length > 20) fail('storage_error');
   const seen = new Set();
   for (const ref of parsed) {
     if (!ref || typeof ref !== 'object' || Array.isArray(ref) ||

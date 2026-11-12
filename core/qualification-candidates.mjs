@@ -238,6 +238,19 @@ function shortenedSingleton(local, cap) {
  * unqualified.
  */
 export async function qualifyCandidateItems(model, items, deadline, assertCaptureEvidence, episode = false, report = {}) {
+  if (items.length > 5) {
+    denseArray(items, 1, 20);
+    const result = [];
+    report.itemsShortened = 0;
+    report.itemsUnqualified = 0;
+    for (let start = 0; start < items.length; start += 5) {
+      const part = {};
+      result.push(...await qualifyCandidateItems(model, items.slice(start, start + 5), deadline, assertCaptureEvidence, episode, part));
+      report.itemsShortened += part.itemsShortened;
+      report.itemsUnqualified += part.itemsUnqualified;
+    }
+    return result;
+  }
   deadline?.check();
   const system = episode ? episodeSystem : legacySystem;
   const snapshot = createQualificationCandidateSnapshot(items);
