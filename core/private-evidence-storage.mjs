@@ -8,6 +8,7 @@ import { createQualificationStorage } from './claim-qualification-storage.mjs';
 import { evidenceInput, evidenceRefs } from './private-evidence-input.mjs';
 import { keyed } from './private-card-input.mjs';
 import { fail } from './validation.mjs';
+import { receiptSourceTimeProbe } from './context-read-assembly.mjs';
 
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
@@ -88,7 +89,10 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
         'client',client,'session_id',session_id,'event_id',event_id,'role',role,'excerpt',excerpt,'created_at',created_at,'occurred_at',occurred_at)`
       : `json_object('id',id,'memory_id',memory_id,'receipt_key',receipt_key,
         'client',client,'session_id',session_id,'event_id',event_id,'role',role,'excerpt',excerpt,'created_at',created_at)`;
-    const rows=db.prepare(`SELECT memories.*${ancestry},
+    const sourceTimes=memo.sourceDates && layout.rawLineage ? `,(SELECT json_group_array(r.id)
+      FROM (SELECT id FROM receipts WHERE memory_id=memories.id ORDER BY created_at,id LIMIT 17) r
+      WHERE ${receiptSourceTimeProbe}) AS source_time_receipts` : '';
+    const rows=db.prepare(`SELECT memories.*${ancestry}${sourceTimes},
       EXISTS(SELECT 1 FROM memory_qualifications q WHERE q.memory_id=memories.id) AS has_qualification,
       (SELECT json_group_array(${memoReceiptProjection})
         FROM (SELECT * FROM receipts WHERE memory_id=memories.id ORDER BY created_at,id LIMIT 17)) AS batch_receipts
@@ -109,7 +113,9 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
   function cardMetadata(card) {
     return { type: 'card', ref: { type: 'card', namespace: card.namespace, cardId: card.id,
       revision: card.revision, bodyRevision: card.bodyRevision }, state: card.state,
-    support: card.support, origin: card.origin };
+    support: card.support, origin: card.origin,
+    ...(card.origin === 'engine' ? { builtAt: card.builtAt, clusterKey: card.clusterKey,
+      status: card.status, sourceRevisions: card.sourceRevisions } : {}) };
   }
   const cardEligible = (ns, card, intent, memo) => Boolean(card && contentReadSafety(db, { identity, namespace: ns, intent, memo,
     ref: { type: 'card', namespace: ns, cardId: card.id, revision: card.revision, bodyRevision: card.bodyRevision },

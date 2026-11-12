@@ -19,7 +19,7 @@ import { existingStoreOption } from './existing-store.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { types } from 'node:util';
 import { composeRawCore } from './raw-composition.mjs';
-import { privateCardOptions } from './private-card-input.mjs';
+import { privateCardOptions, cardNamespace, ENGINE_CARD_LIMITS, withEngineCardDelivery } from './private-card-input.mjs';
 import { createPrivateCardFacade } from './private-card-facade.mjs';
 import { contextInput, assembleSessionContext } from './session-context.mjs';
 import { rangeInput, rangeOrder, validateRangeAnchor, rangePage, envelopeText } from './episode-reads.mjs';
@@ -28,7 +28,7 @@ import { ADMISSION_LEASE_MS } from './episode-schema.mjs';
 import { episodeOptions, episodeClient } from './episode-storage.mjs';
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createMemoryRuntime, readRecallJournalMode } from "./runtime.mjs";
-import { createCaptureDeadline } from './capture-deadline.mjs';
+import { captureInvocationDeadline, createCaptureDeadline } from './capture-deadline.mjs';
 import { uniqueIds, memoryGuards, placementProposal } from './placement-input.mjs';
 import { countTokens, modelPortValue } from './model-budget.mjs';
 import { isSourceContext } from './source-evidence.mjs';
@@ -55,7 +55,8 @@ import {
 // only their own option; all other legal options reach the retained validator.
 const CORE_OPTIONS = Object.freeze(['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy',
   'captureRationale','captureEvidence','captureDeadlineMs','sessionEpisodes',
-  'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence','contentSafety','busyTimeoutMs']);
+  'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence','contentSafety','busyTimeoutMs',
+  'cardRelations','cardVectors']);
 const OPEN_OPTIONS = Object.freeze([...CORE_OPTIONS, 'rawConversations', 'raw', 'rawSearch']);
 
 const keepAdmissionKey = Symbol('keepAdmissionKey');
@@ -175,7 +176,7 @@ function failure(error) {
   if (isStorageBusy(error)) code = "storage_busy";
   if (["invalid_identifier", "invalid_text", "invalid_memory", "invalid_receipt",
     "invalid_revision", "invalid_limit"].includes(code)) code = "invalid_input";
-  return { ok: false, error: { code, retryable: code === "storage_busy" } };
+  return { ok: false, error: { code, retryable: code === "storage_busy" || code === 'local_raw_privacy_write_failed' } };
 }
 
 // Validate the trusted opt-in before composition can snapshot any constructor fields.
@@ -225,7 +226,7 @@ function openWithRoleContext(input, roleContext) {
   if (!descriptor && raw !== true) return buildCore(base);
   if (!descriptor) {
     try { return composeRawCore(buildCore, base, defaultRawOptions(), {
-      sources: false, lineage: true, deletion: true, localControls: true,
+      sources: false, lineage: true, deletion: true, localControls: true, localRawPrivacy: true,
       rawTextReaders: false,
       captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch), searchEmbedding: roleContext,
     }); } catch (error) {
@@ -236,11 +237,11 @@ function openWithRoleContext(input, roleContext) {
       const core = buildCore(base);
       const search = localRawSearchManager(roleContext?.rawSearch) ?? createLocalRawSearch(base.path, defaultRawOptions().port);
       search.unsupportedStore();
-      return Object.freeze({ ...core, ...(rawSearch === false
+      return withEngineCardDelivery(Object.freeze({ ...core, ...(rawSearch === false
         ? { getRawSearchStatus: search.methods.getRawSearchStatus } : search.methods), close() {
         const stopped = search.close(), result = core.close();
         return Promise.resolve(stopped).then(() => result);
-      } });
+      } }), core);
     }
   }
   if (!Object.hasOwn(descriptor, 'value')) throw new MemoryStoreError('invalid_input');
@@ -252,6 +253,7 @@ function openWithRoleContext(input, roleContext) {
   const coreOptions = Object.create(Object.getPrototypeOf(input), fields);
   return composeRawCore(buildCore, coreOptions, options, {
     sources: Boolean(coreOptions.privateCards), lineage: true, deletion: true, localControls: true,
+    localRawPrivacy: Boolean(options.localAuthority),
     captureDefault: true, searchDefault: rawSearch !== false, searchManager: localRawSearchManager(roleContext?.rawSearch), searchEmbedding: roleContext,
   });
 }
@@ -309,9 +311,23 @@ export function createMemoryCore(input, internal) {
     ...(methodPackages ? { methodPackages } : {}),
     ...(assets ? { assets } : {}),
     ...(roleProfiles ? { roleProfiles } : {}),
-    ...(privateCards ? { privateCards } : {}), ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) });
+    ...(privateCards ? { privateCards } : {}), ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) },
+    { engineCards: typeof model?.consolidate === 'function' });
   try {
   const { storeId, cursorSecret } = runtime.identity;
+  let engineCards, engineCardsLoading;
+  const engineConfigured = typeof model?.consolidate === 'function';
+  for (const port of [input.cardRelations, input.cardVectors])
+    if (port !== undefined && typeof port?.read !== 'function') fail('invalid_input');
+  async function loadEngineCards() {
+    engineCardsLoading ??= (async () => {
+      const { createEngineCardMaintenance } = await import('./engine-card-maintenance.mjs');
+      const storage = await runtime.engineCardStorage(); runtime.ready();
+      return engineCards = createEngineCardMaintenance({ storage, model,
+        relations: input.cardRelations, vectors: input.cardVectors });
+    })();
+    return engineCardsLoading;
+  }
 
   function namespaceBinding(ns) {
     return createHmac("sha256", cursorSecret)
@@ -1037,9 +1053,9 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  async function capture(input, keepInput, rawRegistration) {
+  async function capture(input, keepInput, rawRegistration, sharedDeadline) {
     try {
-      let deadline = sessionEpisodes || captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs);
+      let deadline = sharedDeadline ?? (sessionEpisodes || captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs));
       runtime.ready();
       if (!keepInput) object(input, ['namespace', 'client', 'eventId', 'sessionId', 'messages', ...(sessionEpisodes ? ['episodeContext'] : ['causal'])]);
       const ns = contractNamespace(input.namespace);
@@ -1048,7 +1064,7 @@ export function createMemoryCore(input, internal) {
       if ((captureEvidence || evidenceOnly) && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
       return success(await (keepInput ? keepEpisodeCapture : sessionEpisodes ? captureEpisodeMessages : captureMessages)({ model, captureQualification, captureSourcePolicy,
         runtime, ns, sessionEpisodes, keepInput, rawRegistration,
-        startAdmission: () => (deadline = captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs)),
+        startAdmission: () => (deadline = sharedDeadline ?? (captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs))),
         captureRationale, captureEvidence,
         deadline, input: { ...input, namespace },
         operations: { filterCaptureSources: sources => runtime.filterCaptureSources(ns, sources),
@@ -1298,10 +1314,20 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  internal?.attachCapture?.((input, registration) => capture(input, undefined, registration));
+  internal?.attachCapture?.((input, registration, deadline) => capture(input, undefined, registration, deadline));
   const contentReads = new Set(['get','list','map','fetch','recall','sourceSnapshot','getEpisode','listEpisodes','listMemoriesByTime',
     'sessionStartContext','getRationale','inspectAdmission','inspectCaptureEvidence','listReviewTransitions','listReviewConflicts']);
-  return contentSafetyFacade({
+  return withEngineCardDelivery(contentSafetyFacade({
+    ...(engineConfigured ? {
+      async maintainCards(input) { try { runtime.ready(); return success(await (await loadEngineCards()).maintain(input)); } catch (error) { return failure(error); } },
+      getEngineCardStatus(input) { try {
+        runtime.ready();
+        if (engineCards) return success(engineCards.status(input));
+        object(input, ['namespace']); cardNamespace(input.namespace);
+        return success({ configured: true, state: runtime.engineCardAvailable() ? 'ready' : 'unsupported_store',
+          limits: ENGINE_CARD_LIMITS, lastPass: null });
+      } catch (error) { return failure(error); } },
+    } : {}),
     ...createMethodPackageFacade(runtime.methodPackages, methodPackages, runtime.ready,assets),
     ...createAssetFacade(runtime.assets, assets, runtime.ready),
     ...createRoleProfileFacade(runtime.roleProfiles, roleProfiles, { path: input.path, readOnly: Boolean(input.existingStore), context: internal?.roleContext, assets }),
@@ -1313,13 +1339,15 @@ export function createMemoryCore(input, internal) {
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission, inspectAdmission,
     inspectCaptureEvidence, discardCaptureEvidence,
-    applyPlacement, linkMocs, map, fetch, recall, sourceSnapshot, capture: input => capture(input), planCaptureBatches, keepEpisode, endEpisodeSession, classifyPlacement, rebuildIndex,
+    applyPlacement, linkMocs, map, fetch, recall, sourceSnapshot,
+    capture: (input, invocation) => capture(input, undefined, undefined, captureInvocationDeadline(undefined, invocation)),
+    planCaptureBatches, keepEpisode, endEpisodeSession, classifyPlacement, rebuildIndex,
     reviewRationale, getRationale, reviewDecisionBasis,
     close() {
       runtime.close();
       return success(null);
     },
-  }, { check: runtime.assertContentScope, portGuard: runtime.contentPortGuard, failure, asyncMethods: ['capture'],
+  }, { check: runtime.assertContentScope, portGuard: runtime.contentPortGuard, failure, asyncMethods: ['capture','maintainCards'],
     requestScope: (work, method) => contentWriteMethodClass(method) === 'read' ? withContentSuppressionRequest(work) : work(),
     isFailedCapture(result) {
       // Admission committed before the paused classifier. After close only its
@@ -1327,8 +1355,13 @@ export function createMemoryCore(input, internal) {
       // receipts, counts or content survive this projection.
       return result?.ok===true&&result.value?.classification?.status==='failed';
     },
-    validate: (method,args,result,scopes) => { if(contentReads.has(method)&&result?.ok)runtime.assertContentOutput(result.value,scopes); }, noOwner: ['close',
-    'getPrivateCardCapabilities','getAssetCapabilities','getMethodPackageCapabilities'] });
+    validate: (method,args,result,scopes) => {
+      if (!result?.ok) return;
+      if (contentReads.has(method)) runtime.assertContentOutput(result.value,scopes);
+    }, noOwner: ['close',
+    'getPrivateCardCapabilities','getAssetCapabilities','getMethodPackageCapabilities'] }), null, {
+      project: (input, value) => engineCards.deliver(cardNamespace(input.namespace), value), failure,
+    });
   } catch (error) {
     try { runtime.close(); } catch { /* Preserve the construction failure. */ }
     throw error;

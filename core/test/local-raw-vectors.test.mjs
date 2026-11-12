@@ -165,10 +165,36 @@ test('slow embedding settlement makes progress while capture remains independent
   const started=new Promise(resolve=>{began=resolve;});
   provider.embedder.embed=async(...args)=>{began();await new Promise(resolve=>{release=resolve;setTimeout(resolve,500);});return base(...args);};
   const f=fixture(t,provider);ok(await f.core.capture(input(1)));await f.tick();
+  // Drain the bootstrap discovery cursor before requesting vector work.
+  await f.tick();
   const pending=f.tick();await Promise.race([started,delay(1000).then(()=>{throw Error('embedding_did_not_start');})]);
   const captured=await Promise.race([f.core.capture(input(2)),delay(200).then(()=>{throw Error('capture_waited_for_embedding');})]);ok(captured);
   await delay(60);release();await pending;
   // Restore immediate responses; the first slow result must not poison retries.
   provider.embedder.embed=base;
   await ready(f,30);
+});
+
+test('context batch preserves candidates issued by both live local readers', async t => {
+  const provider = embedding(), f = fixture(t, provider);
+  ok(await f.core.capture(input(1))); await ready(f);
+  const port = f.manager.contextPort([ns]);
+  const semantic = await port.search({ query: 'cobalt telescope' });
+  const lexical = await port.search({ query: 'cobalt telescope', semantic: false });
+  const candidates = [semantic.candidates[0], lexical.candidates[0], semantic.candidates[0]];
+  assert.ok(candidates.every(Boolean)); assert.notEqual(candidates[0].proof, candidates[1].proof);
+  const singles = [];
+  for (const candidate of candidates) singles.push(await port.prepare(candidate, { intent: 'current' }));
+  const progress = [], batch = await port.prepareMany(candidates, { intent: 'current', onPrepared: (handle, index) => progress.push([handle, index]) });
+  assert.equal(batch.complete, true);
+  assert.deepEqual(batch.handles.map(handle => handle?.value), singles.map(handle => handle.value));
+  assert.deepEqual(progress.map(([, index]) => index), [0, 1, 2]);
+  assert.deepEqual(port.revalidate(batch.handles), singles.map(handle => handle.value));
+  const own = Object.getOwnPropertyDescriptor(performance, 'now'); let now = 100;
+  Object.defineProperty(performance, 'now', { configurable: true, value: () => now });
+  try {
+    const stopped = await port.prepareMany(candidates, { intent: 'current', deadlineAt: 500, onPrepared() { now = 500; } });
+    assert.equal(stopped.complete, false, 'valid candidates in later reader partitions were skipped');
+    assert.equal(stopped.handles.length, 1); assert.ok(stopped.handles[0]);
+  } finally { Object.defineProperty(performance, 'now', own); }
 });

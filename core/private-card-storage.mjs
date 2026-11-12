@@ -18,6 +18,7 @@ import { createCardRawSources } from './card-raw-sources.mjs';
 import { cardText, keyed, noteInput, OWNER_NOTE_CAP, pageLimit, refs, sourceRef } from './private-card-input.mjs';
 import { hasCardLineage, collectCardBodySourcesInside, sealCardBodyInside, checkCardActionInside,
   recordCardActionInside, cardBodyDigest } from './card-lineage.mjs';
+import { isEngineCard, engineCardMetadataInside } from './content-safety.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
@@ -117,8 +118,11 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
   }
   function metadata(ns, row, readSet = [ns], { historicalReason = false, deadlineAt = Infinity } = {}, memo = createContentReadMemo(db)) {
     const review = cardApplicabilityInside(db, row), currentDependency = historicalReason ? null : dependencies.compare(ns, row, readSet, { deadlineAt });
+    const engine = isEngineCard(row.id) ? engineCardMetadataInside(db, ns, row) : null;
     return { id: row.id, namespace: ns, revision: row.revision, state: row.state,
-      bodyRevision: row.body_revision, origin: 'authored', support: { ...(hasCardLineage(db) && memo?.cardBodies?.get(row.id)?.header.origin === 'user-authored'
+      bodyRevision: row.body_revision, origin: engine ? 'engine' : 'authored',
+      ...(engine ? { builtAt: engine.builtAt, clusterKey: engine.clusterKey, status: 'current', sourceRevisions: engine.sourceRevisions } : {}),
+      support: { ...(engine ? { status: 'eligible', applicability: 'current', reasons: ['unassessed'] } : hasCardLineage(db) && memo?.cardBodies?.get(row.id)?.header.origin === 'user-authored'
         ? {status:'eligible',applicability:'unknown',reasons:['unassessed']} : support(ns, hasCardLineage(db)?memo?.cardBodies?.get(row.id)?.refs??getRefs(row.id,memo):getRefs(row.id, memo), memo)),
         applicability: review.applicability,
         applicabilityReviewedRevision: review.reviewedRevision, checkedAt: row.updated_at,
@@ -371,6 +375,15 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     cardDetailInside: (ns, id, readSet, options) => detail(ns, card(ns, id), readSet, options) });
   return Object.freeze({ assertContentOutput(value, scopes) { if(!cachedContentLayout(db)?.suppressionRevision)return; return assertContentOutput(db,identity,value,scopes); }, assertContentScope: (scopes,{delivery=false}={}) => { ready(); if(!cachedContentLayout(db)?.suppressionRevision)return; if(!delivery && scopes.length && hasContentSuppressionRequestInside(db) && !db.isTransaction) { contentSuppressionRequestInside(db,scopes,{defer:true}); return; } assertContentScopes(db,scopes); },
     lineageEnabled:()=>hasCardLineage(db),
+    // Canonical internal writers; maintenance cannot obtain a fact-only sink.
+    engineCardWriters() { return {
+      seal(ns, id, refs) {
+        if (hasCardLineage(db)) sealCardBodyInside(db, { identity, namespace: ns, cardId: id,
+          sources: collectCardBodySourcesInside(db, identity, ns, refs,
+            ref => sourceReadSafety(db, { identity, namespace: ns, ref }).allowed) });
+      },
+      purge(ns, row, actionId) { purgeCard(ns, row, 'deleted', actionId); },
+    }; },
     // Internal shared-read seams: caller owns scope authorization and transaction.
     cardDetailInside(ns, id, readSet, intent) { ready(); return detail(ns, card(ns, id), readSet, intent); },
     cardMetadataInside(ns, row) { ready(); const memo = createContentReadMemo(db); return row && cardSafe(ns, row, 'listCards', memo) ? metadata(ns, row, undefined, undefined, memo) : null; },

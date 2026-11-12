@@ -33,7 +33,7 @@ async function fixture(t,client = 'claude-code') {
   assert.deepEqual(archived,manifest); assert.deepEqual(walk(installed),archived);
   for (const path of closure) { assert.ok(archived.includes(path),path); assert.deepEqual(readFileSync(join(installed,path)),readFileSync(join(root,path))); }
   for (const path of ['integrations/client/raw/local-host-rearm.mjs','integrations/client/raw/local-rearm-state.mjs']) assert.equal(lstatSync(join(installed,path)).mode&0o777,0o644);
-  const scaffold = { PATH:dirname(process.execPath),HOME:home,TMPDIR:workspace.path,TMP:workspace.path,TEMP:workspace.path,
+  const scaffold = { NODE_TEST_CONTEXT:'child-v8',CAIRN_SYNTHETIC_FIXTURE_ROOT:workspace.path,CAIRN_SYNTHETIC_CODEX:join(workspace.path,'codex'), PATH:dirname(process.execPath),HOME:home,TMPDIR:workspace.path,TMP:workspace.path,TEMP:workspace.path,
     NODE_NO_WARNINGS:'1',NODE_DISABLE_COMPILE_CACHE:'1',SYNTHETIC_INSTALLED:installed,SYNTHETIC_CLIENT:client,
     SYNTHETIC_DATABASE:database,SYNTHETIC_CONFIG:configPath,SYNTHETIC_USAGE:usage,SYNTHETIC_TRACE:join(workspace.path,'http.jsonl'),
     SYNTHETIC_CORE:join(installed,'core/index.mjs'),SYNTHETIC_MODE:'memory' };
@@ -71,7 +71,7 @@ async function fixture(t,client = 'claude-code') {
     const trace = join(workspace.path,'host-'+phase+++'.jsonl'), settings = trace+'.settings.json';
     writeFileSync(settings,JSON.stringify({ installed,profilePath,args,trace,scaffold,mode:'memory',syntheticBinary:binary,preload:childPreload }),{ mode:0o600 });
     const result = spawnSync(process.execPath,[driver,settings],{ cwd:workspace.path,encoding:'utf8',timeout:25000,maxBuffer:262144,
-      env:{ PATH:dirname(process.execPath),HOME:home,TMPDIR:workspace.path,TMP:workspace.path,TEMP:workspace.path,
+      env:{ NODE_TEST_CONTEXT:'child-v8',CAIRN_SYNTHETIC_FIXTURE_ROOT:workspace.path,CAIRN_SYNTHETIC_CODEX:binary,PATH:dirname(process.execPath),HOME:home,TMPDIR:workspace.path,TMP:workspace.path,TEMP:workspace.path,
         NODE_NO_WARNINGS:'1',NODE_DISABLE_COMPILE_CACHE:'1',...(key ? { CAIRN_SYNTHETIC_API_KEY:'synthetic_key_secret' }:{}) } });
     assert.equal(result.error,undefined); assert.equal(result.status,expected,result.stderr+result.stdout); assert.equal(result.signal,null);
     assert.doesNotMatch(result.stdout+result.stderr,/synthetic_key_secret/);
@@ -82,6 +82,12 @@ async function fixture(t,client = 'claude-code') {
     return JSON.parse(result.stdout);
   }
   const selected = action => [action,'--session',sessionId,'--source',sourcePath];
+  async function initializeCapture(){
+    const text=readFileSync(sourcePath,'utf8');
+    if(client==='codex')writeFileSync(sourcePath,header,{mode:0o600});
+    const result=await invoke([...selected('initialize'),'--start',client==='codex'?'eof':'beginning']);
+    if(client==='codex')writeFileSync(sourcePath,text,{mode:0o600});return result;
+  }
   const rearmArgs = (revision = 0,id = randomUUID()) => ['rearm','--expected-revision',String(revision),'--action-id',id,'--session',sessionId,'--source',sourcePath];
   function operator(action) {
     const script = `const{openMemoryCore}=await import(process.env.SYNTHETIC_CORE);const c=JSON.parse((await import('node:fs')).readFileSync(process.env.SYNTHETIC_CONFIG));
@@ -106,7 +112,7 @@ ${action==='inspect' ? `const list=ok(core.list({namespace}));console.log(JSON.s
       for (const row of rows(join(workspace.path,name))) if (row.path?.startsWith(installed+'/')) seen.add(relative(installed,row.path));
     return [...seen].sort();
   }
-  return { workspace,installed,configPath,profilePath,stateRoot,identityKeyPath,sourcePath,sessionId,append,invoke,selected,rearmArgs,
+  return { workspace,installed,configPath,profilePath,stateRoot,identityKeyPath,sourcePath,sessionId,append,invoke,selected,rearmArgs,initializeCapture,
     operator,inspectRaw,cursorPath,cursor,durable,direct,processReceipts,closure,eagerClosure,observedClosure,calls:()=>rows(scaffold.SYNTHETIC_TRACE).length,
     ledger:()=>rows(join(usage,'usage',readdirSync(join(usage,'usage')).find(name=>name.endsWith('.json')))),archiveCount:archived.length };
 }
@@ -114,7 +120,7 @@ ${action==='inspect' ? `const list=ok(core.list({namespace}));console.log(JSON.s
 for (const client of ['claude-code','codex']) test(`RR02/05/10 installed ${client}: capture, pause, explicit rearm, later capture and immutable replay`,{ timeout:120000 },async t => {
   const f = await fixture(t,client), initial='Synthetic initial source. Ａ🙂', paused='Synthetic paused source must not be saved.', later='Synthetic later source. e\u0301';
   f.append(initial); assert.equal((await f.invoke(['prepare'])).reason,'prepared');
-  assert.equal((await f.invoke([...f.selected('initialize'),'--start','beginning'])).reason,'initialized');
+  assert.equal((await f.initializeCapture()).reason,'initialized');
   const firstReply = await f.invoke(f.selected('run'),{ key:true }); assert.deepEqual(Object.keys(firstReply),['version','status','reason','worker']);
   const original = f.operator('inspect')[0], first = f.inspectRaw(), old = f.cursor(), key = readFileSync(f.identityKeyPath);
   assert.ok(original.qualification); assert.equal(original.receipts.length,1);
@@ -166,8 +172,8 @@ let fired=false;const result=await withWriteObserver(({path})=>{if(path===${JSON
 
 for (const client of ['claude-code','codex']) test(`RR04/06/10 installed ${client}: real conversation deletion blocks cold pending-action recovery`,{ timeout:120000 },async t => {
   const f = await fixture(t,client); f.append('Synthetic captured source before deletion');
-  await f.invoke(['prepare']); await f.invoke([...f.selected('initialize'),'--start','beginning']);
-  assert.equal((await f.invoke(f.selected('run'),{ key:true })).worker.completedRecords,client === 'codex' ? 2:1);
+  await f.invoke(['prepare']); await f.initializeCapture();
+  assert.equal((await f.invoke(f.selected('run'),{ key:true })).worker.completedRecords,1);
   assert.equal(f.cursor().issuedOrdinal,1); assert.equal(f.cursor().pending,null);
   f.operator('pause'); f.operator('resume'); const args = f.rearmArgs();
   const interrupt = `const{createLocalRawHost,withLocalHostDependencies}=await import(${JSON.stringify('file:')}+${JSON.stringify(join(f.installed,'integrations/client/raw/local-host.mjs'))});
@@ -177,7 +183,7 @@ const detectHost=async()=>{const detected=await q.detectRunningHost({pid:42,proc
 let fired=false;const result=await withLocalHostDependencies({detectHost},()=>withWriteObserver(({path})=>{if(path===${JSON.stringify(f.profilePath+'.rearm.json')}&&!fired){fired=true;throw Error('synthetic pending interruption')}},()=>createLocalRawHost({profilePath:${JSON.stringify(f.profilePath)}}).rearm(${JSON.stringify({expectedRevision:0,actionId:args[4],sessionId:f.sessionId,sourcePath:f.sourcePath})})));if(!fired||result.status!=='blocked')throw Error('synthetic interruption missing');`;
   f.direct(['--import',preload,'--input-type=module','-e',interrupt]);
   const deletion = `const{openMemoryCore}=await import(process.env.SYNTHETIC_CORE);const c=JSON.parse((await import('node:fs')).readFileSync(process.env.SYNTHETIC_CONFIG));
-const core=openMemoryCore({path:process.env.SYNTHETIC_DATABASE,existingStore:{version:'schema29-existing-v1',storeId:c.authority.storeId},rawConversations:{mode:'off',configureCap:false,readPolicy(){throw Error('retained read forbidden')}}});
+const core=openMemoryCore({path:process.env.SYNTHETIC_DATABASE,existingStore:{version:'schema29-existing-v1',storeId:c.authority.storeId},rawConversations:{mode:'off',configureCap:false,readPolicy(){throw Error('retained capture forbidden')}}});
 try{const ok=r=>{if(!r.ok)throw Error('synthetic delete refused');return r.value};const{namespace,client}=c.authority;const before=ok(core.getLocalCaptureControl({namespace,client}));const conversation=ok(core.listRawConversations({namespace,client})).conversations[0];if(!conversation)throw Error('synthetic capture missing');ok(core.deleteConversation({namespace,conversationId:conversation.id,expectedRevision:conversation.revision,actionId:'synthetic-delete-before-recovery'}));if(JSON.stringify(ok(core.getLocalCaptureControl({namespace,client})))!==JSON.stringify(before))throw Error('synthetic controls changed');}finally{core.close()}`;
   f.direct(['--import',preload,'--input-type=module','-e',deletion]);
   const before = f.durable(),calls = f.calls(),ledger = f.ledger();

@@ -79,7 +79,7 @@ for(const phase of ['snapshot','selection','final'])test(`expiry in ${phase} rel
   let crossed=false,sourceChecks=0;
   DatabaseSync.prototype.prepare=function(sql){
     const statement=prepare.call(this,sql);
-    const match=phase==='snapshot'?sql.startsWith('SELECT s.*,h.sequence'):
+    const match=phase==='snapshot'?sql.startsWith('SELECT * FROM segments WHERE published=1 ORDER BY id DESC'):
       phase==='selection'?sql.includes('FROM raw_parts WHERE'):sql.startsWith('SELECT 1 FROM raw_source_maps WHERE')&&++sourceChecks===2;
     if(match&&!crossed){crossed=true;advance(1001);}return statement;
   };

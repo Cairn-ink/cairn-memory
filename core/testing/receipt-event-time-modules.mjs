@@ -19,6 +19,13 @@ const frozenExceptions = JSON.parse(readFileSync(new URL('../test/fixtures/recei
 // change no loader or feature consumer. The private sidecar-handle registry
 // adds an identity-ack field and passes it to storage; loaders stay unchanged.
 const exceptions = frozenExceptions.map(entry => {
+  // Observed-host diagnostic I/O is best-effort after validation. The existing
+  // package-metadata resolution expression and its namespace use are unchanged.
+  if (entry.file === 'integrations/codex/qualification.mjs') {
+    assert.equal(entry.sha256, '9c37710cfffa802fbc42286c6e9bf8c3bf8bdf3d4c34a0c163d672868714cdac',
+      'frozen host metadata loader pin');
+    return { ...entry, line: 83, sha256: 'd5bea045ed4c3fefd45e325f268833f1d535b075ab63ad5dd8dd0409c57dd380' };
+  }
   // The wait policy scopes the opening check and repeats it after timeout
   // configuration. These changes add no loader and no feature consumer.
   if (entry.file === 'core/topic-reader-sqlite.mjs') {
@@ -35,11 +42,12 @@ const exceptions = frozenExceptions.map(entry => {
   }
   // Parent handle reservation, target preparation and close/exit cleanup keep
   // the host loader and synchronous transmission/final validation unchanged.
+  // The final pause recheck before transport adds no loader or feature consumer.
   // Keep the frozen PR 1 pin, then bind the complete integrated Worker bytes.
   if (entry.file === 'core/context-semantic-worker.mjs') {
     assert.equal(entry.sha256, 'ef2961fcb0114b9d9062084d57babea2adfad4d0753619c500728ca657da5fa5',
       'frozen semantic Worker loader pin');
-    return { ...entry, line: 502, sha256: '184156b8181e5e9efabc107045fb7d50f52058b58a010570f487dd7ce36949fe' };
+    return { ...entry, line: 502, sha256: 'b4e6fb221984be0f64299da36f9b6f0dec08e4aa9e4d09f5d0af8a1a97f8eaf6' };
   }
   if (entry.file !== 'core/context-product-worker.mjs') return entry;
   assert.equal(entry.sha256, '073071759a46698824ffd029a5fe48fbd737513c5c6936ba826b5d413be32bbe',

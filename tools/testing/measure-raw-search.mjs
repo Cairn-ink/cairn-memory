@@ -1,3 +1,4 @@
+import {rawPreparationMode,preparationMemoryPopulations,seedPreparationMemories,observeReceiptAncestry} from './raw-search-prepare-cost.mjs';
 import {errorSummary} from './raw-search-window-summary.mjs';
 import {measurementError,takeInternalErrors,takeOperationOvershoots,takeInternalErrorCounts} from './raw-search-phase-ledger.mjs';
 import assert from 'node:assert/strict';
@@ -25,6 +26,7 @@ const [{createRawSearchAuthority},{openRawSearchStorage},{rawSearchChunks,rawSea
 
 const summary=values=>{const sorted=[...values].sort((a,b)=>a-b),at=q=>sorted[Math.min(sorted.length-1,Math.ceil(sorted.length*q)-1)];
   return {p50:at(.5),p95:at(.95),p99:at(.99),max:sorted.at(-1),samples:sorted.length};};
+const costSummary=values=>values.length?summary(values):{p50:null,p95:null,p99:null,max:null,samples:0};
 export async function measureRawColdSearch(factory,search,now=()=>performance.now()){
   const openedAt=now(),service=await factory(),searchAt=now();
   const value=await search(service),endedAt=now();
@@ -46,21 +48,35 @@ export async function measureRawFullRead(storage,authority){
   return {ms:performance.now()-start,retrievalMs,fenceMs,selected,opening,work:result.coverage.scanned,snapshot:snapshot.timings};
 }
 export async function measureRawSearch(t,targets) {
+  // Batch mode reuses the complete builder/report/gates below. By default it
+  // crosses each turn size with 100 and 20,000 unrelated synthetic Memories;
+  // CAIRN_RAW_MEASURE_MEMORIES can select smaller populations for a smoke.
+  const mode=rawPreparationMode(),memoryPopulations=preparationMemoryPopulations(mode);
   const profile=process.env.CAIRN_RAW_MEASURE_PROFILE;
   if(profile&&!['commitment-cost','cadence','fixture-only'].includes(profile))throw Error('invalid_measurement_profile');
+  if(profile&&mode==='batch')throw Error('batch_mode_requires_default_measurement_profile');
   const lineageTools=profile?await import('./measure-raw-search-lineage.mjs'):null;
   const reports=[];
-  t.diagnostic(JSON.stringify({hardware:{cpu:cpus()[0].model,cores:cpus().length,memoryBytes:totalmem()},node:process.version,targets}));
-  const scenarios=[...targets.sizes.map(count=>({count,cap:false})),{count:Math.ceil(targets.rawCapBytes/4000),cap:true}];
+  t.diagnostic(JSON.stringify({hardware:{cpu:cpus()[0].model,cores:cpus().length,memoryBytes:totalmem()},node:process.version,mode,memoryPopulations,targets}));
+  const scenarios=[...targets.sizes.flatMap(count=>memoryPopulations.map(memories=>({count,cap:false,memories}))),{count:Math.ceil(targets.rawCapBytes/4000),cap:true,memories:0}];
   for(const scenario of scenarios.filter(s=>(!profile||!s.cap&&(profile!=='cadence'||s.count===10000))&&(!process.env.CAIRN_RAW_MEASURE_TURNS||process.env.CAIRN_RAW_MEASURE_TURNS.split(',').map(Number).includes(s.count)))){
-    takeInternalErrors();takeInternalErrorCounts();const {count,cap}=scenario;console.log('measurement phase=seed turns='+count);
+    takeInternalErrors();takeInternalErrorCounts();const {count,cap,memories}=scenario;console.log('measurement phase=seed turns='+count+' memories='+memories+' mode='+mode);
     const ws=createTestWorkspace(null,{prefix:'raw-search-measure-'}),path=join(ws.path,'canonical.sqlite'),directory=join(ws.path,'index');
     mkdirSync(directory,{mode:0o700});
-    let db,reader,storage,service,retained=false;
+    let db,reader,storage,service,ancestryProbe,retained=false;
+    const preparationHolds={current:null,single:[],batch:[]},holdKinds=new WeakMap();
     const originalExec=DatabaseSync.prototype.exec,starts=new WeakMap(),configured=new WeakSet(),sections=[],readWaits=[],sharedIntervals=[],sharedStarts=new WeakMap();
     DatabaseSync.prototype.exec=function(sql){
       const began=performance.now(),value=originalExec.call(this,sql);
       if(sql==='BEGIN'){
+        if(preparationHolds.current){
+          const stack=new Error().stack;
+          // Only the source reader's initial read -> prepare call, excluding
+          // its finish snapshot and the live guards invoked by its opener.
+          const initial=preparationHolds.current==='batch'?stack.includes('prepareBatch'):
+            /at read \([^\n]*\/raw-source-reader\.mjs:\d+:\d+\)\n\s+at (?:Object\.)?prepare \(/.test(stack);
+          holdKinds.set(this,{mode:preparationHolds.current,initial});
+        }
         if(!configured.has(this)){
           this.function('raw_search_measure_read',value=>{starts.set(this,performance.now());sharedStarts.set(this,process.hrtime.bigint());return value;});
           configured.add(this);
@@ -70,7 +86,9 @@ export async function measureRawSearch(t,targets) {
         this.prepare('SELECT raw_search_measure_read(store_id) FROM store_metadata WHERE singleton=1').get();
         readWaits.push(starts.get(this)-began);
       }else if((sql==='COMMIT'||sql==='ROLLBACK')&&starts.has(this)){
-        sections.push(performance.now()-starts.get(this));sharedIntervals.push([sharedStarts.get(this),process.hrtime.bigint()]);starts.delete(this);sharedStarts.delete(this);
+        const ended=process.hrtime.bigint(),heldMs=Number(ended-sharedStarts.get(this))/1e6,kind=holdKinds.get(this);
+        if(kind){preparationHolds[kind.mode].push({ms:heldMs,initial:kind.initial});holdKinds.delete(this);}
+        sections.push(performance.now()-starts.get(this));sharedIntervals.push([sharedStarts.get(this),ended]);starts.delete(this);sharedStarts.delete(this);
       }
       return value;
     };
@@ -134,7 +152,9 @@ export async function measureRawSearch(t,targets) {
         if(staged.length)try{await storage.commitBatch({staged,checkpoint});built+=staged.length;}catch(error){if((error.errcode&255)!==13)throw error;quota=true;break;}
         if(inventory.complete)break;
       }
-      const rebuildMs=performance.now()-rebuildStart;console.log('measurement phase=reads turns='+count);
+      const rebuildMs=performance.now()-rebuildStart;
+      const memoryPopulation=memories?seedPreparationMemories(db,ns,memories):0;
+      console.log('measurement phase=reads turns='+count+' memories='+memoryPopulation+' mode='+mode);
       checkpoint={after:['','',-1],sweep:0,cycles:1,coverageComplete:!quota};
       let checkpointError;
       try{checkpoint.fence=authority.fence();}catch(error){
@@ -153,6 +173,7 @@ export async function measureRawSearch(t,targets) {
       const searchInput={query:'copper telescope',queryVector:{input:'copper telescope',embedder:{id:provider.id,revision:provider.revision,dimensions:1536,normalization:'l2'},vector:queryVector}};
       if(profile){
         const report=await lineageTools.measureLineageProfile({profile,count,path,authority,service,host,input:searchInput,sections,sharedIntervals,lineage});
+        report.mode=mode;
         report.maxOperationDeadlineOvershootMs=Math.max(0,...takeOperationOvershoots());report.internalErrors=takeInternalErrorCounts();
         report.indexedParts=built;report.sessionFences=sessionFences;
         report.checkpointError=checkpointError;
@@ -187,7 +208,12 @@ export async function measureRawSearch(t,targets) {
         catch(error){apiErrors.push({stage:'warmup',...measurementError(error)});break;}
         if(actual.semantic.state==='ready'||snapshot.partial||quota||count>targets.completeHybridTurns)break;
       }
-      const warm=[],full=[],work=[],api=[],prepareTimes=[];let apiCoverage,apiSemantic;
+      const warm=[],full=[],work=[],api=[],prepareTimes=[],singlePrepareTimes=[],singlePrepareGroupTimes=[],preparedCandidates=[],preparedRanges=[];let apiCoverage,apiSemantic;
+      ancestryProbe=observeReceiptAncestry({initialSnapshot:database=>holdKinds.get(database)?.initial===true});
+      const observePreparation=async(label,work)=>{
+        preparationHolds.current=label;
+        try{return await ancestryProbe.run(label,work);}finally{preparationHolds.current=null;}
+      };
       for(let sample=0;sample<(cap?5:targets.searchSamples);sample++){
         const begin=performance.now(),next=await storage.search();snapshotTimes.push(next.timings);
         const rankStart=performance.now(),result=retrieveRaw(next.rows,'copper telescope');warm.push(performance.now()-rankStart);
@@ -207,9 +233,30 @@ export async function measureRawSearch(t,targets) {
         // a later consumer's surface; representative source preparation is
         // measured separately for the turn profiles.
         if(!cap&&actual.candidates.length){takeInternalErrors();const start=performance.now();
-          try{await service.prepare(actual.candidates[0],{},host.token);prepareTimes.push(performance.now()-start);}
-          catch(error){prepareErrors.push({...measurementError(error),ms:performance.now()-start});}}
+          const selected=actual.candidates.slice(0,24);
+          try{
+            if(mode==='batch'){
+              const batch=await observePreparation('batch',()=>service.prepareMany(selected,{},host.token));
+              prepareTimes.push(performance.now()-start);preparedCandidates.push(batch.handles.filter(Boolean).length);
+              preparedRanges.push(selected.reduce((sum,candidate)=>sum+candidate.ranges.length,0));
+              if(!batch.complete||batch.handles.some(handle=>!handle)||batch.handles.length!==selected.length)
+                prepareErrors.push({code:'incomplete_batch',expected:selected.length,prepared:preparedCandidates.at(-1),complete:batch.complete});
+              const singleGroupStart=performance.now();
+              for(const candidate of selected){
+                takeInternalErrors();const singleStart=performance.now();
+                try{await observePreparation('single',()=>service.prepare(candidate,{},host.token));singlePrepareTimes.push(performance.now()-singleStart);}
+                catch(error){prepareErrors.push({comparison:'single',...measurementError(error),ms:performance.now()-singleStart});}
+              }
+              singlePrepareGroupTimes.push(performance.now()-singleGroupStart);
+            }else{await observePreparation('single',()=>service.prepare(selected[0],{},host.token));prepareTimes.push(performance.now()-start);preparedCandidates.push(1);preparedRanges.push(selected[0].ranges.length);}
+          }catch(error){prepareErrors.push({...measurementError(error),ms:performance.now()-start});}}
       }
+      const receiptAncestry=ancestryProbe.finish();ancestryProbe.close();ancestryProbe=null;
+      const holdSummary=label=>({all:costSummary(preparationHolds[label].map(row=>row.ms)),initialSnapshot:costSummary(preparationHolds[label].filter(row=>row.initial).map(row=>row.ms))});
+      const preparationCost={method:'engine first-read SHARED probe to successful COMMIT/ROLLBACK return; excludes acquisition and crypto',
+        memoryPopulation,preparedCandidates:costSummary(preparedCandidates),preparedRanges:costSummary(preparedRanges),writerVisibleHold:{single:holdSummary('single'),batch:holdSummary('batch')},
+        singlePrepare:costSummary(mode==='single'?prepareTimes:singlePrepareTimes),singlePrepareGroup:costSummary(singlePrepareGroupTimes),receiptAncestry};
+      console.log('measurement preparation='+JSON.stringify({mode,turns:count,prepare:summary(prepareTimes),...preparationCost}));
       if(!quota)assert.equal(built,cap?count:count+Math.ceil(count/100));
       assert.equal(db.prepare('SELECT saved_bytes FROM raw_owner_usage').get()?.saved_bytes,rawBytes);
       // Trusted synthetic harness only, independent of all public status and
@@ -236,7 +283,7 @@ export async function measureRawSearch(t,targets) {
         for(let i=0;i<targets.warmupSearches;i++){takeInternalErrors();const result=await service.search(searchInput,host.token);if(result.semantic.state==='ready'||snapshot.partial)break;}
       }
       console.log('measurement phase=capture turns='+count);
-      const readsCheckpoint={turns:count,cap,indexedParts:built,returnedParts:snapshot.rows.length,hintBytes:snapshot.hintBytes,
+      const readsCheckpoint={mode,turns:count,cap,indexedParts:built,returnedParts:snapshot.rows.length,hintBytes:snapshot.hintBytes,
         rebuildMs,coldMs,api:summary(api),apiCoverage,apiSemantic,warm:summary(warm),full:summary(full),vectorScan,
         canonical:summary(sections),canonicalReadWait:summary(readWaits),snapshotWork:snapshotTimes,
         hintEncoding:summary(encodingTimes),rssBytes:process.memoryUsage().rss,...await storage.status()};
@@ -244,7 +291,7 @@ export async function measureRawSearch(t,targets) {
       let capture=null;
       if(!cap)try{capture=await captureContention(path,service,host.token,targets);}
       catch(error){capture={unavailable:true,error:error.message};console.log('measurement capture-failed='+JSON.stringify({turns:count,error:error.message}));}
-      const state=await storage.status(),report={scenario:cap?'raw-cap':'turns',quotaExhausted:quota,indexedParts:built,partial:snapshot.partial||quota,returnedParts:snapshot.rows.length,vectorPayloadBytes:built*6144,turns:count,chunks:snapshot.rows.reduce((n,r)=>n+r.chunks.length,0),rawBytes,
+      const state=await storage.status(),report={mode,preparationCost,scenario:cap?'raw-cap':'turns',quotaExhausted:quota,indexedParts:built,partial:snapshot.partial||quota,returnedParts:snapshot.rows.length,vectorPayloadBytes:built*6144,turns:count,chunks:snapshot.rows.reduce((n,r)=>n+r.chunks.length,0),rawBytes,
         canonicalBuildMs,rebuildMs,coldMs,factoryMs,api:summary(api),apiCoverage,apiSemantic,warm:summary(warm),full:summary(full),canonical:summary(sections),canonicalReadWait:summary(readWaits),canonicalMeasurement:'first-read-probe-to-commit',authorityWork:{inventory:summary(inventoryTimes),fence:summary(fenceTimes),selected:summary(selectedTimes)},opening:summary(openingTimes),hintBytes:snapshot.hintBytes,snapshotWork:{sqlite:summary(snapshotTimes.map(t=>t.sqliteMs)),authentication:summary(snapshotTimes.map(t=>t.authenticationMs)),decode:summary(snapshotTimes.map(t=>t.decodeMs))},hintEncoding:summary(encodingTimes),coldApiMs,coldApiCoverage:coldApi?.coverage,coldApiError,apiErrors,prepareErrors,failedApi:summary(failedApiTimes),warmupSearches:Math.min(warmup+1,targets.warmupSearches),prepare:summary(prepareTimes),semanticProfile:apiSemantic?.state==='ready'?'complete-hybrid':'bm25-only',scanWork:Math.max(...work),
         vectorScan,capture,cacheResidency,coldApiDistribution,coldApiErrors,residencyAfterClose,...state,rssBytes:process.memoryUsage().rss,bytesPerTurn:state.allocatedBytes/count,failures:[]};
       // Preserve the original timing/RSS distributions above. This additional
@@ -262,10 +309,15 @@ export async function measureRawSearch(t,targets) {
       if(apiErrors.length||coldApiError)report.failures.push('search_unavailable');
       if(prepareErrors.length)report.failures.push('source_prepare_unavailable');
       report.maxOperationDeadlineOvershootMs=Math.max(0,...takeOperationOvershoots());report.internalErrors=takeInternalErrorCounts();
+      if(process.env.CAIRN_RAW_MEASURE_OUTPUT){
+        mkdirSync(process.env.CAIRN_RAW_MEASURE_OUTPUT,{recursive:true});
+        writeFileSync(join(process.env.CAIRN_RAW_MEASURE_OUTPUT,mode+'-'+count+'-memories-'+memoryPopulation+'.json'),JSON.stringify(report,null,2)+'\n');
+      }
       reports.push(report);console.log('measurement result='+JSON.stringify(report));t.diagnostic(JSON.stringify(report));
-    }finally{DatabaseSync.prototype.exec=originalExec;await service?.close();await storage?.close();reader?.db.close();db?.close();if(!retained)await ws.cleanup();}
+    }finally{ancestryProbe?.close();DatabaseSync.prototype.exec=originalExec;await service?.close();await storage?.close();reader?.db.close();db?.close();if(!retained)await ws.cleanup();}
   }
   if(!profile)assert.deepEqual(reports.flatMap(report=>report.failures),[],'frozen performance targets');
+  return reports;
 }
 
 function measureResidency(metadata){

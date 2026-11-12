@@ -580,6 +580,11 @@
     "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
   },
   {
+    "path": "integrations/codex/installed-state.mjs",
+    "source": "const claim = await open(join(dirname(configPath),name), 'wx', 0o600);",
+    "reason": "Exclusive 0600 per-day notice claim in the private installation directory, closed immediately; never a SQLite store path."
+  },
+  {
     "path": "integrations/codex/qualification.mjs",
     "source": "export async function detectRunningHost({pid=process.ppid,proc='/proc',read=readFile,link=readlink,identity=binaryIdentity}={}) {",
     "reason": "Bounded explicit transcript/source input, not the engine SQLite path."
@@ -951,7 +956,7 @@
   },
   {
     "path": "integrations/client/private-state.mjs",
-    "source": "import { lstat, mkdir, open, link, rename, unlink, realpath } from \"node:fs/promises\"",
+    "source": "import { lstat, mkdir, open, link, rename, unlink, realpath, readdir } from \"node:fs/promises\"",
     "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
   },
   {
@@ -973,6 +978,11 @@
     "path": "integrations/client/transport-hosted.mjs",
     "source": "import { lstat, mkdir, realpath, open, rename, unlink } from \"node:fs/promises\"",
     "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
+  },
+  {
+    "path": "integrations/codex/installed-state.mjs",
+    "source": "import { open, readdir, unlink } from 'node:fs/promises'",
+    "reason": "Exclusive 0600 per-day notice claim in the private installation directory, closed immediately; never a SQLite store path."
   },
   {
     "path": "integrations/codex/qualification.mjs",
@@ -1026,7 +1036,7 @@
   },
   {
     "path": "plugins/cairn-memory/lib/private-state.mjs",
-    "source": "import { lstat, mkdir, open, link, rename, unlink, realpath } from \"node:fs/promises\"",
+    "source": "import { lstat, mkdir, open, link, rename, unlink, realpath, readdir } from \"node:fs/promises\"",
     "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
   },
   {
@@ -1673,5 +1683,35 @@
     "path": "core/local-raw-search.mjs",
     "source": "import { mkdir } from 'node:fs/promises'",
     "reason": "Creates private search sidecar directories only; mkdir does not open or close a database file descriptor."
+  },
+  {
+    "path": "integrations/client/raw/local-codex-qualification.mjs",
+    "source": "import { realpathSync, stat as statCallback, lutimes as lutimesCallback } from 'node:fs'",
+    "reason": "Metadata only: realpathSync resolves host/config fixture boundaries; promisified stat/lutimes inspect the bound host or update observed-host cache JSON timestamps. None opens database or sidecar data descriptors."
+  },
+  {
+    "path": "integrations/client/raw/local-session-start.mjs",
+    "source": "import { readdir, unlink } from 'node:fs/promises'",
+    "reason": "Lists and removes only authority-bound session-start JSON markers under the private starts directory; never database files or sidecars."
+  },
+  {
+    "path": "packages/setup/lib/local-capture.mjs",
+    "source": "import { mkdir, open, rename, lstat, readdir, rm } from 'node:fs/promises'",
+    "reason": "Installer metadata filesystem import; only settings, Codex support stub and capture request temps use exclusive create behind store/sidecar and private-directory checks."
+  },
+  {
+    "path": "packages/setup/lib/local-capture.mjs",
+    "source": "temporary => open(temporary, 'wx', 0o600), JSON.stringify(settings, null, 2) + '\\n');",
+    "reason": "Installer settings JSON temp, exclusively created 0600 then atomically renamed; checked against canonical store/sidecar paths, never opens the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/local-capture.mjs",
+    "source": "temporary => open(temporary, 'wx', 0o600), '{}\\n');",
+    "reason": "Installer Codex support stub temp, exclusively created 0600 then atomically renamed; checked against canonical store/sidecar paths, never opens the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/local-capture.mjs",
+    "source": "temporary => open(temporary, 'wx', 0o600), JSON.stringify(request) + '\\n');",
+    "reason": "Sensitive installer capture request metadata temp, exclusively created 0600 in an owner-checked 0700 directory with cleanup; canonical store/sidecar aliases refused."
   }
 ]

@@ -4,6 +4,7 @@ import { PassThrough } from 'node:stream';
 import { spawnSync } from 'node:child_process';
 import { openSync, closeSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { Client } from '@modelcontextprotocol/client';
 import * as z from 'zod/v4';
 import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server';
@@ -15,15 +16,35 @@ import { createContextCounter } from '../../openai/context-counter.mjs';
 import { countOpenAITokens } from '../../openai/index.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
 import { meteredText, ASSEMBLY_FRAMING, assembleContext } from '../../../core/context-read-assembly.mjs';
+import { readRawChannel, assembleThreeLayerContext } from '../../../core/context-read-three-layer.mjs';
 import { ASSEMBLY_POLICIES, ASSEMBLY_LIMITS, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_DEFAULTS } from '../../../core/context-read-input.mjs';
 import { assemblyFixture, assemblyQuery, sample, fixedPrepared } from '../../../core/testing/context-read-assembly-fixture.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { contextHost, contextNamespace as ns, contextProviderArgs } from './context-support.mjs';
+import { installRawSearchTestClock } from '../../../core/testing/raw-search-clock.mjs';
 
 const query = { query: 'assembly', types: ['memory'], intent: 'current' };
 const snapshotKey = 'ink.cairn/context-read-snapshot';
 const metaKey = 'ink.cairn/context-read-diagnostics';
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
+
+test('MCP projects dated partial Raw evidence and preserves partial coverage in metadata', async t => {
+  installRawSearchTestClock(t);
+  const text = 'assembly telescope evidence';
+  const value = { namespace: ns, conversationId: 'synthetic-partial-conversation', messageId: 'synthetic-partial-turn',
+    role: 'assistant', occurredAt: '2026-01-01T08:00:00.000Z', ranges: [{ source: { span: { start: 0, end: text.length } }, text }] };
+  const handle = { value }, rawSearch = { search: async () => ({ coverage: { status: 'partial' }, candidates: [value] }),
+    prepareMany: async (_candidates, { onPrepared }) => { onPrepared(handle, 0); return { handles: [handle], complete: true }; }, revalidate: handles => { assert.deepEqual(handles, [handle]); return [value]; } };
+  const raw = await readRawChannel(rawSearch, { query: 'telescope', readSet: [ns] }, {}, performance.now() + 1000);
+  const assembled = assembleThreeLayerContext({ prepared: [], query: 'telescope', readSet: [ns],
+    representation: 'representation-v2-dated', counter: { id: 'synthetic', countTokens: text => text.length },
+    budget: { maxTokens: 6000, maxItems: 24 }, policy: { id: 'rank-first-whole-v1' }, deadlineAt: Infinity }, raw);
+  assert.equal(assembled.validateRaw(), true);
+  const { selected, validateRaw, ...result } = assembled;
+  const response = contextToolResponse({ ok: true, value: result }, { assembly: true });
+  assert.equal(response.isError, false); assert.equal(response._meta[metaKey].coverage.raw, 'partial');
+  assert.match(response.content[0].text, /assembly telescope evidence/); assert.match(response.content[0].text, /2026-01-01T08:00Z/);
+});
 const childMcp = `
   const {Client}=await import(${JSON.stringify(new URL('../node_modules/@modelcontextprotocol/client/dist/index.mjs', import.meta.url).href)});
   const {InMemoryTransport}=await import(${JSON.stringify(new URL('../node_modules/@modelcontextprotocol/server/dist/index.mjs', import.meta.url).href)});

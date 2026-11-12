@@ -58,6 +58,14 @@ let endpoint;
 let post;
 let quotaTarget;
 let credentialDir;
+let recallConfigurationPending = false;
+async function publishRecallConfiguration() {
+  if (!recallConfigurationPending) return;
+  recallConfigurationPending = false;
+  await recordCredentialConfiguration(credentialDir, {
+    configured: Boolean(token), endpoint, observedAt,
+  }, { signal: recallSignal }).catch(() => {});
+}
 try {
   endpoint = normalizeEndpoint(configuredEndpoint);
   post = createJsonPoster({ endpoint, token });
@@ -111,12 +119,14 @@ async function dispatchActive(generation, start, signal) {
     return Promise.resolve(operation).then(async (response) => {
       const outcome = [401, 403].includes(response.status) ? "rejected" :
         response.ok ? "ok" : response.status === 429 ? "server-busy" : "server-error";
-      await recordCredentialAuth(credentialDir, { endpoint, observedAt, outcome,
-        at: new Date().toISOString() }, { signal }).catch(() => {});
+      const at = new Date().toISOString();
+      await publishRecallConfiguration();
+      await recordCredentialAuth(credentialDir, { endpoint, observedAt, outcome, at }, { signal }).catch(() => {});
       return response;
     }, async (error) => {
-      await recordCredentialAuth(credentialDir, { endpoint, observedAt, outcome: "unreachable",
-        at: new Date().toISOString() }, { signal }).catch(() => {});
+      const at = new Date().toISOString();
+      await publishRecallConfiguration();
+      await recordCredentialAuth(credentialDir, { endpoint, observedAt, outcome: "unreachable", at }, { signal }).catch(() => {});
       throw error;
     });
   }, { signal });
@@ -439,7 +449,8 @@ try {
     } else {
       const hookInput = await input();
       if (["start", "recall", "capture", "capture-detached"].includes(action)) {
-        await recordCredentialConfiguration(credentialDir, {
+        if (action === "recall") recallConfigurationPending = true;
+        else await recordCredentialConfiguration(credentialDir, {
           configured: Boolean(token), endpoint, observedAt, resetAuth: action === "start",
         }, { signal: recallSignal }).catch(() => {});
         checkRecall();
@@ -468,5 +479,8 @@ try {
     process.exitCode = 1;
   }
 } finally {
+  // No fetch (or a failed decision) still refreshes configuration diagnostics.
+  // After a response, dispatchActive publishes configuration before auth/output.
+  await publishRecallConfiguration();
   clearTimeout(recallTimer);
 }

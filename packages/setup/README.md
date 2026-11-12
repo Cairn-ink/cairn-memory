@@ -16,6 +16,157 @@ EOF boundaries, pending batches and permanent format latches keep their
 behaviour. Existing cloud-mode Codex users must rerun setup to install the
 updated runtime.
 
+Installer **0.6.6 is prepared and unpublished**. The engine bundle is synced
+from commit `b2d29993`. Executable engine sources match this cut. The archive
+includes the installer’s updated `docs/defaults.md`, so it is not byte-identical
+to the cut archive.
+
+`setup --local` now installs automatic Raw capture by default for each selected
+tool. It saves conversation text from that tool's sessions on this computer as
+plaintext in the same local store used by `cairn-local`, without a key or model
+calls. Both tools share the 200,000,000-byte Raw cap.
+
+Turn capture off with `setup --local --no-capture` or
+`config --local-capture off`; turn it back on with `config --local-capture on`.
+Add `--client claude` or `--client codex` to select one tool. Off keeps data and
+removes owned hooks. Setup remembers an explicit off preference. A notice appears
+once per client installation. Codex users must approve new entries in `/hooks`.
+A failed or pending format qualification still installs the hooks; capture waits.
+After a Codex update, capture resumes once background qualification passes.
+If it stays pending or failed, rerun setup. Status reads the engine's last observed
+qualification state and reason without launching Codex.
+
+Forgetting or correcting a memory hides whole conversations with messages within
+30 minutes before or after its save time. This can include unrelated conversations
+and miss other conversations about the same subject. To remove a conversation,
+use the commands below. A fork or resume of a hidden conversation stays hidden.
+Codex forks aren't saved locally. New Claude Code sessions are captured from
+their first turn, including when the transcript appears after session start.
+Turning capture back on preserves those hiding fences.
+Existing conversations resume at the next real hook's transcript end, skipping
+text written while off. Claude Code also skips the first turn of an already-running
+conversation after re-enabling; subsequent turns resume.
+
+`uninstall --local` disables capture and removes its hooks and MCP registration,
+keeping Raw, identity and the pinned engine runtime so setup can restore capture.
+To inspect and remove one conversation:
+
+```sh
+npx @cairn-ink/memory raw list
+npx @cairn-ink/memory raw list --client claude
+npx @cairn-ink/memory raw delete <conversation-id>
+npx @cairn-ink/memory raw delete <conversation-id> --yes
+```
+
+`raw list` shows ids, clients, time ranges, counts and hidden/fenced status,
+never text; `--client claude|codex` filters the list. Delete accepts one explicit
+id without wildcards. It previews counts, client and time range unless `--yes`
+is given. An unknown id fails without changes. Both commands require an installed
+local client and refuse cloud mode. They use the same store and namespace as MCP.
+
+Deletion removes the conversation's Raw messages and index rows and its Episodes, and invalidates dependent Cards under the existing lineage rule. Confirmed authored Card bodies may remain stored. Re-sent copies (fork, resume or cursor reset) are not archived again. Extracted Memories are kept; use each Memory's own forget operation to remove it.
+
+`raw delete <conversation-id> --yes` finishes in one command and shows progress
+counts. The command retries automatically for up to about 10 minutes. If it stops before completion, run the same command again to continue.
+While a large conversation is being deleted, saving in other sessions
+pauses and catches up afterwards: about 11–15 seconds for a 10,000-message
+conversation in the concurrent-saving workload described in the
+[local Raw guide](../../docs/raw-local-journal.md).
+
+Several sessions saving at once no longer stop one of them from saving. Default
+reads keep the Raw excerpts they already validated when a read reaches its time
+limit, marked partial, instead of dropping them.
+
+**Search catches up after saving.** Each turn is saved to the local store as soon as it ends. Raw search covers a newly saved conversation only after the local index reaches it. That indexing runs while Claude Code or Codex has the Cairn MCP server open: a few minutes for about 1,000 saved messages, about an hour for 10,000. While you keep working, each new save restarts the indexing pass, so a conversation saved during a busy session may not be searchable until you pause. Until the index has caught up, search reports partial coverage instead of claiming it found everything. Memories, and conversations the index already covers, are not affected and stay searchable as before.
+
+Known limits in this release:
+- While new turns keep arriving, the local MCP server keeps indexing: about one small index write per second and roughly 3% of one CPU core.
+- Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
+- Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.
+- A later release indexes newly saved conversations first.
+
+Going back to 0.6.5: an **attested base-33 store with card lineage revision 1**
+(physical 53, lineage 1) that 0.6.6 opened with Raw on is refused with
+`unsupported_database`. Reinstall 0.6.6 to recover access. **Attested lineage-0
+and ordinary local stores open in 0.6.5.** Captured Raw stays searchable, with
+eligible excerpts readable through contextRead. Hidden conversations stay hidden
+in both current and history Raw search because 0.6.5 enforces the existing
+`raw_session_fences` rows. The new local tables remain intact and are ignored.
+0.6.5 itself does not capture automatically, so its engine does not use the new
+hide windows or fork fences for capture. Its setup leaves 0.6.6 hooks registered
+with their retained engine; turn capture off with 0.6.6 before downgrading to
+stop them.
+
+安裝器 **0.6.6 已備妥，尚未發布**。引擎同步自 `b2d29993`，可執行的引擎
+原始碼與此版本一致。封裝內含安裝器更新的 `docs/defaults.md`，因此不與該版本的
+封裝逐位元組相同。
+
+`setup --local` 現在預設替所選工具安裝自動 Raw 擷取，把這台電腦上該工具的
+對話文字，以明文存進 `cairn-local` 使用的同一份資料庫，不需要金鑰，也不
+呼叫模型。兩個工具共用 200,000,000-byte 的 Raw 上限。
+
+用 `setup --local --no-capture` 或 `config --local-capture off` 關閉，
+`config --local-capture on` 重新開啟。可加 `--client claude` 或
+`--client codex` 只設定一個工具。關閉會移除擷取 hooks、保留資料，重跑 setup
+也會記住關閉偏好。每個工具的安裝提示只顯示一次。Codex 請到 `/hooks` 核准
+新增項目。格式驗證失敗或還在等待時，仍會安裝 hooks，擷取則等待驗證。
+Codex 更新後，背景驗證通過就會恢復擷取；若持續等待或驗證失敗，請重跑 setup。
+status 讀取引擎上次觀察到的驗證狀態與原因，不啟動 Codex。
+
+忘記或更正記憶時，也會隱藏在記憶保存時間前後 30 分鐘內有訊息的整段對話。
+這可能包含無關對話，也可能漏掉其他談到相同主題的對話。要移除對話，請用 raw delete。
+隱藏對話的分支或續接仍會保持隱藏。Codex 分支對話不會存進本機。
+Claude Code 新對話從第一輪開始保存，包含逐字稿在 session start 之後才建立的情況。
+重新開啟擷取會保留這些隱藏規則，既有對話從下一個實際 hook 看到的逐字稿結尾
+恢復，跳過關閉期間的文字。Claude Code 已在進行中的對話，重新開啟後的第一輪
+也不會保存，後續輪次才恢復。
+
+`uninstall --local` 會關閉擷取、移除 hooks 與 MCP 連接，保留 Raw、身分與綁定的
+引擎，讓重跑 setup 可以恢復。要查看或移除一段對話：
+
+```sh
+npx @cairn-ink/memory raw list
+npx @cairn-ink/memory raw list --client codex
+npx @cairn-ink/memory raw delete <conversation-id>
+npx @cairn-ink/memory raw delete <conversation-id> --yes
+```
+
+`raw list` 只列出 id、工具、時間範圍、數量與隱藏／封鎖狀態，不顯示文字；
+可用 `--client claude|codex` 篩選。刪除時一次只能指定一個明確的 id，不能用
+萬用字元。預設只預覽數量、工具與時間範圍，加上 `--yes` 才會刪除；未知 id
+會報錯且不改動資料。這兩個指令需要已安裝的本機工具，雲端模式不能使用，
+資料庫與命名空間都沿用 MCP 的設定。
+
+刪除會移除該對話的 Raw 訊息與索引列、Episodes，並依既有來源關聯規則讓相依 Cards 的來源支持失效。已確認、由使用者撰寫的 Card 本文可能仍保留在資料庫。分支、續接或游標重設後重送的副本不會再次保存。從對話抽取的 Memories 會保留；若要移除，仍須各自執行 forget。
+
+`raw delete <conversation-id> --yes` 會在一次執行中完成刪除，並顯示進度數量。
+指令會自動重試，最長約 10 分鐘。若停止時尚未完成，請重跑同一個指令來繼續。
+刪除大型對話時，
+其他工作階段會暫停保存，完成後再補存；依[本機 Raw 指南](../../docs/raw-local-journal.md)
+的同時保存情境，一段 10,000 則訊息的對話約會讓保存暫停 11–15 秒。
+
+多個工作階段同時保存，不再導致其中一個停止保存。預設讀取到達時間上限時，
+會保留已驗證的 Raw 片段並標示為 partial，不會把這些片段丟掉。
+
+**保存後，搜尋需要時間追上。** 每一輪對話結束時就會存進本機資料庫，但 Raw 搜尋要等本機索引處理到這段對話，才找得到它。索引只在 Claude Code 或 Codex 開著 Cairn MCP 伺服器時進行：約 1,000 則已保存訊息需要幾分鐘，10,000 則約需一小時。持續使用時，每次新的保存都會讓索引從頭再跑一次，所以忙碌工作階段中保存的對話，可能要等你停下來後才搜得到。索引追上之前，搜尋會回報 partial（部分涵蓋），不會聲稱已經找遍全部內容。Memories 與索引已涵蓋的對話不受影響，照常可以搜尋。
+
+本版已知限制：
+- 只要新的對話持續進來，本機 MCP 伺服器就會持續建索引：大約每秒一次小量索引寫入，約佔一個 CPU 核心的 3%。
+- 約 50,000 則訊息以上的歷史可能永遠建不完索引，搜尋會一直回報 partial。
+- 由不自行維護索引的讀取端處理的搜尋（例如設定了 embedding 模型時的純關鍵字搜尋），即使索引已建完，也可能持續回報 partial；搜尋結果仍會照常回傳。
+- 之後的版本會優先為新保存的對話建索引。
+
+降回 0.6.5 時，若 0.6.6 已在開啟 Raw 的情況下開過
+**經驗證的 base-33、card lineage revision 1 資料庫**（physical 53、lineage 1），
+0.6.5 會以 `unsupported_database` 拒絕開啟；重裝 0.6.6 就能恢復存取。
+**經驗證的 lineage-0 資料庫與一般本機資料庫，0.6.5 都能開啟。** 已保存的 Raw
+仍可搜尋，符合讀取條件的片段也能透過 contextRead 閱讀。已隱藏的對話在
+current 與 history 兩種 Raw 搜尋中都會保持隱藏，因為 0.6.5 仍會遵守既有的
+`raw_session_fences` 記錄。新增的本機資料表會完整保留，0.6.5 不會使用它們。
+0.6.5 本身不會自動擷取，因此它的引擎不會在擷取時使用新的隱藏時間窗與
+分支封鎖規則。它的 setup 會保留 0.6.6 的 hooks，繼續使用原本保留的引擎；
+若要停止它們，請先用 0.6.6 關閉擷取再降版。
+
 ## Setup / 安裝
 
 ```sh
@@ -54,7 +205,7 @@ No Cairn account or sign-in is needed. Local mode uses one private root,
 `~/.cairn-memory`, or an absolute `CAIRN_MEMORY_HOME`. It keeps the installation
 record in `installation.json`,
 engine generations and the npm cache in `engine/`, and memory by default in
-`data/memory.sqlite` (created on first engine use). Initial engine dependency
+`data/memory.sqlite` (created during capture setup or first engine use). Initial engine dependency
 installation needs npm registry access unless its cache is already populated.
 Setup registers a `cairn-local` stdio MCP server through each client's own CLI:
 user scope for Claude Code, and `$CODEX_HOME/config.toml` (default `~/.codex`)
@@ -64,17 +215,18 @@ Restart the tools after setup. If Node moves, rerun `setup --local`.
 本機模式不需要 Cairn 帳號或登入，共用一個私有目錄，預設為
 `~/.cairn-memory`，也可用絕對路徑的 `CAIRN_MEMORY_HOME` 指定。
 `installation.json` 保存安裝紀錄，`engine/` 放引擎
-版本與 npm 快取，預設在 `data/memory.sqlite` 保存記憶，第一次使用引擎時
-才建立資料庫。
+版本與 npm 快取，預設在 `data/memory.sqlite` 保存記憶，設定擷取或第一次使用引擎時建立資料庫。
 第一次安裝引擎相依套件需要連到 npm registry，除非快取已備妥。
 安裝器透過各工具的 CLI 註冊 `cairn-local` stdio MCP server：Claude Code
 使用 user scope，Codex 使用 `$CODEX_HOME/config.toml`，預設在 `~/.codex`。
 兩個工具共用資料庫與 owner，並使用 Node 的絕對路徑。安裝後請重開工具；
 Node 路徑變動時，重跑 `setup --local`。
 
-**0.6.3 local mode has no automatic capture or automatic recall.** Use the five
-explicit MCP tools: `remember_memory`, `recall_memory`, `inspect_memory`,
-`correct_memory`, `forget_memory`. Saving, inspecting, correcting and forgetting
+**0.6.6 local mode captures Raw automatically by default.** Use the explicit MCP tools:
+`remember_memory`, `recall_memory`, `inspect_memory`, `correct_memory`,
+`forget_memory`, alongside the default dated contextRead tools
+`find_memory_candidates`, `fetch_memory_candidate_evidence`, and
+`read_memory_context`. Automatic hooks fill Raw without a model; setup does not register `capture_memory`. Saving, inspecting, correcting and forgetting
 need no model key. Semantic recall needs a model key; without one it reports
 `model_not_configured`. If `OPENAI_API_KEY` is in the tool's environment, the
 engine will use it for recall and send selected text to that provider.
@@ -84,8 +236,11 @@ it reads the Claude registration configuration file `~/.claude.json` with a
 `cairn-local` MCP registrations. It does not access credential stores or use
 authentication fields. Unrelated entries and file contents are never printed.
 
-**0.6.3 本機模式不會自動記下對話，也不會自動回想。** 請明確呼叫上面五個
-MCP 工具。保存、查看、更正與遺忘不需要模型金鑰；語意回想需要模型金鑰，
+**0.6.6 本機模式預設自動保存 Raw。** 可明確呼叫 `remember_memory`、
+`recall_memory`、`inspect_memory`、`correct_memory`、`forget_memory`，
+也可使用預設開啟、附日期的 contextRead 工具 `find_memory_candidates`、
+`fetch_memory_candidate_evidence`、`read_memory_context`。自動 hooks 不需要模型就能保存 Raw，setup 不會註冊 `capture_memory`。
+保存、查看、更正與遺忘不需要模型金鑰；語意回想需要模型金鑰，
 沒有時回報 `model_not_configured`。若工具的環境已有 `OPENAI_API_KEY`，
 引擎會用它回想，並把選取的文字傳給該模型供應商，本機儲存不代表所有處理
 都離線。安裝器不會傳送你的資料；它會讀取上限 4 MiB 的 Claude 註冊設定檔
@@ -95,10 +250,8 @@ MCP 工具。保存、查看、更正與遺忘不需要模型金鑰；語意回�
 
 When both tools share the database, `storage_busy` is a retryable transient
 result: retry the operation; it does not mean memory is empty. `status` reports
-registration, engine and Node state without starting the local engine or testing
-a live connection. `--verbose` adds private paths, owner, engine ID and retained
-failed installations. Uninstall detaches selected registrations and removes
-`engine/` only when all clients are proven detached; **memory data is kept**.
+registration, engine, Node and per-client capture on/off/blocked state, reason and Raw cap through read-only engine status; it does not test a live connection. `--verbose` adds private paths, owner, engine ID and retained
+failed installations. Uninstall disables capture, removes hooks and detaches selected registrations, retaining identity and its pinned runtime; **memory data is kept**.
 `--client claude|codex` limits registration or detachment, not conflict
 detection.
 `uninstall --local --purge-config` also removes the descriptor and `.npmrc`,
@@ -106,9 +259,8 @@ never data; it cannot be combined with `--client`. A pending setup must be
 uninstalled without `--client`.
 
 兩個工具共用資料庫時，`storage_busy` 是暫時忙碌，請重試該操作，不能當成
-沒有記憶。`status` 顯示註冊、引擎與 Node 狀態，不啟動本機引擎或測試實際
-連線；`--verbose` 會多顯示私有路徑、owner、引擎 ID 與保留的失敗安裝。
-解除安裝會移除所選工具的連接，確認全部解除後才移除 `engine/`，**記憶資料
+沒有記憶。`status` 顯示註冊、引擎與 Node 狀態，也會透過唯讀引擎 status 顯示各工具擷取狀態、原因與 Raw 上限，不測試實際連線；`--verbose` 會多顯示私有路徑、owner、引擎 ID 與保留的失敗安裝。
+解除安裝會移除所選工具的連接，保留擷取身分與綁定引擎，**記憶資料
 會保留**。`--client claude|codex` 只限制註冊或解除的工具，衝突仍檢查兩邊。
 `uninstall --local --purge-config` 會加刪安裝紀錄與 `.npmrc`，不刪資料，
 不能搭配 `--client`。尚未完成的安裝若要移除，不能只選單一工具。
@@ -124,7 +276,8 @@ uninstalled without `--client`.
 | `--purge-config` | With `uninstall --local`, removes the descriptor and `.npmrc` after detachment, keeping data. Cannot be used with `--client`. |
 | `--dry-run` | With local setup, shows the plan without changing settings, starting the engine or resuming a pending operation. |
 | Hosted setup options | `--endpoint`, `--reauthorize`, `--manual-token`, `--no-browser`, `--no-clipboard`, `--codex-daily-cap`, `--codex-capture-exec` are rejected with `local_option_invalid`. |
-| Hosted controls | `disable`, `pause`, `resume`, `prompt-recall-on`, `prompt-recall-off`, `config` are rejected on local-only installations with `local_control_unsupported`. |
+| `--no-capture` / `config --local-capture off\|on` | Setup opt-out / change local capture; off keeps data. |
+| Hosted controls | `disable`, `pause`, `resume`, `prompt-recall-on`, `prompt-recall-off` and other `config` options are rejected on local-only installations with `local_control_unsupported`. |
 
 | 選項 | 本機模式行為 |
 | --- | --- |
@@ -135,7 +288,8 @@ uninstalled without `--client`.
 | `--purge-config` | 搭配 `uninstall --local`，解除連接後加刪安裝紀錄與 `.npmrc`，保留資料，不能搭配 `--client`。 |
 | `--dry-run` | 本機安裝預演，不改設定、不啟動引擎，也不接續尚未完成的操作。 |
 | 雲端安裝選項 | `--endpoint`、`--reauthorize`、`--manual-token`、`--no-browser`、`--no-clipboard`、`--codex-daily-cap`、`--codex-capture-exec` 會回報 `local_option_invalid`。 |
-| 雲端控制 | 本機模式使用 `disable`、`pause`、`resume`、`prompt-recall-on`、`prompt-recall-off`、`config` 會回報 `local_control_unsupported`。 |
+| `--no-capture` / `config --local-capture off\|on` | 安裝時關閉／切換本機擷取；關閉保留資料。 |
+| 雲端控制 | 本機模式使用 `disable`、`pause`、`resume`、`prompt-recall-on`、`prompt-recall-off` 與其他 `config` 選項會回報 `local_control_unsupported`。 |
 
 If `claude mcp` or `codex mcp` lacks the required subcommands, setup prints a
 manual registration snippet, marks that client `manual`, and exits 1. Follow

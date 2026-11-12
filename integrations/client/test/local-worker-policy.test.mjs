@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { workerFixture } from './fixtures/local-worker-workspace.mjs';
 import { claude } from './fixtures/raw-fixtures.mjs';
 import { sourceBudget, READ_LIMIT, RECORD_LIMIT } from '../raw/local-worker-source.mjs';
+import { localCaptureReply } from '../raw/local-reply.mjs';
 
 async function call(f,action,options = {}) {
   const result = await f.runWorker(action,options).done;
@@ -12,6 +13,10 @@ async function call(f,action,options = {}) {
   assert.doesNotMatch(result.stdout+result.stderr,/synthetic_source_secret|synthetic_key_secret/);
   return JSON.parse(result.stdout);
 }
+test('Raw-only mode conflict is a confirmed transport refusal',() => {
+  const reply = {status:409,body:{error:'raw_session_mode_conflict'}};
+  assert.deepEqual(localCaptureReply(Buffer.from(JSON.stringify(reply)+'\n'),{}),reply);
+});
 function policyFixture(t,settings = {}) {
   const f = workerFixture(t,settings), directory = join(f.workspace.path,'fake-runtime','adapters','local');
   mkdirSync(directory,{ recursive:true });

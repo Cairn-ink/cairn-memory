@@ -309,3 +309,27 @@ test('a previously cached unavailable probe is retried instead of becoming a per
   assert.equal((await qualifyBinary(f.configPath,f.host,{collect:async()=>{probes++;return result('0.163.0');}})).status,'qualified');
   assert.equal(probes,1);
 });
+
+test('identical observed host bytes skip publication; a changed host is still published', async t => {
+  const f = await fixture(t);
+  const { withWriteObserver } = await import('../../client/private-state.mjs');
+  await observeHost(f.configPath, f.host);
+  const writes = [];
+  await withWriteObserver(event => writes.push(event), () => observeHost(f.configPath, f.host));
+  assert.equal(writes.filter(event => event.kind === 'write').length, 0);
+  const changed = { ...f.host, processPath: '/proc/123/exe' };
+  await withWriteObserver(event => writes.push(event), () => observeHost(f.configPath, changed));
+  assert.equal(writes.filter(event => event.kind === 'write').length, 1);
+  assert.deepEqual(await observedHosts(f.configPath), [changed]);
+});
+
+test('deferred host evidence still schedules the first qualification with a missing cache', async t => {
+  const f = await fixture(t);
+  let launched = 0;
+  const options = { detect: async () => f.host, observe: async () => {}, launch: async () => { launched++; } };
+  assert.equal((await currentHost(f.configPath, options)).status, 'pending');
+  assert.equal(launched, 1, 'first_qualification_is_scheduled');
+  assert.deepEqual(await observedHosts(f.configPath), [f.host]);
+  assert.equal((await currentHost(f.configPath, options)).status, 'pending');
+  assert.equal(launched, 1, 'live_pending_qualification_is_not_duplicated');
+});

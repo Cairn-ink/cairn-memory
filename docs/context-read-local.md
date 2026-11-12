@@ -431,7 +431,8 @@ their existing v2 projection. Contract §15.9 records lifecycle safety for up to
 ## Default Memory + Raw assembly
 
 The host supplies `contextRead.rawSearch`, an already-open local service exposing
-`search`, `prepare` and synchronous batch `revalidate`. The host owns its
+`search`, synchronous batch `revalidate`, and `prepare`, `prepareMany`, or both.
+Existing single-candidate hosts need no changes. The host owns its
 credentials, fixed owner/read set, maintenance and close. If Raw uses a separate
 credential, bind it in a trusted wrapper rather than passing it as read input:
 
@@ -439,6 +440,8 @@ credential, bind it in a trusted wrapper rather than passing it as read input:
 const rawSearch = {
   search: input => rawService.search(input, rawCredential),
   prepare: (candidate, settings) => rawService.prepare(candidate, settings, rawCredential),
+  // Optional optimization when the service supports it:
+  prepareMany: (candidates, settings) => rawService.prepareMany(candidates, settings, rawCredential),
   revalidate: handles => rawService.revalidate(handles),
 };
 const reader = openContextReader({ path, contextRead: {
@@ -483,14 +486,53 @@ date. Explicit `representation:'representation-v2'` keeps undated Memory output
 and relevance order. Raw retains its original `occurredAt` for attribution.
 The untrusted-data framing applies to both channels.
 
-`diagnostics.coverage.raw` is `included`, `unavailable` or `partial`. An absent
-or unavailable service, partial search, failed preparation, or exhausted Raw
-time allowance yields the existing Memory-only assembly. Raw preparation has a
-subdeadline that reserves time for Memory assembly. Prepared Raw is validated
-again after counting and authority callbacks; a failed final validation drops
-all Raw and rebuilds the Memory-only response. Packing also reserves time for
-Memory-only finalization. Optional relation/MOC previews with more than 24
-Memory candidates use the Memory-only path (`raw:'partial'`) until wider
+`diagnostics.coverage.raw` is `included`, `unavailable`, `unsupported_store` or
+`partial`. Incomplete search and exhausted Raw preparation time retain the
+already prepared, identity-checked candidates in rank order with `partial`
+coverage. A candidate outside the read set, an identity mismatch or a failed
+preparation skips only that candidate and makes coverage `partial`. An outcome
+that completes after the cutoff is discarded; the timer snapshots the validated
+prefix, so late completions cannot change it. Partial coverage can accompany
+delivered Raw evidence and dates; it does not mean the Raw channel is empty.
+An empty Raw set uses the existing Memory-only assembly, including a complete
+search with zero candidates (`included`). An absent or failed service reports
+`unavailable`; an unsupported store reports `unsupported_store`.
+The first 24 search candidates use `prepareMany` when present; otherwise the
+shared channel uses the existing single-candidate loop. A throwing optional batch
+method can recover unprocessed candidates through `prepare`. Native batches
+authorize each candidate using the unchanged `rawSearchSource` input
+`{candidate, intent}`; no new authorization shape or capability declaration is
+required. Known range-count and byte-cap failures are rejected before source
+inspection. Each candidate is authenticated against its own live search proof;
+local ports partition candidates by issuing reader while preserving input order.
+The publication header is acquired once per native batch; initial canonical
+source checks and sealed payload copies share one read snapshot. One reader opens texts after releasing
+that snapshot, preserving byte, digest and authenticated-context checks.
+Canonical source state and caller grants can change after release. Live guards
+check both around every part opener; registration revalidates all contributing
+sources before exposing a handle. Assembly and final delivery revalidate again.
+The single-candidate `prepare` and `prepareSource` APIs remain available to other callers.
+`prepareMany(candidates, settings, credential)` returns `{handles, complete}`,
+with a handle or `null` for each completed candidate. It calls
+`settings.onPrepared(handle, index)` in input order as each outcome completes.
+`settings.deadlineAt` is the monotonic Raw cutoff; `complete:false` means the
+batch stopped early. The channel checks handle identities before accepting each
+callback and snapshots only completed items at stop.
+Raw preparation keeps the default 1,000 ms read deadline and its 40% Raw share,
+reserving time for Memory assembly.
+Every nonempty Raw set is batch-revalidated before any Raw text projection.
+Prepared Raw is validated again after counting and authority callbacks; a failed
+final validation drops all Raw and rebuilds the Memory-only response.
+
+Known limit: in mixed-reader Raw validation, each issuing reader's grant is
+sampled once. If a later reader's access callback revokes an earlier reader's
+grant during the same validation, the set is still accepted for that validation;
+the next validation of the revoked grant refuses it. Stored-state checks for
+forgotten, suppressed or excluded sources and owner/namespace isolation are
+unaffected: one final whole-set snapshot enforces them.
+
+Packing also reserves time for Memory-only finalization. Optional relation/MOC previews
+with more than 24 Memory candidates use the Memory-only path (`raw:'partial'`) until wider
 coalesced snapshots are supported. Late asynchronous completions
 are discarded. Hosts must keep synchronous service calls bounded and own any
 underlying operation until it settles. No permanent connection refusal is

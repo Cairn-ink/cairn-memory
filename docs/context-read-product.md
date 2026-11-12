@@ -218,6 +218,13 @@ errors. Search and assembly diagnostic errors also take their final sample befor
 constructing a data-bearing error envelope. Status and maintenance take their
 final sample immediately before a fresh canonical read transaction.
 
+Known limit: in mixed-reader Raw validation, each issuing reader's grant is
+sampled once. If a later reader's access callback revokes an earlier reader's
+grant during the same validation, the set is still accepted for that validation;
+the next validation of the revoked grant refuses it. Stored-state checks for
+forgotten, suppressed or excluded sources and owner/namespace isolation are
+unaffected: one final whole-set snapshot enforces them.
+
 Opening operational failures reject with sanitized `code` and `cleanupId`;
 validation errors create no Worker. Fetch/capabilities return Promise envelopes.
 Timeout/cancellation settles independently of cleanup; late data is discarded.
@@ -2007,8 +2014,9 @@ Smaller host budgets are supported. `raw:false` on `contextRead` explicitly
 selects Memory-only assembly. `findCandidates` and exact evidence fetch keep
 their existing interfaces and retrieval behavior.
 
-`createContextReadHost` may return `rawSearch` with `search`, `prepare` and
-synchronous batch `revalidate`. The service stays inside the Worker; functions
+`createContextReadHost` may return `rawSearch` with `search`, synchronous batch
+`revalidate`, and `prepare`, `prepareMany`, or both. Existing prepare-only hosts
+continue through the shared single-candidate loop; batch preparation is optional. The service stays inside the Worker; functions
 and raw credentials do not cross IPC. The host binds any separate Raw credential
 in these methods and registers its disposer through the existing resource owner
 or `host.close`. The engine neither opens nor maintains this service. A direct
@@ -2034,12 +2042,36 @@ attached to Memory is dated inside `evidence`; identical body text uses
 Saved text remains untrusted data. Signed snapshots cover the selected canonical
 Memories/Cards; Raw evidence is inline and does not expand snapshot fetch.
 
-`diagnostics.coverage.raw` reports `included`, `unavailable` or `partial`.
-Unavailable, incomplete or timed-out Raw uses the exact existing Memory-only
-assembly. Raw work has a subdeadline reserving Memory assembly time. All admitted
+`diagnostics.coverage.raw` reports `included`, `unavailable`, `unsupported_store`
+or `partial`. Incomplete search and preparation cutoffs retain the validated
+candidate prefix with `partial` coverage, including its Raw evidence and dates.
+Invalid or failed candidates are skipped individually. The first 24 search
+candidates use the optional batch method when present, with the existing
+single-candidate loop as fallback. Each native batch authorizes candidates
+separately with the unchanged `rawSearchSource` input `{candidate, intent}`;
+existing host authorizers need no changes. Overbudget metadata is rejected before
+source inspection. Candidates from every live issuing proof/reader retain their
+input order and individual outcomes. Each native batch shares one publication
+header, one canonical read snapshot for initial source checks and sealed bytes,
+and one reader setup. Texts open in rank order after releasing the snapshot, with byte,
+digest and authenticated-context checks. Canonical state and caller grants may
+change after release: live guards check both around each part opener, and
+registration revalidates every contributing source before exposing a handle.
+Each completed outcome is reported to
+the channel immediately; late outcomes are ignored and the timer snapshots the
+items collected so far. The 1,000 ms default deadline and 40% Raw share remain
+unchanged. The single-candidate service APIs remain available. Empty Raw sets
+use the existing Memory-only assembly; a complete search with zero candidates
+still reports `included`. Unavailable services and unsupported stores retain
+their respective coverage values. Raw work has a subdeadline reserving Memory
+assembly time. Every nonempty Raw set, including partial sets, is batch-revalidated
+before any Raw text projection. All admitted
 Raw handles are batch-revalidated after host counting/authority callbacks,
-before canonical final delivery. Failed validation discards Raw and rebuilds
-Memory-only output without holding a SQLite transaction across an asynchronous
-operation. The semantic publication gate still covers synchronous assembly and
-final validation; Raw preparation happens before entering it. Hosts own late
-underlying operations and must bound synchronous service calls.
+before canonical final delivery. No SQLite transaction is held across an
+asynchronous operation. The semantic publication gate still covers synchronous
+assembly and final validation; Raw preparation happens before entering it.
+Hosts own late underlying operations and must bound synchronous service calls.
+
+Known limit: on the product reader, Raw invalidated between initial and final
+validation yields the existing refusal (`reader_failed`) rather than a Memory-only
+response; the local/facade reader rebuilds Memory-only.

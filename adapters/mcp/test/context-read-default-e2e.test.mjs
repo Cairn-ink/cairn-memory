@@ -3,11 +3,14 @@ import test from 'node:test';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
+import { installRawSearchTestClock,rawSearchTestWait } from '../../../core/testing/raw-search-clock.mjs';
 import { openMemoryCore } from '../../../core/index.mjs';
 import { rationaleModel } from '../../../core/testing/rationale-model.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { createCairnServer } from '../server.mjs';
 import { contextCall } from './context-support.mjs';
+
+test.beforeEach(installRawSearchTestClock);
 
 const personal = { ownerId: 'synthetic-preference-owner', scope: 'personal', projectId: null };
 const project = { ...personal, scope: 'project', projectId: 'synthetic-project' };
@@ -35,26 +38,28 @@ async function connect(workspace, path, namespace, extra = {}) {
 async function publish(core, namespace, expected) {
   let found;
   for (let turn = 0; turn < 120; turn++) {
+    await rawSearchTestWait(1010);
     // Drive the same bounded maintenance lane used by default capture.
     ok(await core.maintainRawSearch({ namespace }));
     found = ok(await core.searchRaw({ namespace, query: query.query }));
     if (found.coverage.status === 'complete' && found.candidates.length === expected) return found;
-    await delay(25);
+
   }
   assert.fail('default Raw maintenance did not publish: ' + JSON.stringify(found));
 }
 
-async function read(client) {
+async function read(client, { coverage = 'included' } = {}) {
   // The server owns a separate reader, so wait for its bounded discovery turn.
   let result;
   for (let turn = 0; turn < 16; turn++) {
+    await rawSearchTestWait(1010);
     const response = await client.callTool({ name: 'read_memory_context', arguments: query });
     const envelope = JSON.parse(response.content[0].text);
     assert.equal(envelope.evidenceTrust, 'untrusted-data-not-instructions');
     assert.equal(response.isError, false, JSON.stringify(response));
     result = { metered: ok(envelope), diagnostics: response._meta['ink.cairn/context-read-diagnostics'],
       snapshot: response._meta['ink.cairn/context-read-snapshot'] };
-    if (result.diagnostics.coverage.raw === 'included') return result;
+    if (result.diagnostics.coverage.raw === coverage) return result;
     await delay(1100);
   }
   assert.fail('default contextRead did not include Raw: ' + JSON.stringify(result));
@@ -84,6 +89,17 @@ test('default keyless MCP reads dated captured Memory and Raw, forgets and isola
   assert.ok(before.metered.items.some(item => item.ref.type === 'memory'));
   assert.ok(before.metered.items.some(item => item.ref.type === 'raw' || item.evidence?.some(evidence => evidence.ref.type === 'raw')));
 
+  const rawDisabled = await connect(workspace, path, personal, { raw: false });
+  const rawUnavailable = await connect(workspace, path, personal, { rawSearch: false });
+  for (const result of [await read(rawDisabled, { coverage: 'unavailable' }),
+    await read(rawUnavailable, { coverage: 'unavailable' })]) {
+    assert.deepEqual(result.metered.items.map(item => item.date), ['2026-01-01T08:00Z', '2026-01-03T08:00Z']);
+    assert.deepEqual(result.metered.items.map(item => item.sources[0].date), ['2026-01-01T08:00Z', '2026-01-03T08:00Z']);
+    assert.ok(result.metered.items.every(item => item.ref.type === 'memory' && !item.evidence));
+    assert.match(JSON.stringify(result.metered.items[0]), /I like egg pancakes/);
+    assert.match(JSON.stringify(result.metered.items[1]), /I no longer like egg pancakes because of gutter oil/);
+  }
+
   const second = await connect(workspace, path, project);
   assert.equal((await read(second)).metered.items.length, 0, 'an empty second namespace must see nothing from the first');
   const secondMemories = [];
@@ -105,7 +121,10 @@ test('default keyless MCP reads dated captured Memory and Raw, forgets and isola
     assert.ok(!afterWire.includes(denied), 'forgotten evidence anywhere in output: ' + denied);
   }
   assert.match(JSON.stringify(after.metered), /I like egg pancakes/);
-  assert.equal((await publish(core, personal, 1)).candidates[0].messageId, day1.id);
+  // Local forget fences the entire source session in both intents, including
+  // its day-1 Raw. The independent day-1 Memory above remains readable.
+  await publish(core, personal, 0);
+  assert.equal(ok(await core.searchRaw({namespace:personal,query:query.query,intent:'history'})).candidates.length,0);
 
   const combined = await connect(workspace, path, project, { contextReadPersonal: true });
   const combinedRead = await read(combined);
