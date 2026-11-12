@@ -85,7 +85,7 @@ test('budget spends no less than floor; signed cursor replays the exact boundary
   const f = await layoutFixture(t, layout); seed(f.db,2049);
   const score = createQueryScore('note'); let scored = 0;
   const first = query(f.runtime,'note',{ score(text) { scored++; now += 1; return score(text); } });
-  assert.equal(QUERY_SCAN_BUDGET_MS,400);
+  assert.equal(QUERY_SCAN_BUDGET_MS,300);
   assert.equal(scored,1024); assert.equal(first.scanBoundary.rows,1024);
   assert.equal(first.scanBoundary.stop,'budget'); assert.equal(first.scanExhausted,false);
   now = 0;

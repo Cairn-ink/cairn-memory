@@ -3,7 +3,7 @@
 ## Unreleased — default recall recency scan
 
 - Use one newest-first keyset scan for body and source recall: a 1,024-row
-  floor, fixed 400 ms budget and 20,000-row cap, retaining the best 1,024 by
+  floor, fixed 300 ms budget and 20,000-row cap, retaining the best 1,024 by
   query overlap then ID. Remove the candidate-policy constructor option.
 - Bound the added scan time per recall call: a two-namespace read set splits
   the budget evenly (rounded down per namespace); each floor always completes.

@@ -781,7 +781,7 @@ uses the greatest distinct literal query-token overlap across the generated body
 and those four excerpts. A receipt supplies the existing 120-code-point select
 preview only when it scores strictly above the body; the first stable-ID receipt
 wins a receipt tie, while a body tie keeps the body preview. All recall modes scan nondeleted physical rows newest first on the existing
-`namespace_memories` index, with a 1,024-row floor, a fixed 400 ms monotonic
+`namespace_memories` index, with a 1,024-row floor, a fixed 300 ms monotonic
 budget and a 20,000-row cap. The floor and its placement share one
 normal-timeout deferred transaction. Tail pages use timeout zero, restored
 synchronously, and visit at most 256 rows or 25 ms before releasing SHARED.

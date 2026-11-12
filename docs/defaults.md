@@ -88,7 +88,7 @@ retained-profile server is a read-only host with its own authority boundaries.
 Legacy `recall()` now scans each authorized namespace newest first, using
 `updated_at DESC, id ASC` on the existing `namespace_memories` index. All recall
 modes use this default; there is no candidate-policy constructor option.
-`QUERY_SCAN_BUDGET_MS` in `core/query-candidates.mjs` is fixed at **400 ms** per
+`QUERY_SCAN_BUDGET_MS` in `core/query-candidates.mjs` is fixed at **300 ms** per
 recall call. A read set splits it evenly, rounded down, so each namespace of a
 two-namespace call scans its tail for at most half; every floor still completes.
 The floor reads up to 1,025 current, nondeleted, non-awaiting rows in one

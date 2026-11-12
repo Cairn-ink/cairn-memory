@@ -3,7 +3,7 @@ import { fail } from './validation.mjs';
 export const QUERY_CANDIDATE_VERSION = 'literal-recency-keyset-overlap-v4';
 export const SOURCE_QUERY_CANDIDATE_VERSION = 'literal-current-memory-source-overlap-v1';
 export const SOURCE_QUERY_RECEIPT_LIMIT = 4;
-export const QUERY_SCAN_BUDGET_MS = 400;
+export const QUERY_SCAN_BUDGET_MS = 300;
 // QUERY_SCAN_BUDGET_MS bounds one recall call. A read set splits it evenly, so
 // the added scan time stays within the call bound for every read-set size.
 // Each namespace's newest-first floor always completes regardless.

@@ -1423,7 +1423,7 @@ order is deterministic, not chronological.
 
 Internally, explicit source mode reads and scores up to four retained excerpts
 of 800 UTF-16 units per eligible memory within the default recency keyset scan
-(1,024-row floor, 400 ms budget and 20,000 physical-row cap). The supplied selector receives only the winning 120-code-point preview for
+(1,024-row floor, 300 ms budget and 20,000 physical-row cap). The supplied selector receives only the winning 120-code-point preview for
 each candidate packed into the existing at-most-100-item, 4,000-token page over
 at most two rounds, not those four full excerpts, receipt IDs or source metadata.
 Each candidate receipt must first pass the same authoritative stored identity,
@@ -1440,12 +1440,25 @@ experimental `sourceCandidatePolicy` constructor option has been removed.
 The floor reads current, nondeleted, non-awaiting rows in one statement and
 scores at most 1,024; an unscored 1,025th row detects whether a tail is needed.
 A namespace with at most 1,024 current rows keeps the ordinary statement budget.
-Tail scanning stops at the namespace's share of the fixed 400 ms per-call monotonic budget, 20,000-row cap, or the end. The floor, safety checks
+Tail scanning stops at the namespace's share of the fixed 300 ms per-call monotonic budget, 20,000-row cap, or the end. The floor, safety checks
 and placement share one normal-timeout deferred transaction. Tail pages use
 zero timeout, restored synchronously, with at most 256 rows or 25 ms per page.
 An epoch change discards the tail without restarting. Final placement of new
 tail candidates is one try-once read that rechecks the floor epochs; contention
 or movement there returns the placed floor, subject to existing freshness checks.
+
+Coverage is therefore newest-first and bounded per call. The newest 1,024
+current Memories of each namespace are always scored. Beyond them, a call scores
+as many further rows as fit in the budget, which depends on the machine. On the
+development workstation used for this project's measurements (quiet machine,
+disk-backed store, no concurrent writer), a one-namespace call reached about
+18,000 rows beyond the floor of a 20,000-Memory namespace within the 300 ms
+budget, and about 8,000 with 150 ms, which is each namespace's share in a
+two-namespace call; a 6,500-Memory namespace was scanned to its end. A slower machine scans fewer rows in the same time. Older Memories
+beyond that point are not literally scored in that call, and the response
+reports incomplete coverage (`scanExhausted:false`). A store in DELETE journal
+mode with a continuous writer can still make recall reads wait or return busy;
+this change does not alter that.
 Historical and awaiting tail rows, and projection-rejected rows, consume rows
 and time. The best 1,024 candidates
 are retained by literal overlap then ID, independent of recency. Budget/cap

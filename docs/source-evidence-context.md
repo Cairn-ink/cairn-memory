@@ -45,7 +45,7 @@ Every recall mode uses the default recency keyset scan described in
 [defaults](defaults.md). The floor reads current, nondeleted, non-awaiting
 rows in one statement, scoring at most 1,024; an unscored 1,025th row decides
 whether to continue. An exhausted floor retains ordinary statement costs.
-The tail visits nondeleted physical rows within a fixed 400 ms monotonic
+The tail visits nondeleted physical rows within a fixed 300 ms monotonic
 budget up to 20,000 total rows per authorized namespace. The floor, safety checks and placement share one
 normal-timeout deferred transaction. Tail pages use timeout zero, restored
 synchronously, and release SHARED after at most 256 rows or 25 ms. An epoch

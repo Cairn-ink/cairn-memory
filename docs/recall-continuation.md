@@ -7,7 +7,7 @@ Candidates repeated through multiple parents/pages are fetched once.
 Candidates are distinct memories scored before packing by full-body literal
 query overlap, then stable ID. Every recall mode scans newest first with the
 existing `namespace_memories` index and `updated_at DESC, id ASC` keyset.
-A 1,024-row floor precedes the fixed 400 ms budget; the hard cap is 20,000
+A 1,024-row floor precedes the fixed 300 ms budget; the hard cap is 20,000
 visited rows. The floor filters history and awaiting review in one content
 statement; its unscored 1,025th row detects a tail. An exhausted floor keeps
 ordinary recall statement costs. History and awaiting review in the tail, and
