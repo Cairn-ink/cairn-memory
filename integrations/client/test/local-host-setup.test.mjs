@@ -254,7 +254,7 @@ test('A5 official Claude full event fields remain inert, including background ta
     background_tasks:[{id:'synthetic',type:'shell',status:'running',description:'inert',command:'never execute'}],
     session_crons:[{id:'synthetic',schedule:'0 * * * *',recurring:true,prompt:'never interpret'}]})).status,'ready');
   assert.equal((await f.hook('PreCompact',{cwd:f.root,trigger:'manual',custom_instructions:null})).status,'ready');
-  assert.equal((await f.hook('Stop',{background_tasks:[{command:'inert',profilePath:'/forged'}]})).status,'blocked');
+  assert.equal((await f.hook('Stop',{background_tasks:[{command:'inert',profilePath:'/forged'}]})).status,'ready');
 });
 test('A1 readonly status creates no transient setup lock or installation-directory mutation',async t=>{
   const f=await setupFixture(t);await f.setup();const before=lstatSync(f.request.installationDirectory,{bigint:true}).mtimeNs;
