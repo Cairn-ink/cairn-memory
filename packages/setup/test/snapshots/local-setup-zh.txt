@@ -31,5 +31,6 @@ Codex：請到 /hooks 核准新增的項目。
 Codex 格式驗證：pending（qualification_pending）。
 Codex 擷取正在等待格式驗證。Codex 更新後，背景驗證通過就會恢復擷取；若持續等待或
   驗證失敗，請重新執行 setup。
-✓ 本機記憶設定完成。
 接下來：重新開啟 Claude Code 和 Codex。
+Codex：對話儲存已關閉（qualification_required）；背景格式驗證通過後會自動開始儲
+  存。

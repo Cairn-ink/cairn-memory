@@ -388,7 +388,7 @@ for (const unsafe of ['775', '777', 'symlink', 'symlink-component', 'file', 'for
   assert.equal(result.code, 2, result.display + result.stderr);
   assert.match(result.display, unsafe === 'file' ? /Cannot inspect Codex/ : /The local memory directory is unsafe/);
   assert.deepEqual(await snapshot(f.home), inventory);
-  assert.equal((await f.calls('codex')).some(call => call.args[0] === 'mcp' && call.args[1] === 'add'), false);
+  assert.equal((await f.calls('codex')).some(call => call.args[0] === 'mcp' && call.args[1] === 'add' && !call.args.includes('--help')), false);
 });
 
 test('descriptor strict JSON, exact keys, bounds, vectors and published references', async t => {
@@ -766,15 +766,17 @@ test('cloud installation metadata still routes cloud when its Codex CLI is unava
   assert.match(cloud.display, /terminal|interactive/iu); assert.deepEqual(await f.inventory(), before);
 });
 
-test('partial local setup reports the saved engine and Claude registration on a Codex directory failure', async t => {
+test('unsafe Codex capture directory refuses before installing the engine or registering Claude', async t => {
   if (!needCache(t)) return;
   const f = await localFixture(t); await f.config('# preserve\n'); await chmod(f.codexHome, 0o777);
-  const result = await f.run(); assert.equal(result.code, 1, result.display);
-  assert.doesNotMatch(result.display, /Nothing was changed/);
-  assert.match(result.display, /local engine installed/); assert.match(result.display, /Claude Code connected to local memory/);
-  assert.ok(result.literals.includes('npx @cairn-ink/memory setup --local'));
-  assert.equal((await f.descriptor()).operation.checkpoints.claude.state, 'done');
-  await chmod(f.codexHome, 0o700); assert.equal((await f.run(['setup'])).code, 0);
+  const before = await f.inventory();
+  const result = await f.run(); assert.equal(result.code, 2, result.display);
+  assert.match(result.display, /The local memory directory is unsafe/);
+  assert.doesNotMatch(result.display, /local engine installed|Claude Code connected to local memory/);
+  assert.deepEqual(await f.inventory(), before);
+  assert.equal((await f.calls('claude')).some(call => call.args[1] === 'add' && !call.args.includes('--help')), false);
+  await assert.rejects(lstat(f.root), { code: 'ENOENT' });
+  await chmod(f.codexHome, 0o700); assert.equal((await f.run(['setup', '--local'])).code, 0);
 });
 
 for (const [name, holder, child, expected] of [

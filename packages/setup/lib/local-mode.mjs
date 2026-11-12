@@ -374,9 +374,10 @@ export async function localStatus(detection, { write, t, env = process.env, verb
     if (detection.descriptorError) { refusal(detection.descriptorError.key, detection, { write, t }); return; }
     if (!descriptor && (detection.orphanEngine || Object.values(states).some(state => state.entry))) { refusal('local_orphan', detection, { write, t }); return; }
     const uninstalled = descriptor?.state === 'uninstalled';
+    const capturedClients = uninstalled ? Object.keys((await captureSettings(root)).clients) : [];
     const registration = state => state.unknown || !state.available ? 'unknown' : state.entry ? 'registered' : 'missing';
     for (const client of clientNames) if (states[client].local || states[client].entry ||
-        (uninstalled && registration(states[client]) === 'unknown')) {
+        (uninstalled && (registration(states[client]) === 'unknown' || capturedClients.includes(client)))) {
       write(t('local_status_client', { client: client === 'claude' ? 'Claude Code' : 'Codex' }));
       const state = registration(states[client]);
       write(t('local_status_registration', { state: t('local_registration_' + state) }));

@@ -37,5 +37,6 @@ Codex format qualification: pending (qualification_pending).
 Codex capture waits for format qualification. After a Codex update, capture
   resumes once background qualification passes; rerun setup after a Codex
   update if it stays pending or failed.
-✓ Local memory setup complete.
 Next: reopen Claude Code and Codex.
+Codex: conversation saving is OFF (qualification_required); saving starts
+  automatically once background format qualification passes.
