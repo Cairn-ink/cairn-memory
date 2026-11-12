@@ -16,12 +16,13 @@ export function control(db,namespace,{paused=0,enabled=1}={}) {
     .run(namespace.ownerId,namespace.scope,namespace.projectId??'','synthetic',paused,enabled);
 }
 const hostUrl=new URL('./context-semantic-host.mjs',import.meta.url).href;
-export async function semanticFixture(t,readSet=[ns]) {
+export async function semanticFixture(t,readSet=[ns],configuration={}) {
   globalThis[Symbol.for('context-read-product-p2e-v1/physical-policy')]?.clear();
   const f=fixture(t,{cards:true});
   const memories=readSet.map(namespace=>f.admit('lexical needle',namespace));
   for(const namespace of readSet)card(f,namespace,'needle','synthetic body');
   f.core.close();
+  if(configuration.transmissionSnapshot){const db=new DatabaseSync(f.path);try{assert.equal(db.prepare('PRAGMA journal_mode=WAL').get().journal_mode,'wal');}finally{db.close();}}
   const supervisor=createContextReadSupervisor();f.workspace.defer(()=>supervisor.close());
   const state=new SharedArrayBuffer(64),view=new Int32Array(state);view[0]=1;
   const anchorPath=join(f.workspace.path,'authority.sqlite'),ledgerPath=join(f.workspace.path,'ledger.sqlite');
@@ -38,14 +39,14 @@ export async function semanticFixture(t,readSet=[ns]) {
   const types=['memory','card'];
   const coordinator=await openContextSemanticCoordinator({version:'context-read-product-p2e-v1',supervisor,ledgerPath,ledgerIdentity,provider:selection,
     refreshCaps:{steady:{maxItemsPerUtcDay:2000,maxUsdPerUtcDay:'0.05'},backfill:{maxItemsPerUtcDay:20000,maxUsdPerUtcDay:'0.50',maxUsdTotal:'5'}},backfillTargets:[{canonicalPath:f.path,readSet,types,intents:['current','history']}],priceTable,
-    host:{moduleUrl:new URL('./context-semantic-pause-host.mjs',import.meta.url).href,configuration:{semanticServiceBinding:binding,anchorPath,state,priceTable,pausePath:f.path,pauseNamespace:readSet.at(-1)}}});
+    host:{moduleUrl:new URL('./context-semantic-pause-host.mjs',import.meta.url).href,configuration:{semanticServiceBinding:binding,anchorPath,state,priceTable,pausePath:f.path,pauseNamespace:readSet.at(-1),...configuration}}});
   f.workspace.defer(()=>coordinator.close());
   ok(await coordinator.setOwnerSemantic({ownerId:ns.ownerId,semantic:true,expectedRevision:0},token));
   function configure(service) {
     const credential={opaque:randomUUID()},ids={requestId:randomUUID(),handleId:randomUUID(),credentialBindingId:randomUUID(),credentialExpiresUtcMs:null};
     const ownerCoverage={policy:'recent-projects-v1',selectionRevision:'synthetic',requestedNamespaces:readSet.length,selectedNamespaces:readSet.length,omittedNamespaces:0};
     const binding={kind:service?'service':'request',...(service?{serviceId:randomUUID(),credentialBindingId:ids.credentialBindingId,credentialExpiresUtcMs:null}:ids),credentialDigest:credentialDigest(credential),ownerId:ns.ownerId,namespaces:{readSet,ownerCoverage},issuedAt:0};
-    return {credential,options:{supervisor,path:f.path,version:'context-read-v1',profile:PRODUCT_PROFILE,readSet,ownerCoverage,
+    return {credential,options:{supervisor,path:f.path,...(configuration.transmissionSnapshot?{wal:true}:{}),version:'context-read-v1',profile:PRODUCT_PROFILE,readSet,ownerCoverage,
       ...(service?{sidecarJournalMode:'DELETE'}:{requestControl:{...ids,requestMaxMs:5000}}),semanticConfig:{version:'context-read-product-p2e-v1',coordinator,...(service?{}:{queryEmbeddingMaxMs:3000,finalizeReserveMs:1000})},
       host:{moduleUrl:hostUrl,configuration:{[service?'serviceBinding':'requestBinding']:binding,state,...(service?{}:{requestReservation:new SharedArrayBuffer(4)})}}}};
   }
@@ -53,7 +54,7 @@ export async function semanticFixture(t,readSet=[ns]) {
   const projection={readSet,types,intent:'current'};
   async function refresh(mode='embeddings') {return ok(await maintainer.refreshContextIndex({...projection,mode,budget:{maxItems:1024,maxMs:5000,...(mode==='embeddings'?{maxUsd:'0.50'}:{})}},maintenance.credential));}
   await refresh('lexical');assert.equal((await refresh()).status,'complete');
-  return {f,view,memories,refresh,ledgerPath,async query(){const r=configure(false),reader=await openContextProductReader(r.options);f.workspace.defer(()=>reader.close());return ok(await reader.contextRead({...projection,query:'needle',semantic:true,deadlineMs:5000,budget:{maxTokens:4000,maxItems:12}},r.credential));}};
+  return {f,view,memories,refresh,ledgerPath,async query(raw=false){const r=configure(false),reader=await openContextProductReader(r.options);f.workspace.defer(()=>reader.close());const result=await reader.contextRead({...projection,query:'needle',semantic:true,deadlineMs:5000,budget:{maxTokens:4000,maxItems:12}},r.credential);return raw?result:ok(result);}};
 }
 
 export function reservations(s) {

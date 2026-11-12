@@ -219,6 +219,14 @@ export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandle
       }
     });
   }
+  // The transport callback runs this after validation and mutable host hooks,
+  // outside their snapshots. Reuse only the current dispatch's versioned guard.
+  function recheckPause(input) {
+    const guard=embeddingGuards.get(input);
+    if(!guard)fail('budget_denied');
+    try { guard(); }
+    catch(error) { if(error.code==='namespace_paused')fail('budget_denied');throw error; }
+  }
   function portGuard(message,metadata) {
     if(!message.contentFence)return undefined;
     const f=message.contentFence,v=open(metadata.path),db=v.facade.port.db,layout=cachedContentLayout(db);
@@ -232,7 +240,7 @@ export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandle
       if((row?`${row.epoch_hi}:${row.epoch_lo}`:'0:0')!==f.suppressionEpoch)fail('evidence_unavailable');
     };
   }
-  return {prepare,prepareTargets,targets,validate,catalog,purge,transmission,portGuard,close(){
+  return {prepare,prepareTargets,targets,validate,catalog,purge,transmission,recheckPause,portGuard,close(){
     closed=true;let failure;
     for(const v of views.values())for(const close of [()=>v.storage.close(),()=>v.facade.close()])try{close();}catch(error){failure??=error;}
     views.clear();if(failure)throw failure;
