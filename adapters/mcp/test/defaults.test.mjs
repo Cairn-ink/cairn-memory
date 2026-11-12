@@ -16,13 +16,16 @@ const namespace = { ownerId: 'synthetic-default-owner', scope: 'personal', proje
 test('CLI defaults, opt-outs and help advertise preferred reads', () => {
   const base = ['--db', '/synthetic/store.sqlite', '--owner', namespace.ownerId];
   assert.equal(parseConfiguration(base).contextRead, 'context-read-v1');
+  assert.equal(parseConfiguration(base).rawSemantic, undefined);
+  assert.equal(parseConfiguration([...base, '--raw-semantic']).rawSemantic, true);
+  assert.equal(parseConfiguration([...base, '--raw-semantic', '--no-context-semantic']).contextSemantic, false);
   assert.equal(parseConfiguration([...base, '--no-context-read']).contextRead, false);
   assert.equal(parseConfiguration([...base, '--no-raw']).raw, false);
   assert.equal(parseConfiguration([...base, '--no-context-semantic']).contextSemantic, false);
   assert.throws(() => parseConfiguration([...base, '--no-context-read', '--context-read', 'context-read-v1']));
   const result = spawnSync(process.execPath, [new URL('../cli.mjs', import.meta.url).pathname, '--help'], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
-  for (const name of ['--no-context-read', '--no-raw', 'find_memory_candidates', 'read_memory_context']) assert.ok(result.stdout.includes(name));
+  for (const name of ['--no-context-read', '--no-raw', '--raw-semantic', 'find_memory_candidates', 'read_memory_context']) assert.ok(result.stdout.includes(name));
 });
 test('keyless server starts with context tools, and explicit off removes them', async t => {
   const workspace = createTestWorkspace(t);

@@ -72,8 +72,8 @@ export function createCairnServer(options = {}) {
   object(options, ['path', 'namespace', 'model', 'captureQualification', 'captureRationale',
     'captureEvidence', 'captureEvidenceAccess', 'sourceSnapshot', 'recallContext', 'classificationRecovery',
     'captureDeadlineMs', 'sessionEpisodesAccess', 'client', 'sessionId', 'readClient', 'sessionEpisodes', 'privateCards', 'methodPackages', 'methodReadPersonal',
-    'raw', 'rawSearch', 'contextSemantic', 'contextRead', 'contextReadPersonal', 'contextEmbedding', 'contextCounter', 'assets', 'roleProfiles', 'roleProfileAttribution', 'contextReadSources', 'privateCardCurrentDependencies']);
-  for (const name of ['raw', 'rawSearch', 'contextSemantic']) {
+    'raw', 'rawSearch', 'rawSemantic', 'contextSemantic', 'contextRead', 'contextReadPersonal', 'contextEmbedding', 'contextCounter', 'assets', 'roleProfiles', 'roleProfileAttribution', 'contextReadSources', 'privateCardCurrentDependencies']);
+  for (const name of ['raw', 'rawSearch', 'rawSemantic', 'contextSemantic']) {
     if (Object.hasOwn(options, name) && typeof options[name] !== 'boolean') throw Error('invalid_mcp_configuration');
   }
   if (Object.hasOwn(options, 'contextRead') && !['context-read-v1', false].includes(options.contextRead)) throw Error('invalid_mcp_configuration');
@@ -174,7 +174,8 @@ export function createCairnServer(options = {}) {
   // Older readers retain their existing grammar until that reader is installed.
   const rawSearch = context && options.raw !== false && options.rawSearch !== false && supportsRawContext()
     ? createLocalRawSearch(path, defaultRawOptions().port,
-      options.contextSemantic === false ? undefined : options.contextEmbedding) : null;
+      options.rawSemantic === true && options.contextSemantic !== false ? options.contextEmbedding : undefined,
+      { semanticDisabledReason: options.contextSemantic === false ? 'disabled' : options.rawSemantic === true ? 'disabled' : 'raw_semantic_not_enabled' }) : null;
   const rawPort = rawSearch?.contextPort(context.readSet);
   const core = openMemoryCore({ path, model, raw: options.raw !== false, ...(options.rawSearch === false ? { rawSearch: false } : {}), ...(context?{contextRead:{...context.configuration,...(options.contextSemantic === false ? {} : options.contextEmbedding),counter:contextCounter,...(rawPort ? {rawSearch:rawPort} : {}),...(sources ? { sources } : {})}}:{}),
     ...(roles ? { roleProfiles: roles.configuration } : {}),

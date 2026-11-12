@@ -29,7 +29,7 @@ OPENAI_API_KEY automatically selects bounded OpenAI embeddings when present.
 See docs/defaults.md for costs, options and every default.
 
 Usage:
-  cairn-memory --db ABS --owner ID [--project ID] [--context-read context-read-v1 | --no-context-read] [--context-read-personal]
+  cairn-memory --db ABS --owner ID [--project ID] [--context-read context-read-v1 | --no-context-read] [--context-read-personal] [--raw-semantic]
     [--context-read-sources relations-one-hop-v1,moc-v1]
     [--context-embedder openai --context-embed-model MODEL --context-embed-dimensions N --context-embed-max-requests N --context-embed-max-usd X]
   cairn-memory context refresh --db ABS --owner ID [--project ID] --types memory,card --intent current|history --max-items N --max-ms T
@@ -188,12 +188,12 @@ See docs/context-read-local.md for budgets, degraded states and non-claims.
 
 function parseHostConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
-    '--raw', '--no-raw', '--no-raw-search', '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
+    '--raw', '--no-raw', '--no-raw-search', '--raw-semantic', '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
     '--classification-recovery', '--capture-deadline-ms', '--session-episodes-access',
     '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--private-cards', '--retained-raw-profile', '--method-packages', '--assets', '--role-profiles', '--private-card-current-dependencies', ...CONTEXT_FLAGS, CONTEXT_SOURCE_FLAG]);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
-    if(['--method-read-personal','--context-read-personal','--raw','--no-raw','--no-raw-search','--no-context-read','--no-context-semantic'].includes(args[i])){
+    if(['--method-read-personal','--context-read-personal','--raw','--no-raw','--no-raw-search','--raw-semantic','--no-context-read','--no-context-semantic'].includes(args[i])){
       if(values.has(args[i]))throw Error('invalid_mcp_configuration');
       values.set(args[i],true);i--;continue;
     }
@@ -268,6 +268,7 @@ function parseHostConfiguration(args) {
     ...context,
     ...(values.has('--no-raw') ? { raw: false } : {}),
     ...(values.has('--no-raw-search') ? { rawSearch: false } : {}),
+    ...((values.has('--raw-semantic') || values.has('--context-embedder')) ? { rawSemantic: true } : {}),
     ...(values.has('--private-card-current-dependencies') ? { privateCardCurrentDependencies: values.get('--private-card-current-dependencies') } : {}),
     ...(values.has('--role-profiles') ? { roleProfiles: values.get('--role-profiles') } : {}),
     ...(values.has('--assets')?{assets:'local-v1'}:{}),
@@ -342,6 +343,8 @@ export async function start(args = process.argv.slice(2), env = process.env) {
   }
   if (check && config.contextRead && args.includes('--context-read')) {
     console.log(JSON.stringify({ ok: true, mode: 'configuration-check', contextRead: config.contextRead,
+      rawSemantic: config.rawSemantic === true && config.contextSemantic !== false,
+      rawSemanticReason: config.contextSemantic === false ? 'disabled' : config.rawSemantic === true ? null : 'raw_semantic_not_enabled',
       contextReadPersonal: config.contextReadPersonal ?? false,
       ...(config.privateCardCurrentDependencies ? { privateCardCurrentDependencies: config.privateCardCurrentDependencies, cardDependencyApproval: 'separate-local-tty-required' } : {}),
       ...(config.roleProfiles ? roleProfileCheckConfiguration(config) : {}), scope: config.namespace.scope,
@@ -357,6 +360,8 @@ export async function start(args = process.argv.slice(2), env = process.env) {
   if (check) {
     console.log(JSON.stringify({ ok: true, mode: 'configuration-check',
       raw: config.raw !== false, rawSearch: config.raw !== false && config.rawSearch !== false,
+      rawSemantic: config.rawSemantic === true && config.contextSemantic !== false,
+      rawSemanticReason: config.contextSemantic === false ? 'disabled' : config.rawSemantic === true ? null : 'raw_semantic_not_enabled',
       contextRead: config.contextRead || false,
       scope: config.namespace.scope, modelKeyPresent: Boolean(key),
       recallModel: key ? DEFAULT_MODEL : null,
