@@ -31,7 +31,8 @@
 - Engine Cards bundle dated verbatim Memories within 850 body tokens and divide
   large topics into event-ordered parts of at most 12 with independent reuse and
   rebuilds. A Card citing a Memory in the read's item window takes that hit's
-  position and replaces its cited sources when it fits the pack budget. The model
+  position and replaces its cited sources when it fits the pack budget; a hit on
+  an out-of-date statement delivers the Card without that statement. The model
   marks out-of-date IDs only; current reads omit their Timeline and all citation
   tags while retaining their coverage. Same-namespace Cards carrying an old
   current line are retired for a later debounced rebuild.

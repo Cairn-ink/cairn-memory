@@ -184,7 +184,7 @@ consumes the acknowledgement internally rather than publishing it as a tool
 result. Product-index/Worker APIs expose context-index maintenance, not
 `maintainCards`.
 
-Engine Cards enter the existing candidate ranking. A Card citing a Memory on a current line among
+Engine Cards enter the existing candidate ranking. A Card citing a Memory (on a current line or under `Timeline:`) among
 the first `budget.maxItems` ranked Memory candidates is considered immediately
 before its best-ranked cited Memory. In mixed Memory/Raw assembly its unit
 borrows that Memory unit's lexical score and rank prior, without a size penalty
@@ -194,8 +194,9 @@ ordinary candidates; all cluster sources still bind invalidation and read safety
 For `intent: 'current'`, the delivered body contains the title and current lines,
 without the `Timeline:` line or citation tags. Counts and budget checks meter
 this delivered text. History delivers the stored title and body unchanged;
-evidence reads also remain unchanged. Promotion uses only current-line citations,
-so a Timeline-only hit never promotes a Card. Covered-source detection always
+evidence reads also remain unchanged. Promotion uses every stored citation: when
+the hit is a Memory listed under `Timeline:`, the Card takes its place and that
+out-of-date statement is not delivered. Covered-source detection always
 uses the stored body, preventing out-of-date entries from returning beside it.
 Stored lineage fingerprints, snapshot fences, signed snapshot references and
 `bodyRev` continue to bind the canonical stored Card. Projection does not mutate

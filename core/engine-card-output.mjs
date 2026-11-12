@@ -6,7 +6,9 @@ export const CONSOLIDATE_PROMPT = `You are given one topic's dated memories abou
 Find every memory that is out of date: a later-dated memory changes, replaces, removes, cancels or negates the same thing it states. Examples: a preference the user later dropped or reversed, a list entry the user later asked to remove, an amount, plan, schedule or status that was later revised to a different value.
 Records are never out of date: what the user spent, walked, ate, did or attended on a particular day stays true even when another day has a different number. Two memories about different things, different days or different items do not replace each other. A memory is not out of date merely because it is older.
 Return each out-of-date memory as one timeline entry: date is that memory's own date, text is a few words naming what replaced it, memoryIds holds only that memory's id.
-A memory that itself states the change (for example "no longer likes X" or "remove X from the list") is current; do not list it. When unsure, do not list the memory.
+A memory that itself states a change of preference or value (for example "no longer likes X" or "now prefers Y") is current; do not list it.
+A memory that only asks to remove or delete an entry from a list or document (for example "remove X from the stakeholders") has done its work once the entry is gone: list it too, but only when you also list the memory that added that entry.
+When unsure, do not list the memory.
 Return currentState as exactly one entry with text "ok" and memoryIds holding the id of the latest memory. Return contradictions as an empty array.`;
 
 export const normalizedMemoryText = content => content.replace(/[\p{Cc}\[\]]/gu, ' ').replace(/\s+/gu, ' ').trim();

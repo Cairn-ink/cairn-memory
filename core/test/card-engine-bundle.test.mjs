@@ -6,6 +6,7 @@ import { createEngineCardStorage } from '../engine-card-storage.mjs';
 import { createEngineCardMaintenance } from '../engine-card-maintenance.mjs';
 import { configured, prebuild } from '../testing/context-product-owner-fixture.mjs';
 import { ENGINE_CARD_LIMITS } from '../private-card-input.mjs';
+import { createHash } from 'node:crypto';
 import { assembleContext, deliveredCardText, meteredText } from '../context-read-assembly.mjs';
 import { assembleThreeLayerContext } from '../context-read-three-layer.mjs';
 import { modelRequestText, MODEL_INPUT_TOKENS } from '../model-call.mjs';
@@ -176,4 +177,13 @@ test('a sole current source that cannot fit produces no Card without shortening 
   const memories = realisticCardMemories(1); memories[0].content = 'Orion detail '.repeat(1000).trim();
   const before = structuredClone(memories), value = validateConsolidation(output(memories), memories, scriptedConsolidator());
   assert.equal(value.body, null); assert.deepEqual(memories, before);
+});
+
+// The marking result depends on this exact wording: without the paragraph on
+// dated records a real model marks daily expenses and activity logs as replaced.
+// Change the text only together with a real-model check, then update the digest.
+test('the out-of-date marking prompt is pinned', () => {
+  assert.equal(createHash('sha256').update(CONSOLIDATE_PROMPT).digest('hex'), '0dc8d244ddd9d814d97259666869c5b13815e3dfd29be8292e447611f6fb3e85');
+  assert.match(CONSOLIDATE_PROMPT, /Records are never out of date/u);
+  assert.match(CONSOLIDATE_PROMPT, /has done its work once the entry is gone/u);
 });

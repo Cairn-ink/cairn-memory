@@ -11,18 +11,20 @@ export const memoryPackKey = ref => JSON.stringify([ref.namespace.ownerId, ref.n
 export const currentCardLines = text => text.split('\n').filter(line => !line.startsWith('Timeline:')).join('\n');
 export const deliveredCardText = (item, intent = 'current') => item.type === 'card' && item.metadata?.origin === 'engine' && intent === 'current'
   ? currentCardLines(item.text).replace(/\s*\[[^\[\]\r\n]+\]/gu, '') : item.text;
-export const cardSourceKeys = (items, currentOnly = false) => new Set(items.filter(item => item.type === 'card' && item.metadata?.origin === 'engine')
+export const cardSourceKeys = items => new Set(items.filter(item => item.type === 'card' && item.metadata?.origin === 'engine')
   .flatMap(item => {
-    const cited = new Set([...(currentOnly ? currentCardLines(item.text) : item.text).matchAll(/\[([^\[\]\r\n]+)\]/gu)].flatMap(match => match[1].split(',')));
+    const cited = new Set([...item.text.matchAll(/\[([^\[\]\r\n]+)\]/gu)].flatMap(match => match[1].split(',')));
     return (item.sourceMemoryRefs ?? []).filter(ref => cited.has(ref.memoryId)).map(memoryPackKey);
   }));
 // Prepared candidates have already passed the reader's eligibility fences.
 // Promotion only borrows the position of a cited Memory in the item window.
+// A Timeline citation counts too: when the hit is an out-of-date statement,
+// the Card (delivered without that line) takes its place.
 export function engineCardHits(prepared, maxItems) {
   const window = prepared.filter(item => item.type === 'memory').sort((a, b) => a.rank - b.rank).slice(0, maxItems);
   const hits = new Map();
   for (const card of prepared) {
-    const covered = cardSourceKeys([card], true);
+    const covered = cardSourceKeys([card]);
     const hit = window.find(memory => covered.has(memoryPackKey(memory.ref)));
     if (hit) hits.set(card, hit);
   }

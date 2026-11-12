@@ -56,11 +56,17 @@ for (const mixed of [false, true]) {
       assert.ok(coalesced.selected.some(item => item.ref.memoryId === f.memories[12].ref.memoryId));
       assert.ok(!coalesced.metered.items.some(item => item.ref.type === 'card'));
     }
-    f.card.text += `\nTimeline: 2026-01-01: Orion old fact [${f.memories[2].ref.memoryId}]`;
-    assert.ok(!pack(f).metered.items.some(item => item.ref.type === 'card'), 'Timeline hit never promotes');
     // A selected out-of-window source still blocks its lower-ranked Card.
-    f.memories[0].text = 'oversized '.repeat(10000);
+    const original = f.memories[0].text; f.memories[0].text = 'oversized '.repeat(10000);
     assert.ok(!pack(f).metered.items.some(item => item.ref.type === 'card'));
+    f.memories[0].text = original;
+    // An out-of-date statement inside the window promotes its Card as well:
+    // the Card, delivered without that line, takes the old statement's place.
+    f.card.text += `\nTimeline: 2026-01-01: Orion old fact [${f.memories[2].ref.memoryId}]`;
+    const promoted = pack(f);
+    assert.ok(promoted.metered.items.some(item => item.ref.type === 'card'), 'Timeline hit promotes');
+    assert.ok(!promoted.selected.some(item => item.ref.memoryId === f.memories[2].ref.memoryId), 'out-of-date Memory leaves the pack');
+    assert.ok(!JSON.stringify(promoted.metered).includes('Orion old fact'), 'out-of-date line is not delivered');
   });
   test(`${mixed ? 'three-layer' : 'Memory'} promotion still requires budget fit and leaves authored ordering intact`, () => {
     const f = fixture();
