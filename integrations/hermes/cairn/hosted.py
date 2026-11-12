@@ -7,6 +7,7 @@ import getpass
 import json
 from pathlib import Path
 import re
+import tempfile
 import threading
 import time
 import warnings
@@ -296,18 +297,23 @@ def prompt_local_fields(schema, values):
 
 
 def post_setup(provider, hermes_home, config):
-    from hermes_cli.config import save_config, save_env_value
+    from hermes_cli.config import get_env_value, remove_env_value, save_config, save_env_value
 
     home_scope = set_hermes_home_override(hermes_home)
+    completed = []
+    missing = object()
+    previous_memory = config.get("memory", missing)
+    previous_provider = (previous_memory.get("provider", missing)
+                         if isinstance(previous_memory, dict) else missing)
     try:
         mode = input("Cairn mode: hosted or local [hosted]: ").strip() or "hosted"
         if mode == "local":
             values = config.get("memory", {}).get("cairn", {})
             values = dict(values) if isinstance(values, dict) else {}
-            env_writes = prompt_local_fields(provider.get_config_schema(), values)
-            provider.save_config(values, hermes_home)
-            for key, value in env_writes.items():
-                save_env_value(key, value)
+            schema = provider.get_config_schema()
+            env_writes = prompt_local_fields(schema, values)
+            env_keys = {field["env_var"] for field in schema
+                        if field.get("secret") and field.get("env_var")}
         elif mode == "hosted":
             endpoint = input(f"Cairn endpoint [{DEFAULT_ENDPOINT}]: ").strip() or DEFAULT_ENDPOINT
             endpoint_origin(endpoint)
@@ -320,20 +326,70 @@ def post_setup(provider, hermes_home, config):
                 print(message)
                 return
             values = validate_config({"mode": "hosted", "api_endpoint": endpoint})
-            provider.save_config(values, hermes_home)
-            save_env_value("CAIRN_MEMORY_TOKEN", token)
+            env_writes = {"CAIRN_MEMORY_TOKEN": token}
+            env_keys = set(env_writes)
         else:
             print("Choose hosted or local. Nothing saved.")
             return
+        # Snapshot everything before the first write. Secrets stay behind Hermes's
+        # public API; only our own non-secret config is restored as raw bytes.
+        target = Path(hermes_home).resolve() / "cairn.json"
+        try:
+            previous_config = target.read_bytes()
+        except FileNotFoundError:
+            previous_config = None
+        previous_env = {key: get_env_value(key) for key in env_keys | {"CAIRN_MEMORY_TOKEN"}}
+        provider.save_config(values, hermes_home)
+        completed.append(("config", None))
+        for key, value in env_writes.items():
+            save_env_value(key, value)
+            completed.append(("env", key))
         if not isinstance(config.get("memory"), dict):
             config["memory"] = {}
         config["memory"]["provider"] = "cairn"
         save_config(config)
+        completed.append(("activation", None))
         print("Cairn activated. Start a new session.")
         if mode == "hosted":
             print("Revoke the token by deleting it at cairn.ink → Settings → Connections.")
-    except (ValueError, OSError, EOFError, KeyboardInterrupt, getpass.GetPassWarning):
+    except (Exception, KeyboardInterrupt):
+        # The in-memory activation may have changed even if its disk write failed.
+        if previous_memory is missing:
+            config.pop("memory", None)
+        else:
+            config["memory"] = previous_memory
+            if isinstance(previous_memory, dict):
+                if previous_provider is missing:
+                    previous_memory.pop("provider", None)
+                else:
+                    previous_memory["provider"] = previous_provider
+        restore_failed = False
+        for kind, key in reversed(completed):
+            try:
+                if kind == "activation":
+                    save_config(config)
+                elif kind == "env":
+                    if previous_env[key] is None:
+                        remove_env_value(key)
+                    else:
+                        save_env_value(key, previous_env[key])
+                elif previous_config is None:
+                    target.unlink(missing_ok=True)
+                else:
+                    temporary = None
+                    try:
+                        with tempfile.NamedTemporaryFile(mode="wb", dir=target.parent, delete=False) as file:
+                            temporary = Path(file.name)
+                            file.write(previous_config)
+                        temporary.replace(target)
+                    finally:
+                        if temporary is not None:
+                            temporary.unlink(missing_ok=True)
+            except (Exception, KeyboardInterrupt):
+                restore_failed = True
         print("Cairn setup failed. Check the endpoint, credential and profile permissions; retry memory setup.")
+        if restore_failed:
+            print("Previous settings could not be restored. Re-run hermes memory setup.")
     finally:
         reset_hermes_home_override(home_scope)
 
