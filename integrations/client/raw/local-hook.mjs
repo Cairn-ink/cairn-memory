@@ -10,32 +10,21 @@ import { directory, events } from './local-setup-files.mjs';
 import { absolute, exact, locations, runtime, checkSignal, fail, failure } from './local-setup-input.mjs';
 
 const hookResult = (status,reason = null) => Object.freeze({ version:'local-raw-hook-v1',status,reason });
-function nativeRows(value,fields) {
-  if (types.isProxy(value) || !Array.isArray(value)) fail('event_refused');
-  const descriptors=Object.getOwnPropertyDescriptors(value),length=descriptors.length.value;
-  if (length>256 || Reflect.ownKeys(descriptors).length!==length+1) fail('event_refused');
-  for(let index=0;index<length;index++){
-    const entry=descriptors[index];if(!entry || !Object.hasOwn(entry,'value'))fail('event_refused');
-    const row=ownData(entry.value,fields);
-    if(Object.values(row).some(item=>!(typeof item==='string'&&item.length<=16000||typeof item==='boolean')))fail('event_refused');
-  }
-}
 function payload(value,event,client) {
-  let input;
-  try { input = ownData(value,['hook_event_name','session_id','transcript_path','cwd','permission_mode','model',
-    'stop_hook_active','last_assistant_message','trigger','custom_instructions','source','prompt','turn_id','agent_id','agent_type',
-    'session_title','background_tasks','session_crons']); }
-  catch { fail('event_refused'); }
+  if (!value || typeof value !== 'object' || types.isProxy(value) ||
+      ![Object.prototype,null].includes(Object.getPrototypeOf(value))) fail('event_refused');
+  const input = {};
+  // Read only the fields capture uses; native clients may add arbitrary data.
+  for (const key of ['hook_event_name','session_id','transcript_path','source']) {
+    const descriptor = Object.getOwnPropertyDescriptor(value,key);
+    if (!descriptor) continue;
+    if (!Object.hasOwn(descriptor,'value')) fail('event_refused');
+    input[key] = descriptor.value;
+  }
   if (!events(client).includes(event) || input.hook_event_name !== event || typeof input.session_id !== 'string' ||
       !input.session_id || input.session_id.length > 200 || input.session_id.trim() !== input.session_id ||
       !input.session_id.isWellFormed() || /[\x00-\x1f\x7f]/.test(input.session_id) || !absolute(input.transcript_path)) fail('event_refused');
-  // Extra native data is never interpreted as configuration or execution input.
-  for (const [key,item] of Object.entries(input)) {
-    if(key==='background_tasks')nativeRows(item,['id','type','status','description','command','agent_type','server','tool','name']);
-    else if(key==='session_crons')nativeRows(item,['id','schedule','recurring','prompt']);
-    else if (!['hook_event_name','session_id','transcript_path'].includes(key) &&
-      !(item === null || typeof item === 'string' && item.length<=65536 || typeof item === 'boolean')) fail('event_refused');
-  }
+  if (Object.hasOwn(input,'source') && typeof input.source !== 'string') fail('event_refused');
   return { sessionId:input.session_id,sourcePath:input.transcript_path,source:input.source };
 }
 async function source(record,path,allowMissing = false) {

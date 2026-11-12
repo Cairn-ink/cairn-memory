@@ -2,6 +2,8 @@
 
 ## 0.6.6 — Unreleased
 
+- Local capture accepts the additional hook fields that current Claude Code versions send; earlier builds ignored those turns.
+
 - `setup --local` installs automatic plaintext conversation Raw capture by default
   for selected Claude Code and Codex clients, without a key or model calls, in the
   same database and namespace as local MCP. Shared Raw cap: 200,000,000 bytes.
