@@ -1,6 +1,24 @@
 // v19 was never implemented. v20 is only the explicit local note/Card slice.
 export const PRIVATE_CARD_SCHEMA_VERSION = 21;
 export const CARD_DEPENDENCY_LIMIT = 128;
+
+// The caller owns the canonical forget/erasure transaction. Old attempts did
+// not retain their full source set, so an opaque legacy fingerprint cannot be
+// proved independent of a forgotten source and must be removed conservatively.
+export function purgeEngineCardOperationsInside(db, ns, memoryId) {
+  if (!db.isTransaction) throw new Error('storage_error');
+  if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_operations'").get()) return;
+  const selection = memoryId === undefined ? '' : ` AND (target_id=?
+    OR json_type(result,'$.sourceRevisions') IS NOT 'array'
+    OR EXISTS(SELECT 1 FROM json_each(result,'$.sourceRevisions')
+      WHERE json_extract(value,'$.memoryId')=?))`;
+  db.prepare(`DELETE FROM card_operations WHERE owner_id=?
+    ${ns.scope === 'owner' ? '' : 'AND scope=? AND project_id=?'}
+    AND method IN ('consolidateAttempt','consolidateOutcome'${memoryId === undefined ? ",'consolidateCleanup'" : ''})${selection}`)
+    .run(ns.ownerId, ...(ns.scope === 'owner' ? [] : [ns.scope, ns.projectId ?? '']),
+      ...(memoryId === undefined ? [] : [memoryId, memoryId]));
+}
+
 export function installPrivateCards(db) {
   db.exec(`
     CREATE TABLE card_notes (

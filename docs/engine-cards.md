@@ -74,6 +74,25 @@ fingerprint exists, even under another topic key. If the Card is missing or no
 longer eligible, maintenance can rebuild it once. Publishing no Card ends that
 attempt without opening a retry loop; refusal still blocks unchanged sources.
 
+Attempt and outcome rows retain source IDs/revisions and a keyed source-set
+fingerprint, without source text. Forget removes both kinds of row for every
+affected source set inside the Memory's forget transaction. Namespace purge and
+owner erasure remove their bookkeeping in the suppression transaction. Outcome
+settlement requires the original reservation to still exist, so a worker awaiting
+a model response cannot recreate bookkeeping after forget or erasure commits.
+
+Older rows lack complete source lists. Maintenance conservatively removes those
+opaque reservations and outcomes, including terminal outcomes, because their
+independence from an earlier forgotten source cannot be established. At the start
+of each namespace scan, maintenance inspects at most 64 ledger headers and up to
+96 source IDs per matching row. A
+namespace checkpoint stores only a rowid watermark and commits with the deletes;
+reopening resumes it, and reaching the end restarts the scan. Other namespaces'
+payloads are not loaded or changed. This uses the existing layout and makes no
+model or embedding requests. Erasure also removes the namespace's checkpoint.
+Canonical Card rows, routing receipts, bindings and sealed lineage continue
+through the existing Card invalidation and retirement path described below.
+
 An optional `cardRelations.read({namespace, memoryIds, memories, signal})` port
 returns `{from, to, kind, slot}` edges. Only endpoints in the cluster and equal
 slot identities count. Without an explicit port, the canonical storage adapter

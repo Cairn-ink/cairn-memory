@@ -1,6 +1,6 @@
 import { randomUUID, createHmac, createHash } from 'node:crypto';
 import { readTransaction, transaction } from './database.mjs';
-import { withContentSuppressionRequest, inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { withContentSuppressionRequest, inContentSuppressionRequestInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, sourceReadSafety, receiptReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { createPrivateCardStorage } from './private-card-storage.mjs';
 import { createCardRawSources } from './card-raw-sources.mjs';
@@ -85,6 +85,9 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
     });
   }
   function snapshot(ns, maximum, check, after = '') {
+    // A resumed scan may restart from the beginning on epoch change. Clean
+    // only at scan starts, so even that two-snapshot pass has one cleanup page.
+    if (!after) cleanupOperations(ns);
     return read(ns, () => {
       const epoch = db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch ?? 1;
       const rows = db.prepare(`SELECT * FROM memories WHERE ${where} AND deleted=0 AND review_state!='awaiting'
@@ -116,6 +119,41 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       }
       return { memories, complete, epoch, after: rows.slice(0, maximum).at(-1)?.id ?? after };
     });
+  }
+  // A durable rowid watermark contains no source identity/digest. Inspect at
+  // most 64 ledger headers per maintenance opening/pass, including other
+  // namespaces, without loading their payloads. Deletes and progress commit
+  // together; reopen resumes, exhaustion wraps to catch later stale sources.
+  function cleanupOperations(ns) {
+    ready();
+    if (!has('card_operations')) return;
+    withContentSuppressionRequest(() => transaction(db, () => {
+      if (contentSuppressionReasonInside(db, ns)) return;
+      const action = 'engine-cleanup.' + bind('engine-card-cleanup-v1', boundary(ns));
+      const prior = db.prepare(`SELECT result FROM card_operations WHERE ${where} AND action_id=?`)
+        .get(...boundary(ns), action);
+      const after = prior ? JSON.parse(prior.result).after : 0;
+      const page = db.prepare(`SELECT rowid,owner_id,scope,project_id FROM card_operations
+        WHERE rowid>? ORDER BY rowid LIMIT 64`).all(after);
+      for (const header of page) {
+        if (header.owner_id !== ns.ownerId || header.scope !== ns.scope || header.project_id !== (ns.projectId ?? '')) continue;
+        const row = db.prepare(`SELECT * FROM card_operations WHERE rowid=?
+          AND method IN ('consolidateAttempt','consolidateOutcome')`).get(header.rowid);
+        if (!row) continue;
+        const refs = JSON.parse(row.result).sourceRevisions;
+        // Membership of legacy hashes is unrecoverable, including failed
+        // generations with no Card. Never guess from their first-source ID.
+        const stale = !Array.isArray(refs) || !refs.length || refs.length > ENGINE_CARD_LIMITS.sources || refs.some(ref =>
+          !db.prepare(`SELECT 1 FROM memories WHERE ${where} AND id=? AND deleted=0`)
+            .get(...boundary(ns), ref.memoryId));
+        if (stale) db.prepare('DELETE FROM card_operations WHERE rowid=?').run(header.rowid);
+      }
+      const result = JSON.stringify({ after: page.length === 64 ? page.at(-1).rowid : 0 });
+      if (prior) db.prepare(`UPDATE card_operations SET result=? WHERE ${where} AND action_id=?`)
+        .run(result, ...boundary(ns), action);
+      else db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)')
+        .run(...boundary(ns), action, 'consolidateCleanup', '', '', result, new Date().toISOString());
+    }), { fresh: true });
   }
   async function rawSpans(ns, memories, check) {
     const result = []; let used = 0;
@@ -265,16 +303,25 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       // each new attempt with a fresh immutable row, indexed by source fingerprint.
       const action = prefix + randomUUID(), target = cluster.memories[0].id;
       db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)')
-        .run(...boundary(ns), action, 'consolidateAttempt', fingerprint, target, JSON.stringify({ claimedAt: timestamp, attemptNumber }), timestamp);
+        .run(...boundary(ns), action, 'consolidateAttempt', fingerprint, target,
+          JSON.stringify({ claimedAt: timestamp, attemptNumber, sourceRevisions: cardMemoryRevisions(cluster.memories) }), timestamp);
       return { action, fingerprint, target };
     });
   }
   function finish(ns, attempt, outcome, timestamp) {
     ready();
     return transaction(db, () => {
+      // Forget and namespace/owner erasure delete the reservation in their
+      // canonical transaction. Both success and failure settle through this
+      // fence, so an awaiting worker cannot resurrect a purged fingerprint.
+      const claim = db.prepare(`SELECT result FROM card_operations WHERE ${where}
+        AND action_id=? AND method='consolidateAttempt' AND payload_binding=? AND target_id=?`)
+        .get(...boundary(ns), attempt.action, attempt.fingerprint, attempt.target);
+      if (!claim) return;
+      const sourceRevisions = JSON.parse(claim.result).sourceRevisions;
       db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)')
         .run(...boundary(ns), attempt.action + '.outcome', 'consolidateOutcome', attempt.fingerprint,
-          attempt.target, JSON.stringify({ outcome }), timestamp);
+          attempt.target, JSON.stringify({ outcome, sourceRevisions }), timestamp);
     });
   }
   function retire(ns, id, timestamp, deleted = false) {
