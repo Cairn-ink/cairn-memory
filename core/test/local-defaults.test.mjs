@@ -14,6 +14,9 @@ import { openMemoryCore } from '../index.mjs';
 import { createMemoryCore } from '../contract.mjs';
 import { composeRawCore } from '../raw-composition.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
+import { installRawSearchTestClock, rawSearchTestWait } from '../testing/raw-search-clock.mjs';
+
+test.beforeEach(installRawSearchTestClock);
 
 const ns = { ownerId: 'synthetic-owner', scope: 'personal', projectId: null };
 const request = (n, patch = {}) => ({ namespace: ns, client: 'codex', sessionId: 'session', eventId: 'batch-' + n,
@@ -63,6 +66,7 @@ test('default maintenance publishes captures in bounded quanta without capture w
   assert.equal(existsSync(path + '.raw-search'), false, 'capture must return before index I/O starts');
   let found;
   for (let quantum = 0; quantum < 12; quantum++) {
+    await rawSearchTestWait(1100);
     await delay(1100);
     found = ok(await core.searchRaw({ namespace: ns, query: 'cobalt telescope' }));
     if (found.candidates.length === 6) break;
@@ -115,6 +119,7 @@ for (const contentSafety of [undefined, 's2h-v1']) test(`default Raw search with
   ok(await core.capture({ ...request(2), namespace:otherNamespace }));
   let found;
   for (let quantum = 0; quantum < 12; quantum++) {
+    await rawSearchTestWait(1100);
     await delay(1100);
     found = ok(await core.searchRaw({ namespace:ns, query:'cobalt telescope' }));
     if (found.candidates.length) break;
@@ -142,6 +147,7 @@ test('context Raw port shares maintenance and validates one fixed personal/proje
   manager.schedule(ns);
   let found;
   for (let quantum = 0; quantum < 12; quantum++) {
+    await rawSearchTestWait(1100);
     await delay(1100);
     found = await port.search({ query:'cobalt telescope', intent:'current' });
     if (found.coverage.status === 'complete' && found.candidates.length === 2) break;
