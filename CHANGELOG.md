@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased — default recall recency scan
+
+- Use one newest-first keyset scan for body and source recall: a 1,024-row
+  floor, fixed 300 ms budget and 20,000-row cap, retaining the best 1,024 by
+  query overlap then ID. Remove the candidate-policy constructor option.
+- Bound the added scan time per recall call: a two-namespace read set splits
+  the budget evenly (rounded down per namespace); each floor always completes.
+- Read floor content in one filtered statement with an unscored extra row to
+  detect a tail, preserving ordinary statement costs for small namespaces.
+  Keep the floor and its placement in one normal-timeout deferred transaction,
+  then use try-once tail pages. Epoch changes discard the tail without restarting;
+  final tail placement rechecks the floor epochs in one try-once read. Bind the
+  scan boundary into signed continuation cursors; busy continuations are stale.
+  Budget exhaustion and a busy tail remain ordinary incomplete coverage. See
+  [defaults](docs/defaults.md). Earlier prefix/opt-in entries are historical.
+
 ## Unreleased — nothing sent to an embedding provider while saving is paused
 
 - With an embedding model configured, Memory and Card search no longer sends the

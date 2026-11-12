@@ -1,4 +1,10 @@
 > **Historical archive — PR #205, head `6d8b0821fa1a552a4a33c484d3f30ea214c32b29`.** This preserves the
+
+> Candidate discovery in this plan is superseded by the default recency keyset
+> scan in [defaults](../defaults.md): 1,024-row floor, fixed 400 ms budget,
+> 20,000-row cap and score/ID top-1,024 retention for all recall modes.
+> The former candidate-policy constructor option is removed. Historical
+> observations and other contracts below remain records of their original version.
 > original document from that PR for traceability. It is not the current
 > protocol, result interpretation, or promotion gate; consult the latest
 > [limitations](../limitations.md) and [roadmap](../../ROADMAP.md) where applicable.

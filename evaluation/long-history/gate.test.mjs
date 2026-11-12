@@ -21,10 +21,10 @@ test('frozen long-history gate traverses capture, cold recall and packed answer'
   assert.equal(report.batchOutcomes.faultControls.find(row => row.control === 'failedClassification').capture,
     'completed-post-admission-failure');
   assert.equal(report.stages.retained, 7);
-  assert.equal(report.stages.referenceVisible, 6);
+  assert.equal(report.stages.referenceVisible, report.stages.retained);
   assert.equal(report.stages.candidateVisible, 0);
-  assert.equal(report.stages.selected, 6);
-  assert.equal(report.stages.answerContextPresent, 6);
+  assert.equal(report.stages.selected, report.stages.referenceVisible);
+  assert.equal(report.stages.answerContextPresent, report.stages.selected);
   assert.equal(report.controlStages.emptySelection.selected, false);
   assert.equal(report.controlStages.emptySelection.firstDeliveryFailure, 'selected');
   assert.equal(report.controlStages.emptySelection.ranked, 'not-run');
@@ -44,9 +44,9 @@ test('frozen long-history gate traverses capture, cold recall and packed answer'
   assert.equal(capacity.family, capacityCase.name);
   assert.equal(capacity.eligibleMemories, capacityCase.count);
   assert.equal(capacity.questions[0].firstMissing, 'candidate-visible');
-  assert.equal(capacity.questions[0].firstDeliveryFailure, 'reference-visible');
-  assert.equal(capacity.questions[0].stages.referenceVisible, false);
-  assert.equal(capacity.questions[0].stages.selected, 'not-run');
+  assert.equal(capacity.questions[0].firstDeliveryFailure, null);
+  assert.equal(capacity.questions[0].stages.referenceVisible, true);
+  assert.equal(capacity.questions[0].stages.selected, true);
   assert.equal(capacity.questions[1].stages.answerContextPresent, true);
   assert.equal(capacity.questions[1].stages.candidateVisible, false);
   assert.equal(capacity.questions[1].routingCueVisible, true);

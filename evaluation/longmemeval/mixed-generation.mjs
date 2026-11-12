@@ -286,8 +286,7 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
     onDiagnostic: modelDiagnostics.onDiagnostic });
   const core = openMemoryCore({ path: path.join(folder, 'store.db'), model,
     ...(evidenceOnly ? { captureSourcePolicy: 'indexed-evidence-v1' }
-      : { captureQualification: 'source-bound-v2', captureSourcePolicy: 'indexed-windows-v1' }),
-    sourceCandidatePolicy: 'bounded-keyset-v1' });
+      : { captureQualification: 'source-bound-v2', captureSourcePolicy: 'indexed-windows-v1' }) });
   holdCore(core);
   try {
     verifyMixedCapturePlan({ history: plan.renderedHistory, namespace: row.namespace,
