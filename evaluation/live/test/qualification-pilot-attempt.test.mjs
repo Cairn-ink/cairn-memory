@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createQualificationPilotAttempt, QUALIFICATION_PILOT_LIMITS } from '../qualification-pilot-attempt.mjs';
+import { createQualificationPilotAttempt, createCandidateQualificationAttempt, QUALIFICATION_PILOT_LIMITS } from '../qualification-pilot-attempt.mjs';
 
 // Scripted accounting isolates the one-shot controller, not installed MCP or a
 // real budget. Actual installed/session/ledger integration has a separate gate.
@@ -174,10 +174,23 @@ test('relation attempts use a separate cap, count both HTTP routes and keep ordi
  const cap = f.gate.getState().relationRequestCap;
  for (let i = 0; i < cap; i++) await f.gate.request(i % 2 ? '/responses' : '/responses/input_tokens', body('relateMemories'));
  assert.equal(f.gate.getState().relationRequests, cap);
- await f.gate.request('/responses', body('extract'));
- assert.equal(f.gate.getState().requests, cap + 1);
+ for (let i = 0; i < QUALIFICATION_PILOT_LIMITS.requests; i++) await f.gate.request('/responses', body('extract'));
+ assert.equal(f.gate.getState().requests, cap + QUALIFICATION_PILOT_LIMITS.requests);
+ assert.equal(f.gate.getState().reservedMicroUsd, (cap + QUALIFICATION_PILOT_LIMITS.requests) * 5000);
  assert.equal(f.gate.getState().relationRequests, cap);
  await assert.rejects(f.gate.request('/responses', body('relateMemories')), /relation_request_cap_exceeded/);
- assert.equal(f.sends(), cap + 1);
+ assert.equal(f.sends(), cap + QUALIFICATION_PILOT_LIMITS.requests);
  assert.equal(f.gate.getState().halted, 'relation_request_cap_exceeded');
+});
+
+test('relation reservations preserve the complete candidate allowance without raising its ordinary money cap', async () => {
+ const f = fixture(), gate = createCandidateQualificationAttempt(f.config);
+ await gate.request('/responses/input_tokens', body('relateMemories'));
+ await gate.request('/responses', body('relateMemories'));
+ for (let i = 0; i < 36; i++) await gate.request('/responses', body('extract'));
+ assert.equal(gate.getState().requests, 38);
+ assert.equal(gate.getState().relationRequests, 2);
+ assert.equal(gate.getState().reservedMicroUsd, 190000);
+ await assert.rejects(gate.request('/responses', body('extract')), /attempt_limit/);
+ assert.equal(f.sends(), 38);
 });

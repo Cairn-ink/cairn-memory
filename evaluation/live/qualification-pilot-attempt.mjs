@@ -89,7 +89,12 @@ function createAttempt(options, limits, methods, modelReservations = null) {
         await checkPins(); checkState();
         const relation = parsed.text.format.name === 'cairn_relateMemories';
         if (relation && relationRequests >= MEMORY_RELATION_REQUEST_CAP) fail('relation_request_cap_exceeded');
-        if ((!relation && requests - relationRequests >= limits.requests) || reservedMicroUsd + reservation > limits.microUsd) fail('attempt_limit');
+        // Relation sends have their own finite allowance. Preserve the old
+        // methods' request and reservation headroom; the durable send guard
+        // still enforces the campaign's total money and request limits.
+        const ordinaryReserved = reservedMicroUsd - relationRequests * (limits.reservationMicroUsd ?? 0);
+        if (!relation && (requests - relationRequests >= limits.requests
+          || ordinaryReserved + reservation > limits.microUsd)) fail('attempt_limit');
         requests++; if (relation) relationRequests++; reservedMicroUsd += reservation;
         entry = { sequence: requests, endpoint: path, method: parsed.text.format.name,
           reservedMicroUsd: reservation, status: 'reserved' };
