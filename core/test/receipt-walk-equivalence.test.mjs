@@ -159,9 +159,11 @@ for(const layout of [18,53])for(const seed of seeds)test(`receipt walk equivalen
 });
 
 
+const precedenceConnections=new WeakMap();
 async function precedenceFixture(t) {
   const f=eventTimeSafetyFixture(t,33);await f.migrate();
-  const db=f.connect();t.after(()=>db.close());installedContentLayout(db);return db;
+  const db=f.connect();t.after(()=>db.close());installedContentLayout(db);
+  precedenceConnections.set(db,()=>f.connect());return db;
 }
 function precedenceMemory(db,i,{revision=1}={}) {
   const id='memory-'+String(i).padStart(5,'0');
@@ -175,6 +177,9 @@ function precedenceReceipt(db,id,source,{key=digest(source),rid='receipt-'+id}={
 }
 const errorOutcome=error=>({code:error.code,errcode:error.errcode??null});
 function chargedDecision(t,db,create,batch,{at=Infinity,injected,fromWalk=false}={}) {
+  // Each injected failure gets a fresh connection: failed schema probes can
+  // invalidate connection-local attestation caches. Keep fault indices isolated.
+  db=precedenceConnections.get(db)();installedContentLayout(db);
   const storage=create(db),native=db.prepare.bind(db);let executions=0,started=!fromWalk;
   const trace=[];
   const hook=t.mock.method(db,'prepare',sql=>{
@@ -192,7 +197,7 @@ function chargedDecision(t,db,create,batch,{at=Infinity,injected,fromWalk=false}
   let outcome;
   try{transaction(db,()=>storage.assertReceipts(ns,batch));outcome={code:'accept',errcode:null};}
   catch(error){assert.equal(typeof error.code,'string');outcome=errorOutcome(error);}
-  finally{hook.mock.restore();}
+  finally{hook.mock.restore();db.close();}
   return {outcome,executions,trace};
 }
 function fillPrecedence(db,target,{lateError=false,second,lateRefusal=false}={}) {
