@@ -140,7 +140,7 @@ for(const layout of [18,53])test(`wanted tuple UTF-8 bindings and filter-off SQL
   }
 });
 
-for(const layout of [18,53])test(`documented base limitation: UTF-16 store refused at open on both sides layout=${layout}`,async t=>{
+for(const layout of [18,53])test(`documented UTF-16 header refusal and valid-store unfiltered decisions layout=${layout}`,async t=>{
   const {f,db}=await fixture(t,layout),path=join(f.workspace.path,'utf16.sqlite');
   const target=new DatabaseSync(path);target.exec("PRAGMA encoding='UTF-16le'");
   const schema=db.prepare("SELECT type,name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'").all();
@@ -154,7 +154,22 @@ for(const layout of [18,53])test(`documented base limitation: UTF-16 store refus
   const reference=outcome(()=>openDatabase(path,layout===53?{currentDependencies:true}:{}));
   const actual=outcome(()=>openDatabase(path,layout===53?{currentDependencies:true}:{}));
   assert.deepEqual(actual,reference);assert.equal(reference.code,'unsupported_database');
-  t.diagnostic(JSON.stringify({node:process.version,layout,reference,current:actual,encoding:'UTF-16le'}));
+  // An unrecognized application id refuses before receipt enumeration.
+  // A recognized header must retain the unfiltered walk for UTF-16.
+  const header=new DatabaseSync(path);
+  header.exec('PRAGMA application_id='+db.prepare('PRAGMA application_id').get().application_id);header.close();
+  const opened=openDatabase(path,layout===53?{currentDependencies:true}:{});t.after(()=>opened.close());
+  assert.equal(opened.prepare('PRAGMA encoding').get().encoding,'UTF-16le');
+  opened.exec("PRAGMA encoding='UTF-8'");
+  assert.equal(opened.prepare('PRAGMA encoding').get().encoding,'UTF-16le');
+  transaction(opened,()=>{memory(opened);receipt(opened,source(0),0);});
+  const old=trace(t,opened,createLegacyReceiptWalk,[source(0)]),current=trace(t,opened,createRawLineageStorage,[source(0)]);
+  assert.deepEqual(current.outcome,old.outcome);assert.equal(old.outcome.code,layout===53?'source_excluded':null);
+  assert.ok(current.sql.every(row=>!row.sql.includes('instr(CAST(')));
+  const roleBytes=opened.prepare('SELECT hex(role) bytes FROM receipts').get().bytes;
+  assert.equal(roleBytes,'7500730065007200');
+  t.diagnostic(JSON.stringify({node:process.version,layout,invalidHeader:{reference,current:actual},
+    validHeader:{reference:old.outcome,current:current.outcome},encoding:'UTF-16le',roleBytes}));
 });
 
 // Documented base cursor limitation, outside engine-written keys. Hotfix
