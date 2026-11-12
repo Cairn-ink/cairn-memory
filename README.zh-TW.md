@@ -152,6 +152,19 @@ Codex 的規則，以及外掛的隱私約定。
 [隱私與威脅模型（英文）](docs/privacy.md) ·
 [預設功能、成本與開關（英文）](docs/defaults.md)
 
+## 如果你在跑 agent harness
+
+安裝器會把記憶 server 註冊給這台電腦上所有的 Claude Code 和 Codex 對話。每個對話
+各自啟動一份，所以 harness 一次開很多 agent，就會同時有那麼多份記憶 server 開著
+同一個資料庫。不想讓 worker 載入它，可以這樣做：
+
+- **Claude Code。** 啟動 worker 時加 `--strict-mcp-config`，只載入你用
+  `--mcp-config` 指定的 server。
+- **Codex。** 用 `codex exec --ignore-user-config` 啟動 worker，略過註冊了這個
+  server 的全域設定。
+
+你自己開的互動對話照常使用記憶。
+
 ## 目前狀態
 
 這是開發者預覽版。依賴它之前，請先知道這些限制：

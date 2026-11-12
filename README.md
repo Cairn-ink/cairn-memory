@@ -169,6 +169,20 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
 [Privacy and threat model](docs/privacy.md) ·
 [Defaults, costs and off switches](docs/defaults.md)
 
+## If you run an agent harness
+
+Setup registers the memory server for every Claude Code and Codex session on
+this computer. Each session starts its own copy, so a harness that launches
+many agents also launches that many memory servers on one database. To keep
+workers from loading it:
+
+- **Claude Code.** Start workers with `--strict-mcp-config`, which loads only
+  the servers you pass with `--mcp-config`.
+- **Codex.** Start workers with `codex exec --ignore-user-config`, which skips
+  the global configuration where the server is registered.
+
+Your own interactive sessions keep using memory as before.
+
 ## Status
 
 This is a developer preview. Know these limits before you rely on it:
