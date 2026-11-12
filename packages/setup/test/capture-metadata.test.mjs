@@ -260,15 +260,16 @@ for (const client of ['claude-code', 'codex', undefined]) for (const mode of [0o
   const f = await fixture(t), directory = join(f.home, 'client-config'), path = join(directory, 'settings.json');
   await mkdir(directory, { mode }); await chmod(directory, mode);
   await writeFile(path, '{}\n', { mode: 0o600 });
+  const request = client === undefined ? undefined : { client, clientConfigPath: path };
   if (client === undefined && mode !== 0o700) {
-    await assert.rejects(nativeSnapshot(path, client), { reason: 'unsafe_path' });
+    await assert.rejects(nativeSnapshot(path, request), { reason: 'unsafe_path' });
     await assert.rejects(nativeSnapshot(path), { reason: 'unsafe_path' });
-    await assert.rejects(nativeWrite(path, '{"hooks":{}}\n', await nativeSnapshot(path, 'codex')), { reason: 'unsafe_path' });
+    await assert.rejects(nativeWrite(path, '{"hooks":{}}\n', await nativeSnapshot(path, { client: 'codex', clientConfigPath: path })), { reason: 'unsafe_path' });
     assert.equal(await readFile(path, 'utf8'), '{}\n');
   } else {
-    const before = await nativeSnapshot(path, client), text = '{"hooks":{}}\n';
-    await nativeWrite(path, text, before, client);
-    assert.equal((await nativeSnapshot(path, client)).text, text);
+    const before = await nativeSnapshot(path, request), text = '{"hooks":{}}\n';
+    await nativeWrite(path, text, before, request);
+    assert.equal((await nativeSnapshot(path, request)).text, text);
     assert.equal((await lstat(path)).mode & 0o777, 0o600);
   }
   assert.equal((await lstat(directory)).mode & 0o777, mode);
@@ -278,7 +279,7 @@ for (const unsafe of ['775', '777', 'symlink', 'symlink-component', 'file', 'for
   const { nativeSnapshot, nativeWrite } = await import('../../../integrations/client/raw/local-setup-files.mjs');
   const f = await fixture(t), directory = join(f.home, 'codex-config'), path = join(directory, 'hooks.json');
   await mkdir(directory, { mode: 0o700 }); await writeFile(path, '{}\n', { mode: 0o600 });
-  const before = await nativeSnapshot(path, 'codex');
+  const before = await nativeSnapshot(path, { client: 'codex', clientConfigPath: path });
   let target = path;
   if (unsafe === 'file') {
     const file = join(f.home, 'file'); await writeFile(file, 'synthetic sentinel'); target = join(file, 'hooks.json');
@@ -293,8 +294,39 @@ for (const unsafe of ['775', '777', 'symlink', 'symlink-component', 'file', 'for
     if (path === directory) Object.defineProperty(stat, 'uid', { value: process.getuid() + 1 });
     return stat;
   });
-  await assert.rejects(nativeSnapshot(target, 'codex'), { reason: 'unsafe_path' });
-  await assert.rejects(nativeWrite(target, '{"hooks":{}}\n', before, 'codex'));
+  await assert.rejects(nativeSnapshot(target, { client: 'codex', clientConfigPath: path }), { reason: 'unsafe_path' });
+  await assert.rejects(nativeWrite(target, '{"hooks":{}}\n', before, { client: 'codex', clientConfigPath: path }));
   if (unsafe === 'foreign-owner') { fs.lstat = originalLstat; syncBuiltinESMExports(); }
   assert.deepEqual(await directorySnapshot(f.home), inventory);
+});
+
+for (const client of ['claude-code', 'codex']) test(`${client} directory relaxation is bound to the request directory`, async t => {
+  const { nativeSnapshot, nativeWrite, nativeDirectory } = await import('../../../integrations/client/raw/local-setup-files.mjs');
+  const f = await fixture(t), directory = join(f.home, 'unrelated'), path = join(directory, 'settings.json');
+  await mkdir(directory, { mode: 0o755 }); await chmod(directory, 0o755);
+  await writeFile(path, '{}\n', { mode: 0o600 });
+  const request = { client, clientConfigPath: join(f.home, 'actual-client', 'settings.json') };
+  await assert.rejects(nativeSnapshot(path, request), { reason: 'unsafe_path' });
+  await assert.rejects(nativeSnapshot(path, client), { reason: 'unsafe_path' });
+  await assert.rejects(nativeDirectory(directory, request), { reason: 'unsafe_path' });
+  await assert.rejects(nativeWrite(path, '{"hooks":{}}\n', { text: '{}\n', identity: null }, request), { reason: 'unsafe_path' });
+  assert.equal(await readFile(path, 'utf8'), '{}\n');
+});
+
+for (const client of ['claude', 'codex']) for (const kind of ['real', 'leaf-symlink', 'component-symlink']) test(`${client} trailing slash ${kind}`, async t => {
+  const f = await fixture(t), directory = join(f.home, 'config');
+  await mkdir(directory, { mode: 0o755 });
+  let path = directory;
+  if (kind !== 'real') {
+    const alias = join(f.home, 'alias'); await symlink(directory, alias);
+    path = alias;
+    if (kind === 'component-symlink') { await mkdir(join(directory, 'child'), { mode: 0o700 }); path = join(alias, 'child'); }
+  }
+  f.env[client === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME'] = path + '/';
+  if (kind === 'real') {
+    assert.equal(await clientConfigDirectory(client, f.env), directory);
+    await f.configure(client);
+    const request = JSON.parse(await readFile(join(f.root, `capture-${client}-request.json`)));
+    assert.equal(dirname(request.clientConfigPath), directory);
+  } else await assert.rejects(f.configure(client), { key: 'local_root_invalid', code: 2 });
 });

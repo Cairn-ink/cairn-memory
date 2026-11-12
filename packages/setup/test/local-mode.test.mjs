@@ -178,6 +178,32 @@ async function seed(f, { state = 'installed', selected = ['claude', 'codex'], re
   return { d, vector };
 }
 
+for (const client of ['claude', 'codex']) test(`${client} accepts trailing config separators in setup`, async t => {
+  if (!needCache(t)) return;
+  const f = await localFixture(t, { claude: client === 'claude', codex: client === 'codex',
+    codexState: { version: '0.162.0', formatEvidence: true } });
+  const directory = client === 'claude' ? join(f.home, '.claude') : f.codexHome;
+  await mkdir(directory, { mode: 0o755 }); await chmod(directory, 0o755);
+  const env = { [client === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME']: directory + '/' };
+  const result = await f.run(['setup', '--local', '--client', client], { env });
+  assert.equal(result.code, 0, result.display);
+  assert.equal((await json(join(f.root, 'capture', client, 'installation.json'))).phase, 'active');
+  assert.equal((await lstat(directory)).mode & 0o777, 0o755);
+});
+
+test('saved capture off skips unsafe Claude capture directory on later setup', async t => {
+  if (!needCache(t)) return;
+  const f = await localFixture(t, { codex: false }), directory = join(f.home, '.claude');
+  await mkdir(directory, { mode: 0o777 }); await chmod(directory, 0o777);
+  const initial = await f.run(['setup', '--local', '--client', 'claude', '--no-capture']);
+  assert.equal(initial.code, 0, initial.display);
+  const result = await f.run(['setup', '--local', '--client', 'claude']);
+  assert.equal(result.code, 0, result.display);
+  assert.match(result.display, /Claude Code local capture: off/);
+  assert.equal((await lstat(directory)).mode & 0o777, 0o777);
+  await assert.rejects(lstat(join(directory, 'settings.json')), { code: 'ENOENT' });
+});
+
 // Use the unpacked setup fixture so these cases never need to pack a release.
 for (const mode of [0o700, 0o750, 0o755, null]) test(`Claude config directory ${mode === null ? 'missing' : mode.toString(8)} installs capture without chmod`, async t => {
   if (!needCache(t)) return;
@@ -209,7 +235,6 @@ for (const mode of [0o700, 0o750, 0o755, null]) test(`Claude config directory ${
   const before = await readFile(join(config, 'settings.json'), 'utf8');
   await run(['setup', '--local', '--client', 'claude']);
   assert.equal(await readFile(join(config, 'settings.json'), 'utf8'), before);
-    assert.match((await run(['status', '--client', 'claude'])).display, /Claude Code local capture: on/);
   assert.match((await run(['status', '--client', 'claude'])).display, /Claude Code local capture: on/);
   if (mode === 0o755) {
     assert.match((await run(['config', '--local-capture', 'off', '--client', 'claude'])).display, /Claude Code local capture: off/);
@@ -296,7 +321,6 @@ for (const custom of [false, true]) for (const mode of [0o700, 0o750, 0o755, nul
   const before = await readFile(join(config, 'hooks.json'), 'utf8');
   await run(['setup', '--local', '--client', 'codex']);
   assert.equal(await readFile(join(config, 'hooks.json'), 'utf8'), before);
-    assert.match((await run(['status', '--client', 'codex'])).display, /Codex local capture: on/);
   assert.match((await run(['status', '--client', 'codex'])).display, /Codex local capture: on/);
   if (mode === 0o755) {
     assert.match((await run(['config', '--local-capture', 'off', '--client', 'codex'])).display, /Codex local capture: off/);
