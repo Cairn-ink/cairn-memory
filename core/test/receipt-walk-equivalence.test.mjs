@@ -268,3 +268,14 @@ test('first receipt late refusal precedes second receipt early refusal',async t=
     t.diagnostic(JSON.stringify({implementation:create.name,outcome:result.outcome,executions:result.executions}));
   }
 });
+
+test('later receipts are validated when the first receipt matches nothing',async t=>{
+  const db=await precedenceFixture(t),later=receipt('later-many');
+  transaction(db,()=>{for(let i=0;i<140;i++)
+    precedenceReceipt(db,precedenceMemory(db,i),later,{key:i===139?'inconsistent-key':digest(later)});});
+  const batch=[receipt('absent-zero'),receipt('absent-one'),later];
+  for(const create of [createLegacyReceiptWalk,createRawLineageStorage]){
+    const result=chargedDecision(t,db,create,batch);assert.deepEqual(result.outcome,{code:'source_excluded',errcode:null});
+    t.diagnostic(JSON.stringify({implementation:create.name,outcome:result.outcome}));
+  }
+});

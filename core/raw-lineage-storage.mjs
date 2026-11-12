@@ -412,6 +412,8 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
       if (contentSuppressionReasonInside(db, ns)) fail('source_excluded');
       // Validate receipt one as the walk streams; retain later receipts' matches.
       // Snapshot enumeration, overflow and validated handling stay unchanged.
+      // Leave the row loop only by failing: later receipts see only the rows
+      // retained while receipt one drains the walk.
       const matches=snapshot ? undefined : matchingReceiptInputs(db,check,ns,receipts);
       for (const [index,receipt] of receipts.entries()) {
         check();
