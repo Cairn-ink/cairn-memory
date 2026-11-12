@@ -30,7 +30,7 @@ Cairn.ink Memory 讓這兩個工具共用一份記憶。每筆記憶都留著存
 npx @cairn-ink/memory setup
 ```
 
-需要 Node 22.16 以上，以及裝好的 Claude Code 或 Codex。安裝時只問一個問題：
+需要 Node 22.16 以上，以及 `PATH` 上找得到的 Claude Code 或 Codex。安裝時先問：
 記憶要放在哪裡？
 
 | | **本機** | **雲端** |
@@ -86,7 +86,7 @@ Codex 還要到 `/hooks` 允許 Cairn 的設定。一台電腦一次只能用一
 | 保存一筆記憶，連同存入時的原文 | `remember_memory` |
 | 用關鍵字搜尋記憶和已保存的對話，不需要模型金鑰 | `find_memory_candidates`、`read_memory_context` |
 | 讓模型挑出相關的記憶，需要你的 OpenAI 金鑰 | `recall_memory` |
-| 查看一筆記憶、它的修改紀錄和原文 | `inspect_memory` |
+| 查看一筆記憶、它的目前版本和原文 | `inspect_memory` |
 | 修改一筆記憶的內容 | `correct_memory` |
 | 讓一筆記憶不再被使用 | `forget_memory` |
 
@@ -103,8 +103,8 @@ Codex 還要到 `/hooks` 允許 Cairn 的設定。一台電腦一次只能用一
 - **回想。** 每次提問會送一份遮蔽過、限制長度的副本到 cairn.ink，找到的相關
   記憶會帶進這次提問。
 - **暫停。** 不想被記下的對話，開始前跑 `npx @cairn-ink/memory pause`，結束後跑
-  `npx @cairn-ink/memory resume`。在 Claude Code 裡也可以用
-  `/cairn-memory:pause`。暫停期間的內容事後不會補存。
+  `npx @cairn-ink/memory resume`。如果只接了 Claude Code，改在 Claude Code 裡用
+  `/cairn-memory:pause` 和 `/cairn-memory:resume`。暫停期間的內容事後不會補存。
 - **兩個工具。** 第一次一起設定只要用瀏覽器登入一次。先裝 Claude Code、後加
   Codex，需要用同一個帳號再登入一次。
 - **Codex。** 只有安裝器驗證過的 Codex 版本會開啟自動記憶，
@@ -125,8 +125,9 @@ Codex 的規則，以及外掛的隱私約定。
   這個檔案，上限 200 MB，不呼叫模型，也不需要金鑰。要關掉，跑
   `npx @cairn-ink/memory config --local-capture off`，或安裝時用
   `npx @cairn-ink/memory setup --local --no-capture`。
-  `npx @cairn-ink/memory raw list` 會列出已保存的對話，不顯示內容；
-  `npx @cairn-ink/memory raw delete <conversation-id>` 可以刪掉其中一段。
+  `npx @cairn-ink/memory raw list` 會列出已保存的對話，不顯示內容。
+  `npx @cairn-ink/memory raw delete <conversation-id>` 會先預覽要刪掉什麼，
+  加上 `--yes` 才真的刪除。
 - **模型金鑰。** 保存、關鍵字搜尋、查看、修改、忘記都不呼叫模型。如果工具的
   環境裡有 `OPENAI_API_KEY`，引擎會用它做語意搜尋和回想，相關文字會送到 OpenAI。
 - **雲端。** 對話文字和提問會在盡力遮蔽後送到 cairn.ink。Claude Code 外掛預設
@@ -165,6 +166,8 @@ Codex 的規則，以及外掛的隱私約定。
 [Roadmap](ROADMAP.md) · [Changelog](CHANGELOG.md) ·
 [每項主張的依據（英文）](docs/promotion-claims.md)
 
+想追蹤新版本，可以幫這個 repo 按星。
+
 ## Cairn.ink Memory 和 Cairn.ink
 
 **Cairn.ink Memory** 是這個 repo 裡的開源記憶層。**[Cairn.ink](https://cairn.ink)**
@@ -187,11 +190,11 @@ Cairn.ink 雲端的抽取服務、使用者資料庫、登入、計費、濫用�
 
 ## 更多文件
 
-以下文件目前都是英文。
+除了安裝器說明是中英對照，以下文件目前都是英文。
 
 | 你想做的事 | 文件 |
 | --- | --- |
-| 看所有安裝選項、切換模式、處理卡住的安裝 | [安裝器說明](packages/setup/README.md)（中英對照） |
+| 看所有安裝選項、切換模式、處理卡住的安裝 | [安裝器說明](packages/setup/README.md) |
 | 手動連接雲端，或讀它的規則與隱私約定 | [雲端模式細節](docs/cloud-mode.md) |
 | 從原始碼建置，或手動設定 client | [從原始碼安裝本機預覽版](docs/local-from-source.md)、[Windows 指南](docs/windows-install.md) |
 | 安裝前先看它怎麼跑 | [36 秒操作錄影（MP4）](docs/promotion/demo/cairn-memory-preview.mp4) |
@@ -209,7 +212,8 @@ Cairn.ink 雲端的抽取服務、使用者資料庫、登入、計費、濫用�
   而且要由使用者自己登入。本機預設會把對話文字存在這台電腦上，使用者不想要
   的話，加上 `--no-capture`。
 - 在非互動的 shell 裡，請跑 `npx @cairn-ink/memory setup --local` 或
-  `npx @cairn-ink/memory setup --cloud`。沒有加旗標時，非互動執行不會寫入任何設定。
+  `npx @cairn-ink/memory setup --cloud`。第一次安裝時，非互動執行如果沒有加模式
+  旗標，不會寫入任何設定。
 - 安裝完成後，請使用者重開 Claude Code 和 Codex。
 
 ## 開發

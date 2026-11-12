@@ -32,7 +32,7 @@ npx @cairn-ink/memory setup
 ```
 
 You need Node 22.16 or later, and Claude Code or Codex on your `PATH`. Setup
-asks one question: where should your memory live?
+first asks: where should your memory live?
 
 | | **Local** | **Cloud** |
 | --- | --- | --- |
@@ -90,7 +90,7 @@ minutes may not show up yet.
 | Save a memory together with its source text | `remember_memory` |
 | Search memories and saved conversations by keyword, with no model key | `find_memory_candidates`, `read_memory_context` |
 | Let a model pick the relevant memories, with your OpenAI key | `recall_memory` |
-| See a memory, its revisions and its source text | `inspect_memory` |
+| See a memory, its current revision and its source text | `inspect_memory` |
 | Replace what a memory says | `correct_memory` |
 | Take a memory out of use | `forget_memory` |
 
@@ -107,10 +107,12 @@ Cloud saves and recalls for you, so you do not have to ask.
   Masking is best-effort.
 - **Recall.** Each prompt sends a masked, length-limited copy to cairn.ink, and
   the relevant memories are added to that prompt.
-- **Pausing.** Run `npx @cairn-ink/memory pause` before a conversation you want
-  left out, and `npx @cairn-ink/memory resume` afterwards. Inside Claude Code
-  you can also use `/cairn-memory:pause`. Paused text is not saved later.
-- **Both tools.** One browser sign-in connects Claude Code and Codex together.
+- **Pausing.** Before a conversation you want left out, run
+  `npx @cairn-ink/memory pause`, and `npx @cairn-ink/memory resume` afterwards.
+  If only Claude Code is connected, use `/cairn-memory:pause` and
+  `/cairn-memory:resume` inside it instead. Paused text is not saved later.
+- **Both tools.** Setting up Claude Code and Codex together takes one browser
+  sign-in.
   Adding Codex after Claude Code needs one browser sign-in with the same account.
 - **Codex.** Automatic memory turns on only for Codex versions the installer
   has verified, and `npx @cairn-ink/memory status` shows whether yours is one.
@@ -130,8 +132,9 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
   Codex conversations into that file automatically, up to 200 MB, with no model
   and no key. Turn it off with `npx @cairn-ink/memory config --local-capture off`,
   or install with `npx @cairn-ink/memory setup --local --no-capture`.
-  `npx @cairn-ink/memory raw list` lists saved conversations without their text,
-  and `npx @cairn-ink/memory raw delete <conversation-id>` removes one.
+  `npx @cairn-ink/memory raw list` lists saved conversations without their text.
+  `npx @cairn-ink/memory raw delete <conversation-id>` previews what would be
+  removed, and adding `--yes` deletes it.
 - **Model keys.** Saving, keyword search, inspecting, correcting and forgetting
   use no model. If `OPENAI_API_KEY` is set in your tool's environment, the
   engine uses it for semantic search and recall, and sends the text involved to
@@ -178,6 +181,8 @@ This is a developer preview. Know these limits before you rely on it:
 
 [Roadmap](ROADMAP.md) · [Changelog](CHANGELOG.md) ·
 [What each claim rests on](docs/promotion-claims.md)
+
+Star the repository to follow new releases.
 
 ## Cairn.ink Memory and Cairn.ink
 
@@ -226,8 +231,8 @@ If a user asked you to install Cairn.ink Memory:
   conversation text on this computer by default; add `--no-capture` if the user
   does not want that.
 - In a non-interactive shell, run `npx @cairn-ink/memory setup --local` or
-  `npx @cairn-ink/memory setup --cloud`. Without a flag, a non-interactive run
-  writes nothing.
+  `npx @cairn-ink/memory setup --cloud`. On a fresh install, a non-interactive
+  run without a mode flag writes nothing.
 - When setup finishes, tell the user to restart Claude Code and Codex.
 
 ## Development
