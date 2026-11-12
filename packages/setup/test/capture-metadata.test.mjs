@@ -4,7 +4,7 @@ import fs, { mkdir, writeFile, readFile, lstat, readdir, symlink, chmod, link } 
 import { syncBuiltinESMExports } from 'node:module';
 import { join, dirname } from 'node:path';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
-import { configureCapture } from '../lib/local-capture.mjs';
+import { clientConfigDirectory, configureCapture } from '../lib/local-capture.mjs';
 import { newDescriptor, executableFor } from '../lib/local-descriptor.mjs';
 
 async function fixture(t) {
@@ -187,4 +187,114 @@ for (const client of ['claude', 'codex']) test(`${client} final capture request 
     assert.equal(text.includes(forbidden), false);
     assert.equal(f.output.join('\n').includes(forbidden), false);
   }
+});
+
+for (const custom of [false, true]) for (const mode of [0o700, 0o750, 0o755]) test(`Claude client directory accepts mode ${mode.toString(8)} without chmod (custom=${custom})`, async t => {
+  const f = await fixture(t), path = join(f.home, custom ? 'claude-config' : '.claude');
+  if (custom) f.env.CLAUDE_CONFIG_DIR = path;
+  await mkdir(path, { mode }); await chmod(path, mode);
+  await f.configure();
+  assert.equal((await lstat(path)).mode & 0o777, mode);
+  assert.ok(f.output.includes('local_capture_status'));
+});
+
+for (const custom of [false, true]) for (const mode of [0o700, 0o750, 0o755, null]) test(`Codex client directory accepts mode ${mode === null ? 'missing' : mode.toString(8)} without chmod (custom=${custom})`, async t => {
+  const f = await fixture(t), path = join(f.home, custom ? 'codex-config' : '.codex');
+  if (custom) f.env.CODEX_HOME = path;
+  if (mode !== null) { await mkdir(path, { mode }); await chmod(path, mode); }
+  await f.configure('codex');
+  assert.equal((await lstat(path)).mode & 0o777, mode ?? 0o700);
+  const request = JSON.parse(await readFile(join(f.root, 'capture-codex-request.json'), 'utf8'));
+  assert.equal(request.clientConfigPath, join(path, 'hooks.json'));
+  assert.equal(request.sourceRoot, join(path, 'sessions'));
+  assert.ok(f.output.includes('local_capture_status'));
+});
+
+async function directorySnapshot(path) {
+  const stat = await lstat(path);
+  return { mode: stat.mode, uid: stat.uid, value: stat.isSymbolicLink() ? await fs.readlink(path) :
+    stat.isDirectory() ? await Promise.all((await readdir(path)).sort().map(async name => [name, await directorySnapshot(join(path, name))])) :
+      await readFile(path, 'utf8') };
+}
+for (const unsafe of ['775', '777', 'symlink', 'symlink-component', 'file', 'foreign-owner', 'custom-writable']) test(`Codex unsafe directory ${unsafe} refuses without changes`, async t => {
+  const f = await fixture(t), path = join(f.home, unsafe === 'custom-writable' ? 'codex-config' : '.codex');
+  if (unsafe === 'custom-writable') f.env.CODEX_HOME = path;
+  if (unsafe === 'file') await writeFile(path, 'synthetic sentinel', { mode: 0o600 });
+  else if (unsafe.startsWith('symlink')) {
+    const target = join(f.home, 'target'); await mkdir(target, { mode: 0o700 });
+    if (unsafe === 'symlink') await symlink(target, path);
+    else {
+      const alias = join(f.home, 'alias'); await symlink(target, alias);
+      await mkdir(join(target, 'config'), { mode: 0o700 }); f.env.CODEX_HOME = join(alias, 'config');
+    }
+  } else {
+    await mkdir(path, { mode: 0o700 });
+    await writeFile(join(path, 'hooks.json'), '{}\n', { mode: 0o600 });
+    if (unsafe !== 'foreign-owner') await chmod(path, unsafe === 'custom-writable' ? 0o775 : parseInt(unsafe, 8));
+  }
+  const before = await directorySnapshot(f.home), rootBefore = await directorySnapshot(f.root);
+  const originalLstat = fs.lstat;
+  if (unsafe === 'foreign-owner') intercept(t, 'lstat', original => async (target, ...args) => {
+    const stat = await original(target, ...args);
+    if (target === path) Object.defineProperty(stat, 'uid', { value: process.getuid() + 1 });
+    return stat;
+  });
+  await assert.rejects(clientConfigDirectory('codex', f.env), { key: 'local_root_invalid', code: 2 });
+  await assert.rejects(f.configure('codex'), { key: 'local_root_invalid', code: 2 });
+  // End the synthetic ownership interception before comparing real metadata.
+  if (unsafe === 'foreign-owner') { fs.lstat = originalLstat; syncBuiltinESMExports(); }
+  assert.deepEqual(await directorySnapshot(f.home), before);
+  assert.deepEqual(await directorySnapshot(f.root), rootBefore);
+});
+
+for (const leaf of ['capture', 'capture-usage', 'capture-support', 'capture-support/claude']) test(`private ${leaf} still requires mode 0700`, async t => {
+  const f = await fixture(t), path = join(f.root, leaf);
+  await mkdir(path, { recursive: true, mode: 0o700 }); await chmod(path, 0o755);
+  await assert.rejects(f.configure(), { key: 'local_root_invalid', code: 2 });
+  assert.equal((await lstat(path)).mode & 0o777, 0o755);
+  await assert.rejects(lstat(join(f.root, 'capture-claude-request.json')), { code: 'ENOENT' });
+});
+
+for (const client of ['claude-code', 'codex', undefined]) for (const mode of [0o700, 0o750, 0o755]) test(`${client} native settings snapshot/write directory mode ${mode.toString(8)}`, async t => {
+  const { nativeSnapshot, nativeWrite } = await import('../../../integrations/client/raw/local-setup-files.mjs');
+  const f = await fixture(t), directory = join(f.home, 'client-config'), path = join(directory, 'settings.json');
+  await mkdir(directory, { mode }); await chmod(directory, mode);
+  await writeFile(path, '{}\n', { mode: 0o600 });
+  if (client === undefined && mode !== 0o700) {
+    await assert.rejects(nativeSnapshot(path, client), { reason: 'unsafe_path' });
+    await assert.rejects(nativeSnapshot(path), { reason: 'unsafe_path' });
+    await assert.rejects(nativeWrite(path, '{"hooks":{}}\n', await nativeSnapshot(path, 'codex')), { reason: 'unsafe_path' });
+    assert.equal(await readFile(path, 'utf8'), '{}\n');
+  } else {
+    const before = await nativeSnapshot(path, client), text = '{"hooks":{}}\n';
+    await nativeWrite(path, text, before, client);
+    assert.equal((await nativeSnapshot(path, client)).text, text);
+    assert.equal((await lstat(path)).mode & 0o777, 0o600);
+  }
+  assert.equal((await lstat(directory)).mode & 0o777, mode);
+});
+
+for (const unsafe of ['775', '777', 'symlink', 'symlink-component', 'file', 'foreign-owner']) test(`Codex native settings refuses unsafe directory ${unsafe} on reads and writes`, async t => {
+  const { nativeSnapshot, nativeWrite } = await import('../../../integrations/client/raw/local-setup-files.mjs');
+  const f = await fixture(t), directory = join(f.home, 'codex-config'), path = join(directory, 'hooks.json');
+  await mkdir(directory, { mode: 0o700 }); await writeFile(path, '{}\n', { mode: 0o600 });
+  const before = await nativeSnapshot(path, 'codex');
+  let target = path;
+  if (unsafe === 'file') {
+    const file = join(f.home, 'file'); await writeFile(file, 'synthetic sentinel'); target = join(file, 'hooks.json');
+  } else if (unsafe.startsWith('symlink')) {
+    const alias = join(f.home, 'alias'); await symlink(directory, alias);
+    if (unsafe === 'symlink') target = join(alias, 'hooks.json');
+    else { await mkdir(join(directory, 'child'), { mode: 0o700 }); target = join(alias, 'child/hooks.json'); }
+  } else if (unsafe !== 'foreign-owner') await chmod(directory, parseInt(unsafe, 8));
+  const inventory = await directorySnapshot(f.home), originalLstat = fs.lstat;
+  if (unsafe === 'foreign-owner') intercept(t, 'lstat', original => async (path, ...args) => {
+    const stat = await original(path, ...args);
+    if (path === directory) Object.defineProperty(stat, 'uid', { value: process.getuid() + 1 });
+    return stat;
+  });
+  await assert.rejects(nativeSnapshot(target, 'codex'), { reason: 'unsafe_path' });
+  await assert.rejects(nativeWrite(target, '{"hooks":{}}\n', before, 'codex'));
+  if (unsafe === 'foreign-owner') { fs.lstat = originalLstat; syncBuiltinESMExports(); }
+  assert.deepEqual(await directorySnapshot(f.home), inventory);
 });
