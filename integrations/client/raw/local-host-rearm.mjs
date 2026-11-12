@@ -1,3 +1,4 @@
+import { claudeHeadlessSource } from './local-claude-entrypoint.mjs';
 import { detectLocalCodexHost } from './local-codex-qualification.mjs';
 import { privateRead, privateWrite, checkedPath } from '../private-state.mjs';
 import { stateLock } from '../state-lock.mjs';
@@ -237,6 +238,8 @@ export async function lazyRearm(profile,config,context,operation) {
   } finally { try { await opened?.close(); } finally { identity?.key.fill(0); } }
 }
 async function qualifiedContext(profile,selection,authority,operation,deps) {
+  if (profile.installation.client === 'claude-code' && await claudeHeadlessSource(selection.sourcePath)) rearmFail('source_unqualified');
+  operation.check();
   let formatAuthority = null;
   if (profile.installation.client === 'codex') {
     const host = await detectLocalCodexHost(deps.detectHost); operation.check();

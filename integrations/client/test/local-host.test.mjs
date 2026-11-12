@@ -101,7 +101,7 @@ test(`B4c qualification ${change} uses synthetic installation and refuses`,async
 for(const client of ['claude-code','codex'])test(`B4c ${client} real worker initialized at EOF and no provider credential`,async t=>{
   const f=await hostFixture(t,{client}),counts=observe(t);assert.equal((await f.call('prepare')).status,'ready');
   const result=await f.call('initialize');assert.equal(result.status,'ready',JSON.stringify(result));assert.equal(result.reason,'initialized');
-  assert.equal(counts.worker,1);assert.equal(counts.source,client==='codex'?2:1);assert.equal(result.worker.dispatchedParts,0);privateOutput(f,result);
+  assert.equal(counts.worker,1);assert.equal(counts.source,2);assert.equal(result.worker.dispatchedParts,0);privateOutput(f,result);
   const before=f.snapshot();assert.equal((await f.call('run')).status,'ready');assert.deepEqual(f.snapshot(),before);
 });
 
