@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(max-width: 600px)" srcset="docs/images/readme-hero-mobile.png">
-    <img src="docs/images/readme-hero.png" alt="Cairn.ink Memory：可以查看與修改的 AI 記憶。圖中是一筆已保存的記憶「報告要簡短」，以及存入時的原文。開源專案。" width="1200">
+    <img src="docs/images/readme-hero.png" alt="Cairn.ink Memory：可以查看與修改的 AI 記憶，Claude Code 和 Codex 共用一份。圖中是一座手繪小島，島上的石堆有三顆石頭，分別標著卡片、記憶、對話。開源專案。" width="1200">
   </picture>
 </p>
 

@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(max-width: 600px)" srcset="docs/images/readme-hero-mobile.png">
-    <img src="docs/images/readme-hero.png" alt="Cairn.ink Memory: AI memory you can inspect and change. A saved memory, “Keep reports brief”, shown with the text it was saved from. Open source." width="1200">
+    <img src="docs/images/readme-hero.png" alt="Cairn.ink Memory: AI memory you can inspect and change. One memory for Claude Code and Codex. A hand-drawn island carries a cairn of three stones, labelled Cards, Memories and Conversations. Open source." width="1200">
   </picture>
 </p>
 
