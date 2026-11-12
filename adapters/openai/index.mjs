@@ -6,6 +6,7 @@ import { qualificationCandidatesInlineSchema, schemasFor, schemasForQualificatio
   snapshotIndexedExtractInput, episodeSchemasFor } from './schemas.mjs';
 import { DEFAULT_MODEL, modelProfile, episodeProfile } from './profiles.mjs';
 import { classificationWire } from './classification-wire.mjs';
+import { consolidationSchema } from './consolidate-schema.mjs';
 import { decodeQualificationEvidencePool } from './qualification-evidence-pool.mjs';
 import { snapshotQualificationTextCatalog } from '../../core/qualification-text-catalog.mjs';
 import { qualificationCandidatesPrompt, standardInlineQualificationPrompt } from '../../core/qualification-candidates-prompt.mjs';
@@ -266,7 +267,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
       countBodyTokens: countTokens(countBody) };
   }
 
-  async function post(path, body, maximum, signal, diagnose) {
+  async function post(path, body, maximum, signal, diagnose, consolidation = false) {
     checkAbort(signal, diagnose);
     try {
       const response = await fetchImpl(`https://api.openai.com/v1${path}`, {
@@ -276,6 +277,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
       checkAbort(signal);
       if (!response.ok || response.redirected || response.status < 200 || response.status >= 300) {
         response.body?.cancel().catch(() => {});
+        if (consolidation && (response.status === 429 || response.status >= 500)) fail('consolidation_transient');
         providerFailure();
       }
       return await readJSON(response, maximum, signal, diagnose);
@@ -283,6 +285,8 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
       diagnose(signal.aborted || error?.name === 'AbortError' ? 'model_cancelled' : 'transport_failure');
       checkAbort(signal);
       if (error?.name === 'AbortError') throw new DOMException('OpenAI request cancelled', 'AbortError');
+      if (consolidation && (error?.code === 'consolidation_transient' || error instanceof TypeError ||
+          ['TimeoutError', 'APIConnectionError'].includes(error?.name))) fail('consolidation_transient');
       providerFailure();
     }
   }
@@ -316,7 +320,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
           ? snapshotIndexedExtractInput(input) : input;
         const originalSerializedInput = JSON.stringify(prevalidated);
         snapshot = JSON.parse(originalSerializedInput);
-        schema = episodic ? episodeSchemasFor(method, snapshot) : schemasFor(method, snapshot);
+        schema = method === 'consolidate' ? consolidationSchema(snapshot) : episodic ? episodeSchemasFor(method, snapshot) : schemasFor(method, snapshot);
         instructions = qualificationInstructions(method, system, snapshot);
         localTokens = countTokens(JSON.stringify({ system: instructions, input: snapshot, maxOutputTokens }));
         if (method === 'classify') {
@@ -335,7 +339,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
       diagnose('request_invalid'); throw new Error('invalid_openai_request');
     }
     if (localTokens > 6000) { diagnose('request_bounds'); fail('context_budget_exceeded'); }
-    const selected = profile[method === 'selectChecklist' ? 'select' : method];
+    const selected = profile[method === 'selectChecklist' ? 'select' : method === 'consolidate' ? 'classify' : method];
     const payload = qualifier ? null : { model: selected.model, instructions,
       input: [{ role: 'user', content: [{ type: 'input_text', text: serializedInput }] }],
       text: { format: { type: 'json_schema', name: `cairn_${method}`, strict: true,
@@ -344,11 +348,14 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     const countBody = qualifier ? qualifier.countBody : JSON.stringify(payload);
     const generateBody = qualifier ? qualifier.generateBody
       : JSON.stringify({ ...payload, max_output_tokens: 1024, store: false, stream: false });
+    if (method === 'consolidate' && countTokens(countBody) > 6000) {
+      diagnose('request_bounds'); fail('context_budget_exceeded');
+    }
     if (qualifier && qualifier.countBodyTokens > 6000) {
       diagnose('request_bounds');
       fail('context_budget_exceeded');
     }
-    const counted = await post('/responses/input_tokens', countBody, 65536, signal, diagnose);
+    const counted = await post('/responses/input_tokens', countBody, 65536, signal, diagnose, method === 'consolidate');
     if (!record(counted) || counted.object !== 'response.input_tokens' || !count(counted.input_tokens)) {
       diagnose('token_count_response');
       fail('token_count_unavailable');
@@ -358,15 +365,25 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
       fail('context_budget_exceeded');
     }
     checkAbort(signal, diagnose);
-    const response = await post('/responses', generateBody, 262144, signal, diagnose);
+    const response = await post('/responses', generateBody, 262144, signal, diagnose, method === 'consolidate');
     checkAbort(signal, diagnose);
     const output = parseOutput(response, selected.contextWindow, selected.model, diagnose);
+    if (method === 'consolidate' && !schemaAccepts(schema, output)) { diagnose('output_shape'); fail('invalid_model_output'); }
     if (episodic) return normalizeEpisodeOutput(method, snapshot, output, qualifier?.schema ?? schema, diagnose);
     return normalizeClassificationWire(method, output, schema, wire, diagnose)
       ?? normalizeQualificationSlots(method, snapshot, output, validationSchema, diagnose);
   }
 
   return Object.freeze({ contextWindow, countTokens, ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
+    fitsConsolidationRequest({ system, input, maxOutputTokens }) {
+      if (typeof system !== 'string' || maxOutputTokens !== 1024) return false;
+      const schema = consolidationSchema(input), selected = profile.classify;
+      const body = { model: selected.model, instructions: system,
+        input: [{ role: 'user', content: [{ type: 'input_text', text: JSON.stringify(input) }] }],
+        text: { format: { type: 'json_schema', name: 'cairn_consolidate', strict: true, schema } },
+        truncation: 'disabled', ...(selected.reasoning ? { reasoning: selected.reasoning } : {}) };
+      return countTokens(JSON.stringify({ system, input, maxOutputTokens })) <= 6000 && countTokens(JSON.stringify(body)) <= 6000;
+    },
     ...(episode ? { interpretEpisode: request => invoke('interpretEpisode', request),
       episodeMetadata: Object.freeze({ adapter: 'openai', model: episode.model, profile: episode.model }) } : {}),
     // Core plans qualification by this exact wire measurement, which includes the
@@ -390,5 +407,6 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     selectChecklist: (request) => invoke('selectChecklist', request),
     rank: (request) => invoke('rank', request),
     reconcile: (request) => invoke('reconcile', request),
+    consolidate: (request) => invoke('consolidate', request),
   });
 }

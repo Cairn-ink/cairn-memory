@@ -106,3 +106,21 @@ test('first-install safety preflight accepts the relation package and preserves 
   assert.equal(report.enumerated,cards?1:0);assert.equal(report.unchangedFiles,true);
  }
 });
+
+for (const hidden of ['forgotten', 'suppressed']) test(`relation reasons and dates disappear with a ${hidden} endpoint`, async t => {
+ const f = safetyFixture(t, 18); await f.migrate(); const h = host(); h.state.allowed = [ns];
+ const core = openMemoryCore({ path: f.path, contextRead: { version: 'context-read-v1', authority: h.authority, counter: { id: 'synthetic', countTokens: () => 1 } } });
+ const db = f.connect(); t.after(() => { core.close(); db.close(); });
+ const seed = ok(core.admit({ namespace: ns, memory: { content: 'VisibleThread independent breakfast', kind: 'fact' }, receipts: [receipt('visible-reason')] })).memory;
+ const peer = ok(core.admit({ namespace: ns, memory: { content: 'PrivatePeer older breakfast', kind: 'fact' }, receipts: [receipt('private-reason')] })).memory;
+ installMemoryThreadLayout(f.path);
+ db.prepare(`INSERT INTO memory_relations(id,from_memory_id,from_revision,to_memory_id,to_revision,relation,confidence,decided_by,created_at,reason)
+  VALUES('private-reason-edge',?,?,?,?,'contradicts',1,'llm','now','PrivateReason unique explanation')`).run(seed.id,seed.revision,peer.id,peer.revision);
+ db.prepare('INSERT INTO memory_relation_times VALUES(?,?,?,?)').run(peer.id,peer.revision,'2001-02-03T04:05:06.000Z',db.prepare('SELECT id FROM receipts WHERE memory_id=?').get(peer.id).id);
+ const read = () => h.call(core, 'contextRead', { readSet: [ns], types: ['memory'], intent: 'history', query: 'VisibleThread', semantic: false, representation: 'representation-v2-dated', budget: {} });
+ const before = JSON.stringify(ok(await read())); assert.match(before, /PrivateReason/); assert.match(before, /2001-02-03/);
+ if (hidden === 'forgotten') ok(core.forget({ namespace: ns, memoryId: peer.id, expectedRevision: peer.revision }));
+ else transaction(db, () => writeContentSuppressionInside(db, { namespace: ns, kind: 'memory', key: peer.id, reason: 'purge', actionId: 'private-reason-hide' }));
+ const after = JSON.stringify(ok(await read()));
+ for (const value of [peer.id, 'PrivatePeer', 'PrivateReason', '2001-02-03']) assert.ok(!after.includes(value), value);
+});

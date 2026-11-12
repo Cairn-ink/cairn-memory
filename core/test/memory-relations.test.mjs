@@ -246,3 +246,35 @@ test('a relation timeout reserves admission time and admits without edges',async
  assert.equal(f.db.prepare("SELECT count(*) n FROM sqlite_schema WHERE name='memory_relations'").get().n,0);
  assert.ok(diagnostics.some(value=>value.stage==='relateMemories'&&value.reason==='model_timeout'));
 });
+
+for (const setting of [{ paused: 1 }, { enabled: 0 }]) test(`relation model and vectors respect saving controls ${JSON.stringify(setting)}`, async t => {
+ const { control } = await import('../testing/context-semantic-pause-fixture.mjs');
+ let armed = false, embeddings = 0;
+ const fake = createFakeEmbedder();
+ const f = fixture(t, { contextOptions: { embedder: { ...fake, embed(texts, controls) {
+  embeddings++; controls.beforeDispatch(); return fake.embed(texts, controls);
+ } }, policy: { family: 'local', maxRequests: 1000, maxUsd: 1, estimateUsd: () => 0 } } });
+ await f.capture('My breakfast is oats.');
+ ok(await f.trusted.call(f.core, 'refreshContextIndex', { readSet: [ns], types: ['memory'], intent: 'current', budget: { maxItems: 1024, maxMs: 5000 } }));
+ const extract = f.model.extract;
+ f.model.extract = request => { const output = extract(request); if (armed) control(f.db, ns, setting); return output; };
+ const before = embeddings; armed = true;
+ await f.capture('My breakfast is eggs.');
+ assert.equal(f.calls.length, 0, 'no relation model request after saving stops');
+ assert.equal(embeddings, before, 'no relation vector request after saving stops');
+});
+
+test('a pause during relation token preflight prevents model dispatch', async t => {
+ const { control } = await import('../testing/context-semantic-pause-fixture.mjs');
+ const f = fixture(t);
+ await f.capture('My breakfast is oats.');
+ let paused = false;
+ f.model.countTokens = text => {
+  if (!paused && text.includes('"candidates"') && text.includes('"facts"')) {
+   paused = true; control(f.db, ns, { paused: 1 });
+  }
+  return 1;
+ };
+ await f.capture('My breakfast is eggs.');
+ assert.equal(paused, true); assert.equal(f.calls.length, 0);
+});

@@ -9,7 +9,9 @@ import { localRoot, requestedRoot, canonicalPath, readDescriptor, writeDescripto
 import { readClaudeServers, registerClaude, detachClaude } from './local-claude.mjs';
 import { registerCodex, detachCodex, checkCodexLock, codexCapabilities } from './local-codex.mjs';
 import { shellArgument } from './output.mjs';
+import { configureCapture, captureStatus, captureSettings, retainedCapture } from './local-capture.mjs';
 import { SetupError } from './errors.mjs';
+import { rawLocal, validateRawOptions } from './local-raw.mjs';
 
 const clientNames = ['claude', 'codex'];
 const controls = ['disable', 'pause', 'resume', 'prompt-recall-on', 'prompt-recall-off', 'config'];
@@ -130,8 +132,9 @@ function validateLocalOptions(options, selection, descriptor) {
 }
 export async function routeLocalMode(options, selection, context) {
   const [action, ...flags] = selection.argv;
-  if (!['setup', 'status', 'uninstall', ...controls].includes(action)) { context.beforeRouting?.(); return { handled: false }; }
-  if (flags.some(flag => !['--dry-run', '--no-browser', '--no-clipboard', '--manual-token', '--reauthorize'].includes(flag)) ||
+  if (!['raw', 'setup', 'status', 'uninstall', ...controls].includes(action)) { context.beforeRouting?.(); return { handled: false }; }
+  if (action === 'raw') validateRawOptions(options, selection);
+  else if (flags.some(flag => !['--dry-run', '--no-browser', '--no-clipboard', '--manual-token', '--reauthorize'].includes(flag)) ||
       (action !== 'setup' && flags.length)) { context.beforeRouting?.(); throw new SetupError('unknown_command', 2); }
   if (!context.supportedNode(context.nodeVersion)) { context.beforeRouting?.(); throw new SetupError('node_required'); }
   const { write, t, interactive, prompt } = context;
@@ -140,11 +143,26 @@ export async function routeLocalMode(options, selection, context) {
   if (action === 'setup' && (options.local || union === 'local' || (detection.descriptorError && !options.cloud)))
     validateLocalOptions(options, selection, descriptor);
   context.beforeRouting?.();
+  if (action === 'raw') return { handled: true, code: await rawLocal(options, selection, detection, context) };
   if (action === 'uninstall' && options.local) {
     validateLocalOptions(options, selection, descriptor);
     return { handled: true, code: await uninstallLocal(options, selection, detection, context) };
   }
   if (action === 'status') return { handled: false, detection, statusCode: detection.descriptorError || (!descriptor && (detection.orphanEngine || Object.values(states).some(state => state.entry))) ? 2 : 0 };
+  if (action === 'config' && options.localCapture !== undefined) {
+    if (union === 'mixed') return refusal('mode_mixed', detection, context);
+    if (union === 'unknown') return refusal('mode_unknown', detection, context);
+    if (union !== 'local' || !descriptor || descriptor.state !== 'installed') throw new SetupError('local_option_invalid', 2);
+    for (const client of clientNames) if (states[client].changedHome) return refusal('local_client_home_changed', detection, context, { client, ...states[client].changedHome });
+    const selected = clientNames.filter(client => descriptor.clients[client] && (!selection.client || selection.client === client));
+    if (!selected.length) throw new SetupError('local_option_invalid', 2);
+    await withLocalLock(detection.root, async onChild => {
+      const current = await readDescriptor(detection.root);
+      if (JSON.stringify(current) !== JSON.stringify(descriptor)) throw new SetupError('local_recovery_required', 2);
+      await configureCapture(detection.root, current, selected, { ...context, onChild }, { enabled: options.localCapture });
+    });
+    return { handled: true, code: 0 };
+  }
   if (controls.includes(action) || action === 'uninstall') {
     if (union === 'local') return refusal('local_control_unsupported', detection, context);
     if (union === 'mixed') return refusal('mode_mixed', detection, context);
@@ -290,6 +308,7 @@ async function setupLocal(options, selection, detection, context) {
     await npmrc.chmod(0o600);
     try { await npmrc.writeFile('registry=https://registry.npmjs.org/\n'); await npmrc.sync(); } finally { await npmrc.close(); }
     const references = publishedReferences(descriptor);
+    for (const receipt of Object.values((await captureSettings(root)).clients)) references.add(receipt.engineId);
     // A user can apply a manual snippet after its checkpoint was cleared.
     // Never quarantine a generation the current native registration still uses,
     // even when a manual receipt describes a newer desired generation.
@@ -337,11 +356,14 @@ async function setupLocal(options, selection, detection, context) {
       if (state === 'done') write(t('local_registered', { client: client === 'claude' ? 'Claude Code' : 'Codex' }));
 
     }
+    // Keep the setup journal until capture orchestration is durable too.
+    await configureCapture(root, descriptor, descriptor.operation.clients, { ...context, onChild: updateChild },
+      { enabled: options.noCapture ? false : undefined });
     descriptor.state = 'installed'; descriptor.operation = null; await writeDescriptor(root, descriptor);
     write(t('local_done')); write(t('next_reopen')); return manual ? 1 : 0;
   });
 }
-export async function localStatus(detection, { write, t, verbose, emittedEnvironmentCauses = new Set() }) {
+export async function localStatus(detection, { write, t, env = process.env, verbose, emittedEnvironmentCauses = new Set() }) {
   if (!detection) return;
   const { descriptor, root, states } = detection;
   try {
@@ -354,6 +376,7 @@ export async function localStatus(detection, { write, t, verbose, emittedEnviron
       write(t('local_status_client', { client: client === 'claude' ? 'Claude Code' : 'Codex' }));
       const state = registration(states[client]);
       write(t('local_status_registration', { state: t('local_registration_' + state) }));
+      await captureStatus(root, client, { write, t, env });
     }
     if (!descriptor) return;
     if (uninstalled) write(t(clientNames.every(client => registration(states[client]) === 'missing') ?
@@ -406,7 +429,7 @@ async function uninstallLocal(options, selection, detection, context) {
       !await codexPrecheck(detection, context)) return 2;
   progress.localOperation = true;
   const root = await localRoot(env, { create: true });
-  return withLocalLock(root, async () => {
+  return withLocalLock(root, async onChild => {
     let descriptor = detection.descriptorError ? null : await readDescriptor(root);
     if (descriptor?.operation?.kind === 'setup') {
       const previous = descriptor.operation;
@@ -424,6 +447,7 @@ async function uninstallLocal(options, selection, detection, context) {
       const cp = descriptor?.operation?.checkpoints[client];
       if (cp?.state === 'detached') continue;
       if (cp) { cp.state = 'detaching'; await writeDescriptor(root, descriptor); }
+      await configureCapture(root, descriptor, [client], { ...context, onChild }, { uninstall: true });
       if (client === 'claude') await detachClaude({ home: detection.destinations.claude, run: runClaude });
       else await detachCodex({ home: dirname(detection.destinations.codex), env, inspection, write, t });
       if (descriptor) { recordClient(descriptor, client, null); await writeDescriptor(root, descriptor); }
@@ -440,7 +464,9 @@ async function uninstallLocal(options, selection, detection, context) {
           if (after.states.codex.environmentCause) write(t(after.states.codex.environmentCause));
           write(t('local_uninstall_retained')); write.literal(shellArgument(join(root, 'engine'))); return 2;
         }
-        await rm(await deletionPath(root, 'engine', { databasePath: descriptor.database.path }), { recursive: true, force: true });
+        // Engine records pin their runtime path. Retain it with disabled identity
+        // so an identical setup request can reactivate without rewriting authority.
+        if (!await retainedCapture(root)) await rm(await deletionPath(root, 'engine', { databasePath: descriptor.database.path }), { recursive: true, force: true });
         descriptor.state = 'uninstalled'; descriptor.engine = null; descriptor.node = null; descriptor.operation = null;
         await writeDescriptor(root, descriptor);
       }

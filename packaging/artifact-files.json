@@ -393,5 +393,11 @@
   "docs/memory-relations.md",
   "core/memory-relations-time.mjs",
   "core/memory-relations-safety.mjs",
-  "core/memory-relations-erasure.mjs"
+  "core/memory-relations-erasure.mjs",
+  "adapters/openai/consolidate-schema.mjs",
+  "core/engine-card-clusters.mjs",
+  "core/engine-card-maintenance.mjs",
+  "core/engine-card-output.mjs",
+  "core/engine-card-storage.mjs",
+  "docs/engine-cards.md"
 ]

@@ -74,7 +74,10 @@ for(const noFence of [false])test(`a fresh query cannot inherit pre-fact eligibi
   await assert.rejects(primary.service.prepareSource(alphaRef,{intent:'current'},primary.host.token),{code:'raw_search_unavailable'});
   const leaked=inside.candidates.some(c=>c.conversationId===alpha.conversationId);
   const inClean=inside.candidates.find(c=>c.conversationId===clean.conversationId),freshClean=fresh.candidates[0];assert.ok(inClean);
-  if(noFence){assert.equal(inside.coverage.status,'complete');assert.equal(fresh.coverage.status,'complete');}
+  // New ancestry invalidates inventory coverage while allowed hits remain usable.
+  for(const result of [inside,fresh]){
+    assert.equal(result.coverage.status,'partial');assert.ok(result.coverage.causes.includes('index_incomplete'));
+  }
   assert.equal(leaked,false,'a new ancestry edge to an erased Raw ancestor must remove alpha before any candidate metadata or score leaves');
   assert.ok(Number.isFinite(inClean.score)&&Number.isFinite(freshClean.score));
 });

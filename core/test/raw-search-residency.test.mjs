@@ -11,12 +11,12 @@ import {rawVectorResidencySelected,reserveSharedVectors,MAX_CACHE_BYTES} from '.
 for(const outcome of ['complete','deadline','error'])test(`closing a Raw service releases shared vector residency after ${outcome}`,async t=>{
   assert.equal(rawVectorResidencySelected,false);
   const f=sourceFixture(t);await savedSource(f,'Synthetic copper telescope.');
-  const s=await searchFixture(f);assert.equal(rawVectorResidencySelected,true);await s.maintain();
+  const s=await searchFixture(f);assert.equal(rawVectorResidencySelected,true);await s.maintain();await s.tick();
   const own=Object.getOwnPropertyDescriptor(performance,'now'),prepare=DatabaseSync.prototype.prepare;
   let now=100,armed=true;
   Object.defineProperty(performance,'now',{configurable:true,value:()=>now});
   DatabaseSync.prototype.prepare=function(sql){
-    if(armed&&sql.startsWith('SELECT s.*,h.sequence')){armed=false;
+    if(armed&&sql.startsWith('SELECT * FROM segments WHERE published=1 ORDER BY id DESC')){armed=false;
       if(outcome==='deadline')now+=1001;
       else if(outcome==='error')throw Error('synthetic storage error');
     }

@@ -15,7 +15,7 @@ import { validateContextProductLayout } from './context-product-schema.mjs';
 import { openReadDatabase } from './read-database.mjs';
 import { readTransaction, isConnectionDiscarded, isStorageBusy, busyTimeoutOption } from './database.mjs';
 import { ownData } from './local-authority-input.mjs';
-import { deepFreeze } from './private-card-input.mjs';
+import { deepFreeze, withEngineCardDelivery } from './private-card-input.mjs';
 import { verifyPrivateGrant } from './private-card-facade.mjs';
 import { cardDependencyFence } from './card-current-storage.mjs';
 import { createPrivateCardStorage } from './private-card-storage.mjs';
@@ -29,7 +29,7 @@ import { fuseCandidates, RRF_PRESETS } from './context-read-fusion.mjs';
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION } from './context-read-tokenize.mjs';
 import { validateVector } from './context-read-embedder.mjs';
 import { contextBudget } from './context-read-budget.mjs';
-import { receiptEventDate, completeResponseBytes } from './context-read-assembly.mjs';
+import { receiptEventDate, completeResponseBytes, cardPackSources, receiptSourceRows, resolveMemorySourceDates } from './context-read-assembly.mjs';
 import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from './context-read-three-layer.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { CONTEXT_VERSION, CONTEXT_METHODS, CONTEXT_LIMITS, SOURCE_LIMITS, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_DEFAULTS, DEFAULT_ASSEMBLY_POLICY,
@@ -39,7 +39,7 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const bytes = envelope => Buffer.byteLength(JSON.stringify(envelope));
 const success = value => ({ ok: true, value });
 const states = new Set(['ready', 'unavailable', 'disabled', 'absent', 'timeout', 'provider_error', 'rate_limited',
-  'budget_denied', 'stale_index', 'dimension_mismatch', 'partial_coverage']);
+  'budget_denied', 'stale_index', 'dimension_mismatch', 'partial_coverage', 'namespace_paused']);
 const channel = (state, causes = state === 'ready' ? [] : [state]) => ({ state, causes: [...new Set(causes)] });
 const maintenanceReasons = new Map([['missing', 'missing'], ['corrupt', 'corrupt'], ['wrong_store', 'wrong-store'],
   ['wrong-store', 'wrong-store'], ['incompatible', 'incompatible']]);
@@ -79,15 +79,31 @@ export function openContextCore(baseOptions, contextRead, openBase) {
       preflight: () => assertContextReadReadOnlyAuxiliaries(baseOptions.path) });
     probe.db.close();
   }
-  const base = openBase(baseOptions);
+  let context;
+  const base = openBase(typeof baseOptions.model?.consolidate === 'function' && baseOptions.cardVectors === undefined ? { ...baseOptions,
+    cardVectors: { read: request => context?.cardVectors(request) ?? [] },
+  } : baseOptions);
   try {
-    const context = createContextFacade(baseOptions.path === ':memory:' ? ':memory:' : resolve(baseOptions.path), options, { readOnly, ...busyOptions });
+    context = createContextFacade(baseOptions.path === ':memory:' ? ':memory:' : resolve(baseOptions.path), options, { readOnly, ...busyOptions });
     const vectorConfig={path:baseOptions.path===':memory:'?':memory:':resolve(baseOptions.path),embedder:options.embedder,dispatch:contextBudget(options),batchSize:options.policy.maxBatchDocuments};
-    return Object.freeze({ ...base, ...context.methods,
+    const relationMethods = {
       capture: (...args) => withMemoryRelationVectors(vectorConfig,()=>base.capture(...args)),
       ...(base.captureRaw?{captureRaw:(...args)=>withMemoryRelationVectors(vectorConfig,()=>base.captureRaw(...args))}:{}),
       ...(base.keepEpisode?{keepEpisode:(...args)=>withMemoryRelationVectors(vectorConfig,()=>base.keepEpisode(...args))}:{}),
-      close() { context.close(); return base.close(); } });
+    };
+    if (!base.maintainCards) return Object.freeze({ ...base, ...context.methods, ...relationMethods, close() { context.close(); return base.close(); } });
+    const engineMethods = {
+      ...Object.fromEntries(Object.keys(context.methods).map(method => [method, (...args) => context.methods[method](...args)])),
+      async maintainCards(input) {
+        const result = await base.maintainCards(input);
+        if (result.ok && result.value.built?.length && !context.productCapabilities.types.includes('card')) {
+          context.close();
+          context = createContextFacade(resolve(baseOptions.path), options, { readOnly, ...busyOptions });
+        }
+        return result;
+      },
+    };
+    return withEngineCardDelivery(Object.freeze({ ...base, ...context.methods, ...engineMethods, ...relationMethods, close() { context.close(); return base.close(); } }), base);
   } catch (error) { try { base.close(); } catch { /* Preserve the initialization refusal. */ } throw error; }
 }
 export function openContextReader(value) {
@@ -432,15 +448,18 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         preflight?.release?.();
         if (preflight?.state === 'ready' && preflight.eligible > 0) {
           controller = new AbortController(); controllers.add(controller);
-          const guard = () => { access.check();
+          const embeddingGuard = storage.embeddingGuard(input.readSet, deadlineAt);
+          const guard = (phase = 'pre-send') => { access.check();
             if (sourceState) read(() => assertSourcesInside(input, sourceState, internal ? 'snapshot_stale' : 'cursor_stale'));
-            storage.assertState(projection, current); };
+            storage.assertState(projection, current);
+            embeddingGuard(phase); };
           time = performance.now();
           try {
+            embeddingGuard();
             let vectors,invoked=false;
             assertContentPort({before:true});
             try { vectors = await dispatch(options.embedder, [input.query], { signal: controller.signal, deadlineAt, guard,onInvoke:()=>{invoked=true;} }); }
-            finally { try { guard(); } finally { if(invoked)assertContentPort(); } }
+            finally { try { guard('post-send'); } finally { if(invoked)assertContentPort(); } }
             if (!Array.isArray(vectors) || vectors.length !== 1) throw Object.assign(new Error(), { code: 'provider_error' });
             const query = validateVector(vectors[0], options.embedder);
             const scoring = storage.semanticPreflight(projection, options.embedder, { deadlineAt });
@@ -650,8 +669,10 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           deadline = true;
           return { generations: [], items: [], unavailable: candidates.items.length };
         }
-        const generations = canonicalFence(input.readSet, input.types), items = [];
+        const generations = canonicalFence(input.readSet, input.types), items = [], dateEntries = [];
         const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
+        const dated = input.representation === 'representation-v2-dated';
+        if (safetyMemo && dated) safetyMemo.sourceDates = true;
         if (searched.sourceState) assertSourcesInside(input, searched.sourceState, 'snapshot_stale');
         let unavailable = 0;
         const witnessBudget = searched.sourceState ? sourceBudget(dependencyAware ? deadlineAt : Infinity) : null;
@@ -675,9 +696,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             unavailable++; continue;
           }
           const { type, ref, state, origin } = item;
+          const memoryKey = JSON.stringify([[ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId??''],ref.memoryId]);
           const sourceRows = type === 'memory' && item.provenance.sourceAccess === 'available' ?
-            (safetyMemo?.evidenceReceipts?.get(JSON.stringify([[ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId??''],ref.memoryId]))?.slice(0,16) ??
-              db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId)).filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)) : [];
+            receiptSourceRows(db, ref.memoryId, dated && cachedContentLayout(db)?.rawLineage,
+              safetyMemo?.evidenceReceipts?.get(memoryKey)?.slice(0,16), safetyMemo?.evidenceMemories?.get(memoryKey))
+              .filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)) : [];
           const relationLabels = memoryRelationLabels(db,ref,deadlineAt);
           const stated=candidate.thread?.eventTime??null;
           const eventTime=stated??(relationLabels.length?memoryRelationTime(db,{id:ref.memoryId,revision:ref.revision}):null);
@@ -690,7 +713,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           items.push({ type, ref, threadKey:candidate.threadKey, threadOrder:candidate.threadOrder, threadRank:candidate.threadRank, ns: input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), rank: candidate.rank,
             metadata: type === 'memory' ? { state, reviewState: item.reviewState, filing: item.filing,
               kind: item.kind, origin, confidence: item.confidence,
-              ...(relationLabels.length?{relations:relationLabels}:{}),...(candidate.thread?{thread:candidate.thread}:{}) } : { state, support: item.support, origin },
+              ...(relationLabels.length?{relations:relationLabels}:{}),...(candidate.thread?{thread:candidate.thread}:{}) } : { state, support: item.support, origin,
+                ...(origin === 'engine' ? { builtAt: item.builtAt, clusterKey: item.clusterKey, status: item.status } : {}) },
+            ...(type === 'card' && origin === 'engine' ? cardPackSources(item) : {}),
             text: type === 'memory' ? item.content : item.title + '\n' + item.body,
             turnIds: citedRawTurns(db, ref.namespace, sourceRows, rawChannel),
             sessionIds: sourceRows.map(row => JSON.stringify(['receipt', namespaceKey(ref.namespace), row.client, row.session_id])),
@@ -698,7 +723,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             sourcesComplete: type === 'memory' && item.provenance.coverage.status === 'complete',
             fence: bind('snapshot-item', cardLineageItemInside(db,item)),
             dependencyCount: item.support?.currentDependency ? item.support.currentDependency.versions?.length ?? 0 : null });
+          if (dated && type === 'memory') dateEntries.push({ item: items.at(-1), rows: sourceRows });
         }
+        if (dated && !resolveMemorySourceDates(db, dateEntries, deadlineAt)) { items.length = 0; deadline = true; }
         return { generations, items, unavailable };
       });
       const scope = bind('snapshot-scope', input.readSet);
@@ -829,7 +856,16 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       return facadeFailure(error);
     }
   }
+  function cardVectors(request) {
+    if (!options.embedder) return [];
+    for (const entry of indexes.values()) {
+      try { const rows = entry.storage.cardVectors(request, options.embedder); if (rows.length) return rows; }
+      catch { /* Optional old/missing vectors retain the lexical cluster path. */ }
+    }
+    return [];
+  }
   return { fileIdentity: database?.fileIdentity, productCapabilities: { types: supportedTypes, receiptEventTime: receiptEventTimeEnabled(cachedContentLayout(db)) },
+    cardVectors,
     ...(options.product ? { productPort: { db, read, ready, evidence, bind, encode, decode, identity, features: info, canonicalFence } } : {}),
     methods: contentSafetyFacade({ getContextReadCapabilities() {
     return success(structuredClone({ version: CONTEXT_VERSION, methods: [...CONTEXT_METHODS], receiptEventTime: receiptEventTimeEnabled(cachedContentLayout(db)), types: [...supportedTypes], intents: ['current', 'history'],

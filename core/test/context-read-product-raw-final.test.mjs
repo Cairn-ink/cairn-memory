@@ -52,6 +52,7 @@ function fixture(mutation, coverage) {
     // No relation layout: preserve the canonical candidates and omit labels.
     deliverMemoryRelations: (_db, _input, candidates) => candidates,
     memoryRelationLabels: () => [], memoryRelationTime: () => null,
+    receiptSourceRows: () => [], resolveMemorySourceDates: () => true,
     assembleThreeLayerContext, completeResponseBytes, ASSEMBLY_LIMITS, namespaceKey, fail,
     success: value => ({ ok: true, value }), same: (a, b) => JSON.stringify(a) === JSON.stringify(b),
     counter: { id: 'synthetic-quarter-bytes', countTokens(text) {

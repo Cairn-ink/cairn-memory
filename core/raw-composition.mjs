@@ -6,6 +6,7 @@ import { createMemoryRuntime } from './runtime.mjs';
 import { createRawCaptureStorage } from './raw-capture-storage.mjs';
 import { isStorageBusy } from './database.mjs';
 import { MemoryStoreError } from './validation.mjs';
+import { withEngineCardDelivery } from './private-card-input.mjs';
 
 const success = value => ({ ok: true, value });
 const failure = error => {
@@ -22,7 +23,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
   let storage, capture, runtime;
   const core = buildCore(input, {
     rawSources: sources,
-    createRuntime: config => (runtime = createMemoryRuntime(config, { rawCapture: true,
+    createRuntime: (config, extensions) => (runtime = createMemoryRuntime(config, { ...extensions, rawCapture: true,
       rawSources: sources,
       rawLineage: lineage === true,
       rawDeletion: deletion,
@@ -33,7 +34,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
   });
   const deadlineMs = Object.hasOwn(input, 'captureDeadlineMs') ? input.captureDeadlineMs : undefined;
   const search = searchDefault ? searchManager ?? (rawOptions.mode !== 'off' ? createLocalRawSearch(input.path, rawOptions.port, searchEmbedding) : null) : null;
-  return contentSafetyFacade({ ...core,
+  return withEngineCardDelivery(contentSafetyFacade({ ...core,
     ...(search ? search.methods : {}),
     close() {
       // Stop scheduling synchronously; native close bounds provider settlement.
@@ -118,5 +119,5 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
     validate: (method,args,result,scopes) => {
       if (['getConversation','listRawConversations','getRawUsage','listRawEffects','previewDeleteConversation'].includes(method) && result?.ok) runtime.assertContentOutput(result.value,scopes);
     }, asyncMethods: ['capture','captureRaw','getConversation','searchRaw','maintainRawSearch','getRawSearchStatus'], noOwner: ['close',
-    'getPrivateCardCapabilities','getAssetCapabilities','getMethodPackageCapabilities','getContextReadCapabilities'] });
+    'getPrivateCardCapabilities','getAssetCapabilities','getMethodPackageCapabilities','getContextReadCapabilities'] }), core);
 }
