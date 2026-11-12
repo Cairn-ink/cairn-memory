@@ -971,6 +971,9 @@
     "literal:storeId": 2,
     "literal:targetId": 2
   },
+  "integrations/client/raw/local-settings-lock.mjs": {
+    "key:pid": 1
+  },
   "integrations/client/raw/local-setup-init.mjs": {
     "literal:store_invalid": 3
   },
