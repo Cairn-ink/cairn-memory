@@ -1,97 +1,28 @@
 <p align="center">
   <picture>
     <source media="(max-width: 600px)" srcset="docs/images/readme-hero-mobile.png">
-    <img src="docs/images/readme-hero.png" alt="Cairn Memory：可以查看與修改的 AI 記憶。正式 Cairn 疊石標誌。目前為開源開發者預覽版。" width="1200">
+    <img src="docs/images/readme-hero.png" alt="Cairn.ink Memory：可以查看與修改的 AI 記憶。圖中是一筆已保存的記憶「報告要簡短」，以及存入時的原文。開源專案。" width="1200">
   </picture>
 </p>
 
-# Cairn Memory
+<h1 align="center">Cairn.ink Memory</h1>
 
-[English README](README.md) · **繁體中文** · [預設功能、成本與開關](docs/defaults.md)
-
-**保存跨次 AI 工作的重要背景，需求改變時也能修改。**
+<p align="center"><strong>給 Claude Code 和 Codex 用的記憶，你可以查看、修改，也可以叫它忘記。</strong></p>
 
 <p align="center">
   <a href="https://github.com/Cairn-ink/cairn-memory/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Cairn-ink/cairn-memory/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://www.npmjs.com/package/@cairn-ink/memory"><img alt="npm 版本" src="https://img.shields.io/npm/v/%40cairn-ink%2Fmemory"></a>
   <a href="LICENSE"><img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
-  <a href="https://cairn.ink"><img alt="Cairn.ink 託管服務" src="https://img.shields.io/badge/hosted-cairn.ink-5b5147"></a>
+  <a href="https://cairn.ink"><img alt="Cairn.ink 雲端服務" src="https://img.shields.io/badge/hosted-cairn.ink-5b5147"></a>
 </p>
 
-**Cairn Memory** 是 Cairn.ink 的開源 AI 記憶工具，Claude Code 和 Codex
-可以透過本機 MCP 工具使用，也可以連接雲端自動記憶。你可以前往
-[Cairn.ink](https://cairn.ink)、安裝
-[@cairn-ink/memory npm 套件](https://www.npmjs.com/package/@cairn-ink/memory)，
-或查看 [Cairn Memory GitHub 原始碼](https://github.com/Cairn-ink/cairn-memory)。
+<p align="center">
+  <a href="README.md">English</a> · 繁體中文
+</p>
 
-你是不是常跟 AI 重複說：「報告要簡短」「這個專案已經改方向了」？
-Cairn 提供工具，讓你把這些偏好或決定存成記憶，下次可以查看；事情改變時，
-也能修改或移出使用中的記憶。
-
-**目前是需要設定的開發者預覽版。** 下方提供日常使用範例、本機安裝與託管
-連線入口。
-
-## 一個日常例子
-
-1. 你用記憶工具存下：「我的報告請簡短一點。」
-2. 開新一段對話時，你可以透過已接好的記憶工具查看這個偏好，以及當初存入的文字。
-3. 後來你需要詳細報告，就先查看目前版本，再把偏好改成「報告請寫詳細一點」。
-4. 如果這個偏好已經不適用，也可以把它移出使用中的記憶。
-
-![概念示意：保存簡短報告的偏好與提交的來源文字；需求改變後，修改成詳細報告，或移出使用中的記憶。](docs/images/memory-workflow.png)
-
-圖片是概念示意，並非 Claude、Codex 或產品介面的截圖。本機預覽版預設靠明確
-呼叫工具來保存記憶，**不會自行讀取你的全部對話**。
-
-## Source Receipt 是什麼？
-
-可以先把它理解成「這筆記憶附上的來源文字」。它保留保存或修改這筆記憶時
-提交的文字，方便你對照：**這筆記憶是根據什麼內容存下來的？**
-
-它不能保證記憶正確、完整理解了你的意思，或內容本身是真實的；也不是整段
-對話的經過驗證的紀錄。忘記一筆記憶，是把它移出使用中的記憶，不代表硬碟、
-來源紀錄和備份都已安全抹除；改寫過的相似內容仍可能被存成新記憶。
-
-## Cairn Memory 與 Cairn
-
-**Cairn Memory** 是這個 repo 提供的開源記憶工具，用來保存、查看與修改 AI
-工作的背景。**[Cairn](https://cairn.ink)** 是人與 AI 共用的託管記憶地圖，讓人
-整理、審閱與分享知識。
-
-這個 repo 同時包含本機工具與連接 Cairn 託管服務的整合。兩條路徑的設定與
-功能範圍分別說明：本機使用不需要 Cairn 帳號；託管連線需要相容的服務與
-登入授權。
-
-## 我應該從哪裡開始？
-
-| 你現在想做的事 | 建議入口 | 需要什麼 |
-| --- | --- | --- |
-| 先看懂用途，不想安裝 | [36 秒操作影片](docs/promotion/demo/cairn-memory-preview.mp4) | 不需要安裝或 Cairn 帳號；影片展示工具輸出 |
-| 在自己的電腦試工具 | [Linux／WSL 步驟](README.md#try-the-local-memory-layer) 或 [Windows PowerShell 指南](docs/windows-install.md) | 需要 Git、Node >=22.16、npm、tar；有 Linux x64 與限定範圍的 Windows x64 驗證；不需要 Cairn 帳號 |
-| 使用已文件化的 Claude Code／Codex 託管連線 | [託管設定](README.md#existing-hosted-integration) | 需要相容的服務與登入授權；Claude Code 外掛需要 Cairn 帳號與 token |
-
-如果你平常只在網頁或桌面 App 聊天，**先不要照著 Claude Code 或 Codex 的
-終端機指令安裝**；先確認你使用的是哪個客戶端，以及它支援的連接方式。
-目前保留的本機驗證涵蓋 SDK 與指定版本的 Hermes，沒有建立目前 Claude、Codex
-或 ChatGPT 本機端的相容性保證。[已驗證的路徑與範圍](docs/promotion-claims.md#supported-paths)
-
-本機安裝需要終端機操作。設定前，請確認電腦系統、客戶端與支援的連線方式，
-再依對應指南完成安裝。
-
-## 使用需求與限制
-
-- 長對話已有[四個案例的實際模型實驗](docs/evidence/long-history-live-pilot.md)，
-  其中一個 Cairn 回答漏掉重要資訊。這是特定實驗路徑的小型診斷，不能代表
-  預設客戶端的長期召回可靠度；完整邊界見[已知限制](docs/limitations.md)。
-- 本機的保存、查看、修改與忘記，可以不呼叫 AI 模型。操作影片也是這種方式。
-- 讓模型依上下文挑選相關記憶的功能，需要你自己的 OpenAI API key；選取的
-  上下文會傳到 OpenAI，也可能產生費用。沒有 key 時，該步驟會回報
-  `model_not_configured`，不能把它當成成功找到相關記憶。
-- 預設自動抽取記憶的品質仍未通過我們的來源支持標準，不能把示範當成普遍可靠
-  的記憶效果。[已知限制](docs/limitations.md)
-- 託管服務與本機工具是不同路徑。Claude Code 託管外掛有自動保存功能與另外的
-  資料處理方式；通過格式驗收的 Codex 雲端整合也支援自動保存與提問回想。
-  本機模式則只提供明確呼叫的 MCP 工具，不會自動保存或回想。
-- [本機資料與刪除範圍](README.md#local-privacy-and-control) · [隱私說明](docs/privacy.md)
+Claude Code 和 Codex 每次開新對話都從零開始，同樣的偏好和專案決定只好一講再講。
+Cairn.ink Memory 讓這兩個工具共用一份記憶。每筆記憶都留著存入時的原文，
+哪天記錯了或過時了，你可以看它是怎麼來的，再修改它或叫它忘記。
 
 ## 安裝
 
@@ -99,16 +30,209 @@ Cairn 提供工具，讓你把這些偏好或決定存成記憶，下次可以�
 npx @cairn-ink/memory setup
 ```
 
-Installer **0.6.3** 已於 2026-11-03 發布，修正 Codex 0.164.0–0.166.0 的格式資格，
-可直接用上方指令；第一次互動安裝會問要用本機
-MCP 工具，或登入 cairn.ink 使用雲端自動記憶，也可用 `setup --local`／
-`setup --cloud` 直接選擇，首次非互動執行時需指定 `--local`／`--cloud`；
-本機模式目前不會自動保存或回想。
+需要 Node 22.16 以上，以及裝好的 Claude Code 或 Codex。安裝時只問一個問題：
+記憶要放在哪裡？
 
-更多安裝、開發與技術文件，請看 [English README](README.md)。
+| | **本機** | **雲端** |
+| --- | --- | --- |
+| 帳號 | 不需要 | 需要 [cairn.ink](https://cairn.ink) 帳號，用瀏覽器登入一次 |
+| 記憶放在哪 | 這台電腦上的一個 SQLite 檔 | cairn.ink |
+| 自動保存什麼 | 你和 Claude Code、Codex 的對話，以明文保存 | 你的對話，由 cairn.ink 整理成記憶 |
+| 存一筆記憶 | 你開口，agent 才存 | 自動，也可以請 agent 存 |
+| 怎麼找回來 | 你問，agent 才去查 | 每次提問自動帶入相關記憶 |
+| 換一台電腦 | 不會同步 | 登入後是同一份記憶 |
+| 費用 | 免費 | 見[方案與價格](https://cairn.ink/zh-Hant/pricing) |
 
-本機 MCP server 和安裝程式預設開啟 Raw 保存、Raw 搜尋、附日期的三層
-contextRead 與讀取工具。可用 `--no-raw`、`--no-raw-search`、
-`--no-context-read` 分別關閉。Library 的 `openMemoryCore` 預設不保存 Raw，
-需要時傳入 `raw:true`。現有資料庫的配置若無法支援 Raw，會以 Memory-only
-模式執行。完整成本與開關見[預設功能說明](docs/defaults.md)。
+想跳過這個問題，直接跑 `npx @cairn-ink/memory setup --local` 或
+`npx @cairn-ink/memory setup --cloud`。裝完請重開 Claude Code 和 Codex；
+Codex 還要到 `/hooks` 允許 Cairn 的設定。一台電腦一次只能用一種模式，
+兩種模式之間不會搬移記憶。
+
+套件名稱是 `@cairn-ink/memory`。npm 和 PyPI 上沒有 scope 的 `cairn-memory`
+是別人的專案，跟這裡無關。
+
+## 開始使用
+
+裝好本機模式後，Claude Code 和 Codex 都會多一組記憶工具，來自名為
+`cairn-local` 的 server。用平常說話的方式講就可以：
+
+```text
+記住：我的報告要簡短。
+```
+
+之後開新對話：
+
+```text
+你記得我喜歡怎樣的報告嗎？
+這筆記憶是怎麼來的？
+改一下：我現在需要詳細的報告。
+忘記這筆記憶。
+```
+
+如果 agent 沒有去用記憶工具，直接點名：「用 cairn-local 的記憶工具」。
+
+本機模式也會在你工作時把對話存下來，之後可以直接問：
+
+```text
+上週我們對資料庫搬遷做了什麼決定？
+```
+
+已保存對話的搜尋是在背景慢慢補上的，剛剛幾分鐘的內容可能還找不到。
+
+![概念示意：保存「報告要簡短」的偏好和存入時的原文；之後改成詳細報告，或忘記這筆記憶。](docs/images/memory-workflow.png)
+
+| 你想做的事 | 工具 |
+| --- | --- |
+| 保存一筆記憶，連同存入時的原文 | `remember_memory` |
+| 用關鍵字搜尋記憶和已保存的對話，不需要模型金鑰 | `find_memory_candidates`、`read_memory_context` |
+| 讓模型挑出相關的記憶，需要你的 OpenAI 金鑰 | `recall_memory` |
+| 查看一筆記憶、它的修改紀錄和原文 | `inspect_memory` |
+| 修改一筆記憶的內容 | `correct_memory` |
+| 讓一筆記憶不再被使用 | `forget_memory` |
+
+跟著記憶保存的那段原文叫 **Source Receipt**。它讓你看到保存或修改這筆記憶時
+送進來的文字，但不能證明這筆記憶是對的。
+[所有工具與參數（英文）](docs/standalone-mcp.md#tools)
+
+## 雲端模式
+
+雲端模式會自動保存、自動回想，不用你開口。
+
+- **保存。** 登入後，Claude Code 和 Codex 的對話文字會自動保存。送出前會先在
+  你的電腦上遮蔽看起來像密碼或金鑰的內容，遮蔽是盡力而為，不保證全部遮到。
+- **回想。** 每次提問會送一份遮蔽過、限制長度的副本到 cairn.ink，找到的相關
+  記憶會帶進這次提問。
+- **暫停。** 不想被記下的對話，開始前跑 `npx @cairn-ink/memory pause`，結束後跑
+  `npx @cairn-ink/memory resume`。在 Claude Code 裡也可以用
+  `/cairn-memory:pause`。暫停期間的內容事後不會補存。
+- **兩個工具。** 第一次一起設定只要用瀏覽器登入一次。先裝 Claude Code、後加
+  Codex，需要用同一個帳號再登入一次。
+- **Codex。** 只有安裝器驗證過的 Codex 版本會開啟自動記憶，
+  `npx @cairn-ink/memory status` 會顯示你的版本有沒有通過。`codex exec`
+  這類自動執行的工作預設不會保存，要另外開啟。
+
+在工作對話上開啟之前，請先讀
+[雲端會送出什麼、怎麼控制](https://cairn.ink/zh-Hant/memory/privacy)。
+[雲端模式細節（英文）](docs/cloud-mode.md)說明手動安裝外掛、雲端 MCP 端點、
+Codex 的規則，以及外掛的隱私約定。
+
+## 你的資料
+
+- **本機。** 所有資料都在一個明文的 SQLite 檔裡，預設是
+  `~/.cairn-memory/data/memory.sqlite`。不會傳任何東西給 Cairn，也不需要 Cairn
+  帳號。安裝時會從 npm 下載引擎需要的套件。
+- **已保存的對話。** 本機模式會自動把你和 Claude Code、Codex 的對話文字存進
+  這個檔案，上限 200 MB，不呼叫模型，也不需要金鑰。要關掉，跑
+  `npx @cairn-ink/memory config --local-capture off`，或安裝時用
+  `npx @cairn-ink/memory setup --local --no-capture`。
+  `npx @cairn-ink/memory raw list` 會列出已保存的對話，不顯示內容；
+  `npx @cairn-ink/memory raw delete <conversation-id>` 可以刪掉其中一段。
+- **模型金鑰。** 保存、關鍵字搜尋、查看、修改、忘記都不呼叫模型。如果工具的
+  環境裡有 `OPENAI_API_KEY`，引擎會用它做語意搜尋和回想，相關文字會送到 OpenAI。
+- **雲端。** 對話文字和提問會在盡力遮蔽後送到 cairn.ink。Claude Code 外掛預設
+  會傳不含內容的使用統計，可以關閉。Codex 的登入資訊存在未加密、只有你的
+  使用者帳號讀得到的檔案裡。
+- **忘記。** 忘記一筆記憶，是讓它不再被使用，同樣的文字也不能再存一次。這不是
+  安全抹除：資料庫檔案和備份裡可能還留著那段文字，換個說法的內容也可能被存成
+  新的記憶。在本機模式，忘記或修改一筆記憶時，也會把這筆記憶保存時間前後
+  30 分鐘內有訊息的對話一起隱藏。這可能藏到無關的對話，也可能漏掉相關的對話，
+  要刪掉特定一段對話請用 `raw delete`。
+- **解除安裝。** `npx @cairn-ink/memory uninstall --local` 會斷開工具的連接，
+  記憶檔會留著。解除雲端模式，你在 cairn.ink 上的記憶也會留著。
+
+[本機資料、備份與刪除（英文）](docs/local-from-source.md#local-privacy-and-control) ·
+[隱私與威脅模型（英文）](docs/privacy.md) ·
+[預設功能、成本與開關（英文）](docs/defaults.md)
+
+## 目前狀態
+
+這是開發者預覽版。依賴它之前，請先知道這些限制：
+
+- **保存之後，搜尋要一點時間才跟上。** 本機模式在 Claude Code 或 Codex 開著的
+  時候，在背景替新對話建索引：大約 1,000 則訊息要幾分鐘，10,000 則約一小時。
+  索引跟上之前，搜尋會標示結果只涵蓋一部分。大約 50,000 則以上的歷史可能永遠
+  建不完。
+- **本機模式要你開口才會回想。** 本機模式不會自己把記憶帶進提問，你問了，
+  agent 才去查。
+- **平台。** 本機安裝在 Linux 和 WSL 測試過。macOS 走同一套程式，但還沒測試。
+  Windows 原生環境下 `setup --local` 會拒絕執行，請用 WSL，或照
+  [PowerShell 原始碼安裝指南（英文）](docs/windows-install.md)操作。
+- **語意回想需要金鑰。** 沒有 OpenAI 金鑰時，`recall_memory` 會回報
+  `model_not_configured`，關鍵字搜尋照常可用。完全在本機跑模型的路徑還沒有驗證。
+- **抽取品質。** 引擎預設用模型抽取記憶的品質，還沒通過我們自己訂的來源支持
+  標準。證據和保留下來的失敗案例都在[已知限制（英文）](docs/limitations.md)。
+
+[Roadmap](ROADMAP.md) · [Changelog](CHANGELOG.md) ·
+[每項主張的依據（英文）](docs/promotion-claims.md)
+
+## Cairn.ink Memory 和 Cairn.ink
+
+**Cairn.ink Memory** 是這個 repo 裡的開源記憶層。**[Cairn.ink](https://cairn.ink)**
+是雲端產品，一張人和 AI 工具共用的記憶地圖，用來整理、審閱和分享知識。
+雲端模式把 Claude Code 和 Codex 接到你的 Cairn.ink 帳號，本機模式完全不會連到它。
+
+## 這個 repo 裡有什麼
+
+- 安裝器 `@cairn-ink/memory`，以及 Claude Code 外掛和它的 marketplace 設定；
+- 本機的 SQLite 記憶引擎，包含來源原文、修改、忘記與搜尋，還有一個精簡的
+  本機 MCP server；
+- 在本機過濾對話、遮蔽敏感內容、推導專案識別的程式；
+- 公開的 HTTP 與 MCP 通訊規格，附 JSON Schema；
+- 選用的 OpenAI adapter；
+- 相容性測試與自架說明。
+
+Cairn.ink 雲端的抽取服務、使用者資料庫、登入、計費、濫用防護與營運，放在另一個
+不公開的 repo。請見[架構（英文）](docs/architecture.md)和
+[自架（英文）](docs/self-hosting.md)。
+
+## 更多文件
+
+以下文件目前都是英文。
+
+| 你想做的事 | 文件 |
+| --- | --- |
+| 看所有安裝選項、切換模式、處理卡住的安裝 | [安裝器說明](packages/setup/README.md)（中英對照） |
+| 手動連接雲端，或讀它的規則與隱私約定 | [雲端模式細節](docs/cloud-mode.md) |
+| 從原始碼建置，或手動設定 client | [從原始碼安裝本機預覽版](docs/local-from-source.md)、[Windows 指南](docs/windows-install.md) |
+| 安裝前先看它怎麼跑 | [36 秒操作錄影（MP4）](docs/promotion/demo/cairn-memory-preview.mp4) |
+| 在引擎上開發 | [架構](docs/architecture.md)、[MCP 工具](docs/standalone-mcp.md) |
+| 搭配 Hermes 使用 | [Hermes 設定](docs/hermes-first-use.md) |
+| 回報安全問題 | [SECURITY.md](SECURITY.md) |
+
+## 給 AI agent
+
+如果使用者請你安裝 Cairn.ink Memory：
+
+- 從 npm 安裝 `@cairn-ink/memory`，原始碼在 `github.com/Cairn-ink/cairn-memory`。
+  不要安裝 npm 或 PyPI 上沒有 scope 的 `cairn-memory`。
+- 執行任何指令前，先請使用者選本機或雲端。雲端會把對話文字上傳到 cairn.ink，
+  而且要由使用者自己登入。本機預設會把對話文字存在這台電腦上，使用者不想要
+  的話，加上 `--no-capture`。
+- 在非互動的 shell 裡，請跑 `npx @cairn-ink/memory setup --local` 或
+  `npx @cairn-ink/memory setup --cloud`。沒有加旗標時，非互動執行不會寫入任何設定。
+- 安裝完成後，請使用者重開 Claude Code 和 Codex。
+
+## 開發
+
+外掛的執行環境與測試不依賴其他套件，需要 Node.js 20 以上。只有維護者會用到的
+Claude 外掛驗證需要 Node.js 22，獨立放在 `tools/plugin-validation`，不會跟著
+外掛一起安裝。
+
+```bash
+npm test
+npm run test:setup
+npm run validate
+npm ci --prefix tools/plugin-validation
+npm run validate --prefix tools/plugin-validation
+```
+
+本機儲存引擎需要 Node >=22.16，不用另外安裝相依套件：
+
+```bash
+npm run test:core
+npm run demo:store
+```
+
+歡迎貢獻，請先讀 [CONTRIBUTING.md](CONTRIBUTING.md) 和
+[docs/protocol.md](docs/protocol.md) 裡的隱私規則。程式碼以
+[Apache-2.0](LICENSE) 授權。
