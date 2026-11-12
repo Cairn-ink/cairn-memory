@@ -19,6 +19,11 @@
   never discards validated items.
 - Preserve foreground lexical reads when a background checkpoint commits during
   sidecar probing, retaining the existing file identity, protection and WAL checks.
+- Host-visible with an embedding provider configured: on a cold store the first
+  embedding request can leave up to about two seconds sooner after open, because
+  the first read now publishes the lexical projection within its extra time.
+  Request and document counts are unchanged, nothing is sent while saving is
+  paused or disabled, and `--no-context-semantic` turns embedding off.
 
 ## Unreleased — nothing sent to an embedding provider while saving is paused
 

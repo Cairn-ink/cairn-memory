@@ -188,6 +188,12 @@ Explicit provider overrides require all five options together. Otherwise
 `OPENAI_API_KEY` selects bounded OpenAI embeddings automatically in MCP;
 `--no-context-semantic` disables them.
 
+Timing after open: the semantic timer keeps its 1,000 ms first delay and cadence.
+On a cold store the first read can publish the lexical projection within its
+extra time, so the first embedding request may leave up to about two seconds
+sooner than when that read timed out unpublished. The number of requests and
+documents is the same, and nothing is sent while saving is paused or disabled.
+
 ```sh
 cairn-memory --db /absolute/private/memory.sqlite --owner OWNER \
   --context-read context-read-v1 \

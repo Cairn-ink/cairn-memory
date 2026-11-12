@@ -325,6 +325,9 @@ for (const mode of ['paused', 'disabled', 'second-process', 'enabled']) test(`fo
     assert.ok(main.length > 0); assert.equal(branch.length, main.length, 'same provider request count as main');
     assert.equal(main.reduce((n, call) => n + call.count, 0), 40);
     assert.equal(branch.reduce((n, call) => n + call.count, 0), 40);
-    assert.ok(branch.every(call => call.at >= main[0].at), 'no provider entry earlier than main after forced first-read grace');
+    // A cold first read that publishes within its grace lets the unchanged semantic timer embed in turns that main
+    // still spends on lexical work, so the first request may leave sooner than on main. It can never precede the
+    // timer's own first delay, and the paused, disabled and second-process cases above stay at zero calls.
+    assert.ok(branch.every(call => call.at >= 1000), 'no provider entry before the semantic timer\'s first delay');
   }
 });
