@@ -13,6 +13,18 @@ export const cardSourceKeys = items => new Set(items.filter(item => item.type ==
     const cited = new Set([...item.text.matchAll(/\[([^\[\]\r\n]+)\]/gu)].flatMap(match => match[1].split(',')));
     return (item.sourceMemoryRefs ?? []).filter(ref => cited.has(ref.memoryId)).map(memoryPackKey);
   }));
+// Prepared candidates have already passed the reader's eligibility fences.
+// Promotion only borrows the position of a cited Memory in the item window.
+export function engineCardHits(prepared, maxItems) {
+  const window = prepared.filter(item => item.type === 'memory').sort((a, b) => a.rank - b.rank).slice(0, maxItems);
+  const hits = new Map();
+  for (const card of prepared) {
+    const covered = cardSourceKeys([card]);
+    const hit = window.find(memory => covered.has(memoryPackKey(memory.ref)));
+    if (hit) hits.set(card, hit);
+  }
+  return hits;
+}
 export const cardPackSources = item => item.origin === 'engine'
   ? { sourceMemoryRefs: item.bindings.map(binding => binding.memoryRef).filter(Boolean) } : {};
 
@@ -128,6 +140,12 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
   responseBytes, now = () => performance.now() }) {
   const started = now(), selected = new Map();
   const hasEngineCards = prepared.some(item => item.type === 'card' && item.metadata?.origin === 'engine');
+  if (hasEngineCards) {
+    const hits = engineCardHits(prepared, budget.maxItems);
+    const cards = [...hits.keys()];
+    prepared = prepared.filter(item => !hits.has(item)).flatMap(item =>
+      [...cards.filter(card => hits.get(card) === item), item]);
+  }
   const datedSources = new Set(representation === 'representation-v2-dated'
     ? prepared.filter(item => item.sources.some(source => source.date || source.dates?.length)) : []);
   const stops = { budget: false, items: false, deadline: false };

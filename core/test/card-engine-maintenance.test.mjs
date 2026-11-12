@@ -16,11 +16,11 @@ import { lineageFixture, receipt } from '../testing/card-lineage-fixture.mjs';
 import { withContentWriteOperation } from '../content-write-context.mjs';
 
 test('long recurring topic builds in maintenance, read packs Card, fact read retains Memory, forget falls back', async t => {
-  const f = engineCardFixture(t), memories = f.seed();
+  const f = engineCardFixture(t), memories = f.seed(12);
   assert.equal(f.model.calls.length, 0, 'admission does not consolidate');
   const pass = ok(await f.pass()); assert.equal(pass.state, 'ready', JSON.stringify(pass)); assert.equal(pass.built.length, 1, JSON.stringify(pass));
-  assert.equal(pass.modelCalls, 1); assert.equal(f.model.calls[0].memories.length, 30);
-  const card = pass.built[0]; assert.equal(card.origin, 'engine'); assert.equal(card.sourceRevisions.length, 30);
+  assert.equal(pass.modelCalls, 1); assert.equal(f.model.calls[0].memories.length, 12);
+  const card = pass.built[0]; assert.equal(card.origin, 'engine'); assert.equal(card.sourceRevisions.length, 12);
   assert.equal(ok(await f.pass()).built.length, 0, 'unchanged cluster does not spend again');
   ok(await f.refresh());
   const read = ok(await f.read('what is the current state of Orion'));
@@ -28,8 +28,8 @@ test('long recurring topic builds in maintenance, read packs Card, fact read ret
   assert.ok(read.metered.items.some(item => item.ref.type === 'memory'), 'uncited cluster sources remain candidates');
   const packedBody = read.metered.items.find(item => item.ref.type === 'card').body;
   assert.ok(read.metered.items.filter(item => item.ref.type === 'memory').every(item => !packedBody.includes(item.ref.id)));
-  const fact = ok(await f.read('what does Orion marker17 record'));
-  assert.equal(fact.metered.items[0].ref.id, memories[17].id);
+  const fact = ok(await f.read('what does Orion marker7 record'));
+  assert.equal(fact.metered.items[0].ref.id, memories[7].id);
   assert.equal(fact.metered.items[0].ref.type, 'memory');
   const without = ok(await f.read('what is the current state of Orion', { types: ['memory'] }));
   t.diagnostic(JSON.stringify({ withCardTokens: read.diagnostics.budget.used, withoutCardTokens: without.diagnostics.budget.used }));
@@ -42,12 +42,12 @@ test('long recurring topic builds in maintenance, read packs Card, fact read ret
   assert.equal(ok(await f.pass()).built.length, 0, 'rebuild is debounced');
 });
 
-test('five spread memories, short histories and missing pressure do not build', async t => {
-  const f = engineCardFixture(t); f.seed(5);
+test('four current memories and chains without pressure do not build', async t => {
+  const f = engineCardFixture(t); f.seed(4);
   assert.equal(ok(await f.pass()).built.length, 0); assert.equal(f.model.calls.length, 0);
   assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 18);
   const memories = Array.from({ length: 8 }, (_, i) => ({ id: String(i), date: new Date(2026, 0, i + 1).toISOString(), conversations: ['conversation-' + i], currentness: 'current' }));
-  assert.equal(cardTrigger(memories, undefined, 100).eligible, false);
+  assert.equal(cardTrigger(memories, undefined, 100).topic, true);
   assert.equal(cardTrigger(memories.slice(0, 4), [{ from: '0', to: '1', kind: 'supersedes', slot: 's' },
     { from: '1', to: '2', kind: 'supersedes', slot: 's' }, { from: '2', to: '3', kind: 'supersedes', slot: 's' }], 1199).eligible, false);
 });
@@ -75,13 +75,13 @@ test('writable existing-store pins reuse installed Cards without a schema upgrad
   assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, physical);
 });
 
-for (const present of [true, false]) test(`slot changed four times: relations port ${present ? 'present' : 'absent'}`, async t => {
+for (const present of [true, false]) test(`five-Memory topic builds with relations port ${present ? 'present' : 'absent'}`, async t => {
   let edges;
   const f = engineCardFixture(t, present ? { cardRelations: { read() { return edges; } } } : {});
   const memories = Array.from({ length: 5 }, (_, i) => f.add('Orion slot value ' + i, 0, i));
   edges = memories.slice(1).map((memory, i) => ({ from: memory.id, to: memories[i].id, kind: 'supersedes', slot: 'orion-status' }));
-  const pass = ok(await f.pass()); assert.equal(pass.built.length, present ? 1 : 0, JSON.stringify(pass));
-  assert.equal(f.model.calls.length, present ? 1 : 0);
+  const pass = ok(await f.pass()); assert.equal(pass.built.length, 1, JSON.stringify(pass));
+  assert.equal(f.model.calls.length, 1); assert.equal(Boolean(f.model.calls[0].relations), present);
 });
 
 test('four-Memory chain requires actual packed token pressure when it has fewer than five items', async t => {
@@ -119,7 +119,7 @@ test('output drops uncited sentences, refuses foreign citations and excess token
   assert.doesNotMatch(value.body, /Invented/); assert.match(value.body, /Open contradictions/); assert.match(value.body, /2026-01-01/);
   assert.throws(() => validateConsolidation({ ...output, currentState: [{ text: 'Foreign.', memoryIds: ['foreign'] }] }, memories, model));
   assert.equal(validateConsolidation({ currentState: [{ text: 'No support.', memoryIds: [] }], timeline: [], contradictions: [] }, memories, model), null);
-  assert.throws(() => validateConsolidation({ ...output, currentState: [{ text: 'length '.repeat(260), memoryIds: ['a'] }] }, memories, model));
+  assert.throws(() => validateConsolidation({ ...output, currentState: [{ text: 'x '.repeat(950), memoryIds: ['a'] }] }, memories, model));
 });
 
 test('keyless status, worker limits, provider refusal and source races never store a Card', async t => {
@@ -138,7 +138,7 @@ test('keyless status, worker limits, provider refusal and source races never sto
 });
 
 test('stale rebuild waits ten minutes, creates a fresh row; lost trigger deletes the stale Card', async t => {
-  const f = engineCardFixture(t); const memories = f.seed();
+  const f = engineCardFixture(t); const memories = f.seed(12);
   const first = ok(await f.pass()).built[0];
   ok(f.core.forget({ namespace: ns, memoryId: memories[0].id, expectedRevision: memories[0].revision }));
   const storage = createEngineCardStorage({ db: f.db, identity: f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get(), ready() {} });
@@ -157,16 +157,16 @@ test('bounded maintenance resumes a complete namespace scan without publishing a
   assert.equal(ok(await f.pass({ maxItems: 10 })).state, 'work_limit');
   assert.equal(ok(await f.pass({ maxItems: 10 })).state, 'work_limit'); assert.equal(f.model.calls.length, 0);
   const completed = ok(await f.pass({ maxItems: 10 })); assert.equal(completed.built.length, 1, JSON.stringify(completed));
-  assert.equal(completed.built[0].sourceRevisions.length, 30);
+  assert.equal(completed.built[0].sourceRevisions.length, 12);
 });
 
 test('filed topics share one namespace but keep exact independent source sets', async t => {
   const f = engineCardFixture(t), large = f.file(f.seed(), 'Orion'), small = f.file(f.seed(5, 'Vega'), 'Vega');
   const pass = ok(await f.pass()); assert.equal(pass.built.length, 1, JSON.stringify(pass));
-  assert.equal(pass.built[0].clusterKey, 'moc:' + large.mocId);
-  assert.equal(f.model.calls[0].memories.length, 30);
+  assert.equal(pass.built[0].clusterKey, 'moc:' + large.mocId + '#0');
+  assert.equal(f.model.calls[0].memories.length, 12);
   assert.ok(f.model.calls[0].memories.every(memory => !small.memories.some(source => source.id === memory.id)));
-  assert.equal(ok(await f.pass()).built.length, 0);
+  assert.equal(ok(await f.pass()).built.length, 1);
 });
 
 test('model deadline is a budget result and does not permanently refuse the next pass', async t => {

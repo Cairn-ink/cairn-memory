@@ -64,3 +64,17 @@ export function engineCardFixture(t, { model = scriptedConsolidator(), ...coreOp
     refresh: () => trusted.call(core, 'refreshContextIndex', { readSet: [ns], types: ['memory', 'card'],
       intent: 'current', budget: { maxItems: 1024, maxMs: 5000 } }) };
 }
+
+// Ordinary complete sentences and UUID citations exercise model-sized output.
+export function realisticCardOutput(memories) {
+  const entry = (index, text) => ({ text, memoryIds: [memories[index % memories.length].id] });
+  return {
+    currentState: Array.from({ length: 8 }, (_, i) => entry(i,
+      `Orion group ${i} coordinates the community garden workshop with local volunteers and prepares the planting materials before the next scheduled public planning meeting.`)),
+    timeline: Array.from({ length: 4 }, (_, i) => ({ ...entry(i + 8,
+      `Orion group ${i} previously reserved the public library meeting room and shared the initial workshop schedule with the participating neighborhood volunteers.`),
+      date: memories[(i + 8) % memories.length].date.slice(0, 10) })),
+    contradictions: Array.from({ length: 2 }, (_, i) => entry(i,
+      `Orion group ${i} has conflicting reports about volunteer availability for the weekend workshop and still needs confirmation from the community planning coordinator.`))
+  };
+}

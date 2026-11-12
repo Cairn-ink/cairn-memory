@@ -204,7 +204,7 @@ export function validateCardCall(method, input, raw = false, currentDependencies
 }
 
 export const ENGINE_CARD_LIMITS = Object.freeze({ memories: 512, sources: 96, rawUnits: 400,
-  rawTotalUnits: 8000, scanMemories: 4096, scanBytes: 8388608, debounceMs: 600000, maxCards: 1, maxTokens: 250 });
+  rawTotalUnits: 8000, scanMemories: 4096, scanBytes: 8388608, debounceMs: 600000, maxCards: 1, maxTokens: 600 });
 
 // Keep the canonical engine projection private to method identities. Every
 // composition that adds a promise boundary must finalize its completed handle

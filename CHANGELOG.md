@@ -12,9 +12,14 @@
 
 ## Unreleased — engine-generated topic Cards
 
-- Five current Memories on one topic from one conversation now qualify for a
+- Engine Cards fit complete supported sentences within 600 body tokens and divide
+  large topics into event-ordered parts of at most 12 with independent reuse and
+  rebuilds. A Card citing a Memory in the read's item window takes that hit's
+  position and replaces its cited sources when it fits the pack budget.
+
+- Five current Memories in a topic part, whatever their conversations, qualify for a
   Card, alongside the existing recurrence and change-chain conditions, with
-  the same budget pressure requirement. Trigger results include `dictated`;
+  the same budget pressure requirement. Trigger results include `topic`;
   status describes the conditions in plain words. The first Card can build on
   the next eligible maintenance pass without a ten-minute wait; rebuilds keep
   their existing debounce.

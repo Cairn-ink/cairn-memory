@@ -8,7 +8,7 @@ import { contextCall } from './context-support.mjs';
 
 test('configured model builds Cards in default maintenance with authoring tools off, then falls back after forget', { timeout: 30000 }, async t => {
   t.mock.method(globalThis, 'fetch', () => assert.fail('offline scripted model cannot use a provider'));
-  const f = engineCardFixture(t), memories = f.seed();
+  const f = engineCardFixture(t), memories = f.seed(12);
   const server = createCairnServer({ path: f.path, namespace: ns, model: f.model, raw: false });
   f.workspace.defer(() => server.close()); assert.equal(await server.contextCounterReady, true);
   const client = new Client({ name: 'synthetic-engine-card-client', version: '1' });

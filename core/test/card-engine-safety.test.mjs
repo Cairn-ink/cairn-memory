@@ -56,7 +56,7 @@ test('owner and namespace clusters never combine recurrence or share Card source
   assert.ok(card.sourceRevisions.every(ref => ids.has(ref.memoryId)));
 });
 
-test('sealed maintenance retires a changed source set and deletes bodies after recurrence is lost', async t => {
+test('sealed maintenance retires a changed source set and deletes bodies after the trigger is lost', async t => {
   const model = scriptedConsolidator(), f = await lineageFixture(t, { options: { model } }), memories = [];
   const add = i => {
     const memory = ok(f.core.admit({ namespace: ns, memory: { content: 'Orion lifecycle ' + i, kind: 'fact' },
@@ -77,7 +77,7 @@ test('sealed maintenance retires a changed source set and deletes bodies after r
       .maintain({ namespace: ns, budget: { maxMs: 5000 } }));
   const rebuilt = await pass(600001); assert.equal(rebuilt.built.length, 1, JSON.stringify(rebuilt));
   assert.notEqual(rebuilt.built[0].id, first.id);
-  for (const memory of memories.slice(0, 3)) ok(f.core.forget({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision }));
+  for (const memory of memories.slice(0, 5)) ok(f.core.forget({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision }));
   const cleaned = await pass(1200002); assert.equal(cleaned.state, 'ready', JSON.stringify(cleaned)); assert.ok(cleaned.deleted >= 1);
   assert.equal(f.row(first.id).state, 'deleted'); assert.equal(f.row(first.id).body, null);
   assert.ok(f.db.prepare('SELECT 1 FROM card_body_provenance WHERE card_id=?').get(first.id));

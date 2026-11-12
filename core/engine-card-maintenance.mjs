@@ -6,7 +6,7 @@ import { countTokens, modelPortValue } from './model-budget.mjs';
 import { cardNamespace } from './private-card-input.mjs';
 import { object, fail } from './validation.mjs';
 import { CONSOLIDATE_PROMPT, validateConsolidation } from './engine-card-output.mjs';
-import { ENGINE_CARD_LIMITS, cardTrigger, clusterMemories, chainLength, cardMemoryRevisions } from './engine-card-clusters.mjs';
+import { ENGINE_CARD_LIMITS, cardTrigger, clusterMemories, partitionCardClusters, chainLength, cardMemoryRevisions } from './engine-card-clusters.mjs';
 import { assembleContext } from './context-read-assembly.mjs';
 
 /** Called only by a bounded maintenance pass, never admission/capture. The model
@@ -95,7 +95,7 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
         const vectorMap = new Map(vectorRows.filter(row => snapshot.memories.some(m => m.id === row.memoryId && m.revision === row.revision))
           .map(row => [row.memoryId, row.vector]));
         storage.validate(ns, snapshot.memories, check); check();
-        const clusters = clusterMemories(snapshot.memories, vectorMap, check), cards = storage.cards(ns, check);
+        const clusters = partitionCardClusters(clusterMemories(snapshot.memories, vectorMap, check)), cards = storage.cards(ns, check);
         // A deleted seed must not turn a stale topic into a new key and bypass
         // its debounce. Reuse a prior similarity key for a majority-overlapping
         // source set; MOC identities remain exact and never merge this way.
@@ -105,7 +105,7 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
             overlap: card.sourceRevisions.filter(ref => ids.has(ref.memoryId)).length /
               Math.max(ids.size, card.sourceRevisions.length) })).filter(value => value.overlap >= .65)
             .sort((a, b) => b.overlap - a.overlap || a.card.builtAt.localeCompare(b.card.builtAt))[0];
-          if (match) cluster.key = match.card.clusterKey;
+          if (match) cluster.key = match.card.clusterKey.replace(/#\d+$/, '') + (cluster.key.match(/#\d+$/)?.[0] ?? '');
         }
         const eligible = new Map();
         for (const cluster of clusters) {
@@ -124,9 +124,10 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
         const timestamp = new Date(now()).toISOString();
         for (const card of cards) {
           check();
-          const cluster = eligible.get(card.clusterKey);
+          const cluster = eligible.get(card.clusterKey) ?? eligible.get(card.clusterKey.endsWith('#0')
+            ? card.clusterKey.slice(0, -2) : card.clusterKey + '#0');
           const sameSources = cluster && JSON.stringify(card.sourceRevisions) === JSON.stringify(cardMemoryRevisions(cluster.memories));
-          if (card.status === 'current' && sameSources) { eligible.delete(cluster.key); continue; }
+          if (card.status === 'current' && sameSources && cluster.key === card.clusterKey) { eligible.delete(cluster.key); continue; }
           // Search before staling against the old key: another eligible set
           // may already occupy that topic while these exact sources moved on.
           // An occupied exact match must not hide another free destination.

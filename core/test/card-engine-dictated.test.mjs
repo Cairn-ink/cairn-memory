@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { engineCardFixture, scriptedConsolidator, ns, ok } from '../testing/engine-card-fixture.mjs';
-import { cardTrigger } from '../engine-card-clusters.mjs';
+import { engineCardFixture, scriptedConsolidator, realisticCardOutput, ns, ok } from '../testing/engine-card-fixture.mjs';
+import { cardTrigger, partitionCardClusters } from '../engine-card-clusters.mjs';
 import { createEngineCardStorage } from '../engine-card-storage.mjs';
 import { createEngineCardMaintenance } from '../engine-card-maintenance.mjs';
 import { validateConsolidation } from '../engine-card-output.mjs';
@@ -25,26 +25,26 @@ const facts = [
   'Orion facilitators share the planting guide with new volunteers and invite questions before the workshop begins.'
 ];
 
-test('dictated trigger counts distinct Memories per conversation and preserves recurrence, chain and pressure', () => {
+test('topic trigger counts distinct Memories per conversation and preserves recurrence, chain and pressure', () => {
   const rows = Array.from({ length: 8 }, (_, i) => ({ id: String(i), date: '2026-01-01', currentness: 'current', conversations: ['shared'] }));
   assert.deepEqual(cardTrigger(rows.slice(0, 4), undefined, 0),
-    { eligible: false, recurring: false, dictated: false, chain: null, pressure: false, memories: 4, conversations: 1, tokens: 0 });
+    { eligible: false, recurring: false, topic: false, chain: null, pressure: false, memories: 4, conversations: 1, tokens: 0 });
   assert.deepEqual(cardTrigger(rows.slice(0, 5), undefined, 0),
-    { eligible: true, recurring: false, dictated: true, chain: null, pressure: true, memories: 5, conversations: 1, tokens: 0 });
+    { eligible: true, recurring: false, topic: true, chain: null, pressure: true, memories: 5, conversations: 1, tokens: 0 });
   const spread = rows.map((row, i) => ({ ...row, conversations: ['separate-' + i] }));
-  assert.equal(cardTrigger(spread.slice(0, 5), undefined, 0).eligible, false);
-  assert.equal(cardTrigger(rows.map(row => ({ ...row, currentness: 'historical' })), [], 0).dictated, false);
-  assert.equal(cardTrigger(rows.slice(0, 4).map(row => ({ ...row, conversations: ['shared', 'shared'] })), [], 1200).dictated, false);
+  assert.equal(cardTrigger(spread.slice(0, 5), undefined, 0).eligible, true);
+  assert.equal(cardTrigger(rows.map(row => ({ ...row, currentness: 'historical' })), [], 0).topic, false);
+  assert.equal(cardTrigger(rows.slice(0, 4).map(row => ({ ...row, conversations: ['shared', 'shared'] })), [], 1200).topic, false);
   const recurring = spread.map((row, i) => ({ ...row, date: new Date(Date.UTC(2026, 0, 1 + i * 2)).toISOString() }));
   assert.deepEqual(cardTrigger(recurring, [], 0),
-    { eligible: true, recurring: true, dictated: false, chain: 0, pressure: true, memories: 8, conversations: 8, tokens: 0 });
+    { eligible: true, recurring: true, topic: true, chain: 0, pressure: true, memories: 8, conversations: 8, tokens: 0 });
   const edges = rows.slice(1, 4).map((row, i) => ({ from: row.id, to: rows[i].id, kind: 'supersedes', slot: 'status' }));
   assert.deepEqual(cardTrigger(spread.slice(0, 4), edges, 1200),
-    { eligible: true, recurring: false, dictated: false, chain: 3, pressure: true, memories: 4, conversations: 4, tokens: 1200 });
+    { eligible: true, recurring: false, topic: false, chain: 3, pressure: true, memories: 4, conversations: 4, tokens: 1200 });
   assert.equal(cardTrigger(spread.slice(0, 4), edges, 1199).eligible, false);
 });
 
-test('dictation builds immediately from the whole topic, then rebuilds ten minutes after staling and after forget', async t => {
+test('topic consolidation builds immediately from the whole topic, then rebuilds ten minutes after staling and after forget', async t => {
   const f = engineCardFixture(t, { model: completeModel() });
   let clock = Date.UTC(2026, 5, 1);
   const w = worker(f, () => clock), memories = [];
@@ -58,7 +58,7 @@ test('dictation builds immediately from the whole topic, then rebuilds ten minut
   assert.equal(first.modelCalls, 1); assert.equal(f.model.calls[0].memories.length, 6);
   const body = f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(first.built[0].id).body;
   for (const memory of memories) assert.ok(body.includes(`[${memory.id}]`));
-  assert.match(ok(f.core.getEngineCardStatus({ namespace: ns })).trigger, /five.*one conversation/);
+  assert.match(ok(f.core.getEngineCardStatus({ namespace: ns })).trigger, /five.*topic part/);
   clock += 60000;
   memories.push(f.add('Orion item six ready.', 0, 0), f.add('Orion item seven ready.', 0, 0));
   const stale = await run(w); assert.equal(stale.built.length, 0); assert.equal(stale.debounced, 1);
@@ -82,22 +82,22 @@ test('dictation builds immediately from the whole topic, then rebuilds ten minut
   assert.ok(!f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(forgotten.built[0].id).body.includes(memories[0].content));
 });
 
-test('six same-conversation facts consolidate together; owner and namespace sources never join', async t => {
+test('five same-day facts from separate conversations consolidate; owner and namespace sources never join', async t => {
   const f = engineCardFixture(t, { model: completeModel() });
-  const memories = Array.from({ length: 6 }, (_, i) => f.add(`Orion task ${i} ready.`, 0, 0));
+  const memories = Array.from({ length: 5 }, (_, i) => f.add(`Orion task ${i} ready.`, 0, i));
   const filed = f.file(memories, 'Orion workshop');
   for (const namespace of [{ ...ns, ownerId: 'synthetic-other-owner' }, { ...ns, projectId: 'synthetic-other-project' }])
     for (let i = 0; i < 5; i++) f.add(`Orion private workshop task ${i} ready.`, 0, 0, namespace);
   const pass = ok(await f.pass()); assert.equal(pass.built.length, 1, JSON.stringify(pass));
   assert.equal(pass.built[0].clusterKey, 'moc:' + filed.mocId);
   const status = ok(f.core.getEngineCardStatus({ namespace: ns }));
-  assert.match(status.trigger, /five.*one conversation/); assert.equal(status.lastPass.built, 1);
+  assert.match(status.trigger, /five.*topic part/); assert.equal(status.lastPass.built, 1);
   assert.deepEqual(new Set(f.model.calls[0].memories.map(memory => memory.id)), new Set(memories.map(memory => memory.id)));
   const body = f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(pass.built[0].id).body;
   for (const memory of memories) assert.ok(body.includes(`[${memory.id}]`));
 });
 
-test('without consolidation configured dictation does no work or control reads', async t => {
+test('without consolidation configured topic consolidation does no work or control reads', async t => {
   const f = engineCardFixture(t, { model: null });
   for (let i = 0; i < 6; i++) f.add(`Orion task ${i} ready.`, 0, 0);
   assert.equal(Object.hasOwn(f.core, 'maintainCards'), false);
@@ -133,22 +133,13 @@ test('both packers retain uncited cluster Memories when a body omits items, acro
   assert.equal(cardSourceKeys([card]).has(memoryPackKey({ ...memories[0].ref, revision: 2 })), false);
 });
 
-test('host read retains facts omitted by a dictated body that fits the token limit', async t => {
-  const model = scriptedConsolidator(({ input }) => {
-    const currentState = [];
-    for (const entry of output(input.memories).currentState) {
-      const trial = { currentState: [...currentState, entry], timeline: [], contradictions: [] };
-      try { validateConsolidation(trial, input.memories, model); }
-      catch { break; }
-      currentState.push(entry);
-    }
-    return { currentState, timeline: [], contradictions: [] };
-  });
+test('host read retains ordinary Memories omitted by whole-entry fitting', async t => {
+  const model = scriptedConsolidator(({ input }) => realisticCardOutput(input.memories));
   const f = engineCardFixture(t, { model });
-  const memories = Array.from({ length: 12 }, (_, i) => f.add(facts[i % facts.length].replace('Orion', 'Orion group ' + i), 0, 0));
+  const memories = Array.from({ length: 12 }, (_, i) => f.add(facts[i % facts.length].replace('Orion', 'Orion group ' + i), i, i));
   const pass = ok(await f.pass()); assert.equal(pass.built.length, 1, JSON.stringify(pass));
   const body = f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(pass.built[0].id).body;
-  assert.ok(model.countTokens(body) <= 250);
+  assert.ok(model.countTokens(body) <= 600);
   const omitted = memories.filter(memory => !body.includes(memory.id)); assert.ok(omitted.length);
   ok(await f.refresh());
   const read = ok(await f.read('what is the current state of Orion', { budget: { maxItems: 24, maxTokens: 6000 } }));
@@ -156,25 +147,125 @@ test('host read retains facts omitted by a dictated body that fits the token lim
   for (const memory of omitted) assert.ok(read.metered.items.some(item => item.ref.type === 'memory' && item.ref.id === memory.id), memory.id);
 });
 
-test('body capacity uses deterministic ordinary facts, real-length UUID citations and the engine tokenizer', async t => {
-  const model = completeModel();
-  for (const count of [5, 8, 12, 20]) {
-    const memories = Array.from({ length: count }, (_, i) => {
-      const hex = createHash('sha256').update('synthetic-fact-' + i).digest('hex');
-      return { id: `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`,
-        content: facts[i % facts.length].replace('Orion', 'Orion group ' + i) };
-    });
-    const sentences = (await model.consolidate({ input: { memories } })).currentState;
-    const render = entries => entries.map(entry => `${entry.text} [${entry.memoryIds.join(',')}]`).join(' ');
-    const allTokens = model.countTokens(render(sentences));
-    let carried = 0;
-    // Prefix packing is the fake model's explicit policy, not engine truncation.
-    while (carried < count && model.countTokens(render(sentences.slice(0, carried + 1))) <= 250) carried++;
-    const fitted = { currentState: sentences.slice(0, carried), timeline: [], contradictions: [] };
-    const value = validateConsolidation(fitted, memories, model);
-    assert.ok(value); assert.ok(model.countTokens(value.body) <= 250);
-    assert.ok(memories.every(memory => memory.content.split(/\s+/u).length >= 10 && memory.content.split(/\s+/u).length <= 25));
-    if (count >= 12) assert.ok(carried < count);
-    t.diagnostic(JSON.stringify({ items: count, allTokens, carried, bodyTokens: model.countTokens(value.body) }));
+const render = value => {
+  const tagged = entry => `${entry.text} [${entry.memoryIds.join(',')}]`;
+  return [value.currentState.map(tagged).join(' '),
+    ...(value.timeline.length ? ['Timeline: ' + value.timeline.map(e => `${e.date}: ${tagged(e)}`).join('; ')] : []),
+    ...(value.contradictions.length ? ['Open contradictions: ' + value.contradictions.map(tagged).join(' ')] : [])].join('\n');
+};
+const syntheticMemories = count => Array.from({ length: count }, (_, i) => {
+  const hex = createHash('sha256').update('synthetic-fact-' + i).digest('hex');
+  return { id: `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`,
+    date: new Date(Date.UTC(2026, 0, i + 1)).toISOString() };
+});
+for (const count of [7, 9, 12]) test(`realistic ${count}-Memory output fits whole entries in priority order`, t => {
+  const model = completeModel(), memories = syntheticMemories(count), output = realisticCardOutput(memories);
+  assert.equal(output.currentState.length, 8); assert.equal(output.timeline.length, 4); assert.equal(output.contradictions.length, 2);
+  for (const entry of output.currentState) assert.ok(entry.text.split(/\s+/u).length >= 12 && entry.text.split(/\s+/u).length <= 25);
+  assert.ok(model.countTokens(render(output)) > 600);
+  const expected = structuredClone(output); expected.timeline.sort((a, b) => a.date.localeCompare(b.date));
+  while (model.countTokens(render(expected)) > 600) {
+    if (expected.timeline.length) expected.timeline.shift();
+    else if (expected.currentState.length > 1) expected.currentState.pop();
+    else expected.contradictions.pop();
   }
+  const value = validateConsolidation(output, memories, model), { body, ...entries } = value;
+  assert.deepEqual(entries, expected); assert.equal(body, render(entries)); assert.ok(model.countTokens(body) <= 600);
+  assert.ok(value.timeline.length < 4); assert.equal(output.timeline.length, 4, 'input remains intact');
+  t.diagnostic(JSON.stringify({ memories: count, bodyTokens: model.countTokens(body), replaced: cardSourceKeys([{ type: 'card',
+    metadata: { origin: 'engine' }, text: body, sourceMemoryRefs: memories.map(m => ({ namespace: ns, memoryId: m.id, revision: 1 })) }]).size }));
+});
+
+test('fitting removes current tails before contradiction tails and refuses an oversized sole sentence', () => {
+  const memories = syntheticMemories(12), model = completeModel(), output = realisticCardOutput(memories);
+  for (const entry of [...output.currentState, ...output.timeline, ...output.contradictions]) entry.memoryIds = memories.map(m => m.id);
+  const value = validateConsolidation(output, memories, model);
+  assert.equal(value.timeline.length, 0); assert.equal(value.currentState.length, 1);
+  assert.ok(value.contradictions.length < 2); assert.equal(value.body, render(value));
+  assert.deepEqual(value.currentState, output.currentState.slice(0, 1));
+  assert.deepEqual(value.contradictions, output.contradictions.slice(0, value.contradictions.length));
+  assert.throws(() => validateConsolidation({ currentState: [{ text: 'x '.repeat(950).trim() + '.',
+    memoryIds: memories.map(m => m.id) }], timeline: [], contradictions: [] }, memories, model), { code: 'invalid_model_output' });
+});
+
+for (const count of [13, 30]) test(`${count} Memories form bounded parts and generate once per pass`, async t => {
+  const f = engineCardFixture(t, { model: scriptedConsolidator(({ input }) => realisticCardOutput(input.memories)) });
+  const memories = f.seed(count), filed = f.file(memories, 'Orion');
+  const parts = partitionCardClusters([{ key: 'topic', memories: memories.map((m, i) =>
+    ({ ...m, date: new Date(Date.UTC(2026, 0, i + 1)).toISOString() })) }]);
+  assert.deepEqual(parts.map(p => p.memories.length), count === 13 ? [12, 1] : [12, 12, 6]);
+  const built = [];
+  for (let i = 0; i < (count === 13 ? 1 : 3); i++) {
+    const pass = ok(await f.pass()); assert.equal(pass.modelCalls, 1); assert.equal(pass.built.length, 1, JSON.stringify(pass));
+    built.push(pass.built[0]); assert.equal(pass.built[0].clusterKey, `moc:${filed.mocId}#${i}`);
+  }
+  assert.equal(ok(await f.pass()).modelCalls, 0);
+  assert.deepEqual(built.map(c => c.sourceRevisions.length), count === 13 ? [12] : [12, 12, 6]);
+  assert.ok(f.model.calls.every(call => call.memories.length <= 12));
+});
+
+test('appending changes only the final part; forgetting an early source hides and rebuilds shifted parts', async t => {
+  const f = engineCardFixture(t), filed = f.file(f.seed(), 'Orion'), memories = filed.memories;
+  let clock = Date.now(); const w = worker(f, () => clock), built = [];
+  for (let i = 0; i < 3; i++) built.push(ok(await f.pass()).built[0]);
+  const added = f.add('Orion later community planning milestone.', 61, 7);
+  // Move into the existing topic rather than a new MOC.
+  const map = ok(f.core.map({ namespace: ns }));
+  ok(f.core.applyPlacement({ namespace: ns, expectedIndexRevision: map.indexRevision,
+    expectedMemoryRevisions: [{ memoryId: added.id, revision: added.revision }],
+    proposal: { items: [{ memoryId: added.id, parentIds: [filed.mocId] }] } }));
+  const stale = await run(w); assert.equal(stale.debounced, 1); assert.equal(stale.modelCalls, 0);
+  clock += 600001;
+  const appended = await run(w); assert.equal(appended.built.length, 1, JSON.stringify(appended));
+  assert.equal(appended.built[0].clusterKey, `moc:${filed.mocId}#2`); assert.equal(appended.built[0].sourceRevisions.length, 7);
+  for (const card of built.slice(0, 2)) assert.equal(f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(card.id).revision, 1);
+  const forgotten = memories[0];
+  ok(f.core.forget({ namespace: ns, memoryId: forgotten.id, expectedRevision: forgotten.revision }));
+  clock = Date.parse(f.db.prepare('SELECT updated_at FROM private_cards WHERE id=?').get(built[0].id).updated_at);
+  ok(await f.refresh());
+  const read = ok(await f.read('Orion current state'));
+  assert.ok(!read.metered.items.some(item => item.ref.id === built[0].id));
+  await run(w); clock += 600001;
+  const rebuilt = await run(w); assert.equal(rebuilt.built.length, 1, JSON.stringify(rebuilt));
+  assert.equal(rebuilt.built[0].clusterKey, `moc:${filed.mocId}#0`);
+  assert.ok(!f.model.calls.at(-1).memories.some(memory => memory.id === forgotten.id));
+  assert.ok(!f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(rebuilt.built[0].id).body.includes(forgotten.content));
+});
+
+test('parts sort event dates then IDs and small clusters retain their key', () => {
+  const memories = Array.from({ length: 13 }, (_, i) => ({ id: String(20 - i), date: '2026-01-01' }));
+  const parts = partitionCardClusters([{ key: 'moc:topic', memories }]);
+  assert.deepEqual(parts.map(p => p.key), ['moc:topic#0', 'moc:topic#1']);
+  assert.deepEqual(parts.flatMap(p => p.memories.map(m => m.id)), memories.map(m => m.id).sort());
+  assert.equal(partitionCardClusters([{ key: 'small', memories: memories.slice(0, 12) }])[0].key, 'small');
+});
+
+for (const filed of [false, true]) test(`${filed ? 'filed' : 'similarity'} part boundary carries exact sources and debounces changed sources`, async t => {
+  const f = engineCardFixture(t); let memories = f.seed(12);
+  const placement = filed ? f.file(memories, 'Orion') : null;
+  if (placement) memories = placement.memories;
+  const topic = placement?.mocId;
+  const first = ok(await f.pass()).built[0]; assert.ok(first);
+  const added = f.add('Orion appended community garden milestone.', 61, 7);
+  if (filed) {
+    const map = ok(f.core.map({ namespace: ns }));
+    ok(f.core.applyPlacement({ namespace: ns, expectedIndexRevision: map.indexRevision,
+      expectedMemoryRevisions: [{ memoryId: added.id, revision: added.revision }],
+      proposal: { items: [{ memoryId: added.id, parentIds: [topic] }] } }));
+  }
+  const moved = ok(await f.pass()); assert.equal(moved.modelCalls, 0, JSON.stringify(moved));
+  const storage = createEngineCardStorage({ db: f.db, upgrade: true, ready() {},
+    identity: f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
+  assert.equal(storage.cards(ns, () => {}).find(card => card.id === first.id).clusterKey, first.clusterKey + '#0');
+  assert.equal(ok(await f.pass()).modelCalls, 0, 'carry keeps a stable source fingerprint despite event ordering');
+  ok(f.core.forget({ namespace: ns, memoryId: memories[0].id, expectedRevision: memories[0].revision }));
+  const updated = Date.parse(f.db.prepare('SELECT updated_at FROM private_cards WHERE id=?').get(first.id).updated_at);
+  let clock = updated;
+  const w = worker(f, () => clock);
+  assert.equal((await run(w)).modelCalls, 0);
+  clock += 600001;
+  const rebuilt = await run(w); assert.equal(rebuilt.built.length, 1, JSON.stringify(rebuilt));
+  assert.equal(rebuilt.built[0].clusterKey, first.clusterKey);
+  assert.equal(rebuilt.built[0].sourceRevisions.length, 12);
+  assert.ok(!f.model.calls.at(-1).memories.some(memory => memory.id === memories[0].id));
 });

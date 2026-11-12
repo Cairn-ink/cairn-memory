@@ -24,17 +24,18 @@ of at least 0.65 when both retained vectors exist, otherwise positive BM25 term
 overlap. Configured context readers reuse their retained vectors without making
 an embedding call for clustering.
 
-A cluster needs one of three conditions plus budget pressure: at least
+Before evaluating triggers, a cluster larger than 12 Memories is sorted by event
+date, with memory ID breaking ties, and divided into consecutive parts of 12.
+Each part has key `<cluster key>#<part index>` (zero-based); clusters of 12 or
+fewer keep their key. Similarity-key reuse and exact-source carry apply per part.
+Each part needs one of three conditions plus budget pressure: at least
 8 memories, 3 conversations and 14 days; a chain of at least 3 supersedes or
-contradicts edges on one slot; or at least 5 current Memories from one
-conversation (dictated). The trigger result includes `dictated` alongside
-`recurring`, `chain` and `pressure`. The Card uses the whole topic cluster,
-including Memories from other conversations. Pressure means at least 5 memories
-or 1,200 tokens
-of packed Memory/receipt text, including framing and metadata, measured with the
-configured tokenizer and existing packer. These thresholds
-correspond to the product's 12 item / 3,000 token pack. There is no sliding time
-window or importance sum.
+contradicts edges on one slot; or at least 5 current Memories, whatever their
+conversations. The trigger result includes `topic` alongside `recurring`, `chain`
+and `pressure`. Pressure means at least 5 memories or 1,200 tokens of packed
+Memory/receipt text, including framing and metadata, measured with the configured
+tokenizer and existing packer. These thresholds correspond to the product's
+12 item / 3,000 token pack. There is no sliding time window or importance sum.
 
 A topic with no previous Card can build on the next eligible maintenance pass
 after the fifth Memory lands, with no ten-minute wait. Capture itself does not
@@ -44,6 +45,11 @@ more items arrive, the next pass marks the earlier Card stale and hides it; a pa
 fresh Card. Further additions during that wait do not restart it. The old row
 and seal remain. Scan expiry and failed-attempt backoff keep their existing
 timing; an incomplete scan can require multiple passes.
+
+Appending a later-dated Memory changes only the last part (or adds a new part).
+Known limit: removing or re-dating a Memory in the middle shifts later part
+boundaries and rebuilds the affected Cards. Rebuilds retain the existing ten-minute
+debounce and at most one generation per pass; several passes may be needed.
 
 Receipt event dates take precedence; legacy memories without those dates use
 their recorded creation date. This fallback is an arrival date, not a recovered
@@ -67,15 +73,23 @@ Each entry is a single sentence. Current state renders as one paragraph, followe
 by the dated timeline and unresolved contradictions. The engine drops uncited
 sentences, rejects foreign IDs and malformed output, and requires a supported
 current-state sentence. The rendered body, including citation tags, is at most
-250 tokens. Timeline dates must agree with a cited source. Model text is inert.
+600 tokens. The prompt asks for at most eight current-state sentences, four
+timeline entries and two contradictions, broad current-item coverage, and each
+memory ID cited once on the sentence it best supports. If the cleaned body is too
+large, the engine removes whole entries: oldest timeline first, then current-state
+sentences from the end (keeping one), then contradictions from the end. A sole
+current-state sentence that cannot fit is refused. Returned entries exactly match
+the rendered body. Timeline dates must agree with a cited source. Model text is inert.
 
 The OpenAI adapter uses a closed structured-output schema with source-ID enums.
 Each pass makes at most one generation, through the existing 6,000 input / 1,024
 provider output envelope and model deadline. The tighter Card body limit is
 post-validated. The local guarded model charges the existing runtime budget for
 consolidation and stops on refusal. Memory text is never truncated to fit a
-request. Oversized clusters return `source_limit` or `input_budget` for later
-maintenance; they do not publish a partial Card.
+request. Parts may still exceed the input envelope and return `input_budget`.
+`ENGINE_CARD_LIMITS.sources` remains 96; `source_limit` is unreachable through
+maintenance because every part contains at most 12 Memories. Its defensive check
+remains in place.
 Before dispatch, the existing Card operation ledger reserves the exact source
 ID/revision fingerprint. Refusal or invalid output is terminal for that
 fingerprint, including after restart or a cluster label change. Explicit transient failures (timeout,
@@ -162,14 +176,17 @@ consumes the acknowledgement internally rather than publishing it as a tool
 result. Product-index/Worker APIs expose context-index maintenance, not
 `maintainCards`.
 
-Engine Cards enter the existing candidate ranking. Packing an engine Card removes only its exact
-source Memory revisions cited in the rendered body from that pack; uncited
-cluster Memories remain ordinary candidates subject to the same ranking and
-pack budget. All cluster sources still bind the Card for invalidation and
-read safety; a Card that does not fit removes
-nothing. Authored Cards keep their existing packing behavior. A lower-ranked engine Card does not displace a higher-ranked source Memory
-already selected for a specific fact. This also applies when Memory and Raw are assembled together. Single
-fact matches continue to use ordinary Memory candidates. Ranking is unchanged.
+Engine Cards enter the existing candidate ranking. A Card citing a Memory among
+the first `budget.maxItems` ranked Memory candidates is considered immediately
+before its best-ranked cited Memory. In mixed Memory/Raw assembly its unit
+borrows that Memory unit's lexical score and rank prior, without a size penalty
+in scoring; budget fit still applies. Packing the Card removes only exact source
+Memory revisions cited in its rendered body. Uncited cluster Memories remain
+ordinary candidates; all cluster sources still bind invalidation and read safety.
+A Card that does not fit removes nothing. A Card without a cited Memory in the
+window retains ordinary ranking and cannot displace a better-ranked source
+Memory already selected. Authored Cards and Memory ranking are unchanged. All
+reader eligibility, namespace, lineage and budget checks remain in place.
 
 Additive engine Card metadata on evidence reads is `origin`, `builtAt`,
 `clusterKey`, `status` and `sourceRevisions`. Packed Card metadata includes the
