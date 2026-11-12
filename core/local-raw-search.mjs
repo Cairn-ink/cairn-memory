@@ -16,7 +16,7 @@ export const localRawSearchManager = port => owners.get(port) ?? null;
 export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
   const embeddingPolicy = embedder ? rawEmbeddingPolicy(policy) : null;
   const entries = new Map();
-  let timer, running, closing, closed = false, unsupported = false, next = 0;
+  let timer, running, closing, closed = false, unsupported = false, serviced = 0;
   const unsupportedStatus = () => ({ state: 'unavailable', raw: 'unsupported_store', coverage: 'unknown' });
   const unsupportedSearch = () => ({ candidates: [], coverage: { status: 'unsupported_store' } });
   const maintenanceTurn = { version: 1, maxWaitMs: 25, createTurn() {
@@ -32,7 +32,7 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
     const namespaces = readSet.map(normalize).sort((a,b) => Buffer.compare(Buffer.from(JSON.stringify(a)), Buffer.from(JSON.stringify(b))));
     if (namespaces.some(ns => ns.ownerId !== namespaces[0].ownerId) || new Set(namespaces.map(ns => JSON.stringify(ns))).size !== namespaces.length) fail('invalid_read_set');
     const key = hash(namespaces.length === 1 ? namespaces[0] : namespaces);
-    if (!entries.has(key)) entries.set(key, { key, readSet: namespaces, token: {}, grants: new WeakMap(), readers: new Map(), service: null, opening: null, error: null });
+    if (!entries.has(key)) entries.set(key, { key, readSet: namespaces, token: {}, grants: new WeakMap(), readers: new Map(), service: null, opening: null, error: null, lastServed: 0, dirty: false });
     return entries.get(key);
   }
   async function serviceFor(entry, lexical = false) {
@@ -74,7 +74,12 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
     timer.unref();
   }
   async function tick() {
-    const values = [...entries.values()], entry = values[next++ % values.length];
+    const values = [...entries.values()];
+    // Oldest service wins; dirty saves break ties without starving polling of
+    // other-process writers. A finite namespace population remains required.
+    values.sort((a,b)=>a.lastServed-b.lastServed||Number(b.dirty)-Number(a.dirty)||a.key.localeCompare(b.key));
+    const entry=values[0];
+    if(entry){entry.lastServed=++serviced;entry.dirty=false;}
     if (!entry || closed) return;
     try { await maintain(entry, await serviceFor(entry)); }
     catch (error) {
@@ -124,7 +129,8 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
     unsupportedStore() { unsupported = true; clearTimeout(timer); timer = null; },
     schedule(namespace) {
       const ns = normalize(namespace);
-      if (![...entries.values()].some(entry => entry.readSet.some(value => same(value, ns)))) entryFor([ns]);
+      const entry=[...entries.values()].find(entry=>entry.readSet.some(value=>same(value,ns)))??entryFor([ns]);
+      entry.dirty=true;
       arm(0);
     },
     start() { arm(0); },
