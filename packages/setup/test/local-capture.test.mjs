@@ -29,7 +29,7 @@ async function run(command, args, { input, ...options } = {}) {
     child.stdin.end(input);
   });
 }
-async function fixture(t, { codex = true, failedQualification = false, cloud = false, interactive = false } = {}) {
+async function fixture(t, { codex = true, failedQualification = false, cloud = false, interactive = false, platform = process.platform } = {}) {
   const ws = createTestWorkspace(t, { prefix: 'packed-local-capture-' });
   const home = join(ws.path, 'home'), bin = join(ws.path, 'bin'), root = join(home, '.cairn-memory');
   await mkdir(home, { mode: 0o700 }); await mkdir(bin, { mode: 0o700 });
@@ -64,7 +64,7 @@ async function fixture(t, { codex = true, failedQualification = false, cloud = f
     CAIRN_SETUP_NPM_CACHE: process.env.CAIRN_SETUP_NPM_CACHE, CAIRN_SETUP_NPM_OFFLINE: '1' };
   const harness = join(ws.path, 'setup.mjs');
   await writeFile(harness, `import{main}from ${JSON.stringify(pathToFileURL(join(pkg, 'lib/setup.mjs')).href)};
-    process.exitCode=await main(process.argv.slice(2),{interactive:${interactive},prompt:async()=> 'yes'});`);
+    process.exitCode=await main(process.argv.slice(2),{interactive:${interactive},platform:${JSON.stringify(platform)},prompt:async()=> 'yes'});`);
   const setup = async (args = ['setup', '--local'], { expected = 0, packagePath } = {}) => {
     assertFixtureClients(env, ws.path);
     const result = await run(process.execPath, [packagePath ? join(packagePath, 'bin/memory.mjs') : harness, ...args], { env, cwd: ws.path });
@@ -407,9 +407,16 @@ test('packed Claude transcript created after SessionStart captures its first tur
   const reader = await mcp(f, t); await searchCaptured(reader); await reader.close();
 });
 
-test('packed hook → raw list → preview → delete → MCP empty → re-sent copies fenced', { timeout: 150000 }, async t => {
+for (const mode of [
+  { name: 'native', codex: process.platform !== 'darwin', platform: process.platform },
+  { name: 'linux Claude-only, Codex absent', codex: false, platform: 'linux', claudeOnly: true },
+  { name: 'darwin Claude-only, Codex absent', codex: false, platform: 'darwin', claudeOnly: true },
+  { name: 'darwin Claude-only, Codex present', codex: true, platform: 'darwin', claudeOnly: true },
+  { name: 'darwin both registered, Codex capture blocked', codex: true, platform: 'darwin', setupCode: 2 },
+]) test(`packed hook → raw list → preview → delete → MCP empty → re-sent copies fenced (${mode.name})`, { timeout: 150000 }, async t => {
   if (!needCache(t)) return;
-  const f = await fixture(t, { codex:process.platform !== 'darwin' }); await f.setup(['setup', '--local', '--owner', 'synthetic-raw-owner', '--project', 'synthetic-raw-project']);
+  const f = await fixture(t, mode); await f.setup(['setup', '--local', '--owner', 'synthetic-raw-owner', '--project', 'synthetic-raw-project',
+    ...(mode.claudeOnly ? ['--client', 'claude'] : [])], { expected: mode.setupCode ?? 0 });
   const d = await f.descriptor(), vector = d.clients.claude.vector;
   const executable = join(f.root, 'engine', vector.engineId, 'app/node_modules/cairn-memory-local-preview/bin/cairn-memory.mjs');
   const help = await run(vector.node, [executable, 'raw', '--help'], { env: f.env, cwd: f.ws });
@@ -426,7 +433,8 @@ test('packed hook → raw list → preview → delete → MCP empty → re-sent 
   assert.equal(row.client, 'claude-code'); assert.equal(row.messageCount, 1); assert.ok(row.byteCount > 0);
   assert.ok(Date.parse(row.firstEventAt)); assert.ok(Date.parse(row.lastEventAt));
   assert.equal(await f.setup(['raw', 'list', '--client', 'claude']), listed);
-  assert.equal(await f.setup(['raw', 'list', '--client', 'codex']), '');
+  if (d.clients.codex) assert.equal(await f.setup(['raw', 'list', '--client', 'codex']), '');
+  else await f.setup(['raw', 'list', '--client', 'codex'], { expected: 2 });
   const before = await snapshotDatabase(f);
   const preview = await f.setup(['raw', 'delete', id]);
   assert.doesNotMatch(preview, /copper|telescope|private delete sentinel/);
