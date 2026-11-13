@@ -5,8 +5,9 @@ Cairn.ink Memory 安裝程式 <version>
 記憶留在這台電腦，安裝程式不會傳送你的資料。
 若 Cairn MCP server 的環境有 OPENAI_API_KEY，語意搜尋會把記憶與搜尋文字傳給
   OpenAI，每次 server 執行的預估費用上限為 US$1。已保存的對話只有在你用
-  --raw-semantic（或明確設定 --context-embedder）啟用後才會傳送。要完全在本機處
-  理，請用 --no-context-semantic，或不要提供金鑰給 server。
+  --raw-semantic（或明確設定 --context-embedder）啟用後才會傳送。要讓所有資料都
+  留在這台電腦，請不要提供金鑰給 server。--no-context-semantic 只會關閉
+  embeddings；有金鑰時，回想和其他模型功能仍會把記憶文字傳給 OpenAI。
 ? 連接 Claude Code？ (Y/n)
 ? 連接 Codex？ (y/N)
 正在安裝本機記憶引擎……
@@ -21,8 +22,9 @@ Claude Code 本機擷取預設開啟，會把這台電腦上該工具的對話�
   off；重新開啟：config --local-capture on。若 Cairn MCP server 的環境有
   OPENAI_API_KEY，語意搜尋會把記憶與搜尋文字傳給 OpenAI，每次 server
   執行的預估費用上限為 US$1。已保存的對話只有在你用 --raw-semantic（或明確設定
-  --context-embedder）啟用後才會傳送。要完全在本機處理，請用
-  --no-context-semantic，或不要提供金鑰給 server。
+  --context-embedder）啟用後才會傳送。要讓所有資料都留在這台電腦，請不要提供金鑰
+  給 server。--no-context-semantic 只會關閉
+  embeddings；有金鑰時，回想和其他模型功能仍會把記憶文字傳給 OpenAI。
 Claude Code 本機擷取：on（on）。Raw 上限：200,000,000 bytes。
 Codex 本機擷取預設開啟，會把這台電腦上該工具的對話文字，以明文 Raw
   存進本機資料庫，不需要金鑰，也不呼叫模型。共用 Raw 上限為 200,000,000
@@ -33,8 +35,9 @@ Codex 本機擷取預設開啟，會把這台電腦上該工具的對話文字�
   off；重新開啟：config --local-capture on。若 Cairn MCP server 的環境有
   OPENAI_API_KEY，語意搜尋會把記憶與搜尋文字傳給 OpenAI，每次 server
   執行的預估費用上限為 US$1。已保存的對話只有在你用 --raw-semantic（或明確設定
-  --context-embedder）啟用後才會傳送。要完全在本機處理，請用
-  --no-context-semantic，或不要提供金鑰給 server。
+  --context-embedder）啟用後才會傳送。要讓所有資料都留在這台電腦，請不要提供金鑰
+  給 server。--no-context-semantic 只會關閉
+  embeddings；有金鑰時，回想和其他模型功能仍會把記憶文字傳給 OpenAI。
 Codex：請到 /hooks 核准新增的項目。
 Codex 本機擷取：blocked（qualification_required）。Raw 上限：200,000,000 bytes。
 Codex：請到 /hooks 核准新增的項目。

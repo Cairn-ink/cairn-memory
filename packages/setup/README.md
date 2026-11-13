@@ -238,8 +238,9 @@ need no model key. Semantic recall needs a model key; without one it reports
 `model_not_configured`. With `OPENAI_API_KEY` available to the Cairn MCP server, memories and search text
 go to OpenAI for semantic search, up to an estimated US$1 per server run. Saved
 conversations are sent only if you opt in with `--raw-semantic` (or explicitly
-configure `--context-embedder`). To stay fully local, use `--no-context-semantic`,
-or do not give the server a key.
+configure `--context-embedder`). To keep everything on this computer, don't give
+the server a key. `--no-context-semantic` only turns off embeddings; with a key,
+recall and other model features still send memory text to OpenAI.
 Local storage does not mean all processing is offline. Setup sends no user data;
 it reads the Claude registration configuration file `~/.claude.json` with a
 4 MiB bound and extracts only `type`/`command`/`args` from the named `cairn` and
@@ -254,7 +255,8 @@ authentication fields. Unrelated entries and file contents are never printed.
 沒有時回報 `model_not_configured`。若 Cairn MCP server 的環境有 `OPENAI_API_KEY`，語意搜尋會把記憶與搜尋文字
 傳給 OpenAI，每次 server 執行的預估費用上限為 US$1。已保存的對話只有在你用
 `--raw-semantic`（或明確設定 `--context-embedder`）啟用後才會傳送。
-要完全在本機處理，請用 `--no-context-semantic`，或不要提供金鑰給 server。
+要讓所有資料都留在這台電腦，請不要提供金鑰給 server。`--no-context-semantic` 只會關閉
+embeddings；有金鑰時，回想和其他模型功能仍會把記憶文字傳給 OpenAI。
 本機儲存不代表所有處理都離線。安裝器不會傳送你的資料；它會讀取上限 4 MiB 的 Claude 註冊設定檔
 `~/.claude.json`，只取出 `cairn`、`cairn-local` MCP 項目的
 `type`／`command`／`args`，不存取憑證儲存區，也不使用驗證欄位。
