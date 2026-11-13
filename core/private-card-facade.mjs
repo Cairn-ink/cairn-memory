@@ -1,5 +1,5 @@
 import { contentSafetyFacade, contentAuthorityPort } from './content-safety-boundary.mjs';
-import { dispatchCommit, hasCommitDispatcher } from './commit-dispatch.mjs';
+import { dispatchCommit, hasCommitDispatcher, withCommitDelivery, inCommitDelivery } from './commit-dispatch.mjs';
 import { CARD_CURRENT_VERSION, CARD_CURRENT_METHODS } from './card-current-input.mjs';
 import { authorizeCardCurrentDependencies } from './card-current-facade.mjs';
 import { isStorageBusy } from './database.mjs';
@@ -80,6 +80,7 @@ export function createPrivateCardFacade(storage, options, ready, rawReader) {
         }
         const dependencies = payload.currentDependencies ? authorizeCardCurrentDependencies(options, request, authority) : null;
         const mutate = () => {
+        if (hasCommitDispatcher(storage)) storage.assertContentScope([ns], { delivery: false });
         let finalGeneration;
         try { const final=verify(options.authority.isCurrent(grant,request));finalGeneration=final.generation;
           if(JSON.stringify(final.audit)!==JSON.stringify(verified.audit))fail('scope_changed'); }
@@ -117,5 +118,5 @@ export function createPrivateCardFacade(storage, options, ready, rawReader) {
     ...(options.currentDependencies ? { currentDependencies: { version: CARD_CURRENT_VERSION, methods: [...CARD_CURRENT_METHODS], maxPackages: 16, maxVectorBytes: 32768, actionClass: 'explicit-user' } } : {}),
     raw: Boolean(rawReader), modelAssisted: false, publication: false,
   } });
-  return contentSafetyFacade(result, { writeBoundary:storage, check: (scopes,phase) => storage.assertContentScope(scopes,phase), failure: privateFailure, validate: (method,args,result,scopes) => { if(CARD_READS.has(method)&&result?.ok)storage.assertContentOutput(result.value,scopes); }, noOwner: ['getPrivateCardCapabilities'] });
+  return contentSafetyFacade(result, { writeBoundary:storage, requestScope: hasCommitDispatcher(storage) ? work => withCommitDelivery(work) : undefined, check: (scopes,phase) => phase?.delivery && hasCommitDispatcher(storage) ? inCommitDelivery(() => storage.assertContentScope(scopes,phase)) : storage.assertContentScope(scopes,phase), failure: privateFailure, validate: (method,args,result,scopes) => { if(CARD_READS.has(method)&&result?.ok) { const validate=()=>storage.assertContentOutput(result.value,scopes); if(hasCommitDispatcher(storage))inCommitDelivery(validate);else validate(); } }, noOwner: ['getPrivateCardCapabilities'] });
 }

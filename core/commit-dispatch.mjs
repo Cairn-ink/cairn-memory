@@ -7,6 +7,11 @@ import { withContentSuppressionRequest } from './content-suppression-storage.mjs
 // never request data. The attempt closure and detached output stay on its stack.
 const opening = new AsyncLocalStorage(), requests = new AsyncLocalStorage(), attempts = new AsyncLocalStorage();
 const bindings = new WeakMap();
+const deliveries = new AsyncLocalStorage();
+// The facade's delivery resumes the successful attempt's suppression account.
+// Failed attempts never become a delivery authority.
+export const withCommitDelivery = work => withContentSuppressionRequest(() => deliveries.run({ resume: work => work() }, work));
+export const inCommitDelivery = work => { const scope = deliveries.getStore(); return scope ? scope.resume(work) : work(); };
 const openingHost = () => { const scope = opening.getStore(); return scope?.active ? scope.host : undefined; };
 const busyBudgets = new WeakSet();
 export const isCommitBusy = error => Boolean(error && busyBudgets.has(error));
@@ -95,7 +100,14 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
         const { restoreTimeoutMs } = bindings.get(db);
         try {
           db.exec('PRAGMA busy_timeout = 5');
-          const value = withContentSuppressionRequest(() => attempts.run(state, work), { fresh: true });
+          const value = withContentSuppressionRequest(() => attempts.run(state, () => {
+            const value = work();
+            const delivery = deliveries.getStore();
+            if (delivery && !state.busyResults.has(value) && !(value && typeof value.then === 'function')) {
+              delivery.resume = AsyncLocalStorage.snapshot();
+            }
+            return value;
+          }), { fresh: true });
           // Never await caller work. An async transaction closure is invalid.
           if (value && typeof value.then === 'function') fail('storage_error');
           if (!state.busyResults.has(value)) { checkIdle('return'); return { value }; }
