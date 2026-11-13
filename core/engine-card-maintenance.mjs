@@ -6,8 +6,8 @@ import { countTokens, modelPortValue } from './model-budget.mjs';
 import { cardNamespace } from './private-card-input.mjs';
 import { object, fail } from './validation.mjs';
 import { CONSOLIDATE_PROMPT, validateConsolidation } from './engine-card-output.mjs';
-import { ENGINE_CARD_LIMITS, cardTrigger, clusterMemories, chainLength, cardMemoryRevisions } from './engine-card-clusters.mjs';
-import { assembleContext } from './context-read-assembly.mjs';
+import { ENGINE_CARD_LIMITS, cardTrigger, clusterMemories, partitionCardClusters, chainLength, cardMemoryRevisions } from './engine-card-clusters.mjs';
+import { assembleContext, cardSourceKeys, currentCardLines, memoryPackKey } from './context-read-assembly.mjs';
 
 /** Called only by a bounded maintenance pass, never admission/capture. The model
  * port uses the same callModel envelope, tokenizer, deadline and guarded adapter
@@ -97,7 +97,7 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
         const vectorMap = new Map(vectorRows.filter(row => snapshot.memories.some(m => m.id === row.memoryId && m.revision === row.revision))
           .map(row => [row.memoryId, row.vector]));
         storage.validate(ns, snapshot.memories, check); check();
-        const clusters = clusterMemories(snapshot.memories, vectorMap, check), cards = storage.cards(ns, check);
+        const clusters = partitionCardClusters(clusterMemories(snapshot.memories, vectorMap, check)), cards = storage.cards(ns, check);
         // A deleted seed must not turn a stale topic into a new key and bypass
         // its debounce. Reuse a prior similarity key for a majority-overlapping
         // source set; MOC identities remain exact and never merge this way.
@@ -107,7 +107,7 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
             overlap: card.sourceRevisions.filter(ref => ids.has(ref.memoryId)).length /
               Math.max(ids.size, card.sourceRevisions.length) })).filter(value => value.overlap >= .65)
             .sort((a, b) => b.overlap - a.overlap || a.card.builtAt.localeCompare(b.card.builtAt))[0];
-          if (match) cluster.key = match.card.clusterKey;
+          if (match) cluster.key = match.card.clusterKey.replace(/#\d+$/, '') + (cluster.key.match(/#\d+$/)?.[0] ?? '');
         }
         const eligible = new Map();
         for (const cluster of clusters) {
@@ -126,9 +126,10 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
         const timestamp = new Date(now()).toISOString();
         for (const card of cards) {
           check();
-          const cluster = eligible.get(card.clusterKey);
+          const cluster = eligible.get(card.clusterKey) ?? eligible.get(card.clusterKey.endsWith('#0')
+            ? card.clusterKey.slice(0, -2) : card.clusterKey + '#0');
           const sameSources = cluster && JSON.stringify(card.sourceRevisions) === JSON.stringify(cardMemoryRevisions(cluster.memories));
-          if (card.status === 'current' && sameSources) { eligible.delete(cluster.key); continue; }
+          if (card.status === 'current' && sameSources && cluster.key === card.clusterKey) { eligible.delete(cluster.key); continue; }
           // Search before staling against the old key: another eligible set
           // may already occupy that topic while these exact sources moved on.
           // An occupied exact match must not hide another free destination.
@@ -154,17 +155,12 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
         for (const cluster of eligible.values()) {
           check();
           if (cluster.memories.length > ENGINE_CARD_LIMITS.sources) { result.state = 'source_limit'; continue; }
-          let rawSpans, rawTimer;
-          try {
-            rawSpans = await Promise.race([storage.rawSpans(ns, cluster.memories, check),
-              new Promise((_, reject) => { rawTimer = setTimeout(() => reject(Object.assign(Error('deadline'),
-                { code: 'model_timeout' })), deadline.remainingMs()); })]);
-          } finally { clearTimeout(rawTimer); }
-          const memories = cluster.memories.map(({ id, revision, content, date, currentness }) => ({ id, revision, content, date, currentness }));
+          const requestSources = [...cluster.memories];
+          const memories = requestSources.map(({ id, revision, content, date, currentness }) => ({ id, revision, content, date, currentness }));
           const ids = new Set(memories.map(memory => memory.id));
           const relevantRelations = edges?.filter(edge => ids.has(edge?.from) && ids.has(edge?.to) &&
             ['supersedes', 'contradicts'].includes(edge.kind)).slice(0, 192).map(({ from, to, kind, slot }) => ({ from, to, kind, slot }));
-          const request = () => ({ memories, rawSpans, ...(relevantRelations?.length ? { relations: relevantRelations } : {}) });
+          const request = () => ({ memories, rawSpans: [], ...(relevantRelations?.length ? { relations: relevantRelations } : {}) });
           const fits = () => {
             if (countTokens(model, modelRequestText(CONSOLIDATE_PROMPT, request())) > MODEL_INPUT_TOKENS) return false;
             const fit = modelPortValue(model, 'fitsConsolidationRequest', 'invalid_input');
@@ -173,11 +169,16 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
               [{ system: CONSOLIDATE_PROMPT, input: structuredClone(request()), maxOutputTokens: 1024 }]) }) === true; }
             finally { assertContentPort(); }
           };
-          while (rawSpans.length && !fits()) {
-            const shorter = rawSpans.map(span => { const points = [...span.text];
-              return { ...span, text: points.slice(0, Math.max(1, Math.floor(points.length / 2))).join('') }; });
-            if (shorter.every((span, index) => span.text.length === rawSpans[index].text.length)) break;
-            rawSpans = shorter;
+          // Own sources always go first. Newest same-topic context follows,
+          // bounded by both the existing adapter envelope and 24 Memories.
+          if (fits()) for (const memory of [...(cluster.contextMemories ?? [])]
+            .filter(memory => !ids.has(memory.id)).sort((a, b) => Date.parse(b.date) - Date.parse(a.date) || a.id.localeCompare(b.id))) {
+            check();
+            if (memories.length >= 24) break;
+            const { id, revision, content, date, currentness } = memory;
+            memories.push({ id, revision, content, date, currentness });
+            if (!fits()) { memories.pop(); continue; }
+            requestSources.push(memory);
           }
           if (!fits()) { result.state = 'input_budget'; continue; }
           const attempt = storage.claim(ns, cluster, new Date(now()).toISOString(), check);
@@ -185,10 +186,21 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
           result.modelCalls++;
           try {
             const output = await callModel(model, 'consolidate', CONSOLIDATE_PROMPT, request(), {
-              deadline, beforeDispatch: checkPause, validateFresh: () => { check(); storage.validate(ns, cluster.memories, check); }, failureCode: 'consolidation_failed' });
-            const value = validateConsolidation(output, memories, model); check();
-            const card = value && storage.commit(ns, cluster, value, new Date(now()).toISOString(), check);
+              deadline, beforeDispatch: checkPause, validateFresh: () => { check(); storage.validate(ns, requestSources, check); }, failureCode: 'consolidation_failed' });
+            const value = validateConsolidation(output, memories, model, cluster.memories); check();
+            const card = value.body && storage.commit(ns, cluster, value, new Date(now()).toISOString(), check);
             if (card) result.built.push(card);
+            // Context can identify an old current line in another Card. Reuse
+            // ordinary staling and its debounce; one generation ends this pass.
+            // Only current lines count: a Card that already lists the Memory
+            // under Timeline is up to date, and retiring it would make two
+            // Cards rebuild each other for ever.
+            for (const other of cards.filter(card => card.status === 'current')) {
+              const covered = cardSourceKeys([{ type: 'card', metadata: { origin: 'engine' }, text: currentCardLines(other.row.body),
+                sourceMemoryRefs: other.sourceRevisions.map(ref => ({ namespace: ns, ...ref })) }]);
+              if (requestSources.some(memory => value.outOfDateIds.includes(memory.id) && covered.has(memoryPackKey({
+                namespace: ns, memoryId: memory.id, revision: memory.revision })))) storage.retire(ns, other.id, new Date(now()).toISOString());
+            }
             // Valid output without a committed Card must not reopen a missing
             // fingerprint on every subsequent maintenance pass.
             storage.finish(ns, attempt, card ? 'succeeded' : 'terminal', new Date(now()).toISOString());

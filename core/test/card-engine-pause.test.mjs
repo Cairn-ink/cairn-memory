@@ -40,19 +40,41 @@ function storageFor(f) {
     identity: f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
 }
 
-for (const disabled of [false, true]) test(`Card transport refuses ${disabled ? 'disable' : 'pause'} after cluster selection`, async t => {
+for (const injection of ['last freshness validation', 'first token count'])
+for (const disabled of [false, true]) test(`Card transport refuses ${disabled ? 'disable' : 'pause'} after cluster selection (${injection})`, async t => {
   const f = engineCardFixture(t); f.seed(8);
-  let selected = false;
-  const storage = storageFor(f), rawSpans = storage.rawSpans;
-  storage.rawSpans = (...args) => {
+  let selected = false, claimed = false, validations = 0;
+  const storage = storageFor(f), claim = storage.claim, validate = storage.validate;
+  const inject = () => {
     selected = true;
     createEpisodeStorage({ db: f.db, options: { mode: 'episode-v1' }, advanceEpoch() {} })
       .setControl(ns, { expectedGeneration: 'initial', ...(disabled ? { enabled: false } : { paused: true }) }, disabled);
-    return rawSpans(...args);
   };
+  storage.claim = (...args) => {
+    const attempt = claim(...args);
+    claimed = Boolean(attempt);
+    return attempt;
+  };
+  storage.validate = (...args) => {
+    const value = validate(...args);
+    // callModel validates once around counting and again in the dispatch
+    // microtask. Inject after that final canonical read has closed.
+    if (claimed && ++validations === 2 && injection === 'last freshness validation') inject();
+    return value;
+  };
+  if (injection === 'first token count') {
+    const countTokens = f.model.countTokens;
+    f.model.countTokens = text => {
+      // Eight Memories need no pressure estimate: this first count sizes the
+      // selected cluster's request, before its claim or freshness validation.
+      if (!selected) { assert.equal(claimed, false); inject(); }
+      return countTokens(text);
+    };
+  }
   const pass = await createEngineCardMaintenance({ storage, model: f.model })
     .maintain({ namespace: ns, budget: { maxMs: 5000 } });
   assert.equal(selected, true);
+  assert.equal(validations, 2, 'injection is followed by the final pre-dispatch validation');
   assert.equal(f.model.calls.length, 0);
   assert.equal(pass.state, 'paused', JSON.stringify(pass));
   assert.equal(pass.reason, 'namespace_paused');

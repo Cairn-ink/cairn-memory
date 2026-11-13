@@ -40,7 +40,7 @@ for (const change of ['forget', 'suppressed', 'denied', 'revision']) test(`engin
   for (const intent of ['current', 'history']) {
     const result = await trusted.call(f.core, 'contextRead', { ...projection, intent, query: 'Orion current state',
       raw: false, semantic: false, deadlineMs: 5000 });
-    assert.doesNotMatch(JSON.stringify(result), /Orion current state:/);
+    assert.equal(JSON.stringify(result).includes(card.id), false);
   }
 });
 
@@ -56,7 +56,7 @@ test('owner and namespace clusters never combine recurrence or share Card source
   assert.ok(card.sourceRevisions.every(ref => ids.has(ref.memoryId)));
 });
 
-test('sealed maintenance retires a changed source set and deletes bodies after recurrence is lost', async t => {
+test('sealed maintenance retires a changed source set and deletes bodies after the trigger is lost', async t => {
   const model = scriptedConsolidator(), f = await lineageFixture(t, { options: { model } }), memories = [];
   const add = i => {
     const memory = ok(f.core.admit({ namespace: ns, memory: { content: 'Orion lifecycle ' + i, kind: 'fact' },
@@ -77,13 +77,13 @@ test('sealed maintenance retires a changed source set and deletes bodies after r
       .maintain({ namespace: ns, budget: { maxMs: 5000 } }));
   const rebuilt = await pass(600001); assert.equal(rebuilt.built.length, 1, JSON.stringify(rebuilt));
   assert.notEqual(rebuilt.built[0].id, first.id);
-  for (const memory of memories.slice(0, 3)) ok(f.core.forget({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision }));
+  for (const memory of memories.slice(0, 5)) ok(f.core.forget({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision }));
   const cleaned = await pass(1200002); assert.equal(cleaned.state, 'ready', JSON.stringify(cleaned)); assert.ok(cleaned.deleted >= 1);
   assert.equal(f.row(first.id).state, 'deleted'); assert.equal(f.row(first.id).body, null);
   assert.ok(f.db.prepare('SELECT 1 FROM card_body_provenance WHERE card_id=?').get(first.id));
 });
 
-test('engine generation reads bounded receipt Raw spans; exclusion revokes the generated Card', async t => {
+test('engine generation sends no Raw spans; exclusion revokes the generated Card', async t => {
   const model = scriptedConsolidator();
   const f = sourceFixture(t, { lineage: true, model: { ...model, classify: undefined,
     extract: ({ input }) => ({ items: [{ content: input.messages[0].content, kind: 'fact', confidence: 1, sourceIndices: [0] }] }) } });
@@ -96,8 +96,7 @@ test('engine generation reads bounded receipt Raw spans; exclusion revokes the g
     .run(new Date(Date.UTC(2026, 0, i * 3 + 1)).toISOString(), m.id));
   const pass = ok(await f.core.maintainCards({ namespace: rawNs, budget: { maxMs: 10000 } }));
   assert.equal(pass.built.length, 1, JSON.stringify(pass));
-  assert.equal(model.calls[0].rawSpans.length, 8);
-  assert.ok(model.calls[0].rawSpans.every(span => span.text.length <= 400));
+  assert.deepEqual(model.calls[0].rawSpans, []);
   const card = pass.built[0], source = raw[0];
   assert.equal(ok(f.call('getCard', { namespace: rawNs, cardId: card.id })).card.origin, 'engine');
   f.db.prepare('INSERT INTO raw_source_exclusions VALUES(?,?,?,?,1)').run(source.conversationId, source.messageId, 0, 1);

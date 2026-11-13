@@ -172,7 +172,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       generations:generationsFor(items),access:access.accessGenerations,fences:items.map(i=>i.fence)});
     const candidateDetails={count:c.items.length,channels:c.channels,coverage:c.coverage,trace:c.trace};
     const decorate=diagnostics=>({...diagnostics,omitted:{...diagnostics.omitted,unavailable:prepared.unavailable},candidates:candidateDetails});
-    const assembleRead=raw=>assembleThreeLayerContext({query:p.query,readSet:p.readSet,prepared:prepared.items,counter,policy:p.policy,budget:p.budget,representation:p.representation,deadlineAt:p.deadlineAt,
+    const assembleRead=raw=>assembleThreeLayerContext({query:p.query,readSet:p.readSet,intent:p.intent,prepared:prepared.items,counter,policy:p.policy,budget:p.budget,representation:p.representation,deadlineAt:p.deadlineAt,
       responseBytes:p.representation==='representation-v2-dated'?({meteredBytes,diagnostics,selected})=>
         completeResponseBytes(success({metered:null,snapshot:null,diagnostics:decorate(diagnostics)}),meteredBytes,
           selected.length?snapshotValue(selected):null)<=ASSEMBLY_LIMITS.responseBytes:undefined,

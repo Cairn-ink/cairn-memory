@@ -626,7 +626,7 @@ function cardDedupeUnit(coveredIndex) {
     text: 'assembly telescope unrelated comparison', date: '2026-02-01T00:00Z', sources: [] };
   const card = { ...template, type: 'card', rank: 1,
     ref: { type: 'card', namespace: ns, cardId: 'synthetic-card', revision: 1, bodyRevision: 1 },
-    text: 'assembly telescope topic summary', date: '2026-05-01T00:00Z', sources: [],
+    text: `assembly telescope topic summary [${members[coveredIndex].ref.memoryId}]`, date: '2026-05-01T00:00Z', sources: [],
     metadata: { state: 'confirmed', support: 'supported', origin: 'engine', builtAt: '2026-05-01T00:00:00.000Z',
       clusterKey: 'synthetic-topic', status: 'current' }, sourceMemoryRefs: [members[coveredIndex].ref] };
   const build = prepared => assembleThreeLayerContext(packedArgs({ prepared }), raw);

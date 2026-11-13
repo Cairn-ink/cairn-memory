@@ -1,14 +1,15 @@
 # Engine Cards
 
 A Memory is an atomic claim with an event time. An engine Card consolidates the
-current state and history of one topic. It is derived, untrusted recollection,
+dated Memories of one topic, with out-of-date statements separated from current lines. It is derived, untrusted recollection,
 never an additional fact or execution permission.
 
 Generation is available by default when the model implements `consolidate`.
 There is no authoring confirmation or generation toggle. Capture never builds a
 Card. The existing MCP maintenance loop calls `maintainCards`; embedded hosts can
 call the same method in their maintenance worker. `getEngineCardStatus` reports
-the last bounded pass. These methods are present only when the model implements
+the trigger in plain words and the last bounded pass. These methods are present
+only when the model implements
 `consolidate`; ordinary handles retain their established method surface.
 Writable pinned stores reuse installed Card tables without upgrading their schema.
 
@@ -23,13 +24,32 @@ of at least 0.65 when both retained vectors exist, otherwise positive BM25 term
 overlap. Configured context readers reuse their retained vectors without making
 an embedding call for clustering.
 
-A cluster needs both recurrence and budget pressure. Recurrence means at least
-8 memories, 3 conversations and 14 days, or a chain of at least 3 supersedes or
-contradicts edges on one slot. Pressure means at least 5 memories or 1,200 tokens
-of packed Memory/receipt text, including framing and metadata, measured with the
-configured tokenizer and existing packer. These thresholds
-correspond to the product's 12 item / 3,000 token pack. There is no sliding time
-window or importance sum.
+Before evaluating triggers, a cluster larger than 12 Memories is sorted by event
+date, with memory ID breaking ties, and divided into consecutive parts of 12.
+Each part has key `<cluster key>#<part index>` (zero-based); clusters of 12 or
+fewer keep their key. Similarity-key reuse and exact-source carry apply per part.
+Each part needs one of three conditions plus budget pressure: at least
+8 memories, 3 conversations and 14 days; a chain of at least 3 supersedes or
+contradicts edges on one slot; or at least 5 current Memories, whatever their
+conversations. The trigger result includes `topic` alongside `recurring`, `chain`
+and `pressure`. Pressure means at least 5 memories or 1,200 tokens of packed
+Memory/receipt text, including framing and metadata, measured with the configured
+tokenizer and existing packer. These thresholds correspond to the product's
+12 item / 3,000 token pack. There is no sliding time window or importance sum.
+
+A topic with no previous Card can build on the next eligible maintenance pass
+after the fifth Memory lands, with no ten-minute wait. Capture itself does not
+schedule a pass. The MCP loop arms a pass one second after the previous pass
+finishes (or after startup); embedded hosts choose their worker cadence. When
+more items arrive, the next pass marks the earlier Card stale and hides it; a pass at least ten minutes after that staling can build a
+fresh Card. Further additions during that wait do not restart it. The old row
+and seal remain. Scan expiry and failed-attempt backoff keep their existing
+timing; an incomplete scan can require multiple passes.
+
+Appending a later-dated Memory changes only the last part (or adds a new part).
+Known limit: removing or re-dating a Memory in the middle shifts later part
+boundaries and rebuilds the affected Cards. Rebuilds retain the existing ten-minute
+debounce and at most one generation per pass; several passes may be needed.
 
 Receipt event dates take precedence; legacy memories without those dates use
 their recorded creation date. This fallback is an arrival date, not a recovered
@@ -40,28 +60,45 @@ otherwise the receipt's client and session identity.
 
 `consolidate({system, input: {memories, rawSpans}, maxOutputTokens, signal})`
 uses the ordinary model port. A memory contains `id`, `revision`, `content`,
-`date` and `currentness`. Optional readable Raw spans contain `memoryId`, `date`
-and `text`; each is at most 400 units, with at most 8,000 units per request.
-When available, an additional `relations` array supplies up to 192 same-topic
-edges; `supersedes` points from a newer claim to an older claim.
-Unreadable spans are omitted. A missing or denied source cannot authorize a
-Card even when an optional Raw read fails.
+`date` and `currentness`. The part's own Memories always come first, followed by
+other Memories from the same original cluster, newest first, up to 24 total.
+Context is added only while the existing input and adapter envelopes still fit.
+`rawSpans` is an empty array; no Raw text is sent. When available, `relations`
+supplies up to 192 same-part edges; `supersedes` points from newer to older.
 
-The output has three arrays: `currentState` and `contradictions` contain
-`{text, memoryIds}`, and `timeline` contains `{date, text, memoryIds}`.
-Each entry is a single sentence. Current state renders as one paragraph, followed
-by the dated timeline and unresolved contradictions. The engine drops uncited
-sentences, rejects foreign IDs and malformed output, and requires a supported
-current-state sentence. The rendered body, including citation tags, is at most
-250 tokens. Timeline dates must agree with a cited source. Model text is inert.
+The model identifies only out-of-date Memories: later statements that change,
+replace, remove, cancel or negate the same thing. Daily records remain true for
+their own dates; different days, things and list items do not replace each other.
+The change statement itself remains current. Uncertain cases stay current.
+The closed output still has three arrays: `currentState` and `contradictions`
+contain `{text, memoryIds}`, and `timeline` contains `{date, text, memoryIds}`.
+The prompt asks for one `currentState` entry with text `ok` and the latest ID,
+empty `contradictions`, and one timeline entry per out-of-date Memory.
+Malformed shapes are refused. A timeline entry counts only when every ID belongs
+to the request; an entry containing a foreign ID is ignored in full. Only these
+IDs are used: model text and dates are never stored or delivered. Zero marked
+Memories is an ordinary successful result; all marked means no Card.
+
+The body is built from the part's original Memories, sorted by event date with
+ID breaking ties. Every current line is `<YYYY-MM-DD>: <content> [<memory id>]`.
+A Memory the store already holds as history is always treated as out of date,
+whatever the model returns. If any sources are marked out of date, a final `Timeline: ` line holds those same
+dated verbatim entries separated by `; `. Control characters and square brackets
+in content become spaces; whitespace collapses. Nothing is paraphrased or
+shortened. The body cap is **850 tokens**, including dates and citation tags.
+The offline 15–40 word synthetic corpus with UUID IDs needs 750 tokens for twelve
+stored lines. When the cap is exceeded, whole current lines are removed oldest
+first; their uncited Memories remain ordinary candidates. If no current line
+fits, no Card is published. Timeline entries are never shortened or dropped to fit.
 
 The OpenAI adapter uses a closed structured-output schema with source-ID enums.
 Each pass makes at most one generation, through the existing 6,000 input / 1,024
-provider output envelope and model deadline. The tighter Card body limit is
-post-validated. The local guarded model charges the existing runtime budget for
+provider output envelope and model deadline. The verbatim Card body is fitted locally after validation. The local guarded model charges the existing runtime budget for
 consolidation and stops on refusal. Memory text is never truncated to fit a
-request. Oversized clusters return `source_limit` or `input_budget` for later
-maintenance; they do not publish a partial Card.
+request. Parts may still exceed the input envelope and return `input_budget`.
+`ENGINE_CARD_LIMITS.sources` remains 96; `source_limit` is unreachable through
+maintenance because every part contains at most 12 Memories. Its defensive check
+remains in place.
 Before dispatch, the existing Card operation ledger reserves the exact source
 ID/revision fingerprint. Refusal or invalid output is terminal for that
 fingerprint, including after restart or a cluster label change. Explicit transient failures (timeout,
@@ -148,11 +185,37 @@ consumes the acknowledgement internally rather than publishing it as a tool
 result. Product-index/Worker APIs expose context-index maintenance, not
 `maintainCards`.
 
-Engine Cards enter the existing candidate ranking. Packing an engine Card removes its exact
-source Memory revisions from that pack; a Card that does not fit removes
-nothing. Authored Cards keep their existing packing behavior. A lower-ranked engine Card does not displace a higher-ranked source Memory
-already selected for a specific fact. This also applies when Memory and Raw are assembled together. Single
-fact matches continue to use ordinary Memory candidates. Ranking is unchanged.
+Engine Cards enter the existing candidate ranking. A Card citing a Memory (on a current line or under `Timeline:`) among
+the first `budget.maxItems` ranked Memory candidates is considered immediately
+before its best-ranked cited Memory. In mixed Memory/Raw assembly its unit
+borrows that Memory unit's lexical score and rank prior, without a size penalty
+in scoring; budget fit still applies. Packing the Card removes only exact source
+Memory revisions cited in its stored body, including Timeline entries. Uncited cluster Memories remain
+ordinary candidates; all cluster sources still bind invalidation and read safety.
+For `intent: 'current'`, the delivered body contains the title and current lines,
+without the `Timeline:` line or citation tags. Counts and budget checks meter
+this delivered text. History delivers the stored title and body unchanged;
+evidence reads also remain unchanged. Promotion uses every stored citation: when
+the hit is a Memory listed under `Timeline:`, the Card takes its place and that
+out-of-date statement is not delivered. Covered-source detection always
+uses the stored body, preventing out-of-date entries from returning beside it.
+Stored lineage fingerprints, snapshot fences, signed snapshot references and
+`bodyRev` continue to bind the canonical stored Card. Projection does not mutate
+that body or advance its revision. Final canonical refetch and signed-response
+byte checks remain in place.
+
+A later statement alone does not rewrite an existing Card: until maintenance
+identifies the change and rebuilds, an older Card can still deliver that line.
+When a build marks an ID appearing on another current Card's current lines in
+the same namespace, it retires that Card through the existing staling path.
+Retirement hides it immediately; a later pass rebuilds after the ordinary
+ten-minute debounce, with at most one generation per pass. Context is bounded,
+so changes outside the selected context can remain unrecognized.
+
+A Card that does not fit removes nothing. A Card without a cited Memory in the
+window retains ordinary ranking and cannot displace a better-ranked source
+Memory already selected. Authored Cards and Memory ranking are unchanged. All
+reader eligibility, namespace, lineage and budget checks remain in place.
 
 Additive engine Card metadata on evidence reads is `origin`, `builtAt`,
 `clusterKey`, `status` and `sourceRevisions`. Packed Card metadata includes the
@@ -161,4 +224,4 @@ The authored Card API and its confirmation authority remain available separately
 
 Run the offline synthetic exercise with
 `node tools/testing/measure-engine-cards.mjs`. It prints exact pack tokens for
-the scripted model and local tokenizer, without provider access.
+stored and current-delivered bodies for parts of 5, 8 and 12 realistic synthetic Memories, with the local tokenizer and no provider access.
