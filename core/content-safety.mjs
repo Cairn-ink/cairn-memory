@@ -148,7 +148,7 @@ export function receiptReadSafety(db, options) {
     }
     memo?.receipts.set(key, result);
     const state = result.allowed ? cachedContentSuppressionRequestInside(db, namespace.ownerId) : null;
-    if (state && result.allowed) (state.completed ??= new Set()).add(JSON.stringify([...boundary(namespace),'receipt',receipt.id,null]));
+    if (state && result.allowed && memo?.retainOutputDecisions !== false) (state.completed ??= new Set()).add(JSON.stringify([...boundary(namespace),'receipt',receipt.id,null]));
     return result;
   });
 }
@@ -233,7 +233,7 @@ export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = fa
       if (result.allowed) { const fact = memory?.invalid_raw_ancestry ? 'ineligible' : sourceSuppression(db, ns, ref, rawTargets, memory && Object.hasOwn(memory, 'invalid_raw_ancestry')); if (fact) result = denied(fact); }
       memo?.sources.set(key, { result, value, memory });
       const state = cachedContentSuppressionRequestInside(db, ns.ownerId);
-      if (state && result.allowed) {
+      if (state && result.allowed && memo?.retainOutputDecisions !== false) {
         (state.sourcesChecked ??= new Set()).add(key);
         state.sourcesChecked.add(JSON.stringify(sourceRef(ref,ns,true)));
         const completed = state.completed ??= new Set();

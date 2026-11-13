@@ -45,13 +45,14 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
       edges.set(JSON.stringify([edge.from_id, edge.to_id, edge.relation,
         edge.from_receipt, edge.to_receipt]), edge);
     }
+    const memo=prepareSources?.(ns,[...new Set([...edges.values()].flatMap(edge=>[edge.from_id,edge.to_id]))]);
     for (const edge of edges.values()) for (const side of ['from', 'to']) {
       const id = edge[`${side}_id`];
       let endpoint = endpoints.get(id);
       if (!endpoint) {
         const row = currentRow(ns, id);
         if (!row) fail('revision_conflict');
-        const evidence = readSourceEvidence(row);
+        const evidence = readSourceEvidence(row,memo);
         endpoint = { row: { ...row }, receipts: evidence.receipts, receiptCount: evidence.receiptCount,
           rawReceipts: db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id').all(id) };
         endpoints.set(id, endpoint);
@@ -65,6 +66,7 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
   }
 
   function restoreFilingEdges(ns, snapshot, nextRevisions) {
+    const memo=prepareSources?.(ns,[...snapshot.endpoints.keys()]);
     for (const [id, before] of snapshot.endpoints) {
       const after = currentRow(ns, id);
       if (!after || after.revision !== (nextRevisions.get(id) ?? before.row.revision)) fail('revision_conflict');
@@ -81,7 +83,7 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
       }
       const rawReceipts = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id').all(id);
       if (JSON.stringify(rawReceipts) !== JSON.stringify(before.rawReceipts)) fail('revision_conflict');
-      if (JSON.stringify(readSourceEvidence(after).receipts) !== JSON.stringify(before.receipts)) {
+      if (JSON.stringify(readSourceEvidence(after,memo).receipts) !== JSON.stringify(before.receipts)) {
         fail('revision_conflict');
       }
     }

@@ -236,7 +236,43 @@ export function beginContentWriteSafety(db, operation) {
         }};
         return db.prepare(sql);
       }},db);
-      return dependentMemo=createContentReadMemo(source);
+      dependentMemo=createContentReadMemo(source);
+      dependentMemo.retainOutputDecisions=false;
+      return dependentMemo;
+    }
+    // Native revision triggers retain bindings and emit one immutable effect
+    // for each revision of each bound Memory. Prove the entire net transition,
+    // including intermediate duplicate admissions, before retaining identities.
+    function memoryInvalidation(key, ns, change) {
+      if (!change?.old || changedBindings.has(key) ||
+          change.columns.some((c,i)=>!['id','revision','updated_at'].includes(c.name)&&change.old[i]!==undefined) ||
+          JSON.stringify(boundary(namespace(change.row)))!==JSON.stringify(boundary(ns))) return false;
+      const previous=oldValue(change,'revision'), row=change.row;
+      if (!Number.isSafeInteger(previous) || row.revision<=previous) return false;
+      const bindings=db.prepare(`SELECT b.memory_id FROM card_memory_bindings b
+        JOIN memories m ON m.id=b.memory_id WHERE b.card_id=? AND m.owner_id=? AND m.scope=? AND m.project_id=?`)
+        .all(key,...boundary(ns));
+      const causes=canonical.filter(c=>c.table==='memories'&&c.old&&
+        JSON.stringify(boundary(namespace(c.row)))===JSON.stringify(boundary(ns))&&
+        bindings.some(b=>b.memory_id===c.row.id)&&c.row.revision>oldValue(c,'revision'));
+      const expected=new Set();
+      for (const cause of causes) {
+        const before=oldValue(cause,'revision');
+        if (!Number.isSafeInteger(before) || !Number.isSafeInteger(cause.row.revision)) return false;
+        for(let revision=before+1;revision<=cause.row.revision;revision++)
+          expected.add('memory-revision-'+cause.row.id+'-'+revision);
+      }
+      const effects=canonical.filter(c=>c.table==='card_effects'&&c.row.entity_type==='card'&&c.row.entity_id===key)
+        .sort((a,b)=>a.row.ordinal-b.row.ordinal);
+      if (!expected.size || effects.length!==expected.size || effects.length!==row.revision-previous ||
+          removed.some(c=>c.table==='card_effects'&&c.row.entity_type==='card'&&c.row.entity_id===key)) return false;
+      for(const [index,effect] of effects.entries()) {
+        const e=effect.row;
+        if(effect.old||e.kind!=='evidence_invalidated'||e.revision!==previous+index+1||
+            JSON.stringify(boundary(namespace(e)))!==JSON.stringify(boundary(ns))||!expected.delete(e.action_id)) return false;
+      }
+      return !expected.size && causes.some(c=>effects.at(-1).row.action_id==='memory-revision-'+c.row.id+'-'+c.row.revision&&
+        row.updated_at===c.row.updated_at);
     }
     function automaticallyInvalidatedCard(key,ns){
       if(lineage)return lineageInvalidatedCard(key,ns);
@@ -256,7 +292,7 @@ export function beginContentWriteSafety(db, operation) {
       const reachesTarget=ref=>sourceTargets(ref).some(target=>ownTarget(ns,target))||ref.type==='receipt'&&exists('raw_receipt_lineage')&&
         db.prepare('SELECT conversation_id,message_id,start,end FROM raw_receipt_lineage WHERE receipt_id=?').all(ref.receiptId)
           .some(row=>ownTarget(ns,{kind:'raw',key:row.conversation_id,messageId:row.message_id,start:row.start,end:row.end}));
-      if(!contributors.some(reachesTarget))return false;
+      if(!contributors.some(reachesTarget)&&!memoryInvalidation(key,ns,change))return false;
       withContentSuppressionCeilingsInside(db,ceilings,()=>{for(const ref of contributors){
         const targets=sourceTargets(ref),own=targets.some(target=>ownTarget(ns,target));
         if(!own){
@@ -294,7 +330,13 @@ export function beginContentWriteSafety(db, operation) {
       // Stable presentation rows are positive evidence when an older body's
       // closure was unknown. They cannot grant completeness or serving access.
       if(!changedBindings.has(key))for(const ref of cardContributorsInside(db,key))targets.push(...sourceTargets(ref));
-      if(!targets.some(target=>ownTarget(ns,target)))return false;
+      if(!targets.some(target=>ownTarget(ns,target))) {
+        if(!memoryInvalidation(key,ns,change))return false;
+        const publicNs={...ns,projectId:ns.projectId||null}, memo=dependentReadMemo(publicNs);
+        loadCardBodyContributorsInside(db,identity,publicNs,key,{
+          validateSource:ref=>sourceReadSafety(db,{identity,namespace:publicNs,ref,memo}).allowed });
+        return true;
+      }
       // A receipt-only Card can be invalidated once per changed Memory. Native
       // sessions retain only the net Card update, so reconstruct every step from
       // its newly inserted effects and canonical source transitions. An unchanged

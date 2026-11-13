@@ -113,5 +113,5 @@ export function createQualificationStorage({ db, receiptKey, assertStoredReceipt
     db.prepare('DELETE FROM memory_qualifications WHERE memory_id = ?').run(memoryId);
   }
 
-  return { bind, inspect, clear };
+  return { bind, inspect, clear, stored(memory) { return inspectStored(memory)?.qualification ?? null; } };
 }

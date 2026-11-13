@@ -282,7 +282,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     const exhausted = new Set(), blocked = new Set(), matches = [], queryWords = words(input.query);
     function next(type, metadataOnly = false) {
       const layout=cachedContentLayout(db);
-      let columns = metadataOnly ? (layout?.suppressionRevision
+      let columns = metadataOnly ? (layout?.suppressionRevision || type==='card'&&[...memo.receiptDenials?.values()??[]].some(Boolean)
         ? 'id,revision'+(type==='card'?',body_revision':'') : 'id') : '*';
       if(type==='memory'&&layout?.suppressionRevision&&layout.rawLineage)columns+=`,EXISTS(
         SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id
@@ -296,19 +296,25 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     }
     function assertContributor(type,row,peek=false) {
       const layout=cachedContentLayout(db);
-      if(!row || !layout?.suppressionRevision)return;
+      if(!row)return true;
       if(type==='memory'){
+        if(!layout?.suppressionRevision)return true;
         if(row.invalid_raw_ancestry||contentSuppressionReasonInside(db,ns,{kind:'memory',key:row.id,
           revision:row.revision,version:JSON.stringify(['memory-revision-v1',row.revision]),
           ancestryChecked:!layout.rawLineage||Object.hasOwn(row,'invalid_raw_ancestry')}))fail('evidence_unavailable');
-        return;
+        return true;
       }
-      const proof=cachedContentSuppressionRequestInside(db,ns.ownerId);
-      if(peek&&!hasCardLineage(db)&&proof?.facts?.length===0&&proof.readSet.some(n=>n.scope==='owner'||n.scope===ns.scope&&(n.projectId??'')===(ns.projectId??'')))return;
-      // Share this decision with the existing detail read, including its
-      // contributor/source memo. No extra canonical pass per scanned Card.
-      if(!contentReadSafety(db,{identity,namespace:ns,memo,method:'getCard',
-        ref:{type:'card',namespace:ns,cardId:row.id,revision:row.revision,bodyRevision:row.body_revision}}).allowed)fail('evidence_unavailable');
+      if(!layout?.suppressionRevision && ![...memo.receiptDenials?.values()??[]].some(Boolean))return true;
+      const ref={type:'card',namespace:ns,cardId:row.id,revision:row.revision,bodyRevision:row.body_revision};
+      if(contentReadSafety(db,{identity,namespace:ns,memo,method:'getCard',ref}).allowed)return true;
+      // Distinguish source markers from every pre-existing canonical refusal.
+      // This isolated proof cannot authorize delivery or warm serving decisions.
+      if(![...memo.receiptDenials?.values()??[]].some(Boolean))fail('evidence_unavailable');
+      const retained=createContentReadMemo(db);
+      retained.retainOutputDecisions=false;
+      retained.receiptDenials=new Map([...memo.receiptDenials].map(([key])=>[key,false]));
+      if(!contentReadSafety(db,{identity,namespace:ns,memo:retained,method:'getCard',ref}).allowed)fail('evidence_unavailable');
+      return false;
     }
     const scanRefs=input.types.flatMap(type=>db.prepare(type==='memory'
       ? `SELECT id,revision,content,currentness,review_state FROM memories WHERE ${where} AND deleted=0 AND id>? ORDER BY id LIMIT ?`
@@ -327,7 +333,9 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       const row = next(type);
       if (!row) { exhausted.add(type); continue; }
       // Scanned counts, body-unit budgets and cursor identities are outputs.
-      assertContributor(type,row);
+      if(!assertContributor(type,row)) {
+        after[type]=row.id;scannedRows++;byType[type].scanned++;continue;
+      }
       const text = type === 'memory' ? row.content : `${row.title}\n${row.body}`;
       if (scannedBodyUnits + text.length > input.scanBodyUnits) { blocked.add(type); stopped = 'body_budget'; continue; }
       after[type] = row.id; scannedRows++; scannedBodyUnits += text.length; byType[type].scanned++;
@@ -342,7 +350,14 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     }
     // A metadata-only bounded peek tells callers which streams actually ended.
     for (const type of input.types) if (!blocked.has(type)) {
-      const peek=next(type,true);assertContributor(type,peek,true);if(!peek)exhausted.add(type);
+      let peek=next(type,true);
+      while(peek&&!assertContributor(type,peek,true)) {
+        if(scannedRows>=input.scanRows) { stopped='row_budget';break; }
+        if(performance.now()-started>=input.deadlineMs) { stopped='deadline';break; }
+        after[type]=peek.id;scannedRows++;byType[type].scanned++;
+        peek=next(type,true);
+      }
+      if(!peek)exhausted.add(type);
     }
     const complete = exhausted.size === input.types.length;
     for (const type of input.types) byType[type].partial = !exhausted.has(type);

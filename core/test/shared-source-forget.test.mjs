@@ -854,3 +854,66 @@ test('review B full receipt pages resolve qualification and procedural tokens on
     assert.equal(new Set(lookups.map(row=>row.snapshot)).size,expected);
   }
 });
+
+for (const kind of ['ordinary-48','ordinary-53']) for (const writer of ['capture','duplicate-extraction','admit','filing'])
+test(`native nonterminal invalidation ${kind} ${writer}`, async t => {
+  const f=await fixture(t,kind);
+  const add=(content,evidence)=>ok(f.core.admit({namespace:ns,memory:{content,kind:'fact'},receipts:[evidence]})).memory;
+  const a=add(forgotten,source()),d=add('Synthetic retained dependency',source()),b=add(survivor,receipt('synthetic-original'));
+  let card=ok(f.call('createCardDraft',{actionId:'synthetic-native-draft',drafting:'authored',input:{title:'Synthetic',body:'Synthetic body',
+    memoryRefs:[memoryRef(b),memoryRef(d)],sourcePolicy:'retained-receipts-v1'}}));
+  card=ok(f.call('confirmCardDraft',{actionId:'synthetic-native-confirm',cardId:card.id,expectedRevision:card.revision,applicability:'current'}));
+  ok(act(f,'forget',a));
+  const extra=receipt('synthetic-additional');
+  if(writer==='admit') assert.equal(add(survivor,extra).id,b.id);
+  else if(writer==='filing') {
+    assert.equal(add(survivor,extra).id,b.id);
+    const current=ok(f.core.get({namespace:ns,memoryId:b.id})).memory,map=ok(f.core.map({namespace:ns}));
+    ok(f.core.applyPlacement({namespace:ns,expectedIndexRevision:map.indexRevision,expectedMemoryRevisions:[{memoryId:b.id,revision:current.revision}],
+      proposal:{items:[{memoryId:b.id,parentIds:[],newL1:{title:'Synthetic native topic',parentL2Ids:[]}}]}}));
+  } else {
+    f.model.items=[{content:survivor,kind:'fact',confidence:.8,sourceIndices:[0]}];
+    if(writer==='duplicate-extraction') f.model.items.push({...f.model.items[0],sourceIndices:[1]});
+    ok(await f.core.capture({namespace:ns,client:extra.client,sessionId:extra.sessionId,eventId:'synthetic-native-capture',
+      messages:[{id:extra.eventId,role:extra.role,content:extra.excerpt},
+        ...(writer==='duplicate-extraction'?[{id:'synthetic-extra-message',role:'user',content:'Synthetic other attachment'}]:[])]}));
+  }
+  const value=ok(f.core.get({namespace:ns,memoryId:b.id}));
+  assert.ok(value.memory.revision>b.revision);
+  assert.ok(value.receipts.some(r=>r.eventId===extra.eventId),'new independent receipt commits');
+  assert.equal(ok(f.call('getCard',{cardId:card.id})).card,null);
+});
+
+for(const kind of ['ordinary-33','ordinary-48','ordinary-53']) test(`selectEvidence skips denied Card including peek ${kind}`,async t=>{
+  const f=await fixture(t,kind),[b,a]=await capture(f);
+  let card=ok(f.call('createCardDraft',{actionId:'synthetic-select-draft',drafting:'authored',input:{title:'Unrelated title',body:'Unrelated body',
+    memoryRefs:[memoryRef(b)],sourcePolicy:'retained-receipts-v1'}}));
+  card=ok(f.call('confirmCardDraft',{actionId:'synthetic-select-confirm',cardId:card.id,expectedRevision:card.revision,applicability:'current'}));
+  ok(act(f,'forget',a));
+  for(const limit of [1,24]) {
+    const value=ok(f.call('selectEvidence',{query:survivor,types:['memory','card'],intent:'current',limit}));
+    assert.deepEqual(value.items.map(item=>item.ref.memoryId),[b.id]);
+    assert.equal(value.nextCursor,null);noLeak(value,'selection omits denied Card');
+  }
+});
+
+for(const kind of ['fresh-default','ordinary-48','ordinary-53']) test(`withheld qualification preserves binding and unresolved transitions ${kind}`,async t=>{
+  const f=await fixture(t,kind);
+  const qualification=value=>({version:1,slot:{subject:'Synthetic subject',property:'Synthetic property',scope:'Synthetic scope',applies:'Synthetic applies'},
+    value,attribution:'direct',commitment:'adopted',anchors:[{receiptIndex:0,start:0,end:message.length,text:message,
+      fields:['subject','property','scope','applies','value','attribution','commitment']}]});
+  const add=(content,value,evidence)=>ok(f.core.admit({namespace:ns,memory:{content,kind:'fact'},receipts:[evidence],qualification:qualification(value)})).memory;
+  const b=add(survivor,'before',source()),c=add('Synthetic replacement claim','after',{...receipt('synthetic-qualified-replacement'),excerpt:message});
+  const bind=(m,slotId=null)=>f.core.bindQualifiedClaim({namespace:ns,memoryId:m.id,expectedRevision:m.revision,slotId,singleClaim:true});
+  const slot=ok(bind(b)).slotId;ok(bind(c,slot));
+  const a=ok(f.core.admit({namespace:ns,memory:{content:forgotten,kind:'fact'},receipts:[source()]})).memory;
+  ok(act(f,'forget',a));
+  assert.equal(ok(bind(b)).slotId,slot);assert.equal(ok(bind(b,slot)).slotId,slot);
+  assert.equal(bind(b,'synthetic-other-slot').error.code,'qualification_conflict');
+  const predecessor={memoryId:b.id,expectedRevision:b.revision},replacement={memoryId:c.id,expectedRevision:c.revision};
+  for(const value of [ok(f.core.transitionQualified({namespace:ns,predecessor,replacement})),
+    ok(f.core.transitionQualifiedSet({namespace:ns,predecessors:[predecessor],replacement}))]) {
+    assert.equal(value.status,'unresolved');assert.equal(value.reason,'qualification_missing');noLeak(value,'unresolved support');
+  }
+  assert.equal(ok(f.core.get({namespace:ns,memoryId:b.id,includeQualification:true})).qualification,null);
+});

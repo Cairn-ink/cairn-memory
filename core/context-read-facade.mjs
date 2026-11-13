@@ -301,15 +301,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   function assertSourcesInside(input, sourceState, code) {
     if (sourceState && !same(captureSources(input), sourceState.fences)) fail(code);
   }
-  function prepareReadMemo(input, refs, witnesses = []) {
-    const memo=createContentReadMemo(db), ids=[...new Set(witnesses.flatMap(path=>
-      [path.edge.from_receipt,path.edge.to_receipt,path.edge.receipt_id].filter(Boolean)))];
-    const additional=ids.length?input.readSet.map(namespace=>({namespace,receipts:db.prepare(`SELECT r.* FROM receipts r
-      JOIN memories m ON m.id=r.memory_id WHERE m.owner_id=? AND m.scope=? AND m.project_id=?
-        AND r.id IN (SELECT value FROM json_each(?))`).all(namespace.ownerId,namespace.scope,namespace.projectId??'',JSON.stringify(ids))})):[];
-    const batchRefs=[...refs,...witnesses.flatMap(path=>[path.via.seed,path.ref])];
-    evidence.prepareInside(batchRefs,memo,Boolean(options.sources),additional);
-    memo.relationWitnessesPrepared=true;
+  function prepareReadMemo(input, refs) {
+    const memo = createContentReadMemo(db);
+    evidence.prepareInside(refs, memo, Boolean(options.sources));
     return memo;
   }
   function witnessInside(input, path, code, budget = sourceBudget(Infinity)) {
@@ -321,12 +315,12 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   function deliverPage(input, ranking, position, limit) {
     return read(() => {
       const result = page(ranking, position, limit);
-      const safetyMemo=prepareReadMemo(input,result.items.map(candidate=>candidate.ref),ranking.sourceState?.witnesses);
+      const safetyMemo=prepareReadMemo(input,result.items.map(candidate=>candidate.ref));
       for (const candidate of result.items) evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet,
         {safetyMemo,batchRefs:result.items.map(candidate=>candidate.ref),legacyEvidence:Boolean(options.sources)});
       if (!options.sources) return result;
       assertSourcesInside(input, ranking.sourceState, 'cursor_stale');
-      const budget = sourceBudget(Infinity); budget.receiptMemo=safetyMemo;
+      const budget = sourceBudget(Infinity);
       for (const path of ranking.sourceState.witnesses) witnessInside(input, path, 'cursor_stale', budget);
       return result;
     });
@@ -498,7 +492,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         sampleTrace(diagnostics.trace);
         access.check(); storage.assertState(projection, current);
         const horizon = deepFreeze({ items: candidateItems, ...diagnostics });
-        return { ok: true, horizon, readMemo:()=>prepareReadMemo(input,horizon.items.map(candidate=>candidate.ref),sourceState?.witnesses), ...(sourceState ? { sourceState } : {}), check() {
+        return { ok: true, horizon, readMemo:()=>prepareReadMemo(input,horizon.items.map(candidate=>candidate.ref)), ...(sourceState ? { sourceState } : {}), check() {
           access.check();
           if (sourceState) read(() => assertSourcesInside(input, sourceState, 'snapshot_stale'));
           const resumed = acquireSidecar(projection, access);
@@ -652,7 +646,6 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         if (searched.sourceState) assertSourcesInside(input, searched.sourceState, 'snapshot_stale');
         let unavailable = 0;
         const witnessBudget = searched.sourceState ? sourceBudget(dependencyAware ? deadlineAt : Infinity) : null;
-        if(witnessBudget)witnessBudget.receiptMemo=safetyMemo;
         for (const [position, candidate] of candidates.items.entries()) {
           if (dependencyAware && performance.now() >= deadlineAt) {
             deadline = true; unavailable += candidates.items.length - position; break;
@@ -747,7 +740,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         const safetyMemo=searched.readMemo?.();
         if (searched.sourceState) {
           assertSourcesInside(input, searched.sourceState, 'snapshot_stale');
-          const witnessBudget = sourceBudget(Infinity); witnessBudget.receiptMemo=safetyMemo;
+          const witnessBudget = sourceBudget(Infinity);
           for (const path of searched.sourceState.witnesses) if (delivered.some(item => same(item.ref, path.ref)))
             witnessInside(input, path, 'snapshot_stale', witnessBudget);
         }
