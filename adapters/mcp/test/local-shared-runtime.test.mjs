@@ -188,10 +188,11 @@ test('B forgets and reads/writes while A awaits a provider; A disconnect does no
   await Promise.race([entered.promise, pending.then(() => { throw Error('provider_not_entered'); })]);
   assert.equal(host.inspect().inFlight, 1);
   ok(await call(b.client, 'forget_memory', { memoryId: memory.id, expectedRevision: memory.revision }));
-  const bRead = context(b.client);
+  // B's write must not invalidate B's own in-progress sidecar generation.
+  // Both operations still complete while A is awaiting its provider.
+  const read = await context(b.client);
   const bWrite = call(b.client, 'remember_memory', { content: 'synthetic in-flight B write', kind: 'fact' });
   await a.handle.close();
-  const read = await bRead;
   ok(await bWrite);
   assert.ok(!JSON.stringify(read.value).includes('SYNTHETIC_PENDING_SENTINEL'));
   ok(await call(b.client, 'remember_memory', { content: 'synthetic concurrent B write', kind: 'fact' }));

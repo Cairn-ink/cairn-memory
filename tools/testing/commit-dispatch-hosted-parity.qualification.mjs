@@ -1,11 +1,14 @@
+// One-time R2k qualification: default hosted envelopes and complete SQL ordering.
+// Base: a8de07ba7dbb61fcebe4bb80f06e5f6d092c35e2. Requires full git history.
+// Run explicitly: node tools/testing/run.mjs tools/testing/commit-dispatch-hosted-parity.qualification.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { DatabaseSync, StatementSync } from 'node:sqlite';
-import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
-import { openMemoryCore } from '../contract.mjs';
+import { createTestWorkspace } from './workspace.mjs';
+import { openMemoryCore } from '../../core/contract.mjs';
 
 const base = 'a8de07ba7dbb61fcebe4bb80f06e5f6d092c35e2';
 const ns = { ownerId: 'synthetic-hosted-commit', scope: 'personal', projectId: null };

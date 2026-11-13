@@ -65,7 +65,11 @@ test('SDK server revocation wakes backoff before disconnect and retains the exis
   await settled.promise;
   assert.ok(performance.now() - start < 500, 'R2G_CANCEL_BACKOFF_IMMEDIATE');
   assert.equal(JSON.parse(response.content[0].text).error.code, 'authority_required', 'R2G_REVOCATION_REFUSAL');
-  await closed; await pending; assert.deepEqual(await lock.exited, [0, null]);
+  await closed;
+  // SDK server transport close stops sends but does not end this synthetic
+  // peer's streams. The engine refusal above is already observed; retire the
+  // client so its pending RPC cannot wait for the SDK's default timeout.
+  await client.close(); await pending; assert.deepEqual(await lock.exited, [0, null]);
   const observer = runtime.server(); w.defer(() => observer.close());
   const [c, d] = streams(), reader = new Client({ name: 'synthetic-observer', version: '1' });
   t.after(async () => { await reader.close(); c.destroy(); d.destroy(); });

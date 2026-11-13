@@ -78,9 +78,15 @@ test('lazy Card storage init retains native waiting outside a dispatched mainten
   const w = createTestWorkspace(t), path = join(w.path, 'lazy.sqlite'), dispatcher = createCommitDispatcher({ strict: true });
   const runtime = dispatcher.open(() => createMemoryRuntime({ path }, { engineCards: true }));
   w.defer(() => runtime.close());
+  const writer = openMemoryCore({ path, raw: false });
+  try { ok(writer.admit({ namespace: ns, memory: { content: 'Synthetic lazy Card source', kind: 'fact' },
+    receipts: [{ client: 'synthetic', sessionId: 'lazy', eventId: 'source', role: 'user', excerpt: 'Synthetic lazy source' }] })); }
+  finally { writer.close(); }
   const storage = await runtime.engineCardStorage();
+  const cluster = { key: 'synthetic-lazy-cluster', memories: storage.snapshot(ns, 16, () => {}).memories };
+  assert.equal(cluster.memories.length, 1);
   const lock = await holdWriteLock(t, path, 500), start = performance.now();
-  const attempt = withSynchronousCommitScope('lazy Card storage init', () => storage.claim(ns, { key: 'synthetic-empty-cluster', memories: [] }, new Date().toISOString(), () => {}));
+  const attempt = withSynchronousCommitScope('lazy Card storage init', () => storage.claim(ns, cluster, new Date().toISOString(), () => {}));
   waited(performance.now() - start); assert.ok(attempt);
   assert.deepEqual(await lock.exited, [0, null]);
   assert.deepEqual(dispatcher.inspectBusyTimeouts(), [5000], 'R2G_TIMEOUT_RESTORE');
