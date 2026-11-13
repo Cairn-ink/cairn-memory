@@ -67,20 +67,24 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       AND r.relation IN ('supersedes','contradicts') AND a.id IN (SELECT value FROM json_each(?))
       AND b.id IN (SELECT value FROM json_each(?)) LIMIT 2049`).all(...boundary(ns), JSON.stringify(memoryIds), JSON.stringify(memoryIds)));
   }
-  function pressureItems(ns, memories) {
+  function pressureItems(ns, memories, { rawSpans = false } = {}) {
     return read(ns, () => {
       const receipts = createCardReceiptSources(db, bind), evidence = createPrivateEvidenceStorage({ db, identity,
         receiptRefInside: receipts.refInside });
+      // Canonical evidence validation below still binds receipts locally. The
+      // pressure projection itself needs no excerpt without explicit consent.
+      const columns = rawSpans === true ? '*' : db.prepare('PRAGMA table_info(receipts)').all()
+        .filter(column => column.name !== 'excerpt').map(column => '"' + column.name.replaceAll('"', '""') + '"').join(',');
       const refs = memories.map(memory => memoryReference(ns, memory));
       return evidence.itemsInside(ns, refs, 'history', [ns], { legacyEvidence: true }).map((item, index) => {
-        const rows = item.provenance.sourceAccess === 'available' ? db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16')
+        const rows = item.provenance.sourceAccess === 'available' ? db.prepare(`SELECT ${columns} FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16`)
           .all(item.ref.memoryId).filter(row => item.provenance.receiptMetadata.some(receipt => receipt.receiptId === row.id)) : [];
         return { type: 'memory', ref: item.ref, ns: 0, rank: index + 1, text: item.content,
           metadata: { state: item.state, reviewState: item.reviewState, filing: item.filing, kind: item.kind, origin: item.origin, confidence: item.confidence },
-          date: receiptEventDate(rows), sources: rows.map((row, index) => {
+          date: receiptEventDate(rows), sources: rawSpans === true ? rows.map((row, index) => {
             const { role, excerpt } = validateSourceReceipt(item.ref.memoryId, row, source => createHash('sha256').update(JSON.stringify(source)).digest('hex'));
             return { index, role, excerpt };
-          }), sourceAccess: item.provenance.sourceAccess, sourcesComplete: item.provenance.coverage.status === 'complete',
+          }) : [], sourceAccess: item.provenance.sourceAccess, sourcesComplete: item.provenance.coverage.status === 'complete',
           fence: createHmac('sha256', identity.cursorSecret).update(JSON.stringify(['context-read-v1', 'snapshot-item', identity.storeId, item])).digest('base64url') };
       });
     });
