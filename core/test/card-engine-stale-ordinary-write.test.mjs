@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { DatabaseSync, backup } from 'node:sqlite';
+import { chmodSync } from 'node:fs';
+import { join } from 'node:path';
 import { lineageFixture, lineageHost, ns, ok, receipt } from '../testing/card-lineage-fixture.mjs';
 import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import { scriptedConsolidator } from '../testing/engine-card-fixture.mjs';
@@ -11,7 +14,8 @@ import { createPrivateCardStorage } from '../private-card-storage.mjs';
 import { beginContentWriteSafety } from '../content-write-safety.mjs';
 import { contentSafetyInventory } from '../content-safety-migration.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
-import { transaction } from '../database.mjs';
+import { attestContentSafety } from '../content-safety-schema.mjs';
+import { transaction, readTransaction } from '../database.mjs';
 import { createMemoryRuntime } from '../runtime.mjs';
 import { batch } from '../testing/episode-helpers.mjs';
 import { request, splitRaw } from '../testing/raw-capture-fixtures.mjs';
@@ -33,6 +37,7 @@ async function fixture(t, mode = 'sealed') {
   const f = safetyFixture(t, 23);
   if (mode === 'suppression without lineage') await f.migrate();
   const host = lineageHost(), core = openMemoryCore({ path: f.path, privateCards: host.options, ...options }), db = f.connect();
+  attestContentSafety(db);
   t.after(() => { core.close(); db.close(); });
   return { ...f, core, db, model, trusted, call: (method, input) => host.call(core, method, input),
     identity: db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() };
@@ -429,4 +434,210 @@ test(`sealed ${route} stales an engine Card bound through a different retained r
     assert.equal(f.db.prepare('SELECT count(*) n FROM card_memory_bindings WHERE card_id=?').get(purged.id).n, 0);
     assert.deepEqual(effects(f, purged.id).map(effect => effect.kind), ['card_deleted']);
   }
+});
+
+async function authoredCandidate(f, suffix) {
+  const source = ok(f.call('submitSourceNote', { actionId: 'scan-note-' + suffix,
+    text: 'Synthetic scan source ' + suffix, occurredAt: null })).source;
+  const draft = ok(f.call('createCardDraft', { actionId: 'scan-draft-' + suffix, drafting: 'authored',
+    input: { title: 'Synthetic scan ' + suffix, body: 'Synthetic scan body ' + suffix, sources: [source] } }));
+  return ok(f.call('confirmCardDraft', { actionId: 'scan-confirm-' + suffix, cardId: draft.id,
+    expectedRevision: draft.revision, applicability: 'current' }));
+}
+
+// Load the actual reviewed source, resolving its imports against the same core.
+// This compares executed statement text, including repetitions, with main.
+async function scanStorageAt(revision, file, name) {
+  const { execFileSync } = await import('node:child_process');
+  const source = execFileSync('git', ['show', revision + ':core/' + file],
+    { cwd: new URL('../../', import.meta.url), encoding: 'utf8' });
+  const resolved = source.replace(/from '(\.\/[^']+)'/g,
+    (_, specifier) => 'from ' + JSON.stringify(new URL('../' + specifier, import.meta.url).href));
+  return (await import('data:text/javascript;base64,' + Buffer.from(resolved).toString('base64')))[name];
+}
+function scanCensus(db, work) {
+  const prepare = db.prepare, exec = db.exec, statements = [];
+  db.prepare = function(sql) {
+    const statement = prepare.call(this, sql);
+    return new Proxy(statement, { get(target, key) {
+      const value = Reflect.get(target, key, target);
+      if (typeof value !== 'function') return value;
+      return (...args) => {
+        if (['run', 'all', 'get', 'iterate'].includes(key)) statements.push({ sql, method: key, bindings: args });
+        return Reflect.apply(value, target, args);
+      };
+    } });
+  };
+  db.exec = function(sql) { statements.push({ sql, method: 'exec' }); return exec.call(this, sql); };
+  try { return { value: work(), statements }; }
+  finally { db.prepare = prepare; db.exec = exec; }
+}
+
+for (const mode of modes) test(`engine-free selection and map statement texts equal main, ${mode}`, async t => {
+  const f = await fixture(t, mode);
+  const { createPrivateEvidenceStorage } = await import('../private-evidence-storage.mjs');
+  const { createPrivateOrganizationStorage } = await import('../private-organization-storage.mjs');
+  const { inContentSuppressionRequestInside } = await import('../content-suppression-storage.mjs');
+  const mainEvidence = await scanStorageAt('d4bfba57', 'private-evidence-storage.mjs', 'createPrivateEvidenceStorage');
+  const mainOrganization = await scanStorageAt('d4bfba57', 'private-organization-storage.mjs', 'createPrivateOrganizationStorage');
+  const cards = createPrivateCardStorage({ db: f.db, identity: f.identity, ready() {} });
+  const options = { db: f.db, identity: f.identity, cardDetailInside: cards.cardDetailInside };
+  const factories = { selectEvidence: [mainEvidence, createPrivateEvidenceStorage],
+    mapEvidence: [mainOrganization, createPrivateOrganizationStorage] };
+  const inputs = { selectEvidence: { query: 'Synthetic', types: ['card'], intent: 'current', limit: 1, deadlineMs: 5000 },
+    mapEvidence: { type: 'card', limit: 1 } };
+  for (const population of ['empty', 'authored']) {
+    if (population === 'authored') for (let i = 0; i < 3; i++) await authoredCandidate(f, String(i));
+    assert.equal(f.db.prepare("SELECT count(*) n FROM private_cards WHERE id GLOB 'engine-card.*'").get().n, 0);
+    for (const [method, pair] of Object.entries(factories)) {
+      let cursors = [undefined, undefined], pages = 0;
+      do {
+        const traces = pair.map((factory, i) => scanCensus(f.db, () => readTransaction(f.db, () =>
+          inContentSuppressionRequestInside(f.db, () => factory(options).call(method, ns,
+            { ...inputs[method], ...(cursors[i] ? { cursor: cursors[i] } : {}) }, 1), [ns]))));
+        assert.deepEqual(traces[1].statements, traces[0].statements, method + ' ' + population + ' statement census');
+        assert.deepEqual(traces[1].value, traces[0].value, method + ' ' + population + ' page');
+        t.diagnostic(JSON.stringify({ method, population, page: ++pages, statements: traces[0].statements.length,
+          compared: 'exact ordered SQL texts, bindings and execution methods from main; fresh factory per resume' }));
+        cursors = traces.map(trace => trace.value.nextCursor);
+        assert.ok(pages < 10, 'scan must finish');
+      } while (cursors[0]);
+      if (population === 'authored') assert.ok(pages >= 2, 'census includes cursor resume');
+    }
+  }
+});
+
+// Isolated counterfactual: remove only stale scan candidates, preserving the
+// original store identity, generation fences and all surviving canonical data.
+// Orphaned provenance remains deliberately unreadable, just as for stale Cards.
+async function absentScanOptions(t, f, ids) {
+  const path = join(f.workspace.path, 'scan-absence.sqlite');
+  await backup(f.db, path); chmodSync(path, 0o600);
+  const db = new DatabaseSync(path);
+  t.after(() => db.close());
+  db.exec('PRAGMA foreign_keys=OFF; PRAGMA trusted_schema=OFF');
+  for (const id of ids) {
+    db.prepare('DELETE FROM card_moc_refs WHERE card_id=?').run(id);
+    db.prepare('DELETE FROM private_cards WHERE id=?').run(id);
+  }
+  attestContentSafety(db);
+  const cards = createPrivateCardStorage({ db, identity: f.identity, ready() {} });
+  return { db, identity: f.identity, cardDetailInside: cards.cardDetailInside };
+}
+async function scanWalk(factory, options, method, input, staleIds = []) {
+  const { inContentSuppressionRequestInside } = await import('../content-suppression-storage.mjs');
+  const read = cursor => readTransaction(options.db, () => inContentSuppressionRequestInside(options.db,
+    () => factory(options).call(method, ns, { ...input, ...(cursor ? { cursor } : {}) }, 1), [ns]));
+  const walk = start => {
+    const pages = [], seen = new Set(); let cursor = start;
+    do {
+      const page = read(cursor);
+      for (const id of staleIds) assert.equal(JSON.stringify(page).includes(id), false);
+      pages.push(page); cursor = page.nextCursor;
+      if (cursor) {
+        assert.ok(!seen.has(cursor), 'cursor must advance'); seen.add(cursor);
+      }
+      assert.ok(pages.length < 30, 'walk must terminate');
+    } while (cursor);
+    return pages;
+  };
+  const pages = walk();
+  for (let i = 0; i < pages.length; i++) if (pages[i].nextCursor)
+    assert.deepEqual(walk(pages[i].nextCursor), pages.slice(i + 1), 'cold resume from each returned cursor');
+  const items = pages.flatMap(page => page.items);
+  assert.equal(new Set(items.map(item => JSON.stringify(item))).size, items.length, 'no repeated readable candidate');
+  return pages;
+}
+// Snapshot tokens also fence the retained population, which differs in the
+// absence copy. Compare the complete content/count projection, not tokens.
+const withoutCursor = ({ nextCursor, snapshot, ...page }) => page;
+
+for (const mode of modes) test(`stale engine scan contents and counts equal absence across pages, ${mode}`, async t => {
+  const f = await fixture(t, mode), memories = seed(f), w = worker(f);
+  const built = (await w.pass()).built; assert.ok(built.length);
+  const stale = row(f, built[0].id);
+  // Membership and unfiled candidates must both omit the same stale Card.
+  ok(f.call('applyCardPlacement', { actionId: 'scan-placement',
+    expectedIndexRevision: ok(f.call('mapEvidence', { type: 'card' })).indexRevision,
+    refs: [{ type: 'card', namespace: ns, cardId: stale.id, revision: stale.revision, bodyRevision: stale.body_revision }],
+    proposal: { items: [{ cardId: stale.id, parentIds: [],
+      newL1: { title: 'Synthetic scan topic', parentL2Ids: [] } }] } }));
+  for (let i = 0; i < 3; i++) await authoredCandidate(f, String(i));
+  ok(f.core.admit({ namespace: ns, memory: { content: memories[0].content, kind: 'fact' },
+    receipts: [receipt('scan-new-source')] }));
+  assert.ok(row(f, stale.id).revision > stale.revision);
+  const { createPrivateEvidenceStorage } = await import('../private-evidence-storage.mjs');
+  const { createPrivateOrganizationStorage } = await import('../private-organization-storage.mjs');
+  const cards = createPrivateCardStorage({ db: f.db, identity: f.identity, ready() {} });
+  const options = { db: f.db, identity: f.identity, cardDetailInside: cards.cardDetailInside };
+  const staleIds = f.db.prepare("SELECT id FROM private_cards WHERE id GLOB 'engine-card.*' AND revision>1").all().map(r => r.id);
+  const absent = await absentScanOptions(t, f, staleIds);
+  const factories = { selectEvidence: createPrivateEvidenceStorage, mapEvidence: createPrivateOrganizationStorage };
+  const requests = [
+    ['selectEvidence', { query: 'Synthetic', types: ['card'], intent: 'current', limit: 1, deadlineMs: 5000 }],
+    ['selectEvidence', { query: 'Synthetic', types: ['card'], intent: 'history', limit: 1, deadlineMs: 5000 }],
+    ['mapEvidence', { type: 'card', limit: 1 }],
+  ];
+  for (const [method, input] of requests) {
+    // The public call must succeed as well as the shared storage seam.
+    ok(f.call(method, input));
+    const actual = await scanWalk(factories[method], options, method, input, staleIds);
+    const expected = await scanWalk(factories[method], absent, method, input);
+    assert.ok(actual.length >= 2, 'second page succeeds');
+    assert.deepEqual(actual.map(withoutCursor), expected.map(withoutCursor),
+      method + ' page contents, order, returned counts and complete walk equal absence');
+  }
+});
+
+for (const mode of modes) test(`stale engine map row at page boundary and every cursor resumes, ${mode}`, async t => {
+  const f = await fixture(t, mode), memories = seed(f);
+  const built = memories.slice(0, 3).map((memory, i) => publish(f, [memory], 'moc:synthetic-boundary-' + i))
+    .sort((a, b) => a.id < b.id ? -1 : 1);
+  const stale = built[1];
+  f.db.prepare('UPDATE private_cards SET revision=revision+1 WHERE id=?').run(stale.id);
+  const { createPrivateOrganizationStorage } = await import('../private-organization-storage.mjs');
+  const cards = createPrivateCardStorage({ db: f.db, identity: f.identity, ready() {} });
+  const options = { db: f.db, identity: f.identity, cardDetailInside: cards.cardDetailInside };
+  const input = { type: 'card', limit: 1 };
+  ok(f.call('mapEvidence', input));
+  const actual = await scanWalk(createPrivateOrganizationStorage, options, 'mapEvidence', input, [stale.id]);
+  const absent = await absentScanOptions(t, f, [stale.id]);
+  const expected = await scanWalk(createPrivateOrganizationStorage, absent, 'mapEvidence', input);
+  assert.equal(actual.length, 2);
+  assert.deepEqual(actual.map(withoutCursor), expected.map(withoutCursor));
+  assert.deepEqual(actual.flatMap(page => page.items.map(item => item.ref.cardId)), [built[0].id, built[2].id]);
+  assert.equal(actual[0].coverage.scanned, 1);
+  assert.equal(actual[1].coverage.scanned, 1);
+});
+
+for (const mode of modes) test(`all-stale engine map window advances and terminal stale window finishes, ${mode}`, async t => {
+  const f = await fixture(t, mode), memories = seed(f);
+  // Real publications distribute their dependencies below each Memory's limit.
+  const built = Array.from({ length: 258 }, (_, i) => publish(f, [memories[i % memories.length]],
+    'moc:synthetic-window-' + i)).sort((a, b) => a.id < b.id ? -1 : 1);
+  const current = built.at(-1), staleIds = built.slice(0, -1).map(card => card.id);
+  f.db.prepare('UPDATE private_cards SET revision=revision+1 WHERE id!=?').run(current.id);
+  const { createPrivateOrganizationStorage } = await import('../private-organization-storage.mjs');
+  const cards = createPrivateCardStorage({ db: f.db, identity: f.identity, ready() {} });
+  const options = { db: f.db, identity: f.identity, cardDetailInside: cards.cardDetailInside };
+  const input = { type: 'card', limit: 1 };
+  const pages = await scanWalk(createPrivateOrganizationStorage, options, 'mapEvidence', input, staleIds);
+  assert.deepEqual(ok(f.call('mapEvidence', input)).items, []);
+  assert.equal(pages.length, 2);
+  assert.deepEqual(pages[0].items, []);
+  assert.deepEqual(pages[0].coverage, { status: 'budget_exhausted', scanned: 0, included: 0, partial: true });
+  assert.ok(pages[0].nextCursor, 'full stale window returns an advanced physical cursor');
+  assert.equal(pages[1].nextCursor, null);
+  assert.equal(pages[1].coverage.scanned, 1);
+  const absent = await absentScanOptions(t, f, staleIds);
+  const expected = await scanWalk(createPrivateOrganizationStorage, absent, 'mapEvidence', input);
+  assert.deepEqual(pages.flatMap(page => page.items), expected.flatMap(page => page.items));
+  assert.equal(pages.reduce((sum, page) => sum + page.coverage.scanned, 0), expected[0].coverage.scanned);
+  assert.equal(pages.reduce((sum, page) => sum + page.coverage.included, 0), expected[0].coverage.included);
+  f.db.prepare('UPDATE private_cards SET revision=revision+1 WHERE id=?').run(current.id);
+  const terminal = await scanWalk(createPrivateOrganizationStorage, options, 'mapEvidence', input, built.map(card => card.id));
+  assert.equal(terminal.length, 2);
+  assert.ok(terminal[0].nextCursor);
+  assert.equal(terminal[1].nextCursor, null);
+  assert.ok(terminal.every(page => !page.items.length && page.coverage.scanned === 0 && page.coverage.included === 0));
 });

@@ -1,5 +1,5 @@
 import { cachedContentLayout } from './content-safety-schema.mjs';
-import { contentReadSafety, createContentReadMemo } from './content-safety.mjs';
+import { contentReadSafety, createContentReadMemo, isEngineCard, engineCardRevisionsInside } from './content-safety.mjs';
 import { cardDependencyFence } from './card-current-storage.mjs';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { keyed } from './private-card-input.mjs';
@@ -224,22 +224,27 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
     const marks = boundary(ns);
     // Physical rows are paged before canonical validation, so stale records also
     // consume work. Every candidate kind has a stable key and no copied body.
-    // An engine Card beyond its publication revision is never readable. Omit
-    // it before contributor checks and scan/cursor projections, as selection does.
     const rows = db.prepare(`SELECT * FROM (
       SELECT 'topic' kind,id a,'' b,NULL card_revision,NULL body_revision FROM card_mocs WHERE ${where}
       UNION ALL SELECT 'edge',e.parent_id,e.child_id,NULL,NULL FROM card_moc_edges e JOIN card_mocs t ON t.id=e.parent_id WHERE t.owner_id=? AND t.scope=? AND t.project_id=?
       UNION ALL SELECT 'member',r.moc_id,r.card_id,r.card_revision,r.body_revision FROM card_moc_refs r JOIN card_mocs t ON t.id=r.moc_id WHERE t.owner_id=? AND t.scope=? AND t.project_id=?
       UNION ALL SELECT 'unfiled',id,'',revision,body_revision FROM private_cards WHERE ${where} AND state='confirmed'
-    ) WHERE kind NOT IN ('member','unfiled') OR NOT EXISTS(
-      SELECT 1 FROM private_cards c WHERE c.id=CASE kind WHEN 'member' THEN b ELSE a END
-        AND c.id GLOB 'engine-card.*' AND c.revision!=1)
-      ORDER BY CASE kind WHEN 'topic' THEN 0 WHEN 'edge' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,a,b
+    ) ORDER BY CASE kind WHEN 'topic' THEN 0 WHEN 'edge' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,a,b
       LIMIT 257 OFFSET ?`).all(...marks, ...marks, ...marks, ...marks, offset);
     const result = [];
-    let scanned = 0;
+    let scanned = 0, consumed = 0;
     for (const row of rows.slice(0, 256)) {
       if (result.filter(value => value.item).length >= input.limit + 1) break;
+      consumed++;
+      if (['member','unfiled'].includes(row.kind)) {
+        const id = row.kind === 'member' ? row.b : row.a;
+        if (isEngineCard(id)) {
+          const candidate = db.prepare(`SELECT * FROM private_cards WHERE ${where} AND id=?`).get(...marks, id);
+          // Keep the cursor's physical offset, but omit stale engines before
+          // contributor checks, text/identity projection and returned counts.
+          if (!candidate || !engineCardRevisionsInside(db, ns, candidate)) continue;
+        }
+      }
       const safetyMemo=createContentReadMemo(db);
       if (cachedContentLayout(db)?.suppressionRevision && ['member','unfiled'].includes(row.kind)) {
         const id=row.kind==='member'?row.b:row.a;
@@ -251,34 +256,34 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
         const current = topic(ns, row.a);
         if (parent && (parent.level !== 2 || !db.prepare('SELECT 1 FROM card_moc_edges WHERE parent_id=? AND child_id=? AND child_revision=? AND parent_revision=?').get(parent.id, current.id, current.revision, parent.revision))) continue;
         result.push({ item: { type: 'topic', topic: { type: 'card', id: current.id, level: `L${current.level}`,
-          revision: current.revision, ...titleInside(ns, current) } }, consumed: scanned });
+          revision: current.revision, ...titleInside(ns, current) } }, consumed, scanned });
       } else if (row.kind === 'edge') {
         if (parent && (parent.level !== 2 || parent.id !== row.a)) continue;
         const edge = db.prepare('SELECT * FROM card_moc_edges WHERE parent_id=? AND child_id=?').get(row.a, row.b);
         const p = topic(ns, row.a), child = topic(ns, row.b);
         if (!p || !child || p.level !== 2 || child.level !== 1 || p.revision !== edge.parent_revision || child.revision !== edge.child_revision) continue;
         result.push({ item: { type: 'ref', ref: { parentId: p.id, parentRevision: p.revision,
-          childType: 'topic', childId: child.id, childRevision: child.revision, relation: 'contains' } }, consumed: scanned });
+          childType: 'topic', childId: child.id, childRevision: child.revision, relation: 'contains' } }, consumed, scanned });
       } else {
         const card = cardDetailInside(ns, row.kind === 'member' ? row.b : row.a,undefined,{safetyMemo});
         if (!safeCard(ns, card)) continue;
         if (row.kind === 'unfiled') {
           if (parent || db.prepare('SELECT 1 FROM card_moc_refs WHERE card_id=? AND card_revision=? AND body_revision=? LIMIT 1').get(card.id, card.revision, card.bodyRevision)) continue;
-          result.push({ item: { type: 'unfiled', ref: cardRef(ns, card) }, consumed: scanned });
+          result.push({ item: { type: 'unfiled', ref: cardRef(ns, card) }, consumed, scanned });
         } else {
           const ref = db.prepare('SELECT * FROM card_moc_refs WHERE moc_id=? AND card_id=?').get(row.a, row.b), p = topic(ns, row.a);
           if (parent && (parent.level !== 1 || parent.id !== row.a)) continue;
           if (!p || p.level !== 1 || p.revision !== ref.moc_revision || !sameRef(card, { revision: ref.card_revision, bodyRevision: ref.body_revision })) continue;
           result.push({ item: { type: 'ref', ref: { parentId: p.id, parentRevision: p.revision,
-            childType: 'card', childId: card.id, childRevision: card.revision, bodyRevision: card.bodyRevision, relation: 'contains' } }, consumed: scanned });
+            childType: 'card', childId: card.id, childRevision: card.revision, bodyRevision: card.bodyRevision, relation: 'contains' } }, consumed, scanned });
         }
       }
     }
-    return { rows: result, scanned, hasMore: scanned < rows.length, epoch: cardIndex(ns) };
+    return { rows: result, scanned, consumed, hasMore: consumed < rows.length, epoch: cardIndex(ns) };
   }
   function paged(method, ns, original, input, accessGeneration) {
     const binding = bind([ns, method, input]), offset = decode(original.cursor, binding, ns, accessGeneration);
-    let rows, epoch, scanned, more;
+    let rows, epoch, scanned, more, advanced;
     if (method === 'mapEvidence' && input.type === 'memory') {
       const page = memoryMapInside(ns, { purpose: input.purpose, parentRef: input.parentRef, limit: input.limit, offset });
       epoch = page.epoch; rows = page.rows; scanned = rows.length; more = rows.length > input.limit;
@@ -287,7 +292,7 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
           { type: 'unfiled', ref: { type: 'memory', namespace: ns, ...row.item.ref }, label: row.item.label } :
           { type: 'ref', ref: { ...row.item.ref, childType: row.item.ref.childType === 'moc' ? 'topic' : row.item.ref.childType }, label: row.item.label } });
     } else if (method === 'mapEvidence') {
-      const page = cardMapRows(ns, input, offset); ({ rows, epoch, scanned } = page); more = page.hasMore;
+      const page = cardMapRows(ns, input, offset); ({ rows, epoch, scanned, consumed: advanced } = page); more = page.hasMore;
     } else {
       const column = input.type === 'memory' ? 'memory_moc_id' : 'card_moc_id';
       rows = db.prepare(`SELECT * FROM evidence_mappings WHERE ${where} AND ${column}=? ORDER BY id LIMIT ? OFFSET ?`)
@@ -298,10 +303,10 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
     while (true) {
       const selected = rows.slice(0, take), partial = more || rows.length > take;
       const consumed = selected.at(-1)?.consumed ?? (rows.length > take ? take : scanned);
-      const nextOffset = offset + (rows.length > take ? consumed : scanned);
+      const nextOffset = offset + (rows.length > take ? consumed : advanced ?? scanned);
       const value = { ...(method === 'mapEvidence' ? { type: input.type, indexRevision: epoch } : {}),
         items: selected.filter(row => row.item).map(row => row.item), invalidRefs: selected.filter(row => row.invalidRef).map(row => row.invalidRef),
-        coverage: { status: partial ? 'budget_exhausted' : 'complete', scanned: rows.length > take ? consumed : scanned,
+        coverage: { status: partial ? 'budget_exhausted' : 'complete', scanned: rows.length > take ? selected.at(-1)?.scanned ?? consumed : scanned,
           included: selected.filter(row => row.item).length, partial },
         nextCursor: partial ? encode({ binding, offset: nextOffset, generations: generations(ns), accessGeneration }) : null };
       if (size(value) <= 65536) return value;
