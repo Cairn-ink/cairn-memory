@@ -2,6 +2,29 @@ import assert from 'node:assert/strict';
 import { Duplex, PassThrough } from 'node:stream';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+
+// External writer owns a native SQLite transaction, never a raw file handle.
+// Cleanup also supervises early assertion failures and startup/child errors.
+export async function holdWriteLock(t, path, holdMs) {
+  const child = spawn(process.execPath, ['--input-type=module', '-e',
+    "import { DatabaseSync } from 'node:sqlite'; const db = new DatabaseSync(process.argv[1]); db.exec('BEGIN IMMEDIATE'); process.stdout.write('locked\\n'); setTimeout(() => { db.exec('ROLLBACK'); db.close(); }, Number(process.argv[2]));",
+    path, String(holdMs)], { stdio: ['ignore', 'pipe', 'ignore'] });
+  const exited = once(child, 'exit');
+  // Register a rejection handler before any asynchronous startup error.
+  exited.catch(() => {});
+  t.after(async () => {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+    await exited;
+  });
+  const [ready] = await Promise.race([
+    once(child.stdout, 'data'),
+    exited.then(() => { throw Error('synthetic_lock_not_acquired'); }),
+  ]);
+  assert.equal(ready.toString(), 'locked\n', 'external SQLite writer acquired BEGIN IMMEDIATE');
+  return { exited };
+}
 
 export const ns = { ownerId: 'synthetic-shared-owner', scope: 'personal', projectId: null };
 export const counter = { id: 'synthetic-character-counter', countTokens: text => Math.ceil(text.length / 4) };

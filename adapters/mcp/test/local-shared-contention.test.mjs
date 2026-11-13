@@ -1,16 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { spawn } from 'node:child_process';
-import { once } from 'node:events';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as delay } from 'node:timers/promises';
 import { rationaleModel } from '../../../core/testing/rationale-model.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { createLocalSharedRuntime } from '../local-shared-runtime.mjs';
-import { ns, counter, query, ok, connect, call, context } from './local-shared-support.mjs';
+import { ns, counter, query, ok, connect, call, context, holdWriteLock } from './local-shared-support.mjs';
 
-test('A4 measure B-H reads while A waits on a three-second external canonical write lock', { timeout: 60000 }, async t => {
+for (const holdMs of [3000, 7000]) test(`A4 eight connections remain responsive under an external ${holdMs}ms canonical write lock`, { timeout: 60000 }, async t => {
   const w = createTestWorkspace(t), path = join(w.path, 'synthetic-contention.sqlite');
   // The default MCP client is Memory-only; exercise real retained Raw here.
   const host = createLocalSharedRuntime({ path, namespace: ns, client: 'codex', contextCounter: counter, model: rationaleModel(), captureQualification: 'source-bound-v2' });
@@ -50,15 +48,12 @@ test('A4 measure B-H reads while A waits on a three-second external canonical wr
     const start = performance.now(), write = call(clients[0], 'remember_memory', writeInput);
     baseline.push(...await measure(start)); ok(await write);
   }
-  // This is another process using the same SQLite library, never a raw fd.
-  const child = spawn(process.execPath, ['--input-type=module', '-e',
-    "import { DatabaseSync } from 'node:sqlite'; const db = new DatabaseSync(process.argv[1]); db.exec('BEGIN IMMEDIATE'); process.stdout.write('locked\\n'); setTimeout(() => { db.exec('ROLLBACK'); db.close(); }, 3000);", path],
-    { stdio: ['ignore', 'pipe', 'pipe'] });
-  const exited = once(child, 'exit');
-  t.after(async () => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM'); await exited; });
-  const [ready] = await once(child.stdout, 'data'); assert.equal(ready.toString(), 'locked\n');
-  const start = performance.now(), write = call(clients[0], 'remember_memory', writeInput);
-  const locked = await measure(start), written = await write;
+  const { exited } = await holdWriteLock(t, path, holdMs);
+  // remember_memory has no caller-supplied budget: the A4 default is 5000ms.
+  const deadlineMs = 5000, granularityMs = 256;
+  const start = performance.now(), write = call(clients[0], 'remember_memory', writeInput)
+    .then(result => ({ result, elapsedMs: performance.now() - start }));
+  const locked = await measure(start), { result: written, elapsedMs } = await write;
   const [code, signal] = await exited; assert.equal(code, 0); assert.equal(signal, null);
   const stats = samples => ({ reads: samples.length,
     p95Ms: [...samples].sort((a,b) => a.latencyMs-b.latencyMs)[Math.ceil(samples.length * .95)-1].latencyMs,
@@ -66,9 +61,31 @@ test('A4 measure B-H reads while A waits on a three-second external canonical wr
     rawPartials: samples.filter(sample => sample.rawPartial).length, failures: samples.filter(sample => sample.failed).length,
     storageBusy: samples.filter(sample => sample.storageBusy).length });
   const single = stats(baseline), held = stats(locked);
-  const stalled = held.p95Ms > 2 * single.p95Ms || held.partialRate > single.partialRate;
-  t.diagnostic('A4 ' + JSON.stringify({ baseline: single, locked: held, ratio: held.p95Ms / single.p95Ms, stalled,
-    writeOk: written.ok, raw: 'enabled; warmed included before measurement',
-    action: stalled ? 'owner decision required; canonical fallback not implemented' : 'no stall observed' }));
-  ok(written);
+  t.diagnostic('A4 ' + JSON.stringify({ connections: clients.length, holdMs, deadlineMs,
+    baseline: single, locked: held, ratio: held.p95Ms / single.p95Ms, writeMs: elapsedMs,
+    writeOk: written.ok, writeBusy: written.error?.code === 'storage_busy' }));
+  assert.ok(held.p95Ms <= 2 * single.p95Ms, 'A4 B-H read p95 must stay within 2x unlocked baseline');
+  assert.ok(held.partialRate <= single.partialRate, 'A4 locked reads must not increase the partial rate');
+  assert.equal(held.failures, 0, 'A4 every B-H read must succeed under the external write lock');
+  assert.ok(elapsedMs <= deadlineMs + granularityMs, 'A4 write must finish inside its original deadline plus one back-off granularity');
+  if (!written.ok || holdMs > deadlineMs) {
+    assert.equal(written.ok, false, 'A4 lock beyond the deadline must refuse the write');
+    assert.equal(written.error.code, 'storage_busy', 'A4 deadline exhaustion must return the named busy code');
+    assert.equal(written.error.retryable, true, 'A4 busy refusal must remain retryable');
+  }
+  if (holdMs > deadlineMs) assert.ok(elapsedMs >= deadlineMs - granularityMs,
+    'A4 write must use its budget instead of failing at the native short timeout');
+  else if (written.ok) assert.ok(elapsedMs >= holdMs - granularityMs,
+    'A4 successful write must wait asynchronously for the external lock release');
+  // STOPPED: the engine has no diagnostic seam at this revision. This is the
+  // proposed adapter observation, deliberately a required regression guard.
+  assert.equal(typeof host.inspectTransactions, 'function', 'A4 requires an engine-owned transaction-state seam');
+  const states = host.inspectTransactions();
+  assert.ok(states.length > 0, 'A4 transaction diagnostics must cover the owned connections');
+  for (const state of states) {
+    assert.equal(state.isOpen, true, 'A4 contention must leave every engine connection open');
+    assert.equal(state.isTransaction, false, 'A4 contention must leave no engine connection mid-transaction');
+  }
+  for (const client of clients) await context(client);
+  ok(await call(clients[0], 'remember_memory', { content: 'Synthetic post-contention write', kind: 'fact' }));
 });
