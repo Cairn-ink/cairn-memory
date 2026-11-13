@@ -10,6 +10,7 @@ import { createLocalSharedRuntime } from '../local-shared-runtime.mjs';
 import { createCairnServer } from '../server.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
+import { defaultRawOptions } from '../../../core/local-defaults.mjs';
 import { rationaleModel } from '../../../core/testing/rationale-model.mjs';
 import { ns, counter, query, ok, streams, connect, call, context, deferred } from './local-shared-support.mjs';
 
@@ -239,13 +240,19 @@ test('canonical pause fences Raw on all eight connections and preserves main exp
   }
   const conversations = ok(control.listRawConversations({ namespace: ns, client: 'codex', limit: 50 }));
   assert.equal(conversations.conversations.length, 1, 'all Raw connections share one configured capture session');
-  const retained = ok(await control.getConversation({ namespace: ns,
+  // raw:true intentionally hides text readers. Select the existing explicit
+  // journal reader profile, using the same local plaintext port as the writer.
+  const rawReader = openMemoryCore({ path: rawPath, rawSearch: false, rawConversations: defaultRawOptions() });
+  w.defer(() => rawReader.close());
+  const retained = ok(await rawReader.getConversation({ namespace: ns,
     conversationId: conversations.conversations[0].id, limit: 50 }));
   assert.equal(retained.messages.length, 16, 'only eight warm and eight resumed Raw messages are retained');
   assert.equal(JSON.stringify(retained).includes('SYNTHETIC_PAUSED_RAW_SENTINEL_'), false,
     'no Raw message submitted while paused may appear after resume');
   const memories = ok(control.list({ namespace: ns, limit: 50 }));
-  assert.equal(JSON.stringify(memories).includes('SYNTHETIC_PAUSED_RAW_SENTINEL_'), false,
+  assert.equal(memories.exhausted, true, 'paused Memory absence must inspect the entire namespace');
+  const inspected = memories.memories.map(memory => ok(control.get({ namespace: ns, memoryId: memory.id })));
+  assert.equal(JSON.stringify(inspected).includes('SYNTHETIC_PAUSED_RAW_SENTINEL_'), false,
     'no inferred Memory from refused paused Raw may appear after resume');
 
   // Client identity is runtime configuration. Use a second eight-connection
