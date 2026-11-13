@@ -45,6 +45,10 @@ try {
     const candidates = [];
     const result = await runForwarder(configuration.args, { ...configuration.options,
       onCandidate(child) {
+        // Production detaches/unrefs candidates. This fixture supervises their
+        // actual wait status until test teardown, including idle resets caused
+        // by later sessions; their lifetime is not bounded by forwarder EOF.
+        child.ref();
         send({ kind: 'candidate', pid: child.pid });
         candidates.push(new Promise(resolve => child.on('exit', (code, signal) => {
           send({ kind: 'candidate-exit', pid: child.pid, code, signal }); resolve();
@@ -57,9 +61,7 @@ try {
     if (result) process.exitCode = 1;
     // Keep the supervisor alive after stdio EOF so detached children's actual
     // wait status is reported, including losers and the idle-exiting winner.
-    let timer;
-    try { await Promise.race([Promise.all(candidates), new Promise((_, reject) => { timer = setTimeout(() => reject(Error('candidate_cleanup_timeout')), 40000); })]); }
-    finally { clearTimeout(timer); }
+    await Promise.all(candidates);
   }
 } catch { send({ kind: 'fixture-failed' }); process.exitCode = 1; }
 finally { process.disconnect?.(); }
