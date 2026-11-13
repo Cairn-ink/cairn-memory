@@ -279,7 +279,7 @@ function checklistSchema(input) {
 }
 
 /** Request-scoped identifier constraints; core still validates correlated tuples. */
-export function schemasFor(method, input) {
+export function schemasFor(method, input, allowEmptyRationale = false) {
   if (method === 'selectChecklist') {
     try { return checklistSchema(input); } catch { invalid(); }
   }
@@ -319,6 +319,7 @@ export function schemasFor(method, input) {
     if (!memoryIndices.length) invalid();
     const receiptIndices = input.memories.flatMap(memory => {
       const indices = snapshotIndices(memory.receipts, 100);
+      if (!indices.length && !allowEmptyRationale) invalid();
       return indices;
     });
     const evidenced = input.memories.filter(memory => memory.receipts.length).map(memory => memory.index);

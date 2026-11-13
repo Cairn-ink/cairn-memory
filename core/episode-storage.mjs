@@ -1,6 +1,7 @@
+import { receiptDenialsInside, contentReadSafety, createContentReadMemo, receiptReadSafety } from './content-safety.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
-import { contentReadSafety, createContentReadMemo, receiptReadSafety } from './content-safety.mjs';
-import { contentSuppressionReasonInside, receiptDenialsInside } from './content-suppression-storage.mjs';
+
+import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHmac, randomUUID } from 'node:crypto';
 import { transaction, isStorageBusy } from './database.mjs';
 import { ADMISSION_LEASE_MS, HEX_DIGEST } from './episode-schema.mjs';
@@ -55,7 +56,7 @@ export function episodeReadRow(row) {
     observed: row.observed, attempted: row.attempted, covered: row.covered };
 }
 
-export function episodeReadRowsInside(db, ns, rows, linkedReceipts = []) {
+function episodeReadRowsInside(db, ns, rows, linkedReceipts = []) {
   const memo = createContentReadMemo(db);
   const sources = rows.length ? db.prepare(`SELECT s.*,o.client AS origin_client,o.session_key AS origin_session
     FROM episode_sources s JOIN session_episodes e ON e.id=s.episode_id

@@ -1,5 +1,5 @@
-import { sourceReadSafety, createContentReadMemo } from './content-safety.mjs';
-import { receiptDenialsInside } from './content-suppression-storage.mjs';
+import { receiptDenialsInside, sourceReadSafety, createContentReadMemo } from './content-safety.mjs';
+
 import { fail } from './validation.mjs';
 import { cardMemoryRefs, sourceRef } from './private-card-input.mjs';
 

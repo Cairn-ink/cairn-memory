@@ -967,7 +967,7 @@ export function createMemoryCore(input, internal) {
       const storage = { map: (request) => mapPage(request, navigation),
         fetch: (request, reader) => reader ? fetchUsing(request,reader) : fetch(request), validateFresh,
         prepare: refs => {
-          const reader=preparedRead=runtime.prepareRecall(refs.map(ref=>({...ref,namespace:namespaces[ref.namespaceIndex]})),includeQualification,contextMode);
+          const reader=preparedRead=runtime.recallSnapshot(refs.map(ref=>({...ref,namespace:namespaces[ref.namespaceIndex]})),null,[],includeQualification,contextMode);
           return {fetch:request=>storage.fetch(request,reader),recentReceipts:(ref,count)=>storage.recentReceipts(ref,count,reader)};
         },
         recentReceipts: (ref, limit, reader) => (reader ?? runtime).recentReceipts(namespaces[ref.namespaceIndex], ref, limit),

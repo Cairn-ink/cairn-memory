@@ -1,10 +1,11 @@
+import { receiptDenialsInside, contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { captureSnapshot } from './capture-input.mjs';
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
 import { registerContentWriteBoundary } from './content-write-context.mjs';
 import { contentScopeEpochGuard, assertContentOutput, contentReceiptCount, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
 import { receiptEventTimeEnabled, cachedContentLayout, installedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
 import { writeContentSuppressionInside, suppressReceiptsInside, withContentSuppressionReadInside, requireSuppressionTransaction, allocateContentKey, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, hasContentSuppressionRequestInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
-import { contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
+
 import { roleProfileOptions } from './role-profile-input.mjs';
 import { createRoleProfileStorage } from './role-profile-storage.mjs';
 import { assetOptions } from './asset-input.mjs';
@@ -37,7 +38,6 @@ import { createRawCardInvalidation } from './card-raw-sources.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { createRawDeletionStorage } from './raw-deletion-storage.mjs';
 import { createRawLineageStorage, isSourceSnapshotOverflow, SOURCE_SNAPSHOT_MS } from './raw-lineage-storage.mjs';
-import { receiptDenialsInside } from './content-suppression-storage.mjs';
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
 const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
@@ -202,7 +202,6 @@ export function createMemoryRuntime(input, internal) {
         LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id
         WHERE ar.memory_id=memories.id AND (ac.owner_id IS NOT memories.owner_id
           OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry` : '';
-
 
   function legacyDto(memory, memo) {
     if (!memory || privacyMemoryDenied(memory)) return null;
@@ -586,7 +585,7 @@ export function createMemoryRuntime(input, internal) {
     const memo = createContentReadMemo(db), batches = [];
     memo.runtimeReceipts = new Map();
     for (const ns of new Map(entries.map(entry => [JSON.stringify(boundary(internalNamespace(entry.namespace))), entry.namespace])).values()) {
-      const ids = entries.filter(entry => JSON.stringify(boundary(internalNamespace(entry.namespace))) === JSON.stringify(boundary(internalNamespace(ns)))).map(entry => entry.memoryId);
+      const ids = [...new Set(entries.filter(entry => JSON.stringify(boundary(internalNamespace(entry.namespace))) === JSON.stringify(boundary(internalNamespace(ns)))).map(entry => entry.memoryId))];
       const rows = db.prepare(`SELECT r.* FROM json_each(?) w CROSS JOIN memories m ON m.id=w.value
         JOIN receipts r ON r.memory_id=m.id WHERE m.owner_id=? AND m.scope=? AND m.project_id=?
         ORDER BY r.created_at,r.id`).all(JSON.stringify(ids),...boundary(internalNamespace(ns)));
@@ -806,6 +805,9 @@ export function createMemoryRuntime(input, internal) {
 
   function recallSnapshot(candidates, selected, namespaces = [], includeQualification = false, contextMode) {
     ready();
+    // Private preparation handoff through the existing collaborator. Null is
+    // never a delivered selection and does not add a runtime method.
+    if (selected === null) return prepareRecall(candidates, includeQualification, contextMode);
     return transaction(db, () => {
       // This transaction is the return linearization point across the read set.
       const rows = candidates.map(({ namespace, memoryId, revision }) => {
@@ -1039,7 +1041,7 @@ export function createMemoryRuntime(input, internal) {
     listRawEffects(input) { ready(); return deletion.list(input); },
     identity, ready, admit, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     legacyGet, legacyList, legacySearch,
-    listPage, getPage, fetchPage, recentReceipts, recallSnapshot, sourceSnapshot, prepareRecall,
+    listPage, getPage, fetchPage, recentReceipts, recallSnapshot, sourceSnapshot,
     rationaleSnapshot(ns, refs, inputMode) { ready(); return rationaleStorage.snapshot(ns, refs, inputMode); },
     commitRationale(ns, refs, snapshot, proposals, deadline) {
       ready(); return rationaleStorage.commit(ns, refs, snapshot, proposals, deadline);

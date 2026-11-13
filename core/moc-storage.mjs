@@ -1,10 +1,10 @@
+import { receiptDenialsInside, contentReadSafety, receiptReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { performance } from 'node:perf_hooks';
 import { cachedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
-import { contentReadSafety, receiptReadSafety, createContentReadMemo } from './content-safety.mjs';
+
 import { contentSuppressionRequestFenceInside, contentSuppressionReasonInside, cachedContentSuppressionRequestInside,
   contentSuppressionFenceInside, withContentSuppressionRequest,
   resetContentSuppressionRequestInside, contentSuppressionRequestInside } from './content-suppression-storage.mjs';
-import { receiptDenialsInside } from './content-suppression-storage.mjs';
 import { randomUUID } from "node:crypto";
 import { transaction, readTransaction, isStorageBusy } from "./database.mjs";
 import { fail } from "./validation.mjs";

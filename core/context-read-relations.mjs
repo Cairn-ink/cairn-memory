@@ -1,7 +1,8 @@
+import { receiptDenialsInside, contentReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { hasCardLineage } from './card-lineage.mjs';
 import { bindContentSafetyConnection, cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
-import { contentReadSafety, createContentReadMemo } from './content-safety.mjs';
-import { contentSuppressionReasonInside, receiptDenialsInside } from './content-suppression-storage.mjs';
+
+import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { compareCanonical, canonicalKey } from './context-read-bm25.mjs';

@@ -46,14 +46,27 @@ test(`Episode source and receipt withholding ${kind} ${operation}, linked=${link
   }
   const withheldIds = [b, a].flatMap(memory => f.db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(memory.id).map(row => row.id));
   const request = { namespace: ns, episodeId, sourceLimit: 16, memoryLimit: 50 };
-  assert.ok(ok(f.core.getEpisode(request)).sources.items.some(source => source.text === text));
+  if (linked && operation === 'reject') {
+    // As before: an awaiting linked decision hides the whole Episode.
+    assert.equal(f.core.getEpisode(request).error.code, 'episode_not_found');
+  } else assert.ok(ok(f.core.getEpisode(request)).sources.items.some(source => source.text === text));
   const action = { namespace: ns, memoryId: a.id, expectedRevision: a.revision };
   ok(operation === 'correct' ? f.core.correct({ ...action, content: 'Synthetic corrected Episode claim', kind: 'fact',
     receipt: receipt('synthetic-episode-correction') }) : f.core[operation]({ ...action,
     ...(operation === 'reject' ? { actionId: 'synthetic-episode-rejection' } : {}) }));
   // This line exposes getEpisode on lineage-enabled stores; it has no separate
   // getEpisodeWithLineage method. Exercise that actual public composition.
-  const result = f.core.getEpisode(request), value = ok(result), serialized = JSON.stringify(result);
+  const result = f.core.getEpisode(request);
+  if (linked && operation === 'correct' && ['package48', 'lineage53'].includes(kind)) {
+    // The base already refuses the retained old admission reference against
+    // the correction revision-through fact; markers do not cause this refusal.
+    assert.equal(result.error.code, 'evidence_unavailable');
+    assert.equal(f.db.prepare('SELECT deleted FROM session_episodes WHERE id=?').get(episodeId).deleted, 0);
+    assert.equal(f.db.prepare('SELECT count(*) n FROM episode_sources WHERE episode_id=?').get(episodeId).n, 0);
+    return;
+  }
+  const value = ok(result), serialized = JSON.stringify(result);
+  if (linked) assert.equal(value.episode.processing.state, 'invalidated');
   assert.equal(serialized.includes(forgotten), false);
   assert.equal(serialized.includes(text), false);
   for (const id of withheldIds) assert.equal(serialized.includes(id), false, 'withheld receipt id anywhere in the response');

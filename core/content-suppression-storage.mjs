@@ -1,3 +1,4 @@
+import { receiptDenialTokens } from './content-safety.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { bindContentSafetyConnection, cachedContentLayout, contentSafetyConnection, contentSafetyBudgetError, installedContentLayout, withContentSafetyLayoutInside } from './content-safety-schema.mjs';
@@ -5,47 +6,6 @@ import { fail, identifier } from './validation.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const reasons = new Set(['user_forget', 'correction_supersession', 'purge', 'privacy_erase', 'account_erasure']);
-// Portable across account re-keying and store merges. Namespace isolation lives
-// in the suppressed primary key and read memo, never in the address digest.
-export function receiptDenialTokens(receipts) {
-  return [...new Set(receipts.flatMap(receipt => [
-    'rs1:i:' + receipt.receipt_key,
-    'rs1:a:' + createHash('sha256').update(JSON.stringify([
-      'receipt-source-address-v1', receipt.client, receipt.session_id, receipt.event_id, receipt.role,
-    ])).digest('hex'),
-  ]))];
-}
-export function receiptDenialsInside(db, ns, receipts, memo) {
-  // A batch may cover several namespaces, but every token retains the full
-  // primary-key boundary. The memo belongs only to the caller's snapshot.
-  const batches = Array.isArray(ns) ? ns : [{ namespace: ns, receipts }];
-  const cache = memo ? memo.receiptDenials ??= new Map() : new Map();
-  const key = (namespace, token) => JSON.stringify([...boundary(namespace), token]);
-  const missing = new Map();
-  for (const batch of batches) for (const token of receiptDenialTokens(batch.receipts)) {
-    const id = key(batch.namespace, token);
-    if (!cache.has(id)) missing.set(id, [...boundary(batch.namespace), token]);
-  }
-  if (missing.size) {
-    if (batches.length === 1) {
-      const namespace = batches[0].namespace;
-      const rows = db.prepare(`SELECT s.fingerprint,1 AS denied FROM json_each(?) w CROSS JOIN suppressed s
-WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value`)
-        .all(JSON.stringify([...missing.values()].map(value => value[3])), ...boundary(namespace));
-      for (const id of missing.keys()) cache.set(id, false);
-      for (const row of rows) cache.set(key(namespace, row.fingerprint), true);
-    } else {
-      const rows = db.prepare(`SELECT s.owner_id,s.scope,s.project_id,s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s
-WHERE s.owner_id=json_extract(w.value,'$[0]') AND s.scope=json_extract(w.value,'$[1]')
-AND s.project_id=json_extract(w.value,'$[2]') AND s.fingerprint=json_extract(w.value,'$[3]')`)
-        .all(JSON.stringify([...missing.values()]));
-      for (const id of missing.keys()) cache.set(id, false);
-      for (const row of rows) cache.set(JSON.stringify([row.owner_id, row.scope, row.project_id, row.fingerprint]), true);
-    }
-  }
-  return new Set(batches.flatMap(batch => batch.receipts.filter(receipt =>
-    receiptDenialTokens([receipt]).some(token => cache.get(key(batch.namespace, token)))).map(receipt => receipt.receipt_key)));
-}
 export const suppressionEpoch = row => (BigInt(row.epoch_hi) << 32n) + BigInt(row.epoch_lo);
 export function requireSuppressionTransaction(db) {
   if (!db.isTransaction) fail('storage_error');

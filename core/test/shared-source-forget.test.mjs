@@ -20,7 +20,7 @@ import { configured, descriptor } from '../testing/context-product-owner-fixture
 import { contentSafetyFacade } from '../content-safety-boundary.mjs';
 import { transaction, readTransaction } from '../database.mjs';
 import { createContentReadMemo, receiptReadSafety } from '../content-safety.mjs';
-import { receiptDenialsInside, receiptDenialTokens } from '../content-suppression-storage.mjs';
+import { receiptDenialsInside, receiptDenialTokens } from '../content-safety.mjs';
 
 const survivor = 'Synthetic surviving signal';
 const forgotten = 'Synthetic sibling secret';
@@ -761,7 +761,7 @@ test(`review 8 unrelated Card invalidation ${kind} ${operation}`, async t => {
   assert.ok(result.indexRevision);
   assert.ok(f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(card.id).revision > before.revision);
   const served = f.call('getCard', { cardId: card.id });
-  assert.equal(served.ok, false, 'invalidation never waives Card delivery');
+  assert.equal(ok(served).card, null, 'invalidation never waives Card delivery');
   assert.equal(ok(f.core.get({ namespace: ns, memoryId: d.id })).memory.content, 'Synthetic retained contributor');
 });
 
