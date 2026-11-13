@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setTimeout as delay } from 'node:timers/promises';
+import { existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { createCairnServer } from '../server.mjs';
 import { sourceFixture, savedSource, ns } from '../../../core/testing/raw-source-fixtures.mjs';
 import { scriptedConsolidator } from '../../../core/testing/engine-card-fixture.mjs';
@@ -43,8 +47,26 @@ for (const [name, options, expected] of [
   if (expected) assert.ok(model.calls[0].rawSpans.every(span => span.text.startsWith(marker)));
 });
 
-test('local server rejects non-boolean rawSemantic before opening a store', () => {
+test('local server rejects non-boolean rawSemantic before opening a store', async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'mcp-raw-consent-' });
+  const path = join(workspace.path, 'store.sqlite');
+  const configuration = { path, namespace: ns, contextRead: false, raw: false, rawSearch: false };
+  const exec = t.mock.method(DatabaseSync.prototype, 'exec');
+  const prepare = t.mock.method(DatabaseSync.prototype, 'prepare');
+  let server;
+  workspace.defer(() => server?.close());
   for (const rawSemantic of [null, undefined, 0, 1, 'true', [], {}]) {
-    assert.throws(() => createCairnServer({ rawSemantic }), /invalid_mcp_configuration/);
+    assert.throws(() => { server = createCairnServer({ ...configuration, rawSemantic }); },
+      { message: 'invalid_mcp_configuration' });
+    assert.equal(existsSync(path), false, 'invalid configuration must not create the store');
+    assert.deepEqual(readdirSync(workspace.path), [], 'no store or sidecar files');
+    assert.equal(exec.mock.callCount(), 0, 'no store initialization');
+    assert.equal(prepare.mock.callCount(), 0, 'no store queries');
   }
+  // Prove that the same path and namespace otherwise open a real local store.
+  server = createCairnServer({ ...configuration, rawSemantic: false });
+  assert.equal(existsSync(path), true);
+  assert.ok(exec.mock.callCount() > 0);
+  assert.ok(prepare.mock.callCount() > 0);
+  await server.close();
 });
