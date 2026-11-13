@@ -301,6 +301,17 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   function assertSourcesInside(input, sourceState, code) {
     if (sourceState && !same(captureSources(input), sourceState.fences)) fail(code);
   }
+  function prepareReadMemo(input, refs, witnesses = []) {
+    const memo=createContentReadMemo(db), ids=[...new Set(witnesses.flatMap(path=>
+      [path.edge.from_receipt,path.edge.to_receipt,path.edge.receipt_id].filter(Boolean)))];
+    const additional=ids.length?input.readSet.map(namespace=>({namespace,receipts:db.prepare(`SELECT r.* FROM receipts r
+      JOIN memories m ON m.id=r.memory_id WHERE m.owner_id=? AND m.scope=? AND m.project_id=?
+        AND r.id IN (SELECT value FROM json_each(?))`).all(namespace.ownerId,namespace.scope,namespace.projectId??'',JSON.stringify(ids))})):[];
+    const batchRefs=[...refs,...witnesses.flatMap(path=>[path.via.seed,path.ref])];
+    evidence.prepareInside(batchRefs,memo,Boolean(options.sources),additional);
+    memo.relationWitnessesPrepared=true;
+    return memo;
+  }
   function witnessInside(input, path, code, budget = sourceBudget(Infinity)) {
     try {
       const reader = sourceReader(db, { storeId: info.storeId, cursorSecret: info.cursorSecret }, info, input, budget);
@@ -310,12 +321,12 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   function deliverPage(input, ranking, position, limit) {
     return read(() => {
       const result = page(ranking, position, limit);
-      const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
+      const safetyMemo=prepareReadMemo(input,result.items.map(candidate=>candidate.ref),ranking.sourceState?.witnesses);
       for (const candidate of result.items) evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet,
-        safetyMemo?{safetyMemo,batchRefs:result.items.map(candidate=>candidate.ref)}:options.sources?{legacyEvidence:true}:undefined);
+        {safetyMemo,batchRefs:result.items.map(candidate=>candidate.ref),legacyEvidence:Boolean(options.sources)});
       if (!options.sources) return result;
       assertSourcesInside(input, ranking.sourceState, 'cursor_stale');
-      const budget = sourceBudget(Infinity);
+      const budget = sourceBudget(Infinity); budget.receiptMemo=safetyMemo;
       for (const path of ranking.sourceState.witnesses) witnessInside(input, path, 'cursor_stale', budget);
       return result;
     });
@@ -487,7 +498,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         sampleTrace(diagnostics.trace);
         access.check(); storage.assertState(projection, current);
         const horizon = deepFreeze({ items: candidateItems, ...diagnostics });
-        return { ok: true, horizon, ...(sourceState ? { sourceState } : {}), check() {
+        return { ok: true, horizon, readMemo:()=>prepareReadMemo(input,horizon.items.map(candidate=>candidate.ref),sourceState?.witnesses), ...(sourceState ? { sourceState } : {}), check() {
           access.check();
           if (sourceState) read(() => assertSourcesInside(input, sourceState, 'snapshot_stale'));
           const resumed = acquireSidecar(projection, access);
@@ -637,10 +648,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           return { generations: [], items: [], unavailable: candidates.items.length };
         }
         const generations = canonicalFence(input.readSet, input.types), items = [];
-        const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
+        const safetyMemo=searched.readMemo?.();
         if (searched.sourceState) assertSourcesInside(input, searched.sourceState, 'snapshot_stale');
         let unavailable = 0;
         const witnessBudget = searched.sourceState ? sourceBudget(dependencyAware ? deadlineAt : Infinity) : null;
+        if(witnessBudget)witnessBudget.receiptMemo=safetyMemo;
         for (const [position, candidate] of candidates.items.entries()) {
           if (dependencyAware && performance.now() >= deadlineAt) {
             deadline = true; unavailable += candidates.items.length - position; break;
@@ -653,7 +665,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
               catch (error) { if (error.code === 'evidence_unavailable') { unavailable++; continue; } throw error; }
             }
             if (dependencyAware && performance.now() >= deadlineAt) { deadline = true; unavailable++; continue; }
-            item = evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet, { deadlineAt: dependencyAware ? deadlineAt : Infinity, legacyEvidence:Boolean(options.sources), ...(safetyMemo?{safetyMemo,batchRefs:candidates.items.map(candidate=>candidate.ref)}:{}) })[0];
+            item = evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet, { deadlineAt: dependencyAware ? deadlineAt : Infinity, legacyEvidence:Boolean(options.sources), safetyMemo,batchRefs:candidates.items.map(candidate=>candidate.ref) })[0];
             if (dependencyAware && performance.now() >= deadlineAt) { deadline = true; unavailable++; continue; }
           }
           catch (error) {
@@ -662,8 +674,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           }
           const { type, ref, state, origin } = item;
           const sourceRows = type === 'memory' && item.provenance.sourceAccess === 'available' ?
-            (safetyMemo?.evidenceReceipts?.get(JSON.stringify([[ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId??''],ref.memoryId]))?.slice(0,16) ??
-              db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId)).filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)) : [];
+            (safetyMemo?.evidenceReceipts?.get(JSON.stringify([[ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId??''],ref.memoryId])) ??
+              db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id').all(ref.memoryId))
+              .filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)).slice(0,16) : [];
           const date = receiptEventDate(sourceRows);
           const sources = sourceRows.map((row, index) => {
             const { role, excerpt } = validateSourceReceipt(ref.memoryId, row, source =>
@@ -731,17 +744,17 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       if (bytes(result) > CONTEXT_LIMITS.responseBytes) fail('context_item_too_large');
       // No host callback, count or await follows this authoritative read.
       return read(() => {
+        const safetyMemo=searched.readMemo?.();
         if (searched.sourceState) {
           assertSourcesInside(input, searched.sourceState, 'snapshot_stale');
-          const witnessBudget = sourceBudget(Infinity);
+          const witnessBudget = sourceBudget(Infinity); witnessBudget.receiptMemo=safetyMemo;
           for (const path of searched.sourceState.witnesses) if (delivered.some(item => same(item.ref, path.ref)))
             witnessInside(input, path, 'snapshot_stale', witnessBudget);
         }
         if (delivered.length && !same(canonicalFence(input.readSet, [...new Set(delivered.map(item => item.type))]), generationsFor(delivered))) fail('snapshot_stale');
-        const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
         for (const item of delivered) {
           let current;
-          try { current = evidence.itemsInside(item.ref.namespace, [item.ref], input.intent, input.readSet,safetyMemo?{safetyMemo,batchRefs:delivered.map(item=>item.ref)}:options.sources?{legacyEvidence:true}:undefined)[0]; }
+          try { current = evidence.itemsInside(item.ref.namespace, [item.ref], input.intent, input.readSet,{safetyMemo,batchRefs:delivered.map(item=>item.ref),legacyEvidence:Boolean(options.sources)})[0]; }
           catch (error) {
             if (['evidence_unavailable', 'revision_conflict'].includes(error.code)) fail('snapshot_stale');
             throw error;
@@ -779,8 +792,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       function fetchInside() {
         const generations = canonicalFence(input.readSet, types);
         if (previous && (!same(previous.generations, generations) || !same(previous.access, access.accessGenerations))) fail('snapshot_stale');
-        const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
-        const items = refs.map(ref => evidence.itemsInside(ref.namespace, [ref], intent, input.readSet,safetyMemo?{safetyMemo,batchRefs:refs}:options.sources?{legacyEvidence:true}:undefined)[0]);
+        const safetyMemo=createContentReadMemo(db);
+        const items = refs.map(ref => evidence.itemsInside(ref.namespace, [ref], intent, input.readSet,{safetyMemo,batchRefs:refs,legacyEvidence:Boolean(options.sources)})[0]);
         const fences = items.map(item => bind('snapshot-item', cardLineageItemInside(db,item)));
         if (input.fences?.some((prefix, i) => prefix !== null && !fences[i].startsWith(prefix))) fail('snapshot_stale');
         if (previous && !same(previous.fences, fences)) fail('snapshot_stale');

@@ -5,6 +5,11 @@ recall separates retained source passages from model interpretations. It is
 useful when a generated summary or qualification may have changed the meaning.
 It does not make source claims true or authenticate submitted speakers.
 
+Forgetting, correcting or rejecting a Memory withholds its old evidence from
+other Memories citing the same message. Their own statements remain readable,
+even if they repeat that wording. A Memory can have no delivered receipts;
+receipt counts can exceed the receipts delivered after evidence withholding.
+
 ```js
 await core.recall({ readSet: [namespace], query: 'What did I ask about?',
   contextMode: 'source-evidence' });
@@ -98,3 +103,8 @@ state resolution, execution permission or new host compatibility is claimed.
 
 See [core recall diagnostics](fetch-recall.md#optional-core-recall-diagnostics)
 for the optional direct core `diagnostics` input and result.
+
+The authorized `listSuppressionsSince` feed is the deliberate exception to receipt
+withholding: it exports the forgotten target's receipt incarnation as content-free
+erasure control data. Consumers need that identity to remove their copies. This
+feed is not evidence delivery; it does not restore receipt text or source access.

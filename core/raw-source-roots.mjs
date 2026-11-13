@@ -121,18 +121,22 @@ export function createRawSourceRoots(db, { readMemo } = {}) {
     return { roots: proven ? values : [], independent: false, unknown: !proven,
       legacyKeep: true, possibleRoots: missing ? null : values };
   }
-  function memoryRoots(ns, id) {
+  function memoryRoots(ns, id, receipts = db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(id)) {
     const roots = new Map();
-    for (const row of db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(id)) {
+    for (const row of receipts) {
       for (const root of receipt(ns, row).roots) roots.set(root.client + ':' + root.sessionKey, root);
     }
     return [...roots.values()];
   }
   function touchMemory(ns, id, incoming) {
     if (!enabled()) return;
-    const roots = memoryRoots(ns, id);
+    const receipts = db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(id);
+    const roots = memoryRoots(ns, id, receipts);
     if (incoming) roots.push(...resolve(ns, incoming));
     touchRoots(ns, roots);
+    // The caller may reuse this same-transaction canonical set before deleting
+    // receipts. Source touching and Raw eligibility keep their existing work.
+    return receipts;
   }
   function touchRoots(ns, roots, changedEpisodes = new Set()) {
     for (const root of new Map(roots.map(root => [root.client + ':' + root.sessionKey, root])).values()) {

@@ -335,6 +335,9 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
       diagnose('request_invalid'); throw new Error('invalid_openai_request');
     }
     if (localTokens > 6000) { diagnose('request_bounds'); fail('context_budget_exceeded'); }
+    if (['reviewBasis', 'relate'].includes(method) && snapshot.memories.every(memory => memory.receipts.length === 0)) {
+      return method === 'reviewBasis' ? { units: [], links: [] } : { edges: [] };
+    }
     const selected = profile[method === 'selectChecklist' ? 'select' : method];
     const payload = qualifier ? null : { model: selected.model, instructions,
       input: [{ role: 'user', content: [{ type: 'input_text', text: serializedInput }] }],

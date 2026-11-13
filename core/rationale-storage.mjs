@@ -9,17 +9,18 @@ const bounded = value => {
 };
 
 /** Only current, exact-namespace sources. No model call occurs in a transaction. */
-export function createRationaleStorage({ db, currentRow, readSourceEvidence, epoch, advanceEpoch }) {
-  function source(ns, ref, includeFocus = false) {
+export function createRationaleStorage({ db, currentRow, readSourceEvidence, epoch, advanceEpoch, prepareSources }) {
+  function source(ns, ref, includeFocus = false, memo) {
     const row = currentRow(ns, ref.memoryId);
     if (!row) fail('memory_not_found');
     if (row.revision !== ref.revision) fail('revision_conflict');
-    return { ...readSourceEvidence(row),
+    return { ...readSourceEvidence(row, memo),
       ...(includeFocus ? { focus: { content: row.content, interpretationStatus: 'unverified' } } : {}) };
   }
 
   function snapshotInside(ns, refs, inputMode) {
-    return bounded({ sources: refs.map(ref => source(ns, ref, inputMode === 'claim-focus-v1')), indexRevision: epoch(ns),
+    const memo = prepareSources?.(ns, refs.map(ref => ref.memoryId));
+    return bounded({ sources: refs.map(ref => source(ns, ref, inputMode === 'claim-focus-v1', memo)), indexRevision: epoch(ns),
       ...(inputMode ? { inputMode } : {}) });
   }
 
@@ -38,6 +39,7 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
   function snapshotFilingEdges(ns, changedIds) {
     const edges = new Map();
     const endpoints = new Map();
+    const withheld = new Set();
     const select = db.prepare('SELECT * FROM rationale_edges WHERE from_id = ? OR to_id = ?');
     for (const id of changedIds) for (const edge of select.all(id, id)) {
       edges.set(JSON.stringify([edge.from_id, edge.to_id, edge.relation,
@@ -49,15 +51,17 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
       if (!endpoint) {
         const row = currentRow(ns, id);
         if (!row) fail('revision_conflict');
-        endpoint = { row: { ...row }, receipts: readSourceEvidence(row).receipts,
+        const evidence = readSourceEvidence(row);
+        endpoint = { row: { ...row }, receipts: evidence.receipts, receiptCount: evidence.receiptCount,
           rawReceipts: db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id').all(id) };
         endpoints.set(id, endpoint);
       }
       if (endpoint.row.revision !== edge[`${side}_revision`]) fail('revision_conflict');
       const cited = endpoint.receipts.find(receipt => receipt.id === edge[`${side}_receipt`]);
+      if (!cited && endpoint.receiptCount > endpoint.receipts.length) { withheld.add(edge); continue; }
       if (!cited || digest(cited) !== edge[`${side}_digest`]) fail('revision_conflict');
     }
-    return { edges: [...edges.values()], endpoints };
+    return { edges: [...edges.values()].filter(edge => !withheld.has(edge)), endpoints };
   }
 
   function restoreFilingEdges(ns, snapshot, nextRevisions) {
@@ -113,10 +117,10 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
     }, deadline?.check);
   }
 
-  function inspectInside(ns, ref, view = 'decision-context') {
+  function inspectInside(ns, ref, view = 'decision-context', memo) {
       if (!['decision-context', 'incident-proposals'].includes(view)) fail('invalid_input');
       const incident = view === 'incident-proposals';
-      const sources = new Map([[ref.memoryId, source(ns, ref)]]);
+      let sources;
       const edges = [];
       const incoming = (id, relation) => db.prepare(`SELECT * FROM rationale_edges
         WHERE to_id = ? AND relation = ? ORDER BY from_id, from_receipt, to_receipt LIMIT 11`).all(id, relation);
@@ -130,18 +134,27 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
       const uniqueRows = new Map(rows.map(row => [JSON.stringify([row.from_id, row.to_id,
         row.relation, row.from_receipt, row.to_receipt]), row]));
       if (uniqueRows.size > 10) fail('rationale_limit');
+      memo ??= prepareSources?.(ns, [ref.memoryId, ...[...uniqueRows.values()].flatMap(row => [row.from_id,row.to_id])]);
+      sources = new Map([[ref.memoryId, source(ns, ref, false, memo)]]);
       for (const row of uniqueRows.values()) {
+        let withheld = false;
         for (const side of ['from', 'to']) {
           const id = row[`${side}_id`];
           if (!sources.has(id)) {
             if (sources.size === 6) fail('rationale_limit');
-            sources.set(id, source(ns, { memoryId: id, revision: row[`${side}_revision`] }));
+            sources.set(id, source(ns, { memoryId: id, revision: row[`${side}_revision`] }, false, memo));
           }
           const evidence = sources.get(id);
           const receipt = evidence.receipts.find(receipt => receipt.id === row[`${side}_receipt`]);
-          if (evidence.memory.revision !== row[`${side}_revision`] || !receipt ||
+          if (evidence.memory.revision !== row[`${side}_revision`]) fail('revision_conflict');
+          // Source mode reads the complete bounded stored set and withholds
+          // whole receipts. A count gap proves evidence was withheld; omit its
+          // dependent link rather than making a readable Memory fail.
+          if (!receipt && evidence.receiptCount > evidence.receipts.length) { withheld = true; continue; }
+          if (!receipt ||
               digest(receipt) !== row[`${side}_digest`]) fail('revision_conflict');
         }
+        if (withheld) continue;
         edges.push({ from: row.from_id, to: row.to_id, relation: row.relation,
           fromReceipt: row.from_receipt, toReceipt: row.to_receipt, interpretationStatus: 'model-proposed' });
       }

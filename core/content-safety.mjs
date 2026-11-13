@@ -1,4 +1,4 @@
-import { contentSuppressionReasonInside, registerContentSuppressionReadMemoInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { contentSuppressionReasonInside, registerContentSuppressionReadMemoInside, cachedContentSuppressionRequestInside, receiptDenialsInside } from './content-suppression-storage.mjs';
 import { bindContentSafetyConnection, cachedContentLayout, contentSafetyConnection } from './content-safety-schema.mjs';
 import { createHash, createHmac } from 'node:crypto';
 import { createCardRawSources } from './card-raw-sources.mjs';
@@ -69,11 +69,12 @@ function rawAncestryColumn(db, table) {
 }
 // Canonical S1 receipt validation is also part of a source-ref decision. It
 // cannot invoke a serving entry; its memo is distinct from completed decisions.
-function canonicalReceiptReadSafety(db, { namespace, receipt, memo, rawTargets = [], rawAncestryEmpty = false }) {
+function canonicalReceiptReadSafety(db, { namespace, receipt, memo, denialMemo = memo, rawTargets = [], rawAncestryEmpty = false }) {
   const key = JSON.stringify([namespace, receipt]);
   const cache = memo && (memo.canonicalReceipts ??= new Map());
   if (cache?.has(key)) { const entry = cache.get(key); rawTargets.push(...entry.rawTargets); return entry.result; }
   const remember = result => { cache?.set(key, { result, rawTargets: [...rawTargets] }); return result; };
+  if (receiptDenialsInside(memo?.db ?? db, namespace, [receipt], denialMemo).has(receipt.receipt_key)) return remember(denied('purge'));
   const source = { client: receipt.client, sessionId: receipt.session_id, eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt };
   if (createHash('sha256').update(JSON.stringify(source)).digest('hex') !== receipt.receipt_key) return remember(denied('identity_mismatch'));
   try {
@@ -111,8 +112,10 @@ export function receiptReadSafety(db, options) {
 }
 
 export function anchoredReadSafety(db, { namespace, memoryId, anchors, memo = createContentReadMemo(db) }) {
-  for (const anchor of anchors) {
-    const receipt = memo.db.prepare('SELECT * FROM receipts WHERE memory_id=? AND id=?').get(memoryId, anchor.receiptId);
+  const receipts = anchors.map(anchor => memo.db.prepare('SELECT * FROM receipts WHERE memory_id=? AND id=?').get(memoryId, anchor.receiptId));
+  receiptDenialsInside(memo.db, namespace, receipts.filter(Boolean), memo);
+  for (const [index, anchor] of anchors.entries()) {
+    const receipt = receipts[index];
     if (!receipt) return denied('missing');
     if (createHash('sha256').update(receipt.excerpt).digest('hex') !== (anchor.receiptDigest ?? anchor.digest)) return denied('identity_mismatch');
     const result = receiptReadSafety(db, { namespace, receipt, memo });
@@ -247,7 +250,7 @@ export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = fa
 }
 
 function canonicalContentReadSafety(db, { identity, namespace: ns, ref, method = 'retrieval', intent = 'current',
-  currentCardEligible, rawRows, expectedMemoryIdentity, receipts = [], memo, factObservation, selectedMemory, selectedReceipts }) {
+  currentCardEligible, rawRows, expectedMemoryIdentity, receipts = [], memo, denialMemo = memo ?? {}, factObservation, selectedMemory, selectedReceipts }) {
   db = memo?.db ?? db;
   if (!ref || !sameNamespace(ns, ref.namespace)) return denied('ineligible');
   const type = ref.type;
@@ -269,10 +272,11 @@ function canonicalContentReadSafety(db, { identity, namespace: ns, ref, method =
   const receiptRows = receipts.length ? new Map((selectedMemory && memo && db.isTransaction && selectedReceipts ?
     selectedReceipts.filter(receipt=>receipt.memory_id===row.id) : db.prepare(`SELECT * FROM receipts WHERE memory_id=?
     AND id IN (${receipts.map(() => '?').join(',')})`).all(row.id, ...receipts.map(receipt => receipt.id))).map(receipt => [receipt.id, receipt])) : new Map();
+  receiptDenialsInside(db, ns, [...receiptRows.values()], denialMemo);
   for (const receipt of receipts) {
     const current = receiptRows.get(receipt.id);
     if (!current) return denied('missing');
-    const lineage = receiptReadSafety(db, { namespace: ns, receipt: current, memo });
+    const lineage = receiptReadSafety(db, { namespace: ns, receipt: current, memo, denialMemo });
     if (!lineage.allowed) return lineage;
     if (JSON.stringify(current) !== JSON.stringify(receipt))
       return denied('identity_mismatch');

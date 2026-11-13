@@ -1,6 +1,6 @@
 import { cachedContentLayout } from './content-safety-schema.mjs';
-import { contentReadSafety } from './content-safety.mjs';
-import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
+import { contentReadSafety, createContentReadMemo, receiptReadSafety } from './content-safety.mjs';
+import { contentSuppressionReasonInside, receiptDenialsInside } from './content-suppression-storage.mjs';
 import { createHmac, randomUUID } from 'node:crypto';
 import { transaction, isStorageBusy } from './database.mjs';
 import { ADMISSION_LEASE_MS, HEX_DIGEST } from './episode-schema.mjs';
@@ -53,6 +53,32 @@ export function episodeReadRow(row) {
     session_key: row.session_key, client: row.client, first_received_at: row.first_received_at,
     last_received_at: row.last_received_at, updated_at: row.updated_at, record: row.record,
     observed: row.observed, attempted: row.attempted, covered: row.covered };
+}
+
+export function episodeReadRowsInside(db, ns, rows, linkedReceipts = []) {
+  const memo = createContentReadMemo(db);
+  const sources = rows.length ? db.prepare(`SELECT s.*,o.client AS origin_client,o.session_key AS origin_session
+    FROM episode_sources s JOIN session_episodes e ON e.id=s.episode_id
+    JOIN session_episodes o ON o.id=s.origin_episode_id
+    WHERE e.owner_id=? AND e.scope=? AND e.project_id=? AND o.owner_id=e.owner_id
+      AND o.scope=e.scope AND o.project_id=e.project_id AND e.id IN (SELECT value FROM json_each(?)) ORDER BY s.id`)
+    .all(...boundary(ns),JSON.stringify(rows.map(row=>row.id))) : [];
+  const receipts = sources.map(source => {
+    const input={client:source.origin_client,sessionId:source.origin_session,eventId:source.message_id,role:source.role,excerpt:source.text};
+    return {receipt_key:sourceDigest(JSON.stringify(input)),client:input.client,session_id:input.sessionId,event_id:input.eventId,role:input.role};
+  });
+  const denied = receiptDenialsInside(db,ns,[...receipts,...linkedReceipts],memo);
+  const hidden = new Set(sources.filter((source,index)=>denied.has(receipts[index].receipt_key)).map(source=>source.id));
+  return {memo,sources:sources.filter(source=>!hidden.has(source.id)),rows:rows.map(row=>{
+    if (!sources.some(source=>source.episode_id===row.id&&hidden.has(source.id))) return row;
+    const record=JSON.parse(row.record);
+    for (const [field,anchors] of Object.entries(record.anchors??{})) if (anchors.some(anchor=>hidden.has(anchor.sourceId))) {
+      record[field]=null; delete record.anchors[field];
+      if (record.editor) delete record.editor[field];
+    }
+    record.language=null;
+    return {...row,record:JSON.stringify(record)};
+  })};
 }
 
 export function episodeMetadata(ns, row) {
@@ -1044,10 +1070,13 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       let row = safety ? db.prepare(projected.query.sql).get(...projected.query.params) : live(ns, input.episodeId);
       if (!row || row.deleted) fail('episode_not_found');
       assertEpisodeRead?.(ns, row, projected.budget);
-      row = episodeReadRow(row);
       if (db.prepare('SELECT 1 FROM review_hidden_episodes WHERE id=?').get(row.id)) fail('episode_not_found');
-      const sources = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? AND id>? ORDER BY id LIMIT ?')
-        .all(row.id, pages.source.after ?? '', pages.source.limit+1).map(source => ({ id: source.id, digest: source.digest,
+      const linkedReceipts=db.prepare(`SELECT r.* FROM episode_memory_links l JOIN memories m ON m.id=l.memory_id
+        JOIN receipts r ON r.memory_id=m.id WHERE l.episode_id=? AND m.owner_id=? AND m.scope=? AND m.project_id=?`)
+        .all(row.id,...boundary(ns));
+      const delivery=episodeReadRowsInside(db,ns,[row],linkedReceipts), memo=delivery.memo;
+      row = episodeReadRow(delivery.rows[0]);
+      const sources = delivery.sources.filter(source=>source.id>(pages.source.after??'')).slice(0,pages.source.limit+1).map(source => ({ id: source.id, digest: source.digest,
           originEpisodeId: source.origin_episode_id, eventId: source.event_id, messageId: source.message_id,
           role: source.role, text: source.text, truncated: !!source.truncated, receiptOrdinal: source.ordinal }));
       const memories = db.prepare(`SELECT l.* FROM episode_memory_links l JOIN memories m ON m.id=l.memory_id
@@ -1057,7 +1086,10 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
           const memory = db.prepare('SELECT * FROM memories WHERE id=?').get(link.memory_id);
           return memory && contentReadSafety(db, { namespace: ns, intent: 'history', ref: { type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision } }).allowed;
         }).map(link => ({ id: link.id, memoryId: link.memory_id,
-          admissionRevision: link.admission_revision, receiptIds: JSON.parse(link.receipt_ids).filter(id => !contentSuppressionReasonInside(db, ns, { kind: 'receipt', key: id }) && db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(id, link.memory_id)) }));
+          admissionRevision: link.admission_revision, receiptIds: JSON.parse(link.receipt_ids).filter(id => {
+            const receipt=linkedReceipts.find(receipt=>receipt.id===id&&receipt.memory_id===link.memory_id);
+            return receipt&&receiptReadSafety(db,{namespace:ns,receipt,memo}).allowed;
+          }) }));
       const policies = db.prepare(`SELECT e.*,s.state,s.release_reason FROM episode_events e LEFT JOIN staged_capture_evidence s
         ON e.owner_id=s.owner_id AND e.scope=s.scope AND e.project_id=s.project_id AND e.client=s.client AND e.event_id=s.event_id
         WHERE e.episode_id=? AND e.position>? ORDER BY e.position LIMIT ?`)

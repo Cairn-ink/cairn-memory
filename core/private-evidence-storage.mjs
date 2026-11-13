@@ -1,5 +1,5 @@
 import { hasCardLineage, cardLineageItemInside, cardLineageNamespaceInside } from './card-lineage.mjs';
-import { contentSuppressionReasonInside, cachedContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
+import { contentSuppressionReasonInside, cachedContentSuppressionRequestInside, contentSuppressionMayMatchInside, receiptDenialsInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety, memoryReadEligible, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { createHash, timingSafeEqual } from 'node:crypto';
@@ -53,13 +53,73 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry` : '';
     return db.prepare(`SELECT *${ancestry} FROM memories WHERE ${where} AND id=? AND deleted=0`).get(...boundary(ns), id);
   }
+  function receiptBatchInside(refs, memo, legacy, additional = []) {
+    const batches = [...additional];
+    for (const ns of new Map(refs.map(ref => [JSON.stringify(boundary(ref.namespace)), ref.namespace])).values()) {
+      const scoped = refs.filter(ref => JSON.stringify(boundary(ref.namespace)) === JSON.stringify(boundary(ns)));
+      const rows = legacy ? [] : memoryBatchInside(ns, scoped, memo);
+      // Keep the bounded projection stable. A full first page may hide an
+      // independent receipt behind denied ones, so complete those sets before
+      // the single marker lookup and before any delivery limit is applied.
+      const full = rows.filter(row => JSON.parse(row.batch_receipts).length === 17);
+      if (full.length) {
+        const found = db.prepare(`SELECT r.*
+          FROM json_each(?) wanted CROSS JOIN memories m ON m.id=wanted.value
+          JOIN receipts r ON r.memory_id=m.id
+          WHERE m.owner_id=? AND m.scope=? AND m.project_id=? ORDER BY r.created_at,r.id`)
+          .all(JSON.stringify(full.map(row => row.id)), ...boundary(ns));
+        for (const row of full) {
+          const complete = found.filter(receipt => receipt.memory_id === row.id);
+          row.batch_receipts = JSON.stringify(complete.map(({ occurred_at, ...receipt }) =>
+            memoReceiptEventTime ? { ...receipt, occurred_at } : receipt));
+        }
+      }
+      const receipts = rows.flatMap(row => JSON.parse(row.batch_receipts));
+      // Legacy projections retain their existing Memory/receipt validation.
+      // Collect their complete receipt sets before any item is projected.
+      if (legacy || !cachedContentLayout(db)?.suppressionRevision) {
+        const cache = memo.deliveryReceipts ??= new Map();
+        for (const ref of scoped.filter(ref => ref.type === 'memory')) {
+          const key = JSON.stringify([boundary(ns), ref.memoryId]);
+          if (cache.has(key)) continue;
+          const found = db.prepare(`SELECT r.* FROM receipts r JOIN memories m ON m.id=r.memory_id
+            WHERE m.owner_id=? AND m.scope=? AND m.project_id=? AND m.id=? ORDER BY r.created_at,r.id`)
+            .all(...boundary(ns), ref.memoryId);
+          cache.set(key, found); receipts.push(...found);
+        }
+      }
+      const cardCache = memo.deliveryCards ??= new Set();
+      const cards = scoped.filter(ref => ref.type === 'card' && !cardCache.has(JSON.stringify([boundary(ns), ref.cardId])));
+      if (cards.length) {
+        const ids = JSON.stringify(cards.map(ref => ref.cardId));
+        // Collect only candidate Cards' bound receipts. These rows warm denial
+        // tokens, never canonical identity/currentness or lineage decisions.
+        const lineage = hasCardLineage(db) ? ` UNION
+          SELECT r.* FROM json_each(?) wanted CROSS JOIN private_cards c ON c.id=wanted.value
+          JOIN card_body_sources s ON s.card_id=c.id AND s.body_revision=c.body_revision
+            AND s.owner_id=c.owner_id AND s.scope=c.scope AND s.project_id=c.project_id AND s.source_kind='receipt'
+          JOIN receipts r ON r.id=s.source_key JOIN memories m ON m.id=r.memory_id
+          WHERE c.owner_id=? AND c.scope=? AND c.project_id=?
+            AND m.owner_id=c.owner_id AND m.scope=c.scope AND m.project_id=c.project_id` : '';
+        receipts.push(...db.prepare(`SELECT r.* FROM json_each(?) wanted CROSS JOIN private_cards c ON c.id=wanted.value
+          JOIN card_memory_bindings b ON b.card_id=c.id JOIN receipts r ON r.id=b.receipt_id
+          JOIN memories m ON m.id=r.memory_id AND m.id=b.memory_id
+          WHERE c.owner_id=? AND c.scope=? AND c.project_id=?
+            AND m.owner_id=c.owner_id AND m.scope=c.scope AND m.project_id=c.project_id${lineage}`)
+          .all(ids, ...boundary(ns), ...(lineage ? [ids, ...boundary(ns)] : [])));
+        for (const ref of cards) cardCache.add(JSON.stringify([boundary(ns), ref.cardId]));
+      }
+      if (receipts.length) batches.push({ namespace: ns, receipts });
+    }
+    receiptDenialsInside(db, batches, undefined, memo);
+  }
   function memoryBatchInside(ns, refs, memo) {
-    if(!cachedContentLayout(db)?.suppressionRevision || !db.isTransaction)return;
+    if(!cachedContentLayout(db)?.suppressionRevision || !db.isTransaction)return [];
     const cache=memo.evidenceMemories??=new Map();
     const ids=[...new Set(refs.filter(ref=>ref.type==='memory' &&
       JSON.stringify(boundary(ref.namespace))===JSON.stringify(boundary(ns))).map(ref=>ref.memoryId))]
       .filter(id=>!cache.has(JSON.stringify([boundary(ns),id])));
-    if(!ids.length)return;
+    if(!ids.length)return [];
     const layout=cachedContentLayout(db);
     const ancestry=layout.rawLineage ? `,EXISTS(
       SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id
@@ -95,6 +155,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       FROM memories WHERE ${where} AND deleted=0 AND id IN (${ids.map(()=>'?').join(',')})`).all(...boundary(ns),...ids);
     for(const id of ids)cache.set(JSON.stringify([boundary(ns),id]),undefined);
     for(const row of rows)cache.set(JSON.stringify([boundary(ns),row.id]),row);
+    return rows;
   }
   function selectedReceiptRef(ns,row,receipt) {
     return {type:'receipt',namespace:ns,memoryId:row.id,memoryRevision:row.revision,receiptId:receipt.id,
@@ -146,14 +207,22 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     if (row.revision !== ref.revision) fail('revision_conflict');
     const projected=safety;
     const selectedReceipts=projected?JSON.parse(row.batch_receipts):undefined;
-    const allReceiptRows = selectedReceipts ?? db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 17').all(row.id);
-    const receiptRows = allReceiptRows.filter(receipt => receiptReadSafety(db, { namespace: ns, receipt, memo,
+    const allReceiptRows = selectedReceipts ?? memo.deliveryReceipts?.get(JSON.stringify([boundary(ns), row.id])) ?? db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id').all(row.id);
+    const denied = receiptDenialsInside(db, ns, allReceiptRows, memo);
+    const unmarked = allReceiptRows.filter(receipt => !denied.has(receipt.receipt_key));
+    const receiptRows = unmarked.slice(0, 17).filter(receipt => receiptReadSafety(db, { namespace: ns, receipt, memo,
       rawAncestryEmpty:projected && row.empty_raw_ancestry===1 && !contentSuppressionMayMatchInside(db,ns,{kind:'receipt',key:receipt.id}) }).allowed);
-    if(selectedReceipts)(memo.evidenceReceipts??=new Map()).set(JSON.stringify([boundary(ns),row.id]),selectedReceipts);
+    (memo.evidenceReceipts??=new Map()).set(JSON.stringify([boundary(ns),row.id]),receiptRows.slice(0, 16));
     if (!contentReadSafety(db, { identity, namespace: ns, ref, intent, memo, ...(safety ? { selectedMemory: row, selectedReceipts } : {}), receipts: receiptRows.slice(0, 16) }).allowed) fail('evidence_unavailable');
     const sourceAccess = memoryReadEligible(row) ? 'available' : 'unavailable-for-noncurrent-memory';
     const sources = sourceAccess === 'available' ? receiptRows.slice(0, 16).map(receipt => selectedReceipts?selectedReceiptRef(ns,row,receipt):receiptRefInside(ns, row, receipt)) : [];
-    const projection = projected && row.has_qualification===0 ? null : qualification.inspect(row);
+    // Both the parent and each receipt completed the canonical gate in this
+    // synchronous snapshot. These refs bind those exact selected rows. Retain
+    // that proof for the existing delivery fence, rather than re-entering Raw
+    // receipt validation after the transaction has ended on lineage-zero stores.
+    const request = cachedContentSuppressionRequestInside(db, ns.ownerId);
+    if (request) for (const source of sources) (request.sourcesChecked ??= new Set()).add(JSON.stringify(source));
+    const projection = projected && row.has_qualification===0 ? null : qualification.inspect(row, memo);
     const assessed = projection && anchoredReadSafety(db, { namespace: ns, memoryId: row.id, anchors: projection.anchors, memo }).allowed ? projection : null;
     const qualified = assessed ? { ...assessed, sourceText: 'read-separately',
       anchors: assessed.anchors.map(({ text, ...anchor }) => anchor) } : null;
@@ -163,8 +232,8 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
           memoryRevision: row.revision, receiptId: receipt.id })),
         completeness: 'excerpt-only', conversationCoverage: 'unknown',
         meaning: 'unassessed', attribution, corroboration: 'not-assessed',
-        coverage: { status: allReceiptRows.length > 16 || receiptRows.length !== allReceiptRows.length ? 'budget_exhausted' : 'complete', included: Math.min(receiptRows.length, 16),
-          omitted: allReceiptRows.length > 16 ? null : allReceiptRows.length - receiptRows.length } } };
+        coverage: { status: receiptRows.length > 16 || receiptRows.length !== allReceiptRows.length ? 'budget_exhausted' : 'complete', included: Math.min(receiptRows.length, 16),
+          omitted: unmarked.length > 16 ? null : allReceiptRows.length - receiptRows.length } } };
   }
   function makeSnapshot(ns, intent, refs, items, accessGeneration) {
     return encode('evidence-snapshot-v1', { version: 1,
@@ -173,7 +242,9 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       fences: items.map(value => bind('evidence-item-v1', cardLineageItemInside(db,value))) }, 16384);
   }
   function fetched(ns, input, accessGeneration) {
-    const memo = createContentReadMemo(db), items = input.refs.map(ref => item(ns, ref, input.intent, undefined, undefined, memo));
+    const memo = createContentReadMemo(db);
+    receiptBatchInside(input.refs, memo, false);
+    const items = input.refs.map(ref => item(ns, ref, input.intent, undefined, undefined, memo));
     const result = { items, snapshot: makeSnapshot(ns, input.intent, input.refs, items, accessGeneration) };
     if (size(result) > input.responseByteLimit) fail('context_item_too_large');
     return result;
@@ -186,7 +257,9 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
         previous.accessGeneration !== accessGeneration) fail('snapshot_stale');
     // Empty selections also have a meaningful generation fence.
     const refs = previous.refs.length ? evidenceRefs(previous.refs, ns) : [];
-    const memo = createContentReadMemo(db), items = refs.map(ref => item(ns, ref, previous.intent, undefined, undefined, memo));
+    const memo = createContentReadMemo(db);
+    receiptBatchInside(refs, memo, false);
+    const items = refs.map(ref => item(ns, ref, previous.intent, undefined, undefined, memo));
     if (JSON.stringify(previous.fences) !== JSON.stringify(items.map(value => bind('evidence-item-v1', cardLineageItemInside(db,value))))) fail('snapshot_stale');
     const result = { items, snapshot: makeSnapshot(ns, previous.intent, refs, items, accessGeneration) };
     if (size(result) > input.responseByteLimit) fail('context_item_too_large');
@@ -236,6 +309,14 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       if(!contentReadSafety(db,{identity,namespace:ns,memo,method:'getCard',
         ref:{type:'card',namespace:ns,cardId:row.id,revision:row.revision,bodyRevision:row.body_revision}}).allowed)fail('evidence_unavailable');
     }
+    const scanRefs=input.types.flatMap(type=>db.prepare(type==='memory'
+      ? `SELECT id,revision,content,currentness,review_state FROM memories WHERE ${where} AND deleted=0 AND id>? ORDER BY id LIMIT ?`
+      : `SELECT id,revision,body_revision FROM private_cards WHERE ${where} AND state='confirmed' AND id>? ORDER BY id LIMIT ?`)
+      .all(...boundary(ns),after[type],input.scanRows+1)
+      .filter(row=>type==='card'||memoryReadEligible(row,input.intent)&&[...queryWords].some(word=>words(row.content).has(word)))
+      .map(row=>({type,namespace:ns,
+        [type==='memory'?'memoryId':'cardId']:row.id,revision:row.revision,...(type==='card'?{bodyRevision:row.body_revision}:{})})));
+    receiptBatchInside(scanRefs,memo,false);
     while (matches.length < input.limit && exhausted.size + blocked.size < input.types.length) {
       if (scannedRows >= input.scanRows) { stopped = 'row_budget'; break; }
       if (performance.now() - started >= input.deadlineMs) { stopped = 'deadline'; break; }
@@ -266,7 +347,9 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     for (const type of input.types) byType[type].partial = !exhausted.has(type);
     matches.sort((left, right) => right.score - left.score || input.types.indexOf(left.type) - input.types.indexOf(right.type) ||
       ((left.ref.memoryId ?? left.ref.cardId) < (right.ref.memoryId ?? right.ref.cardId) ? -1 : 1));
-    const refs = matches.map(value => value.ref), items = refs.map(ref => item(ns, ref, input.intent, undefined, undefined, memo));
+    const refs = matches.map(value => value.ref);
+    receiptBatchInside(refs, memo, false);
+    const items = refs.map(ref => item(ns, ref, input.intent, undefined, undefined, memo));
     return { items: matches,
       coverage: { status: complete ? 'complete' : 'budget_exhausted', byType, scannedRows, scannedBodyUnits,
         reason: complete ? null : matches.length === input.limit ? 'item_limit' : stopped,
@@ -278,9 +361,10 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
   return Object.freeze({
     // Internal U5 read seam: authorization and the deferred transaction belong
     // to the caller. Reuses the exact current/history canonical predicate/DTO.
+    prepareInside(refs, memo, legacy, additional) { receiptBatchInside(refs, memo, legacy, additional); },
     itemsInside(ns, refs, intent, readSet, options) {
       const memo = options?.safetyMemo ?? createContentReadMemo(db);
-      if(!options?.legacyEvidence)memoryBatchInside(ns,options?.batchRefs??refs,memo);
+      receiptBatchInside(options?.batchRefs ?? refs, memo, Boolean(options?.legacyEvidence));
       return refs.map(ref => item(ns, ref, intent, readSet, options, memo));
     },
     call(method, ns, original, accessGeneration) {

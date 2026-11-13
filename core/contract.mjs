@@ -876,7 +876,8 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  function fetch(input) {
+  function fetch(input) { return fetchUsing(input, runtime); }
+  function fetchUsing(input, reader) {
     return invoke(() => {
       runtime.ready();
       object(input, ['namespace', 'refs', 'view', 'cursor', 'tokenBudget', 'includeQualification', 'contextMode']);
@@ -898,7 +899,7 @@ export function createMemoryCore(input, internal) {
         ...(includeQualification ? { includeQualification: true } : {}),
         ...(isSourceContext(contextMode) ? { contextMode } : {}) };
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
-      return fetchMemories({ runtime, model, ns, refs, view, budget, cursor, binding, encodeCursor, includeQualification, contextMode });
+      return fetchMemories({ runtime: reader, model, ns, refs, view, budget, cursor, binding, encodeCursor, includeQualification, contextMode });
     });
   }
 
@@ -950,7 +951,10 @@ export function createMemoryCore(input, internal) {
         ...(isSourceContext(contextMode) ? { sourceMode: contextMode } : {}),
         queryDigest: createHmac('sha256', cursorSecret)
           .update(JSON.stringify([QUERY_EXCERPT_VERSION, query])).digest('base64url') };
-      const validateFresh = (candidates = []) => runtime.recallSnapshot(candidates.map((candidate) => ({
+      let preparedRead;
+      const validateFresh = (candidates = []) => {
+        preparedRead?.assertFresh();
+        return runtime.recallSnapshot(candidates.map((candidate) => ({
         namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
         revision: candidate.revision,
         receiptLimit: candidate.receiptCap ?? candidate.item?.receipts?.length ?? 0,
@@ -959,8 +963,14 @@ export function createMemoryCore(input, internal) {
         const page = navigation.pages.get(namespaceBinding(namespace));
         return page ? [{ namespace, indexRevision: page.epoch, suppressionEpoch: page.suppressionEpoch }] : [];
       }), includeQualification);
-      const storage = { map: (request) => mapPage(request, navigation), fetch, validateFresh,
-        recentReceipts: (ref, limit) => runtime.recentReceipts(namespaces[ref.namespaceIndex], ref, limit),
+      };
+      const storage = { map: (request) => mapPage(request, navigation),
+        fetch: (request, reader) => reader ? fetchUsing(request,reader) : fetch(request), validateFresh,
+        prepare: refs => {
+          const reader=preparedRead=runtime.prepareRecall(refs.map(ref=>({...ref,namespace:namespaces[ref.namespaceIndex]})),includeQualification,contextMode);
+          return {fetch:request=>storage.fetch(request,reader),recentReceipts:(ref,count)=>storage.recentReceipts(ref,count,reader)};
+        },
+        recentReceipts: (ref, limit, reader) => (reader ?? runtime).recentReceipts(namespaces[ref.namespaceIndex], ref, limit),
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
           revision: candidate.revision, receiptLimit: candidate.receiptCap ?? candidate.item.receipts.length,
@@ -981,7 +991,7 @@ export function createMemoryCore(input, internal) {
             diagnostics.storageCalls++;
             if (diagnostics.storageCalls === 1 || elapsed > diagnostics.storageMaxMs) {
               diagnostics.storageMaxMs = elapsed;
-              diagnostics.storageMaxCall = name;
+              diagnostics.storageMaxCall = name === 'prepare' ? 'fetch' : name;
             }
           }
         };

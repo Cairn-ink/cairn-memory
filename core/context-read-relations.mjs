@@ -1,6 +1,7 @@
+import { hasCardLineage } from './card-lineage.mjs';
 import { bindContentSafetyConnection, cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety, createContentReadMemo } from './content-safety.mjs';
-import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
+import { contentSuppressionReasonInside, receiptDenialsInside } from './content-suppression-storage.mjs';
 import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { compareCanonical, canonicalKey } from './context-read-bm25.mjs';
@@ -129,11 +130,32 @@ export function sourceReader(db, identity, features, input, budget, sharedContex
   // Trusted feature handoff for point-only adapters; normal serving handles
   // reuse their opener's attestation. This never reads canonical population.
   const suppressionRevision = features.suppressionRevision ?? (cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision;
-  const readMemo = suppressionRevision ? createContentReadMemo(charged) : undefined;
+  const readMemo = sourceContexts.get(budget)?.readMemo ?? createContentReadMemo(charged);
+  if(budget.receiptMemo) {
+    readMemo.receiptDenials=budget.receiptMemo.receiptDenials;
+    readMemo.relationWitnessesPrepared=true;
+  }
+  function deniedWitnesses() {
+    if(readMemo.relationWitnessesPrepared)return;
+    const sealed=features.cards&&hasCardLineage(db);
+    const batches=input.readSet.map(ns=>({namespace:ns,receipts:charged.prepare(`SELECT DISTINCT r.* FROM rationale_edges e
+      JOIN receipts r ON r.id=e.from_receipt OR r.id=e.to_receipt JOIN memories m ON m.id=r.memory_id
+      WHERE m.owner_id=? AND m.scope=? AND m.project_id=?${features.cards?` UNION
+      SELECT r.* FROM private_cards c JOIN card_memory_bindings b ON b.card_id=c.id
+        JOIN receipts r ON r.id=b.receipt_id AND r.memory_id=b.memory_id JOIN memories m ON m.id=r.memory_id
+        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND m.owner_id=c.owner_id AND m.scope=c.scope AND m.project_id=c.project_id`:''}${sealed?` UNION
+      SELECT r.* FROM private_cards c JOIN card_body_sources s ON s.card_id=c.id AND s.body_revision=c.body_revision
+        AND s.owner_id=c.owner_id AND s.scope=c.scope AND s.project_id=c.project_id AND s.source_kind='receipt'
+        JOIN receipts r ON r.id=s.source_key JOIN memories m ON m.id=r.memory_id
+        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND m.owner_id=c.owner_id AND m.scope=c.scope AND m.project_id=c.project_id`:''}`)
+      .all(...boundary(ns),...(features.cards?boundary(ns):[]),...(sealed?boundary(ns):[]))}));
+    receiptDenialsInside(charged,batches,undefined,readMemo);
+    readMemo.relationWitnessesPrepared=true;
+  }
   const rawAncestry = Boolean(suppressionRevision && cachedContentLayout(db)?.rawLineage);
   if (!sourceContexts.has(budget)) {
     budget.hold(1024 * 1024, { required: true });
-    sourceContexts.set(budget, { privateBudget: sourcePrivateBudget(budget.check), cache: sharedContext ?? createSourceContext() });
+    sourceContexts.set(budget, { privateBudget: sourcePrivateBudget(budget.check), cache: sharedContext ?? createSourceContext(), readMemo });
   }
   const { privateBudget, cache } = sourceContexts.get(budget);
   const allowed = ns => input.readSet.some(value => namespaceKey(value) === namespaceKey(ns));
@@ -210,8 +232,9 @@ export function sourceReader(db, identity, features, input, budget, sharedContex
         }
       }
     } else {
+      deniedWitnesses();
       const scratch = budget.hold(4 * 1024 * 1024);
-      try { if (!contextCardEligible(charged, identity, features, ns, row, 'current', { requireApplicability: !titleSource, rawRows: 128, readSet: input.readSet })) return { reason: 'ineligible' }; }
+      try { if (!contextCardEligible(charged, identity, features, ns, row, 'current', { requireApplicability: !titleSource, rawRows: 128, readSet: input.readSet, safetyMemo: readMemo })) return { reason: 'ineligible' }; }
       catch (error) { if (error.code === 'source_budget_exceeded') throw new SourceStop('state_limit'); throw error; }
       finally { budget.release(scratch); }
     }
@@ -242,7 +265,10 @@ export function sourceReader(db, identity, features, input, budget, sharedContex
     const owner = metadata(ns, 'memory', row.memory_id, { required: true }); account(row, owner.foreign);
     const bytes = privateBudget.hold(sourceStateBytes(row)); privateBudget.release(bytes);
     if (!owner.scoped || row.memory_id !== memoryId || !row.payload) return false;
-    try { return digest(validateSourceReceipt(memoryId, { ...JSON.parse(row.payload), memory_id: row.memory_id }, digest)) === expected; }
+    try {
+      const receipt=JSON.parse(row.payload);
+      return digest(validateSourceReceipt(memoryId, { ...receipt, memory_id: row.memory_id }, digest)) === expected;
+    }
     catch { return false; }
   }
 

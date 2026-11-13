@@ -990,8 +990,8 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
 // Reconciliation, members and relation endpoints use the canonical current/
 // history predicate. Only organization title-source checks omit applicability,
 // matching private-organization-storage titleInside; support remains required.
-export function contextCardEligible(sourceDb, identity, features, ns, row, intent = 'current', { requireApplicability = true, rawRows, readSet = [ns] } = {}) {
-  return contentReadSafety(sourceDb, { identity, namespace: ns, intent,
+export function contextCardEligible(sourceDb, identity, features, ns, row, intent = 'current', { requireApplicability = true, rawRows, readSet = [ns], safetyMemo } = {}) {
+  return contentReadSafety(sourceDb, { identity, namespace: ns, intent, memo: safetyMemo,
     ref: { type: 'card', namespace: ns, cardId: row.id, revision: row.revision, bodyRevision: row.body_revision || null },
     rawRows,
     currentCardEligible: () => {

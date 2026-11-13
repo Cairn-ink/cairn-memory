@@ -4,6 +4,7 @@ import { contentReadSafety, receiptReadSafety, createContentReadMemo } from './c
 import { contentSuppressionRequestFenceInside, contentSuppressionReasonInside, cachedContentSuppressionRequestInside,
   contentSuppressionFenceInside, withContentSuppressionRequest,
   resetContentSuppressionRequestInside, contentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { receiptDenialsInside } from './content-suppression-storage.mjs';
 import { randomUUID } from "node:crypto";
 import { transaction, readTransaction, isStorageBusy } from "./database.mjs";
 import { fail } from "./validation.mjs";
@@ -431,21 +432,27 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       ) AS empty_raw_ancestry` : '';
       const receiptSources = sourceReceiptLimit === 0 ? null : db.prepare(rawReceiptProof ?
         `SELECT r.*${receiptAncestry} FROM receipts r INDEXED BY capture_memory_receipts
-          WHERE r.memory_id = ? ORDER BY r.id LIMIT ?` :
-        `SELECT * FROM receipts INDEXED BY capture_memory_receipts WHERE memory_id = ? ORDER BY id LIMIT ?`);
+          WHERE r.memory_id = ? ORDER BY r.id` :
+        `SELECT * FROM receipts INDEXED BY capture_memory_receipts WHERE memory_id = ? ORDER BY id`);
+      let receiptRows = new Map();
+      const collectReceipts = memories => {
+        receiptRows = new Map(memories.map(memory => [memory.id, receiptSources ? receiptSources.all(
+          ...(rawReceiptProof ? Array.from({length:4},()=>boundary(ns)).flat() : []), memory.id) : []]));
+        receiptDenialsInside(db, ns, [...receiptRows.values()].flat(), readMemo);
+      };
       const scoreMemory = (memory) => {
         const bodyScore = score(memory.content);
         let candidateScore = bodyScore;
         let winningExcerpt;
         if (receiptSources) {
-          const receipts = receiptSources.all(...(rawReceiptProof ? Array.from({length:4},()=>boundary(ns)).flat() : []), memory.id, sourceReceiptLimit);
-          for (const receipt of receipts) {
-            const source = validateSourceReceipt(memory.id, receipt, receiptKey);
-            // The selected Memory already completed its canonical decision above.
-            // This row is canonical and validateSourceReceipt binds its identity;
-            // retain the receipt's own S1/ancestry and suppression decision.
+          const receipts = receiptRows.get(memory.id) ?? [];
+          const deniedReceipts = receiptDenialsInside(db, ns, receipts, readMemo);
+          const allowed = receipts.filter(receipt => !deniedReceipts.has(receipt.receipt_key));
+          for (const receipt of allowed.slice(0, sourceReceiptLimit)) {
             if (safety && !receiptReadSafety(db, { namespace: ns, receipt, memo: readMemo,
               rawAncestryEmpty: receipt.empty_raw_ancestry === 1 }).allowed) continue;
+            const source = validateSourceReceipt(memory.id, receipt, receiptKey);
+            // Only admitted receipts compete for the bounded source label.
             const receiptScore = score(source.excerpt);
             // Stable receipt-ID order and strict improvement preserve the first
             // receipt on ties and retain the body label on a body/receipt tie.
@@ -508,6 +515,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       const scanRows = (limit, tail) => {
         const pageStarted = performance.now();
         const batch = physicalRows(last, limit);
+        collectReceipts(batch);
         let consumed = 0;
         for (const physical of batch) {
           // Residual filters and projection denials consume rows and time.
@@ -543,9 +551,10 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         assertIndexAvailable(ns);
         currentEpoch = epoch(ns);
         if (replay && currentEpoch !== expectedEpoch) fail('cursor_stale');
-        readMemo = safety ? createContentReadMemo(db) : undefined;
+        readMemo = createContentReadMemo(db);
         const limit = Math.min(floor, replay ? scanBoundary.rows : scan);
         const batch = floorPage.all(...boundary(ns), limit + 1);
+        collectReceipts(batch.slice(0,limit));
         for (const memory of batch.slice(0, limit)) {
           visited++;
           last = positionOf(memory);
@@ -607,7 +616,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         const accepted = tryReadPage(() => {
           if (!sameEpochs(epochs())) return false;
           assertIndexAvailable(ns);
-          readMemo = safety ? createContentReadMemo(db) : undefined;
+          readMemo = createContentReadMemo(db);
           scanRows(Math.min(page, (replay ? scanBoundary.rows : scan) - visited), true);
           return true;
         });
