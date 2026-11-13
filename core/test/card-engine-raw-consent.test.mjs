@@ -51,3 +51,37 @@ test('maintenance input checker rejects non-boolean rawSpans before storage acce
     await assert.rejects(worker.maintain({ namespace: ns, rawSpans }), { code: 'invalid_input' });
   }
 });
+
+for (const [name, options, expected] of [
+  ['default', {}, false],
+  ['explicit opt-out', { rawSpans: false }, false],
+  ['explicit opt-in', { rawSpans: true }, true],
+]) test(`four-Memory receipt pressure respects Raw consent: ${name}`, async t => {
+  t.mock.method(globalThis, 'fetch', () => assert.fail('recording model is offline'));
+  const sentinel = 'SYNTHETIC_RECEIPT_ONLY', counted = [], otherCalls = [];
+  const model = scriptedConsolidator(request => {
+    otherCalls.push(structuredClone(request));
+    return { currentState: [{ text: 'Orion current slot value.', memoryIds: [request.input.memories[0].id] }],
+      timeline: [], contradictions: [] };
+  });
+  const count = model.countTokens;
+  model.countTokens = text => { counted.push(text); return count(text); };
+  model.fitsConsolidationRequest = request => { otherCalls.push(structuredClone(request)); return true; };
+  let edges;
+  const f = engineCardFixture(t, { model, cardRelations: { read: () => edges } });
+  const memories = Array.from({ length: 4 }, (_, i) => ok(f.core.admit({ namespace: ns,
+    memory: { content: `Orion slot value ${i}.`, kind: 'fact' },
+    receipts: [{ client: 'synthetic', sessionId: `conversation-${i}`, eventId: `event-${i}`,
+      role: 'user', excerpt: `${sentinel} ${i}: ` + 'x! '.repeat(240) }] })).memory);
+  edges = memories.slice(1).map((memory, i) => ({ from: memory.id, to: memories[i].id,
+    kind: 'supersedes', slot: 'orion-status' }));
+  assert.equal(edges.length, 3);
+  assert.ok(memories.every(memory => !ok(f.core.get({ namespace: ns, memoryId: memory.id })).memory.content.includes(sentinel)));
+  counted.length = 0; otherCalls.length = 0;
+  const pass = ok(await f.core.maintainCards({ namespace: ns, budget: { maxMs: 10000 }, ...options }));
+  assert.ok(counted.length > 0, 'four-Memory chain actually meters pressure');
+  assert.equal(counted.some(text => text.includes(sentinel)), expected, 'receipt text requires opt-in at the counter');
+  assert.ok(!JSON.stringify(otherCalls).includes(sentinel), 'receipt-only text never enters another model method');
+  assert.equal(pass.built.length, expected ? 1 : 0, JSON.stringify(pass));
+  assert.equal(model.calls.length, expected ? 1 : 0, 'receipts alone create pressure only with opt-in');
+});
