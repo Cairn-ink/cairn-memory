@@ -70,7 +70,7 @@ function file(f, memories, title) {
 function effects(f, id) {
   return f.db.prepare("SELECT * FROM card_effects WHERE entity_type='card' AND entity_id=? ORDER BY ordinal").all(id);
 }
-async function assertStaleAndRebuild(f, w, before, changed, currentIds) {
+async function assertStaleAndRebuild(f, w, before, changed, currentIds, scopedSuppression = false) {
   const after = row(f, before.id);
   assert.equal(after.state, before.state);
   assert.equal(after.revision, before.revision + changed.length);
@@ -100,11 +100,16 @@ async function assertStaleAndRebuild(f, w, before, changed, currentIds) {
     assert.equal(staleFetch.ok, false); assert.equal(staleFetch.error.code, 'evidence_unavailable');
   }
   const projection = { readSet: [ns], types: ['memory', 'card'], intent: 'current' };
-  ok(await f.trusted.call(f.core, 'refreshContextIndex', { ...projection, budget: { maxItems: 1024, maxMs: 5000 } }));
+  const refresh = await f.trusted.call(f.core, 'refreshContextIndex', { ...projection, budget: { maxItems: 1024, maxMs: 5000 } });
+  // Scoped correction facts hide the maintenance acknowledgement after the
+  // work completes. The subsequent read must still serve current evidence.
+  if (scopedSuppression) assert.deepEqual(refresh, { ok: false, error: { code: 'index_unavailable', retryable: false } });
+  else assert.equal(ok(refresh).status, 'complete');
   const context = ok(await f.trusted.call(f.core, 'contextRead', { ...projection, query: 'Synthetic ordinary evidence',
     raw: false, semantic: false, deadlineMs: 5000, budget: { maxItems: 12, maxTokens: 3000 } }));
   assert.ok(context.metered.items.length);
   assert.ok(context.metered.items.every(item => item.ref.type === 'memory'));
+  for (const id of currentIds) assert.ok(context.metered.items.some(item => item.ref.id === id));
   w.advance();
   const rebuilt = (await w.pass()).built;
   assert.ok(rebuilt.length, 'a later maintenance pass rebuilds eligible evidence');
@@ -153,6 +158,17 @@ test(`engine stale ordinary write: ${operation}, ${mode}`, async t => {
     const placed = file(f, changed, 'Synthetic changed ordinary topic');
     assert.equal(placed.memories.length, changed.length);
     for (const m of changed) assert.equal(memoryRow(f, m.id).filing_status, 'filed');
+    if (operation === 're-filing') {
+      // Moving between topics leaves filed status (and the Memory revision)
+      // unchanged, so the bound engine Card must remain current.
+      assert.equal(memoryRow(f, target.id).revision, target.revision);
+      assert.deepEqual(row(f, before.id), before);
+      assert.ok(effects(f, before.id).every(effect => effect.revision <= before.revision));
+      assert.equal(ok(f.call('getCard', { cardId: before.id })).card.revision, before.revision);
+      assert.ok(f.db.prepare('SELECT 1 FROM moc_memory_refs WHERE memory_id=? AND moc_id=?')
+        .get(target.id, placed.createdMocs.find(m => m.level === 'L1').id), 'the topic placement really changed');
+      return;
+    }
   } else if (operation === 'correction') {
     ok(f.core.correct({ namespace: ns, memoryId: target.id, expectedRevision: target.revision,
       content: 'Synthetic corrected ordinary evidence', kind: 'fact', receipt: receipt('synthetic-correction-receipt') }));
@@ -168,7 +184,8 @@ test(`engine stale ordinary write: ${operation}, ${mode}`, async t => {
   const newEvent = { 'dedupe admission': 'synthetic-new-receipt', 'capture restatement': 'synthetic-restatement',
     confirmation: 'synthetic-confirmation-receipt', correction: 'synthetic-correction-receipt', 'remember metadata': 'synthetic-remember-receipt' }[operation];
   if (newEvent) assert.ok(f.db.prepare('SELECT 1 FROM receipts WHERE memory_id=? AND event_id=?').get(target.id, newEvent));
-  await assertStaleAndRebuild(f, w, before, changed, changed.map(m => m.id));
+  await assertStaleAndRebuild(f, w, before, changed, changed.map(m => m.id),
+    operation === 'correction' && mode !== 'without lineage');
 });
 
 for (const mode of modes) test(`engine stale ordinary write: causal capture retires bound predecessor, ${mode}`, async t => {
@@ -408,8 +425,9 @@ test(`sealed ${route} stales an engine Card bound through a different retained r
   const stale = row(f, survivor.id);
   assert.equal(stale.revision, before.revision + 1); assert.equal(stale.state, before.state);
   assert.equal(stale.title, before.title); assert.equal(stale.body, before.body);
-  assert.deepEqual({ ...stale, revision: before.revision, updated_at: before.updated_at }, before,
-    'only the trigger revision and timestamp changed on the retained Card');
+  assert.deepEqual(Object.keys(stale).sort(), Object.keys(before).sort());
+  for (const field of Object.keys(before)) if (!['revision', 'updated_at'].includes(field))
+    assert.equal(stale[field], before[field], 'only the trigger revision and timestamp changed: ' + field);
   assert.equal(stale.updated_at, memoryRow(f, ma.id).updated_at);
   assert.deepEqual(f.db.prepare('SELECT * FROM card_memory_bindings WHERE card_id=?').all(survivor.id), bindings);
   assert.deepEqual(f.db.prepare('SELECT * FROM card_body_sources WHERE card_id=? ORDER BY source_key').all(survivor.id), sources);
@@ -445,16 +463,18 @@ async function authoredCandidate(f, suffix) {
     expectedRevision: draft.revision, applicability: 'current' }));
 }
 
-// Load the actual reviewed source, resolving its imports against the same core.
-// This compares executed statement text, including repetitions, with main.
-async function scanStorageAt(revision, file, name) {
-  const { execFileSync } = await import('node:child_process');
-  const source = execFileSync('git', ['show', revision + ':core/' + file],
-    { cwd: new URL('../../', import.meta.url), encoding: 'utf8' });
-  const resolved = source.replace(/from '(\.\/[^']+)'/g,
-    (_, specifier) => 'from ' + JSON.stringify(new URL('../' + specifier, import.meta.url).href));
-  return (await import('data:text/javascript;base64,' + Buffer.from(resolved).toString('base64')))[name];
-}
+// Pin the two reviewed scan statements here so this test also works in
+// shallow checkouts and source copies with no historical commit objects.
+const selectionScanSql = columns => `SELECT ${columns} FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND state='confirmed' AND id>? ORDER BY id LIMIT 1`;
+const mapScanSql = `SELECT * FROM (
+      SELECT 'topic' kind,id a,'' b,NULL card_revision,NULL body_revision FROM card_mocs WHERE owner_id=? AND scope=? AND project_id=?
+      UNION ALL SELECT 'edge',e.parent_id,e.child_id,NULL,NULL FROM card_moc_edges e JOIN card_mocs t ON t.id=e.parent_id WHERE t.owner_id=? AND t.scope=? AND t.project_id=?
+      UNION ALL SELECT 'member',r.moc_id,r.card_id,r.card_revision,r.body_revision FROM card_moc_refs r JOIN card_mocs t ON t.id=r.moc_id WHERE t.owner_id=? AND t.scope=? AND t.project_id=?
+      UNION ALL SELECT 'unfiled',id,'',revision,body_revision FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND state='confirmed'
+    ) ORDER BY CASE kind WHEN 'topic' THEN 0 WHEN 'edge' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,a,b
+      LIMIT 257 OFFSET ?`;
+const candidateScans = statements => statements.filter(({ sql }) =>
+  sql.includes('FROM private_cards') && (sql.includes('id>?') || sql.includes('UNION ALL')));
 function scanCensus(db, work) {
   const prepare = db.prepare, exec = db.exec, statements = [];
   db.prepare = function(sql) {
@@ -478,31 +498,43 @@ for (const mode of modes) test(`engine-free selection and map statement texts eq
   const { createPrivateEvidenceStorage } = await import('../private-evidence-storage.mjs');
   const { createPrivateOrganizationStorage } = await import('../private-organization-storage.mjs');
   const { inContentSuppressionRequestInside } = await import('../content-suppression-storage.mjs');
-  const mainEvidence = await scanStorageAt('d4bfba57', 'private-evidence-storage.mjs', 'createPrivateEvidenceStorage');
-  const mainOrganization = await scanStorageAt('d4bfba57', 'private-organization-storage.mjs', 'createPrivateOrganizationStorage');
   const cards = createPrivateCardStorage({ db: f.db, identity: f.identity, ready() {} });
   const options = { db: f.db, identity: f.identity, cardDetailInside: cards.cardDetailInside };
-  const factories = { selectEvidence: [mainEvidence, createPrivateEvidenceStorage],
-    mapEvidence: [mainOrganization, createPrivateOrganizationStorage] };
+  const factories = { selectEvidence: createPrivateEvidenceStorage, mapEvidence: createPrivateOrganizationStorage };
   const inputs = { selectEvidence: { query: 'Synthetic', types: ['card'], intent: 'current', limit: 1, deadlineMs: 5000 },
     mapEvidence: { type: 'card', limit: 1 } };
+  const marks = [ns.ownerId, ns.scope, ns.projectId ?? ''];
+  const peekColumns = mode === 'without lineage' ? 'id' : 'id,revision,body_revision';
   for (const population of ['empty', 'authored']) {
-    if (population === 'authored') for (let i = 0; i < 3; i++) await authoredCandidate(f, String(i));
+    const authored = [];
+    if (population === 'authored') for (let i = 0; i < 3; i++) authored.push(await authoredCandidate(f, String(i)));
+    const ids = authored.map(card => card.id).sort();
     assert.equal(f.db.prepare("SELECT count(*) n FROM private_cards WHERE id GLOB 'engine-card.*'").get().n, 0);
-    for (const [method, pair] of Object.entries(factories)) {
-      let cursors = [undefined, undefined], pages = 0;
+    for (const [method, factory] of Object.entries(factories)) {
+      const read = cursor => scanCensus(f.db, () => readTransaction(f.db, () =>
+        inContentSuppressionRequestInside(f.db, () => factory(options).call(method, ns,
+          { ...inputs[method], ...(cursor ? { cursor } : {}) }, 1), [ns])));
+      let cursor, pages = 0;
+      const resumes = [];
       do {
-        const traces = pair.map((factory, i) => scanCensus(f.db, () => readTransaction(f.db, () =>
-          inContentSuppressionRequestInside(f.db, () => factory(options).call(method, ns,
-            { ...inputs[method], ...(cursors[i] ? { cursor: cursors[i] } : {}) }, 1), [ns]))));
-        assert.deepEqual(traces[1].statements, traces[0].statements, method + ' ' + population + ' statement census');
-        assert.deepEqual(traces[1].value, traces[0].value, method + ' ' + population + ' page');
-        t.diagnostic(JSON.stringify({ method, population, page: ++pages, statements: traces[0].statements.length,
-          compared: 'exact ordered SQL texts, bindings and execution methods from main; fresh factory per resume' }));
-        cursors = traces.map(trace => trace.value.nextCursor);
+        const trace = read(cursor), page = pages++;
+        const expected = method === 'selectEvidence' ? [
+          { sql: selectionScanSql('*'), method: 'get', bindings: [...marks, ids[page - 1] ?? ''] },
+          { sql: selectionScanSql(peekColumns), method: 'get', bindings: [...marks, ids[page] ?? ''] },
+        ] : [{ sql: mapScanSql, method: 'all', bindings: [...marks, ...marks, ...marks, ...marks, page] }];
+        assert.deepEqual(candidateScans(trace.statements), expected,
+          method + ' ' + population + ' exact ordered scan texts, bindings and execution methods');
+        assert.deepEqual(trace.value.items.map(item => item.ref.cardId), ids.slice(page, page + 1));
+        if (cursor) resumes.push({ cursor, trace });
+        cursor = trace.value.nextCursor;
+        assert.equal(Boolean(cursor), page + 1 < ids.length);
         assert.ok(pages < 10, 'scan must finish');
-      } while (cursors[0]);
-      if (population === 'authored') assert.ok(pages >= 2, 'census includes cursor resume');
+      } while (cursor);
+      assert.equal(pages, Math.max(1, ids.length), 'complete population was walked');
+      for (const resume of resumes) assert.deepEqual(read(resume.cursor), resume.trace,
+        'cold resume from every cursor repeats the full page and statement census');
+      t.diagnostic(JSON.stringify({ method, population, pages, resumes: resumes.length,
+        compared: 'literal reviewed scan SQL, bindings and methods; fresh factory on every page and resume' }));
     }
   }
 });
@@ -563,8 +595,11 @@ for (const mode of modes) test(`stale engine scan contents and counts equal abse
     proposal: { items: [{ cardId: stale.id, parentIds: [],
       newL1: { title: 'Synthetic scan topic', parentL2Ids: [] } }] } }));
   for (let i = 0; i < 3; i++) await authoredCandidate(f, String(i));
-  ok(f.core.admit({ namespace: ns, memory: { content: memories[0].content, kind: 'fact' },
+  const target = memoryRow(f, memories[0].id);
+  const admitted = ok(f.core.admit({ namespace: ns, memory: { content: target.content, kind: 'fact' },
     receipts: [receipt('scan-new-source')] }));
+  assert.equal(admitted.memory.id, target.id); assert.equal(admitted.deduplicated, true);
+  assert.equal(memoryRow(f, target.id).revision, target.revision + 1);
   assert.ok(row(f, stale.id).revision > stale.revision);
   const { createPrivateEvidenceStorage } = await import('../private-evidence-storage.mjs');
   const { createPrivateOrganizationStorage } = await import('../private-organization-storage.mjs');
