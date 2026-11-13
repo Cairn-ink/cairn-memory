@@ -6,7 +6,8 @@ import { Client } from '@modelcontextprotocol/client';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { createCommitDispatcher } from '../../../core/commit-dispatch.mjs';
-import { createLocalSharedRuntime } from '../local-shared-runtime.mjs';
+import { createLocalSharedRuntime as createSharedRuntime } from '../local-shared-runtime.mjs';
+const createLocalSharedRuntime = options => createSharedRuntime(options, { strict: true });
 import { createLocalCairnRuntime } from '../server.mjs';
 import { call, connect, deferred, holdWriteLock, ns, ok, streams } from './local-shared-support.mjs';
 
@@ -46,7 +47,7 @@ for (const reason of ['disconnect', 'host-close']) test(`shared SDK ${reason} st
 test('SDK server revocation wakes backoff before disconnect and retains the existing refusal', { timeout: 15000 }, async t => {
   const w = createTestWorkspace(t), path = join(w.path, 'revocation.sqlite');
   const backoff = deferred(), settled = deferred(); let response;
-  const dispatcher = createCommitDispatcher({ onBackoff: () => backoff.resolve() });
+  const dispatcher = createCommitDispatcher({ strict: true, onBackoff: () => backoff.resolve() });
   const runtime = dispatcher.open(() => createLocalCairnRuntime({ path, namespace: ns, raw: false, contextRead: false }, { dispatcher }));
   w.defer(() => runtime.close());
   const server = runtime.server({ lifecycle: { async run(work) {

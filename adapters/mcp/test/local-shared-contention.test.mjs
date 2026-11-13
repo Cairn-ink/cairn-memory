@@ -5,7 +5,8 @@ import { performance } from 'node:perf_hooks';
 import { setTimeout as delay } from 'node:timers/promises';
 import { rationaleModel } from '../../../core/testing/rationale-model.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
-import { createLocalSharedRuntime } from '../local-shared-runtime.mjs';
+import { createLocalSharedRuntime as createSharedRuntime } from '../local-shared-runtime.mjs';
+const createLocalSharedRuntime = options => createSharedRuntime(options, { strict: true });
 import { ns, counter, query, ok, connect, call, context, holdWriteLock } from './local-shared-support.mjs';
 
 for (const holdMs of [3000, 7000]) test(`A4 eight connections remain responsive under an external ${holdMs}ms canonical write lock`, { timeout: 60000 }, async t => {

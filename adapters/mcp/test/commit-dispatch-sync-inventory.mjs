@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve, relative } from 'node:path';
+import { parse } from '../../../tools/testing/vendor/acorn/acorn.mjs';
 
 const root = new URL('../../../', import.meta.url).pathname;
 // Conservative source census, seeded from R2f's transaction/BEGIN inventory.
@@ -11,21 +12,23 @@ export function masked(source) {
     value => value.replace(/[^\n]/g, ' '));
 }
 export function functionRegions(source) {
-  const code = masked(source), regions = [];
-  // Separate balanced scanner keeps ordinary identifiers and line edits out of
-  // the pin. Only named enclosing functions, never line numbers, identify sites.
-  const close = (start, left, right) => {
-    let depth = 1;
-    for (let i = start + 1; i < code.length; i++) {
-      if (code[i] === left) depth++;
-      else if (code[i] === right && --depth === 0) return i;
+  const regions = [];
+  const name = node => node?.name ?? node?.value ?? node?.property?.name;
+  const visit = (node, parent) => {
+    if (!node || typeof node.type !== 'string') return;
+    if (['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(node.type)) {
+      const label = node.id?.name ?? (parent?.type === 'VariableDeclarator' ? name(parent.id)
+        : ['Property', 'MethodDefinition'].includes(parent?.type) ? name(parent.key)
+        : parent?.type === 'AssignmentExpression' ? name(parent.left)
+        : parent?.type === 'CallExpression' ? `<${name(parent.callee) ?? 'call'} callback>` : '<anonymous>');
+      regions.push({ name: label, start: node.start, end: node.end });
     }
-    return code.length;
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) value.forEach(child => visit(child, node));
+      else if (value && typeof value === 'object') visit(value, node);
+    }
   };
-  for (const match of code.matchAll(/\bfunction\s*\*?\s+([\w$]+)\s*\(/g)) {
-    const args = code.indexOf('(', match.index), brace = code.indexOf('{', close(args, '(', ')') + 1);
-    if (brace >= 0) regions.push({ name: match[1], start: match.index, end: close(brace, '{', '}') });
-  }
+  visit(parse(source, { ecmaVersion: 'latest', sourceType: 'module' }));
   return regions;
 }
 export function sharedSources() {

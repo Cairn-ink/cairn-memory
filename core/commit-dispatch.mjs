@@ -14,13 +14,16 @@ export const APPROVED_SYNCHRONOUS_SCOPES = Object.freeze([
 ]);
 export function withSynchronousCommitScope(label, work) {
   if (!APPROVED_SYNCHRONOUS_SCOPES.includes(label)) fail('storage_error');
-  return synchronousScopes.run(label, work);
+  const scope = { label, active: true };
+  try { return synchronousScopes.run(scope, work); }
+  finally { scope.active = false; }
 }
 export function assertCommitWriteRouted(db, site = 'transaction') {
   const binding = bindings.get(db);
-  if (!binding || attempts.getStore()?.db === db) return;
-  const label = synchronousScopes.getStore();
-  if (label) { binding.host.namedScopes.add(label); return; }
+  const attempt = attempts.getStore();
+  if (!binding || attempt?.active && attempt.db === db) return;
+  const scope = synchronousScopes.getStore();
+  if (scope?.active) { binding.host.namedScopes.add(scope.label); return; }
   binding.host.unroutedWrites++;
   if (binding.host.strict) {
     const error = new MemoryStoreError('unrouted_synchronous_write');
@@ -30,7 +33,8 @@ export function assertCommitWriteRouted(db, site = 'transaction') {
 }
 export function dispatchSynchronousCommit(connection, work) {
   const binding = bindings.get(connection);
-  if (!binding || attempts.getStore()?.db === binding.db) return work();
+  const attempt = attempts.getStore();
+  if (!binding || attempt?.active && attempt.db === binding.db) return work();
   return binding.host.dispatch(binding.db, work, undefined, { retry: false });
 }
 const deliveries = new AsyncLocalStorage();
@@ -52,7 +56,7 @@ function exhausted() {
 // the current attempt, never in a code-string inference or caller payload.
 export function commitFailure(error, result) {
   const attempt = attempts.getStore();
-  if (attempt && busy(error)) attempt.busyResults.add(result);
+  if (attempt?.active && busy(error)) attempt.busyResults.add(result);
   return result;
 }
 
@@ -90,7 +94,7 @@ export function withCommitBinding(source, work) {
 }
 export function recordCommit(db) {
   const attempt = attempts.getStore();
-  if (attempt?.db === db) attempt.commits++;
+  if (attempt?.active && attempt.db === db) attempt.commits++;
 }
 
 // Called only with an engine-owned synchronous closure encompassing one complete
@@ -127,7 +131,7 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
       const tryCommit = () => {
         checkAuthority();
         checkIdle('attempt');
-        const state = { db, commits: 0, busyResults: new WeakSet() };
+        const state = { db, active: true, commits: 0, busyResults: new WeakSet() };
         const { restoreTimeoutMs } = bindings.get(db);
         try {
           db.exec('PRAGMA busy_timeout = 5');
@@ -148,6 +152,7 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
           if (!busy(error)) throw error;
           if (state.commits || !retryAllowed) throw error;
         } finally {
+          state.active = false;
           // checkIdle retires a connection with an active transaction. Keep
           // its fixed refusal, without attempting SQL on that closed handle.
           if (db.isOpen) db.exec(`PRAGMA busy_timeout = ${restoreTimeoutMs}`);
@@ -202,7 +207,7 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
     run(work, { signal, check, deadlineAt } = {}) {
       return requests.run({ signal, check, deadlineAt }, work);
     },
-    inspectSynchronousWrites: () => ({ count: host.unroutedWrites, scopes: [...host.namedScopes].sort() }),
+    inspectSynchronousWrites: () => ({ count: host.unroutedWrites, connections: host.connections.size, scopes: [...host.namedScopes].sort() }),
     inspectTransactions() {
       const result = [];
       for (const ref of host.connections) {

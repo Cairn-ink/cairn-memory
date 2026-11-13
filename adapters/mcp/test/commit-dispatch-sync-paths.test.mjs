@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parse } from '../../../tools/testing/vendor/acorn/acorn.mjs';
-import { masked } from './commit-dispatch-sync-inventory.mjs';
+import { masked, functionRegions } from './commit-dispatch-sync-inventory.mjs';
+import { APPROVED_SYNCHRONOUS_SCOPES } from '../../../core/commit-dispatch.mjs';
 import { sharedSources, syncInventory, syncEntryCalls } from './commit-dispatch-sync-inventory.mjs';
 
 const pin = JSON.parse(readFileSync(new URL('./fixtures/commit-dispatch-sync-paths.json', import.meta.url), 'utf8'));
@@ -70,4 +71,33 @@ test('negative control: an added transaction in an existing shared write functio
   const brace = source.indexOf('{', source.indexOf(')', start));
   sources.set(file, source.slice(0, brace + 1) + '\n    transaction(db, () => {});\n' + source.slice(brace + 1));
   assert.throws(() => check(sources), /R2G_UNPINNED_SYNC_WRITE/);
+});
+
+test('R2i named scopes equal the four approved paths and no fifth scope can hide in a caller', { timeout: 3000 }, () => {
+  const names = new Set();
+  for (const source of sharedSources().values()) {
+    const visit = node => {
+      if (!node || typeof node.type !== 'string') return;
+      if (node.type === 'CallExpression' && node.callee.name === 'withSynchronousCommitScope' && node.arguments[0]?.type === 'Literal')
+        names.add(node.arguments[0].value);
+      for (const value of Object.values(node)) {
+        if (Array.isArray(value)) value.forEach(visit);
+        else if (value && typeof value === 'object') visit(value);
+      }
+    };
+    visit(parse(source, { ecmaVersion: 'latest', sourceType: 'module' }));
+  }
+  const approved = pin.approvedSynchronousPaths.map(item => item.path).sort();
+  assert.deepEqual([...APPROVED_SYNCHRONOUS_SCOPES].sort(), approved);
+  assert.deepEqual([...names].sort(), approved, 'R2I_NAMED_SYNC_SCOPES');
+});
+
+test('R2i census attributes arrows and methods to their own regions', { timeout: 3000 }, () => {
+  const source = 'function outer(){const guard=()=>transaction(db,check);return {write(){transaction(db,work)}}}';
+  const regions = functionRegions(source);
+  for (const [needle, expected] of [['transaction(db,check)', 'guard'], ['transaction(db,work)', 'write']]) {
+    const offset = source.indexOf(needle);
+    const region = regions.filter(fn => fn.start <= offset && fn.end >= offset).sort((a,b) => b.start-a.start)[0];
+    assert.equal(region.name, expected);
+  }
 });

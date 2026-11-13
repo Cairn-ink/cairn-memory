@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync, writeFileSync } from 'node:fs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
-import { createCommitDispatcher, bindCommitConnection } from '../../../core/commit-dispatch.mjs';
+import { createCommitDispatcher, bindCommitConnection, withSynchronousCommitScope, dispatchCommit } from '../../../core/commit-dispatch.mjs';
 import { createMemoryRuntime } from '../../../core/runtime.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
 import { fixture as sidecarFixture } from '../../../core/testing/context-read-fixture.mjs';
@@ -17,7 +17,7 @@ const waited = elapsed => assert.ok(elapsed >= 250 && elapsed < 5000, 'R2G_RARE_
 test('daemon-start schema/privacy install retains the 5s native wait', { timeout: 15000 }, async t => {
   const w = createTestWorkspace(t), path = join(w.path, 'startup.sqlite');
   openMemoryCore({ path, raw: false }).close();
-  const lock = await holdWriteLock(t, path, 500), dispatcher = createCommitDispatcher();
+  const lock = await holdWriteLock(t, path, 500), dispatcher = createCommitDispatcher({ strict: true });
   const start = performance.now();
   const core = dispatcher.open(() => openMemoryCore({ path, raw: true, rawSearch: false })); w.defer(() => core.close());
   waited(performance.now() - start);
@@ -57,7 +57,7 @@ function lockNextSidecarBegin(t, directory, path) {
   return { exited, restore: () => { DatabaseSync.prototype.exec = original; }, armed: () => armed };
 }
 for (const repair of [false, true]) test(`sidecar ${repair ? 'repair/reopen' : 'create'} retains its native wait`, { timeout: 15000 }, async t => {
-  const f = sidecarFixture(t), dispatcher = createCommitDispatcher();
+  const f = sidecarFixture(t), dispatcher = createCommitDispatcher({ strict: true });
   // The fixture's observer is a retained read-only canonical handle.
   f.db.exec('PRAGMA busy_timeout=5000'); dispatcher.open(() => bindCommitConnection(f.db));
   const path = f.path + '.context-read-v1.sqlite';
@@ -75,34 +75,53 @@ for (const repair of [false, true]) test(`sidecar ${repair ? 'repair/reopen' : '
 });
 
 test('lazy Card storage init retains native waiting outside a dispatched maintenance claim', { timeout: 15000 }, async t => {
-  const w = createTestWorkspace(t), path = join(w.path, 'lazy.sqlite'), dispatcher = createCommitDispatcher();
+  const w = createTestWorkspace(t), path = join(w.path, 'lazy.sqlite'), dispatcher = createCommitDispatcher({ strict: true });
   const runtime = dispatcher.open(() => createMemoryRuntime({ path }, { engineCards: true }));
   w.defer(() => runtime.close());
   const storage = await runtime.engineCardStorage();
   const lock = await holdWriteLock(t, path, 500), start = performance.now();
-  const attempt = storage.claim(ns, { key: 'synthetic-empty-cluster', memories: [] }, new Date().toISOString(), () => {});
+  const attempt = withSynchronousCommitScope('lazy Card storage init', () => storage.claim(ns, { key: 'synthetic-empty-cluster', memories: [] }, new Date().toISOString(), () => {}));
   waited(performance.now() - start); assert.ok(attempt);
   assert.deepEqual(await lock.exited, [0, null]);
   assert.deepEqual(dispatcher.inspectBusyTimeouts(), [5000], 'R2G_TIMEOUT_RESTORE');
-  // STOP: production maintenance invokes this claim *inside* dispatchCommit
-  // (engine-card-maintenance.mjs:193). ensureLayout at engine-card-storage:210
-  // therefore still inherits 5ms there. Splitting it requires that file's owner.
+  // This fixture deliberately exercises the approved synchronous scope. The
+  // production claim below exercises migration inside dispatched attempts.
 });
 
 test('read_role_task_context synchronous reconciliation retains its native wait', { timeout: 15000 }, async t => {
-  const w = createTestWorkspace(t), path = join(w.path, 'role.sqlite'), h = roleHost(), dispatcher = createCommitDispatcher();
+  const w = createTestWorkspace(t), path = join(w.path, 'role.sqlite'), h = roleHost(), dispatcher = createCommitDispatcher({ strict: true });
   const core = dispatcher.open(() => openMemoryCore({ path, raw: false, methodPackages: h.methods, assets: h.assets,
     contextRead: h.context, roleProfiles: h.options })); w.defer(() => core.close());
   ok(await dispatcher.run(() => core.publishRoleProfileRelease(publish(), {})));
   ok(await dispatcher.run(() => core.admit({ namespace: roleNs, memory: { content: 'Synthetic finance evidence', kind: 'fact' },
     receipts: [{ client: 'synthetic', sessionId: 'role', eventId: 'seed', role: 'user', excerpt: 'Synthetic finance evidence' }] })));
   const input = { ...read(), task: 'finance', deadlineMs: 5000 };
-  ok(await dispatcher.run(() => core.readRoleTaskContext(input, {})));
+  ok(await dispatcher.run(() => withSynchronousCommitScope('read_role_task_context', () => core.readRoleTaskContext(input, {}))));
   // Advance canonical sequence so this role read must reconcile a checkpoint.
   ok(await dispatcher.run(() => core.admit({ namespace: roleNs, memory: { content: 'Synthetic finance changed evidence', kind: 'fact' },
     receipts: [{ client: 'synthetic', sessionId: 'role', eventId: 'changed', role: 'user', excerpt: 'Synthetic finance changed evidence' }] })));
   const lock = await holdWriteLock(t, path + '.context-read-v1.sqlite', 500), start = performance.now();
-  ok(await dispatcher.run(() => core.readRoleTaskContext(input, {})));
+  ok(await dispatcher.run(() => withSynchronousCommitScope('read_role_task_context', () => core.readRoleTaskContext(input, {}))));
   waited(performance.now() - start); assert.deepEqual(await lock.exited, [0, null]);
   assert.ok(dispatcher.inspectBusyTimeouts().every(value => value === 5000), 'R2G_TIMEOUT_RESTORE');
+});
+
+test('item 8: production lazy Card claim retries its migration and leaves a complete layout', { timeout: 15000 }, async t => {
+  const w = createTestWorkspace(t), path = join(w.path, 'production-lazy.sqlite');
+  let backoffs = 0;
+  const dispatcher = createCommitDispatcher({ strict: true, onBackoff() { backoffs++; } });
+  const runtime = dispatcher.open(() => createMemoryRuntime({ path }, { engineCards: true }));
+  w.defer(() => runtime.close());
+  const storage = await runtime.engineCardStorage(), lock = await holdWriteLock(t, path, 400);
+  const attempt = await dispatchCommit(storage, () => storage.claim(ns,
+    { key: 'synthetic-dispatched-cluster', memories: [] }, new Date().toISOString(), () => {}));
+  assert.ok(attempt); assert.ok(backoffs > 0);
+  assert.deepEqual(await lock.exited, [0, null]);
+  const observer = new DatabaseSync(path, { readOnly: true });
+  try {
+    assert.equal(observer.prepare('PRAGMA user_version').get().user_version, 23);
+    assert.ok(observer.prepare("SELECT 1 FROM sqlite_master WHERE name='card_applicability_reviews'").get());
+    assert.ok(observer.prepare("SELECT 1 FROM sqlite_master WHERE name='card_mocs'").get());
+  } finally { observer.close(); }
+  assert.equal(dispatcher.inspectSynchronousWrites().count, 0);
 });

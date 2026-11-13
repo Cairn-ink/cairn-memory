@@ -7,10 +7,10 @@ import { once } from 'node:events';
 
 // External writer owns a native SQLite transaction, never a raw file handle.
 // Cleanup also supervises early assertion failures and startup/child errors.
-export async function holdWriteLock(t, path, holdMs) {
+export async function holdWriteLock(t, path, holdMs, mode = 'IMMEDIATE') {
   const child = spawn(process.execPath, ['--input-type=module', '-e',
-    "import { DatabaseSync } from 'node:sqlite'; const db = new DatabaseSync(process.argv[1]); db.exec('BEGIN IMMEDIATE'); process.stdout.write('locked\\n'); setTimeout(() => { db.exec('ROLLBACK'); db.close(); }, Number(process.argv[2]));",
-    path, String(holdMs)], { stdio: ['ignore', 'pipe', 'ignore'] });
+    "import { DatabaseSync } from 'node:sqlite'; const db = new DatabaseSync(process.argv[1]); db.exec('BEGIN '+process.argv[3]); process.stdout.write('locked\\n'); setTimeout(() => { db.exec('ROLLBACK'); db.close(); }, Number(process.argv[2]));",
+    path, String(holdMs), mode], { stdio: ['ignore', 'pipe', 'ignore'] });
   const exited = once(child, 'exit');
   // Register a rejection handler before any asynchronous startup error.
   exited.catch(() => {});
@@ -22,7 +22,7 @@ export async function holdWriteLock(t, path, holdMs) {
     once(child.stdout, 'data'),
     exited.then(() => { throw Error('synthetic_lock_not_acquired'); }),
   ]);
-  assert.equal(ready.toString(), 'locked\n', 'external SQLite writer acquired BEGIN IMMEDIATE');
+  assert.equal(ready.toString(), 'locked\n', 'external SQLite writer acquired BEGIN ' + mode);
   return { exited };
 }
 
@@ -57,3 +57,5 @@ export async function context(client, args = query) {
   return { response, value: ok(JSON.parse(response.content[0].text)),
     diagnostics: response._meta['ink.cairn/context-read-diagnostics'], snapshot: response._meta['ink.cairn/context-read-snapshot'] };
 }
+
+export const holdExclusiveLock = (t, path, holdMs) => holdWriteLock(t, path, holdMs, 'EXCLUSIVE');

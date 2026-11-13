@@ -7,10 +7,10 @@ import { createCommitDispatcher } from '../../core/commit-dispatch.mjs';
 /** One exact configuration, one runtime, independent SDK instances per stream.
  * Authentication and identity selection belong to the caller (R3).
  */
-export function createLocalSharedRuntime(options = {}) {
+export function createLocalSharedRuntime(options = {}, { strict = false } = {}) {
   const configuration = { ...options, namespace: structuredClone(options.namespace) };
   const closingSignal = new AbortController();
-  const dispatcher = createCommitDispatcher({ signal: closingSignal.signal });
+  const dispatcher = createCommitDispatcher({ signal: closingSignal.signal, strict });
   const connections = new Set();
   let runtime, closed = false, closing, inFlight = 0, sdkServers = 0;
   return {

@@ -1,23 +1,25 @@
+import { rationaleModel } from '../../../core/testing/rationale-model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
-import { createLocalSharedRuntime } from '../local-shared-runtime.mjs';
+import { createLocalSharedRuntime as createSharedRuntime } from '../local-shared-runtime.mjs';
+const createLocalSharedRuntime = options => createSharedRuntime(options, { strict: true });
 import { call, connect, context, counter, deferred, holdWriteLock, ns, ok } from './local-shared-support.mjs';
 
 const p95 = rows => [...rows].sort((a,b) => a-b)[Math.ceil(rows.length * .95)-1];
-test('A4 eight connections: a capture retry keeps B-H reads within twice baseline without provider replay', async t => {
+test('A4 eight connections: a capture retry keeps B-H reads within twice baseline without provider replay', { timeout: 60000 }, async t => {
   const workspace = createTestWorkspace(t, { prefix: 'shared-commit-eight-' });
   const path = join(workspace.path, 'store.sqlite'), locked = deferred();
   let extract = 0, classify = 0, lock;
-  const model = { contextWindow: 8192, countTokens: () => 1,
+  const model = { ...rationaleModel(),
     async extract() {
       extract++; lock = await holdWriteLock(t, path, 3000); locked.resolve();
       return { items: [{ content: 'Synthetic cobalt telescope capture', kind: 'fact', confidence: .8, sourceIndices: [0] }] };
     },
     async classify({ input }) { classify++; return { items: input.memories.map(memory => ({ memoryId: memory.id,
       parentIds: [], newL1: { title: 'Synthetic telescope', parentL2Ids: [] } })) }; } };
-  const host = createLocalSharedRuntime({ path, namespace: ns, raw: false, model, contextCounter: counter });
+  const host = createLocalSharedRuntime({ path, namespace: ns, raw: false, model, captureQualification: 'source-bound-v2', contextCounter: counter });
   workspace.defer(() => host.close());
   const clients = [];
   for (let index = 0; index < 8; index++) clients.push((await connect(t, host)).client);

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { rationaleModel } from '../../../core/testing/rationale-model.mjs';
-import { createLocalSharedRuntime } from '../local-shared-runtime.mjs';
+import { createLocalSharedRuntime as createSharedRuntime } from '../local-shared-runtime.mjs';
+const createLocalSharedRuntime = options => createSharedRuntime(options, { strict: true });
 import { seed, namespace } from './fixtures/episode-server.mjs';
 import { call, connect, deferred, holdWriteLock, ok } from './local-shared-support.mjs';
 

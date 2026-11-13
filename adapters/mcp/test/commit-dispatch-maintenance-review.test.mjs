@@ -1,0 +1,38 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { setImmediate as turn } from 'node:timers/promises';
+import { startContextMaintenance } from '../server.mjs';
+import { createEngineCardMaintenance } from '../../../core/engine-card-maintenance.mjs';
+
+test('item 8: a busy Card namespace cannot skip other namespaces or projection refresh', { timeout: 3000 }, async t => {
+  let tick;
+  const original = globalThis.setTimeout;
+  globalThis.setTimeout = callback => { tick = callback; return { unref() {} }; };
+  t.after(() => { globalThis.setTimeout = original; });
+  const seen = [], projections = [];
+  const namespaces = ['one', 'two'].map(ownerId => ({ ownerId, scope: 'personal', projectId: null }));
+  const core = { getContextReadCapabilities: () => ({ ok: true, value: { types: ['memory', 'card'] } }),
+    maintainCards: async ({ namespace }) => {
+      seen.push(namespace.ownerId);
+      return { ok: true, value: { state: 'refused', reason: 'storage_busy' } };
+    } };
+  const loop = startContextMaintenance(core, { readSet: namespaces, call: async (core, method, input) => {
+    projections.push(input.types);
+  } }, { cards: true });
+  try {
+    for (let i = 0; i < 3; i++) {
+      tick(); await turn();
+    }
+    assert.deepEqual(seen, ['one', 'two', 'one', 'two', 'one', 'two'], 'R2I_MAINTENANCE_CONTINUES');
+    assert.deepEqual(projections, [['memory', 'card'], ['memory'], ['card']]);
+  } finally { await loop.close(); }
+});
+
+for (const native of [false, true]) test(`item 8: failureReasons reports ${native ? 'native' : 'dispatcher'} BUSY as storage_busy`, { timeout: 3000 }, async () => {
+  const storage = { available: () => true, pauseGuard: () => () => {},
+    snapshot() { throw native ? Object.assign(Error('synthetic lock'), { code: 'ERR_SQLITE_ERROR', errcode: 5 })
+      : Object.assign(Error('storage_busy'), { code: 'storage_busy' }); } };
+  const worker = createEngineCardMaintenance({ storage, model: { consolidate() {} } });
+  const value = await worker.maintain({ namespace: { ownerId: 'synthetic', scope: 'personal', projectId: null } });
+  assert.equal(value.state, 'refused'); assert.equal(value.reason, 'storage_busy', 'R2I_BUSY_REASON');
+});

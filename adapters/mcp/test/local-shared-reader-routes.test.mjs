@@ -8,7 +8,8 @@ import { openMemoryCore } from '../../../core/contract.mjs';
 import { rationaleModel } from '../../../core/testing/rationale-model.mjs';
 import { installRawSearchTestClock, rawSearchTestWait } from '../../../core/testing/raw-search-clock.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
-import { createLocalSharedRuntime } from '../local-shared-runtime.mjs';
+import { createLocalSharedRuntime as createSharedRuntime } from '../local-shared-runtime.mjs';
+const createLocalSharedRuntime = options => createSharedRuntime(options, { strict: true });
 import { ns, counter, query, ok, connect, context, deferred } from './local-shared-support.mjs';
 
 test('N=12 overlapping connections preserve sequential Raw coverage and semantic ready rates', { timeout: 90000 }, async t => {

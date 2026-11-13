@@ -10,7 +10,8 @@ import { openMemoryCore } from '../../../core/contract.mjs';
 import { rationaleModel } from '../../../core/testing/rationale-model.mjs';
 import { installRawSearchTestClock, rawSearchTestWait } from '../../../core/testing/raw-search-clock.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
-import { createLocalSharedRuntime } from '../local-shared-runtime.mjs';
+import { createLocalSharedRuntime as createSharedRuntime } from '../local-shared-runtime.mjs';
+const createLocalSharedRuntime = options => createSharedRuntime(options, { strict: true });
 import { createCairnServer } from '../server.mjs';
 import { ns, counter, query, ok, connect, context, deferred, streams } from './local-shared-support.mjs';
 

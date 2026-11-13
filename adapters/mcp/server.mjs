@@ -652,7 +652,7 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
 }
 
 /** Bounded embedding refresh; no provider call holds up capture or tool delivery. */
-function startContextMaintenance(core, access, { cards = false, semantic = true, run } = {}) {
+export function startContextMaintenance(core, access, { cards = false, semantic = true, run } = {}) {
   const { readSet } = access;
   const capabilities = core.getContextReadCapabilities?.();
   let types = capabilities?.ok ? capabilities.value.types : ['memory'];
