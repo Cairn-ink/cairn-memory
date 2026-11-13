@@ -36,14 +36,20 @@ export const purgeAdditionSQL = ([sql]) =>
   /^SELECT\b.*\bFROM private_cards\b.*\bJOIN card_operations\b/i.test(sql) ||
   /^DELETE FROM card_operations\b/i.test(sql);
 
-// forget is one-based; after is zero-based within the revised archived call.
+// ordinal is one-based among ALL calls of method, including refusals; after is
+// zero-based within that revised archived call. Allowed methods are fixture data.
 // Entries sharing an anchor are inserted in ledger order. Probes are individual
 // entries, never an optional allowance attached to another statement.
-export function validateSqlAdditions(entries = []) {
+export function validateSqlAdditions(entries = [], sqlAdditionMethods = []) {
   assert.ok(Array.isArray(entries), 'sqlAdditions is an array');
+  assert.ok(Array.isArray(sqlAdditionMethods) && sqlAdditionMethods.every(method => typeof method === 'string' && method.trim() === method && method.length > 0),
+    'sqlAdditionMethods is an explicit list of call methods');
+  assert.equal(new Set(sqlAdditionMethods).size, sqlAdditionMethods.length, 'addition methods are listed once');
   for (const entry of entries) {
-    assert.ok(entry && workloadKeys.includes(entry.key) && Number.isInteger(entry.forget) && entry.forget > 0 &&
+    assert.ok(entry && workloadKeys.includes(entry.key) && typeof entry.method === 'string' &&
+      Number.isInteger(entry.ordinal) && entry.ordinal > 0 && !Object.hasOwn(entry, 'forget') &&
       Number.isInteger(entry.after) && entry.after >= 0, 'position-anchored workload addition');
+    assert.ok(sqlAdditionMethods.includes(entry.method), 'addition belongs to a reviewed call method');
     assert.ok(Number.isInteger(entry.reference) && entry.reference > 0 &&
       typeof entry.reason === 'string' && entry.reason.trim().length > 0 && !/[\r\n]/.test(entry.reason),
     'addition has a pull request number and a public reason');
@@ -52,10 +58,14 @@ export function validateSqlAdditions(entries = []) {
       ['get', 'all', 'iterate', 'run', 'exec'].includes(row[1]) && Array.isArray(row[2]), 'full traced statement row');
     assert.ok(purgeAdditionSQL(row) && !receiptWalkSQL(row), 'only reviewed purge statements, never receipt exemptions');
   }
+  assert.deepEqual([...new Set(entries.map(entry => entry.method))].sort(), [...sqlAdditionMethods].sort(),
+    'reviewed methods are exactly those carrying additions across the workloads');
 }
 
+const compareAnchors = (a, b) => (a.method < b.method ? -1 : a.method > b.method ? 1 : 0) || a.ordinal - b.ordinal;
 const orderedEntries = (key, entries) => entries.filter(entry => entry.key === key)
-  .sort((a, b) => a.forget - b.forget || a.after - b.after);
+  .sort((a, b) => compareAnchors(a, b) || a.after - b.after);
+const statementSummary = ([sql, method, bindings]) => [hash(sql), method, hash(bindings)];
 const callStatements = (record, call) => record.statements.slice(call[2], call[3]);
 function checkCallRanges(record) {
   let end = 0;
@@ -71,34 +81,35 @@ function checkCallRanges(record) {
   }
 }
 
-export function ledgerAdditionSummary(key, entries = []) {
-  validateSqlAdditions(entries);
+export function ledgerAdditionSummary(key, entries = [], sqlAdditionMethods = []) {
+  validateSqlAdditions(entries, sqlAdditionMethods);
   const calls = [];
   for (const entry of orderedEntries(key, entries)) {
     let call = calls.at(-1);
-    if (call?.forget !== entry.forget) calls.push(call = { forget: entry.forget, statements: [] });
-    call.statements.push([hash(entry.statement[0]), entry.statement[1]]);
+    if (!call || compareAnchors(call, entry)) calls.push(call = { method: entry.method, ordinal: entry.ordinal, statements: [] });
+    call.statements.push(statementSummary(entry.statement));
   }
-  return { forgetCalls: calls.length, calls };
+  return { callCount: calls.length, calls };
 }
 
-export function reconstructWideTrace(key, archived, entries = []) {
-  validateSqlAdditions(entries); checkCallRanges(archived);
+export function reconstructWideTrace(key, archived, entries = [], sqlAdditionMethods = []) {
+  validateSqlAdditions(entries, sqlAdditionMethods); checkCallRanges(archived);
   const wanted = orderedEntries(key, entries), insertions = new Map();
-  let forget = 0, consumed = 0;
+  const ordinals = new Map();
+  let consumed = 0;
   for (const call of archived.calls) {
-    if (call[0] !== 'forget') continue;
-    forget++;
-    for (const entry of wanted.filter(entry => entry.forget === forget)) {
-      assert.equal(call.length, 4, 'addition belongs to a traced forget');
-      assert.ok(entry.after < call[3] - call[2], `existing anchor for forget ${forget} after ${entry.after}`);
+    const method = call[0], ordinal = (ordinals.get(method) ?? 0) + 1;
+    ordinals.set(method, ordinal);
+    for (const entry of wanted.filter(entry => entry.method === method && entry.ordinal === ordinal)) {
+      assert.equal(call.length, 4, 'addition belongs to a traced call');
+      assert.ok(entry.after < call[3] - call[2], `existing anchor for ${method} ${ordinal} after ${entry.after}`);
       const index = call[2] + entry.after;
       // This is the canonical purge site, after authorization/suppression and
       // immediately before the tombstone. A refused call without it has no anchor.
       assert.equal(archived.statements[index + 1]?.[0],
         'UPDATE memories SET content = NULL, deleted = 1, revision = revision + 1, updated_at = ? WHERE id = ?',
         'purge anchor precedes the canonical Memory tombstone');
-      assert.ok(index + 1 < call[3], 'purge anchor stays inside its forget');
+      assert.ok(index + 1 < call[3], 'purge anchor stays inside its call');
       const rows = insertions.get(index) ?? [];
       rows.push(entry.statement); insertions.set(index, rows); consumed++;
     }
@@ -114,42 +125,47 @@ export function reconstructWideTrace(key, archived, entries = []) {
 }
 
 // This check needs only the current trace. Select the purge family over the
-// entire trace, compare full rows in their forget calls, and reject leftovers.
+// entire trace, compare full rows in their reviewed calls, and reject leftovers.
 // It also returns the precise positions to subtract for receipt count checks.
-export function currentAdditionSummary(key, current, entries = []) {
-  validateSqlAdditions(entries); checkCallRanges(current);
+export function currentAdditionSummary(key, current, entries = [], sqlAdditionMethods = []) {
+  validateSqlAdditions(entries, sqlAdditionMethods); checkCallRanges(current);
   const wanted = orderedEntries(key, entries), positions = new Set(), calls = [];
   const texts = new Set(entries.map(entry => entry.statement[0]));
   const isAddition = row => purgeAdditionSQL(row) || texts.has(row[0]);
-  let forget = 0, consumed = 0;
+  const ordinals = new Map();
+  let consumed = 0;
   for (const call of current.calls) {
-    if (call[0] !== 'forget') continue;
-    forget++;
-    const expected = wanted.filter(entry => entry.forget === forget), rows = [];
-    assert.equal(call.length, 4, 'forget has statement offsets');
+    const method = call[0], ordinal = (ordinals.get(method) ?? 0) + 1;
+    ordinals.set(method, ordinal);
+    const expected = wanted.filter(entry => entry.method === method && entry.ordinal === ordinal), rows = [];
+    if (call.length !== 4) {
+      assert.equal(expected.length, 0, 'additions require complete call offsets');
+      continue;
+    }
     for (let index = call[2]; index < call[3]; index++) if (isAddition(current.statements[index])) {
       rows.push(current.statements[index]); positions.add(index);
     }
-    assert.deepEqual(rows, expected.map(entry => entry.statement), `forget ${forget} has exactly its ledger rows and bindings`);
+    if (rows.length) assert.ok(sqlAdditionMethods.includes(method), `${method} carries purge SQL but is not a reviewed addition method`);
+    assert.deepEqual(rows, expected.map(entry => entry.statement), `${method} ${ordinal} has exactly its ledger rows and bindings`);
     consumed += expected.length;
-    if (rows.length) calls.push({ forget, statements: rows.map(([sql, method]) => [hash(sql), method]) });
+    if (rows.length) calls.push({ method, ordinal, statements: rows.map(statementSummary) });
   }
   assert.equal(consumed, wanted.length, 'no unused current-trace ledger entry');
   current.statements.forEach((row, index) => {
-    if (isAddition(row)) assert.ok(positions.has(index), 'no purge addition outside its forget call');
+    if (isAddition(row)) assert.ok(positions.has(index), 'no purge addition outside its reviewed call');
   });
-  const effect = { forgetCalls: calls.length, calls };
-  assert.deepEqual(effect, ledgerAdditionSummary(key, entries), 'current additions have the ledger summary');
+  const effect = { callCount: calls.length, calls: calls.sort(compareAnchors) };
+  assert.deepEqual(effect, ledgerAdditionSummary(key, entries, sqlAdditionMethods), 'current additions have the ledger summary');
   return { effect, positions };
 }
 
-export function assertWidePins(key, current, entries, pinned) {
+export function assertWidePins(key, current, entries, pinned, sqlAdditionMethods = []) {
   const actual = summary(current);
+  const effect = currentAdditionSummary(key, current, entries, sqlAdditionMethods).effect;
   if (workloadKeys.includes(key)) {
-    const effect = currentAdditionSummary(key, current, entries).effect;
-    if (effect.forgetCalls || Object.hasOwn(pinned ?? {}, 'sqlAdditions')) {
+    if (effect.callCount || Object.hasOwn(pinned ?? {}, 'sqlAdditions')) {
       actual.sqlAdditions = effect;
-      assert.deepEqual(pinned?.sqlAdditions, ledgerAdditionSummary(key, entries), 'pins explicitly describe the ledger effect');
+      assert.deepEqual(pinned?.sqlAdditions, ledgerAdditionSummary(key, entries, sqlAdditionMethods), 'pins explicitly describe the ledger effect');
     }
   }
   assert.deepEqual(actual, pinned, 'current trace matches its pins');
@@ -168,9 +184,9 @@ export function compareWideTables(current, archived, removedRows = []) {
   assert.deepEqual(current, expected, 'every table population, minus only explicitly reviewed rows');
 }
 
-export function compareWideTraces({ key, current, archived, sqlAdditions = [], receiptWalk = false }) {
-  const reconstructed = reconstructWideTrace(key, archived, sqlAdditions);
-  const { positions } = currentAdditionSummary(key, current, sqlAdditions);
+export function compareWideTraces({ key, current, archived, sqlAdditions = [], sqlAdditionMethods = [], receiptWalk = false }) {
+  const reconstructed = reconstructWideTrace(key, archived, sqlAdditions, sqlAdditionMethods);
+  const { positions } = currentAdditionSummary(key, current, sqlAdditions, sqlAdditionMethods);
   assert.deepEqual(current.effectWitnesses, archived.effectWitnesses, 'complete effect witnesses, including rolled-back writes');
   compareWideTables(current.dump, archived.dump, []);
   if (!receiptWalk) {
