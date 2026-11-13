@@ -1,3 +1,6 @@
+import { host as roleHost, publish as rolePublish, read as roleRead } from './role-fixture.mjs';
+import { createOpenAIModel } from '../../adapters/openai/index.mjs';
+import { productSidecar } from '../context-product-sidecar.mjs';
 import { readFileSync } from 'node:fs';
 import { sourceEvidence } from '../source-evidence.mjs';
 import { model as episodeModel, input as episodeCaptureInput } from '../testing/episode-capture-helpers.mjs';
@@ -9,7 +12,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync, StatementSync } from 'node:sqlite';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { openMemoryCore, openMemoryStore } from '../index.mjs';
+import { roleTaskMeteredText, roleTaskToolResponse, openMemoryCore, openMemoryStore } from '../index.mjs';
 import { openRawCaptureCore } from '../raw-capture.mjs';
 import { lineageFixture, lineageHost, ns, ok, receipt } from '../testing/card-lineage-fixture.mjs';
 import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
@@ -23,7 +26,7 @@ import { accessDigest } from '../context-product-validation.mjs';
 import { configured, descriptor } from '../testing/context-product-owner-fixture.mjs';
 import { contentSafetyFacade } from '../content-safety-boundary.mjs';
 import { transaction, readTransaction } from '../database.mjs';
-import { receiptDeliverySnapshot, createContentReadMemo, receiptReadSafety } from '../content-safety.mjs';
+import { receiptStoredCountInside, receiptDeliverySnapshot, createContentReadMemo, receiptReadSafety } from '../content-safety.mjs';
 import { receiptDenialsInside, receiptDenialTokens } from '../content-safety.mjs';
 
 const survivor = 'Synthetic surviving signal';
@@ -209,6 +212,8 @@ async function reads(f, memory, expectedReceipts) {
   await refreshContext(f);
   values.contextRead = ok(await f.trusted.call(f.context, 'contextRead', { readSet: [ns], types: ['memory'], intent: 'current',
     query: 'Synthetic', semantic: false, deadlineMs: 5000, budget: { maxItems: 12, maxTokens: 3000 } }));
+  values.exportedText = roleTaskMeteredText(values.contextRead.metered);
+  values.exportedTool = roleTaskToolResponse({ok:true,value:values.contextRead});
   for (const [name, value] of Object.entries(values)) {
     noLeak(value, name);
     assert.ok(hasId(value, memory.id), name + ' includes B');
@@ -1076,6 +1081,15 @@ for(const operation of operations) test(`delivery-only mixed evidence omits a ma
   assert.deepEqual(selected.items.map(item=>item.ref.memoryId),[b.id]);noLeak(fetched,'mixed fetch');
   for(const invalid of [{...ref,namespace:otherNamespace},{...ref,cardId:'synthetic-missing'}, {...ref,revision:0}])
     assert.equal(f.call('fetchEvidence',{intent:'current',refs:[memoryRef(b),invalid]}).ok,false);
+  const host=roleHost({counter:{id:'synthetic',countTokens:()=>1}});
+  const roles=openMemoryCore({path:f.path,methodPackages:host.methods,assets:host.assets,roleProfiles:host.options,contextRead:host.context});
+  t.after(()=>roles.close());
+  ok(roles.publishRoleProfileRelease(rolePublish(ns,'synthetic-role','synthetic-role-publication'),{}));
+  const context=ok(roles.readRoleTaskContext({...roleRead('synthetic-role',[ns]),task:'Synthetic'},{}));
+  noLeak(context,'role task context');assert.ok(hasId(context,b.id));assert.equal(hasId(context,card.id),false);
+  const retainedId=f.db.prepare('SELECT id FROM receipts WHERE memory_id=?').get(b.id).id;
+  assert.equal(hasId(context,retainedId),false);
+
 });
 
 for(const operation of operations) for(const existing of [false,true]) test(`delivery-only first qualified binding ${operation}, existing=${existing}`,async t=>{
@@ -1122,6 +1136,8 @@ for(const operation of operations) test(`delivery-only unchanged Card confirmati
   assert.equal(confirmed.state,'confirmed');
   const later=draft('synthetic-later-draft');
   for(const c of [confirmed,later]){const read=ok(f.call('getCard',{cardId:c.id}));assert.equal(read.card,null);noLeak(read,'Card projection');}
+  const listed=ok(f.call('listCards',{states:['draft','confirmed'],limit:50}));
+  assert.deepEqual(listed.items,[]);noLeak(listed,'Card listing');
 });
 
 test('delivery-only marker-free rationale validates the root before eleven-edge overflow',async t=>{
@@ -1257,4 +1273,133 @@ test('get paging and context projection stay linear for a large receipt set',asy
   assert.ok(counted.length<=1,'stored count is cached under both native change counters');
   const result=ok(await f.trusted.call(f.context,'fetchCandidateEvidence',{readSet:[ns],intent:'current',refs:[memoryRef(b)]}));
   assert.equal(result.items[0].provenance.receiptMetadata.length,16);
+});
+
+for(const operation of operations) test(`source snapshots, rationale recall and legacy delivery ${operation}`,async t=>{
+  const f=await fixture(t,'ordinary-53',operation),[b,a]=await capture(f);
+  const denied=ok(f.core.get({namespace:ns,memoryId:b.id})).receipts[0].id;
+  ok(act(f,operation,a));f.model.countTokens=()=>1;
+  const snapshot=ok(f.core.sourceSnapshot({readSet:[ns],limit:12}));
+  assert.ok(snapshot.memories.some(item=>item.memory.id===b.id&&item.receipts.length===0&&item.receiptCount===1));
+  const recall=ok(await f.core.recall({readSet:[ns],query:survivor,limit:8,contextMode:'rationale-evidence'}));
+  assert.ok(recall.memories.some(item=>item.memory.id===b.id));
+  const store=openMemoryStore({path:f.path});t.after(()=>store.close());
+  const legacy=store.scope({ownerId:ns.ownerId,projectId:ns.projectId});
+  const values=[snapshot,recall,legacy.get(b.id),legacy.list({limit:20}),legacy.search('Synthetic',{limit:20})];
+  for(const result of values){assert.ok(hasId(result,b.id));noLeak(result,'source and legacy delivery');assert.equal(hasId(result,denied),false);}
+  assert.deepEqual(legacy.get(b.id).receipts,[]);
+});
+
+for(const operation of operations) for(const mixed of [false,true])
+test(`core review inputs reach the real adapter after withholding ${operation}, mixed=${mixed}`,async t=>{
+  const f=await fixture(t,'ordinary-53',operation),[b,a]=await capture(f);
+  const denied=ok(f.core.get({namespace:ns,memoryId:b.id})).receipts[0].id,memories=[b];
+  if(mixed)memories.push(ok(f.core.admit({namespace:ns,memory:{content:'Synthetic independent review claim',kind:'fact'},receipts:[receipt('synthetic-review-independent')]})).memory);
+  ok(act(f,operation,a));
+  const requests=[];
+  const adapter=createOpenAIModel({apiKey:'synthetic',fetchImpl:async(url,options)=>{
+    const body=JSON.parse(options.body);requests.push(body);
+    noLeak(body,'actual adapter request');assert.equal(hasId(body,denied),false);
+    const wire=JSON.parse(body.input[0].content[0].text);
+    assert.deepEqual(wire.memories[0].receipts,[]);
+    if(url.endsWith('/input_tokens'))return Response.json({object:'response.input_tokens',input_tokens:100});
+    return Response.json({object:'response',model:body.model,status:'completed',error:null,incomplete_details:null,
+      output:[{type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:JSON.stringify(body.text.format.name==='cairn_reviewBasis'?{units:[],links:[]}:{edges:[]})}]}],
+      usage:{input_tokens:100,output_tokens:10,total_tokens:110}});
+  }});
+  f.model.reviewBasis=adapter.reviewBasis;f.model.relate=adapter.relate;f.model.countTokens=()=>1;
+  const refs=memories.map(({id:memoryId,revision})=>({memoryId,revision}));
+  const basis=ok(await f.core.reviewDecisionBasis({namespace:ns,refs}));
+  const rationale=ok(await f.core.reviewRationale({namespace:ns,refs}));
+  for(const result of [basis,rationale]){noLeak(result,'core review result');assert.equal(hasId(result,denied),false);}
+  assert.equal(requests.length,mixed?4:0,'all-empty reviews return locally; mixed reviews use count and generation');
+});
+
+for(const kind of ['ordinary-48','ordinary-53'])
+test(`product Card lexical filtering refills the ranking bound ${kind}`,async t=>{
+  const f=await fixture(t,kind),cards=[];
+  for(let i=0;i<26;i++) {
+    f.model.items=[{content:'Synthetic lexical claim '+i,kind:'fact',confidence:.8,sourceIndices:[0]}];
+    const memory=ok(await f.core.capture({namespace:ns,client:'synthetic',sessionId:'synthetic-lexical-'+i,eventId:'synthetic-lexical-batch-'+i,
+      messages:[{id:'synthetic-lexical-message-'+i,role:'user',content:message+' '+i}]})).admission.memories[0];
+    let card=ok(f.call('createCardDraft',{actionId:'synthetic-lexical-card-'+i,drafting:'authored',input:{title:'Synthetic needle',body:'Synthetic needle body',
+      memoryRefs:[memoryRef(memory)],sourcePolicy:'retained-receipts-v1'}}));
+    card=ok(f.call('confirmCardDraft',{actionId:'synthetic-lexical-confirm-'+i,cardId:card.id,expectedRevision:card.revision,applicability:'current'}));
+    cards.push({card,memory});
+  }
+  const facade=openContextProductFacade(f.path,{}),p={readSet:[ns],types:['card'],intent:'current',ownerCoverage:descriptor([ns])};
+  const storage=productSidecar({path:f.path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,writable:true});
+  t.after(()=>{storage.close();facade.close();});
+  const access=accessDigest({ownerId:ns.ownerId,namespaces:{readSet:[ns]}});
+  let observed;
+  for(let i=0;i<100;i++) {storage.refresh(p,access,{maxItems:1024,maxMs:5000});observed=storage.observe(p,access);if(observed.dto.lexical.state==='ready')break;}
+  assert.equal(observed.dto.lexical.state,'ready');
+  const before=storage.lexical(p,observed.publication,'needle',32);assert.equal(before.rows.length,26);
+  const denied=new Set(before.rows.slice(0,24).map(row=>row.ref.cardId));
+  // Layout 48's zero-fact store reaches the no-fact lexical arm. Layout 53
+  // always uses the lineage-aware arm for Cards. Synthetic marker insertion
+  // keeps the publication and fact epoch fixed so both arms are exercised.
+  for(const {card,memory}of cards.filter(({card})=>denied.has(card.id))) {
+    const rows=f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(memory.id);
+    for(const token of receiptDenialTokens(rows))f.db.prepare('INSERT OR IGNORE INTO suppressed VALUES(?,?,?,?)').run(ns.ownerId,ns.scope,ns.projectId,token);
+  }
+  const measured=await trace(()=>storage.lexical(p,observed.publication,'needle'));
+  assert.equal(measured.result.matched,2);assert.equal(measured.result.rows.length,2);
+  for(const row of measured.result.rows)assert.equal(denied.has(row.ref.cardId),false);
+  assert.equal(measured.rows.filter(isLookup).length,1,'one union lookup for all matching Card contributors');
+});
+
+for(const count of [16,17,100,101,200,201,512])
+test(`marker-free receipt order, cursors and coverage at ${count}`,async t=>{
+  const f=await fixture(t,'ordinary-53'),[initial]=await capture(f);f.model.countTokens=()=>1;
+  let b=initial;
+  for(let start=1;start<count;start+=4) b=ok(f.core.admit({namespace:ns,memory:{content:survivor,kind:'fact'},
+    receipts:Array.from({length:Math.min(4,count-start)},(_,i)=>receipt('synthetic-boundary-'+String(start+i).padStart(4,'0')))})).memory;
+  assert.deepEqual(markers(f),[]);
+  const stored=f.db.prepare('SELECT id FROM receipts WHERE memory_id=? ORDER BY created_at,id').all(b.id).map(row=>row.id);
+  let cursor;const getIds=[];
+  do {
+    const page=ok(f.core.get({namespace:ns,memoryId:b.id,receiptLimit:16,...(cursor?{receiptCursor:cursor}:{})}));
+    assert.equal(page.memory.receiptCount,count);assert.equal(page.exhausted,page.nextReceiptCursor===null);
+    getIds.push(...page.receipts.map(row=>row.id));cursor=page.nextReceiptCursor;
+  }while(cursor);
+  assert.deepEqual(getIds,stored);
+  const store=openMemoryStore({path:f.path});t.after(()=>store.close());
+  const legacy=await trace(()=>store.scope({ownerId:ns.ownerId,projectId:ns.projectId}).get(b.id));
+  assert.equal(legacy.result.receipts.length,count);assert.equal(legacy.rows.filter(isLookup).length,1,'uncapped headers share one marker union');
+  cursor=undefined;const fetchIds=[];let pages=0;
+  do {
+    const page=ok(f.core.fetch({namespace:ns,refs:[{memoryId:b.id,revision:b.revision}],tokenBudget:4000,...(cursor?{cursor}:{})}));
+    assert.equal(page.items[0].receiptCount,count);assert.equal(page.exhausted,page.nextCursor===null);
+    fetchIds.push(...page.items[0].receipts.map(row=>row.id));cursor=page.nextCursor;pages++;
+    assert.ok(pages<=Math.ceil(count/100));
+  }while(cursor);
+  assert.deepEqual(fetchIds,stored);assert.equal(pages,Math.ceil(count/100));
+  const evidence=ok(f.call('fetchEvidence',{intent:'current',refs:[memoryRef(b)]})).items[0];
+  assert.deepEqual(evidence.provenance.receiptMetadata.map(row=>row.receiptId),stored.slice(0,16));
+  assert.deepEqual(evidence.provenance.coverage,{status:count<=16?'complete':'budget_exhausted',included:Math.min(16,count),omitted:count<=16?0:null});
+  const recalled=ok(await f.core.recall({readSet:[ns],query:survivor,limit:8}));
+  const item=recalled.memories.find(item=>item.memory.id===b.id);assert.ok(item);
+  assert.equal(item.receiptCount,count);assert.deepEqual(item.receipts.map(row=>row.id),stored.slice(0,200));
+  const runtime=createMemoryRuntime({path:f.path});t.after(()=>runtime.close());
+  const recent=f.db.prepare('SELECT id FROM receipts WHERE memory_id=? ORDER BY created_at DESC,id LIMIT 16').all(b.id).map(row=>row.id);
+  assert.deepEqual(runtime.recentReceipts(ns,{memoryId:b.id,revision:b.revision},16).map(row=>row.id),recent);
+  const source=f.core.fetch({namespace:ns,refs:[{memoryId:b.id,revision:b.revision}],contextMode:'source-evidence',tokenBudget:4000});
+  if(count<=100)assert.deepEqual(ok(source).items[0].receipts.map(row=>row.id),stored);
+  else assert.equal(source.error.code,'context_item_too_large');
+});
+
+
+test('receipt counts discard values computed inside a rolled-back write',async t=>{
+  const f=await fixture(t,'ordinary-53'),[b]=await capture(f),extra=receipt('synthetic-rollback');
+  assert.equal(receiptStoredCountInside(f.db,ns,b.id),1);
+  let inside;
+  assert.throws(()=>transaction(f.db,()=>{
+    f.db.prepare('INSERT INTO receipts VALUES(?,?,?,?,?,?,?,?,?)').run('synthetic-rollback-receipt',b.id,key(extra),extra.client,extra.sessionId,extra.eventId,extra.role,extra.excerpt,'2026-01-01T00:00:00.000Z');
+    assert.equal(receiptStoredCountInside(f.db,ns,b.id),2);
+    inside=f.db.prepare('SELECT total_changes() n').get().n;
+    throw new Error('synthetic-rollback');
+  }),/synthetic-rollback/);
+  assert.equal(f.db.prepare('SELECT total_changes() n').get().n,inside,'rollback does not change the native counter');
+  assert.equal(receiptStoredCountInside(f.db,ns,b.id),1);
 });
