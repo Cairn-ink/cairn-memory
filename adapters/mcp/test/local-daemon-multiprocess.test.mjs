@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { createConnection } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import { workspace, until, ok, query } from './local-daemon-support.mjs';
-import { connectOrStart } from '../local-forwarder.mjs';
 
 test('missing store creation is serialized before physical identity election', { timeout: 30000 }, async t => {
   const w = await workspace(t); await rm(w.path);
@@ -38,7 +37,7 @@ test('real socket mode and owner checks refuse before connection', { timeout: 20
   const w = await workspace(t), a = w.forward(); a.release(); await w.connect(a);
   const name = (await readdir(join(w.root, 'run'))).find(name => name.endsWith('.sock')), socket = join(w.root, 'run', name);
   await chmod(socket, 0o666);
-  await assert.rejects(connectOrStart(w.args, { root: join(w.root, 'run'), environment: {}, connectMs: 1000 }), /daemon_entry_mode/, 'unsafe socket mode must refuse before MCP');
+  await assert.rejects(w.probeConnection({ connectMs: 1000 }), /daemon_entry_mode/, 'unsafe socket mode must refuse before MCP');
   await chmod(socket, 0o600);
   // Owner mismatch uses the same narrow entry checker without requiring root chown.
   const { checkedEntry, runtimeDirectory } = await import('../local-daemon-state.mjs');
@@ -50,7 +49,7 @@ test('live SIGSTOP owner refuses within bound without another runtime; dead owne
   const w = await workspace(t), a = w.forward(); a.release(); const first = await w.connect(a);
   process.kill(first.owner.pid, 'SIGSTOP');
   const start = performance.now();
-  await assert.rejects(connectOrStart(w.args, { root: join(w.root, 'run'), environment: {}, connectMs: 750 }), /daemon_connect_timeout/, 'stopped live owner must refuse within connect bound');
+  await assert.rejects(w.probeConnection({ connectMs: 750 }), /daemon_connect_timeout/, 'stopped live owner must refuse within connect bound');
   assert.ok(performance.now() - start < 1750, 'live owner refusal must stay bounded');
   assert.equal((await w.descriptor()).incarnation, first.incarnation, 'stopped live owner incarnation must never be stolen');
   process.kill(first.owner.pid, 'SIGCONT');

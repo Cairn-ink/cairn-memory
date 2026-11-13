@@ -62,6 +62,19 @@ export async function workspace(t) {
   function forward(extra = [], options = {}) {
     return child({ args: [...args, ...extra], options: { root: join(root, 'run'), environment: {}, ...options } });
   }
+  async function probeConnection(options) {
+    // Use the same empty execArgv/environment as the elected forwarders, so
+    // socket/owner tests reach the intended check on both supported runtimes.
+    const entry = child({ role: 'connection-probe', args,
+      options: { root: join(root, 'run'), environment: {}, ...options } });
+    entry.release();
+    const result = await until(() => entry.messages.find(m => m.kind === 'connection-probe-result'),
+      'connection probe must report its refusal');
+    assert.deepEqual(result.execArgv, []);
+    await until(() => entry.exit, 'connection probe must record its exit');
+    assert.equal(entry.exit.code, 0);
+    if (result.code) throw Object.assign(Error(result.code), { code: result.code });
+  }
   async function connect(entry) {
     const connected = await until(() => entry.messages.find(m => m.kind === 'connected'), 'authenticated connection must report metadata');
     await entry.request('initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'synthetic-r3', version: '1' } });
@@ -117,5 +130,5 @@ export async function workspace(t) {
       finally { await rm(root, { recursive: true, force: true }); }
     }
   });
-  return { root, path, args, children, owners, exits, messages, child, forward, connect, bootstrap, descriptor };
+  return { root, path, args, children, owners, exits, messages, child, forward, connect, bootstrap, descriptor, probeConnection };
 }

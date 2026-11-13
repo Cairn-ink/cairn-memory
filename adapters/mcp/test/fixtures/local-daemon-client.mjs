@@ -1,12 +1,21 @@
 // Synthetic process fixture. Its single IPC bootstrap is the only configuration input.
 import { once } from 'node:events';
-import { runForwarder } from '../../local-forwarder.mjs';
+import { runForwarder, connectOrStart } from '../../local-forwarder.mjs';
 import { runCandidate } from '../../local-daemon.mjs';
 
 const [configuration] = await once(process, 'message');
 const send = message => { if (process.connected) process.send(message); };
 try {
-  if (configuration.role === 'candidate') {
+  if (configuration.role === 'connection-probe') {
+    // The owner identity describes a normal Node process. node:test on Node 24
+    // carries runner flags that production correctly refuses as injection.
+    let code = null;
+    try {
+      const connection = await connectOrStart(configuration.args, configuration.options);
+      connection.socket.destroy();
+    } catch (error) { code = error.code; }
+    send({ kind: 'connection-probe-result', code, execArgv: process.execArgv });
+  } else if (configuration.role === 'candidate') {
     let armed = false;
     process.on('message', message => { if (message.kind === 'arm') { armed = true; send({ kind: 'armed' }); } });
     const acquired = await runCandidate(configuration.bootstrap, { ...configuration.lifecycle,
