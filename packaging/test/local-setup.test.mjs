@@ -192,17 +192,3 @@ for(const client of ['claude-code','codex'])test(`A2/A3 installed ${client} matc
   assert.equal(rows(f.scaffold.SYNTHETIC_TRACE).length,0);
   await f.workspace.cleanup();assert.equal(existsSync(f.workspace.path),false);
 });
-
-for (const entrypoint of ['sdk-cli','sdk-ts']) test(`installed Claude ${entrypoint} hook skips quietly without capture markers`,{timeout:120000},async t => {
-  const f=await installedSetupFixture(t,'claude-code'); f.request.interpretationConsent=false; f.save();
-  await f.invoke('cli',['init','--database',f.request.databasePath]); await f.setup(); await f.activate();
-  const preamble=['session-owner','queue-operation','mode','permission-mode','file-history-snapshot'].map(type=>JSON.stringify({type})+'\n').join('');
-  writeFileSync(f.sourcePath,preamble+JSON.stringify({type:'user',entrypoint})+'\n',{mode:0o600});
-  for(const event of ['SessionStart','Stop']) {
-    const launched=f.launch('hook',[],{event}),outcome=await launched.done;
-    assert.equal(outcome.code,0); assert.equal(outcome.signal,null); assert.equal(outcome.stdout,''); assert.equal(outcome.stderr,'');
-    assert.equal(rows(launched.trace).filter(row=>['worker','spawn'].includes(row.kind)).length,0,'headless session must not dispatch worker');
-  }
-  assert.equal((await f.inspect()).events,0); assert.equal((await f.inspect()).parts.length,0);
-  assert.deepEqual(readdirSync(join(f.request.installationDirectory,'state/sessions')),[]);
-});

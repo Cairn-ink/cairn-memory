@@ -1,4 +1,3 @@
-import { claudeHeadlessSource } from './local-claude-entrypoint.mjs';
 import { detectLocalCodexHost } from './local-codex-qualification.mjs';
 import { localCodexQualification } from './local-codex-qualification.mjs';
 import { checkLocalSession } from './local-session-fence.mjs';
@@ -102,8 +101,6 @@ export function createLocalRawHost(value) {
         await checkHostPermission(finalConfig); op.check();
       }
       await checkLocalSession(profile,config,selected); op.check();
-      if (profile.installation.client === 'claude-code' && await claudeHeadlessSource(selected.sourcePath)) fail('source_unqualified');
-      op.check();
       let formatAuthority = null;
       if (profile.installation.client === 'codex') {
         const host = await detectLocalCodexHost(deps.detectHost); op.check();

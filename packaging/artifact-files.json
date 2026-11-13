@@ -207,7 +207,6 @@
   "integrations/client/raw/local-worker-source.mjs",
   "integrations/client/raw/local-worker-state.mjs",
   "integrations/client/raw/local-host.mjs",
-  "integrations/client/raw/local-claude-entrypoint.mjs",
   "integrations/client/raw/local-setup-input.mjs",
   "integrations/client/raw/local-setup-files.mjs",
   "integrations/client/raw/local-settings-lock.mjs",
