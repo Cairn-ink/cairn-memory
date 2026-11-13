@@ -139,6 +139,7 @@
   "core/runtime.mjs",
   "core/supersession-storage.mjs",
   "core/validation.mjs",
+  "core/suppression-content.mjs",
   "core/prompts/classify-placement.md",
   "core/prompts/extract-memories.md",
   "core/prompts/extract-retained-sources.md",
