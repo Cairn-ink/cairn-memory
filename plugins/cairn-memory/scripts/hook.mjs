@@ -340,8 +340,8 @@ async function writeStartBoundary(path, state, guard) {
     checkStartBoundary();
     await writeFile(temporary, JSON.stringify(state), { mode: 0o600, flag: "wx" });
     if (guard) await guard();
-    checkStartBoundary();
     guard?.beforeStart?.();
+    checkStartBoundary();
     await rename(temporary, path);
   } finally {
     await unlink(temporary).catch(() => {});
@@ -359,7 +359,7 @@ async function writeLocalActiveStartBoundary(path, state, guard) {
 
 async function writeActiveStartBoundary(path, state) {
   const writeLocal = guard => writeLocalActiveStartBoundary(path, state, guard);
-  if (!hostedConfig) return writeLocal();
+  if (!hostedConfig) return;
   // Start never observes the network. Only existing durable POSIX authority
   // can authorize birth; diagnostics and portable in-process state cannot.
   if (!hostedPauseMode(hostedConfig).barrier) return;

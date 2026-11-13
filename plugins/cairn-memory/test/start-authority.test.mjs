@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { appendFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { readControlState, setPaused } from '../lib/control-state.mjs';
 import { withFileLock } from '../lib/file-lock.mjs';
@@ -57,6 +59,48 @@ test('hosted-paused pending birth grants no authority',
     await f.run('capture', { session_id: 'synthetic-after-resume' });
     assert.deepEqual(ids(f), ['after-resume'], 'validated active birth sends its first turn');
   });
+
+test('invalid endpoint cannot authorize hosted-paused pending birth', { timeout: 20000 }, async t => {
+  let remote = { ...active, paused: true, generation: 1 };
+  const f = await harness(t, { pauseState: () => remote });
+  await f.run('recall', { session_id: 'synthetic-observer' });
+  const before = await readControlState(f.dataDir);
+  assert.equal(before.paused, false, 'hosted pause leaves local control active');
+  const requests = f.requests.length;
+  const child = spawn(process.execPath, [
+    fileURLToPath(new URL('../scripts/hook.mjs', import.meta.url)), 'start-boundary',
+  ], {
+    env: { HOME: f.workspace.path, CLAUDE_PLUGIN_DATA: f.dataDir,
+      CLAUDE_PLUGIN_OPTION_API_ENDPOINT: 'http://invalid.example',
+      CLAUDE_PLUGIN_OPTION_API_TOKEN: 'synthetic-token', CLAUDE_PLUGIN_OPTION_TELEMETRY: 'false' },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  let stdout = '', stderr = '';
+  child.stdout.on('data', chunk => stdout += chunk);
+  child.stderr.on('data', chunk => stderr += chunk);
+  const closed = new Promise((resolve, reject) => {
+    child.once('error', reject); child.once('close', resolve);
+  });
+  f.workspace.defer(async () => {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    await closed;
+  });
+  child.stdin.end(JSON.stringify({ session_id: f.sessionId, transcript_path: f.transcript,
+    cwd: '/synthetic/project', source: 'startup', hook_event_name: 'SessionStart' }));
+  assert.equal(await closed, 0, stderr);
+  assert.equal(stdout, ''); assert.equal(stderr, '');
+  assert.equal(f.requests.length, requests, 'invalid endpoint birth makes no network request');
+  const birth = await f.state().catch(error => {
+    if (error.code !== 'ENOENT') throw error;
+  });
+  await appendFile(f.transcript, row('paused-text', new Date().toISOString()));
+  remote = { ...remote, paused: false }; // Repair endpoint via the ordinary harness; keep generation.
+  await f.run('capture');
+  assert.equal((await readControlState(f.dataDir)).generation, before.generation);
+  assert.deepEqual({ sent: ids(f), pending: birth?.startPending === true },
+    { sent: [], pending: false }, 'invalid hosted configuration grants no pending authority');
+  assert.equal((await f.state()).startPending, undefined);
+});
 
 test('existing-transcript birth before any hosted observation retains its boundary', { timeout: 20000 }, async t => {
   const f = await harness(t);
