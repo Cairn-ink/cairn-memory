@@ -32,9 +32,10 @@ async function classifyAdmission(model, namespace, admission, operations, key, d
       if (memory.filing.status === 'unfiled') guards.push({ memoryId: admitted.id, revision: admitted.revision });
     }
     // Keep has its own durable admission identity; placement uses the same revision guards.
-    const started = keep ? { skipped: !guards.length } : unwrap(operations.beginInitialClassification({ ...key,
+    const start = () => operations.beginInitialClassification({ ...key,
       admitted: admission.memories.map(({ id, revision }) => ({ memoryId: id, revision })),
-      selected: guards }));
+      selected: guards });
+    const started = keep ? { skipped: !guards.length } : unwrap(operations.commit ? await operations.commit(start) : start());
     if (started.skipped) return { status: 'skipped', reason: 'already_filed' };
     attemptToken = started.token;
     deadline?.check();
@@ -49,16 +50,18 @@ async function classifyAdmission(model, namespace, admission, operations, key, d
       mapRevision: mapped.indexRevision }));
     deadline?.check();
     const apply = keep ? operations.applyPlacement : operations.applyInitialPlacement;
-    const placed = unwrap(apply({ ...(keep ? { namespace } : { ...key, token: attemptToken }),
+    const place = () => apply({ ...(keep ? { namespace } : { ...key, token: attemptToken }),
       proposal: classified.proposal,
       expectedMemoryRevisions: classified.basedOn.memoryRevisions,
-      expectedIndexRevision: classified.basedOn.indexRevision }));
+      expectedIndexRevision: classified.basedOn.indexRevision });
+    const placed = unwrap(operations.commit ? await operations.commit(place) : place());
     return { status: 'applied', memoryRevisions: placed.memories.map((memory) =>
       ({ memoryId: memory.id, revision: memory.revision })), indexRevision: placed.indexRevision,
     ...(classified.classificationTruncated ? { classificationTruncated: classified.classificationTruncated } : {}) };
   } catch (error) {
     if (attemptToken) {
-      try { unwrap(operations.failInitialClassification({ ...key, token: attemptToken })); }
+      try { const failAttempt = () => operations.failInitialClassification({ ...key, token: attemptToken });
+        unwrap(operations.commit ? await operations.commit(failAttempt) : failAttempt()); }
       catch { /* A failed receipt write cannot replace the original failure. */ }
     }
     const code = error instanceof MemoryStoreError ? error.code : 'classification_failed';
@@ -145,9 +148,10 @@ export async function captureMessages({ model, input, operations, captureQualifi
     sessionId: snapshot.sourceReceipts?.[index]?.sessionId ?? snapshot.sessionId,
     eventId: message.id, role: message.role, excerpt: message.content,
   }));
-  const claim = episodeRun ? episodeRun.claim : snapshot.causal ? unwrap(operations.ordered.claim(snapshot, identities))
-    : captureEvidence ? unwrap(operations.claimCaptureEvidence({ ...key, view: retained }, identities))
-      : unwrap(operations.claimAdmission({ ...key, leaseMs: 125000 }, identities));
+  const claimWork = () => snapshot.causal ? operations.ordered.claim(snapshot, identities)
+    : captureEvidence ? operations.claimCaptureEvidence({ ...key, view: retained }, identities)
+      : operations.claimAdmission({ ...key, leaseMs: 125000 }, identities);
+  const claim = episodeRun ? episodeRun.claim : unwrap(operations.commit ? await operations.commit(claimWork) : claimWork());
   if (claim.rawReplay) return claim.rawReplay;
   if (claim.processing || claim.duplicate) return { ...claim, ...coverage,
     ...(captureRationale ? { rationale: { status: 'not-run', reason: claim.processing ? 'processing' : 'duplicate',
@@ -173,6 +177,12 @@ export async function captureMessages({ model, input, operations, captureQualifi
     } else request = { ...request, input: { ...request.input,
       messages: allowed.map((index, position) => ({ ...request.input.messages[index], index: position })) } };
     deadline?.check();
+    if (operations.commit && isPreDispatchToken(owned.token)) {
+      const dispatched = await operations.commit(() => operations.beginCaptureDispatch(owned));
+      owned.token = dispatched.token;
+      stagedDispatched = true;
+      deadline?.check();
+    }
     const output = episodeRun?.skip ? { items: [] } : await callModel(model, 'extract', request.system, request.input,
       { failureCode: 'extraction_failed', deadline, validateFresh: assertSources,
         beforeDispatch: () => {
@@ -210,14 +220,20 @@ export async function captureMessages({ model, input, operations, captureQualifi
         ? { decisions: [], reason: items.length ? 'qualification_requires_identity' : null }
         : await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery, deadline, validateFresh: () => { assertSources(); unwrap(operations.ordered.assertPrepared(snapshot, claim.order, prepared)); }, sourceView });
       deadline?.check();
-      finished = unwrap(operations.ordered.finish(snapshot, claim.token, claim.order, prepared, judged));
-    } else finished = unwrap(operations.finishAdmission({ ...owned, items: items.map(({ receiptTimes, ...item }) =>
+      const finish = () => operations.ordered.finish(snapshot, claim.token, claim.order, prepared, judged);
+      finished = unwrap(operations.commit ? await operations.commit(finish) : finish());
+    } else {
+      const finish = () => operations.finishAdmission({ ...owned, items: items.map(({ receiptTimes, ...item }) =>
       receiptTimes ? { ...item, receipts: item.receipts.map((receipt, index) =>
-        ({ ...receipt, occurredAt: receiptTimes[index] })) } : item) }));
+        ({ ...receipt, occurredAt: receiptTimes[index] })) } : item) });
+      finished = unwrap(operations.commit ? await operations.commit(finish) : finish());
+    }
   } catch (error) {
     // A failed or stale cleanup cannot replace the original error or release a successor's claim.
-    try { operations.abandonAdmission(owned, (isCaptureSourceBusy(error) && !stagedDispatched) || Boolean(episodeRun &&
-      (isStorageBusy(error) || (error instanceof MemoryStoreError && error.code === 'storage_busy')))); } catch { /* Pre-dispatch staged tokens remain reclaimable without cleanup. */ }
+    try { const abandon = () => operations.abandonAdmission(owned, (isCaptureSourceBusy(error) && !stagedDispatched) || Boolean(episodeRun &&
+      (isStorageBusy(error) || (error instanceof MemoryStoreError && error.code === 'storage_busy'))));
+      if (operations.commit) await operations.commit(abandon); else abandon();
+    } catch { /* Pre-dispatch staged tokens remain reclaimable without cleanup. */ }
     if (error instanceof MemoryStoreError) throw error;
     if (episodeRun && isStorageBusy(error)) fail('storage_busy');
     fail(episodeRun?.keep ? 'storage_error' : 'extraction_failed');

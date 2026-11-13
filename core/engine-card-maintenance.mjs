@@ -1,4 +1,5 @@
 import { performance } from 'node:perf_hooks';
+import { dispatchCommit, hasCommitDispatcher } from './commit-dispatch.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { assertContentPort, inertContentPortValue } from './content-safety-boundary.mjs';
 import { callModel, modelRequestText, MODEL_INPUT_TOKENS } from './model-call.mjs';
@@ -58,6 +59,7 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
     try {
       const checkPause = storage.pauseGuard(ns, end);
       checkPause();
+      const commit = hasCommitDispatcher(storage) ? work => dispatchCommit(storage, () => { checkPause(); return work(); }, deadline) : null;
       await withContentSuppressionRequest(async () => {
         const scope = JSON.stringify(ns), previous = scans.get(scope);
         let page = storage.snapshot(ns, maxItems, check, previous?.after ?? '');
@@ -132,21 +134,28 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
           // Search before staling against the old key: another eligible set
           // may already occupy that topic while these exact sources moved on.
           // An occupied exact match must not hide another free destination.
-          const destination = card.status === 'current' && [...eligible.values()].find(candidate =>
+          const carry = candidate =>
             candidate.key !== card.clusterKey && candidate.memories.length === card.sourceRevisions.length && candidate.memories.every(memory =>
               card.sourceRevisions.some(ref => ref.memoryId === memory.id && ref.revision === memory.revision)) &&
-            storage.carry(ns, card, candidate, check));
+            storage.carry(ns, card, candidate, check);
+          let destination;
+          if (commit && card.status === 'current') {
+            for (const candidate of eligible.values()) if (await commit(() => carry(candidate))) { destination = candidate; break; }
+          } else destination = card.status === 'current' && [...eligible.values()].find(carry);
           if (destination) {
             eligible.delete(destination.key); continue;
           }
           if (!cluster) {
             if (now() - Date.parse(card.row.updated_at) >= ENGINE_CARD_LIMITS.debounceMs) {
-              storage.retire(ns, card.id, timestamp, true); result.deleted++;
+              if (commit) await commit(() => storage.retire(ns, card.id, timestamp, true)); else storage.retire(ns, card.id, timestamp, true);
+              result.deleted++;
             }
             continue;
           }
           const newlyStale = card.row.revision === 1;
-          if (newlyStale) storage.retire(ns, card.id, timestamp);
+          if (newlyStale) {
+            if (commit) await commit(() => storage.retire(ns, card.id, timestamp)); else storage.retire(ns, card.id, timestamp);
+          }
           if (newlyStale || now() - Date.parse(card.row.updated_at) < ENGINE_CARD_LIMITS.debounceMs) {
             eligible.delete(cluster.key); result.debounced++;
           }
@@ -180,26 +189,33 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
             rawSpans = shorter;
           }
           if (!fits()) { result.state = 'input_budget'; continue; }
-          const attempt = storage.claim(ns, cluster, new Date(now()).toISOString(), check);
+          const claim = () => storage.claim(ns, cluster, new Date(now()).toISOString(), check);
+          const attempt = commit ? await commit(claim) : claim();
           if (!attempt) { result.debounced++; continue; }
           result.modelCalls++;
           try {
             const output = await callModel(model, 'consolidate', CONSOLIDATE_PROMPT, request(), {
               deadline, beforeDispatch: checkPause, validateFresh: () => { check(); storage.validate(ns, cluster.memories, check); }, failureCode: 'consolidation_failed' });
             const value = validateConsolidation(output, memories, model); check();
-            const card = value && storage.commit(ns, cluster, value, new Date(now()).toISOString(), check);
+            const publish = () => storage.commit(ns, cluster, value, new Date(now()).toISOString(), check);
+            const card = value && (commit ? await commit(publish) : publish());
             if (card) result.built.push(card);
             // Valid output without a committed Card must not reopen a missing
             // fingerprint on every subsequent maintenance pass.
-            storage.finish(ns, attempt, card ? 'succeeded' : 'terminal', new Date(now()).toISOString());
+            const finish = () => storage.finish(ns, attempt, card ? 'succeeded' : 'terminal', new Date(now()).toISOString());
+            if (commit) await commit(finish); else finish();
           } catch (error) {
             let code;
             try { code = error?.code; }
             catch { /* Unreadable failure framing is terminal. */ }
-            if (code === 'namespace_paused') storage.release(ns, attempt);
+            if (code === 'namespace_paused') {
+              const release = () => storage.release(ns, attempt);
+              if (commit) await dispatchCommit(storage, release, deadline); else release();
+            }
             else {
               const transient = ['model_timeout', 'model_cancelled', 'consolidation_transient'].includes(code);
-              storage.finish(ns, attempt, transient ? 'transient' : 'terminal', new Date(now()).toISOString());
+              const finish = () => storage.finish(ns, attempt, transient ? 'transient' : 'terminal', new Date(now()).toISOString());
+              if (commit) await dispatchCommit(storage, finish, deadline); else finish();
             }
             throw error;
           }

@@ -1,4 +1,5 @@
 import './content-write-safety.mjs';
+import { bindCommitConnection, commitBusyTimeout, hasCommitDispatcher, recordCommit } from './commit-dispatch.mjs';
 import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheInside } from './content-suppression-storage.mjs';
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
@@ -318,6 +319,12 @@ function checkedReadConnection(db, check) {
   return bindContentSafetyConnection(wrap(db), db);
 }
 export function readTransaction(db, work, acquisition) {
+  // The embedded context reader opens through its retained read-only opener.
+  // Bind that engine-owned connection during the same host construction scope.
+  if (!hasCommitDispatcher(db)) {
+    bindCommitConnection(db);
+    if (hasCommitDispatcher(db)) db.exec('PRAGMA busy_timeout=5');
+  }
   if (discardedConnections.has(db) || !db.isOpen) fail('store_closed');
   if (activeReads.has(db) || db.isTransaction || typeof work !== 'function' ||
       types.isAsyncFunction(work) || types.isGeneratorFunction(work)) fail('storage_error');
@@ -374,6 +381,7 @@ registerContentReadSnapshot((db,work)=>readTransaction(db,()=>{checkInstalledCon
 // Reviewed read-only mode: keep transaction fences and statement counts, acquiring
 // SHARED on the first SELECT. Writers must retain BEGIN IMMEDIATE.
 export function transaction(db, work, check, { deferred = false } = {}) {
+  if (hasCommitDispatcher(db) && (types.isAsyncFunction(work) || types.isGeneratorFunction(work))) fail('storage_error');
   if (activeReads.has(db) || discardedConnections.has(db)) fail('storage_error');
   check?.();
   const execute = () => {
@@ -385,11 +393,13 @@ export function transaction(db, work, check, { deferred = false } = {}) {
         contentWrite = beginContentWrite(db);
         return work();
       });
+      if (hasCommitDispatcher(db) && result && typeof result.then === 'function') fail('storage_error');
       contentWrite?.validate(result);
       contentWrite?.close();
       contentWrite = null;
       check?.();
       db.exec("COMMIT");
+      recordCommit(db);
       return result;
     } catch (error) {
       if(db.isTransaction)db.exec("ROLLBACK");
@@ -422,7 +432,8 @@ export function busyTimeoutOption(input) {
  * Default creation and all existing-store maintenance paths stay unchanged. */
 export function openDatabase(path, options = {}) {
   const busyTimeoutMs = busyTimeoutOption(options);
-  const timeout = Math.min(STORAGE_BUSY_TIMEOUT_MS, busyTimeoutMs ?? STORAGE_BUSY_TIMEOUT_MS);
+  const timeout = Math.min(STORAGE_BUSY_TIMEOUT_MS, busyTimeoutMs ?? STORAGE_BUSY_TIMEOUT_MS,
+    commitBusyTimeout() ?? STORAGE_BUSY_TIMEOUT_MS);
   let { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false, localControls = false, methodPackages = false, assets = false, roleProfiles = false, currentDependencies = false, existingStore, storeFence, contentSafety } = options;
   if ([rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls].some(value => typeof value !== 'boolean')) fail('invalid_input');
   rawDeletion ||= rawSources || localControls;
@@ -450,7 +461,7 @@ export function openDatabase(path, options = {}) {
       if (methodPackages && layout.base < 30) fail('unsupported_database');
       if (currentDependencies && layout.base !== 33) fail('unsupported_database');
       location.check();
-      return db;
+      return bindCommitConnection(db);
     } catch (error) {
       try { db.close(); } catch { /* Preserve the construction failure. */ }
       throw error;
@@ -789,7 +800,7 @@ export function openDatabase(path, options = {}) {
         installContentSafetyInside(db, base, contentSafetyInventory(db));
       }
     });
-    return db;
+    return bindCommitConnection(db);
   } catch (error) {
     db?.close();
     throw error;

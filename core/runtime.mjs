@@ -1,4 +1,5 @@
 import { captureSnapshot } from './capture-input.mjs';
+import { bindCommitRuntime } from './commit-dispatch.mjs';
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
 import { registerContentWriteBoundary } from './content-write-context.mjs';
 import { contentScopeEpochGuard, assertContentOutput, contentReceiptCount, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
@@ -926,8 +927,8 @@ export function createMemoryRuntime(input, internal) {
       async engineCardStorage() {
         ready();
         const { createEngineCardStorage } = await import('./engine-card-storage.mjs');
-        ready(); return createEngineCardStorage({ db, identity, ready, rawReader: rawCapture?.engineSourceReader(),
-          upgrade: !input.existingStore && !input.storeFence });
+        ready(); return bindCommitRuntime(createEngineCardStorage({ db, identity, ready, rawReader: rawCapture?.engineSourceReader(),
+          upgrade: !input.existingStore && !input.storeFence }), db);
       },
     } : {}),
     methodPackages: methodStorage,
@@ -1025,7 +1026,7 @@ export function createMemoryRuntime(input, internal) {
     filterCaptureSources: captureSourceBoundary('filterCaptureSources'),
     assertCaptureSources: captureSourceBoundary('assertCaptureSources') });
   recallJournalModes.set(result, { db });
-  return result;
+  return bindCommitRuntime(result, db);
   } catch (error) {
     try { db.close(); } catch { /* Preserve the construction failure. */ }
     throw error;

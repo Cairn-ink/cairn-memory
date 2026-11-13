@@ -14,6 +14,7 @@ import { isAbsolute, dirname } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { performance } from 'node:perf_hooks';
+import { bindCommitConnection, commitBusyTimeout, dispatchCommit, hasCommitDispatcher, recordCommit } from './commit-dispatch.mjs';
 import { readTransaction, isConnectionDiscarded } from './database.mjs';
 import { cardNamespace } from './private-card-input.mjs';
 import { cardApplicabilityInside } from './private-evidence-schema.mjs';
@@ -272,6 +273,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
         m.journalPeakBytes = Math.max(m.journalPeakBytes, stat(sidecarPath + '-journal')?.size ?? 0);
       }
       clock = performance.now(); side.exec('COMMIT');
+      recordCommit(side);
       if (m) {
         m.commitMs += performance.now() - clock; m.writeTransactions++;
         m[kind + 'TransactionMs'] += performance.now() - started;
@@ -291,9 +293,10 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       rebuildReason ??= 'missing';
     }
     fileIdentity = protectedFile(sidecarPath);
-    try { side = new DatabaseSync(sidecarPath, { readOnly, timeout: 5000 }); }
+    try { side = bindCommitConnection(new DatabaseSync(sidecarPath, { readOnly, timeout: commitBusyTimeout(canonical) ?? 5000 }), canonical); }
     catch { unavailable('unsafe_file'); }
-    side.exec('PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=5000;');
+    side.exec(hasCommitDispatcher(side) ? 'PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=5;'
+      : 'PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=5000;');
     checkFile();
     if (!initial) write(() => {
       side.exec(`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=${SIDECAR_FORMAT}; ${ddl}`);
@@ -868,7 +871,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       if (!Array.isArray(vectors) || vectors.length !== rows.length) fail('invalid_input');
       const encoded = vectors.map(vector => encodeVector(vector, port));
       const checkpoint = generation(p);
-      write(() => {
+      const publish = () => write(() => {
         assertCheckpoint(checkpoint);
         rows.forEach((row, i) => {
           const current = side.prepare('SELECT revision,body_revision,eligible FROM documents WHERE generation=? AND stream=? AND id=?').get(p.id, row.stream, row.id);
@@ -876,10 +879,20 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
           side.prepare('INSERT OR REPLACE INTO vectors VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(p.id, row.stream, row.id, identity.storeId,
             JSON.stringify(p.streams[row.stream].ns), p.streams[row.stream].type, row.revision, row.body_revision, REPRESENTATION_VERSION,
             port.id, port.revision, port.dimensions, port.normalization, encoded[i]);
-          embedded++;
+          if (!hasCommitDispatcher(side)) embedded++;
         });
         side.prepare('UPDATE generations SET checkpoint=checkpoint+1 WHERE id=?').run(p.id);
       });
+      if (hasCommitDispatcher(side)) await dispatchCommit(side, () => {
+        checkSignal(signal); guard();
+        if (performance.now() - started >= maxMs) unavailable('timeout');
+        const current = generation(p);
+        if (!fresh(p, current) || current.sequence !== g.sequence || current.incarnation !== g.incarnation) unavailable('stale_index');
+        dispatch();
+        return publish();
+      }, { remainingMs: () => Math.max(0, started + maxMs - performance.now()) });
+      else publish();
+      if (hasCommitDispatcher(side)) embedded += rows.length;
       onProgress?.({ attempted, embedded });
     }
     return { attempted, embedded, metrics: m };

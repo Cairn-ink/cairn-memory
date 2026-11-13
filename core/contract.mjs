@@ -1,4 +1,5 @@
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
+import { dispatchCommit, hasCommitDispatcher } from './commit-dispatch.mjs';
 import { contentWriteMethodClass } from './content-write-context.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { contentSafetyFacade } from './content-safety-boundary.mjs';
@@ -380,6 +381,10 @@ export function createMemoryCore(input, internal) {
   function invoke(work) {
     try { return success(work()); } catch (error) { return failure(error); }
   }
+
+  // These closures contain only the selected synchronous storage phase. The
+  // provider's detached result remains outside, in this invocation's stack.
+  const commit = hasCommitDispatcher(runtime) ? (work, deadline) => dispatchCommit(runtime, work, deadline) : null;
 
   function admit(input) {
     return invoke(() => {
@@ -1006,7 +1011,9 @@ export function createMemoryCore(input, internal) {
       deadline?.check();
       const proposals = await proposeRationale(model, snapshot.sources, validateFresh, deadline);
       deadline?.check();
-      return success({ ...runtime.commitRationale(ns, refs, snapshot, proposals, deadline),
+      const committed = commit ? await commit(() => runtime.commitRationale(ns, refs, snapshot, proposals, deadline), deadline)
+        : runtime.commitRationale(ns, refs, snapshot, proposals, deadline);
+      return success({ ...committed,
         ...(inputMode ? { inputMode } : {}) });
     } catch (error) { return failure(error); }
   }
@@ -1067,7 +1074,8 @@ export function createMemoryCore(input, internal) {
         startAdmission: () => (deadline = sharedDeadline ?? (captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs))),
         captureRationale, captureEvidence,
         deadline, input: { ...input, namespace },
-        operations: { filterCaptureSources: sources => runtime.filterCaptureSources(ns, sources),
+        operations: { ...(commit ? { commit: work => commit(work, deadline) } : {}),
+          filterCaptureSources: sources => runtime.filterCaptureSources(ns, sources),
           assertCaptureSources: sources => runtime.assertCaptureSources(ns, sources),
           // Preserve private pre-dispatch busy provenance across this internal
           // operation, including the runtime facade's entry/delivery checks.
@@ -1317,7 +1325,7 @@ export function createMemoryCore(input, internal) {
   internal?.attachCapture?.((input, registration, deadline) => capture(input, undefined, registration, deadline));
   const contentReads = new Set(['get','list','map','fetch','recall','sourceSnapshot','getEpisode','listEpisodes','listMemoriesByTime',
     'sessionStartContext','getRationale','inspectAdmission','inspectCaptureEvidence','listReviewTransitions','listReviewConflicts']);
-  return withEngineCardDelivery(contentSafetyFacade({
+  const core = withEngineCardDelivery(contentSafetyFacade({
     ...(engineConfigured ? {
       async maintainCards(input) { try { runtime.ready(); return success(await (await loadEngineCards()).maintain(input)); } catch (error) { return failure(error); } },
       getEngineCardStatus(input) { try {
@@ -1362,6 +1370,7 @@ export function createMemoryCore(input, internal) {
     'getPrivateCardCapabilities','getAssetCapabilities','getMethodPackageCapabilities'] }), null, {
       project: (input, value) => engineCards.deliver(cardNamespace(input.namespace), value), failure,
     });
+  return core;
   } catch (error) {
     try { runtime.close(); } catch { /* Preserve the construction failure. */ }
     throw error;
