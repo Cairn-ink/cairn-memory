@@ -132,3 +132,85 @@ test(`withheld Episode projects complete base invalidation ${operation}`,async t
   const invalidated=ok(f.core.getEpisode(request));
   for(const field of Object.keys(expected))assert.deepEqual(projected.episode[field],invalidated.episode[field],field);
 });
+
+for(const operation of ['forget','correct','reject'])
+test(`Episode listing and next steps scan past withheld candidates ${operation}`,async t=>{
+  const port=model({extract:({input})=>({items:[{content:'Synthetic retained '+input.messages[0].content,kind:'fact',confidence:.8,sourceIndices:[0]}]}),
+    interpretEpisode:request=>{
+      const field=value=>({value,anchors:[{sourceIndex:0,start:0,end:request.input.sources[0].text.length}]});
+      return {type:field('work'),language:'mixed',gist:field('Synthetic derived wording'),outcome:null,nextStep:field('Synthetic next action'),disposition:null};
+    }});
+  const f=await lineageFixture(t,{base:33,options:{...options,decisionReview:'required-v1',model:port}}),episodes=[];
+  for(let i=0;i<15;i++) {
+    const result=ok(await f.core.capture(episodeInput(1,'synthetic-scan-'+i,{namespace:ns,
+      messages:[{id:'synthetic-scan-source-'+i,role:'user',content:'Synthetic scan evidence '+i,occurredAt:'1901-02-03T04:05:06.789Z'}]})));
+    const memory=result.admission.memories[0],saved=ok(f.core.get({namespace:ns,memoryId:memory.id})).receipts[0];
+    episodes.push({id:result.episode.id,saved});
+  }
+  const sorted=f.db.prepare("SELECT id FROM session_episodes ORDER BY json_extract(record,'$.eventEnd') DESC,id").all().map(row=>episodes.find(e=>e.id===row.id));
+  const ordinary=openMemoryCore({path:f.path,decisionReview:'required-v1',model:model({extract:({input})=>({items:[{
+    content:'Synthetic terminal '+input.messages[0].content,kind:operation==='reject'?'decision':'fact',confidence:.8,sourceIndices:[0]}]})})});
+  t.after(()=>ordinary.close());
+  const receiptIds=[];
+  for(const {saved,id}of sorted.slice(0,13)) {
+    receiptIds.push(saved.id);
+    const target=ok(await ordinary.capture({namespace:ns,client:saved.client,sessionId:saved.sessionId,eventId:'synthetic-terminal-'+id,
+      messages:[{id:saved.eventId,role:saved.role,content:saved.excerpt}]})).admission.memories[0];
+    const action={namespace:ns,memoryId:target.id,expectedRevision:target.revision};
+    ok(operation==='correct'?ordinary.correct({...action,content:'Synthetic replacement '+id,kind:'fact',receipt:receipt('synthetic-scan-correction-'+id)}):
+      ordinary[operation]({...action,...(operation==='reject'?{actionId:'synthetic-scan-rejection-'+id}:{})}));
+  }
+  const input={namespace:ns,since:'1901-02-01T00:00:00.000Z',until:'1901-03-01T00:00:00.000Z',timeBasis:'event',limit:1};
+  const first=ok(f.core.listEpisodes(input));
+  assert.deepEqual(first.items.map(item=>item.id),[sorted[13].id]);assert.equal(first.exhausted,false);assert.ok(first.nextCursor);
+  const second=ok(f.core.listEpisodes({...input,cursor:first.nextCursor}));
+  assert.deepEqual(second.items.map(item=>item.id),[sorted[14].id]);assert.equal(second.exhausted,true);assert.equal(second.nextCursor,null);
+  const received=ok(f.core.listEpisodes({...input,timeBasis:'receipt',limit:50}));
+  assert.equal(received.items.length,15);
+  for(const item of received.items.filter(item=>sorted.slice(0,13).some(e=>e.id===item.id))) {
+    assert.equal(item.gist,null);assert.equal(item.nextStep,null);assert.equal(item.eventEnd,null);assert.equal(item.processing.state,'invalidated');
+  }
+  const context=ok(f.core.sessionStartContext({namespace:ns,groups:{nextSteps:true,procedural:false},maxTokens:2000,maxChars:8000}));
+  assert.deepEqual(context.groups.nextSteps.items.map(item=>item.episodeId),[sorted[13].id]);
+  const encoded=JSON.stringify({first,second,received,context});
+  for(const item of sorted.slice(0,13)){assert.equal(encoded.includes(item.saved.excerpt),false);assert.equal(encoded.includes(item.saved.id),false);}
+});
+
+test('Episode link and source continuation filter each physical page',async t=>{
+  let batch=0;
+  const port=model({extract:()=>({items:Array.from({length:9},(_,i)=>({content:`Synthetic linked claim ${batch}-${i}`,kind:'fact',confidence:.8,sourceIndices:[0]}))})});
+  const f=await lineageFixture(t,{base:33,options:{...options,model:port}}),saved=[];
+  let episodeId;
+  for(batch=1;batch<=6;batch++) {
+    const result=ok(await f.core.capture(episodeInput(batch,'synthetic-link-continuation',{namespace:ns})));
+    episodeId=result.episode.id;
+    saved.push(ok(f.core.get({namespace:ns,memoryId:result.admission.memories[0].id})).receipts[0]);
+  }
+  const request={namespace:ns,episodeId,sourceLimit:1,memoryLimit:50};
+  const before=ok(f.core.getEpisode(request));
+  assert.ok(before.sources.nextCursor,'six sources require source continuation');
+  assert.ok(before.memoryLinks.nextCursor,'fifty-four links require link continuation');
+  const ordinary=openMemoryCore({path:f.path,model:model({extract:({input})=>({items:[{content:'Synthetic withheld '+input.messages[0].content,kind:'fact',confidence:.8,sourceIndices:[0]}]})})});
+  t.after(()=>ordinary.close());
+  const withheld=[];
+  for(const source of saved.slice(0,3)) {
+    const target=ok(await ordinary.capture({namespace:ns,client:source.client,sessionId:source.sessionId,eventId:'synthetic-links-'+source.eventId,
+      messages:[{id:source.eventId,role:source.role,content:source.excerpt}]})).admission.memories[0];
+    withheld.push(...f.db.prepare('SELECT id FROM receipts WHERE receipt_key=(SELECT receipt_key FROM receipts WHERE id=?)').all(source.id).map(row=>row.id));
+    ok(ordinary.forget({namespace:ns,memoryId:target.id,expectedRevision:target.revision}));
+  }
+  const links=[],sources=[];
+  for(const kind of ['sources','memoryLinks']) {
+    let cursor;
+    do {
+      const page=ok(f.core.getEpisode({...request,...(cursor?{[kind==='sources'?'sourceCursor':'memoryCursor']:cursor}:{})}));
+      (kind==='sources'?sources:links).push(...page[kind].items);
+      cursor=page[kind].nextCursor;
+      for(const id of withheld)assert.equal(JSON.stringify(page).includes(id),false);
+      for(const source of saved.slice(0,3))assert.equal(JSON.stringify(page).includes(source.excerpt),false);
+    } while(cursor);
+  }
+  assert.equal(new Set(links.map(link=>link.memoryId)).size,54);
+  assert.equal(new Set(sources.map(source=>source.id)).size,3);
+  assert.ok(links.some(link=>link.receiptIds.length===0));
+});

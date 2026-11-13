@@ -290,10 +290,13 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     const cursor = cursorDecode(input.cursor, expected, ns);
     if (method === 'getSource') {
       const row = resolve(ns, input.source), parts = [];
-      if (input.source.type === 'receipt' && !cardSourceDeliverable(ns,input.source)) fail('source_unavailable');
       let start = cursor?.after ?? 0;
       if (!Number.isSafeInteger(start) || start < 0 || start >= row.text.length ||
           (start > 0 && /[\uDC00-\uDFFF]/.test(row.text[start]))) fail('invalid_cursor');
+      if (input.source.type === 'receipt' && !cardSourceDeliverable(ns,input.source)) return {
+        source: null, parts: [], coverage: { status: 'complete', completeness: input.source.completeness,
+          conversationCoverage: 'unknown', included: 0, omitted: 0 }, nextCursor: null,
+      };
       while (start < row.text.length && parts.length < count) {
         let end = Math.min(start + 4000, row.text.length);
         if (end < row.text.length && /[\uDC00-\uDFFF]/.test(row.text[end])) end--;

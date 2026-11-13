@@ -1,5 +1,29 @@
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { fail } from './validation.mjs';
+
+// Private count/coordinate cache shared with transaction rollback cleanup.
+// It contains no marker decisions or source text.
+const receiptCoordinates = new WeakMap();
+export function receiptCoordinateStateInside(db, version, changes) {
+  let state = receiptCoordinates.get(db);
+  if (!state || state.version !== version || state.changes !== changes) {
+    state = { version, changes, memories: new Map() };
+    receiptCoordinates.set(db, state);
+  }
+  return state;
+}
+export function clearReceiptCoordinatesInside(db) { receiptCoordinates.delete(db); }
+
+// Portable across account re-keying and store merges. Namespace isolation lives
+// in the suppressed primary key and read memo, never in the address digest.
+export function receiptDenialTokens(receipts) {
+  return [...new Set(receipts.flatMap(receipt => [
+    'rs1:i:' + receipt.receipt_key,
+    'rs1:a:' + createHash('sha256').update(JSON.stringify([
+      'receipt-source-address-v1', receipt.client, receipt.session_id, receipt.event_id, receipt.role,
+    ])).digest('hex'),
+  ]))];
+}
 
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId || ''];

@@ -149,19 +149,30 @@ export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRea
   return function read(ns, operation, filter, cursor) {
     // Reviewed read-only pages can share a snapshot with a RESERVED writer.
     return transaction(db, () => {
-      const original = rangeQuery(ns,operation,filter,cursor?.a);
-      const projected = operation === 'listEpisodes' ? episodeProjection(ns, original, cursor?.e) : { epoch: epoch(ns), query: original };
-      const current = projected.epoch;
-      if (cursor && cursor.e !== current) fail('cursor_stale');
-      const query = projected.query;
-      let rows = db.prepare(query.sql).all(...query.params);
-      if (contentSuppressionReasonInside(db, ns)) fail('revision_conflict');
-      if (operation === 'listEpisodes') rows = episodeReadRowsInside(db,ns,rows).rows
-        .filter(row=>filter.timeBasis!=='event'||JSON.parse(row.record).eventEnd!==null);
-      return { epoch: current, rows: rows.map(row => {
-        if (operation === 'listEpisodes') {
+      let after = cursor?.a, current, rows = [];
+      // Each query retains the original physical keyset. Projected intervals
+      // cannot be used as progress anchors because withholding blanks them.
+      while (true) {
+        const original = rangeQuery(ns, operation, filter, after);
+        const projected = operation === 'listEpisodes' ? episodeProjection(ns, original, cursor?.e) : { epoch: epoch(ns), query: original };
+        current = projected.epoch;
+        if (cursor && cursor.e !== current) fail('cursor_stale');
+        const query = projected.query;
+        const physical = db.prepare(query.sql).all(...query.params);
+        if (contentSuppressionReasonInside(db, ns)) fail('revision_conflict');
+        if (operation !== 'listEpisodes') { rows = physical; break; }
+        const visible = episodeReadRowsInside(db, ns, physical).rows;
+        for (let row of visible) {
           assertEpisodeRead?.(ns, row, projected.budget);
           row = episodeReadRow(row);
+          if (filter.timeBasis !== 'event' || JSON.parse(row.record).eventEnd !== null) rows.push(row);
+        }
+        if (rows.length >= filter.limit + 1 || physical.length < filter.limit + 1) break;
+        const last = physical.at(-1);
+        after = { time: filter.timeBasis === 'event' ? JSON.parse(last.record).eventEnd : last.first_received_at, id: last.id };
+      }
+      return { epoch: current, rows: rows.slice(0, filter.limit + 1).map(row => {
+        if (operation === 'listEpisodes') {
           const item = episodeMetadata(ns,row);
           return { item, key: { time: filter.timeBasis === 'event' ? item.eventEnd : item.firstReceivedAt, id: row.id } };
         }

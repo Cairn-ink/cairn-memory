@@ -1395,13 +1395,14 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
             const score=scoreBM25(terms,{frequencies,length:document.token_length},{N,totalLength:total.totalTokenLength,df});
             ranked.push({score,ref:{type:ss[document.stream].type,namespace:ss[document.stream].ns,
               [ss[document.stream].type==='memory'?'memoryId':'cardId']:document.id,revision:document.revision,...(ss[document.stream].type==='card'?{bodyRevision:document.body_revision}:{})}});
-            rankScores(ranked);if(ranked.length>limit)ranked.pop();matched++;
+            matched++;
           }
           if(rows.length<128)break;after=rows.at(-1).doc;
         }
       }
       const deliveryMemo=cardDeliverySnapshot(canonical,ranked.map(row=>row.ref));
-      return {rows:ranked.filter(({ref})=>ref.type!=='card'||cardDeliverable(canonical,ref.namespace,ref.cardId,deliveryMemo)),matched};
+      const deliverable = ranked.filter(({ref})=>ref.type!=='card'||cardDeliverable(canonical,ref.namespace,ref.cardId,deliveryMemo));
+      return {rows:rankScores(deliverable).slice(0,limit),matched:deliverable.length};
     }));
   }
 

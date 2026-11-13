@@ -23,7 +23,7 @@ import { accessDigest } from '../context-product-validation.mjs';
 import { configured, descriptor } from '../testing/context-product-owner-fixture.mjs';
 import { contentSafetyFacade } from '../content-safety-boundary.mjs';
 import { transaction, readTransaction } from '../database.mjs';
-import { createContentReadMemo, receiptReadSafety } from '../content-safety.mjs';
+import { receiptDeliverySnapshot, createContentReadMemo, receiptReadSafety } from '../content-safety.mjs';
 import { receiptDenialsInside, receiptDenialTokens } from '../content-safety.mjs';
 
 const survivor = 'Synthetic surviving signal';
@@ -37,7 +37,7 @@ const normalize = sql => sql.replace(/\s+/g, ' ').trim();
 const insertSQL = 'INSERT OR IGNORE INTO suppressed(owner_id,scope,project_id,fingerprint) SELECT ?,?,?,value FROM json_each(?)';
 const receiptSQL = 'SELECT r.id,r.receipt_key,r.client,r.session_id,r.event_id,r.role FROM receipts r WHERE r.memory_id=? AND EXISTS( SELECT 1 FROM memories m WHERE m.id=r.memory_id AND m.owner_id=? AND m.scope=? AND m.project_id=?)';
 const lookupSQL = 'SELECT s.fingerprint,1 AS denied FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value';
-const isLookup = row => row.sql === lookupSQL || row.sql.startsWith('SELECT s.owner_id,s.scope,s.project_id,s.fingerprint FROM json_each(?)') || row.sql.startsWith("SELECT 'memory' AS kind,");
+const isLookup = row => row.sql === lookupSQL || row.sql.startsWith('SELECT s.owner_id,s.scope,s.project_id,s.fingerprint FROM json_each(?)');
 const source = (excerpt = message) => ({ client: 'synthetic', sessionId: 'synthetic-session',
   eventId: 'synthetic-message', role: 'user', excerpt });
 const otherNamespace = { ...ns, projectId: 'synthetic-other-project' };
@@ -234,7 +234,12 @@ test(`shared source ${kind} ${operation}, independent=${extra}`, async t => {
   assert.ok(markers(f).every(token => /^rs1:[ia]:[0-9a-f]{64}$/.test(token)), 'content-free disjoint domains');
   const values = await reads(f, b, extra ? [independent] : []);
   for (const value of Object.values(values)) assert.equal(hasId(value, deniedReceipt.id), false, 'denied reference omitted');
-  if (oldRef) assert.equal((await f.call('getSource', { source: oldRef })).ok, false, 'previously issued reference refuses');
+  if (oldRef) {
+    const empty = ok(await f.call('getSource', { source: oldRef }));
+    assert.deepEqual(empty, { source: null, parts: [], coverage: { status: 'complete', completeness: oldRef.completeness,
+      conversationCoverage: 'unknown', included: 0, omitted: 0 }, nextCursor: null });
+    noLeak(empty, 'saved source reference');assert.equal(hasId(empty, deniedReceipt.id), false);
+  }
 });
 
 for (const kind of ordinaryKinds) for (const operation of operations)
@@ -738,9 +743,10 @@ test(`context receipt lookups are batched per snapshot ${route}, markers=${marke
   assert.equal(new Set(lookups.map(row => row.snapshot)).size, 2);
   for (const lookup of lookups) {
     assert.ok(lookup.snapshot, 'lookup belongs to an actual read transaction');
-    const jobs=JSON.parse(lookup.args[0]);
-    assert.equal(jobs.length,12,'the complete twelve-item identity set is checked before projection');
-    assert.ok(jobs.every(job=>readSet.some(namespace=>job.owner===namespace.ownerId&&job.scope===namespace.scope&&job.project===(namespace.projectId??''))));
+    const tokens=JSON.parse(lookup.args[0]);
+    assert.equal(tokens.length,24,'two JavaScript tokens for each of twelve selected receipt headers');
+    assert.ok(tokens.every(tuple=>readSet.some(namespace=>tuple[0]===namespace.ownerId&&tuple[1]===namespace.scope&&tuple[2]===(namespace.projectId??''))));
+    assert.ok(tokens.every(tuple=>/^rs1:[ia]:[0-9a-f]{64}$/.test(tuple[3])));
     const plan = f.db.prepare('EXPLAIN QUERY PLAN ' + lookup.sql).all(...lookup.args);
     assert.ok(plan.some(row => /SEARCH s USING (?:COVERING )?INDEX sqlite_autoindex_suppressed_1/.test(row.detail) &&
       ['owner_id=?', 'scope=?', 'project_id=?', 'fingerprint=?'].every(part => row.detail.includes(part))));
@@ -1050,13 +1056,13 @@ test('the recall hook prints a zero-delivered-receipt Memory without a receipt s
 });
 
 // Delivery markers never participate in stored-proof validation.
-test('delivery-only mixed evidence omits a marked Card and keeps its Memory',async t=>{
-  const f=await fixture(t,'ordinary-53'),[b,a]=await capture(f);
+for(const operation of operations) test(`delivery-only mixed evidence omits a marked Card and keeps its Memory ${operation}`,async t=>{
+  const f=await fixture(t,'ordinary-53',operation),[b,a]=await capture(f);
   let card=ok(f.call('createCardDraft',{actionId:'synthetic-mixed-draft',drafting:'authored',input:{title:'Synthetic',body:message,
     memoryRefs:[memoryRef(b)],sourcePolicy:'retained-receipts-v1'}}));
   card=ok(f.call('confirmCardDraft',{actionId:'synthetic-mixed-confirm',cardId:card.id,expectedRevision:card.revision,applicability:'current'}));
   const ref={type:'card',namespace:ns,cardId:card.id,revision:card.revision,bodyRevision:card.bodyRevision};
-  ok(act(f,'forget',a));
+  ok(act(f,operation,a));
   const fetched=ok(f.call('fetchEvidence',{intent:'current',refs:[memoryRef(b),ref]}));
   assert.deepEqual(fetched.items.map(item=>item.ref.memoryId),[b.id]);
   assert.deepEqual(fetched.items[0].provenance.sources,[]);
@@ -1067,8 +1073,8 @@ test('delivery-only mixed evidence omits a marked Card and keeps its Memory',asy
     assert.equal(f.call('fetchEvidence',{intent:'current',refs:[memoryRef(b),invalid]}).ok,false);
 });
 
-for(const existing of [false,true]) test(`delivery-only first qualified binding, existing=${existing}`,async t=>{
-  const f=await fixture(t,'ordinary-53'),[initialB,a]=await capture(f);
+for(const operation of operations) for(const existing of [false,true]) test(`delivery-only first qualified binding ${operation}, existing=${existing}`,async t=>{
+  const f=await fixture(t,'ordinary-53',operation),[initialB,a]=await capture(f);
   const qualification={version:1,slot:{subject:'Synthetic subject',property:'Synthetic property',scope:'Synthetic scope',applies:'Synthetic applies'},
     value:'Synthetic value',attribution:'direct',commitment:'adopted',anchors:[{receiptIndex:0,start:0,end:message.length,text:message,
       fields:['subject','property','scope','applies','value','attribution','commitment']}]};
@@ -1080,30 +1086,30 @@ for(const existing of [false,true]) test(`delivery-only first qualified binding,
       receipts:[{...receipt('synthetic-other-qualified'),excerpt:message}],qualification})).memory;
     slotId=ok(f.core.bindQualifiedClaim({namespace:ns,memoryId:c.id,expectedRevision:c.revision,slotId:null,singleClaim:true})).slotId;
   }
-  ok(act(f,'forget',a));
+  ok(act(f,operation,a));
   const bound=ok(f.core.bindQualifiedClaim({namespace:ns,memoryId:b.id,expectedRevision:b.revision,slotId,singleClaim:true}));
   if(slotId)assert.equal(bound.slotId,slotId);else assert.equal(typeof bound.slotId,'string');
   assert.equal(ok(f.core.get({namespace:ns,memoryId:b.id,includeQualification:true})).qualification,null);
 });
 
-test('delivery-only procedural writes commit with their saved retained anchor',async t=>{
-  const f=await fixture(t,'ordinary-53');f.model.items[0].kind='instruction';
+for(const operation of operations) test(`delivery-only procedural writes commit with their saved retained anchor ${operation}`,async t=>{
+  const f=await fixture(t,'ordinary-53',operation);f.model.items[0].kind='instruction';
   const [b,a]=await capture(f),saved=ok(f.core.get({namespace:ns,memoryId:b.id}));
   const anchor={receiptId:saved.receipts[0].id,digest:sourceDigest(saved.receipts[0].excerpt),start:0,end:8};
   const write=expectedTagRevision=>f.core.setProceduralMemory({namespace:ns,memoryId:b.id,expectedRevision:b.revision,expectedTagRevision,
     procedural:{anchors:[anchor]}});
-  const first=ok(write(0));ok(act(f,'forget',a));
+  const first=ok(write(0));ok(act(f,operation,a));
   const second=ok(write(first.tag.tagRevision));
   assert.deepEqual(Object.keys(second).sort(),['indexRevision','tag']);
   assert.equal(second.tag.tagRevision,first.tag.tagRevision+1);assert.deepEqual(second.tag.anchors,first.tag.anchors);
   assert.equal(ok(f.core.get({namespace:ns,memoryId:b.id})).procedural,undefined);
 });
 
-test('delivery-only unchanged Card confirmation and retained-receipt creation succeed',async t=>{
-  const f=await fixture(t,'ordinary-53'),[b,a]=await capture(f);
+for(const operation of operations) test(`delivery-only unchanged Card confirmation and retained-receipt creation succeed ${operation}`,async t=>{
+  const f=await fixture(t,'ordinary-53',operation),[b,a]=await capture(f);
   const draft=actionId=>ok(f.call('createCardDraft',{actionId,drafting:'authored',input:{title:'Synthetic title',body:message,
     memoryRefs:[memoryRef(b)],sourcePolicy:'retained-receipts-v1'}}));
-  const card=draft('synthetic-retained-draft');ok(act(f,'forget',a));
+  const card=draft('synthetic-retained-draft');ok(act(f,operation,a));
   const confirmed=ok(f.call('confirmCardDraft',{actionId:'synthetic-retained-confirm',cardId:card.id,expectedRevision:card.revision,applicability:'current'}));
   assert.equal(confirmed.state,'confirmed');
   const later=draft('synthetic-later-draft');
@@ -1167,4 +1173,74 @@ test('Raw deletion and shared-source markers preserve the retained receipt count
   ok(act(f,'forget',secondTarget));
   assert.equal(stored(),2,'markers retain the stored shared receipts');
   await assertDelivered([]);
+});
+
+for (const operation of operations) for (const route of ['embedded','product'])
+test(`candidate fetch aligns omitted Cards and caller fences ${route} ${operation}`, async t => {
+  const f=await fixture(t,'ordinary-53',operation),[b,a]=await capture(f);
+  let card=ok(f.call('createCardDraft',{actionId:'synthetic-candidate-draft',drafting:'authored',input:{title:'Synthetic',body:message,
+    memoryRefs:[memoryRef(b)],sourcePolicy:'retained-receipts-v1'}}));
+  card=ok(f.call('confirmCardDraft',{actionId:'synthetic-candidate-confirm',cardId:card.id,expectedRevision:card.revision,applicability:'current'}));
+  const cardRef={type:'card',namespace:ns,cardId:card.id,revision:card.revision,bodyRevision:card.bodyRevision};
+  const c=ok(f.core.admit({namespace:ns,memory:{content:'Synthetic unaffected candidate',kind:'fact'},receipts:[receipt('synthetic-candidate-independent')]})).memory;
+  ok(act(f,operation,a));
+  let call;
+  if(route==='product') {
+    const facade=openContextProductFacade(f.path,{authorize:()=>({accessGenerations:[1],check(){}})});
+    t.after(()=>facade.close());call=input=>facade.fetchCandidateEvidence(input,{});
+  } else call=input=>f.trusted.call(f.context,'fetchCandidateEvidence',input);
+  // Put the omitted Card before both retained items to expose fence shifts.
+  const input={readSet:[ns],intent:'current',refs:[cardRef,memoryRef(b),memoryRef(c)]};
+  const first=ok(await call(input));
+  assert.deepEqual(first.items.map(item=>item.ref.memoryId),[b.id,c.id]);
+  assert.deepEqual(first.items[0].provenance.sources,[]);
+  const saved=JSON.parse(Buffer.from(first.snapshot.split('.')[0],'base64url').toString());
+  assert.equal(saved.refs.length,2);assert.equal(saved.fences.length,2);
+  const checked=ok(await call({...input,fences:['omitted0',...saved.fences.map(value=>value.slice(0,8))]}));
+  assert.deepEqual(checked.items,first.items);
+  assert.deepEqual(ok(await call({readSet:[ns],snapshot:first.snapshot})).items,first.items);
+  const wrong=await call({...input,fences:[null,null,'invalid0']});
+  assert.equal(wrong.error.code,'snapshot_stale');
+  const empty=ok(await call({...input,refs:[cardRef]}));assert.deepEqual(empty.items,[]);
+  assert.deepEqual(ok(await call({readSet:[ns],snapshot:empty.snapshot})).items,[]);
+  for(const result of [first,checked,empty]){noLeak(result,'candidate fetch');assert.equal(hasId(result,card.id),false);}
+});
+
+test('receipt snapshot deduplicates before count, offset and anchor reads',async t=>{
+  const f=await fixture(t,'ordinary-53'),entries=[];
+  for(let i=0;i<12;i++) {
+    const b=ok(f.core.admit({namespace:ns,memory:{content:'Synthetic deduplicated candidate '+i,kind:'fact'},receipts:[receipt('synthetic-deduplicated-'+i)]})).memory;
+    entries.push({namespace:ns,memoryId:b.id});
+  }
+  const measured=await trace(()=>readTransaction(f.db,()=>{
+    const memo=createContentReadMemo(f.db);
+    for(let i=0;i<12;i++)receiptDeliverySnapshot(f.db,[...entries,...entries],memo,[],{limit:17});
+    return memo.deliveryHeaders.size;
+  }));
+  assert.equal(measured.result,12);assert.equal(measured.rows.filter(isLookup).length,1);
+  assert.equal(measured.rows.filter(row=>row.sql.startsWith('SELECT count(*) AS n FROM receipts r INDEXED BY memory_receipts')).length,12);
+  assert.equal(measured.rows.filter(row=>row.sql.includes('FROM qualification_anchors q CROSS JOIN')).length,12);
+});
+
+test('get paging and context projection stay linear for a large receipt set',async t=>{
+  const f=await fixture(t,'ordinary-53');f.model.countTokens=()=>1;
+  let b;
+  for(let i=0;i<2000;i++) b=ok(f.core.admit({namespace:ns,memory:{content:survivor,kind:'fact'},receipts:[receipt('synthetic-linear-'+String(i).padStart(4,'0'))]})).memory;
+  const expected=f.db.prepare('SELECT id FROM receipts WHERE memory_id=? ORDER BY created_at,id').all(b.id).map(row=>row.id);
+  const measured=await trace(async()=>{
+    let cursor;const ids=[];
+    do {const page=ok(f.core.get({namespace:ns,memoryId:b.id,receiptLimit:16,...(cursor?{receiptCursor:cursor}:{})}));
+      ids.push(...page.receipts.map(row=>row.id));cursor=page.nextReceiptCursor;
+    } while(cursor);
+    return ids;
+  });
+  assert.deepEqual(measured.result,expected);
+  assert.equal(measured.rows.some(row=>row.sql.includes('receipts previous')),false,'no repeated prefix counts');
+  const headers=measured.rows.filter(row=>row.sql.startsWith('SELECT j.value AS input,r.id'));
+  assert.ok(headers.length<=Math.ceil(2000/16)+1);
+  assert.ok(headers.every(row=>row.args[1]===49),'page probe plus fixed header margin');
+  const counted=measured.rows.filter(row=>row.sql.startsWith('SELECT count(*) AS n FROM receipts r INDEXED BY memory_receipts'));
+  assert.ok(counted.length<=1,'stored count is cached under both native change counters');
+  const result=ok(await f.trusted.call(f.context,'fetchCandidateEvidence',{readSet:[ns],intent:'current',refs:[memoryRef(b)]}));
+  assert.equal(result.items[0].provenance.receiptMetadata.length,16);
 });

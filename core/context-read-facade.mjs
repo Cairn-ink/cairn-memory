@@ -669,7 +669,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           const { type, ref, state, origin } = item;
           const sourceRows = type === 'memory' && item.provenance.sourceAccess === 'available' ?
             (safetyMemo?.evidenceReceipts?.get(JSON.stringify([[ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId??''],ref.memoryId])) ??
-              db.prepare(`SELECT r.* FROM json_each(?) wanted CROSS JOIN receipts r ON r.id=wanted.value WHERE r.memory_id=?`).all(JSON.stringify(item.provenance.receiptMetadata.map(receipt=>receipt.receiptId)),ref.memoryId))
+              db.prepare(`SELECT r.* FROM json_each(?) wanted CROSS JOIN receipts r INDEXED BY sqlite_autoindex_receipts_1 ON r.id=wanted.value WHERE r.memory_id=?`).all(JSON.stringify(item.provenance.receiptMetadata.map(receipt=>receipt.receiptId)),ref.memoryId))
               .filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)).slice(0,16) : [];
           const date = receiptEventDate(sourceRows);
           const sources = sourceRows.map((row, index) => {
@@ -753,7 +753,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             if (['evidence_unavailable', 'revision_conflict'].includes(error.code)) fail('snapshot_stale');
             throw error;
           }
-          if (bind('snapshot-item', cardLineageItemInside(db,current)) !== item.fence) fail('snapshot_stale');
+          if (!current || bind('snapshot-item', cardLineageItemInside(db,current)) !== item.fence) fail('snapshot_stale');
         }
         return result;
       });
@@ -775,11 +775,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         try {
           ownData(previous, ['v', 'scope', 'intent', 'refs', 'generations', 'access', 'fences']);
           if (previous.v !== 1 || previous.scope !== scope || !['current', 'history'].includes(previous.intent) || !Array.isArray(previous.refs)) fail('invalid_snapshot');
-          refs = contextRefs(previous.refs.map(value => {
+          refs = previous.refs.length ? contextRefs(previous.refs.map(value => {
             if (!Array.isArray(value) || value.length !== (value[1] === 'card' ? 5 : 4) || !Number.isInteger(value[0]) || !input.readSet[value[0]]) fail('invalid_snapshot');
             return { namespace: input.readSet[value[0]], type: value[1], [value[1] === 'memory' ? 'memoryId' : 'cardId']: value[2], revision: value[3],
               ...(value[1] === 'card' ? { bodyRevision: value[4] } : {}) };
-          }), input.readSet, supportedTypes); intent = previous.intent;
+          }), input.readSet, supportedTypes) : []; intent = previous.intent;
         } catch { fail('invalid_snapshot'); }
       }
       const types = [...new Set(refs.map(ref => ref.type))];
@@ -787,11 +787,14 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         const generations = canonicalFence(input.readSet, types);
         if (previous && (!same(previous.generations, generations) || !same(previous.access, access.accessGenerations))) fail('snapshot_stale');
         const safetyMemo=createContentReadMemo(db);
-        const items = refs.map(ref => evidence.itemsInside(ref.namespace, [ref], intent, input.readSet,{safetyMemo,batchRefs:refs,legacyEvidence:Boolean(options.sources)})[0]);
+        const pairs = refs.map((ref, originalIndex) => ({ ref, originalIndex,
+          item: evidence.itemsInside(ref.namespace, [ref], intent, input.readSet,
+            {safetyMemo,batchRefs:refs,legacyEvidence:Boolean(options.sources)})[0] })).filter(pair => pair.item);
+        const items = pairs.map(pair => pair.item), kept = pairs.map(pair => pair.ref);
         const fences = items.map(item => bind('snapshot-item', cardLineageItemInside(db,item)));
-        if (input.fences?.some((prefix, i) => prefix !== null && !fences[i].startsWith(prefix))) fail('snapshot_stale');
-        if (previous && !same(previous.fences, fences)) fail('snapshot_stale');
-        return { items, generations, fences };
+        if (pairs.some((pair, i) => input.fences?.[pair.originalIndex] != null && !fences[i].startsWith(input.fences[pair.originalIndex]))) fail('snapshot_stale');
+        if (previous && !same(pairs.map(pair => previous.fences[pair.originalIndex]), fences)) fail('snapshot_stale');
+        return { items, refs: kept, generations: canonicalFence(input.readSet, [...new Set(kept.map(ref => ref.type))]), fences };
       }
       const prepared = read(fetchInside);
       access.check();
@@ -799,9 +802,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       // callback after this point; snapshots bind the exact delivered items.
       return read(() => {
         const current = fetchInside();
-        if (!same(current.generations, prepared.generations) || !same(current.fences, prepared.fences)) fail('snapshot_stale');
+        if (!same(current.generations, prepared.generations) || !same(current.refs, prepared.refs) || !same(current.fences, prepared.fences)) fail('snapshot_stale');
         const result = { items: current.items, snapshot: encode('snapshot', { v: 1, scope, intent,
-          refs: refs.map(ref => [input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), ref.type,
+          refs: current.refs.map(ref => [input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), ref.type,
             ref.memoryId ?? ref.cardId, ref.revision, ...(ref.type === 'card' ? [ref.bodyRevision] : [])]),
           generations: current.generations, access: access.accessGenerations, fences: current.fences }, 16384) };
         if (bytes(success(result)) > input.responseByteLimit) fail('context_item_too_large');

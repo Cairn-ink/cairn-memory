@@ -1,9 +1,10 @@
+import { clearReceiptCoordinatesInside } from './raw-source-roots.mjs';
 import './content-write-safety.mjs';
 import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheInside } from './content-suppression-storage.mjs';
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
 import { SAFETY_SCHEMA_VERSIONS, resolveContentLayout, assertContentFeatures } from './content-safety-layout.mjs';
-import { attestContentSafety, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection } from './content-safety-schema.mjs';
+import { attestContentSafety, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection, contentSafetyConnection } from './content-safety-schema.mjs';
 import { validateContextProductLayout } from './context-product-schema.mjs';
 import { installCardCurrentDependencies, validateCardCurrentDependencies, assertNoCardCurrentDependencies } from './card-current-schema.mjs';
 import { installRoleProfiles, validateRoleProfiles, assertNoRoleProfiles } from './role-profile-schema.mjs';
@@ -350,6 +351,7 @@ export function readTransaction(db, work, acquisition) {
     began ||= attempted && db.isTransaction;
   } finally {
     if (began && db.isTransaction) {
+      clearReceiptCoordinatesInside(contentSafetyConnection(db));
       try { db.exec('ROLLBACK'); } catch (failure) { cleanupError = failure; cleanupFailed = true; }
     }
     if (saved !== undefined) {
@@ -392,6 +394,7 @@ export function transaction(db, work, check, { deferred = false } = {}) {
       db.exec("COMMIT");
       return result;
     } catch (error) {
+      clearReceiptCoordinatesInside(contentSafetyConnection(db));
       if(db.isTransaction)db.exec("ROLLBACK");
       if (error?.code === 'ERR_SQLITE_ERROR' && error.message === 'card_dependency_limit_reached') {
         fail('dependency_limit_reached');

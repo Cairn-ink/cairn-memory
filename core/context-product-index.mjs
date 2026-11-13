@@ -148,7 +148,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         if (!item) { unavailable++; continue; }
         const sourceRows=item.type==='memory' && item.provenance.sourceAccess==='available'
           ? (safetyMemo?.evidenceReceipts?.get(JSON.stringify([[ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId??''],ref.memoryId])) ??
-            db.prepare(`SELECT r.* FROM json_each(?) wanted CROSS JOIN receipts r ON r.id=wanted.value WHERE r.memory_id=?`).all(JSON.stringify(item.provenance.receiptMetadata.map(receipt=>receipt.receiptId)),ref.memoryId))
+            db.prepare(`SELECT r.* FROM json_each(?) wanted CROSS JOIN receipts r INDEXED BY sqlite_autoindex_receipts_1 ON r.id=wanted.value WHERE r.memory_id=?`).all(JSON.stringify(item.provenance.receiptMetadata.map(receipt=>receipt.receiptId)),ref.memoryId))
             .filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)).slice(0,16):[];
         const date=receiptEventDate(sourceRows);
         const sources=sourceRows.map((row,index)=>{
@@ -192,7 +192,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         let current;
         try{current=evidence.itemsInside(item.ref.namespace,[item.ref],p.intent,p.readSet,{safetyMemo,batchRefs:delivered.map(item=>item.ref)})[0];}
         catch(e){if(['evidence_unavailable','revision_conflict'].includes(e.code))fail('snapshot_stale');throw e;}
-        if(bind('snapshot-item',cardLineageItemInside(db,current))!==item.fence)fail('snapshot_stale');
+        if(!current||bind('snapshot-item',cardLineageItemInside(db,current))!==item.fence)fail('snapshot_stale');
       }
       return result;
     };
@@ -309,7 +309,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         if(r.vectorPublication){p.vectorPublication=r.vectorPublication;p.semanticSnapshot=r.semanticSnapshot;}
         try{return final(p,access,r.publication,()=>{
           const safetyMemo=createContentReadMemo(db);
-        for(const candidate of result.value.items)evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet,{safetyMemo,batchRefs:result.value.items.map(candidate=>candidate.ref)});
+        result.value.items=result.value.items.filter(candidate=>evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet,{safetyMemo,batchRefs:result.value.items.map(candidate=>candidate.ref)}).length>0);
           return result;
         });}catch(e){if(e.code==='index_unavailable')fail('cursor_stale');throw e;}
       }
@@ -326,7 +326,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       const result=page(r,0,p.limit);
       return final(p,access,r.publication,()=>{
         const safetyMemo=createContentReadMemo(db);
-        for(const candidate of result.value.items)evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet,{safetyMemo,batchRefs:result.value.items.map(candidate=>candidate.ref)});
+        result.value.items=result.value.items.filter(candidate=>evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet,{safetyMemo,batchRefs:result.value.items.map(candidate=>candidate.ref)}).length>0);
         return result;
       });
     } catch(e) {
@@ -419,14 +419,14 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       // fact to match. Delivery still independently fences facts added during
       // semantic callbacks; a safety layout alone is not a populated fact set.
       if((hasCardLineage(db) || c.suppressionEpoch && c.suppressionEpoch !== '0:0') && ranked.some(candidate=>hasCardLineage(db)&&candidate.ref.type==='card'||contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId}))) ranked=read(()=>{const safetyMemo=createContentReadMemo(db);return ranked.filter(candidate=>{
-        try{evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet,{safetyMemo,batchRefs:ranked.map(candidate=>candidate.ref)});return true;}
+        try{return evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet,{safetyMemo,batchRefs:ranked.map(candidate=>candidate.ref)}).length>0;}
         catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
       });});
       const fusionStarted=performance.now(),lexical=c.lexical,fused=fuseCandidates(lexical.rows,ranked,{preset:'rrf-k10',limit:24,semanticState:channel,coverageComplete:preflight?.status==='complete'});
       detail.timings.fusionMs=performance.now()-fusionStarted;
       c.items=fused.rows.map((row,i)=>({ref:row.ref,rank:i+1,fusionScore:row.fusionScore,channels:row.channels}));
       if((hasCardLineage(db) || c.suppressionEpoch && c.suppressionEpoch !== '0:0') && c.items.some(candidate=>hasCardLineage(db)&&candidate.ref.type==='card'||contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId})))c.items=read(()=>{const safetyMemo=createContentReadMemo(db);return c.items.filter(candidate=>{
-        try{evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet,{safetyMemo,batchRefs:c.items.map(candidate=>candidate.ref)});return true;}
+        try{return evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet,{safetyMemo,batchRefs:c.items.map(candidate=>candidate.ref)}).length>0;}
         catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
       });});
       detail.effective=fused.mode;c.coverage.depths.semantic=reason===null?24:0;
@@ -468,7 +468,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         if(!valid){Object.assign(r,lexicalFallback(r));delete r.vectorPublication;}
         const result=page(r,0,p.limit);
         const safetyMemo=createContentReadMemo(db);
-        for(const candidate of result.value.items)evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet,{safetyMemo,batchRefs:result.value.items.map(candidate=>candidate.ref)});
+        result.value.items=result.value.items.filter(candidate=>evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet,{safetyMemo,batchRefs:result.value.items.map(candidate=>candidate.ref)}).length>0);
         return result;
       });
     }catch(error){attribution?.captureFailure(error);attribution?.selectFailure(error);return failure(error.code==='ERR_SQLITE_ERROR'?[5,6].includes(error.errcode&255)?'storage_busy':'storage_error':error.code??'storage_error');}
@@ -495,7 +495,8 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         try {
           await quantum.measureAsync(async()=>{
             let suppressionEpoch;
-            const texts=read(()=>{const layout=cachedContentLayout(db);if(!layout)fail('evidence_unavailable');suppressionEpoch=layout.suppressionRevision?contentSuppressionRequestFenceInside(db,p.readSet[0].ownerId):undefined;const safetyMemo=createContentReadMemo(db);return rows.map(r=>{const item=evidence.itemsInside(r.ref.namespace,[r.ref],p.intent,p.readSet,{safetyMemo,batchRefs:rows.map(r=>r.ref)})[0];return item.type==='memory'?item.content:item.title+'\n'+item.body;});});
+            const texts=read(()=>{const layout=cachedContentLayout(db);if(!layout)fail('evidence_unavailable');suppressionEpoch=layout.suppressionRevision?contentSuppressionRequestFenceInside(db,p.readSet[0].ownerId):undefined;const safetyMemo=createContentReadMemo(db);const pairs=rows.map(r=>({row:r,item:evidence.itemsInside(r.ref.namespace,[r.ref],p.intent,p.readSet,{safetyMemo,batchRefs:rows.map(r=>r.ref)})[0]})).filter(pair=>pair.item);rows=pairs.map(pair=>pair.row);return pairs.map(({item})=>item.type==='memory'?item.content:item.title+'\n'+item.body);});
+            if(!rows.length){reason='validation_invalid';return;}
             while(texts.length>1&&Buffer.byteLength(JSON.stringify(texts))>240000){texts.pop();rows.pop();}
             const result=await semantic.call('embed',{texts,kind:'refresh',expected:snapshot.policy,projection:{readSet:p.readSet,types:p.types,intent:p.intent,suppressionEpoch,accessDigest:observed.publication.accessDigest,lexicalValidationDigest:digest(observed.publication)},maxUsd:dollars(usd(p.budget.maxUsd)-spent)},providerCutoff);
             attempts+=rows.length;spent+=usd(result.chargedUsd);

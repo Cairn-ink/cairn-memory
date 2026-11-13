@@ -1,4 +1,4 @@
-import { receiptDenialTokens } from './content-safety.mjs';
+import { receiptDenialTokens } from './raw-source-roots.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { bindContentSafetyConnection, cachedContentLayout, contentSafetyConnection, contentSafetyBudgetError, installedContentLayout, withContentSafetyLayoutInside } from './content-safety-schema.mjs';

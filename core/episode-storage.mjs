@@ -1054,7 +1054,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
           AND m.owner_id=? AND m.scope=? AND m.project_id=? ORDER BY l.id LIMIT ?`)
         .all(row.id,pages.memory.after??'',...boundary(ns),pages.memory.limit+1);
       const linkedIds=linkRows.flatMap(link=>JSON.parse(link.receipt_ids).map(id=>[link.memory_id,id]));
-      const linkedReceipts=db.prepare(`SELECT r.* FROM json_each(?) wanted CROSS JOIN receipts r
+      const linkedReceipts=db.prepare(`SELECT r.* FROM json_each(?) wanted CROSS JOIN receipts r INDEXED BY sqlite_autoindex_receipts_1
         ON r.id=json_extract(wanted.value,'$[1]') CROSS JOIN memories m ON m.id=r.memory_id
         WHERE r.memory_id=json_extract(wanted.value,'$[0]') AND m.owner_id=? AND m.scope=? AND m.project_id=?`)
         .all(JSON.stringify(linkedIds),...boundary(ns));
