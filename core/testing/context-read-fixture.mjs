@@ -17,6 +17,12 @@ export const request = (patch = {}) => ({ readSet: [ns], types: ['memory'], inte
 export { readTransaction } from '../database.mjs';
 import { readTransaction } from '../database.mjs';
 
+// The observer relies on inotify's ordered event queue. macOS FSEvents may
+// coalesce, delay, drop or reorder rapid create/delete events, so neither the
+// sentinel barrier nor a "no file was created" check is sound there.
+export const observerSkip = process.platform === 'linux' ? false :
+  'needs Linux inotify ordering; macOS FSEvents may drop or reorder rapid file events';
+
 // Fresh inotify subscription per observation. A sentinel event drains the
 // same ordered event queue, avoiding sleeps and events from fixture setup.
 export async function observeDatabaseFiles(f, work) {

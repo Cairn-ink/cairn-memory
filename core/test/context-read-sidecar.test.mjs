@@ -6,7 +6,7 @@ import { openMemoryCore } from '../index.mjs';
 import { assertContextReadReadOnlyAuxiliaries, openContextReadSidecar } from '../context-read-sidecar.mjs';
 import { createFakeEmbedder } from '../context-read-embedder.mjs';
 import { createBM25 } from '../context-read-bm25.mjs';
-import { fixture, request, drain, snapshot, ns, ok, receipt, observeDatabaseFiles } from '../testing/context-read-fixture.mjs';
+import { fixture, request, drain, snapshot, ns, ok, receipt, observeDatabaseFiles, observerSkip } from '../testing/context-read-fixture.mjs';
 import { rationaleModel } from '../testing/rationale-model.mjs';
 import { sourceFixture, savedSource, anchor, resolve, draft, ns as rawNs } from '../testing/raw-source-fixtures.mjs';
 const unavailable = fn => assert.throws(fn, { code: 'index_unavailable' });
@@ -343,7 +343,7 @@ test('R09 rebuild reasons: corrupt, incompatible, wrong-store and deleted sideca
   unlinkSync(f.path + '.context-read-v1.sqlite'); index = f.index(); assert.equal(drain(index).reason, 'missing');
 });
 
-test('R12 read-only missing/stale/hot/auxiliary/unsafe sidecars create no files, including transient files', async t => {
+test('R12 read-only missing/stale/hot/auxiliary/unsafe sidecars create no files, including transient files', { skip: observerSkip }, async t => {
   const f = fixture(t); f.admit('synthetic apple');
   const before = readdirSync(f.workspace.path).sort();
   const observed = await observeDatabaseFiles(f, () => unavailable(() => f.index({ readOnly: true })));
@@ -366,7 +366,7 @@ test('R12 read-only missing/stale/hot/auxiliary/unsafe sidecars create no files,
   assert.throws(() => openContextReadSidecar({ path: ':memory:', db: f.db }), { code: 'index_unavailable' });
 });
 
-test('R12 checkpointed WAL header without auxiliaries refuses before SQLite can create transient files', async t => {
+test('R12 checkpointed WAL header without auxiliaries refuses before SQLite can create transient files', { skip: observerSkip }, async t => {
   for (const location of ['canonical', 'sidecar']) {
     const f = fixture(t); f.admit('synthetic apple'); const index = f.index(); drain(index); index.close();
     const path = location === 'canonical' ? f.path : f.path + '.context-read-v1.sqlite';
@@ -384,7 +384,7 @@ test('R12 checkpointed WAL header without auxiliaries refuses before SQLite can 
   }
 });
 
-test('probe open failure is unsafe_file and never deletes or rebuilds an existing sidecar', async t => {
+test('probe open failure is unsafe_file and never deletes or rebuilds an existing sidecar', { skip: observerSkip }, async t => {
   const childProcess = await import('node:child_process');
   const { syncBuiltinESMExports } = await import('node:module');
   const f = fixture(t); f.admit('unreadable sidecar');
