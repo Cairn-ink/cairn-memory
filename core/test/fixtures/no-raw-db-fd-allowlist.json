@@ -1713,5 +1713,25 @@
     "path": "packages/setup/lib/local-capture.mjs",
     "source": "temporary => open(temporary, 'wx', 0o600), JSON.stringify(request) + '\\n');",
     "reason": "Sensitive installer capture request metadata temp, exclusively created 0600 in an owner-checked 0700 directory with cleanup; canonical store/sidecar aliases refused."
+  },
+  {
+    "path": "integrations/client/raw/local-source-open.mjs",
+    "source": "import { constants } from 'node:fs'",
+    "reason": "Local transcript opener only; never accepts a database path from capture authority."
+  },
+  {
+    "path": "integrations/client/raw/local-source-open.mjs",
+    "source": "import { open, lstat } from 'node:fs/promises'",
+    "reason": "Local transcript opener only; never accepts a database path from capture authority."
+  },
+  {
+    "path": "integrations/client/raw/local-source-open.mjs",
+    "source": "const handle = await open(prefix, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_DIRECTORY);",
+    "reason": "Local transcript opener only; never accepts a database path from capture authority."
+  },
+  {
+    "path": "integrations/client/raw/local-source-open.mjs",
+    "source": "file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);",
+    "reason": "Local transcript opener only; never accepts a database path from capture authority."
   }
 ]
