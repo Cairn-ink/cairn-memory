@@ -14,7 +14,7 @@ import { isAbsolute, dirname } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { performance } from 'node:perf_hooks';
-import { bindCommitConnection, commitBusyTimeout, dispatchCommit, hasCommitDispatcher, recordCommit } from './commit-dispatch.mjs';
+import { bindCommitConnection, dispatchCommit, hasCommitDispatcher, recordCommit } from './commit-dispatch.mjs';
 import { readTransaction, isConnectionDiscarded } from './database.mjs';
 import { cardNamespace } from './private-card-input.mjs';
 import { cardApplicabilityInside } from './private-evidence-schema.mjs';
@@ -293,10 +293,9 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       rebuildReason ??= 'missing';
     }
     fileIdentity = protectedFile(sidecarPath);
-    try { side = bindCommitConnection(new DatabaseSync(sidecarPath, { readOnly, timeout: commitBusyTimeout(canonical) ?? 5000 }), canonical); }
+    try { side = bindCommitConnection(new DatabaseSync(sidecarPath, { readOnly, timeout: 5000 }), canonical); }
     catch { unavailable('unsafe_file'); }
-    side.exec(hasCommitDispatcher(side) ? 'PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=5;'
-      : 'PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=5000;');
+    side.exec('PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=5000;');
     checkFile();
     if (!initial) write(() => {
       side.exec(`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=${SIDECAR_FORMAT}; ${ddl}`);

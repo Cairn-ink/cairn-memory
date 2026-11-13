@@ -12,10 +12,15 @@ const busy = error => error?.code === 'ERR_SQLITE_ERROR' && Number.isInteger(err
   [5, 6].includes(error.errcode & 0xff) || error?.code === 'storage_busy';
 const busyResult = value => value?.ok === false && value.error?.code === 'storage_busy';
 
-export function bindCommitConnection(db, source) {
+export function bindCommitConnection(db, source, { canonical = true } = {}) {
   const host = source ? bindings.get(source)?.host : openingHost();
+  if (host && canonical && bindings.has(db) && bindings.get(db).restoreTimeoutMs !== 5000) fail('storage_error');
   if (host && !bindings.has(db)) {
-    const binding = { host, db };
+    const restoreTimeoutMs = db.prepare('PRAGMA busy_timeout').get().timeout;
+    // Canonical and context-sidecar openers retain today's native wait. Only
+    // the synchronous attempt below may temporarily shorten it.
+    if (canonical && restoreTimeoutMs !== 5000) fail('storage_error');
+    const binding = { host, db, restoreTimeoutMs };
     bindings.set(db, binding);
     host.connections.add(new WeakRef(db));
   }
@@ -27,7 +32,6 @@ export function bindCommitRuntime(runtime, db) {
   return runtime;
 }
 export const hasCommitDispatcher = value => bindings.has(value);
-export const commitBusyTimeout = value => bindings.has(value) || openingHost() ? 5 : undefined;
 export function withCommitBinding(source, work) {
   const binding = bindings.get(source);
   if (!binding) return work();
@@ -75,7 +79,9 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
         checkIdle('attempt');
         if (end - now() < 5) fail('storage_busy');
         const state = { db, commits: 0 };
+        const { restoreTimeoutMs } = bindings.get(db);
         try {
+          db.exec('PRAGMA busy_timeout = 5');
           const value = withContentSuppressionRequest(() => attempts.run(state, work), { fresh: true });
           // Never await caller work. An async transaction closure is invalid.
           if (value && typeof value.then === 'function') fail('storage_error');
@@ -85,6 +91,10 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
           checkIdle('failure');
           if (!busy(error)) throw error;
           if (state.commits) throw error;
+        } finally {
+          // checkIdle retires a connection with an active transaction. Keep
+          // its fixed refusal, without attempting SQL on that closed handle.
+          if (db.isOpen) db.exec(`PRAGMA busy_timeout = ${restoreTimeoutMs}`);
         }
         return null;
       };
@@ -138,6 +148,13 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
         result.push({ isOpen: db.isOpen, isTransaction: db.isOpen ? db.isTransaction : false });
       }
       return result;
+    },
+    // Internal test diagnostic: no native handles leave the engine.
+    inspectBusyTimeouts() {
+      return [...host.connections].flatMap(ref => {
+        const db = ref.deref();
+        return db?.isOpen ? [db.prepare('PRAGMA busy_timeout').get().timeout] : [];
+      });
     },
   });
 }

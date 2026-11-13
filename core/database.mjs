@@ -1,5 +1,5 @@
 import './content-write-safety.mjs';
-import { bindCommitConnection, commitBusyTimeout, hasCommitDispatcher, recordCommit } from './commit-dispatch.mjs';
+import { bindCommitConnection, hasCommitDispatcher, recordCommit } from './commit-dispatch.mjs';
 import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheInside } from './content-suppression-storage.mjs';
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
@@ -322,8 +322,9 @@ export function readTransaction(db, work, acquisition) {
   // The embedded context reader opens through its retained read-only opener.
   // Bind that engine-owned connection during the same host construction scope.
   if (!hasCommitDispatcher(db)) {
-    bindCommitConnection(db);
-    if (hasCommitDispatcher(db)) db.exec('PRAGMA busy_timeout=5');
+    // Retained read-only auxiliary handles can intentionally use timeout=0.
+    // Their enforced query_only scope below cannot become a canonical writer.
+    bindCommitConnection(db, undefined, { canonical: false });
   }
   if (discardedConnections.has(db) || !db.isOpen) fail('store_closed');
   if (activeReads.has(db) || db.isTransaction || typeof work !== 'function' ||
@@ -432,8 +433,7 @@ export function busyTimeoutOption(input) {
  * Default creation and all existing-store maintenance paths stay unchanged. */
 export function openDatabase(path, options = {}) {
   const busyTimeoutMs = busyTimeoutOption(options);
-  const timeout = Math.min(STORAGE_BUSY_TIMEOUT_MS, busyTimeoutMs ?? STORAGE_BUSY_TIMEOUT_MS,
-    commitBusyTimeout() ?? STORAGE_BUSY_TIMEOUT_MS);
+  const timeout = Math.min(STORAGE_BUSY_TIMEOUT_MS, busyTimeoutMs ?? STORAGE_BUSY_TIMEOUT_MS);
   let { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false, localControls = false, methodPackages = false, assets = false, roleProfiles = false, currentDependencies = false, existingStore, storeFence, contentSafety } = options;
   if ([rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls].some(value => typeof value !== 'boolean')) fail('invalid_input');
   rawDeletion ||= rawSources || localControls;
