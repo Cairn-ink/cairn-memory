@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync, StatementSync } from 'node:sqlite';
 import { openMemoryCore } from '../contract.mjs';
 import { transaction } from '../database.mjs';
-import { openMemoryStore } from '../index.mjs';
+import { openMemoryStore, normalizeBoundedText as publicNormalizeBoundedText, normalizedTextLength } from '../index.mjs';
 import { createQualificationCandidateSnapshot } from '../qualification-candidates.mjs';
 import { fingerprint, boundedText } from '../validation.mjs';
 import { suppressionContent } from '../suppression-content.mjs';
@@ -475,4 +475,12 @@ test('admit normalization retains its 20000 guard and fingerprints', () => {
   }
   for (const raw of ['', ' ', '[REDACTED]', 'a\0b', 'x'.repeat(4001), ' '.repeat(20000) + 'x', null, 1])
     assert.throws(() => suppressionContent(raw), { code: 'invalid_input' });
+});
+
+test('the public normalizeBoundedText keeps its one-argument form', () => {
+  assert.equal(publicNormalizeBoundedText.length, 1);
+  assert.deepEqual(['hello', ' world '].map(publicNormalizeBoundedText), ['hello', 'world']);
+  assert.throws(() => publicNormalizeBoundedText('a'.repeat(20_001), 'x'), { code: 'invalid_text' });
+  assert.throws(() => publicNormalizeBoundedText('a'.repeat(20_001), 1_000_000), { code: 'invalid_text' });
+  assert.equal(normalizedTextLength(' a  b '), 3);
 });
