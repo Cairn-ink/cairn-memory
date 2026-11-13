@@ -230,7 +230,9 @@ export function finishCaptureSetup(outcomes, { write, t }) {
   })).join(' '));
   return inactive.some(value => !value.temporary) ? 2 : 0;
 }
-function showCapture(client, outcome, { write, t }) {
+function showCapture(client, outcome, { write, t, platform = process.platform }) {
+  const macCodex = client === 'codex' && platform === 'darwin' && outcome.status !== 'disabled';
+  if (macCodex && ['active', 'prepared'].includes(outcome.status)) outcome = { status:'blocked', reason:'qualification_required' };
   // A retained older runtime may omit the DTO. Keep capture status waiting
   // rather than infer a qualified host or inspect its private cache ourselves.
   const verdict = client === 'codex' ? outcome.qualification ??
@@ -242,13 +244,14 @@ function showCapture(client, outcome, { write, t }) {
   const reason = waiting ? 'qualification_required' : state === 'blocked' ? (allowedReasons.has(outcome.reason) ? outcome.reason : outcome.status === 'prepared' ? 'prepared' : outcome.status === 'busy' ? 'busy' : outcome.status === 'declined' ? 'declined' : 'not_installed') : state;
   write(t('local_capture_status', { client: client === 'claude' ? 'Claude Code' : 'Codex', state, reason }));
   if (client === 'codex') {
+    if (macCodex) write(t('local_capture_codex_macos'));
     write(t('local_capture_codex_approval'));
     if (verdict) {
       const status = ['qualified', 'pending', 'failed'].includes(verdict.status) ? verdict.status : 'pending';
       const reason = /^[a-z_]{1,64}$/.test(verdict.reason ?? '') ? verdict.reason : 'qualification_required';
       write(t('local_capture_qualification_status', { state: status, reason }));
       write(t(waiting ? 'local_capture_qualification' : 'local_capture_last_qualified'));
-    } else if (outcome.reason === 'qualification_required') write(t('local_capture_qualification'));
+    } else if (!macCodex && outcome.reason === 'qualification_required') write(t('local_capture_qualification'));
   }
   return { state, reason, temporary: outcome.status === 'active' && outcome.qualification?.status === 'pending' };
 }

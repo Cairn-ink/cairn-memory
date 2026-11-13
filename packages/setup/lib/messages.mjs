@@ -1608,6 +1608,7 @@ Object.assign(messages, {
   "local_capture_setup_off": {"en": "{client}: conversation saving is OFF ({reason}).", "zh": "{client}：對話儲存已關閉（{reason}）。"},
   "local_capture_setup_waiting": {"en": "{client}: conversation saving is OFF ({reason}); saving starts automatically once background format qualification passes.", "zh": "{client}：對話儲存已關閉（{reason}）；背景格式驗證通過後會自動開始儲存。"},
   "local_capture_status": {"en": "{client} local capture: {state} ({reason}). Raw cap: 200,000,000 bytes.", "zh": "{client} 本機擷取：{state}（{reason}）。Raw 上限：200,000,000 bytes。"},
+  "local_capture_codex_macos": {"en": "Codex: automatic saving isn't supported on macOS yet; the memory tools work. To set up only Claude Code, run `npx @cairn-ink/memory setup --local --client claude`.", "zh": "Codex：macOS 目前還不支援自動保存，但記憶工具可以正常使用。若只要設定 Claude Code，請執行 `npx @cairn-ink/memory setup --local --client claude`。"},
   "local_capture_codex_approval": {"en": "Codex: approve the new entries in /hooks.", "zh": "Codex：請到 /hooks 核准新增的項目。"},
   "local_capture_qualification_status": {"en": "Codex format qualification: {state} ({reason}).", "zh": "Codex 格式驗證：{state}（{reason}）。"},
   "local_capture_last_qualified": {"en": "Last observed Codex format qualified. If capture stops after a Codex update, rerun setup.", "zh": "上次觀察到的 Codex 格式已通過驗證。若 Codex 更新後擷取停止，請重新執行 setup。"},
