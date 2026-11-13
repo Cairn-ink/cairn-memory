@@ -49,6 +49,14 @@ test("hook input checks every chunk and propagates cancellation and read errors"
   await assert.rejects(readHookInput(broken()), error => error === aborted);
 });
 
+test("hook input accepts already-decoded string chunks from object-mode streams", async () => {
+  const text = JSON.stringify(fields);
+  const { Readable } = await import("node:stream");
+  assert.deepEqual(JSON.parse(await readHookInput(Readable.from([text]))), fields);
+  const mixed = [text.slice(0, 7), Buffer.from(text.slice(7, 20)), text.slice(20)];
+  assert.deepEqual(JSON.parse(await readHookInput(chunks(mixed))), fields);
+});
+
 test("hook input uses non-fatal UTF-8 replacement for invalid bytes", async () => {
   const bytes = Buffer.concat([Buffer.from('{"prompt":"'), Buffer.from([0xff, 0xe4]), Buffer.from('"}')]);
   const text = await readHookInput(chunks(Array.from(bytes, byte => Buffer.from([byte]))));
