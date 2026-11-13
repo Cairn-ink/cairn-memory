@@ -2,9 +2,9 @@
 // the installed engine; keep its identity and pinned runtime across uninstall.
 import { spawn } from 'node:child_process';
 import { mkdir, open, rename, lstat, readdir, rm } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { boundedJSON, canonicalPath, executableFor, ownedDirectory, validPath, engineIdPattern, pidIsDead } from './local-descriptor.mjs';
+import { boundedJSON, canonicalPath, executableFor, ownedDirectory, localFilesystemError, validPath, engineIdPattern, pidIsDead } from './local-descriptor.mjs';
 import { SetupError } from './errors.mjs';
 
 export const RAW_CAP = 200000000;
@@ -73,6 +73,25 @@ async function directory(path) {
   await ownedDirectory(path);
   if (await canonicalPath(path) !== path) fail();
 }
+// Client-owned configuration can be readable by others, but never writable.
+export async function clientConfigDirectory(client, env, { create = false } = {}) {
+  const path = client === 'claude' ? env.CLAUDE_CONFIG_DIR ?? join(await canonicalPath(env.HOME), '.claude') :
+    env.CODEX_HOME ?? join(await canonicalPath(env.HOME), '.codex');
+  const resolved = typeof path === 'string' ? resolve(path) : path;
+  try {
+    if (!validPath(path) || await canonicalPath(path) !== resolved) throw new SetupError('local_root_invalid', 2);
+    if (create) await mkdir(path, { recursive: true, mode: 0o700 });
+    let stat;
+    try { stat = await lstat(path.replace(/\/+$/u, '') || '/'); }
+    catch (error) { if (!create && error.code === 'ENOENT') return resolved; throw error; }
+    if (!stat.isDirectory() || stat.isSymbolicLink() || (stat.mode & 0o022) ||
+        (process.getuid && stat.uid !== process.getuid())) {
+      throw new SetupError('local_root_invalid', 2, { code: 'insecure_directory' });
+    }
+    if (await canonicalPath(path) !== resolved) throw new SetupError('local_root_invalid', 2);
+    return resolved;
+  } catch (error) { throw localFilesystemError(error, 'local_root_invalid'); }
+}
 // Output is a bounded content-free engine DTO, never a child diagnostic. Kill
 // the process group so a timed-out format probe cannot leave a schema child.
 export async function engineChild(node, args, { env = process.env, onChild = async () => {}, timeout = 170000 } = {}) {
@@ -110,10 +129,7 @@ async function qualification(root, receipt, context) {
   return engineChild(receipt.node, ['--input-type=module', '-e', script], { ...context, timeout: 90000 });
 }
 async function requestFor(root, descriptor, client, receipt, context) {
-  const home = await canonicalPath(context.env.HOME);
-  const nativeHome = client === 'claude' ? await canonicalPath(context.env.CLAUDE_CONFIG_DIR ?? join(home, '.claude')) :
-    await canonicalPath(context.env.CODEX_HOME ?? join(home, '.codex'));
-  await directory(nativeHome);
+  const nativeHome = await clientConfigDirectory(client, context.env, { create: true });
   const sourceRoot = join(nativeHome, client === 'claude' ? 'projects' : 'sessions');
   await mkdir(sourceRoot, { recursive: true, mode: 0o700 });
   if (await canonicalPath(sourceRoot) !== sourceRoot) fail(); // The engine validates source ownership/mode.
@@ -141,6 +157,7 @@ async function requestFor(root, descriptor, client, receipt, context) {
     rawMode: 'local-plain-v1', rawCapBytes: RAW_CAP, dailyCap: 1000, providerApiKeyEnv: 'OPENAI_API_KEY',
     interpretationConsent: false, plaintextRawConsent: true, foregroundConsent: true };
 }
+export const captureRequested = (enabled, receipt) => enabled ?? receipt?.enabled ?? true;
 export async function configureCapture(root, descriptor, selected, context, { enabled, uninstall = false } = {}) {
   if (!descriptor && !uninstall) fail();
   await directory(root);
@@ -148,10 +165,11 @@ export async function configureCapture(root, descriptor, selected, context, { en
     await metadataPath(file(root), descriptor.database.path);
     await staleRequests(root, descriptor.database.path);
   }
-  const settings = await captureSettings(root);
+  const settings = await captureSettings(root), outcomes = [];
   for (const client of selected) {
     let receipt = settings.clients[client];
     if (!receipt && uninstall) continue;
+    if (!uninstall && captureRequested(enabled, receipt)) await clientConfigDirectory(client, context.env);
     receipt ??= settings.clients[client] = { enabled: true, noticed: false, engineId: descriptor.engine.id, node: descriptor.node };
     if (enabled !== undefined) receipt.enabled = enabled;
     // Uninstall disables without changing the user's retained setup preference.
@@ -191,15 +209,26 @@ export async function configureCapture(root, descriptor, selected, context, { en
         if (outcome.status === 'prepared') outcome = await invoke(root, receipt, ['activate', '--installation', installation], context);
       }
     }
-    // The engine installs hooks even while qualification is pending/failed.
-    // Its cache-only DTO is the sole qualification authority for setup and status.
-    if (client === 'codex' && outcome.status === 'active') {
+    // Read the same cache-only observation as status, including after a failed
+    // action. Never report capture from an intermediate action result.
+    if (!uninstall && receipt.enabled) {
       outcome = await invoke(root, receipt, ['status', '--installation', installation], { ...context, timeout: 10000 });
     }
-    showCapture(client, outcome, context);
+    const summary = showCapture(client, outcome, context);
+    outcomes.push({ client, requested: !uninstall && receipt.enabled, ...summary });
     // A disable refusal must stop uninstall before engine/MCP detachment.
     if ((uninstall || !receipt.enabled) && outcome.status !== 'disabled') fail();
   }
+  return outcomes;
+}
+export function finishCaptureSetup(outcomes, { write, t }) {
+  const inactive = outcomes.filter(value => value.requested && value.state !== 'on');
+  if (!inactive.length) { write(t('local_done')); write(t('next_reopen')); return 0; }
+  write(t('next_reopen'));
+  write(inactive.map(value => t(value.temporary ? 'local_capture_setup_waiting' : 'local_capture_setup_off', {
+    client: value.client === 'claude' ? 'Claude Code' : 'Codex', reason: value.reason,
+  })).join(' '));
+  return inactive.some(value => !value.temporary) ? 2 : 0;
 }
 function showCapture(client, outcome, { write, t }) {
   // A retained older runtime may omit the DTO. Keep capture status waiting
@@ -209,8 +238,8 @@ function showCapture(client, outcome, { write, t }) {
   const waiting = verdict && verdict.status !== 'qualified';
   const state = outcome.status === 'active' && !waiting ? 'on' : outcome.status === 'disabled' ? 'off' : 'blocked';
   const allowedReasons = new Set(['not_installed','prepared','rearm_required','recovery_required','configuration_conflict','configuration_changed',
-    'unsafe_path','store_invalid','authority_bound','authority_changed','qualification_required','runtime_unavailable','busy','cancelled','child_unavailable','unexpected_failure']);
-  const reason = waiting ? 'qualification_required' : state === 'blocked' ? (allowedReasons.has(outcome.reason) ? outcome.reason : 'not_installed') : state;
+    'invalid_input','declined','source_refused','event_refused','unsafe_path','store_invalid','authority_bound','authority_changed','qualification_required','runtime_unavailable','busy','cancelled','child_unavailable','unexpected_failure']);
+  const reason = waiting ? 'qualification_required' : state === 'blocked' ? (allowedReasons.has(outcome.reason) ? outcome.reason : outcome.status === 'prepared' ? 'prepared' : outcome.status === 'busy' ? 'busy' : outcome.status === 'declined' ? 'declined' : 'not_installed') : state;
   write(t('local_capture_status', { client: client === 'claude' ? 'Claude Code' : 'Codex', state, reason }));
   if (client === 'codex') {
     write(t('local_capture_codex_approval'));
@@ -221,6 +250,7 @@ function showCapture(client, outcome, { write, t }) {
       write(t(waiting ? 'local_capture_qualification' : 'local_capture_last_qualified'));
     } else if (outcome.reason === 'qualification_required') write(t('local_capture_qualification'));
   }
+  return { state, reason, temporary: outcome.status === 'active' && outcome.qualification?.status === 'pending' };
 }
 export async function captureStatus(root, client, context) {
   const receipt = (await captureSettings(root)).clients[client];

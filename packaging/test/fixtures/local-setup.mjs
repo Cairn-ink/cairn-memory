@@ -118,8 +118,18 @@ export async function load(url,context,next){const result=await next(url,context
         sessionId:settings.payload.session_id,sourcePath:settings.payload.transcript_path});console.log(JSON.stringify(result));
     }else if(settings.action==='inspect'){
       const {DatabaseSync}=await import('node:sqlite'),db=new DatabaseSync(settings.request.databasePath,{readOnly:true});try{
+        const namespaces = [];
+        // Inspect every owner/project-bearing table, including permissions.
+        // Claim qualification scope alone is not a namespace.
+        // Quote identifiers obtained from SQLite itself, never payload data.
+        const quote = name => '"'+name.replaceAll('"','""')+'"';
+        for (const {name} of db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all()) {
+          const fields = db.prepare('PRAGMA table_info('+quote(name)+')').all().map(row=>row.name)
+            .filter(field=>['owner_id','scope','project_id'].includes(field));
+          if (fields.includes('owner_id') || fields.includes('project_id')) namespaces.push({table:name,fields,rows:db.prepare('SELECT '+fields.map(quote).join(',')+' FROM '+quote(name)).all()});
+        }
         const parts=db.prepare('SELECT sealed,saved FROM raw_parts ORDER BY rowid').all().map(part=>({saved:part.saved,text:Buffer.from(part.sealed??[]).toString()}));
-        console.log(JSON.stringify({parts,memories:db.prepare('SELECT count(*) n FROM memories WHERE deleted=0').get().n,events:db.prepare('SELECT count(*) n FROM raw_events').get().n,
+        console.log(JSON.stringify({namespaces,parts,memories:db.prepare('SELECT count(*) n FROM memories WHERE deleted=0').get().n,events:db.prepare('SELECT count(*) n FROM raw_events').get().n,
           control:db.prepare('SELECT target_id,revision,automatic_capture_enabled,consent_generation,raw_notice_version FROM local_capture_controls WHERE owner_id=? AND scope=? AND project_id=? AND client=?')
             .get(settings.request.namespace.ownerId,settings.request.namespace.scope,settings.request.namespace.projectId??'',settings.request.client)??null,
           usage:db.prepare('SELECT cap_bytes FROM raw_owner_usage WHERE owner_id=?').get(settings.request.namespace.ownerId)??null}));

@@ -1,0 +1,703 @@
+{
+  "untrusted": {
+    "data": [
+      {
+        "cwd": "<CWD>",
+        "hooks": [
+          {
+            "key": "<CODEX_HOME>/hooks.json:pre_compact:0:0",
+            "eventName": "preCompact",
+            "handlerType": "command",
+            "command": "<HOOK_COMMAND>",
+            "async": false,
+            "matcher": null,
+            "timeoutSec": 3,
+            "statusMessage": null,
+            "additionalContextLimit": null,
+            "sourcePath": "<CODEX_HOME>/hooks.json",
+            "source": "user",
+            "pluginId": null,
+            "environmentId": null,
+            "displayOrder": 0,
+            "enabled": true,
+            "isManaged": false,
+            "currentHash": "sha256:0db4bf8b7d9384155356fbe79dba1cc2a0b0567c796b335187ca8cd7515f8e06",
+            "trustStatus": "untrusted"
+          },
+          {
+            "key": "<CODEX_HOME>/hooks.json:session_start:0:0",
+            "eventName": "sessionStart",
+            "handlerType": "command",
+            "command": "<HOOK_COMMAND>",
+            "async": false,
+            "matcher": null,
+            "timeoutSec": 3,
+            "statusMessage": null,
+            "additionalContextLimit": null,
+            "sourcePath": "<CODEX_HOME>/hooks.json",
+            "source": "user",
+            "pluginId": null,
+            "environmentId": null,
+            "displayOrder": 1,
+            "enabled": true,
+            "isManaged": false,
+            "currentHash": "sha256:32ad552795a2d0379e15c56094772227648dc8831fd529ddb59a7ff987cb561b",
+            "trustStatus": "untrusted"
+          },
+          {
+            "key": "<CODEX_HOME>/hooks.json:user_prompt_submit:0:0",
+            "eventName": "userPromptSubmit",
+            "handlerType": "command",
+            "command": "<HOOK_COMMAND>",
+            "async": false,
+            "matcher": null,
+            "timeoutSec": 3,
+            "statusMessage": null,
+            "additionalContextLimit": 0,
+            "sourcePath": "<CODEX_HOME>/hooks.json",
+            "source": "user",
+            "pluginId": null,
+            "environmentId": null,
+            "displayOrder": 2,
+            "enabled": true,
+            "isManaged": false,
+            "currentHash": "sha256:bd59807fcd64e65ebd1b35ce17b7fd182611fb438fec6dd11f265b8a15dbc1fe",
+            "trustStatus": "untrusted"
+          },
+          {
+            "key": "<CODEX_HOME>/hooks.json:stop:0:0",
+            "eventName": "stop",
+            "handlerType": "command",
+            "command": "<HOOK_COMMAND>",
+            "async": false,
+            "matcher": null,
+            "timeoutSec": 3,
+            "statusMessage": null,
+            "additionalContextLimit": null,
+            "sourcePath": "<CODEX_HOME>/hooks.json",
+            "source": "user",
+            "pluginId": null,
+            "environmentId": null,
+            "displayOrder": 3,
+            "enabled": true,
+            "isManaged": false,
+            "currentHash": "sha256:d0d21ced6fcb4ac6da91ac939aab7deb65b5c50cf5d78c3f77cb1d44e362cd05",
+            "trustStatus": "untrusted"
+          }
+        ],
+        "warnings": [],
+        "errors": []
+      }
+    ]
+  },
+  "trusted": {
+    "data": [
+      {
+        "cwd": "<CWD>",
+        "hooks": [
+          {
+            "key": "<CODEX_HOME>/hooks.json:pre_compact:0:0",
+            "eventName": "preCompact",
+            "handlerType": "command",
+            "command": "<HOOK_COMMAND>",
+            "async": false,
+            "matcher": null,
+            "timeoutSec": 3,
+            "statusMessage": null,
+            "additionalContextLimit": null,
+            "sourcePath": "<CODEX_HOME>/hooks.json",
+            "source": "user",
+            "pluginId": null,
+            "environmentId": null,
+            "displayOrder": 0,
+            "enabled": true,
+            "isManaged": false,
+            "currentHash": "sha256:0db4bf8b7d9384155356fbe79dba1cc2a0b0567c796b335187ca8cd7515f8e06",
+            "trustStatus": "trusted"
+          },
+          {
+            "key": "<CODEX_HOME>/hooks.json:session_start:0:0",
+            "eventName": "sessionStart",
+            "handlerType": "command",
+            "command": "<HOOK_COMMAND>",
+            "async": false,
+            "matcher": null,
+            "timeoutSec": 3,
+            "statusMessage": null,
+            "additionalContextLimit": null,
+            "sourcePath": "<CODEX_HOME>/hooks.json",
+            "source": "user",
+            "pluginId": null,
+            "environmentId": null,
+            "displayOrder": 1,
+            "enabled": true,
+            "isManaged": false,
+            "currentHash": "sha256:32ad552795a2d0379e15c56094772227648dc8831fd529ddb59a7ff987cb561b",
+            "trustStatus": "trusted"
+          },
+          {
+            "key": "<CODEX_HOME>/hooks.json:user_prompt_submit:0:0",
+            "eventName": "userPromptSubmit",
+            "handlerType": "command",
+            "command": "<HOOK_COMMAND>",
+            "async": false,
+            "matcher": null,
+            "timeoutSec": 3,
+            "statusMessage": null,
+            "additionalContextLimit": 0,
+            "sourcePath": "<CODEX_HOME>/hooks.json",
+            "source": "user",
+            "pluginId": null,
+            "environmentId": null,
+            "displayOrder": 2,
+            "enabled": true,
+            "isManaged": false,
+            "currentHash": "sha256:bd59807fcd64e65ebd1b35ce17b7fd182611fb438fec6dd11f265b8a15dbc1fe",
+            "trustStatus": "trusted"
+          },
+          {
+            "key": "<CODEX_HOME>/hooks.json:stop:0:0",
+            "eventName": "stop",
+            "handlerType": "command",
+            "command": "<HOOK_COMMAND>",
+            "async": false,
+            "matcher": null,
+            "timeoutSec": 3,
+            "statusMessage": null,
+            "additionalContextLimit": null,
+            "sourcePath": "<CODEX_HOME>/hooks.json",
+            "source": "user",
+            "pluginId": null,
+            "environmentId": null,
+            "displayOrder": 3,
+            "enabled": true,
+            "isManaged": false,
+            "currentHash": "sha256:d0d21ced6fcb4ac6da91ac939aab7deb65b5c50cf5d78c3f77cb1d44e362cd05",
+            "trustStatus": "trusted"
+          }
+        ],
+        "warnings": [],
+        "errors": []
+      }
+    ]
+  },
+  "notifications": [
+    {
+      "method": "hook/started",
+      "params": {
+        "threadId": "01a1d027-2b3a-79c2-9d1b-3e3836256c5a",
+        "turnId": "01a1d027-2b4a-7e92-9c81-9486a81fe3a2",
+        "run": {
+          "id": "session-start:1:<CODEX_HOME>/hooks.json",
+          "eventName": "sessionStart",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "thread",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 1,
+          "status": "running",
+          "statusMessage": null,
+          "startedAt": 1794493590,
+          "completedAt": null,
+          "durationMs": null,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1794493590363
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a1d027-2b3a-79c2-9d1b-3e3836256c5a",
+        "turnId": "01a1d027-2b4a-7e92-9c81-9486a81fe3a2",
+        "run": {
+          "id": "session-start:1:<CODEX_HOME>/hooks.json",
+          "eventName": "sessionStart",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "thread",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 1,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1794493590,
+          "completedAt": 1794493590,
+          "durationMs": 7,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1794493590370
+    },
+    {
+      "method": "hook/started",
+      "params": {
+        "threadId": "01a1d027-2b3a-79c2-9d1b-3e3836256c5a",
+        "turnId": "01a1d027-2b4a-7e92-9c81-9486a81fe3a2",
+        "run": {
+          "id": "user-prompt-submit:2:<CODEX_HOME>/hooks.json",
+          "eventName": "userPromptSubmit",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 2,
+          "status": "running",
+          "statusMessage": null,
+          "startedAt": 1794493590,
+          "completedAt": null,
+          "durationMs": null,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1794493590385
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a1d027-2b3a-79c2-9d1b-3e3836256c5a",
+        "turnId": "01a1d027-2b4a-7e92-9c81-9486a81fe3a2",
+        "run": {
+          "id": "user-prompt-submit:2:<CODEX_HOME>/hooks.json",
+          "eventName": "userPromptSubmit",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 2,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1794493590,
+          "completedAt": 1794493590,
+          "durationMs": 2,
+          "entries": [
+            {
+              "kind": "context",
+              "text": "SYNTHETIC_CONTEXT_CANARY"
+            }
+          ]
+        }
+      },
+      "emittedAtMs": 1794493590387
+    },
+    {
+      "method": "hook/started",
+      "params": {
+        "threadId": "01a1d027-2b3a-79c2-9d1b-3e3836256c5a",
+        "turnId": "01a1d027-2b4a-7e92-9c81-9486a81fe3a2",
+        "run": {
+          "id": "stop:3:<CODEX_HOME>/hooks.json",
+          "eventName": "stop",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 3,
+          "status": "running",
+          "statusMessage": null,
+          "startedAt": 1794493590,
+          "completedAt": null,
+          "durationMs": null,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1794493590430
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a1d027-2b3a-79c2-9d1b-3e3836256c5a",
+        "turnId": "01a1d027-2b4a-7e92-9c81-9486a81fe3a2",
+        "run": {
+          "id": "stop:3:<CODEX_HOME>/hooks.json",
+          "eventName": "stop",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 3,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1794493590,
+          "completedAt": 1794493590,
+          "durationMs": 2,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1794493590432
+    },
+    {
+      "method": "hook/started",
+      "params": {
+        "threadId": "01a1d027-3b11-7c71-a14e-5074deb3a12f",
+        "turnId": "01a1d027-3b20-77e3-9665-6f7d9d35dd55",
+        "run": {
+          "id": "session-start:1:<CODEX_HOME>/hooks.json",
+          "eventName": "sessionStart",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "thread",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 1,
+          "status": "running",
+          "statusMessage": null,
+          "startedAt": 1794493594,
+          "completedAt": null,
+          "durationMs": null,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1794493594418
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a1d027-3b11-7c71-a14e-5074deb3a12f",
+        "turnId": "01a1d027-3b20-77e3-9665-6f7d9d35dd55",
+        "run": {
+          "id": "session-start:1:<CODEX_HOME>/hooks.json",
+          "eventName": "sessionStart",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "thread",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 1,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1794493594,
+          "completedAt": 1794493594,
+          "durationMs": 2,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1794493594421
+    },
+    {
+      "method": "hook/started",
+      "params": {
+        "threadId": "01a1d027-3b11-7c71-a14e-5074deb3a12f",
+        "turnId": "01a1d027-3b20-77e3-9665-6f7d9d35dd55",
+        "run": {
+          "id": "user-prompt-submit:2:<CODEX_HOME>/hooks.json",
+          "eventName": "userPromptSubmit",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 2,
+          "status": "running",
+          "statusMessage": null,
+          "startedAt": 1794493594,
+          "completedAt": null,
+          "durationMs": null,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1794493594422
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a1d027-3b11-7c71-a14e-5074deb3a12f",
+        "turnId": "01a1d027-3b20-77e3-9665-6f7d9d35dd55",
+        "run": {
+          "id": "user-prompt-submit:2:<CODEX_HOME>/hooks.json",
+          "eventName": "userPromptSubmit",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 2,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1794493594,
+          "completedAt": 1794493594,
+          "durationMs": 2,
+          "entries": [
+            {
+              "kind": "context",
+              "text": "SYNTHETIC_CONTEXT_CANARY"
+            }
+          ]
+        }
+      },
+      "emittedAtMs": 1794493594425
+    },
+    {
+      "method": "hook/started",
+      "params": {
+        "threadId": "01a1d027-3b11-7c71-a14e-5074deb3a12f",
+        "turnId": "01a1d027-3b20-77e3-9665-6f7d9d35dd55",
+        "run": {
+          "id": "stop:3:<CODEX_HOME>/hooks.json",
+          "eventName": "stop",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 3,
+          "status": "running",
+          "statusMessage": null,
+          "startedAt": 1794493594,
+          "completedAt": null,
+          "durationMs": null,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1794493594456
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a1d027-3b11-7c71-a14e-5074deb3a12f",
+        "turnId": "01a1d027-3b20-77e3-9665-6f7d9d35dd55",
+        "run": {
+          "id": "stop:3:<CODEX_HOME>/hooks.json",
+          "eventName": "stop",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 3,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1794493594,
+          "completedAt": 1794493594,
+          "durationMs": 2,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1794493594458
+    },
+    {
+      "method": "hook/started",
+      "params": {
+        "threadId": "01a1d027-3b11-7c71-a14e-5074deb3a12f",
+        "turnId": "01a1d027-3b8b-7ae2-93e7-e067f7788ce7",
+        "run": {
+          "id": "pre-compact:0:<CODEX_HOME>/hooks.json",
+          "eventName": "preCompact",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 0,
+          "status": "running",
+          "statusMessage": null,
+          "startedAt": 1794493594,
+          "completedAt": null,
+          "durationMs": null,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1794493594537
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a1d027-3b11-7c71-a14e-5074deb3a12f",
+        "turnId": "01a1d027-3b8b-7ae2-93e7-e067f7788ce7",
+        "run": {
+          "id": "pre-compact:0:<CODEX_HOME>/hooks.json",
+          "eventName": "preCompact",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 0,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1794493594,
+          "completedAt": 1794493594,
+          "durationMs": 2,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1794493594540
+    },
+    {
+      "method": "hook/started",
+      "params": {
+        "threadId": "01a1d027-3b11-7c71-a14e-5074deb3a12f",
+        "turnId": "01a1d027-3bee-7c61-8a52-1f8a8e3d25b7",
+        "run": {
+          "id": "session-start:1:<CODEX_HOME>/hooks.json",
+          "eventName": "sessionStart",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "thread",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 1,
+          "status": "running",
+          "statusMessage": null,
+          "startedAt": 1794493594,
+          "completedAt": null,
+          "durationMs": null,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1794493594633
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a1d027-3b11-7c71-a14e-5074deb3a12f",
+        "turnId": "01a1d027-3bee-7c61-8a52-1f8a8e3d25b7",
+        "run": {
+          "id": "session-start:1:<CODEX_HOME>/hooks.json",
+          "eventName": "sessionStart",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "thread",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 1,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1794493594,
+          "completedAt": 1794493594,
+          "durationMs": 2,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1794493594636
+    },
+    {
+      "method": "hook/started",
+      "params": {
+        "threadId": "01a1d027-3b11-7c71-a14e-5074deb3a12f",
+        "turnId": "01a1d027-3bee-7c61-8a52-1f8a8e3d25b7",
+        "run": {
+          "id": "user-prompt-submit:2:<CODEX_HOME>/hooks.json",
+          "eventName": "userPromptSubmit",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 2,
+          "status": "running",
+          "statusMessage": null,
+          "startedAt": 1794493594,
+          "completedAt": null,
+          "durationMs": null,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1794493594637
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a1d027-3b11-7c71-a14e-5074deb3a12f",
+        "turnId": "01a1d027-3bee-7c61-8a52-1f8a8e3d25b7",
+        "run": {
+          "id": "user-prompt-submit:2:<CODEX_HOME>/hooks.json",
+          "eventName": "userPromptSubmit",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 2,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1794493594,
+          "completedAt": 1794493594,
+          "durationMs": 2,
+          "entries": [
+            {
+              "kind": "context",
+              "text": "SYNTHETIC_CONTEXT_CANARY"
+            }
+          ]
+        }
+      },
+      "emittedAtMs": 1794493594640
+    },
+    {
+      "method": "hook/started",
+      "params": {
+        "threadId": "01a1d027-3b11-7c71-a14e-5074deb3a12f",
+        "turnId": "01a1d027-3bee-7c61-8a52-1f8a8e3d25b7",
+        "run": {
+          "id": "stop:3:<CODEX_HOME>/hooks.json",
+          "eventName": "stop",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 3,
+          "status": "running",
+          "statusMessage": null,
+          "startedAt": 1794493594,
+          "completedAt": null,
+          "durationMs": null,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1794493594675
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a1d027-3b11-7c71-a14e-5074deb3a12f",
+        "turnId": "01a1d027-3bee-7c61-8a52-1f8a8e3d25b7",
+        "run": {
+          "id": "stop:3:<CODEX_HOME>/hooks.json",
+          "eventName": "stop",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "<CODEX_HOME>/hooks.json",
+          "source": "user",
+          "displayOrder": 3,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1794493594,
+          "completedAt": 1794493594,
+          "durationMs": 2,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1794493594678
+    }
+  ],
+  "placement": {
+    "origin": "trusted UserPromptSubmit hookSpecificOutput.additionalContext",
+    "canary": "SYNTHETIC_CONTEXT_CANARY",
+    "placements": [
+      {
+        "requestIndex": 0,
+        "inputIndex": 4,
+        "role": "developer",
+        "item": {
+          "type": "message",
+          "id": "msg_01a1d027-2b78-7420-a876-d5330d265ffd",
+          "role": "developer",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "SYNTHETIC_CONTEXT_CANARY"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

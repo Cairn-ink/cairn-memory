@@ -15,7 +15,7 @@ import { formatFixture } from './format-fixtures.mjs';
 const fixtures = new URL('./fixtures/', import.meta.url);
 const json = async name => JSON.parse(await readFile(new URL(name, fixtures)));
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
-const versions = ['0.163.0', '0.164.0', '0.165.0', '0.166.0'];
+const versions = ['0.163.0', '0.164.0', '0.165.0', '0.166.0', '0.167.0', '0.167.2'];
 const oldMarkers = (await json('binary-0.162.0/format.json')).serdeMarkers;
 const oldFormats = ['a64741d8899f84513232c3145595ed279325abfdf190b7705b94dcb81b14ab1a',
   '66fc10979c1594fdb2ba648983d36f10f2c4c1b33c01afe853ba92925b707b87'];
@@ -36,7 +36,8 @@ function differences(a, b, path = '') {
 }
 const imageChanges = ['/ThreadItem/oneOf/15/anyOf', '/ThreadItem/oneOf/15/description',
   '/ThreadItem/oneOf/15/properties/inputImages', '/ThreadItem/oneOf/15/properties/result', '/ThreadItem/oneOf/15/required'];
-const allowed = version => version === '0.163.0' ? [] : ['/HookEventName/enum', '/ImageGenerationInputImage', ...imageChanges,
+const audioChanges = ['/UserInput/oneOf/3/anyOf', '/UserInput/oneOf/3/properties/url', '/UserInput/oneOf/3/required'];
+const allowed = version => version.startsWith('0.167.') ? audioChanges : version === '0.163.0' ? [] : ['/HookEventName/enum', '/ImageGenerationInputImage', ...imageChanges,
   ...(version === '0.166.0' ? ['/HookMetadata/properties/environmentId', '/HooksListParams/properties/cwds/description',
     '/HooksListParams/properties/threadId', '/ThreadItem/description', '/ThreadItem/oneOf/15/properties/generationId',
     '/ThreadItem/properties', '/ThreadItem/type'] : [])].sort();
@@ -82,7 +83,7 @@ for (const version of versions) test(`Q01–Q04 ${version}: strict markers, exac
     // a claim that the historical strict collector succeeded.
     assert.ok(!oldFormats.includes(fingerprint({ ...evidence, serdeMarkers: oldMarkers })));
   }
-  const previous = await formatFixture('0.162.0');
+  const previous = await formatFixture(version.startsWith('0.167.') ? '0.166.0' : '0.162.0');
   assert.deepEqual(evidence.hooks, previous.hooks); // complete objects and definitions
   assert.deepEqual(differences(previous.appServer, evidence.appServer), allowed(version));
   const refs = new Set();
@@ -94,8 +95,17 @@ for (const version of versions) test(`Q01–Q04 ${version}: strict markers, exac
   assert.equal(manifest.modelCalls, 0); assert.equal(manifest.mockRequests, 13); assert.deepEqual(manifest.unexpected, []);
   assert.equal(manifest.failure, undefined); assert.ok(manifest.exits.every(row => row.code === 0 && row.signal === null));
   for (const [script, digest] of [['probe-codex-rollout.mjs', manifest.scriptSha256], ['codex-probe-isolation.mjs', manifest.isolationScriptSha256],
-    ['probe-codex-seeded-readback.mjs', manifest.seededReadback.scriptSha256], ['freeze-codex-rollout.mjs', manifest.normalization.scriptSha256]])
-    assert.equal(sha(await readFile(new URL('../../../scripts/' + script, import.meta.url))), digest, script);
+    ['probe-codex-seeded-readback.mjs', manifest.seededReadback.scriptSha256], ['freeze-codex-rollout.mjs', manifest.normalization.scriptSha256]]) {
+    let source = await readFile(new URL('../../../scripts/' + script, import.meta.url), 'utf8');
+    if (script === 'probe-codex-seeded-readback.mjs' && !version.startsWith('0.167.')) {
+      // Historical manifests pin the original gate. Reconstruct its exact
+      // bytes; the 0.167 manifests must match the current script unchanged.
+      assert.ok(source.includes('/\\/(0\\.16[3-6]\\.0|0\\.167\\.[02]) /u'));
+      source = source.replace('/\\/(0\\.16[3-6]\\.0|0\\.167\\.[02]) /u', '/\\/(0\\.16[3-6]\\.0) /u')
+        .replace('requires_native_0.163.0_to_0.167.2', 'requires_native_0.163.0_to_0.166.0');
+    }
+    assert.equal(sha(source), digest, script);
+  }
   for (const file of manifest.files) {
     const bytes = await readFile(new URL(file.path, fixtures)); assert.equal(sha(bytes), file.sha256); assert.equal(bytes.length, file.bytes);
     assert.ok(!/\/home\/|\/tmp\/claude|(?:^|["\s])\/(?:tmp|usr|bin|etc)\//mu.test(bytes.toString()), file.path);
@@ -141,6 +151,7 @@ for (const version of versions) test(`Q01–Q04 ${version}: strict markers, exac
   assert.equal(hooks.placement.placements[0].requestIndex, 0);
   assert.match(JSON.stringify(hooks.placement.placements[0].item), /SYNTHETIC_CONTEXT_CANARY/);
   const seeded = await json(`seeded-readback-${version}.json`);
+  assert.equal(seeded.scriptSha256, manifest.seededReadback.scriptSha256);
   assert.deepEqual(seeded.exits.map(row => row.code), [0, 0]); assert.equal(seeded.modelCalls, 0); assert.equal(seeded.mockRequests, 0);
   assert.ok(!seeded.methods.includes('turn/start'));
   for (const [name, phases] of [['partial-final', ['partial_answer', 'final_answer']], ['interrupted', ['partial_answer']], ['unknown', []]])
@@ -150,8 +161,8 @@ for (const version of versions) test(`Q01–Q04 ${version}: strict markers, exac
 test('Q04/Q05 accepted dynamic tool definitions stay nonconversation; unknown creators still need proof', () => {
   const header = version => Buffer.from(JSON.stringify({ type: 'session_meta', payload: { cli_version: version, history_mode: 'paginated', id: 's', source: 'cli' } }));
   for (const version of versions) assert.equal(verifyHeader(header(version), 's'), FORMAT);
-  assert.throws(() => verifyHeader(header('0.167.0'), 's'), /creator_unqualified/);
-  assert.equal(verifyHeader(header('0.167.0'), 's', { qualifiedCreatorVersion: '0.167.0' }), FORMAT);
+  assert.throws(() => verifyHeader(header('0.168.0'), 's'), /creator_unqualified/);
+  assert.equal(verifyHeader(header('0.168.0'), 's', { qualifiedCreatorVersion: '0.168.0' }), FORMAT);
   const context = { sessionId: 's', wireSessionId: 'a'.repeat(64), epoch: 0, start: 0, end: 1 };
   assert.equal(parseLine(Buffer.from(JSON.stringify({ type: 'dynamic_tools_updated', payload: { tools: [{ description: 'Synthetic tool definitions.' }] } })), context).reason, 'non_conversation');
   for (const type of ['hook_started', 'hook_completed', 'context_compacted'])

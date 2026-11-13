@@ -81,7 +81,15 @@
   existing `date` keeps its meaning. Stores without source dates produce the
   same output as before and run no extra statement.
 
-## 0.6.6 — Unreleased
+## 0.6.6 — 2026-11-13
+
+- Raw document and query embeddings now require `--raw-semantic` or an explicit `--context-embedder`; setup discloses that an MCP OpenAI key sends memories and search text to OpenAI for semantic search, up to an estimated US$1 per server run. To keep everything on this computer, don't give the server a key; `--no-context-semantic` only turns off embeddings, and with a key, recall and other model features still send memory text to OpenAI.
+- Codex CLI 0.167.0 and 0.167.2 are now qualified for automatic capture. Earlier installers report `format_changed` for them and keep saving off; rerun setup to pick up the new qualification.
+
+- Local setup reports conversation saving as OFF and exits with code 2 when requested capture is blocked or fails; pending background format qualification reports when saving will start automatically.
+
+- Local capture setup accepts Claude Code's and Codex's own configuration directories when they aren't writable by other users (for example mode 0755).
+- Local capture accepts the additional hook fields that current Claude Code versions send; earlier builds ignored those turns.
 
 - `setup --local` installs automatic plaintext conversation Raw capture by default
   for selected Claude Code and Codex clients, without a key or model calls, in the
@@ -115,12 +123,20 @@
   10,000-message conversation in the concurrent-saving workload described in
   the [local Raw guide](docs/raw-local-journal.md).
 - Several sessions saving at once no longer stop one of them from saving.
-- **Search catches up after saving.** Each turn is saved to the local store as soon as it ends. Raw search covers a newly saved conversation only after the local index reaches it. That indexing runs while Claude Code or Codex has the Cairn MCP server open: a few minutes for about 1,000 saved messages, about an hour for 10,000. While you keep working, each new save restarts the indexing pass, so a conversation saved during a busy session may not be searchable until you pause. Until the index has caught up, newly saved conversations may be missing from results. The coverage report marks such results as partial, but assistants using the memory tool see only the results, so an empty answer then doesn't mean nothing was saved. Memories, and conversations the index already covers, are not affected and stay searchable as before.
+- **Search catches up after saving.** Each turn is saved to the local store as soon as it ends. Raw search covers a newly saved conversation only after the local index reaches it. Raw search builds its index in the background while Cairn is running, at roughly one saved message per second: allow about 15 minutes for 1,000 saved messages and roughly 2 hours for 10,000. After each new saved message it re-checks the whole index (about 6 minutes per 1,000 saved messages). Until a build or re-check finishes, Raw search still returns results but reports partial coverage. While you keep working, each new save restarts the indexing pass, so a conversation saved during a busy session may not be searchable until you pause. Until the index has caught up, newly saved conversations may be missing from results. The coverage report marks such results as partial, but assistants using the memory tool see only the results, so an empty answer then doesn't mean nothing was saved. Memories, and conversations the index already covers, are not affected and stay searchable as before.
   Known limits in this release:
   - While new turns keep arriving, the local MCP server keeps indexing: about one small index write per second and roughly 3% of one CPU core.
   - Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
   - Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.
   - With an embedding model configured, semantic search can still send the search text, and background index maintenance can send stored memory text, to that provider while saving is paused or disabled for that store; fixed in the next release.
+  - With an OpenAI key configured for the MCP server, recall, classify, relate and review requests can still send the query and stored memory text to OpenAI while saving is paused or disabled; fixed in the next release. Installs without a key, and automatic capture, are not affected.
+  - Local setup doesn't support a custom `CLAUDE_CONFIG_DIR` yet: setup stops with "The Claude Code local entry could not be verified." Fixed in the next release.
+  - If `~/.claude` or `~/.codex` (or `CLAUDE_CONFIG_DIR` / `CODEX_HOME`) is a symbolic link, local setup stops without connecting that tool. Fixed in the next release.
+  - macOS with Node from Homebrew: setup records Node's versioned path, so rerun setup after `brew upgrade` updates Node. Fixed in the next release.
+  - Claude Code runs started by scripts or the Agent SDK (for example `claude -p`) are saved like interactive sessions.
+  - Deleting a conversation or forgetting a memory removes that text from Cairn's database at once, and it is never shown again; conversations a forget only hides stay saved until you delete them. Local search index files can keep word lists (and, with semantic search, vectors) from deleted items until background cleanup reaches them. Cleanup runs only while Cairn is running, may not reach them while new conversations keep being saved, and never covers index files for a search setup you no longer use. As with most databases, deleted text can also remain in unused file space until it is overwritten.
+  - Automatic saving runs on Linux and WSL. On macOS, setup connects Claude Code and Codex and the memory tools work, but automatic saving doesn't start yet: setup reports conversation saving OFF (runtime_unavailable) and exits with code 2.
+  - When capture resumes after being turned off, Cairn reads up to the last 4 KiB of the conversation file, and for Codex up to the first 4 KiB to find its session header; some of those bytes may have been written while capture was off. They are used only to identify the session and check the file wasn't replaced, never saved or sent.
   - A later release indexes newly saved conversations first.
 - Default reads keep the Raw excerpts they already validated when a read reaches
   its time limit, marked partial, instead of dropping them.
@@ -173,7 +189,7 @@
   Unknown event times are handled conservatively; both Raw search intents hide
   fenced sessions. Hosted selections retain their existing behavior and schema.
 
-## 0.6.5 — Unreleased
+## 0.6.5 — 2026-11-09
 
 - 0.6.4 was prepared but not published; its changes ship in 0.6.5.
 - Hosted Codex SessionStart shows a short notice when format qualification
