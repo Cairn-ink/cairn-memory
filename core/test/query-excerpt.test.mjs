@@ -158,5 +158,8 @@ test('final label shortcut proves whole prefix tokens using original UTF-16 boun
     ['𐐀', '😀'.repeat(119) + '𐐨 ' + '.'.repeat(200)],
     ['alpha', '.'.repeat(115) + 'alphabet ' + '.'.repeat(150) + 'alpha'],
     ['𐐀', '.'.repeat(119) + '𐐨x ' + '.'.repeat(150) + '𐐨'],
+    // Distinct padding: a prefix-only token scan would return the first window here.
+    ['alpha', '!'.repeat(115) + 'alphabet ' + '.'.repeat(150) + 'alpha'],
+    ['𐐀', '!'.repeat(119) + '𐐨x ' + '.'.repeat(150) + '𐐨'],
   ]) check(query, body);
 });
