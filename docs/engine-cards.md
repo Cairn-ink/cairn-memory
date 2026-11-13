@@ -44,6 +44,10 @@ uses the ordinary model port. A memory contains `id`, `revision`, `content`,
 and `text`; each is at most 400 units, with at most 8,000 units per request.
 When available, an additional `relations` array supplies up to 192 same-topic
 edges; `supersedes` points from a newer claim to an older claim.
+`maintainCards` uses Memories only by default: omitted or `false` `rawSpans`
+opens no Raw and sends `rawSpans: []`; only `rawSpans: true` includes excerpts.
+The local MCP server opts in only with `rawSemantic: true` and
+`contextSemantic !== false`; Card generation remains available in either mode.
 Unreadable spans are omitted. A missing or denied source cannot authorize a
 Card even when an optional Raw read fails.
 

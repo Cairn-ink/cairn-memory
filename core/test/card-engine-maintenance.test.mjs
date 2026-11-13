@@ -180,11 +180,11 @@ test('model deadline is a budget result and does not permanently refuse the next
   let rawWaiting = true;
   const worker = createEngineCardMaintenance({ model: raw.model, storage: { ...canonical,
     rawSpans: () => rawWaiting ? new Promise(() => {}) : [] } });
-  const rawExpired = await worker.maintain({ namespace: ns, budget: { maxMs: 250 } });
+  const rawExpired = await worker.maintain({ namespace: ns, budget: { maxMs: 250 }, rawSpans: true });
   assert.equal(rawExpired.state, 'deadline'); assert.equal(rawExpired.reason, 'deadline');
   assert.equal(raw.model.calls.length, 0);
   rawWaiting = false;
-  const rawRecovered = await worker.maintain({ namespace: ns, budget: { maxMs: 5000 } });
+  const rawRecovered = await worker.maintain({ namespace: ns, budget: { maxMs: 5000 }, rawSpans: true });
   assert.equal(rawRecovered.built.length, 1, JSON.stringify(rawRecovered));
 });
 

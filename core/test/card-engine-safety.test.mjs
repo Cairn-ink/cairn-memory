@@ -95,7 +95,7 @@ test('engine generation reads bounded receipt Raw spans; exclusion revokes the g
   const memories = f.db.prepare('SELECT id FROM memories ORDER BY id').all(); assert.equal(memories.length, 8);
   memories.forEach((m, i) => f.db.prepare('UPDATE memories SET created_at=? WHERE id=?')
     .run(new Date(Date.UTC(2026, 0, i * 3 + 1)).toISOString(), m.id));
-  const pass = ok(await f.core.maintainCards({ namespace: rawNs, budget: { maxMs: 10000 } }));
+  const pass = ok(await f.core.maintainCards({ namespace: rawNs, budget: { maxMs: 10000 }, rawSpans: true }));
   assert.equal(pass.built.length, 1, JSON.stringify(pass));
   assert.equal(model.calls[0].rawSpans.length, 8);
   assert.ok(model.calls[0].rawSpans.every(span => span.text.length <= 400));
