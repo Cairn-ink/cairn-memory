@@ -3,7 +3,7 @@
 ## 0.6.7 — Unreleased
 
 - Raw search now opens on macOS (directory link counts differ there).
-- Known limit: When capture resumes after being turned off, Cairn reads up to the last 4 KiB written while it was off, only to check the file wasn't replaced; those bytes are hashed, never saved or sent.
+- Known limit: When capture resumes after being turned off, Cairn reads up to the last 4 KiB of the conversation file, and for Codex up to the first 4 KiB to find its session header; some of those bytes may have been written while capture was off. They are used only to identify the session and check the file wasn't replaced, never saved or sent.
 
 - Claude Code automatic saving now works on macOS with Node ≥22.16. Linux and WSL keep the existing transcript opener; the hosted runtime is unchanged.
 - Codex automatic saving on macOS isn't supported yet; the memory tools work. To set up only Claude Code, run `npx @cairn-ink/memory setup --local --client claude`.

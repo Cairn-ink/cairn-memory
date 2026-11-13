@@ -82,7 +82,7 @@ If turning it off was interrupted, status asks you to run the off command again.
 User-owned hardlinked transcript files are accepted, as on Linux.
 
 Known limits in this release:
-- When capture resumes after being turned off, Cairn reads up to the last 4 KiB written while it was off, only to check the file wasn't replaced; those bytes are hashed, never saved or sent.
+- When capture resumes after being turned off, Cairn reads up to the last 4 KiB of the conversation file, and for Codex up to the first 4 KiB to find its session header; some of those bytes may have been written while capture was off. They are used only to identify the session and check the file wasn't replaced, never saved or sent.
 - On macOS, a process running as the same user or root can still redirect an open through precisely timed directory swaps during verification, without crossing a privilege boundary.
 - While new turns keep arriving, the local MCP server keeps indexing: about one small index write per second and roughly 3% of one CPU core.
 - Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
@@ -171,7 +171,7 @@ Codex 的 hooks 核准提示。執行 `--no-capture` 或 `config --local-capture
 和 Linux 一樣，使用者擁有的對話檔案可以是硬連結。
 
 本版已知限制：
-- 從關閉狀態恢復擷取時，Cairn 會讀取關閉期間寫入的最後至多 4 KiB，只用來確認檔案沒有被替換；這些位元組只做雜湊，不會保存或送出。
+- 從關閉狀態恢復擷取時，Cairn 會讀取對話檔最後至多 4 KiB，Codex 還會讀取開頭至多 4 KiB 來找出 session 標頭；其中一部分可能是關閉期間寫入的。這些位元組只用來辨識 session、確認檔案沒有被替換，不會保存或送出。
 - 在 macOS，同一使用者或 root 的程式仍可能在驗證期間精準切換目錄來重新導向開啟的檔案，但不會跨越權限邊界。
 - 只要新的對話持續進來，本機 MCP 伺服器就會持續建索引：大約每秒一次小量索引寫入，約佔一個 CPU 核心的 3%。
 - 約 50,000 則訊息以上的歷史可能永遠建不完索引，搜尋會一直回報 partial。
