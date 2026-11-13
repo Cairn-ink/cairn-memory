@@ -9,7 +9,7 @@ const success = (value) => ({ ok: true, value, evidenceTrust: "untrusted-data-no
 export async function requestJson({ endpoint, token, path, body, signal, assertCurrent = () => {} }) {
   signal?.throwIfAborted();
   const options = { method: body === undefined ? "GET" : "POST", redirect: "error", signal,
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: path === "/api/mcp" ? "application/json, text/event-stream" : "application/json",
       "User-Agent": "cairn-openclaw/0.1.0", ...(path === "/api/mcp" ? { "MCP-Protocol-Version": MCP_PROTOCOL } : {}) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }) };
   assertCurrent();

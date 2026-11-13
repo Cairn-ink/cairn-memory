@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { mkdir, rmdir, unlink, lstat } from "node:fs/promises";
 import { createSecretFileAtomic } from "openclaw/plugin-sdk/secret-file";
-import { DEFAULT_ENDPOINT, DEFAULT_TIMEOUT_MS, OFF_SWITCH, recallPrompt, worstCaseBlockingMs, endpointOrigin, mergeSetup, timeoutValue } from "./config.mjs";
+import { getMemoryCapabilityRegistration } from "openclaw/plugin-sdk/memory-host-core";
+import { DEFAULT_ENDPOINT, DEFAULT_TIMEOUT_MS, OFF_SWITCH, activeMemoryBudget, defaultRecallTools, recallPrompt, worstCaseBlockingMs, endpointOrigin, mergeSetup, timeoutValue } from "./config.mjs";
 import { checkCredential } from "./hosted.mjs";
 import { createTerminal } from "./terminal.mjs";
 export async function runSetup(api, { io, timeoutMs = api.pluginConfig?.activeMemoryTimeoutMs ?? DEFAULT_TIMEOUT_MS } = {}) {
@@ -15,11 +16,15 @@ export async function runSetup(api, { io, timeoutMs = api.pluginConfig?.activeMe
     const checked = await checkCredential(endpoint, token);
     if (!checked.ok) { io.print(checked.message); return false; }
     io.print("Memory-only token accepted.");
-    const answer = await io.ask(recallPrompt(timeoutMs));
+    const snapshot = api.runtime.config.current();
+    const budget = activeMemoryBudget(snapshot, timeoutMs);
+    const answer = await io.ask(recallPrompt(budget.timeoutMs, budget.setupGraceTimeoutMs));
     io.print(OFF_SWITCH);
     if (!["", "y", "yes", "n", "no"].includes(answer.trim().toLowerCase())) throw 0;
     const automatic = !["n", "no"].includes(answer.trim().toLowerCase());
-    io.print(`Recall-work budget: ${timeoutMs} ms; documented worst-case blocking: ${worstCaseBlockingMs(timeoutMs)} ms.`);
+    const memoryRegistration = automatic ? getMemoryCapabilityRegistration() : undefined;
+    if (automatic && snapshot.plugins?.entries?.["active-memory"]?.config?.toolsAllow === undefined) defaultRecallTools(snapshot, memoryRegistration);
+    io.print(`Recall-work budget: ${budget.timeoutMs} ms; documented worst-case blocking: ${worstCaseBlockingMs(budget.timeoutMs, budget.setupGraceTimeoutMs)} ms.`);
     // Unique immutable secret + one transactional host config write. Existing secrets are never overwritten.
     const root = api.runtime.state.resolveStateDir();
     directory = join(root, "cairn-secrets");
@@ -36,19 +41,23 @@ export async function runSetup(api, { io, timeoutMs = api.pluginConfig?.activeMe
     secretCreated = true;
     await api.runtime.config.mutateConfigFile({
       afterWrite: { mode: "none", reason: "Local Cairn setup: operator restarts the Gateway after completion." },
-      mutate(draft) { mergeSetup(draft, { endpoint, provider, secretPath, automatic, timeoutMs }); },
+      mutate(draft) {
+        if (automatic && JSON.stringify(activeMemoryBudget(draft, timeoutMs)) !== JSON.stringify(budget)) throw new Error("cairn_setup_conflict");
+        mergeSetup(draft, { endpoint, provider, secretPath, automatic, timeoutMs, memoryRegistration });
+      },
     });
     published = true;
     io.print("Cairn configured through OpenClaw's transactional config API. Restart the Gateway and start a new session.");
     io.print("Revoke the token at cairn.ink → Settings → Connections.");
     return true;
-  } catch {
+  } catch (error) {
     // Output failure after an accepted config write must never remove its live credential.
     if (published) return true;
     let rollbackOk = true;
     if (secretCreated) try { await unlink(secretPath); } catch { rollbackOk = false; }
     if (directoryCreated) try { await rmdir(directory); } catch { rollbackOk = false; }
-    const message = rollbackOk ? "Cairn setup failed. Nothing saved." :
+    const message = rollbackOk ? (error?.message === "cairn_memory_provider_unresolved" ?
+      "Cannot determine the selected memory provider's recall tools. Nothing saved; run setup with that provider loaded or configure Active Memory toolsAllow explicitly." : "Cairn setup failed. Nothing saved.") :
       "Cairn setup failed; secret cleanup failed. Check the private cairn-secrets directory before retrying.";
     if (io) io.print(message); else process.stderr.write("Cairn setup needs a terminal with hidden input. Nothing saved.\n");
     return false;

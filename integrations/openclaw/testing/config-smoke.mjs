@@ -12,7 +12,7 @@ const server = createServer((_req, res) => { res.setHeader("Content-Type", "appl
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 try {
   const answers = [`http://127.0.0.1:${server.address().port}`, "synthetic-memory-token", ""];
-  const ok = await runSetup({ runtime: { state: { resolveStateDir: () => process.env.OPENCLAW_STATE_DIR }, config: { mutateConfigFile } } },
+  const ok = await runSetup({ runtime: { state: { resolveStateDir: () => process.env.OPENCLAW_STATE_DIR }, config: { mutateConfigFile, current: () => ({}) } } },
     { io: { ask: async (prompt, hidden) => { process.stdout.write(prompt + (hidden ? " [REDACTED]" : "") + "\n"); return answers.shift(); },
       print: (text) => process.stdout.write(text + "\n") } });
   if (!ok) process.exitCode = 1;

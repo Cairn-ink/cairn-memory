@@ -10,7 +10,7 @@ const argsFor = (name) => name === TOOLS[0] ? { query: "preferences" } :
 function host(state) {
   const registrations = [], cli = [];
   plugin.register({ registerTool: (factory, options) => registrations.push({ factory, options }),
-    registerCli: (...args) => cli.push(args) });
+    registerCli: (...args) => cli.push(args), runtime: { state: { resolveStateDir: () => state.root } } });
   return { registrations, cli, config: { plugins: { entries: { "cairn-memory": { config: { endpoint: state.endpoint, token: TOKEN } } } } } };
 }
 test("SDK entry, static metadata, factories and absent/conversation audiences make zero requests", async (t) => {
@@ -41,10 +41,11 @@ test("owner-private factory uses runtime SecretRef materialization, Bearer auth 
     assert.deepEqual(cloud.events.slice(-2), ["invocation", "audience"]);
     assert.ok(!JSON.stringify(result).includes(TOKEN));
   }
-  assert.equal(cloud.requests.length, 5);
+  assert.equal(cloud.requests.length, 8);
   assert.ok(cloud.requests.every((x) => x.headers.authorization === `Bearer ${TOKEN}`));
   const rpc = cloud.requests.filter((x) => x.path === "/api/mcp");
   assert.ok(rpc.every((x) => x.headers["mcp-protocol-version"] === "2025-06-18"));
+  assert.ok(rpc.every((x) => x.headers.accept === "application/json, text/event-stream"));
   assert.equal(rpc[0].body.params.clientInfo.name, "cairn-openclaw");
   assert.equal(rpc[1].body.params.name, "remember_memory");
 });
@@ -179,4 +180,106 @@ test("redaction covers JSON-escaped credentials and success object keys", async 
   cloud.toolResult = { isError: false, structuredContent: { [token]: token } };
   const result = await createHostedClient({ endpoint: cloud.endpoint, token }).call(TOOLS[1], argsFor(TOOLS[1]), context(cloud));
   assert.deepEqual(result.value, { "[REDACTED]": "[REDACTED]" });
+});
+
+test("MCP fake rejects either missing Accept type, including initialize", async (t) => {
+  const cloud = await fakeCloud(t);
+  for (const accept of ["application/json", "text/event-stream", "*/*"]) {
+    const response = await fetch(cloud.endpoint + "/api/mcp", { method: "POST", headers: { Accept: accept },
+      body: JSON.stringify({ method: "initialize" }) });
+    assert.equal(response.status, 406); await response.arrayBuffer();
+  }
+});
+function recallTool(cloud) {
+  const shim = host(cloud), ctx = context(cloud);
+  ctx.getRuntimeConfig = () => shim.config;
+  return shim.registrations[0].factory.create(ctx);
+}
+const recallRequests = (cloud) => cloud.requests.filter((request) => request.path === "/api/memory/recall");
+test("paused automatic and explicit recalls send no query; resumed recall returns", async (t) => {
+  const cloud = await fakeCloud(t), tool = recallTool(cloud);
+  cloud.pauseValue = { enforced: true, paused: true, generation: 1 };
+  for (const callId of ["automatic", "explicit"]) {
+    const result = await tool.execute(callId, argsFor(TOOLS[0]));
+    assert.equal(result.details.ok, true); assert.equal(result.content[0].text, "");
+    assert.equal(recallRequests(cloud).length, 0);
+  }
+  assert.ok(cloud.requests.every((request) => request.path === "/api/memory/pause-state" && request.body === undefined));
+  cloud.pauseValue = { enforced: true, paused: false, generation: 1 };
+  const result = await tool.execute("resumed", argsFor(TOOLS[0]));
+  assert.match(result.content[0].text, /Prefer small/); assert.equal(recallRequests(cloud).length, 1);
+});
+for (const mode of ["http", "invalid", "unenforced", "missing-field", "regression"]) test(`pause observation ${mode} withholds recall`, async (t) => {
+  const cloud = await fakeCloud(t), tool = recallTool(cloud);
+  if (mode === "regression") {
+    cloud.pauseValue.generation = 2;
+    await tool.execute("establish", argsFor(TOOLS[0])); cloud.requests.length = 0;
+    cloud.pauseValue.generation = 1;
+  } else if (mode === "http") cloud.pauseStatus = 503;
+  else if (mode === "invalid") cloud.pauseValue.generation = "invalid";
+  else if (mode === "unenforced") cloud.pauseValue.enforced = false;
+  else delete cloud.pauseValue.paused;
+  const result = await tool.execute("call", argsFor(TOOLS[0]));
+  assert.equal(result.content[0].text, ""); assert.equal(recallRequests(cloud).length, 0);
+});
+test("pause changing before dispatch or output withholds query or recalled data", async (t) => {
+  for (const boundary of ["dispatch", "output"]) {
+    const cloud = await fakeCloud(t), tool = recallTool(cloud);
+    let observations = 0;
+    cloud.beforeReply = (op) => {
+      if (op === "/api/memory/pause-state" && ++observations === (boundary === "dispatch" ? 2 : 3)) {
+        cloud.pauseValue = { enforced: true, paused: true, generation: 1 };
+      }
+    };
+    assert.equal((await tool.execute("call", argsFor(TOOLS[0]))).content[0].text, "");
+    assert.equal(recallRequests(cloud).length, boundary === "dispatch" ? 0 : 1);
+  }
+});
+test("stale authority before pause observation sends nothing", async (t) => {
+  const cloud = await fakeCloud(t), tool = recallTool(cloud);
+  cloud.staleAudience = true;
+  await tool.execute("call", argsFor(TOOLS[0]));
+  assert.equal(cloud.requests.length, 0);
+});
+test("explicit remember and forget mirror direct MCP while paused", async (t) => {
+  const cloud = await fakeCloud(t), shim = host(cloud), ctx = context(cloud);
+  ctx.getRuntimeConfig = () => shim.config;
+  cloud.pauseValue = { enforced: true, paused: true, generation: 1 };
+  const remember = shim.registrations[1].factory.create(ctx), forget = shim.registrations[2].factory.create(ctx);
+  assert.deepEqual((await remember.execute("explicit", argsFor(TOOLS[1]))).details, failure("cairn_tool_failed"));
+  assert.equal((await forget.execute("explicit", argsFor(TOOLS[2]))).details.ok, true);
+  assert.equal(cloud.requests.length, 4);
+  assert.ok(cloud.requests.every((request) => request.path === "/api/mcp"));
+});
+test("off CLI removes only Cairn recall, preserving Active Memory and agent grants", async () => {
+  const { Command } = await import("commander");
+  let registrar;
+  const draft = { plugins: { entries: { "active-memory": { enabled: true,
+    config: { toolsAllow: ["memory_search", TOOLS[0], "memory_get"], agents: ["main", "work"] } } } },
+    agents: { entries: { main: { tools: { alsoAllow: TOOLS } } } } };
+  plugin.register({ registerTool() {}, registerCli: (value) => { registrar = value; }, runtime: { config: {
+    async mutateConfigFile({ mutate }) { mutate(draft); },
+  } } });
+  const expected = structuredClone(draft); expected.plugins.entries["active-memory"].config.toolsAllow = ["memory_search", "memory_get"];
+  const program = new Command(); registrar({ program });
+  await program.parseAsync(["cairn", "auto-recall", "off"], { from: "user" });
+  assert.deepEqual(draft, expected);
+});
+
+test("observer state is private and unsafe plugin state withholds before network", async (t) => {
+  const { mkdir, stat, readdir, readFile } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  const cloud = await fakeCloud(t), tool = recallTool(cloud);
+  await tool.execute("call", argsFor(TOOLS[0]));
+  const root = join(cloud.root, "plugins", "cairn-memory");
+  assert.equal((await stat(root)).mode & 0o777, 0o700);
+  const observations = join(root, "hosted-pause");
+  const files = await readdir(observations);
+  assert.equal(files.length, 1);
+  assert.equal((await stat(join(observations, files[0]))).mode & 0o777, 0o600);
+  assert.deepEqual(JSON.parse(await readFile(join(observations, files[0]))), cloud.pauseValue);
+  const unsafe = await fakeCloud(t);
+  await mkdir(join(unsafe.root, "plugins", "cairn-memory"), { recursive: true, mode: 0o755 });
+  assert.equal((await recallTool(unsafe).execute("call", argsFor(TOOLS[0]))).content[0].text, "");
+  assert.equal(unsafe.requests.length, 0);
 });

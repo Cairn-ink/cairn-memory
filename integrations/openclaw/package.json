@@ -7,7 +7,7 @@
   "license": "Apache-2.0",
   "engines": { "node": ">=22.16.0" },
   "peerDependencies": { "openclaw": "2026.11.3" },
-  "files": ["src/", "openclaw.plugin.json", "README.md"],
+  "files": ["src/", "lib/", "openclaw.plugin.json", "README.md"],
   "openclaw": {
     "extensions": ["./src/index.mjs"],
     "compat": { "pluginApi": ">=2026.11.3" },

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { readSecretFile } from "openclaw/plugin-sdk/secret-file";
 import { runSetup } from "../src/setup.mjs";
 import { createTerminal } from "../src/terminal.mjs";
-import { configSchema, DEFAULT_TIMEOUT_MS, endpointOrigin, mergeSetup, OFF_SWITCH, PLUGIN_ID, RECALL_PROMPT, recallPrompt, TOOLS } from "../src/config.mjs";
+import { configSchema, DEFAULT_TIMEOUT_MS, defaultRecallTools, endpointOrigin, mergeSetup, removeAutomaticRecall, OFF_SWITCH, PLUGIN_ID, RECALL_PROMPT, recallPrompt, TOOLS } from "../src/config.mjs";
 import { checkCredential } from "../src/hosted.mjs";
 import { fakeCloud, TOKEN } from "./cloud.mjs";
 async function fixture(t, initial = {}) {
@@ -24,6 +24,7 @@ async function fixture(t, initial = {}) {
     }
     return answers.shift(); }, print: (text) => output.push(text) };
   const api = { runtime: { state: { resolveStateDir: () => root }, config: {
+    current: () => initial,
     async mutateConfigFile({ mutate, afterWrite }) {
       assert.equal(afterWrite.mode, "none");
       const draft = JSON.parse(await readFile(configPath, "utf8"));
@@ -39,7 +40,7 @@ test("default recall prompt pins the configured 5000 ms default to the documente
   assert.equal(DEFAULT_TIMEOUT_MS, 5000);
   assert.equal(configSchema.properties.activeMemoryTimeoutMs.default, DEFAULT_TIMEOUT_MS);
   assert.equal(manifest.configSchema.properties.activeMemoryTimeoutMs.default, DEFAULT_TIMEOUT_MS);
-  assert.equal(recallPrompt(DEFAULT_TIMEOUT_MS), "Turn on automatic recall? It makes one extra call to your model before each reply in direct chats, using your usage; it can add up to about 8 s. [Y/n]");
+  assert.equal(recallPrompt(DEFAULT_TIMEOUT_MS), "Turn on automatic recall? It runs extra calls to your model before each reply in direct chats, using your usage; it can add up to about 8 s. [Y/n]");
   assert.equal(RECALL_PROMPT, recallPrompt(DEFAULT_TIMEOUT_MS));
 });
 test("setup validates before writes, asks exact cost prompt default yes, persists only a private file SecretRef", async (t) => {
@@ -62,7 +63,7 @@ test("setup validates before writes, asks exact cost prompt default yes, persist
   assert.equal(policy.profile, "coding"); assert.deepEqual(policy.deny, ["exec"]);
   assert.deepEqual(config.plugins.slots, { memory: "memory-core" });
   assert.deepEqual(config.plugins.entries["active-memory"].config, { agents: ["main"], mode: "always",
-    allowedChatTypes: ["direct"], queryMode: "message", toolsAllow: [TOOLS[0]], timeoutMs: 5000, setupGraceTimeoutMs: 0 });
+    allowedChatTypes: ["direct"], queryMode: "message", toolsAllow: ["memory_search", "memory_get", TOOLS[0]], timeoutMs: 5000, setupGraceTimeoutMs: 0 });
   assert.ok(!f.output.join("\n").includes(TOKEN));
   t.diagnostic("Setup transcript (credential redacted):\n" + f.output.map((line) => line === "Memory-only token:" ? line + " [REDACTED; hidden input]" : line).join("\n"));
 });
@@ -73,16 +74,15 @@ test("existing allow is merged without alsoAllow, explicit no and timeout option
   const config = JSON.parse(await readFile(f.configPath));
   assert.deepEqual(config.agents.entries.main.tools.allow, ["existing", ...TOOLS]);
   assert.equal(config.agents.entries.main.tools.alsoAllow, undefined);
-  assert.equal(config.plugins.entries["active-memory"].enabled, false);
-  assert.equal(config.plugins.entries["active-memory"].config.timeoutMs, 2500);
-  assert.equal(f.asks[2].prompt, "Turn on automatic recall? It makes one extra call to your model before each reply in direct chats, using your usage; it can add up to about 5.5 s. [Y/n]");
+  assert.equal(config.plugins.entries["active-memory"], undefined);
+  assert.equal(f.asks[2].prompt, "Turn on automatic recall? It runs extra calls to your model before each reply in direct chats, using your usage; it can add up to about 5.5 s. [Y/n]");
   assert.ok(f.output.includes("Recall-work budget: 2500 ms; documented worst-case blocking: 5500 ms."));
 });
 test("setup derives recall prompt latency from the configured plugin timeout", async (t) => {
   const f = await fixture(t);
   f.api.pluginConfig = { activeMemoryTimeoutMs: 12000 };
   assert.equal(await runSetup(f.api, { io: f.io }), true);
-  assert.equal(f.asks[2].prompt, "Turn on automatic recall? It makes one extra call to your model before each reply in direct chats, using your usage; it can add up to about 15 s. [Y/n]");
+  assert.equal(f.asks[2].prompt, "Turn on automatic recall? It runs extra calls to your model before each reply in direct chats, using your usage; it can add up to about 15 s. [Y/n]");
   assert.equal(f.output[f.output.indexOf(f.asks[2].prompt) + 1], OFF_SWITCH);
 });
 for (const [label, change] of [
@@ -167,4 +167,59 @@ test("output failure after accepted publication keeps the committed credential",
   assert.equal(await runSetup(f.api, { io: f.io }), true);
   const config = JSON.parse(await readFile(f.configPath));
   assert.equal(await readSecretFile(Object.values(config.secrets.providers)[0].path, "credential"), TOKEN);
+});
+
+test("review merge scenario preserves existing Active Memory for yes, no, and off", () => {
+  const active = { enabled: false, config: { agents: ["main", "work"], mode: "escalate", queryMode: "recent",
+    timeoutMs: 15000, setupGraceTimeoutMs: 30000, allowedChatTypes: ["direct", "group"], toolsAllow: ["memory_search"] } };
+  const options = { endpoint: "https://cairn.ink", provider: "cairn-test", secretPath: "/synthetic/token", timeoutMs: 5000 };
+  for (const automatic of [true, false]) {
+    const draft = { plugins: { entries: { "active-memory": structuredClone(active) } } };
+    const before = JSON.stringify(draft.plugins.entries["active-memory"]);
+    mergeSetup(draft, { ...options, automatic });
+    if (!automatic) assert.equal(JSON.stringify(draft.plugins.entries["active-memory"]), before);
+    else {
+      assert.deepEqual(draft.plugins.entries["active-memory"], { enabled: true,
+        config: { ...active.config, toolsAllow: ["memory_search", TOOLS[0]] } });
+      const withoutCairn = structuredClone(draft);
+      withoutCairn.plugins.entries["active-memory"].config.toolsAllow = ["memory_search"];
+      removeAutomaticRecall(draft);
+      assert.deepEqual(draft, withoutCairn);
+      removeAutomaticRecall(draft); assert.deepEqual(draft, withoutCairn);
+    }
+  }
+});
+test("setup discloses the effective existing timeout and setup grace", async (t) => {
+  const initial = { plugins: { entries: { "active-memory": { config: { agents: ["work"],
+    timeoutMs: 15000, setupGraceTimeoutMs: 30000 } } } } };
+  const f = await fixture(t, initial);
+  assert.equal(await runSetup(f.api, { io: f.io }), true);
+  assert.equal(f.asks[2].prompt, recallPrompt(15000, 30000));
+  assert.match(f.asks[2].prompt, /about 48 s/);
+  const active = JSON.parse(await readFile(f.configPath)).plugins.entries["active-memory"];
+  assert.deepEqual(active.config.agents, ["work", "main"]);
+  assert.equal(active.config.timeoutMs, 15000); assert.equal(active.config.setupGraceTimeoutMs, 30000);
+});
+test("no leaves an existing Active Memory entry byte-identical and never creates a missing one", async (t) => {
+  const active = { enabled: true, config: { agents: ["work"], mode: "escalate", toolsAllow: ["memory_search"] } };
+  const f = await fixture(t, { plugins: { entries: { "active-memory": active } } });
+  f.answers[2] = "n";
+  const before = JSON.stringify(active);
+  assert.equal(await runSetup(f.api, { io: f.io }), true);
+  assert.equal(JSON.stringify(JSON.parse(await readFile(f.configPath)).plugins.entries["active-memory"]), before);
+});
+test("default recall tools follow the selected provider capability or documented fallback", () => {
+  assert.deepEqual(defaultRecallTools({}), ["memory_search", "memory_get"]);
+  assert.deepEqual(defaultRecallTools({ plugins: { slots: { memory: "memory-lancedb" } } }), ["memory_recall"]);
+  const config = { plugins: { slots: { memory: "custom-memory" } } };
+  assert.deepEqual(defaultRecallTools(config, { pluginId: "custom-memory", capability: { recallToolNames: ["custom_search", "custom_get"] } }), ["custom_search", "custom_get"]);
+  assert.throws(() => defaultRecallTools(config, { pluginId: "other", capability: { recallToolNames: ["wrong"] } }), /provider_unresolved/);
+  assert.deepEqual(defaultRecallTools(config, { pluginId: "custom-memory", capability: {} }), ["memory_search", "memory_get"]);
+});
+test("unknown provider without a loaded capability refuses setup before writing", async (t) => {
+  const f = await fixture(t, { plugins: { slots: { memory: "custom-memory" } } });
+  assert.equal(await runSetup(f.api, { io: f.io }), false);
+  assert.equal(await readFile(f.configPath, "utf8"), f.initialBytes);
+  assert.deepEqual(await readdir(f.root), ["openclaw.json"]);
+  assert.ok(f.output.some((line) => line.startsWith("Cannot determine")));
 });

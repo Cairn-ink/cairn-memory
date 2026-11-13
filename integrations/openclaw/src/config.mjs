@@ -1,13 +1,16 @@
 export const PLUGIN_ID = "cairn-memory";
 export const DEFAULT_ENDPOINT = "https://cairn.ink";
 export const TOOLS = ["cairn_recall_memory", "cairn_remember_memory", "cairn_forget_memory"];
-export const OFF_SWITCH = "openclaw config set plugins.entries.active-memory.enabled false";
+export const OFF_SWITCH = "openclaw cairn auto-recall off";
 export const DEFAULT_TIMEOUT_MS = 5000;
 export const RECALL_PROMPT = recallPrompt();
-// OpenClaw recommended-setup: timeout + setup grace (setup sets 0) + 1500 ms preflight + 1500 ms settlement.
-export function worstCaseBlockingMs(timeoutMs = DEFAULT_TIMEOUT_MS) { return timeoutValue(timeoutMs) + 3000; }
-export function recallPrompt(timeoutMs = DEFAULT_TIMEOUT_MS) {
-  return `Turn on automatic recall? It makes one extra call to your model before each reply in direct chats, using your usage; it can add up to about ${worstCaseBlockingMs(timeoutMs) / 1000} s. [Y/n]`;
+// OpenClaw recommended-setup: timeout + setup grace + 1500 ms preflight + 1500 ms settlement.
+export function worstCaseBlockingMs(timeoutMs = DEFAULT_TIMEOUT_MS, setupGraceTimeoutMs = 0) {
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 250 || !Number.isInteger(setupGraceTimeoutMs) || setupGraceTimeoutMs < 0) throw new Error("cairn_setup_conflict");
+  return timeoutMs + setupGraceTimeoutMs + 3000;
+}
+export function recallPrompt(timeoutMs = DEFAULT_TIMEOUT_MS, setupGraceTimeoutMs = 0) {
+  return `Turn on automatic recall? It runs extra calls to your model before each reply in direct chats, using your usage; it can add up to about ${worstCaseBlockingMs(timeoutMs, setupGraceTimeoutMs) / 1000} s. [Y/n]`;
 }
 export const configSchema = {
   type: "object", additionalProperties: false,
@@ -36,7 +39,31 @@ export function timeoutValue(value = DEFAULT_TIMEOUT_MS) {
 export function validToken(token) {
   return typeof token === "string" && /^[\x21-\x7e]+$/.test(token) && token.length <= 16384;
 }
-export function mergeSetup(draft, { endpoint, provider, secretPath, automatic, timeoutMs }) {
+// memory-tools.md and the host's active-memory config.ts: selected capability,
+// then the documented LanceDB/built-in fallback. Unknown providers need live SDK evidence.
+export function defaultRecallTools(draft, registration) {
+  const selected = draft.plugins?.slots?.memory?.trim() || "memory-core";
+  if (registration?.pluginId === selected) {
+    const names = registration.capability.recallToolNames;
+    if (Array.isArray(names) && names.some((x) => typeof x === "string" && x.trim())) {
+      return [...new Set(names.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().toLowerCase()))];
+    }
+    return selected === "memory-lancedb" ? ["memory_recall"] : ["memory_search", "memory_get"];
+  }
+  if (selected === "memory-lancedb") return ["memory_recall"];
+  if (["memory-core", "none"].includes(selected.toLowerCase())) return ["memory_search", "memory_get"];
+  throw new Error("cairn_memory_provider_unresolved");
+}
+export function activeMemoryBudget(draft, timeoutMs) {
+  const existing = draft.plugins?.entries?.["active-memory"]?.config;
+  return { timeoutMs: existing && Object.hasOwn(existing, "timeoutMs") ? existing.timeoutMs : timeoutMs,
+    setupGraceTimeoutMs: existing && Object.hasOwn(existing, "setupGraceTimeoutMs") ? existing.setupGraceTimeoutMs : 0 };
+}
+export function removeAutomaticRecall(draft) {
+  const config = draft.plugins?.entries?.["active-memory"]?.config;
+  if (Array.isArray(config?.toolsAllow)) config.toolsAllow = config.toolsAllow.filter((name) => name !== TOOLS[0]);
+}
+export function mergeSetup(draft, { endpoint, provider, secretPath, automatic, timeoutMs, memoryRegistration }) {
   draft.secrets ??= {};
   draft.secrets.providers ??= {};
   if (Object.hasOwn(draft.secrets.providers, provider)) throw new Error("cairn_setup_conflict");
@@ -55,8 +82,16 @@ export function mergeSetup(draft, { endpoint, provider, secretPath, automatic, t
     throw new Error("cairn_setup_conflict");
   }
   policy[key] = [...new Set([...(policy[key] ?? []), ...TOOLS])];
-  const active = draft.plugins.entries["active-memory"] ?? {};
-  draft.plugins.entries["active-memory"] = { ...active, enabled: automatic,
-    config: { ...active.config, agents: ["main"], mode: "always", allowedChatTypes: ["direct"],
-      queryMode: "message", toolsAllow: [TOOLS[0]], timeoutMs, setupGraceTimeoutMs: 0 } };
+  if (!automatic) return;
+  const active = draft.plugins.entries["active-memory"] ??= {};
+  const config = active.config ??= {};
+  for (const key of ["agents", "toolsAllow"]) if (Object.hasOwn(config, key) &&
+    (!Array.isArray(config[key]) || !config[key].every((x) => typeof x === "string"))) throw new Error("cairn_setup_conflict");
+  const append = (values, name) => values.includes(name) ? values : [...values, name];
+  config.toolsAllow = append(config.toolsAllow ?? defaultRecallTools(draft, memoryRegistration), TOOLS[0]);
+  config.agents = append(config.agents ?? [], "main");
+  for (const [key, value] of Object.entries({ mode: "always", allowedChatTypes: ["direct"], queryMode: "message", timeoutMs, setupGraceTimeoutMs: 0 })) {
+    if (!Object.hasOwn(config, key)) config[key] = value;
+  }
+  active.enabled = true;
 }

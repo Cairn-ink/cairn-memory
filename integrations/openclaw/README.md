@@ -12,11 +12,11 @@ Setup defaults to `https://cairn.ink`. It accepts HTTPS origins, or HTTP on loop
 After the token is accepted, setup asks:
 
 ```text
-Turn on automatic recall? It makes one extra call to your model before each reply in direct chats, using your usage; it can add up to about 8 s. [Y/n]
-openclaw config set plugins.entries.active-memory.enabled false
+Turn on automatic recall? It runs extra calls to your model before each reply in direct chats, using your usage; it can add up to about 8 s. [Y/n]
+openclaw cairn auto-recall off
 ```
 
-Press Enter for yes. Automatic recall makes **one extra model call before each eligible direct-chat reply**, charged to your model usage; Cairn recall quota also applies. The default recall-work budget is 5 seconds. OpenClaw's documented worst-case blocking time is **8 seconds**: `timeoutMs + setupGraceTimeoutMs + 3000`, including up to 1500 ms preflight and 1500 ms settlement. Turn automatic recall off later with **`openclaw config set plugins.entries.active-memory.enabled false`**. That switch disables Active Memory for all its configured agents; explicit Cairn tool calls remain available. See OpenClaw `docs/concepts/active-memory/recommended-setup.md:42–75`.
+Press Enter for yes. Automatic recall runs **extra calls to your model before each eligible direct-chat reply**, using your model usage; Cairn recall quota also applies. A fresh setup uses a 5-second recall-work budget and OpenClaw's documented **8-second** worst-case block: `timeoutMs + setupGraceTimeoutMs + 3000`, including up to 1500 ms preflight and 1500 ms settlement. The question uses the existing effective timeout and setup grace when already configured. Turn Cairn automatic recall off with **`openclaw cairn auto-recall off`**, then restart the Gateway and start a new session. This removes only `cairn_recall_memory` from Active Memory's `toolsAllow`; Active Memory stays enabled and existing tools and agent grants remain. See OpenClaw `docs/concepts/active-memory/recommended-setup.md:42–75`.
 
 Set another recall-work budget during setup:
 
@@ -24,7 +24,7 @@ Set another recall-work budget during setup:
 openclaw cairn setup --active-memory-timeout-ms 2500
 ```
 
-The plugin option `activeMemoryTimeoutMs` defaults to `5000` (range 250–120000). Setup copies it to Active Memory's `timeoutMs` and sets `setupGraceTimeoutMs: 0`. The question derives its seconds from `(timeoutMs + 3000) / 1000`, so a 2500 ms budget shows 5.5 s and a 12000 ms budget shows 15 s. On subsequent edits, change `plugins.entries.active-memory.config.timeoutMs` to change the live Active Memory budget; the plugin option supplies the next setup default. If you also change `setupGraceTimeoutMs`, include it in the worst-case formula above. Start a new session after restarting the Gateway as setup requests.
+The plugin option `activeMemoryTimeoutMs` defaults to `5000` (range 250–120000). Setup uses it only when Active Memory has no `timeoutMs`; it supplies `setupGraceTimeoutMs: 0` only when absent. With no existing grace, a 2500 ms budget shows 5.5 s and a 12000 ms budget shows 15 s. Existing timeout and grace values always win. A concurrent budget change during setup refuses publication so the accepted disclosure cannot silently become stale. Change `plugins.entries.active-memory.config.timeoutMs` for the live budget; the plugin option supplies the next setup default.
 
 ## Configuration and credentials
 
@@ -67,7 +67,7 @@ A representative configuration follows. `SECRET_FILE` is a placeholder for the a
           "mode": "always",
           "allowedChatTypes": ["direct"],
           "queryMode": "message",
-          "toolsAllow": ["cairn_recall_memory"],
+          "toolsAllow": ["memory_search", "memory_get", "cairn_recall_memory"],
           "timeoutMs": 5000,
           "setupGraceTimeoutMs": 0
         }
@@ -76,6 +76,8 @@ A representative configuration follows. `SECRET_FILE` is a placeholder for the a
   }
 }
 ```
+
+Answering no leaves the entire existing Active Memory entry unchanged and does not create one. Answering yes enables it, appends `main` to existing agents and `cairn_recall_memory` to existing `toolsAllow`, and fills only absent `mode`, `queryMode`, `timeoutMs`, `setupGraceTimeoutMs` and `allowedChatTypes` keys. Existing broader chat types remain audience-gated. When `toolsAllow` is absent, setup consults the selected provider's SDK `recallToolNames`, preserving those tools alongside ours. The documented built-in fallback is `memory_search` plus `memory_get`; LanceDB's is `memory_recall`. An unknown provider without a loaded capability refuses setup before writing, rather than guessing. See `docs/concepts/active-memory/memory-tools.md:11–25` and `openclaw/plugin-sdk/memory-host-core`.
 
 Setup merges grants with the existing main-agent policy. When `allow` already exists, it extends that array; otherwise it extends `alsoAllow`. It preserves profiles and denies and refuses a scope containing both fields. OpenClaw policy restrictions still apply: an `allow` list cannot restore a tool excluded by the selected profile, and a deny still wins. Adjust restrictive layered policy explicitly if needed. See `docs/concepts/active-memory/memory-tools.md:11–44,104–109`.
 
@@ -89,9 +91,9 @@ Each tool is a `contextVersion: 2` factory. Conversation or unknown audiences ge
 - `cairn_remember_memory`: hosted MCP `POST /api/mcp`, for explicit remember requests only.
 - `cairn_forget_memory`: hosted MCP, for explicit forget requests using the exact recalled UUID.
 
-MCP uses protocol `2025-06-18`, a `cairn-openclaw` client identity and a 20-second deadline shared by initialization and the tool call. Every response has a 1 MiB decoded-body cap; redirects are refused. Errors contain only stable codes and retryability, never server diagnostics. The adapter matches Hermes's auth, rate, availability, transport, unavailable-tool, not-found, quota, suppression and tool-failure mappings (including invalid-input and protocol-mismatch refusals). Successful tool data carries `evidenceTrust: "untrusted-data-not-instructions"`; recall is formatted and bounded for model use.
+MCP requests advertise `Accept: application/json, text/event-stream`. MCP uses protocol `2025-06-18`, a `cairn-openclaw` client identity and a 20-second deadline shared by initialization and the tool call. Every response has a 1 MiB decoded-body cap; redirects are refused. Errors contain only stable codes and retryability, never server diagnostics. The adapter matches Hermes's auth, rate, availability, transport, unavailable-tool, not-found, quota, suppression and tool-failure mappings (including invalid-input and protocol-mismatch refusals). Successful tool data carries `evidenceTrust: "untrusted-data-not-instructions"`; recall is formatted and bounded for model use.
 
-Active Memory explicitly calls only `cairn_recall_memory`, with the main-agent grants above. This plugin registers no prompt hook, does not claim `plugins.slots.memory`, and performs no auto-save. Local mode and publishing are outside this preview.
+Active Memory can call the existing provider tools and `cairn_recall_memory`, with the main-agent grants above. This plugin registers no prompt hook, does not claim `plugins.slots.memory`, and performs no auto-save. Local mode and publishing are outside this preview.
 
 ## Offline verification
 
@@ -108,4 +110,8 @@ The runner copies this package into a temporary directory outside the checkout a
 
 OpenClaw's `plugins validate` and `plugins build --check` authoring commands cover scaffold-generated tool and feature plugins; this general `definePluginEntry` plugin with v2 factories uses ClawHub's `package validate` as its gate (see `docs/cli/plugins/authoring.md`). Contributors can run `bash integrations/openclaw/testing/validate-package.sh "$OFFLINE_CLAWHUB_BIN" "$OFFLINE_NODE_MODULES/openclaw"` with existing offline dependencies; it isolates HOME, XDG and OpenClaw state, blocks non-loopback connections, retains reports in a temporary directory, and runs separately from `node --test`. The host-shim tests independently check the manifest, factory registration and config schema.
 
-Shared client modules were reviewed: `transport-hosted.mjs` restricts client identity to Claude/Codex and has different response/body budgets; `hosted-schemas.mjs` restricts capture identity; `hosted-pause.mjs` depends on shared client state; `recall-query.mjs` targets hook prompts. The standalone adapter implements the Hermes wire contract with its own explicit OpenClaw identity and does not change shared behavior.
+Every Cairn recall first observes the account's hosted pause through the shared `deferHostedPauseStatus` implementation, checks again before dispatch and before releasing memories, and withholds on paused, failed, invalid, unenforced or regressing observations. Pause-state requests contain no query or body. The observer uses a private directory at `<OpenClaw state>/plugins/cairn-memory`, rooted through `api.runtime.state.resolveStateDir()` (see `docs/plugins/sdk-runtime/state-and-system.md`, `api.runtime.state`). Its validated local records preserve the remote generation across calls.
+
+OpenClaw's v2 tool context has no general marker for Active Memory: `conversationRecall` is optional and applies only to protected transcript recall (`dist/config-contracts-CY87ANNp.d.ts:48578–48655`; `dist/extensions/active-memory/index.js:347–352,387`). Therefore **explicit recall is also pause-gated**. Explicit remember and forget retain Claude Code/Codex behavior: direct MCP calls, with server-side refusal of remember while capture is disabled and forget remaining available. There is no client pause preflight for mutations. Claude's direct route is `plugins/cairn-memory/.mcp.json`; Codex's is installed by `packages/setup/lib/codex-runtime.mjs`.
+
+The observer and its transitive dependencies are generated into this package's `lib/` by the existing shared client bundler, without runtime imports outside the package. Regenerate with `node integrations/client/bundle.mjs --openclaw`; verify with `node integrations/client/bundle.mjs --openclaw --check`. The default bundler target remains the Claude plugin. Generated copies retain the shared sources and their existing exact filesystem guard classifications; they do not take any memory slot or use a database. This separate npm package is deliberately absent from the local engine's `packaging/artifact-files.json`.
