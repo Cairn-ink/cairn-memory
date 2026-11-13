@@ -13,6 +13,7 @@ import { createEngineCardStorage } from '../engine-card-storage.mjs';
 import { clusterMemories } from '../engine-card-clusters.mjs';
 import { transaction } from '../database.mjs';
 import { suppressOwnerInside, writeContentSuppressionInside } from '../content-suppression-storage.mjs';
+import { keyed } from '../private-card-input.mjs';
 
 export const closureStoreKinds = ['sealed', 'suppression', 'legacy'].flatMap(family => [
   { family, base: 23, raw: false, eventTime: false }, { family, base: 33, raw: false, eventTime: false },
@@ -152,20 +153,44 @@ export async function prepareClosureControl(t, kind, operation, json = false) {
   };
   const erasureControls = operation.endsWith('erasure') ? [ns,
     { ...ns, projectId: 'synthetic-other-project' }, { ...ns, ownerId: 'synthetic-other-owner' }].map((namespace, index) => {
+    const prefix = 'synthetic-control-' + index;
+    let controlCard = card, controlMemory = memory;
     if (index) {
-      const source = ok(f.core.admit({ namespace, memory: { content: 'Synthetic isolated control evidence', kind: 'fact' },
-        receipts: [receipt('synthetic-isolated-control', 'Synthetic isolated control evidence')] })).memory;
+      assert.deepEqual(erasureSnapshot(namespace), { cards: [], bindings: [], operations: [] });
+      const content = 'Synthetic isolated control evidence ' + index;
+      controlMemory = ok(f.core.admit({ namespace, memory: { content, kind: 'fact' },
+        receipts: [receipt(prefix, content)] })).memory;
       const snapshot = f.engine.snapshot(namespace, 512, () => {});
-      assert.ok(f.engine.commit(namespace, { key: 'moc:synthetic-isolated-control',
-        memories: snapshot.memories.filter(m => m.id === source.id) },
-        { body: 'Synthetic isolated control body' }, stamp, () => {}));
+      controlCard = f.engine.commit(namespace, { key: 'moc:' + prefix,
+        memories: snapshot.memories.filter(m => m.id === controlMemory.id) },
+        { body: 'Synthetic isolated control body ' + index }, stamp, () => {});
+      assert.ok(controlCard);
     }
-    for (const method of erasureMethods) f.db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)')
-      .run(namespace.ownerId, namespace.scope, namespace.projectId ?? '', 'synthetic-control-' + method,
+    // snapshot writes a cleanup watermark; commit writes the publication.
+    // The lineage seal adds provenance/reservations, but no operation row.
+    const cleanupAction = 'engine-cleanup.' + keyed(f.identity.cursorSecret, 'engine-card-cleanup-v1',
+      [f.identity.storeId, [namespace.ownerId, namespace.scope, namespace.projectId ?? '']]);
+    const native = erasureSnapshot(namespace);
+    assert.deepEqual(native.cards.map(row => row.id), [controlCard.id]);
+    assert.equal(native.cards[0].state, 'confirmed');
+    assert.deepEqual(native.bindings.map(row => [row.card_id, row.memory_id, row.memory_revision]),
+      [[controlCard.id, controlMemory.id, controlMemory.revision]]);
+    const operationHeaders = rows => rows.map(row => [row.action_id, row.method, row.target_id]);
+    const nativeHeaders = [[controlCard.id, 'consolidate', controlCard.id], [cleanupAction, 'consolidateCleanup', '']]
+      .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+    assert.deepEqual(operationHeaders(native.operations), nativeHeaders, 'exact native operations before synthetic inserts');
+    const syntheticActions = erasureMethods.map(method => prefix + '-' + method);
+    // Sealed stores require owner-wide action uniqueness, including projects.
+    for (const [i, method] of erasureMethods.entries()) f.db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)')
+      .run(namespace.ownerId, namespace.scope, namespace.projectId ?? '', syntheticActions[i],
         method, 'synthetic-control-binding', 'synthetic-control-target', '{}', stamp);
     const before = erasureSnapshot(namespace);
-    assert.equal(before.cards.length, 1); assert.equal(before.bindings.length, 1);
-    assert.equal(before.operations.filter(row => erasureMethods.includes(row.method)).length, erasureMethods.length);
+    assert.deepEqual(before.cards, native.cards); assert.deepEqual(before.bindings, native.bindings);
+    assert.deepEqual(before.operations.map(row => row.action_id),
+      [controlCard.id, cleanupAction, ...syntheticActions].sort(), 'exact prepared operation actions');
+    assert.deepEqual(before.operations.filter(row => !syntheticActions.includes(row.action_id)), native.operations);
+    assert.deepEqual(before.operations.filter(row => erasureMethods.includes(row.method)).map(row => row.action_id),
+      [cleanupAction, ...syntheticActions].sort(), 'native cleanup and all synthetic actions are purge targets');
     return { namespace, before };
   }) : [];
   const before = f.row(card.id);
@@ -229,8 +254,11 @@ export async function prepareClosureControl(t, kind, operation, json = false) {
         assert.equal(typeof value.factId, 'string'); assert.equal(typeof value.epoch, 'bigint');
         assert.ok(value.epoch > 0n, `positive erasure epoch: ${value.epoch.toString()}`);
         assert.equal(f.db.prepare('SELECT count(*) n FROM card_memory_bindings WHERE card_id=?').get(card.id).n, 0);
-        assert.equal(f.db.prepare('SELECT match_mode FROM content_suppressions WHERE fact_id=?').get(value.factId).match_mode,
-          operation === 'owner erasure' ? 'owner' : 'namespace');
+        const fact = f.db.prepare('SELECT * FROM content_suppressions WHERE owner_id=? AND fact_id=?').get(ns.ownerId, value.factId);
+        const mode = operation === 'owner erasure' ? 'owner' : 'namespace';
+        assert.deepEqual([fact.scope, fact.project_id, fact.kind, fact.match_mode, fact.stable_key, fact.incarnation],
+          [mode === 'owner' ? 'owner' : ns.scope, mode === 'owner' ? '' : ns.projectId, mode, mode, '', '']);
+        assert.equal((BigInt(fact.epoch_hi) << 32n) + BigInt(fact.epoch_lo), value.epoch);
         for (const [index, control] of erasureControls.entries()) {
           const current = erasureSnapshot(control.namespace);
           const erased = index === 0 || operation === 'owner erasure' && index === 1;
@@ -238,7 +266,7 @@ export async function prepareClosureControl(t, kind, operation, json = false) {
             assert.deepEqual(current, control.before, 'other namespace/owner Cards, bindings and operations are untouched');
             continue;
           }
-          assert.equal(current.cards.length, control.before.cards.length);
+          assert.deepEqual(current.cards.map(row => row.id), control.before.cards.map(row => row.id));
           for (const [i, row] of current.cards.entries()) {
             assert.equal(row.state, 'deleted'); assert.equal(row.title, null); assert.equal(row.body, null);
             assert.equal(row.revision, control.before.cards[i].revision + 1);
@@ -246,6 +274,8 @@ export async function prepareClosureControl(t, kind, operation, json = false) {
           assert.deepEqual(current.bindings, [], 'erased namespace has no Card memory bindings');
           assert.deepEqual(current.operations.filter(row => erasureMethods.includes(row.method)), [],
             'erased namespace has no consolidation attempts, outcomes or cleanup');
+          assert.deepEqual(current.operations.map(row => row.action_id), current.cards.map(row => row.id),
+            'only the exact publication action survives erasure');
           assert.deepEqual(current.operations, control.before.operations.filter(row => !erasureMethods.includes(row.method)),
             'other operation rows are retained');
         }
