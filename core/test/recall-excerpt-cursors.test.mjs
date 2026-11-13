@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { openMemoryCore } from '../contract.mjs';
-import { QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT, SOURCE_QUERY_CANDIDATE_VERSION,
+import { QUERY_CANDIDATE_VERSION, QUERY_CANDIDATES, SOURCE_QUERY_CANDIDATE_VERSION,
   SOURCE_QUERY_RECEIPT_LIMIT } from '../query-candidates.mjs';
 
 const namespace = { ownerId: 'excerpt-cursor-test', scope: 'personal', projectId: null };
@@ -52,9 +52,9 @@ test('internal excerpt cursors bind query and policy without exposing query; pub
     assert.ok(binding.q.length > 20);
     assert.ok(binding.x);
     assert.equal(binding.policy, QUERY_CANDIDATE_VERSION);
-    assert.equal(binding.policy, 'literal-current-memory-overlap-v2');
+    assert.equal(binding.policy, 'literal-recency-keyset-overlap-v4');
     assert.notEqual(binding.policy, 'literal-memory-overlap-v1');
-    assert.equal(binding.scan, QUERY_SCAN_LIMIT);
+    assert.equal(binding.scan, QUERY_CANDIDATES.scan);
     if (contextMode) {
       assert.equal(binding.sourceMode, contextMode);
       assert.equal(binding.sourcePolicy, SOURCE_QUERY_CANDIDATE_VERSION);
@@ -64,7 +64,10 @@ test('internal excerpt cursors bind query and policy without exposing query; pub
       assert.equal(Object.hasOwn(binding, 'sourcePolicy'), false);
       assert.equal(Object.hasOwn(binding, 'sourceReceiptLimit'), false);
     }
-    assert.deepEqual(binding.a, { offset: 100 });
+    assert.equal(binding.a.offset, 100);
+    assert.equal(binding.a.scanBoundary.rows, 101);
+    assert.equal(binding.a.scanBoundary.stop, 'end');
+    assert.equal(typeof binding.a.scanBoundary.last.updatedAt, 'string');
     assert.equal(binding.l, 100);
     assert.equal(binding.b, 4000);
     assert.equal(Number.isSafeInteger(binding.e), true);
