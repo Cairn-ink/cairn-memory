@@ -7086,5 +7086,519 @@
     ],
     "forgetEpisode": [],
     "reject": []
+  },
+  "cardStatementExecutions": {
+    "workload:23": {
+      "callCount": 3,
+      "calls": [
+        {
+          "method": "forget",
+          "ordinal": 1,
+          "statements": [
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ]
+          ]
+        },
+        {
+          "method": "forget",
+          "ordinal": 2,
+          "statements": [
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ]
+          ]
+        },
+        {
+          "method": "forget",
+          "ordinal": 3,
+          "statements": [
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ]
+          ]
+        }
+      ]
+    },
+    "workload:33": {
+      "callCount": 5,
+      "calls": [
+        {
+          "method": "deleteConversation",
+          "ordinal": 1,
+          "statements": [
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ],
+            [
+              "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "delete-raw"
+              ]
+            ],
+            [
+              "INSERT OR IGNORE INTO card_raw_pending_invalidations(card_id,revision) VALUES(?,?)",
+              "run",
+              [
+                "00000000-0000-4000-8000-000000000048",
+                2
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ],
+            [
+              "INSERT OR IGNORE INTO card_raw_pending_invalidations(card_id,revision) VALUES(?,?)",
+              "run",
+              [
+                "00000000-0000-4000-8000-000000000048",
+                2
+              ]
+            ],
+            [
+              "UPDATE private_cards SET revision=revision+1,updated_at=?, title=CASE WHEN state='draft' THEN NULL ELSE title END,body=CASE WHEN state='draft' THEN NULL ELSE body END, state=CASE WHEN state='draft' THEN 'cancelled' ELSE state END WHERE id=?",
+              "run",
+              [
+                "2026-01-01T00:00:00.000Z",
+                "00000000-0000-4000-8000-000000000048"
+              ]
+            ],
+            [
+              "INSERT INTO card_effects VALUES(lower(hex(randomblob(16))),?,?,?,?,?,?,?,?, (SELECT coalesce(max(ordinal),0)+1 FROM card_effects))",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "evidence_invalidated",
+                "card",
+                "00000000-0000-4000-8000-000000000048",
+                3,
+                "delete-raw"
+              ]
+            ],
+            [
+              "INSERT INTO card_epochs VALUES(?,?,?,2) ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=generation+1",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                ""
+              ]
+            ],
+            [
+              "DELETE FROM card_raw_pending_invalidations",
+              "run",
+              []
+            ],
+            [
+              "DELETE FROM card_raw_mutation_context",
+              "run",
+              []
+            ]
+          ]
+        },
+        {
+          "method": "deleteConversation",
+          "ordinal": 2,
+          "statements": []
+        },
+        {
+          "method": "forget",
+          "ordinal": 1,
+          "statements": [
+            [
+              "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "memory-forget-00000000-0000-4000-8000-000000000003"
+              ]
+            ],
+            [
+              "DELETE FROM card_raw_pending_invalidations",
+              "run",
+              []
+            ],
+            [
+              "DELETE FROM card_raw_mutation_context",
+              "run",
+              []
+            ]
+          ]
+        },
+        {
+          "method": "forget",
+          "ordinal": 2,
+          "statements": [
+            [
+              "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "memory-forget-00000000-0000-4000-8000-000000000003"
+              ]
+            ],
+            [
+              "DELETE FROM card_raw_pending_invalidations",
+              "run",
+              []
+            ],
+            [
+              "DELETE FROM card_raw_mutation_context",
+              "run",
+              []
+            ]
+          ]
+        },
+        {
+          "method": "forget",
+          "ordinal": 3,
+          "statements": [
+            [
+              "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "memory-forget-00000000-0000-4000-8000-000000000077"
+              ]
+            ],
+            [
+              "DELETE FROM card_raw_pending_invalidations",
+              "run",
+              []
+            ],
+            [
+              "DELETE FROM card_raw_mutation_context",
+              "run",
+              []
+            ]
+          ]
+        }
+      ]
+    },
+    "workload:52": {
+      "callCount": 3,
+      "calls": [
+        {
+          "method": "forget",
+          "ordinal": 1,
+          "statements": [
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ]
+          ]
+        },
+        {
+          "method": "forget",
+          "ordinal": 2,
+          "statements": [
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_bindings"
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_memory_bindings"
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_raw_bindings"
+              ]
+            ]
+          ]
+        },
+        {
+          "method": "forget",
+          "ordinal": 3,
+          "statements": [
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ]
+          ]
+        }
+      ]
+    },
+    "workload:53": {
+      "callCount": 5,
+      "calls": [
+        {
+          "method": "deleteConversation",
+          "ordinal": 1,
+          "statements": [
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ],
+            [
+              "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "delete-raw"
+              ]
+            ],
+            [
+              "INSERT OR IGNORE INTO card_raw_pending_invalidations(card_id,revision) VALUES(?,?)",
+              "run",
+              [
+                "00000000-0000-4000-8000-000000000050",
+                2
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ],
+            [
+              "INSERT OR IGNORE INTO card_raw_pending_invalidations(card_id,revision) VALUES(?,?)",
+              "run",
+              [
+                "00000000-0000-4000-8000-000000000050",
+                2
+              ]
+            ],
+            [
+              "UPDATE private_cards SET revision=revision+1,updated_at=?, title=CASE WHEN state='draft' THEN NULL ELSE title END,body=CASE WHEN state='draft' THEN NULL ELSE body END, state=CASE WHEN state='draft' THEN 'cancelled' ELSE state END WHERE id=?",
+              "run",
+              [
+                "2026-01-01T00:00:00.000Z",
+                "00000000-0000-4000-8000-000000000050"
+              ]
+            ],
+            [
+              "INSERT INTO card_effects VALUES(lower(hex(randomblob(16))),?,?,?,?,?,?,?,?, (SELECT coalesce(max(ordinal),0)+1 FROM card_effects))",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "evidence_invalidated",
+                "card",
+                "00000000-0000-4000-8000-000000000050",
+                3,
+                "delete-raw"
+              ]
+            ],
+            [
+              "INSERT INTO card_epochs VALUES(?,?,?,2) ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=generation+1",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                ""
+              ]
+            ],
+            [
+              "DELETE FROM card_raw_pending_invalidations",
+              "run",
+              []
+            ],
+            [
+              "DELETE FROM card_raw_mutation_context",
+              "run",
+              []
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_bindings"
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_memory_bindings"
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_raw_bindings"
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_bindings"
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_memory_bindings"
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_raw_bindings"
+              ]
+            ]
+          ]
+        },
+        {
+          "method": "deleteConversation",
+          "ordinal": 2,
+          "statements": []
+        },
+        {
+          "method": "forget",
+          "ordinal": 1,
+          "statements": [
+            [
+              "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "memory-forget-00000000-0000-4000-8000-000000000005"
+              ]
+            ],
+            [
+              "DELETE FROM card_raw_pending_invalidations",
+              "run",
+              []
+            ],
+            [
+              "DELETE FROM card_raw_mutation_context",
+              "run",
+              []
+            ]
+          ]
+        },
+        {
+          "method": "forget",
+          "ordinal": 2,
+          "statements": [
+            [
+              "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "memory-forget-00000000-0000-4000-8000-000000000005"
+              ]
+            ],
+            [
+              "DELETE FROM card_raw_pending_invalidations",
+              "run",
+              []
+            ],
+            [
+              "DELETE FROM card_raw_mutation_context",
+              "run",
+              []
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_bindings"
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_memory_bindings"
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_raw_bindings"
+              ]
+            ]
+          ]
+        },
+        {
+          "method": "forget",
+          "ordinal": 3,
+          "statements": [
+            [
+              "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "memory-forget-00000000-0000-4000-8000-000000000087"
+              ]
+            ],
+            [
+              "DELETE FROM card_raw_pending_invalidations",
+              "run",
+              []
+            ],
+            [
+              "DELETE FROM card_raw_mutation_context",
+              "run",
+              []
+            ]
+          ]
+        }
+      ]
+    }
   }
 }
