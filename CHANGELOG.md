@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — Card consolidation respects the Raw opt-in
+
+- Engine Card consolidation uses memories only by default, including for library
+  callers. Set `rawSpans: true` on `maintainCards` to include saved conversation
+  excerpts. The local MCP server includes those excerpts only with
+  `rawSemantic: true`, unless `contextSemantic: false` overrides it.
+
+## Unreleased — forgotten-text read
+
+- Add `core.isSuppressed({ namespace, content })` so a host can ask before
+  saving. This pure read uses admission's normalized exact-text suppression
+  check in the caller's namespace and returns `{ suppressed: boolean }`.
+
 ## Unreleased — default recall recency scan
 
 - Use one newest-first keyset scan for body and source recall: a 1,024-row

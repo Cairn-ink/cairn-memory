@@ -103,11 +103,11 @@ test('M01 selected managed opener refuses a complete v29 prerequisite store with
   assert.deepEqual(readFileSync(f.databasePath),before);
 });
 
-test('M01 actual old default API and Memory DTOs remain byte-for-byte identical on the same unselected store',t=>{
+test('M01 actual old default API adds only the suppression read and Memory DTOs remain byte-for-byte identical',t=>{
   const workspace=createTestWorkspace(t),path=join(workspace.path,'default.sqlite');
   const {expected:previous}=restoreHistoricalStore(path,'compatibility');
   const core=openMemoryCore({path});
-  try{assert.deepEqual(Object.keys(core),previous.keys);assert.equal(JSON.stringify(core.get({namespace:ns,memoryId:previous.id})),JSON.stringify(previous.get));
+  try{assert.deepEqual(Object.keys(core),previous.keys.flatMap(name=>name==='admit'?['isSuppressed',name]:[name]));assert.equal(JSON.stringify(core.get({namespace:ns,memoryId:previous.id})),JSON.stringify(previous.get));
     assert.equal(JSON.stringify(core.list({namespace:ns})),JSON.stringify(previous.list));assert.equal(JSON.stringify(core.map({namespace:ns})),JSON.stringify(previous.map));}
   finally{core.close();}
 });

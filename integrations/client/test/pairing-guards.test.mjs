@@ -13,6 +13,8 @@ const allowed = new Set([
   "integrations/client/bundle.mjs",
   "integrations/client/pairing.mjs",
   "plugins/cairn-memory/lib/pairing.mjs",
+  // Generated observer dependency: only the same read-only legacy detector.
+  "integrations/openclaw/lib/pairing.mjs",
   // Separate opt-in namespace, rooted by private versioned root.json/key binding;
   // it never adopts the legacy Claude capture cursor.
   "integrations/client/raw/local-worker-state.mjs",

@@ -94,6 +94,12 @@ export function withReviewedReadDefaults(probe) {
       if (tool.name === 'read_memory_context') tool.inputSchema.properties.maxTokens.maximum = 6000;
     }
     expected[mode].tools = JSON.stringify(listed);
+    // Reviewed core facade addition: the forgotten-text read follows reject on the core facade. No MCP tool changes.
+    const core = JSON.parse(expected[mode].core);
+    const anchor = core.keys.indexOf('reject');
+    if (anchor < 0 || core.keys.includes('isSuppressed')) throw new Error('reviewed core facade anchor');
+    core.keys.splice(anchor + 1, 0, 'isSuppressed');
+    expected[mode].core = JSON.stringify(core);
   }
   for (const index of [1, 2]) {
     const { ok, mode, ...check } = JSON.parse(expected.cli.stdout[index]);
