@@ -16,9 +16,12 @@ test('A3 eight parallel connections preserve single-connection Raw coverage and 
   const w = createTestWorkspace(t), path = join(w.path, 'synthetic-capacity.sqlite');
   const seed = openMemoryCore({ path, raw: true, model: rationaleModel() });
   try {
-    ok(await seed.capture({ namespace: ns, client: 'synthetic', sessionId: 'synthetic-capacity', eventId: 'synthetic-batch',
-      messages: Array.from({ length: 12 }, (_, i) => ({ role: 'user', content: 'Synthetic cobalt telescope part ' + i,
-        occurredAt: '2026-01-01T08:00:00.000Z' })) }));
+    // Core capture requires message IDs; Raw retention accepts codex/claude-code.
+    // Keep each extraction within the core's five-item output limit.
+    for (let i = 0; i < 12; i++) ok(await seed.capture({ namespace: ns, client: 'codex',
+      sessionId: 'synthetic-capacity', eventId: 'synthetic-batch-' + i,
+      messages: [{ id: 'synthetic-message-' + i, role: 'user', content: 'Synthetic cobalt telescope part ' + i,
+        occurredAt: '2026-01-01T08:00:00.000Z' }] }));
     let published;
     for (let i = 0; i < 80; i++) {
       await rawSearchTestWait(1010); ok(await seed.maintainRawSearch({ namespace: ns }));
