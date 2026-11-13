@@ -46,19 +46,20 @@ export function recordCommit(db) {
 
 // Called only with an engine-owned synchronous closure encompassing one complete
 // transaction (including its original guards), before any success projection.
-export function dispatchCommit(connection, work, deadline) {
+export function dispatchCommit(connection, work, deadline, options) {
   const binding = bindings.get(connection);
   if (!binding) return work();
-  return binding.host.dispatch(binding.db, work, deadline);
+  return binding.host.dispatch(binding.db, work, deadline, options);
 }
 
 export function createCommitDispatcher({ now = () => performance.now(), random = Math.random,
-  onAwait, onBackoff } = {}) {
+  onAwait, onBackoff, signal: hostSignal } = {}) {
   const host = {
     connections: new Set(),
-    dispatch(db, work, deadline) {
+    dispatch(db, work, deadline, { compensating = false } = {}) {
       if (typeof work !== 'function' || types.isAsyncFunction(work) || types.isGeneratorFunction(work)) fail('storage_error');
-      const scope = requests.getStore();
+      const scope = compensating ? undefined : requests.getStore();
+      const signal = compensating ? hostSignal : scope?.signal;
       const started = now();
       let end = Math.min(started + 5000, scope?.deadlineAt ?? Infinity);
       const checkIdle = point => {
@@ -70,7 +71,8 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
         if (db.isTransaction !== false) refuseActive();
       };
       const checkAuthority = () => {
-        if (scope?.signal?.aborted) fail('authority_required');
+        if (hostSignal?.aborted) fail('store_closed');
+        if (signal?.aborted) fail('authority_required');
         scope?.check?.();
       };
       const tryCommit = () => {
@@ -101,7 +103,7 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
       // The default attempt always runs. Only retries consume an explicit
       // caller budget; provider time never consumes an implicit request budget.
       let remaining = Infinity;
-      try { if (deadline?.remainingMs) remaining = deadline.remainingMs(Number.MAX_SAFE_INTEGER); }
+      try { if (!compensating && deadline?.remainingMs) remaining = deadline.remainingMs(Number.MAX_SAFE_INTEGER); }
       catch (error) { if (error?.code !== 'model_timeout') throw error; remaining = 0; }
       end = Math.min(end, now() + remaining);
       const retry = async () => {
@@ -117,7 +119,6 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
         checkIdle('before_timer');
         try { await new Promise((resolve, reject) => {
           let timer;
-          const signal = scope?.signal;
           const finish = error => {
             clearTimeout(timer); signal?.removeEventListener('abort', abort);
             if (error) reject(error); else resolve();

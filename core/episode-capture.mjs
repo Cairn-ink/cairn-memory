@@ -94,7 +94,7 @@ function recordDraftFailure(runtime, ns, failure) {
 async function recordDraftFailureAsync(runtime, ns, failure) {
   const deadline = performance.now() + Math.min(250, failure.busyTimeoutMs ?? 250);
   const written = await dispatchCommit(runtime, () => runtime.failEpisodeDraft(ns, failure),
-    { remainingMs: () => Math.max(0, deadline - performance.now()) });
+    undefined, { compensating: true });
   if (written?.revision !== undefined) return failure.code;
   // Recovery may have finalized this token before a later attempt changed the
   // episode-wide state. Read only this attempt, within the remaining budget.
@@ -202,7 +202,7 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
       ? { code: 'episode_outcome_pending', retryable: false }
       : { code: error.code === 'source_excluded' ? 'source_excluded' : reportedCode, retryable } };
   } finally {
-    try { if (owned && retryable) (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.settleEpisodeAttempt(ns, { ...owned, retryable })) : runtime.settleEpisodeAttempt(ns, { ...owned, retryable })); }
+    try { if (owned && retryable) (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.settleEpisodeAttempt(ns, { ...owned, retryable }), undefined, { compensating: true }) : runtime.settleEpisodeAttempt(ns, { ...owned, retryable })); }
     catch (error) { if (!isStorageBusy(error)) throw error; }
   }
 }
@@ -222,7 +222,7 @@ async function auxiliary({ runtime, ns, model, episodeId, generation, trigger, d
     }
     return await interpret({ runtime, ns, model, episodeId, generation, writerToken: writer.token,
       trigger, watermark: state.observed, deadline });
-  } finally { (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.releaseEpisodeWriter(ns, { episodeId, token: writer.token })) : runtime.releaseEpisodeWriter(ns, { episodeId, token: writer.token })); }
+  } finally { (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.releaseEpisodeWriter(ns, { episodeId, token: writer.token }), undefined, { compensating: true }) : runtime.releaseEpisodeWriter(ns, { episodeId, token: writer.token })); }
 }
 
 export async function endEpisode({ runtime, ns, model, input }) {
@@ -313,7 +313,7 @@ export async function captureEpisodeMessages(options) {
         memoryIds: result.memoryIds, suppressedCount: result.suppressedCount } }
         : result.processing ? { admission: { status: 'processing' } } : {}) };
   } finally {
-    if (registered?.token) (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.releaseEpisodeWriter(ns, { episodeId: registered.episodeId, token: registered.token })) : runtime.releaseEpisodeWriter(ns, { episodeId: registered.episodeId, token: registered.token }));
+    if (registered?.token) (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.releaseEpisodeWriter(ns, { episodeId: registered.episodeId, token: registered.token }), undefined, { compensating: true }) : runtime.releaseEpisodeWriter(ns, { episodeId: registered.episodeId, token: registered.token }));
   }
 }
 
@@ -350,7 +350,7 @@ export async function keepEpisodeCapture(options) {
       id: keepInput.episodeId, policy: 'explicit-keep', sourceCoverage: kept.coverage } };
   } catch (error) {
     const code = error instanceof MemoryStoreError ? error.code : 'storage_error';
-    try { (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.failEpisodeKeep(ns, kept, code)) : runtime.failEpisodeKeep(ns, kept, code)); } catch { /* Preserve the original failure. */ }
+    try { (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.failEpisodeKeep(ns, kept, code), undefined, { compensating: true }) : runtime.failEpisodeKeep(ns, kept, code)); } catch { /* Preserve the original failure. */ }
     throw error;
   }
 }

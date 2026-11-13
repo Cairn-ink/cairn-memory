@@ -9,7 +9,8 @@ import { createCommitDispatcher } from '../../core/commit-dispatch.mjs';
  */
 export function createLocalSharedRuntime(options = {}) {
   const configuration = { ...options, namespace: structuredClone(options.namespace) };
-  const dispatcher = createCommitDispatcher(), closingSignal = new AbortController();
+  const closingSignal = new AbortController();
+  const dispatcher = createCommitDispatcher({ signal: closingSignal.signal });
   const connections = new Set();
   let runtime, closed = false, closing, inFlight = 0, sdkServers = 0;
   return {

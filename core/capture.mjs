@@ -61,7 +61,7 @@ async function classifyAdmission(model, namespace, admission, operations, key, d
   } catch (error) {
     if (attemptToken) {
       try { const failAttempt = () => operations.failInitialClassification({ ...key, token: attemptToken });
-        unwrap(operations.commit ? await operations.commit(failAttempt) : failAttempt()); }
+        unwrap(operations.commit ? await operations.commit(failAttempt, { compensating: true }) : failAttempt()); }
       catch { /* A failed receipt write cannot replace the original failure. */ }
     }
     const code = error instanceof MemoryStoreError ? error.code : 'classification_failed';
@@ -232,7 +232,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
     // A failed or stale cleanup cannot replace the original error or release a successor's claim.
     try { const abandon = () => operations.abandonAdmission(owned, (isCaptureSourceBusy(error) && !stagedDispatched) || Boolean(episodeRun &&
       (isStorageBusy(error) || (error instanceof MemoryStoreError && error.code === 'storage_busy'))));
-      if (operations.commit) await operations.commit(abandon); else abandon();
+      if (operations.commit) await operations.commit(abandon, { compensating: true }); else abandon();
     } catch { /* Pre-dispatch staged tokens remain reclaimable without cleanup. */ }
     if (error instanceof MemoryStoreError) throw error;
     if (episodeRun && isStorageBusy(error)) fail('storage_busy');

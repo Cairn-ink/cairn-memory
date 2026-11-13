@@ -34,7 +34,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
     attachCapture: operation => { capture = operation; },
   });
   const deadlineMs = Object.hasOwn(input, 'captureDeadlineMs') ? input.captureDeadlineMs : undefined;
-  const commit = hasCommitDispatcher(runtime) ? (work, deadline) => dispatchCommit(runtime, work, deadline) : null;
+  const commit = hasCommitDispatcher(runtime) ? (work, deadline, options) => dispatchCommit(runtime, work, deadline, options) : null;
   const invokeCommit = work => {
     if (!commit) return invoke(work);
     try { const value = commit(work); return value && typeof value.then === 'function' ? value.then(success, failure) : success(value); }
@@ -69,7 +69,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
         return result;
       } catch (error) {
         try { if (error.code !== 'store_closed') {
-          if (commit) await commit(() => storage.fenceArrival(arrivalToken), deadline);
+          if (commit) await commit(() => storage.fenceArrival(arrivalToken), undefined, { compensating: true });
           else storage.fenceArrival(arrivalToken);
         } } catch (fenceError) { return failure(fenceError); }
         if (isRawEpochConflict(error) || error.code === 'model_timeout') throw error;
@@ -98,7 +98,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
         }
         const raw = registration.result();
         if (!raw) {
-          if (commit) await commit(() => storage.fenceArrival(arrivalToken), deadline);
+          if (commit) await commit(() => storage.fenceArrival(arrivalToken), undefined, { compensating: true });
           else storage.fenceArrival(arrivalToken);
         }
         if (raw) search?.schedule(request.namespace);
@@ -109,7 +109,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
         // only its validated, detached arrival identity for conservative fencing.
         // Commit-time overlap already committed its fence before refusing.
         try { if (error.code !== 'store_closed') {
-          if (commit) await commit(() => storage.fenceArrival(arrivalToken), deadline);
+          if (commit) await commit(() => storage.fenceArrival(arrivalToken), undefined, { compensating: true });
           else storage.fenceArrival(arrivalToken);
         } } catch (fenceError) { return failure(fenceError); }
         if (isRawEpochConflict(error) || error.code === 'model_timeout') throw error;

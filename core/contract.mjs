@@ -384,7 +384,7 @@ export function createMemoryCore(input, internal) {
 
   // These closures contain only the selected synchronous storage phase. The
   // provider's detached result remains outside, in this invocation's stack.
-  const commit = hasCommitDispatcher(runtime) ? (work, deadline) => dispatchCommit(runtime, work, deadline) : null;
+  const commit = hasCommitDispatcher(runtime) ? (work, deadline, options) => dispatchCommit(runtime, work, deadline, options) : null;
 
   function admit(input) {
     return invoke(() => {
@@ -1074,7 +1074,7 @@ export function createMemoryCore(input, internal) {
         startAdmission: () => (deadline = sharedDeadline ?? (captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs))),
         captureRationale, captureEvidence,
         deadline, input: { ...input, namespace },
-        operations: { ...(commit ? { commit: work => commit(work, deadline) } : {}),
+        operations: { ...(commit ? { commit: (work, options) => commit(work, deadline, options) } : {}),
           filterCaptureSources: sources => runtime.filterCaptureSources(ns, sources),
           assertCaptureSources: sources => runtime.assertCaptureSources(ns, sources),
           // Preserve private pre-dispatch busy provenance across this internal

@@ -203,19 +203,19 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
             // Valid output without a committed Card must not reopen a missing
             // fingerprint on every subsequent maintenance pass.
             const finish = () => storage.finish(ns, attempt, card ? 'succeeded' : 'terminal', new Date(now()).toISOString());
-            if (commit) await commit(finish); else finish();
+            if (commit) await dispatchCommit(storage, finish, undefined, { compensating: true }); else finish();
           } catch (error) {
             let code;
             try { code = error?.code; }
             catch { /* Unreadable failure framing is terminal. */ }
             if (code === 'namespace_paused') {
               const release = () => storage.release(ns, attempt);
-              if (commit) await dispatchCommit(storage, release, deadline); else release();
+              if (commit) await dispatchCommit(storage, release, undefined, { compensating: true }); else release();
             }
             else {
               const transient = ['model_timeout', 'model_cancelled', 'consolidation_transient'].includes(code);
               const finish = () => storage.finish(ns, attempt, transient ? 'transient' : 'terminal', new Date(now()).toISOString());
-              if (commit) await dispatchCommit(storage, finish, deadline); else finish();
+              if (commit) await dispatchCommit(storage, finish, undefined, { compensating: true }); else finish();
             }
             throw error;
           }
