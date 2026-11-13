@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/client';
 import { setImmediate as nextTurn } from 'node:timers/promises';
+import { PassThrough } from 'node:stream';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { PROTOCOL_VERSION_META_KEY, CLIENT_CAPABILITIES_META_KEY } from '@modelcontextprotocol/core/internal';
 import { createLocalSharedRuntime } from '../local-shared-runtime.mjs';
@@ -74,6 +75,22 @@ test('eight connections contain stream errors during attach, abort, ended peer, 
   await nextTurn(); await nextTurn();
   assert.equal(host.inspect().connections, 0);
   assert.equal(host.inspect().runtime.state, 'closed');
+  // No handshake yet, and separate input/output endpoints: the SDK's retained
+  // stdout error handler cannot accidentally protect the input under test.
+  const openingHost = createLocalSharedRuntime({ path: join(w.path, 'synthetic-opening-teardown.sqlite'),
+    namespace: ns, raw: false, contextCounter: counter });
+  w.defer(() => openingHost.close());
+  const opening = [];
+  for (let i = 0; i < 8; i++) {
+    const endpoint = () => new PassThrough({ destroy(error, done) { setImmediate(() => done(error ?? abort())); } });
+    const input = endpoint(), output = endpoint();
+    opening.push(openingHost.attach(input, output));
+  }
+  assert.equal(openingHost.inspect().connections, 8);
+  await Promise.all(opening.map(connection => connection.close()));
+  await openingHost.close();
+  await nextTurn(); await nextTurn();
+  assert.equal(openingHost.inspect().connections, 0);
   assert.deepEqual(asynchronousErrors, [], 'no connection may emit an uncaught exception or unhandled rejection');
 });
 
