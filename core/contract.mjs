@@ -1407,7 +1407,7 @@ export function createMemoryCore(input, internal) {
     confirm reject claimAdmission finishAdmission abandonAdmission inspectCaptureEvidence discardCaptureEvidence
     applyPlacement linkMocs rebuildIndex closeEpisodeNextStep forgetEpisode correctEpisode releaseEpisodeCorrection
     setCapturePaused setProjectCapture setProceduralMemory get list map fetch sourceSnapshot inspectAdmission
-    listReviewTransitions listReviewConflicts listEpisodes listMemoriesByTime getEpisode sessionStartContext getRationale`.split(/\s+/));
+    listReviewTransitions listReviewConflicts listEpisodes listMemoriesByTime getEpisode sessionStartContext getRationale isSuppressed`.split(/\s+/));
   return Object.freeze(Object.fromEntries(Object.entries(core).map(([method, value]) => [method,
     synchronousCommits.has(method) ? (...args) => {
       try {
