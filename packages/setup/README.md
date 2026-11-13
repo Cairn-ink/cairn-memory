@@ -9,7 +9,7 @@ local MCP tools or cloud automatic memory.
 
 Requires Node ≥22.16 and the selected CLI on PATH. The installer itself has no
 runtime dependencies.
-This README describes **installer 0.6.6**. Local mode now saves Claude Code and
+This README describes **installer 0.6.6**, published on 2026-11-13. Local mode now saves Claude Code and
 Codex conversations automatically. Codex CLI 0.167.0 and 0.167.2 are qualified
 for automatic capture; if you already use Codex with Cairn, in local or cloud
 mode, rerun setup to pick up the new qualification.
@@ -97,7 +97,7 @@ hide windows or fork fences for capture. Its setup leaves 0.6.6 hooks registered
 with their retained engine; turn capture off with 0.6.6 before downgrading to
 stop them.
 
-本說明對應**安裝器 0.6.6**。本機模式現在會自動保存 Claude Code 與 Codex 的對話。
+本說明對應**安裝器 0.6.6**（2026-11-13 發布）。本機模式現在會自動保存 Claude Code 與 Codex 的對話。
 Codex CLI 0.167.0 與 0.167.2 已通過格式驗證，可以自動擷取；已經在 Cairn 使用
 Codex 的人（本機或雲端模式）請重新執行 setup，以套用新的驗證。
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.6 — Unreleased
+## 0.6.6 — 2026-11-13
 
 - Raw document and query embeddings now require `--raw-semantic` or an explicit `--context-embedder`; setup discloses that an MCP OpenAI key sends memories and search text to OpenAI for semantic search, up to an estimated US$1 per server run. To keep everything on this computer, don't give the server a key; `--no-context-semantic` only turns off embeddings, and with a key, recall and other model features still send memory text to OpenAI.
 - Codex CLI 0.167.0 and 0.167.2 are now qualified for automatic capture. Earlier installers report `format_changed` for them and keep saving off; rerun setup to pick up the new qualification.
@@ -106,7 +106,7 @@
   Unknown event times are handled conservatively; both Raw search intents hide
   fenced sessions. Hosted selections retain their existing behavior and schema.
 
-## 0.6.5 — Unreleased
+## 0.6.5 — 2026-11-09
 
 - 0.6.4 was prepared but not published; its changes ship in 0.6.5.
 - Hosted Codex SessionStart shows a short notice when format qualification
