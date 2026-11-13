@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.6.7 — Unreleased
+
 ## 0.6.6 — Unreleased
 
 - Raw document and query embeddings now require `--raw-semantic` or an explicit `--context-embedder`; setup discloses that an MCP OpenAI key sends memories and search text to OpenAI for semantic search, up to an estimated US$1 per server run. To keep everything on this computer, don't give the server a key; `--no-context-semantic` only turns off embeddings, and with a key, recall and other model features still send memory text to OpenAI.
