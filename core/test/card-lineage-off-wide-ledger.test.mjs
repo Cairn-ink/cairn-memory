@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { compareWideTraces, assertWidePins, summary, ledgerAdditionSummary, compareWideTables,
   currentReceiptWalkSQLTexts, reconstructWideTrace, currentAdditionSummary, validateSqlAdditions, hash, cardFamilySQL, forgettingMethods,
@@ -350,7 +351,7 @@ test('SQL normalization preserves literals, quoted identifiers and their comment
     `DELETE FROM "main" . [card_bindings] WHERE source_ref='a  b;-- /* c */'`);
   assert.equal(cardFamilySQL(row(`SELECT 'DELETE FROM card_bindings; -- literal' FROM memories`)), false);
   assert.equal(cardFamilySQL(row(`UPDATE memories SET content='card_bindings; DELETE FROM private_cards'`)), false);
-  assert.equal(cardFamilySQL(row('UPDATE memories SET revision=2 /* DELETE FROM card_bindings */')), false);
+  assert.equal(cardFamilySQL(row('UPDATE memories SET revision=2 /* DELETE FROM card_bindings */')), true, 'comments in flattened traces fail closed');
   assert.equal(purgeAdditionSQL(row('DELETE /* gap */ FROM "main".[card_operations] WHERE target_id=?')), true);
 });
 
@@ -409,4 +410,39 @@ for (const mode of ['archive', 'pins']) test(`${mode} card-family: a reviewed le
   if (mode === 'archive') assert.throws(() => compare(f), { code: 'ERR_ASSERTION', message: /outside a forgetting call/ });
   else assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods, f.cardStatementTexts ?? {}, executionPins(f)),
     { code: 'ERR_ASSERTION', message: /outside a forgetting call/ });
+});
+
+for (const method of ['run', 'exec']) test(`pins-only rejects flattened line comment through tracer ${method}`, () => {
+  const controls = new URL('../testing/card-lineage-off-wide-controls.mjs', import.meta.url).href;
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    import { DatabaseSync } from 'node:sqlite';
+    const {startTrace,stopTrace,statements}=await import(${JSON.stringify(controls)});
+    const db=new DatabaseSync(':memory:');db.exec('CREATE TABLE card_memory_bindings(card_id TEXT)');
+    startTrace();
+    const sql='DELETE -- gap\\nFROM card_memory_bindings WHERE card_id=?';
+    db.prepare(sql).run('synthetic-unrelated');
+    db.exec(sql.replace('?',"'synthetic-unrelated'"));
+    stopTrace();db.close();process.stdout.write(JSON.stringify(statements));
+  `], { encoding: 'utf8' });
+  assert.equal(child.status, 0, child.stderr);
+  const recorded = JSON.parse(child.stdout).find(([, operation]) => operation === method);
+  assert.ok(recorded); assert.equal(recorded[0].includes('\n'), false);
+  assert.match(recorded[0], /DELETE -- gap FROM card_memory_bindings/);
+  const f = fixture(), executions = structuredClone(executionPins(f)), ledger = pinned(f).sqlAdditions;
+  delete f.archived;
+  f.parts = structuredClone(f.parts); f.parts[2][2].push(recorded); f.current = trace(f.parts);
+  assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions,
+    { ...summary(f.current), sqlAdditions: ledger }, f.sqlAdditionMethods, {}, executions),
+    { code: 'ERR_ASSERTION', message: /unreviewed card-family statement/ });
+});
+test('only exact single read-only schema pragmas are outside the Card family', () => {
+  for (const table of ['private_cards', 'card_effects', 'card_epochs', 'card_moc_epochs'])
+    for (const name of ['table_info', 'table_xinfo', 'foreign_key_list', 'index_list', 'index_info', 'index_xinfo'])
+      for (const target of [table, '"' + table + '"', "'" + table + "'"])
+        assert.equal(cardFamilySQL(row(`PRAGMA ${name}(${target})`)), false);
+  for (const sql of ['PRAGMA writable_schema=ON', 'PRAGMA table_info("private_cards"); SELECT 1',
+    'PRAGMA unknown("private_cards")', 'PRAGMA table_info("private_cards");;', ';PRAGMA table_info("private_cards")', 'PRAGMA table_info="private_cards"',
+    'PRAGMA table_info("private_cards", "card_effects")', 'PRAGMA main.table_info("private_cards")']) {
+    assert.equal(cardFamilySQL(row(sql)), true, sql);
+  }
 });

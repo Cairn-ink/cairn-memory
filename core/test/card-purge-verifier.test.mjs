@@ -17,6 +17,13 @@ import { writeContentSuppressionInside } from '../content-suppression-storage.mj
 import { lineageHmac } from '../card-lineage.mjs';
 import { engineCardMetadataInside } from '../content-safety.mjs';
 
+import { prepareClosureControl, closureStoreKinds } from '../testing/card-closure-controls.mjs';
+
+async function committedPublicControl(t, operation = 'forget') {
+  const control = await prepareClosureControl(t, closureStoreKinds[0], operation);
+  control.verify(ok(await control.invoke()));
+}
+
 const timestamp = '2026-06-01T00:00:00.000Z';
 function storage(f) { return createEngineCardStorage({ db: f.db, identity: f.identity, ready() {} }); }
 function admit(f, suffix, namespace = ns) {
@@ -142,6 +149,9 @@ const projectA = { ...ns, scope: 'project', projectId: 'synthetic-project-a' };
 const projectB = { ...ns, scope: 'project', projectId: 'synthetic-project-b' };
 for (const [authorized, target] of [[projectA, projectB], [personal, projectB], [projectA, personal]])
 test(`purge scope rejects whole ${target.scope} closure under ${authorized.scope} authority`, async t => {
+  const publicControl = await setup(t, false, target);
+  ok(publicControl.core.forget({ namespace: target, memoryId: publicControl.memory.id, expectedRevision: publicControl.memory.revision }));
+  assert.equal(publicControl.row(publicControl.card.id).state, 'deleted');
   const f = await setup(t, false, target), before = contentSafetyInventory(f.db);
   const control = new Error('synthetic-control-rollback');
   assert.throws(() => guardedPurge(f, target, [target], undefined, () => { throw control; }), error => error === control,
@@ -158,6 +168,9 @@ test(`purge scope rejects whole ${target.scope} closure under ${authorized.scope
 
 for (const [authorized, target] of [[projectA, projectB], [personal, projectB], [projectA, personal]])
 test(`declared deletion binds its ${target.scope} target to ${authorized.scope} operation scopes`, async t => {
+  const publicControl = await setup(t, false, target);
+  ok(publicControl.call('deleteKnowledgeCard', { namespace: target, actionId: 'synthetic-control-delete', cardId: publicControl.card.id, expectedRevision: publicControl.card.revision }));
+  assert.equal(publicControl.row(publicControl.card.id).state, 'deleted');
   const f = await setup(t, false, target), before = contentSafetyInventory(f.db);
   let reached = false;
   registerContentWriteGuard((db, operation) => {
@@ -202,6 +215,8 @@ test('declared engine deletion accepts its native receipt and authorization', as
   assert.equal(validated, true); assert.equal(f.row(f.card.id).state, 'deleted');
 });
 test('suppression-enabled engine deletion without lineage also freezes its existing receipt', async t => {
+  const control = await prepareClosureControl(t, closureStoreKinds.find(kind => kind.family === 'suppression' && kind.base === 23), 'Card deletion');
+  control.verify(ok(await control.invoke()));
   const fixture = safetyFixture(t, 23); await fixture.migrate();
   const host = lineageHost(), core = openMemoryCore({ path: fixture.path, privateCards: host.options }), db = fixture.connect();
   attestContentSafety(db); t.after(() => { core.close(); db.close(); });
@@ -219,6 +234,7 @@ test('suppression-enabled engine deletion without lineage also freezes its exist
 });
 for (const fault of ['existing cluster key', 'extra operation', 'extra authorization', 'unwritten family table'])
 test(`declared deletion closure rejects ${fault} at validation with complete rollback`, async t => {
+  await committedPublicControl(t, 'Card deletion');
   const f = await setup(t), before = contentSafetyInventory(f.db); let control = false, reached = false;
   const result = declaredDeletion(f, undefined, () => { control = true; throw new Error('synthetic-control-rollback'); });
   assert.equal(control, true, 'the identical native deletion passes validation before intentional rollback');
@@ -240,6 +256,7 @@ test(`declared deletion closure rejects ${fault} at validation with complete rol
 });
 for (const path of ['forgetting', 'trigger invalidation', 'maintenance purge', 'maintenance retirement'])
 test(`${path} closure freezes a Card-family table the path never writes`, async t => {
+  await committedPublicControl(t, { forgetting: 'forget', 'trigger invalidation': 'correction' }[path] ?? path);
   const f = await setup(t), before = contentSafetyInventory(f.db), control = new Error('synthetic-control-rollback');
   const invoke = (mutate, validated) => {
     if (path === 'forgetting') return guardedPurge(f, ns, [ns], mutate, validated);
@@ -270,6 +287,7 @@ test(`${path} closure freezes a Card-family table the path never writes`, async 
 });
 for (const fault of ['cluster key update', 'operation target moved away', 'operation removed', 'operation inserted', 'authorization request target'])
 test(`purge freezes ${fault} with a native valid-purge control`, async t => {
+  await committedPublicControl(t);
   const f = await setup(t);
   if (['operation target moved away', 'operation removed'].includes(fault)) auditOperation(f, f.card.id);
   const before = contentSafetyInventory(f.db), control = new Error('synthetic-control-rollback');
@@ -305,6 +323,7 @@ for (const fault of ['wrong namespace', 'wrong owner', 'multi-step revision', 's
   'two deletion effects', 'effect for another entity', 'missing purge fact', 'mismatched purge fact',
   'operation does not forget the bound Memory', 'an authored Card', 'non-null text', 'other column edited',
   'no engine receipt', 'Memory not among removed bindings', 'Memory fact without tombstone', 'already deleted Memory']) test(`sealed purge verifier rejects ${fault}`, async t => {
+  await committedPublicControl(t);
   const f = await setup(t, fault === 'an authored Card');
   if (fault === 'already deleted Memory') f.db.prepare('UPDATE memories SET deleted=1,content=NULL,revision=revision+1 WHERE id=?').run(f.memory.id);
   const before = contentSafetyInventory(f.db);
@@ -313,7 +332,7 @@ for (const fault of ['wrong namespace', 'wrong owner', 'multi-step revision', 's
 });
 
 for (const method of ['capture', 'correct', 'editKnowledgeCard']) test(`ordinary ${method} cannot delete an engine Card through the purge branch`, async t => {
-  const f = await setup(t), authored = f.confirm(f.draft([f.note('synthetic-edit-source')])), before = contentSafetyInventory(f.db);
+  let f = await setup(t), authored = f.confirm(f.draft([f.note('synthetic-edit-source')])), before = contentSafetyInventory(f.db);
   const invoke = () => method === 'capture' ? f.core.capture({ namespace: ns, client: 'synthetic', sessionId: 'synthetic-capture',
     eventId: 'synthetic-capture-event', messages: [{ id: 'synthetic-message', role: 'user', content: 'Synthetic unrelated capture.' }] }) : method === 'correct' ?
     f.core.correct({ namespace: ns, memoryId: f.other.id, expectedRevision: f.other.revision,
@@ -321,6 +340,9 @@ for (const method of ['capture', 'correct', 'editKnowledgeCard']) test(`ordinary
     f.call('editKnowledgeCard', { actionId: 'synthetic-authored-edit', cardId: authored.id, expectedRevision: authored.revision,
       title: 'Synthetic edited title', body: 'Synthetic edited body', applicability: 'current',
       bindings: ok(f.call('getCard', { cardId: authored.id })).card.bindings.map(b => b.source) });
+  ok(await invoke());
+  f = await setup(t); authored = f.confirm(f.draft([f.note('synthetic-edit-source')]));
+  before = contentSafetyInventory(f.db);
   let injected = 0;
   registerContentWriteGuard((db, operation) => {
     const guard = beginContentWriteSafety(db, operation); if (!guard) return guard;
@@ -407,6 +429,7 @@ for (const order of ['stale first', 'current first']) test(`publication preserve
 });
 
 for (const extra of [false, true]) test(`sealed user Card deletion ${extra ? 'refuses a second undeclared engine Card' : 'erases its declared engine Card'}`, async t => {
+  if (extra) await committedPublicControl(t, 'Card deletion');
   const f = await setup(t), second = extra ? publish(f, [f.other], 'moc:synthetic-other-target') : null;
   const before = contentSafetyInventory(f.db);
   let injected = 0;

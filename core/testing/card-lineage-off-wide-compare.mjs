@@ -33,16 +33,21 @@ export function reviseSQL(key, statements, sqlRevisions = []) {
 // Full SQL, method and arguments are still compared against the ledger below.
 // Tokenize before recognizing targets: comments and separators are meaningful
 // only outside literals/quoted identifiers. Keep exact trace rows for the pins.
-function scanSQL(sql) {
-  const statements=[],tokens=[];let normalized='',space=false,uncertain=false,depth=0;
+function scanSQL(sql, retainCommentTokens = false) {
+  const statements=[],tokens=[];let normalized='',space=false,uncertain=false,depth=0,hasComment=false,separators=0;
   const emit=(raw,kind,value=raw)=>{
     if(space&&normalized)normalized+=' ';
     normalized+=raw;space=false;tokens.push({kind,value});
   };
-  const finish=()=>{if(tokens.length)statements.push({tokens:tokens.splice(0),uncertain:uncertain||depth!==0});uncertain=false;depth=0;};
+  const finish=()=>{if(tokens.length)statements.push({tokens:tokens.splice(0),uncertain:uncertain||depth!==0,hasComment});uncertain=false;depth=0;hasComment=false;};
   for(let i=0;i<sql.length;) {
     const c=sql[i],next=sql[i+1];
     if(/\s/.test(c)){space=true;i++;continue;}
+    // Traces flatten whitespace, losing line-comment ends. For classification,
+    // fail closed over every token outside string literals, even after comments.
+    if(retainCommentTokens&&((c==='-'&&next==='-')||(c==='/'&&next==='*'))){
+      uncertain=true;hasComment=true;emit(c+next,'symbol');i+=2;continue;
+    }
     if(c==='-'&&next==='-'){while(i<sql.length&&sql[i]!=='\n'&&sql[i]!=='\r')i++;space=true;continue;}
     if(c==='/'&&next==='*'){
       const end=sql.indexOf('*/',i+2);if(end<0){uncertain=true;break;}
@@ -63,10 +68,10 @@ function scanSQL(sql) {
     const word=/^[a-z_][a-z_0-9$]*/i.exec(sql.slice(i));
     if(word){emit(word[0],'word');i+=word[0].length;continue;}
     if(c==='(')depth++;if(c===')'&&--depth<0)uncertain=true;
-    if(c===';'){normalized+=';';space=false;finish();i++;continue;}
+    if(c===';'){separators++;normalized+=';';space=false;finish();i++;continue;}
     emit(c,'symbol');i++;
   }
-  finish();return {normalized:normalized.trim(),statements};
+  finish();return {normalized:normalized.trim(),statements,separators};
 }
 const cardTable = name => /^(?:private_cards|card_[a-z_0-9]+)$/i.test(name);
 const keyword=(token,word)=>token?.kind==='word'&&token.value.toUpperCase()===word;
@@ -117,10 +122,22 @@ export const purgeAdditionSQL = ([sql]) => scanSQL(sql).statements.some(statemen
 // This set describes source-forgetting calls, independently of the reviewed
 // subset of methods carrying ledger rows in a particular workload.
 export const forgettingMethods = new Set(['forget', 'deleteConversation', 'forgetEpisode', 'reject']);
+const schemaReadPragmas = new Set(['table_info','table_xinfo','foreign_key_list','index_list','index_info','index_xinfo']);
+function schemaReadPragma({tokens,uncertain}) {
+  return !uncertain&&tokens.length===5&&keyword(tokens[0],'PRAGMA')&&tokens[1].kind==='word'&&
+    schemaReadPragmas.has(tokens[1].value.toLowerCase())&&tokens[2].value==='('&&
+    ['word','identifier','literal'].includes(tokens[3].kind)&&tokens[4].value===')';
+}
 export function cardFamilySQL([sql, , bindings = []]) {
-  return scanSQL(sql).statements.some(statement=>{
+  const {statements,separators,normalized}=scanSQL(sql,true);
+  // Only one exact read-only introspection statement is exempt. Every other
+  // PRAGMA (including one embedded in a batch) retains uncertain classification.
+  if(statements.length===1&&separators<=1&&!normalized.startsWith(';')&&schemaReadPragma(statements[0]))return false;
+  return statements.some(statement=>{
     const {tokens}=statement,{writes,uncertain}=statementTargets(statement);
-    if(writes.some(write=>cardTable(write.table))||uncertain&&mentionsCard(tokens))return true;
+    const mentionTokens=statement.hasComment?tokens.filter(token=>token.kind!=='literal'):tokens;
+    if(keyword(tokens[0],'PRAGMA')&&keyword(tokens[1],'WRITABLE_SCHEMA'))return true;
+    if(writes.some(write=>cardTable(write.table))||uncertain&&mentionsCard(mentionTokens))return true;
     if(!tokens.some(token=>keyword(token,'SELECT')))return false;
     if(reads(tokens,'JOIN').some(name=>name.toLowerCase()==='card_operations'))return true;
     return [...reads(tokens,'FROM'),...reads(tokens,'JOIN')].some(name=>/^sqlite_(?:master|schema)$/i.test(name))&&

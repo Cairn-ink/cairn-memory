@@ -213,6 +213,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     const byType = Object.fromEntries(input.types.map(type => [type, { scanned: 0, included: 0, partial: true }]));
     const exhausted = new Set(), blocked = new Set(), matches = [], queryWords = words(input.query);
     const deadline = Symbol('selection deadline');
+    let deniedTraversalTimedOut = false;
     function next(type, metadataOnly = false) {
       let candidateAfter = after[type];
       const layout=cachedContentLayout(db);
@@ -226,7 +227,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
         // A denied prefix has no caller-supplied row bound. Check the shared
         // deadline before continuing it, including metadata-only lookahead.
         if (candidateAfter !== after[type] && performance.now() - started >= input.deadlineMs) {
-          stopped = 'deadline'; return deadline;
+          stopped = 'deadline'; deniedTraversalTimedOut = true; return deadline;
         }
         const row = type === 'memory' ? db.prepare(`SELECT ${columns} FROM memories WHERE ${where}
         AND deleted=0 AND id>? ORDER BY id LIMIT 1`).get(...boundary(ns), candidateAfter) :
@@ -287,7 +288,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       byType[type].included++;
     }
     // A metadata-only bounded peek tells callers which streams actually ended.
-    for (const type of input.types) if (stopped !== 'deadline' && !blocked.has(type)) {
+    for (const type of input.types) if (!deniedTraversalTimedOut && !blocked.has(type)) {
       const peek=next(type,true);if(peek===deadline)break;
       assertContributor(type,peek,true);if(!peek)exhausted.add(type);
     }

@@ -206,7 +206,8 @@ for (const phase of ['selection', 'metadata lookahead']) test(`denied engine ${p
   ok(f.core.admit({ namespace: ns, memory: { content: surviving, kind: 'fact' },
     receipts: [receipt('synthetic-deadline-source')] }));
   const cards = createPrivateCardStorage({ db: f.db, identity: f.identity, ready() {} });
-  const evidence = createPrivateEvidenceStorage({ db: f.db, identity: f.identity, cardDetailInside: cards.cardDetailInside });
+  const evidence = createPrivateEvidenceStorage({ db: f.db, identity: f.identity, cardDetailInside: cards.cardDetailInside,
+    receiptRefInside: cards.receiptRefInside });
   const prepare = f.db.prepare, clock = Object.getOwnPropertyDescriptor(performance, 'now');
   let candidates = 0;
   // Model an arbitrarily long increasing denied prefix. A hard probe ceiling
@@ -247,7 +248,8 @@ test('deadline cursor resumes through denied candidates and consumes every reada
   const readable = Array.from({ length: 3 }, (_, i) => engine.commit(ns,
     { key: 'moc:synthetic-resume-' + i, memories: sources }, { body: cardBody }, '2026-06-01T00:00:00.000Z', () => {}).id).sort();
   const cards = createPrivateCardStorage({ db: f.db, identity: f.identity, ready() {} });
-  const evidence = createPrivateEvidenceStorage({ db: f.db, identity: f.identity, cardDetailInside: cards.cardDetailInside });
+  const evidence = createPrivateEvidenceStorage({ db: f.db, identity: f.identity, cardDetailInside: cards.cardDetailInside,
+    receiptRefInside: cards.receiptRefInside });
   const prepare = f.db.prepare, clock = Object.getOwnPropertyDescriptor(performance, 'now');
   const denied = [1, 2, 3].map(i => 'engine-card.!synthetic-denied-' + i);
   assert.ok(denied.at(-1) < readable[0]);
@@ -286,6 +288,67 @@ test('deadline cursor resumes through denied candidates and consumes every reada
     assert.equal(new Set(seen).size, readable.length, 'no consumed readable candidate repeats or is skipped');
   } finally {
     f.db.prepare = prepare;
+    if (clock) Object.defineProperty(performance, 'now', clock); else delete performance.now;
+  }
+});
+
+// The prior selector always ran its final metadata lookahead after an ordinary
+// outer-loop timeout. Reconstruct that control without an archive dependency;
+// all selection SQL and binding expressions are shared and compared in full.
+async function outerDeadlineReference() {
+  const { readFileSync } = await import('node:fs');
+  const location = new URL('../private-evidence-storage.mjs', import.meta.url);
+  let source = readFileSync(location, 'utf8');
+  assert.ok(source.includes('if (!deniedTraversalTimedOut && !blocked.has(type))'));
+  source = source.replace('if (!deniedTraversalTimedOut && !blocked.has(type))', 'if (!blocked.has(type))')
+    .replace(/from '(\.\/[^']+)'/g, (_, path) => `from '${new URL(path, location).href}'`);
+  return (await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'))).createPrivateEvidenceStorage;
+}
+for (const populated of [false, true]) test(`ordinary outer deadline preserves prior ${populated ? 'Memory-only' : 'empty Card'} result and statement trace`, async t => {
+  const f = await lineageFixture(t);
+  if (populated) ok(f.core.admit({ namespace: ns, memory: { content: surviving, kind: 'fact' },
+    receipts: [receipt('synthetic-outer-deadline')] }));
+  const cards = createPrivateCardStorage({ db: f.db, identity: f.identity, ready() {} });
+  const previousFactory = await outerDeadlineReference();
+  const input = { intent: 'current', query: 'Synthetic', types: [populated ? 'memory' : 'card'], deadlineMs: 100 };
+  const clock = Object.getOwnPropertyDescriptor(performance, 'now');
+  function run(factory) {
+    const statements = [], prepare = f.db.prepare;
+    let ticks = 0;
+    Object.defineProperty(performance, 'now', { configurable: true, value: () => ticks++ ? 100 : 0 });
+    f.db.prepare = function(sql) {
+      const statement = prepare.call(this, sql);
+      return new Proxy(statement, { get(target, name) {
+        const value = Reflect.get(target, name, target);
+        if (typeof value !== 'function') return value;
+        return (...bindings) => { statements.push([sql, name, bindings]); return Reflect.apply(value, target, bindings); };
+      } });
+    };
+    try {
+      const result = readTransaction(f.db, () => inContentSuppressionRequestInside(f.db,
+        () => factory({ db: f.db, identity: f.identity, cardDetailInside: cards.cardDetailInside,
+          receiptRefInside: cards.receiptRefInside }).call('selectEvidence', ns, input, 1), [ns]));
+      return { result, statements };
+    } finally { f.db.prepare = prepare; }
+  }
+  try {
+    const expected = run(previousFactory), current = run(createPrivateEvidenceStorage);
+    assert.deepEqual(current, expected, 'result, snapshot, cursor, SQL text, execution methods and bindings agree');
+    const { result, statements } = current, type = input.types[0];
+    assert.deepEqual(result.items, []);
+    assert.equal(result.coverage.scannedRows, 0); assert.equal(result.coverage.scannedBodyUnits, 0);
+    assert.deepEqual(result.coverage.byType[type], { scanned: 0, included: 0, partial: populated });
+    assert.equal(result.coverage.status, populated ? 'budget_exhausted' : 'complete');
+    assert.equal(result.coverage.reason, populated ? 'deadline' : null);
+    if (populated) {
+      assert.ok(result.nextCursor);
+      const cursor = JSON.parse(Buffer.from(result.nextCursor.split('.')[0], 'base64url'));
+      assert.deepEqual(cursor.after, { memory: '' }); assert.equal(cursor.turn, 0);
+    } else assert.equal(result.nextCursor, null);
+    const scans = statements.filter(([sql]) => /^SELECT id,revision(?:,body_revision)? FROM (?:memories|private_cards) WHERE/.test(sql));
+    assert.equal(scans.length, 1, 'the unchanged final metadata probe still executes');
+    assert.equal(scans[0][1], 'get'); assert.deepEqual(scans[0][2], [ns.ownerId, ns.scope, ns.projectId, '']);
+  } finally {
     if (clock) Object.defineProperty(performance, 'now', clock); else delete performance.now;
   }
 });

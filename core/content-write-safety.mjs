@@ -40,6 +40,51 @@ const referenceKinds = field => /MemoryIds?$/.test(field)||/^memoryIds?$/.test(f
   /CardIds?$/.test(field)||/^cardIds?$/.test(field)?'card':
   /^(?:source|note)Ids?$/.test(field)?'submitted-note':field==='conversationId'?'raw':null;
 
+// Closure membership is schema data, never a search through payload strings.
+// JSON paths address typed reference objects only; '*' visits one array level.
+// The schema coverage test checks direct FKs and the declared polymorphic slots.
+export const engineCardClosureReferences = {
+  private_cards: { columns: ['id'] },
+  card_operations: { columns: ['target_id'], json: [
+    { column: 'result', path: [], key: 'id', rowMethods: ['createCardDraft', 'editCardDraft', 'confirmCardDraft',
+      'cancelCardDraft', 'editKnowledgeCard', 'deleteKnowledgeCard', 'declareCardCurrentDependencies',
+      'revalidateCardCurrentDependencies', 'consolidate'] },
+    { column: 'result', path: ['cardRefs', '*'], key: 'cardId', when: ['type', 'card'] }] },
+  card_body_provenance: { columns: ['card_id'] },
+  card_body_sources: { columns: ['card_id'] },
+  card_body_authorizations: { columns: ['card_id', 'request_target'] },
+  card_bindings: { columns: ['card_id'] },
+  card_memory_bindings: { columns: ['card_id'] },
+  card_raw_bindings: { columns: ['card_id'] },
+  card_effects: { columns: [{ key: 'entity_id', when: ['entity_type', 'card'] }] },
+  card_applicability_reviews: { columns: ['card_id'] },
+  card_current_dependencies: { columns: ['card_id'] },
+  card_moc_title_sources: { columns: ['card_id'] },
+  card_moc_refs: { columns: ['card_id'] },
+  card_raw_pending_invalidations: { columns: ['card_id'] },
+  content_identity_reservations: { columns: [
+    { key: 'stable_key', when: ['kind', 'card'] }, { key: 'incarnation', when: ['kind', 'card'] }] },
+  content_suppressions: { columns: [
+    { key: 'stable_key', when: ['kind', 'card'] }, { key: 'incarnation', when: ['kind', 'card'] }] },
+  method_changes: { json: [{ column: 'reason_refs', path: ['*'], key: 'cardId', when: ['type', 'card'] }] },
+  method_binding_events: { json: [{ column: 'reason_refs', path: ['*'], key: 'cardId', when: ['type', 'card'] }] },
+  role_profile_releases: { json: [{ column: 'payload', path: ['fields', 'related', '*'], key: 'cardId', when: ['type', 'card'] }] },
+  role_profile_changes: { json: [{ column: 'payload', path: ['reasonRefs', '*'], key: 'cardId', when: ['type', 'card'] }] },
+};
+function closureRowReferencesCard(table, row, keys) {
+  const refs=engineCardClosureReferences[table];
+  if(!refs||!row)return false;
+  const matches=(node,slot)=>node&&(!slot.when||node[slot.when[0]]===slot.when[1])&&keys.has(node[slot.key]);
+  if(refs.columns?.some(slot=>matches(row,typeof slot==='string'?{key:slot}:slot)))return true;
+  return refs.json?.some(slot=>{
+    if(row[slot.column]==null||slot.rowMethods&&!slot.rowMethods.includes(row.method))return false;
+    let nodes;
+    try{nodes=[JSON.parse(row[slot.column])];}catch{fail('evidence_unavailable');}
+    for(const part of slot.path)nodes=nodes.flatMap(node=>part==='*'?(Array.isArray(node)?node:[]):[node?.[part]]);
+    return nodes.some(node=>matches(node,slot));
+  })??false;
+}
+
 /** A session spans just one mutation. No SQL or session is allocated on open,
  * reads, legacy cells, or trusted maintenance without a facade write context. */
 export function beginContentWriteSafety(db, operation) {
@@ -513,30 +558,10 @@ export function beginContentWriteSafety(db, operation) {
           contentSuppressionTargetMatches(f,namespace(row),{kind:'card',key:row.id}));
       // Every existing engine transition has one explanation and one closure
       // audit, including declared deletion and internal maintenance transactions.
-      // These tables come from the schema's direct and polymorphic Card refs.
-      // Empty allowances freeze a table; an unknown table/row is never exempt.
-      const frozenCardRows={card_operations:[],card_body_provenance:[],card_body_sources:[],
-        card_body_authorizations:[],card_bindings:[],card_memory_bindings:[],card_raw_bindings:[],
-        card_effects:[],card_applicability_reviews:[],card_current_dependencies:[],
-        card_moc_title_sources:[],card_moc_refs:[],card_raw_pending_invalidations:[],
-        content_identity_reservations:[],content_suppressions:[],method_changes:[],method_binding_events:[],
-        role_profile_releases:[],role_profile_changes:[]};
+      // An empty allowance freezes every declared structural reference table.
+      const frozenCardRows=Object.fromEntries(Object.keys(engineCardClosureReferences).map(table=>[table,[]]));
       const before=c=>c.old?Object.fromEntries(c.columns.map((column,i)=>
         [column.name,c.old[i]===undefined?c.row[column.name]:c.old[i]])):null;
-      const namesCard=(value,keys)=>{
-        const pending=[value];
-        while(pending.length) {
-          const next=pending.pop();
-          if(typeof next==='string') {
-            if(keys.has(next))return true;
-            try{pending.push(JSON.parse(next));}catch{ /* Plain scalar text. */ }
-          } else if(next!==null&&typeof next==='object')for(const [name,v]of Object.entries(next)) {
-            if(keys.has(name))return true;
-            pending.push(v);
-          }
-        }
-        return false;
-      };
       function engineClosure(change) {
         const row=change.row,ns=namespace(row),key=row.id;
         const keys=new Set([key,before(change)?.id]);keys.delete(undefined);
@@ -551,7 +576,13 @@ export function beginContentWriteSafety(db, operation) {
           effects[0].row.revision===row.revision&&sameNamespace(effects[0].row)&&
           facts.length===1&&!facts[0].old&&facts[0].row.reason==='purge'&&facts[0].row.match_mode==='incarnation'&&
           facts[0].row.action_id===effects[0].row.action_id&&contentSuppressionTargetMatches(facts[0].row,ns,{kind:'card',key});
+        // The suppression writer inserts this reservation only on first purge.
+        // Existing reservations are not rewritten; updates/removals never qualify.
+        const reservations=canonical.filter(c=>c.table==='content_identity_reservations'&&!c.old&&
+          sameNamespace(c.row)&&c.row.kind==='card'&&c.row.stable_key===key&&c.row.incarnation===key&&
+          c.row.evidence_origin==='writer'&&facts.length===1&&facts[0].row.evidence_origin==='writer');
         const purgeWrites=()=>({...frozenCardRows,private_cards:[change],card_effects:effects,content_suppressions:facts,
+          content_identity_reservations:reservations,
           ...Object.fromEntries([...bindingTables,'card_current_dependencies'].map(table=>[table,
             removed.filter(c=>c.table===table&&keys.has(c.row.card_id))]))});
         const ownAction=purged?effects[0].row.action_id:null;
@@ -577,7 +608,7 @@ export function beginContentWriteSafety(db, operation) {
         ].filter(path=>path.accept);
         if(paths.length!==1)fail('evidence_unavailable');
         const allowed=paths[0].writes();
-        for(const c of [...canonical,...removed])if(namesCard(c.row,keys)||c.old&&namesCard(before(c),keys)) {
+        for(const c of [...canonical,...removed])if(closureRowReferencesCard(c.table,c.row,keys)||c.old&&closureRowReferencesCard(c.table,before(c),keys)) {
           if(!Object.hasOwn(allowed,c.table)||!allowed[c.table].includes(c))fail('evidence_unavailable');
         }
         if(purged)for(const table of [...bindingTables,'card_current_dependencies'])if(exists(table)&&
