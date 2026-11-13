@@ -238,3 +238,54 @@ for (const phase of ['selection', 'metadata lookahead']) test(`denied engine ${p
   assert.ok(result.nextCursor);
   assert.equal(JSON.stringify(result).includes('engine-card.synthetic-denied'), false);
 });
+
+test('deadline cursor resumes through denied candidates and consumes every readable Card once', async t => {
+  const f = await lineageFixture(t), memory = ok(f.core.admit({ namespace: ns,
+    memory: { content: surviving, kind: 'fact' }, receipts: [receipt('synthetic-resume-source')] })).memory;
+  const engine = createEngineCardStorage({ db: f.db, identity: f.identity, ready() {} });
+  const sources = engine.snapshot(ns, 512, () => {}).memories.filter(m => m.id === memory.id);
+  const readable = Array.from({ length: 3 }, (_, i) => engine.commit(ns,
+    { key: 'moc:synthetic-resume-' + i, memories: sources }, { body: cardBody }, '2026-06-01T00:00:00.000Z', () => {}).id).sort();
+  const cards = createPrivateCardStorage({ db: f.db, identity: f.identity, ready() {} });
+  const evidence = createPrivateEvidenceStorage({ db: f.db, identity: f.identity, cardDetailInside: cards.cardDetailInside });
+  const prepare = f.db.prepare, clock = Object.getOwnPropertyDescriptor(performance, 'now');
+  const denied = [1, 2, 3].map(i => 'engine-card.!synthetic-denied-' + i);
+  assert.ok(denied.at(-1) < readable[0]);
+  let probes = 0, now = 0, timeout = true;
+  f.db.prepare = function(sql) {
+    if (/^SELECT .* FROM private_cards WHERE/.test(sql) && sql.includes("state='confirmed' AND id>?")) {
+      const statement = prepare.call(this, sql);
+      return { get(...bindings) {
+        probes++;
+        const id = denied.find(id => id > bindings.at(-1));
+        if (id) {
+          if (timeout && id === denied.at(-1)) now = 100;
+          return { id, revision: 1, body_revision: 1, state: 'confirmed' };
+        }
+        return statement.get(...bindings);
+      } };
+    }
+    return prepare.call(this, sql);
+  };
+  Object.defineProperty(performance, 'now', { configurable: true, value: () => now });
+  const select = cursor => readTransaction(f.db, () => inContentSuppressionRequestInside(f.db,
+    () => evidence.call('selectEvidence', ns, { query: 'Synthetic', types: ['card'], intent: 'current',
+      limit: 1, deadlineMs: 100, ...(cursor ? { cursor } : {}) }, 1), [ns]));
+  try {
+    const first = select();
+    assert.equal(probes, 3, 'deadline sentinel prevents a new final lookahead traversal');
+    assert.deepEqual(first.items, []); assert.equal(first.coverage.reason, 'deadline');
+    assert.equal(first.coverage.byType.card.partial, true); assert.ok(first.nextCursor);
+    timeout = false; now = 1000; // A later call gets its own later absolute deadline.
+    const seen = []; let cursor = first.nextCursor;
+    for (let page = 0; cursor && page < readable.length; page++) {
+      const next = select(cursor);
+      assert.equal(next.items.length, 1); seen.push(next.items[0].ref.cardId); cursor = next.nextCursor;
+    }
+    assert.equal(cursor, null); assert.deepEqual(seen, readable);
+    assert.equal(new Set(seen).size, readable.length, 'no consumed readable candidate repeats or is skipped');
+  } finally {
+    f.db.prepare = prepare;
+    if (clock) Object.defineProperty(performance, 'now', clock); else delete performance.now;
+  }
+});

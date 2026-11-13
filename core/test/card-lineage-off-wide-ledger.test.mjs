@@ -226,6 +226,18 @@ for (const mutation of ['purge moved before the fence', 'purge moved after the t
   });
 
 const reviewedCardText = 'UPDATE private_cards SET revision=revision+1 WHERE id=?';
+for (const [name, sql] of [
+  ['comment-separated deletion', 'DELETE /* gap */ FROM card_memory_bindings WHERE card_id=?'],
+  ['second statement writes a Card', 'UPDATE memories SET revision=revision WHERE id=?; DELETE FROM main."card_memory_bindings" WHERE card_id=?'],
+]) test(`pins-only classifier rejects ${name} with fixed Card pins and regenerated general summaries`, () => {
+  const f = fixture(), reviewedExecutions = structuredClone(executionPins(f)), reviewedAdditions = pinned(f).sqlAdditions;
+  delete f.archived;
+  f.parts = structuredClone(f.parts);
+  f.parts[2][2].push(row(sql, 'exec', ['synthetic-unrelated-card'])); f.current = trace(f.parts);
+  assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions,
+    { ...summary(f.current), sqlAdditions: reviewedAdditions }, f.sqlAdditionMethods, {}, reviewedExecutions),
+    { code: 'ERR_ASSERTION', message: /unreviewed card-family statement/ });
+});
 for (const receiptWalk of [false, true]) for (const mode of ['archive', 'pins'])
 for (const mutation of ['control', 'duplicate with altered bindings', 'remove', 'reorder', 'rebind', 'execution method'])
 test(`${mode} per-call Card executions: ${mutation}, receiptWalk=${receiptWalk}`, () => {
@@ -320,12 +332,26 @@ test('card-family classifier covers target tables, schema probes and Card operat
     'UPDATE private_cards SET revision=2', 'DELETE FROM card_memory_bindings WHERE card_id=?',
     'UPDATE main."card_effects" SET ordinal=2', 'DELETE FROM [card_bindings]',
     'WITH wanted AS (SELECT 1) DELETE FROM card_bindings WHERE card_id=?',
+    'DELETE -- gap\n FROM main.`card_bindings` WHERE card_id=?',
+    'UPDATE memories SET revision=2; DELETE /* gap */ FROM [main].[card_bindings]',
+    'UPDATE memories SET revision=2; INSERT INTO "main"."card_effects" VALUES(?)',
+    'CREATE TRIGGER synthetic AFTER INSERT ON memories BEGIN DELETE FROM card_bindings; UPDATE private_cards SET revision=2; END',
+    'UNRECOGNIZED card_bindings', 'UPDATE /* incomplete target */ (card_bindings)',
+    'SELECT * FROM "card_bindings',
     "SELECT 1 FROM sqlite_schema WHERE name IN ('other','private_cards')",
     "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'", 'SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id'])
     assert.equal(cardFamilySQL(row(sql)), true, sql);
   for (const sql of ['UPDATE memories SET deleted=1', "SELECT 1 FROM sqlite_master WHERE name='memories'", 'DELETE FROM card1',
     'SELECT * FROM private_cards WHERE id=?', 'SELECT 1 FROM card_memory_bindings WHERE card_id=? LIMIT 1'])
     assert.equal(cardFamilySQL(row(sql)), false, sql);
+});
+test('SQL normalization preserves literals, quoted identifiers and their comment/separator text', () => {
+  assert.equal(normalizeSQL(`  DELETE /* gap */\n FROM "main" . [card_bindings] -- gap\n WHERE source_ref='a  b;-- /* c */'  `),
+    `DELETE FROM "main" . [card_bindings] WHERE source_ref='a  b;-- /* c */'`);
+  assert.equal(cardFamilySQL(row(`SELECT 'DELETE FROM card_bindings; -- literal' FROM memories`)), false);
+  assert.equal(cardFamilySQL(row(`UPDATE memories SET content='card_bindings; DELETE FROM private_cards'`)), false);
+  assert.equal(cardFamilySQL(row('UPDATE memories SET revision=2 /* DELETE FROM card_bindings */')), false);
+  assert.equal(purgeAdditionSQL(row('DELETE /* gap */ FROM "main".[card_operations] WHERE target_id=?')), true);
 });
 
 for (const padded of [false, true]) test(`reviewed text list rejects a purge text even without a matching ledger row, padded=${padded}`, () => {

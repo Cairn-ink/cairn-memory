@@ -287,7 +287,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       byType[type].included++;
     }
     // A metadata-only bounded peek tells callers which streams actually ended.
-    for (const type of input.types) if (!blocked.has(type)) {
+    for (const type of input.types) if (stopped !== 'deadline' && !blocked.has(type)) {
       const peek=next(type,true);if(peek===deadline)break;
       assertContributor(type,peek,true);if(!peek)exhausted.add(type);
     }

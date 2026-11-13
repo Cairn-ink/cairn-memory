@@ -1,13 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { lineageFixture, ns, ok, receipt } from '../testing/card-lineage-fixture.mjs';
+import { lineageFixture, lineageHost, ns, ok, receipt } from '../testing/card-lineage-fixture.mjs';
+import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
+import { openMemoryCore } from '../index.mjs';
+import { attestContentSafety } from '../content-safety-schema.mjs';
 import { createMemoryRuntime } from '../runtime.mjs';
 import { batch } from '../testing/episode-helpers.mjs';
 import { request, splitRaw } from '../testing/raw-capture-fixtures.mjs';
 import { createEngineCardStorage } from '../engine-card-storage.mjs';
 import { createPrivateCardStorage } from '../private-card-storage.mjs';
 import { beginContentWriteSafety } from '../content-write-safety.mjs';
-import { registerContentWriteGuard } from '../content-write-context.mjs';
+import { registerContentWriteGuard, withContentWriteOperation } from '../content-write-context.mjs';
 import { contentSafetyInventory } from '../content-safety-migration.mjs';
 import { transaction } from '../database.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
@@ -174,6 +177,97 @@ test(`declared deletion binds its ${target.scope} target to ${authorized.scope} 
 const auditOperation = (f, target) => f.db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)')
   .run(ns.ownerId, ns.scope, ns.projectId ?? '', 'synthetic-purge-audit', 'inspectCardOperation',
     'synthetic-audit-binding', target, '{}', timestamp);
+function extraAuthorization(f) {
+  auditOperation(f, '');
+  const binding = lineageHmac(f.identity, 'card-action-audit-s2-v1',
+    [f.identity.storeId, ns.ownerId, 'synthetic-purge-audit', 'synthetic-audit-binding']);
+  f.db.prepare(`INSERT INTO card_body_authorizations VALUES(?,?,?,?,?,?,?,?,?, 'operation',NULL,NULL,NULL)`)
+    .run(ns.ownerId, 'synthetic-purge-audit', ns.scope, ns.projectId ?? '', 'inspectCardOperation', f.card.id,
+      'synthetic-human', timestamp, binding);
+}
+function declaredDeletion(f, mutate = () => {}, validated = () => {}) {
+  registerContentWriteGuard((db, operation) => {
+    const guard = beginContentWriteSafety(db, operation);
+    return { ...guard, validate(result) { mutate({ ...f, db }); guard.validate(result); validated(); } };
+  });
+  try { return f.call('deleteKnowledgeCard', { actionId: 'synthetic-native-delete',
+    cardId: f.card.id, expectedRevision: f.card.revision }); }
+  finally { registerContentWriteGuard(beginContentWriteSafety); }
+}
+const extraReview = f => assert.equal(f.db.prepare("UPDATE card_applicability_reviews SET applicability='historical' WHERE card_id=?")
+  .run(f.card.id).changes, 1);
+test('declared engine deletion accepts its native receipt and authorization', async t => {
+  const f = await setup(t); let validated = false;
+  assert.equal(ok(declaredDeletion(f, undefined, () => { validated = true; })).id, f.card.id);
+  assert.equal(validated, true); assert.equal(f.row(f.card.id).state, 'deleted');
+});
+test('suppression-enabled engine deletion without lineage also freezes its existing receipt', async t => {
+  const fixture = safetyFixture(t, 23); await fixture.migrate();
+  const host = lineageHost(), core = openMemoryCore({ path: fixture.path, privateCards: host.options }), db = fixture.connect();
+  attestContentSafety(db); t.after(() => { core.close(); db.close(); });
+  const f = { db, core, call: (method, input) => host.call(core, method, input),
+    row: id => db.prepare('SELECT * FROM private_cards WHERE id=?').get(id),
+    identity: db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() };
+  f.card = publish(f, [admit(f, 'synthetic-legacy-delete')]);
+  const before = contentSafetyInventory(db); let reached = false;
+  const rejected = declaredDeletion(f, current => {
+    current.db.prepare("UPDATE card_operations SET result=json_set(result,'$.clusterKey',?) WHERE owner_id=? AND action_id=? AND method='consolidate'")
+      .run('moc:synthetic-changed-route', ns.ownerId, f.card.id); reached = true;
+  });
+  assert.equal(reached, true); assert.equal(rejected.ok, false); assert.equal(rejected.error.code, 'evidence_unavailable');
+  assert.equal(contentSafetyInventory(db), before); assert.equal(ok(declaredDeletion(f)).id, f.card.id);
+});
+for (const fault of ['existing cluster key', 'extra operation', 'extra authorization', 'unwritten family table'])
+test(`declared deletion closure rejects ${fault} at validation with complete rollback`, async t => {
+  const f = await setup(t), before = contentSafetyInventory(f.db); let control = false, reached = false;
+  const result = declaredDeletion(f, undefined, () => { control = true; throw new Error('synthetic-control-rollback'); });
+  assert.equal(control, true, 'the identical native deletion passes validation before intentional rollback');
+  assert.equal(result.ok, false); assert.equal(contentSafetyInventory(f.db), before);
+  const rejected = declaredDeletion(f, current => {
+    const { db } = current;
+    if (fault === 'existing cluster key') db.prepare(`UPDATE card_operations SET result=json_set(result,'$.clusterKey',?)
+      WHERE owner_id=? AND action_id=? AND method='consolidate'`).run('moc:synthetic-changed-route', ns.ownerId, f.card.id);
+    if (fault === 'extra operation') auditOperation(current, f.card.id);
+    if (fault === 'extra authorization') extraAuthorization(current);
+    if (fault === 'unwritten family table') extraReview(current);
+    assert.ok(engineCardMetadataInside(db, ns, db.prepare('SELECT * FROM private_cards WHERE id=?').get(f.card.id)));
+    reached = true;
+  });
+  assert.equal(reached, true, 'native deletion and injected SQL succeed before guard validation');
+  assert.equal(rejected.ok, false); assert.equal(rejected.error.code, 'evidence_unavailable');
+  assert.equal(contentSafetyInventory(f.db), before, 'schema, every table, counters and authority match after rollback');
+  assert.equal(ok(declaredDeletion(f)).id, f.card.id);
+});
+for (const path of ['forgetting', 'trigger invalidation', 'maintenance purge', 'maintenance retirement'])
+test(`${path} closure freezes a Card-family table the path never writes`, async t => {
+  const f = await setup(t), before = contentSafetyInventory(f.db), control = new Error('synthetic-control-rollback');
+  const invoke = (mutate, validated) => {
+    if (path === 'forgetting') return guardedPurge(f, ns, [ns], mutate, validated);
+    if (path.startsWith('maintenance')) {
+      registerContentWriteGuard((db, operation) => {
+        const guard = beginContentWriteSafety(db, operation);
+        return { ...guard, validate(result) { mutate(); guard.validate(result); validated(); } };
+      });
+      try { return withContentWriteOperation('maintainCards', [ns],
+        () => storage(f).retire(ns, f.card.id, timestamp, path === 'maintenance purge')); }
+      finally { registerContentWriteGuard(beginContentWriteSafety); }
+    }
+    return transaction(f.db, () => {
+      const guard = beginContentWriteSafety(f.db, { method: 'correct', scopes: [ns] });
+      try {
+        f.db.prepare('UPDATE memories SET revision=revision+1,updated_at=? WHERE id=?').run(timestamp, f.memory.id);
+        mutate(); guard.validate({}); validated();
+      } finally { guard.close(); }
+    });
+  };
+  assert.throws(() => invoke(() => {}, () => { throw control; }), error => error === control);
+  assert.equal(contentSafetyInventory(f.db), before);
+  let reached = false;
+  assert.throws(() => invoke(() => { extraReview(f); reached = true; }, () => {}), error => error.code === 'evidence_unavailable');
+  assert.equal(reached, true, 'the review update passes native guards in every path');
+  assert.equal(contentSafetyInventory(f.db), before);
+  invoke(() => {}, () => {});
+});
 for (const fault of ['cluster key update', 'operation target moved away', 'operation removed', 'operation inserted', 'authorization request target'])
 test(`purge freezes ${fault} with a native valid-purge control`, async t => {
   const f = await setup(t);

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 
 export const workloadKeys = [23, 33, 52, 53].map(cell => 'workload:' + cell);
-export const normalizeSQL = sql => sql.replace(/\s+/g, ' ').trim();
+export const normalizeSQL = sql => scanSQL(sql).normalized;
 export const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export const summary = record => ({ calls: record.calls.map(([method, result, start, end]) =>
   [method, hash(result), start ?? null, end ?? null]), statements: record.statements.length,
@@ -31,28 +31,102 @@ export function reviseSQL(key, statements, sqlRevisions = []) {
 // Recognize the purge family independently of hashes, so re-pinning the general
 // trace hash cannot hide an extra/dropped purge in a clone without the archive.
 // Full SQL, method and arguments are still compared against the ledger below.
-export const purgeAdditionSQL = ([sql]) =>
-  /^SELECT\b.*\bFROM sqlite_(?:master|schema)\b.*\bname\s*=\s*'(?:card_operations|card_memory_bindings)'/i.test(sql) ||
-  /^SELECT\b.*\bFROM private_cards\b.*\bJOIN card_operations\b/i.test(sql) ||
-  /^DELETE FROM card_operations\b/i.test(sql);
+// Tokenize before recognizing targets: comments and separators are meaningful
+// only outside literals/quoted identifiers. Keep exact trace rows for the pins.
+function scanSQL(sql) {
+  const statements=[],tokens=[];let normalized='',space=false,uncertain=false,depth=0;
+  const emit=(raw,kind,value=raw)=>{
+    if(space&&normalized)normalized+=' ';
+    normalized+=raw;space=false;tokens.push({kind,value});
+  };
+  const finish=()=>{if(tokens.length)statements.push({tokens:tokens.splice(0),uncertain:uncertain||depth!==0});uncertain=false;depth=0;};
+  for(let i=0;i<sql.length;) {
+    const c=sql[i],next=sql[i+1];
+    if(/\s/.test(c)){space=true;i++;continue;}
+    if(c==='-'&&next==='-'){while(i<sql.length&&sql[i]!=='\n'&&sql[i]!=='\r')i++;space=true;continue;}
+    if(c==='/'&&next==='*'){
+      const end=sql.indexOf('*/',i+2);if(end<0){uncertain=true;break;}
+      i=end+2;space=true;continue;
+    }
+    if(["'",'"','`','['].includes(c)) {
+      const start=i++,close=c==='['?']':c;let value='',closed=false;
+      while(i<sql.length){
+        if(sql[i]===close){
+          if(c!=='['&&sql[i+1]===close){value+=close;i+=2;continue;}
+          i++;closed=true;break;
+        }
+        value+=sql[i++];
+      }
+      if(!closed)uncertain=true;
+      emit(sql.slice(start,i),c==="'"?'literal':'identifier',value);continue;
+    }
+    const word=/^[a-z_][a-z_0-9$]*/i.exec(sql.slice(i));
+    if(word){emit(word[0],'word');i+=word[0].length;continue;}
+    if(c==='(')depth++;if(c===')'&&--depth<0)uncertain=true;
+    if(c===';'){normalized+=';';space=false;finish();i++;continue;}
+    emit(c,'symbol');i++;
+  }
+  finish();return {normalized:normalized.trim(),statements};
+}
+const cardTable = name => /^(?:private_cards|card_[a-z_0-9]+)$/i.test(name);
+const keyword=(token,word)=>token?.kind==='word'&&token.value.toUpperCase()===word;
+function targetAt(tokens,index) {
+  const identifier=token=>token&&['word','identifier','literal'].includes(token.kind);
+  if(!identifier(tokens[index]))return null;
+  let name=tokens[index++].value;
+  if(tokens[index]?.value==='.'){
+    if(!identifier(tokens[index+1]))return null;
+    name=tokens[index+1].value;index+=2;
+  }
+  return tokens[index]?.value==='.'?null:{name,index};
+}
+function statementTargets(statement) {
+  const {tokens}=statement,writes=[];let uncertain=statement.uncertain;
+  // Supported statement heads. Other syntax mentioning a Card fails closed.
+  if(!['SELECT','WITH','INSERT','REPLACE','UPDATE','DELETE','BEGIN','COMMIT','ROLLBACK','SAVEPOINT','RELEASE']
+    .some(word=>keyword(tokens[0],word)))uncertain=true;
+  for(let i=0;i<tokens.length;i++) {
+    let at=i+1,kind;
+    if(keyword(tokens[i],'INSERT')||keyword(tokens[i],'REPLACE')){
+      kind='insert';if(keyword(tokens[at],'OR'))at+=2;
+      if(!keyword(tokens[at++],'INTO')){uncertain=true;continue;}
+    } else if(keyword(tokens[i],'UPDATE')){
+      // DO UPDATE SET is the conflict arm of the already classified INSERT.
+      if(keyword(tokens[i-1],'DO')&&keyword(tokens[at],'SET'))continue;
+      kind='update';if(keyword(tokens[at],'OR'))at+=2;
+    } else if(keyword(tokens[i],'DELETE')){
+      kind='delete';if(!keyword(tokens[at++],'FROM')){uncertain=true;continue;}
+    } else continue;
+    const target=targetAt(tokens,at);
+    if(!target)uncertain=true;else writes.push({kind,table:target.name});
+  }
+  return {writes,uncertain};
+}
+const reads=(tokens,word)=>tokens.flatMap((token,index)=>keyword(token,word)?[targetAt(tokens,index+1)?.name??'']:[]);
+const mentionsCard=tokens=>tokens.some(token=>cardTable(token.value)||/\b(?:private_cards|card_[a-z_0-9]+)\b/i.test(token.value));
+export const purgeAdditionSQL = ([sql]) => scanSQL(sql).statements.some(statement=>{
+  const {tokens}=statement;
+  if(statementTargets(statement).writes.some(write=>write.kind==='delete'&&write.table.toLowerCase()==='card_operations'))return true;
+  if(!tokens.some(token=>keyword(token,'SELECT')))return false;
+  if(reads(tokens,'FROM').some(name=>name.toLowerCase()==='private_cards')&&reads(tokens,'JOIN').some(name=>name.toLowerCase()==='card_operations'))return true;
+  return reads(tokens,'FROM').some(name=>/^sqlite_(?:master|schema)$/i.test(name))&&tokens.some((token,index)=>
+    token.value.toLowerCase()==='name'&&tokens[index+1]?.value==='='&&tokens[index+2]?.kind==='literal'&&
+    ['card_operations','card_memory_bindings'].includes(tokens[index+2].value.toLowerCase()));
+});
 
 // This set describes source-forgetting calls, independently of the reviewed
 // subset of methods carrying ledger rows in a particular workload.
 export const forgettingMethods = new Set(['forget', 'deleteConversation', 'forgetEpisode', 'reject']);
-const identifier = '(?:"[^"]+"|`[^`]+`|\\[[^\\]]+\\]|[a-z_][a-z_0-9]*)';
-const qualifiedIdentifier = `(${identifier}(?:\\s*\\.\\s*${identifier})?)`;
-const cardTable = name => /^(?:private_cards|card_[a-z_]+)$/i.test(name);
-const tableName = name => name.split(/\s*\.\s*/).at(-1).replace(/^["`\[]|["`\]]$/g, '');
-const cardWrite = new RegExp(`\\b(?:(?:INSERT(?:\\s+OR\\s+\\w+)?|REPLACE)\\s+INTO|UPDATE(?:\\s+OR\\s+\\w+)?|DELETE\\s+FROM)\\s+${qualifiedIdentifier}`, 'i');
-const schemaRead = new RegExp(`\\b(?:FROM|JOIN)\\s+${qualifiedIdentifier}`, 'gi');
-const cardJoin = new RegExp(`\\bJOIN\\s+${qualifiedIdentifier}`, 'gi');
 export function cardFamilySQL([sql, , bindings = []]) {
-  const write = cardWrite.exec(sql);
-  if (write && cardTable(tableName(write[1]))) return true;
-  if (!/\bSELECT\b/i.test(sql)) return false;
-  if ([...sql.matchAll(cardJoin)].some(match => tableName(match[1]).toLowerCase() === 'card_operations')) return true;
-  return [...sql.matchAll(schemaRead)].some(match => /^sqlite_(?:master|schema)$/i.test(tableName(match[1]))) &&
-    ([...sql.matchAll(/['"`]((?:private_cards|card_[a-z_]+))['"`]/gi)].length > 0 || bindings.some(value => typeof value === 'string' && cardTable(value)));
+  return scanSQL(sql).statements.some(statement=>{
+    const {tokens}=statement,{writes,uncertain}=statementTargets(statement);
+    if(writes.some(write=>cardTable(write.table))||uncertain&&mentionsCard(tokens))return true;
+    if(!tokens.some(token=>keyword(token,'SELECT')))return false;
+    if(reads(tokens,'JOIN').some(name=>name.toLowerCase()==='card_operations'))return true;
+    return [...reads(tokens,'FROM'),...reads(tokens,'JOIN')].some(name=>/^sqlite_(?:master|schema)$/i.test(name))&&
+      (tokens.some(token=>['literal','identifier'].includes(token.kind)&&cardTable(token.value))||
+        bindings.some(value=>typeof value==='string'&&cardTable(value)));
+  });
 }
 
 export function validateCardStatementTexts(texts = {}, entries = []) {

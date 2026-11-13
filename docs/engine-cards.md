@@ -169,6 +169,14 @@ Carry, retirement and rebuild routing inspect every live page within the pass's
 existing deadline; there is no total 129-row history cutoff. Source scan limits,
 per-source dependency limits and the one-generation-per-pass limit still apply.
 
+Evidence selection checks its shared deadline between denied engine candidates,
+including metadata lookahead. Once the deadline stops selection, it starts no
+further lookahead probe and returns partial coverage with a continuation cursor.
+Only consumed readable positions enter that cursor. Denied positions are not
+persisted, so a denied prefix that consumes every call's deadline is rescanned
+on every call. Indexed candidate seeks and the per-call deadline bound each
+traversal; they do not guarantee eventual progress through such a prefix.
+
 When a bound Memory's revision changes, the existing trigger advances the Card
 revision once and records one `evidence_invalidated` effect for that Memory.
 Ordinary admission or capture of another receipt, causal supersession,
