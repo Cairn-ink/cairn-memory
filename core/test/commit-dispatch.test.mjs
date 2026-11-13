@@ -129,3 +129,14 @@ test('unbound default path never takes the dispatcher and remains synchronous', 
   assert.equal(value, 'default', 'default path must never take the dispatcher');
   assert.equal(calls, 1);
 });
+
+test('unbound dispatch preserves result identity without inspecting native state, options or then', () => {
+  const touched = [];
+  const poison = label => new Proxy({}, { get(_value, key) {
+    touched.push([label, key]); throw Error('R2M_UNBOUND_PROPERTY_READ');
+  } });
+  const connection = poison('connection'), deadline = poison('deadline'), options = poison('options');
+  const value = poison('result');
+  assert.equal(dispatchCommit(connection, () => value, deadline, options), value, 'R2M_UNBOUND_RESULT_IDENTITY');
+  assert.deepEqual(touched, [], 'R2M_UNBOUND_PROPERTY_READ');
+});
