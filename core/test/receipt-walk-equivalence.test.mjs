@@ -369,3 +369,73 @@ test('first receipt late refusal precedes second receipt early refusal',async t=
     t.diagnostic(JSON.stringify({implementation:create.name,outcome:result.outcome,executions:result.executions}));
   }
 });
+
+// Keep malformed cursor keys mixed with valid keys. Unwanted prefix rows move
+// the filtered boundary without putting the same key at the reference boundary.
+for(const placement of ['cursor','non-cursor','both'])test(`stored-key receipt walk inclusion: ${placement}`,async t=>{
+  const db=await precedenceFixture(t),native=db.prepare.bind(db);
+  const byteKinds=['80','C0AF','E08080','6C0072','EDA080','EDB080','6D6964'];
+  let cases=0,roundTrips=0,safeRefusals=0;
+  for(const columns of [['created_at'],['id'],['created_at','id']])for(const hex of byteKinds)
+    for(const unwanted of [1,2,3])for(const deny of [true,false]) {
+      const label=JSON.stringify({placement,columns,hex,unwanted,deny}),namespace={...ns,ownerId:'stored-key-'+cases};
+      const wanted=Array.from({length:5},(_,i)=>receipt('stored-key-'+i));
+      const batch=[receipt('absent-stored-key'),...wanted];
+      transaction(db,()=>{
+        const parent='stored-key-parent-'+cases;
+        native(`INSERT INTO memories(id,owner_id,scope,project_id,fingerprint,content,kind,origin,confidence,revision,deleted,created_at,updated_at)
+          VALUES(?,?,?,?,?,'Synthetic','fact','explicit',1,1,0,'time','time')`).run(parent,namespace.ownerId,namespace.scope,namespace.projectId,parent);
+        const insert=(source,id,time,key=digest(source))=>native(`INSERT INTO receipts(id,memory_id,receipt_key,client,session_id,event_id,role,excerpt,created_at)
+          VALUES(CAST(? AS TEXT),?,?,?,?,?,?,?,CAST(? AS TEXT))`).run(Buffer.concat([Buffer.from(parent+'-'),id]),parent,key,source.client,source.sessionId,source.eventId,source.role,source.excerpt,time);
+        for(let i=0;i<unwanted;i++)insert(receipt('unwanted-'+i),Buffer.from('a'+i),Buffer.from('a'));
+        for(let i=0;i<3;i++)insert(wanted[i],Buffer.from('b'+i),Buffer.from('a'));
+        const bad=Buffer.concat([Buffer.from('z'),Buffer.from(hex,'hex')]);
+        const cursor=placement==='non-cursor'?Buffer.from('y'):bad;
+        const target=placement==='cursor'?Buffer.from('z\uE000'):Buffer.concat([bad,Buffer.from('z')]);
+        insert(wanted[3],columns.includes('id')?cursor:Buffer.from('c3'),columns.includes('created_at')?cursor:Buffer.from('time'));
+        insert(wanted[4],columns.includes('id')?target:Buffer.from('c4'),columns.includes('created_at')?target:Buffer.from('time'),deny?'inconsistent-key':digest(wanted[4]));
+        // Earlier rows share the timestamp for id-only cases, so id decides ties.
+        if(!columns.includes('created_at'))native("UPDATE receipts SET created_at='time' WHERE memory_id=?").run(parent);
+      });
+      const stored=native(`SELECT *,hex(created_at) time_hex,hex(id) id_hex FROM receipts
+        WHERE memory_id=? ORDER BY created_at,id`).all('stored-key-parent-'+cases);
+      const admitted=new Set(wanted.map(source=>source.eventId));
+      const expected=stored.filter(row=>admitted.has(row.event_id)).map(row=>row.event_id);
+      assert.equal(expected[3],wanted[3].eventId,label+' cursor placement');
+      const inDomain=stored.every(row=>Buffer.from(row.created_at).toString('hex').toUpperCase()===row.time_hex&&Buffer.from(row.id).toString('hex').toUpperCase()===row.id_hex);
+      const walk=create=>{
+        let starts=0,pages=0;const visited=[];
+        const hook=t.mock.method(db,'prepare',sql=>{
+          const statement=native(sql),all=statement.all.bind(statement);
+          statement.all=(...args)=>{
+            if(sql.startsWith('SELECT id,revision,deleted,updated_at')&&args[3]===0&&args.length===5)starts++;
+            const isBatch=sql.includes('FROM json_each(?) wanted CROSS JOIN receipts');
+            const isPage=sql.includes('FROM receipts r INDEXED BY memory_receipts')&&sql.includes('ORDER BY created_at,id LIMIT 5');
+            if(isPage&&++pages>128)throw Object.assign(Error('synthetic page bound'),{code:'source_budget_exceeded'});
+            const rows=all(...args);
+            // The reference discards its batch witness prefix and starts a page
+            // at the beginning; the filtered batch itself emits the first four rows.
+            if(starts===1&&(isPage||isBatch&&(create!==createLegacyReceiptWalk||rows.length<=4)))visited.push(...rows.slice(0,4).map(row=>row.event_id));
+            return rows;
+          };
+          return statement;
+        });
+        try{return {decision:transaction(db,()=>decide(()=>create(db).assertReceipts(namespace,batch))),visited};}
+        finally{hook.mock.restore();}
+      };
+      const reference=walk(createLegacyReceiptWalk),filtered=walk(patchedReceiptWalk);
+      assert.notEqual(reference.decision,'source_budget_exceeded',label+' reference completes');
+      assert.notEqual(filtered.decision,'source_budget_exceeded',label+' filtered completes');
+      assert.ok(filtered.decision!=='accept'||reference.decision==='accept',label+' never accepts a reference refusal');
+      assert.deepEqual(filtered.visited,expected,label+' exact filtered stored order');
+      const required=reference.visited.filter(id=>admitted.has(id));
+      let offset=0;
+      for(const id of filtered.visited)if(id===required[offset])offset++;
+      assert.equal(offset,required.length,label+' every admitted reference row is visited in order');
+      if(inDomain){assert.equal(filtered.decision,reference.decision,label+' round-tripping decision and error code');roundTrips++;}
+      if(filtered.decision!==reference.decision)safeRefusals++;
+      assert.equal(filtered.decision,deny?'source_excluded':'accept',label+' reaches the final key');
+      cases++;
+    }
+  t.diagnostic(JSON.stringify({node:process.version,placement,cases,roundTrips,safeRefusals,byteKinds,columnSets:3,unwantedCounts:[1,2,3]}));
+});

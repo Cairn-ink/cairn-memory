@@ -9,6 +9,7 @@ import { createRawLineageStorage } from '../raw-lineage-storage.mjs';
 import { createLegacyReceiptWalk } from '../testing/receipt-walk-reference.mjs';
 import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import { eventTimeSafetyFixture } from '../testing/receipt-event-time-fixture.mjs';
+import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 
 const ns={ownerId:'synthetic-owner',scope:'project',projectId:'synthetic-project'};
 const source=i=>({client:'synthetic',sessionId:'session',eventId:'event-'+i,role:'user',excerpt:'excerpt-'+i});
@@ -135,7 +136,7 @@ for(const layout of [18,53])test(`wanted tuple UTF-8 bindings and filter-off SQL
   for(const value of ['\0x','l\0r','x\0','\uFFFD','\uD800','\uDC00'])for(const field of ['client','sessionId','eventId','excerpt']) {
     const result=trace(t,db,createRawLineageStorage,[{...wanted,[field]:value}]);
     for(const row of result.sql.filter(row=>row.sql.includes('CROSS JOIN receipts')))assert.equal(row.sql,baselineText);
-    for(const row of result.sql.filter(row=>row.sql.startsWith('SELECT r.*,? AS memory_revision')))assert.equal(row.sql,
+    for(const row of result.sql.filter(row=>row.sql.includes('FROM receipts r INDEXED BY memory_receipts')&&row.sql.includes('ORDER BY created_at,id LIMIT 5')))assert.equal(row.sql,
       'SELECT r.*,? AS memory_revision,? AS memory_deleted FROM receipts r INDEXED BY memory_receipts WHERE memory_id=? AND (created_at,id)>(?,?) ORDER BY created_at,id LIMIT 5');
   }
 });
@@ -172,8 +173,8 @@ for(const layout of [18,53])test(`documented UTF-16 header refusal and valid-sto
     validHeader:{reference:old.outcome,current:current.outcome},encoding:'UTF-16le',roleBytes}));
 });
 
-// Documented base cursor limitation, outside engine-written keys. Hotfix
-// invariant: never accepts what the base refuses. No cursor repair is made here.
+// The reference retains its decoded-cursor limitation. Filtered cursors must
+// reach the later refusal even when the reference skips or repeats a page.
 for(const kind of ['invalid UTF-8','NUL'])test(`documented cursor difference (${kind}): never accepts what the base refuses`,async t=>{
   const {db}=await fixture(t,53);
   transaction(db,()=>{
@@ -189,7 +190,7 @@ for(const kind of ['invalid UTF-8','NUL'])test(`documented cursor difference (${
   assert.equal(old.outcome.code,kind==='invalid UTF-8'?null:truncates?'source_budget_exceeded':'source_excluded');
   const stored=db.prepare('SELECT hex(created_at) bytes,created_at FROM receipts LIMIT 1').get();
   const rebound=db.prepare('SELECT hex(?) bytes').get(stored.created_at).bytes;
-  const pages=old.sql.filter(row=>row.sql.startsWith('SELECT r.*,? AS memory_revision'));
+  const pages=old.sql.filter(row=>row.sql.includes('FROM receipts r INDEXED BY memory_receipts')&&row.sql.includes('ORDER BY created_at,id LIMIT 5'));
   if(kind==='NUL'&&truncates) {
     assert.equal(pages.length,32);assert.deepEqual(pages.at(-1).ids,pages.at(-2).ids,'base repeats the same page');
   }
@@ -208,7 +209,7 @@ test('filtered witness and overflow reach every equal-timestamp receipt by uniqu
   });
   const old=trace(t,db,createLegacyReceiptWalk,wanted),actual=trace(t,db,createRawLineageStorage,wanted);
   assert.deepEqual(actual.outcome,old.outcome);assert.equal(old.outcome.code,'source_excluded');
-  const pages=actual.sql.filter(row=>row.sql.includes('CROSS JOIN receipts')||row.sql.startsWith('SELECT r.*,? AS memory_revision'));
+  const pages=actual.sql.filter(row=>row.sql.includes('CROSS JOIN receipts')||row.sql.includes('FROM receipts r INDEXED BY memory_receipts')&&row.sql.includes('ORDER BY created_at,id LIMIT 5'));
   assert.ok(pages.length>1);assert.ok(pages.every(row=>row.sql.includes('instr(CAST(')));
   assert.deepEqual([...new Set(pages.flatMap(row=>row.ids))].sort(),expected);
   assert.deepEqual(pages.map(row=>row.rows),[5,5,5,5,5,2]);
@@ -245,4 +246,53 @@ test('decoded memory identities preserve the frozen decision with valid receipt 
   t.diagnostic(JSON.stringify({node:process.version,validity,wanted,reference:old,control:control.outcome,current:actual}));
   assert.deepEqual(old.outcome,{decision:'refuse',code:'source_excluded'},'the version fence is a valid refusal');
   assert.deepEqual(actual.outcome,old.outcome,'exact decision and error code with valid receipt paging keys');
+});
+
+for(const variant of ['receipt-key mismatch','receipt suppression'])test(`stored-byte overflow cursor retains refusal: ${variant}`,async t=>{
+  const {db}=await fixture(t,53);
+  transaction(db,()=>{
+    memory(db,'parent',0);receipt(db,source(100),0);
+    for(let i=0;i<4;i++)receipt(db,source(i),i+1);
+    receipt(db,source(4),5,{key:variant==='receipt-key mismatch'?'inconsistent-key':digest(source(4))});
+    db.exec("UPDATE receipts SET created_at=CAST(x'80' AS TEXT) WHERE id IN ('receipt-4','receipt-5')");
+    if(variant==='receipt suppression')writeContentSuppressionInside(db,{namespace:ns,kind:'receipt',key:'receipt-5',reason:'user_forget',actionId:'synthetic-forget'});
+  });
+  const wanted=[0,1,2,3,4].map(source),reference=trace(t,db,createLegacyReceiptWalk,wanted),filtered=trace(t,db,createRawLineageStorage,wanted);
+  assert.deepEqual(reference.outcome,{decision:'refuse',code:'source_excluded'});
+  assert.deepEqual(filtered.outcome,reference.outcome);
+  const page=filtered.sql.find(row=>row.sql.includes('(created_at,id)>(CAST(? AS TEXT),CAST(? AS TEXT))'));
+  assert.ok(page);assert.equal(Buffer.from(page.args[3]).toString('hex'),'80');
+  assert.ok(page.ids.includes('receipt-5'));
+  t.diagnostic(JSON.stringify({node:process.version,variant,reference:reference.outcome,filtered:filtered.outcome,cursorHex:Buffer.from(page.args[3]).toString('hex')}));
+});
+
+test('filtered receipt plans retain the binary memory index ranges',async t=>{
+  const {db}=await fixture(t,53);
+  transaction(db,()=>{memory(db,'parent',0);for(let i=0;i<9;i++)receipt(db,source(i),i);});
+  const filtered=trace(t,db,createRawLineageStorage,Array.from({length:9},(_,i)=>source(i)));
+  const off=trace(t,db,createRawLineageStorage,[{...source(0),excerpt:'\uFFFD'}]);
+  const batch=filtered.sql.find(row=>row.sql.includes('FROM json_each(?) wanted CROSS JOIN receipts'));
+  const overflow=filtered.sql.find(row=>row.sql.includes('(created_at,id)>(CAST(? AS TEXT),CAST(? AS TEXT))'));
+  const offOverflow=off.sql.find(row=>row.sql.includes('(created_at,id)>(?,?)'));
+  assert.ok(batch&&overflow&&offOverflow);
+  const ddl=db.prepare("SELECT sql FROM sqlite_schema WHERE name='receipts'").get().sql;
+  assert.doesNotMatch(ddl,/COLLATE/i);
+  for(const column of ['created_at','id'])assert.match(ddl,new RegExp(column+' TEXT NOT NULL'));
+  const index=db.prepare('PRAGMA index_xinfo(memory_receipts)').all().filter(row=>row.key);
+  assert.deepEqual(index.map(row=>[row.name,row.coll,row.desc]),[['memory_id','BINARY',0],['created_at','BINARY',0],['id','BINARY',0]]);
+  const plans={};
+  for(const [name,row] of Object.entries({batch,overflow,offOverflow})) {
+    const plan=db.prepare('EXPLAIN QUERY PLAN '+row.sql).all(...row.args).map(row=>row.detail);plans[name]=plan;
+    assert.ok(plan.some(detail=>/^SEARCH (?:r|receipts) USING (?:COVERING )?INDEX memory_receipts \(memory_id=\?/.test(detail)),name+' uses the memory range');
+    assert.ok(plan.every(detail=>!/^SCAN (?:r|receipts)(?: |$)/.test(detail)),name+' never scans receipts');
+    assert.doesNotMatch(row.sql.slice(row.sql.indexOf('WHERE memory_id=')),/created_at COLLATE|id COLLATE|CAST\(\? AS TEXT\) COLLATE/);
+  }
+  const range=plan=>plan.find(detail=>detail.includes('USING INDEX memory_receipts'));
+  assert.equal(range(plans.overflow),'SEARCH r USING INDEX memory_receipts (memory_id=? AND created_at>?)');
+  assert.equal(range(plans.offOverflow),'SEARCH r USING INDEX memory_receipts (memory_id=? AND (created_at,id)>(?,?))');
+  // CAST keeps the memory/time index range; SQLite checks the id tie in the
+  // residual tuple predicate rather than naming it in the range plan text.
+  // The batch starts each memory from its beginning; only overflow has a tuple lower bound.
+  assert.ok(plans.batch.some(detail=>detail==='SEARCH receipts USING INDEX memory_receipts (memory_id=?)'));
+  t.diagnostic(JSON.stringify({node:process.version,index,plans}));
 });
