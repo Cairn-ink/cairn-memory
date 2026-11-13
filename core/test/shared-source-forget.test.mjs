@@ -440,7 +440,7 @@ for (const operation of operations) test(`missing/stale targets add no denial ${
   }
 });
 
-test('package verifier refuses unrelated marker rows and rolls them back', async t => {
+test('package verifier refuses unrelated marker inserts without gating canonical output', async t => {
   const f = await fixture(t, 'ordinary-53');
   const api = contentSafetyFacade({ forget() { return transaction(f.db, () => {
     f.db.prepare('INSERT INTO suppressed VALUES(?,?,?,?)').run(ns.ownerId, ns.scope, ns.projectId, 'rs1:i:' + '0'.repeat(64));
@@ -463,8 +463,10 @@ test('package verifier refuses unrelated marker rows and rolls them back', async
   const exposed = contentSafetyFacade({ admit() { return transaction(f.db, () => ({
     memory: { id: retained.memory_id }, deduplicated: false, insertedReceiptIds: [retained.id],
   })); } }, { check() {}, failure: error => ({ ok: false, error: { code: error.code } }) });
-  assert.equal(exposed.admit({ namespace: ns }).error?.code, 'evidence_unavailable',
-    'an arbitrary output cannot borrow the native private attachment proof');
+  const before = markers(f);
+  assert.deepEqual(exposed.admit({ namespace: ns }), { memory: { id: retained.memory_id }, deduplicated: false, insertedReceiptIds: [retained.id] },
+    'canonical output validation does not consult delivery markers');
+  assert.deepEqual(markers(f), before, 'canonical output acceptance grants no marker insertion authority');
 });
 
 test('denial tokens are portable, message-addressed, and disjoint from Memory fingerprints', () => {
@@ -841,7 +843,10 @@ for (const kind of ['ordinary-48','ordinary-53']) test(`review A1 rationale fili
   ok(f.core.applyPlacement({namespace:ns,expectedIndexRevision:map.indexRevision,
     expectedMemoryRevisions:[{memoryId:b.id,revision:b.revision}],
     proposal:{items:[{memoryId:b.id,parentIds:[],newL1:{title:'Synthetic filing topic',parentL2Ids:[]}}]}}));
-  assert.equal(f.db.prepare('SELECT count(*) AS n FROM rationale_edges').get().n,0);
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM rationale_edges').get().n,1,'filing preserves the canonical edge as at the base');
+  const current=ok(f.core.get({namespace:ns,memoryId:b.id})).memory;
+  const delivered=ok(f.core.getRationale({namespace:ns,memoryId:b.id,revision:current.revision}));
+  assert.deepEqual(delivered.edges,[]);noLeak(delivered,'filed rationale');
   assert.equal(ok(f.core.get({namespace:ns,memoryId:d.id})).memory.content,'Synthetic rationale endpoint');
 });
 
@@ -1074,11 +1079,14 @@ for(const operation of operations) test(`delivery-only mixed evidence omits a ma
 });
 
 for(const operation of operations) for(const existing of [false,true]) test(`delivery-only first qualified binding ${operation}, existing=${existing}`,async t=>{
-  const f=await fixture(t,'ordinary-53',operation),[initialB,a]=await capture(f);
+  const f=await fixture(t,'ordinary-53',operation);
   const qualification={version:1,slot:{subject:'Synthetic subject',property:'Synthetic property',scope:'Synthetic scope',applies:'Synthetic applies'},
     value:'Synthetic value',attribution:'direct',commitment:'adopted',anchors:[{receiptIndex:0,start:0,end:message.length,text:message,
       fields:['subject','property','scope','applies','value','attribution','commitment']}]};
   const b=ok(f.core.admit({namespace:ns,memory:{content:survivor,kind:'fact'},receipts:[source()],qualification})).memory;
+  // Qualification is immutable on deduplication. Seed it before the ordinary
+  // capture instead of attempting to add it to an already unqualified Memory.
+  const [initialB,a]=await capture(f);
   assert.equal(b.id,initialB.id);
   let slotId=null;
   if(existing){
@@ -1139,15 +1147,20 @@ test('Raw deletion and shared-source markers preserve the retained receipt count
     const interpreted=result.interpretation.ok===undefined?result.interpretation:ok(result.interpretation);
     return {conversationId:result.raw.conversationId,memories:interpreted.admission.memories};
   };
-  const shared=await rawCapture('synthetic-shared-conversation',message,'synthetic-shared-source');
-  const [initialB,a]=shared.memories;
+  // The shared address is ordinary evidence. Forgetting a real Raw-backed
+  // sibling would also install the base Raw exclusion, which is a different
+  // authority rule from delivery-only markers.
+  // Explicit admission proves that the ordinary shared receipt has independent
+  // ancestry; deletion conservatively removes recent unknown-origin receipts.
+  ok(f.core.admit({namespace:ns,memory:{content:survivor,kind:'fact'},receipts:[{client:'synthetic',sessionId:'synthetic-ordinary-shared',
+    eventId:'synthetic-shared-source',role:'user',excerpt:message}]}));
+  const shared=ok(await f.core.capture({namespace:ns,client:'synthetic',sessionId:'synthetic-ordinary-shared',eventId:'synthetic-ordinary-batch',
+    messages:[{id:'synthetic-shared-source',role:'user',content:message}]}));
+  const [initialB,a]=shared.admission.memories;
   f.model.items=[{content:survivor,kind:'fact',confidence:.8,sourceIndices:[0]}];
   const removed=await rawCapture('synthetic-removed-conversation','Synthetic removed conversation support','synthetic-removed-source');
   const retainedText='Synthetic retained conversation support';
-  f.model.items.push({content:'Synthetic second withholding target',kind:'fact',confidence:.8,sourceIndices:[0]});
   const retained=await rawCapture('synthetic-retained-conversation',retainedText,'synthetic-retained-source');
-  const secondTarget=retained.memories.find(memory=>memory.id!==initialB.id);
-  assert.ok(secondTarget);
   const stored=()=>f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(initialB.id).n;
   assert.equal(stored(),3);
   const conversation=ok(await f.core.getConversation({namespace:ns,conversationId:removed.conversationId})).conversation;
@@ -1170,8 +1183,9 @@ test('Raw deletion and shared-source markers preserve the retained receipt count
     assert.equal(JSON.stringify({detail,items,recalled,usage}).includes('Synthetic removed conversation support'),false);
   }
   await assertDelivered([retainedText]);
-  ok(act(f,'forget',secondTarget));
-  assert.equal(stored(),2,'markers retain the stored shared receipts');
+  const last=ok(await f.core.getConversation({namespace:ns,conversationId:retained.conversationId})).conversation;
+  ok(f.core.deleteConversation({namespace:ns,conversationId:retained.conversationId,expectedRevision:last.revision,actionId:'synthetic-final-deletion'}));
+  assert.equal(stored(),1,'the ordinary shared receipt remains stored and withheld');
   await assertDelivered([]);
 });
 

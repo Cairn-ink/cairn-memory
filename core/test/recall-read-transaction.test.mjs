@@ -262,7 +262,9 @@ test('committed forget stays hidden and suppression prevents readmission', async
   const f = fixture(t), memory = admit(f.core);
   assert.equal(ok(await recall(f.core)).memories[0].memory.id, memory.id);
   ok(f.core.forget({ namespace, memoryId: memory.id, expectedRevision: memory.revision }));
-  assert.equal(f.db.prepare('SELECT count(*) AS n FROM suppressed').get().n, 1);
+  assert.equal(f.db.prepare("SELECT count(*) AS n FROM suppressed WHERE fingerprint NOT GLOB 'rs1:*'").get().n, 1);
+  // One forgotten receipt contributes one identity token and one address token.
+  assert.equal(f.db.prepare("SELECT count(*) AS n FROM suppressed WHERE fingerprint GLOB 'rs1:*'").get().n, 2);
   assert.equal(f.db.prepare('SELECT deleted FROM memories WHERE id=?').get(memory.id).deleted, 1);
   const blocked = f.core.admit({ namespace, memory: { content: memory.content, kind: 'fact' }, receipts: [receipt(memory.content)] });
   assert.equal(blocked.error?.code, 'memory_suppressed');
