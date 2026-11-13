@@ -144,7 +144,7 @@ P2 是入門與素材驗證；其通過不表示預設抽取品質通過，也�
 | 2 單一入口及狀態一致 | 未完成 | [README](../../README.md)已有單一入口，但本次文件尚待合併，不能把工作中的改寫當成已合併 gate。 |
 | 3 四項硬安全 | 未完成 | 下表列出 release 來源中的測試；引用的完整零違規評測紀錄來自較舊 `b05773f`，不是 0.6.6 的已發布 engine 驗收紀錄。 |
 | 4 E08、E09 | 未完成 | [原始定義](semantic-evaluation.md#frozen-acceptance-e01e09)保留；尚未附上公告版本的 E08 紀錄（離線測試與 CI、兩個 Node 版本、regression demos、plugin gates），也還沒有固定 commit 的獨立審查紀錄。 |
-| 5 三次乾淨安裝 | 未完成 | [舊三次紀錄](../promotion/install-validation/README.md)是 `7467aebc` 的 agent/source 安裝；不含已發布 0.6.6 或真實 macOS，也還沒有新版本在 Node 22.16 與 Node 24 上的紀錄。 |
+| 5 三次乾淨安裝 | 未完成 | [舊三次紀錄](../promotion/install-validation/README.md)是 `7467aebc` 的 agent/source 安裝，不是已發布版本。0.6.6 的自動保存只在 Linux 與 WSL 執行（[capture host check](../../integrations/client/raw/local-host-profile.mjs)）：在 macOS 上 `setup --local` 會接上 client、記憶工具可用，但回報對話保存 OFF 並以代碼 2 結束，所以真實 macOS 這一項在自動保存支援 macOS 之前無法符合。Node 22.16 與 Node 24 的新版本紀錄也還沒有。 |
 | 6 真實雙 client | 未完成 | [packed capture 測試](../../packages/setup/test/local-capture.test.mjs)使用合成 client／transcript，不能當成真正 Claude Code 與 Codex 跨 session 驗收。 |
 | 7 三位外部安裝者 | 未完成 | [舊讀者記錄](../promotion/reader-test.csv)仍 pending；沒有三位外部人員依新文件安裝的完整回報。 |
 | 8 資料外送揭露 | 未完成 | [README Your data](../../README.md#your-data)及[繁中版](../../README.zh-TW.md#你的資料)寫明：有 key 時 Memory 與搜尋文字會送到 OpenAI、保存的對話要另外開啟才送、不給 key 才全部留在本機，`--no-context-semantic` 只關 embeddings。`2238d2fc` 的 [release notes](../../CHANGELOG.md)、[CLI 說明](../../adapters/mcp/cli.mjs)、[installer README](../../packages/setup/README.md)、[defaults](../defaults.md)，以及 setup 印出的 `local_privacy`／`local_capture_notice`（[messages](../../packages/setup/lib/messages.mjs)）說法相同。文字已一致；要等這個版本發布、README 合併後才算符合。詳見[證據表](../promotion-claims.md)。 |
