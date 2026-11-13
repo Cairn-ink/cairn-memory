@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { syncBuiltinESMExports } from 'node:module';
+import { apfs } from '../testing/directory-nlink-fixture.mjs';
 import { join, dirname } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
@@ -16,24 +16,6 @@ import { fixture, drain, request } from '../testing/context-read-fixture.mjs';
 
 test.beforeEach(installRawSearchTestClock);
 
-// Patch the builtin binding, including the imports at the actual comparison
-// points. Regular-file stats are returned untouched. No production test hook.
-function apfs(t) {
-  const original = fs.lstatSync;
-  const samples = [];
-  fs.lstatSync = (path, options) => {
-    const stat = original(path, options);
-    if (stat.isDirectory()) {
-      const count = 2 + fs.readdirSync(path).length;
-      stat.nlink = typeof stat.nlink === 'bigint' ? BigInt(count) : count;
-      samples.push({ path: String(path), nlink: Number(stat.nlink) });
-    }
-    return stat;
-  };
-  syncBuiltinESMExports();
-  t.after(() => { fs.lstatSync = original; syncBuiltinESMExports(); });
-  return samples;
-}
 async function raw(t) {
   const ws = createTestWorkspace(t), directory = join(ws.path, 'index');
   fs.mkdirSync(directory, { mode: 0o700 });

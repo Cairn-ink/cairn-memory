@@ -26,6 +26,8 @@ export const observerSkip = process.platform === 'linux' ? false :
 // Fresh inotify subscription per observation. A sentinel event drains the
 // same ordered event queue, avoiding sleeps and events from fixture setup.
 export async function observeDatabaseFiles(f, work) {
+  if (process.platform !== 'linux') throw Object.assign(new Error('observer_requires_inotify: ' + observerSkip),
+    { code: 'observer_requires_inotify' });
   const name = basename(f.path), sentinel = '.u5a-observe-' + randomUUID(), markers = [], events = [];
   const observed = new Set([name, name + '.context-read-v1.sqlite'].flatMap(database =>
     ['', '-journal', '-wal', '-shm'].map(suffix => database + suffix)));

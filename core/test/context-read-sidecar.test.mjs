@@ -1,14 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFileSync, lstatSync, readFileSync, readdirSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, lstatSync, readFileSync, readdirSync, renameSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { openMemoryCore } from '../index.mjs';
-import { assertContextReadReadOnlyAuxiliaries, openContextReadSidecar } from '../context-read-sidecar.mjs';
-import { createFakeEmbedder } from '../context-read-embedder.mjs';
-import { createBM25 } from '../context-read-bm25.mjs';
-import { fixture, request, drain, snapshot, ns, ok, receipt, observeDatabaseFiles, observerSkip } from '../testing/context-read-fixture.mjs';
-import { rationaleModel } from '../testing/rationale-model.mjs';
-import { sourceFixture, savedSource, anchor, resolve, draft, ns as rawNs } from '../testing/raw-source-fixtures.mjs';
+import { sqliteOpenSpy, refusesWithoutOpens, sqliteHeaderCall, rawHeaderCall } from '../testing/context-read-open-spy.mjs';
+// Bootstrap the constructor spy before loading any application modules.
+const { openMemoryCore } = await import('../index.mjs');
+const { assertContextReadCanonicalDelete, assertContextReadReadOnlyAuxiliaries, openContextReadSidecar } = await import('../context-read-sidecar.mjs');
+const { createFakeEmbedder } = await import('../context-read-embedder.mjs');
+const { createBM25 } = await import('../context-read-bm25.mjs');
+const { fixture, request, drain, snapshot, ns, ok, receipt, observeDatabaseFiles, observerSkip } = await import('../testing/context-read-fixture.mjs');
+const { apfs } = await import('../testing/directory-nlink-fixture.mjs');
+const { rationaleModel } = await import('../testing/rationale-model.mjs');
+const { sourceFixture, savedSource, anchor, resolve, draft, ns: rawNs } = await import('../testing/raw-source-fixtures.mjs');
 const unavailable = fn => assert.throws(fn, { code: 'index_unavailable' });
 
 test('R02/R03/R10 real canonical stores; shared query_only reads; lexical equals clean BM25', t => {
@@ -343,72 +346,148 @@ test('R09 rebuild reasons: corrupt, incompatible, wrong-store and deleted sideca
   unlinkSync(f.path + '.context-read-v1.sqlite'); index = f.index(); assert.equal(drain(index).reason, 'missing');
 });
 
-test('R12 read-only missing/stale/hot/auxiliary/unsafe sidecars create no files, including transient files', { skip: observerSkip }, async t => {
-  const f = fixture(t); f.admit('synthetic apple');
-  const before = readdirSync(f.workspace.path).sort();
-  const observed = await observeDatabaseFiles(f, () => unavailable(() => f.index({ readOnly: true })));
-  assert.deepEqual(readdirSync(f.workspace.path).sort(), before); assert.deepEqual(observed.events, []);
-  const index = f.index(); drain(index); index.close();
-  const reader = f.index({ readOnly: true }); assert.equal(reader.lexical(request(), 'apple').length, 1);
-  assert.throws(() => reader.reconcile(request()), { code: 'invalid_input' });
-  f.admit('synthetic fresh'); unavailable(() => reader.lexical(request(), 'apple')); reader.close();
-  for (const suffix of ['-journal', '-wal', '-shm']) {
-    for (const path of [f.path, f.path + '.context-read-v1.sqlite']) {
-      writeFileSync(path + suffix, Buffer.alloc(1024, 1), { mode: 0o600 });
-      const files = readdirSync(f.workspace.path).sort();
-      assert.throws(() => f.index({ readOnly: true }), { code: suffix === '-journal' ? 'storage_busy' : 'index_unavailable' });
-      assert.deepEqual(readdirSync(f.workspace.path).sort(), files); unlinkSync(path + suffix);
-    }
-  }
-  const path = f.path + '.context-read-v1.sqlite'; unlinkSync(path); symlinkSync(f.path, path);
-  unavailable(() => f.index()); unavailable(() => f.index({ readOnly: true }));
-  assert.ok(lstatSync(path).isSymbolicLink());
-  assert.throws(() => openContextReadSidecar({ path: ':memory:', db: f.db }), { code: 'index_unavailable' });
-});
+// Only inotify assertions are skipped. The work, open transcript and final
+// directory checks run on every platform, including the APFS simulation.
+const observeOnLinux = (f, work) => process.platform === 'linux' ? observeDatabaseFiles(f, work) :
+  Promise.resolve({ result: work(), events: null });
+async function assertObserverEvents(t, observations) {
+  await t.test('inotify sees no database or companion events', { skip: observerSkip }, () => {
+    for (const observed of observations) assert.deepEqual(observed.events, []);
+  });
+}
 
-test('R12 checkpointed WAL header without auxiliaries refuses before SQLite can create transient files', { skip: observerSkip }, async t => {
-  for (const location of ['canonical', 'sidecar']) {
-    const f = fixture(t); f.admit('synthetic apple'); const index = f.index(); drain(index); index.close();
-    const path = location === 'canonical' ? f.path : f.path + '.context-read-v1.sqlite';
-    const writer = new DatabaseSync(path);
-    assert.equal(writer.prepare('PRAGMA journal_mode=WAL').get().journal_mode, 'wal'); writer.close();
-    assert.equal(readFileSync(path)[18], 2);
-    const before = readdirSync(f.workspace.path).sort();
-    assert.ok(!before.some(name => name.endsWith('-wal') || name.endsWith('-shm')));
+test('database observer detects transient companions or refuses unsupported platforms', async t => {
+  if (process.platform !== 'linux') {
+    let ran = false;
+    await assert.rejects(observeDatabaseFiles(null, () => { ran = true; }), { code: 'observer_requires_inotify' });
+    assert.equal(ran, false);
+  } else {
+    const f = fixture(t);
     const observed = await observeDatabaseFiles(f, () => {
-      unavailable(() => assertContextReadReadOnlyAuxiliaries(f.path));
-      unavailable(() => f.index({ readOnly: true }));
+      writeFileSync(f.path + '-wal', 'synthetic', { mode: 0o600 }); unlinkSync(f.path + '-wal');
     });
-    assert.deepEqual(readdirSync(f.workspace.path).sort(), before); assert.deepEqual(observed.events, []);
-    if (location === 'sidecar') assert.equal(drain(f.index()).reason, 'incompatible');
+    assert.ok(observed.events.length > 0, 'positive control sees even a removed companion');
   }
 });
 
-test('probe open failure is unsafe_file and never deletes or rebuilds an existing sidecar', { skip: observerSkip }, async t => {
-  const childProcess = await import('node:child_process');
-  const { syncBuiltinESMExports } = await import('node:module');
+for (const simulatedAPFS of [false, true]) {
+  const variant = simulatedAPFS ? ' (simulated APFS directory nlink)' : '';
+  test('R12 read-only missing/stale/hot/auxiliary/unsafe sidecars create no files, including transient files' + variant, async t => {
+    if (simulatedAPFS) apfs(t);
+    const f = fixture(t); f.admit('synthetic apple');
+    const observations = [], before = readdirSync(f.workspace.path).sort();
+    observations.push(await observeOnLinux(f, () => refusesWithoutOpens(() => f.index({ readOnly: true }),
+      { code: 'index_unavailable', reason: 'missing' }, [sqliteHeaderCall(f.path)])));
+    assert.deepEqual(readdirSync(f.workspace.path).sort(), before);
+    const index = f.index(); drain(index); index.close();
+    const path = f.path + '.context-read-v1.sqlite';
+    // Positive control: the forwarding constructor intercepts the named import
+    // in the real sidecar opener, then delegates normally.
+    const opened = sqliteOpenSpy(() => f.index({ readOnly: true }));
+    assert.deepEqual(opened.calls, [sqliteHeaderCall(path),
+      { kind: 'in-process', args: [path, { readOnly: true, timeout: 5000 }] }]);
+    const reader = opened.result;
+    assert.equal(reader.lexical(request(), 'apple').length, 1);
+    refusesWithoutOpens(() => reader.reconcile(request()), { code: 'invalid_input' });
+    f.admit('synthetic fresh');
+    const staleFiles = readdirSync(f.workspace.path).sort();
+    observations.push(await observeOnLinux(f, () => refusesWithoutOpens(() => reader.lexical(request(), 'apple'),
+      { code: 'index_unavailable', reason: 'rebuilding' }, [sqliteHeaderCall(f.path)])));
+    assert.deepEqual(readdirSync(f.workspace.path).sort(), staleFiles); reader.close();
+    for (const suffix of ['-journal', '-wal', '-shm']) {
+      for (const target of [f.path, path]) {
+        writeFileSync(target + suffix, Buffer.alloc(1024, 1), { mode: 0o600 });
+        const files = readdirSync(f.workspace.path).sort(), inode = lstatSync(target + suffix).ino,
+          bytes = readFileSync(target + suffix);
+        const error = suffix === '-journal' ? { code: 'storage_busy' } :
+          { code: 'index_unavailable', reason: 'auxiliary_file' };
+        observations.push(await observeOnLinux(f, () => refusesWithoutOpens(() => f.index({ readOnly: true }),
+          error, suffix === '-journal' ? [rawHeaderCall(target)] : [])));
+        assert.deepEqual(readdirSync(f.workspace.path).sort(), files);
+        assert.equal(lstatSync(target + suffix).ino, inode); assert.deepEqual(readFileSync(target + suffix), bytes);
+        unlinkSync(target + suffix);
+      }
+    }
+    unlinkSync(path); symlinkSync(f.path, path);
+    const unsafeFiles = readdirSync(f.workspace.path).sort();
+    for (const readOnly of [false, true]) observations.push(await observeOnLinux(f, () =>
+      refusesWithoutOpens(() => f.index({ readOnly }), { code: 'index_unavailable', reason: 'unsafe_file' })));
+    assert.deepEqual(readdirSync(f.workspace.path).sort(), unsafeFiles);
+    assert.ok(lstatSync(path).isSymbolicLink());
+    refusesWithoutOpens(() => openContextReadSidecar({ path: ':memory:', db: f.db }),
+      { code: 'index_unavailable', reason: 'memory_store' });
+    await assertObserverEvents(t, observations);
+  });
+
+  test('R12 checkpointed WAL header without auxiliaries refuses before SQLite can create transient files' + variant, async t => {
+    if (simulatedAPFS) apfs(t);
+    const observations = [];
+    for (const location of ['canonical', 'sidecar']) {
+      const f = fixture(t); f.admit('synthetic apple'); const index = f.index(); drain(index); index.close();
+      const path = location === 'canonical' ? f.path : f.path + '.context-read-v1.sqlite';
+      const writer = new DatabaseSync(path);
+      assert.equal(writer.prepare('PRAGMA journal_mode=WAL').get().journal_mode, 'wal'); writer.close();
+      assert.equal(readFileSync(path)[18], 2);
+      if (location === 'sidecar') assertContextReadCanonicalDelete(f.path);
+      const before = readdirSync(f.workspace.path).sort(), inode = lstatSync(path).ino, bytes = readFileSync(path);
+      assert.ok(!before.some(name => name.endsWith('-wal') || name.endsWith('-shm')));
+      observations.push(await observeOnLinux(f, () => {
+        for (const work of [() => assertContextReadReadOnlyAuxiliaries(f.path), () => f.index({ readOnly: true })]) {
+          refusesWithoutOpens(work, { code: 'index_unavailable', reason: 'auxiliary_file' }, [sqliteHeaderCall(path)]);
+        }
+      }));
+      assert.deepEqual(readdirSync(f.workspace.path).sort(), before);
+      assert.equal(lstatSync(path).ino, inode); assert.deepEqual(readFileSync(path), bytes);
+      if (location === 'sidecar') assert.equal(drain(f.index()).reason, 'incompatible');
+    }
+    await assertObserverEvents(t, observations);
+  });
+}
+
+test('probe open failure is unsafe_file and never deletes or rebuilds an existing sidecar', async t => {
   const f = fixture(t); f.admit('unreadable sidecar');
   const index = f.index(); drain(index); index.close();
-  const path = f.path + '.context-read-v1.sqlite', before = lstatSync(path), bytes = readFileSync(path);
-  const original = childProcess.default.spawnSync;
+  assertContextReadCanonicalDelete(f.path);
+  const path = f.path + '.context-read-v1.sqlite', before = lstatSync(path), bytes = readFileSync(path),
+    files = readdirSync(f.workspace.path).sort();
   let probes = 0;
-  childProcess.default.spawnSync = (command, args, options) => {
-    if (args[2]?.includes("new DatabaseSync(process.argv[1], { readOnly: true })")) {
-      probes++;
-      args = args.map((arg, i) => i === 2 ? arg.replace(
-        'new DatabaseSync(process.argv[1], { readOnly: true })',
-        "(() => { throw Object.assign(new Error('unreadable'), { errcode: 14 }); })()") : arg);
+  const observed = await observeOnLinux(f, () => {
+    for (const readOnly of [false, true]) {
+      const calls = refusesWithoutOpens(() => f.index({ readOnly }), { code: 'index_unavailable', reason: 'unsafe_file' },
+        [sqliteHeaderCall(path)], { failProbeOpen: true });
+      probes += calls.filter(call => call.kind === 'child').length;
     }
-    return original(command, args, options);
-  };
-  syncBuiltinESMExports();
-  try {
-    const observed = await observeDatabaseFiles(f, () => {
-      for (const readOnly of [false, true]) assert.throws(() => f.index({ readOnly }), {
-        code: 'index_unavailable', reason: 'unsafe_file',
-      });
+  });
+  assert.equal(probes, 2);
+  assert.deepEqual(readdirSync(f.workspace.path).sort(), files);
+  assert.equal(lstatSync(path).ino, before.ino); assert.deepEqual(readFileSync(path), bytes);
+  await assertObserverEvents(t, [observed]);
+});
+
+// Model a writer replacing the journal while the raw-header child runs. The
+// retained old journal makes the directory entry count (and APFS nlink) grow.
+// Both directory-proof comparisons must still classify this as contention.
+test('simulated APFS journal replacement retains storage_busy through both directory proofs', t => {
+  const samples = apfs(t), f = fixture(t); f.admit('synthetic journal turnover');
+  const index = f.index(); drain(index); index.close();
+  assertContextReadCanonicalDelete(f.path);
+  for (const path of [f.path, f.path + '.context-read-v1.sqlite']) {
+    const journal = path + '-journal', previous = path + '-previous-journal';
+    writeFileSync(journal, Buffer.alloc(1024, 1), { mode: 0o600 });
+    const inode = lstatSync(journal).ino, mainInode = lstatSync(path).ino, mainBytes = readFileSync(path),
+      files = readdirSync(f.workspace.path).sort(), offset = samples.length;
+    refusesWithoutOpens(() => f.index({ readOnly: true }), { code: 'storage_busy' }, [rawHeaderCall(path)], {
+      beforeHeader() {
+        renameSync(journal, previous); writeFileSync(journal, Buffer.alloc(1024, 2), { mode: 0o600 });
+      },
     });
-    assert.equal(probes, 2); assert.deepEqual(observed.events, []);
-    assert.equal(lstatSync(path).ino, before.ino); assert.deepEqual(readFileSync(path), bytes);
-  } finally { childProcess.default.spawnSync = original; syncBuiltinESMExports(); }
+    assert.deepEqual(readdirSync(f.workspace.path).sort(), [...files, previous.split('/').at(-1)].sort(),
+      'only the synthetic writer added an entry');
+    assert.equal(lstatSync(previous).ino, inode); assert.notEqual(lstatSync(journal).ino, inode);
+    assert.deepEqual(readFileSync(journal), Buffer.alloc(1024, 2));
+    assert.equal(lstatSync(path).ino, mainInode); assert.deepEqual(readFileSync(path), mainBytes);
+    const links = samples.slice(offset).filter(sample => sample.path === f.workspace.path).map(sample => sample.nlink);
+    assert.ok(new Set(links).size >= 2, 'the refusal crossed a real simulated directory nlink change');
+    unlinkSync(journal); unlinkSync(previous);
+  }
 });
