@@ -54,8 +54,8 @@ export async function openLocalSource(path) {
     ancestors.length = 0;
     return file;
   } catch (error) {
-    await file?.close();
-    await Promise.all(ancestors.map(ancestor => ancestor.handle.close()));
+    await Promise.allSettled([file, ...ancestors.map(ancestor => ancestor.handle)]
+      .filter(Boolean).map(async handle => handle.close()));
     throw error;
   }
 }
