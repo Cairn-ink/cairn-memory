@@ -50,7 +50,9 @@ test('default help changes are exact and preserve every pinned safety line', () 
     "go to OpenAI for semantic search, up to an estimated US$1 per server run.\n" +
     "Saved conversations are sent only with --raw-semantic or an explicit\n" +
     "--context-embedder configuration. Raw document and query embeddings are off by default.\n" +
-    "To stay fully local, use --no-context-semantic, or do not give the server a key.\n" +
+    "To keep everything on this computer, don't give the server a key.\n" +
+    "--no-context-semantic only turns off embeddings; with a key, recall and other\n" +
+    "model features still send memory text to OpenAI.\n" +
     'See docs/defaults.md for costs, options and every default.\n\n';
   const original = reviewedHelp();
   const current = original.replace('\n\nUsage:', '\n\n' + defaults + 'Usage:')

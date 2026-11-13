@@ -29,7 +29,9 @@ With OPENAI_API_KEY available to the Cairn MCP server, memories and search text
 go to OpenAI for semantic search, up to an estimated US$1 per server run.
 Saved conversations are sent only with --raw-semantic or an explicit
 --context-embedder configuration. Raw document and query embeddings are off by default.
-To stay fully local, use --no-context-semantic, or do not give the server a key.
+To keep everything on this computer, don't give the server a key.
+--no-context-semantic only turns off embeddings; with a key, recall and other
+model features still send memory text to OpenAI.
 See docs/defaults.md for costs, options and every default.
 
 Usage:

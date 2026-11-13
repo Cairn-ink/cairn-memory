@@ -45,7 +45,7 @@ Several sessions saving at once no longer stop one of them from saving. Default
 reads keep the Raw excerpts they already validated when a read reaches its time
 limit, marked partial, instead of dropping them.
 
-**Search catches up after saving.** Each turn is saved to the local store as soon as it ends. Raw search covers a newly saved conversation only after the local index reaches it. That indexing runs while Claude Code or Codex has the Cairn MCP server open: a few minutes for about 1,000 saved messages, about an hour for 10,000. While you keep working, each new save restarts the indexing pass, so a conversation saved during a busy session may not be searchable until you pause. Until the index has caught up, search reports partial coverage instead of claiming it found everything. Memories, and conversations the index already covers, are not affected and stay searchable as before.
+**Search catches up after saving.** Each turn is saved to the local store as soon as it ends. Raw search covers a newly saved conversation only after the local index reaches it. Raw search builds its index in the background while Cairn is running, at roughly one saved message per second: allow about 15 minutes for 1,000 saved messages and roughly 2 hours for 10,000. After each new saved message it re-checks the whole index (about 6 minutes per 1,000 saved messages). Until a build or re-check finishes, Raw search still returns results but reports partial coverage. While you keep working, each new save restarts the indexing pass, so a conversation saved during a busy session may not be searchable until you pause. Until the index has caught up, newly saved conversations may be missing from results. The coverage report marks such results as partial, but assistants using the memory tool see only the results, so an empty answer then doesn't mean nothing was saved. Memories, and conversations the index already covers, are not affected and stay searchable as before.
 
 Known limits in this release:
 - While new turns keep arriving, the local MCP server keeps indexing: about one small index write per second and roughly 3% of one CPU core.
@@ -151,8 +151,10 @@ go to OpenAI for semantic search, up to an estimated US$1 per server run. Saved
 conversations are sent only if you opt in with `--raw-semantic` or explicitly
 configure `--context-embedder`. Raw document and query embeddings are both off
 by default, with status reason `raw_semantic_not_enabled`; no Raw vectors are
-pending. To stay fully local, use `--no-context-semantic`, or do not give the
-server a key. `--no-context-semantic` also overrides Raw opt-in.
+pending. To keep everything on this computer, don't give the server a key.
+`--no-context-semantic` only turns off embeddings (it also overrides Raw
+opt-in); with a key, recall and other model features still send memory text to
+OpenAI.
 
 The embedding budget is process-local, shared by opted-in Raw document refresh,
 Memory and Card refresh and query embeddings for the same provider ID and revision. It is not
