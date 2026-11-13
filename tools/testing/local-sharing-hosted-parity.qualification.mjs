@@ -1,3 +1,6 @@
+// One-time R1 qualification: unscoped Raw, ranking and budget parity against
+// fixed base 405893c957ee582fecd1a48265351a73be6bb190. Requires full git history.
+// Run explicitly: node tools/testing/run.mjs tools/testing/local-sharing-hosted-parity.qualification.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -5,12 +8,12 @@ import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { mkdirSync, unlinkSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
-import { sourceFixture, savedSource } from '../testing/raw-source-fixtures.mjs';
-import { searchFixture } from '../testing/raw-search-fixtures.mjs';
-import { installRawSearchTestClock, rawSearchTestWait } from '../testing/raw-search-clock.mjs';
-import { coreFixture, query, ok } from '../testing/context-read-core-fixture.mjs';
-import { contextBudget } from '../context-read-budget.mjs';
+import { createTestWorkspace } from './workspace.mjs';
+import { sourceFixture, savedSource } from '../../core/testing/raw-source-fixtures.mjs';
+import { searchFixture } from '../../core/testing/raw-search-fixtures.mjs';
+import { installRawSearchTestClock, rawSearchTestWait } from '../../core/testing/raw-search-clock.mjs';
+import { coreFixture, query, ok } from '../../core/testing/context-read-core-fixture.mjs';
+import { contextBudget } from '../../core/context-read-budget.mjs';
 
 // Exercise the approved, immutable engine base as an independent implementation.
 // All files and stores are temporary synthetic test workspaces; no installation.
