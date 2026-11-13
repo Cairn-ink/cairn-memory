@@ -81,6 +81,8 @@ Known limits in this release:
 - Local setup doesn't support a custom `CLAUDE_CONFIG_DIR` yet: setup stops with "The Claude Code local entry could not be verified." Fixed in the next release.
 - If `~/.claude` or `~/.codex` (or `CLAUDE_CONFIG_DIR` / `CODEX_HOME`) is a symbolic link, local setup stops without connecting that tool. Fixed in the next release.
 - macOS with Node from Homebrew: setup records Node's versioned path, so rerun setup after `brew upgrade` updates Node. Fixed in the next release.
+- Claude Code runs started by scripts or the Agent SDK (for example `claude -p`) are saved like interactive sessions.
+- Deleting a conversation or forgetting a memory removes that text from Cairn's database at once, and it is never shown again; conversations a forget only hides stay saved until you delete them. Local search index files can keep word lists (and, with semantic search, vectors) from deleted items until background cleanup reaches them. Cleanup runs only while Cairn is running, may not reach them while new conversations keep being saved, and never covers index files for a search setup you no longer use. As with most databases, deleted text can also remain in unused file space until it is overwritten.
 - A later release indexes newly saved conversations first.
 
 Going back to 0.6.5: an **attested base-33 store with card lineage revision 1**
@@ -157,6 +159,8 @@ npx @cairn-ink/memory raw delete <conversation-id> --yes
 - 本機設定還不支援自訂的 `CLAUDE_CONFIG_DIR`：設定會停在「無法確認 Claude Code 的本機記憶項目」。下一版修正。
 - 若 `~/.claude` 或 `~/.codex`（或 `CLAUDE_CONFIG_DIR`／`CODEX_HOME`）是符號連結，本機設定會停止，不會連接該工具。下一版修正。
 - macOS 上用 Homebrew 安裝的 Node：設定會記下 Node 帶版本號的路徑，所以 `brew upgrade` 更新 Node 之後請重新執行 setup。下一版修正。
+- 由腳本或 Agent SDK 啟動的 Claude Code 執行（例如 `claude -p`）會和互動式工作階段一樣被保存。
+- 刪除對話或忘記記憶時，那段文字會立刻從 Cairn 的資料庫移除，之後不會再出現；只是因「忘記」而隱藏的對話仍然保存著，要刪除才會移除。本機搜尋索引檔可能還留著被刪內容的詞彙清單（開啟語意搜尋時還有向量），要等背景清理處理到才會移除。清理只在 Cairn 執行時進行，持續有新對話存入時可能一直輪不到，而不再使用的搜尋設定留下的索引檔不會被清理。和多數資料庫一樣，刪掉的文字也可能留在檔案未使用的空間，直到被覆寫。
 - 之後的版本會優先為新保存的對話建索引。
 
 降回 0.6.5 時，若 0.6.6 已在開啟 Raw 的情況下開過
