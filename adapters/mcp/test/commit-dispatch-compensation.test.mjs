@@ -2,11 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { openMemoryCore, createMemoryCore } from '../../../core/contract.mjs';
 import { composeRawCore } from '../../../core/raw-composition.mjs';
 import { createCommitDispatcher } from '../../../core/commit-dispatch.mjs';
-import { setup, input, interpretation, ns as episodeNs } from '../../../core/testing/episode-capture-helpers.mjs';
+import { setup, input, interpretation, options as episodeOptions, ns as episodeNs } from '../../../core/testing/episode-capture-helpers.mjs';
 import { engineCardFixture, scriptedConsolidator } from '../../../core/testing/engine-card-fixture.mjs';
 import { localPlainPort, request as rawRequest, splitRaw } from '../../../core/testing/raw-capture-fixtures.mjs';
 import { rationaleModel } from '../../../core/testing/rationale-model.mjs';
@@ -45,9 +46,16 @@ function gate(t, selector, { exhausted = false } = {}) {
     assert.ok(backoffs >= 1, marker + ': cancellation must not suppress cleanup retry');
     assert.equal(cancellation.signal.aborted, true);
     assert.ok(host.inspectTransactions().every(state => state.isOpen && !state.isTransaction));
+    assert.equal(host.inspectSynchronousWrites().count, 0, marker + ': all writes must be routed');
   } };
 }
 const inFile = (file, method) => stack => stack.includes(file) && new RegExp('\\b' + method + ' \\(').test(stack);
+function sourceSite(file, anchor) {
+  const source = readFileSync(new URL('../../../core/' + file, import.meta.url), 'utf8');
+  const offset = source.indexOf(anchor);
+  assert.ok(offset >= 0 && source.indexOf(anchor, offset + 1) < 0, 'unique cleanup call site');
+  return file + ':' + source.slice(0, offset).split('\n').length + ':';
+}
 const source = 'Synthetic cobalt telescope preference';
 const capture = { namespace: ns, client: 'synthetic', sessionId: 'cleanup', eventId: 'batch',
   messages: [{ id: 'message', role: 'user', content: source }] };
@@ -81,14 +89,22 @@ for (const outcome of ['success', 'failure', 'pause']) test(`cancelled Card ${ou
     if (outcome === 'pause') ok(writer.setCapturePaused({ namespace: cardNs, expectedGeneration: 'initial', paused: true }));
     return base.consolidate(request);
   } };
-  const f = g.host.open(() => engineCardFixture(t, { model, sessionEpisodes: { mode: 'episode-v1' } }));
+  // Seed through the fixture's synchronous ordinary core, then open the
+  // production dispatched core on the same synthetic store for the pass.
+  const config = { model, raw: false, ...episodeOptions };
+  const f = engineCardFixture(t, config);
   const memories = f.seed(); f.file(memories, 'Synthetic cleanup topic');
-  writer = openMemoryCore({ path: f.path, raw: false, sessionEpisodes: { mode: 'episode-v1' } }); f.workspace.defer(() => writer.close());
+  writer = f.core;
+  const core = g.host.open(() => openMemoryCore({ path: f.path, ...config,
+    contextRead: { version: 'context-read-v1', authority: f.trusted.authority,
+      counter: { id: 'o200k_base', countTokens: model.countTokens } } }));
+  f.workspace.defer(() => core.close());
   const observer = g.connect(f.path, f.workspace);
   // The fixture exports a fixed namespace; derive it from canonical seeded rows.
   const row = observer.prepare('SELECT owner_id,scope,project_id FROM memories LIMIT 1').get();
   cardNs = { ownerId: row.owner_id, scope: row.scope, projectId: row.project_id || null };
-  g.arm(); await g.run(() => f.pass()); g.verify('R2K_CARD_' + outcome.toUpperCase() + '_CLEANUP');
+  g.arm(); await g.run(() => core.maintainCards({ namespace: cardNs, budget: { maxMs: 5000 } }));
+  g.verify('R2K_CARD_' + outcome.toUpperCase() + '_CLEANUP');
   if (outcome === 'pause') assert.equal(observer.prepare("SELECT count(*) n FROM card_operations WHERE method='consolidateAttempt'").get().n, 0);
   else assert.equal(JSON.parse(observer.prepare("SELECT result FROM card_operations WHERE method='consolidateOutcome'").get().result).outcome,
     outcome === 'success' ? 'succeeded' : 'terminal');
@@ -125,7 +141,9 @@ for (const exhausted of [false, true]) test(`cancelled episode settlement native
 });
 
 for (const auxiliary of [false, true]) test(`cancelled episode writer release; auxiliary=${auxiliary}`, async t => {
-  const site = auxiliary ? 'episode-capture.mjs:219:' : 'episode-capture.mjs:310:';
+  const site = sourceSite('episode-capture.mjs', auxiliary
+    ? '  } finally { (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.releaseEpisodeWriter'
+    : '    if (registered?.token) (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.releaseEpisodeWriter');
   const g = gate(t, stack => stack.includes(site) && stack.includes('releaseWriter'));
   const f = g.host.open(() => setup(t)); const observer = g.connect(f.path, f.ws);
   let run = () => f.core.capture(input());
