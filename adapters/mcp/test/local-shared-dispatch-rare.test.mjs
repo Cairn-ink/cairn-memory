@@ -114,13 +114,23 @@ test('read_role_task_context synchronous reconciliation retains its native wait'
 
 test('item 8: production lazy Card claim retries its migration and leaves a complete layout', { timeout: 15000 }, async t => {
   const w = createTestWorkspace(t), path = join(w.path, 'production-lazy.sqlite');
+  const seed = openMemoryCore({ path, raw: false });
+  try { ok(seed.admit({ namespace: ns, memory: { content: 'Synthetic lazy Card source', kind: 'fact' },
+    receipts: [{ client: 'synthetic', sessionId: 'lazy', eventId: 'source', role: 'user', excerpt: 'Synthetic lazy Card source' }] })); }
+  finally { seed.close(); }
   let backoffs = 0;
   const dispatcher = createCommitDispatcher({ strict: true, onBackoff() { backoffs++; } });
   const runtime = dispatcher.open(() => createMemoryRuntime({ path }, { engineCards: true }));
   w.defer(() => runtime.close());
-  const storage = await runtime.engineCardStorage(), lock = await holdWriteLock(t, path, 400);
+  const storage = await runtime.engineCardStorage();
+  const memories = storage.snapshot(ns, 16, () => {}).memories;
+  assert.equal(memories.length, 1, 'claim uses one real retained receipt source');
+  const before = new DatabaseSync(path, { readOnly: true });
+  try { assert.equal(before.prepare('PRAGMA user_version').get().user_version, 18, 'snapshot must leave migration lazy'); }
+  finally { before.close(); }
+  const lock = await holdWriteLock(t, path, 400);
   const attempt = await dispatchCommit(storage, () => storage.claim(ns,
-    { key: 'synthetic-dispatched-cluster', memories: [] }, new Date().toISOString(), () => {}));
+    { key: 'synthetic-dispatched-cluster', memories }, new Date().toISOString(), () => {}));
   assert.ok(attempt); assert.ok(backoffs > 0);
   assert.deepEqual(await lock.exited, [0, null]);
   const observer = new DatabaseSync(path, { readOnly: true });
