@@ -1,4 +1,6 @@
 import { contentSafetyFacade, contentAuthorityPort } from './content-safety-boundary.mjs';
+import { contentWriteBoundaryConnection } from './content-write-context.mjs';
+import { assertContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { dispatchCommit, hasCommitDispatcher, withCommitDelivery, inCommitDelivery } from './commit-dispatch.mjs';
 import { CARD_CURRENT_VERSION, CARD_CURRENT_METHODS } from './card-current-input.mjs';
 import { authorizeCardCurrentDependencies } from './card-current-facade.mjs';
@@ -91,6 +93,14 @@ export function createPrivateCardFacade(storage, options, ready, rawReader) {
         return value;
         };
         const deliver = value => {
+        // Nested reads defer the generic inner delivery check to the parent,
+        // whose account predates the retry. Card storage's scope check does not
+        // compare delivery epochs. Reinvoke the existing epoch check against
+        // the successful attempt before a retained body enters the envelope.
+        if (read && hasCommitDispatcher(storage)) inCommitDelivery(() => {
+          assertContentSuppressionRequestInside(contentWriteBoundaryConnection(storage), [ns]);
+          storage.assertContentScope([ns], { delivery: true });
+        });
         if (Buffer.byteLength(JSON.stringify({ ok: true, value }), 'utf8') > 65536) fail('context_item_too_large');
         return { ok: true, value };
         };

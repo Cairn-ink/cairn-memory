@@ -144,10 +144,15 @@ for (const kind of ['card', 'source', 'unrelated']) test(`P1-5: ${kind} suppress
   target = kind === 'card' ? { kind: 'card', key: card.id }
     : kind === 'source' ? { kind: 'submitted-note', key: writer.prepare('SELECT id FROM card_notes').get().id }
       : { kind: 'memory', key: 'synthetic-unrelated-memory' };
+  const readable = ok(await authority.call(core, 'getCard', { namespace: ns, cardId: card.id }));
+  assert.equal(readable.card.body, 'Synthetic private body', 'control: the retained body is readable before suppression');
   writer.exec('BEGIN IMMEDIATE'); armed = true;
   const result = await authority.call(core, 'getCard', { namespace: ns, cardId: card.id });
   assert.ok(backoffs > 0 && suppressed);
+  t.diagnostic('R2M_CARD_HANDOFF ' + JSON.stringify({ kind, ok: result.ok,
+    bodyReturned: JSON.stringify(result).includes('Synthetic private body') }));
   assert.equal(result.error?.code, 'evidence_unavailable', kind === 'unrelated' ? 'R2K_CARD_ACCOUNT_HANDOFF' : 'R2I_CARD_DELIVERY_FENCE');
+  assert.doesNotMatch(JSON.stringify(result), /Synthetic private body/, 'R2M_SUPPRESSED_CARD_BODY_REFUSED');
 });
 
 test('P2-1: a reconcile commits its tail after its cooperative budget expires', { timeout: 10000 }, async t => {
