@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "cf1550a7a0ab7bf32285368a1b9ec47e7791c9e03bcc1197f6dd618839a0d02d",
-  "bytes": 1326698,
+  "sha256": "2d47b7c7518134cc35e62228b2f06272483dd3973eb7b9b3a3a0e31642a7ba67",
+  "bytes": 1327844,
   "files": [
     "LICENSE",
     "README.md",
@@ -374,6 +374,7 @@
     "integrations/client/raw/local-setup-init.mjs",
     "integrations/client/raw/local-setup-input.mjs",
     "integrations/client/raw/local-setup.mjs",
+    "integrations/client/raw/local-source-open.mjs",
     "integrations/client/raw/local-transport.mjs",
     "integrations/client/raw/local-worker-input.mjs",
     "integrations/client/raw/local-worker-progress.mjs",
@@ -606,9 +607,10 @@
     "integrations/client/raw/local-worker.mjs": "3e80ba6ad38a5112f4da45e971bb70d5b11c86cc1f75ec4d53a46565cd4bc74f",
     "integrations/client/raw/local-worker-input.mjs": "4bed6dd911c34a1feb6a7cd3678b3c631256bee1dc013ddefb3847aa4d1c5649",
     "integrations/client/raw/local-worker-progress.mjs": "ca40ad00cccf4976dd9d4a6eb8ce88c9e87c5486e326149855454334b6f21bd3",
-    "integrations/client/raw/local-worker-source.mjs": "1ae5a769062ba3479bf0a3b7f02f196a5b1afb4e36cf1f9c8aefcbadba3a9916",
+    "integrations/client/raw/local-worker-source.mjs": "8fa56d11c8db15b2397f5e60648725dc69285310169e4e189fa36da76746934e",
+    "integrations/client/raw/local-source-open.mjs": "138d2b6f0c0a4b95d618532aae4776d567e3b1e81c2cdd5b996d417e7e3fe26b",
     "integrations/client/raw/local-worker-state.mjs": "40f4e6ddea49395c033bda9cf27f58367607cad901366538f98cb6658bb5c5a1",
-    "integrations/client/raw/local-host.mjs": "3efa871ab0ec25a75ecd0583434d43b6143f65f086e6279ed300128e3cbccfef",
+    "integrations/client/raw/local-host.mjs": "a1d73e94f0384618c3c26a9d520ee3eddf63c268e48c6d3841dea99685f82907",
     "integrations/client/raw/local-setup-input.mjs": "e4f2cf1031897b25d3e16f6f65696bfab62afee758e82fe8e8d148785029cb6a",
     "integrations/client/raw/local-setup-files.mjs": "f54b51f466531ad76798de6982146e7080bd60d2004c259bcf7e0fc59cf2055a",
     "integrations/client/raw/local-settings-lock.mjs": "0e3a1973363798d9cf037b972743b1c53f154a1ffda6729b5e0f4660826ecbbc",
@@ -619,10 +621,10 @@
     "integrations/client/raw/local-codex-qualification.mjs": "96fae8a0e3821d08a7d2347c5e4e42570a5e15378f74aa25120d93dfe404bdac",
     "integrations/client/raw/local-session-start.mjs": "9975bb99bf3a7d89f45495492abee7d89b1219497a4fdadbe01018309bc142b2",
     "integrations/client/raw/local-session-fence.mjs": "ec0a9ea5e45158423f70fdb1a8cf0df1a8b1b4424df452b8cde671436bbbea39",
-    "integrations/client/raw/local-host-profile.mjs": "c8b6ba0fa3484a5ca8a7f670b87ce7e32bd97ea95f67c2afbcdcba662890d709",
+    "integrations/client/raw/local-host-profile.mjs": "4dd9e8cd5a022c1802e5a62470b8584ab93ebb399b59f4993b6eca99e64413c6",
     "integrations/client/raw/local-host-permission.mjs": "02dc29407324012fe2eece44e05bc6f164b2ce30f4dfd5cd2656418d4b4879e7",
     "integrations/client/raw/local-host-preparation.mjs": "c5e2cd4bcf85b82fdd522a3796f8981dc320ecc7688abbb20759c82c3dc7b4c9",
-    "integrations/client/raw/local-host-rearm.mjs": "67adb4efbd714659f13b27656b34f4a5ed4ca5b0bcc958b51414c07d3541f738",
+    "integrations/client/raw/local-host-rearm.mjs": "c06e8d5341d42950cc3454b8ba0ea923f85c76ce49810750fbace595b684780f",
     "integrations/client/raw/local-rearm-state.mjs": "c436e9d537438baaa324a75a8a22b275427d4276d402c8d3a497821c8087b95e",
     "integrations/client/raw/local-host-cli.mjs": "a9edb3615a795b811a61c08979041ed9fda584fe10c025f35d03e5e198721c7b",
     "integrations/client/raw/claude.mjs": "5c298d4e7e15cbfb8b62f40c98ab7538b6e14281349ccc45fa5e8b6cbcc3d258",
@@ -793,7 +795,7 @@
     "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b"
   },
   "generatedHashes": {
-    "package.json": "40b946814083a7efce704a63d8f7ee81f7e86ce7ca7f483bafc97d1dacc5ffc3",
+    "package.json": "bcda6060b042eeb2e388cf83ceb7d88c9dce49ed344b06ddeade31c55c2c35e4",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8"
   }
 }
