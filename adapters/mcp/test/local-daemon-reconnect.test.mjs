@@ -39,7 +39,8 @@ for (const side of ['before', 'after']) test(`SIGKILL ${side} mutation COMMIT fa
   const a = w.forward(); a.release(); await w.connect(a);
   candidate.process.send({ kind: 'arm' });
   await until(() => candidate.messages.some(m => m.kind === 'armed'), 'mutation barrier must be armed');
-  const call = a.tool('remember_memory', { content: 'synthetic cobalt telescope COMMIT_SENTINEL', kind: 'fact' });
+  const content = 'synthetic cobalt telescope COMMIT_SENTINEL';
+  const call = a.tool('remember_memory', { content, kind: 'fact' });
   await until(() => candidate.messages.some(m => m.kind === 'commit-barrier' && m.side === side), 'fault must hit exact COMMIT side');
   candidate.process.kill('SIGKILL'); await until(() => candidate.exit, 'fault candidate exit must be recorded');
   assert.equal(candidate.exit.signal, 'SIGKILL');
@@ -53,8 +54,13 @@ for (const side of ['before', 'after']) test(`SIGKILL ${side} mutation COMMIT fa
   const core = openMemoryCore({ path: w.path, raw: false });
   try {
     const listed = ok(core.list({ namespace: ns }));
-    const text = JSON.stringify(listed);
+    assert.equal(listed.exhausted, true, 'durable outcome census must be complete');
+    assert.equal(listed.memories.length, side === 'after' ? 1 : 0, 'exactly one admission may survive COMMIT; tools must never replay');
+    // list() deliberately returns metadata; get() is the public content API.
+    const durable = listed.memories.map(memory => ok(core.get({ namespace: ns, memoryId: memory.id })).memory);
+    const text = JSON.stringify(durable);
     assert.equal(text.includes('COMMIT_SENTINEL'), side === 'after', 'normal engine API must observe exact durable COMMIT outcome');
+    if (side === 'after') assert.equal(durable[0].content, content, 'the committed payload must survive exactly');
   } finally { await core.close(); }
   // A read through the recovered MCP service also confirms the store is usable.
   const result = await b.tool('inspect_memory', {}); assert.equal(result.ok, true);
