@@ -39,6 +39,8 @@ release.
   to the provider while saving is paused or disabled for that store. Searches
   fall back to keyword results. Stores without an embedding model do no extra
   work.
+- Card maintenance also sends nothing to the consolidation model while saving
+  is paused or disabled.
 - Known limit: a pause that lands in the instant between the final check and the
   provider call can still let that one in-flight request go out.
 
