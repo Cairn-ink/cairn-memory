@@ -4,15 +4,17 @@ import { join } from 'node:path';
 import { sqliteOpenSpy, SpiedDatabaseSync } from '../testing/context-read-open-spy.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 
-const { databaseOpens, databaseBindings, childLaunches } =
+const { databaseOpens, databaseBindings, childLaunches, workerLaunches } =
   await import('../testing/context-read-open-patterns.mjs');
 
-test('every SQLite import and require route records a real read-only open', t => {
+test('every SQLite acquisition route records a real read-only open', t => {
   const workspace = createTestWorkspace(t, { prefix: 'open-spy-control-' });
   const path = join(workspace.path, 'synthetic.sqlite');
   const db = new SpiedDatabaseSync(path);
   db.exec("CREATE TABLE synthetic_control(value TEXT); INSERT INTO synthetic_control VALUES('synthetic');");
   db.close();
+  assert.equal(SpiedDatabaseSync.prototype.constructor, SpiedDatabaseSync);
+  assert.equal(db.constructor, SpiedDatabaseSync);
   for (const binding of databaseBindings) assert.equal(binding, SpiedDatabaseSync);
   for (const [pattern, open] of Object.entries(databaseOpens)) {
     const { result, calls } = sqliteOpenSpy(() => open(path));
@@ -24,7 +26,7 @@ test('every SQLite import and require route records a real read-only open', t =>
   assert.equal(sqliteOpenSpy(() => databaseOpens['cached-default'](path)).calls.length, 1);
 });
 
-test('spawnSync records named, default, cached-default and require launches', () => {
+test('spawnSync records every acquisition route', () => {
   const args = ['--input-type=module', '-e', "process.stdout.write('synthetic')"];
   const options = { encoding: 'utf8', env: {}, timeout: 5000, maxBuffer: 4096 };
   for (const [pattern, launches] of Object.entries(childLaunches)) {
@@ -33,6 +35,35 @@ test('spawnSync records named, default, cached-default and require launches', ()
     assert.equal(result.stdout, 'synthetic', pattern);
     assert.deepEqual(calls, [{ kind: 'child', command: process.execPath, args, options }], pattern);
   }
+});
+
+test('Worker refuses every alias before launch, even if caught, then delegates outside the spy', async () => {
+  const source = "require('node:worker_threads').parentPort.postMessage('synthetic')";
+  for (const [pattern, Worker] of Object.entries(workerLaunches)) {
+    let calls;
+    assert.throws(() => sqliteOpenSpy(transcript => {
+      calls = transcript;
+      new Worker(source, { eval: true });
+    }), { code: 'open_spy_worker_launch_refused' }, pattern);
+    assert.deepEqual(calls, [{ kind: 'refused-worker', api: 'Worker' }], pattern);
+    assert.throws(() => sqliteOpenSpy(transcript => {
+      calls = transcript;
+      try { new Worker(source, { eval: true }); } catch {}
+    }), { code: 'open_spy_worker_launch_refused' }, `caught ${pattern}`);
+    assert.deepEqual(calls, [{ kind: 'refused-worker', api: 'Worker' }], `caught ${pattern}`);
+  }
+  assert.deepEqual(sqliteOpenSpy(() => 'restored').calls, []);
+  const worker = new workerLaunches['cached-default'](source, { eval: true });
+  assert.equal(worker.constructor, workerLaunches['cached-default']);
+  let message;
+  worker.on('message', value => { message = value; });
+  const exit = await new Promise((resolve, reject) => {
+    worker.once('error', reject);
+    worker.once('exit', resolve);
+  });
+  assert.equal(exit, 0);
+  assert.equal(message, 'synthetic');
+  assert.deepEqual(sqliteOpenSpy(() => 'restored after worker').calls, []);
 });
 
 test('all other child launches refuse through every alias, even if caught', () => {

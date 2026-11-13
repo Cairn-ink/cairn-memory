@@ -1,6 +1,15 @@
+// Threat model: in scope are ordinary code paths opening SQLite or launching
+// children/workers before a refusal, through named, namespace, default (including
+// cached), dynamic, createRequire, process.getBuiltinModule and .constructor
+// routes, every child_process launch API, and worker_threads.Worker. Bootstrap
+// must precede application imports; activation covers a synchronous callback.
+// Out of scope is deliberate evasion: native addons, vm contexts, process.binding
+// or internal bindings, inspector, or reading builtins through other processes.
+// Those routes are outside the guarantee.
 import assert from 'node:assert/strict';
 import sqlite from 'node:sqlite';
 import childProcess from 'node:child_process';
+import workerThreads from 'node:worker_threads';
 import { registerHooks, syncBuiltinESMExports } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
@@ -16,6 +25,7 @@ export const SpiedDatabaseSync = new Proxy(sqlite.DatabaseSync, {
   },
 });
 sqlite.DatabaseSync = SpiedDatabaseSync;
+Object.defineProperty(SpiedDatabaseSync.prototype, 'constructor', { value: SpiedDatabaseSync });
 // Node 22 does not synchronize node:sqlite's named constructor export. ESM
 // receives an explicit forwarding export; createRequire receives the patched
 // builtin object. Preserve the other SQLite exports on both routes.
@@ -33,6 +43,18 @@ registerHooks({
 
 const refusedChild = api => Object.assign(new Error(`open spy refuses child launch: ${api}`),
   { code: 'open_spy_child_launch_refused' });
+const refusedWorker = () => Object.assign(new Error('open spy refuses worker launch'),
+  { code: 'open_spy_worker_launch_refused' });
+workerThreads.Worker = new Proxy(workerThreads.Worker, {
+  construct(target, args, newTarget) {
+    if (active) {
+      active.calls.push({ kind: 'refused-worker', api: 'Worker' });
+      throw refusedWorker();
+    }
+    return Reflect.construct(target, args, newTarget);
+  },
+});
+Object.defineProperty(workerThreads.Worker.prototype, 'constructor', { value: workerThreads.Worker });
 for (const api of ['spawnSync', 'spawn', 'execFileSync', 'execFile', 'execSync', 'exec', 'fork']) {
   const original = childProcess[api];
   childProcess[api] = (...parameters) => {
@@ -102,6 +124,7 @@ export function sqliteOpenSpy(work, { failProbeOpen = false, beforeHeader } = {}
   active = { calls, failProbeOpen, beforeHeader };
   try {
     const result = work(calls);
+    if (calls.some(call => call.kind === 'refused-worker')) throw refusedWorker();
     const refused = calls.find(call => call.kind === 'refused-child');
     if (refused) throw refusedChild(refused.api);
     return { result, calls };
