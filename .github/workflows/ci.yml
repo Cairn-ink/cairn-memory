@@ -59,6 +59,9 @@ jobs:
           done
       - run: npm run test:local-worker
       - run: npm run test:raw-producer
+      # Same artifact cache preparation as the Linux artifact job.
+      - run: node tools/testing/run.mjs --script packaging/verify-clean-cache.mjs
+      - run: node tools/testing/run.mjs --script packaging/prepare-cache.mjs
       - run: node tools/testing/run.mjs packaging/test/local-setup.test.mjs
       - name: Prime installer engine dependency cache
         env:
