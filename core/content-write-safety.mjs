@@ -187,6 +187,7 @@ export function beginContentWriteSafety(db, operation) {
       return dependentMemo=createContentReadMemo(source);
     }
     function automaticallyInvalidatedCard(key,ns){
+      if(engineMemoryInvalidatedCard(key,ns))return true;
       if(lineage)return lineageInvalidatedCard(key,ns);
       const change=canonical.find(c=>c.table==='private_cards'&&c.row.id===key),row=change?.row??get('private_cards',key);
       if(!row||row.state!=='confirmed'||changedBindings.has(key)||change&&(!change.old||
@@ -269,6 +270,42 @@ export function beginContentWriteSafety(db, operation) {
         }
       }
       return timestamp===undefined||row.updated_at===timestamp;
+    }
+    function engineMemoryInvalidatedCard(key,ns) {
+      const change=canonical.find(c=>c.table==='private_cards'&&c.row.id===key),row=change?.row;
+      const sameNamespace=value=>value&&JSON.stringify(boundary(value))===JSON.stringify(boundary(ns));
+      if(!change?.old||!['draft','confirmed'].includes(row.state)||!sameNamespace(namespace(row))||
+        !scopes.some(sameNamespace)||!engineCardMetadataInside(db,ns,row)||
+        change.columns.some((c,i)=>!['id','revision','updated_at'].includes(c.name)&&change.old[i]!==undefined))return false;
+      const previous=oldValue(change,'revision');
+      if(!Number.isSafeInteger(previous)||previous<1||!Number.isSafeInteger(row.revision)||row.revision<=previous)return false;
+      // Check both identities of an update: moving a binding or authority row
+      // away from this Card is still a change to this Card's closure.
+      const belongs=c=>c.row.card_id===key||c.old&&oldValue(c,'card_id')===key;
+      if([...canonical,...removed].some(c=>
+        (bindingTables.has(c.table)||['card_body_provenance','card_body_sources','card_body_authorizations'].includes(c.table))&&belongs(c)||
+        c.table==='card_body_authorizations'&&(c.row.request_target===key||c.old&&oldValue(c,'request_target')===key)||
+        c.table==='card_operations'&&(c.row.target_id===key||c.old&&oldValue(c,'target_id')===key)))return false;
+      const cardEffect=c=>c.row.entity_type==='card'&&c.row.entity_id===key||
+        c.old&&oldValue(c,'entity_type')==='card'&&oldValue(c,'entity_id')===key;
+      const effects=canonical.filter(c=>c.table==='card_effects'&&cardEffect(c)).sort((a,b)=>a.row.ordinal-b.row.ordinal);
+      if(effects.length!==row.revision-previous||removed.some(c=>c.table==='card_effects'&&cardEffect(c)))return false;
+      const causes=new Set();let timestamp;
+      for(const [index,effect]of effects.entries()) {
+        const e=effect.row;
+        if(effect.old||e.kind!=='evidence_invalidated'||e.revision!==previous+index+1||!sameNamespace(namespace(e)))return false;
+        const memory=canonical.find(c=>c.table==='memories'&&c.old&&sameNamespace(namespace(c.row))&&
+          e.action_id==='memory-revision-'+c.row.id+'-'+c.row.revision);
+        if(!memory||causes.has(memory.row.id)||!Number.isSafeInteger(memory.row.revision)||!Number.isSafeInteger(oldValue(memory,'revision'))||
+          oldValue(memory,'revision')<1||memory.row.revision!==oldValue(memory,'revision')+1||
+          memory.columns.some((c,i)=>['owner_id','scope','project_id'].includes(c.name)&&memory.old[i]!==undefined)||
+          !db.prepare('SELECT 1 FROM card_memory_bindings WHERE card_id=? AND memory_id=? LIMIT 1').get(key,memory.row.id))return false;
+        causes.add(memory.row.id);timestamp=memory.row.updated_at;
+      }
+      // This only hides an engine Card: every read rejects its advanced revision.
+      // It grants no serving authority or retention exception; text, bindings,
+      // seals and purge behavior stay unchanged, including prior source denials.
+      return row.updated_at===timestamp;
     }
     function engineForgottenCard(key,ns) {
       // A source cascade may terminally forget a bound Memory without a public
@@ -456,8 +493,8 @@ export function beginContentWriteSafety(db, operation) {
         if(removed.some(c=>c.table==='card_effects'))fail('evidence_unavailable');
         for(const {table,row,old}of canonical) {
           if(['card_body_sources','card_body_provenance'].includes(table)||table==='card_body_authorizations'&&row.authorization_kind!=='operation')fail('evidence_unavailable');
-          if(table==='private_cards'&&!lineageInvalidatedCard(row.id,namespace(row))&&!engineForgottenCard(row.id,namespace(row)))fail('evidence_unavailable');
-          if(table==='card_effects'&&(old||row.entity_type==='card'&&!lineageInvalidatedCard(row.entity_id,namespace(row))&&!engineForgottenCard(row.entity_id,namespace(row))))fail('evidence_unavailable');
+          if(table==='private_cards'&&!engineForgottenCard(row.id,namespace(row))&&!engineMemoryInvalidatedCard(row.id,namespace(row))&&!lineageInvalidatedCard(row.id,namespace(row)))fail('evidence_unavailable');
+          if(table==='card_effects'&&(old||row.entity_type==='card'&&!engineForgottenCard(row.entity_id,namespace(row))&&!engineMemoryInvalidatedCard(row.entity_id,namespace(row))&&!lineageInvalidatedCard(row.entity_id,namespace(row))))fail('evidence_unavailable');
         }
       }
     }

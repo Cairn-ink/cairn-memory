@@ -222,7 +222,11 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
         AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry`;
       const row = type === 'memory' ? db.prepare(`SELECT ${columns} FROM memories WHERE ${where}
         AND deleted=0 AND id>? ORDER BY id LIMIT 1`).get(...boundary(ns), after[type]) :
-        db.prepare(`SELECT ${columns} FROM private_cards WHERE ${where} AND state='confirmed' AND id>? ORDER BY id LIMIT 1`)
+        // Engine reads require the original publication revision. Filter stale
+        // rows before contributor checks or projecting text/counts/cursor ids;
+        // current candidates still require the complete canonical read proof.
+        db.prepare(`SELECT ${columns} FROM private_cards WHERE ${where} AND state='confirmed'
+          AND (id NOT GLOB 'engine-card.*' OR revision=1) AND id>? ORDER BY id LIMIT 1`)
           .get(...boundary(ns), after[type]);
       return row;
     }

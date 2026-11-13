@@ -163,8 +163,22 @@ Carry, retirement and rebuild routing inspect every live page within the pass's
 existing deadline; there is no total 129-row history cutoff. Source scan limits,
 per-source dependency limits and the one-generation-per-pass limit still apply.
 
-The existing source invalidation increments the Card revision. Such a Card has
-status `stale` and is refused by both current and history reads. Suppressed,
+When a bound Memory's revision changes, the existing trigger advances the Card
+revision once and records one `evidence_invalidated` effect for that Memory.
+Ordinary admission or capture of another receipt, causal supersession,
+confirmation, filing or re-filing, remember metadata updates and correction can
+therefore stale an engine Card without failing the Memory write, including on
+stores with sealed lineage. Multiple bound Memories changed in one transaction
+produce one consecutive step each. The Card keeps its state, title, body,
+bindings and seals; the write verifier accepts only those trigger steps, proven
+by the same transaction's scoped Memory revisions and unchanged bindings.
+This grants no authority to edit, delete, re-bind or re-state an engine Card.
+Terminal forgetting still purges the Card first as described above.
+
+Such a Card has status `stale` and is refused by both current and history reads.
+Candidate and context reads skip it and continue serving eligible Memories;
+direct Card lookup returns no Card, and an explicit fetch of its stale evidence
+refuses. The surrounding candidate read remains successful. Suppressed,
 excluded, forgotten, denied or foreign sources also make the Card ineligible.
 After at least ten minutes, a later worker pass re-evaluates the trigger. A
 rebuild inserts a fresh Card row and source set, purging all superseded engine

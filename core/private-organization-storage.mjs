@@ -224,12 +224,17 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
     const marks = boundary(ns);
     // Physical rows are paged before canonical validation, so stale records also
     // consume work. Every candidate kind has a stable key and no copied body.
+    // An engine Card beyond its publication revision is never readable. Omit
+    // it before contributor checks and scan/cursor projections, as selection does.
     const rows = db.prepare(`SELECT * FROM (
       SELECT 'topic' kind,id a,'' b,NULL card_revision,NULL body_revision FROM card_mocs WHERE ${where}
       UNION ALL SELECT 'edge',e.parent_id,e.child_id,NULL,NULL FROM card_moc_edges e JOIN card_mocs t ON t.id=e.parent_id WHERE t.owner_id=? AND t.scope=? AND t.project_id=?
       UNION ALL SELECT 'member',r.moc_id,r.card_id,r.card_revision,r.body_revision FROM card_moc_refs r JOIN card_mocs t ON t.id=r.moc_id WHERE t.owner_id=? AND t.scope=? AND t.project_id=?
       UNION ALL SELECT 'unfiled',id,'',revision,body_revision FROM private_cards WHERE ${where} AND state='confirmed'
-    ) ORDER BY CASE kind WHEN 'topic' THEN 0 WHEN 'edge' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,a,b
+    ) WHERE kind NOT IN ('member','unfiled') OR NOT EXISTS(
+      SELECT 1 FROM private_cards c WHERE c.id=CASE kind WHEN 'member' THEN b ELSE a END
+        AND c.id GLOB 'engine-card.*' AND c.revision!=1)
+      ORDER BY CASE kind WHEN 'topic' THEN 0 WHEN 'edge' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,a,b
       LIMIT 257 OFFSET ?`).all(...marks, ...marks, ...marks, ...marks, offset);
     const result = [];
     let scanned = 0;
