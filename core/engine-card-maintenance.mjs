@@ -193,10 +193,14 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
             // fingerprint on every subsequent maintenance pass.
             storage.finish(ns, attempt, card ? 'succeeded' : 'terminal', new Date(now()).toISOString());
           } catch (error) {
-            let transient = false;
-            try { transient = ['model_timeout', 'model_cancelled', 'consolidation_transient'].includes(error?.code); }
+            let code;
+            try { code = error?.code; }
             catch { /* Unreadable failure framing is terminal. */ }
-            storage.finish(ns, attempt, transient ? 'transient' : 'terminal', new Date(now()).toISOString());
+            if (code === 'namespace_paused') storage.release(ns, attempt);
+            else {
+              const transient = ['model_timeout', 'model_cancelled', 'consolidation_transient'].includes(code);
+              storage.finish(ns, attempt, transient ? 'transient' : 'terminal', new Date(now()).toISOString());
+            }
             throw error;
           }
           // One generation per bounded worker pass, including invalid output.

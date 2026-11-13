@@ -7,7 +7,7 @@ import { observeStatements } from './fixtures/no-provider-statement-observer.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { control } from '../testing/context-semantic-pause-fixture.mjs';
-import { engineCardFixture, ns, ok } from '../testing/engine-card-fixture.mjs';
+import { engineCardFixture, scriptedConsolidator, ns, ok } from '../testing/engine-card-fixture.mjs';
 
 for (const disabled of [false, true]) test(`Card maintenance skips ${disabled ? 'disabled' : 'paused'} namespace before selection`, async t => {
   const f = engineCardFixture(t); f.seed(8);
@@ -56,6 +56,56 @@ for (const disabled of [false, true]) test(`Card transport refuses ${disabled ? 
   assert.equal(f.model.calls.length, 0);
   assert.equal(pass.state, 'paused', JSON.stringify(pass));
   assert.equal(pass.reason, 'namespace_paused');
+});
+
+for (const disabled of [false, true]) test(`Card ${disabled ? 'disable' : 'pause'} after claim does not consume an attempt`, async t => {
+  const f = engineCardFixture(t); f.seed(8);
+  const storage = storageFor(f), claim = storage.claim;
+  const controls = createEpisodeStorage({ db: f.db, options: { mode: 'episode-v1' }, advanceEpoch() {} });
+  let generation = 'initial';
+  const setFlag = value => { generation = controls.setControl(ns, { expectedGeneration: generation,
+    ...(disabled ? { enabled: !value } : { paused: value }) }, disabled).generation; };
+  let claimed = false;
+  storage.claim = (...args) => {
+    const attempt = claim(...args);
+    if (attempt && !claimed) {
+      claimed = true;
+      setFlag(true);
+    }
+    return attempt;
+  };
+  const pass = () => createEngineCardMaintenance({ storage, model: f.model })
+    .maintain({ namespace: ns, budget: { maxMs: 5000 } });
+  const paused = await pass();
+  assert.equal(claimed, true);
+  assert.equal(paused.state, 'paused');
+  assert.equal(f.model.calls.length, 0);
+  const reserved = f.db.prepare("SELECT method FROM card_operations WHERE method IN ('consolidateAttempt','consolidateOutcome')").all();
+  setFlag(false);
+  const resumed = await pass();
+  assert.equal(resumed.built.length, 1, JSON.stringify(resumed));
+  assert.equal(f.model.calls.length, 1, 'resume sends exactly once for the same sources');
+  assert.deepEqual(reserved, [], 'guard refusal leaves no attempt or outcome');
+  const attempt = f.db.prepare("SELECT result FROM card_operations WHERE method='consolidateAttempt'").get();
+  assert.equal(JSON.parse(attempt.result).attemptNumber, 1);
+  assert.deepEqual(f.db.prepare("SELECT result FROM card_operations WHERE method='consolidateOutcome'").all()
+    .map(row => JSON.parse(row.result).outcome), ['succeeded']);
+});
+
+test('a genuine Card model refusal remains terminal for the same sources', async t => {
+  const model = scriptedConsolidator(() => { throw Error('Synthetic refusal'); });
+  const f = engineCardFixture(t, { model }); f.seed(8);
+  const storage = storageFor(f);
+  let clock = Date.now();
+  const pass = () => createEngineCardMaintenance({ storage, model, now: () => clock })
+    .maintain({ namespace: ns, budget: { maxMs: 5000 } });
+  assert.equal((await pass()).state, 'refused');
+  const outcomes = f.db.prepare("SELECT result FROM card_operations WHERE method='consolidateOutcome'").all();
+  assert.deepEqual(outcomes.map(row => JSON.parse(row.result).outcome), ['terminal']);
+  clock += 3600000;
+  assert.equal((await pass()).built.length, 0);
+  assert.equal(model.calls.length, 1);
+  assert.deepEqual(f.db.prepare("SELECT result FROM card_operations WHERE method='consolidateOutcome'").all(), outcomes);
 });
 
 for (const disabled of [false, true]) test(`Card transport sees second-process WAL ${disabled ? 'disable' : 'pause'} committed inside last validation snapshot`, async t => {

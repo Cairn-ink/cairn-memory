@@ -270,6 +270,17 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       return { action, fingerprint, target };
     });
   }
+  function release(ns, attempt) {
+    ready();
+    return transaction(db, () => {
+      // A durable dispatch guard refused before any model call. Release only
+      // this unfinished reservation; other attempts and outcomes stay intact.
+      db.prepare(`DELETE FROM card_operations WHERE ${where} AND action_id=?
+        AND method='consolidateAttempt' AND payload_binding=?
+        AND NOT EXISTS(SELECT 1 FROM card_operations WHERE ${where} AND action_id=?)`)
+        .run(...boundary(ns), attempt.action, attempt.fingerprint, ...boundary(ns), attempt.action + '.outcome');
+    });
+  }
   function finish(ns, attempt, outcome, timestamp) {
     ready();
     return transaction(db, () => {
@@ -326,6 +337,6 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
   // validation snapshots, including the final synchronous transport fence.
   const pauseGuard = (ns, deadlineAt) => contextEmbeddingGuard(db,
     work => { ready(); return readTransaction(db, work); }, [ns], deadlineAt);
-  return { pauseGuard, available, snapshot, rawSpans, cards, carry, retire, commit, claim, finish, relations, pressureItems, deliver,
+  return { pauseGuard, available, snapshot, rawSpans, cards, carry, retire, commit, claim, release, finish, relations, pressureItems, deliver,
     validate(ns, memories, check) { return read(ns, () => { if (!sourcesCurrent(ns, memories.map(m => m.source), check)) fail('source_unavailable'); }); } };
 }
