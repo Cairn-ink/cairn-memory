@@ -18,7 +18,7 @@ bumped here.
 - Long non-English prompts and paths are no longer corrupted when hook input arrives in pieces.
 - Hook stdin reads have their own deadlines; unfinished input is discarded without sending.
 
-## 0.3.6 — 2026-11-10: hosted pause and capture session windows
+## 0.3.6 — 2026-11-10: hosted pause and capture session windows (unreleased; shipped in 0.3.7)
 
 Plugin and marketplace 0.3.6. Protocol stays 0.3.0. The installer version is not
 bumped here; the Codex changes reach installs through the next installer
