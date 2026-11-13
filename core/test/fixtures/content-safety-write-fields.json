@@ -977,15 +977,15 @@
     "literal:storeId": 2,
     "literal:targetId": 2
   },
+  "integrations/client/raw/local-settings-lock.mjs": {
+    "key:pid": 1
+  },
   "integrations/client/raw/local-setup-init.mjs": {
     "literal:store_invalid": 3
   },
   "integrations/client/raw/local-hook.mjs": {
     "key:sessionId": 1,
-    "literal:agent_id": 1,
-    "literal:id": 2,
-    "literal:session_id": 2,
-    "literal:turn_id": 1
+    "literal:session_id": 1
   },
   "integrations/client/raw/local-host-profile.mjs": {
     "key:sessionId": 1,

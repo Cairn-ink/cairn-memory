@@ -9,7 +9,7 @@ import { localRoot, requestedRoot, canonicalPath, readDescriptor, writeDescripto
 import { readClaudeServers, registerClaude, detachClaude } from './local-claude.mjs';
 import { registerCodex, detachCodex, checkCodexLock, codexCapabilities } from './local-codex.mjs';
 import { shellArgument } from './output.mjs';
-import { configureCapture, captureStatus, captureSettings, retainedCapture } from './local-capture.mjs';
+import { configureCapture, captureStatus, captureSettings, retainedCapture, clientConfigDirectory, captureRequested, finishCaptureSetup } from './local-capture.mjs';
 import { SetupError } from './errors.mjs';
 import { rawLocal, validateRawOptions } from './local-raw.mjs';
 
@@ -267,6 +267,16 @@ async function setupLocal(options, selection, detection, context) {
     codexCapable = await codexCapabilities(env);
     if (codexCapable && !await codexPrecheck(detection, context, { add: true })) return 2;
   }
+  const capturePreferences = await captureSettings(detection.root);
+  for (const client of selected) if (captureRequested(options.noCapture ? false : undefined, capturePreferences.clients[client])) {
+    try { await clientConfigDirectory(client, env); }
+    catch (error) {
+      if (!(error instanceof SetupError)) throw error;
+      write(t(error.key, error.params));
+      write(t('local_capture_setup_off', { client: client === 'claude' ? 'Claude Code' : 'Codex', reason: 'unsafe_path' }));
+      return 2;
+    }
+  }
   progress.localOperation = true; progress.localAction = 'setup';
   await ownedLocalTree(detection.root);
   // CAIRN_SETUP_NPM_CACHE is caller-supplied test storage, not an owned
@@ -357,10 +367,10 @@ async function setupLocal(options, selection, detection, context) {
 
     }
     // Keep the setup journal until capture orchestration is durable too.
-    await configureCapture(root, descriptor, descriptor.operation.clients, { ...context, onChild: updateChild },
+    const capture = await configureCapture(root, descriptor, descriptor.operation.clients, { ...context, onChild: updateChild },
       { enabled: options.noCapture ? false : undefined });
     descriptor.state = 'installed'; descriptor.operation = null; await writeDescriptor(root, descriptor);
-    write(t('local_done')); write(t('next_reopen')); return manual ? 1 : 0;
+    return finishCaptureSetup(capture, context) || (manual ? 1 : 0);
   });
 }
 export async function localStatus(detection, { write, t, env = process.env, verbose, emittedEnvironmentCauses = new Set() }) {
@@ -370,9 +380,10 @@ export async function localStatus(detection, { write, t, env = process.env, verb
     if (detection.descriptorError) { refusal(detection.descriptorError.key, detection, { write, t }); return; }
     if (!descriptor && (detection.orphanEngine || Object.values(states).some(state => state.entry))) { refusal('local_orphan', detection, { write, t }); return; }
     const uninstalled = descriptor?.state === 'uninstalled';
+    const capturedClients = uninstalled ? Object.keys((await captureSettings(root)).clients) : [];
     const registration = state => state.unknown || !state.available ? 'unknown' : state.entry ? 'registered' : 'missing';
     for (const client of clientNames) if (states[client].local || states[client].entry ||
-        (uninstalled && registration(states[client]) === 'unknown')) {
+        (uninstalled && (registration(states[client]) === 'unknown' || capturedClients.includes(client)))) {
       write(t('local_status_client', { client: client === 'claude' ? 'Claude Code' : 'Codex' }));
       const state = registration(states[client]);
       write(t('local_status_registration', { state: t('local_registration_' + state) }));

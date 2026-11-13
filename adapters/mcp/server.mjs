@@ -175,7 +175,8 @@ export function createCairnServer(options = {}) {
   // Older readers retain their existing grammar until that reader is installed.
   const rawSearch = context && options.raw !== false && options.rawSearch !== false && supportsRawContext()
     ? createLocalRawSearch(path, defaultRawOptions().port,
-      options.contextSemantic === false ? undefined : options.contextEmbedding) : null;
+      options.rawSemantic === true && options.contextSemantic !== false ? options.contextEmbedding : undefined,
+      { semanticDisabledReason: options.contextSemantic === false ? 'disabled' : options.rawSemantic === true ? 'disabled' : 'raw_semantic_not_enabled' }) : null;
   const rawPort = rawSearch?.contextPort(context.readSet);
   const core = openMemoryCore({ path, model, raw: options.raw !== false, ...(options.rawSearch === false ? { rawSearch: false } : {}), ...(context?{contextRead:{...context.configuration,...(options.contextSemantic === false ? {} : options.contextEmbedding),counter:contextCounter,...(rawPort ? {rawSearch:rawPort} : {}),...(sources ? { sources } : {})}}:{}),
     ...(roles ? { roleProfiles: roles.configuration } : {}),
