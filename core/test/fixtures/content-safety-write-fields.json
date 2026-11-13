@@ -22,7 +22,7 @@
     "literal:entityId": 2,
     "literal:from_id": 1,
     "literal:fromId": 1,
-    "literal:id": 5,
+    "literal:id": 6,
     "literal:keep_source_ids": 1,
     "literal:leftMemoryId": 1,
     "literal:memory_id": 2,
@@ -270,8 +270,8 @@
     "key:leaseId": 1,
     "key:memoryId": 1,
     "key:memoryRef": 1,
-    "key:ownerId": 3,
-    "key:projectId": 2,
+    "key:ownerId": 4,
+    "key:projectId": 3,
     "key:receiptId": 1,
     "key:sourceId": 1,
     "key:targetId": 1,
@@ -1660,7 +1660,8 @@
     "key:conversationId": 1,
     "key:id": 2,
     "key:memoryId": 2,
-    "key:messageId": 1
+    "key:messageId": 1,
+    "key:rowid": 1
   },
   "adapters/mcp/raw-command.mjs": {
     "key:actionId": 1,
