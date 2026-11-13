@@ -25,7 +25,9 @@ export function roleEvidence(storage,config) {
     if (!canonical) return null;
     const {type,state,origin}=canonical;
     const sourceRows=type==='memory'&&canonical.provenance.sourceAccess==='available'?
-      db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).filter(row=>canonical.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)):[];
+      db.prepare(`SELECT r.* FROM json_each(?) wanted CROSS JOIN receipts r INDEXED BY sqlite_autoindex_receipts_1
+        ON r.id=wanted.value WHERE r.memory_id=?`)
+        .all(JSON.stringify(canonical.provenance.receiptMetadata.map(receipt=>receipt.receiptId)),ref.memoryId):[];
     const date=receiptEventDate(sourceRows);
     const sources=sourceRows.map((row,index)=>{
       const {role,excerpt}=validateSourceReceipt(ref.memoryId,row,source=>createHash('sha256').update(JSON.stringify(source)).digest('hex'));

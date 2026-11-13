@@ -322,8 +322,10 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
       const after = typeof cursor?.after === 'number' ? db.prepare(`SELECT id FROM private_cards WHERE ${where} AND rowid=?`)
         .get(...boundary(ns), cursor.after)?.id : cursor?.after ?? '';
       if (after === undefined) fail('cursor_stale');
-      const candidateIds=db.prepare(`SELECT id FROM private_cards WHERE ${where} AND state IN (${input.states.map(()=>'?').join(',')}) AND id>? ORDER BY id LIMIT ?`)
-        .all(...boundary(ns),...input.states,after,hasCardLineage(db)?1024:count+1).map(row=>row.id);
+      const candidateLimit = hasCardLineage(db) ? 1024 : count + 1;
+      const candidateProbe = db.prepare(`SELECT id FROM private_cards WHERE ${where} AND state=? AND id>? ORDER BY id LIMIT ?`);
+      const candidateIds = input.states.flatMap(state => candidateProbe.all(...boundary(ns), state, after, candidateLimit))
+        .sort((a,b) => Buffer.compare(Buffer.from(a.id), Buffer.from(b.id))).slice(0, candidateLimit).map(row => row.id);
       receiptDeliverySnapshot(db,[],memo,[{namespace:ns,receipts:cardReceiptTokens(db,ns,candidateIds)}]);
       if (hasCardLineage(db)) {
         const probe = db.prepare(`SELECT rowid AS cursor_row,id,revision,state,body_revision,created_at,updated_at,confirmed_at
