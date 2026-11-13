@@ -1,6 +1,6 @@
 // Import this control only after the open-spy bootstrap, just like application
 // modules. All cached aliases are captured during this module's initialization.
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, backup } from 'node:sqlite';
 import * as sqliteNamespace from 'node:sqlite';
 import sqlite from 'node:sqlite';
 import * as children from 'node:child_process';
@@ -52,6 +52,9 @@ export const databaseOpens = {
   'cached-builtin-prototype': path => read(CachedBuiltinPrototypeDatabase, path),
   'cached-instance': path => read(CachedInstanceDatabase, path),
 };
+export const backupBindings = [backup, sqliteNamespace.backup, sqlite.backup,
+  dynamic.backup, dynamic.default.backup, requiredSQLite.backup, builtinSQLite.backup];
+
 export const databaseBindings = [DatabaseSync, sqliteNamespace.DatabaseSync,
   sqlite.DatabaseSync, CachedDefaultDatabase, dynamic.DatabaseSync,
   dynamic.default.DatabaseSync, CachedDynamicDefaultDatabase,
