@@ -20,6 +20,7 @@ const needCache = t => engineCacheComplete(process.env.CAIRN_SETUP_NPM_CACHE) ||
 async function run(command, args, { input, ...options } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], ...options });
+    child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
     let stdout = '', stderr = '';
     child.stdout.on('data', data => stdout += data); child.stderr.on('data', data => stderr += data);
     child.on('error', reject);
@@ -92,6 +93,7 @@ async function mcp(f, t) {
   const executable = join(f.root, 'engine', receipt.engineId, 'app/node_modules/cairn-memory-local-preview/bin/cairn-memory.mjs');
   const child = spawn(receipt.node, [executable, '--db', d.database.path, '--owner', d.ownerId,
     ...(d.projectId ? ['--project', d.projectId] : [])], { cwd: f.ws, env: f.env, stdio: ['pipe', 'pipe', 'pipe'] });
+  child.stdout.setEncoding('utf8');
   child.stderr.resume(); let sequence = 0, buffer = ''; const pending = new Map();
   child.stdout.on('data', bytes => {
     buffer += bytes;

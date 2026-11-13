@@ -145,6 +145,7 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
     assertFixtureClients({ ...env, ...options.env }, ws.path);
     const child = spawn(nodeExecutable, [harness, ...args], { cwd: ws.path,
       env: { ...env, ...options.env, LOCAL_TEST_OPTIONS: JSON.stringify(options) }, stdio: ['ignore', 'pipe', 'pipe'] });
+    child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
     let stdout = '', stderr = '';
     child.stdout.on('data', bytes => { stdout += bytes; }); child.stderr.on('data', bytes => { stderr += bytes; });
     // A surviving npm child can still own these pipes after setup is killed.

@@ -162,6 +162,7 @@ export async function observeHosted(pluginRoot) {
           CLAUDE_PLUGIN_OPTION_API_TOKEN: 'synthetic-token', CLAUDE_PLUGIN_OPTION_TELEMETRY: 'false' },
         stdio: ['pipe', 'pipe', 'pipe'],
       });
+      child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
       let stdout = ''; let stderr = '';
       child.stdout.on('data', chunk => stdout += chunk);
       child.stderr.on('data', chunk => stderr += chunk);
