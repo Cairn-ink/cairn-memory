@@ -9,7 +9,7 @@ import { contentWriteChanges } from './content-write-changes.mjs';
 import { CONTENT_TERMINAL_FIELDS, CONTENT_TERMINAL_ACK_FIELDS, registerContentWriteGuard } from './content-write-context.mjs';
 import { fail } from './validation.mjs';
 import { hasCardLineage, loadCardBodyContributorsInside, verifyCardLineageCommitmentsInside, lineageHmac } from './card-lineage.mjs';
-import { engineCardMetadataInside, engineCardRevisionsInside } from './content-safety.mjs';
+import { engineCardMetadataInside, engineCardRevisionsInside, isEngineCard } from './content-safety.mjs';
 
 const names = {memory:'memories',receipt:'receipts',card:'private_cards','submitted-note':'card_notes',raw:'raw_conversations'};
 const kinds = Object.fromEntries(Object.entries(names).map(([kind,table])=>[table,kind]));
@@ -271,12 +271,11 @@ export function beginContentWriteSafety(db, operation) {
       return timestamp===undefined||row.updated_at===timestamp;
     }
     function engineForgottenCard(key,ns) {
-      // Forget may erase an engine body instead of merely staling it. This
-      // validates a content-free write transition, never serving authority.
-      let forgetting=false;
-      for(let context=operation;context;context=context.parent)forgetting ||= context.method==='forget';
+      // A source cascade may terminally forget a bound Memory without a public
+      // forget ancestor. Same-action terminal facts and removed bindings prove
+      // ownership; a method name alone cannot authorize this transition.
       const change=canonical.find(c=>c.table==='private_cards'&&c.row.id===key),row=change?.row;
-      if(!forgetting||!change?.old||row.state!=='deleted'||row.title!==null||row.body!==null||
+      if(!change?.old||row.state!=='deleted'||row.title!==null||row.body!==null||
         row.revision!==oldValue(change,'revision')+1||
         JSON.stringify(boundary(namespace(row)))!==JSON.stringify(boundary(ns))||
         !engineCardMetadataInside(db,ns,row)||
@@ -293,7 +292,9 @@ export function beginContentWriteSafety(db, operation) {
           contentSuppressionTargetMatches(f,ns,{kind:'card',key}))&&
         removed.some(c=>c.table==='card_memory_bindings'&&c.row.card_id===key&&
           terminalFacts.some(f=>f.kind==='memory'&&f.match_mode==='incarnation'&&f.action_id===effect.action_id&&
-            contentSuppressionTargetMatches(f,ns,{kind:'memory',key:c.row.memory_id})));
+            contentSuppressionTargetMatches(f,ns,{kind:'memory',key:c.row.memory_id})&&
+            canonical.some(m=>m.table==='memories'&&m.old&&m.row.id===c.row.memory_id&&m.row.deleted===1&&m.row.content===null&&
+              oldValue(m,'deleted')===0&&JSON.stringify(boundary(namespace(m.row)))===JSON.stringify(boundary(ns)))));
     }
     const sourceAuthority=createRawLineageStorage(db);
     function engineRetiredCard(key,ns) {
@@ -432,6 +433,12 @@ export function beginContentWriteSafety(db, operation) {
       const sourceMethods=new Set(['forget','correct','deleteSourceNote','deleteConversation','setRawCaptureControl']);
       let sourceOperation=false;
       for(let context=operation;context;context=context.parent)sourceOperation ||= sourceMethods.has(context.method);
+      // Review rejection and either episode cascade also run forgetMutation.
+      // Their actual terminal Memory fact selects validation without expanding
+      // the method classification or granting authority to ordinary writes.
+      sourceOperation ||= terminalFacts.some(f=>f.kind==='memory'&&f.match_mode==='incarnation');
+      if(!sourceOperation&&operation.method!=='maintainCards'&&canonical.some(c=>
+        c.table==='private_cards'&&isEngineCard(c.row.id)&&c.row.state==='deleted'))fail('evidence_unavailable');
       if(sourceOperation) {
         // Audit removals have no surviving row for generic reference walking.
         // Validate effects even when the source writer leaves its Card untouched.

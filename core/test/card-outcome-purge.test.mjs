@@ -148,6 +148,11 @@ test('forget statement census on a consolidated synthetic topic', async t => {
   DatabaseSync.prototype.exec = function(sql) { statements.push(...sql.split(';').filter(part => part.trim())); return exec.call(this, sql); };
   try { forget(f, memories[1]); }
   finally { DatabaseSync.prototype.prepare = original; DatabaseSync.prototype.exec = exec; }
+  assert.equal(statements.filter(sql => /^DELETE FROM card_operations WHERE owner_id=\?/.test(sql)).length, 1,
+    'forget executes exactly one bookkeeping purge');
+  assert.equal(statements.filter(sql => /^SELECT c\.\* FROM private_cards c/.test(sql)).length, 1,
+    'forget executes exactly one bound engine body lookup');
+  assert.equal(rows(f.db).length, 0, 'forgotten source sets retain no attempt/outcome rows');
   t.diagnostic('FORGET_STATEMENT_CENSUS ' + JSON.stringify({ node: process.version, statements: statements.length,
     bookkeeping: statements.filter(sql => /DELETE FROM card_operations|SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_operations'/.test(sql)).length }));
 });

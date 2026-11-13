@@ -150,23 +150,21 @@ test('forgetting a similarity seed keeps the ten-minute debounce without retaini
   assert.equal(f.model.calls.length, 2);
 });
 
-test('the live Card scan crosses its 128-row page without losing a later part', async t => {
-  const f = engineCardFixture(t); f.seed(8);
+test('the live Card scan crosses two 128-row pages with 257 live Cards', async t => {
+  const f = engineCardFixture(t);
   const identity = f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get();
   const storage = createEngineCardStorage({ db: f.db, identity, ready() {}, upgrade: true });
-  ok(await f.pass());
-  const snapshot = storage.snapshot(ns, 512, () => {}), timestamp = '2030-01-01T00:00:00.000Z';
-  const ids = [];
-  // Distinct routing keys isolate the reader's page boundary. Each commit
-  // still observes the canonical per-source dependency bound.
-  for (let i = 0; i < 127; i++) ids.push(storage.commit(ns, { key: 'moc:synthetic-part-' + i,
-    memories: snapshot.memories }, { body: 'Synthetic live page.' }, timestamp, () => {}).id);
-  // Use another source set for the row beyond the per-Memory fanout bound.
-  f.seed(8, 'Antares');
-  const other = storage.snapshot(ns, 512, () => {}).memories.filter(memory => memory.content.startsWith('Antares'));
-  ids.push(storage.commit(ns, { key: 'moc:synthetic-last-part', memories: other },
-    { body: 'Synthetic last live page.' }, timestamp, () => {}).id);
+  f.seed(8); ok(await f.pass());
+  const timestamp = '2030-01-01T00:00:00.000Z', ids = [];
+  // Three disjoint source sets keep every Memory below its 128-Card fanout.
+  for (const [topic, count] of [['Orion', 127], ['Antares', 128], ['Vega', 1]]) {
+    if (topic !== 'Orion') f.seed(8, topic);
+    const memories = storage.snapshot(ns, 512, () => {}).memories.filter(memory => memory.content.startsWith(topic));
+    for (let i = 0; i < count; i++) ids.push(storage.commit(ns, { key: 'moc:synthetic-part-' + topic + '-' + i,
+      memories }, { body: 'Synthetic live page.' }, timestamp, () => {}).id);
+  }
   const live = storage.cards(ns), seen = new Set(live.map(card => card.id));
-  assert.equal(live.length, 129);
+  assert.equal(live.length, 257);
+  assert.equal(seen.size, 257);
   assert.ok(ids.every(id => seen.has(id)));
 });

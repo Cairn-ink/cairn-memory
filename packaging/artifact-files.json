@@ -388,7 +388,6 @@
   "core/engine-card-clusters.mjs",
   "core/engine-card-maintenance.mjs",
   "core/engine-card-output.mjs",
-  "core/engine-card-purge.mjs",
   "core/engine-card-storage.mjs",
   "docs/engine-cards.md"
 ]

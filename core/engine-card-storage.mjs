@@ -382,7 +382,8 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
         ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)=(c.owner_id,c.scope,c.project_id,c.id,c.id)
         WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate'
         AND json_extract(o.result,'$.origin')='engine' AND json_extract(o.result,'$.clusterKey')=?
-        AND (c.title IS NOT NULL OR c.body IS NOT NULL) ORDER BY c.id`).all(...boundary(ns), cluster.key);
+        AND (c.title IS NOT NULL OR c.body IS NOT NULL) ORDER BY c.id`).all(...boundary(ns), cluster.key)
+        .filter(row => row.state !== 'confirmed' || row.revision !== 1 || !engineCardRevisionsInside(db, ns, row));
       for (const row of superseded) { check(); writers.purge(ns, row, 'engine-supersede.' + randomUUID(), timestamp); }
       for (const ref of refs) if (db.prepare(`SELECT count(*) AS n FROM (SELECT DISTINCT c.id
         FROM card_memory_bindings b JOIN private_cards c ON c.id=b.card_id WHERE b.memory_id=?

@@ -94,8 +94,16 @@ Forget also removes the title and body of every engine Card bound to that
 Memory before the forget transaction commits, including stale Cards and older
 rows kept by rebuilds. It uses the ordinary Card purge path: the row becomes
 deleted, its revision advances, and its live source bindings are removed.
+Raw conversation deletion and episode forgetting run the same purge for each
+Memory their cascade terminally forgets. Review rejection also uses that Memory
+forget path. On sealed stores, the Card transition requires a terminal Memory
+fact of the same action, its removed binding, the canonical engine receipt,
+the same namespace, exactly one revision and deletion effect, null text, and
+unchanged seals and other columns. A public operation name supplies no authority.
 Namespace purge and owner erasure do the same for all their engine Cards in
-the suppression transaction. Authored Cards keep their existing behavior.
+the suppression transaction. If the Card purge writer is unavailable while Card
+tables exist, erasure refuses and rolls back instead of writing a suppression
+fact without purging. Authored Cards keep their existing behavior.
 Card identities, routing metadata, keyed digests and sealed lineage records
 without text remain as provenance. Attempt and outcome bookkeeping disappears
 at once with the text. Forget makes no model or embedding request. Later
@@ -156,12 +164,17 @@ titles and bodies become NULL and live bindings disappear; text-free rows,
 routing receipts and seals remain. Other cluster keys and authored Cards are
 untouched. Carrying a Card to a new key retains its existing body and identity.
 Forgetting a bound source purges text from both rows immediately as described
-above; stale status alone does not erase text.
+above; stale status alone does not erase text. Correction and partial Raw receipt
+removal retain the stale Card's title and body at rest until rebuild or retirement,
+even when correction replaces the old Memory content. Both current and history
+reads withhold that stale body. These remain source invalidations; only terminal
+Memory forgetting performs the immediate purge described above.
 If the trigger no longer holds, maintenance deletes the stale Card body while
 retaining its row and lineage records. The pass's `deleted` count includes only
 deletions performed by that pass, excluding rows already purged by forget or
-an earlier rebuild. Current/history candidate and context reads skip purged
-Cards and can return the remaining Memories. Explicit fetches of erased Card
+an earlier rebuild. Retirement also leaves a text-free routing tombstone that
+holds a re-emerging topic for the same ten-minute debounce. Current/history
+candidate and context reads skip purged Cards and can return the remaining Memories. Explicit fetches of erased Card
 evidence still refuse; old snapshots still fail their freshness fences.
 
 Maintenance rechecks the committed Card and each listed source revision before

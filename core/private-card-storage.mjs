@@ -1,7 +1,7 @@
 import { contentSuppressionRequestInside, hasContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { assertContentOutput, assertContentScopes } from './content-safety-boundary.mjs';
-import { writeContentSuppressionInside, allocateContentKey } from './content-suppression-storage.mjs';
+import { writeContentSuppressionInside, allocateContentKey, requireSuppressionTransaction, registerEngineCardPurgeInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, sourceReadSafety, cardContributorsInside, createContentReadMemo } from './content-safety.mjs';
 import { createCardCurrentStorage, cardDependencyFence } from './card-current-storage.mjs';
 import { CARD_CURRENT_METHODS } from './card-current-input.mjs';
@@ -26,6 +26,43 @@ const now = () => new Date().toISOString();
 const size = value => Buffer.byteLength(JSON.stringify({ ok: true, value }), 'utf8');
 const attribution = () => ({ sourceAuthor: null, claimant: null, subject: null,
   eventTime: null, commitment: 'unknown', status: 'unassessed' });
+
+// Cache only a successful table probe, independently for each open handle.
+const memoryBindingTables = new WeakSet();
+
+// The caller owns the forget/suppression transaction. Do not use serving
+// eligibility here: stale bodies and older rebuild rows must also be erased.
+export function purgeEngineCardsInside(db, ns, actionId, memoryId) {
+  requireSuppressionTransaction(db);
+  if (!memoryBindingTables.has(db)) {
+    if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_memory_bindings'").get()) return;
+    memoryBindingTables.add(db);
+  }
+  const rows = db.prepare(`SELECT c.* FROM private_cards c
+    JOIN card_operations o ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)=
+      (c.owner_id,c.scope,c.project_id,c.id,c.id)
+    WHERE c.owner_id=? ${ns.scope === 'owner' ? '' : 'AND c.scope=? AND c.project_id=?'}
+      AND o.method='consolidate' AND json_extract(o.result,'$.origin')='engine'
+      AND (c.title IS NOT NULL OR c.body IS NOT NULL)
+      ${memoryId === undefined ? '' : `AND EXISTS(SELECT 1 FROM card_memory_bindings b
+        WHERE b.card_id=c.id AND b.memory_id=?)`}
+    ORDER BY c.id`).all(ns.ownerId, ...(ns.scope === 'owner' ? [] : [ns.scope, ns.projectId ?? '']),
+      ...(memoryId === undefined ? [] : [memoryId]));
+  if (!rows.length) return;
+  const identity = db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata WHERE singleton=1').get();
+  const writers = createPrivateCardStorage({ db, identity, ready() {} }).engineCardWriters();
+  const namespaces = new Map();
+  for (const row of rows) {
+    const namespace = { ownerId: row.owner_id, scope: row.scope, projectId: row.project_id };
+    writers.purge(namespace, row, actionId);
+    namespaces.set(JSON.stringify(namespace), namespace);
+  }
+  for (const namespace of namespaces.values()) db.prepare(`INSERT INTO card_epochs VALUES(?,?,?,2)
+    ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=generation+1`)
+    .run(namespace.ownerId, namespace.scope, namespace.projectId);
+}
+
+registerEngineCardPurgeInside(purgeEngineCardsInside);
 
 /** Uses the same canonical SQLite handle as all existing Memory operations. */
 export function createPrivateCardStorage({ db, identity, ready, memoryMapInside, memoryTopicInside, rawSources = false }) {
