@@ -255,12 +255,49 @@ function showCapture(client, outcome, { write, t, platform = process.platform })
   }
   return { state, reason, temporary: outcome.status === 'active' && outcome.qualification?.status === 'pending' };
 }
+// A disabled journal is published only after SQL authority has been revoked.
+// It can also be published on a hook-removal failure, so require the native
+// hooks to be gone as well. No retained executable is needed for this proof.
+async function captureDisabled(root, client, context) {
+  try {
+    const installation = join(root, 'capture', client);
+    const nativeHome = await clientConfigDirectory(client, context.env);
+    const nativePath = join(nativeHome, client === 'claude' ? 'settings.json' : 'hooks.json');
+    if (await exists(installation)) {
+      await ownedDirectory(installation);
+      const record = await boundedJSON(join(installation, 'installation.json'), 65536, { privateFile: true });
+      if (record.version !== 'local-raw-installation-v1' || record.phase !== 'disabled' ||
+          record.request?.installationDirectory !== installation || record.request.clientConfigPath !== nativePath ||
+          record.request.client !== (client === 'claude' ? 'claude-code' : 'codex')) return false;
+    }
+    if (!await exists(nativePath)) return true;
+    const stat = await lstat(nativePath);
+    if (stat.nlink !== 1 || (stat.mode & 0o022) || (process.getuid && stat.uid !== process.getuid())) return false;
+    const native = await boundedJSON(nativePath, 1048576);
+    if (native.hooks === undefined) return true;
+    if (!native.hooks || typeof native.hooks !== 'object' || Array.isArray(native.hooks)) return false;
+    for (const groups of Object.values(native.hooks)) {
+      if (!Array.isArray(groups)) return false;
+      for (const group of groups) {
+        if (!Array.isArray(group?.hooks)) return false;
+        for (const hook of group.hooks) {
+          if (!hook || typeof hook !== 'object') return false;
+          if (typeof hook.command === 'string' && /cairn[-_/ ]?memory|integrations\/codex\/entry\.mjs|scripts\/launch-capture\.mjs|local-setup-cli\.mjs/i.test(hook.command)) return false;
+        }
+      }
+    }
+    return true;
+  } catch { return false; }
+}
 export async function captureStatus(root, client, context) {
   const receipt = (await captureSettings(root)).clients[client];
   if (!receipt) return; // 0.6.5 descriptors retain their established status shape.
-  const outcome = receipt.enabled ?
-    await invoke(root, receipt, ['status', '--installation', join(root, 'capture', client)], { ...context, timeout: 10000 }) :
-    { status: 'disabled' };
+  if (!receipt.enabled) {
+    if (await captureDisabled(root, client, context)) showCapture(client, { status: 'disabled' }, context);
+    else context.write(context.t('local_capture_disable_interrupted', { client: client === 'claude' ? 'Claude Code' : 'Codex' }));
+    return;
+  }
+  const outcome = await invoke(root, receipt, ['status', '--installation', join(root, 'capture', client)], { ...context, timeout: 10000 });
   showCapture(client, outcome, context);
 }
 export async function retainedCapture(root) { return Object.keys((await captureSettings(root)).clients).length > 0; }

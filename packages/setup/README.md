@@ -76,7 +76,8 @@ limit, marked partial, instead of dropping them.
 
 With `--no-capture`, setup prints only the off capture status, without the
 default-on notice or Codex hook-approval prompt. After `--no-capture` or
-`config --local-capture off`, status reports capture as off on every platform.
+`config --local-capture off` completes, status reports capture as off on every platform.
+If turning it off was interrupted, status asks you to run the off command again.
 
 Homebrew Node installations now record a matching stable `opt` path, so a Node
 upgrade does not leave registrations pointing at a removed Cellar version.
@@ -165,7 +166,8 @@ npx @cairn-ink/memory raw delete <conversation-id> --yes
 
 使用 `--no-capture` 時，設定只會顯示擷取已關閉，不再顯示預設開啟通知或
 Codex 的 hooks 核准提示。執行 `--no-capture` 或 `config --local-capture off`
-之後，所有平台的 status 都會顯示擷取已關閉。
+完成之後，所有平台的 status 都會顯示擷取已關閉。
+若關閉作業中斷，status 會提示再次執行關閉指令。
 
 Homebrew 的 Node 安裝現在會記下指向同一個 Node 的穩定 `opt` 路徑，更新
 Node 後，記憶工具的設定不會再指向已移除的 Cellar 版本。
