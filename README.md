@@ -50,7 +50,7 @@ first asks: where should your memory live?
 | --- | --- | --- |
 | Account | None | A [cairn.ink](https://cairn.ink) account, one browser sign-in |
 | Where memory lives | A SQLite database on this computer | cairn.ink |
-| Saved automatically | Your Claude Code and Codex conversations, as plain text | Your conversations, which cairn.ink turns into memories |
+| Saved automatically | Your Claude Code and Codex conversations, as plain text (on Linux and WSL for now) | Your conversations, which cairn.ink turns into memories |
 | Saving a memory | Your agent saves one when you ask | Automatic, or ask your agent |
 | Getting it back | Your agent searches when you ask | Relevant memories are added to each prompt |
 | Other computers | Not synced | The same memory wherever you sign in |
@@ -86,7 +86,8 @@ If your agent does not reach for the memory tools, name them: “use the
 cairn-local memory tools”.
 
 Local mode also saves your conversations as you work, so you can ask about them
-later:
+later (on Linux and WSL; on macOS automatic saving does not start yet, see
+[Status](#status)):
 
 ```text
 What did we decide about the database migration last week?
@@ -117,7 +118,7 @@ stones of a cairn.
 
 | Layer | What it holds | Local mode | Cloud mode |
 | --- | --- | --- | --- |
-| **Conversations** | What was said, as searchable text | Saved automatically on your computer | Sent to cairn.ink |
+| **Conversations** | What was said, as searchable text | Saved automatically on your computer (Linux and WSL) | Sent to cairn.ink |
 | **Memories** | The preferences, decisions and facts worth keeping, each with its Source Receipt | Saved when you or your agent ask | Extracted from your conversations automatically, or saved on request |
 | **Cards** | Topic pages that pull related memories together into a map | Not built by default | The map you browse on cairn.ink |
 
@@ -157,8 +158,9 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
   search indexes in a folder beside it (`memory.sqlite.raw-search`). Nothing is
   sent to Cairn, and no Cairn account is involved. Setup downloads the engine's
   packages from npm.
-- **Saved conversations.** Local mode saves the text of your Claude Code and
-  Codex conversations into that database automatically, up to 200 MB. Saving
+- **Saved conversations.** On Linux and WSL, Local mode saves the text of your
+  Claude Code and Codex conversations into that database automatically, up to
+  200 MB. Saving
   needs no account, no key and no model calls. Turn it off with
   `npx @cairn-ink/memory config --local-capture off`,
   or install with `npx @cairn-ink/memory setup --local --no-capture`.
@@ -231,9 +233,12 @@ This is a developer preview. Know these limits before you rely on it:
   may never finish indexing.
 - **Local recall is on request.** Local mode does not add memories to your
   prompts by itself. Your agent searches when you ask.
-- **Platforms.** Local setup is tested on Linux and WSL. macOS runs the same
-  code but is untested. On native Windows `setup --local` refuses to run, so
-  use WSL or the [source-checkout guide for PowerShell](docs/windows-install.md).
+- **Platforms.** Automatic saving runs on Linux and WSL. On macOS, setup
+  connects Claude Code and Codex and the memory tools work, but automatic
+  saving doesn't start yet: setup reports conversation saving OFF
+  (`runtime_unavailable`) and exits with code 2. On native Windows
+  `setup --local` refuses to run, so use WSL or the
+  [source-checkout guide for PowerShell](docs/windows-install.md).
 - **Homebrew Node on macOS.** Setup records Node's versioned path, so rerun
   setup after `brew upgrade` updates Node. Fixed in the next release.
 - **Config directories.** Local setup stops without connecting a tool if

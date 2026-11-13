@@ -46,7 +46,7 @@ npx @cairn-ink/memory setup
 | --- | --- | --- |
 | 帳號 | 不需要 | 需要 [cairn.ink](https://cairn.ink) 帳號，用瀏覽器登入一次 |
 | 記憶放在哪 | 這台電腦上的 SQLite 資料庫 | cairn.ink |
-| 自動保存什麼 | 你和 Claude Code、Codex 的對話，以明文保存 | 你的對話，由 cairn.ink 整理成記憶 |
+| 自動保存什麼 | 你和 Claude Code、Codex 的對話，以明文保存（目前限 Linux 和 WSL） | 你的對話，由 cairn.ink 整理成記憶 |
 | 存一筆記憶 | 你開口，agent 才存 | 自動，也可以請 agent 存 |
 | 怎麼找回來 | 你問，agent 才去查 | 每次提問自動帶入相關記憶 |
 | 換一台電腦 | 不會同步 | 登入後是同一份記憶 |
@@ -80,7 +80,8 @@ Codex 還要到 `/hooks` 允許 Cairn 的設定。一台電腦一次只能用一
 
 如果 agent 沒有去用記憶工具，直接點名：「用 cairn-local 的記憶工具」。
 
-本機模式也會在你工作時把對話存下來，之後可以直接問：
+本機模式也會在你工作時把對話存下來，之後可以直接問（Linux 和 WSL；macOS 上自動保存
+還不會啟動，見[目前狀態](#目前狀態)）：
 
 ```text
 上週我們對資料庫搬遷做了什麼決定？
@@ -109,7 +110,7 @@ Cairn.ink Memory 把 agent 學到的東西分成三層存放，就像一座石�
 
 | 層 | 放什麼 | 本機模式 | 雲端模式 |
 | --- | --- | --- | --- |
-| **對話** | 講過的內容，以可搜尋的文字保存 | 自動存在你的電腦上 | 送到 cairn.ink |
+| **對話** | 講過的內容，以可搜尋的文字保存 | 自動存在你的電腦上（Linux 和 WSL） | 送到 cairn.ink |
 | **記憶** | 值得留下的偏好、決定和事實，每筆都附 Source Receipt | 你或 agent 開口才存 | 從對話自動整理出來，也可以開口存 |
 | **卡片** | 把相關記憶整理在一起的主題頁，連成一張地圖 | 預設不會建立 | 你在 cairn.ink 上瀏覽的地圖 |
 
@@ -144,7 +145,7 @@ Codex 的規則，以及外掛的隱私約定。
   `~/.cairn-memory/data/memory.sqlite`；旁邊的資料夾 `memory.sqlite.raw-search`
   放搜尋用的索引，同樣是明文。不會傳任何東西給 Cairn，也不需要 Cairn 帳號。
   安裝時會從 npm 下載引擎需要的套件。
-- **已保存的對話。** 本機模式會自動把你和 Claude Code、Codex 的對話文字存進
+- **已保存的對話。** 在 Linux 和 WSL 上，本機模式會自動把你和 Claude Code、Codex 的對話文字存進
   這個資料庫，上限 200 MB。保存不需要帳號、不需要金鑰，也不呼叫模型。要關掉，跑
   `npx @cairn-ink/memory config --local-capture off`，或安裝時用
   `npx @cairn-ink/memory setup --local --no-capture`。
@@ -204,7 +205,8 @@ Codex 的規則，以及外掛的隱私約定。
   不代表沒存到。大約 50,000 則以上的歷史可能永遠建不完。
 - **本機模式要你開口才會回想。** 本機模式不會自己把記憶帶進提問，你問了，
   agent 才去查。
-- **平台。** 本機安裝在 Linux 和 WSL 測試過。macOS 走同一套程式，但還沒測試。
+- **平台。** 自動保存目前只在 Linux 和 WSL 上執行。macOS：安裝與記憶工具可用；自動保存
+  還不會啟動（setup 會回報對話保存為 OFF、`runtime_unavailable`，並以代碼 2 結束）。
   Windows 原生環境下 `setup --local` 會拒絕執行，請用 WSL，或照
   [PowerShell 原始碼安裝指南（英文）](docs/windows-install.md)操作。
 - **macOS 上用 Homebrew 裝的 Node。** 安裝時會記下 Node 帶版本號的路徑，所以
