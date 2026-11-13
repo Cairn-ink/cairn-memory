@@ -995,7 +995,8 @@
       "file": "core/database.mjs",
       "start": "export function openDatabase(",
       "end": null,
-      "sha256": "6d48893fb40b6a01adb4a5ffc122222ad042b91ef0c28f15345c8ebc8429bb9a"
+      "sha256": "c26ff2258f864e3c3e50cbba631e95899de6cad25a963511b1764b1a371b5d0b",
+      "reason": "Reviewed mechanical host-mode delta: choose the optional dispatcher timeout and bind the returned native connection; pristine creation and all safety installation statements remain unchanged."
     }
   ],
   "imports": [
