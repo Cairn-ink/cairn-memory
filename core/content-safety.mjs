@@ -434,9 +434,11 @@ function receiptCoordinateCache(db, ns, id) {
 }
 export function receiptStoredCountInside(db, ns, id) {
   const cached = receiptCoordinateCache(db, ns, id);
-  return cached.total ??= db.prepare(`SELECT count(*) AS n FROM receipts r INDEXED BY memory_receipts
-    CROSS JOIN memories m ON m.id=r.memory_id WHERE r.memory_id=? AND m.owner_id=? AND m.scope=? AND m.project_id=?`)
-    .get(id, ...boundary(ns)).n;
+  // Keep the prepared statement sequence independent of cache warmth. Only
+  // execution is cached; diagnostics must not change the SQL a read prepares.
+  const count = db.prepare(`SELECT count(*) AS n FROM receipts r INDEXED BY memory_receipts
+    CROSS JOIN memories m ON m.id=r.memory_id WHERE r.memory_id=? AND m.owner_id=? AND m.scope=? AND m.project_id=?`);
+  return cached.total ??= count.get(id, ...boundary(ns)).n;
 }
 
 // Headers are read in bounded keyset chunks; text is fetched only after the
@@ -567,7 +569,12 @@ export function receiptDeliverySnapshot(db, entries, memo = createContentReadMem
       }
       const last = headers.at(-1);
       if (last) { job.afterTime = last.created_at; job.afterId = last.id; }
-      states.get(job.key).complete = ended && delivered.length < job.limit;
+      const state = states.get(job.key);
+      state.complete = ended && delivered.length < job.limit;
+      // Evidence readers need no persistent coordinates or count scan. A
+      // fully consumed header keyset already gives its exact physical total;
+      // an unfinished one retains unknown omitted coverage, as before.
+      if (job.total === null && ended) state.total = job.position;
       if (!uncapped && !ended && delivered.length < job.limit) next.push(job);
     }
     active = next;

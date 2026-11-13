@@ -66,7 +66,8 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       if(cards.length)batches.push({namespace:ns,receipts:cardReceiptTokens(db,ns,cards.map(ref=>ref.cardId))});
       for(const ref of cards)seen.add(JSON.stringify([...boundary(ns),ref.cardId]));
     }
-    receiptDeliverySnapshot(db,refs.filter(ref=>ref.type==='memory').map(ref=>({namespace:ref.namespace,memoryId:ref.memoryId})),memo,batches,{limit:17});
+    receiptDeliverySnapshot(db,refs.filter(ref=>ref.type==='memory').map(ref=>({namespace:ref.namespace,memoryId:ref.memoryId})),memo,batches,
+      {limit:17,positions:false,totals:false});
   }
   function memoryBatchInside(ns, refs, memo) {
     if(!cachedContentLayout(db)?.suppressionRevision || !db.isTransaction)return [];
@@ -268,14 +269,17 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       if(!contentReadSafety(db,{identity,namespace:ns,memo,method:'getCard',ref}).allowed)fail('evidence_unavailable');
       return cardDeliverable(db,ns,row.id,memo);
     }
-    const scanRefs=input.types.flatMap(type=>db.prepare(type==='memory'
-      ? `SELECT id,revision,content,currentness,review_state FROM memories WHERE ${where} AND deleted=0 AND id>? ORDER BY id LIMIT ?`
+    // Only Cards need contributor tokens before scanning. A mixed scan warms
+    // Memory headers with them to keep one marker union, but never reads a
+    // candidate body ahead of the row/body budget or materializes its receipts.
+    const scanRefs=input.types.includes('card')?input.types.flatMap(type=>db.prepare(type==='memory'
+      ? `SELECT id,revision,currentness,review_state FROM memories WHERE ${where} AND deleted=0 AND id>? ORDER BY id LIMIT ?`
       : `SELECT id,revision,body_revision FROM private_cards WHERE ${where} AND state='confirmed' AND id>? ORDER BY id LIMIT ?`)
       .all(...boundary(ns),after[type],input.scanRows+1)
-      .filter(row=>type==='card'||memoryReadEligible(row,input.intent)&&[...queryWords].some(word=>words(row.content).has(word)))
+      .filter(row=>type==='card'||memoryReadEligible(row,input.intent))
       .map(row=>({type,namespace:ns,
-        [type==='memory'?'memoryId':'cardId']:row.id,revision:row.revision,...(type==='card'?{bodyRevision:row.body_revision}:{})})));
-    receiptBatchInside(scanRefs,memo,false);
+        [type==='memory'?'memoryId':'cardId']:row.id,revision:row.revision,...(type==='card'?{bodyRevision:row.body_revision}:{})}))) : [];
+    receiptBatchInside(scanRefs,memo,true);
     while (matches.length < input.limit && exhausted.size + blocked.size < input.types.length) {
       if (scannedRows >= input.scanRows) { stopped = 'row_budget'; break; }
       if (performance.now() - started >= input.deadlineMs) { stopped = 'deadline'; break; }
