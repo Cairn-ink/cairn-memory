@@ -35,6 +35,8 @@ and miss other conversations about the same subject. To remove a conversation,
 use the commands below. A fork or resume of a hidden conversation stays hidden.
 Codex forks aren't saved locally. New Claude Code sessions are captured from
 their first turn, including when the transcript appears after session start.
+Claude Code runs started by scripts or the Agent SDK (for example `claude -p`)
+aren't saved; interactive sessions, including IDE sessions, are.
 Turning capture back on preserves those hiding fences.
 Existing conversations resume at the next real hook's transcript end, skipping
 text written while off. Claude Code also skips the first turn of an already-running
@@ -115,6 +117,8 @@ status 讀取引擎上次觀察到的驗證狀態與原因，不啟動 Codex。
 這可能包含無關對話，也可能漏掉其他談到相同主題的對話。要移除對話，請用 raw delete。
 隱藏對話的分支或續接仍會保持隱藏。Codex 分支對話不會存進本機。
 Claude Code 新對話從第一輪開始保存，包含逐字稿在 session start 之後才建立的情況。
+由腳本或 Agent SDK 啟動的 Claude Code 執行（例如 `claude -p`）不會保存；
+互動式工作階段（包括 IDE 裡的）照常保存。
 重新開啟擷取會保留這些隱藏規則，既有對話從下一個實際 hook 看到的逐字稿結尾
 恢復，跳過關閉期間的文字。Claude Code 已在進行中的對話，重新開啟後的第一輪
 也不會保存，後續輪次才恢復。
