@@ -1,4 +1,3 @@
-import { localNodeExecutable } from './local-node-path.mjs';
 import { constants } from 'node:fs';
 import { lstat, mkdir, open, readdir, realpath, rename, rm } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -288,7 +287,7 @@ export function newDescriptor(root, installerVersion, { owner, db, project } = {
   return { version: 'cairn-local-installation-v1', state: 'pending', installerVersion,
     ownerId: owner ?? 'local-' + randomBytes(8).toString('hex'), projectId: project ?? null,
     database: { path: db ?? join(root, 'data/memory.sqlite'), external: Boolean(db && db !== join(root, 'data/memory.sqlite')) },
-    engine: null, node: localNodeExecutable(), operation: null, clients: { claude: null, codex: null }, createdAt: now, updatedAt: now };
+    engine: null, node: process.execPath, operation: null, clients: { claude: null, codex: null }, createdAt: now, updatedAt: now };
 }
 export function beginOperation(descriptor, kind, selected, destinations, desired = null) {
   descriptor.state = kind === 'setup' ? 'pending' : 'uninstalling';

@@ -1733,10 +1733,5 @@
     "path": "integrations/client/raw/local-source-open.mjs",
     "source": "file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);",
     "reason": "Local transcript opener only; never accepts a database path from capture authority."
-  },
-  {
-    "path": "packages/setup/lib/local-node-path.mjs",
-    "source": "import { realpathSync } from 'node:fs'",
-    "reason": "Resolve only a matching Homebrew Node executable and opt link; no database file access."
   }
 ]
