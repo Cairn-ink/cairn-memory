@@ -17,7 +17,7 @@ import { transaction } from '../../../core/database.mjs';
 import { fixture as sidecarFixture, request as sidecarRequest } from '../../../core/testing/context-read-fixture.mjs';
 import { setup as episodeFixture, input as episodeInput } from '../../../core/testing/episode-capture-helpers.mjs';
 import { seed } from './fixtures/episode-server.mjs';
-import { ns, ok, call, connect, holdWriteLock, holdExclusiveLock } from './local-shared-support.mjs';
+import { ns, ok, call, connect, holdWriteLock } from './local-shared-support.mjs';
 
 const text = 'Synthetic slow cobalt telescope preference';
 const capture = { namespace: ns, client: 'synthetic', sessionId: 'slow-session', eventId: 'slow-batch',
@@ -97,12 +97,16 @@ for (const operation of ['foreign-inspect', 'forget', 'attach']) test(`P1-4: EXC
   const w = createTestWorkspace(t), path = join(w.path, 'exclusive.sqlite');
   const foreign = await seed(path, { ns, client: 'claude-code', count: 1 });
   const own = await seed(path, { ns, client: 'codex', count: 1 });
+  const holder = new DatabaseSync(path); let backoffs = 0;
   const host = createLocalSharedRuntime({ path, namespace: ns, raw: false, contextRead: false,
-    sessionEpisodesAccess: 'episode-v1', readClient: 'codex' }, { strict: true });
+    sessionEpisodesAccess: 'episode-v1', readClient: 'codex' }, { strict: true, onBackoff() {
+      if (holder.isTransaction) { backoffs++; holder.exec('ROLLBACK'); }
+    } });
   w.defer(() => host.close());
+  w.defer(() => { if (holder.isTransaction) holder.exec('ROLLBACK'); holder.close(); });
   const existing = await connect(t, host);
   const inspected = ok(await call(existing.client, 'inspect_session_episode', { episodeId: own.ids[0] }));
-  const lock = await holdExclusiveLock(t, path, 400);
+  holder.exec('BEGIN EXCLUSIVE');
   if (operation === 'foreign-inspect') {
     const result = await call(existing.client, 'inspect_session_episode', { episodeId: foreign.ids[0] });
     assert.equal(result.error?.code, 'episode_not_found', 'R2I_FOREIGN_EPISODE_DENIED');
@@ -114,32 +118,36 @@ for (const operation of ['foreign-inspect', 'forget', 'attach']) test(`P1-4: EXC
     const attached = await connect(t, host);
     assert.ok((await attached.client.listTools()).tools.some(tool => tool.name === 'remember_memory'), 'R2I_ATTACH_GETS_TOOLS');
   }
-  assert.deepEqual(await lock.exited, [0, null]);
+  assert.ok(backoffs >= 1, 'R2K_EXCLUSIVE_BUSY_OBSERVED');
+  assert.equal(holder.isTransaction, false);
 });
 
-test('P1-5: suppression between a successful Card retry and delivery refuses the body', { timeout: 10000 }, async t => {
+for (const kind of ['card', 'source', 'unrelated']) test(`P1-5: ${kind} suppression between a successful Card retry and delivery refuses the body`, { timeout: 10000 }, async t => {
   const f = safetyFixture(t, 23); await f.migrate();
   const authority = cardHost(), writer = f.connect();
   let armed = false, suppressed = false, backoffs = 0;
-  const host = createCommitDispatcher({ strict: true, onBackoff() { backoffs++; }, onAwait({ point }) {
+  let target;
+  const host = createCommitDispatcher({ strict: true, onBackoff() { backoffs++; writer.exec('ROLLBACK'); }, onAwait({ point }) {
     if (armed && point === 'return') {
       armed = false;
       queueMicrotask(() => {
-        transaction(writer, () => writeContentSuppressionInside(writer, { namespace: ns, kind: 'card', key: card.id,
+        transaction(writer, () => writeContentSuppressionInside(writer, { namespace: ns, ...target,
           reason: 'user_forget', actionId: 'synthetic-delivery-forget' }));
         suppressed = true;
       });
     }
   } });
   const core = host.open(() => openMemoryCore({ path: f.path, raw: false, privateCards: authority.options }));
-  t.after(() => { core.close(); writer.close(); });
+  t.after(() => { if (writer.isTransaction) writer.exec('ROLLBACK'); core.close(); writer.close(); });
   const card = ok(await authority.call(core, 'createCardDraft', { namespace: ns, actionId: 'delivery-card', drafting: 'authored',
     input: { title: 'Synthetic retained Card', body: 'Synthetic private body', authoredInput: { text: 'Synthetic source', occurredAt: null } } }));
-  const lock = await holdWriteLock(t, f.path, 300); armed = true;
+  target = kind === 'card' ? { kind: 'card', key: card.id }
+    : kind === 'source' ? { kind: 'submitted-note', key: writer.prepare('SELECT id FROM card_notes').get().id }
+      : { kind: 'memory', key: 'synthetic-unrelated-memory' };
+  writer.exec('BEGIN IMMEDIATE'); armed = true;
   const result = await authority.call(core, 'getCard', { namespace: ns, cardId: card.id });
-  assert.deepEqual(await lock.exited, [0, null]);
   assert.ok(backoffs > 0 && suppressed);
-  assert.equal(result.error?.code, 'evidence_unavailable', 'R2I_CARD_DELIVERY_FENCE');
+  assert.equal(result.error?.code, 'evidence_unavailable', kind === 'unrelated' ? 'R2K_CARD_ACCOUNT_HANDOFF' : 'R2I_CARD_DELIVERY_FENCE');
 });
 
 test('P2-1: a reconcile commits its tail after its cooperative budget expires', { timeout: 10000 }, async t => {
