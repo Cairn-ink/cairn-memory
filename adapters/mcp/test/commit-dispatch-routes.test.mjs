@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
 import { openRawCaptureCore } from '../../../core/raw-capture.mjs';
@@ -103,18 +104,38 @@ test('Raw replay retries its observation without sealing or model replay', async
 });
 
 test('episode post-model commit retries without re-entering orchestration', async t => {
-  const host = createCommitDispatcher(); let f, lock;
-  f = host.open(() => episodeFixture(t, { async interpretEpisode(request) {
-    lock = await holdWriteLock(t, f.path, 400); return interpretation(request);
-  } }));
-  const captured = await host.run(() => f.core.capture(episodeInput()));
+  let f, injected = false, backoffs = 0;
+  const host = createCommitDispatcher({ strict: true, onBackoff() {
+    backoffs++; f.db.exec('ROLLBACK');
+  } });
+  f = host.open(() => episodeFixture(t, { interpretEpisode: request => interpretation(request) }));
+  // Lock the commit itself. A lock taken inside the provider instead refuses
+  // callModel's later synchronous freshness check before commitDraft is reached.
+  const original = DatabaseSync.prototype.exec;
+  DatabaseSync.prototype.exec = function(sql) {
+    const previous = Error.stackTraceLimit;
+    let stack;
+    try { Error.stackTraceLimit = 100; stack = new Error().stack; }
+    finally { Error.stackTraceLimit = previous; }
+    if (!injected && sql === 'BEGIN IMMEDIATE' && stack.includes('commitDraft')) {
+      injected = true; f.db.exec('BEGIN IMMEDIATE');
+    }
+    return Reflect.apply(original, this, [sql]);
+  };
+  let captured;
+  try { captured = await host.run(() => f.core.capture(episodeInput())); }
+  finally {
+    DatabaseSync.prototype.exec = original;
+    if (f.db.isTransaction) f.db.exec('ROLLBACK');
+  }
   assert.equal(captured.ok, true, 'episode orchestration must not become the retry boundary');
   const value = ok(captured);
-  await joined(lock);
-  assert.equal(value.episode.status, 'interpreted', 'episode orchestration must not become the retry boundary');
+  assert.ok(injected && backoffs >= 1, 'R2M_EPISODE_COMMIT_BUSY_OBSERVED');
+  assert.equal(value.episode.status, 'interpreted', 'episode orchestration must not become the retry boundary: ' + JSON.stringify(value.episode));
   assert.equal(counts(f.model), 1, 'episode provider must stay at exactly 1 under backoff');
   const episode = ok(await f.core.getEpisode({ namespace: episodeInput().namespace, episodeId: value.episode.id }));
   assert.equal(episode.episode.processing.covered, 1); idle(host);
+  assert.equal(host.inspectSynchronousWrites().count, 0);
 });
 
 test('context checkpoint and vector publication backoff embed exactly once', async t => {
