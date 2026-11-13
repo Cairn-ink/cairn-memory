@@ -176,7 +176,13 @@ confirmation, filing or re-filing, remember metadata updates and correction can
 therefore stale an engine Card without failing the Memory write, including on
 stores with sealed lineage. Each update to a bound Memory's revision produces
 one consecutive Card step, including repeated updates to the same Memory within
-one transaction. The Card keeps its state, title, body, bindings and seals; the
+one transaction, as when duplicate extracted items attach distinct receipts.
+A causal batch that restates a bound Memory and contains a different item does
+not offer that restated Memory as a reconciliation candidate. The restatement
+adds its receipt and advances the Memory once; it stays current while the Card
+goes stale. Retiring a bound predecessor through causal capture is a separate
+case in which that predecessor is not restated in the same batch.
+The Card keeps its state, title, body, bindings and seals; the
 write verifier accepts only those trigger steps, proven
 by the same transaction's scoped Memory revisions and unchanged bindings.
 This grants no authority to edit, delete, re-bind or re-state an engine Card.

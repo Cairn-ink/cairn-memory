@@ -189,7 +189,8 @@ test(`engine stale ordinary write: ${operation}, ${mode}`, async t => {
 });
 
 for (const mode of modes) for (const restate of [false, true])
-test(`engine stale ordinary write: causal capture retires bound predecessor, restate=${restate}, ${mode}`, async t => {
+test(`engine stale ordinary write: ${restate ? 'causal batch restates bound predecessor without offering it for reconciliation'
+  : 'causal capture retires bound predecessor, restate=false'}, ${mode}`, async t => {
   const f = await fixture(t, mode), memories = [];
   for (let sequence = 1; sequence <= 3; sequence++) {
     f.model.extract = () => ({ items: Array.from({ length: 3 }, (_, i) => ({
@@ -208,16 +209,36 @@ test(`engine stale ordinary write: causal capture retires bound predecessor, res
   const replacementIndex = restate ? 1 : 0;
   f.model.extract = () => ({ items: [...(restate ? [{ content, kind: 'fact', confidence: .8, sourceIndices: [0] }] : []),
     { content: 'Synthetic ordinary causal replacement', kind: 'fact', confidence: .8, sourceIndices: [replacementIndex] }] });
+  const requests = [];
   f.model.reconcile = ({ input }) => {
+    requests.push(structuredClone(input));
+    if (restate) return { transitions: [] };
     const predecessorIndex = input.candidates.findIndex(m => m.content === content);
-    assert.ok(predecessorIndex >= 0, 'the restated predecessor remains a candidate for the distinct replacement');
+    assert.ok(predecessorIndex >= 0, 'the bound predecessor is supplied for the distinct replacement');
     return { transitions: [{ replacementIndex, predecessorIndex, evidenceIndices: [replacementIndex],
       relation: 'supersedes', valueChange: 'changed', adoption: 'explicit' }] };
   };
   const initialReceipts = f.db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY id').all(target.id);
   const result = ok(await f.core.capture(input));
-  assert.equal(result.reconciliation.retiredCount, 1);
-  assert.equal(memoryRow(f, target.id).currentness, 'historical');
+  if (restate) {
+    assert.equal(requests.length, 1, 'the scripted reconciliation model receives the mixed batch');
+    const request = requests[0];
+    assert.deepEqual(request.messages, input.messages.map(({ role, content }, index) => ({ index, role, content })));
+    assert.deepEqual(request.items, [{ index: 0, content, kind: 'fact', sourceIndices: [0] },
+      { index: 1, content: input.messages[1].content, kind: 'fact', sourceIndices: [1] }]);
+    assert.ok(request.candidates.every(candidate => candidate.content !== content),
+      'main excludes the restated Memory even when another fingerprint occurs in the batch');
+    assert.deepEqual(request.candidates.map(candidate => candidate.content).sort(),
+      memories.slice(1).map(memory => memoryRow(f, memory.id).content).sort(),
+      'the other eligible predecessors still reach reconciliation');
+    assert.deepEqual(result.reconciliation, { status: 'complete_no_change', reason: null, retiredCount: 0 });
+    assert.equal(result.admission.memories[0].id, target.id);
+    assert.equal(memoryRow(f, target.id).currentness, 'current');
+    assert.equal(f.db.prepare('SELECT 1 FROM memory_supersessions WHERE previous_memory_id=?').get(target.id), undefined);
+  } else {
+    assert.equal(result.reconciliation.retiredCount, 1);
+    assert.equal(memoryRow(f, target.id).currentness, 'historical');
+  }
   const replacement = result.admission.memories[replacementIndex];
   assert.equal(memoryRow(f, replacement.id).content, 'Synthetic ordinary causal replacement');
   assert.deepEqual({ ...f.db.prepare('SELECT role,excerpt FROM receipts WHERE memory_id=? AND event_id=?')
@@ -229,7 +250,7 @@ test(`engine stale ordinary write: causal capture retires bound predecessor, res
     .filter(r => initialReceipts.some(old => old.id === r.id)), initialReceipts, 'the prior receipt is unchanged');
   assert.equal(f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(target.id).n,
     initialReceipts.length + Number(restate));
-  await assertStaleAndRebuild(f, w, before, restate ? [target, { ...target, revision: target.revision + 1 }] : [target], [replacement.id]);
+  await assertStaleAndRebuild(f, w, before, [target], restate ? [target.id, replacement.id] : [replacement.id]);
 });
 
 for (const mode of modes) for (const operation of ['duplicate capture', 'successive writes'])
