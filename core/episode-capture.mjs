@@ -115,14 +115,16 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
     owned = { episodeId, token: claim.token };
     if (claim.skipReason) fail(claim.skipReason);
     if (staging === 'not-staged') fail('capacity');
-    const snapshot = runtime.episodeDraftSnapshot(ns, owned);
+    const readSnapshot = () => runtime.episodeDraftSnapshot(ns, owned);
+    const snapshot = hasCommitDispatcher(runtime)
+      ? await dispatchCommit(runtime, readSnapshot, deadline) : readSnapshot();
     const planned = episodeRequest(model, snapshot);
     let checks = 0;
     const output = await callModel(model, 'interpretEpisode', system, planned.input, {
       failureCode: 'episode_failed', deadline, validateFresh: () => {
         // Check the actual prepared request, not a freshly filtered replacement.
         runtime.assertCaptureSources(ns, planned.receipts);
-        runtime.episodeDraftSnapshot(ns, owned);
+        dispatchSynchronousCommit(runtime, readSnapshot);
         // callModel checks once during preparation and again immediately before
         // invoking the port. Consume only at that second check, with no await.
         if (++checks === 2 && !started) {
@@ -203,7 +205,8 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
 
 async function auxiliary({ runtime, ns, model, episodeId, generation, trigger, deadline }) {
   deadline?.check();
-  const state = runtime.episodeCaptureState(ns, { episodeId });
+  const readState = () => runtime.episodeCaptureState(ns, { episodeId });
+  const state = hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, readState, deadline) : readState();
   if (!state || (state.observed <= state.attempted && !state.unfinishedAttempt)) {
     return { id: episodeId, status: 'not-run', reason: 'no-undrafted-evidence' };
   }
@@ -224,7 +227,8 @@ export async function endEpisode({ runtime, ns, model, input }) {
   const control = runtime.getCaptureControl(ns);
   if (control.generation !== input.generation) fail('generation_conflict');
   if (control.paused || !control.enabled) fail('capture_disabled');
-  const state = runtime.episodeCaptureState(ns, { client: input.client, sessionId: input.sessionId });
+  const readState = () => runtime.episodeCaptureState(ns, { client: input.client, sessionId: input.sessionId });
+  const state = hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, readState) : readState();
   if (!state) return { episode: { status: 'not-run', reason: 'no-undrafted-evidence' } };
   return { episode: await auxiliary({ runtime, ns, model, episodeId: state.episodeId,
     generation: input.generation, trigger: 'end' }) };
@@ -255,7 +259,8 @@ export async function captureEpisodeMessages(options) {
       admission: { status: 'covered' } };
     let lazy;
     if (!checked.duplicate) {
-      const pending = runtime.pendingEpisodeSession(ns, batch);
+      const findPending = () => runtime.pendingEpisodeSession(ns, batch);
+      const pending = hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, findPending, sharedDeadline) : findPending();
       if (pending) lazy = await auxiliary({ runtime, ns, model, episodeId: pending,
         generation: batch.generation, trigger: 'lazy', deadline: sharedDeadline });
     }
@@ -271,8 +276,9 @@ export async function captureEpisodeMessages(options) {
     }
     const writerToken = registered.token;
     let pendingFailure;
-    const state = runtime.episodeCaptureState(ns, {
+    const readState = () => runtime.episodeCaptureState(ns, {
       episodeId, client: batch.client, eventId: batch.eventId });
+    const state = hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, readState, sharedDeadline) : readState();
     let episode = registered.draftProcessing ? { id: episodeId, status: 'processing' }
       : { id: episodeId, status: 'not-run', reason: registered.duplicate ? 'replay' : 'debounced' };
     const due = !state.draftConsumed && state.admission !== 'completed' && (state.attempted === 0 ||
