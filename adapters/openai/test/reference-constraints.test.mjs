@@ -254,3 +254,28 @@ test('dynamic schemas preserve the existing strict shape and output bounds', asy
   const extract = await outgoingSchema('extract', { messages: [] });
   assert.equal(accepts(extract, { items: [{ content: 'x'.repeat(601), kind: 'fact', confidence: 0.9, sourceIndices: [0] }] }), false);
 });
+
+for (const method of ['reviewBasis', 'relate']) test(`zero delivered evidence is a local empty ${method} result`, async () => {
+  let calls = 0;
+  const model = createOpenAIModel({ apiKey: 'synthetic-reference-key', fetchImpl: async () => {
+    calls++; throw new Error('unexpected-provider-call');
+  } });
+  const input = { memories: [{ index: 0, receipts: [] }] };
+  assert.deepEqual(await model[method](request(input)), method === 'reviewBasis' ? { units: [], links: [] } : { edges: [] });
+  assert.equal(calls, 0);
+});
+
+for (const method of ['reviewBasis', 'relate']) test(`mixed empty evidence preserves outgoing ${method} index correlation`, async () => {
+  const input = { memories: [{ index: 0, receipts: [] },
+    { index: 1, receipts: [{ index: 0, role: 'user', excerpt: 'Independent synthetic support.' }] }] };
+  const { wire, schema } = await outgoingRequest(method, input);
+  assert.deepEqual(wire, input);
+  const good = method === 'reviewBasis' ? { units: [{ memory: 1, receipt: 0,
+    quote: 'Independent synthetic support.', role: 'premise' }], links: [] }
+    : { edges: [{ from: 1, to: 1, fromReceipt: 0, toReceipt: 0, relation: 'supports-decision' }] };
+  assert.equal(accepts(schema, good), true);
+  const wrong = structuredClone(good);
+  if (method === 'reviewBasis') wrong.units[0].memory = 0;
+  else wrong.edges[0].from = 0;
+  assert.equal(accepts(schema, wrong), false);
+});
