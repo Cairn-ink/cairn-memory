@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compareWideTraces, assertWidePins, summary, ledgerAdditionSummary, compareWideTables,
-  currentReceiptWalkSQLTexts, reconstructWideTrace, currentAdditionSummary, validateSqlAdditions, hash } from '../testing/card-lineage-off-wide-compare.mjs';
+  currentReceiptWalkSQLTexts, reconstructWideTrace, currentAdditionSummary, validateSqlAdditions, hash, cardFamilySQL, forgettingMethods, assertArchivedCardStatementTexts } from '../testing/card-lineage-off-wide-compare.mjs';
 
 const row = (sql, method = 'exec', bindings = []) => [sql, method, bindings];
 const ns = ['synthetic-owner', 'personal', ''];
@@ -207,4 +207,97 @@ test('explicit table removals consume exact rows, with no loose table exemption'
 test('reconstruction consumes separate probe entries and adjusts all later offsets', () => {
   const f = fixture(), reconstructed = reconstructWideTrace(f.key, f.archived, f.sqlAdditions, f.sqlAdditionMethods);
   assert.deepEqual(reconstructed, f.current);
+});
+
+for (const mutation of ['purge moved before the fence', 'purge moved after the tombstone', 'split anchor group'])
+  test(`pins mode: rejects ${mutation} without the archive even with re-derived general hashes`, () => {
+    const f = fixture(); delete f.archived;
+    const rows = f.parts[2][2], purge = rows.splice(4, additions.length);
+    if (mutation === 'split anchor group') {
+      rows.splice(4, 0, ...purge.slice(0, 2), row('SELECT intervening', 'get'), ...purge.slice(2));
+    } else rows.splice(mutation === 'purge moved before the fence' ? 3 : 5, 0, ...purge);
+    f.current = trace(f.parts);
+    assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods),
+      { code: 'ERR_ASSERTION', message: /current purge anchor/ });
+  });
+
+const reviewedCardText = 'UPDATE private_cards SET revision=revision+1 WHERE id=?';
+for (const mode of ['archive', 'pins']) {
+  for (const [name, method, sql, lists] of [
+    ['extra binding delete in forget', 'forget', 'DELETE FROM card_memory_bindings WHERE card_id=?', {}],
+    ['extra Card update in deleteConversation', 'deleteConversation', reviewedCardText, {}],
+    ['one character changed in listed text', 'forget', reviewedCardText + ' ', { forget: [reviewedCardText] }],
+    ['text listed for another method', 'forget', reviewedCardText, { deleteConversation: [reviewedCardText] }],
+  ]) test(`${mode} card-family: rejects ${name}`, () => {
+    const f = fixture(); f.cardStatementTexts = lists;
+    // A matching archived occurrence ensures the negative cases exercise the
+    // current classifier, rather than just failing the archive-list equality.
+    if (lists.forget) {
+      const call = f.archived.calls[3]; f.archived.statements.splice(call[3] - 1, 0, row(reviewedCardText, 'run', ['synthetic-card'])); call[3]++;
+    }
+    if (lists.deleteConversation) {
+      const oldParts = [['deleteConversation', success, [row(reviewedCardText, 'run', ['synthetic-card'])]],
+        ...f.parts.map((part, index) => index === 2 ? [part[0], part[1], forgetRows] : part)];
+      f.archived = trace(oldParts);
+      f.parts.unshift(oldParts[0]);
+    }
+    const part = f.parts.findLast(part => part[0] === 'forget'); part[0] = method;
+    if (method !== 'forget') {
+      for (const call of f.archived.calls) if (call[0] === 'forget' && call[1].ok) call[0] = method;
+      for (const entry of f.sqlAdditions) { entry.method = method; entry.ordinal = 1; }
+      f.sqlAdditionMethods = [method];
+    }
+    part[2].splice(-1, 0, row(sql, 'run', ['synthetic-card'])); f.current = trace(f.parts);
+    if (mode === 'pins') {
+      delete f.archived;
+      assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods, lists),
+        { code: 'ERR_ASSERTION', message: /unreviewed card-family statement/ });
+    } else assert.throws(() => compare(f), { code: 'ERR_ASSERTION', message: /unreviewed card-family statement/ });
+  });
+  for (const method of forgettingMethods) test(`${mode} card-family: accepts a listed exact text in ${method}`, () => {
+    const f = fixture(), listed = row(reviewedCardText, 'run', ['synthetic-card']);
+    for (const part of f.parts) if (part[0] === 'forget') part[0] = method;
+    f.parts[2][2].push(listed); f.current = trace(f.parts);
+    const oldParts = structuredClone(f.parts); oldParts[2][2] = [...forgetRows, listed]; f.archived = trace(oldParts);
+    for (const entry of f.sqlAdditions) entry.method = method;
+    f.sqlAdditionMethods = [method]; f.cardStatementTexts = { [method]: [reviewedCardText] };
+    if (mode === 'archive') compare(f);
+    else { delete f.archived; assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods, f.cardStatementTexts); }
+  });
+}
+test('archive card-family: rejects a listed text absent from every archived call', () => {
+  const f = fixture(); f.cardStatementTexts = { forget: [reviewedCardText] };
+  assert.throws(() => compare(f), { code: 'ERR_ASSERTION', message: /reviewed card texts equal the revised archive/ });
+});
+test('archive card-family: list equality covers the union of workloads', () => {
+  const a = trace([['forget', success, [row(reviewedCardText)]]]), b = trace([['deleteConversation', success, [row(reviewedCardText)]]]);
+  assertArchivedCardStatementTexts([a, b], { forget: [reviewedCardText], deleteConversation: [reviewedCardText] });
+});
+test('card-family classifier covers target tables, schema probes and Card operation joins', () => {
+  for (const sql of ['INSERT INTO card_effects VALUES(?)', 'INSERT OR IGNORE INTO card_epochs VALUES(?)',
+    'UPDATE private_cards SET revision=2', 'DELETE FROM card_memory_bindings WHERE card_id=?',
+    'UPDATE main."card_effects" SET ordinal=2', 'DELETE FROM [card_bindings]',
+    'WITH wanted AS (SELECT 1) DELETE FROM card_bindings WHERE card_id=?',
+    "SELECT 1 FROM sqlite_schema WHERE name IN ('other','private_cards')",
+    "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'", 'SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id'])
+    assert.equal(cardFamilySQL(row(sql)), true, sql);
+  for (const sql of ['UPDATE memories SET deleted=1', "SELECT 1 FROM sqlite_master WHERE name='memories'", 'DELETE FROM card1'])
+    assert.equal(cardFamilySQL(row(sql)), false, sql);
+});
+for (const mode of ['archive', 'pins']) test(`${mode} card-family: a listed forgetting method needs no ledger rows or addition-method entry`, () => {
+  const current = trace([['reject', success, [row(reviewedCardText, 'run', ['synthetic-card'])]]]);
+  const f = { key: 'workload:23', current, archived: structuredClone(current), sqlAdditions: [], sqlAdditionMethods: [],
+    cardStatementTexts: { reject: [reviewedCardText] } };
+  if (mode === 'archive') compare(f);
+  else assertWidePins(f.key, current, [], summary(current), [], f.cardStatementTexts);
+});
+
+for (const mode of ['archive', 'pins']) test(`${mode} card-family: a reviewed ledger cannot put purge SQL in another method`, () => {
+  const f = fixture(); f.parts[2][0] = 'capture';
+  f.archived.calls[3][0] = 'capture';
+  for (const entry of f.sqlAdditions) { entry.method = 'capture'; entry.ordinal = 1; }
+  f.sqlAdditionMethods = ['capture']; f.current = trace(f.parts);
+  if (mode === 'archive') assert.throws(() => compare(f), { code: 'ERR_ASSERTION', message: /outside a forgetting call/ });
+  else assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods),
+    { code: 'ERR_ASSERTION', message: /outside a forgetting call/ });
 });

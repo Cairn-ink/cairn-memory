@@ -6,7 +6,7 @@ import { join,relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { normalizeSQL, summary, currentReceiptWalkSQLTexts, receiptWalkSQLTexts, receiptWalkSQL,
-  workloadKeys, validateSqlAdditions, reviseSQL, compareWideTraces, assertWidePins } from '../testing/card-lineage-off-wide-compare.mjs';
+  workloadKeys, validateSqlAdditions, reviseSQL, compareWideTraces, assertWidePins, validateCardStatementTexts, assertArchivedCardStatementTexts } from '../testing/card-lineage-off-wide-compare.mjs';
 
 const revision='fd5c59ef8e67cc58bb855a95f8910c668150bfa3';
 const root=fileURLToPath(new URL('../../',import.meta.url));
@@ -14,6 +14,7 @@ const pins=JSON.parse(readFileSync(new URL('./fixtures/card-lineage-off-wide-bas
 const receiptWalkPins=JSON.parse(readFileSync(new URL('./fixtures/card-lineage-off-wide-receipt-walk.json',import.meta.url),'utf8'));
 const observedReceiptWalkSQL={current:new Set(),archived:new Set()};
 let archivedReceiptWalkTraces=0;
+const revisedArchives=[];
 const observeReceiptWalkSQL=(statements,trace)=>{
   for(const row of statements)if(receiptWalkSQL(row)) {
     const sql=normalizeSQL(row[0]);
@@ -48,9 +49,9 @@ const added=['inspectCardOperation','revalidateEvidence','fetchCandidateEvidence
   'listMethodEffects','getMethodPackageUsage','disableMethodBinding','resolveMethodsForRole','listMethodBindingEvents','readMethodAttachmentBytes'];
 // Each sqlRevisions entry is an intended, reviewed SQL text change against the archived revision. It replaces only the
 // SQL text of one archived statement; method and bound arguments are never substituted. Delete the list when `revision` advances.
-const sqlRevisions=pins.sqlRevisions??[],sqlAdditions=pins.sqlAdditions??[],sqlAdditionMethods=pins.sqlAdditionMethods??[];
+const sqlRevisions=pins.sqlRevisions??[],sqlAdditions=pins.sqlAdditions??[],sqlAdditionMethods=pins.sqlAdditionMethods??[],cardStatementTexts=pins.cardStatementTexts??{};
 test('reviewed SQL additions have explicit workload, allowed call method, ordinal, anchor and full statement rows',()=>{
-  validateSqlAdditions(sqlAdditions,sqlAdditionMethods);
+  validateSqlAdditions(sqlAdditions,sqlAdditionMethods);validateCardStatementTexts(cardStatementTexts);
 });
 test('archived SQL revisions name only workload keys and revise each statement once',()=>{
   for(const entry of sqlRevisions)assert.ok(workloadKeys.includes(entry.key)&&Number.isInteger(entry.index)&&
@@ -66,17 +67,18 @@ for(const base of [23,33])for(const mode of ['open','workload'])for(const eventT
     if(receiptWalkPins.records[key])observeReceiptWalkSQL(current.statements,'current');
     if(baseline) {
       const old=run(baseline.path,oldPath,mode,cell);reviseSQL(key,old.statements,sqlRevisions);
-      const reconstructed=compareWideTraces({key,current,archived:old,sqlAdditions,sqlAdditionMethods,receiptWalk:Boolean(receiptWalkPins.records[key])});
+      revisedArchives.push(old);
+      const reconstructed=compareWideTraces({key,current,archived:old,sqlAdditions,sqlAdditionMethods,cardStatementTexts,checkArchivedCardTexts:false,receiptWalk:Boolean(receiptWalkPins.records[key])});
       if(receiptWalkPins.records[key]) {
         observeReceiptWalkSQL(old.statements,'archived');archivedReceiptWalkTraces++;
         assert.deepEqual(summary(old),pins.records[key],'receipt cells retain their frozen archived pins');
       } else if(workloadKeys.includes(key)) {
-        assertWidePins(key,reconstructed,sqlAdditions,pins.records[key],sqlAdditionMethods);
+        assertWidePins(key,reconstructed,sqlAdditions,pins.records[key],sqlAdditionMethods,cardStatementTexts);
       } else {
         assert.deepEqual(summary(old),pins.records[key],'frozen opening pins come only from the archived baseline');
       }
     }
-    assert.equal(pins.revision,revision);assertWidePins(key,current,sqlAdditions,receiptWalkPins.records[key]??pins.records[key],sqlAdditionMethods);
+    assert.equal(pins.revision,revision);assertWidePins(key,current,sqlAdditions,receiptWalkPins.records[key]??pins.records[key],sqlAdditionMethods,cardStatementTexts);
     assert.ok(current.statements.every(entry=>entry.length===3&&Array.isArray(entry[2])),'SQL execution includes bound arguments');
     assert.equal(current.statements.some(([sql])=>/card_body_|card_operations_owner_action/.test(sql)),false,'no extended lineage scan');
     if(mode==='workload') {
@@ -123,4 +125,8 @@ test('receipt enumeration exemptions are a closed set over the listed traces',t=
   }
   t.diagnostic(JSON.stringify({exactReceiptEnumerationTexts:receiptWalkSQLTexts.size,archivedReceiptWalkTraces,
     observedCurrentTexts:observedReceiptWalkSQL.current.size,observedArchivedTexts:observedReceiptWalkSQL.archived.size}));
+});
+
+test('reviewed card statement texts equal the union of revised archived forgetting calls',()=>{
+  if(revisedArchives.length)assertArchivedCardStatementTexts(revisedArchives,cardStatementTexts);
 });

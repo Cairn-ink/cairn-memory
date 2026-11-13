@@ -2,8 +2,13 @@
 export const PRIVATE_CARD_SCHEMA_VERSION = 21;
 export const CARD_DEPENDENCY_LIMIT = 128;
 
-// Presence is stable for an open handle; absence may precede an explicit
-// layout installation on that same handle. Never memoize rows or a miss.
+// Cache only successful presence probes per handle, never rows or a miss.
+// installPrivateCards/installCardMemorySources run only in openDatabase startup,
+// offline upgradeLayoutBase, or engine maintenance's ensureLayout transaction.
+// Those installers finish before mutation work; none calls forgetting or
+// owner/namespace erasure. Safety/lineage migration seeds retained incarnation/
+// span facts only. No purge shares an uncommitted table-creation transaction.
+// Unsupported external DDL/rollback can make a later purge fail closed.
 const operationsTables = new WeakSet();
 
 // The caller owns the canonical forget/erasure transaction. Old attempts did

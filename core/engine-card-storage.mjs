@@ -373,9 +373,9 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       // Re-entrant or concurrent maintenance must not publish a second Card.
       const existing = db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id
         WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state='confirmed' AND c.revision=1
-        AND o.method='consolidate' AND json_extract(o.result,'$.clusterKey')=? LIMIT 1`)
-        .get(...boundary(ns), cluster.key);
-      if (existing && engineCardRevisionsInside(db, ns, existing)) return null;
+        AND o.method='consolidate' AND json_extract(o.result,'$.clusterKey')=?`)
+        .all(...boundary(ns), cluster.key);
+      if (existing.some(row => engineCardRevisionsInside(db, ns, row))) return null;
       // Publish and supersession share the canonical transaction. Preserve
       // identities/seals, but erase every older engine payload for this key.
       const superseded = db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o

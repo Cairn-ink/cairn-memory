@@ -95,7 +95,16 @@ Memory before the forget transaction commits, including stale Cards and older
 rows kept by rebuilds. It uses the ordinary Card purge path: the row becomes
 deleted, its revision advances, and its live source bindings are removed.
 Raw conversation deletion and episode forgetting run the same purge for each
-Memory their cascade terminally forgets. Review rejection also uses that Memory
+Memory their cascade terminally forgets. In a mixed cascade, terminal forgets
+run before receipt removal from surviving Memories: a shared engine Card is
+purged and unbound first, while other Cards of a surviving Memory are only
+staled by its revision change. This changes the order of Memory and Card effects
+in that mixed case; returned counts stay the same and Raw effects retain plan
+order. Episode forgetting without Raw roots still terminally forgets every linked
+Memory.
+A user can also delete an engine Card with `deleteKnowledgeCard`, which erases
+its title and body on both sealed and unsealed stores.
+Review rejection also uses that Memory
 forget path. On sealed stores, the Card transition requires a terminal Memory
 fact of the same action, its removed binding, the canonical engine receipt,
 the same namespace, exactly one revision and deletion effect, null text, and

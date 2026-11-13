@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { lineageFixture, ns, ok, receipt } from '../testing/card-lineage-fixture.mjs';
-import { request, splitRaw } from '../testing/raw-capture-fixtures.mjs';
+import { openMemoryCore } from '../index.mjs';
+import { interpretation } from '../testing/episode-capture-helpers.mjs';
+import { config as captureConfig, request, splitRaw } from '../testing/raw-capture-fixtures.mjs';
 import { createEngineCardStorage } from '../engine-card-storage.mjs';
 import { createPrivateCardStorage } from '../private-card-storage.mjs';
 import { beginContentWriteSafety } from '../content-write-safety.mjs';
@@ -61,7 +63,8 @@ function transition(f, fault) {
       if (fault !== 'operation does not forget the bound Memory') {
         const memory = fault === 'Memory not among removed bindings' ? f.other : f.memory;
         writeContentSuppressionInside(f.db, { namespace: ns, kind: 'memory', key: memory.id, reason: 'purge', actionId });
-        f.db.prepare('UPDATE memories SET deleted=1,content=NULL,revision=revision+1,updated_at=? WHERE id=?').run(timestamp, memory.id);
+        if (fault !== 'Memory fact without tombstone')
+          f.db.prepare('UPDATE memories SET deleted=1,content=NULL,revision=revision+1,updated_at=? WHERE id=?').run(timestamp, memory.id);
       }
       if (fault === 'wrong namespace' || fault === 'wrong owner') f.db.prepare(
         `UPDATE card_effects SET ${fault === 'wrong owner' ? 'owner_id' : 'project_id'}=? WHERE entity_id=? AND kind='card_deleted'`)
@@ -111,8 +114,10 @@ test('sealed purge verifier accepts a terminal bound Memory without a forget met
 for (const fault of ['wrong namespace', 'wrong owner', 'multi-step revision', 'surviving binding', 'seal change',
   'two deletion effects', 'effect for another entity', 'missing purge fact', 'mismatched purge fact',
   'operation does not forget the bound Memory', 'an authored Card', 'non-null text', 'other column edited',
-  'no engine receipt', 'Memory not among removed bindings']) test(`sealed purge verifier rejects ${fault}`, async t => {
-  const f = await setup(t, fault === 'an authored Card'), before = contentSafetyInventory(f.db);
+  'no engine receipt', 'Memory not among removed bindings', 'Memory fact without tombstone', 'already deleted Memory']) test(`sealed purge verifier rejects ${fault}`, async t => {
+  const f = await setup(t, fault === 'an authored Card');
+  if (fault === 'already deleted Memory') f.db.prepare('UPDATE memories SET deleted=1,content=NULL,revision=revision+1 WHERE id=?').run(f.memory.id);
+  const before = contentSafetyInventory(f.db);
   assert.throws(() => transition(f, fault), error => error.code === 'evidence_unavailable');
   assert.equal(contentSafetyInventory(f.db), before, 'the entire write rolls back');
 });
@@ -184,23 +189,150 @@ test('sealed Raw conversation deletion purges bound engine text and preserves ot
   assert.equal(ok(f.call('getCard', { cardId: row.id })).card, null);
 });
 
-test('supersession excludes a current row even when the first rev-one match is stale', async t => {
+for (const order of ['stale first', 'current first']) test(`publication preserves one current Card per topic with ${order}`, async t => {
   const f = await setup(t), current = publish(f, [f.memory], 'moc:synthetic-second-route');
   f.db.prepare("UPDATE card_operations SET result=json_set(result,'$.clusterKey',?) WHERE action_id=?")
     .run('moc:synthetic-purge-topic', current.id);
-  // Represent two rev-one rows sharing a route, with the first now invalid.
-  // Force that unordered LIMIT 1 result so this cannot pass by row order luck.
   f.db.prepare('UPDATE card_memory_bindings SET memory_revision=memory_revision+1 WHERE card_id=?').run(f.card.id);
   const stale = f.row(f.card.id), retained = f.row(current.id), s = storage(f);
   const memories = s.snapshot(ns, 512, () => {}).memories.filter(m => m.id === f.memory.id);
   let selected = 0;
   const result = observe(f.db, (sql, method, _args, value) => {
-    if (method === 'get' && sql.startsWith('SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id') && sql.includes('LIMIT 1')) {
-      selected++; return stale;
+    if (sql.startsWith('SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id') &&
+        sql.includes("c.revision=1") && sql.includes("$.clusterKey")) {
+      selected++;
+      const rows = order === 'stale first' ? [stale, retained] : [retained, stale];
+      // Exercise both the old LIMIT/get implementation and the complete lookup.
+      return method === 'get' ? rows[0] : rows;
     }
     return value;
   }, () => s.commit(ns, { key: 'moc:synthetic-purge-topic', memories }, { body: 'Synthetic replacement body.' }, timestamp, () => {}));
-  assert.equal(selected, 1); assert.equal(result.supersededCount, 1);
-  assert.equal(f.row(stale.id).body, null);
-  assert.deepEqual(f.row(current.id), retained, 'the current row is excluded from the purge set');
+  assert.equal(selected, 1); assert.equal(result, null);
+  assert.deepEqual(f.row(stale.id), stale); assert.deepEqual(f.row(current.id), retained);
+  const rows = f.db.prepare(`SELECT c.id FROM private_cards c JOIN card_operations o ON o.target_id=c.id
+    WHERE c.state='confirmed' AND c.revision=1 AND o.method='consolidate' AND json_extract(o.result,'$.clusterKey')=?
+      AND NOT EXISTS(SELECT 1 FROM card_memory_bindings b JOIN memories m ON m.id=b.memory_id
+        WHERE b.card_id=c.id AND b.memory_revision!=m.revision)`).all('moc:synthetic-purge-topic');
+  assert.deepEqual(rows.map(row => row.id), [current.id], 'exactly one current Card remains');
+});
+
+for (const extra of [false, true]) test(`sealed user Card deletion ${extra ? 'refuses a second undeclared engine Card' : 'erases its declared engine Card'}`, async t => {
+  const f = await setup(t), second = extra ? publish(f, [f.other], 'moc:synthetic-other-target') : null;
+  const before = contentSafetyInventory(f.db);
+  let injected = 0;
+  if (extra) registerContentWriteGuard((db, operation) => {
+    const guard = beginContentWriteSafety(db, operation); if (!guard) return guard;
+    return { ...guard, validate(result) {
+      injected++;
+      createPrivateCardStorage({ db, identity: f.identity, ready() {} }).engineCardWriters()
+        .purge(ns, db.prepare('SELECT * FROM private_cards WHERE id=?').get(second.id), 'synthetic-undeclared-deletion');
+      guard.validate(result);
+    } };
+  });
+  let result;
+  try { result = f.call('deleteKnowledgeCard', { actionId: 'synthetic-user-deletion', cardId: f.card.id, expectedRevision: f.card.revision }); }
+  finally { registerContentWriteGuard(beginContentWriteSafety); }
+  if (extra) {
+    assert.equal(injected, 1); assert.equal(result.ok, false); assert.equal(result.error.code, 'evidence_unavailable');
+    assert.equal(contentSafetyInventory(f.db), before);
+    assert.equal(f.row(second.id).state, 'confirmed');
+  } else {
+    assert.equal(ok(result).id, f.card.id);
+    const row = f.row(f.card.id); assert.equal(row.state, 'deleted'); assert.equal(row.title, null); assert.equal(row.body, null);
+  }
+});
+
+async function linkedEpisode(f, memories, sessionId = 'synthetic-shared-root') {
+  const peer = openMemoryCore({ path: f.path, ...captureConfig('episode'), model: { contextWindow: 8192,
+    countTokens: () => 1, interpretEpisode: interpretation } });
+  try {
+    const captured = ok(await peer.capture({ namespace: ns, client: 'claude-code', sessionId, eventId: 'synthetic-episode-event',
+      episodeContext: { clientLabel: 'Synthetic', generation: 'initial', origin: 'ordinary' },
+      messages: [{ id: 'synthetic-episode-message', role: 'user', content: 'Synthetic episode evidence.', occurredAt: null }] }));
+    const id = captured.episode.id;
+    for (const memory of memories) {
+      const ids = f.db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(memory.id).map(row => row.id);
+      f.db.prepare('INSERT INTO episode_memory_links VALUES(?,?,?,?,?,?)')
+        .run('synthetic-link-' + memory.id, id, memory.id, 'synthetic-episode-event', memory.revision, JSON.stringify(ids));
+    }
+    return f.db.prepare('SELECT * FROM session_episodes WHERE id=?').get(id);
+  } finally { peer.close(); }
+}
+for (const route of ['deleteConversation', 'forgetEpisode']) test(`sealed mixed ${route} purges shared engine Cards before retaining sibling receipts`, async t => {
+  let items = ['Synthetic shared evidence first', 'Synthetic shared evidence second'];
+  const f = await lineageFixture(t, { base: 33, raw: true, options: { model: { contextWindow: 8192, countTokens: () => 1,
+    extract: () => ({ items: items.map(content => ({ content, kind: 'fact', confidence: .8, sourceIndices: [0] })) }),
+  } } });
+  const capture = async (sessionId, eventId) => ok(await f.core.captureRaw(request(splitRaw('Synthetic retained root ' + eventId, { id: eventId })[0],
+    { namespace: ns, client: 'claude-code', sessionId, eventId })));
+  const shared = await capture('synthetic-shared-root', 'synthetic-shared-event');
+  const memories = ok(shared.interpretation).admission.memories.toSorted((a, b) => a.id < b.id ? -1 : 1);
+  assert.equal(memories.length, 2);
+  const [first, second] = memories;
+  items = [f.db.prepare('SELECT content FROM memories WHERE id=?').get(first.id).content];
+  const independent = await capture('synthetic-independent-root', 'synthetic-independent-event');
+  assert.equal(ok(independent.interpretation).admission.memories[0].id, first.id);
+  // Keep the Card's chosen receipt on the shared root even if both captures
+  // received the same millisecond timestamp and UUID ordering differs.
+  f.db.prepare('UPDATE receipts SET created_at=? WHERE memory_id=? AND event_id=?')
+    .run('2026-01-01T00:00:00.000Z', first.id, 'synthetic-shared-event');
+  const ma = ok(f.core.get({ namespace: ns, memoryId: first.id })).memory, mb = second;
+  assert.ok(ma.id < mb.id, 'the retained Memory sorts before the terminal Memory');
+  const card = publish(f, [ma, mb]), survivor = publish(f, [ma], 'moc:synthetic-surviving-sibling');
+  const before = f.row(survivor.id), previous = f.row(card.id);
+  assert.equal(f.db.prepare('SELECT r.event_id FROM card_memory_bindings b JOIN receipts r ON r.id=b.receipt_id WHERE b.card_id=? AND b.memory_id=?')
+    .get(survivor.id, ma.id).event_id, 'synthetic-shared-event');
+  const raw = f.db.prepare('SELECT * FROM raw_conversations WHERE id=?').get(shared.raw.conversationId);
+  let result;
+  if (route === 'deleteConversation') result = ok(f.core.deleteConversation({ namespace: ns, conversationId: raw.id,
+    expectedRevision: raw.revision, actionId: 'synthetic-mixed-delete' }));
+  else {
+    const episode = await linkedEpisode(f, [ma, mb]);
+    result = ok(f.core.forgetEpisode({ namespace: ns, episodeId: episode.id, expectedRevision: episode.revision }));
+  }
+  assert.equal(route === 'deleteConversation' ? result.forgottenMemories : result.forgotten, route === 'deleteConversation' ? 1 : true);
+  if (route === 'deleteConversation') { assert.equal(result.retainedMemories, 1); assert.equal(result.removedReceipts, 2); }
+  const row = f.row(card.id); assert.equal(row.state, 'deleted'); assert.equal(row.revision, previous.revision + 1);
+  assert.equal(row.title, null); assert.equal(row.body, null);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM card_memory_bindings WHERE card_id=?').get(card.id).n, 0);
+  const retained = ok(f.core.get({ namespace: ns, memoryId: ma.id }));
+  assert.equal(retained.memory.revision, ma.revision + 1); assert.equal(retained.receipts.length, 1);
+  assert.equal(retained.receipts[0].eventId, 'synthetic-independent-event');
+  assert.equal(f.db.prepare('SELECT deleted FROM memories WHERE id=?').get(mb.id).deleted, 1);
+  const stale = f.row(survivor.id); assert.equal(stale.state, 'confirmed'); assert.equal(stale.revision, before.revision + 1);
+  assert.equal(stale.title, before.title); assert.equal(stale.body, before.body);
+  const effects = f.db.prepare('SELECT kind,entity_id FROM card_effects WHERE entity_id IN (?,?) ORDER BY ordinal').all(card.id, survivor.id);
+  assert.deepEqual(effects.map(row => [row.kind, row.entity_id]), [['card_deleted', card.id], ['evidence_invalidated', survivor.id]]);
+});
+
+test('sealed direct episode forgetting purges shared engine text once across linked Memories', async t => {
+  const f = await setup(t), second = admit(f, 'direct-episode-second');
+  // Direct episode forgetting terminally forgets every linked Memory, even one
+  // with an additional receipt. It does not perform the Raw-root receipt plan.
+  const ma = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic purge evidence bound', kind: 'fact' },
+    receipts: [receipt('direct-independent')] })).memory;
+  const shared = publish(f, [ma, second], 'moc:synthetic-direct-episode');
+  const episode = await linkedEpisode(f, [ma, second]);
+  assert.equal(f.db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_deletion_actions'").get(), undefined);
+  assert.equal(ok(f.core.forgetEpisode({ namespace: ns, episodeId: episode.id, expectedRevision: episode.revision })).forgotten, true);
+  for (const memory of [ma, second]) assert.equal(f.db.prepare('SELECT deleted FROM memories WHERE id=?').get(memory.id).deleted, 1);
+  const row = f.row(shared.id); assert.equal(row.state, 'deleted'); assert.equal(row.revision, 2);
+  assert.equal(row.title, null); assert.equal(row.body, null);
+});
+
+test('sealed rejection drops held review work and purges the rejected Memory engine Card', async t => {
+  const f = await lineageFixture(t, { options: { decisionReview: 'required-v1' } });
+  const memory = admit(f, 'reviewed-bound'), other = admit(f, 'reviewed-other'), card = publish(f, [memory, other]);
+  const otherCard = publish(f, [other], 'moc:synthetic-review-sibling'), before = f.row(otherCard.id);
+  // Seed a previously bound source that now awaits review; the terminal path
+  // must handle existing bindings even though new publication excludes it.
+  f.db.prepare("UPDATE memories SET review_state='awaiting' WHERE id=?").run(memory.id);
+  f.db.prepare(`INSERT INTO confirmation_conflicts(memory_id,memory_revision,target_id,target_revision,source)
+    VALUES(?,?,?,?,?)`).run(memory.id, memory.revision, other.id, other.revision, 'synthetic-review');
+  const result = ok(f.core.reject({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision, actionId: 'synthetic-reject' }));
+  assert.equal(result.forgotten, true); assert.equal(result.reviewEffects.conflicts.length, 1);
+  assert.equal(result.reviewEffects.conflicts[0].status, 'dropped');
+  const row = f.row(card.id); assert.equal(row.state, 'deleted'); assert.equal(row.title, null); assert.equal(row.body, null);
+  assert.equal(f.db.prepare('SELECT deleted FROM memories WHERE id=?').get(memory.id).deleted, 1);
+  assert.deepEqual(f.row(otherCard.id), before, 'review effects do not revise the other Memory or its Card');
 });

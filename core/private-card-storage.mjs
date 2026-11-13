@@ -27,7 +27,13 @@ const size = value => Buffer.byteLength(JSON.stringify({ ok: true, value }), 'ut
 const attribution = () => ({ sourceAuthor: null, claimant: null, subject: null,
   eventTime: null, commitment: 'unknown', status: 'unassessed' });
 
-// Cache only a successful table probe, independently for each open handle.
+// Cache only successful presence probes per handle, never rows or a miss.
+// installPrivateCards/installCardMemorySources run only in openDatabase startup,
+// offline upgradeLayoutBase, or engine maintenance's ensureLayout transaction.
+// Those installers finish before mutation work; none calls forgetting or
+// owner/namespace erasure. Safety/lineage migration seeds retained incarnation/
+// span facts only. No purge shares an uncommitted table-creation transaction.
+// Unsupported external DDL/rollback can make a later purge fail closed.
 const memoryBindingTables = new WeakSet();
 
 // The caller owns the forget/suppression transaction. Do not use serving

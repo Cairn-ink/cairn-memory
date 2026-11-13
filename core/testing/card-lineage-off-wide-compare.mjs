@@ -36,6 +36,52 @@ export const purgeAdditionSQL = ([sql]) =>
   /^SELECT\b.*\bFROM private_cards\b.*\bJOIN card_operations\b/i.test(sql) ||
   /^DELETE FROM card_operations\b/i.test(sql);
 
+// This set describes source-forgetting calls, independently of the reviewed
+// subset of methods carrying ledger rows in a particular workload.
+export const forgettingMethods = new Set(['forget', 'deleteConversation', 'forgetEpisode', 'reject']);
+const identifier = '(?:"[^"]+"|`[^`]+`|\\[[^\\]]+\\]|[a-z_][a-z_0-9]*)';
+const qualifiedIdentifier = `(${identifier}(?:\\s*\\.\\s*${identifier})?)`;
+const cardTable = name => /^(?:private_cards|card_[a-z_]+)$/i.test(name);
+const tableName = name => name.split(/\s*\.\s*/).at(-1).replace(/^["`\[]|["`\]]$/g, '');
+const cardWrite = new RegExp(`\\b(?:INSERT(?:\\s+OR\\s+\\w+)?\\s+INTO|UPDATE(?:\\s+OR\\s+\\w+)?|DELETE\\s+FROM)\\s+${qualifiedIdentifier}`, 'i');
+const schemaRead = new RegExp(`\\b(?:FROM|JOIN)\\s+${qualifiedIdentifier}`, 'gi');
+const cardJoin = new RegExp(`\\bJOIN\\s+${qualifiedIdentifier}`, 'gi');
+export function cardFamilySQL([sql, , bindings = []]) {
+  const write = cardWrite.exec(sql);
+  if (write && cardTable(tableName(write[1]))) return true;
+  if (!/\bSELECT\b/i.test(sql)) return false;
+  if ([...sql.matchAll(cardJoin)].some(match => tableName(match[1]).toLowerCase() === 'card_operations')) return true;
+  return [...sql.matchAll(schemaRead)].some(match => /^sqlite_(?:master|schema)$/i.test(tableName(match[1]))) &&
+    ([...sql.matchAll(/['"`]((?:private_cards|card_[a-z_]+))['"`]/gi)].length > 0 || bindings.some(value => typeof value === 'string' && cardTable(value)));
+}
+
+export function validateCardStatementTexts(texts = {}) {
+  assert.ok(texts && typeof texts === 'object' && !Array.isArray(texts), 'cardStatementTexts is a method map');
+  for (const [method, list] of Object.entries(texts)) {
+    assert.ok(forgettingMethods.has(method) && Array.isArray(list) && list.every(sql => typeof sql === 'string' && sql.length > 0),
+      'reviewed card texts are exact nonempty strings for forgetting methods');
+    assert.deepEqual(list, [...new Set(list)].sort(), 'reviewed card texts are sorted and unique');
+  }
+}
+
+export function archivedCardStatementTexts(archived) {
+  checkCallRanges(archived);
+  return Object.fromEntries([...forgettingMethods].map(method => [method, [...new Set(archived.calls
+    .filter(call => call[0] === method && call.length === 4).flatMap(call => callStatements(archived, call))
+    .filter(cardFamilySQL).map(([sql]) => sql))].sort()]));
+}
+
+// A single fixture list covers all workload traces, so the gate checks their
+// archive union after comparing the individual traces. Pure comparisons default
+// to checking their one supplied archive, including unused list entries.
+export function assertArchivedCardStatementTexts(archives, texts = {}) {
+  validateCardStatementTexts(texts);
+  const observed = archives.map(archivedCardStatementTexts);
+  for (const method of forgettingMethods) assert.deepEqual(
+    [...new Set(observed.flatMap(map => map[method]))].sort(), texts[method] ?? [],
+    `${method} reviewed card texts equal the revised archive`);
+}
+
 // ordinal is one-based among ALL calls of method, including refusals; after is
 // zero-based within that revised archived call. Allowed methods are fixture data.
 // Entries sharing an anchor are inserted in ledger order. Probes are individual
@@ -127,9 +173,9 @@ export function reconstructWideTrace(key, archived, entries = [], sqlAdditionMet
 // This check needs only the current trace. Select the purge family over the
 // entire trace, compare full rows in their reviewed calls, and reject leftovers.
 // It also returns the precise positions to subtract for receipt count checks.
-export function currentAdditionSummary(key, current, entries = [], sqlAdditionMethods = []) {
-  validateSqlAdditions(entries, sqlAdditionMethods); checkCallRanges(current);
-  const wanted = orderedEntries(key, entries), positions = new Set(), calls = [];
+export function currentAdditionSummary(key, current, entries = [], sqlAdditionMethods = [], cardStatementTexts = {}) {
+  validateSqlAdditions(entries, sqlAdditionMethods); validateCardStatementTexts(cardStatementTexts); checkCallRanges(current);
+  const wanted = orderedEntries(key, entries), positions = new Set(), listedPositions = new Set(), calls = [];
   const texts = new Set(entries.map(entry => entry.statement[0]));
   const isAddition = row => purgeAdditionSQL(row) || texts.has(row[0]);
   const ordinals = new Map();
@@ -137,31 +183,60 @@ export function currentAdditionSummary(key, current, entries = [], sqlAdditionMe
   for (const call of current.calls) {
     const method = call[0], ordinal = (ordinals.get(method) ?? 0) + 1;
     ordinals.set(method, ordinal);
-    const expected = wanted.filter(entry => entry.method === method && entry.ordinal === ordinal), rows = [];
+    const expected = wanted.filter(entry => entry.method === method && entry.ordinal === ordinal), rows = [], indices = [];
     if (call.length !== 4) {
       assert.equal(expected.length, 0, 'additions require complete call offsets');
       continue;
     }
-    for (let index = call[2]; index < call[3]; index++) if (isAddition(current.statements[index])) {
-      rows.push(current.statements[index]); positions.add(index);
+    for (let index = call[2]; index < call[3]; index++) {
+      const statement = current.statements[index];
+      const listed = forgettingMethods.has(method) && (cardStatementTexts[method] ?? []).includes(statement[0]);
+      if (listed) listedPositions.add(index);
+      if (isAddition(statement) && (!listed || expected.some(entry => entry.statement[0] === statement[0]))) {
+        rows.push(statement); positions.add(index); indices.push(index);
+      }
     }
-    if (rows.length) assert.ok(sqlAdditionMethods.includes(method), `${method} carries purge SQL but is not a reviewed addition method`);
+    if (rows.length) {
+      assert.ok(sqlAdditionMethods.includes(method), `${method} carries purge SQL but is not a reviewed addition method`);
+      assert.ok(forgettingMethods.has(method), `${method} carries purge SQL outside a forgetting call`);
+    }
     assert.deepEqual(rows, expected.map(entry => entry.statement), `${method} ${ordinal} has exactly its ledger rows and bindings`);
+    // Match each anchor group as one contiguous block ending at the canonical
+    // tombstone. Receipt batching can shift its absolute index within the call.
+    for (let offset = 0; offset < expected.length;) {
+      let end = offset + 1;
+      while (end < expected.length && expected[end].after === expected[offset].after) end++;
+      for (let i = offset + 1; i < end; i++) assert.equal(indices[i], indices[i - 1] + 1, 'current purge anchor group is contiguous');
+      const next = indices[end - 1] + 1;
+      assert.ok(next < call[3], 'current purge anchor stays inside its call');
+      assert.equal(current.statements[next]?.[0],
+        'UPDATE memories SET content = NULL, deleted = 1, revision = revision + 1, updated_at = ? WHERE id = ?',
+        'current purge anchor precedes the canonical Memory tombstone');
+      offset = end;
+    }
+    if (forgettingMethods.has(method)) for (let index = call[2]; index < call[3]; index++) {
+      const statement = current.statements[index];
+      // Known pins-mode limit: another copy of an already listed exact text
+      // passes this classifier. Archive exact comparison and the workload SQL
+      // hash still catch it; this reviewed list intentionally has no counts.
+      if (cardFamilySQL(statement) && !positions.has(index)) assert.ok((cardStatementTexts[method] ?? []).includes(statement[0]),
+        `${method} has an unreviewed card-family statement`);
+    }
     consumed += expected.length;
     if (rows.length) calls.push({ method, ordinal, statements: rows.map(statementSummary) });
   }
   assert.equal(consumed, wanted.length, 'no unused current-trace ledger entry');
   current.statements.forEach((row, index) => {
-    if (isAddition(row)) assert.ok(positions.has(index), 'no purge addition outside its reviewed call');
+    if (isAddition(row)) assert.ok(positions.has(index) || listedPositions.has(index), 'no purge addition outside its reviewed call');
   });
   const effect = { callCount: calls.length, calls: calls.sort(compareAnchors) };
   assert.deepEqual(effect, ledgerAdditionSummary(key, entries, sqlAdditionMethods), 'current additions have the ledger summary');
   return { effect, positions };
 }
 
-export function assertWidePins(key, current, entries, pinned, sqlAdditionMethods = []) {
+export function assertWidePins(key, current, entries, pinned, sqlAdditionMethods = [], cardStatementTexts = {}) {
   const actual = summary(current);
-  const effect = currentAdditionSummary(key, current, entries, sqlAdditionMethods).effect;
+  const effect = currentAdditionSummary(key, current, entries, sqlAdditionMethods, cardStatementTexts).effect;
   if (workloadKeys.includes(key)) {
     if (effect.callCount || Object.hasOwn(pinned ?? {}, 'sqlAdditions')) {
       actual.sqlAdditions = effect;
@@ -184,9 +259,11 @@ export function compareWideTables(current, archived, removedRows = []) {
   assert.deepEqual(current, expected, 'every table population, minus only explicitly reviewed rows');
 }
 
-export function compareWideTraces({ key, current, archived, sqlAdditions = [], sqlAdditionMethods = [], receiptWalk = false }) {
+export function compareWideTraces({ key, current, archived, sqlAdditions = [], sqlAdditionMethods = [], cardStatementTexts = {}, checkArchivedCardTexts = true, receiptWalk = false }) {
+  validateCardStatementTexts(cardStatementTexts);
+  if (checkArchivedCardTexts) assertArchivedCardStatementTexts([archived], cardStatementTexts);
   const reconstructed = reconstructWideTrace(key, archived, sqlAdditions, sqlAdditionMethods);
-  const { positions } = currentAdditionSummary(key, current, sqlAdditions, sqlAdditionMethods);
+  const { positions } = currentAdditionSummary(key, current, sqlAdditions, sqlAdditionMethods, cardStatementTexts);
   assert.deepEqual(current.effectWitnesses, archived.effectWitnesses, 'complete effect witnesses, including rolled-back writes');
   compareWideTables(current.dump, archived.dump, []);
   if (!receiptWalk) {

@@ -437,8 +437,19 @@ export function beginContentWriteSafety(db, operation) {
       // Their actual terminal Memory fact selects validation without expanding
       // the method classification or granting authority to ordinary writes.
       sourceOperation ||= terminalFacts.some(f=>f.kind==='memory'&&f.match_mode==='incarnation');
-      if(!sourceOperation&&operation.method!=='maintainCards'&&canonical.some(c=>
-        c.table==='private_cards'&&isEngineCard(c.row.id)&&c.row.state==='deleted'))fail('evidence_unavailable');
+      // Only this operation's declared terminal Card may be user-deleted.
+      // Match its canonical acknowledgement, scoped fact and request claim;
+      // a second purge fact cannot declare another target for the operation.
+      const declaredCardDeletion=row=>operation.method==='deleteKnowledgeCard'&&
+        CONTENT_TERMINAL_FIELDS[operation.method]==='private_cards.id'&&
+        row.id===result?.[CONTENT_TERMINAL_ACK_FIELDS[operation.method]]&&
+        terminalFacts.some(f=>f.kind==='card'&&f.match_mode==='incarnation'&&
+          contentSuppressionTargetMatches(f,namespace(row),{kind:'card',key:row.id})&&
+          canonical.some(c=>c.table==='card_body_authorizations'&&!c.old&&c.row.method===operation.method&&
+            c.row.request_target===row.id&&c.row.host_action_id===f.action_id&&
+            JSON.stringify(boundary(namespace(c.row)))===JSON.stringify(boundary(namespace(row)))));
+      if((!sourceOperation||operation.method==='deleteKnowledgeCard')&&operation.method!=='maintainCards'&&canonical.some(c=>
+        c.table==='private_cards'&&isEngineCard(c.row.id)&&c.row.state==='deleted'&&!declaredCardDeletion(c.row)))fail('evidence_unavailable');
       if(sourceOperation) {
         // Audit removals have no surviving row for generic reference walking.
         // Validate effects even when the source writer leaves its Card untouched.
