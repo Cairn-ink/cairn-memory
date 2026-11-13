@@ -29,7 +29,7 @@ test('L01 all eight asset/context/method capability combinations compose',()=>{
 test('L01 context wrapper preserves other legal options and rejects unknown/accessor options',()=>{
   const authority={authorize(){return null;},isCurrent(){return null;}},contextRead={version:'context-read-v1',authority};
   const core=openMemoryCore({path:':memory:',contextRead,captureQualification:'source-bound-v2',
-    captureQualifiedDuplicates:'append-matching-evidence-v1',captureDeadlineMs:1000,sourceCandidatePolicy:'bounded-keyset-v1'});
+    captureQualifiedDuplicates:'append-matching-evidence-v1',captureDeadlineMs:1000});
   core.close();
   assert.throws(()=>openMemoryCore({path:':memory:',contextRead,unknown:true}),{code:'invalid_input'});
   let inspected=false;

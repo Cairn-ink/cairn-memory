@@ -1,5 +1,11 @@
 # Automatic source-backed rationale and MCP evidence — R2/R3
 
+> Candidate discovery in this plan is superseded by the default recency keyset
+> scan in [defaults](../defaults.md): 1,024-row floor, fixed 400 ms budget,
+> 20,000-row cap and score/ID top-1,024 retention for all recall modes.
+> The former candidate-policy constructor option is removed. Historical
+> observations and other contracts below remain records of their original version.
+
 Base `fd9786326fbbc666a00da76ff02c6af3956b0a57` after authorized merges #70/#71.
 Goal: a submitted conversation can create proposed rationale links without
 hand-wired memory IDs, and recall can carry linked evidence into ranking and

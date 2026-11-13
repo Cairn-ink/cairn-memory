@@ -280,14 +280,10 @@ test('CF1 ordered awaiting replacement preserves active lineage until confirmati
   assert.equal(f.db.prepare('SELECT count(*) n FROM memory_supersessions').get().n, 0);
 });
 
-test('CF1 bounded source scans exclude awaiting with both source candidate policies', async t => {
+test('CF1 default bounded source scans exclude awaiting', async t => {
   const f = fixture(t); ok(await f.core.capture(captureInput()));
-  for (const sourceCandidatePolicy of [undefined, 'bounded-keyset-v1']) {
-    const core = sourceCandidatePolicy ? openMemoryCore({ path: f.path, model: f.model, sourceCandidatePolicy }) : f.core;
-    if (core !== f.core) f.ws.defer(() => core.close());
-    const result = ok(await core.recall({ readSet: [ns], query: 'I chose A', contextMode: 'source-evidence', selectionMode: 'bounded-source-scan' }));
-    assert.deepEqual(result.memories, []);
-  }
+  const result = ok(await f.core.recall({ readSet: [ns], query: 'I chose A', contextMode: 'source-evidence', selectionMode: 'bounded-source-scan' }));
+  assert.deepEqual(result.memories, []);
 });
 
 for (const outcome of ['confirm', 'reject']) test(`CF1 simultaneous process ${outcome} retries share one durable result`, async t => {
