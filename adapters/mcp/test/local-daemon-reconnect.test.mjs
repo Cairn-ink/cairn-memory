@@ -1,16 +1,34 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { Client } from '@modelcontextprotocol/client';
+import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { openMemoryCore } from '../../../core/contract.mjs';
+import { createCairnServer } from '../server.mjs';
 import { workspace, until, ok, ns } from './local-daemon-support.mjs';
+import { streams, counter, call as sdkCall } from './local-shared-support.mjs';
 
 test('A5 idle reconnect replays initialize and initialized only without duplicate replies', { timeout: 30000 }, async t => {
   const w = await workspace(t), a = w.forward(); a.release(); const first = await w.connect(a);
-  const memory = ok(await a.tool('remember_memory', { content: 'synthetic cobalt telescope no replay', kind: 'fact' })).memory;
+  const content = 'synthetic cobalt telescope no replay';
+  // Admission returns identity/revision only; inspect returns the full Memory.
+  const memory = ok(await a.tool('remember_memory', { content, kind: 'fact' })).memory;
   const initializeReplies = a.lines.filter(m => m.result?.protocolVersion).length;
   process.kill(first.owner.pid, 'SIGKILL');
   await until(() => a.messages.filter(m => m.kind === 'connected').length === 2, 'A5 must reconnect without active tools');
   const inspected = ok(await a.tool('inspect_memory', { memoryId: memory.id }));
-  assert.ok(JSON.stringify(inspected).includes(memory.content));
+  assert.equal(inspected.memory.content, content);
+  assert.equal(inspected.memory.id, memory.id);
+  assert.equal(inspected.memory.revision, memory.revision);
+  // The ordinary single-connection server is the result-shape oracle for the
+  // same inspect call against the same durable record, including receipts.
+  const server = createCairnServer({ path: w.path, namespace: ns, contextCounter: counter });
+  const [serverSide, clientSide] = streams(), direct = new Client({ name: 'synthetic-reconnect-oracle', version: '1' });
+  try {
+    await server.connect(new StdioServerTransport(serverSide, serverSide));
+    await direct.connect(new StdioServerTransport(clientSide, clientSide), { prior: { kind: 'legacy' } });
+    assert.deepEqual(inspected, ok(await sdkCall(direct, 'inspect_memory', { memoryId: memory.id })),
+      'reconnected daemon must return the complete ordinary inspect result');
+  } finally { await direct.close(); await server.close(); serverSide.destroy(); clientSide.destroy(); }
   assert.equal(a.lines.filter(m => m.result?.protocolVersion).length, initializeReplies, 'private replay must suppress duplicate initialize response');
   assert.equal(a.lines.filter(m => m.error?.message === 'daemon_transport').length, 0, 'settled tool must not become in-flight on reconnect');
 });
