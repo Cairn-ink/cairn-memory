@@ -75,6 +75,7 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
           if (!busyResult(value)) { checkIdle('return'); return { value }; }
           if (state.commits) return { value };
         } catch (error) {
+          checkIdle('failure');
           if (!busy(error)) throw error;
           if (state.commits) throw error;
         }
