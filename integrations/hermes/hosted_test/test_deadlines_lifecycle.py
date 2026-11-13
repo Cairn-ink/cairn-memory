@@ -14,7 +14,8 @@ def test_recall_trickle_releases_worker_and_allows_next_recall(install, cloud, m
 
     def track_worker(*args, **kwargs):
         worker = spawn(*args, **kwargs)
-        workers.append(worker)
+        if kwargs.get("name") == "cairn-recall":
+            workers.append(worker)
         return worker
 
     monkeypatch.setattr(hosted, "spawn_context_thread", track_worker)

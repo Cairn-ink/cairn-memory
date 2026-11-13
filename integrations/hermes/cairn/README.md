@@ -44,6 +44,8 @@ one recall in flight per conversation. Each prefetch request has a total deadlin
 of the cap plus 0.5 seconds. Connections are reused within a session.
 Post-turn prefetch is disabled so there is only one recall per non-trivial
 turn against the daily quota.
+Automatic recall, including a cached late result, is withheld while the hosted account is paused or its enforced pause state cannot be verified within the same prefetch cap.
+Explicit remember, recall and forget tools remain available while automatic memory is paused, subject to server authorization.
 
 What leaves the device:
 
