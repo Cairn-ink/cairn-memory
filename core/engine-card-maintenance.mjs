@@ -42,7 +42,8 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
     return result;
   }
   async function maintain(input) {
-    object(input, ['namespace', 'budget']); const ns = cardNamespace(input.namespace);
+    object(input, ['namespace', 'budget', 'rawSpans']); const ns = cardNamespace(input.namespace);
+    if (Object.hasOwn(input, 'rawSpans') && typeof input.rawSpans !== 'boolean') fail('invalid_input');
     const budget = input.budget ?? {}; object(budget, ['maxItems', 'maxMs']);
     const maxItems = budget.maxItems ?? ENGINE_CARD_LIMITS.memories, maxMs = budget.maxMs ?? 1000;
     if (!Number.isSafeInteger(maxItems) || maxItems < 1 || maxItems > ENGINE_CARD_LIMITS.memories ||
@@ -154,8 +155,8 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
         for (const cluster of eligible.values()) {
           check();
           if (cluster.memories.length > ENGINE_CARD_LIMITS.sources) { result.state = 'source_limit'; continue; }
-          let rawSpans, rawTimer;
-          try {
+          let rawSpans = [], rawTimer;
+          if (input.rawSpans === true) try {
             rawSpans = await Promise.race([storage.rawSpans(ns, cluster.memories, check),
               new Promise((_, reject) => { rawTimer = setTimeout(() => reject(Object.assign(Error('deadline'),
                 { code: 'model_timeout' })), deadline.remainingMs()); })]);
