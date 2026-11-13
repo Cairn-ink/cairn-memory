@@ -14,7 +14,7 @@ import { isAbsolute, dirname } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { performance } from 'node:perf_hooks';
-import { bindCommitConnection, dispatchCommit, hasCommitDispatcher, recordCommit } from './commit-dispatch.mjs';
+import { bindCommitConnection, dispatchCommit, hasCommitDispatcher, recordCommit, withSynchronousCommitScope, assertCommitWriteRouted } from './commit-dispatch.mjs';
 import { readTransaction, isConnectionDiscarded } from './database.mjs';
 import { cardNamespace } from './private-card-input.mjs';
 import { cardApplicabilityInside } from './private-evidence-schema.mjs';
@@ -262,6 +262,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     checkFile();
     const m = activeMetrics, started = performance.now();
     let clock = performance.now();
+    assertCommitWriteRouted(side, 'context-sidecar.write');
     side.exec('BEGIN IMMEDIATE');
     if (m) m.beginMs += performance.now() - clock;
     try {
@@ -333,7 +334,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       if (checks.some(sql => side.prepare(sql).get(...args))) unavailable('corrupt');
     });
   }
-  try { open(); }
+  try { withSynchronousCommitScope('sidecar create or repair at open', open); }
   catch (error) {
     try { side?.close(); } catch { /* Preserve the original refusal. */ }
     const repairable = ['wrong_store', 'incompatible', 'corrupt'].includes(error.reason) ||
@@ -347,7 +348,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     auxiliaries(sidecarPath, false);
     if (protectedFile(sidecarPath + '-journal', false)) unlinkSync(sidecarPath + '-journal');
     unlinkSync(sidecarPath);
-    open();
+    withSynchronousCommitScope('sidecar create or repair at open', open);
   }
 
   function fence(p, validate, candidateWorklist) {

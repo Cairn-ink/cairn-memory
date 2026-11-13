@@ -7,6 +7,32 @@ import { withContentSuppressionRequest } from './content-suppression-storage.mjs
 // never request data. The attempt closure and detached output stay on its stack.
 const opening = new AsyncLocalStorage(), requests = new AsyncLocalStorage(), attempts = new AsyncLocalStorage();
 const bindings = new WeakMap();
+const synchronousScopes = new AsyncLocalStorage();
+export const APPROVED_SYNCHRONOUS_SCOPES = Object.freeze([
+  'daemon start install', 'sidecar create or repair at open',
+  'lazy Card storage init', 'read_role_task_context',
+]);
+export function withSynchronousCommitScope(label, work) {
+  if (!APPROVED_SYNCHRONOUS_SCOPES.includes(label)) fail('storage_error');
+  return synchronousScopes.run(label, work);
+}
+export function assertCommitWriteRouted(db, site = 'transaction') {
+  const binding = bindings.get(db);
+  if (!binding || attempts.getStore()?.db === db) return;
+  const label = synchronousScopes.getStore();
+  if (label) { binding.host.namedScopes.add(label); return; }
+  binding.host.unroutedWrites++;
+  if (binding.host.strict) {
+    const error = new MemoryStoreError('unrouted_synchronous_write');
+    error.site = site;
+    throw error;
+  }
+}
+export function dispatchSynchronousCommit(connection, work) {
+  const binding = bindings.get(connection);
+  if (!binding || attempts.getStore()?.db === binding.db) return work();
+  return binding.host.dispatch(binding.db, work, undefined, { retry: false });
+}
 const deliveries = new AsyncLocalStorage();
 // The facade's delivery resumes the successful attempt's suppression account.
 // Failed attempts never become a delivery authority.
@@ -71,10 +97,10 @@ export function dispatchCommit(connection, work, deadline, options) {
 }
 
 export function createCommitDispatcher({ now = () => performance.now(), random = Math.random,
-  onAwait, onBackoff, signal: hostSignal } = {}) {
+  onAwait, onBackoff, signal: hostSignal, strict = false } = {}) {
   const host = {
-    connections: new Set(),
-    dispatch(db, work, deadline, { compensating = false } = {}) {
+    connections: new Set(), namedScopes: new Set(), unroutedWrites: 0, strict,
+    dispatch(db, work, deadline, { compensating = false, retry: retryAllowed = true } = {}) {
       if (typeof work !== 'function' || types.isAsyncFunction(work) || types.isGeneratorFunction(work)) fail('storage_error');
       const scope = compensating ? undefined : requests.getStore();
       const signal = compensating ? hostSignal : scope?.signal;
@@ -111,11 +137,11 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
           // Never await caller work. An async transaction closure is invalid.
           if (value && typeof value.then === 'function') fail('storage_error');
           if (!state.busyResults.has(value)) { checkIdle('return'); return { value }; }
-          if (state.commits) return { value };
+          if (state.commits || !retryAllowed) return { value };
         } catch (error) {
           checkIdle('failure');
           if (!busy(error)) throw error;
-          if (state.commits) throw error;
+          if (state.commits || !retryAllowed) throw error;
         } finally {
           // checkIdle retires a connection with an active transaction. Keep
           // its fixed refusal, without attempting SQL on that closed handle.
@@ -165,12 +191,13 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
   return Object.freeze({
     open(work) {
       const scope = { host, active: true };
-      try { return opening.run(scope, work); }
+      try { return opening.run(scope, () => withSynchronousCommitScope('daemon start install', work)); }
       finally { scope.active = false; }
     },
     run(work, { signal, check, deadlineAt } = {}) {
       return requests.run({ signal, check, deadlineAt }, work);
     },
+    inspectSynchronousWrites: () => ({ count: host.unroutedWrites, scopes: [...host.namedScopes].sort() }),
     inspectTransactions() {
       const result = [];
       for (const ref of host.connections) {

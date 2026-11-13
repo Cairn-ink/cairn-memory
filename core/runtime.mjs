@@ -1,5 +1,5 @@
 import { captureSnapshot } from './capture-input.mjs';
-import { bindCommitRuntime } from './commit-dispatch.mjs';
+import { bindCommitRuntime, dispatchSynchronousCommit, withSynchronousCommitScope } from './commit-dispatch.mjs';
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
 import { registerContentWriteBoundary } from './content-write-context.mjs';
 import { contentScopeEpochGuard, assertContentOutput, contentReceiptCount, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
@@ -820,7 +820,7 @@ export function createMemoryRuntime(input, internal) {
     if (captureSourceDepth && !db.isTransaction && scopes.some(ns =>
         { const proof=cachedContentSuppressionRequestInside(db,ns.ownerId);
           return !proof?.facts || !proof.readSet.some(selected=>selected.scope==='owner' ||
-            selected.scope===ns.scope && (selected.projectId??'')===(ns.projectId??'')); })) return transaction(db, check);
+            selected.scope===ns.scope && (selected.projectId??'')===(ns.projectId??'')); })) return dispatchSynchronousCommit(db, () => transaction(db, check));
     check();
   };
   function captureSourceRead(ns, work) {
@@ -840,7 +840,7 @@ export function createMemoryRuntime(input, internal) {
       if (isSourceSnapshotOverflow(error)) {
         // The incomplete read has rolled back and released SHARED. Respect an
         // earlier RESERVED writer before validating the entire source population.
-        try { return transaction(db,work); }
+        try { return dispatchSynchronousCommit(db, () => transaction(db,work)); }
         catch (failure) { if(isStorageBusy(failure))throw captureSourceBusy(); throw failure; }
       }
       if (isStorageBusy(error)) throw captureSourceBusy();
@@ -927,8 +927,8 @@ export function createMemoryRuntime(input, internal) {
       async engineCardStorage() {
         ready();
         const { createEngineCardStorage } = await import('./engine-card-storage.mjs');
-        ready(); return bindCommitRuntime(createEngineCardStorage({ db, identity, ready, rawReader: rawCapture?.engineSourceReader(),
-          upgrade: !input.existingStore && !input.storeFence }), db);
+        ready(); return withSynchronousCommitScope('lazy Card storage init', () => bindCommitRuntime(createEngineCardStorage({ db, identity, ready, rawReader: rawCapture?.engineSourceReader(),
+          upgrade: !input.existingStore && !input.storeFence }), db));
       },
     } : {}),
     methodPackages: methodStorage,

@@ -1,3 +1,4 @@
+import { dispatchSynchronousCommit } from './commit-dispatch.mjs';
 import { ADMISSION_LEASE_MS } from './episode-schema.mjs';
 import { captureSourceBusy, isPreDispatchToken, postDispatchToken, preDispatchToken } from './capture-source-safety.mjs';
 import { inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
@@ -260,12 +261,12 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
   }
 
   function assertCaptureEvidence(ns, input) {
-    const result = transaction(db, () => {
+    const result = dispatchSynchronousCommit(db, () => transaction(db, () => {
       const now = time(ns, input);
       const row = read(ns, input);
       return guard('finishGuard', ns, input, row, now) ||
         (!live(row, input, now) ? 'capture_evidence_closed' : null);
-    });
+    }));
     if (result) fail(result);
     return null;
   }

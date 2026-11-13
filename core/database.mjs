@@ -1,5 +1,5 @@
 import './content-write-safety.mjs';
-import { bindCommitConnection, hasCommitDispatcher, recordCommit, isCommitBusy } from './commit-dispatch.mjs';
+import { bindCommitConnection, hasCommitDispatcher, recordCommit, isCommitBusy, assertCommitWriteRouted } from './commit-dispatch.mjs';
 import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheInside } from './content-suppression-storage.mjs';
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
@@ -386,6 +386,7 @@ export function transaction(db, work, check, { deferred = false } = {}) {
   if (activeReads.has(db) || discardedConnections.has(db)) fail('storage_error');
   check?.();
   const execute = () => {
+    if (!deferred) assertCommitWriteRouted(db, 'transaction');
     db.exec(deferred ? "BEGIN" : "BEGIN IMMEDIATE");
     let contentWrite;
     try {
