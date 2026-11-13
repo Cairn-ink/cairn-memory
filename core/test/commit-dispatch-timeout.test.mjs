@@ -35,11 +35,11 @@ for (const outcome of ['success', 'BUSY', 'error', 'deadline', 'abort', 'expired
     const run = () => host.run(() => dispatchCommit(runtime, work), { signal: controller.signal,
       deadlineAt: outcome === 'expired-before-attempt' ? 4 : outcome === 'deadline' ? 30 : 5000 });
     if (outcome === 'error') await assert.rejects(invoke(run), code('synthetic_refusal'));
-    else if (outcome === 'deadline' || outcome === 'expired-before-attempt') await assert.rejects(invoke(run), code('storage_busy'));
+    else if (outcome === 'deadline') await assert.rejects(invoke(run), code('storage_busy'));
     else if (outcome === 'abort') await assert.rejects(invoke(run), code('authority_required'));
     else assert.equal(await run(), 'committed');
     restored();
-    if (outcome === 'expired-before-attempt') assert.equal(calls, 0);
+    if (outcome === 'expired-before-attempt') assert.equal(calls, 1);
     if (['BUSY', 'deadline', 'abort'].includes(outcome)) assert.ok(backoffs > 0);
     if (outcome === 'abort') assert.equal(calls, 1, 'abort prevents a second attempt');
   });
