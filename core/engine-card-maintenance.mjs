@@ -16,7 +16,7 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
   let active = false, last = null;
   const failureReasons = new Set(['model_timeout', 'model_cancelled', 'source_unavailable', 'source_excluded',
     'context_budget_exceeded', 'token_count_unavailable', 'invalid_model_output', 'scope_changed',
-    'dependency_limit_reached', 'source_budget_exceeded', 'store_closed', 'invalid_input', 'consolidation_failed']);
+    'namespace_paused', 'dependency_limit_reached', 'source_budget_exceeded', 'store_closed', 'invalid_input', 'consolidation_failed']);
   const scans = new Map();
   for (const port of [relations, vectors]) if (port !== undefined && typeof port?.read !== 'function') fail('invalid_input');
   const configured = typeof model?.consolidate === 'function';
@@ -56,6 +56,8 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
     const check = () => { if (deadline.expired()) fail('model_timeout'); };
     const result = { state: 'ready', built: [], modelCalls: 0, deleted: 0, debounced: 0 };
     try {
+      const checkPause = storage.pauseGuard(ns, end);
+      checkPause();
       await withContentSuppressionRequest(async () => {
         const scope = JSON.stringify(ns), previous = scans.get(scope);
         let page = storage.snapshot(ns, maxItems, check, previous?.after ?? '');
@@ -185,7 +187,7 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
           result.modelCalls++;
           try {
             const output = await callModel(model, 'consolidate', CONSOLIDATE_PROMPT, request(), {
-              deadline, validateFresh: () => { check(); storage.validate(ns, cluster.memories, check); }, failureCode: 'consolidation_failed' });
+              deadline, beforeDispatch: checkPause, validateFresh: () => { check(); storage.validate(ns, cluster.memories, check); }, failureCode: 'consolidation_failed' });
             const value = validateConsolidation(output, memories, model); check();
             const card = value && storage.commit(ns, cluster, value, new Date(now()).toISOString(), check);
             if (card) {
@@ -196,10 +198,14 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
             // fingerprint on every subsequent maintenance pass.
             storage.finish(ns, attempt, card ? 'succeeded' : 'terminal', new Date(now()).toISOString());
           } catch (error) {
-            let transient = false;
-            try { transient = ['model_timeout', 'model_cancelled', 'consolidation_transient'].includes(error?.code); }
+            let code;
+            try { code = error?.code; }
             catch { /* Unreadable failure framing is terminal. */ }
-            storage.finish(ns, attempt, transient ? 'transient' : 'terminal', new Date(now()).toISOString());
+            if (code === 'namespace_paused') storage.release(ns, attempt);
+            else {
+              const transient = ['model_timeout', 'model_cancelled', 'consolidation_transient'].includes(code);
+              storage.finish(ns, attempt, transient ? 'transient' : 'terminal', new Date(now()).toISOString());
+            }
             throw error;
           }
           // One generation per bounded worker pass, including invalid output.
@@ -211,7 +217,7 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
       result.built = [];
       let code;
       try { const proposed = error?.code; if (failureReasons.has(proposed)) code = proposed; } catch { /* Port exception properties are untrusted. */ }
-      result.state = code === 'model_timeout' ? 'deadline' : 'refused';
+      result.state = code === 'namespace_paused' ? 'paused' : code === 'model_timeout' ? 'deadline' : 'refused';
       result.reason = result.state === 'deadline' ? 'deadline' : code ?? 'consolidation_failed';
     } finally { active = false; last = { namespace: JSON.stringify(ns), value: structuredClone(result) }; }
     return result;

@@ -568,6 +568,7 @@ function startContextMaintenance(core, access, { cards = false, semantic = true 
         if (cards) for (const namespace of readSet) {
           if (closed) return;
           const pass = await core.maintainCards({ namespace, budget: { maxItems: 512, maxMs: 30000 } });
+          if (pass.ok && pass.value.state === 'paused') continue;
           if (!pass.ok || pass.value.state === 'refused') return;
         }
         if (cards) { const current = core.getContextReadCapabilities?.(); if (current?.ok) types = current.value.types; }
