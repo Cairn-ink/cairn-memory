@@ -1125,3 +1125,46 @@ test('delivery-only marker-free rationale validates the root before eleven-edge 
   assert.equal(f.core.getRationale({namespace:ns,...refs[0],revision:refs[0].revision+1}).error.code,'revision_conflict');
   assert.equal(f.core.getRationale({namespace:ns,...refs[0]}).error.code,'rationale_limit');
 });
+
+test('Raw deletion and shared-source markers preserve the retained receipt count',async t=>{
+  const f=await fixture(t,'raw-53');
+  const rawCapture=async(sessionId,text,eventId)=>{
+    const result=ok(await f.core.captureRaw(request(splitRaw(text,{id:eventId})[0],{namespace:ns,sessionId,eventId})));
+    const interpreted=result.interpretation.ok===undefined?result.interpretation:ok(result.interpretation);
+    return {conversationId:result.raw.conversationId,memories:interpreted.admission.memories};
+  };
+  const shared=await rawCapture('synthetic-shared-conversation',message,'synthetic-shared-source');
+  const [initialB,a]=shared.memories;
+  f.model.items=[{content:survivor,kind:'fact',confidence:.8,sourceIndices:[0]}];
+  const removed=await rawCapture('synthetic-removed-conversation','Synthetic removed conversation support','synthetic-removed-source');
+  const retainedText='Synthetic retained conversation support';
+  f.model.items.push({content:'Synthetic second withholding target',kind:'fact',confidence:.8,sourceIndices:[0]});
+  const retained=await rawCapture('synthetic-retained-conversation',retainedText,'synthetic-retained-source');
+  const secondTarget=retained.memories.find(memory=>memory.id!==initialB.id);
+  assert.ok(secondTarget);
+  const stored=()=>f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(initialB.id).n;
+  assert.equal(stored(),3);
+  const conversation=ok(await f.core.getConversation({namespace:ns,conversationId:removed.conversationId})).conversation;
+  ok(f.core.deleteConversation({namespace:ns,conversationId:removed.conversationId,expectedRevision:conversation.revision,actionId:'synthetic-combined-deletion'}));
+  assert.equal(stored(),2,'conversation deletion removes its receipt');
+  ok(act(f,'forget',a));
+  async function assertDelivered(excerpts){
+    const detail=ok(f.core.get({namespace:ns,memoryId:initialB.id}));
+    assert.equal(detail.memory.content,survivor);assert.ok(detail.memory.receiptCount>=1);
+    assert.deepEqual(detail.receipts.map(receipt=>receipt.excerpt),excerpts);noLeak(detail,'combined get');
+    const request={namespace:ns,refs:[{memoryId:initialB.id,revision:detail.memory.revision}],tokenBudget:4000};
+    let cursor;const items=[];
+    do{const page=ok(f.core.fetch({...request,...(cursor?{cursor}:{})}));items.push(...page.items);cursor=page.nextCursor;noLeak(page,'combined fetch');}while(cursor);
+    const recalled=ok(await f.core.recall({readSet:[ns],query:survivor,limit:8}));noLeak(recalled,'combined recall');
+    const usage=ok(f.core.fetch({...request,contextMode:'source-evidence'}));noLeak(usage,'combined source fetch');
+    for(const values of [items,recalled.memories,usage.items]){
+      const item=values.find(item=>item.memory.id===initialB.id);assert.ok(item);
+      assert.ok(item.receiptCount>=1);assert.deepEqual(item.receipts.map(receipt=>receipt.excerpt),excerpts);
+    }
+    assert.equal(JSON.stringify({detail,items,recalled,usage}).includes('Synthetic removed conversation support'),false);
+  }
+  await assertDelivered([retainedText]);
+  ok(act(f,'forget',secondTarget));
+  assert.equal(stored(),2,'markers retain the stored shared receipts');
+  await assertDelivered([]);
+});
