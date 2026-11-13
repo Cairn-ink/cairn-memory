@@ -2,6 +2,11 @@
 
 ## 0.6.7 — Unreleased
 
+- Claude Code automatic saving now works on macOS with Node ≥22.16. Linux and WSL keep the existing transcript opener; the hosted runtime is unchanged.
+- Codex automatic saving on macOS isn't supported yet; the memory tools work. To set up only Claude Code, run `npx @cairn-ink/memory setup --local --client claude`.
+- `setup --local --no-capture` no longer prints default-on or Codex hook-approval notices, and status reports a stored capture-off preference as off on every platform.
+- Known limit: on macOS, a process running as the same user or root can still redirect an open through precisely timed directory swaps during verification, without crossing a privilege boundary.
+
 ## 0.6.6 — Unreleased
 
 - Raw document and query embeddings now require `--raw-semantic` or an explicit `--context-embedder`; setup discloses that an MCP OpenAI key sends memories and search text to OpenAI for semantic search, up to an estimated US$1 per server run. To keep everything on this computer, don't give the server a key; `--no-context-semantic` only turns off embeddings, and with a key, recall and other model features still send memory text to OpenAI.
