@@ -320,6 +320,11 @@
       "kind": "gated",
       "operation": "read"
     },
+    "isSuppressed": {
+      "kind": "gated",
+      "operation": "read",
+      "terminalField": null
+    },
     "keepEpisode": {
       "kind": "gated",
       "operation": "write",
@@ -818,6 +823,11 @@
     "isAwaiting": {
       "kind": "gated",
       "operation": "read"
+    },
+    "isSuppressed": {
+      "kind": "gated",
+      "operation": "read",
+      "terminalField": null
     },
     "legacyGet": {
       "kind": "gated",

@@ -888,6 +888,7 @@ export function createMemoryRuntime(input, internal) {
         return { rows, epoch: current };
       }, undefined, { deferred: true });
     },
+    isSuppressed(ns, value) { ready(); return readTransaction(db, () => isSuppressed(ns, value)); },
     isAwaiting(ns, id) { ready(); return activeRow(ns, id)?.review_state === 'awaiting'; },
     resolveReview(ns, action, input) { ready(); return resolveReview(ns, action, input); },
     prepareEpisodeKeep(ns,input) { ready(); return episodes.prepareKeep(ns,input); },

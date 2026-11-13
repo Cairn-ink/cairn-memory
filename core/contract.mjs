@@ -1,3 +1,4 @@
+import { suppressionContent } from './suppression-content.mjs';
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
 import { contentWriteMethodClass } from './content-write-context.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
@@ -118,12 +119,8 @@ function contractReceipt(input) {
 function contractMemory(input, maxContent = 4000) {
   object(input, ["content", "kind"]);
   if (!kinds.includes(input.kind)) throw new MemoryStoreError("invalid_input");
-  let content;
-  try { content = boundedText(input.content, maxContent); } catch {
-    throw new MemoryStoreError("invalid_input");
-  }
-  return { content, kind: input.kind, origin: "explicit", confidence: 1,
-    fingerprint: fingerprint(content) };
+  return { ...suppressionContent(input.content, maxContent),
+    kind: input.kind, origin: "explicit", confidence: 1 };
 }
 
 function contractId(value) {
@@ -379,6 +376,16 @@ export function createMemoryCore(input, internal) {
 
   function invoke(work) {
     try { return success(work()); } catch (error) { return failure(error); }
+  }
+
+  function isSuppressed(input) {
+    return invoke(() => {
+      runtime.ready();
+      object(input, ['namespace', 'content']);
+      const ns = contractNamespace(input.namespace);
+      const value = suppressionContent(input.content);
+      return { suppressed: runtime.isSuppressed(ns, value.fingerprint) };
+    });
   }
 
   function admit(input) {
@@ -1336,6 +1343,7 @@ export function createMemoryCore(input, internal) {
     getCaptureControl, setCapturePaused, setProjectCapture, setProceduralMemory,
     listReviewTransitions, listReviewConflicts,
     confirm: input => resolveReview('confirm', input), reject: input => resolveReview('reject', input),
+    isSuppressed,
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission, inspectAdmission,
     inspectCaptureEvidence, discardCaptureEvidence,

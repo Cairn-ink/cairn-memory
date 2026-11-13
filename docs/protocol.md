@@ -1,5 +1,46 @@
 # Compatibility protocol v0.3.0
 
+### Local core forgotten-text read
+
+| Method | Input | Success value |
+| --- | --- | --- |
+| `core.isSuppressed` | `{ namespace, content }` | `{ suppressed: boolean }` |
+
+`openMemoryCore` exposes this synchronous read in the usual `{ ok, value }`
+envelope. A host can ask before saving: `suppressed` is true exactly when
+admission's forgotten-text check would refuse `memory_suppressed`. It shares
+`admit`'s namespace validation, scope boundary and content normalization:
+NFKC, existing secret redaction, collapsed and trimmed whitespace, then a
+case-insensitive fingerprint. Content must be nonempty and at most 4,000
+normalized UTF-16 code units; invalid content returns `invalid_input`.
+Unknown input fields also refuse `invalid_input`.
+
+The known limit is an exact-text match after admit's normalization, not a
+semantic similarity check. The answer covers only the caller's own namespace;
+the host must bind the namespace to its authenticated caller just as for
+`admit`. Forgotten text in another namespace does not affect this answer.
+Installed content-safety facts hiding a matching live Memory also count as
+suppressed. An erased namespace or closed store refuses with the same code as
+`admit`. The method uses a deferred read transaction, creates no claims, events
+or recall units, and can answer while another connection holds a reserved write
+lock. It does not reserve a later admission: the host must still handle admit's
+refusal if suppression changes between calls.
+
+The host binds `namespace` to the authenticated owner and project, exactly as
+for `admit`; a role context does not add a grant check to either operation.
+This core API is a trusted-host boundary. Invalid namespace/content/input
+returns `invalid_input`; erased namespace or owner returns `memory_not_found`,
+a closed store returns `store_closed`, exclusive contention returns
+`storage_busy`, and failed layout attestation returns `unsupported_database`.
+Errors contain codes and retryability only.
+
+This question does not validate admission-only fields (kind, receipts, receipt
+timestamps, conflict hints, qualification or procedural metadata), nor promise
+that a later write can acquire a lock. A query-only/read-only connection can
+answer even when admission's write returns `storage_error`; a reserved writer
+can likewise block admission while permitting this read. Those write-only
+refusals do not mean the text is suppressed.
+
 The uninstalled [internal Raw producer foundation](raw-local-journal.md#internal-producer-foundation-p4a)
 has a separate v2 preparation/acknowledgement contract and transient-plaintext
 threat model. It does not widen installed v1 or add a hosted route.
