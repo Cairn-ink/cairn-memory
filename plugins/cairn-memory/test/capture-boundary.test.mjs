@@ -212,6 +212,7 @@ test('remember then forget then new-id fork retains copied times and initial cla
 for (const prompt of [false, true]) test(`pending start excludes recently copied history; recall=${prompt}`, async t => {
   const startedAt = '2026-11-10T00:05:00.000Z';
   const f = await harness(t, { observedAt: startedAt });
+  await f.run('recall', { session_id: 'synthetic-observer' });
   await setPaused(f.dataDir, true); await setPaused(f.dataDir, false);
   await f.run('start-boundary');
   if (prompt) await f.run('recall');
@@ -226,6 +227,7 @@ for (const prompt of [false, true]) test(`pending start excludes recently copied
 
 test('pending start clock tolerance retains its edge and later old-dated records', async t => {
   const f = await harness(t, { observedAt: '2026-11-10T00:05:00.000Z' });
+  await f.run('recall', { session_id: 'synthetic-observer' });
   await setPaused(f.dataDir, true); await setPaused(f.dataDir, false);
   await f.run('start-boundary'); await f.run('recall');
   await f.write(row('copied', '2026-11-10T00:04:54.999Z') +
@@ -249,6 +251,7 @@ test('malformed pending start fields carry no post-pause authority', async t => 
 
 test('invalid control state and a lost start lock cannot create pending authority', async t => {
   const f = await harness(t);
+  await f.run('recall', { session_id: 'synthetic-observer' });
   await writeFile(join(f.dataDir, 'control.json'), '{');
   await f.run('start-boundary'); await assert.rejects(f.state(), { code: 'ENOENT' });
   await setPaused(f.dataDir, true); await setPaused(f.dataDir, false);
@@ -263,6 +266,7 @@ test('invalid control state and a lost start lock cannot create pending authorit
 test('pending start stays content-free through recall and an empty capture until a real cursor retires it', async t => {
   const startedAt = '2026-11-10T00:05:00.000Z';
   const f = await harness(t, { observedAt: startedAt });
+  await f.run('recall', { session_id: 'synthetic-observer' });
   await setPaused(f.dataDir, true); const control = await setPaused(f.dataDir, false);
   await f.run('start-boundary');
   const pending = { startPending: true, startGeneration: control.generation, startedAt };
@@ -285,6 +289,7 @@ test('an exhausted SessionStart budget leaves no post-pause start authority', as
     assert.equal(source.split(needle).length, 2);
     return source.replace(needle, 'const START_BOUNDARY_BUDGET_MS = 0;');
   } });
+  await f.run('recall', { session_id: 'synthetic-observer' });
   await setPaused(f.dataDir, true); await setPaused(f.dataDir, false);
   await boundedStart(f); await assert.rejects(f.state(), { code: 'ENOENT' });
   await f.run('recall'); await f.write(row('budget-exit', new Date().toISOString())); await f.run('capture');

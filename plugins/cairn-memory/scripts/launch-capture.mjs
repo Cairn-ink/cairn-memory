@@ -32,7 +32,10 @@ try {
 const control = await readControlState(dataDir);
 if (control.paused) process.exit(0);
 
-const input = await readHookInput(process.stdin);
+// Leave headroom inside the host's one-second launcher timeout, including
+// startup and binding resolution. Expiry discards input and launches no worker.
+const input = await readHookInput(process.stdin, undefined,
+  { deadlineMs: Math.max(0, 800 - performance.now()) });
 let event;
 try {
   event = captureEvent(JSON.parse(input));

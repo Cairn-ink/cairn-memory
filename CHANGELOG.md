@@ -6,11 +6,17 @@ Plugin and marketplace 0.3.7. Protocol stays 0.3.0. The installer version is not
 bumped here.
 
 - On Linux and macOS, capture the first turn of a new Claude Code session
-  started after a hosted pause has resumed, including one-turn sessions.
+  started after a hosted pause has resumed, including one-turn sessions, when
+  the synchronous start hook finishes within its budget and validates active
+  local control. Missing transcripts additionally require locally published active
+  hosted authority; unknown pending starts remain conservative. Existing transcripts
+  retain their local-only start boundary check. Native Windows portable first-prompt
+  authority is unchanged.
 - Exclude leading copied history older than the new session's start, allowing
-  five seconds for clock differences. Sessions live during a pause continue to
-  skip their unprocessed history after resume.
+  five seconds for clock differences. Sessions with a boundary from before a
+  pause continue to skip their unprocessed history after resume.
 - Long non-English prompts and paths are no longer corrupted when hook input arrives in pieces.
+- Hook stdin reads have their own deadlines; unfinished input is discarded without sending.
 
 ## 0.3.6 — 2026-11-10: hosted pause and capture session windows
 

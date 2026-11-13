@@ -10,6 +10,8 @@ import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
 import { readHookInput } from "../lib/hook-input.mjs";
 import { opaqueProjectId } from "../lib/identity.mjs";
 
+const workerOwner = fileURLToPath(new URL('./fixtures/input-worker-owner.mjs', import.meta.url));
+
 const fields = {
   prompt: "請記住中文提示😀",
   cwd: "/synthetic/中文專案😀",
@@ -64,7 +66,39 @@ test("hook input uses non-fatal UTF-8 replacement for invalid bytes", async () =
   assert.equal(JSON.parse(text).prompt, "\uFFFD\uFFFD");
 });
 
-async function localServer(t) {
+test('hook input deadline destroys unfinished input and discards complete JSON', async () => {
+  const { PassThrough } = await import('node:stream');
+  const stream = new PassThrough();
+  // The production deadline is unreferenced; this test explicitly owns its wait.
+  const reading = readHookInput(stream, undefined, { deadlineMs: 20 });
+  reading.catch(() => {});
+  stream.write('{"prompt":"Synthetic input"}');
+  let timer;
+  try {
+    assert.equal(await Promise.race([reading, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('input deadline missing')), 200);
+    })]), '');
+    assert.equal(stream.destroyed, true);
+  } finally {
+    clearTimeout(timer);
+    stream.destroy();
+    await reading.catch(() => {});
+  }
+});
+
+test('completed hook input clears its deadline and still propagates read failures', async () => {
+  const stream = chunks([Buffer.from('{}')]);
+  let destroyed = false;
+  stream.destroy = () => { destroyed = true; };
+  assert.equal(await readHookInput(stream, undefined, { deadlineMs: 20 }), '{}');
+  await delay(40);
+  assert.equal(destroyed, false);
+  const failure = new Error('synthetic_read_failure');
+  async function* broken() { throw failure; }
+  await assert.rejects(readHookInput(broken(), undefined, { deadlineMs: 1000 }), error => error === failure);
+});
+
+async function localServer(workspace) {
   const requests = [];
   const server = createServer((request, response) => {
     const parts = [];
@@ -84,14 +118,24 @@ async function localServer(t) {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", resolve);
   });
-  t.after(() => { server.closeAllConnections(); server.close(); });
+  const sockets = new Set();
+  server.on('connection', socket => {
+    sockets.add(socket);
+    socket.once('close', () => sockets.delete(socket));
+  });
+  workspace.defer(async () => {
+    const closed = new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    for (const socket of sockets) socket.destroy();
+    await closed;
+  });
   return { endpoint: `http://127.0.0.1:${server.address().port}`, requests };
 }
 
-function invocation(t, root, endpoint, launcher = false) {
+function invocation(workspace, endpoint, launcher = false, action = "recall", telemetry = false) {
+  const root = workspace.path;
   const child = spawn(process.execPath, launcher
-    ? [fileURLToPath(new URL("../scripts/launch-capture.mjs", import.meta.url))]
-    : [fileURLToPath(new URL("../scripts/hook.mjs", import.meta.url)), "recall"], {
+    ? ['--import', workerOwner, fileURLToPath(new URL("../scripts/launch-capture.mjs", import.meta.url))]
+    : [fileURLToPath(new URL("../scripts/hook.mjs", import.meta.url)), action], {
     env: {
       PATH: "/usr/bin:/bin",
       TMPDIR: root,
@@ -99,11 +143,10 @@ function invocation(t, root, endpoint, launcher = false) {
       CLAUDE_PLUGIN_DATA: join(root, "data"),
       CLAUDE_PLUGIN_OPTION_API_ENDPOINT: endpoint,
       CLAUDE_PLUGIN_OPTION_API_TOKEN: "test-token",
-      CLAUDE_PLUGIN_OPTION_TELEMETRY: "false",
+      CLAUDE_PLUGIN_OPTION_TELEMETRY: String(telemetry),
     },
-    stdio: ["pipe", "pipe", "pipe"],
+    stdio: ["pipe", "pipe", "pipe", ...(launcher ? ['ipc'] : [])],
   });
-  t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill(); });
   let stdout = "", stderr = "";
   child.stdout.on("data", chunk => { stdout += chunk; });
   child.stderr.on("data", chunk => { stderr += chunk; });
@@ -112,6 +155,16 @@ function invocation(t, root, endpoint, launcher = false) {
   const result = new Promise((resolve, reject) => {
     child.once("error", reject);
     child.once("close", (code, signal) => resolve({ code, signal, stdout, stderr }));
+  });
+  workspace.defer(async () => {
+    if (child.exitCode === null && child.signalCode === null) {
+      // The preload owns the actual Stop worker and awaits its close before
+      // disconnecting. A direct hook has no descendants.
+      if (launcher && child.connected) child.send({ kind: 'stop-workers' }, () => {});
+      else child.kill('SIGKILL');
+    }
+    await result;
+    child.stdin.destroy(); child.stdout.destroy(); child.stderr.destroy();
   });
   return { child, result };
 }
@@ -142,9 +195,9 @@ async function writeSlices(stream, value) {
 
 test("recall receives an intact long CJK query from sliced hook stdin", { timeout: 8000 }, async t => {
   const workspace = createTestWorkspace(t, { prefix: "cairn-input-recall-" });
-  const server = await localServer(t);
+  const server = await localServer(workspace);
   const prompt = "中文提示😀：" + "請記住我偏好簡潔的回答。".repeat(100);
-  const running = invocation(t, workspace.path, server.endpoint);
+  const running = invocation(workspace, server.endpoint);
   await writeSlices(running.child.stdin, { ...fields, prompt, session_id: "input-recall" });
   assert.deepEqual(await running.result, { code: 0, signal: null, stdout: "", stderr: "" });
   const received = server.requests.filter(request => request.path === "/api/memory/recall");
@@ -159,8 +212,8 @@ test("Stop launcher resolves a CJK transcript path and cwd from sliced stdin", {
   const transcript = join(workspace.path, "中文對話😀.jsonl");
   const content = "請保留完整的中文對話😀";
   await writeFile(transcript, JSON.stringify({ type: "user", uuid: "input-user", message: { content } }) + "\n");
-  const server = await localServer(t);
-  const running = invocation(t, workspace.path, server.endpoint, true);
+  const server = await localServer(workspace);
+  const running = invocation(workspace, server.endpoint, true);
   await writeSlices(running.child.stdin, { ...fields, transcript_path: transcript, session_id: "input-capture" });
   assert.deepEqual(await running.result, { code: 0, signal: null, stdout: "", stderr: "" });
   for (let attempt = 0; attempt < 150 && !server.requests.some(request => request.path === "/api/memory/capture"); attempt++) {
@@ -178,8 +231,8 @@ for (const launcher of [false, true]) {
     test(`${launcher ? "Stop launcher" : "recall"} fails open on invalid UTF-8 ${insideString ? "inside JSON" : "outside JSON"}`,
       { timeout: 8000 }, async t => {
         const workspace = createTestWorkspace(t, { prefix: "cairn-input-invalid-" });
-        const server = await localServer(t);
-        const running = invocation(t, workspace.path, server.endpoint, launcher);
+        const server = await localServer(workspace);
+        const running = invocation(workspace, server.endpoint, launcher);
         running.child.stdin.end(insideString
           ? Buffer.concat([Buffer.from('{"prompt":"'), Buffer.from([0xff]), Buffer.from('"}')])
           : Buffer.from([0xff]));
@@ -195,9 +248,32 @@ for (const launcher of [false, true]) {
 
 test("recall still expires and exits silently while stdin is unfinished", { timeout: 8000 }, async t => {
   const workspace = createTestWorkspace(t, { prefix: "cairn-input-expiry-" });
-  const server = await localServer(t);
-  const running = invocation(t, workspace.path, server.endpoint);
+  const server = await localServer(workspace);
+  const running = invocation(workspace, server.endpoint);
   running.child.stdin.write(Buffer.from('{"prompt":"中'));
   assert.deepEqual(await running.result, { code: 0, signal: null, stdout: "", stderr: "" });
   assert.equal(server.requests.length, 0);
 });
+
+for (const action of ['start', 'capture', 'capture-detached', 'launcher']) {
+  test(`${action} owns a stdin deadline and sends nothing when the pipe stays open`, { timeout: 9000 }, async t => {
+    const workspace = createTestWorkspace(t, { prefix: 'cairn-input-deadline-' });
+    const server = await localServer(workspace);
+    const transcript = join(workspace.path, 'transcript.jsonl');
+    await writeFile(transcript, JSON.stringify({ type: 'user', uuid: 'deadline-user', message: { content: 'Synthetic deadline text.' } }) + '\n');
+    const running = invocation(workspace, server.endpoint, action === 'launcher', action, true);
+    const before = performance.now();
+    // Complete, actionable JSON must still be discarded if EOF never arrives.
+    running.child.stdin.write(JSON.stringify({ session_id: 'deadline-session', cwd: workspace.path,
+      transcript_path: transcript, capture_generation: 'initial' }));
+    let timer;
+    try {
+      const result = await Promise.race([running.result, new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('stdin deadline did not close the process')), 6500);
+      })]);
+      assert.deepEqual(result, { code: 0, signal: null, stdout: '', stderr: '' });
+      assert.ok(performance.now() - before < 6500);
+      assert.equal(server.requests.length, 0);
+    } finally { clearTimeout(timer); }
+  });
+}

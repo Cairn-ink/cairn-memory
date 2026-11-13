@@ -37,7 +37,7 @@ const { prepareRecallQuery } = await import("../lib/recall-query.mjs");
 const { resolveClient, clientProjectId, parsePairingRecord } = await import("../lib/pairing.mjs");
 const { VERSION } = await import("../lib/version.mjs");
 const { checkStateLock } = await import("../lib/state-lock.mjs");
-const { canonicalHostRoot } = await import("../lib/private-state.mjs");
+const { canonicalHostRoot, privateRead } = await import("../lib/private-state.mjs");
 const { optionalHostSessionId } = await import("../lib/hosted-contract.mjs");
 const { inspectAutomaticPolicy } = await import("../lib/automatic-policy.mjs");
 const { hostedPauseStatus, completeHostedPauseRotation, observeHostedPause, deferHostedPauseStatus, withHostedPauseGate, hostedPauseMode } = await import("../lib/hosted-pause.mjs");
@@ -123,9 +123,12 @@ try {
 
 async function input() {
   checkRecall();
-  const text = await readHookInput(process.stdin, checkRecall);
+  // Recall and the synchronous boundary retain their process-wide hard caps.
+  // Async start and either capture entry own a five-second stdin read cap.
+  const text = await readHookInput(process.stdin, checkRecall,
+    ['recall', 'start-boundary'].includes(action) ? {} : { deadlineMs: 5000 });
   checkRecall();
-  if (!text.trim()) return {};
+  if (!text.trim()) throw new Error('empty_hook_input');
   try {
     return JSON.parse(text);
   } catch {
@@ -319,6 +322,7 @@ function markersFromState(state) {
       ...(typeof state.firstPromptAt === "string" && Number.isFinite(Date.parse(state.firstPromptAt)) ?
         { firstPromptAt: state.firstPromptAt } : {}),
       ...(state.captureSeen === true ? { captureSeen: true } : {}),
+      ...(Number.isFinite(state.prefixCutoff) ? { prefixCutoff: state.prefixCutoff } : {}),
       ...(state.ownSkillTurn === true ? { ownSkillTurn: true } : {}),
       ...(typeof state.windowInitial === "boolean" ? { windowInitial: state.windowInitial } : {}),
     };
@@ -329,17 +333,47 @@ function markersFromState(state) {
 // temporary file is never state and is ignored by all readers. No cleanup I/O
 // may extend the deadline. Rename is atomic: if exit races an in-flight rename,
 // readers see either the old state or the complete new boundary, never a prefix.
-async function writeStartBoundary(path, state) {
+async function writeStartBoundary(path, state, guard) {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
   try {
     checkStartBoundary();
     await writeFile(temporary, JSON.stringify(state), { mode: 0o600, flag: "wx" });
+    if (guard) await guard();
     checkStartBoundary();
+    guard?.beforeStart?.();
     await rename(temporary, path);
   } finally {
     await unlink(temporary).catch(() => {});
   }
+}
+
+async function writeLocalActiveStartBoundary(path, state, guard) {
+  return withFileLock(join(dataDir, 'control.lock'), async () => {
+    const control = await readControlState(dataDir);
+    if (!control.valid || control.paused) return;
+    checkStartBoundary();
+    await writeStartBoundary(path, state(control), guard);
+  }, { tryOnly: true });
+}
+
+async function writeActiveStartBoundary(path, state) {
+  const writeLocal = guard => writeLocalActiveStartBoundary(path, state, guard);
+  if (!hostedConfig) return writeLocal();
+  // Start never observes the network. Only existing durable POSIX authority
+  // can authorize birth; diagnostics and portable in-process state cannot.
+  if (!hostedPauseMode(hostedConfig).barrier) return;
+  let published;
+  try {
+    published = JSON.parse(await privateRead(join(dataDir, 'hosted-pause',
+      hostedTargetId(hostedConfig) + '.json'), { missing: true }));
+  } catch { return; }
+  if (!Number.isSafeInteger(published?.generation) || published.generation < 0) return;
+  // This shared gate validates enforced/active state, intents, completion,
+  // root rotation and the canonical root, then holds publication out through
+  // our local control check and guarded atomic rename. Unknown means skip.
+  await withHostedPauseGate(hostedConfig, published.generation, writeLocal,
+    { deadlineMs: START_BOUNDARY_BUDGET_MS });
 }
 
 async function startCapture(hookInput) {
@@ -363,22 +397,18 @@ async function startCapture(hookInput) {
     try { size = (await stat(event.transcript_path)).size; }
     catch (error) {
       if (error.code !== "ENOENT") throw error;
-      const control = await readControlState(dataDir);
-      if (control.valid && !control.paused) {
-        checkStartBoundary();
-        await writeStartBoundary(statePath, { ...markers,
-          startPending: true, startGeneration: control.generation, startedAt: observedAt,
-        });
-      }
+      await writeActiveStartBoundary(statePath, control => ({ ...markers,
+        startPending: true, startGeneration: control.generation, startedAt: observedAt,
+      }));
       return;
     }
-    const generation = (await readControlState(dataDir)).generation;
     const tail = size === 0 ? Buffer.alloc(0) : await readSlice(event.transcript_path, size - 1, size);
     checkStartBoundary();
-    await writeStartBoundary(statePath, {
+    // Existing transcripts retain their local-only birth authority.
+    await writeLocalActiveStartBoundary(statePath, ({ generation }) => ({
       offset: size, generation, discardUntilNewline: size > 0 && tail[0] !== 0x0a,
       ...markers, startOffset: size, startedAt: observedAt,
-    });
+    }));
   }, { tryOnly: true });
 }
 
@@ -441,11 +471,14 @@ const CAPTURE_WINDOW_SLICES = 4096;
 const HOSTED_CAPTURE_REQUEST_MS = 25_000;
 
 // Skip only a leading copied prefix, not older timestamps later in a new turn.
-function copiedPrefix(bytes, firstPromptAt, startedAt) {
+function copiedCutoff(firstPromptAt, startedAt) {
   let cutoff = Date.parse(firstPromptAt) - FIRST_PROMPT_MARGIN_MS;
   if (startedAt !== undefined) cutoff = Math.max(Number.isFinite(cutoff) ? cutoff : -Infinity,
     Date.parse(startedAt) - START_CLOCK_TOLERANCE_MS);
-  if (!Number.isFinite(cutoff)) return 0;
+  return Number.isFinite(cutoff) ? cutoff : undefined;
+}
+function copiedPrefix(bytes, cutoff) {
+  if (cutoff === undefined) return 0;
   let at = 0;
   while (at < bytes.length) {
     const newline = bytes.indexOf(0x0a, at);
@@ -542,7 +575,7 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
     });
   }
   const size = (await stat(transcriptPath)).size;
-  const fallback = !cursor && markers.startOffset === undefined;
+  const fallback = (!cursor && markers.startOffset === undefined) || markers.prefixCutoff !== undefined;
   const initial = cursor?.pendingEnd !== undefined ? windowInitial === true : fallback;
 
   // Only portable hosted cursors carry remote authority. Missing/invalid tags
@@ -562,6 +595,7 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
     const tail = size === 0 ? Buffer.alloc(0) : await readSlice(transcriptPath, size - 1, size);
     await writeCursor(statePath, {
       ...markers,
+      prefixCutoff: undefined,
       offset: size,
       generation,
       discardUntilNewline: size > 0 && tail[0] !== 0x0a,
@@ -579,6 +613,7 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
     const tail = size === 0 ? Buffer.alloc(0) : await readSlice(transcriptPath, size - 1, size);
     await writeCursor(statePath, {
       ...markers,
+      prefixCutoff: undefined,
       offset: size,
       generation,
       discardUntilNewline: size > 0 && tail[0] !== 0x0a,
@@ -593,12 +628,14 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
   if (offset === readEnd) return;
 
   let slice = await readSlice(transcriptPath, offset, readEnd);
-  let skipped = 0;
+  // EOF can precede the rest of a fork/copy. Keep the original cutoff across
+  // cursors, retries and queued workers until a new turn is actually accepted.
   if (fallback && markers.firstPromptAt) {
-    skipped = copiedPrefix(slice, markers.firstPromptAt, pendingStart ? markers.startedAt : undefined);
+    markers.prefixCutoff ??= copiedCutoff(markers.firstPromptAt, pendingStart ? markers.startedAt : undefined);
   } else if (fallback && pendingStart) {
-    skipped = copiedPrefix(slice, undefined, markers.startedAt);
+    markers.prefixCutoff ??= copiedCutoff(undefined, markers.startedAt);
   }
+  const skipped = copiedPrefix(slice, markers.prefixCutoff);
   if (skipped) {
     offset += skipped;
     slice = slice.subarray(skipped);
@@ -712,6 +749,7 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
     // processing. Do not advance the cursor: the next hook can retry safely.
     if (result?.processing) throw new Error("capture_processing");
   }
+  delete markers.prefixCutoff;
   await writeCursor(statePath, {
     ...markers,
     offset: pendingEnd,

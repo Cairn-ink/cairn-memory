@@ -83,8 +83,13 @@ The bundled Cairn MCP server also exposes explicit `remember_memory`, `recall_me
 
 Hooks fail open: timeouts, auth errors, and service outages never block normal Claude Code work.
 Explicit pause/resume commands report control failures rather than claiming success. After resume,
-sessions live during the pause skip their unprocessed history; later complete messages are eligible.
-Sessions started after resume are captured from their start, excluding copied history.
+sessions with a boundary from before the pause skip their unprocessed history; later complete messages are eligible.
+On Linux and macOS, new sessions can be captured from their start, excluding copied
+history, when the synchronous start hook finishes within its budget and validates
+active local control. If the transcript is missing at start, this also requires locally
+published active hosted authority; unknown pending starts remain conservative after a
+pause. Existing transcripts still use only local control for their start boundary.
+Native Windows retains its existing portable first-prompt authority.
 Requests already started before pause may still finish.
 
 Hosted recall and capture require a freshly validated, enforced pause state.
