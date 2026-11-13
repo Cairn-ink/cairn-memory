@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "9fe2d59de799e40c6e9273c44228ab1800b9677ec049a2891b8669640949e725",
-  "bytes": 1326996,
+  "sha256": "ea176e179c7af856bd9de1586b03eb95511e78808397b4402aededeb103ba4b0",
+  "bytes": 1326498,
   "files": [
     "LICENSE",
     "README.md",
@@ -355,7 +355,6 @@
     "integrations/client/raw/claude.mjs",
     "integrations/client/raw/codex.mjs",
     "integrations/client/raw/json-stream.mjs",
-    "integrations/client/raw/local-claude-entrypoint.mjs",
     "integrations/client/raw/local-codex-qualification.mjs",
     "integrations/client/raw/local-hook.mjs",
     "integrations/client/raw/local-host-cli.mjs",
@@ -609,8 +608,7 @@
     "integrations/client/raw/local-worker-progress.mjs": "ca40ad00cccf4976dd9d4a6eb8ce88c9e87c5486e326149855454334b6f21bd3",
     "integrations/client/raw/local-worker-source.mjs": "1ae5a769062ba3479bf0a3b7f02f196a5b1afb4e36cf1f9c8aefcbadba3a9916",
     "integrations/client/raw/local-worker-state.mjs": "40f4e6ddea49395c033bda9cf27f58367607cad901366538f98cb6658bb5c5a1",
-    "integrations/client/raw/local-host.mjs": "9f5162d950d1332231101f866f6e5d83f1b129e5a2ddca4383d2b05b959a5982",
-    "integrations/client/raw/local-claude-entrypoint.mjs": "cfc4c64d50c59086d26111ff5212a4621f478fec578205a84d05661ef364658f",
+    "integrations/client/raw/local-host.mjs": "3efa871ab0ec25a75ecd0583434d43b6143f65f086e6279ed300128e3cbccfef",
     "integrations/client/raw/local-setup-input.mjs": "e4f2cf1031897b25d3e16f6f65696bfab62afee758e82fe8e8d148785029cb6a",
     "integrations/client/raw/local-setup-files.mjs": "f54b51f466531ad76798de6982146e7080bd60d2004c259bcf7e0fc59cf2055a",
     "integrations/client/raw/local-settings-lock.mjs": "0e3a1973363798d9cf037b972743b1c53f154a1ffda6729b5e0f4660826ecbbc",
@@ -624,7 +622,7 @@
     "integrations/client/raw/local-host-profile.mjs": "c8b6ba0fa3484a5ca8a7f670b87ce7e32bd97ea95f67c2afbcdcba662890d709",
     "integrations/client/raw/local-host-permission.mjs": "02dc29407324012fe2eece44e05bc6f164b2ce30f4dfd5cd2656418d4b4879e7",
     "integrations/client/raw/local-host-preparation.mjs": "c5e2cd4bcf85b82fdd522a3796f8981dc320ecc7688abbb20759c82c3dc7b4c9",
-    "integrations/client/raw/local-host-rearm.mjs": "921934d2e5d57ba0d3a560993d0276237c2b353ad8fe9bc7747a0ea01121a14e",
+    "integrations/client/raw/local-host-rearm.mjs": "67adb4efbd714659f13b27656b34f4a5ed4ca5b0bcc958b51414c07d3541f738",
     "integrations/client/raw/local-rearm-state.mjs": "c436e9d537438baaa324a75a8a22b275427d4276d402c8d3a497821c8087b95e",
     "integrations/client/raw/local-host-cli.mjs": "a9edb3615a795b811a61c08979041ed9fda584fe10c025f35d03e5e198721c7b",
     "integrations/client/raw/claude.mjs": "5c298d4e7e15cbfb8b62f40c98ab7538b6e14281349ccc45fa5e8b6cbcc3d258",
@@ -795,7 +793,7 @@
     "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b"
   },
   "generatedHashes": {
-    "package.json": "f684527e1004644edf1aeba940f9038f7cb1028dcbe9b35ea20e6c7284f108c7",
+    "package.json": "40b946814083a7efce704a63d8f7ee81f7e86ce7ca7f483bafc97d1dacc5ffc3",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8"
   }
 }
