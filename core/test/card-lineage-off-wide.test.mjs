@@ -63,7 +63,7 @@ const added=['inspectCardOperation','revalidateEvidence','fetchCandidateEvidence
 // Each sqlRevisions entry is an intended, reviewed SQL text change against the archived revision. It replaces only the
 // SQL text of one archived statement; method and bound arguments are never substituted. Delete the list when `revision` advances.
 const sqlRevisions=pins.sqlRevisions??[],sqlAdditions=pins.sqlAdditions??[],sqlAdditionMethods=pins.sqlAdditionMethods??[],cardStatementTexts=pins.cardStatementTexts??{};
-const sqlAdditionPolicy=pins.sqlAdditionPolicy??{sqlTexts:[],familyMethods:[],anchorSQLTexts:[]};
+const sqlAdditionPolicy=pins.sqlAdditionPolicy??{sqlTexts:[],familyMethods:[],anchorSQLTexts:[],anchorAfterSQLTexts:[]};
 test('reviewed SQL additions have explicit workload, allowed call method, ordinal, anchor and full statement rows',()=>{
   validateSqlAdditions(sqlAdditions,sqlAdditionMethods,sqlAdditionPolicy);validateCardStatementTexts(cardStatementTexts,sqlAdditions,sqlAdditionPolicy);
 });

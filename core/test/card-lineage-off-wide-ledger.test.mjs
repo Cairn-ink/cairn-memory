@@ -193,19 +193,27 @@ test('reviewed addition methods reject unlisted entries, duplicates and unused m
   assert.throws(() => validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods), { code: 'ERR_ASSERTION' });
 });
 test('an explicit addition policy is empty only with an empty ledger', () => {
-  const f = fixture(), emptyPolicy = { sqlTexts: [], familyMethods: [], anchorSQLTexts: [] };
-  const policy = { sqlTexts: additions.map(([sql]) => sql), familyMethods: ['forget'], anchorSQLTexts: [tombstone[0]] };
+  const f = fixture(), emptyPolicy = { sqlTexts: [], familyMethods: [], anchorSQLTexts: [], anchorAfterSQLTexts: [] };
+  const policy = { sqlTexts: additions.map(([sql]) => sql), familyMethods: ['forget'], anchorSQLTexts: [tombstone[0]], anchorAfterSQLTexts: [] };
   assert.doesNotThrow(() => validateSqlAdditions([], [], emptyPolicy));
   assert.doesNotThrow(() => validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods, policy));
   const error = { code: 'ERR_ASSERTION', message: /sqlTexts must be non-empty for a non-empty ledger/ };
   assert.throws(() => validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods, emptyPolicy), error);
   assert.throws(() => validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods, {}), error);
-  for (const name of ['sqlTexts', 'familyMethods', 'anchorSQLTexts']) {
+  for (const name of ['sqlTexts', 'familyMethods']) {
     const incomplete = { ...policy, [name]: [] };
     const error = { code: 'ERR_ASSERTION', message: new RegExp(name + ' must be non-empty for a non-empty ledger') };
     assert.throws(() => validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods, incomplete), error);
     delete incomplete[name];
     assert.throws(() => validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods, incomplete), error);
+  }
+  for (const anchors of [{ anchorSQLTexts: [] }, { anchorSQLTexts: [], anchorAfterSQLTexts: [] },
+    { anchorSQLTexts: undefined, anchorAfterSQLTexts: undefined }]) {
+    const incomplete = { ...policy, ...anchors };
+    if (incomplete.anchorSQLTexts === undefined) delete incomplete.anchorSQLTexts;
+    if (incomplete.anchorAfterSQLTexts === undefined) delete incomplete.anchorAfterSQLTexts;
+    assert.throws(() => validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods, incomplete),
+      { code: 'ERR_ASSERTION', message: /at least one anchor list must be non-empty/ });
   }
 });
 test('pins mode: opening traces also reject purge SQL outside a reviewed call', () => {
@@ -365,4 +373,121 @@ for (const mode of ['archive', 'pins']) test(`${mode} card-family: a reviewed le
   if (mode === 'archive') assert.throws(() => compare(f), { code: 'ERR_ASSERTION', message: /outside a forgetting call/ });
   else assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods),
     { code: 'ERR_ASSERTION', message: /outside a forgetting call/ });
+});
+
+const writeAddition = row('INSERT OR IGNORE INTO suppressed SELECT ?,value FROM json_each(?)', 'run',
+  ['synthetic-owner', '["synthetic-fingerprint"]']);
+const readAddition = row('SELECT s.fingerprint,1 AS denied FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value',
+  'all', ['["synthetic-fingerprint"]', ...ns]);
+const receiptAddition = row('SELECT fingerprint FROM receipts WHERE memory_id=?', 'all', ['synthetic-memory']);
+function neighbourFixture(kind = 'write', terminal = false, receiptWalk = false) {
+  const key = receiptWalk ? 'workload:52' : 'workload:23', method = kind === 'write' ? 'forget' : 'map';
+  const predecessor = row(kind === 'write' ? 'SELECT write_fence' : 'SELECT receipt_projection', 'all');
+  const successor = kind === 'write' ? tombstone : row('SELECT read_tail', 'all');
+  const receipt = row([...currentReceiptWalkSQLTexts][0], 'all', [...ns, 0, 10]);
+  const prefix = [row('SELECT authorization', 'get'), ...(receiptWalk ? [receipt] : [])];
+  const oldPrefix = [...prefix, ...(receiptWalk ? [receipt] : [])];
+  const suffix = terminal ? [] : [successor, row(kind === 'write' ? 'COMMIT' : 'SELECT read_finish')];
+  const added = structuredClone(kind === 'write' ? [receiptAddition, writeAddition] : [readAddition]);
+  const parts = [[method, success, [...prefix, predecessor, ...added, ...suffix]]];
+  const sqlAdditions = added.map(statement => ({ key, method, ordinal: 1, after: oldPrefix.length, statement,
+    ...(terminal ? { atCallEnd: true } : {}), reference: 616, reason: 'Review each added execution beside an existing statement.' }));
+  return { key, parts, receiptWalk, predecessor, successor,
+    archived: trace([[method, success, [...oldPrefix, predecessor, ...suffix]]]), current: trace(parts),
+    sqlAdditions, sqlAdditionMethods: [method], sqlAdditionPolicy: {
+      sqlTexts: added.map(([sql]) => sql), familyMethods: [method], anchorSQLTexts: [], anchorAfterSQLTexts: [predecessor[0]],
+    } };
+}
+function checkNeighbourFixture(mode, f) {
+  if (mode === 'archive') return compare(f);
+  const pin = { ...summary(f.current),
+    sqlAdditions: ledgerAdditionSummary(f.key, f.sqlAdditions, f.sqlAdditionMethods, f.sqlAdditionPolicy) };
+  delete f.archived;
+  return assertWidePins(f.key, f.current, f.sqlAdditions, pin, f.sqlAdditionMethods, {}, f.sqlAdditionPolicy);
+}
+for (const receiptWalk of [false, true]) for (const mode of ['archive', 'pins']) {
+  const label = `${mode} neighbours, ${receiptWalk ? 'receipt walk' : 'exact trace'}`;
+  test(`${label}: an empty ledger and policy retain the complete trace`, () => {
+    const f = neighbourFixture('read', false, receiptWalk);
+    f.current = structuredClone(f.archived); f.sqlAdditions = []; f.sqlAdditionMethods = [];
+    f.sqlAdditionPolicy = { sqlTexts: [], familyMethods: [], anchorSQLTexts: [], anchorAfterSQLTexts: [] };
+    checkNeighbourFixture(mode, f);
+  });
+  for (const side of ['successor', 'predecessor']) test(`${label}: write group accepts its ${side}`, () => {
+    const f = neighbourFixture('write', false, receiptWalk);
+    if (side === 'successor') {
+      f.sqlAdditionPolicy.anchorSQLTexts = [f.successor[0]]; f.sqlAdditionPolicy.anchorAfterSQLTexts = [];
+    }
+    checkNeighbourFixture(mode, f);
+  });
+  test(`${label}: a middle read lookup accepts only its listed predecessor`, () => {
+    checkNeighbourFixture(mode, neighbourFixture('read', false, receiptWalk));
+  });
+  test(`${label}: a read lookup moved after a different statement is refused`, () => {
+    const f = neighbourFixture('read', false, receiptWalk), rows = f.parts[0][2];
+    const [lookup] = rows.splice(rows.findIndex(([sql]) => sql === readAddition[0]), 1);
+    rows.splice(-1, 0, lookup); f.current = trace(f.parts);
+    assert.throws(() => checkNeighbourFixture(mode, f), { code: 'ERR_ASSERTION', message: /current purge anchor/ });
+  });
+  test(`${label}: a flagged call-end lookup accepts its final predecessor`, () => {
+    checkNeighbourFixture(mode, neighbourFixture('read', true, receiptWalk));
+  });
+  test(`${label}: a call-end lookup without the flag is refused`, () => {
+    const f = neighbourFixture('read', true, receiptWalk); delete f.sqlAdditions[0].atCallEnd;
+    assert.throws(() => checkNeighbourFixture(mode, f), { code: 'ERR_ASSERTION', message: /anchor stays inside its call/ });
+  });
+  test(`${label}: a flagged group followed by more current SQL is refused`, () => {
+    const f = neighbourFixture('read', true, receiptWalk);
+    f.parts[0][2].push(row('SELECT read_finish')); f.current = trace(f.parts);
+    assert.throws(() => checkNeighbourFixture(mode, f), { code: 'ERR_ASSERTION', message: /current purge anchor group closes its call/ });
+  });
+  test(`${label}: a flagged middle group is refused`, () => {
+    const f = neighbourFixture('read', false, receiptWalk); f.sqlAdditions[0].atCallEnd = true;
+    assert.throws(() => checkNeighbourFixture(mode, f), { code: 'ERR_ASSERTION', message: /last archived statement|current purge anchor group closes/ });
+  });
+  test(`${label}: both empty anchor lists are refused for entries`, () => {
+    const f = neighbourFixture('write', false, receiptWalk); f.sqlAdditionPolicy.anchorAfterSQLTexts = [];
+    assert.throws(() => checkNeighbourFixture(mode, f), { code: 'ERR_ASSERTION', message: /at least one anchor list must be non-empty/ });
+  });
+  test(`${label}: matching neither reviewed neighbour is refused`, () => {
+    const f = neighbourFixture('write', false, receiptWalk);
+    f.sqlAdditionPolicy.anchorAfterSQLTexts = ['SELECT unrelated_predecessor'];
+    f.sqlAdditionPolicy.anchorSQLTexts = ['SELECT unrelated_successor'];
+    assert.throws(() => checkNeighbourFixture(mode, f), { code: 'ERR_ASSERTION', message: /purge anchor matches a reviewed neighbour/ });
+  });
+  test(`${label}: a predecessor does not allow a split group`, () => {
+    const f = neighbourFixture('write', false, receiptWalk), rows = f.parts[0][2];
+    rows.splice(rows.findIndex(([sql]) => sql === writeAddition[0]), 0, row('SELECT intervening'));
+    f.current = trace(f.parts);
+    assert.throws(() => checkNeighbourFixture(mode, f), { code: 'ERR_ASSERTION', message: /current purge anchor group is contiguous/ });
+  });
+  test(`${label}: call-end permission still requires a predecessor`, () => {
+    const f = neighbourFixture('read', true, receiptWalk);
+    f.sqlAdditionPolicy.anchorAfterSQLTexts = []; f.sqlAdditionPolicy.anchorSQLTexts = ['PRAGMA optimize'];
+    assert.throws(() => checkNeighbourFixture(mode, f), { code: 'ERR_ASSERTION', message: /purge anchor matches a reviewed neighbour/ });
+  });
+  test(`${label}: each row of a terminal group needs permission`, () => {
+    const f = neighbourFixture('write', true, receiptWalk); delete f.sqlAdditions[0].atCallEnd;
+    assert.throws(() => checkNeighbourFixture(mode, f), { code: 'ERR_ASSERTION', message: /anchor stays inside its call/ });
+  });
+  test(`${label}: the receipt read is its own entry and cannot be optional`, () => {
+    const f = neighbourFixture('write', false, receiptWalk);
+    f.parts[0][2] = f.parts[0][2].filter(([sql]) => sql !== receiptAddition[0]); f.current = trace(f.parts);
+    assert.throws(() => checkNeighbourFixture(mode, f), { code: 'ERR_ASSERTION', message: /exactly its ledger rows and bindings/ });
+    f.sqlAdditions.shift(); checkNeighbourFixture(mode, f);
+  });
+}
+test('archive neighbours: call-end after must be the final archived index even if the current group is final', () => {
+  const f = neighbourFixture('read', false); f.sqlAdditions[0].atCallEnd = true;
+  f.parts[0][2].splice(-2); f.current = trace(f.parts);
+  assert.throws(() => compare(f), { code: 'ERR_ASSERTION', message: /call-end anchor is the last archived statement/ });
+});
+test('predecessor policies validate exact normalized unique texts and explicit end flags', () => {
+  const f = neighbourFixture('read');
+  for (const texts of [[' SELECT receipt_projection'], ['SELECT receipt_projection', 'SELECT receipt_projection'], [1], 'SELECT receipt_projection'])
+    assert.throws(() => validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods, { ...f.sqlAdditionPolicy, anchorAfterSQLTexts: texts }),
+      { code: 'ERR_ASSERTION' });
+  f.sqlAdditions[0].atCallEnd = 'true';
+  assert.throws(() => validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods, f.sqlAdditionPolicy),
+    { code: 'ERR_ASSERTION', message: /atCallEnd is an explicit boolean/ });
 });

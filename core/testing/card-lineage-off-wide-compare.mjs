@@ -66,12 +66,13 @@ export function cardFamilySQL([sql, , bindings = []]) {
 const defaultSqlAdditionPolicy = Object.freeze({});
 const familyMethods = policy => policy.familyMethods ?? [...forgettingMethods];
 const additionSQL = (row, policy) => policy.sqlTexts === undefined ? purgeAdditionSQL(row) : policy.sqlTexts.includes(row[0]);
-const anchorSQLTexts = policy => policy.anchorSQLTexts ?? [
+const anchorSQLTexts = policy => policy === defaultSqlAdditionPolicy ? [
   'UPDATE memories SET content = NULL, deleted = 1, revision = revision + 1, updated_at = ? WHERE id = ?',
-];
-function assertAdditionAnchor(sql, policy, message) {
-  const texts = anchorSQLTexts(policy);
-  if (texts.length) assert.ok(texts.includes(sql), message);
+] : policy.anchorSQLTexts ?? [];
+const anchorAfterSQLTexts = policy => policy.anchorAfterSQLTexts ?? [];
+function assertAdditionAnchor(before, after, atCallEnd, policy, message) {
+  const predecessor = anchorAfterSQLTexts(policy).includes(before);
+  assert.ok(predecessor || (!atCallEnd && anchorSQLTexts(policy).includes(after)), message);
 }
 
 export function validateCardStatementTexts(texts = {}, entries = [], policy = defaultSqlAdditionPolicy) {
@@ -119,7 +120,7 @@ export function assertArchivedCardStatementTexts(archives, texts = {}, entries =
 // Entries sharing an anchor are inserted in ledger order. Probes are individual
 // entries, never an optional allowance attached to another statement.
 export function validateSqlAdditions(entries = [], sqlAdditionMethods = [], policy = defaultSqlAdditionPolicy) {
-  for (const name of ['sqlTexts', 'familyMethods', 'anchorSQLTexts']) if (Object.hasOwn(policy, name)) {
+  for (const name of ['sqlTexts', 'familyMethods', 'anchorSQLTexts', 'anchorAfterSQLTexts']) if (Object.hasOwn(policy, name)) {
     const list = policy[name];
     assert.ok(Array.isArray(list) && list.every(value => typeof value === 'string' && value.length > 0 && value === normalizeSQL(value)),
       `${name} is an exact string list`);
@@ -127,8 +128,10 @@ export function validateSqlAdditions(entries = [], sqlAdditionMethods = [], poli
   }
   assert.ok(Array.isArray(entries), 'sqlAdditions is an array');
   if (entries.length && policy !== defaultSqlAdditionPolicy) {
-    for (const name of ['sqlTexts', 'familyMethods', 'anchorSQLTexts'])
+    for (const name of ['sqlTexts', 'familyMethods'])
       assert.ok(Array.isArray(policy[name]) && policy[name].length > 0, `${name} must be non-empty for a non-empty ledger`);
+    assert.ok(anchorSQLTexts(policy).length + anchorAfterSQLTexts(policy).length > 0,
+      'at least one anchor list must be non-empty for a non-empty ledger');
   }
   assert.ok(Array.isArray(sqlAdditionMethods) && sqlAdditionMethods.every(method => typeof method === 'string' && method.trim() === method && method.length > 0),
     'sqlAdditionMethods is an explicit list of call methods');
@@ -137,6 +140,7 @@ export function validateSqlAdditions(entries = [], sqlAdditionMethods = [], poli
     assert.ok(entry && workloadKeys.includes(entry.key) && typeof entry.method === 'string' &&
       Number.isInteger(entry.ordinal) && entry.ordinal > 0 && !Object.hasOwn(entry, 'forget') &&
       Number.isInteger(entry.after) && entry.after >= 0, 'position-anchored workload addition');
+    assert.ok(!Object.hasOwn(entry, 'atCallEnd') || typeof entry.atCallEnd === 'boolean', 'atCallEnd is an explicit boolean');
     assert.ok(sqlAdditionMethods.includes(entry.method), 'addition belongs to a reviewed call method');
     assert.ok(Number.isInteger(entry.reference) && entry.reference > 0 &&
       typeof entry.reason === 'string' && entry.reason.trim().length > 0 && !/[\r\n]/.test(entry.reason),
@@ -182,7 +186,7 @@ export function ledgerAdditionSummary(key, entries = [], sqlAdditionMethods = []
 
 export function reconstructWideTrace(key, archived, entries = [], sqlAdditionMethods = [], policy = defaultSqlAdditionPolicy) {
   validateSqlAdditions(entries, sqlAdditionMethods, policy); checkCallRanges(archived);
-  const wanted = orderedEntries(key, entries), insertions = new Map();
+  const wanted = orderedEntries(key, entries), insertions = new Map(), terminalGroups = new Map();
   const ordinals = new Map();
   let consumed = 0;
   for (const call of archived.calls) {
@@ -192,11 +196,15 @@ export function reconstructWideTrace(key, archived, entries = [], sqlAdditionMet
       assert.equal(call.length, 4, 'addition belongs to a traced call');
       assert.ok(entry.after < call[3] - call[2], `existing anchor for ${method} ${ordinal} after ${entry.after}`);
       const index = call[2] + entry.after;
-      // The default policy requires the canonical tombstone. Explicit policies
-      // require reviewed successors; empty lists are valid only with an empty ledger.
-      assertAdditionAnchor(archived.statements[index + 1]?.[0], policy,
-        'purge anchor precedes the canonical Memory tombstone');
-      assert.ok(index + 1 < call[3] || anchorSQLTexts(policy).length === 0, 'purge anchor stays inside its call');
+      // Omitted policy still requires the canonical tombstone. A terminal group
+      // needs explicit permission and a reviewed final archived predecessor.
+      if (entry.atCallEnd) {
+        assert.equal(index, call[3] - 1, 'call-end anchor is the last archived statement');
+        terminalGroups.set(index, call[3]);
+      }
+      else assert.ok(index + 1 < call[3], 'purge anchor stays inside its call');
+      assertAdditionAnchor(archived.statements[index][0], archived.statements[index + 1]?.[0], entry.atCallEnd, policy,
+        'purge anchor matches a reviewed neighbour');
       const rows = insertions.get(index) ?? [];
       rows.push(entry.statement); insertions.set(index, rows); consumed++;
     }
@@ -208,6 +216,8 @@ export function reconstructWideTrace(key, archived, entries = [], sqlAdditionMet
   });
   offsets[archived.statements.length] = statements.length;
   const calls = archived.calls.map(call => call.map((value, index) => index >= 2 ? offsets[value] : value));
+  for (const [index, end] of terminalGroups)
+    assert.equal(offsets[index] + 1 + insertions.get(index).length, offsets[end], 'reconstructed call-end group closes its call');
   return { ...archived, statements, calls };
 }
 
@@ -242,16 +252,20 @@ export function currentAdditionSummary(key, current, entries = [], sqlAdditionMe
       if (familyMethods(policy).length) assert.ok(familyMethods(policy).includes(method), `${method} carries purge SQL outside a forgetting call`);
     }
     assert.deepEqual(rows, expected.map(entry => entry.statement), `${method} ${ordinal} has exactly its ledger rows and bindings`);
-    // Match each anchor group as a contiguous block with any listed successor.
+    // Match each anchor group as a contiguous block beside a reviewed neighbour.
     // Receipt batching can shift its absolute index within the call.
     for (let offset = 0; offset < expected.length;) {
       let end = offset + 1;
       while (end < expected.length && expected[end].after === expected[offset].after) end++;
       for (let i = offset + 1; i < end; i++) assert.equal(indices[i], indices[i - 1] + 1, 'current purge anchor group is contiguous');
-      const next = indices[end - 1] + 1;
-      assert.ok(next < call[3] || anchorSQLTexts(policy).length === 0, 'current purge anchor stays inside its call');
-      assertAdditionAnchor(current.statements[next]?.[0], policy,
-        'current purge anchor precedes the canonical Memory tombstone');
+      const first = indices[offset], next = indices[end - 1] + 1;
+      const before = first > call[2] ? current.statements[first - 1][0] : undefined;
+      for (const entry of expected.slice(offset, end)) {
+        if (entry.atCallEnd) assert.equal(next, call[3], 'current purge anchor group closes its call');
+        else assert.ok(next < call[3], 'current purge anchor stays inside its call');
+        assertAdditionAnchor(before, next < call[3] ? current.statements[next][0] : undefined, entry.atCallEnd, policy,
+          'current purge anchor matches a reviewed neighbour');
+      }
       offset = end;
     }
     if (familyMethods(policy).includes(method)) for (let index = call[2]; index < call[3]; index++) {
