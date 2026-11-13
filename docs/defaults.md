@@ -16,6 +16,48 @@ do not install a transcript hook, start capturing a conversation, or enable host
 Only messages actually submitted to capture enter Raw. The separately selected
 retained-profile server is a read-only host with its own authority boundaries.
 
+Legacy `recall()` now scans each authorized namespace newest first, using
+`updated_at DESC, id ASC` on the existing `namespace_memories` index. All recall
+modes use this default; there is no candidate-policy constructor option.
+`QUERY_SCAN_BUDGET_MS` in `core/query-candidates.mjs` is fixed at **300 ms** per
+recall call. A read set splits it evenly, rounded down, so each namespace of a
+two-namespace call scans its tail for at most half; every floor still completes.
+The floor reads up to 1,025 current, nondeleted, non-awaiting rows in one
+statement, scoring at most 1,024. The extra row decides whether a tail is
+needed. At most 1,024 such rows exhaust the scan with the ordinary statement
+budget. Tail pages visit nondeleted physical rows and stop at the monotonic
+budget, 20,000 total visited rows, or the end. Historical and awaiting tail
+rows, and projection-rejected rows, consume the allowance without contributing text.
+Recency determines traversal; literal overlap and then ID determine the best
+1,024 retained candidates. Body-only recall reads no scoring receipts; source
+modes still examine only the first four stable-ID receipts per eligible memory.
+
+The first 1,024 rows, safety checks and MOC placement share one deferred read
+transaction with the connection's normal busy timeout. The monotonic budget
+includes acquisition and floor work. Later pages release SHARED after at most
+256 rows or 25 ms (checked between rows) and use busy timeout zero, restored
+synchronously after each page. BUSY at the first cheap read stops the tail.
+There are no restarts: a namespace or suppression epoch change discards all
+tail candidates and returns the already placed floor under its original epochs.
+New tail candidates are placed in one final try-once read that rechecks those
+epochs; contention or movement there also returns the floor. Existing delivery
+freshness and content-safety fences still apply. Other recall reads retain the
+normal connection timeout; the discovery budget is not an end-to-end recall
+deadline.
+`scanExhausted:false` means a budget, row cap, busy tail, epoch change or top-candidate
+pruning left coverage incomplete. It is an ordinary incomplete result, with
+`exhausted:false` on private map pages and the existing recall coverage values;
+it adds no error, retry status or response field. Signed recall cursors bind
+the visited-row count, last recency key and stop cause. Continuations replay
+that exact boundary without the time budget, with the same normal-timeout
+floor and try-once tail;
+a busy tail or changed epoch yields `cursor_stale`.
+From a source checkout, run `npm run measure:recall-recency -- --layout plain N`
+(or `--layout 53`; add `--writer` for concurrent writes)
+for one namespace size at a time. The writer is unpaced by default;
+`--writer-pause-ms N` sets an explicit pause between write calls for comparison.
+The helper prints failed samples before returning a nonzero exit code.
+
 | Capability | What it does | Default | Cost | Programmatic option / CLI switch |
 | --- | --- | --- | --- | --- |
 | Raw retention | Saves submitted capture messages through the Raw journal, with lineage and existing exclusion/forgetting controls | On in MCP and the installer; off in the library | Local plaintext disk, default 200,000,000-byte owner cap; no extra model call | MCP `raw:false` / `--no-raw` disables retention. Library callers enable it with `raw:true`; omit or use `raw:false` to disable. For a custom cap, sealing port or policy, use `rawConversations:{mode:'raw-v1',capBytes,port,readPolicy}`. `mode:'off'` disables saving while retaining management APIs. |

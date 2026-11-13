@@ -1,5 +1,11 @@
 # Fix B safety layout — revision 3
 
+> Candidate discovery in this plan is superseded by the default recency keyset
+> scan in [defaults](../defaults.md): 1,024-row floor, fixed 400 ms budget,
+> 20,000-row cap and score/ID top-1,024 retention for all recall modes.
+> The former candidate-policy constructor option is removed. Historical
+> observations and other contracts below remain records of their original version.
+
 Frozen design, 2026-10-29; code references use `a8fd8df3`. Design only.
 This narrows [the parent design](context-read-incremental-catchup.md), §§2.2–2.3,
 3.4–3.5 and 8.1. The revision-2 product facts and owner decisions supersede the

@@ -41,20 +41,27 @@ qualified and unqualified behavior remains unchanged.
 
 ## Completeness and budgets
 
-An embedded caller may construct the local core with
-`openMemoryCore({ path, model, sourceCandidatePolicy: 'bounded-keyset-v1' })`.
-Only explicit `source-evidence` or `rationale-evidence` recall then uses the
-larger private candidate window. It examines at most 20,000 current physical
-rows per authorized namespace in 256-row keyset pages, scores the generated
-body and first four stable-ID receipts of each eligible row, and retains the
-best 1,024 by literal score then ID. A single ID-only sentinel checks whether
-physical rows remain. Projection-excluded rows count toward the physical cap
-but their content and receipts do not enter scoring. A cap or discarded
-eligible candidate reports incomplete coverage; neither a returned page nor
-successful final answer proves all sources were searched. The normal
-constructor, body-only recall, namespace authority, selector/answer budgets,
-and final source payload stay unchanged. There is no MCP or hosted option for
-this constructor policy.
+Every recall mode uses the default recency keyset scan described in
+[defaults](defaults.md). The floor reads current, nondeleted, non-awaiting
+rows in one statement, scoring at most 1,024; an unscored 1,025th row decides
+whether to continue. An exhausted floor retains ordinary statement costs.
+The tail visits nondeleted physical rows within a fixed 300 ms monotonic
+budget up to 20,000 total rows per authorized namespace. The floor, safety checks and placement share one
+normal-timeout deferred transaction. Tail pages use timeout zero, restored
+synchronously, and release SHARED after at most 256 rows or 25 ms. An epoch
+change discards the tail without restarting. New tail candidates are placed in
+one final try-once read that rechecks the floor epochs; contention or movement
+there returns the placed floor, subject to existing delivery freshness checks.
+Historical, awaiting and projection-excluded rows
+consume the allowance without exposing content or receipts to scoring.
+Source contexts score the body and first four stable-ID receipts of each
+eligible memory, retaining the best 1,024 by literal score then ID. Recency
+only determines scan order. A budget, row cap, busy tail or discarded eligible candidate
+keeps coverage incomplete; successful recall does not prove all sources were
+searched. Signed cursors replay the original scan boundary without a new time
+budget; a busy tail or changed epoch makes a continuation `cursor_stale`.
+The candidate-policy constructor option has been removed. Namespace
+authority, selector/answer budgets and final source payload remain unchanged.
 
 Fetch returns every retained receipt for one memory or fails; it does not slice
 an excerpt or silently return an incomplete receipt set. The existing 101-row

@@ -796,7 +796,7 @@ upgrade or clean-development-audit claim is included in this slice.
 
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
-default 1,024-ID candidate prefix can miss a retained target among 1,025
+historical default 1,024-ID candidate prefix could miss a retained target among 1,025
 captured memories; explicit bounded keyset routing can carry that target into
 the packed answer request, while coverage remains `budget_exhausted`. These
 mechanical observations do not establish real-model extraction, semantic
@@ -1179,7 +1179,8 @@ the first 1,024 scanned IDs was not visible in two map pages and recall reported
 `budget_exhausted`. After one different low-ID memory was forgotten, the same
 target became visible and returned with 1,024 current rows. This demonstrates
 a scan-prefix boundary, not a diagnosis of past wrong answers. A positive
-beyond-prefix regression is needed before changing candidate retrieval.
+beyond-prefix regression now covers the default recency keyset scanner; the
+original observation remains historical evidence.
 
 The optional [Python reference sidecar](official-reference-rendering.md)
 preserves number/array rendering from original JSON for official-style judging.
@@ -1421,8 +1422,8 @@ still returned if some other feature selects that memory. Stable receipt-ID
 order is deterministic, not chronological.
 
 Internally, explicit source mode reads and scores up to four retained excerpts
-of 800 UTF-16 units per eligible memory within the existing 1,024-current-memory
-scan. The supplied selector receives only the winning 120-code-point preview for
+of 800 UTF-16 units per eligible memory within the default recency keyset scan
+(1,024-row floor, 300 ms budget and 20,000 physical-row cap). The supplied selector receives only the winning 120-code-point preview for
 each candidate packed into the existing at-most-100-item, 4,000-token page over
 at most two rounds, not those four full excerpts, receipt IDs or source metadata.
 Each candidate receipt must first pass the same authoritative stored identity,
@@ -1434,17 +1435,37 @@ public maps and the classification topic catalog remain unchanged. Existing
 freshness checks stop later use or finalization after a valid mutation, but data
 already sent in a begun model request cannot be withdrawn retroactively.
 
-An embedded caller can explicitly select the experimental
-`sourceCandidatePolicy: 'bounded-keyset-v1'` constructor option. Only explicit
-source-context recall then scans up to 20,000 current physical memories per
-authorized namespace in 256-row keyset pages, retaining at most the 1,024
-highest literal scores. A physical cap with more current rows, or pruning at
-1,024 candidates, remains incomplete even when the retained candidate pages
-are consumed. This widens which retained source previews may reach the selector
-within the same read authority; it does not widen the final source DTO, model
-budgets or public host default. It is still a literal heuristic with the same
-first-four-receipt, Unicode-run/CJK and semantic limitations above. The scan
-bound is an engineering envelope, not a latency or answer-quality SLA.
+All recall modes now share newest-first candidate discovery. The former
+experimental `sourceCandidatePolicy` constructor option has been removed.
+The floor reads current, nondeleted, non-awaiting rows in one statement and
+scores at most 1,024; an unscored 1,025th row detects whether a tail is needed.
+A namespace with at most 1,024 current rows keeps the ordinary statement budget.
+Tail scanning stops at the namespace's share of the fixed 300 ms per-call monotonic budget, 20,000-row cap, or the end. The floor, safety checks
+and placement share one normal-timeout deferred transaction. Tail pages use
+zero timeout, restored synchronously, with at most 256 rows or 25 ms per page.
+An epoch change discards the tail without restarting. Final placement of new
+tail candidates is one try-once read that rechecks the floor epochs; contention
+or movement there returns the placed floor, subject to existing freshness checks.
+
+Coverage is therefore newest-first and bounded per call. The newest 1,024
+current Memories of each namespace are always scored. Beyond them, a call scores
+as many further rows as fit in the budget, which depends on the machine. On the
+development workstation used for this project's measurements (quiet machine,
+disk-backed store, no concurrent writer), a one-namespace call reached about
+18,000 rows beyond the floor of a 20,000-Memory namespace within the 300 ms
+budget, and about 8,000 with 150 ms, which is each namespace's share in a
+two-namespace call; a 6,500-Memory namespace was scanned to its end. A slower machine scans fewer rows in the same time. Older Memories
+beyond that point are not literally scored in that call, and the response
+reports incomplete coverage (`scanExhausted:false`). A store in DELETE journal
+mode with a continuous writer can still make recall reads wait or return busy;
+this change does not alter that.
+Historical and awaiting tail rows, and projection-rejected rows, consume rows
+and time. The best 1,024 candidates
+are retained by literal overlap then ID, independent of recency. Budget/cap
+exhaustion, a busy tail and pruning are incomplete coverage, without a retryable error.
+This widens the searchable prefix within the same authority; it does not change
+source DTOs, model budgets or first-four-receipt/Unicode-run/CJK limitations.
+The budget is an engineering bound, not a latency or answer-quality SLA.
 
 Synthetic actual-core tests demonstrate bounded page visibility, including one
 offline run with the pinned local tokenizer. A post-hoc development replay over
@@ -2513,8 +2534,7 @@ again and replaced a crypto callback after construction had bound it. A later
 47/49 run expected public Memory state `current` instead of `active`. All those
 commands exited 1; fixture corrections preserve strict validation, suppression,
 source pruning and callback binding. Worker logs, including these failures, are
-retained under `/tmp/cairn-raw-p3-evidence.67nhhd/worker-delete-*.log`; primary
-independent logs use `/tmp/cairn-raw-p3b-evidence.xOAiQk/` instead. Neither earlier
+retained privately; primary independent logs are kept separately. Neither earlier
 green runs nor a setup failure substitute for final frozen-source verification.
 
 The first independent P3b Spec review found two further defects on candidate
@@ -2559,8 +2579,7 @@ stopped on qualification conflict and invalid profile setup before the real
 authority-loss red; a later expanded run passed 15/17 because history setup used
 ordinary supersede on a qualified Memory. History now uses real qualified
 binding/transition, preserving the existing refusal. Correction logs, including
-all reds and setup failures, are under
-`/tmp/cairn-raw-p3b-evidence.xOAiQk/review-correction-*.log`.
+all reds and setup failures, are kept outside the repository.
 
 ## Internal Raw sources P3c: bounded local references, not installed Raw adoption
 
@@ -2655,8 +2674,7 @@ now proves exclusion afterward. An 11/13 bounds run reused an event ID across
 different sessions and correctly conflicted. The initial legacy correction
 matrix passed 4/6 because its correction request used admission-shaped fields
 rather than the existing strict correction DTO. Those commands exited 1; fixture
-fixes did not relax runtime validation. Logs are retained under
-`/tmp/cairn-raw-p3c-evidence.n7PShP/worker-*.log`. Final frozen-source gates and
+fixes did not relax runtime validation. Logs are retained privately. Final frozen-source gates and
 independent reviews are recorded separately in the plan/PR; earlier green runs
 are not final-source evidence or measured semantic quality.
 

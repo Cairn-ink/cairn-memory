@@ -58,6 +58,20 @@ const extendedOnly=new Set(['importMethodVersion','checkMethodReasonRefs','getMe
 const added=['inspectCardOperation','revalidateEvidence','fetchCandidateEvidence','getContextIndexStatus','isSuppressed',
   'listMethodManifest','listMethodPackages','listMethodVersions','compareMethodVersions','deleteMethodVersion','deleteMethodPackage',
   'listMethodEffects','getMethodPackageUsage','disableMethodBinding','resolveMethodsForRole','listMethodBindingEvents','readMethodAttachmentBytes'];
+// Each sqlRevisions entry is an intended, reviewed SQL text change against the archived revision. It replaces only the
+// SQL text of one archived statement; method and bound arguments are never substituted. Delete the list when `revision` advances.
+const sqlRevisions=pins.sqlRevisions??[],workloadKeys=[23,33,52,53].map(cell=>'workload:'+cell);
+test('archived SQL revisions name only workload keys and revise each statement once',()=>{
+  for(const entry of sqlRevisions)assert.ok(workloadKeys.includes(entry.key)&&Number.isInteger(entry.index)&&
+    typeof entry.old==='string'&&typeof entry.new==='string'&&entry.old!==entry.new,JSON.stringify(entry.key)+' revision entry');
+  assert.equal(new Set(sqlRevisions.map(({key,index})=>key+'#'+index)).size,sqlRevisions.length,'no statement revised twice');
+});
+const revise=(key,statements)=>{
+  for(const entry of sqlRevisions.filter(entry=>entry.key===key)) {
+    assert.equal(statements[entry.index]?.[0],entry.old,`archived SQL revision ${key}#${entry.index} matches the archive`);
+    statements[entry.index]=[entry.new,...statements[entry.index].slice(1)];
+  }
+};
 for(const base of [23,33])for(const mode of ['open','workload'])for(const eventTime of [false,true]) {
   const cell=eventTime?(base===23?52:53):base,key=mode+':'+cell;
   test(`lineage-zero ${key}: opening, SQL, serialized results/errors and every table match the archived baseline`,async t=>{
@@ -66,7 +80,7 @@ for(const base of [23,33])for(const mode of ['open','workload'])for(const eventT
     const baseline=archive(workspace.path),current=run(root,newPath,mode,cell),actual=summary(current);
     if(receiptWalkPins.records[key])observeReceiptWalkSQL(current.statements);
     if(baseline) {
-      const old=run(baseline.path,oldPath,mode,cell);
+      const old=run(baseline.path,oldPath,mode,cell);revise(key,old.statements);
       assert.deepEqual(current.effectWitnesses,old.effectWitnesses,'complete observed effect rows, including rolled-back writes');
       if(receiptWalkPins.records[key]) {
         observeReceiptWalkSQL(old.statements);
