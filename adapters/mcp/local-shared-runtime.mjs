@@ -2,28 +2,33 @@ import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { ContextStdioServerTransport } from './context-read-transport.mjs';
 import { createLocalCairnRuntime } from './server.mjs';
 import { createLocalContextContinuations } from './local-context-continuations.mjs';
+import { createCommitDispatcher } from '../../core/commit-dispatch.mjs';
 
 /** One exact configuration, one runtime, independent SDK instances per stream.
  * Authentication and identity selection belong to the caller (R3).
  */
 export function createLocalSharedRuntime(options = {}) {
   const configuration = { ...options, namespace: structuredClone(options.namespace) };
+  const dispatcher = createCommitDispatcher(), closingSignal = new AbortController();
   const connections = new Set();
   let runtime, closed = false, closing, inFlight = 0, sdkServers = 0;
   return {
     attach(input, output) {
       if (closed) throw Error('local_host_closed');
       // Activate before discovery, even if this connection never calls a tool.
-      runtime ??= createLocalCairnRuntime(configuration);
+      runtime ??= dispatcher.open(() => createLocalCairnRuntime(configuration,
+        { dispatcher, signal: closingSignal.signal }));
       let key = Object.freeze({});
       const instances = new Set();
       const continuations = createLocalContextContinuations();
       let disconnected = false, disconnecting, active = 0, entry;
+      const disconnect = new AbortController();
       const transport = new ContextStdioServerTransport(input, output);
       const handle = {
         close() {
           if (disconnected) return disconnecting ?? Promise.resolve();
           disconnected = true; key = null; continuations.close(); connections.delete(handle);
+          disconnect.abort();
           input.off('end', onEnd); input.off('close', onEnd); output.off('close', onEnd);
           // close() revokes each SDK instance synchronously before awaiting IO.
           const stopped = [...instances].map(server => server.close());
@@ -49,7 +54,7 @@ export function createLocalSharedRuntime(options = {}) {
           if (disconnected) throw Error('local_connection_closed');
           let server;
           server = runtime.server({ key, lifecycle: {
-            continuations, closed: () => disconnected,
+            continuations, closed: () => disconnected, signal: disconnect.signal,
             async run(work) {
               active++; inFlight++;
               // Initialization must finish before an access port issues its
@@ -71,6 +76,7 @@ export function createLocalSharedRuntime(options = {}) {
     close() {
       if (closing) return closing;
       closed = true;
+      closingSignal.abort();
       const stopped = [...connections].map(connection => connection.close());
       return closing = Promise.allSettled(stopped).then(() => runtime?.close());
     },
@@ -78,5 +84,6 @@ export function createLocalSharedRuntime(options = {}) {
       return { connections: connections.size, inFlight, sdkServers,
         runtime: runtime?.inspect() ?? { state: closed ? 'closed' : 'dormant', cores: 0, rawManagers: 0, rawMaintenanceTimers: 0, refreshers: 0 } };
     },
+    inspectTransactions: () => dispatcher.inspectTransactions(),
   };
 }

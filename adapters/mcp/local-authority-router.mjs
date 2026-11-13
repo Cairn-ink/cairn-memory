@@ -49,9 +49,12 @@ export function createLocalAuthorityRouter() {
     },
     register(ports) {
       const owner = { ports, closed: false };
+      const revoked = new AbortController();
       return {
         run: work => current.run(owner, work),
-        revoke() { owner.closed = true; owner.ports = {}; },
+        check: () => check(owner),
+        signal: revoked.signal,
+        revoke() { owner.closed = true; owner.ports = {}; revoked.abort(); },
         core(core) {
           // Core facades are frozen. Copy method bindings instead of placing
           // a get trap over non-configurable, non-writable properties.
