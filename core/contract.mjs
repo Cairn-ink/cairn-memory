@@ -49,7 +49,7 @@ import { qualificationInput, qualificationSources } from './claim-qualification-
 import { proposeRationale } from './rationale.mjs';
 import { reviewSourceBasis } from './source-basis.mjs';
 import {
-  boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray, fail, receiptEventTime,
+  boundedText, identifier, limit, MemoryStoreError, object, revision, denseArray, fail, receiptEventTime,
 } from "./validation.mjs";
 
 // One constructor grammar for the base and its opt-in wrappers. Wrappers remove
@@ -378,13 +378,33 @@ export function createMemoryCore(input, internal) {
     try { return success(work()); } catch (error) { return failure(error); }
   }
 
+  /**
+   * The read answers whether admit would refuse this exact text as
+   * `memory_suppressed`, extended to raw inputs beyond admit's raw-length guard.
+   * Over admit's eligible inputs, suppressed iff admit refuses memory_suppressed;
+   * receipts run first in admit and may refuse with an earlier admission-only code.
+   * Read/admit raw ceilings are 1,000,000/20,000 UTF-16 units. Unstorable text is false.
+   * Exact matching uses admit's normalization and JavaScript toLowerCase(), not full
+   * Unicode case folding; added characters/embedded text do not match. Older
+   * fingerprints match only if today's normalization yields the same text, as in admit.
+   * Any non-ok result is unanswerable: the host must not save. Retry once for
+   * evidence_unavailable (a fact written between COMMIT and delivery) or storage_busy.
+   * Probes leave no trace; hosts exposing this beyond the authenticated owner
+   * should rate-limit it. The answer does not reserve a later admission.
+   */
   function isSuppressed(input) {
     return invoke(() => {
       runtime.ready();
       object(input, ['namespace', 'content']);
       const ns = contractNamespace(input.namespace);
-      const value = suppressionContent(input.content);
-      return { suppressed: runtime.isSuppressed(ns, value.fingerprint) };
+      const content = input.content;
+      if (!Object.hasOwn(input, 'content') || typeof content !== 'string' ||
+          content.length > 1_000_000) fail('invalid_input');
+      let value;
+      try { value = suppressionContent(content, 4000, 1_000_000); }
+      catch (error) { if (error.code !== 'invalid_input') throw error; }
+      // NULL cannot equal a stored fingerprint; still run the snapshot/scope checks.
+      return { suppressed: runtime.isSuppressed(ns, value?.fingerprint ?? null) };
     });
   }
 

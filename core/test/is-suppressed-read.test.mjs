@@ -4,6 +4,9 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync, StatementSync } from 'node:sqlite';
 import { openMemoryCore } from '../contract.mjs';
 import { transaction } from '../database.mjs';
+import { openMemoryStore } from '../index.mjs';
+import { createQualificationCandidateSnapshot } from '../qualification-candidates.mjs';
+import { fingerprint, boundedText } from '../validation.mjs';
 import { suppressionContent } from '../suppression-content.mjs';
 import { createMemoryRuntime } from '../runtime.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
@@ -82,6 +85,8 @@ for (const base of [18, 23, 33]) for (const safety of [false, true]) {
     const original = 'Synthetic Café 😀 marker';
     forget(f, original);
     forget(f, 'Synthetic zero\u200bwidth');
+    forget(f, 'Synthetic Straße σ');
+    forget(f, 'Synthetic token sk-' + 'a'.repeat(30) + ' end');
     forget(f, 'x'.repeat(4000));
     const other = { ...ns, ownerId: 'synthetic-other-owner' };
     forget(f, 'Synthetic other namespace only', other);
@@ -104,16 +109,20 @@ for (const base of [18, 23, 33]) for (const safety of [false, true]) {
       ['exactly 4000 forgotten', 'x'.repeat(4000), true],
       ['exactly 4000 new', 'y'.repeat(4000), false],
       ['long raw whitespace normalizes below bound', `  ${' '.repeat(4100)}${original}`, true],
+      ['JavaScript lowercase matches', 'SYNTHETIC STRAßE Σ', true],
+      ['no sharp-s case folding', 'Synthetic STRASSE σ', false],
+      ['no final-sigma case folding', 'Synthetic Straße ς', false],
+      ['secret redaction', 'Synthetic token [REDACTED] end', true],
+      ['added character', original + 'x', false],
+      ['embedded text', 'prefix ' + original + ' suffix', false],
       ['never forgotten', 'Synthetic never forgotten', false],
       ['forgotten in another namespace', 'Synthetic other namespace only', false],
     ];
     for (const [name, content, expected] of corpus)
       await t.test(name, () => equivalence(f, content, expected));
     for (const [name, content] of [
-      ['over 4000', 'z'.repeat(4001)], ['over raw input ceiling', ' '.repeat(20001)],
-      ['empty', ''], ['whitespace only', ' \t\n'], ['null', null], ['missing', undefined],
-      ['number', 7], ['object', {}], ['array', []], ['NUL', 'Synthetic\0invalid'],
-      ['redaction only', '[REDACTED]'],
+      ['null', null], ['missing', undefined],
+      ['number', 7], ['object', {}], ['array', []], ['over read raw ceiling', ' '.repeat(1_000_001)],
     ]) await t.test(`invalid content: ${name}`, () => sameRefusal(f, content, 'invalid_input'));
     if (safety) await t.test('content-safety branch hides a live matching Memory', () => {
       const content = 'Synthetic live hidden memory';
@@ -148,8 +157,8 @@ test('refusals: namespace validation and closed store match admission', async t 
   sameRefusal(f, content, 'store_closed');
 });
 
-test('refusals: erased namespace uses the same scope boundary as admission', async t => {
-  const f = await fixture(t, 18, true);
+for (const base of [18, 23, 33]) test(`refusals: erased namespace matches admission base ${base}`, async t => {
+  const f = await fixture(t, base, true);
   fact(f, ns, 'namespace');
   sameRefusal(f, 'Synthetic content in erased namespace', 'memory_not_found');
 });
@@ -268,23 +277,28 @@ test('write-only receipt refusals do not turn the suppression read into admissio
     { memory: { content, kind: 'invalid' } }]) refusal(f.core.admit(admission(content, ns, patch)), 'invalid_input');
 });
 
-for (const safety of [false, true]) test(`refusals: exclusive lock matches admission (${safety ? 'safety' : 'plain'})`, async t => {
-  const f = await fixture(t, 18, safety);
+for (const base of [18, 23, 33]) for (const safety of [false, true]) test(`refusals: exclusive lock matches admission base ${base} (${safety ? 'safety' : 'plain'})`, async t => {
+  const f = await fixture(t, base, safety);
   f.db.exec('BEGIN EXCLUSIVE');
   try { sameRefusal(f, 'Synthetic private busy-store content', 'storage_busy'); }
   finally { f.db.exec('ROLLBACK'); }
+  assert.equal(f.native.prepare('PRAGMA query_only').get().query_only, 0);
 });
 
-test('refusals: erased owner matches admission', async t => {
-  const f = await fixture(t, 18, true);
+for (const base of [18, 23, 33]) test(`refusals: erased owner matches admission base ${base}`, async t => {
+  const f = await fixture(t, base, true);
   fact(f, { ownerId: ns.ownerId, scope: 'owner', projectId: '' }, 'owner', '');
   sameRefusal(f, 'Synthetic private erased-owner content', 'memory_not_found');
 });
 
-test('refusals: changed safety layout attestation matches admission', async t => {
-  const f = await fixture(t, 18, true);
+for (const base of [18, 23, 33]) test(`refusals: independent changed layout base ${base}`, async t => {
+  const f = await fixture(t, base, true);
+  const independent = openMemoryCore({ path: f.path });
+  t.after(() => independent.close());
   f.db.exec('PRAGMA user_version=999');
-  sameRefusal(f, 'Synthetic private unsupported-layout content', 'unsupported_database');
+  refusal(f.core.isSuppressed({ namespace: ns, content: 'Synthetic layout' }), 'unsupported_database');
+  refusal(independent.admit(admission('Synthetic layout')), 'unsupported_database');
+  assert.equal(f.native.prepare('PRAGMA query_only').get().query_only, 0);
 });
 
 test('errors: shared input helper and closed runtime throw content-free codes', async t => {
@@ -308,4 +322,155 @@ test('write-only refusal: a query-only connection still permits the read', async
     assert.equal(f.native.prepare('PRAGMA query_only').get().query_only, 1, 'read restores caller state');
     refusal(f.core.admit(admission(content)), 'storage_error');
   } finally { f.native.exec('PRAGMA query_only=OFF'); }
+});
+
+
+for (const base of [18, 23, 33]) for (const safety of [false, true]) {
+  test(`read raw guard and definite answers: base ${base} safety ${safety}`, async t => {
+    const f = await fixture(t, base, safety), content = 'Synthetic padded forgotten text';
+    forget(f, content);
+    for (const length of [20_001, 1_000_000]) await t.test(`over-20k forgotten raw length ${length}`, () => {
+      const raw = content + ' '.repeat(length - content.length);
+      assert.equal(raw.length, length);
+      assert.deepEqual(f.core.isSuppressed({ namespace: ns, content: raw }), { ok: true, value: { suppressed: true } });
+      refusal(f.core.admit(admission(raw)), 'invalid_input');
+    });
+    for (const text of ['', ' \t\n', '[REDACTED]', 'sk-' + 'a'.repeat(30), 'Synthetic\0invalid', 'z'.repeat(4001), 'x'.repeat(1_000_000)]) {
+      assert.deepEqual(f.core.isSuppressed({ namespace: ns, content: text }), { ok: true, value: { suppressed: false } });
+      refusal(f.core.admit(admission(text)), 'invalid_input');
+    }
+    for (const text of [null, undefined, 42, {}, [], ' '.repeat(1_000_001)])
+      refusal(f.core.isSuppressed({ namespace: ns, content: text }), 'invalid_input');
+    refusal(f.core.isSuppressed({ namespace: ns }), 'invalid_input');
+    const fresh = { ownerId: 'synthetic-never-seen-owner', scope: 'project', projectId: 'synthetic-never-seen-project' };
+    assert.equal(f.db.prepare('SELECT count(*) n FROM memories WHERE owner_id=?').get(fresh.ownerId).n, 0);
+    equivalence(f, 'Synthetic fresh namespace accepts', false, fresh);
+  });
+
+  test(`writer maximum lengths: base ${base} safety ${safety}`, async t => {
+    const f = await fixture(t, base, safety, { model: { contextWindow: 8192, countTokens: () => 1,
+      extract: async () => ({ items: [{ content: 'c'.repeat(600), kind: 'fact', confidence: 0.8, sourceIndices: [0] }] }),
+      classify: async ({ input }) => ({ items: input.memories.map(m => ({ memoryId: m.id, parentIds: [], newL1: { title: 'Synthetic', parentL2Ids: [] } })) }) } });
+    const stored = (id, content, length) => {
+      const row = f.db.prepare('SELECT * FROM memories WHERE id=?').get(id);
+      assert.equal(row.content, content); assert.equal(row.content.length, length);
+      assert.equal(row.fingerprint, fingerprint(content));
+      return row;
+    };
+    const forgetStored = (id, content, length) => {
+      const row = stored(id, content, length);
+      ok(f.core.forget({ namespace: ns, memoryId: id, expectedRevision: row.revision }));
+      equivalence(f, content, true);
+    };
+    // admit writes at 4000; correction suppresses that old stored fingerprint.
+    const a = 'a'.repeat(4000), b = 'b'.repeat(4000), d = 'd'.repeat(4000);
+    const first = ok(f.core.admit(admission(a))).memory;
+    stored(first.id, a, 4000);
+    const corrected = ok(f.core.correct({ namespace: ns, memoryId: first.id, expectedRevision: first.revision,
+      content: b, kind: 'fact', receipt: receipt(`correct-${++sequence}`) })).memory;
+    equivalence(f, a, true);
+    stored(corrected.id, b, 4000);
+    const successor = ok(f.core.supersede({ namespace: ns, memoryId: corrected.id, expectedRevision: corrected.revision,
+      replacement: { content: d, kind: 'fact' }, receipts: [receipt(`supersede-${++sequence}`)] })).memory;
+    equivalence(f, b, true);
+    forgetStored(successor.id, d, 4000);
+    const legacy = openMemoryStore({ path: f.path });
+    try {
+      const scope = legacy.scope({ ownerId: ns.ownerId, projectId: ns.projectId });
+      const old = scope.remember({ content: 'l'.repeat(4000), receipt: receipt(`legacy-${++sequence}`) });
+      stored(old.id, 'l'.repeat(4000), 4000);
+      const replacement = scope.correct(old.id, { content: 'k'.repeat(4000), receipt: receipt(`legacy-correct-${++sequence}`) }, old.revision);
+      equivalence(f, 'l'.repeat(4000), true);
+      forgetStored(replacement.id, 'k'.repeat(4000), 4000);
+    } finally { legacy.close(); }
+    const captured = ok(await f.core.capture({ namespace: ns, client: 'synthetic', eventId: `capture-${++sequence}`,
+      sessionId: 'synthetic-session', messages: [{ id: `message-${++sequence}`, role: 'user', content: 'c'.repeat(600) }] }));
+    forgetStored(captured.admission.memories[0].id, 'c'.repeat(600), 600);
+    for (const qualified of [false, true]) {
+      const content = (qualified ? 'q' : 'i').repeat(600);
+      let item = { content, kind: 'fact', confidence: 0.8, receipts: [receipt(`items-${++sequence}`)] };
+      if (qualified) item = createQualificationCandidateSnapshot([item]).items[0];
+      const key = { namespace: ns, client: 'synthetic', eventId: `admission-${++sequence}`, payloadDigest: 'a'.repeat(64) };
+      const { token } = ok(f.core.claimAdmission({ ...key, leaseMs: 125000 }));
+      const result = ok(f.core.finishAdmission({ ...key, token, items: [item] }));
+      forgetStored(result.memories[0].id, content, 600);
+    }
+    if (safety) {
+      const content = 'h'.repeat(4000), memory = ok(f.core.admit(admission(content))).memory;
+      stored(memory.id, content, 4000); fact(f, ns, 'memory', memory.id);
+      equivalence(f, content, true);
+    }
+  });
+}
+
+for (const base of [18, 23, 33]) test(`delivery race and error cleanup: base ${base}`, async t => {
+  const f = await fixture(t, base, true), content = 'Synthetic race forgotten';
+  forget(f, content);
+  const exec = DatabaseSync.prototype.exec;
+  let injected = 0;
+  DatabaseSync.prototype.exec = function(sql) {
+    const result = Reflect.apply(exec, this, [sql]);
+    if (this === f.native && sql.trim() === 'COMMIT' && !injected++) fact(f, ns, 'memory', 'synthetic-unrelated-fact');
+    return result;
+  };
+  try { refusal(f.core.isSuppressed({ namespace: ns, content }), 'evidence_unavailable'); }
+  finally { DatabaseSync.prototype.exec = exec; }
+  assert.ok(injected > 0);
+  assert.equal(f.native.prepare('PRAGMA query_only').get().query_only, 0);
+  equivalence(f, content, true);
+  const prepare = DatabaseSync.prototype.prepare;
+  DatabaseSync.prototype.prepare = function(sql) {
+    if (this === f.native && sql.includes('SELECT 1 FROM suppressed')) throw Error('synthetic storage failure');
+    return Reflect.apply(prepare, this, [sql]);
+  };
+  try { refusal(f.core.isSuppressed({ namespace: ns, content }), 'storage_error'); }
+  finally { DatabaseSync.prototype.prepare = prepare; }
+  assert.equal(f.native.prepare('PRAGMA query_only').get().query_only, 0);
+});
+
+test('receipts-first ordering: forgotten text plus future occurredAt still refuses admission', async t => {
+  const f = await fixture(t, 18, false), content = 'Synthetic forgotten future receipt';
+  forget(f, content);
+  assert.deepEqual(f.core.isSuppressed({ namespace: ns, content }), { ok: true, value: { suppressed: true } });
+  const result = f.core.admit(admission(content, ns, { receipts: [{ ...receipt(`future-${++sequence}`), occurredAt: '2999-01-01T00:00:00.000Z' }] }));
+  assert.equal(result.ok, false); assert.ok(result.error.code);
+});
+
+for (const base of [18, 23, 33]) for (const mode of ['version', 'revision-through', 'fallback'])
+  test(`content-safety additional facts: base ${base} ${mode}`, async t => {
+    const f = await fixture(t, base, true), content = `Synthetic ${mode} hidden live Memory`;
+    const memory = ok(f.core.admit(admission(content))).memory;
+    transaction(f.db, () => {
+      if (mode === 'fallback') for (let i = 0; i < 4097; i++) writeContentSuppressionInside(f.db,
+        { namespace: ns, kind: 'memory', key: `synthetic-unused-${i}`, reason: 'privacy_erase', actionId: `synthetic-unused-${i}` });
+      writeContentSuppressionInside(f.db, { namespace: ns, kind: 'memory', key: memory.id,
+        ...(mode === 'fallback' ? {} : { matchMode: mode,
+          sourceVersion: JSON.stringify([mode === 'version' ? 'memory-revision-v1' : 'memory-revision-through-v1', memory.revision]) }),
+        reason: 'privacy_erase', actionId: `synthetic-${mode}` });
+    });
+    assert.equal(f.db.prepare('SELECT count(*) n FROM suppressed').get().n, 0);
+    equivalence(f, content, true);
+  });
+
+test('content-safety raw facts use SQL ancestry on base 33', async t => {
+  const f = await fixture(t, 33, true), content = 'Synthetic Raw hidden live Memory';
+  const memory = ok(f.core.admit(admission(content))).memory;
+  const rid = f.db.prepare('SELECT id FROM receipts WHERE memory_id=?').get(memory.id).id;
+  transaction(f.db, () => {
+    f.db.prepare('INSERT INTO raw_conversations VALUES(?,?,?,?,?,?,1,?,?)').run('synthetic-raw', ns.ownerId, ns.scope, ns.projectId, 'codex', 'session', 'time', 'time');
+    f.db.prepare("INSERT INTO raw_receipt_lineage VALUES(?,'synthetic-raw','message',1,5,'exact')").run(rid);
+    writeContentSuppressionInside(f.db, { namespace: ns, kind: 'raw', key: 'synthetic-raw', reason: 'privacy_erase', actionId: 'synthetic-raw-fact' });
+  });
+  assert.equal(f.db.prepare('SELECT count(*) n FROM suppressed').get().n, 0);
+  equivalence(f, content, true);
+});
+
+test('admit normalization retains its 20000 guard and fingerprints', () => {
+  for (const [raw, clean] of [[' Ｃａｆé  😀 ', 'Café 😀'], ['Synthetic token sk-' + 'a'.repeat(30) + ' end', 'Synthetic token [REDACTED] end'], ['x'.repeat(4000), 'x'.repeat(4000)], [' '.repeat(19999) + 'x', 'x']]) {
+    assert.deepEqual(suppressionContent(raw), { content: clean, fingerprint: fingerprint(clean) });
+    assert.equal(boundedText(raw, 4000), clean);
+    assert.deepEqual(suppressionContent(raw, 4000, 1_000_000), suppressionContent(raw));
+  }
+  for (const raw of ['', ' ', '[REDACTED]', 'a\0b', 'x'.repeat(4001), ' '.repeat(20000) + 'x', null, 1])
+    assert.throws(() => suppressionContent(raw), { code: 'invalid_input' });
 });
