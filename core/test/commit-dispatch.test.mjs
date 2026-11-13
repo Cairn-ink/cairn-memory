@@ -9,6 +9,8 @@ const busy = () => Object.assign(Error('synthetic busy'), { code: 'ERR_SQLITE_ER
 const code = expected => error => error.code === expected;
 const invoke = work => Promise.resolve().then(work);
 function fixture(options = {}, db = { isOpen: true, isTransaction: false }) {
+  // Synthetic handles implement the native PRAGMA surface used at bind time.
+  if (!db.prepare) { db.prepare = () => ({ get: () => ({ timeout: 5000 }) }); db.exec = () => {}; }
   const host = createCommitDispatcher(options);
   host.open(() => bindCommitConnection(db));
   return { host, db, run: (work, options) => host.run(() => dispatchCommit(db, work), options) };
@@ -53,7 +55,7 @@ test('missing, unknown, closed and active native state fail closed without retry
 });
 
 test('native rollback failure cannot cross an await or start another attempt', async () => {
-  const db = new DatabaseSync(':memory:');
+  const db = new DatabaseSync(':memory:', { timeout: 5000 });
   const states = []; let calls = 0;
   const f = fixture({ onAwait: state => states.push(state) }, db), original = db.exec.bind(db);
   db.exec = sql => { if (sql === 'ROLLBACK') throw busy(); return original(sql); };
@@ -65,7 +67,7 @@ test('native rollback failure cannot cross an await or start another attempt', a
 });
 
 test('async commit closures and async transaction callbacks are rejected before BEGIN', async () => {
-  const db = new DatabaseSync(':memory:');
+  const db = new DatabaseSync(':memory:', { timeout: 5000 });
   try {
     const f = fixture({}, db); let entered = false;
     await assert.rejects(invoke(() => f.run(async () => { entered = true; await delay(1); })), code('storage_error'),
