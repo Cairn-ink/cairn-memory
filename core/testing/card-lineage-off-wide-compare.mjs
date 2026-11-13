@@ -10,16 +10,21 @@ export const summary = record => ({ calls: record.calls.map(([method, result, st
   sql: hash(record.statements), tables: record.dump.map(([name, rows]) => [name, rows.length, hash(rows)]),
   effectWitnesses: hash(record.effectWitnesses) });
 
-// Exact texts observed in the receipt-walk cells. No seek/overflow exemption.
-export const currentReceiptWalkSQLTexts = new Set([
-  'SELECT id,revision,deleted,updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id=? AND scope=? AND project_id=? AND deleted=? ORDER BY updated_at DESC,id LIMIT ?',
-  "SELECT r.*, json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN ( SELECT rowid FROM receipts INDEXED BY memory_receipts WHERE memory_id=json_extract(wanted.value,'$[0]') ORDER BY created_at,id LIMIT 5) ORDER BY wanted.key,r.created_at,r.id",
+// Exact texts observed in the listed cells and the filter-off witness. The
+// archived batch variant occurs only in the archived baseline's trace,
+// which runs only when the baseline revision is in the local history.
+// Seek and overflow pages are not observed here and receive no exemption.
+export const currentReceiptWalkSQLTexts=new Set([
+  "SELECT id,revision,deleted,updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id=? AND scope=? AND project_id=? AND deleted=? ORDER BY updated_at DESC,id LIMIT ?",
+  "SELECT r.*,CAST(r.created_at AS BLOB) AS receipt_created_at_bytes,CAST(r.id AS BLOB) AS receipt_id_bytes,wanted.key AS wanted_entry, json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN ( SELECT rowid FROM receipts INDEXED BY memory_receipts WHERE memory_id=json_extract(wanted.value,'$[0]') AND (EXISTS (SELECT 1 FROM json_each(?) source WHERE client=json_extract(source.value,'$[0]') COLLATE BINARY AND session_id=json_extract(source.value,'$[1]') COLLATE BINARY AND event_id=json_extract(source.value,'$[2]') COLLATE BINARY AND role=json_extract(source.value,'$[3]') COLLATE BINARY AND excerpt=json_extract(source.value,'$[4]') COLLATE BINARY) OR instr(CAST(client AS BLOB),x'00')>0 OR instr(CAST(session_id AS BLOB),x'00')>0 OR instr(CAST(event_id AS BLOB),x'00')>0 OR instr(CAST(role AS BLOB),x'00')>0 OR instr(CAST(excerpt AS BLOB),x'00')>0) ORDER BY created_at,id LIMIT 5) ORDER BY wanted.key,r.created_at,r.id",
+  "SELECT id,revision,deleted,updated_at, (SELECT encoding FROM pragma_encoding) AS receipt_encoding FROM memories INDEXED BY namespace_memories WHERE owner_id=? AND scope=? AND project_id=? AND deleted=? ORDER BY updated_at DESC,id LIMIT ?",
+  "SELECT r.*,wanted.key AS wanted_entry, json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN ( SELECT rowid FROM receipts INDEXED BY memory_receipts WHERE memory_id=json_extract(wanted.value,'$[0]') ORDER BY created_at,id LIMIT 5) ORDER BY wanted.key,r.created_at,r.id",
 ]);
-export const archivedReceiptWalkSQLTexts = new Set([
+export const archivedReceiptWalkSQLTexts=new Set([
   "SELECT r.*, json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted FROM json_each(?) wanted CROSS JOIN receipts r INDEXED BY memory_receipts ON r.memory_id=json_extract(wanted.value,'$[0]') LIMIT 5",
 ]);
-export const receiptWalkSQLTexts = new Set([...currentReceiptWalkSQLTexts, ...archivedReceiptWalkSQLTexts]);
-export const receiptWalkSQL = ([sql]) => receiptWalkSQLTexts.has(normalizeSQL(sql));
+export const receiptWalkSQLTexts=new Set([...currentReceiptWalkSQLTexts,...archivedReceiptWalkSQLTexts]);
+export const receiptWalkSQL=([sql])=>receiptWalkSQLTexts.has(normalizeSQL(sql));
 
 export function reviseSQL(key, statements, sqlRevisions = []) {
   for (const entry of sqlRevisions.filter(entry => entry.key === key)) {
@@ -55,11 +60,25 @@ export function cardFamilySQL([sql, , bindings = []]) {
     ([...sql.matchAll(/['"`]((?:private_cards|card_[a-z_]+))['"`]/gi)].length > 0 || bindings.some(value => typeof value === 'string' && cardTable(value)));
 }
 
-export function validateCardStatementTexts(texts = {}, entries = []) {
+// Callers can replace the Card policy with reviewed exact-text fixture lists.
+// Omitting policy preserves the original comparison and synthetic fixtures.
+// Distinguish omission from an explicitly supplied empty policy object.
+const defaultSqlAdditionPolicy = Object.freeze({});
+const familyMethods = policy => policy.familyMethods ?? [...forgettingMethods];
+const additionSQL = (row, policy) => policy.sqlTexts === undefined ? purgeAdditionSQL(row) : policy.sqlTexts.includes(row[0]);
+const anchorSQLTexts = policy => policy.anchorSQLTexts ?? [
+  'UPDATE memories SET content = NULL, deleted = 1, revision = revision + 1, updated_at = ? WHERE id = ?',
+];
+function assertAdditionAnchor(sql, policy, message) {
+  const texts = anchorSQLTexts(policy);
+  if (texts.length) assert.ok(texts.includes(sql), message);
+}
+
+export function validateCardStatementTexts(texts = {}, entries = [], policy = defaultSqlAdditionPolicy) {
   assert.ok(texts && typeof texts === 'object' && !Array.isArray(texts), 'cardStatementTexts is a method map');
   const ledgerTexts = new Set(entries.map(entry => normalizeSQL(entry.statement[0])));
   for (const [method, list] of Object.entries(texts)) {
-    assert.ok(forgettingMethods.has(method) && Array.isArray(list) && list.every(sql => typeof sql === 'string' && sql.length > 0),
+    assert.ok(familyMethods(policy).includes(method) && Array.isArray(list) && list.every(sql => typeof sql === 'string' && sql.length > 0),
       'reviewed card texts are exact nonempty strings for forgetting methods');
     assert.deepEqual(list, [...new Set(list)].sort(), 'reviewed card texts are sorted and unique');
     for (const sql of list) {
@@ -76,9 +95,9 @@ export function wideArchiveMode(available, requireArchive) {
   return available ? 'archive' : 'pins';
 }
 
-export function archivedCardStatementTexts(archived) {
+export function archivedCardStatementTexts(archived, policy = defaultSqlAdditionPolicy) {
   checkCallRanges(archived);
-  return Object.fromEntries([...forgettingMethods].map(method => [method, [...new Set(archived.calls
+  return Object.fromEntries(familyMethods(policy).map(method => [method, [...new Set(archived.calls
     .filter(call => call[0] === method && call.length === 4).flatMap(call => callStatements(archived, call))
     .filter(cardFamilySQL).map(([sql]) => sql))].sort()]));
 }
@@ -86,11 +105,11 @@ export function archivedCardStatementTexts(archived) {
 // A single fixture list covers all workload traces, so the gate checks their
 // archive union after comparing the individual traces. Pure comparisons default
 // to checking their one supplied archive, including unused list entries.
-export function assertArchivedCardStatementTexts(archives, texts = {}, entries = []) {
-  validateCardStatementTexts(texts, entries);
+export function assertArchivedCardStatementTexts(archives, texts = {}, entries = [], policy = defaultSqlAdditionPolicy) {
+  validateCardStatementTexts(texts, entries, policy);
   assert.ok(archives.length > 0, 'archived card text comparison needs at least one trace');
-  const observed = archives.map(archivedCardStatementTexts);
-  for (const method of forgettingMethods) assert.deepEqual(
+  const observed = archives.map(archived => archivedCardStatementTexts(archived, policy));
+  for (const method of familyMethods(policy)) assert.deepEqual(
     [...new Set(observed.flatMap(map => map[method]))].sort(), texts[method] ?? [],
     `${method} reviewed card texts equal the revised archive`);
 }
@@ -99,8 +118,18 @@ export function assertArchivedCardStatementTexts(archives, texts = {}, entries =
 // zero-based within that revised archived call. Allowed methods are fixture data.
 // Entries sharing an anchor are inserted in ledger order. Probes are individual
 // entries, never an optional allowance attached to another statement.
-export function validateSqlAdditions(entries = [], sqlAdditionMethods = []) {
+export function validateSqlAdditions(entries = [], sqlAdditionMethods = [], policy = defaultSqlAdditionPolicy) {
+  for (const name of ['sqlTexts', 'familyMethods', 'anchorSQLTexts']) if (Object.hasOwn(policy, name)) {
+    const list = policy[name];
+    assert.ok(Array.isArray(list) && list.every(value => typeof value === 'string' && value.length > 0 && value === normalizeSQL(value)),
+      `${name} is an exact string list`);
+    assert.equal(new Set(list).size, list.length, `${name} entries are unique`);
+  }
   assert.ok(Array.isArray(entries), 'sqlAdditions is an array');
+  if (entries.length && policy !== defaultSqlAdditionPolicy) {
+    for (const name of ['sqlTexts', 'familyMethods', 'anchorSQLTexts'])
+      assert.ok(Array.isArray(policy[name]) && policy[name].length > 0, `${name} must be non-empty for a non-empty ledger`);
+  }
   assert.ok(Array.isArray(sqlAdditionMethods) && sqlAdditionMethods.every(method => typeof method === 'string' && method.trim() === method && method.length > 0),
     'sqlAdditionMethods is an explicit list of call methods');
   assert.equal(new Set(sqlAdditionMethods).size, sqlAdditionMethods.length, 'addition methods are listed once');
@@ -115,7 +144,7 @@ export function validateSqlAdditions(entries = [], sqlAdditionMethods = []) {
     const row = entry.statement;
     assert.ok(Array.isArray(row) && row.length === 3 && typeof row[0] === 'string' && row[0] === normalizeSQL(row[0]) &&
       ['get', 'all', 'iterate', 'run', 'exec'].includes(row[1]) && Array.isArray(row[2]), 'full traced statement row');
-    assert.ok(purgeAdditionSQL(row) && !receiptWalkSQL(row), 'only reviewed purge statements, never receipt exemptions');
+    assert.ok(additionSQL(row, policy) && !receiptWalkSQL(row), 'only reviewed purge statements, never receipt exemptions');
   }
   assert.deepEqual([...new Set(entries.map(entry => entry.method))].sort(), [...sqlAdditionMethods].sort(),
     'reviewed methods are exactly those carrying additions across the workloads');
@@ -140,8 +169,8 @@ function checkCallRanges(record) {
   }
 }
 
-export function ledgerAdditionSummary(key, entries = [], sqlAdditionMethods = []) {
-  validateSqlAdditions(entries, sqlAdditionMethods);
+export function ledgerAdditionSummary(key, entries = [], sqlAdditionMethods = [], policy = defaultSqlAdditionPolicy) {
+  validateSqlAdditions(entries, sqlAdditionMethods, policy);
   const calls = [];
   for (const entry of orderedEntries(key, entries)) {
     let call = calls.at(-1);
@@ -151,8 +180,8 @@ export function ledgerAdditionSummary(key, entries = [], sqlAdditionMethods = []
   return { callCount: calls.length, calls };
 }
 
-export function reconstructWideTrace(key, archived, entries = [], sqlAdditionMethods = []) {
-  validateSqlAdditions(entries, sqlAdditionMethods); checkCallRanges(archived);
+export function reconstructWideTrace(key, archived, entries = [], sqlAdditionMethods = [], policy = defaultSqlAdditionPolicy) {
+  validateSqlAdditions(entries, sqlAdditionMethods, policy); checkCallRanges(archived);
   const wanted = orderedEntries(key, entries), insertions = new Map();
   const ordinals = new Map();
   let consumed = 0;
@@ -163,12 +192,11 @@ export function reconstructWideTrace(key, archived, entries = [], sqlAdditionMet
       assert.equal(call.length, 4, 'addition belongs to a traced call');
       assert.ok(entry.after < call[3] - call[2], `existing anchor for ${method} ${ordinal} after ${entry.after}`);
       const index = call[2] + entry.after;
-      // This is the canonical purge site, after authorization/suppression and
-      // immediately before the tombstone. A refused call without it has no anchor.
-      assert.equal(archived.statements[index + 1]?.[0],
-        'UPDATE memories SET content = NULL, deleted = 1, revision = revision + 1, updated_at = ? WHERE id = ?',
+      // The default policy requires the canonical tombstone. Explicit policies
+      // require reviewed successors; empty lists are valid only with an empty ledger.
+      assertAdditionAnchor(archived.statements[index + 1]?.[0], policy,
         'purge anchor precedes the canonical Memory tombstone');
-      assert.ok(index + 1 < call[3], 'purge anchor stays inside its call');
+      assert.ok(index + 1 < call[3] || anchorSQLTexts(policy).length === 0, 'purge anchor stays inside its call');
       const rows = insertions.get(index) ?? [];
       rows.push(entry.statement); insertions.set(index, rows); consumed++;
     }
@@ -186,11 +214,11 @@ export function reconstructWideTrace(key, archived, entries = [], sqlAdditionMet
 // This check needs only the current trace. Select the purge family over the
 // entire trace, compare full rows in their reviewed calls, and reject leftovers.
 // It also returns the precise positions to subtract for receipt count checks.
-export function currentAdditionSummary(key, current, entries = [], sqlAdditionMethods = [], cardStatementTexts = {}) {
-  validateSqlAdditions(entries, sqlAdditionMethods); validateCardStatementTexts(cardStatementTexts, entries); checkCallRanges(current);
+export function currentAdditionSummary(key, current, entries = [], sqlAdditionMethods = [], cardStatementTexts = {}, policy = defaultSqlAdditionPolicy) {
+  validateSqlAdditions(entries, sqlAdditionMethods, policy); validateCardStatementTexts(cardStatementTexts, entries, policy); checkCallRanges(current);
   const wanted = orderedEntries(key, entries), positions = new Set(), listedPositions = new Set(), calls = [];
   const texts = new Set(entries.map(entry => entry.statement[0]));
-  const isAddition = row => purgeAdditionSQL(row) || texts.has(row[0]);
+  const isAddition = row => additionSQL(row, policy) || texts.has(row[0]);
   const ordinals = new Map();
   let consumed = 0;
   for (const call of current.calls) {
@@ -203,7 +231,7 @@ export function currentAdditionSummary(key, current, entries = [], sqlAdditionMe
     }
     for (let index = call[2]; index < call[3]; index++) {
       const statement = current.statements[index];
-      const listed = forgettingMethods.has(method) && (cardStatementTexts[method] ?? []).includes(statement[0]);
+      const listed = familyMethods(policy).includes(method) && (cardStatementTexts[method] ?? []).includes(statement[0]);
       if (listed) listedPositions.add(index);
       if (isAddition(statement) && (!listed || expected.some(entry => entry.statement[0] === statement[0]))) {
         rows.push(statement); positions.add(index); indices.push(index);
@@ -211,23 +239,22 @@ export function currentAdditionSummary(key, current, entries = [], sqlAdditionMe
     }
     if (rows.length) {
       assert.ok(sqlAdditionMethods.includes(method), `${method} carries purge SQL but is not a reviewed addition method`);
-      assert.ok(forgettingMethods.has(method), `${method} carries purge SQL outside a forgetting call`);
+      if (familyMethods(policy).length) assert.ok(familyMethods(policy).includes(method), `${method} carries purge SQL outside a forgetting call`);
     }
     assert.deepEqual(rows, expected.map(entry => entry.statement), `${method} ${ordinal} has exactly its ledger rows and bindings`);
-    // Match each anchor group as one contiguous block ending at the canonical
-    // tombstone. Receipt batching can shift its absolute index within the call.
+    // Match each anchor group as a contiguous block with any listed successor.
+    // Receipt batching can shift its absolute index within the call.
     for (let offset = 0; offset < expected.length;) {
       let end = offset + 1;
       while (end < expected.length && expected[end].after === expected[offset].after) end++;
       for (let i = offset + 1; i < end; i++) assert.equal(indices[i], indices[i - 1] + 1, 'current purge anchor group is contiguous');
       const next = indices[end - 1] + 1;
-      assert.ok(next < call[3], 'current purge anchor stays inside its call');
-      assert.equal(current.statements[next]?.[0],
-        'UPDATE memories SET content = NULL, deleted = 1, revision = revision + 1, updated_at = ? WHERE id = ?',
+      assert.ok(next < call[3] || anchorSQLTexts(policy).length === 0, 'current purge anchor stays inside its call');
+      assertAdditionAnchor(current.statements[next]?.[0], policy,
         'current purge anchor precedes the canonical Memory tombstone');
       offset = end;
     }
-    if (forgettingMethods.has(method)) for (let index = call[2]; index < call[3]; index++) {
+    if (familyMethods(policy).includes(method)) for (let index = call[2]; index < call[3]; index++) {
       const statement = current.statements[index];
       // Known pins-mode limit: another copy of an already listed exact text
       // passes this classifier. Archive exact comparison and the workload SQL
@@ -245,17 +272,17 @@ export function currentAdditionSummary(key, current, entries = [], sqlAdditionMe
     if (isAddition(row)) assert.ok(positions.has(index) || listedPositions.has(index), 'no purge addition outside its reviewed call');
   });
   const effect = { callCount: calls.length, calls: calls.sort(compareAnchors) };
-  assert.deepEqual(effect, ledgerAdditionSummary(key, entries, sqlAdditionMethods), 'current additions have the ledger summary');
+  assert.deepEqual(effect, ledgerAdditionSummary(key, entries, sqlAdditionMethods, policy), 'current additions have the ledger summary');
   return { effect, positions };
 }
 
-export function assertWidePins(key, current, entries, pinned, sqlAdditionMethods = [], cardStatementTexts = {}) {
+export function assertWidePins(key, current, entries, pinned, sqlAdditionMethods = [], cardStatementTexts = {}, policy = defaultSqlAdditionPolicy) {
   const actual = summary(current);
-  const effect = currentAdditionSummary(key, current, entries, sqlAdditionMethods, cardStatementTexts).effect;
+  const effect = currentAdditionSummary(key, current, entries, sqlAdditionMethods, cardStatementTexts, policy).effect;
   if (workloadKeys.includes(key)) {
     if (effect.callCount || Object.hasOwn(pinned ?? {}, 'sqlAdditions')) {
       actual.sqlAdditions = effect;
-      assert.deepEqual(pinned?.sqlAdditions, ledgerAdditionSummary(key, entries, sqlAdditionMethods), 'pins explicitly describe the ledger effect');
+      assert.deepEqual(pinned?.sqlAdditions, ledgerAdditionSummary(key, entries, sqlAdditionMethods, policy), 'pins explicitly describe the ledger effect');
     }
   }
   assert.deepEqual(actual, pinned, 'current trace matches its pins');
@@ -274,11 +301,11 @@ export function compareWideTables(current, archived, removedRows = []) {
   assert.deepEqual(current, expected, 'every table population, minus only explicitly reviewed rows');
 }
 
-export function compareWideTraces({ key, current, archived, sqlAdditions = [], sqlAdditionMethods = [], cardStatementTexts = {}, checkArchivedCardTexts = true, receiptWalk = false }) {
-  validateCardStatementTexts(cardStatementTexts, sqlAdditions);
-  if (checkArchivedCardTexts) assertArchivedCardStatementTexts([archived], cardStatementTexts, sqlAdditions);
-  const reconstructed = reconstructWideTrace(key, archived, sqlAdditions, sqlAdditionMethods);
-  const { positions } = currentAdditionSummary(key, current, sqlAdditions, sqlAdditionMethods, cardStatementTexts);
+export function compareWideTraces({ key, current, archived, sqlAdditions = [], sqlAdditionMethods = [], cardStatementTexts = {}, checkArchivedCardTexts = true, receiptWalk = false, sqlAdditionPolicy = defaultSqlAdditionPolicy }) {
+  validateCardStatementTexts(cardStatementTexts, sqlAdditions, sqlAdditionPolicy);
+  if (checkArchivedCardTexts) assertArchivedCardStatementTexts([archived], cardStatementTexts, sqlAdditions, sqlAdditionPolicy);
+  const reconstructed = reconstructWideTrace(key, archived, sqlAdditions, sqlAdditionMethods, sqlAdditionPolicy);
+  const { positions } = currentAdditionSummary(key, current, sqlAdditions, sqlAdditionMethods, cardStatementTexts, sqlAdditionPolicy);
   assert.deepEqual(current.effectWitnesses, archived.effectWitnesses, 'complete effect witnesses, including rolled-back writes');
   compareWideTables(current.dump, archived.dump, []);
   if (!receiptWalk) {

@@ -192,6 +192,22 @@ test('reviewed addition methods reject unlisted entries, duplicates and unused m
   f.sqlAdditions[0].method = 'read';
   assert.throws(() => validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods), { code: 'ERR_ASSERTION' });
 });
+test('an explicit addition policy is empty only with an empty ledger', () => {
+  const f = fixture(), emptyPolicy = { sqlTexts: [], familyMethods: [], anchorSQLTexts: [] };
+  const policy = { sqlTexts: additions.map(([sql]) => sql), familyMethods: ['forget'], anchorSQLTexts: [tombstone[0]] };
+  assert.doesNotThrow(() => validateSqlAdditions([], [], emptyPolicy));
+  assert.doesNotThrow(() => validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods, policy));
+  const error = { code: 'ERR_ASSERTION', message: /sqlTexts must be non-empty for a non-empty ledger/ };
+  assert.throws(() => validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods, emptyPolicy), error);
+  assert.throws(() => validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods, {}), error);
+  for (const name of ['sqlTexts', 'familyMethods', 'anchorSQLTexts']) {
+    const incomplete = { ...policy, [name]: [] };
+    const error = { code: 'ERR_ASSERTION', message: new RegExp(name + ' must be non-empty for a non-empty ledger') };
+    assert.throws(() => validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods, incomplete), error);
+    delete incomplete[name];
+    assert.throws(() => validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods, incomplete), error);
+  }
+});
 test('pins mode: opening traces also reject purge SQL outside a reviewed call', () => {
   const f = fixture();
   f.current = trace([['read', success, [additions[3]]]]);
