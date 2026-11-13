@@ -8,7 +8,7 @@ It does not make source claims true or authenticate submitted speakers.
 Forgetting, correcting or rejecting a Memory withholds its old evidence from
 other Memories citing the same message. Their own statements remain readable,
 even if they repeat that wording. A Memory can have no delivered receipts;
-receipt counts can exceed the receipts delivered after evidence withholding.
+an empty receipt list with a positive `receiptCount` means withheld receipts, not corruption, and on a capped recall `receiptsOmitted` includes withheld receipts.
 
 ```js
 await core.recall({ readSet: [namespace], query: 'What did I ask about?',

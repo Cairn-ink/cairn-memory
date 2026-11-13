@@ -24,7 +24,7 @@ export function sourceEvidence(memory, receipts, receiptCount, receiptKey) {
   try {
     identifier(memory.id); revision(memory.revision);
     if (!['current', 'historical'].includes(memory.currentness) ||
-        !Number.isSafeInteger(receiptCount) || receiptCount < 0 || receipts.length > receiptCount) fail('storage_error');
+        !Number.isSafeInteger(receiptCount) || receiptCount < 1 || receipts.length > receiptCount) fail('storage_error');
     const seen = new Set();
     const sources = receipts.map(receipt => {
       const source = validateSourceReceipt(memory.id, receipt, receiptKey);
