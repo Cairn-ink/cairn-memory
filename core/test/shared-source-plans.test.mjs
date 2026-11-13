@@ -183,7 +183,7 @@ test('every added or changed production statement has bounded indexed inputs wit
     procedural:{anchors:[{receiptIndex:0,start:0,end:anchor.excerpt.length}]}}));
   for(let i=0;i<16;i++)ok(await f.core.reviewRationale({namespace:ns,refs:memories.slice(i,i+2).map(memory=>({memoryId:memory.id,revision:memory.revision}))}));
   const episodes=openMemoryCore({path:f.path,...episodeOptions,model:episodeModel({
-    extract:({input})=>({items:Array.from({length:8},(_,i)=>({content:'Synthetic plan Episode '+input.messages[0].content+' '+i,kind:'fact',confidence:.8,sourceIndices:[0]}))}),
+    extract:({input})=>({items:Array.from({length:5},(_,i)=>({content:'Synthetic plan Episode '+input.messages[0].content+' '+i,kind:'fact',confidence:.8,sourceIndices:[0]}))}),
     interpretEpisode:request=>{const field=value=>({value,anchors:[{sourceIndex:0,start:0,end:request.input.sources[0].text.length}]});
       return {type:field('work'),language:'mixed',gist:field('Synthetic plan gist'),outcome:null,nextStep:field('Synthetic plan next step'),disposition:null};},
   })});

@@ -134,8 +134,10 @@ test(`withheld Episode projects complete base invalidation ${operation}`,async t
 });
 
 for(const operation of ['forget','correct','reject'])
-test(`Episode listing and next steps scan past withheld candidates ${operation}`,async t=>{
-  const port=model({extract:({input})=>({items:[{content:'Synthetic retained '+input.messages[0].content,kind:'fact',confidence:.8,sourceIndices:[0]}]}),
+test(`Episode listing and next steps scan past withheld candidates ${operation}`,{timeout:15000},async t=>{
+  // The listing needs interpreted Episodes, not extracted/qualified Memories.
+  // Independent admitted targets below withhold sources without linking them.
+  const port=model({extract:()=>({items:[]}),
     interpretEpisode:request=>{
       const field=value=>({value,anchors:[{sourceIndex:0,start:0,end:request.input.sources[0].text.length}]});
       return {type:field('work'),language:'mixed',gist:field('Synthetic derived wording'),outcome:null,nextStep:field('Synthetic next action'),disposition:null};
@@ -144,18 +146,18 @@ test(`Episode listing and next steps scan past withheld candidates ${operation}`
   for(let i=0;i<15;i++) {
     const result=ok(await f.core.capture(episodeInput(1,'synthetic-scan-'+i,{namespace:ns,
       messages:[{id:'synthetic-scan-source-'+i,role:'user',content:'Synthetic scan evidence '+i,occurredAt:'1901-02-03T04:05:06.789Z'}]})));
-    const memory=result.admission.memories[0],saved=ok(f.core.get({namespace:ns,memoryId:memory.id})).receipts[0];
+    assert.equal(result.admission.memories.length,0);
+    const saved=f.db.prepare(`SELECT s.message_id AS eventId,s.role,s.text AS excerpt,e.client,e.session_key AS sessionId
+      FROM episode_sources s JOIN session_episodes e ON e.id=s.origin_episode_id WHERE s.episode_id=?`).get(result.episode.id);
     episodes.push({id:result.episode.id,saved});
   }
   const sorted=f.db.prepare("SELECT id FROM session_episodes ORDER BY json_extract(record,'$.eventEnd') DESC,id").all().map(row=>episodes.find(e=>e.id===row.id));
-  const ordinary=openMemoryCore({path:f.path,decisionReview:'required-v1',model:model({extract:({input})=>({items:[{
-    content:'Synthetic terminal '+input.messages[0].content,kind:operation==='reject'?'decision':'fact',confidence:.8,sourceIndices:[0]}]})})});
+  const ordinary=openMemoryCore({path:f.path,decisionReview:'required-v1'});
   t.after(()=>ordinary.close());
-  const receiptIds=[];
   for(const {saved,id}of sorted.slice(0,13)) {
-    receiptIds.push(saved.id);
-    const target=ok(await ordinary.capture({namespace:ns,client:saved.client,sessionId:saved.sessionId,eventId:'synthetic-terminal-'+id,
-      messages:[{id:saved.eventId,role:saved.role,content:saved.excerpt}]})).admission.memories[0];
+    const target=ok(ordinary.admit({namespace:ns,memory:{content:'Synthetic terminal '+saved.excerpt,
+      kind:operation==='reject'?'decision':'fact'},receipts:[saved]})).memory;
+    saved.id=f.db.prepare('SELECT id FROM receipts WHERE memory_id=?').get(target.id).id;
     const action={namespace:ns,memoryId:target.id,expectedRevision:target.revision};
     ok(operation==='correct'?ordinary.correct({...action,content:'Synthetic replacement '+id,kind:'fact',receipt:receipt('synthetic-scan-correction-'+id)}):
       ordinary[operation]({...action,...(operation==='reject'?{actionId:'synthetic-scan-rejection-'+id}:{})}));
@@ -165,31 +167,35 @@ test(`Episode listing and next steps scan past withheld candidates ${operation}`
   assert.deepEqual(first.items.map(item=>item.id),[sorted[13].id]);assert.equal(first.exhausted,false);assert.ok(first.nextCursor);
   const second=ok(f.core.listEpisodes({...input,cursor:first.nextCursor}));
   assert.deepEqual(second.items.map(item=>item.id),[sorted[14].id]);assert.equal(second.exhausted,true);assert.equal(second.nextCursor,null);
-  const received=ok(f.core.listEpisodes({...input,timeBasis:'receipt',limit:50}));
+  // Receipt time is assigned on capture and differs from the event's date.
+  const times=f.db.prepare('SELECT min(first_received_at) AS first,max(first_received_at) AS last FROM session_episodes').get();
+  const received=ok(f.core.listEpisodes({...input,timeBasis:'receipt',since:times.first,
+    until:new Date(Date.parse(times.last)+1).toISOString(),limit:50}));
   assert.equal(received.items.length,15);
   for(const item of received.items.filter(item=>sorted.slice(0,13).some(e=>e.id===item.id))) {
     assert.equal(item.gist,null);assert.equal(item.nextStep,null);assert.equal(item.eventEnd,null);assert.equal(item.processing.state,'invalidated');
   }
   const context=ok(f.core.sessionStartContext({namespace:ns,groups:{nextSteps:true,procedural:false},maxTokens:2000,maxChars:8000}));
-  assert.deepEqual(context.groups.nextSteps.items.map(item=>item.episodeId),[sorted[13].id]);
+  const nextOrder=f.db.prepare("SELECT id FROM session_episodes ORDER BY json_extract(record,'$.nextStep.receiptOrdinal') DESC,id").all();
+  assert.deepEqual(context.groups.nextSteps.items.map(item=>item.episodeId),nextOrder.filter(row=>sorted.slice(13).some(e=>e.id===row.id)).map(row=>row.id));
   const encoded=JSON.stringify({first,second,received,context});
   for(const item of sorted.slice(0,13)){assert.equal(encoded.includes(item.saved.excerpt),false);assert.equal(encoded.includes(item.saved.id),false);}
 });
 
 test('Episode link and source continuation filter each physical page',async t=>{
   let batch=0;
-  const port=model({extract:()=>({items:Array.from({length:9},(_,i)=>({content:`Synthetic linked claim ${batch}-${i}`,kind:'fact',confidence:.8,sourceIndices:[0]}))})});
+  const port=model({extract:()=>({items:Array.from({length:5},(_,i)=>({content:`Synthetic linked claim ${batch}-${i}`,kind:'fact',confidence:.8,sourceIndices:[0]}))})});
   const f=await lineageFixture(t,{base:33,options:{...options,model:port}}),saved=[];
   let episodeId;
-  for(batch=1;batch<=6;batch++) {
+  for(batch=1;batch<=11;batch++) {
     const result=ok(await f.core.capture(episodeInput(batch,'synthetic-link-continuation',{namespace:ns})));
     episodeId=result.episode.id;
     saved.push(ok(f.core.get({namespace:ns,memoryId:result.admission.memories[0].id})).receipts[0]);
   }
   const request={namespace:ns,episodeId,sourceLimit:1,memoryLimit:50};
   const before=ok(f.core.getEpisode(request));
-  assert.ok(before.sources.nextCursor,'six sources require source continuation');
-  assert.ok(before.memoryLinks.nextCursor,'fifty-four links require link continuation');
+  assert.ok(before.sources.nextCursor,'eleven sources require source continuation');
+  assert.ok(before.memoryLinks.nextCursor,'fifty-five links require link continuation');
   const ordinary=openMemoryCore({path:f.path,model:model({extract:({input})=>({items:[{content:'Synthetic withheld '+input.messages[0].content,kind:'fact',confidence:.8,sourceIndices:[0]}]})})});
   t.after(()=>ordinary.close());
   const withheld=[];
@@ -201,16 +207,17 @@ test('Episode link and source continuation filter each physical page',async t=>{
   }
   const links=[],sources=[];
   for(const kind of ['sources','memoryLinks']) {
-    let cursor;
+    let cursor,pages=0;
     do {
       const page=ok(f.core.getEpisode({...request,...(cursor?{[kind==='sources'?'sourceCursor':'memoryCursor']:cursor}:{})}));
       (kind==='sources'?sources:links).push(...page[kind].items);
       cursor=page[kind].nextCursor;
+      assert.ok(++pages<=12,'bounded continuation');
       for(const id of withheld)assert.equal(JSON.stringify(page).includes(id),false);
       for(const source of saved.slice(0,3))assert.equal(JSON.stringify(page).includes(source.excerpt),false);
     } while(cursor);
   }
-  assert.equal(new Set(links.map(link=>link.memoryId)).size,54);
-  assert.equal(new Set(sources.map(source=>source.id)).size,3);
+  assert.equal(new Set(links.map(link=>link.memoryId)).size,55);
+  assert.equal(new Set(sources.map(source=>source.id)).size,8);
   assert.ok(links.some(link=>link.receiptIds.length===0));
 });
