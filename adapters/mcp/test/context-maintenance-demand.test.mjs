@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setImmediate as turn } from 'node:timers/promises';
 import { join } from 'node:path';
+import { renameSync, statSync } from 'node:fs';
+import { safetyFixture } from '../../../core/testing/content-safety-s2h-fixture.mjs';
+import { fixture as dependencyFixture, host as dependencyHost, ns as dependencyNamespace } from '../../../core/test/card-current-fixture.mjs';
+import { writeContentSuppressionInside } from '../../../core/content-suppression-storage.mjs';
+import { transaction } from '../../../core/database.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
@@ -107,12 +112,14 @@ test('f: retained demand contains only three enum/timestamp pairs, copied on ins
   assert.deepEqual(createContextMaintenanceDemand().inspect(), [], 'hosts do not share demand');
 });
 
-async function realFixture(t) {
-  const w = createTestWorkspace(t), path = join(w.path, 'synthetic-demand.sqlite');
-  const cards = cardHost(), access = createContextReadAccess(ns, false, { maintenance: true });
-  const core = openMemoryCore({ path, raw: true, privateCards: cards.options,
+async function realFixture(t, { path: sourcePath, cards = cardHost(), shared = false } = {}) {
+  const w = createTestWorkspace(t), path = sourcePath ?? join(w.path, 'synthetic-demand.sqlite');
+  const access = createContextReadAccess(ns, false, { maintenance: true });
+  const host = shared ? createCommitDispatcher({ strict: true }) : null;
+  const open = () => openMemoryCore({ path, raw: true, privateCards: cards.options,
     contextRead: { ...access.configuration, embedder: createFakeEmbedder(), counter,
       policy: { family: 'local', maxRequests: 10000, maxUsd: 1, estimateUsd: () => 0 } } });
+  const core = host ? host.open(open) : open();
   w.defer(() => core.close());
   for (let i = 0; i < 3; i++) ok(await core.admit({ namespace: ns,
     memory: { content: 'Synthetic cobalt telescope memory ' + i, kind: 'fact' },
@@ -129,7 +136,7 @@ async function realFixture(t) {
   t.after(async () => { await client.close(); await server.close(); serverSide.destroy(); clientSide.destroy(); });
   await server.connect(new StdioServerTransport(serverSide, serverSide));
   await client.connect(new StdioServerTransport(clientSide, clientSide));
-  return { core, access, client, demand, path };
+  return { core, access, client, demand, path, cards, card: draft };
 }
 
 for (const wanted of [[combined], [['memory']], [['card']], [combined, ['memory']], [['memory'], ['card']], [combined, ['memory'], ['card']]]) {
@@ -237,4 +244,97 @@ for (const locked of ['canonical', 'sidecar']) test(`idle fence probe retries ${
     if (holder.isTransaction) holder.exec('ROLLBACK');
     holder.close();
   }
+});
+
+async function idleFixture(t, fixture) {
+  const f = fixture ?? await realFixture(t, { shared: true }), selected = [];
+  f.demand.note(['memory']); f.demand.note(['card']);
+  let refuseCard = false;
+  const loop = drivenLoop(t, f.core, { ...f.access, async call(core, method, args) {
+    const result = refuseCard && args.types.length === 1 && args.types[0] === 'card'
+      ? (refuseCard = false, { ok: false, error: { code: 'index_unavailable', retryable: false } })
+      : await f.access.call(core, method, args);
+    selected.push({ types: args.types, result }); return result;
+  } }, { demand: f.demand });
+  for (let i = 0; i < 16; i++) await loop.tick();
+  selected.length = 0;
+  for (let i = 0; i < 3; i++) await loop.tick();
+  assert.deepEqual(selected.map(call => call.types), Array.from({ length: 3 }, () => combined),
+    'control: both views are complete and skipped before invalidation ' + JSON.stringify(selected));
+  selected.length = 0;
+  return { ...f, selected, loop, refuseNextCard() { refuseCard = true; } };
+}
+const cardTurns = f => f.selected.filter(call => call.types.length === 1 && call.types[0] === 'card');
+async function resumesReady(f, marker) {
+  for (let i = 0; i < 6; i++) await f.loop.tick();
+  assert.ok(cardTurns(f).some(call => call.result.ok && call.result.value.status === 'complete'), marker + ' ' + JSON.stringify(f.selected));
+  const result = await context(f.client, input(['card']));
+  assert.equal(result.diagnostics.candidates.channels.semantic.state, 'ready', marker + '_READY');
+}
+
+test('an owner suppression epoch change re-enables an idle Card view and reaches ready', { timeout: 15000 }, async t => {
+  const safety = safetyFixture(t, 23); await safety.migrate();
+  const base = await realFixture(t, { path: safety.path, shared: true });
+  const otherNamespace = { ownerId: ns.ownerId, scope: 'project', projectId: 'synthetic-other-project' };
+  const victim = ok(await base.core.admit({ namespace: otherNamespace,
+    memory: { content: 'Synthetic other-project source to forget', kind: 'fact' },
+    receipts: [{ client: 'synthetic', sessionId: 'owner-epoch', eventId: 'other', role: 'user', excerpt: 'Synthetic other source' }] })).memory;
+  const f = await idleFixture(t, base), db = safety.connect();
+  try {
+    const epoch = () => db.prepare("SELECT epoch FROM namespace_epochs WHERE owner_id=? AND scope='personal'").get(ns.ownerId).epoch;
+    const before = epoch();
+    // The same owner's other namespace advances the owner suppression epoch.
+    // The demanded namespace stays readable and may legitimately reach ready.
+    transaction(db, () => writeContentSuppressionInside(db, { namespace: otherNamespace, kind: 'memory', key: victim.id,
+      reason: 'user_forget', actionId: 'synthetic-idle-owner-epoch' }));
+    assert.equal(epoch(), before, 'control: the demanded Memory namespace epoch is unchanged');
+  } finally { db.close(); }
+  await resumesReady(f, 'R2N_IDLE_SUPPRESSION_REENABLES_CARD');
+});
+
+test('a Card dependency change re-enables an idle view and reaches ready', { timeout: 15000 }, async t => {
+  const h = dependencyHost(), fixture = dependencyFixture(t, { h, contextRead: { ...h.context,
+    embedder: createFakeEmbedder(), policy: { family: 'local', maxRequests: 10000, maxUsd: 1, estimateUsd: () => 0 } } });
+  const ref = fixture.card(), selected = [], demand = createContextMaintenanceDemand();
+  demand.note(['memory']); demand.note(['card']);
+  const loop = drivenLoop(t, fixture.core, { readSet: [dependencyNamespace], async call(core, method, args) {
+    const result = await fixture.call(method, args); selected.push({ types: args.types, result }); return result;
+  } }, { demand });
+  for (let i = 0; i < 16; i++) await loop.tick();
+  selected.length = 0;
+  for (let i = 0; i < 3; i++) await loop.tick();
+  assert.deepEqual(selected.map(call => call.types), Array.from({ length: 3 }, () => combined), 'control: dependency view is skipped');
+  const epochs = () => [fixture.db.prepare('SELECT epoch FROM namespace_epochs LIMIT 1').get()?.epoch,
+    fixture.db.prepare('SELECT generation FROM card_epochs LIMIT 1').get().generation];
+  const before = epochs();
+  fixture.change();
+  assert.deepEqual(epochs(), before, 'dependency adoption changes neither Memory nor Card epochs');
+  assert.equal(ok(fixture.call('getCard', { namespace: dependencyNamespace, cardId: ref.cardId })).card.support.currentDependency.status, 'needs-review');
+  selected.length = 0;
+  for (let i = 0; i < 6; i++) await loop.tick();
+  const turns = selected.filter(call => call.types.length === 1 && call.types[0] === 'card');
+  assert.ok(turns.some(call => call.result.ok && call.result.value.status === 'complete' &&
+    call.result.value.channels.semantic.state === 'ready'), 'R2N_IDLE_DEPENDENCY_REENABLES_CARD');
+});
+
+test('sidecar replacement and reopen re-enable an idle Card view and reach ready', { timeout: 15000 }, async t => {
+  const f = await idleFixture(t), path = f.path + '.context-read-v1.sqlite';
+  const previous = statSync(path).ino;
+  // Metadata rename only. The reader detects the missing incarnation, closes
+  // its old SQLite handle and opens/rebuilds a new sidecar from canonical data.
+  renameSync(path, path + '.retired');
+  await resumesReady(f, 'R2N_IDLE_REOPEN_REENABLES_CARD');
+  assert.notEqual(statSync(path).ino, previous, 'a genuinely new sidecar incarnation is open');
+});
+
+test('a refused refresh removes idle state and the view recovers to ready', { timeout: 15000 }, async t => {
+  const f = await idleFixture(t);
+  // A canonical write invalidates the skipped view; inject one refused return
+  // at the refresh seam to exercise the scheduler's refusal/recovery branch.
+  ok(await f.core.admit({ namespace: ns, memory: { content: 'Synthetic recovery invalidation', kind: 'fact' },
+    receipts: [{ client: 'synthetic', sessionId: 'recovery', eventId: 'invalidate', role: 'user', excerpt: 'Synthetic recovery source' }] }));
+  f.refuseNextCard();
+  for (let i = 0; i < 3; i++) await f.loop.tick();
+  assert.ok(cardTurns(f).some(call => !call.result.ok), 'R2N_IDLE_REFRESH_REFUSED');
+  await resumesReady(f, 'R2N_IDLE_REFUSAL_RECOVERS');
 });
