@@ -1,0 +1,42 @@
+[
+  [
+    "fixed-three-way",
+    "adapters/mcp/server.mjs",
+    "const selectedTypes = views.length ? views[nextView++ % views.length] : types;",
+    "const selectedTypes = [types, ['memory'], ['card']][nextView++ % 3];",
+    "adapters/mcp/test/context-maintenance-demand.test.mjs",
+    "R2J_COMBINED_ONLY"
+  ],
+  [
+    "demand-never-scheduled",
+    "adapters/mcp/server.mjs",
+    "const selectedTypes = views.length ? views[nextView++ % views.length] : types;",
+    "const selectedTypes = types;",
+    "adapters/mcp/test/context-maintenance-demand.test.mjs",
+    "R2K_ACTIVE_VIEWS_ROUND_ROBIN"
+  ],
+  [
+    "old-combined-weighting",
+    "adapters/mcp/server.mjs",
+    "const selectedTypes = views.length ? views[nextView++ % views.length] : types;",
+    "const selectedTypes = views.length && ++nextView % 4 === 0 ? views[0] : types;",
+    "adapters/mcp/test/context-maintenance-demand.test.mjs",
+    "R2K_ACTIVE_VIEWS_ROUND_ROBIN"
+  ],
+  [
+    "no-expiry",
+    "adapters/mcp/server.mjs",
+    "if (timestamp <= cutoff) lastRead.delete(type);",
+    "if (false) lastRead.delete(type);",
+    "adapters/mcp/test/context-maintenance-demand.test.mjs",
+    "R2J_DEMAND_EXPIRY"
+  ],
+  [
+    "combined-never-recorded",
+    "adapters/mcp/server.mjs",
+    "lastRead.set(length === 2 ? 'combined' : first, now());",
+    "length === 1 && lastRead.set(first, now());",
+    "adapters/mcp/test/context-maintenance-demand.test.mjs",
+    "R2K_COMBINED_RECORDED"
+  ]
+]

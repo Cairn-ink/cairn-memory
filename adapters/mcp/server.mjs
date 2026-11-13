@@ -659,12 +659,15 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
   }
 }
 
-/** Host-local, bounded demand: only two enum keys and numeric timestamps. */
+/** Host-local, bounded demand: three type-set enums and numeric timestamps. */
 export function createContextMaintenanceDemand(now = Date.now) {
   const lastRead = new Map();
   return {
     note(types) {
-      if (types?.length === 1 && ['memory', 'card'].includes(types[0])) lastRead.set(types[0], now());
+      if (!Array.isArray(types)) return;
+      const first = types[0], second = types[1], length = types.length;
+      if ((length === 1 || length === 2 && first !== second && ['memory', 'card'].includes(second)) &&
+          ['memory', 'card'].includes(first)) lastRead.set(length === 2 ? 'combined' : first, now());
     },
     inspect() {
       const cutoff = now() - 30 * 60 * 1000;
@@ -680,7 +683,7 @@ export function startContextMaintenance(core, access, { cards = false, semantic 
   const { readSet } = access;
   const capabilities = core.getContextReadCapabilities?.();
   let types = capabilities?.ok ? capabilities.value.types : ['memory'];
-  let closed = false, active, timer, turn = 0, nextFiltered = 0;
+  let closed = false, active, timer, nextView = 0;
   const arm = () => {
     if (closed) return;
     timer = setTimeout(() => {
@@ -693,14 +696,13 @@ export function startContextMaintenance(core, access, { cards = false, semantic 
           if (!pass.ok || pass.value.state === 'refused') continue;
         }
         if (cards) { const current = core.getContextReadCapabilities?.(); if (current?.ok) types = current.value.types; }
-        // Exact type sets have separate vector generations. The common view
-        // keeps three of every four turns; only recently read filtered views
-        // share the fourth. With no filtered demand, every turn is combined.
-        const filtered = semantic && types.length > 1
-          ? demand.inspect().map(([type]) => [type]).filter(([type]) => types.includes(type)) : [];
-        if (!filtered.length) turn = 0;
-        const selectedTypes = filtered.length && ++turn % 4 === 0
-          ? filtered[nextFiltered++ % filtered.length] : types;
+        // Exact type sets have separate generations. Each recently read view
+        // gets one turn in round-robin order, including the combined view.
+        // Without recent demand, retain the full supported view every turn.
+        const views = demand.inspect().map(([view]) => view === 'combined' ? types : [view])
+          .filter(view => view.every(type => types.includes(type)));
+        if (!views.length) nextView = 0;
+        const selectedTypes = views.length ? views[nextView++ % views.length] : types;
         const refresh = () => access.call(core, 'refreshContextIndex', {
           readSet, types: selectedTypes, intent: 'current', budget: { maxItems: 16, maxMs: 1000 },
         });

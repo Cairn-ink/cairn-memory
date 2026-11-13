@@ -53,14 +53,22 @@ function selectionFixture(t) {
   return { demand, selected, loop, advance(ms) { now += ms; } };
 }
 
-test('a: no filtered reads selects the combined view on every turn', async t => {
+test('a: no recent reads selects the combined view on every turn', async t => {
   const f = selectionFixture(t);
   for (let i = 0; i < 12; i++) await f.loop.tick();
   assert.deepEqual(f.selected, Array.from({ length: 12 }, () => combined), 'R2J_COMBINED_ONLY');
   assert.deepEqual(f.demand.inspect(), []);
 });
 
-test('d: filtered demand expires at 30 minutes and resumes combined-only turns', async t => {
+test('combined-only demand keeps every turn combined and is retained', async t => {
+  const f = selectionFixture(t);
+  f.demand.note(combined);
+  for (let i = 0; i < 12; i++) await f.loop.tick();
+  assert.deepEqual(f.selected, Array.from({ length: 12 }, () => combined), 'R2J_COMBINED_ONLY');
+  assert.deepEqual(f.demand.inspect(), [['combined', 100]], 'R2K_COMBINED_RECORDED');
+});
+
+test('d: every demanded view expires at 30 minutes and resumes combined-only turns', async t => {
   const f = selectionFixture(t);
   f.demand.note(['memory']);
   for (let i = 0; i < 4; i++) await f.loop.tick();
@@ -74,16 +82,17 @@ test('d: filtered demand expires at 30 minutes and resumes combined-only turns',
   assert.deepEqual(f.demand.inspect(), []);
 });
 
-test('f: retained demand contains only bounded enum/timestamp pairs, copied on inspection', () => {
+test('f: retained demand contains only three enum/timestamp pairs, copied on inspection', () => {
   let now = 10;
   const demand = createContextMaintenanceDemand(() => now);
-  for (const types of [combined, [], ['raw'], ['memory', 'memory']]) demand.note(types);
+  for (const types of [[], ['raw'], ['memory', 'memory'], ['memory', 'raw'], ['memory','card','raw']]) demand.note(types);
   assert.deepEqual(demand.inspect(), []);
   const types = ['memory']; demand.note(types); types[0] = 'synthetic request text';
   now = 20; demand.note(['card']); now = 30; demand.note(['memory']);
-  assert.deepEqual(demand.inspect(), [['memory', 30], ['card', 20]]);
+  now = 40; demand.note(['card', 'memory']);
+  assert.deepEqual(demand.inspect(), [['memory', 30], ['card', 20], ['combined', 40]]);
   const inspected = demand.inspect(); inspected[0][0] = 'changed'; inspected.push(['extra', 0]);
-  assert.deepEqual(demand.inspect(), [['memory', 30], ['card', 20]], 'R2J_DEMAND_PRIMITIVES');
+  assert.deepEqual(demand.inspect(), [['memory', 30], ['card', 20], ['combined', 40]], 'R2J_DEMAND_PRIMITIVES');
   assert.deepEqual(createContextMaintenanceDemand().inspect(), [], 'hosts do not share demand');
 });
 
@@ -112,19 +121,16 @@ async function realFixture(t) {
   return { core, access, client, demand };
 }
 
-for (const wanted of [[['memory']], [['card']], [['memory'], ['card']]]) {
-  test(`b/c: successful reads activate ${JSON.stringify(wanted)} with a 3-of-4 combined floor and semantic readiness`, { timeout: 15000 }, async t => {
+for (const wanted of [[combined], [['memory']], [['card']], [combined, ['memory']], [['memory'], ['card']], [combined, ['memory'], ['card']]]) {
+  test(`b/c: successful reads schedule only ${JSON.stringify(wanted)} round-robin and reach semantic ready`, { timeout: 15000 }, async t => {
     const f = await realFixture(t), selected = [];
     for (const types of wanted) await context(f.client, input(types));
     const loop = drivenLoop(t, f.core, { ...f.access, call(core, method, args) {
       selected.push(args.types); return f.access.call(core, method, args);
     } }, { demand: f.demand });
     for (let i = 0; i < 16; i++) await loop.tick();
-    for (let i = 0; i <= selected.length - 4; i++) assert.ok(
-      selected.slice(i, i + 4).filter(types => types.length === 2).length >= 3, 'R2J_COMBINED_FLOOR');
-    assert.deepEqual(selected.filter(types => types.length === 1),
-      Array.from({ length: 4 }, (_, i) => wanted[i % wanted.length]), 'R2J_FILTERED_SCHEDULE');
-    for (const types of [combined, ...wanted]) {
+    assert.deepEqual(selected, Array.from({ length: 16 }, (_, i) => wanted[i % wanted.length]), 'R2K_ACTIVE_VIEWS_ROUND_ROBIN');
+    for (const types of wanted) {
       const result = await context(f.client, input(types));
       assert.equal(result.diagnostics.candidates.channels.semantic.state, 'ready', 'R2J_FILTERED_READY');
     }
@@ -133,8 +139,7 @@ for (const wanted of [[['memory']], [['card']], [['memory'], ['card']]]) {
 
 test('e: invalid and refused MCP reads record no demand', { timeout: 15000 }, async t => {
   const f = await realFixture(t);
-  await context(f.client, input(combined));
-  assert.deepEqual(f.demand.inspect(), [], 'combined reads do not activate a filter');
+  assert.deepEqual(f.demand.inspect(), []);
   for (const patch of [{ query: '' }, { types: ['memory', 'memory'] }, { types: ['raw'] }, { deadlineMs: 0 }]) {
     const result = await f.client.callTool({ name: 'read_memory_context', arguments: { ...input(['memory']), ...patch } });
     assert.equal(result.isError, true);

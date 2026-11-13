@@ -27,8 +27,8 @@ test('item 8: a busy Card namespace cannot skip other namespaces or projection r
     }
     assert.deepEqual(seen, Array.from({ length: 8 }, () => ['one', 'two']).flat(), 'R2I_MAINTENANCE_CONTINUES');
     assert.deepEqual(projections, [
-      ['memory', 'card'], ['memory', 'card'], ['memory', 'card'], ['memory'],
-      ['memory', 'card'], ['memory', 'card'], ['memory', 'card'], ['card'],
+      ['memory'], ['card'], ['memory'], ['card'],
+      ['memory'], ['card'], ['memory'], ['card'],
     ]);
   } finally { await loop.close(); }
 });
