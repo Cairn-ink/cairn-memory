@@ -128,7 +128,7 @@ for (const operation of ['foreign-inspect', 'forget', 'attach']) test(`P1-4: EXC
   assert.equal(holder.isTransaction, false);
 });
 
-for (const kind of ['card', 'source', 'unrelated']) test(`P1-5: ${kind} suppression between a successful Card retry and delivery refuses the body`, { timeout: 10000 }, async t => {
+for (const depth of [1, 2, 3, 'immediate']) for (const kind of ['card', 'source', 'unrelated']) test(`P1-5: ${kind} suppression at delivery depth ${depth} refuses the body`, { timeout: 10000 }, async t => {
   const f = safetyFixture(t, 23); await f.migrate();
   const authority = cardHost(), writer = f.connect();
   let armed = false, suppressed = false, backoffs = 0;
@@ -136,13 +136,29 @@ for (const kind of ['card', 'source', 'unrelated']) test(`P1-5: ${kind} suppress
   const host = createCommitDispatcher({ strict: true, onBackoff() { backoffs++; writer.exec('ROLLBACK'); }, onAwait({ point }) {
     if (armed && point === 'return') {
       armed = false;
-      queueMicrotask(() => {
+      const suppress = () => {
         transaction(writer, () => writeContentSuppressionInside(writer, { namespace: ns, ...target,
           reason: 'user_forget', actionId: 'synthetic-delivery-forget' }));
         suppressed = true;
-      });
+      };
+      const schedule = left => left === 0 ? suppress() : queueMicrotask(() => schedule(left - 1));
+      if (depth === 'immediate') setImmediate(suppress);
+      else schedule(depth);
     }
   } });
+  // Model an event-loop yield immediately before the outer facade's delivery
+  // reaction. Only that reaction is delayed; suppression still starts from the
+  // successful attempt, and the production delivery fence runs afterwards.
+  let boundaryDeliveries = 0;
+  const nativeThen = Promise.prototype.then;
+  if (depth === 'immediate') t.mock.method(Promise.prototype, 'then', function(fulfilled, rejected) {
+    const stack = callStack();
+    if (armed && fulfilled?.name === 'deliver' && stack.includes('/content-safety-boundary.mjs:') && ++boundaryDeliveries === 3) {
+      const finalDelivery = fulfilled;
+      fulfilled = async value => { await new Promise(resolve => setImmediate(resolve)); return finalDelivery(value); };
+    }
+    return Reflect.apply(nativeThen, this, [fulfilled, rejected]);
+  });
   const core = host.open(() => openMemoryCore({ path: f.path, raw: false, privateCards: authority.options }));
   t.after(() => { if (writer.isTransaction) writer.exec('ROLLBACK'); core.close(); writer.close(); });
   const card = ok(await authority.call(core, 'createCardDraft', { namespace: ns, actionId: 'delivery-card', drafting: 'authored',
@@ -154,10 +170,11 @@ for (const kind of ['card', 'source', 'unrelated']) test(`P1-5: ${kind} suppress
   assert.equal(readable.card.body, 'Synthetic private body', 'control: the retained body is readable before suppression');
   writer.exec('BEGIN IMMEDIATE'); armed = true;
   const result = await authority.call(core, 'getCard', { namespace: ns, cardId: card.id });
-  assert.ok(backoffs > 0 && suppressed);
-  t.diagnostic('R2M_CARD_HANDOFF ' + JSON.stringify({ kind, ok: result.ok,
+  assert.ok(backoffs > 0 && suppressed, 'suppression commits before the public result');
+  if (depth === 'immediate') assert.equal(boundaryDeliveries, 3, 'delay exactly the final public delivery reaction');
+  t.diagnostic('R2M_CARD_HANDOFF ' + JSON.stringify({ kind, depth, ok: result.ok,
     bodyReturned: JSON.stringify(result).includes('Synthetic private body') }));
-  assert.equal(result.error?.code, 'evidence_unavailable', kind === 'unrelated' ? 'R2K_CARD_ACCOUNT_HANDOFF' : 'R2I_CARD_DELIVERY_FENCE');
+  assert.equal(result.error?.code, 'evidence_unavailable', `${kind === 'unrelated' ? 'R2K_CARD_ACCOUNT_HANDOFF' : 'R2I_CARD_DELIVERY_FENCE'} R2N_CARD_DELIVERY_${depth}`);
   assert.doesNotMatch(JSON.stringify(result), /Synthetic private body/, 'R2M_SUPPRESSED_CARD_BODY_REFUSED');
 });
 

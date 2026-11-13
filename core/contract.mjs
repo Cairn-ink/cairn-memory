@@ -1,6 +1,6 @@
 import { suppressionContent } from './suppression-content.mjs';
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
-import { dispatchCommit, hasCommitDispatcher, commitFailure, dispatchSynchronousCommit } from './commit-dispatch.mjs';
+import { withCommitDelivery, inCommitDelivery, dispatchCommit, hasCommitDispatcher, commitFailure, dispatchSynchronousCommit } from './commit-dispatch.mjs';
 import { contentWriteMethodClass } from './content-write-context.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { contentSafetyFacade } from './content-safety-boundary.mjs';
@@ -1352,6 +1352,8 @@ export function createMemoryCore(input, internal) {
   }
 
   internal?.attachCapture?.((input, registration, deadline) => capture(input, undefined, registration, deadline));
+  // Host reads share one delivery hand-off through nested facades. The final
+  // public check resumes the successful attempt, including after BUSY retries.
   const contentReads = new Set(['get','list','map','fetch','recall','sourceSnapshot','getEpisode','listEpisodes','listMemoriesByTime',
     'sessionStartContext','getRationale','inspectAdmission','inspectCaptureEvidence','listReviewTransitions','listReviewConflicts']);
   const core = withEngineCardDelivery(contentSafetyFacade({
@@ -1385,8 +1387,11 @@ export function createMemoryCore(input, internal) {
       runtime.close();
       return success(null);
     },
-  }, { check: runtime.assertContentScope, portGuard: runtime.contentPortGuard, failure, asyncMethods: ['capture','maintainCards'],
-    requestScope: (work, method) => contentWriteMethodClass(method) === 'read' ? withContentSuppressionRequest(work) : work(),
+  }, { check: commit ? (scopes, phase) => phase?.delivery
+      ? inCommitDelivery(() => runtime.assertContentScope(scopes, phase)) : runtime.assertContentScope(scopes, phase)
+      : runtime.assertContentScope, portGuard: runtime.contentPortGuard, failure, asyncMethods: ['capture','maintainCards'],
+    requestScope: (work, method) => contentWriteMethodClass(method) === 'read'
+      ? commit ? withCommitDelivery(work) : withContentSuppressionRequest(work) : work(),
     isFailedCapture(result) {
       // Admission committed before the paused classifier. After close only its
       // failed-classification completion is deliverable; no retained identities,

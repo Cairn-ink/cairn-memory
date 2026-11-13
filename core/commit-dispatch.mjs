@@ -40,7 +40,8 @@ export function dispatchSynchronousCommit(connection, work) {
 const deliveries = new AsyncLocalStorage();
 // The facade's delivery resumes the successful attempt's suppression account.
 // Failed attempts never become a delivery authority.
-export const withCommitDelivery = work => withContentSuppressionRequest(() => deliveries.run({ resume: work => work() }, work));
+export const withCommitDelivery = work => deliveries.getStore() ? work()
+  : withContentSuppressionRequest(() => deliveries.run({ resume: work => work() }, work));
 export const inCommitDelivery = work => { const scope = deliveries.getStore(); return scope ? scope.resume(work) : work(); };
 const openingHost = () => { const scope = opening.getStore(); return scope?.active ? scope.host : undefined; };
 const busyBudgets = new WeakSet();
