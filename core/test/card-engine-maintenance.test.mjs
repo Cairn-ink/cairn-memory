@@ -161,11 +161,33 @@ test('bounded maintenance resumes a complete namespace scan without publishing a
 
 test('filed topics share one namespace but keep exact independent source sets', async t => {
   const f = engineCardFixture(t), large = f.file(f.seed(), 'Orion'), small = f.file(f.seed(5, 'Vega'), 'Vega');
-  const pass = ok(await f.pass()); assert.equal(pass.built.length, 1, JSON.stringify(pass));
-  assert.equal(pass.built[0].clusterKey, 'moc:' + large.mocId + '#0');
-  assert.equal(f.model.calls[0].memories.length, 24);
-  assert.ok(f.model.calls[0].memories.every(memory => !small.memories.some(source => source.id === memory.id)));
-  assert.equal(ok(await f.pass()).built.length, 1);
+  const builds = new Map();
+  // Random IDs can put either topic first. Collect every eligible part
+  // and pair each Card with its request instead of assigning a topic to a pass.
+  for (let i = 0; i < 4; i++) {
+    const pass = ok(await f.pass()); assert.equal(pass.built.length, 1, JSON.stringify(pass));
+    assert.equal(pass.modelCalls, 1); assert.equal(f.model.calls.length, i + 1);
+    const card = pass.built[0], request = f.model.calls[i];
+    assert.equal(builds.has(card.clusterKey), false, 'each part builds once');
+    builds.set(card.clusterKey, { card, request });
+    const topic = card.clusterKey === 'moc:' + small.mocId ? small : large;
+    const sourceIds = new Set(topic.memories.map(memory => memory.id));
+    assert.ok(request.memories.every(memory => sourceIds.has(memory.id)), 'no request mixes topics');
+  }
+  assert.deepEqual(new Set(builds.keys()), new Set([
+    ...[0, 1, 2].map(part => `moc:${large.mocId}#${part}`), 'moc:' + small.mocId
+  ]));
+  const ids = memories => new Set(memories.map(memory => memory.id));
+  const first = builds.get('moc:' + large.mocId + '#0');
+  assert.deepEqual(new Set(first.card.sourceRevisions.map(ref => ref.memoryId)), ids(large.memories.slice(0, 12)));
+  assert.equal(first.request.memories.length, 24);
+  assert.deepEqual(ids(first.request.memories.slice(0, 12)), ids(large.memories.slice(0, 12)));
+  assert.deepEqual(ids(first.request.memories.slice(12)), ids(large.memories.slice(-12)));
+  const smallBuild = builds.get('moc:' + small.mocId);
+  assert.deepEqual(new Set(smallBuild.card.sourceRevisions.map(ref => ref.memoryId)), ids(small.memories));
+  assert.equal(smallBuild.request.memories.length, 5);
+  assert.deepEqual(ids(smallBuild.request.memories), ids(small.memories));
+  assert.equal(ok(await f.pass()).modelCalls, 0, 'all topic parts are current');
 });
 
 test('model deadline is a budget result and does not permanently refuse the next pass', async t => {
