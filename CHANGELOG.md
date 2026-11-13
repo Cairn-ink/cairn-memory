@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — Card consolidation respects the Raw opt-in
+
+- Engine Card consolidation uses memories only by default, including for library
+  callers. Set `rawSpans: true` on `maintainCards` to include saved conversation
+  excerpts. The local MCP server includes those excerpts only with
+  `rawSemantic: true`, unless `contextSemantic: false` overrides it.
+
 ## Unreleased — default recall recency scan
 
 - Use one newest-first keyset scan for body and source recall: a 1,024-row
