@@ -22,7 +22,7 @@
     "literal:entityId": 2,
     "literal:from_id": 1,
     "literal:fromId": 1,
-    "literal:id": 4,
+    "literal:id": 5,
     "literal:keep_source_ids": 1,
     "literal:leftMemoryId": 1,
     "literal:memory_id": 2,
@@ -264,7 +264,7 @@
     "key:actionId": 3,
     "key:affectedIds": 1,
     "key:card_id": 1,
-    "key:cardId": 2,
+    "key:cardId": 3,
     "key:effectId": 1,
     "key:id": 6,
     "key:leaseId": 1,
@@ -386,7 +386,8 @@
     "key:targetId": 3
   },
   "core/context-read-assembly.mjs": {
-    "key:id": 3
+    "key:id": 3,
+    "key:sourceMemoryRefs": 1
   },
   "core/context-read-three-layer.mjs": {
     "key:conversationId": 2,
@@ -425,7 +426,7 @@
     "key:cardId": 2,
     "key:id": 8,
     "key:ids": 1,
-    "key:memoryId": 1,
+    "key:memoryId": 2,
     "key:storeId": 1,
     "literal:gid": 1,
     "literal:id": 4,
@@ -658,7 +659,7 @@
   "core/moc-storage.mjs": {
     "key:child_id": 1,
     "key:childId": 3,
-    "key:id": 5,
+    "key:id": 6,
     "key:invalidRef": 1,
     "key:memory_id": 1,
     "key:memoryId": 3,
@@ -1638,6 +1639,28 @@
   },
   "core/layout-base-upgrade.mjs": {
     "literal:storeId": 1
+  },
+  "adapters/openai/consolidate-schema.mjs": {
+    "key:memoryIds": 1
+  },
+  "core/engine-card-clusters.mjs": {
+    "key:id": 1,
+    "key:memoryId": 1
+  },
+  "core/engine-card-maintenance.mjs": {
+    "key:id": 1,
+    "key:memoryIds": 1
+  },
+  "core/engine-card-output.mjs": {
+    "key:memoryIds": 1,
+    "literal:memoryIds": 1
+  },
+  "core/engine-card-storage.mjs": {
+    "key:cardId": 1,
+    "key:conversationId": 1,
+    "key:id": 2,
+    "key:memoryId": 2,
+    "key:messageId": 1
   },
   "adapters/mcp/raw-command.mjs": {
     "key:actionId": 1,

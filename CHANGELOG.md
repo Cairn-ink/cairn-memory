@@ -1,5 +1,73 @@
 # Changelog
 
+## Unreleased — default recall recency scan
+
+- Use one newest-first keyset scan for body and source recall: a 1,024-row
+  floor, fixed 300 ms budget and 20,000-row cap, retaining the best 1,024 by
+  query overlap then ID. Remove the candidate-policy constructor option.
+- Bound the added scan time per recall call: a two-namespace read set splits
+  the budget evenly (rounded down per namespace); each floor always completes.
+- Read floor content in one filtered statement with an unscored extra row to
+  detect a tail, preserving ordinary statement costs for small namespaces.
+  Keep the floor and its placement in one normal-timeout deferred transaction,
+  then use try-once tail pages. Epoch changes discard the tail without restarting;
+  final tail placement rechecks the floor epochs in one try-once read. Bind the
+  scan boundary into signed continuation cursors; busy continuations are stale.
+  Budget exhaustion and a busy tail remain ordinary incomplete coverage. See
+  [defaults](docs/defaults.md). Earlier prefix/opt-in entries are historical.
+
+## Unreleased — nothing sent to an embedding provider while saving is paused
+
+- With an embedding model configured, Memory and Card search no longer sends the
+  search text, and index maintenance no longer sends stored Memory or Card text,
+  to the provider while saving is paused or disabled for that store. Searches
+  fall back to keyword results. Stores without an embedding model do no extra
+  work.
+- Card maintenance also sends nothing to the consolidation model while saving
+  is paused or disabled.
+- Known limit: a pause that lands in the instant between the final check and the
+  provider call can still let that one in-flight request go out.
+
+## Unreleased — engine-generated topic Cards
+
+- When a consolidation model is configured, the engine builds topic Cards during
+  maintenance to summarize a topic's current state, history and contradictions.
+  Cards follow their Memories when a topic is relabeled or refiled, without
+  regenerating the summary when the sources stay the same.
+- A forgotten, suppressed or excluded source hides its Card from reads.
+  Maintenance rebuilds the Card from eligible sources when the topic still
+  qualifies, or removes its stale body when it no longer does.
+- There is no separate generation toggle. Generation is available only when the
+  configured model implements `consolidate`; hosts can leave that method
+  unconfigured to keep it off. See [Engine Cards](docs/engine-cards.md).
+- Dated reads retain every surviving Memory's source dates and sort by the
+  surviving sources when a topic Card replaces part of a shared-source group.
+
+## Unreleased — batch Raw preparation
+
+- Document and pin the mixed-reader Raw grant-sampling known limit; final whole-set stored-state checks remain enforced.
+
+- Preserve prepare-only host ports and candidate-based authorizers; optional
+  batches retain candidates from every live proof and reject known oversized
+  ranges before source inspection.
+
+- Recheck live Raw source predicates and caller grants around each part opener
+  and revalidate handles at registration after the initial snapshot releases.
+
+- Default three-layer reads prepare the first 24 Raw candidates together,
+  sharing publication and a canonical source snapshot while preserving each
+  candidate's existing authorization request. Completed
+  candidates retain independent outcomes and cutoff delivery; fresh batch and
+  final checks still precede Raw projection and delivery.
+
+## Unreleased — source dates on delivered Memories
+
+- Context reads attach the date of each Memory's source message, taken from its
+  receipts, so a client can tell when a fact was said even when no Raw excerpt
+  is delivered. Source entries gain an optional `date` or `dates`; the item's
+  existing `date` keeps its meaning. Stores without source dates produce the
+  same output as before and run no extra statement.
+
 ## 0.6.6 — 2026-11-13
 
 - Raw document and query embeddings now require `--raw-semantic` or an explicit `--context-embedder`; setup discloses that an MCP OpenAI key sends memories and search text to OpenAI for semantic search, up to an estimated US$1 per server run. To keep everything on this computer, don't give the server a key; `--no-context-semantic` only turns off embeddings, and with a key, recall and other model features still send memory text to OpenAI.

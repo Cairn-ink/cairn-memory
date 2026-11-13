@@ -133,7 +133,7 @@ function observe() {
       throw error;
     }
     const prepareMs=performance.now()-preparing;
-    if(current&&sql.startsWith('SELECT s.*,h.sequence'))current.payloadReads++;
+    if(current&&(sql.startsWith('SELECT s.*,h.sequence')||sql.startsWith('SELECT * FROM segments WHERE published=1 ORDER BY id ')))current.payloadReads++;
     for(const method of ['get','all']){
       const execute=statement[method];
       statement[method]=function(...args){

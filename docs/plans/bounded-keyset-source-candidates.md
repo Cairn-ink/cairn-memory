@@ -1,5 +1,25 @@
 # Opt-in bounded source candidate discovery
 
+> Candidate discovery in this plan is superseded by the default recency keyset
+> scan in [defaults](../defaults.md): 1,024-row floor, fixed 400 ms budget,
+> 20,000-row cap and score/ID top-1,024 retention for all recall modes.
+> The former candidate-policy constructor option is removed. Historical
+> observations and other contracts below remain records of their original version.
+
+The current standalone resource helper is `scripts/measure-recall-recency.mjs`.
+It accepts `--layout plain` or `--layout 53`, an optional `--writer`, and one
+synthetic namespace size. It reports cold/warm body-only scan and recall timings,
+rows visited, exhaustion, floor/tail holds and concurrent writer waits.
+The writer loop is unpaced unless `--writer-pause-ms N` is supplied. Failed
+samples and resource-bound violations are printed and produce a nonzero exit.
+The shipped floor reads current, non-awaiting content in one statement,
+including an unscored 1,025th row to detect a tail; an exhausted floor retains
+ordinary statement costs. Floor scoring and placement share one normal-timeout
+deferred read. Tail pages and final placement are try-once with timeout zero,
+synchronously restored.
+Epoch changes discard the tail without restarting; busy continuations are stale.
+See [defaults](../defaults.md) for the current lock and cursor contract.
+
 Fixed base `6d67cf0c8cf67adddcc74622e9c805d632ed7769` (accepted PR #238).
 Branch `feat/bounded-keyset-source-candidates`, independent of the mixed budget
 guard. Primary contract frozen before implementation. This is a product retrieval candidate,
@@ -154,8 +174,8 @@ resource feasibility remains to be measured. Primary's initial repro harness
 incorrectly assumed admission refs include content, producing TypeError before
 observation; it was corrected to retain original synthetic content alongside
 refs. This was not a product failure. Subsequent both-Node runs reached the
-intended red assertion and the1024 positive control. Primary artifacts:
-`/tmp/cairn-keyset-repro.0kX3CL` (synthetic/local only, no historical cohorts).
+intended red assertion and the1024 positive control. The reproduction artifacts are kept outside the repository
+(synthetic/local only, no historical cohorts).
 
 ## Implementation checkpoint (pending full gates and independent review)
 

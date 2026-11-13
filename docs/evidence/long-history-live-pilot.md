@@ -1,5 +1,9 @@
 # Four-case real-model long-history feasibility pilot
 
+> Historical candidate-routing configuration: current recall uses the
+> [default recency keyset scan](../defaults.md) in every mode. The old
+> ID-prefix limit and candidate-policy constructor option no longer apply.
+
 Status: one completed, one-shot diagnostic on four newly authored synthetic
 histories. All eight scheduled generation arms and all eight judgments
 completed. This is a small feasibility observation of an explicit opt-in

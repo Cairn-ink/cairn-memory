@@ -193,6 +193,53 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
     }}finally{iterator.return();}
     return {sequence,checkpoint,rows,partial,partialReason,hintBytes:bytes,vectorBytes:vectorSize,timings};
   }
+
+  // Search and cache shape share this exact selection policy and snapshot.
+  // Maintenance keeps its ascending keyset snapshot; it is not a search slice.
+  function searchSlice({decodeRows=true,deadlineAt=Infinity}={}) {
+    let hintBytes=0,vectorBytes=0,partial=false,partialReason=null;
+    const rows=[],seen=new Set(),timings={sqliteMs:0,authenticationMs:0,decodeMs:0};
+    const projection=decodeRows?'*':'id,length(CAST(data AS BLOB)) AS hints,length(vectors) AS vector_size';
+    const admit=(row,recent)=>{
+      if(seen.has(row.id))return true;
+      const hints=decodeRows?Buffer.byteLength(row.data):row.hints;
+      const vectors=decodeRows?row.vectors.byteLength:row.vector_size;
+      if(recent&&hintBytes+hints>4*1024*1024)return false;
+      if(seen.size===RAW_SEARCH_LIMITS.work||hintBytes+hints>RAW_SEARCH_LIMITS.snapshotBytes||vectorBytes+vectors>128*1024*1024){
+        if(!recent){partial=true;partialReason=seen.size===RAW_SEARCH_LIMITS.work?'inventory_limit':
+          hintBytes+hints>RAW_SEARCH_LIMITS.snapshotBytes?'snapshot_byte_limit':'vector_byte_limit';}
+        return false;
+      }
+      hintBytes+=hints;vectorBytes+=vectors;seen.add(row.id);
+      if(decodeRows)rows.push(decode(row,timings));
+      return true;
+    };
+    for(const [direction,limit,recent] of [['DESC',256,true],['ASC',RAW_SEARCH_LIMITS.work+257,false]]){
+      const iterator=db.prepare(`SELECT ${projection} FROM segments WHERE published=1 ORDER BY id ${direction} LIMIT ?`).iterate(limit);
+      try{while(true){
+        if(performance.now()>=deadlineAt)rawSearchDeadline();
+        const start=performance.now(),step=iterator.next();timings.sqliteMs+=performance.now()-start;
+        if(step.done)break;
+        if(!admit(step.value,recent))break;
+      }}finally{iterator.return();}
+    }
+    rows.sort((a,b)=>a.segment-b.segment);
+    return {rows,partial,partialReason,hintBytes,vectorBytes,timings};
+  }
+  async function search(options={}) {
+    return within(options.deadlineAt??Infinity,()=>{
+      ready();db.exec('BEGIN DEFERRED');
+      try {
+        const current=header(),revision=db.prepare('PRAGMA data_version').get().data_version;
+        const slice=searchSlice(options);
+        db.exec('COMMIT');
+        return {generation,revision,sequence:current.sequence,checkpoint:JSON.parse(current.checkpoint),...slice};
+      }catch(error){if(db.isTransaction)db.exec('ROLLBACK');throw error;}
+    });
+  }
+  function head() {
+    ready();const current=header();return {sequence:current.sequence,checkpoint:JSON.parse(current.checkpoint)};
+  }
   function publication(options={}) {
     return within(options.deadlineAt??Infinity,()=>publicationInside(options));
   }
@@ -205,17 +252,7 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
     try {
       const current=header(),revision=db.prepare('PRAGMA data_version').get().data_version;
       if(!shape){db.exec('COMMIT');return {generation,revision,sequence:current.sequence};}
-      const iterator=db.prepare('SELECT length(CAST(data AS BLOB)) AS hints,length(vectors) AS vectors FROM segments WHERE published=1 ORDER BY id LIMIT ?')
-        .iterate(RAW_SEARCH_LIMITS.work+1);
-      let hintBytes=0,vectorBytes=0,count=0,partial=false,partialReason=null;
-      try{for(const row of iterator){
-        if(performance.now()>=deadlineAt)rawSearchDeadline();
-        if(count===RAW_SEARCH_LIMITS.work||hintBytes+row.hints>RAW_SEARCH_LIMITS.snapshotBytes){
-          partial=true;partialReason=count===RAW_SEARCH_LIMITS.work?'inventory_limit':'snapshot_byte_limit';break;
-        }
-        if(vectorBytes+row.vectors>128*1024*1024){partial=true;partialReason='vector_byte_limit';break;}
-        hintBytes+=row.hints;vectorBytes+=row.vectors;count++;
-      }}finally{iterator.return();}
+      const {partial,partialReason,hintBytes,vectorBytes}=searchSlice({decodeRows:false,deadlineAt});
       db.exec('COMMIT');
       return {generation,revision,sequence:current.sequence,checkpoint:JSON.parse(current.checkpoint),
         partial,partialReason,hintBytes,vectorBytes};
@@ -294,6 +331,6 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
     });}while(removed);
     db.exec('VACUUM');
   }
-  return Object.freeze({ openOwner:async () => binding,snapshot,search:snapshot,publication,stage,publish,invalidate,checkpoint,lookup,commitBatch,status,dropOwner,
+  return Object.freeze({ openOwner:async () => binding,snapshot,search,head,tail:()=>db.prepare('SELECT coalesce(max(id),0) AS last FROM segments WHERE published=1').get().last,publication,stage,publish,invalidate,checkpoint,lookup,commitBatch,status,dropOwner,
     async close() { if (!closed) { closed = true; db.close(); } } });
 }

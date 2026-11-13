@@ -3,7 +3,7 @@ import { contentReadSafety } from './content-safety.mjs';
 import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHmac, randomUUID } from 'node:crypto';
 import { transaction, isStorageBusy } from './database.mjs';
-import { ADMISSION_LEASE_MS, HEX_DIGEST } from './episode-schema.mjs';
+import { ADMISSION_LEASE_MS, HEX_DIGEST, advanceEpisodeControlGeneration } from './episode-schema.mjs';
 import { boundedText, denseArray, fail, identifier, object, revision } from './validation.mjs';
 import { sourceDigest, sourceSpan } from './procedural-storage.mjs';
 import { createRawControlStorage } from './raw-control-storage.mjs';
@@ -196,6 +196,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       db.prepare(`INSERT INTO episode_controls(owner_id,scope,project_id,generation,paused,enabled) VALUES(?,?,?,?,?,?)
         ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=excluded.generation,paused=excluded.paused,enabled=excluded.enabled`)
         .run(...boundary(ns), next.generation, +next.paused, +next.enabled);
+      advanceEpisodeControlGeneration(db);
       if (next.paused || !next.enabled) {
         if (sourceRoots?.enabled()) rawControls.closePendingInside({ ownerId: ns.ownerId, namespace: ns, reason: 'capture_barrier' });
         else rawCapture?.closePending({ ownerId: ns.ownerId, namespace: ns, reason: 'capture_barrier' });
@@ -275,7 +276,9 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       if (!fresh.length) return { episodeId: row.id, sessionKey: identity, position: row.observed, overlap: true, processing: unfinished };
       const now = stagedEvidence.touch(ns, true), received = new Date(now).toISOString();
       db.prepare(`INSERT OR IGNORE INTO episode_controls(owner_id,scope,project_id,generation,paused,enabled) VALUES(?,?,?,'initial',0,1)`).run(...boundary(ns));
+      advanceEpisodeControlGeneration(db);
       db.prepare(`UPDATE episode_controls SET ordinal=ordinal+1 WHERE ${where}`).run(...boundary(ns));
+      advanceEpisodeControlGeneration(db);
       const ordinal = control(ns).ordinal;
       if (!row) {
         const id = randomUUID();

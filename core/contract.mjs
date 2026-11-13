@@ -19,7 +19,7 @@ import { existingStoreOption } from './existing-store.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { types } from 'node:util';
 import { composeRawCore } from './raw-composition.mjs';
-import { privateCardOptions } from './private-card-input.mjs';
+import { privateCardOptions, cardNamespace, ENGINE_CARD_LIMITS, withEngineCardDelivery } from './private-card-input.mjs';
 import { createPrivateCardFacade } from './private-card-facade.mjs';
 import { contextInput, assembleSessionContext } from './session-context.mjs';
 import { rangeInput, rangeOrder, validateRangeAnchor, rangePage, envelopeText } from './episode-reads.mjs';
@@ -41,9 +41,9 @@ import { captureSnapshot } from './capture-input.mjs';
 import { requestFits } from './model-packing.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
-import { createQueryScore, QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT,
+import { createQueryScore, QUERY_CANDIDATE_VERSION, namespaceScanBudgetMs,
   SOURCE_QUERY_CANDIDATE_VERSION, SOURCE_QUERY_RECEIPT_LIMIT,
-  BOUNDED_KEYSET_SOURCE_CANDIDATES } from './query-candidates.mjs';
+  QUERY_CANDIDATES } from './query-candidates.mjs';
 import { qualificationInput, qualificationSources } from './claim-qualification-input.mjs';
 import { proposeRationale } from './rationale.mjs';
 import { reviewSourceBasis } from './source-basis.mjs';
@@ -54,8 +54,9 @@ import {
 // One constructor grammar for the base and its opt-in wrappers. Wrappers remove
 // only their own option; all other legal options reach the retained validator.
 const CORE_OPTIONS = Object.freeze(['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy',
-  'captureRationale','captureEvidence','captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes',
-  'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence','contentSafety','busyTimeoutMs']);
+  'captureRationale','captureEvidence','captureDeadlineMs','sessionEpisodes',
+  'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence','contentSafety','busyTimeoutMs',
+  'cardRelations','cardVectors']);
 const OPEN_OPTIONS = Object.freeze([...CORE_OPTIONS, 'rawConversations', 'raw', 'rawSearch']);
 
 const keepAdmissionKey = Symbol('keepAdmissionKey');
@@ -236,11 +237,11 @@ function openWithRoleContext(input, roleContext) {
       const core = buildCore(base);
       const search = localRawSearchManager(roleContext?.rawSearch) ?? createLocalRawSearch(base.path, defaultRawOptions().port);
       search.unsupportedStore();
-      return Object.freeze({ ...core, ...(rawSearch === false
+      return withEngineCardDelivery(Object.freeze({ ...core, ...(rawSearch === false
         ? { getRawSearchStatus: search.methods.getRawSearchStatus } : search.methods), close() {
         const stopped = search.close(), result = core.close();
         return Promise.resolve(stopped).then(() => result);
-      } });
+      } }), core);
     }
   }
   if (!Object.hasOwn(descriptor, 'value')) throw new MemoryStoreError('invalid_input');
@@ -277,12 +278,6 @@ export function createMemoryCore(input, internal) {
         .some(key => Object.hasOwn(input, key)))) {
     throw new MemoryStoreError('invalid_input');
   }
-  const sourceCandidateDescriptor = Object.getOwnPropertyDescriptor(input, 'sourceCandidatePolicy');
-  const sourceCandidatePolicy = sourceCandidateDescriptor?.value;
-  if (sourceCandidateDescriptor && (!Object.hasOwn(sourceCandidateDescriptor, 'value') ||
-      sourceCandidatePolicy !== BOUNDED_KEYSET_SOURCE_CANDIDATES.version)) {
-    throw new MemoryStoreError('invalid_input');
-  }
   const hasCaptureDeadline = Object.hasOwn(input, 'captureDeadlineMs');
   const captureDeadlineMs = hasCaptureDeadline ? input.captureDeadlineMs : undefined;
   if (hasCaptureDeadline && (!Number.isSafeInteger(captureDeadlineMs) ||
@@ -316,9 +311,23 @@ export function createMemoryCore(input, internal) {
     ...(methodPackages ? { methodPackages } : {}),
     ...(assets ? { assets } : {}),
     ...(roleProfiles ? { roleProfiles } : {}),
-    ...(privateCards ? { privateCards } : {}), ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) });
+    ...(privateCards ? { privateCards } : {}), ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) },
+    { engineCards: typeof model?.consolidate === 'function' });
   try {
   const { storeId, cursorSecret } = runtime.identity;
+  let engineCards, engineCardsLoading;
+  const engineConfigured = typeof model?.consolidate === 'function';
+  for (const port of [input.cardRelations, input.cardVectors])
+    if (port !== undefined && typeof port?.read !== 'function') fail('invalid_input');
+  async function loadEngineCards() {
+    engineCardsLoading ??= (async () => {
+      const { createEngineCardMaintenance } = await import('./engine-card-maintenance.mjs');
+      const storage = await runtime.engineCardStorage(); runtime.ready();
+      return engineCards = createEngineCardMaintenance({ storage, model,
+        relations: input.cardRelations, vectors: input.cardVectors });
+    })();
+    return engineCardsLoading;
+  }
 
   function namespaceBinding(ns) {
     return createHmac("sha256", cursorSecret)
@@ -773,17 +782,14 @@ export function createMemoryCore(input, internal) {
       if (catalogOnly) binding.o = 'classification_catalog';
       if (navigation) Object.assign(binding, { o: 'recall_map',
         q: navigation.queryDigest, x: QUERY_EXCERPT_VERSION,
-        policy: navigation.sourceCandidatePolicy ?? QUERY_CANDIDATE_VERSION,
-        scan: navigation.sourceCandidatePolicy ? BOUNDED_KEYSET_SOURCE_CANDIDATES.scan : QUERY_SCAN_LIMIT });
+        policy: QUERY_CANDIDATE_VERSION, scan: QUERY_CANDIDATES.scan,
+        physicalPage: QUERY_CANDIDATES.page, top: QUERY_CANDIDATES.top });
       if (navigation?.sourceMode) Object.assign(binding, { sourceMode: navigation.sourceMode,
         sourcePolicy: SOURCE_QUERY_CANDIDATE_VERSION, sourceReceiptLimit: SOURCE_QUERY_RECEIPT_LIMIT });
-      if (navigation?.sourceCandidatePolicy) Object.assign(binding, {
-        physicalPage: BOUNDED_KEYSET_SOURCE_CANDIDATES.page,
-        top: BOUNDED_KEYSET_SOURCE_CANDIDATES.top,
-      });
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding, safetyLayout);
       if (cursor && (!Number.isSafeInteger(cursor.a.offset) || cursor.a.offset < 0 ||
-          Object.keys(cursor.a).length !== 1)) throw new MemoryStoreError('invalid_cursor');
+          Object.keys(cursor.a).length !== (navigation ? 2 : 1) ||
+          navigation && !Object.hasOwn(cursor.a, 'scanBoundary'))) throw new MemoryStoreError('invalid_cursor');
       const offset = cursor?.a.offset ?? 0;
       let page;
       if (navigation) {
@@ -792,10 +798,15 @@ export function createMemoryCore(input, internal) {
         if (!snapshot) {
           snapshot = runtime.queryCandidateRows(ns, { score: navigation.score, memoryLabel: navigation.excerpt,
             ...(navigation.sourceMode ? { sourceReceiptLimit: SOURCE_QUERY_RECEIPT_LIMIT } : {}),
-            ...(navigation.sourceCandidatePolicy ? { sourceCandidatePolicy: navigation.sourceCandidatePolicy } : {}) });
+            ...(navigation.scanBudgetMs === undefined ? {} : { scanBudgetMs: navigation.scanBudgetMs }),
+            ...(cursor ? { scanBoundary: cursor.a.scanBoundary, expectedEpoch: cursor.e,
+              expectedSuppressionEpoch: cursor.h } : {}) });
           navigation.pages.set(key, snapshot);
         }
-        if (safetyLayout && cursor && cursor.h !== snapshot.suppressionEpoch) throw new MemoryStoreError('invalid_cursor');
+        if (safetyLayout && cursor && cursor.h !== snapshot.suppressionEpoch) throw new MemoryStoreError('cursor_stale');
+        if (cursor && JSON.stringify(cursor.a.scanBoundary) !== JSON.stringify(snapshot.scanBoundary)) {
+          throw new MemoryStoreError('invalid_cursor');
+        }
         if (cursor && cursor.e !== snapshot.epoch) throw new MemoryStoreError('cursor_stale');
         runtime.assertEpoch(ns, snapshot.epoch, snapshot.suppressionEpoch);
         if (offset > snapshot.rows.length) throw new MemoryStoreError('invalid_cursor');
@@ -818,7 +829,8 @@ export function createMemoryCore(input, internal) {
         const pageEnded = take === page.rows.length;
         const exhausted = pageEnded && page.scanExhausted !== false;
         const value = { items: selected.filter((row) => row.item).map((row) => row.item),
-          nextCursor: pageEnded ? null : encodeCursor({ ...binding, e: page.epoch, a: { offset: offset + take } }),
+          nextCursor: pageEnded ? null : encodeCursor({ ...binding, e: page.epoch, a: { offset: offset + take,
+            ...(navigation ? { scanBoundary: page.scanBoundary } : {}) } }),
           exhausted, truncatedBy: exhausted ? null : take < capacity ? 'token_budget' : 'page_limit',
           indexRevision: page.epoch,
           invalidRefs: selected.filter((row) => row.invalidRef).map((row) => row.invalidRef) };
@@ -922,8 +934,8 @@ export function createMemoryCore(input, internal) {
       const count = contractRevision(input.limit ?? 6);
       if (count > 12) throw new MemoryStoreError('invalid_input');
       const navigation = { excerpt: createQueryExcerpt(query), score: createQueryScore(query), pages: new Map(),
+        scanBudgetMs: namespaceScanBudgetMs(namespaces.length),
         ...(isSourceContext(contextMode) ? { sourceMode: contextMode } : {}),
-        ...(sourceCandidatePolicy && isSourceContext(contextMode) ? { sourceCandidatePolicy } : {}),
         queryDigest: createHmac('sha256', cursorSecret)
           .update(JSON.stringify([QUERY_EXCERPT_VERSION, query])).digest('base64url') };
       const validateFresh = (candidates = []) => runtime.recallSnapshot(candidates.map((candidate) => ({
@@ -1305,7 +1317,17 @@ export function createMemoryCore(input, internal) {
   internal?.attachCapture?.((input, registration, deadline) => capture(input, undefined, registration, deadline));
   const contentReads = new Set(['get','list','map','fetch','recall','sourceSnapshot','getEpisode','listEpisodes','listMemoriesByTime',
     'sessionStartContext','getRationale','inspectAdmission','inspectCaptureEvidence','listReviewTransitions','listReviewConflicts']);
-  return contentSafetyFacade({
+  return withEngineCardDelivery(contentSafetyFacade({
+    ...(engineConfigured ? {
+      async maintainCards(input) { try { runtime.ready(); return success(await (await loadEngineCards()).maintain(input)); } catch (error) { return failure(error); } },
+      getEngineCardStatus(input) { try {
+        runtime.ready();
+        if (engineCards) return success(engineCards.status(input));
+        object(input, ['namespace']); cardNamespace(input.namespace);
+        return success({ configured: true, state: runtime.engineCardAvailable() ? 'ready' : 'unsupported_store',
+          limits: ENGINE_CARD_LIMITS, lastPass: null });
+      } catch (error) { return failure(error); } },
+    } : {}),
     ...createMethodPackageFacade(runtime.methodPackages, methodPackages, runtime.ready,assets),
     ...createAssetFacade(runtime.assets, assets, runtime.ready),
     ...createRoleProfileFacade(runtime.roleProfiles, roleProfiles, { path: input.path, readOnly: Boolean(input.existingStore), context: internal?.roleContext, assets }),
@@ -1325,7 +1347,7 @@ export function createMemoryCore(input, internal) {
       runtime.close();
       return success(null);
     },
-  }, { check: runtime.assertContentScope, portGuard: runtime.contentPortGuard, failure, asyncMethods: ['capture'],
+  }, { check: runtime.assertContentScope, portGuard: runtime.contentPortGuard, failure, asyncMethods: ['capture','maintainCards'],
     requestScope: (work, method) => contentWriteMethodClass(method) === 'read' ? withContentSuppressionRequest(work) : work(),
     isFailedCapture(result) {
       // Admission committed before the paused classifier. After close only its
@@ -1333,8 +1355,13 @@ export function createMemoryCore(input, internal) {
       // receipts, counts or content survive this projection.
       return result?.ok===true&&result.value?.classification?.status==='failed';
     },
-    validate: (method,args,result,scopes) => { if(contentReads.has(method)&&result?.ok)runtime.assertContentOutput(result.value,scopes); }, noOwner: ['close',
-    'getPrivateCardCapabilities','getAssetCapabilities','getMethodPackageCapabilities'] });
+    validate: (method,args,result,scopes) => {
+      if (!result?.ok) return;
+      if (contentReads.has(method)) runtime.assertContentOutput(result.value,scopes);
+    }, noOwner: ['close',
+    'getPrivateCardCapabilities','getAssetCapabilities','getMethodPackageCapabilities'] }), null, {
+      project: (input, value) => engineCards.deliver(cardNamespace(input.namespace), value), failure,
+    });
   } catch (error) {
     try { runtime.close(); } catch { /* Preserve the construction failure. */ }
     throw error;
