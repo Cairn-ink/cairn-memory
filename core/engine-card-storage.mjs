@@ -1,7 +1,7 @@
 import { contextEmbeddingGuard } from './context-read-sidecar.mjs';
 import { randomUUID, createHmac, createHash } from 'node:crypto';
 import { readTransaction, transaction } from './database.mjs';
-import { withContentSuppressionRequest, inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { withContentSuppressionRequest, inContentSuppressionRequestInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, sourceReadSafety, receiptReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { createPrivateCardStorage } from './private-card-storage.mjs';
 import { createCardRawSources } from './card-raw-sources.mjs';
@@ -90,6 +90,9 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
     });
   }
   function snapshot(ns, maximum, check, after = '') {
+    // A resumed scan may restart from the beginning on epoch change. Clean
+    // only at scan starts, so even that two-snapshot pass has one cleanup page.
+    if (!after) cleanupOperations(ns);
     return read(ns, () => {
       const epoch = db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch ?? 1;
       const rows = db.prepare(`SELECT * FROM memories WHERE ${where} AND deleted=0 AND review_state!='awaiting'
@@ -122,6 +125,41 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       return { memories, complete, epoch, after: rows.slice(0, maximum).at(-1)?.id ?? after };
     });
   }
+  // A durable rowid watermark contains no source identity/digest. Inspect at
+  // most 64 ledger headers per maintenance opening/pass, including other
+  // namespaces, without loading their payloads. Deletes and progress commit
+  // together; reopen resumes, exhaustion wraps to catch later stale sources.
+  function cleanupOperations(ns) {
+    ready();
+    if (!has('card_operations')) return;
+    withContentSuppressionRequest(() => transaction(db, () => {
+      if (contentSuppressionReasonInside(db, ns)) return;
+      const action = 'engine-cleanup.' + bind('engine-card-cleanup-v1', boundary(ns));
+      const prior = db.prepare(`SELECT result FROM card_operations WHERE ${where} AND action_id=?`)
+        .get(...boundary(ns), action);
+      const after = prior ? JSON.parse(prior.result).after : 0;
+      const page = db.prepare(`SELECT rowid,owner_id,scope,project_id FROM card_operations
+        WHERE rowid>? ORDER BY rowid LIMIT 64`).all(after);
+      for (const header of page) {
+        if (header.owner_id !== ns.ownerId || header.scope !== ns.scope || header.project_id !== (ns.projectId ?? '')) continue;
+        const row = db.prepare(`SELECT * FROM card_operations WHERE rowid=?
+          AND method IN ('consolidateAttempt','consolidateOutcome')`).get(header.rowid);
+        if (!row) continue;
+        const refs = JSON.parse(row.result).sourceRevisions;
+        // Membership of legacy hashes is unrecoverable, including failed
+        // generations with no Card. Never guess from their first-source ID.
+        const stale = !Array.isArray(refs) || !refs.length || refs.length > ENGINE_CARD_LIMITS.sources || refs.some(ref =>
+          !db.prepare(`SELECT 1 FROM memories WHERE ${where} AND id=? AND deleted=0`)
+            .get(...boundary(ns), ref.memoryId));
+        if (stale) db.prepare('DELETE FROM card_operations WHERE rowid=?').run(header.rowid);
+      }
+      const result = JSON.stringify({ after: page.length === 64 ? page.at(-1).rowid : 0 });
+      if (prior) db.prepare(`UPDATE card_operations SET result=? WHERE ${where} AND action_id=?`)
+        .run(result, ...boundary(ns), action);
+      else db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)')
+        .run(...boundary(ns), action, 'consolidateCleanup', '', '', result, new Date().toISOString());
+    }), { fresh: true });
+  }
   async function rawSpans(ns, memories, check) {
     const result = []; let used = 0;
     if (!rawReader) return result;
@@ -147,17 +185,46 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
   }
   function cards(ns, check = () => {}) {
     if (!installed()) return [];
-    return read(ns, () => { const memo = createContentReadMemo(db); return db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id
+    return read(ns, () => { const memo = createContentReadMemo(db), result = [];
+      const page = db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id
       AND o.owner_id=c.owner_id AND o.scope=c.scope AND o.project_id=c.project_id AND o.action_id=c.id
       WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate'
-      AND c.state='confirmed' ORDER BY c.created_at,c.id LIMIT 129`).all(...boundary(ns)).map(row => {
-      check();
-      const metadata = engineCardMetadataInside(db, ns, row);
-      const current = engineCardRevisionsInside(db, ns, row) && contentReadSafety(db, { identity, namespace: ns, memo,
-        ref: cardReference(ns, row),
-        intent: 'history', method: 'getCard' }).allowed;
-      return { ...metadata, row, status: current ? 'current' : 'stale' };
-    }); });
+      AND c.state='confirmed' AND c.id>? ORDER BY c.id LIMIT 128`);
+      // Pages contain live engine rows only, including stale bodies awaiting
+      // rebuild/retirement. Walk every page under the caller's deadline.
+      let after = '';
+      for (;;) {
+        check(); const rows = page.all(...boundary(ns), after);
+        for (const row of rows) {
+          check();
+          const metadata = engineCardMetadataInside(db, ns, row);
+          if (!metadata) continue;
+          const current = engineCardRevisionsInside(db, ns, row) && contentReadSafety(db, { identity, namespace: ns, memo,
+            ref: cardReference(ns, row), intent: 'history', method: 'getCard' }).allowed;
+          result.push({ ...metadata, row, status: current ? 'current' : 'stale' });
+        }
+        if (rows.length < 128) break;
+        after = rows.at(-1).id;
+      }
+      return result;
+    });
+  }
+  function recentPurges(ns, timestamp, check) {
+    if (!installed()) return [];
+    return read(ns, () => {
+      const result = [], since = new Date(Date.parse(timestamp) - ENGINE_CARD_LIMITS.debounceMs).toISOString();
+      // Routing receipts contain source identities, never body/title text.
+      // Tombstones preserve similarity-key continuity and the forget debounce
+      // without occupying any live Card page or becoming serving candidates.
+      for (const row of db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o
+        ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)=(c.owner_id,c.scope,c.project_id,c.id,c.id)
+        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state='deleted' AND c.updated_at>?
+        AND o.method='consolidate' ORDER BY c.id`).iterate(...boundary(ns), since)) {
+        check(); const metadata = engineCardMetadataInside(db, ns, row);
+        if (metadata) result.push({ ...metadata, row });
+      }
+      return result;
+    });
   }
   // Delivery owns a fresh suppression scope and one canonical read snapshot;
   // the commit snapshot cannot authorize references returned after a host hook.
@@ -215,14 +282,14 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
     ready(); check();
     return transaction(db, () => {
       check(); if (!sourcesCurrent(ns, cluster.memories.map(memory => memory.source), check)) fail('source_unavailable');
-      // The namespace's bounded history page may omit this cluster's newest
-      // body. Recheck it atomically before reserving any generation spend.
+      // Recheck this cluster's latest publication or tombstone atomically
+      // before reserving any generation spend.
       const latest = db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id
         AND o.owner_id=c.owner_id AND o.scope=c.scope AND o.project_id=c.project_id AND o.action_id=c.id
-        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state='confirmed'
+        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state IN ('confirmed','deleted')
         AND o.method='consolidate' AND json_extract(o.result,'$.clusterKey')=?
         ORDER BY c.created_at DESC,c.id DESC LIMIT 1`).get(...boundary(ns), cluster.key);
-      if (latest?.revision === 1) {
+      if (latest?.state === 'confirmed' && latest.revision === 1) {
         const metadata = engineCardMetadataInside(db, ns, latest);
         const same = JSON.stringify(metadata?.sourceRevisions) === JSON.stringify(cardMemoryRevisions(cluster.memories));
         if (same && contentReadSafety(db, { identity, namespace: ns, intent: 'history', method: 'getCard',
@@ -270,7 +337,8 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       // each new attempt with a fresh immutable row, indexed by source fingerprint.
       const action = prefix + randomUUID(), target = cluster.memories[0].id;
       db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)')
-        .run(...boundary(ns), action, 'consolidateAttempt', fingerprint, target, JSON.stringify({ claimedAt: timestamp, attemptNumber }), timestamp);
+        .run(...boundary(ns), action, 'consolidateAttempt', fingerprint, target,
+          JSON.stringify({ claimedAt: timestamp, attemptNumber, sourceRevisions: cardMemoryRevisions(cluster.memories) }), timestamp);
       return { action, fingerprint, target };
     });
   }
@@ -288,9 +356,17 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
   function finish(ns, attempt, outcome, timestamp) {
     ready();
     return transaction(db, () => {
+      // Forget and namespace/owner erasure delete the reservation in their
+      // canonical transaction. Both success and failure settle through this
+      // fence, so an awaiting worker cannot resurrect a purged fingerprint.
+      const claim = db.prepare(`SELECT result FROM card_operations WHERE ${where}
+        AND action_id=? AND method='consolidateAttempt' AND payload_binding=? AND target_id=?`)
+        .get(...boundary(ns), attempt.action, attempt.fingerprint, attempt.target);
+      if (!claim) return;
+      const sourceRevisions = JSON.parse(claim.result).sourceRevisions;
       db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)')
         .run(...boundary(ns), attempt.action + '.outcome', 'consolidateOutcome', attempt.fingerprint,
-          attempt.target, JSON.stringify({ outcome }), timestamp);
+          attempt.target, JSON.stringify({ outcome, sourceRevisions }), timestamp);
     });
   }
   function retire(ns, id, timestamp, deleted = false) {
@@ -298,7 +374,8 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       const row = db.prepare(`SELECT * FROM private_cards WHERE ${where} AND id=?`).get(...boundary(ns), id);
       if (!row || !engineCardMetadataInside(db, ns, row)) fail('source_unavailable');
       if (row.state === 'deleted' || !deleted && row.revision !== 1) return;
-      if (deleted) writers.purge(ns, row, 'engine-retire.' + randomUUID());
+      // Tombstone debounce and claims use the maintenance pass's clock too.
+      if (deleted) writers.purge(ns, row, 'engine-retire.' + randomUUID(), timestamp);
       else db.prepare('UPDATE private_cards SET revision=revision+1,updated_at=? WHERE id=?').run(timestamp, id);
       advance(ns);
     });
@@ -309,15 +386,24 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       check();
       const refs = cluster.memories.map(m => m.source);
       if (!sourcesCurrent(ns, refs, check)) fail('source_unavailable');
-      for (const ref of refs) if (db.prepare(`SELECT count(*) AS n FROM (SELECT DISTINCT c.id
-        FROM card_memory_bindings b JOIN private_cards c ON c.id=b.card_id WHERE b.memory_id=?
-        AND c.state IN ('draft','confirmed') LIMIT 128)`).get(ref.memoryId).n >= 128) fail('dependency_limit_reached');
       // Re-entrant or concurrent maintenance must not publish a second Card.
       const existing = db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id
         WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state='confirmed' AND c.revision=1
-        AND o.method='consolidate' AND json_extract(o.result,'$.clusterKey')=? LIMIT 1`)
-        .get(...boundary(ns), cluster.key);
-      if (existing && engineCardRevisionsInside(db, ns, existing)) return null;
+        AND o.method='consolidate' AND json_extract(o.result,'$.clusterKey')=?`)
+        .all(...boundary(ns), cluster.key);
+      if (existing.some(row => engineCardRevisionsInside(db, ns, row))) return null;
+      // Publish and supersession share the canonical transaction. Preserve
+      // identities/seals, but erase every older engine payload for this key.
+      const superseded = db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o
+        ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)=(c.owner_id,c.scope,c.project_id,c.id,c.id)
+        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate'
+        AND json_extract(o.result,'$.origin')='engine' AND json_extract(o.result,'$.clusterKey')=?
+        AND (c.title IS NOT NULL OR c.body IS NOT NULL) ORDER BY c.id`).all(...boundary(ns), cluster.key)
+        .filter(row => row.state !== 'confirmed' || row.revision !== 1 || !engineCardRevisionsInside(db, ns, row));
+      for (const row of superseded) { check(); writers.purge(ns, row, 'engine-supersede.' + randomUUID(), timestamp); }
+      for (const ref of refs) if (db.prepare(`SELECT count(*) AS n FROM (SELECT DISTINCT c.id
+        FROM card_memory_bindings b JOIN private_cards c ON c.id=b.card_id WHERE b.memory_id=?
+        AND c.state IN ('draft','confirmed') LIMIT 128)`).get(ref.memoryId).n >= 128) fail('dependency_limit_reached');
       const shared = tokenizeT1(cluster.memories[0].content).find(term =>
         cluster.memories.filter(memory => tokenizeT1(memory.content).includes(term)).length >= cluster.memories.length / 2);
       const id = 'engine-card.' + randomUUID(), title = 'Topic: ' + (shared ?? 'current state and history');
@@ -334,13 +420,13 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)').run(...boundary(ns), id,
         'consolidate', bind('engine-card-cluster-v1', cluster.key), id, JSON.stringify(metadata), timestamp);
       advance(ns); check();
-      return metadata;
+      return { ...metadata, supersededCount: superseded.length };
     }, [ns]));
   }
   // Each pass owns a versioned canonical decision. Probes must run outside
   // validation snapshots, including the final synchronous transport fence.
   const pauseGuard = (ns, deadlineAt) => contextEmbeddingGuard(db,
     work => { ready(); return readTransaction(db, work); }, [ns], deadlineAt);
-  return { pauseGuard, available, snapshot, rawSpans, cards, carry, retire, commit, claim, release, finish, relations, pressureItems, deliver,
+  return { pauseGuard, available, snapshot, rawSpans, cards, recentPurges, carry, retire, commit, claim, release, finish, relations, pressureItems, deliver,
     validate(ns, memories, check) { return read(ns, () => { if (!sourcesCurrent(ns, memories.map(m => m.source), check)) fail('source_unavailable'); }); } };
 }
