@@ -12,7 +12,8 @@ import { ns, counter, query, ok, connect, call, context } from './local-shared-s
 
 test('A4 measure B-H reads while A waits on a three-second external canonical write lock', { timeout: 60000 }, async t => {
   const w = createTestWorkspace(t), path = join(w.path, 'synthetic-contention.sqlite');
-  const host = createLocalSharedRuntime({ path, namespace: ns, contextCounter: counter, model: rationaleModel(), captureQualification: 'source-bound-v2' });
+  // The default MCP client is Memory-only; exercise real retained Raw here.
+  const host = createLocalSharedRuntime({ path, namespace: ns, client: 'codex', contextCounter: counter, model: rationaleModel(), captureQualification: 'source-bound-v2' });
   w.defer(() => host.close());
   const clients = [];
   for (let i = 0; i < 8; i++) clients.push((await connect(t, host)).client);
@@ -25,6 +26,8 @@ test('A4 measure B-H reads while A waits on a three-second external canonical wr
     if (warm.diagnostics.coverage.raw === 'included') break;
   }
   assert.equal(warm.diagnostics.coverage.raw, 'included');
+  assert.ok(warm.value.items.some(item => item.ref.type === 'raw' || item.evidence?.some(e => e.ref.type === 'raw')),
+    'contention measurement must warm actual retained Raw');
   for (const client of clients.slice(1)) await context(client);
   // Include dispatch delay: a synchronous A write can block even this
   // in-process client's turn before B-H reach callTool(). Both cells use
