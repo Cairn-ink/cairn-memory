@@ -3,6 +3,7 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { captureEvent } from "../lib/capture-event.mjs";
+import { readHookInput } from "../lib/hook-input.mjs";
 import { normalizeEndpoint } from "../lib/config.mjs";
 import { resolveClient, parsePairingRecord } from "../lib/pairing.mjs";
 import { readControlState } from "../lib/control-state.mjs";
@@ -31,8 +32,7 @@ try {
 const control = await readControlState(dataDir);
 if (control.paused) process.exit(0);
 
-let input = "";
-for await (const chunk of process.stdin) input += chunk;
+const input = await readHookInput(process.stdin);
 let event;
 try {
   event = captureEvent(JSON.parse(input));

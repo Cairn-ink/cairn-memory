@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.7 — 2026-11-13: first-turn capture after hosted resume
+
+Plugin and marketplace 0.3.7. Protocol stays 0.3.0. The installer version is not
+bumped here.
+
+- On Linux and macOS, capture the first turn of a new Claude Code session
+  started after a hosted pause has resumed, including one-turn sessions.
+- Exclude leading copied history older than the new session's start, allowing
+  five seconds for clock differences. Sessions live during a pause continue to
+  skip their unprocessed history after resume.
+- Long non-English prompts and paths are no longer corrupted when hook input arrives in pieces.
+
 ## 0.3.6 — 2026-11-10: hosted pause and capture session windows
 
 Plugin and marketplace 0.3.6. Protocol stays 0.3.0. The installer version is not

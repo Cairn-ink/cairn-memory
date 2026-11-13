@@ -6,7 +6,6 @@ import { rotateAutomaticBoundary } from './automatic-policy.mjs';
 import { conforms } from './hosted-contract.mjs';
 import { hostedTargetId } from './transport-hosted.mjs';
 
-// H5 source evidence: cairn-wiki origin/main app/api/memory/pause-state/route.ts.
 // A missing, unenforced or regressing state never authorizes capture/injection.
 const statusPath = config => join(config.root, 'hosted-pause-status', hostedTargetId(config) + '.json');
 // Timestamped atomic records avoid lock contention for either outcome. Keep the

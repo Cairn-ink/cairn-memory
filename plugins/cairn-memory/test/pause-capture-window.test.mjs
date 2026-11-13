@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { appendFile, writeFile } from 'node:fs/promises';
 import test from 'node:test';
+import { setPaused } from '../lib/control-state.mjs';
 import { harness, row } from './capture-window-harness.mjs';
 
 const active = { paused: false, generation: 0, enforced: true };
@@ -80,4 +81,57 @@ test('portable early captureSeen crash preserves prior authority until the EOF d
   assert.equal((await f.state()).offset, Buffer.byteLength(skipped));
   await appendFile(f.transcript, row('portable-later', time)); await f.run('capture');
   assert.deepEqual(ids(f), ['portable-later'], 'portable_crash_actual_later_send');
+});
+
+// Observe a complete hosted pause/resume in another session before SessionStart.
+async function resumedHost(t) {
+  let remote = active;
+  const f = await harness(t, { pauseState: () => remote });
+  const observe = () => f.run('recall', { session_id: 'synthetic-prior' });
+  remote = { ...active, paused: true, generation: 1 }; await observe();
+  remote = { ...active, generation: 2 }; await observe();
+  return { f, observe, remote: value => { remote = value; } };
+}
+
+for (const turns of [1, 2]) test(`missing transcript after hosted resume captures ${turns} new turns`,
+  { timeout: 20000 }, async t => {
+    const { f } = await resumedHost(t);
+    await f.run('start-boundary'); await f.run('recall');
+    for (let turn = 1; turn <= turns; turn++) {
+      const now = new Date().toISOString();
+      await appendFile(f.transcript, row(`user-${turn}`, now) + row(`assistant-${turn}`, now, { type: 'assistant' }));
+      await f.run('capture');
+      assert.deepEqual(ids(f), Array.from({ length: turn }, (_, i) => [`user-${i + 1}`, `assistant-${i + 1}`]).flat());
+    }
+  });
+
+test('pending start loses authority after another hosted pause and resume', { timeout: 20000 }, async t => {
+  const h = await resumedHost(t), { f } = h;
+  await f.run('start-boundary');
+  const pending = await f.state(); assert.equal(pending.startPending, true); assert.equal(pending.offset, undefined);
+  await f.run('recall');
+  h.remote({ ...active, paused: true, generation: 3 }); await h.observe();
+  h.remote({ ...active, generation: 4 }); await h.observe();
+  const transcript = row('revoked-first-turn', new Date().toISOString());
+  await f.write(transcript); await f.run('capture');
+  assert.deepEqual(ids(f), []);
+  assert.equal((await f.state()).offset, Buffer.byteLength(transcript));
+});
+
+test('SessionStart while local control is paused cannot authorize a missing transcript', { timeout: 20000 }, async t => {
+  const h = await resumedHost(t), { f } = h;
+  h.remote({ ...active, paused: true, generation: 3 }); await h.observe();
+  await setPaused(f.dataDir, true);
+  await f.run('start-boundary');
+  await assert.rejects(f.state(), { code: 'ENOENT' });
+  await setPaused(f.dataDir, false);
+  h.remote({ ...active, generation: 4 }); await h.observe();
+  await f.run('recall'); await f.write(row('paused-start-turn', new Date().toISOString())); await f.run('capture');
+  assert.deepEqual(ids(f), []);
+});
+
+test('missing SessionStart after hosted resume stays conservative', { timeout: 20000 }, async t => {
+  const { f } = await resumedHost(t);
+  await f.run('recall'); await f.write(row('unknown-start', new Date().toISOString())); await f.run('capture');
+  assert.deepEqual(ids(f), []);
 });

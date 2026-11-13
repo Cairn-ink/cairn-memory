@@ -68,3 +68,22 @@ for(const sink of ['request','output'])test(`cross-process publication after fin
  if(sink==='request'){assert.equal(wireStarts,1);assert.equal(wireBody,'synthetic paused-period text');}
  else assert.equal(sender.stdout(),'synthetic recalled context');
 });
+
+
+test('hosted resume supplies a stable active local generation and the next pause revokes it', async t => {
+  const root = join(createTestWorkspace(t).path, 'state'); await fs.mkdir(root, { mode: 0o700 });
+  const config = { root, endpoint: 'http://127.0.0.1:1' };
+  let remote = { paused: true, generation: 1, enforced: true };
+  t.mock.method(globalThis, 'fetch', async () => Response.json(remote));
+  await observeHostedPause(config, 'synthetic-token');
+  assert.notEqual((await readControlState(root)).generation, 'initial');
+  await assert.rejects(withHostedPauseGate(config, 1, () => assert.fail('paused_send')), /pause_unavailable/);
+  remote = { ...remote, paused: false, generation: 2 }; await observeHostedPause(config, 'synthetic-token');
+  const start = await readControlState(root);
+  assert.equal(start.valid, true); assert.equal(start.paused, false); assert.notEqual(start.generation, 'initial');
+  await observeHostedPause(config, 'synthetic-token');
+  assert.deepEqual(await readControlState(root), start);
+  remote = { ...remote, paused: true, generation: 3 }; await observeHostedPause(config, 'synthetic-token');
+  remote = { ...remote, paused: false, generation: 4 }; await observeHostedPause(config, 'synthetic-token');
+  assert.notEqual((await readControlState(root)).generation, start.generation);
+});

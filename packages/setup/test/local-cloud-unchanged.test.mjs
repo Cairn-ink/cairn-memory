@@ -163,7 +163,9 @@ const durabilityRuntimeChanges = new Map([
     // Caller deadlines cover unchanged publication, recovery and final admission; changed observations retain durable marker retries.
     previousCallerDeadline: 'c116c69bd2e902d8ae230fe46c9db38b560e5a6d412b6577d08712e208dbec66',
     // The gate and its records use the pinned canonical root; a changed configured path fails closed.
-    current: '15a0c3f7f0e36d6fb9b5a7c337e2f08bc1bfa05b4a751c6a393266409da3fac4',
+    previousCanonicalRoot: '15a0c3f7f0e36d6fb9b5a7c337e2f08bc1bfa05b4a751c6a393266409da3fac4',
+    // Comment-only removal of a source-evidence note; runtime behavior is unchanged.
+    current: '355ee562215c9f11f40b85b9b4a0b1cc53b9cd6b4bc01e900701650fe4b48398',
   }],
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { appendFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { join } from 'node:path';
 import test from 'node:test';
+import { setPaused } from '../lib/control-state.mjs';
 import { withFileLock } from '../lib/file-lock.mjs';
 import { forgetThenFork, harness, oldTime, row } from './capture-window-harness.mjs';
 
@@ -205,4 +207,86 @@ test('invalid session state leaves the start boundary unknown and retains the tu
 
 test('remember then forget then new-id fork retains copied times and initial classification', async t => {
   await forgetThenFork(t);
+});
+
+for (const prompt of [false, true]) test(`pending start excludes recently copied history; recall=${prompt}`, async t => {
+  const startedAt = '2026-11-10T00:05:00.000Z';
+  const f = await harness(t, { observedAt: startedAt });
+  await setPaused(f.dataDir, true); await setPaused(f.dataDir, false);
+  await f.run('start-boundary');
+  if (prompt) await f.run('recall');
+  await f.write(row('copied-user', '2026-11-10T00:04:00.000Z') +
+    row('copied-assistant', '2026-11-10T00:04:01.000Z', { type: 'assistant' }) +
+    row('first-user', startedAt) + row('first-assistant', startedAt, { type: 'assistant' }));
+  await f.run('capture');
+  assert.deepEqual(f.captures.flatMap(body => body.messages.map(m => m.id)), ['first-user', 'first-assistant']);
+  assert.ok(f.captures.every(body => body.window.initial === true));
+  assert.equal((await f.state()).startPending, undefined);
+});
+
+test('pending start clock tolerance retains its edge and later old-dated records', async t => {
+  const f = await harness(t, { observedAt: '2026-11-10T00:05:00.000Z' });
+  await setPaused(f.dataDir, true); await setPaused(f.dataDir, false);
+  await f.run('start-boundary'); await f.run('recall');
+  await f.write(row('copied', '2026-11-10T00:04:54.999Z') +
+    row('tolerance-edge', '2026-11-10T00:04:55.000Z') + row('later-old', oldTime));
+  await f.run('capture');
+  assert.deepEqual(f.captures.flatMap(body => body.messages.map(m => m.id)), ['tolerance-edge', 'later-old']);
+});
+
+test('malformed pending start fields carry no post-pause authority', async t => {
+  for (const invalid of [{ startPending: 'true' }, { startGeneration: 1 }, { startGeneration: '' },
+    { startedAt: 1 }, { startedAt: 'invalid' }, { startedAt: undefined }]) {
+    const f = await harness(t);
+    await setPaused(f.dataDir, true); const control = await setPaused(f.dataDir, false);
+    await mkdir(dirname(f.statePath), { recursive: true });
+    await writeFile(f.statePath, JSON.stringify({ startPending: true, startGeneration: control.generation,
+      startedAt: new Date().toISOString(), ...invalid }));
+    await f.run('recall'); await f.write(row('untrusted', new Date().toISOString())); await f.run('capture');
+    assert.deepEqual(f.captures, []);
+  }
+});
+
+test('invalid control state and a lost start lock cannot create pending authority', async t => {
+  const f = await harness(t);
+  await writeFile(join(f.dataDir, 'control.json'), '{');
+  await f.run('start-boundary'); await assert.rejects(f.state(), { code: 'ENOENT' });
+  await setPaused(f.dataDir, true); await setPaused(f.dataDir, false);
+  await withFileLock(f.statePath + '.lock', async () => {
+    await boundedStart(f); await assert.rejects(f.state(), { code: 'ENOENT' });
+  });
+  await f.run('recall'); await f.write(row('lost-start', new Date().toISOString())); await f.run('capture');
+  assert.deepEqual(f.captures, []);
+});
+
+
+test('pending start stays content-free through recall and an empty capture until a real cursor retires it', async t => {
+  const startedAt = '2026-11-10T00:05:00.000Z';
+  const f = await harness(t, { observedAt: startedAt });
+  await setPaused(f.dataDir, true); const control = await setPaused(f.dataDir, false);
+  await f.run('start-boundary');
+  const pending = { startPending: true, startGeneration: control.generation, startedAt };
+  assert.deepEqual(await f.state(), pending);
+  await f.run('recall'); await f.write(''); await f.run('capture');
+  assert.deepEqual(await f.state(), { ...pending, firstPromptAt: startedAt, captureSeen: true });
+  await f.write(row('first', startedAt));
+  for (const source of ['startup', 'resume', 'compact']) await f.run('start-boundary', { source });
+  assert.deepEqual(await f.state(), { ...pending, firstPromptAt: startedAt, captureSeen: true });
+  await f.run('capture');
+  assert.deepEqual(f.captures.flatMap(body => body.messages.map(m => m.id)), ['first']);
+  const state = await f.state();
+  assert.equal(state.startPending, undefined); assert.equal(state.startGeneration, undefined);
+  assert.equal(state.startedAt, startedAt); assert.equal(state.offset, Buffer.byteLength(row('first', startedAt)));
+});
+
+test('an exhausted SessionStart budget leaves no post-pause start authority', async t => {
+  const f = await harness(t, { mutateRuntime: source => {
+    const needle = 'const START_BOUNDARY_BUDGET_MS = 300;';
+    assert.equal(source.split(needle).length, 2);
+    return source.replace(needle, 'const START_BOUNDARY_BUDGET_MS = 0;');
+  } });
+  await setPaused(f.dataDir, true); await setPaused(f.dataDir, false);
+  await boundedStart(f); await assert.rejects(f.state(), { code: 'ENOENT' });
+  await f.run('recall'); await f.write(row('budget-exit', new Date().toISOString())); await f.run('capture');
+  assert.deepEqual(f.captures, []);
 });

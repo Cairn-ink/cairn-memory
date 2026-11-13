@@ -16,6 +16,7 @@ const startBoundaryTimer = action === 'start-boundary' ? setTimeout(() => proces
   Math.max(0, START_BOUNDARY_BUDGET_MS - performance.now())) : undefined;
 
 const { captureEvent } = await import("../lib/capture-event.mjs");
+const { readHookInput } = await import("../lib/hook-input.mjs");
 const {
   captureCursorPath,
   readCaptureCursor,
@@ -122,8 +123,7 @@ try {
 
 async function input() {
   checkRecall();
-  let text = "";
-  for await (const chunk of process.stdin) { checkRecall(); text += chunk; }
+  const text = await readHookInput(process.stdin, checkRecall);
   checkRecall();
   if (!text.trim()) return {};
   try {
@@ -312,6 +312,10 @@ function markersFromState(state) {
       ...(Object.hasOwn(state, 'hostedTarget') ? { hostedTarget: state.hostedTarget } : {}),
       ...(Number.isSafeInteger(state.startOffset) && state.startOffset >= 0 ? { startOffset: state.startOffset } : {}),
       ...(typeof state.startedAt === "string" ? { startedAt: state.startedAt } : {}),
+      ...(state.startPending === true && typeof state.startGeneration === "string" &&
+        state.startGeneration.length > 0 && typeof state.startedAt === "string" &&
+        Number.isFinite(Date.parse(state.startedAt)) ?
+        { startPending: true, startGeneration: state.startGeneration } : {}),
       ...(typeof state.firstPromptAt === "string" && Number.isFinite(Date.parse(state.firstPromptAt)) ?
         { firstPromptAt: state.firstPromptAt } : {}),
       ...(state.captureSeen === true ? { captureSeen: true } : {}),
@@ -344,16 +348,30 @@ async function startCapture(hookInput) {
   const statePath = captureCursorPath(dataDir, event.session_id);
   // Resume/compact need no write. In particular, never queue behind a capture
   // holding this lock across its network request.
-  if (await readCaptureCursor(statePath) || (await captureMarkers(statePath, { strict: true })).startOffset !== undefined) return;
+  if (await readCaptureCursor(statePath)) return;
+  const existing = await captureMarkers(statePath, { strict: true });
+  if (existing.startOffset !== undefined || existing.startPending) return;
   await withFileLock(`${statePath}.lock`, async () => {
     const cursor = await readCaptureCursor(statePath);
     const markers = await captureMarkers(statePath, { strict: true });
     // An EOF observed after a prompt or capture is not a start boundary.
     if (cursor || markers.startOffset !== undefined || markers.firstPromptAt || markers.captureSeen) return;
-    // Missing transcripts are unknown, never a trusted zero boundary.
+    if (markers.startPending) return;
+    // A missing transcript can still establish when this session was born.
+    // Keep it cursor-free so capture must exclude any later copied prefix.
     let size;
     try { size = (await stat(event.transcript_path)).size; }
-    catch (error) { if (error.code === "ENOENT") return; throw error; }
+    catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      const control = await readControlState(dataDir);
+      if (control.valid && !control.paused) {
+        checkStartBoundary();
+        await writeStartBoundary(statePath, { ...markers,
+          startPending: true, startGeneration: control.generation, startedAt: observedAt,
+        });
+      }
+      return;
+    }
     const generation = (await readControlState(dataDir)).generation;
     const tail = size === 0 ? Buffer.alloc(0) : await readSlice(event.transcript_path, size - 1, size);
     checkStartBoundary();
@@ -417,13 +435,16 @@ async function writePortableFirstPrompt(path, state, guard) {
 
 // Match the server copied-history allowance for prompt timestamp/startup latency.
 const FIRST_PROMPT_MARGIN_MS = 10 * 60 * 1000;
+const START_CLOCK_TOLERANCE_MS = 5 * 1000;
 // Internal test copies lower this cap while retaining the legacy batch layout.
 const CAPTURE_WINDOW_SLICES = 4096;
 const HOSTED_CAPTURE_REQUEST_MS = 25_000;
 
 // Skip only a leading copied prefix, not older timestamps later in a new turn.
-function copiedPrefix(bytes, firstPromptAt) {
-  const cutoff = Date.parse(firstPromptAt) - FIRST_PROMPT_MARGIN_MS;
+function copiedPrefix(bytes, firstPromptAt, startedAt) {
+  let cutoff = Date.parse(firstPromptAt) - FIRST_PROMPT_MARGIN_MS;
+  if (startedAt !== undefined) cutoff = Math.max(Number.isFinite(cutoff) ? cutoff : -Infinity,
+    Date.parse(startedAt) - START_CLOCK_TOLERANCE_MS);
   if (!Number.isFinite(cutoff)) return 0;
   let at = 0;
   while (at < bytes.length) {
@@ -494,9 +515,13 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
   const transcriptPath = hookInput.transcript_path;
   let cursor = await readCaptureCursor(statePath);
   const portableHosted = hosted && !hostedPauseMode(hostedConfig).barrier;
-  const writeCursor = (path, value) => writeCaptureCursor(path, portableHosted
-    ? { ...value, hostedGeneration: hosted.generation, hostedTarget: hostedTargetId(hostedConfig) }
-    : value);
+  const writeCursor = (path, value) => {
+    // A real cursor replaces pending-start authority, including EOF barriers.
+    const { startPending, startGeneration, ...cursorState } = value;
+    return writeCaptureCursor(path, portableHosted
+      ? { ...cursorState, hostedGeneration: hosted.generation, hostedTarget: hostedTargetId(hostedConfig) }
+      : cursorState);
+  };
   // Read all Claude-only metadata together under the session capture lock.
   let captureExtension = {};
   try {
@@ -526,11 +551,12 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
   const knownHostedAuthority = portableHosted && Number.isSafeInteger(cursor?.hostedGeneration) &&
     cursor.hostedGeneration >= 0 && cursor.hostedTarget === hostedTargetId(hostedConfig);
 
-  // After every pause barrier, the first hook for each session establishes a
-  // fresh EOF boundary and transmits nothing. This also protects sessions the
-  // control command could not know about and survives process restarts.
+  // Only a validated SessionStart in this generation can establish birth
+  // after the barrier without a cursor. Unknown and older starts still skip.
+  // capture() already rejected paused control state; dispatch rechecks it.
+  const pendingStart = !cursor && markers.startPending === true && markers.startGeneration === generation;
   if (
-    (generation !== "initial" && (!cursor || cursor.generation !== generation)) ||
+    (generation !== "initial" && (!cursor || cursor.generation !== generation) && !pendingStart) ||
     (portableHosted && (!knownHostedAuthority || cursor.hostedGeneration !== hosted.generation))
   ) {
     const tail = size === 0 ? Buffer.alloc(0) : await readSlice(transcriptPath, size - 1, size);
@@ -567,8 +593,13 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
   if (offset === readEnd) return;
 
   let slice = await readSlice(transcriptPath, offset, readEnd);
+  let skipped = 0;
   if (fallback && markers.firstPromptAt) {
-    const skipped = copiedPrefix(slice, markers.firstPromptAt);
+    skipped = copiedPrefix(slice, markers.firstPromptAt, pendingStart ? markers.startedAt : undefined);
+  } else if (fallback && pendingStart) {
+    skipped = copiedPrefix(slice, undefined, markers.startedAt);
+  }
+  if (skipped) {
     offset += skipped;
     slice = slice.subarray(skipped);
     if (!slice.length) {

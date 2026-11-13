@@ -16,7 +16,7 @@ npx @cairn-ink/memory setup
 ```
 
 This checkout prepares installer **0.5.3**; publication is a separate step.
-Try it with `node packages/setup/bin/memory.mjs setup`. The plugin is 0.3.6.
+Try it with `node packages/setup/bin/memory.mjs setup`. The plugin is 0.3.7.
 Setup asks about new tools, updates connected tools, and uses one browser sign-in
 when connecting both. The default server is cairn.ink. Conflicting servers or
 memory IDs present a choice; non-interactive conflicts change nothing.
@@ -83,8 +83,9 @@ The bundled Cairn MCP server also exposes explicit `remember_memory`, `recall_me
 
 Hooks fail open: timeouts, auth errors, and service outages never block normal Claude Code work.
 Explicit pause/resume commands report control failures rather than claiming success. After resume,
-each session's first capture hook skips its current unprocessed history; later complete messages are
-eligible. Requests already started before pause may still finish.
+sessions live during the pause skip their unprocessed history; later complete messages are eligible.
+Sessions started after resume are captured from their start, excluding copied history.
+Requests already started before pause may still finish.
 
 Hosted recall and capture require a freshly validated, enforced pause state.
 Claude recall observes it once immediately before fetching, after project and
