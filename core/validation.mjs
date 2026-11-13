@@ -35,8 +35,8 @@ export function identifier(value) {
 }
 
 /** Validate and normalize one field using the bounded-text input rules. */
-export function normalizeBoundedText(value) {
-  if (typeof value !== "string" || value.length > 20_000) fail("invalid_text");
+export function normalizeBoundedText(value, rawMax = 20_000) {
+  if (typeof value !== "string" || value.length > rawMax) fail("invalid_text");
   const clean = redactSecrets(value.normalize("NFKC")).replace(/\s+/gu, " ").trim();
   if (!clean || clean === "[REDACTED]" || clean.includes("\0")) fail("invalid_text");
   return clean;
@@ -47,8 +47,8 @@ export function normalizedTextLength(value) {
   return normalizeBoundedText(value).length;
 }
 
-export function boundedText(value, max, truncate = false) {
-  const clean = normalizeBoundedText(value);
+export function boundedText(value, max, truncate = false, rawMax = 20_000) {
+  const clean = normalizeBoundedText(value, rawMax);
   if (!truncate && clean.length > max) fail("invalid_text");
   let result = "";
   for (const point of clean) {

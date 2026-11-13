@@ -1,3 +1,4 @@
+import { suppressionContent } from './suppression-content.mjs';
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
 import { dispatchCommit, hasCommitDispatcher, commitFailure, dispatchSynchronousCommit } from './commit-dispatch.mjs';
 import { contentWriteMethodClass } from './content-write-context.mjs';
@@ -49,7 +50,7 @@ import { qualificationInput, qualificationSources } from './claim-qualification-
 import { proposeRationale } from './rationale.mjs';
 import { reviewSourceBasis } from './source-basis.mjs';
 import {
-  boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray, fail, receiptEventTime,
+  boundedText, identifier, limit, MemoryStoreError, object, revision, denseArray, fail, receiptEventTime,
 } from "./validation.mjs";
 
 // One constructor grammar for the base and its opt-in wrappers. Wrappers remove
@@ -119,12 +120,8 @@ function contractReceipt(input) {
 function contractMemory(input, maxContent = 4000) {
   object(input, ["content", "kind"]);
   if (!kinds.includes(input.kind)) throw new MemoryStoreError("invalid_input");
-  let content;
-  try { content = boundedText(input.content, maxContent); } catch {
-    throw new MemoryStoreError("invalid_input");
-  }
-  return { content, kind: input.kind, origin: "explicit", confidence: 1,
-    fingerprint: fingerprint(content) };
+  return { ...suppressionContent(input.content, maxContent),
+    kind: input.kind, origin: "explicit", confidence: 1 };
 }
 
 function contractId(value) {
@@ -385,6 +382,37 @@ export function createMemoryCore(input, internal) {
   // These closures contain only the selected synchronous storage phase. The
   // provider's detached result remains outside, in this invocation's stack.
   const commit = hasCommitDispatcher(runtime) ? (work, deadline, options) => dispatchCommit(runtime, work, deadline, options) : null;
+
+  /**
+   * The read answers whether admit would refuse this exact text as
+   * `memory_suppressed`, extended to raw inputs beyond admit's raw-length guard.
+   * Over admit's eligible inputs, suppressed iff admit refuses memory_suppressed;
+   * receipts run first in admit and may refuse with an earlier admission-only code.
+   * Read/admit raw ceilings are 1,000,000/20,000 UTF-16 units. Unstorable text is false.
+   * Exact matching uses admit's normalization and JavaScript toLowerCase(), not full
+   * Unicode case folding; added characters/embedded text do not match. Older
+   * fingerprints match only if today's normalization yields the same text, as in admit.
+   * `invalid_input` means unanswerable: the host must not save.
+   * Any non-ok result is unanswerable. Retry once for
+   * evidence_unavailable (a fact written between COMMIT and delivery) or storage_busy.
+   * Probes leave no trace; hosts exposing this beyond the authenticated owner
+   * should rate-limit it. The answer does not reserve a later admission.
+   */
+  function isSuppressed(input) {
+    return invoke(() => {
+      runtime.ready();
+      object(input, ['namespace', 'content']);
+      const ns = contractNamespace(input.namespace);
+      const content = input.content;
+      if (!Object.hasOwn(input, 'content') || typeof content !== 'string' ||
+          content.length > 1_000_000) fail('invalid_input');
+      let value;
+      try { value = suppressionContent(content, 4000, 1_000_000); }
+      catch (error) { if (error.code !== 'invalid_input') throw error; }
+      // NULL cannot equal a stored fingerprint; still run the snapshot/scope checks.
+      return { suppressed: runtime.isSuppressed(ns, value?.fingerprint ?? null) };
+    });
+  }
 
   function admit(input) {
     return invoke(() => {
@@ -1345,6 +1373,7 @@ export function createMemoryCore(input, internal) {
     getCaptureControl, setCapturePaused, setProjectCapture, setProceduralMemory,
     listReviewTransitions, listReviewConflicts,
     confirm: input => resolveReview('confirm', input), reject: input => resolveReview('reject', input),
+    isSuppressed,
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission, inspectAdmission,
     inspectCaptureEvidence, discardCaptureEvidence,

@@ -12,6 +12,7 @@ import threading
 import uuid
 
 from agent.memory_provider import MemoryProvider
+from agent.secret_scope import get_secret
 from hermes_constants import get_hermes_home
 
 from . import hosted
@@ -146,7 +147,7 @@ class CairnMemoryProvider(MemoryProvider):
             if config.get("mode") == "hosted":
                 if self._hosted is None and self._home is None:
                     self._hosted = hosted.HostedMemoryProvider()
-                hosted.read_credential(home, config["api_endpoint"])
+                hosted.profile_token()
                 return True
             if sys.platform != "linux" or importlib.util.find_spec("mcp") is None:
                 return False
@@ -155,7 +156,7 @@ class CairnMemoryProvider(MemoryProvider):
             return False
 
     def unavailable_reason(self):
-        return "Run hermes memory setup: hosted needs a memory-only token; local needs Linux, the host MCP SDK and installed Node/Cairn paths."
+        return "Run hermes memory setup: hosted needs CAIRN_MEMORY_TOKEN (profiles set up with 0.2.0 must re-run setup); local needs Linux, the host MCP SDK and installed Node/Cairn paths."
 
     def post_setup(self, hermes_home, config):
         if self._closed:
@@ -190,7 +191,10 @@ class CairnMemoryProvider(MemoryProvider):
             if field["key"] in existing:
                 field["default"] = existing[field["key"]]
         return paths + optional + [{"key": "api_key", "description": "Optional Cairn capture/recall/classification OpenAI key (paid; selected source evidence leaves this device)",
-                                    "secret": True, "required": False, "env_var": "CAIRN_MEMORY_OPENAI_API_KEY"}]
+                                    "secret": True, "required": False, "env_var": "CAIRN_MEMORY_OPENAI_API_KEY"},
+                                   {"key": "memory_token", "description": "Memory-only Cairn token; validated by hosted setup",
+                                    "secret": True, "required": True, "env_var": "CAIRN_MEMORY_TOKEN",
+                                    "when": {"mode": "hosted"}}]
 
     def save_config(self, values, hermes_home):
         if self._closed:
@@ -284,7 +288,7 @@ class CairnMemoryProvider(MemoryProvider):
             environment = {"LANG": "C.UTF-8", "PATH": "/usr/bin:/bin"}
             uses_extended_timeout = operation == "call" and fields.get("name") in {"capture_memory", "classify_unfiled_memories"}
             if operation == "call" and fields.get("name") in {"recall_memory", "capture_memory", "classify_unfiled_memories"}:
-                environment["OPENAI_API_KEY"] = os.environ.get("CAIRN_MEMORY_OPENAI_API_KEY", "")
+                environment["OPENAI_API_KEY"] = get_secret("CAIRN_MEMORY_OPENAI_API_KEY", "")
             process = subprocess.Popen([sys.executable, "-I", str(Path(__file__).with_name("bridge.py"))],
                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                        env=environment, start_new_session=True)
