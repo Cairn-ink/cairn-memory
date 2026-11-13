@@ -23,6 +23,10 @@ test('C06 pinned independent 94c1076f wire fixtures, controlled identity/clock/e
   assert.equal(result.error, undefined); assert.equal(result.signal, null); assert.equal(result.status, 0, readFileSync(join(workspace.path, 'err'), 'utf8'));
   const historical = readFileSync(new URL('../../../core/test/fixtures/context-read/u5c2-legacy-wire.json', import.meta.url), 'utf8');
   const expected = JSON.parse(historical);
+  // Reviewed core facade addition: the forgotten-text read. It is a core method, not an MCP tool.
+  const surfaceAnchor = expected.defaultSurface.indexOf('inspectCaptureEvidence');
+  assert.ok(surfaceAnchor >= 0 && !expected.defaultSurface.includes('isSuppressed'), 'reviewed default surface anchor');
+  expected.defaultSurface.splice(surfaceAnchor + 1, 0, 'isSuppressed');
   // Preserve historical bytes except documented defaults and the dated option.
   const insertAfter = (object, key, addition) => Object.fromEntries(Object.entries(object)
     .flatMap(entry => entry[0] === key ? [entry, ...Object.entries(addition)] : [entry]));
