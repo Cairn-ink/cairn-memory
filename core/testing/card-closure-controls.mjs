@@ -9,6 +9,8 @@ import { localPlainPort, request, splitRaw } from './raw-capture-fixtures.mjs';
 import { attestContentSafety } from '../content-safety-schema.mjs';
 import { createMemoryRuntime } from '../runtime.mjs';
 import { batch } from './episode-helpers.mjs';
+import { interpretation } from './episode-capture-helpers.mjs';
+import { rationaleModel } from './rationale-model.mjs';
 import { createEngineCardStorage } from '../engine-card-storage.mjs';
 import { clusterMemories } from '../engine-card-clusters.mjs';
 import { transaction } from '../database.mjs';
@@ -22,14 +24,16 @@ export const closureStoreKinds = ['sealed', 'suppression', 'legacy'].flatMap(fam
 export const storeLabel = kind => `${kind.family} base ${kind.base}, Raw ${kind.raw ? 'enabled' : 'disabled'}, event time ${kind.eventTime ? 'enabled' : 'disabled'}`;
 const stamp = '2026-01-01T00:00:00.000Z';
 export async function closureFixture(t, kind = closureStoreKinds[0], operation) {
-  const model = { contextWindow: 8192, countTokens: () => 1, extract: () => ({ items: [] }),
+  const model = { ...(operation === 'Episode forget' && kind.raw
+    ? { qualifyCandidates: rationaleModel().qualifyCandidates, interpretEpisode: interpretation } : {}),
+    contextWindow: 8192, countTokens: () => 1, extract: () => ({ items: [] }),
     reconcile: () => ({ transitions: [] }),
     consolidate: ({ input }) => ({ currentState: [{ text: 'Synthetic control state', memoryIds: [input.memories[0].id] }],
       timeline: [], contradictions: [] }) };
-  // Raw-root deletion also supports an option-off reader. Only the non-Raw
-  // Episode control opts into Episode capture, with its required companions.
+  // Episode controls capture with the required companions so Raw and Episode
+  // reservation receive the same original session input.
   const options = { model, decisionReview: 'required-v1',
-    ...(operation === 'Episode forget' && !kind.raw ? { sessionEpisodes: { mode: 'episode-v1' },
+    ...(operation === 'Episode forget' ? { sessionEpisodes: { mode: 'episode-v1' },
       captureQualification: 'source-bound-v2', captureEvidence: 'staged-v1' } : {}) };
   let f;
   if (kind.family === 'sealed') f = await lineageFixture(t, { base: kind.base, raw: kind.raw, eventTime: kind.eventTime, options });
@@ -91,9 +95,16 @@ export async function prepareClosureControl(t, kind, operation, json = false) {
   if (operation === 'conversation deletion' || operation === 'Episode forget' && kind.raw) {
     f.model.extract = () => ({ items: [{ content: 'Synthetic control Raw evidence', kind: 'fact', confidence: .8, sourceIndices: [0] }] });
     const captured = ok(await f.core.captureRaw(request(splitRaw('Synthetic control Raw evidence')[0],
-      { namespace: ns, client: 'claude-code', sessionId: 'synthetic-control-root', eventId: 'synthetic-control-raw' })));
-    memory = ok(captured.interpretation).admission.memories[0];
+      { namespace: ns, client: 'claude-code', sessionId: 'synthetic-control-root', eventId: 'synthetic-control-raw' },
+      operation === 'Episode forget' ? 'episode' : 'ordinary')));
+    const interpreted = ok(captured.interpretation);
+    memory = interpreted.admission.memories[0];
     root = f.db.prepare('SELECT * FROM raw_conversations WHERE id=?').get(captured.raw.conversationId);
+    if (operation === 'Episode forget') {
+      assert.equal(interpreted.episode.status, 'interpreted');
+      assert.equal(interpreted.admission.memories.length, 1);
+      ep = interpreted.episode;
+    }
   } else if (operation === 'causal supersession') {
     f.model.extract = () => ({ items: [{ content: 'Synthetic causal predecessor', kind: 'fact', confidence: .8, sourceIndices: [0] }] });
     memory = ok(await f.core.capture(captureInput('synthetic-control-prior', 'Synthetic causal predecessor', 1))).admission.memories[0];
@@ -115,7 +126,23 @@ export async function prepareClosureControl(t, kind, operation, json = false) {
     operation === 'maintenance retirement' ? 7 : memories.length);
   const payload = json ? JSON.stringify({ note: card.id }) : card.id;
   if (operation === 'Episode forget') {
-    ep = episode(f, memory);
+    ep = kind.raw ? f.db.prepare('SELECT * FROM session_episodes WHERE id=?').get(ep.id) : episode(f, memory);
+    if (kind.raw) {
+      assert.ok(ep, 'public capture created the Episode');
+      assert.equal(ep.deleted, 0);
+      assert.deepEqual([ep.owner_id, ep.scope, ep.project_id, ep.client, ep.session_key],
+        [root.owner_id, root.scope, root.project_id, root.client, root.session_key],
+        'public Episode and Raw capture share one root');
+      const receipts = f.db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY id').all(memory.id);
+      assert.equal(receipts.length, 1, 'the bound Memory has only this root as support');
+      assert.equal(receipts[0].session_id, ep.session_key);
+      const lineage = f.db.prepare(`SELECT l.receipt_id,l.conversation_id FROM raw_receipt_lineage l
+        JOIN receipts r ON r.id=l.receipt_id WHERE r.memory_id=? ORDER BY l.receipt_id`).all(memory.id);
+      assert.deepEqual(lineage.map(row => [row.receipt_id, row.conversation_id]), [[receipts[0].id, root.id]]);
+      const links = f.db.prepare('SELECT * FROM episode_memory_links WHERE episode_id=?').all(ep.id);
+      assert.deepEqual(links.map(row => [row.memory_id, row.admission_revision, JSON.parse(row.receipt_ids)]),
+        [[memory.id, memory.revision, [receipts[0].id]]], 'public admission linked the Episode to the bound Memory');
+    }
     const sourceRoot = Boolean(f.db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_deletion_actions'").get());
     assert.equal(sourceRoot, kind.base === 33, 'base selects direct or source-root Episode forgetting');
   }
@@ -246,6 +273,19 @@ export async function prepareClosureControl(t, kind, operation, json = false) {
       if (['forget', 'rejection', 'Episode forget'].includes(operation)) assert.equal(value.forgotten, true);
       if (['forget', 'rejection', 'Episode forget', 'conversation deletion'].includes(operation))
         assert.equal(f.memoryRow(memory.id).deleted, 1);
+      if (operation === 'Episode forget' && kind.raw) {
+        assert.equal(f.memoryRow(memory.id).content, null);
+        assert.equal(f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(memory.id).n, 0);
+        assert.equal(f.db.prepare('SELECT deleted FROM session_episodes WHERE id=?').get(ep.id).deleted, 1);
+        assert.equal(f.db.prepare('SELECT id FROM raw_conversations WHERE id=?').get(root.id), undefined);
+        const effects = f.db.prepare(`SELECT source_type,source_id FROM raw_deletion_effects
+          WHERE entity_type='memory' AND entity_id=?`).all(memory.id);
+        assert.deepEqual(effects.map(row => [row.source_type, row.source_id]), [['conversation', root.id]],
+          'Episode forgetting used the Raw conversation route');
+        for (const table of ['card_bindings', 'card_memory_bindings', 'card_raw_bindings'])
+          assert.equal(f.db.prepare(`SELECT count(*) n FROM ${table} WHERE card_id=?`).get(card.id).n, 0,
+            'purged Card has no remaining bindings');
+      }
       if (operation === 'Card deletion') assert.equal(value.id, card.id);
       if (operation === 'conversation deletion') {
         assert.equal(value.conversationId, root.id); assert.equal(value.forgottenMemories, 1);
