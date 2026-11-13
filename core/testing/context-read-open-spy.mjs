@@ -12,9 +12,14 @@
 // enableLoadExtension refuse; so does SQL load_extension, even on a connection
 // whose extensions were enabled earlier. applyChangeset refuses (writes existing
 // databases and can create journals). SQL writes, ATTACH, all VACUUM
-// (also its temporary database), and file-affecting PRAGMAs refuse. This is a
-// conservative keyword check, not a SQL parser: comments/literals are ignored,
-// quoted identifiers retained, and a matching identifier may falsely refuse.
+// (also its temporary database) refuse. A single-pass SQLite lexer separates
+// bare tokens, quoted identifiers, strings and comments across all statements;
+// only bare tokens participate in keyword detection. Quoted load_extension
+// calls are separately recognized as the loader API. PRAGMAs refuse by default:
+// only the read forms in allowedPragma and the exact connection-local settings
+// in connectionPragmas delegate. Schema quoting does not change that allowlist.
+// This is conservative token detection, not a full SQL grammar/authorizer;
+// matching bare identifiers may falsely refuse. Implicit read I/O is below.
 //
 // Cannot independently open files: function/aggregate/setAuthorizer register JS
 // callbacks; enableDefensive changes a flag; createSession tracks an existing
@@ -73,23 +78,110 @@ function forwardMethod(prototype, api, check) {
     return Reflect.apply(original, this, args);
   };
 }
-// Preserve token boundaries when removing comments. Keep quoted identifiers so
-// SELECT "load_extension"(?) cannot bypass the function check. String contents
-// are data, including bound ATTACH/VACUUM filenames, never executable keywords.
+// One scan gives comments, literals and identifiers their SQLite boundaries.
+// In particular, comment delimiters inside any quoted token are just contents.
+function lexSQL(sql) {
+  const tokens = [];
+  for (let i = 0; i < sql.length;) {
+    const c = sql[i], next = sql[i + 1];
+    if (/\s/.test(c)) { i++; continue; }
+    if (c === '-' && next === '-') {
+      i += 2;
+      while (i < sql.length && sql[i] !== '\n') i++;
+      continue;
+    }
+    if (c === '/' && next === '*') {
+      i += 2;
+      while (i < sql.length && !(sql[i] === '*' && sql[i + 1] === '/')) i++;
+      i = Math.min(i + 2, sql.length);
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`' || c === '[') {
+      const close = c === '[' ? ']' : c;
+      let value = '', closed = false;
+      i++;
+      while (i < sql.length) {
+        if (sql[i] === close) {
+          i++;
+          if (c !== '[' && sql[i] === close) { value += close; i++; continue; }
+          closed = true;
+          break;
+        }
+        value += sql[i++];
+      }
+      tokens.push({ kind: closed ? (c === "'" ? 'string' : 'identifier') : 'invalid',
+        value: value.toLowerCase() });
+      continue;
+    }
+    if (/[a-z_\u0080-\uffff]/i.test(c)) {
+      const start = i++;
+      while (i < sql.length && /[a-z_0-9$\u0080-\uffff]/i.test(sql[i])) i++;
+      tokens.push({ kind: 'bare', value: sql.slice(start, i).toLowerCase() });
+      continue;
+    }
+    if (/[0-9]/.test(c)) {
+      const start = i++;
+      while (i < sql.length && /[0-9]/.test(sql[i])) i++;
+      tokens.push({ kind: 'number', value: sql.slice(start, i) });
+      continue;
+    }
+    tokens.push({ kind: 'symbol', value: c });
+    i++;
+  }
+  return tokens;
+}
+const namedToken = token => token && ['bare', 'identifier', 'string'].includes(token.kind);
+const symbol = (token, value) => token?.kind === 'symbol' && token.value === value;
+// Derived from the pinned probe/sidecar reads, database/facade/fence metadata reads and
+// ordinary-read controls. No unknown PRAGMA or persistent assignment delegates.
+const readPragmas = new Set(['journal_mode', 'application_id', 'user_version', 'foreign_key_check', 'query_only']);
+const tablePragmas = new Set(['table_info']);
+const connectionPragmas = new Map([
+  ['foreign_keys', ['on']], ['trusted_schema', ['off']],
+  ['busy_timeout', ['5000']], ['query_only', ['on', 'off']],
+]);
+function allowedPragma(tokens) {
+  let i = 0;
+  if (!namedToken(tokens[i])) return false;
+  // Schema names have no word-character restriction, regardless of quoting.
+  if (symbol(tokens[i + 1], '.')) i += 2;
+  if (!namedToken(tokens[i])) return false;
+  const name = tokens[i++].value, args = tokens.slice(i);
+  if (readPragmas.has(name) && args.length === 0) return true;
+  if (name === 'quick_check') return args.length === 0 ||
+    (args.length === 3 && symbol(args[0], '(') &&
+      args[1].kind === 'number' && args[1].value === '1' && symbol(args[2], ')'));
+  if (tablePragmas.has(name)) return args.length === 3 && symbol(args[0], '(') &&
+    namedToken(args[1]) && symbol(args[2], ')');
+  // The existing read-only opener also sets these connection-local flags.
+  // Admit only the exact forms it and the read controls use, never disk writes.
+  return args.length === 2 && symbol(args[0], '=') &&
+    ['bare', 'number', 'string', 'identifier'].includes(args[1].kind) &&
+    (connectionPragmas.get(name)?.includes(args[1].value) ?? false);
+}
+const fileKeywords = new Set(['attach', 'vacuum', 'load_extension', 'insert', 'update',
+  'delete', 'create', 'drop', 'alter', 'reindex', 'analyze']);
 function fileSQL(sql) {
   if (typeof sql !== 'string') return false;
-  const tokens = sql.replace(/--[^\n]*|\/\*[\s\S]*?\*\/|'(?:''|[^'])*'/g, ' ');
-  if (/\b(?:attach|vacuum|load_extension|insert|update|delete|create|drop|alter|reindex|analyze)\b/i.test(tokens)) return true;
-  if (/\breplace\b(?!\s*\()/i.test(tokens)) return true;
-  if (/\bbegin\s+(?:immediate|exclusive)\b/i.test(tokens)) return true;
-  // Deferred BEGIN/COMMIT/ROLLBACK on a read transaction introduce no filename.
-  // PRAGMA names/schema names may be quoted even with single quotes. Inspect
-  // that spelling separately; ordinary string literals in SELECT stay inert.
-  const pragmas = sql.replace(/--[^\n]*|\/\*[\s\S]*?\*\/|'(?:''|[^'])*'|"(?:""|[^"])*"|`(?:``|[^`])*`|\[[^\]]*\]/g,
-    token => token.startsWith('--') || token.startsWith('/*') ? ' ' : token.slice(1, -1));
-  if (!/\bpragma\b/i.test(tokens)) return false;
-  if (/\bpragma\s+(?:\w+\s*\.\s*)?(?:wal_checkpoint|incremental_vacuum|optimize)\b/i.test(pragmas)) return true;
-  return /\bpragma\s+(?:\w+\s*\.\s*)?(?!(?:query_only|foreign_keys|trusted_schema|busy_timeout|cache_size|mmap_size|read_uncommitted|recursive_triggers|defer_foreign_keys|table_info|table_xinfo|table_list|index_info|index_xinfo|index_list|foreign_key_list|foreign_key_check|integrity_check|quick_check)\b)\w+\s*(?:=|\()/i.test(pragmas);
+  const tokens = lexSQL(sql);
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i], next = tokens[i + 1];
+    // A quoted function name is not a keyword, but still names the loader API.
+    if (namedToken(token) && token.value === 'load_extension' && symbol(next, '(')) return true;
+    if (token.kind !== 'bare') continue;
+    if (fileKeywords.has(token.value)) return true;
+    if (token.value === 'replace' && !symbol(next, '(')) return true;
+    if (token.value === 'begin' && next?.kind === 'bare' &&
+        ['immediate', 'exclusive'].includes(next.value)) return true;
+    // Inspect every PRAGMA in every statement; incomplete/unknown forms refuse.
+    if (token.value === 'pragma') {
+      let end = i + 1;
+      while (end < tokens.length && !symbol(tokens[end], ';')) end++;
+      if (!allowedPragma(tokens.slice(i + 1, end))) return true;
+      i = end;
+    }
+  }
+  return false;
 }
 const checkSQL = (api, sql) => { if (fileSQL(sql)) refuseSQLite(api, sql); };
 forwardMethod(databasePrototype, 'open', () => active.calls.push({ kind: 'sqlite-open', api: 'open' }));

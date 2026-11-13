@@ -169,6 +169,82 @@ test('SQL file operations refuse on preopened connections and initialization-cac
   assert.equal(existsSync(vacuumTarget), true, 'prepared run delegates outside activation');
 });
 
+test('SQL lexer keeps identifier-comment boundaries through every statement', () => {
+  const quoted = [
+    '"report--total"', '`report--total`', '[report--total]', "'report--total'",
+    '"report/* total */end"', '`report/* total */end`', '[report/* total */end]', "'report/* total */end'",
+    '"report""--total"', '`report``--total`', "'report''--total'",
+    '"report""/* total */end"', '`report``/* total */end`', "'report''/* total */end'",
+  ];
+  for (const identifier of quoted) {
+    const sql = `SELECT 1 AS ${identifier}; ATTACH DATABASE ':memory:' AS synthetic_hidden`;
+    for (const api of ['exec', 'prepare']) refusesSQLite(() => preopened[api](sql), api, sql);
+    const create = `SELECT 1 AS ${identifier}; CREATE TABLE synthetic_hidden(n)`;
+    refusesSQLite(() => preopened.exec(create), 'exec', create);
+  }
+  for (const sql of [
+    "SELECT 1; VACUUM INTO ':memory:'",
+    'SELECT 1; /* synthetic comment */ VACUUM INTO ?',
+    'SELECT 1; -- synthetic comment\n ATTACH DATABASE ? AS synthetic_hidden',
+    'SELECT 1; /* " \' ` [ */ ATTACH DATABASE ? AS synthetic_hidden',
+    'SELECT 1; /* synthetic */ ATTaCH/**/DATABASE ? AS synthetic_hidden',
+    'SELECT 1; PRAGMA journal_mode; VACUUM INTO ?',
+  ]) for (const api of ['exec', 'prepare']) refusesSQLite(() => preopened[api](sql), api, sql);
+});
+
+test('PRAGMA refuses unknown, write and malformed forms with every schema spelling', () => {
+  for (const prefix of ['', 'aux.', '"aux-db".', '[aux db].', '`x`.', "'aux-db'.", '"aux""--db".']) {
+    for (const form of ['wal_checkpoint', 'journal_mode=WAL', 'optimize', 'incremental_vacuum',
+      'application_id=1', 'user_version(1)', 'writable_schema=ON', 'unknown_synthetic',
+      'unknown_synthetic(1)', 'query_only=maybe', 'busy_timeout=1', 'table_info',
+      'table_info(x, y)', 'journal_mode(DELETE)', 'quick_check(2)', 'journal_mode garbage']) {
+      const sql = `PRAGMA ${prefix}${form}`;
+      for (const api of ['exec', 'prepare']) refusesSQLite(() => preopened[api](sql), api, sql);
+    }
+  }
+  for (const sql of ['PRAGMA', 'PRAGMA "unterminated', 'PRAGMA [unterminated',
+    'PRAGMA aux.', 'PRAGMA /* unterminated',
+    'SELECT 1; PRAGMA "aux-db".wal_checkpoint',
+    'PRAGMA journal_mode; PRAGMA [aux db].journal_mode=WAL'])
+    refusesSQLite(() => preopened.exec(sql), 'exec', sql);
+  for (const name of ['"wal_checkpoint"', '[wal_checkpoint]', '`wal_checkpoint`', "'wal_checkpoint'"])
+    refusesSQLite(() => preopened.prepare(`PRAGMA ${name}`), 'prepare', `PRAGMA ${name}`);
+});
+
+test('quoted reads and the exact PRAGMA allowlist retain empty transcripts', () => {
+  // Attach only synthetic in-memory schemas while inactive. The allowlist must
+  // handle schema tokens by kind, including escapes and comment-looking names.
+  const schemas = ['main', '"aux-db"', '[aux db]', '`x`', '"aux""--db"'];
+  for (const schema of schemas.slice(1)) preopened.exec(`ATTACH ':memory:' AS ${schema}`);
+  try {
+    const { calls } = sqliteOpenSpy(() => {
+      for (const identifier of ['"report--total"', '`report--total`', '[report--total]',
+        '"report/* total */end"', '`report/* total */end`', '[report/* total */end]',
+        '"report""--total"', '`report``--total`', '"ATTACH"', '`VACUUM`', '[CREATE]']) {
+        const row = preopened.prepare(`SELECT 7 AS ${identifier}`).get();
+        assert.deepEqual(Object.values(row), [7]);
+      }
+      for (const sql of ["SELECT 'report--total'", "SELECT 'report/* total */end'",
+        "SELECT 'report''--total'", 'SELECT 1 /* unterminated',
+        'SELECT 1 -- ATTACH', 'SELECT 1 /* \' " ` [ ATTACH */']) preopened.prepare(sql).get();
+      for (const schema of ['', ...schemas.map(name => name + '.')]) {
+        for (const name of ['journal_mode', 'application_id', 'user_version', 'foreign_key_check', 'quick_check', 'query_only'])
+          preopened.prepare(`PRAGMA ${schema}${name}`).all();
+        preopened.prepare(`PRAGMA ${schema}quick_check(1)`).all();
+        for (const table of ["'synthetic_missing'", '"synthetic--missing"', '[synthetic missing]', '`synthetic`', 'synthetic'])
+          preopened.prepare(`PRAGMA ${schema}table_info(${table})`).all();
+      }
+      for (const name of ['"journal_mode"', '[journal_mode]', '`journal_mode`', "'journal_mode'"])
+        preopened.prepare(`PRAGMA /* synthetic */ ${name}`).get();
+      preopened.exec('PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=5000;');
+      preopened.exec('PRAGMA query_only=ON; BEGIN; SELECT 1; COMMIT; PRAGMA query_only=OFF;');
+    });
+    assert.deepEqual(calls, []);
+  } finally {
+    for (const schema of schemas.slice(1)) preopened.exec(`DETACH ${schema}`);
+  }
+});
+
 test('backup aliases and extension/changeset APIs refuse before file work', async t => {
   const workspace = createTestWorkspace(t, { prefix: 'open-spy-backup-' });
   const target = join(workspace.path, 'synthetic-backup.sqlite');
