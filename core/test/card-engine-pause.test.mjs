@@ -114,21 +114,43 @@ for (const disabled of [false, true]) test(`Card transport sees second-process W
   t.mock.method(DatabaseSync.prototype, 'prepare', function(sql) {
     const statement = Reflect.apply(prepare, this, [sql]); connections.set(statement, this); return statement;
   });
-  let claimed = false, armed = false, observed = false;
+  let claimed = false, armed = false, observed = false, canonical;
+  let snapshots = 0, validationCalls = 0, validatedSnapshot = 0;
+  const order = [], exec = DatabaseSync.prototype.exec;
+  t.mock.method(DatabaseSync.prototype, 'exec', function(sql) {
+    const value = Reflect.apply(exec, this, [sql]);
+    if (armed && this === canonical && /^BEGIN\b/u.test(sql)) order.push(`snapshot:${++snapshots}`);
+    return value;
+  });
   const run = StatementSync.prototype.run;
   t.mock.method(StatementSync.prototype, 'run', function(...args) {
     const value = Reflect.apply(run, this, args);
-    if (this.sourceSQL === 'INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)' && args[4] === 'consolidateAttempt') claimed = true;
+    if (this.sourceSQL === 'INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)' && args[4] === 'consolidateAttempt') {
+      claimed = true; canonical = connections.get(this);
+    }
     return value;
   });
   const countTokens = f.model.countTokens;
   f.model.countTokens = text => { if (claimed) armed = true; return countTokens(text); };
   const get = StatementSync.prototype.get;
   t.mock.method(StatementSync.prototype, 'get', function(...args) {
-    const value = Reflect.apply(get, this, args);
-    if (!armed || observed || !/^SELECT revision FROM memories WHERE/u.test(this.sourceSQL)) return value;
-    observed = true;
     const db = connections.get(this);
+    // This probe is the first operation of the beforeDispatch pause guard,
+    // before it can open its own fresh control-decision snapshot.
+    if (armed && db === canonical && this.sourceSQL === 'PRAGMA data_version') {
+      order.push('beforeDispatch'); armed = false;
+    }
+    const value = Reflect.apply(get, this, args);
+    if (!armed || db !== canonical || !/^SELECT revision FROM memories WHERE/u.test(this.sourceSQL)) return value;
+    if (validatedSnapshot !== snapshots) {
+      validatedSnapshot = snapshots;
+      order.push(`validate:${++validationCalls}`);
+    }
+    // The legacy boundary validates once after counting and once in the
+    // dispatch microtask. Arm only on that final validation's first source.
+    if (observed || validationCalls !== 2) return value;
+    observed = true;
+    order.push(`hook:${validationCalls}`);
     assert.equal(db.isTransaction, true, 'last source validation snapshot is open');
     const readControl = () => db.prepare('SELECT paused,enabled FROM episode_controls WHERE owner_id=? AND scope=? AND project_id=?')
       .get(ns.ownerId, ns.scope, ns.projectId);
@@ -151,7 +173,14 @@ for (const disabled of [false, true]) test(`Card transport sees second-process W
     return value;
   });
   const pass = ok(await f.pass());
+  t.diagnostic(JSON.stringify({ order, validationCalls }));
   assert.equal(observed, true, 'writer committed at the last validation seam');
+  const hook = order.findIndex(event => event.startsWith('hook:')), guard = order.indexOf('beforeDispatch');
+  assert.ok(guard > hook, 'hook precedes the dispatch guard');
+  assert.deepEqual(order.slice(hook + 1, guard).filter(event => event.startsWith('snapshot:')), [],
+    'no canonical snapshot opens between the WAL hook and beforeDispatch');
+  assert.equal(validationCalls, 2, 'both legacy-boundary pre-dispatch validations observed');
+  assert.deepEqual(order, ['snapshot:1', 'validate:1', 'snapshot:2', 'validate:2', 'hook:2', 'beforeDispatch']);
   assert.equal(f.model.calls.length, 0);
   assert.equal(pass.state, 'paused', JSON.stringify(pass));
   assert.equal(pass.reason, 'namespace_paused');
