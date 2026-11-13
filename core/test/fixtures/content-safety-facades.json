@@ -322,8 +322,7 @@
     },
     "isSuppressed": {
       "kind": "gated",
-      "operation": "read",
-      "terminalField": null
+      "operation": "read"
     },
     "keepEpisode": {
       "kind": "gated",
@@ -826,8 +825,7 @@
     },
     "isSuppressed": {
       "kind": "gated",
-      "operation": "read",
-      "terminalField": null
+      "operation": "read"
     },
     "legacyGet": {
       "kind": "gated",

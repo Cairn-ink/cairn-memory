@@ -7,39 +7,59 @@
 | `core.isSuppressed` | `{ namespace, content }` | `{ suppressed: boolean }` |
 
 `openMemoryCore` exposes this synchronous read in the usual `{ ok, value }`
-envelope. A host can ask before saving: `suppressed` is true exactly when
-admission's forgotten-text check would refuse `memory_suppressed`. It shares
-`admit`'s namespace validation, scope boundary and content normalization:
-NFKC, existing secret redaction, collapsed and trimmed whitespace, then a
-case-insensitive fingerprint. Content must be nonempty and at most 4,000
-normalized UTF-16 code units; invalid content returns `invalid_input`.
-Unknown input fields also refuse `invalid_input`.
+envelope. The read answers whether admit would refuse this exact text as
+`memory_suppressed`, extended to raw inputs beyond admit's raw-length guard.
+The raw ceilings are 1,000,000 UTF-16 units for the read and 20,000 for admit.
+One shared normalization/fingerprint path applies NFKC, existing secret
+redaction, collapsed and trimmed whitespace, then lowercases with JavaScript
+`toLowerCase()`; no full Unicode case folding (e.g. ß/SS, σ/ς don't match),
+the same as admit.
 
-The known limit is an exact-text match after admit's normalization, not a
-semantic similarity check. The answer covers only the caller's own namespace;
-the host must bind the namespace to its authenticated caller just as for
-`admit`. Forgotten text in another namespace does not affect this answer.
-Installed content-safety facts hiding a matching live Memory also count as
-suppressed. An erased namespace or closed store refuses with the same code as
-`admit`. The method uses a deferred read transaction, creates no claims, events
-or recall units, and can answer while another connection holds a reserved write
-lock. It does not reserve a later admission: the host must still handle admit's
-refusal if suppression changes between calls.
+Every string within the read's raw guard gets `{ suppressed: boolean }` when
+scope and storage checks succeed. Empty after normalization, redaction-only,
+NUL-containing, and over 4,000 normalized units return `suppressed: false`:
+none can equal stored Memory text. Non-string content, missing or extra fields,
+over 1,000,000 raw units, or an invalid namespace return `invalid_input`.
+Namespace refusals stay identical to admit's.
+
+Known limits: exact-text match after admit's normalization, so trivially
+modified text (an added character, embedded text) is not matched. Fingerprints
+written under an older normalization match only if today's normalization yields
+the same text, the same as for admit. The equivalence domain is admit's eligible
+inputs: the read says `suppressed` iff admit refuses `memory_suppressed`.
+Outside admit's raw guard the read answers more. Admit's receipts-first ordering
+is the safe direction: whenever the read says `true`, admit refuses, possibly
+with an earlier admission-only code. This read does not validate kind, receipts,
+timestamps, conflict hints, qualification, or procedural metadata. Write-only
+lock and query-only failures can also prevent admission independently.
+
+Installed content-safety facts hiding a matching live Memory count as suppressed.
+The read uses a deferred transaction, creates no claims, events or recall units,
+and can answer while another connection holds a reserved write lock. Its early
+scope check is deferred into the snapshot, and the outer facade checks again at
+delivery. It does not reserve a later admission: the host must still handle
+admit's refusal if suppression changes between calls.
+
+| Non-ok code | Meaning |
+| --- | --- |
+| `invalid_input` | Unanswerable: the host must not save. |
+| `memory_not_found` | Erased owner or namespace. |
+| `store_closed` | Closed connection. |
+| `storage_busy` | Storage contention; retry once. |
+| `unsupported_database` | Failed layout attestation. |
+| `evidence_unavailable` | On an installed safety layout, another connection records a forget or erase fact for the owner between the read's COMMIT and final delivery check. Transient race; retry once. |
+| `storage_error` | Other storage failure. |
+
+Any non-ok result means unanswerable, so don't save; retry once for
+`evidence_unavailable`/`storage_busy`. The global `retryable` mapping is unchanged;
+`evidence_unavailable` still carries `retryable: false`. Errors contain codes and
+retryability only.
 
 The host binds `namespace` to the authenticated owner and project, exactly as
-for `admit`; a role context does not add a grant check to either operation.
-This core API is a trusted-host boundary. Invalid namespace/content/input
-returns `invalid_input`; erased namespace or owner returns `memory_not_found`,
-a closed store returns `store_closed`, exclusive contention returns
-`storage_busy`, and failed layout attestation returns `unsupported_database`.
-Errors contain codes and retryability only.
-
-This question does not validate admission-only fields (kind, receipts, receipt
-timestamps, conflict hints, qualification or procedural metadata), nor promise
-that a later write can acquire a lock. A query-only/read-only connection can
-answer even when admission's write returns `storage_error`; a reserved writer
-can likewise block admission while permitting this read. Those write-only
-refusals do not mean the text is suppressed.
+for admit; a role context adds no grant check. Forgotten text in another
+namespace does not affect the answer. This is a trusted-host boundary: a probe
+leaves no trace, unlike a refused admit. Hosts that expose the read beyond the
+authenticated owner should rate-limit it.
 
 The uninstalled [internal Raw producer foundation](raw-local-journal.md#internal-producer-foundation-p4a)
 has a separate v2 preparation/acknowledgement contract and transient-plaintext

@@ -135,6 +135,7 @@ export function createMemoryRuntime(input, internal) {
     return epoch(ns);
   }
 
+  // admitMutation retains its existing-row content-safety check too.
   function isSuppressed(ns, value) {
     if(db.prepare(`SELECT 1 FROM suppressed WHERE ${where} AND fingerprint = ?`).get(...boundary(ns),value))return true;
     if(cachedContentLayout(db)?.suppressionRevision){
