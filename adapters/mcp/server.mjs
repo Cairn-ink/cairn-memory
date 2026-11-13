@@ -52,7 +52,8 @@ async function classifyUnfiledMemories({ core, namespace, model, refs }) {
   // Copy the bounded public references before the first asynchronous model call.
   const targets = refs.map(({ memoryId, revision }) => ({ memoryId, revision }));
   for (const { memoryId, revision } of targets) {
-    const inspected = core.get({ namespace, memoryId });
+    let inspected = core.get({ namespace, memoryId });
+    if (inspected && typeof inspected.then === 'function') inspected = await inspected;
     if (!inspected.ok) return inspected;
     const memory = inspected.value.memory;
     if (memory.revision !== revision) return error('revision_conflict');
@@ -60,15 +61,17 @@ async function classifyUnfiledMemories({ core, namespace, model, refs }) {
     if (memory.filing.status !== 'unfiled') return error('classification_target_not_unfiled');
   }
   if (typeof model?.classify !== 'function') return error('model_not_configured');
-  const mapped = core.map({ namespace, purpose: 'classification' });
+  let mapped = core.map({ namespace, purpose: 'classification' });
+  if (mapped && typeof mapped.then === 'function') mapped = await mapped;
   if (!mapped.ok) return mapped;
   const classified = await core.classifyPlacement({ namespace,
     memoryIds: targets.map(({ memoryId }) => memoryId),
     expectedMemoryRevisions: targets, mapRevision: mapped.value.indexRevision });
   if (!classified.ok) return classified;
-  const placed = core.applyPlacement({ namespace, proposal: classified.value.proposal,
+  let placed = core.applyPlacement({ namespace, proposal: classified.value.proposal,
     expectedMemoryRevisions: classified.value.basedOn.memoryRevisions,
     expectedIndexRevision: classified.value.basedOn.indexRevision });
+  if (placed && typeof placed.then === 'function') placed = await placed;
   return placed.ok ? { ok: true, value: { status: 'applied', ...placed.value } } : placed;
 }
 

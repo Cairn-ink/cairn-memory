@@ -1370,7 +1370,21 @@ export function createMemoryCore(input, internal) {
     'getPrivateCardCapabilities','getAssetCapabilities','getMethodPackageCapabilities'] }), null, {
       project: (input, value) => engineCards.deliver(cardNamespace(input.namespace), value), failure,
     });
-  return core;
+  if (!commit) return core;
+  // This inventory is deliberately provider-free and single-transaction.
+  // Provider orchestration calls the unwrapped local operations above.
+  const synchronousCommits = new Set(`admit correct forget supersede bindQualifiedClaim transitionQualified transitionQualifiedSet
+    confirm reject claimAdmission finishAdmission abandonAdmission inspectCaptureEvidence discardCaptureEvidence
+    applyPlacement linkMocs rebuildIndex closeEpisodeNextStep forgetEpisode correctEpisode releaseEpisodeCorrection
+    setCapturePaused setProjectCapture setProceduralMemory get list map fetch sourceSnapshot inspectAdmission
+    listReviewTransitions listReviewConflicts listEpisodes listMemoriesByTime getEpisode sessionStartContext getRationale`.split(/\s+/));
+  return Object.freeze(Object.fromEntries(Object.entries(core).map(([method, value]) => [method,
+    synchronousCommits.has(method) ? (...args) => {
+      try {
+        const result = commit(() => Reflect.apply(value, core, args));
+        return types.isPromise(result) ? result.catch(failure) : result;
+      } catch (error) { return failure(error); }
+    } : value])));
   } catch (error) {
     try { runtime.close(); } catch { /* Preserve the construction failure. */ }
     throw error;
