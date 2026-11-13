@@ -31,6 +31,9 @@ export function validateConsolidation(output, memories, model, partMemories = me
   const ids = new Set(memories.map(memory => memory.id));
   const outOfDateIds = new Set(output.timeline.filter(entry => entry.memoryIds.every(id => ids.has(id)))
     .flatMap(entry => entry.memoryIds));
+  // A Memory the store already holds as history is never a current line,
+  // whatever the model returned.
+  for (const memory of partMemories) if (memory.currentness && memory.currentness !== 'current') outOfDateIds.add(memory.id);
   const ordered = [...partMemories].sort((a, b) => Date.parse(a.date) - Date.parse(b.date) || a.id.localeCompare(b.id));
   const current = ordered.filter(memory => !outOfDateIds.has(memory.id));
   const timeline = ordered.filter(memory => outOfDateIds.has(memory.id));

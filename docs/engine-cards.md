@@ -81,7 +81,8 @@ Memories is an ordinary successful result; all marked means no Card.
 
 The body is built from the part's original Memories, sorted by event date with
 ID breaking ties. Every current line is `<YYYY-MM-DD>: <content> [<memory id>]`.
-If any sources are marked out of date, a final `Timeline: ` line holds those same
+A Memory the store already holds as history is always treated as out of date,
+whatever the model returns. If any sources are marked out of date, a final `Timeline: ` line holds those same
 dated verbatim entries separated by `; `. Control characters and square brackets
 in content become spaces; whitespace collapses. Nothing is paraphrased or
 shortened. The body cap is **850 tokens**, including dates and citation tags.

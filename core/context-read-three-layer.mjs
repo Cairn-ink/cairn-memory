@@ -292,7 +292,8 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
     const documents = units.map(unit => ({ id: unit.id, text: unit.lexicalText })), bm = createBM25(documents), terms = tokenizeT1(args.query);
     const scores = units.map(unit => scoreBM25(terms, termFrequencies(unit.lexicalText), bm) ?? 0), max = Math.max(1e-12, ...scores);
     units.forEach((unit, i) => { unit.bm25 = scores[i] / max; unit.prior = unit.memories[0]?.type === 'memory' ? 61 / (60 + unit.rank) : 0; });
-    const hits = engineCardHits(args.prepared, args.budget.maxItems);
+    const hits = args.prepared.some(item => item.type === 'card' && item.metadata?.origin === 'engine')
+      ? engineCardHits(args.prepared, args.budget.maxItems) : new Map();
     const memoryUnits = new Map(units.flatMap(unit => unit.memories.filter(item => item.type === 'memory').map(item => [item, unit])));
     for (const unit of units) {
       const hit = unit.memories.map(card => hits.get(card)).filter(Boolean).sort((a, b) => a.rank - b.rank)[0];

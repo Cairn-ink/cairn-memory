@@ -129,6 +129,38 @@ test('cross-part context retires an older Card and the later debounced pass rebu
   assert.match(body.split('\n').at(-1), /milestone 0:/);
 });
 
+test('two parts with an out-of-date Memory each stay stable: a Timeline citation never retires the other Card', async t => {
+  // The model names the same two Memories on every call, whichever part is being built.
+  const model = scriptedConsolidator(({ input }) => output(input.memories, input.memories
+    .filter(m => m.content.includes('milestone 0:') || m.content.includes('milestone 12:')).map(m => m.id)));
+  const f = engineCardFixture(t, { model }); f.file(f.seed(20), 'Orion');
+  const first = ok(await f.pass()).built[0]; assert.ok(first);
+  const second = ok(await f.pass()).built[0]; assert.ok(second); assert.ok(second.clusterKey.endsWith('#1'));
+  const revisions = () => [first.id, second.id].map(id => f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(id).revision);
+  assert.deepEqual(revisions(), [1, 1], 'building the second part leaves the first current');
+  const bodies = [first.id, second.id].map(id => f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(id).body);
+  assert.match(bodies[0].split('\n').at(-1), /^Timeline: .*milestone 0:/u);
+  assert.match(bodies[1].split('\n').at(-1), /^Timeline: .*milestone 12:/u);
+  const storage = createEngineCardStorage({ db: f.db, upgrade: true, ready() {},
+    identity: f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
+  const base = Date.parse(f.db.prepare('SELECT updated_at FROM private_cards WHERE id=?').get(second.id).updated_at);
+  for (const offset of [1000, 600001, 1200002, 1800003]) {
+    const later = await createEngineCardMaintenance({ storage, model, now: () => base + offset })
+      .maintain({ namespace: ns, budget: { maxMs: 5000 } });
+    assert.equal(later.modelCalls, 0, JSON.stringify(later)); assert.equal(later.built.length, 0);
+  }
+  assert.equal(model.calls.length, 2, 'no rebuild after both parts exist');
+  assert.deepEqual(revisions(), [1, 1]);
+});
+
+test('a Memory the store holds as history goes under Timeline even when the model marks nothing', () => {
+  const memories = realisticCardMemories(6);
+  memories[1].currentness = 'historical';
+  const value = validateConsolidation(output(memories), memories, scriptedConsolidator());
+  assert.deepEqual(value.body.split('\n'), [...memories.filter((_, i) => i !== 1).map(line), 'Timeline: ' + line(memories[1])]);
+  assert.deepEqual(value.outOfDateIds, [memories[1].id]);
+});
+
 test('context stays within 24, keeps all own sources, trims against the existing adapter and input envelope', async t => {
   const model = scriptedConsolidator();
   model.fitsConsolidationRequest = ({ system, input }) => {

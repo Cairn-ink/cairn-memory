@@ -7,7 +7,7 @@ import { cardNamespace } from './private-card-input.mjs';
 import { object, fail } from './validation.mjs';
 import { CONSOLIDATE_PROMPT, validateConsolidation } from './engine-card-output.mjs';
 import { ENGINE_CARD_LIMITS, cardTrigger, clusterMemories, partitionCardClusters, chainLength, cardMemoryRevisions } from './engine-card-clusters.mjs';
-import { assembleContext, cardSourceKeys, memoryPackKey } from './context-read-assembly.mjs';
+import { assembleContext, cardSourceKeys, currentCardLines, memoryPackKey } from './context-read-assembly.mjs';
 
 /** Called only by a bounded maintenance pass, never admission/capture. The model
  * port uses the same callModel envelope, tokenizer, deadline and guarded adapter
@@ -190,9 +190,12 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
             if (card) result.built.push(card);
             // Context can identify an old current line in another Card. Reuse
             // ordinary staling and its debounce; one generation ends this pass.
+            // Only current lines count: a Card that already lists the Memory
+            // under Timeline is up to date, and retiring it would make two
+            // Cards rebuild each other for ever.
             for (const other of cards.filter(card => card.status === 'current')) {
-              const covered = cardSourceKeys([{ type: 'card', metadata: { origin: 'engine' }, text: other.row.body,
-                sourceMemoryRefs: other.sourceRevisions.map(ref => ({ namespace: ns, ...ref })) }], true);
+              const covered = cardSourceKeys([{ type: 'card', metadata: { origin: 'engine' }, text: currentCardLines(other.row.body),
+                sourceMemoryRefs: other.sourceRevisions.map(ref => ({ namespace: ns, ...ref })) }]);
               if (requestSources.some(memory => value.outOfDateIds.includes(memory.id) && covered.has(memoryPackKey({
                 namespace: ns, memoryId: memory.id, revision: memory.revision })))) storage.retire(ns, other.id, new Date(now()).toISOString());
             }
