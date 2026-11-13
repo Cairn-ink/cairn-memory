@@ -122,6 +122,7 @@
   - macOS with Node from Homebrew: setup records Node's versioned path, so rerun setup after `brew upgrade` updates Node. Fixed in the next release.
   - Claude Code runs started by scripts or the Agent SDK (for example `claude -p`) are saved like interactive sessions.
   - Deleting a conversation or forgetting a memory removes that text from Cairn's database at once, and it is never shown again; conversations a forget only hides stay saved until you delete them. Local search index files can keep word lists (and, with semantic search, vectors) from deleted items until background cleanup reaches them. Cleanup runs only while Cairn is running, may not reach them while new conversations keep being saved, and never covers index files for a search setup you no longer use. As with most databases, deleted text can also remain in unused file space until it is overwritten.
+  - Automatic saving runs on Linux and WSL. On macOS, setup connects Claude Code and Codex and the memory tools work, but automatic saving doesn't start yet: setup reports conversation saving OFF (runtime_unavailable) and exits with code 2.
   - A later release indexes newly saved conversations first.
 - Default reads keep the Raw excerpts they already validated when a read reaches
   its time limit, marked partial, instead of dropping them.

@@ -340,7 +340,7 @@ If Claude shows two `cairn-local` servers, check `claude mcp list`:
 project/local
 scope can shadow user scope, which setup does not detect. Linux/WSL are
 tested;
-macOS uses the same path but is untested; native Windows local setup is refused
+Automatic saving runs on Linux and WSL. On macOS, setup connects Claude Code and Codex and the memory tools work, but automatic saving doesn't start yet: setup reports conversation saving OFF (runtime_unavailable) and exits with code 2. native Windows local setup is refused
 (use WSL). The engine enables Raw retention for submitted captures, background Raw search
 and dated three-layer contextRead with its preferred tools by default.
 Use `--no-raw`, `--no-raw-search` or `--no-context-read` in the server registration
@@ -366,7 +366,7 @@ semantic search. See [defaults and off switches](../../docs/defaults.md).
 `npx @cairn-ink/memory setup --cloud`，兩種模式不會搬移資料。
 Claude 若出現兩個 `cairn-local`，請用 `claude mcp list` 檢查；project／local
 scope 可能蓋過 user scope，安裝器不會偵測這種情況。Linux／WSL 已測試，
-macOS 走相同程式但尚未測試；Windows 原生環境會拒絕本機安裝，請用 WSL。
+自動保存目前在 Linux 和 WSL 上執行。macOS 上，setup 會連接 Claude Code 與 Codex，記憶工具也能用，但自動保存還不會啟動：setup 會回報對話保存為 OFF（runtime_unavailable）並以代碼 2 結束。Windows 原生環境會拒絕本機安裝，請用 WSL。
 安裝器不會開啟引擎的選用功能。
 
 ## Cloud mode / 雲端模式
