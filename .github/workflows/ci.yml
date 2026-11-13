@@ -29,6 +29,9 @@ jobs:
       - name: Inspect dependency directory
         run: if [ -e adapters/mcp/node_modules ] || [ -L adapters/mcp/node_modules ]; then ls -ld adapters/mcp/node_modules; fi
       - run: npm ci --prefix adapters/mcp --ignore-scripts
+      - name: Inspect provider dependency directory
+        run: if [ -e adapters/openai/node_modules ] || [ -L adapters/openai/node_modules ]; then ls -ld adapters/openai/node_modules; fi
+      - run: npm ci --prefix adapters/openai --ignore-scripts
       - run: node integrations/client/testing/run.mjs integrations/client/test/local-source-open.test.mjs integrations/client/test/local-source-parity.test.mjs
       - run: node integrations/client/testing/run.mjs integrations/client/test/local-source-close.test.mjs
       - name: Diagnose native macOS capture transport
