@@ -1,7 +1,7 @@
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety } from './content-safety.mjs';
 import { createHash } from 'node:crypto';
-import { transaction } from './database.mjs';
+import { transaction, isStorageBusy } from './database.mjs';
 import { createRawJournal, isRawEpochConflict } from './raw-journal.mjs';
 import { rawBoundary, rawRegistration, rawNamespace } from './raw-input.mjs';
 import { captureSnapshot } from './capture-input.mjs';
@@ -65,7 +65,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       if (privacy && hasCommitDispatcher(db)) await dispatchCommit(db, fence, deadline); else fence();
     }
     catch (error) {
-      if (privacy && ['storage_busy','conversation_deleted'].includes(error.code)) arrivalInputs.get(arrivalToken).decided = true;
+      if (privacy && !isStorageBusy(error) && ['storage_busy','conversation_deleted'].includes(error.code)) arrivalInputs.get(arrivalToken).decided = true;
       throw error;
     }
     const previous = binding(input);

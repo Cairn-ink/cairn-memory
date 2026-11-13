@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { types } from 'node:util';
-import { fail } from './validation.mjs';
+import { fail, MemoryStoreError } from './validation.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 
 // Internal host seam. Registries contain connection identities and diagnostics,
@@ -8,9 +8,22 @@ import { withContentSuppressionRequest } from './content-suppression-storage.mjs
 const opening = new AsyncLocalStorage(), requests = new AsyncLocalStorage(), attempts = new AsyncLocalStorage();
 const bindings = new WeakMap();
 const openingHost = () => { const scope = opening.getStore(); return scope?.active ? scope.host : undefined; };
+const busyBudgets = new WeakSet();
+export const isCommitBusy = error => Boolean(error && busyBudgets.has(error));
 const busy = error => error?.code === 'ERR_SQLITE_ERROR' && Number.isInteger(error.errcode) &&
-  [5, 6].includes(error.errcode & 0xff) || error?.code === 'storage_busy';
-const busyResult = value => value?.ok === false && value.error?.code === 'storage_busy';
+  [5, 6].includes(error.errcode & 0xff) || isCommitBusy(error);
+function exhausted() {
+  const error = new MemoryStoreError('storage_busy');
+  busyBudgets.add(error);
+  throw error;
+}
+// Keep the public envelope byte-identical. Retry provenance lives only in
+// the current attempt, never in a code-string inference or caller payload.
+export function commitFailure(error, result) {
+  const attempt = attempts.getStore();
+  if (attempt && busy(error)) attempt.busyResults.add(result);
+  return result;
+}
 
 export function bindCommitConnection(db, source, { canonical = true } = {}) {
   const host = source ? bindings.get(source)?.host : openingHost();
@@ -78,14 +91,14 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
       const tryCommit = () => {
         checkAuthority();
         checkIdle('attempt');
-        const state = { db, commits: 0 };
+        const state = { db, commits: 0, busyResults: new WeakSet() };
         const { restoreTimeoutMs } = bindings.get(db);
         try {
           db.exec('PRAGMA busy_timeout = 5');
           const value = withContentSuppressionRequest(() => attempts.run(state, work), { fresh: true });
           // Never await caller work. An async transaction closure is invalid.
           if (value && typeof value.then === 'function') fail('storage_error');
-          if (!busyResult(value)) { checkIdle('return'); return { value }; }
+          if (!state.busyResults.has(value)) { checkIdle('return'); return { value }; }
           if (state.commits) return { value };
         } catch (error) {
           checkIdle('failure');
@@ -112,7 +125,7 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
         checkIdle('backoff');
         checkAuthority();
         const left = end - now();
-        if (left < 5) fail('storage_busy');
+        if (left < 5) exhausted();
         const cap = Math.min(256, 16 * 2 ** Math.min(attempt, 4));
         const waitMs = Math.min(left, cap / 2 + random() * cap / 2);
         onBackoff?.({ attempt, waitMs, remainingMs: left });
@@ -129,7 +142,7 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
           if (signal?.aborted) abort();
         }); } finally { checkIdle('after_timer'); }
         checkAuthority();
-        if (end - now() < 5) fail('storage_busy');
+        if (end - now() < 5) exhausted();
         const result = tryCommit();
         if (result) return result.value;
         }

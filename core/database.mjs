@@ -1,5 +1,5 @@
 import './content-write-safety.mjs';
-import { bindCommitConnection, hasCommitDispatcher, recordCommit } from './commit-dispatch.mjs';
+import { bindCommitConnection, hasCommitDispatcher, recordCommit, isCommitBusy } from './commit-dispatch.mjs';
 import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheInside } from './content-suppression-storage.mjs';
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
@@ -40,7 +40,7 @@ import { migrateVersion14, migrateVersion15, migrateVersion16 } from './episode-
 
 export const STORAGE_BUSY_TIMEOUT_MS = 5_000;
 export const isStorageBusy = error => error?.code === 'ERR_SQLITE_ERROR' &&
-  Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 0xff);
+  Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 0xff) || isCommitBusy(error);
 
 export const APPLICATION_ID = 0x43414952;
 const VERSION = CONFIRMATION_SCHEMA_VERSION;

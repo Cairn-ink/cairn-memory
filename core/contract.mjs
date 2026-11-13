@@ -1,5 +1,5 @@
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
-import { dispatchCommit, hasCommitDispatcher } from './commit-dispatch.mjs';
+import { dispatchCommit, hasCommitDispatcher, commitFailure } from './commit-dispatch.mjs';
 import { contentWriteMethodClass } from './content-write-context.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { contentSafetyFacade } from './content-safety-boundary.mjs';
@@ -177,7 +177,7 @@ function failure(error) {
   if (isStorageBusy(error)) code = "storage_busy";
   if (["invalid_identifier", "invalid_text", "invalid_memory", "invalid_receipt",
     "invalid_revision", "invalid_limit"].includes(code)) code = "invalid_input";
-  return { ok: false, error: { code, retryable: code === "storage_busy" || code === 'local_raw_privacy_write_failed' } };
+  return commitFailure(error, { ok: false, error: { code, retryable: code === "storage_busy" || code === 'local_raw_privacy_write_failed' } });
 }
 
 // Validate the trusted opt-in before composition can snapshot any constructor fields.
