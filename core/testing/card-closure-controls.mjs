@@ -11,6 +11,8 @@ import { createMemoryRuntime } from '../runtime.mjs';
 import { batch } from './episode-helpers.mjs';
 import { createEngineCardStorage } from '../engine-card-storage.mjs';
 import { clusterMemories } from '../engine-card-clusters.mjs';
+import { transaction } from '../database.mjs';
+import { suppressOwnerInside, writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 
 export const closureStoreKinds = ['sealed', 'suppression', 'legacy'].flatMap(family => [
   { family, base: 23, raw: false, eventTime: false }, { family, base: 33, raw: false, eventTime: false },
@@ -18,12 +20,16 @@ export const closureStoreKinds = ['sealed', 'suppression', 'legacy'].flatMap(fam
 ].flatMap(kind => family === 'legacy' ? [kind] : [kind, { ...kind, eventTime: true }]));
 export const storeLabel = kind => `${kind.family} base ${kind.base}, Raw ${kind.raw ? 'enabled' : 'disabled'}, event time ${kind.eventTime ? 'enabled' : 'disabled'}`;
 const stamp = '2026-01-01T00:00:00.000Z';
-export async function closureFixture(t, kind = closureStoreKinds[0]) {
+export async function closureFixture(t, kind = closureStoreKinds[0], operation) {
   const model = { contextWindow: 8192, countTokens: () => 1, extract: () => ({ items: [] }),
     reconcile: () => ({ transitions: [] }),
     consolidate: ({ input }) => ({ currentState: [{ text: 'Synthetic control state', memoryIds: [input.memories[0].id] }],
       timeline: [], contradictions: [] }) };
-  const options = { model, decisionReview: 'required-v1', sessionEpisodes: { mode: 'episode-v1' } };
+  // Raw-root deletion also supports an option-off reader. Only the non-Raw
+  // Episode control opts into Episode capture, with its required companions.
+  const options = { model, decisionReview: 'required-v1',
+    ...(operation === 'Episode forget' && !kind.raw ? { sessionEpisodes: { mode: 'episode-v1' },
+      captureQualification: 'source-bound-v2', captureEvidence: 'staged-v1' } : {}) };
   let f;
   if (kind.family === 'sealed') f = await lineageFixture(t, { base: kind.base, raw: kind.raw, eventTime: kind.eventTime, options });
   else {
@@ -70,11 +76,12 @@ function episode(f, memory) {
   } finally { runtime.close(); }
 }
 export const purgeOperations = ['forget', 'rejection', 'conversation deletion', 'Episode forget', 'Card deletion',
-  'maintenance purge', 'rebuild supersession', 'maintenance retirement'];
+  'maintenance purge', 'rebuild supersession', 'maintenance retirement', 'owner erasure', 'namespace erasure'];
 export const ordinaryOperations = ['capture dedupe', 'duplicate extraction', 'confirmation', 'filing', 'correction', 'causal supersession'];
-export const supportedControl = (kind, operation) => operation !== 'conversation deletion' || kind.raw;
+export const supportedControl = (kind, operation) => (operation !== 'conversation deletion' || kind.raw) &&
+  (!operation.endsWith('erasure') || kind.family !== 'legacy');
 export async function prepareClosureControl(t, kind, operation, json = false) {
-  const f = await closureFixture(t, kind);
+  const f = await closureFixture(t, kind, operation);
   let memory, card, root, ep, input;
   const captureInput = (event, content, sequence) => ({ namespace: ns, client: 'synthetic',
     sessionId: 'synthetic-control-stream', eventId: event,
@@ -102,8 +109,15 @@ export async function prepareClosureControl(t, kind, operation, json = false) {
   }
   card = f.publish(operation === 'maintenance retirement' ? memories.slice(0, 7) : memories, key);
   assert.ok(card);
+  assert.equal(f.row(card.id).state, 'confirmed', 'the fixture published its engine Card');
+  assert.equal(f.db.prepare('SELECT count(*) n FROM card_memory_bindings WHERE card_id=?').get(card.id).n,
+    operation === 'maintenance retirement' ? 7 : memories.length);
   const payload = json ? JSON.stringify({ note: card.id }) : card.id;
-  if (operation === 'Episode forget') ep = episode(f, memory);
+  if (operation === 'Episode forget') {
+    ep = episode(f, memory);
+    const sourceRoot = Boolean(f.db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_deletion_actions'").get());
+    assert.equal(sourceRoot, kind.base === 33, 'base selects direct or source-root Episode forgetting');
+  }
   if (['rejection', 'confirmation'].includes(operation)) f.db.prepare("UPDATE memories SET review_state='awaiting' WHERE id=?").run(memory.id);
   if (operation === 'rebuild supersession') {
     ok(f.core.admit({ namespace: ns, memory: { content: f.memoryRow(memory.id).content, kind: 'fact' },
@@ -138,6 +152,10 @@ export async function prepareClosureControl(t, kind, operation, json = false) {
     if (operation === 'conversation deletion') return f.core.deleteConversation({ namespace: ns, conversationId: root.id,
       expectedRevision: root.revision, actionId: 'synthetic-control-delete-root' });
     if (operation === 'Episode forget') return f.core.forgetEpisode({ namespace: ns, episodeId: ep.id, expectedRevision: ep.revision });
+    if (operation.endsWith('erasure')) return { ok: true, value: transaction(f.db, () => operation === 'owner erasure'
+      ? suppressOwnerInside(f.db, { ownerId: ns.ownerId, reason: 'account_erasure', actionId: 'synthetic-control-erasure' })
+      : writeContentSuppressionInside(f.db, { namespace: ns, kind: 'namespace', matchMode: 'namespace',
+        reason: 'purge', actionId: 'synthetic-control-erasure' })) };
     if (operation === 'Card deletion') return f.call('deleteKnowledgeCard', { actionId: 'synthetic-control-delete-card',
       cardId: card.id, expectedRevision: before.revision });
     if (operation.startsWith('maintenance') || operation === 'rebuild supersession') return f.core.maintainCards({ namespace: ns, budget: { maxMs: 5000 } });
@@ -171,10 +189,20 @@ export async function prepareClosureControl(t, kind, operation, json = false) {
       }
     } else {
       assert.equal(after.state, 'deleted'); assert.equal(after.title, null); assert.equal(after.body, null);
+      assert.equal(after.revision, before.revision + 1);
       if (['forget', 'rejection', 'Episode forget'].includes(operation)) assert.equal(value.forgotten, true);
       if (['forget', 'rejection', 'Episode forget', 'conversation deletion'].includes(operation))
         assert.equal(f.memoryRow(memory.id).deleted, 1);
       if (operation === 'Card deletion') assert.equal(value.id, card.id);
+      if (operation === 'conversation deletion') {
+        assert.equal(value.conversationId, root.id); assert.equal(value.forgottenMemories, 1);
+      }
+      if (operation.endsWith('erasure')) {
+        assert.equal(typeof value.factId, 'string'); assert.ok(value.epoch > 0n);
+        assert.equal(f.db.prepare('SELECT count(*) n FROM card_memory_bindings WHERE card_id=?').get(card.id).n, 0);
+        assert.equal(f.db.prepare('SELECT match_mode FROM content_suppressions WHERE fact_id=?').get(value.factId).match_mode,
+          operation === 'owner erasure' ? 'owner' : 'namespace');
+      }
       if (operation === 'maintenance purge') assert.equal(value.deleted, 1);
       if (operation === 'rebuild supersession') {
         assert.ok(value.built.length > 0); assert.equal(value.deleted, 1, 'the rebuild purged its superseded row');

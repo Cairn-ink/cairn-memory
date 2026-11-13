@@ -412,22 +412,34 @@ for (const mode of ['archive', 'pins']) test(`${mode} card-family: a reviewed le
     { code: 'ERR_ASSERTION', message: /outside a forgetting call/ });
 });
 
-for (const method of ['run', 'exec']) test(`pins-only rejects flattened line comment through tracer ${method}`, () => {
+for (const [label, sql] of [
+  ['line comment', 'DELETE -- gap\nFROM card_memory_bindings WHERE card_id=?'],
+  ['apostrophe in line comment', "DELETE -- '\nFROM card_operations WHERE target_id=?"],
+  ['apostrophe in block comment', "DELETE /* ' */ FROM card_memory_bindings WHERE card_id=?"],
+  ['double quote in comment', 'DELETE -- "\nFROM card_memory_bindings WHERE card_id=?'],
+  ['double quote in block comment', 'DELETE /* " */ FROM card_memory_bindings WHERE card_id=?'],
+  ['commented pragma assignment', "PRAGMA table_info='private_cards' -- gap"],
+  ['commented unknown pragma', "PRAGMA unknown('private_cards') -- gap"],
+  ['pragma and commented batch', "PRAGMA table_info('private_cards') -- '\n; DELETE FROM card_operations WHERE target_id='synthetic-unrelated'"],
+  ['pragma with Card only after comment', "PRAGMA user_version -- '\n; DELETE FROM card_memory_bindings WHERE card_id='synthetic-unrelated'"],
+]) for (const method of ['prepare', 'exec']) test(`pins-only rejects ${label} through tracer ${method}`, () => {
   const controls = new URL('../testing/card-lineage-off-wide-controls.mjs', import.meta.url).href;
   const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
     import { DatabaseSync } from 'node:sqlite';
     const {startTrace,stopTrace,statements}=await import(${JSON.stringify(controls)});
-    const db=new DatabaseSync(':memory:');db.exec('CREATE TABLE card_memory_bindings(card_id TEXT)');
+    const db=new DatabaseSync(':memory:');
+    db.exec('CREATE TABLE card_memory_bindings(card_id TEXT); CREATE TABLE card_operations(target_id TEXT); CREATE TABLE private_cards(id TEXT)');
+    const sql=${JSON.stringify(sql)};
     startTrace();
-    const sql='DELETE -- gap\\nFROM card_memory_bindings WHERE card_id=?';
-    db.prepare(sql).run('synthetic-unrelated');
+    const prepared=db.prepare(sql);
+    if(sql.startsWith('PRAGMA'))prepared.all();else prepared.run('synthetic-unrelated');
     db.exec(sql.replace('?',"'synthetic-unrelated'"));
     stopTrace();db.close();process.stdout.write(JSON.stringify(statements));
   `], { encoding: 'utf8' });
   assert.equal(child.status, 0, child.stderr);
-  const recorded = JSON.parse(child.stdout).find(([, operation]) => operation === method);
-  assert.ok(recorded); assert.equal(recorded[0].includes('\n'), false);
-  assert.match(recorded[0], /DELETE -- gap FROM card_memory_bindings/);
+  const recorded = JSON.parse(child.stdout).find(([, operation]) => method === 'prepare' ? operation !== 'exec' : operation === 'exec');
+  assert.ok(recorded); assert.equal(recorded[0], sql.replace(/\s+/g, ' ').trim());
+  assert.equal(cardFamilySQL(recorded), true);
   const f = fixture(), executions = structuredClone(executionPins(f)), ledger = pinned(f).sqlAdditions;
   delete f.archived;
   f.parts = structuredClone(f.parts); f.parts[2][2].push(recorded); f.current = trace(f.parts);
@@ -440,9 +452,14 @@ test('only exact single read-only schema pragmas are outside the Card family', (
     for (const name of ['table_info', 'table_xinfo', 'foreign_key_list', 'index_list', 'index_info', 'index_xinfo'])
       for (const target of [table, '"' + table + '"', "'" + table + "'"])
         assert.equal(cardFamilySQL(row(`PRAGMA ${name}(${target})`)), false);
+  for (const sql of ["SELECT '-- private_cards'", "SELECT '/* card_effects'", "SELECT 'escaped '' -- card_effects'"])
+    assert.equal(cardFamilySQL(row(sql)), false, 'comment markers inside existing literals stay literal');
   for (const sql of ['PRAGMA writable_schema=ON', 'PRAGMA table_info("private_cards"); SELECT 1',
     'PRAGMA unknown("private_cards")', 'PRAGMA table_info("private_cards");;', ';PRAGMA table_info("private_cards")', 'PRAGMA table_info="private_cards"',
-    'PRAGMA table_info("private_cards", "card_effects")', 'PRAGMA main.table_info("private_cards")']) {
+    'PRAGMA table_info("private_cards", "card_effects")', 'PRAGMA main.table_info("private_cards")',
+    "PRAGMA table_info('private_cards') -- gap", "PRAGMA table_info('private_cards') /* gap */",
+    "PRAGMA table_info('private_cards'); --", "PRAGMA table_info('private_cards'); /**/",
+    "PRAGMA table_info='private_cards' -- gap", "PRAGMA unknown('private_cards') -- gap"]) {
     assert.equal(cardFamilySQL(row(sql)), true, sql);
   }
 });

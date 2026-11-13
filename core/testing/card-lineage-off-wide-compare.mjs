@@ -44,9 +44,12 @@ function scanSQL(sql, retainCommentTokens = false) {
     const c=sql[i],next=sql[i+1];
     if(/\s/.test(c)){space=true;i++;continue;}
     // Traces flatten whitespace, losing line-comment ends. For classification,
-    // fail closed over every token outside string literals, even after comments.
+    // fail closed over the raw suffix: quotes after its first introducer may
+    // belong to a comment, so none of their boundaries can be trusted.
     if(retainCommentTokens&&((c==='-'&&next==='-')||(c==='/'&&next==='*'))){
-      uncertain=true;hasComment=true;emit(c+next,'symbol');i+=2;continue;
+      uncertain=true;hasComment=true;emit(c+next,'symbol');
+      for(const [word]of sql.slice(i).matchAll(/[a-z_][a-z_0-9$]*/gi))emit(word,'word');
+      break;
     }
     if(c==='-'&&next==='-'){while(i<sql.length&&sql[i]!=='\n'&&sql[i]!=='\r')i++;space=true;continue;}
     if(c==='/'&&next==='*'){
@@ -132,12 +135,11 @@ export function cardFamilySQL([sql, , bindings = []]) {
   const {statements,separators,normalized}=scanSQL(sql,true);
   // Only one exact read-only introspection statement is exempt. Every other
   // PRAGMA (including one embedded in a batch) retains uncertain classification.
-  if(statements.length===1&&separators<=1&&!normalized.startsWith(';')&&schemaReadPragma(statements[0]))return false;
+  if(statements.length===1&&separators<=1&&!normalized.startsWith(';')&&!statements[0].hasComment&&schemaReadPragma(statements[0]))return false;
   return statements.some(statement=>{
     const {tokens}=statement,{writes,uncertain}=statementTargets(statement);
-    const mentionTokens=statement.hasComment?tokens.filter(token=>token.kind!=='literal'):tokens;
     if(keyword(tokens[0],'PRAGMA')&&keyword(tokens[1],'WRITABLE_SCHEMA'))return true;
-    if(writes.some(write=>cardTable(write.table))||uncertain&&mentionsCard(mentionTokens))return true;
+    if(writes.some(write=>cardTable(write.table))||uncertain&&mentionsCard(tokens))return true;
     if(!tokens.some(token=>keyword(token,'SELECT')))return false;
     if(reads(tokens,'JOIN').some(name=>name.toLowerCase()==='card_operations'))return true;
     return [...reads(tokens,'FROM'),...reads(tokens,'JOIN')].some(name=>/^sqlite_(?:master|schema)$/i.test(name))&&

@@ -1,10 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { engineCardClosureReferences } from '../content-write-safety.mjs';
+import { parse } from '../../tools/testing/vendor/acorn/acorn.mjs';
 import { openDatabase } from '../database.mjs';
 import { contentSafetyDDL } from '../content-safety-schema.mjs';
 import { cardLineageDDL } from '../card-lineage-schema.mjs';
+
+// Read the private declaration without expanding the frozen runtime exports.
+const verifierSource = readFileSync(new URL('../content-write-safety.mjs', import.meta.url), 'utf8');
+const declaration = parse(verifierSource, { ecmaVersion: 2025, sourceType: 'module' }).body
+  .filter(node => node.type === 'VariableDeclaration').flatMap(node => node.declarations)
+  .filter(node => node.id.name === 'engineCardClosureReferences');
+assert.equal(declaration.length, 1, 'one private closure-map declaration');
+function literalData(node) {
+  if (node.type === 'Literal') return node.value;
+  if (node.type === 'ArrayExpression') return node.elements.map(literalData);
+  assert.equal(node.type, 'ObjectExpression', 'the closure map contains only static data');
+  return Object.fromEntries(node.properties.map(property => {
+    assert.equal(property.type, 'Property'); assert.equal(property.kind, 'init');
+    assert.equal(property.computed, false); assert.equal(property.method, false);
+    return [property.key.name ?? property.key.value, literalData(property.value)];
+  }));
+}
+const engineCardClosureReferences = literalData(declaration[0].init);
 
 // Read installer source, including newly added schema modules. Do not enumerate
 // FK tables here: a new direct Card FK must automatically require map coverage.

@@ -10,11 +10,21 @@ import { contentSafetyInventory } from '../content-safety-migration.mjs';
 for (const kind of closureStoreKinds)
 for (const operation of [...purgeOperations, ...ordinaryOperations])
 for (const json of ordinaryOperations.includes(operation) ? [false, true] : [false]) {
-  if (!supportedControl(kind, operation)) continue;
-  test(`committed public ${operation}, ${storeLabel(kind)}, payload ${json ? 'JSON' : 'plain'}`, async t => {
+  const erasure = operation.endsWith('erasure');
+  const skip = supportedControl(kind, operation) ? false : erasure
+    ? 'legacy layouts have no content-suppression erasure seam'
+    : 'conversation deletion requires the Raw facade';
+  test(`committed ${erasure ? 'internal' : 'public'} ${operation}, ${storeLabel(kind)}, payload ${json ? 'JSON' : 'plain'}`, { skip }, async t => {
     // Every negative follows its own committed control on the identical layout.
     const positive = await prepareClosureControl(t, kind, operation, json);
-    positive.verify(ok(await positive.invoke()));
+    let erasureGuards = 0;
+    if (erasure) registerContentWriteGuard((db, context) => {
+      erasureGuards++; return beginContentWriteSafety(db, context);
+    });
+    try { positive.verify(ok(await positive.invoke())); }
+    finally { if (erasure) registerContentWriteGuard(beginContentWriteSafety); }
+    // Trusted erasure transactions have no facade operation context.
+    if (erasure) { assert.equal(erasureGuards, 0); return; }
     if (kind.family === 'legacy') return; // This layout has no write verifier.
     const negative = await prepareClosureControl(t, kind, operation, json);
     let injected = false, refused = false, rolledBack = false, restoreExec;

@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "65ddb26fab44091a9ae9603d624fe824c6bfc4c546b66363e2d83885e576716a",
-  "bytes": 1376166,
+  "sha256": "7e0d0f6732f75a206a20135e5467f01f8b418990be5733627a1434f8f8a91d7f",
+  "bytes": 1376165,
   "files": [
     "LICENSE",
     "README.md",
@@ -408,7 +408,7 @@
   "sourceHashes": {
     "core/content-write-context.mjs": "01ee9d2c14d57ed99069fe026c619d5a8bf0b537de328bf20e2da5f3b19b9999",
     "core/content-write-changes.mjs": "876f6fa7bc67c69031ef8ccc645eab9b321713803b77f9203ac30ca783e88caa",
-    "core/content-write-safety.mjs": "4737ba3fd60f3f4385565b8c320ac294a09ca77446cdc0a08114817888e1f57d",
+    "core/content-write-safety.mjs": "cd362ef0fc035b97fbac3cd6b1cf2b14bba7fb1084117e9b57abcf8bd1fec449",
     "core/admission-storage.mjs": "e1ed41ed5265f62bb3a95b95c4fab1b99d5addbf59e810b2935e71adc1fb2f6f",
     "core/local-authority-input.mjs": "bfce603a1081956e8d4dd790d09e8e394c0b06b20cca987980217d2e4d85a988",
     "core/local-authority-schema.mjs": "b1ff2de1a829c503dff18f425ac57942b52e3b90e9ef01aa209e06863945a3d3",

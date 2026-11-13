@@ -43,7 +43,7 @@ const referenceKinds = field => /MemoryIds?$/.test(field)||/^memoryIds?$/.test(f
 // Closure membership is schema data, never a search through payload strings.
 // JSON paths address typed reference objects only; '*' visits one array level.
 // The schema coverage test checks direct FKs and the declared polymorphic slots.
-export const engineCardClosureReferences = {
+const engineCardClosureReferences = {
   private_cards: { columns: ['id'] },
   card_operations: { columns: ['target_id'], json: [
     { column: 'result', path: [], key: 'id', rowMethods: ['createCardDraft', 'editCardDraft', 'confirmCardDraft',
