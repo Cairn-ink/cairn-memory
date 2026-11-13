@@ -113,20 +113,20 @@ P2 是入門與素材驗證；其通過不表示預設抽取品質通過，也�
 
 此門檻適用於 Show HN 或任何廣泛公告，且只能宣傳**已發布 npm 版本**在 Local 模式實際提供的能力：一個指令設定、本機 SQLite 儲存、不經模型自動保存對話原文，以及每筆記憶都附來源原文的明確工具。這裡的「自動保存」是逐字保存對話文字，不是模型抽取。Cairn.ink Memory 的 0.6.6 release 仍須在發布後按同一版本核對，本文不宣告它已發布。
 
-貼文及創辦人的首則留言都必須寫明：我們不主張模型抽取品質、recall 準確率或成本節省；Cloud 模式的模型抽取仍未通過自己的來源支持標準，並連到[已知限制](../limitations.md)。公告一旦主張抽取品質、自動 recall 品質，或 Cards 與 maps，完整 [E01 至 E09](semantic-evaluation.md) 就恢復適用，標準不變。
+貼文及創辦人的首則留言都必須寫明：我們不主張模型抽取品質、recall 準確率或成本節省；引擎預設的模型抽取仍未通過自己的來源支持標準，並連到[已知限制](../limitations.md)。公告一旦主張抽取品質、自動 recall 品質，或 Cards 與 maps，完整 [E01 至 E09](semantic-evaluation.md) 就恢復適用，標準不變。公告若宣稱 current、history、why 或自動更新能力，仍須依 [reliability contract](memory-reliability-contract.md) 驗證對應狀態與來源，不能只檢查回答字串。
 
 以下 11 項必須對**實際公告的同一版本**全部成立：
 
 1. [主張證據表](../promotion-claims.md)已按該版本重新查核；README 與 HN 文案的每個事實句都有對應列。
 2. 單一入口 README 已合併；README、ROADMAP 與本計畫的 gate 狀態一致。
 3. 保留 E05 的硬安全條件：更正後接受舊 revision 為零、已遺忘記憶復活為零、接受偽造來源為零、跨 namespace 參照為零。逐項引用 `2a4e7091` 的測試或紀錄；若只有舊 engine build 的證據，條件 3 維持未完成，並標明版本。
-4. [semantic-evaluation.md](semantic-evaluation.md#frozen-acceptance-e01e09) 定義的 E08、E09 繼續適用。對 Local 模式公告，適用的部分是：公告版本的一般測試與 CI 在離線狀態、兩個支援的 Node 版本上通過（E08）；用來放行的證據在固定 commit 上經過獨立審查，未達標就照實記錄，作者不自行合併或放行（E09）。原文如下。
+4. [semantic-evaluation.md](semantic-evaluation.md#frozen-acceptance-e01e09) 定義的 E08、E09 照原文繼續適用於公告版本，沒有刪減項目：E08 的離線測試與 CI、兩個支援的 Node 版本、regression demos 與 plugin gates 都要通過；E09 的固定 commit 獨立審查、未達標照實記錄、作者不自行合併或放行。原文如下。
 
    E08: Ordinary tests/CI are offline. Test denominators, absent results, safety/relevance failures, budget exhaustion, malformed output and opt-in. Offline tests use fake model/HTTP and cannot establish semantic quality. Run both supported core Node versions, regression demos and plugin gates.
 
    E09: Primary DRI inspects synthetic evidence, records numeric outcomes and limitations, then obtains independent Standards/Spec reviews on fixed commit. An unmet gate is reported honestly and fixed in a separately scoped change, never by silently relaxing the rubric or dropping cases. No self merge, publication, deployment or competitor benchmark claims.
 
-5. 已發布 npm 版本的三次乾淨安裝都通過 `setup --local` 及無 key walkthrough（save、new process、find、inspect、correct、forget），涵蓋 Linux 或 WSL，以及至少一台真正的 macOS。每次嘗試都留在分母。
+5. 已發布 npm 版本的三次乾淨安裝都通過 `setup --local` 及無 key walkthrough（save、new process、find、inspect、correct、forget），涵蓋 Linux 或 WSL、至少一台真正的 macOS，以及 Node 22.16 與 Node 24。每次嘗試都留在分母。
 6. 已發布版本有真實 client 證據：一次真正的 Claude Code session、一次真正的 Codex session，各自保存一筆記憶、從新 session 找回並查看來源，另以 `raw list` 顯示自動保存的對話。
 7. 至少三位專案外的人只依文件安裝並回報。每次嘗試都記錄，包含失敗；每筆都有平台、版本、花費時間及卡住的位置。
 8. 揭露離開電腦的資料：README 的「Your data」與 setup 輸出說明有 key 時哪些內容會送到模型供應商、如何全部留在本機，並與 release notes 一致。
@@ -143,11 +143,11 @@ P2 是入門與素材驗證；其通過不表示預設抽取品質通過，也�
 | 1 主張逐句對應 | 未完成 | [0.6.6 證據表](../promotion-claims.md)已按 README 重查；HN 稿尚未寫，逐句對應尚未完成。 |
 | 2 單一入口及狀態一致 | 未完成 | [README](../../README.md)已有單一入口，但本次文件尚待合併，不能把工作中的改寫當成已合併 gate。 |
 | 3 四項硬安全 | 未完成 | 下表列出 release 來源中的測試；引用的完整零違規評測紀錄來自較舊 `b05773f`，不是 0.6.6 的已發布 engine 驗收紀錄。 |
-| 4 E08、E09 | 未完成 | [原始定義](semantic-evaluation.md#frozen-acceptance-e01e09)保留；尚未附上公告版本在兩個 Node 版本上的 CI 紀錄，也還沒有固定 commit 的獨立審查紀錄。 |
-| 5 三次乾淨安裝 | 未完成 | [舊三次紀錄](../promotion/install-validation/README.md)是 `7467aebc` 的 agent/source 安裝；不含已發布 0.6.6 或真實 macOS。 |
+| 4 E08、E09 | 未完成 | [原始定義](semantic-evaluation.md#frozen-acceptance-e01e09)保留；尚未附上公告版本的 E08 紀錄（離線測試與 CI、兩個 Node 版本、regression demos、plugin gates），也還沒有固定 commit 的獨立審查紀錄。 |
+| 5 三次乾淨安裝 | 未完成 | [舊三次紀錄](../promotion/install-validation/README.md)是 `7467aebc` 的 agent/source 安裝；不含已發布 0.6.6 或真實 macOS，也還沒有新版本在 Node 22.16 與 Node 24 上的紀錄。 |
 | 6 真實雙 client | 未完成 | [packed capture 測試](../../packages/setup/test/local-capture.test.mjs)使用合成 client／transcript，不能當成真正 Claude Code 與 Codex 跨 session 驗收。 |
 | 7 三位外部安裝者 | 未完成 | [舊讀者記錄](../promotion/reader-test.csv)仍 pending；沒有三位外部人員依新文件安裝的完整回報。 |
-| 8 資料外送揭露 | 未完成 | [README Your data](../../README.md#your-data)及[繁中版](../../README.zh-TW.md#你的資料)寫明：有 key 時 Memory 與搜尋文字會送到 OpenAI、保存的對話要另外開啟才送、不給 key 才全部留在本機。`2a4e7091` 的 [messages](../../packages/setup/lib/messages.mjs)中 `local_privacy`／`local_capture_notice` 也在 setup 時說明這些內容。但 0.6.6 的 [release notes](../../CHANGELOG.md)與 CLI 說明把 `--no-context-semantic` 寫成可以「fully local」，而 [MCP CLI](../../adapters/mcp/cli.mjs)在有 key 時仍獨立建立模型，`recall_memory` 等工具照樣會送出文字。README 與 release notes 的說法還不一致，維持未完成，詳見[證據表](../promotion-claims.md)。 |
+| 8 資料外送揭露 | 未完成 | [README Your data](../../README.md#your-data)及[繁中版](../../README.zh-TW.md#你的資料)寫明：有 key 時 Memory 與搜尋文字會送到 OpenAI、保存的對話要另外開啟才送、不給 key 才全部留在本機。但在 `2a4e7091`，有五處把 `--no-context-semantic` 寫成可以「fully local」：[release notes](../../CHANGELOG.md)、[CLI 說明](../../adapters/mcp/cli.mjs)、[installer README](../../packages/setup/README.md)、[defaults](../defaults.md)，以及 setup 實際印出的 `local_privacy`／`local_capture_notice`（[messages](../../packages/setup/lib/messages.mjs)）。[MCP CLI](../../adapters/mcp/cli.mjs)在有 key 時仍獨立建立模型，`recall_memory` 等工具照樣會送出文字。setup 輸出是程式字串，要改字才能符合；在公告版本的這五處與 README 一致之前，維持未完成。詳見[證據表](../promotion-claims.md)。 |
 | 9 真實 client 錄影 | 未完成 | README 仍連到 [2026-10-03 demo](../promotion/demo/README.md)，它是編輯過的 model-free 工具輸出，不是 0.6.6 真實 client 錄影。 |
 | 10 HN 文案及回覆安排 | 未完成 | 尚無完整 HN 稿、五題首則留言及獨立審閱，也無創辦人的回覆時段紀錄。 |
 | 11 發布量測 | 未完成 | [歷史快照](../promotion/metrics/20261002T171417.327267Z/summary.json)不是本次起點；45 stars 不含同窗 14 天 views／uniques，每日新快照尚未開始。 |
@@ -225,18 +225,22 @@ GitHub traffic 提供最近 14 天的資料，故需每日保存回傳視窗。�
 - 移除限定 Local 公告必須先通過 E01 至 E09 品質門檻的前提，包括 36/36 嘗試、recall 至少 90%、precision 至少 90%、擷取事實恢復至少 90%、擷取 claims 的來源支持及 MOC。它們仍是品質主張的完整門檻，不改數字或刪除失敗。
 - 移除 Show HN 前必須先跑 P3 的 D0 與第 7 天檢查；中文貼文與 Show HN 可以同週進行，保留原試驗紀錄。
 - 移除 P1 五位讀者看 30 秒、至少四位理解的發布前提，改由條件 7 的至少三位專案外安裝者及全部嘗試紀錄取代。舊 P1／P2 真人條件沒有補寫成完成。
-- 新增 Cairn.ink Memory 公告的限定範圍：只宣傳已發布 npm 版本的 Local setup、SQLite、無模型保存對話原文及附來源的明確工具。貼文與首則留言須揭露不主張抽取品質、recall 準確率或省錢，並連到 Cloud 抽取仍未過關的限制。品質、自動 recall 品質或 Cards／maps 主張恢復完整 E01 至 E09。
+- 取代舊 P2 的放行條件（三次乾淨 source 安裝與無 key walkthrough、demo 與來源紀錄一致）：改由條件 5、6、9 對已發布版本驗證。舊 P2 的紀錄保留為歷史，不算新條件的證據。
+- P3 不再是 Show HN 前提後，P3 自己的進入條件（P0 至 P2 通過）也不再擋 Show HN；對應的檢查改由條件 1（P0）、條件 7（P1）、條件 5、6、9（P2）承擔。
+- 保留舊 P4 的一條：公告若宣稱 current、history、why 或自動更新能力，仍依 reliability contract 驗證對應狀態與來源。
+- 舊 P4 其餘的評測條款（評測版本與宣傳版本相符、holdout 與 historical 結果分開、不得把失敗案例重跑到成功）隨 E01 至 E09 一起只在品質主張時適用；「版本相符」的要求保留在「對實際公告的同一版本全部成立」這句。
+- 新增 Cairn.ink Memory 公告的限定範圍：只宣傳已發布 npm 版本的 Local setup、SQLite、無模型保存對話原文及附來源的明確工具。貼文與首則留言須揭露不主張抽取品質、recall 準確率或省錢，並連到引擎預設抽取仍未過關的限制。品質、自動 recall 品質或 Cards／maps 主張恢復完整 E01 至 E09。
 - 新增條件 1：公告版本重查主張表，README 與 HN 的每個事實句逐列對應。
 - 新增條件 2：單一入口 README 已合併，README、ROADMAP 與本計畫狀態一致。
-- 保留 E05 為條件 3：舊 revision、遺忘復活、偽造來源、跨 namespace 四項都為零，列明 release 證據及舊 build 邊界；保留 E08、E09 為條件 4，不重新解釋。
-- 新增條件 5：已發布版本三次乾淨安裝及無 key 的 save、new process、find、inspect、correct、forget，涵蓋 Linux／WSL 與真實 macOS，每次嘗試留在分母。
+- 保留 E05 為條件 3：舊 revision、遺忘復活、偽造來源、跨 namespace 四項都為零，列明 release 證據及舊 build 邊界；保留 E08、E09 為條件 4，照原文適用，沒有刪減項目。
+- 新增條件 5：已發布版本三次乾淨安裝及無 key 的 save、new process、find、inspect、correct、forget，涵蓋 Linux／WSL 與真實 macOS，並保留舊 P2 對 Node 22.16 與 Node 24 的涵蓋要求，每次嘗試留在分母。
 - 新增條件 6：真正的 Claude Code 與 Codex 跨 session 保存、找回、查看來源，並用 `raw list` 查自動保存的對話。
 - 新增條件 7：至少三位外部人員只依文件安裝，記錄含失敗的每次平台、版本、耗時及卡點。
 - 新增條件 8：README 與 setup 輸出揭露 key、模型供應商、外送資料及保持本機的方式，與 release notes 一致。
 - 新增條件 9：以公告版本、可追溯 session 的真實 client 錄影替換 2026-10-03 model-free demo。
 - 保留直接試用、做法及限制的 Show HN 內容要求，新增條件 10 的五題創辦人首則留言、獨立審閱與發布後約三小時及翌晨回覆安排。
 - 新增條件 11：發布前記錄 stars、14 天 views／unique visitors，之後每日快照；歷史量測工具與紀錄繼續保留。
-- 新增發布時間建議及實質改版後最多重貼一次的安排，它們不是 gate 條件；新增獨立審閱後由本人批准 pull request 簽核。11 項條件仍未全部完成，廣泛宣傳尚未放行。
+- 新增發布時間建議及實質改版後可以重貼一次的安排，它們不是 gate 條件；新增獨立審閱後由本人批准 pull request 簽核。11 項條件仍未全部完成，廣泛宣傳尚未放行。
 
 ## 量測與渠道參考
 
