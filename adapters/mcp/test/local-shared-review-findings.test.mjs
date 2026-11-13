@@ -23,6 +23,12 @@ const text = 'Synthetic slow cobalt telescope preference';
 const capture = { namespace: ns, client: 'synthetic', sessionId: 'slow-session', eventId: 'slow-batch',
   messages: [{ id: 'slow-message', role: 'user', content: text }] };
 const extraction = () => ({ items: [{ content: text, kind: 'preference', confidence: .8, sourceIndices: [0] }] });
+// Dispatcher/facade frames must not hide the actual storage or model seam.
+function callStack() {
+  const previous = Error.stackTraceLimit;
+  try { Error.stackTraceLimit = 100; return new Error().stack; }
+  finally { Error.stackTraceLimit = previous; }
+}
 function hostCore(t, options, dispatchOptions = {}) {
   const workspace = createTestWorkspace(t);
   const path = options.path ?? join(workspace.path, 'review.sqlite');
@@ -185,13 +191,13 @@ test('P2-2: capture pre-provider freshness refusal leaves staged evidence reclai
   const safety = safetyFixture(t); await safety.migrate();
   let armed = false, injected = false, providers = 0;
   const model = { ...rationaleModel(), countTokens() {
-    if (!injected && new Error().stack.includes('/model-call.mjs')) armed = true;
+    if (!injected && callStack().includes('/model-call.mjs')) armed = true;
     return 1;
   }, extract() { providers++; return { items: [] }; } };
   const f = hostCore(t, { path: safety.path, model, captureQualification: 'source-bound-v2', captureEvidence: 'staged-v1' });
   const original = DatabaseSync.prototype.exec;
   DatabaseSync.prototype.exec = function(sql) {
-    const stack = new Error().stack;
+    const stack = callStack();
     if (armed && !injected && sql.startsWith('BEGIN') &&
         (stack.includes('captureSourceRead') || stack.includes('assertContentScope'))) {
       injected = true; armed = false;
