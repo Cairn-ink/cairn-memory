@@ -196,8 +196,9 @@ excluded, forgotten, denied or foreign sources also make the Card ineligible.
 Card candidate scans also skip an engine Card whose revision is current when
 the canonical source check denies it. Memory source checks still apply, including
 to Memories that share an excluded Raw span.
-Each later write to a bound Memory restarts the ten-minute wait before a worker
-pass rebuilds or retires the Card. After that wait, a later pass re-evaluates the
+Each later revision-changing write to a bound Memory restarts the ten-minute wait
+before a worker pass rebuilds or retires the Card. Re-filing with an unchanged
+revision does not restart the wait. After that wait, a later pass re-evaluates the
 trigger. A rebuild inserts a fresh Card row and source set, purging all superseded engine
 payloads for the same namespace and cluster key in the same transaction. Their
 titles and bodies become NULL and live bindings disappear; text-free rows,

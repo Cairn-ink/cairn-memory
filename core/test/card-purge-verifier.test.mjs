@@ -11,27 +11,29 @@ import { registerContentWriteGuard } from '../content-write-context.mjs';
 import { contentSafetyInventory } from '../content-safety-migration.mjs';
 import { transaction } from '../database.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
+import { lineageHmac } from '../card-lineage.mjs';
+import { engineCardMetadataInside } from '../content-safety.mjs';
 
 const timestamp = '2026-06-01T00:00:00.000Z';
 function storage(f) { return createEngineCardStorage({ db: f.db, identity: f.identity, ready() {} }); }
-function admit(f, suffix) {
-  return ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic purge evidence ' + suffix, kind: 'fact' },
+function admit(f, suffix, namespace = ns) {
+  return ok(f.core.admit({ namespace, memory: { content: 'Synthetic purge evidence ' + suffix, kind: 'fact' },
     receipts: [receipt(suffix)] })).memory;
 }
-function publish(f, memories, key = 'moc:synthetic-purge-topic') {
+function publish(f, memories, key = 'moc:synthetic-purge-topic', namespace = ns) {
   const s = storage(f), ids = new Set(memories.map(m => m.id));
-  const sources = s.snapshot(ns, 512, () => {}).memories.filter(m => ids.has(m.id));
+  const sources = s.snapshot(namespace, 512, () => {}).memories.filter(m => ids.has(m.id));
   assert.equal(sources.length, ids.size);
-  return s.commit(ns, { key, memories: sources }, { body: 'Synthetic retained engine body.' }, timestamp, () => {});
+  return s.commit(namespace, { key, memories: sources }, { body: 'Synthetic retained engine body.' }, timestamp, () => {});
 }
-async function setup(t, authored = false) {
+async function setup(t, authored = false, namespace = ns) {
   const f = await lineageFixture(t, { options: { model: { contextWindow: 8192, countTokens: () => 1,
     extract: () => ({ items: [{ content: 'Synthetic unrelated captured evidence.', kind: 'fact', confidence: .8, sourceIndices: [0] }] }),
-  } } }), memory = admit(f, 'bound'), other = admit(f, 'unrelated');
+  } } }), memory = admit(f, 'bound', namespace), other = admit(f, 'unrelated', namespace);
   const card = authored ? f.confirm(ok(f.call('createCardDraft', { actionId: 'authored-purge-target', drafting: 'authored',
     input: { title: 'Synthetic authored title', body: 'Synthetic authored body',
       memoryRefs: [{ type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision }],
-      sourcePolicy: 'retained-receipts-v1' } }))) : publish(f, [memory]);
+      sourcePolicy: 'retained-receipts-v1' } }))) : publish(f, [memory], undefined, namespace);
   return { ...f, memory, other, card };
 }
 // Immutable facts cannot be removed and deleted rows cannot retain text in a
@@ -110,6 +112,100 @@ test('sealed purge verifier accepts a terminal bound Memory without a forget met
   const f = await setup(t); transition(f);
   assert.equal(f.row(f.card.id).state, 'deleted');
   assert.equal(f.row(f.card.id).title, null); assert.equal(f.row(f.card.id).body, null);
+});
+
+// Keep the entire closure native and internally consistent. Only the guard's
+// authorized read set differs; no row moves namespace and no trigger is bypassed.
+function guardedPurge(f, namespace, scopes, mutate = () => {}, validated = () => {}) {
+  return transaction(f.db, () => {
+    const guard = beginContentWriteSafety(f.db, { method: 'forget', scopes });
+    assert.ok(guard);
+    try {
+      const actionId = 'synthetic-scoped-purge';
+      createPrivateCardStorage({ db: f.db, identity: f.identity, ready() {} }).engineCardWriters()
+        .purge(namespace, f.row(f.card.id), actionId);
+      writeContentSuppressionInside(f.db, { namespace, kind: 'memory', key: f.memory.id, reason: 'purge', actionId });
+      f.db.prepare('UPDATE memories SET deleted=1,content=NULL,revision=revision+1,updated_at=? WHERE id=?')
+        .run(timestamp, f.memory.id);
+      f.db.prepare('DELETE FROM receipts WHERE memory_id=?').run(f.memory.id);
+      mutate();
+      guard.validate({});
+      validated();
+    } finally { guard.close(); }
+  });
+}
+const personal = { ...ns, scope: 'personal', projectId: null };
+const projectA = { ...ns, scope: 'project', projectId: 'synthetic-project-a' };
+const projectB = { ...ns, scope: 'project', projectId: 'synthetic-project-b' };
+for (const [authorized, target] of [[projectA, projectB], [personal, projectB], [projectA, personal]])
+test(`purge scope rejects whole ${target.scope} closure under ${authorized.scope} authority`, async t => {
+  const f = await setup(t, false, target), before = contentSafetyInventory(f.db);
+  const control = new Error('synthetic-control-rollback');
+  assert.throws(() => guardedPurge(f, target, [target], undefined, () => { throw control; }), error => error === control,
+    'matching-scope native control passes the verifier');
+  assert.equal(contentSafetyInventory(f.db), before);
+  let reached = false;
+  assert.throws(() => guardedPurge(f, target, [authorized], () => { reached = true; }),
+    error => error.code === 'evidence_unavailable');
+  assert.equal(reached, true, 'all native writes succeed before scope validation');
+  assert.equal(contentSafetyInventory(f.db), before, 'all tables, schema, counters and authority roll back');
+  guardedPurge(f, target, [target]);
+  assert.equal(f.row(f.card.id).state, 'deleted', 'matching scope also commits successfully');
+});
+
+for (const [authorized, target] of [[projectA, projectB], [personal, projectB], [projectA, personal]])
+test(`declared deletion binds its ${target.scope} target to ${authorized.scope} operation scopes`, async t => {
+  const f = await setup(t, false, target), before = contentSafetyInventory(f.db);
+  let reached = false;
+  registerContentWriteGuard((db, operation) => {
+    const guard = beginContentWriteSafety(db, { ...operation, scopes: [authorized] });
+    return { ...guard, validate(result) { reached = true; guard.validate(result); } };
+  });
+  let result;
+  try { result = f.call('deleteKnowledgeCard', { namespace: target, actionId: 'synthetic-scoped-delete',
+    cardId: f.card.id, expectedRevision: f.card.revision }); }
+  finally { registerContentWriteGuard(beginContentWriteSafety); }
+  assert.equal(reached, true); assert.equal(result.ok, false); assert.equal(result.error.code, 'evidence_unavailable');
+  assert.equal(contentSafetyInventory(f.db), before);
+  assert.equal(ok(f.call('deleteKnowledgeCard', { namespace: target, actionId: 'synthetic-scoped-delete',
+    cardId: f.card.id, expectedRevision: f.card.revision })).id, f.card.id);
+});
+
+const auditOperation = (f, target) => f.db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)')
+  .run(ns.ownerId, ns.scope, ns.projectId ?? '', 'synthetic-purge-audit', 'inspectCardOperation',
+    'synthetic-audit-binding', target, '{}', timestamp);
+for (const fault of ['cluster key update', 'operation target moved away', 'operation removed', 'operation inserted', 'authorization request target'])
+test(`purge freezes ${fault} with a native valid-purge control`, async t => {
+  const f = await setup(t);
+  if (['operation target moved away', 'operation removed'].includes(fault)) auditOperation(f, f.card.id);
+  const before = contentSafetyInventory(f.db), control = new Error('synthetic-control-rollback');
+  assert.throws(() => guardedPurge(f, ns, [ns], undefined, () => { throw control; }), error => error === control);
+  assert.equal(contentSafetyInventory(f.db), before);
+  let reached = false;
+  assert.throws(() => guardedPurge(f, ns, [ns], () => {
+    if (fault === 'cluster key update') f.db.prepare("UPDATE card_operations SET result=json_set(result,'$.clusterKey',?) WHERE action_id=?")
+      .run('moc:synthetic-changed-route', f.card.id);
+    if (fault === 'operation target moved away') f.db.prepare('UPDATE card_operations SET target_id=? WHERE action_id=?')
+      .run('', 'synthetic-purge-audit');
+    if (fault === 'operation removed') f.db.prepare('DELETE FROM card_operations WHERE action_id=?').run('synthetic-purge-audit');
+    if (fault === 'operation inserted') auditOperation(f, f.card.id);
+    if (fault === 'authorization request target') {
+      // Operation audit rows have a NULL card_id. A valid HMAC/receipt must not
+      // make request_target a second route to change this purged Card's audit.
+      auditOperation(f, '');
+      const binding = lineageHmac(f.identity, 'card-action-audit-s2-v1',
+        [f.identity.storeId, ns.ownerId, 'synthetic-purge-audit', 'synthetic-audit-binding']);
+      f.db.prepare(`INSERT INTO card_body_authorizations VALUES(?,?,?,?,?,?,?,?,?, 'operation',NULL,NULL,NULL)`)
+        .run(ns.ownerId, 'synthetic-purge-audit', ns.scope, ns.projectId ?? '', 'inspectCardOperation', f.card.id,
+          'synthetic-human', timestamp, binding);
+    }
+    assert.ok(engineCardMetadataInside(f.db, ns, f.row(f.card.id)), 'metadata is valid even after the extra write');
+    reached = true;
+  }), error => error.code === 'evidence_unavailable');
+  assert.equal(reached, true, 'native schema accepts every write; the purge closure check refuses');
+  assert.equal(contentSafetyInventory(f.db), before, 'complete transaction rolls back');
+  guardedPurge(f, ns, [ns]);
+  assert.equal(f.row(f.card.id).state, 'deleted');
 });
 for (const fault of ['wrong namespace', 'wrong owner', 'multi-step revision', 'surviving binding', 'seal change',
   'two deletion effects', 'effect for another entity', 'missing purge fact', 'mismatched purge fact',

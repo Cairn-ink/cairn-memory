@@ -16,6 +16,7 @@ import { contentReadSafety, createContentReadMemo, engineCardRevisionsInside } f
 import { attestContentSafety } from '../content-safety-schema.mjs';
 import { inContentSuppressionRequestInside } from '../content-suppression-storage.mjs';
 import { readTransaction } from '../database.mjs';
+import { performance } from 'node:perf_hooks';
 
 const surviving = 'Synthetic surviving signal';
 const siblingText = 'Synthetic sibling secret';
@@ -198,4 +199,42 @@ test('engine scan canonical database and programming errors remain errors', asyn
       assert.equal(reached, true, method + ' reaches the canonical safety check');
     } finally { f.db.prepare = prepare; }
   }
+});
+
+for (const phase of ['selection', 'metadata lookahead']) test(`denied engine ${phase} stops at the shared deadline`, async t => {
+  const f = await lineageFixture(t);
+  ok(f.core.admit({ namespace: ns, memory: { content: surviving, kind: 'fact' },
+    receipts: [receipt('synthetic-deadline-source')] }));
+  const cards = createPrivateCardStorage({ db: f.db, identity: f.identity, ready() {} });
+  const evidence = createPrivateEvidenceStorage({ db: f.db, identity: f.identity, cardDetailInside: cards.cardDetailInside });
+  const prepare = f.db.prepare, clock = Object.getOwnPropertyDescriptor(performance, 'now');
+  let candidates = 0;
+  // Model an arbitrarily long increasing denied prefix. A hard probe ceiling
+  // makes a missing deadline check fail promptly instead of hanging the test.
+  f.db.prepare = function(sql) {
+    if (/^SELECT .* FROM private_cards WHERE/.test(sql) && sql.includes("state='confirmed' AND id>?")) return { get() {
+      assert.ok(++candidates <= 3, 'no candidate scan after the shared deadline');
+      return { id: 'engine-card.synthetic-denied-' + candidates, revision: 1, body_revision: 1, state: 'confirmed' };
+    } };
+    return prepare.call(this, sql);
+  };
+  Object.defineProperty(performance, 'now', { configurable: true, value: () => candidates >= 3 ? 100 : 0 });
+  let result;
+  try {
+    result = readTransaction(f.db, () => inContentSuppressionRequestInside(f.db, () => evidence.call('selectEvidence', ns,
+      { query: 'Synthetic', types: phase === 'selection' ? ['card'] : ['memory', 'card'],
+        intent: 'current', limit: 1, deadlineMs: 100 }, 1), [ns]));
+  } finally {
+    f.db.prepare = prepare;
+    if (clock) Object.defineProperty(performance, 'now', clock); else delete performance.now;
+  }
+  assert.equal(candidates, 3);
+  assert.equal(result.coverage.status, 'budget_exhausted');
+  assert.equal(result.coverage.byType.card.partial, true, 'deadline does not imply exhaustion');
+  assert.equal(result.coverage.byType.card.scanned, 0);
+  assert.equal(result.coverage.byType.card.included, 0);
+  assert.equal(result.items.length, phase === 'selection' ? 0 : 1);
+  assert.equal(result.coverage.reason, phase === 'selection' ? 'deadline' : 'item_limit');
+  assert.ok(result.nextCursor);
+  assert.equal(JSON.stringify(result).includes('engine-card.synthetic-denied'), false);
 });

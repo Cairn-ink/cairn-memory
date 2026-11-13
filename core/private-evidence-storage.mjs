@@ -212,6 +212,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     let turn = previous?.turn ?? 0, scannedRows = 0, scannedBodyUnits = 0, stopped = null;
     const byType = Object.fromEntries(input.types.map(type => [type, { scanned: 0, included: 0, partial: true }]));
     const exhausted = new Set(), blocked = new Set(), matches = [], queryWords = words(input.query);
+    const deadline = Symbol('selection deadline');
     function next(type, metadataOnly = false) {
       let candidateAfter = after[type];
       const layout=cachedContentLayout(db);
@@ -222,6 +223,11 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
         LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id
         AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry`;
       while (true) {
+        // A denied prefix has no caller-supplied row bound. Check the shared
+        // deadline before continuing it, including metadata-only lookahead.
+        if (candidateAfter !== after[type] && performance.now() - started >= input.deadlineMs) {
+          stopped = 'deadline'; return deadline;
+        }
         const row = type === 'memory' ? db.prepare(`SELECT ${columns} FROM memories WHERE ${where}
         AND deleted=0 AND id>? ORDER BY id LIMIT 1`).get(...boundary(ns), candidateAfter) :
           db.prepare(`SELECT ${columns} FROM private_cards WHERE ${where} AND state='confirmed' AND id>? ORDER BY id LIMIT 1`)
@@ -264,6 +270,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       turn = (turn + 1) % input.types.length;
       if (exhausted.has(type) || blocked.has(type)) continue;
       const row = next(type);
+      if (row === deadline) break;
       if (!row) { exhausted.add(type); continue; }
       // Scanned counts, body-unit budgets and cursor identities are outputs.
       assertContributor(type,row);
@@ -281,7 +288,8 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     }
     // A metadata-only bounded peek tells callers which streams actually ended.
     for (const type of input.types) if (!blocked.has(type)) {
-      const peek=next(type,true);assertContributor(type,peek,true);if(!peek)exhausted.add(type);
+      const peek=next(type,true);if(peek===deadline)break;
+      assertContributor(type,peek,true);if(!peek)exhausted.add(type);
     }
     const complete = exhausted.size === input.types.length;
     for (const type of input.types) byType[type].partial = !exhausted.has(type);

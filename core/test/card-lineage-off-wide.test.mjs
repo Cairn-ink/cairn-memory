@@ -60,6 +60,7 @@ const added=['inspectCardOperation','revalidateEvidence','fetchCandidateEvidence
 // Each sqlRevisions entry is an intended, reviewed SQL text change against the archived revision. It replaces only the
 // SQL text of one archived statement; method and bound arguments are never substituted. Delete the list when `revision` advances.
 const sqlRevisions=pins.sqlRevisions??[],sqlAdditions=pins.sqlAdditions??[],sqlAdditionMethods=pins.sqlAdditionMethods??[],cardStatementTexts=pins.cardStatementTexts??{};
+const cardStatementExecutions=pins.cardStatementExecutions;
 test('reviewed SQL additions have explicit workload, allowed call method, ordinal, anchor and full statement rows',()=>{
   validateSqlAdditions(sqlAdditions,sqlAdditionMethods);validateCardStatementTexts(cardStatementTexts,sqlAdditions);
 });
@@ -82,17 +83,17 @@ for(const base of [23,33])for(const mode of ['open','workload'])for(const eventT
       }
       const old=run(baseline.path,oldPath,mode,cell);reviseSQL(key,old.statements,sqlRevisions);
       if(workloadKeys.includes(key))revisedArchives.push(old);
-      const reconstructed=compareWideTraces({key,current,archived:old,sqlAdditions,sqlAdditionMethods,cardStatementTexts,checkArchivedCardTexts:false,receiptWalk:Boolean(receiptWalkPins.records[key])});
+      const reconstructed=compareWideTraces({key,current,archived:old,sqlAdditions,sqlAdditionMethods,cardStatementTexts,cardStatementExecutions,checkArchivedCardTexts:false,receiptWalk:Boolean(receiptWalkPins.records[key])});
       if(receiptWalkPins.records[key]) {
         observeReceiptWalkSQL(old.statements,'archived');archivedReceiptWalkTraces++;
         assert.deepEqual(summary(old),pins.records[key],'receipt cells retain their frozen archived pins');
       } else if(workloadKeys.includes(key)) {
-        assertWidePins(key,reconstructed,sqlAdditions,pins.records[key],sqlAdditionMethods,cardStatementTexts);
+        assertWidePins(key,reconstructed,sqlAdditions,pins.records[key],sqlAdditionMethods,cardStatementTexts,cardStatementExecutions);
       } else {
         assert.deepEqual(summary(old),pins.records[key],'frozen opening pins come only from the archived baseline');
       }
     });
-    assert.equal(pins.revision,revision);assertWidePins(key,current,sqlAdditions,receiptWalkPins.records[key]??pins.records[key],sqlAdditionMethods,cardStatementTexts);
+    assert.equal(pins.revision,revision);assertWidePins(key,current,sqlAdditions,receiptWalkPins.records[key]??pins.records[key],sqlAdditionMethods,cardStatementTexts,cardStatementExecutions);
     assert.ok(current.statements.every(entry=>entry.length===3&&Array.isArray(entry[2])),'SQL execution includes bound arguments');
     assert.equal(current.statements.some(([sql])=>/card_body_|card_operations_owner_action/.test(sql)),false,'no extended lineage scan');
     if(mode==='workload') {

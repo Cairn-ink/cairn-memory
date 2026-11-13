@@ -323,13 +323,19 @@ export function beginContentWriteSafety(db, operation) {
       // forget ancestor. Same-action terminal facts and removed bindings prove
       // ownership; a method name alone cannot authorize this transition.
       const change=canonical.find(c=>c.table==='private_cards'&&c.row.id===key),row=change?.row;
+      const sameNamespace=value=>value&&JSON.stringify(boundary(value))===JSON.stringify(boundary(ns));
       if(!change?.old||row.state!=='deleted'||row.title!==null||row.body!==null||
         row.revision!==oldValue(change,'revision')+1||
-        JSON.stringify(boundary(namespace(row)))!==JSON.stringify(boundary(ns))||
-        !engineCardMetadataInside(db,ns,row)||
+        !sameNamespace(namespace(row))||!scopes.some(sameNamespace)||!engineCardMetadataInside(db,ns,row)||
         change.columns.some((c,i)=>!['id','state','revision','title','body','updated_at'].includes(c.name)&&change.old[i]!==undefined))return false;
-      if([...canonical,...removed].some(c=>['card_body_provenance','card_body_sources','card_body_authorizations'].includes(c.table)&&c.row.card_id===key)||
-        canonical.some(c=>bindingTables.has(c.table)&&c.row.card_id===key)||
+      // Purging removes live bindings, but never rewrites a receipt or sealed
+      // authority. Moving a row away still changes this Card's closure.
+      const touches=(c,column)=>c.row[column]===key||c.old&&oldValue(c,column)===key;
+      if([...canonical,...removed].some(c=>
+        ['card_body_provenance','card_body_sources','card_body_authorizations'].includes(c.table)&&touches(c,'card_id')||
+        c.table==='card_body_authorizations'&&touches(c,'request_target')||
+        c.table==='card_operations'&&touches(c,'target_id'))||
+        canonical.some(c=>bindingTables.has(c.table)&&touches(c,'card_id'))||
         [...bindingTables].some(table=>exists(table)&&db.prepare('SELECT 1 FROM '+table+' WHERE card_id=? LIMIT 1').get(key)))return false;
       const effects=canonical.filter(c=>c.table==='card_effects'&&c.row.entity_type==='card'&&c.row.entity_id===key);
       if(effects.length!==1||effects[0].old)return false;
@@ -490,6 +496,7 @@ export function beginContentWriteSafety(db, operation) {
       // a second purge fact cannot declare another target for the operation.
       const declaredCardDeletion=row=>operation.method==='deleteKnowledgeCard'&&
         CONTENT_TERMINAL_FIELDS[operation.method]==='private_cards.id'&&
+        scopes.some(ns=>JSON.stringify(boundary(ns))===JSON.stringify(boundary(namespace(row))))&&
         row.id===result?.[CONTENT_TERMINAL_ACK_FIELDS[operation.method]]&&
         terminalFacts.some(f=>f.kind==='card'&&f.match_mode==='incarnation'&&
           contentSuppressionTargetMatches(f,namespace(row),{kind:'card',key:row.id})&&

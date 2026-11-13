@@ -126,6 +126,30 @@ const orderedEntries = (key, entries) => entries.filter(entry => entry.key === k
   .sort((a, b) => compareAnchors(a, b) || a.after - b.after);
 const statementSummary = ([sql, method, bindings]) => [hash(sql), method, hash(bindings)];
 const callStatements = (record, call) => record.statements.slice(call[2], call[3]);
+// Full execution rows use the worker's normalized bindings, just like addition
+// ledger rows. Include empty/refused calls and count ordinals over ALL calls.
+export function cardExecutionSummary(record, omitted = new Set()) {
+  checkCallRanges(record);
+  const ordinals = new Map(), calls = [];
+  for (const call of record.calls) {
+    const method = call[0], ordinal = (ordinals.get(method) ?? 0) + 1;
+    ordinals.set(method, ordinal);
+    if (!forgettingMethods.has(method)) continue;
+    const statements = [];
+    if (call.length === 4) for (let index = call[2]; index < call[3]; index++)
+      if (!omitted.has(index) && cardFamilySQL(record.statements[index])) statements.push(record.statements[index]);
+    calls.push({ method, ordinal, statements });
+  }
+  return { callCount: calls.length, calls };
+}
+
+function assertCardExecutions(key, record, pins, omitted = new Set()) {
+  if (!workloadKeys.includes(key)) return;
+  assert.ok(pins && Object.hasOwn(pins, key), 'cardStatementExecutions requires reviewed per-call pins for ' + key);
+  assert.deepEqual(cardExecutionSummary(record, omitted), pins[key],
+    key + ' Card-family executions match reviewed calls, order, exact texts, methods and bindings');
+}
+
 function checkCallRanges(record) {
   let end = 0;
   for (const call of record.calls) {
@@ -229,9 +253,8 @@ export function currentAdditionSummary(key, current, entries = [], sqlAdditionMe
     }
     if (forgettingMethods.has(method)) for (let index = call[2]; index < call[3]; index++) {
       const statement = current.statements[index];
-      // Known pins-mode limit: another copy of an already listed exact text
-      // passes this classifier. Archive exact comparison and the workload SQL
-      // hash still catch it; this reviewed list intentionally has no counts.
+      // Per-call execution pins separately check occurrences and bindings of
+      // these listed texts, even when general trace hashes are regenerated.
       // Plain Card-table SELECTs without a card_operations join also remain
       // outside this classifier; archive comparison and SQL hashes cover them.
       if (cardFamilySQL(statement) && !positions.has(index)) assert.ok((cardStatementTexts[method] ?? []).includes(statement[0]),
@@ -249,9 +272,10 @@ export function currentAdditionSummary(key, current, entries = [], sqlAdditionMe
   return { effect, positions };
 }
 
-export function assertWidePins(key, current, entries, pinned, sqlAdditionMethods = [], cardStatementTexts = {}) {
+export function assertWidePins(key, current, entries, pinned, sqlAdditionMethods = [], cardStatementTexts = {}, cardStatementExecutions) {
   const actual = summary(current);
-  const effect = currentAdditionSummary(key, current, entries, sqlAdditionMethods, cardStatementTexts).effect;
+  const { effect, positions } = currentAdditionSummary(key, current, entries, sqlAdditionMethods, cardStatementTexts);
+  assertCardExecutions(key, current, cardStatementExecutions, positions);
   if (workloadKeys.includes(key)) {
     if (effect.callCount || Object.hasOwn(pinned ?? {}, 'sqlAdditions')) {
       actual.sqlAdditions = effect;
@@ -274,11 +298,13 @@ export function compareWideTables(current, archived, removedRows = []) {
   assert.deepEqual(current, expected, 'every table population, minus only explicitly reviewed rows');
 }
 
-export function compareWideTraces({ key, current, archived, sqlAdditions = [], sqlAdditionMethods = [], cardStatementTexts = {}, checkArchivedCardTexts = true, receiptWalk = false }) {
+export function compareWideTraces({ key, current, archived, sqlAdditions = [], sqlAdditionMethods = [], cardStatementTexts = {}, cardStatementExecutions, checkArchivedCardTexts = true, receiptWalk = false }) {
   validateCardStatementTexts(cardStatementTexts, sqlAdditions);
   if (checkArchivedCardTexts) assertArchivedCardStatementTexts([archived], cardStatementTexts, sqlAdditions);
   const reconstructed = reconstructWideTrace(key, archived, sqlAdditions, sqlAdditionMethods);
   const { positions } = currentAdditionSummary(key, current, sqlAdditions, sqlAdditionMethods, cardStatementTexts);
+  assertCardExecutions(key, archived, cardStatementExecutions);
+  assertCardExecutions(key, current, cardStatementExecutions, positions);
   assert.deepEqual(current.effectWitnesses, archived.effectWitnesses, 'complete effect witnesses, including rolled-back writes');
   compareWideTables(current.dump, archived.dump, []);
   if (!receiptWalk) {

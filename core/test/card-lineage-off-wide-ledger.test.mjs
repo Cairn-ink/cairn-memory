@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compareWideTraces, assertWidePins, summary, ledgerAdditionSummary, compareWideTables,
   currentReceiptWalkSQLTexts, reconstructWideTrace, currentAdditionSummary, validateSqlAdditions, hash, cardFamilySQL, forgettingMethods,
-  assertArchivedCardStatementTexts, validateCardStatementTexts, normalizeSQL, wideArchiveMode } from '../testing/card-lineage-off-wide-compare.mjs';
+  assertArchivedCardStatementTexts, validateCardStatementTexts, normalizeSQL, wideArchiveMode, cardExecutionSummary, purgeAdditionSQL } from '../testing/card-lineage-off-wide-compare.mjs';
 
 const row = (sql, method = 'exec', bindings = []) => [sql, method, bindings];
 const ns = ['synthetic-owner', 'personal', ''];
@@ -40,7 +40,10 @@ function fixture(receiptWalk = false) {
     reference: 616, reason: 'Erase engine Card content and bookkeeping when its source is forgotten.' }));
   return { key, receiptWalk, archived: trace(oldParts), current: trace(parts), sqlAdditions, sqlAdditionMethods: ['forget'], parts };
 }
-const compare = f => compareWideTraces(f);
+// Synthetic fixture pins are derived before mutation in occurrence tests below.
+const executionPins = f => f.cardStatementExecutions ?? { [f.key]: cardExecutionSummary(f.archived ?? f.current,
+  new Set((f.archived ?? f.current).statements.flatMap((statement, index) => purgeAdditionSQL(statement) ? [index] : []))) };
+const compare = f => compareWideTraces({ ...f, cardStatementExecutions: executionPins(f) });
 const pinned = f => ({ ...summary(f.current), sqlAdditions: ledgerAdditionSummary(f.key, f.sqlAdditions, f.sqlAdditionMethods) });
 
 function cascadeFixture(receiptWalk) {
@@ -110,7 +113,7 @@ for (const receiptWalk of [false, true]) {
   });
   test(`${mode}: deleteConversation additions match exactly across a multi-Memory cascade`, () => {
     const f = cascadeFixture(receiptWalk); compare(f);
-    assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods);
+    assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods, f.cardStatementTexts ?? {}, executionPins(f));
     const call = pinned(f).sqlAdditions.calls.find(call => call.method === 'deleteConversation');
     assert.equal(call.ordinal, 2); assert.equal(call.statements.length, 4);
   });
@@ -126,7 +129,7 @@ for (const receiptWalk of [false, true]) {
     const f = cascadeFixture(receiptWalk); f.parts = structuredClone(f.parts);
     mutate(f); f.current = trace(f.parts);
     assert.throws(() => compare(f), { code: 'ERR_ASSERTION' });
-    assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods), { code: 'ERR_ASSERTION' });
+    assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods, f.cardStatementTexts ?? {}, executionPins(f)), { code: 'ERR_ASSERTION' });
   });
 }
 
@@ -136,17 +139,17 @@ for (const method of ['forgetEpisode', 'reject']) test(`reviewed call methods ar
   for (const call of f.archived.calls) if (call[0] === 'forget') call[0] = method;
   for (const entry of f.sqlAdditions) entry.method = method;
   f.sqlAdditionMethods = [method]; f.current = trace(f.parts);
-  compare(f); assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods);
+  compare(f); assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods, f.cardStatementTexts ?? {}, executionPins(f));
 });
 
 test('pins mode: explicit addition summaries match the ledger and the current trace', () => {
-  const f = fixture(); assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods);
+  const f = fixture(); assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods, f.cardStatementTexts ?? {}, executionPins(f));
   assert.equal(pinned(f).sqlAdditions.callCount, 1);
   assert.equal(pinned(f).sqlAdditions.calls[0].statements.length, 4);
 });
 test('pins mode: an empty ledger accepts identical traces with legacy pins', () => {
   const f = fixture(); f.current = structuredClone(f.archived); f.sqlAdditions = []; f.sqlAdditionMethods = [];
-  assertWidePins(f.key, f.current, f.sqlAdditions, summary(f.current), f.sqlAdditionMethods);
+  assertWidePins(f.key, f.current, f.sqlAdditions, summary(f.current), f.sqlAdditionMethods, f.cardStatementTexts ?? {}, executionPins(f));
 });
 for (const mutation of ['extra', 'extra with changed SQL', 'dropped', 'other operation', 'binding', 'unused entry'])
   test(`pins mode: rejects ${mutation} even with re-derived general hashes`, () => {
@@ -159,11 +162,11 @@ for (const mutation of ['extra', 'extra with changed SQL', 'dropped', 'other ope
     if (mutation === 'binding') f.parts[2][2][7][2][3] = 'synthetic-other-memory';
     if (mutation === 'unused entry') f.sqlAdditions.push({ ...structuredClone(f.sqlAdditions[0]), ordinal: 3 });
     f.current = trace(f.parts);
-    assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods), { code: 'ERR_ASSERTION' });
+    assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods, f.cardStatementTexts ?? {}, executionPins(f)), { code: 'ERR_ASSERTION' });
   });
 test('pins mode: a hand-edited effect summary cannot replace the ledger', () => {
   const f = fixture(), pin = pinned(f); pin.sqlAdditions.callCount = 0;
-  assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pin, f.sqlAdditionMethods), { code: 'ERR_ASSERTION' });
+  assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pin, f.sqlAdditionMethods, f.cardStatementTexts ?? {}, executionPins(f)), { code: 'ERR_ASSERTION' });
 });
 for (const [name, index] of [['Memory', 3], ['namespace', 0]])
   test(`pins mode: a wrong ${name} binding changes the reviewed bindings hash without an archive`, () => {
@@ -181,7 +184,7 @@ for (const [name, index] of [['Memory', 3], ['namespace', 0]])
     assert.notEqual(after[2], before[2]);
     assert.equal(after[2], hash(f.sqlAdditions[3].statement[2]));
     const pin = { ...summary(f.current), sqlAdditions: reviewed };
-    assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pin, f.sqlAdditionMethods),
+    assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pin, f.sqlAdditionMethods, f.cardStatementTexts ?? {}, executionPins(f)),
       { code: 'ERR_ASSERTION', message: /pins explicitly describe the ledger effect/ });
   });
 test('reviewed addition methods reject unlisted entries, duplicates and unused methods', () => {
@@ -218,11 +221,42 @@ for (const mutation of ['purge moved before the fence', 'purge moved after the t
       rows.splice(4, 0, ...purge.slice(0, 2), row('SELECT intervening', 'get'), ...purge.slice(2));
     } else rows.splice(mutation === 'purge moved before the fence' ? 3 : 5, 0, ...purge);
     f.current = trace(f.parts);
-    assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods),
+    assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods, f.cardStatementTexts ?? {}, executionPins(f)),
       { code: 'ERR_ASSERTION', message: /current purge anchor/ });
   });
 
 const reviewedCardText = 'UPDATE private_cards SET revision=revision+1 WHERE id=?';
+for (const receiptWalk of [false, true]) for (const mode of ['archive', 'pins'])
+for (const mutation of ['control', 'duplicate with altered bindings', 'remove', 'reorder', 'rebind', 'execution method'])
+test(`${mode} per-call Card executions: ${mutation}, receiptWalk=${receiptWalk}`, () => {
+  const f = fixture(receiptWalk), first = row(reviewedCardText, 'run', ['synthetic-first-card']),
+    second = row(reviewedCardText, 'run', ['synthetic-second-card']);
+  f.parts[2][2].push(first, second);
+  const oldParts = structuredClone(f.parts); oldParts[2][2] = [...forgetRows, first, second];
+  f.archived = trace(oldParts); f.current = trace(f.parts);
+  f.cardStatementTexts = { forget: [reviewedCardText] };
+  f.cardStatementExecutions = structuredClone(executionPins(f));
+  const reviewedAdditions = pinned(f).sqlAdditions;
+  f.parts = structuredClone(f.parts);
+  const rows = f.parts[2][2];
+  if (mutation === 'duplicate with altered bindings') rows.splice(1, 0, row(reviewedCardText, 'run', ['synthetic-wrong-card']));
+  if (mutation === 'remove') rows.pop();
+  if (mutation === 'reorder') rows.push(rows.splice(-2, 1)[0]);
+  if (mutation === 'rebind') rows.at(-1)[2] = ['synthetic-wrong-card'];
+  if (mutation === 'execution method') rows.at(-1)[1] = 'all';
+  f.current = trace(f.parts);
+  const run = () => mode === 'archive' ? compare(f) : assertWidePins(f.key, f.current, f.sqlAdditions,
+    { ...summary(f.current), sqlAdditions: reviewedAdditions }, f.sqlAdditionMethods, f.cardStatementTexts, f.cardStatementExecutions);
+  if (mode === 'pins') delete f.archived;
+  if (mutation === 'control') run();
+  else assert.throws(run, { code: 'ERR_ASSERTION', message: /Card-family executions match reviewed calls/ });
+});
+for (const mode of ['archive', 'pins']) test(`${mode} per-call Card executions: missing pins fail closed`, () => {
+  const f = fixture();
+  const run = () => mode === 'archive' ? compareWideTraces(f) :
+    assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods);
+  assert.throws(run, { code: 'ERR_ASSERTION', message: /cardStatementExecutions requires reviewed per-call pins/ });
+});
 for (const mode of ['archive', 'pins']) {
   for (const [name, method, sql, lists] of [
     ['extra binding delete in forget', 'forget', 'DELETE FROM card_memory_bindings WHERE card_id=?', {}],
@@ -254,7 +288,7 @@ for (const mode of ['archive', 'pins']) {
     part[2].splice(-1, 0, row(sql, 'run', ['synthetic-card'])); f.current = trace(f.parts);
     if (mode === 'pins') {
       delete f.archived;
-      assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods, lists),
+      assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods, lists, executionPins(f)),
         { code: 'ERR_ASSERTION', message: /unreviewed card-family statement/ });
     } else assert.throws(() => compare(f), { code: 'ERR_ASSERTION', message: /unreviewed card-family statement/ });
   });
@@ -266,7 +300,7 @@ for (const mode of ['archive', 'pins']) {
     for (const entry of f.sqlAdditions) entry.method = method;
     f.sqlAdditionMethods = [method]; f.cardStatementTexts = { [method]: [reviewedCardText] };
     if (mode === 'archive') compare(f);
-    else { delete f.archived; assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods, f.cardStatementTexts); }
+    else { delete f.archived; assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods, f.cardStatementTexts, executionPins(f)); }
   });
 }
 test('archive card-family: rejects a listed text absent from every archived call', () => {
@@ -299,7 +333,7 @@ for (const padded of [false, true]) test(`reviewed text list rejects a purge tex
   const f = fixture(); f.cardStatementTexts = { forget: [sql] };
   // An extra listed copy used to bypass the purge ledger in pins mode.
   f.parts[2][2].splice(-1, 0, row(sql, 'get')); f.current = trace(f.parts);
-  assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods, f.cardStatementTexts),
+  assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods, f.cardStatementTexts, executionPins(f)),
     { code: 'ERR_ASSERTION', message: /cannot hide purge-family statements/ });
   assert.throws(() => validateCardStatementTexts(f.cardStatementTexts),
     { code: 'ERR_ASSERTION', message: /cannot hide purge-family statements/ });
@@ -338,7 +372,7 @@ for (const mode of ['archive', 'pins']) test(`${mode} card-family: a listed forg
   const f = { key: 'workload:23', current, archived: structuredClone(current), sqlAdditions: [], sqlAdditionMethods: [],
     cardStatementTexts: { reject: [reviewedCardText] } };
   if (mode === 'archive') compare(f);
-  else assertWidePins(f.key, current, [], summary(current), [], f.cardStatementTexts);
+  else assertWidePins(f.key, current, [], summary(current), [], f.cardStatementTexts, executionPins(f));
 });
 
 for (const mode of ['archive', 'pins']) test(`${mode} card-family: a reviewed ledger cannot put purge SQL in another method`, () => {
@@ -347,6 +381,6 @@ for (const mode of ['archive', 'pins']) test(`${mode} card-family: a reviewed le
   for (const entry of f.sqlAdditions) { entry.method = 'capture'; entry.ordinal = 1; }
   f.sqlAdditionMethods = ['capture']; f.current = trace(f.parts);
   if (mode === 'archive') assert.throws(() => compare(f), { code: 'ERR_ASSERTION', message: /outside a forgetting call/ });
-  else assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods),
+  else assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods, f.cardStatementTexts ?? {}, executionPins(f)),
     { code: 'ERR_ASSERTION', message: /outside a forgetting call/ });
 });
