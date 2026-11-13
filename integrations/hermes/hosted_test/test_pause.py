@@ -1,7 +1,9 @@
 """Hosted automatic pause parity, using synthetic credentials and loopback only."""
 
 import json
+import threading
 import time
+import uuid
 
 import pytest
 
@@ -45,7 +47,7 @@ def test_paused_zero_recalls_then_resumed(install, cloud):
     cloud.pause_value = state(False, 2)
     assert "Synthetic note" in provider.prefetch("Synthetic resumed", session_id="conversation")
     assert provider.recall_status().count == 1
-    assert len(cloud.requests_for(PAUSE)) == 2
+    assert len(cloud.requests_for(PAUSE)) == 3
     assert len(cloud.requests_for(RECALL)) == 1
 
 
@@ -96,7 +98,8 @@ def test_valid_schema_generation_boundaries(install, cloud, generation):
     _, provider, _, _ = install()
     cloud.pause_value = state(generation=generation)
     assert "Synthetic note" in provider.prefetch("Synthetic query")
-    assert len(cloud.requests_for(PAUSE)) == len(cloud.requests_for(RECALL)) == 1
+    assert len(cloud.requests_for(PAUSE)) == 2
+    assert len(cloud.requests_for(RECALL)) == 1
 
 
 def test_observation_history_is_per_provider(install, cloud):
@@ -224,7 +227,7 @@ def test_late_result_injected_only_after_fresh_unpaused_observation(install, clo
     cloud.recall_release.clear()
     assert "Synthetic note" in provider.prefetch("Synthetic next", session_id="conversation")
     assert "Synthetic note" not in provider.prefetch("Synthetic still in flight", session_id="conversation")
-    assert len(cloud.requests_for(PAUSE)) == 3
+    assert len(cloud.requests_for(PAUSE)) == 4
     assert len(cloud.requests_for(RECALL)) == 2
     cloud.recall_release.set()
     wait_done(provider)
@@ -244,3 +247,117 @@ def test_explicit_tools_bypass_automatic_pause(install, cloud, available):
     assert len(cloud.requests_for(PAUSE)) == 1
     assert len(cloud.requests_for(RECALL)) == 1
     assert [r[1]["method"] for r in cloud.requests_for("/api/mcp")] == ["initialize", "tools/call", "tools/call"]
+
+
+def test_late_result_across_unobserved_pause_resume(install, cloud):
+    _, provider, _, _ = install()
+    cloud.recall_release.clear()
+    assert provider.prefetch("Synthetic first", session_id="conversation") == ""
+    cloud.recall_release.set()
+    cloud.wait_recalls(1)
+    wait_done(provider)
+    assert provider._hosted._late
+    # The account paused and resumed between turns; only its generation changed.
+    cloud.pause_value = state(generation=1)
+    cloud.recall_release.clear()
+    cloud.recall_value = {"memories": [{"id": str(uuid.uuid4()), "content": "Synthetic fresh note",
+                                      "kind": "preference"}]}
+    try:
+        injected = provider.prefetch("Synthetic second", session_id="conversation")
+    finally:
+        cloud.recall_release.set()
+        wait_done(provider)
+    assert "Synthetic note: prefer small examples." not in injected
+
+
+@pytest.mark.parametrize("remote,allowed", [
+    (state(True, 1), False), (state(enforced=False), False),
+    (state(generation=1), False), (state(), True),
+])
+@pytest.mark.parametrize("late", [False, True])
+def test_pause_rechecked_after_recall(install, cloud, remote, allowed, late):
+    _, provider, _, _ = install()
+    cloud.recall_release.clear()
+    result = []
+    worker = threading.Thread(target=lambda: result.append(
+        provider.prefetch("Synthetic query", session_id="conversation")))
+    worker.start()
+    try:
+        deadline = time.monotonic() + 2
+        while not cloud.requests_for(RECALL) and time.monotonic() < deadline:
+            time.sleep(0.005)
+        assert cloud.requests_for(RECALL)
+        if late:
+            worker.join(2)
+            assert not worker.is_alive()
+            assert result == [""]
+        cloud.pause_value = remote
+        cloud.recall_release.set()
+        worker.join(2)
+        assert not worker.is_alive()
+        wait_done(provider)
+        if late:
+            assert bool(provider._hosted._late) is allowed
+        else:
+            assert ("Synthetic note" in result[0]) is allowed
+        assert len(cloud.requests_for(PAUSE)) == 2
+    finally:
+        cloud.recall_release.set()
+        worker.join(2)
+
+
+def test_recheck_shares_total_deadline(install, cloud, monkeypatch):
+    _, provider, _, _ = install()
+    request = provider._hosted._client.request
+
+    def delay_recheck(method, url, **kwargs):
+        if method == "POST" and url.endswith(RECALL):
+            cloud.pause_delay = 0.8
+        return request(method, url, **kwargs)
+
+    monkeypatch.setattr(provider._hosted._client, "request", delay_recheck)
+    started = time.monotonic()
+    assert provider.prefetch("Synthetic query", session_id="conversation") == ""
+    assert time.monotonic() - started < 0.4
+    wait_done(provider)
+    assert time.monotonic() - started < 0.95
+    assert not provider._hosted._late
+    assert len(cloud.requests_for(PAUSE)) == 2
+
+
+def test_recheck_shares_deadline_without_remaining_budget(install, cloud, monkeypatch):
+    _, provider, _, hosted = install()
+    render = hosted.format_memories
+    started = time.monotonic()
+
+    def render_after_deadline(value):
+        time.sleep(max(0, started + 0.8 - time.monotonic()))
+        return render(value)
+
+    monkeypatch.setattr(hosted, "format_memories", render_after_deadline)
+    assert provider.prefetch("Synthetic query", session_id="conversation") == ""
+    wait_done(provider)
+    assert not provider._hosted._late
+    assert len(cloud.requests_for(PAUSE)) == 1
+
+
+def test_prefetch_epoch_precedes_observation(install, cloud, monkeypatch):
+    _, provider, _, _ = install()
+    observe = provider._hosted._observe_pause
+    first = True
+
+    def overlapping_observation(*args, **kwargs):
+        nonlocal first
+        remote = observe(*args, **kwargs)
+        if first:
+            first = False
+            # Another prefetch observes a pause before this prefetch can dispatch.
+            cloud.pause_value = state(True, 1)
+            withheld(provider, "paused")
+        return remote
+
+    monkeypatch.setattr(provider._hosted, "_observe_pause", overlapping_observation)
+    assert provider.prefetch("Synthetic overlapping query", session_id="conversation") == ""
+    wait_done(provider)
+    assert not provider._hosted._late
+    assert not cloud.requests_for(RECALL)
