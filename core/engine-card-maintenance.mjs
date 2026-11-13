@@ -18,7 +18,7 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
   let active = false, last = null;
   const failureReasons = new Set(['model_timeout', 'model_cancelled', 'source_unavailable', 'source_excluded',
     'context_budget_exceeded', 'token_count_unavailable', 'invalid_model_output', 'scope_changed',
-    'namespace_paused', 'storage_busy', 'dependency_limit_reached', 'source_budget_exceeded', 'store_closed', 'invalid_input', 'consolidation_failed']);
+    'namespace_paused', 'dependency_limit_reached', 'source_budget_exceeded', 'store_closed', 'invalid_input', 'consolidation_failed']);
   const scans = new Map();
   for (const port of [relations, vectors]) if (port !== undefined && typeof port?.read !== 'function') fail('invalid_input');
   const configured = typeof model?.consolidate === 'function';
@@ -228,7 +228,12 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
     } catch (error) {
       result.built = [];
       let code;
-      try { const proposed = isStorageBusy(error) ? 'storage_busy' : error?.code; if (failureReasons.has(proposed)) code = proposed; } catch { /* Port exception properties are untrusted. */ }
+      try {
+        // Preserve the ordinary path's single read of an untrusted accessor.
+        const proposed = error?.code;
+        if (hasCommitDispatcher(storage) && (proposed === 'storage_busy' || isStorageBusy(error))) code = 'storage_busy';
+        else if (failureReasons.has(proposed)) code = proposed;
+      } catch { /* Port exception properties are untrusted. */ }
       result.state = code === 'namespace_paused' ? 'paused' : code === 'model_timeout' ? 'deadline' : 'refused';
       result.reason = result.state === 'deadline' ? 'deadline' : code ?? 'consolidation_failed';
     } finally { active = false; last = { namespace: JSON.stringify(ns), value: structuredClone(result) }; }
