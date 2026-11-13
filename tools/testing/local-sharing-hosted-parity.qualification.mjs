@@ -1,5 +1,7 @@
 // One-time R1 qualification: unscoped Raw, ranking and budget parity against
-// fixed base 405893c957ee582fecd1a48265351a73be6bb190. Requires full git history.
+// fixed base 3cbbb1a46b590bca3c68376eaedf4f63c8d1e321. Requires full git history.
+// Main 63cd28b6 itself failed this comparison against the earlier base 405893c9
+// (maintenance diagnostics differ), so the base moved to current main.
 // Run explicitly: node tools/testing/run.mjs tools/testing/local-sharing-hosted-parity.qualification.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -17,7 +19,7 @@ import { contextBudget } from '../../core/context-read-budget.mjs';
 
 // Exercise the approved, immutable engine base as an independent implementation.
 // All files and stores are temporary synthetic test workspaces; no installation.
-const base = '405893c957ee582fecd1a48265351a73be6bb190';
+const base = '3cbbb1a46b590bca3c68376eaedf4f63c8d1e321';
 let workspace, original;
 test.before(async () => {
   workspace = createTestWorkspace(null, { prefix: 'r1-base-parity-' });
