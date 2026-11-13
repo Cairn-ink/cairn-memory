@@ -296,3 +296,25 @@ test('filtered receipt plans retain the binary memory index ranges',async t=>{
   assert.ok(plans.batch.some(detail=>detail==='SEARCH receipts USING INDEX memory_receipts (memory_id=?)'));
   t.diagnostic(JSON.stringify({node:process.version,index,plans}));
 });
+
+for(const column of ['created_at','id'])for(const variant of ['receipt-key mismatch','receipt suppression'])
+test(`empty stored ${column} overflow cursor retains refusal: ${variant}`,async t=>{
+  const {db}=await fixture(t,53),target=column==='created_at'?'receipt-5':'x';
+  transaction(db,()=>{
+    memory(db,'parent',0);
+    for(let i=0;i<5;i++) {
+      const value=source(i),id=column==='created_at'?'receipt-'+(i+1):i<3?'a'+i:i===3?'':'x';
+      db.prepare(`INSERT INTO receipts(id,memory_id,receipt_key,client,session_id,event_id,role,excerpt,created_at)
+        VALUES(?,?,?,?,?,?,?,?,?)`).run(id,'parent',i===4&&variant==='receipt-key mismatch'?'inconsistent-key':digest(value),
+          ...fields.map(field=>value[field]),column==='created_at'?'':i<3?'time':'u');
+    }
+    if(variant==='receipt suppression')writeContentSuppressionInside(db,{namespace:ns,kind:'receipt',key:target,reason:'user_forget',actionId:'synthetic-forget'});
+  });
+  const wanted=[0,1,2,3,4].map(source),reference=trace(t,db,createLegacyReceiptWalk,wanted),filtered=trace(t,db,createRawLineageStorage,wanted);
+  assert.deepEqual(reference.outcome,{decision:'refuse',code:'source_excluded'});
+  assert.deepEqual(filtered.outcome,reference.outcome,'empty strings round-trip and retain the reference refusal');
+  const page=filtered.sql.find(row=>row.sql.includes('(created_at,id)>(CAST(? AS TEXT),CAST(? AS TEXT))'));
+  assert.ok(page);assert.equal(db.prepare('SELECT CAST(? AS TEXT) value').get(page.args[column==='created_at'?3:4]).value,'','the bound cursor preserves empty TEXT');
+  assert.ok(page.ids.includes(target),'the tied target survives the overflow seek');
+  t.diagnostic(JSON.stringify({node:process.version,column,variant,reference:reference.outcome,filtered:filtered.outcome}));
+});

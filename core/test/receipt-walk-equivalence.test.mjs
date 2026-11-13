@@ -370,6 +370,48 @@ test('first receipt late refusal precedes second receipt early refusal',async t=
   }
 });
 
+function assertStoredKeyWalk(t,db,{parent,namespace,wanted,label,deny}) {
+  const native=db.prepare.bind(db),batch=[receipt('absent-stored-key'),...wanted];
+  const stored=native(`SELECT *,hex(created_at) time_hex,hex(id) id_hex FROM receipts
+    WHERE memory_id=? ORDER BY created_at,id`).all(parent);
+  const admitted=new Set(wanted.map(source=>source.eventId));
+  const expected=stored.filter(row=>admitted.has(row.event_id)).map(row=>row.event_id);
+  assert.equal(expected[3],wanted[3].eventId,label+' cursor placement');
+  const inDomain=stored.every(row=>Buffer.from(row.created_at).toString('hex').toUpperCase()===row.time_hex&&Buffer.from(row.id).toString('hex').toUpperCase()===row.id_hex);
+  const walk=create=>{
+    let starts=0,pages=0;const visited=[];
+    const hook=t.mock.method(db,'prepare',sql=>{
+      const statement=native(sql),all=statement.all.bind(statement);
+      statement.all=(...args)=>{
+        if(sql.startsWith('SELECT id,revision,deleted,updated_at')&&args[3]===0&&args.length===5)starts++;
+        const isBatch=sql.includes('FROM json_each(?) wanted CROSS JOIN receipts');
+        const isPage=sql.includes('FROM receipts r INDEXED BY memory_receipts')&&sql.includes('ORDER BY created_at,id LIMIT 5');
+        if(isPage&&++pages>128)throw Object.assign(Error('synthetic page bound'),{code:'source_budget_exceeded'});
+        const rows=all(...args);
+        // The reference discards its batch witness prefix and starts a page
+        // at the beginning; the filtered batch itself emits the first four rows.
+        if(starts===1&&(isPage||isBatch&&(create!==createLegacyReceiptWalk||rows.length<=4)))visited.push(...rows.slice(0,4).map(row=>row.event_id));
+        return rows;
+      };
+      return statement;
+    });
+    try{return {decision:transaction(db,()=>decide(()=>create(db).assertReceipts(namespace,batch))),visited};}
+    finally{hook.mock.restore();}
+  };
+  const reference=walk(createLegacyReceiptWalk),filtered=walk(patchedReceiptWalk);
+  assert.notEqual(reference.decision,'source_budget_exceeded',label+' reference completes');
+  assert.notEqual(filtered.decision,'source_budget_exceeded',label+' filtered completes');
+  assert.ok(filtered.decision!=='accept'||reference.decision==='accept',label+' never accepts a reference refusal');
+  assert.deepEqual(filtered.visited,expected,label+' exact filtered stored order');
+  const required=reference.visited.filter(id=>admitted.has(id));
+  let offset=0;
+  for(const id of filtered.visited)if(id===required[offset])offset++;
+  assert.equal(offset,required.length,label+' every admitted reference row is visited in order');
+  if(inDomain)assert.equal(filtered.decision,reference.decision,label+' round-tripping decision and error code');
+  assert.equal(filtered.decision,deny?'source_excluded':'accept',label+' reaches the final key');
+  return {inDomain,safeRefusal:filtered.decision!==reference.decision};
+}
+
 // Keep malformed cursor keys mixed with valid keys. Unwanted prefix rows move
 // the filtered boundary without putting the same key at the reference boundary.
 for(const placement of ['cursor','non-cursor','both'])test(`stored-key receipt walk inclusion: ${placement}`,async t=>{
@@ -380,7 +422,6 @@ for(const placement of ['cursor','non-cursor','both'])test(`stored-key receipt w
     for(const unwanted of [1,2,3])for(const deny of [true,false]) {
       const label=JSON.stringify({placement,columns,hex,unwanted,deny}),namespace={...ns,ownerId:'stored-key-'+cases};
       const wanted=Array.from({length:5},(_,i)=>receipt('stored-key-'+i));
-      const batch=[receipt('absent-stored-key'),...wanted];
       transaction(db,()=>{
         const parent='stored-key-parent-'+cases;
         native(`INSERT INTO memories(id,owner_id,scope,project_id,fingerprint,content,kind,origin,confidence,revision,deleted,created_at,updated_at)
@@ -397,45 +438,43 @@ for(const placement of ['cursor','non-cursor','both'])test(`stored-key receipt w
         // Earlier rows share the timestamp for id-only cases, so id decides ties.
         if(!columns.includes('created_at'))native("UPDATE receipts SET created_at='time' WHERE memory_id=?").run(parent);
       });
-      const stored=native(`SELECT *,hex(created_at) time_hex,hex(id) id_hex FROM receipts
-        WHERE memory_id=? ORDER BY created_at,id`).all('stored-key-parent-'+cases);
-      const admitted=new Set(wanted.map(source=>source.eventId));
-      const expected=stored.filter(row=>admitted.has(row.event_id)).map(row=>row.event_id);
-      assert.equal(expected[3],wanted[3].eventId,label+' cursor placement');
-      const inDomain=stored.every(row=>Buffer.from(row.created_at).toString('hex').toUpperCase()===row.time_hex&&Buffer.from(row.id).toString('hex').toUpperCase()===row.id_hex);
-      const walk=create=>{
-        let starts=0,pages=0;const visited=[];
-        const hook=t.mock.method(db,'prepare',sql=>{
-          const statement=native(sql),all=statement.all.bind(statement);
-          statement.all=(...args)=>{
-            if(sql.startsWith('SELECT id,revision,deleted,updated_at')&&args[3]===0&&args.length===5)starts++;
-            const isBatch=sql.includes('FROM json_each(?) wanted CROSS JOIN receipts');
-            const isPage=sql.includes('FROM receipts r INDEXED BY memory_receipts')&&sql.includes('ORDER BY created_at,id LIMIT 5');
-            if(isPage&&++pages>128)throw Object.assign(Error('synthetic page bound'),{code:'source_budget_exceeded'});
-            const rows=all(...args);
-            // The reference discards its batch witness prefix and starts a page
-            // at the beginning; the filtered batch itself emits the first four rows.
-            if(starts===1&&(isPage||isBatch&&(create!==createLegacyReceiptWalk||rows.length<=4)))visited.push(...rows.slice(0,4).map(row=>row.event_id));
-            return rows;
-          };
-          return statement;
-        });
-        try{return {decision:transaction(db,()=>decide(()=>create(db).assertReceipts(namespace,batch))),visited};}
-        finally{hook.mock.restore();}
-      };
-      const reference=walk(createLegacyReceiptWalk),filtered=walk(patchedReceiptWalk);
-      assert.notEqual(reference.decision,'source_budget_exceeded',label+' reference completes');
-      assert.notEqual(filtered.decision,'source_budget_exceeded',label+' filtered completes');
-      assert.ok(filtered.decision!=='accept'||reference.decision==='accept',label+' never accepts a reference refusal');
-      assert.deepEqual(filtered.visited,expected,label+' exact filtered stored order');
-      const required=reference.visited.filter(id=>admitted.has(id));
-      let offset=0;
-      for(const id of filtered.visited)if(id===required[offset])offset++;
-      assert.equal(offset,required.length,label+' every admitted reference row is visited in order');
-      if(inDomain){assert.equal(filtered.decision,reference.decision,label+' round-tripping decision and error code');roundTrips++;}
-      if(filtered.decision!==reference.decision)safeRefusals++;
-      assert.equal(filtered.decision,deny?'source_excluded':'accept',label+' reaches the final key');
+      const {inDomain,safeRefusal}=assertStoredKeyWalk(t,db,{parent:'stored-key-parent-'+cases,namespace,wanted,label,deny});
+      if(inDomain)roundTrips++;if(safeRefusal)safeRefusals++;
       cases++;
     }
   t.diagnostic(JSON.stringify({node:process.version,placement,cases,roundTrips,safeRefusals,byteKinds,columnSets:3,unwantedCounts:[1,2,3]}));
 });
+
+// Empty TEXT is the minimum BINARY key: an empty timestamp at the fourth
+// position requires earlier empty timestamps. UNIQUE permits only one empty id;
+// an empty (timestamp,id) pair cannot be the fourth row in stored order.
+for(const emptyTime of ['none','cursor','non-cursor','both'])
+  for(const emptyId of ['none','cursor','non-cursor']) {
+    if(emptyTime==='none'&&emptyId==='none'||emptyId==='cursor'&&['cursor','both'].includes(emptyTime))continue;
+    test(`whole empty stored keys: time=${emptyTime} id=${emptyId}`,async t=>{
+      const db=await precedenceFixture(t);let cases=0;
+      for(const unwanted of [0,1,3])for(const deny of [false,true]) {
+        const parent='empty-parent-'+cases,namespace={...ns,ownerId:parent};
+        const wanted=Array.from({length:5},(_,i)=>receipt('empty-key-'+i));
+        const label=JSON.stringify({emptyTime,emptyId,unwanted,deny});
+        const time=i=>emptyTime==='none'?(i<3?'time':'u'):emptyTime==='non-cursor'?(i<3?'':'u'):emptyTime==='cursor'?(i<4?'':'u'):'';
+        const id=i=>emptyId==='cursor'&&i===3||emptyId==='non-cursor'&&i===0?'':i<3?'b'+i:i===3?'c3':'x';
+        transaction(db,()=>{
+          db.prepare(`INSERT INTO memories(id,owner_id,scope,project_id,fingerprint,content,kind,origin,confidence,revision,deleted,created_at,updated_at)
+            VALUES(?,?,?,?,?,'Synthetic','fact','explicit',1,1,0,'time','time')`).run(parent,namespace.ownerId,namespace.scope,namespace.projectId,parent);
+          const insert=(source,rid,stamp,key=digest(source))=>db.prepare(`INSERT INTO receipts(id,memory_id,receipt_key,client,session_id,event_id,role,excerpt,created_at)
+            VALUES(?,?,?,?,?,?,?,?,?)`).run(rid,parent,key,source.client,source.sessionId,source.eventId,source.role,source.excerpt,stamp);
+          for(let i=0;i<unwanted;i++)insert(receipt('unwanted-'+i),'a'+i,time(0));
+          for(let i=0;i<5;i++)insert(wanted[i],id(i),time(i),i===4&&deny?'inconsistent-key':digest(wanted[i]));
+        });
+        const {inDomain,safeRefusal}=assertStoredKeyWalk(t,db,{parent,namespace,wanted,label,deny});
+        assert.ok(inDomain,label+' whole empty keys round-trip');assert.equal(safeRefusal,false,label);
+        const stored=db.prepare('SELECT id,created_at FROM receipts WHERE memory_id=? ORDER BY created_at,id').all(parent);
+        assert.equal(stored.filter(row=>row.id==='').length,emptyId==='none'?0:1,label+' whole empty id count');
+        assert.equal(stored.filter(row=>row.created_at==='').length,emptyTime==='none'?0:unwanted+(emptyTime==='cursor'?4:emptyTime==='non-cursor'?3:5),label+' whole empty timestamp count');
+        transaction(db,()=>db.prepare('DELETE FROM memories WHERE id=?').run(parent));
+        cases++;
+      }
+      t.diagnostic(JSON.stringify({node:process.version,emptyTime,emptyId,cases,roundTrips:cases,unwantedCounts:[0,1,3]}));
+    });
+  }

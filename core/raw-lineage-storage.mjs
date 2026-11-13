@@ -280,7 +280,8 @@ function* writerReceiptInputs(db, check, ns, receipts) {
           while(true) {
             check();
             const seek=filter?'(CAST(? AS TEXT),CAST(? AS TEXT))':'(?,?)';
-            const cursor=filter?[receiptAfter.receipt_created_at_bytes,receiptAfter.receipt_id_bytes]:[receiptAfter.created_at,receiptAfter.id];
+            // Some drivers bind a zero-length BLOB as NULL; empty TEXT keeps the key.
+            const cursor=filter?[receiptAfter.receipt_created_at_bytes,receiptAfter.receipt_id_bytes].map(bytes=>bytes.length?bytes:''):[receiptAfter.created_at,receiptAfter.id];
             const page=db.prepare(`SELECT r.*${cursorColumns},? AS memory_revision,? AS memory_deleted FROM receipts r INDEXED BY memory_receipts
               WHERE memory_id=? AND (created_at,id)>${seek}${filter} ORDER BY created_at,id LIMIT 5`)
               .all(memory.revision,memory.deleted,memory.id,...cursor,...args);
