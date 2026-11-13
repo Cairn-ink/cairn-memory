@@ -371,7 +371,8 @@ export function createMemoryCore(input, internal) {
    * Exact matching uses admit's normalization and JavaScript toLowerCase(), not full
    * Unicode case folding; added characters/embedded text do not match. Older
    * fingerprints match only if today's normalization yields the same text, as in admit.
-   * Any non-ok result is unanswerable: the host must not save. Retry once for
+   * `invalid_input` means unanswerable: the host must not save.
+   * Any non-ok result is unanswerable. Retry once for
    * evidence_unavailable (a fact written between COMMIT and delivery) or storage_busy.
    * Probes leave no trace; hosts exposing this beyond the authenticated owner
    * should rate-limit it. The answer does not reserve a later admission.
