@@ -1,4 +1,6 @@
-import { receiptDenialsInside, contentReadSafety, createContentReadMemo, receiptReadSafety } from './content-safety.mjs';
+import { episodeReadRowsInside } from './episode-reads.mjs';
+import { receiptDenialsInside, anchorsDeliverable, cardDeliverable } from './content-safety.mjs';
+import { contentReadSafety, createContentReadMemo, receiptReadSafety } from './content-safety.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 
 import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
@@ -56,31 +58,6 @@ export function episodeReadRow(row) {
     observed: row.observed, attempted: row.attempted, covered: row.covered };
 }
 
-function episodeReadRowsInside(db, ns, rows, linkedReceipts = []) {
-  const memo = createContentReadMemo(db);
-  const sources = rows.length ? db.prepare(`SELECT s.*,o.client AS origin_client,o.session_key AS origin_session
-    FROM episode_sources s JOIN session_episodes e ON e.id=s.episode_id
-    JOIN session_episodes o ON o.id=s.origin_episode_id
-    WHERE e.owner_id=? AND e.scope=? AND e.project_id=? AND o.owner_id=e.owner_id
-      AND o.scope=e.scope AND o.project_id=e.project_id AND e.id IN (SELECT value FROM json_each(?)) ORDER BY s.id`)
-    .all(...boundary(ns),JSON.stringify(rows.map(row=>row.id))) : [];
-  const receipts = sources.map(source => {
-    const input={client:source.origin_client,sessionId:source.origin_session,eventId:source.message_id,role:source.role,excerpt:source.text};
-    return {receipt_key:sourceDigest(JSON.stringify(input)),client:input.client,session_id:input.sessionId,event_id:input.eventId,role:input.role};
-  });
-  const denied = receiptDenialsInside(db,ns,[...receipts,...linkedReceipts],memo);
-  const hidden = new Set(sources.filter((source,index)=>denied.has(receipts[index].receipt_key)).map(source=>source.id));
-  return {memo,sources:sources.filter(source=>!hidden.has(source.id)),rows:rows.map(row=>{
-    if (!sources.some(source=>source.episode_id===row.id&&hidden.has(source.id))) return row;
-    const record=JSON.parse(row.record);
-    for (const [field,anchors] of Object.entries(record.anchors??{})) if (anchors.some(anchor=>hidden.has(anchor.sourceId))) {
-      record[field]=null; delete record.anchors[field];
-      if (record.editor) delete record.editor[field];
-    }
-    record.language=null;
-    return {...row,record:JSON.stringify(record)};
-  })};
-}
 
 export function episodeMetadata(ns, row) {
   const record = JSON.parse(row.record);
@@ -1089,7 +1066,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         }).map(link => ({ id: link.id, memoryId: link.memory_id,
           admissionRevision: link.admission_revision, receiptIds: JSON.parse(link.receipt_ids).filter(id => {
             const receipt=linkedReceipts.find(receipt=>receipt.id===id&&receipt.memory_id===link.memory_id);
-            return receipt&&receiptReadSafety(db,{namespace:ns,receipt,memo}).allowed;
+            return receipt&&!receiptDenialsInside(db,ns,[receipt],memo).size&&receiptReadSafety(db,{namespace:ns,receipt,memo}).allowed;
           }) }));
       const policies = db.prepare(`SELECT e.*,s.state,s.release_reason FROM episode_events e LEFT JOIN staged_capture_evidence s
         ON e.owner_id=s.owner_id AND e.scope=s.scope AND e.project_id=s.project_id AND e.client=s.client AND e.event_id=s.event_id

@@ -1,5 +1,4 @@
-import { receiptDenialsInside, sourceReadSafety, createContentReadMemo } from './content-safety.mjs';
-
+import { sourceReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { fail } from './validation.mjs';
 import { cardMemoryRefs, sourceRef } from './private-card-input.mjs';
 
@@ -18,9 +17,10 @@ export function createCardReceiptSources(db, binding) {
         [ns, current.id, current.revision, row.id, row.client, row.session_id, row.event_id, row.role, row.excerpt]),
       completeness: 'excerpt-only' };
   }
-  function resolve(ns, ref, memo = createContentReadMemo(db)) {
+  function resolve(ns, ref) {
     sourceRef(ref, ns);
     const identity = db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata WHERE singleton=1').get();
+    const memo = createContentReadMemo(db);
     if (!sourceReadSafety(db, { identity, namespace: ns, ref, strict: true, memo }).allowed) fail('source_unavailable');
     return memo.sources.get(JSON.stringify(ref)).value;
   }
@@ -31,15 +31,10 @@ export function createCardReceiptSources(db, binding) {
     return refFor(ns, current, row);
   }
   function fromMemories(ns, values) {
-    const result = [], memo = createContentReadMemo(db);
-    const selected=cardMemoryRefs(values,ns).map(ref=>{
-      const current=memory(ns,ref.memoryId,ref.revision);
-      return {current,rows:db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY id').all(current.id)};
-    });
-    receiptDenialsInside(db,ns,selected.flatMap(item=>item.rows),memo);
-    for (const {current,rows} of selected) {
-      const denied = receiptDenialsInside(db, ns, rows, memo);
-      const receipts = rows.filter(receipt => !denied.has(receipt.receipt_key));
+    const result = [];
+    for (const ref of cardMemoryRefs(values, ns)) {
+      const current = memory(ns, ref.memoryId, ref.revision);
+      const receipts = db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY id LIMIT 17').all(current.id);
       if (!receipts.length || result.length + receipts.length > 16) fail('source_unavailable');
       result.push(...receipts.map(row => refFor(ns, current, row)));
     }

@@ -952,9 +952,7 @@ export function createMemoryCore(input, internal) {
         queryDigest: createHmac('sha256', cursorSecret)
           .update(JSON.stringify([QUERY_EXCERPT_VERSION, query])).digest('base64url') };
       let preparedRead;
-      const validateFresh = (candidates = []) => {
-        preparedRead?.assertFresh();
-        return runtime.recallSnapshot(candidates.map((candidate) => ({
+      const validateFresh = (candidates = []) => runtime.recallSnapshot(candidates.map((candidate) => ({
         namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
         revision: candidate.revision,
         receiptLimit: candidate.receiptCap ?? candidate.item?.receipts?.length ?? 0,
@@ -963,7 +961,6 @@ export function createMemoryCore(input, internal) {
         const page = navigation.pages.get(namespaceBinding(namespace));
         return page ? [{ namespace, indexRevision: page.epoch, suppressionEpoch: page.suppressionEpoch }] : [];
       }), includeQualification);
-      };
       const storage = { map: (request) => mapPage(request, navigation),
         fetch: (request, reader) => reader ? fetchUsing(request,reader) : fetch(request), validateFresh,
         prepare: refs => {
@@ -1117,7 +1114,7 @@ export function createMemoryCore(input, internal) {
           })),
           reviewRationale: value => reviewRationaleValidated(value, deadline),
           discoverRationale: ({ refs, query }) => invoke(() => {
-            runtime.rationaleSnapshot(ns, refs);
+            runtime.rationaleSnapshot(ns, refs, null);
             const page = runtime.queryCandidateRows(ns, { score: createQueryScore(query), memoryLabel: () => '' });
             const found = [...refs]; const seen = new Set(refs.map(ref => ref.memoryId));
             for (const { item } of page.rows) {

@@ -665,6 +665,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             if (!['evidence_unavailable', 'revision_conflict'].includes(error.code)) throw error;
             unavailable++; continue;
           }
+          if (!item) { unavailable++; continue; }
           const { type, ref, state, origin } = item;
           const sourceRows = type === 'memory' && item.provenance.sourceAccess === 'available' ?
             (safetyMemo?.evidenceReceipts?.get(JSON.stringify([[ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId??''],ref.memoryId])) ??

@@ -1,6 +1,5 @@
-import { receiptDenialsInside, contentReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
-
+import { contentReadSafety } from './content-safety.mjs';
 import { createHash } from 'node:crypto';
 import { qualificationInput, qualificationSources } from './claim-qualification-input.mjs';
 import { fail } from './validation.mjs';
@@ -11,7 +10,7 @@ const source = row => ({ client: row.client, sessionId: row.session_id,
 
 // All callers hold the shared runtime transaction. No model or external I/O.
 export function createQualificationStorage({ db, receiptKey, assertStoredReceipts }) {
-  function inspectStored(memory, withhold = false, memo) {
+  function inspectStored(memory) {
     const row = db.prepare('SELECT * FROM memory_qualifications WHERE memory_id = ?').get(memory.id);
     if (!row) return null;
     try {
@@ -22,16 +21,14 @@ export function createQualificationStorage({ db, receiptKey, assertStoredReceipt
       const stored = db.prepare(`SELECT * FROM qualification_anchors
         WHERE memory_id = ? ORDER BY ordinal LIMIT 5`).all(memory.id);
       if (stored.length !== row.anchor_count) fail('storage_error');
-      const receipts = stored.map(anchor => db.prepare('SELECT * FROM receipts WHERE id = ? AND memory_id = ?')
-        .get(anchor.receipt_id, memory.id));
-      if (withhold && receiptDenialsInside(db, { ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id },
-        receipts.filter(Boolean), memo ?? createContentReadMemo(db)).size) return null;
-      stored.forEach((anchor, index) => {
+      const receipts = stored.map((anchor, index) => {
         if (anchor.ordinal !== index) fail('storage_error');
-        const receipt = receipts[index];
+        const receipt = db.prepare('SELECT * FROM receipts WHERE id = ? AND memory_id = ?')
+          .get(anchor.receipt_id, memory.id);
         if (!receipt || receipt.receipt_key !== receiptKey(source(receipt)) ||
             !['user', 'assistant'].includes(receipt.role) ||
             anchor.receipt_digest !== digest(receipt.excerpt)) fail('storage_error');
+        return receipt;
       });
       const clean = qualificationInput({ version: row.version,
         slot: { subject: row.subject, property: row.property, scope: row.scope, applies: row.applies },
@@ -46,11 +43,11 @@ export function createQualificationStorage({ db, receiptKey, assertStoredReceipt
     } catch { fail('storage_error'); }
   }
 
-  function inspect(memory, memo = createContentReadMemo(db)) {
-    const stored = inspectStored(memory, true, memo);
+  function inspect(memory) {
+    const stored = inspectStored(memory);
     if (!stored) return null;
     const namespace = { ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id || null };
-    if ((cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision && !contentReadSafety(db, { namespace, intent: 'history', memo, ref: { type: 'memory', namespace,
+    if ((cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision && !contentReadSafety(db, { namespace, intent: 'history', ref: { type: 'memory', namespace,
       memoryId: memory.id, revision: memory.revision }, receipts: stored.receipts }).allowed) fail('revision_conflict');
     return stored.qualification;
   }
@@ -91,7 +88,7 @@ export function createQualificationStorage({ db, receiptKey, assertStoredReceipt
           [...new Map(original.receipts.map(receipt => [receipt.id, receipt])).values()]);
         return;
       }
-      const existing = inspectStored(memory)?.qualification;
+      const existing = inspect(memory);
       // The original revision is retained even after filing/receipt additions.
       if (!existing || JSON.stringify({ ...value, boundRevision: existing.boundRevision }) !== JSON.stringify(existing)) {
         fail('qualification_conflict');
@@ -113,5 +110,5 @@ export function createQualificationStorage({ db, receiptKey, assertStoredReceipt
     db.prepare('DELETE FROM memory_qualifications WHERE memory_id = ?').run(memoryId);
   }
 
-  return { bind, inspect, clear, stored(memory) { return inspectStored(memory)?.qualification ?? null; } };
+  return { bind, inspect, clear };
 }

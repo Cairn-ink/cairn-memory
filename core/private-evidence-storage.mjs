@@ -1,4 +1,5 @@
-import { receiptDenialsInside, contentReadSafety, memoryReadEligible, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
+import { receiptDenialsInside, anchorsDeliverable, cardDeliverable, cardReceiptTokens } from './content-safety.mjs';
+import { contentReadSafety, memoryReadEligible, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { hasCardLineage, cardLineageItemInside, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { contentSuppressionReasonInside, cachedContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
@@ -92,22 +93,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       const cardCache = memo.deliveryCards ??= new Set();
       const cards = scoped.filter(ref => ref.type === 'card' && !cardCache.has(JSON.stringify([boundary(ns), ref.cardId])));
       if (cards.length) {
-        const ids = JSON.stringify(cards.map(ref => ref.cardId));
-        // Collect only candidate Cards' bound receipts. These rows warm denial
-        // tokens, never canonical identity/currentness or lineage decisions.
-        const lineage = hasCardLineage(db) ? ` UNION
-          SELECT r.* FROM json_each(?) wanted CROSS JOIN private_cards c ON c.id=wanted.value
-          JOIN card_body_sources s ON s.card_id=c.id AND s.body_revision=c.body_revision
-            AND s.owner_id=c.owner_id AND s.scope=c.scope AND s.project_id=c.project_id AND s.source_kind='receipt'
-          JOIN receipts r ON r.id=s.source_key JOIN memories m ON m.id=r.memory_id
-          WHERE c.owner_id=? AND c.scope=? AND c.project_id=?
-            AND m.owner_id=c.owner_id AND m.scope=c.scope AND m.project_id=c.project_id` : '';
-        receipts.push(...db.prepare(`SELECT r.* FROM json_each(?) wanted CROSS JOIN private_cards c ON c.id=wanted.value
-          JOIN card_memory_bindings b ON b.card_id=c.id JOIN receipts r ON r.id=b.receipt_id
-          JOIN memories m ON m.id=r.memory_id AND m.id=b.memory_id
-          WHERE c.owner_id=? AND c.scope=? AND c.project_id=?
-            AND m.owner_id=c.owner_id AND m.scope=c.scope AND m.project_id=c.project_id${lineage}`)
-          .all(ids, ...boundary(ns), ...(lineage ? [ids, ...boundary(ns)] : [])));
+        receipts.push(...cardReceiptTokens(db, ns, cards.map(ref => ref.cardId)));
         for (const ref of cards) cardCache.add(JSON.stringify([boundary(ns), ref.cardId]));
       }
       if (receipts.length) batches.push({ namespace: ns, receipts });
@@ -181,6 +167,10 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed);
   function item(ns, ref, intent, readSet, options, memo = createContentReadMemo(db)) {
     if (ref.type === 'card') {
+      const stored = db.prepare(`SELECT id,revision,body_revision FROM private_cards WHERE ${where} AND id=?`).get(...boundary(ns),ref.cardId);
+      if (!stored || !contentReadSafety(db,{identity,namespace:ns,intent,ref:{...ref,revision:stored.revision,bodyRevision:stored.body_revision},memo}).allowed) fail('evidence_unavailable');
+      if (stored.revision !== ref.revision || stored.body_revision !== ref.bodyRevision) fail('revision_conflict');
+      if (!cardDeliverable(db, ns, ref.cardId, memo)) return null;
       const card = cardDetailInside(ns, ref.cardId, readSet, { ...options, safetyMemo: memo });
       if (!cardEligible(ns, card, intent, memo)) fail('evidence_unavailable');
       if (card.revision !== ref.revision || card.bodyRevision !== ref.bodyRevision) fail('revision_conflict');
@@ -224,7 +214,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     const request = cachedContentSuppressionRequestInside(db, ns.ownerId);
     if (request) for (const source of sources) (request.sourcesChecked ??= new Set()).add(JSON.stringify(source));
     const projection = projected && row.has_qualification===0 ? null : qualification.inspect(row, memo);
-    const assessed = projection && anchoredReadSafety(db, { namespace: ns, memoryId: row.id, anchors: projection.anchors, memo }).allowed ? projection : null;
+    const assessed = projection && anchorsDeliverable(db, ns, row.id, projection.anchors, memo) && anchoredReadSafety(db, { namespace: ns, memoryId: row.id, anchors: projection.anchors, memo }).allowed ? projection : null;
     const qualified = assessed ? { ...assessed, sourceText: 'read-separately',
       anchors: assessed.anchors.map(({ text, ...anchor }) => anchor) } : null;
     return { ...memoryMetadata(ns, row), content: row.content, qualification: qualified,
@@ -245,8 +235,9 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
   function fetched(ns, input, accessGeneration) {
     const memo = createContentReadMemo(db);
     receiptBatchInside(input.refs, memo, false);
-    const items = input.refs.map(ref => item(ns, ref, input.intent, undefined, undefined, memo));
-    const result = { items, snapshot: makeSnapshot(ns, input.intent, input.refs, items, accessGeneration) };
+    const pairs = input.refs.map(ref => ({ref, value:item(ns, ref, input.intent, undefined, undefined, memo)})).filter(pair=>pair.value);
+    const items = pairs.map(pair=>pair.value), refs = pairs.map(pair=>pair.ref);
+    const result = { items, snapshot: makeSnapshot(ns, input.intent, refs, items, accessGeneration) };
     if (size(result) > input.responseByteLimit) fail('context_item_too_large');
     return result;
   }
@@ -304,17 +295,9 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
           ancestryChecked:!layout.rawLineage||Object.hasOwn(row,'invalid_raw_ancestry')}))fail('evidence_unavailable');
         return true;
       }
-      if(!layout?.suppressionRevision && ![...memo.receiptDenials?.values()??[]].some(Boolean))return true;
       const ref={type:'card',namespace:ns,cardId:row.id,revision:row.revision,bodyRevision:row.body_revision};
-      if(contentReadSafety(db,{identity,namespace:ns,memo,method:'getCard',ref}).allowed)return true;
-      // Distinguish source markers from every pre-existing canonical refusal.
-      // This isolated proof cannot authorize delivery or warm serving decisions.
-      if(![...memo.receiptDenials?.values()??[]].some(Boolean))fail('evidence_unavailable');
-      const retained=createContentReadMemo(db);
-      retained.retainOutputDecisions=false;
-      retained.receiptDenials=new Map([...memo.receiptDenials].map(([key])=>[key,false]));
-      if(!contentReadSafety(db,{identity,namespace:ns,memo:retained,method:'getCard',ref}).allowed)fail('evidence_unavailable');
-      return false;
+      if(!contentReadSafety(db,{identity,namespace:ns,memo,method:'getCard',ref}).allowed)fail('evidence_unavailable');
+      return cardDeliverable(db,ns,row.id,memo);
     }
     const scanRefs=input.types.flatMap(type=>db.prepare(type==='memory'
       ? `SELECT id,revision,content,currentness,review_state FROM memories WHERE ${where} AND deleted=0 AND id>? ORDER BY id LIMIT ?`
@@ -381,7 +364,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     itemsInside(ns, refs, intent, readSet, options) {
       const memo = options?.safetyMemo ?? createContentReadMemo(db);
       receiptBatchInside(options?.batchRefs ?? refs, memo, Boolean(options?.legacyEvidence));
-      return refs.map(ref => item(ns, ref, intent, readSet, options, memo));
+      return refs.map(ref => item(ns, ref, intent, readSet, options, memo)).filter(Boolean);
     },
     call(method, ns, original, accessGeneration) {
     const input = evidenceInput(method, original, ns);

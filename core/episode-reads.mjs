@@ -1,5 +1,6 @@
+import { sourceDigest } from './procedural-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
-import { contentReadSafety } from './content-safety.mjs';
+import { contentReadSafety, receiptDenialsInside, createContentReadMemo } from './content-safety.mjs';
 import { cachedContentSuppressionRequestInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { transaction } from './database.mjs';
 import { episodeClient, episodeMetadata, episodeReadRow, instant } from './episode-storage.mjs';
@@ -152,8 +153,10 @@ export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRea
       const projected = operation === 'listEpisodes' ? episodeProjection(ns, original, cursor?.e) : { epoch: epoch(ns), query: original };
       const current = projected.epoch;
       if (cursor && cursor.e !== current) fail('cursor_stale');
-      const query = projected.query, rows = db.prepare(query.sql).all(...query.params);
+      const query = projected.query;
+      let rows = db.prepare(query.sql).all(...query.params);
       if (contentSuppressionReasonInside(db, ns)) fail('revision_conflict');
+      if (operation === 'listEpisodes') rows = episodeReadRowsInside(db,ns,rows).rows;
       return { epoch: current, rows: rows.map(row => {
         if (operation === 'listEpisodes') {
           assertEpisodeRead?.(ns, row, projected.budget);
@@ -191,3 +194,30 @@ export function rangePage(page, filter, binding, encodeCursor, operation) {
   }
   fail('context_item_too_large');
 }
+
+export function episodeReadRowsInside(db, ns, rows, linkedReceipts = []) {
+  const memo = createContentReadMemo(db);
+  const sources = rows.length ? db.prepare(`SELECT s.*,o.client AS origin_client,o.session_key AS origin_session
+    FROM episode_sources s JOIN session_episodes e ON e.id=s.episode_id
+    JOIN session_episodes o ON o.id=s.origin_episode_id
+    WHERE e.owner_id=? AND e.scope=? AND e.project_id=? AND o.owner_id=e.owner_id
+      AND o.scope=e.scope AND o.project_id=e.project_id AND e.id IN (SELECT value FROM json_each(?)) ORDER BY s.id`)
+    .all(...boundary(ns),JSON.stringify(rows.map(row=>row.id))) : [];
+  const receipts = sources.map(source => {
+    const input={client:source.origin_client,sessionId:source.origin_session,eventId:source.message_id,role:source.role,excerpt:source.text};
+    return {receipt_key:sourceDigest(JSON.stringify(input)),client:input.client,session_id:input.sessionId,event_id:input.eventId,role:input.role};
+  });
+  const denied = receiptDenialsInside(db,ns,[...receipts,...linkedReceipts],memo);
+  const hidden = new Set(sources.filter((source,index)=>denied.has(receipts[index].receipt_key)).map(source=>source.id));
+  return {memo,sources:sources.filter(source=>!hidden.has(source.id)),rows:rows.map(row=>{
+    if (!sources.some(source=>source.episode_id===row.id&&hidden.has(source.id))) return row;
+    // Same record as invalidate(ns,id,false): source denial invalidates the
+    // whole interpretation. No event interval survives a withheld source.
+    const record = { clientLabel:null,eventStart:null,eventEnd:null,eventTimeCoverage:'unknown',
+      interpretedAt:null,type:null,language:null,gist:null,outcome:null,nextStep:null,
+      anchors:{},modelMetadata:null,semanticSupport:'unassessed',editor:{},
+      processing:{state:'invalidated',missing:0,expired:0,omitted:0,errorCode:null} };
+    return {...row,record:JSON.stringify(record)};
+  })};
+}
+

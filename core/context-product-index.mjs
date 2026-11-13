@@ -145,6 +145,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         const ref=candidate.ref; let item;
         try {item=evidence.itemsInside(ref.namespace,[ref],p.intent,p.readSet,{safetyMemo,batchRefs:c.items.map(candidate=>candidate.ref)})[0];}
         catch(e) {if(['evidence_unavailable','revision_conflict'].includes(e.code)){unavailable++;continue;}throw e;}
+        if (!item) { unavailable++; continue; }
         const sourceRows=item.type==='memory' && item.provenance.sourceAccess==='available'
           ? (safetyMemo?.evidenceReceipts?.get(JSON.stringify([[ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId??''],ref.memoryId])) ??
             db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id').all(ref.memoryId))

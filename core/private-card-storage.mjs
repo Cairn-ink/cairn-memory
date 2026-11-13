@@ -1,3 +1,4 @@
+import { cardDeliverable, cardReceiptTokens, receiptDenialsInside } from './content-safety.mjs';
 import { contentSuppressionRequestInside, hasContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { assertContentOutput, assertContentScopes } from './content-safety-boundary.mjs';
@@ -131,7 +132,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
   }
   function detail(ns, row, readSet, intent) {
     const memo = intent?.safetyMemo ?? createContentReadMemo(db);
-    if (!row || !cardSafe(ns, row, 'getCard', memo)) return null;
+    if (!row || !cardSafe(ns, row, 'getCard', memo) || intent?.delivery === true && !cardDeliverable(db, ns, row.id, memo)) return null;
     return { ...metadata(ns, row, readSet, intent, memo), title: row.title, body: row.body,
       bindings: getRefs(row.id, memo).map(ref => ({ id: ref.type === 'raw' ? raw.bindingId(ref) : ref.sourceId ?? ref.receiptId, source: ref,
         dependency: ref.type === 'receipt' ? 'memory-interpretation' : 'source-only',
@@ -251,9 +252,13 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
   const cardEpoch = ns => { const fence = cardDependencyFence(db, ns); return Object.keys(fence).length ? binding('card-dependency-cursor-v1', [epoch(ns), fence]) : epoch(ns); };
   const cardCursor = createPrivateCursor({ binding, purpose: 'card-cursor-v1', epoch: cardEpoch });
   const legacyCursor = createPrivateCursor({ binding, purpose: 'card-cursor-v1', epoch });
+  function cardSourceDeliverable(ns,ref) {
+    const row=db.prepare('SELECT receipt_key,client,session_id,event_id,role FROM receipts WHERE memory_id=? AND id=?').get(ref.memoryId,ref.receiptId);
+    return !row || receiptDenialsInside(db,ns,[row],createContentReadMemo(db)).size===0;
+  }
   function read(method, ns, input) {
     if (method === 'getCard') {
-      const result = { card: detail(ns, card(ns, input.cardId)) };
+      const result = { card: detail(ns, card(ns, input.cardId),undefined,{delivery:true}) };
       if (size(result) > (input.responseByteLimit ?? 65536)) fail('context_item_too_large');
       return result;
     }
@@ -284,6 +289,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     const { encode: cursorEncode, decode: cursorDecode } = method === 'listCards' ? cardCursor : legacyCursor;
     const cursor = cursorDecode(input.cursor, expected, ns);
     if (method === 'getSource') {
+      if (input.source.type === 'receipt' && !cardSourceDeliverable(ns,input.source)) fail('source_unavailable');
       const row = resolve(ns, input.source), parts = [];
       let start = cursor?.after ?? 0;
       if (!Number.isSafeInteger(start) || start < 0 || start >= row.text.length ||
@@ -325,7 +331,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
             .sort((a,b) => Buffer.compare(Buffer.from(a.id), Buffer.from(b.id))).slice(0, batchLimit);
           for (const row of rows) {
             scanned++; scanAfter = row.id; cardAfter = row.cursor_row;
-            if (cardSafe(ns, row, 'listCards', memo)) visible.push(row);
+            if (cardSafe(ns, row, 'listCards', memo) && cardDeliverable(db, ns, row.id, memo)) visible.push(row);
             if (visible.length > count) break;
           }
           if (rows.length < batchLimit) { cardComplete = true; break; }
@@ -343,7 +349,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
           .all(...boundary(ns), ...input.states, after, count + 1);
         cardComplete = rows.length <= count;
         cardAfter = rows.slice(0, count).at(-1)?.cursor_row;
-        cardRows.push(...rows.slice(0, count).filter(row => cardSafe(ns, row, 'listCards', memo)));
+        cardRows.push(...rows.slice(0, count).filter(row => cardSafe(ns, row, 'listCards', memo) && cardDeliverable(db, ns, row.id, memo)));
       }
     }
     let items = isCards ? cardRows.map(row => metadata(ns, row, undefined, undefined, memo)) :
@@ -368,12 +374,12 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     cardDetailInside: (ns, id, readSet, options) => detail(ns, card(ns, id), readSet, options),
     receiptRefInside: (ns, memory, receipt) => receiptSources.refInside(ns, memory, receipt) });
   const organization = createPrivateOrganizationStorage({ db, identity, memoryMapInside, memoryTopicInside,
-    cardDetailInside: (ns, id, readSet, options) => detail(ns, card(ns, id), readSet, options) });
+    cardDetailInside: (ns, id, readSet, options) => detail(ns, card(ns, id), readSet, {...options, delivery:false}) });
   return Object.freeze({ assertContentOutput(value, scopes) { if(!cachedContentLayout(db)?.suppressionRevision)return; return assertContentOutput(db,identity,value,scopes); }, assertContentScope: (scopes,{delivery=false}={}) => { ready(); if(!cachedContentLayout(db)?.suppressionRevision)return; if(!delivery && scopes.length && hasContentSuppressionRequestInside(db) && !db.isTransaction) { contentSuppressionRequestInside(db,scopes,{defer:true}); return; } assertContentScopes(db,scopes); },
     lineageEnabled:()=>hasCardLineage(db),
     // Internal shared-read seams: caller owns scope authorization and transaction.
     cardDetailInside(ns, id, readSet, intent) { ready(); return detail(ns, card(ns, id), readSet, intent); },
-    cardMetadataInside(ns, row) { ready(); const memo = createContentReadMemo(db); return row && cardSafe(ns, row, 'listCards', memo) ? metadata(ns, row, undefined, undefined, memo) : null; },
+    cardMetadataInside(ns, row) { ready(); const memo = createContentReadMemo(db); return row && cardSafe(ns, row, 'listCards', memo) && cardDeliverable(db,ns,row.id,memo) ? metadata(ns, row, undefined, undefined, memo) : null; },
     receiptRefInside(ns, memoryRow, receiptRow) { ready(); return receiptSources.refInside(ns, memoryRow, receiptRow); },
     payloadBinding: value => binding('card-action-v1', value),
     call(method, ns, input, payloadBinding, isRead, context) {

@@ -901,7 +901,7 @@ for(const kind of ['ordinary-33','ordinary-48','ordinary-53']) test(`selectEvide
   }
 });
 
-for(const kind of ['fresh-default','ordinary-48','ordinary-53']) test(`withheld qualification preserves binding and unresolved transitions ${kind}`,async t=>{
+for(const kind of ['fresh-default','ordinary-48','ordinary-53']) for(const method of ['transitionQualified','transitionQualifiedSet']) test(`withheld qualification preserves binding and base transitions ${kind} ${method}`,async t=>{
   const f=await fixture(t,kind);
   const qualification=value=>({version:1,slot:{subject:'Synthetic subject',property:'Synthetic property',scope:'Synthetic scope',applies:'Synthetic applies'},
     value,attribution:'direct',commitment:'adopted',anchors:[{receiptIndex:0,start:0,end:message.length,text:message,
@@ -915,11 +915,11 @@ for(const kind of ['fresh-default','ordinary-48','ordinary-53']) test(`withheld 
   assert.equal(ok(bind(b)).slotId,slot);assert.equal(ok(bind(b,slot)).slotId,slot);
   assert.equal(bind(b,'synthetic-other-slot').error.code,'qualification_conflict');
   const predecessor={memoryId:b.id,expectedRevision:b.revision},replacement={memoryId:c.id,expectedRevision:c.revision};
-  for(const value of [ok(f.core.transitionQualified({namespace:ns,predecessor,replacement})),
-    ok(f.core.transitionQualifiedSet({namespace:ns,predecessors:[predecessor],replacement}))]) {
-    assert.equal(value.status,'unresolved');assert.equal(value.reason,'qualification_missing');noLeak(value,'unresolved support');
-  }
   assert.equal(ok(f.core.get({namespace:ns,memoryId:b.id,includeQualification:true})).qualification,null);
+  const value=ok(method==='transitionQualified' ? f.core.transitionQualified({namespace:ns,predecessor,replacement}) :
+    f.core.transitionQualifiedSet({namespace:ns,predecessors:[predecessor],replacement}));
+  assert.equal(value.status,'applied');
+
 });
 
 // Ordinary capture creates the shared receipts before any Episode fixture work.
@@ -1047,4 +1047,81 @@ test('the recall hook prints a zero-delivered-receipt Memory without a receipt s
   assert.deepEqual(format({ memories: [{ id: 'synthetic-memory', origin: 'agent-inferred', scope: 'project',
     confidence: .8, content: survivor, receipts: [], receiptCount: 1 }] }),
   [`- [synthetic-memory] (agent-inferred, project, confidence 0.80) ${survivor}`]);
+});
+
+// Delivery markers never participate in stored-proof validation.
+test('delivery-only mixed evidence omits a marked Card and keeps its Memory',async t=>{
+  const f=await fixture(t,'ordinary-53'),[b,a]=await capture(f);
+  let card=ok(f.call('createCardDraft',{actionId:'synthetic-mixed-draft',drafting:'authored',input:{title:'Synthetic',body:message,
+    memoryRefs:[memoryRef(b)],sourcePolicy:'retained-receipts-v1'}}));
+  card=ok(f.call('confirmCardDraft',{actionId:'synthetic-mixed-confirm',cardId:card.id,expectedRevision:card.revision,applicability:'current'}));
+  const ref={type:'card',namespace:ns,cardId:card.id,revision:card.revision,bodyRevision:card.bodyRevision};
+  ok(act(f,'forget',a));
+  const fetched=ok(f.call('fetchEvidence',{intent:'current',refs:[memoryRef(b),ref]}));
+  assert.deepEqual(fetched.items.map(item=>item.ref.memoryId),[b.id]);
+  assert.deepEqual(fetched.items[0].provenance.sources,[]);
+  assert.deepEqual(ok(f.call('revalidateEvidence',{snapshot:fetched.snapshot})).items,fetched.items);
+  const selected=ok(f.call('selectEvidence',{intent:'current',query:'Synthetic',types:['memory','card'],limit:24}));
+  assert.deepEqual(selected.items.map(item=>item.ref.memoryId),[b.id]);noLeak(fetched,'mixed fetch');
+  for(const invalid of [{...ref,namespace:otherNamespace},{...ref,cardId:'synthetic-missing'}, {...ref,revision:0}])
+    assert.equal(f.call('fetchEvidence',{intent:'current',refs:[memoryRef(b),invalid]}).ok,false);
+});
+
+for(const existing of [false,true]) test(`delivery-only first qualified binding, existing=${existing}`,async t=>{
+  const f=await fixture(t,'ordinary-53'),[initialB,a]=await capture(f);
+  const qualification={version:1,slot:{subject:'Synthetic subject',property:'Synthetic property',scope:'Synthetic scope',applies:'Synthetic applies'},
+    value:'Synthetic value',attribution:'direct',commitment:'adopted',anchors:[{receiptIndex:0,start:0,end:message.length,text:message,
+      fields:['subject','property','scope','applies','value','attribution','commitment']}]};
+  const b=ok(f.core.admit({namespace:ns,memory:{content:survivor,kind:'fact'},receipts:[source()],qualification})).memory;
+  assert.equal(b.id,initialB.id);
+  let slotId=null;
+  if(existing){
+    const c=ok(f.core.admit({namespace:ns,memory:{content:'Synthetic other qualified claim',kind:'fact'},
+      receipts:[{...receipt('synthetic-other-qualified'),excerpt:message}],qualification})).memory;
+    slotId=ok(f.core.bindQualifiedClaim({namespace:ns,memoryId:c.id,expectedRevision:c.revision,slotId:null,singleClaim:true})).slotId;
+  }
+  ok(act(f,'forget',a));
+  const bound=ok(f.core.bindQualifiedClaim({namespace:ns,memoryId:b.id,expectedRevision:b.revision,slotId,singleClaim:true}));
+  if(slotId)assert.equal(bound.slotId,slotId);else assert.equal(typeof bound.slotId,'string');
+  assert.equal(ok(f.core.get({namespace:ns,memoryId:b.id,includeQualification:true})).qualification,null);
+});
+
+test('delivery-only procedural writes commit with their saved retained anchor',async t=>{
+  const f=await fixture(t,'ordinary-53');f.model.items[0].kind='instruction';
+  const [b,a]=await capture(f),saved=ok(f.core.get({namespace:ns,memoryId:b.id}));
+  const anchor={receiptId:saved.receipts[0].id,digest:sourceDigest(saved.receipts[0].excerpt),start:0,end:8};
+  const write=expectedTagRevision=>f.core.setProceduralMemory({namespace:ns,memoryId:b.id,expectedRevision:b.revision,expectedTagRevision,
+    procedural:{anchors:[anchor]}});
+  const first=ok(write(0));ok(act(f,'forget',a));
+  const second=ok(write(first.tag.tagRevision));
+  assert.deepEqual(Object.keys(second).sort(),['indexRevision','tag']);
+  assert.equal(second.tag.tagRevision,first.tag.tagRevision+1);assert.deepEqual(second.tag.anchors,first.tag.anchors);
+  assert.equal(ok(f.core.get({namespace:ns,memoryId:b.id})).procedural,undefined);
+});
+
+test('delivery-only unchanged Card confirmation and retained-receipt creation succeed',async t=>{
+  const f=await fixture(t,'ordinary-53'),[b,a]=await capture(f);
+  const draft=actionId=>ok(f.call('createCardDraft',{actionId,drafting:'authored',input:{title:'Synthetic title',body:message,
+    memoryRefs:[memoryRef(b)],sourcePolicy:'retained-receipts-v1'}}));
+  const card=draft('synthetic-retained-draft');ok(act(f,'forget',a));
+  const confirmed=ok(f.call('confirmCardDraft',{actionId:'synthetic-retained-confirm',cardId:card.id,expectedRevision:card.revision,applicability:'current'}));
+  assert.equal(confirmed.state,'confirmed');
+  const later=draft('synthetic-later-draft');
+  for(const c of [confirmed,later]){const read=ok(f.call('getCard',{cardId:c.id}));assert.equal(read.card,null);noLeak(read,'Card projection');}
+});
+
+test('delivery-only marker-free rationale validates the root before eleven-edge overflow',async t=>{
+  const f=await fixture(t,'ordinary-53'),memories=[];
+  for(let i=0;i<6;i++){
+    f.model.items=[{content:`Synthetic rationale claim ${i}`,kind:'fact',confidence:.8,sourceIndices:[0]}];
+    memories.push((await capture(f,`synthetic-rationale-batch-${i}`,`Synthetic rationale support ${i}`))[0]);
+  }
+  const refs=memories.map(memoryRef).map(({memoryId,revision})=>({memoryId,revision}));
+  const propose=async (chosen,edges)=>{f.model.relate=()=>({edges:edges.map(([from,to,relation])=>({from,to,relation,fromReceipt:0,toReceipt:0}))});
+    ok(await f.core.reviewRationale({namespace:ns,refs:chosen}));};
+  for(const neighbor of refs.slice(1))await propose([refs[0],neighbor],[[1,0,'supports-decision'],[1,0,'challenges-premise']]);
+  await propose(refs.slice(1,3),[[1,0,'challenges-premise']]);
+  assert.deepEqual(markers(f),[]);
+  assert.equal(f.core.getRationale({namespace:ns,...refs[0],revision:refs[0].revision+1}).error.code,'revision_conflict');
+  assert.equal(f.core.getRationale({namespace:ns,...refs[0]}).error.code,'rationale_limit');
 });

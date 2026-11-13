@@ -18,48 +18,6 @@ const denied = reason => ({ allowed: false, reason });
 const bind = (identity, purpose, value) => createHmac('sha256', identity.cursorSecret)
   .update(JSON.stringify([purpose, [identity.storeId, value]])).digest('base64url');
 
-// Portable across account re-keying and store merges. Namespace isolation lives
-// in the suppressed primary key and read memo, never in the address digest.
-export function receiptDenialTokens(receipts) {
-  return [...new Set(receipts.flatMap(receipt => [
-    'rs1:i:' + receipt.receipt_key,
-    'rs1:a:' + createHash('sha256').update(JSON.stringify([
-      'receipt-source-address-v1', receipt.client, receipt.session_id, receipt.event_id, receipt.role,
-    ])).digest('hex'),
-  ]))];
-}
-export function receiptDenialsInside(db, ns, receipts, memo) {
-  // A batch may cover several namespaces, but every token retains the full
-  // primary-key boundary. The memo belongs only to the caller's snapshot.
-  const batches = Array.isArray(ns) ? ns : [{ namespace: ns, receipts }];
-  const cache = memo ? memo.receiptDenials ??= new Map() : new Map();
-  const key = (namespace, token) => JSON.stringify([...boundary(namespace), token]);
-  const missing = new Map();
-  for (const batch of batches) for (const token of receiptDenialTokens(batch.receipts)) {
-    const id = key(batch.namespace, token);
-    if (!cache.has(id)) missing.set(id, [...boundary(batch.namespace), token]);
-  }
-  if (missing.size) {
-    if (batches.length === 1) {
-      const namespace = batches[0].namespace;
-      const rows = db.prepare(`SELECT s.fingerprint,1 AS denied FROM json_each(?) w CROSS JOIN suppressed s
-WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value`)
-        .all(JSON.stringify([...missing.values()].map(value => value[3])), ...boundary(namespace));
-      for (const id of missing.keys()) cache.set(id, false);
-      for (const row of rows) cache.set(key(namespace, row.fingerprint), true);
-    } else {
-      const rows = db.prepare(`SELECT s.owner_id,s.scope,s.project_id,s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s
-WHERE s.owner_id=json_extract(w.value,'$[0]') AND s.scope=json_extract(w.value,'$[1]')
-AND s.project_id=json_extract(w.value,'$[2]') AND s.fingerprint=json_extract(w.value,'$[3]')`)
-        .all(JSON.stringify([...missing.values()]));
-      for (const id of missing.keys()) cache.set(id, false);
-      for (const row of rows) cache.set(JSON.stringify([row.owner_id, row.scope, row.project_id, row.fingerprint]), true);
-    }
-  }
-  return new Set(batches.flatMap(batch => batch.receipts.filter(receipt =>
-    receiptDenialTokens([receipt]).some(token => cache.get(key(batch.namespace, token)))).map(receipt => receipt.receipt_key)));
-}
-
 // Trusted core method dispatch only. No public input selects a purpose.
 export function contentReadPurpose(method, row) {
   return ['getCard', 'listCards', 'confirmCardDraft'].includes(method)
@@ -111,12 +69,11 @@ function rawAncestryColumn(db, table) {
 }
 // Canonical S1 receipt validation is also part of a source-ref decision. It
 // cannot invoke a serving entry; its memo is distinct from completed decisions.
-function canonicalReceiptReadSafety(db, { namespace, receipt, memo, denialMemo = memo, rawTargets = [], rawAncestryEmpty = false }) {
+function canonicalReceiptReadSafety(db, { namespace, receipt, memo, rawTargets = [], rawAncestryEmpty = false }) {
   const key = JSON.stringify([namespace, receipt]);
   const cache = memo && (memo.canonicalReceipts ??= new Map());
   if (cache?.has(key)) { const entry = cache.get(key); rawTargets.push(...entry.rawTargets); return entry.result; }
   const remember = result => { cache?.set(key, { result, rawTargets: [...rawTargets] }); return result; };
-  if (receiptDenialsInside(memo?.db ?? db, namespace, [receipt], denialMemo).has(receipt.receipt_key)) return remember(denied('purge'));
   const source = { client: receipt.client, sessionId: receipt.session_id, eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt };
   if (createHash('sha256').update(JSON.stringify(source)).digest('hex') !== receipt.receipt_key) return remember(denied('identity_mismatch'));
   try {
@@ -148,16 +105,14 @@ export function receiptReadSafety(db, options) {
     }
     memo?.receipts.set(key, result);
     const state = result.allowed ? cachedContentSuppressionRequestInside(db, namespace.ownerId) : null;
-    if (state && result.allowed && memo?.retainOutputDecisions !== false) (state.completed ??= new Set()).add(JSON.stringify([...boundary(namespace),'receipt',receipt.id,null]));
+    if (state && result.allowed) (state.completed ??= new Set()).add(JSON.stringify([...boundary(namespace),'receipt',receipt.id,null]));
     return result;
   });
 }
 
 export function anchoredReadSafety(db, { namespace, memoryId, anchors, memo = createContentReadMemo(db) }) {
-  const receipts = anchors.map(anchor => memo.db.prepare('SELECT * FROM receipts WHERE memory_id=? AND id=?').get(memoryId, anchor.receiptId));
-  receiptDenialsInside(memo.db, namespace, receipts.filter(Boolean), memo);
-  for (const [index, anchor] of anchors.entries()) {
-    const receipt = receipts[index];
+  for (const anchor of anchors) {
+    const receipt = memo.db.prepare('SELECT * FROM receipts WHERE memory_id=? AND id=?').get(memoryId, anchor.receiptId);
     if (!receipt) return denied('missing');
     if (createHash('sha256').update(receipt.excerpt).digest('hex') !== (anchor.receiptDigest ?? anchor.digest)) return denied('identity_mismatch');
     const result = receiptReadSafety(db, { namespace, receipt, memo });
@@ -233,7 +188,7 @@ export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = fa
       if (result.allowed) { const fact = memory?.invalid_raw_ancestry ? 'ineligible' : sourceSuppression(db, ns, ref, rawTargets, memory && Object.hasOwn(memory, 'invalid_raw_ancestry')); if (fact) result = denied(fact); }
       memo?.sources.set(key, { result, value, memory });
       const state = cachedContentSuppressionRequestInside(db, ns.ownerId);
-      if (state && result.allowed && memo?.retainOutputDecisions !== false) {
+      if (state && result.allowed) {
         (state.sourcesChecked ??= new Set()).add(key);
         state.sourcesChecked.add(JSON.stringify(sourceRef(ref,ns,true)));
         const completed = state.completed ??= new Set();
@@ -292,7 +247,7 @@ export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = fa
 }
 
 function canonicalContentReadSafety(db, { identity, namespace: ns, ref, method = 'retrieval', intent = 'current',
-  currentCardEligible, rawRows, expectedMemoryIdentity, receipts = [], memo, denialMemo = memo ?? {}, factObservation, selectedMemory, selectedReceipts }) {
+  currentCardEligible, rawRows, expectedMemoryIdentity, receipts = [], memo, factObservation, selectedMemory, selectedReceipts }) {
   db = memo?.db ?? db;
   if (!ref || !sameNamespace(ns, ref.namespace)) return denied('ineligible');
   const type = ref.type;
@@ -314,11 +269,10 @@ function canonicalContentReadSafety(db, { identity, namespace: ns, ref, method =
   const receiptRows = receipts.length ? new Map((selectedMemory && memo && db.isTransaction && selectedReceipts ?
     selectedReceipts.filter(receipt=>receipt.memory_id===row.id) : db.prepare(`SELECT * FROM receipts WHERE memory_id=?
     AND id IN (${receipts.map(() => '?').join(',')})`).all(row.id, ...receipts.map(receipt => receipt.id))).map(receipt => [receipt.id, receipt])) : new Map();
-  receiptDenialsInside(db, ns, [...receiptRows.values()], denialMemo);
   for (const receipt of receipts) {
     const current = receiptRows.get(receipt.id);
     if (!current) return denied('missing');
-    const lineage = receiptReadSafety(db, { namespace: ns, receipt: current, memo, denialMemo });
+    const lineage = receiptReadSafety(db, { namespace: ns, receipt: current, memo });
     if (!lineage.allowed) return lineage;
     if (JSON.stringify(current) !== JSON.stringify(receipt))
       return denied('identity_mismatch');
@@ -387,4 +341,84 @@ export function contentReadSafety(db, options) {
       ...boundary(namespace), ref.type, ref.memoryId ?? ref.cardId, ref.revision]));
     return result;
   });
+}
+
+// Delivery projections below never participate in canonical validation.
+// Portable across account re-keying and store merges. Namespace isolation lives
+// in the suppressed primary key and read memo, never in the address digest.
+export function receiptDenialTokens(receipts) {
+  return [...new Set(receipts.flatMap(receipt => [
+    'rs1:i:' + receipt.receipt_key,
+    'rs1:a:' + createHash('sha256').update(JSON.stringify([
+      'receipt-source-address-v1', receipt.client, receipt.session_id, receipt.event_id, receipt.role,
+    ])).digest('hex'),
+  ]))];
+}
+export function receiptDenialsInside(db, ns, receipts, memo) {
+  // A batch may cover several namespaces, but every token retains the full
+  // primary-key boundary. The memo belongs only to the caller's snapshot.
+  const batches = Array.isArray(ns) ? ns : [{ namespace: ns, receipts }];
+  const cache = memo ? memo.receiptDenials ??= new Map() : new Map();
+  const key = (namespace, token) => JSON.stringify([...boundary(namespace), token]);
+  const missing = new Map();
+  for (const batch of batches) for (const token of receiptDenialTokens(batch.receipts)) {
+    const id = key(batch.namespace, token);
+    if (!cache.has(id)) missing.set(id, [...boundary(batch.namespace), token]);
+  }
+  if (missing.size) {
+    if (batches.length === 1) {
+      const namespace = batches[0].namespace;
+      const rows = db.prepare(`SELECT s.fingerprint,1 AS denied FROM json_each(?) w CROSS JOIN suppressed s
+WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value`)
+        .all(JSON.stringify([...missing.values()].map(value => value[3])), ...boundary(namespace));
+      for (const id of missing.keys()) cache.set(id, false);
+      for (const row of rows) cache.set(key(namespace, row.fingerprint), true);
+    } else {
+      const rows = db.prepare(`SELECT s.owner_id,s.scope,s.project_id,s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s
+WHERE s.owner_id=json_extract(w.value,'$[0]') AND s.scope=json_extract(w.value,'$[1]')
+AND s.project_id=json_extract(w.value,'$[2]') AND s.fingerprint=json_extract(w.value,'$[3]')`)
+        .all(JSON.stringify([...missing.values()]));
+      for (const id of missing.keys()) cache.set(id, false);
+      for (const row of rows) cache.set(JSON.stringify([row.owner_id, row.scope, row.project_id, row.fingerprint]), true);
+    }
+  }
+  return new Set(batches.flatMap(batch => batch.receipts.filter(receipt =>
+    receiptDenialTokens([receipt]).some(token => cache.get(key(batch.namespace, token)))).map(receipt => receipt.receipt_key)));
+}
+
+// Token-only collection is bounded by the selected Card ids. CROSS JOIN keeps
+// each step on its id index even without planner statistics.
+export function cardReceiptTokens(db, ns, ids) {
+  if (!ids.length) return [];
+  const lineage = hasCardLineage(db) ? ` UNION
+    SELECT r.receipt_key,r.client,r.session_id,r.event_id,r.role
+    FROM json_each(?) wanted CROSS JOIN private_cards c ON c.id=wanted.value
+    CROSS JOIN card_body_sources s ON s.card_id=c.id AND s.body_revision=c.body_revision
+      AND s.owner_id=c.owner_id AND s.scope=c.scope AND s.project_id=c.project_id AND s.source_kind='receipt'
+    CROSS JOIN receipts r ON r.id=s.source_key CROSS JOIN memories m ON m.id=r.memory_id
+    WHERE c.owner_id=? AND c.scope=? AND c.project_id=?
+      AND m.owner_id=c.owner_id AND m.scope=c.scope AND m.project_id=c.project_id` : '';
+  const selected = JSON.stringify([...new Set(ids)]);
+  return db.prepare(`SELECT r.receipt_key,r.client,r.session_id,r.event_id,r.role
+    FROM json_each(?) wanted CROSS JOIN private_cards c ON c.id=wanted.value
+    CROSS JOIN card_memory_bindings b ON b.card_id=c.id CROSS JOIN receipts r ON r.id=b.receipt_id
+    CROSS JOIN memories m ON m.id=r.memory_id AND m.id=b.memory_id
+    WHERE c.owner_id=? AND c.scope=? AND c.project_id=?
+      AND m.owner_id=c.owner_id AND m.scope=c.scope AND m.project_id=c.project_id${lineage}`)
+    .all(selected, ...boundary(ns), ...(lineage ? [selected, ...boundary(ns)] : []));
+}
+export function cardDeliverable(db, ns, id, memo) {
+  const cache = memo && (memo.deliveryCardTokens ??= new Map());
+  const key = JSON.stringify([...boundary(ns), id]);
+  let rows = cache?.get(key);
+  if (!rows) {
+    rows = cardReceiptTokens(db, ns, [id]);
+    cache?.set(key, rows);
+  }
+  return receiptDenialsInside(db, ns, rows, memo).size === 0;
+}
+export function anchorsDeliverable(db, ns, memoryId, anchors, memo) {
+  const rows = anchors.map(anchor => db.prepare('SELECT * FROM receipts WHERE memory_id=? AND id=?')
+    .get(memoryId, anchor.receiptId)).filter(Boolean);
+  return receiptDenialsInside(db, ns, rows, memo).size === 0;
 }

@@ -1,10 +1,10 @@
-import { receiptDenialsInside, receiptDenialTokens, cardContributorsInside, contentReadSafety, sourceReadSafety, createContentReadMemo } from './content-safety.mjs';
+import { receiptDenialTokens } from './content-safety.mjs';
 import { assertContentScopes } from './content-safety-boundary.mjs';
 import { createRawLineageStorage } from './raw-lineage-storage.mjs';
-import { createHash, createHmac } from 'node:crypto';
-
+import { createHmac } from 'node:crypto';
+import { cardContributorsInside, contentReadSafety, sourceReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { sourceRef } from './private-card-input.mjs';
-import { bindContentSafetyConnection, cachedContentLayout, installedContentLayout, contentSafetyConnection } from './content-safety-schema.mjs';
+import { bindContentSafetyConnection, cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
 import { contentSuppressionReasonInside, contentSuppressionTargetMatches, suppressionEpoch, withContentSuppressionCeilingsInside } from './content-suppression-storage.mjs';
 import { contentWriteChanges } from './content-write-changes.mjs';
 import { CONTENT_TERMINAL_FIELDS, CONTENT_TERMINAL_ACK_FIELDS, registerContentWriteGuard } from './content-write-context.mjs';
@@ -65,7 +65,7 @@ export function beginContentWriteSafety(db, operation) {
     if(!row||!declared(names[kind])||!ceilings.has(row.owner_id)||!row.deleted&&!['deleted','cancelled'].includes(row.state))fail('evidence_unavailable');
     replayTargets.push({kind,row});
   }, validate(result) {
-    const changes=contentWriteChanges(session.changeset()), metadata=new Map(), seen=new Set(), checked=new Set(), receiptDenialMemo={};
+    const changes=contentWriteChanges(session.changeset()), metadata=new Map(), seen=new Set(), checked=new Set();
     const identity=db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata WHERE singleton=1').get();
     const tables=new Map(db.prepare('PRAGMA table_list').all().filter(t=>t.schema==='main').map(t=>[t.name,t.type]));
     const info=table=>{if(!metadata.has(table))metadata.set(table,db.prepare('PRAGMA table_info('+quote(table)+')').all());return metadata.get(table);};
@@ -208,9 +208,8 @@ export function beginContentWriteSafety(db, operation) {
       return [{kind:ref.type,key:ref.sourceId??ref.conversationId,revision:ref.revision,
         version:ref.type==='submitted-note'?JSON.stringify(['note-v1',ref.revision]):undefined,messageId:ref.messageId,start:ref.span?.start,end:ref.span?.end}];
     }
-    let dependentMemo, retainedNamespace;
-    function dependentReadMemo(ns){
-      retainedNamespace=ns;
+    let dependentMemo;
+    function dependentReadMemo(){
       if(dependentMemo)return dependentMemo;
       // Only exemption-(c) validation uses this adapter. Retain S1's complete
       // receipt identity/origin/lineage proof, excluding canonical exclusions
@@ -218,15 +217,6 @@ export function beginContentWriteSafety(db, operation) {
       // and uncertain/foreign lineage still refuse. Ordinary serving never
       // receives this memo or adapter.
       const source=bindContentSafetyConnection({get isTransaction(){return db.isTransaction;},prepare(sql){
-        if(sql==='SELECT * FROM receipts WHERE memory_id=? AND id=?')return {get(memoryId,receiptId){
-          const row=db.prepare(sql).get(memoryId,receiptId);
-          // Only immutable dependent invalidation uses this connection. Retain
-          // its receipt identity while preserving the complete canonical proof.
-          // These marker decisions never enter an ordinary delivery memo.
-          if(row)for(const token of receiptDenialTokens([row]))
-            (dependentMemo.receiptDenials??=new Map()).set(JSON.stringify([...boundary(retainedNamespace),token]),false);
-          return row;
-        }};
         if(sql.replace(/\s+/g,' ').trim()==='SELECT 1 FROM raw_source_exclusions WHERE conversation_id=? AND message_id=? AND start<? AND end>?')return {get(conversationId,messageId,end,start){
           const rows=db.prepare(`SELECT c.owner_id,c.scope,c.project_id,x.conversation_id,x.message_id,x.start,x.end
             FROM raw_source_exclusions x LEFT JOIN raw_conversations c ON c.id=x.conversation_id
@@ -236,43 +226,7 @@ export function beginContentWriteSafety(db, operation) {
         }};
         return db.prepare(sql);
       }},db);
-      dependentMemo=createContentReadMemo(source);
-      dependentMemo.retainOutputDecisions=false;
-      return dependentMemo;
-    }
-    // Native revision triggers retain bindings and emit one immutable effect
-    // for each revision of each bound Memory. Prove the entire net transition,
-    // including intermediate duplicate admissions, before retaining identities.
-    function memoryInvalidation(key, ns, change) {
-      if (!change?.old || changedBindings.has(key) ||
-          change.columns.some((c,i)=>!['id','revision','updated_at'].includes(c.name)&&change.old[i]!==undefined) ||
-          JSON.stringify(boundary(namespace(change.row)))!==JSON.stringify(boundary(ns))) return false;
-      const previous=oldValue(change,'revision'), row=change.row;
-      if (!Number.isSafeInteger(previous) || row.revision<=previous) return false;
-      const bindings=db.prepare(`SELECT b.memory_id FROM card_memory_bindings b
-        JOIN memories m ON m.id=b.memory_id WHERE b.card_id=? AND m.owner_id=? AND m.scope=? AND m.project_id=?`)
-        .all(key,...boundary(ns));
-      const causes=canonical.filter(c=>c.table==='memories'&&c.old&&
-        JSON.stringify(boundary(namespace(c.row)))===JSON.stringify(boundary(ns))&&
-        bindings.some(b=>b.memory_id===c.row.id)&&c.row.revision>oldValue(c,'revision'));
-      const expected=new Set();
-      for (const cause of causes) {
-        const before=oldValue(cause,'revision');
-        if (!Number.isSafeInteger(before) || !Number.isSafeInteger(cause.row.revision)) return false;
-        for(let revision=before+1;revision<=cause.row.revision;revision++)
-          expected.add('memory-revision-'+cause.row.id+'-'+revision);
-      }
-      const effects=canonical.filter(c=>c.table==='card_effects'&&c.row.entity_type==='card'&&c.row.entity_id===key)
-        .sort((a,b)=>a.row.ordinal-b.row.ordinal);
-      if (!expected.size || effects.length!==expected.size || effects.length!==row.revision-previous ||
-          removed.some(c=>c.table==='card_effects'&&c.row.entity_type==='card'&&c.row.entity_id===key)) return false;
-      for(const [index,effect] of effects.entries()) {
-        const e=effect.row;
-        if(effect.old||e.kind!=='evidence_invalidated'||e.revision!==previous+index+1||
-            JSON.stringify(boundary(namespace(e)))!==JSON.stringify(boundary(ns))||!expected.delete(e.action_id)) return false;
-      }
-      return !expected.size && causes.some(c=>effects.at(-1).row.action_id==='memory-revision-'+c.row.id+'-'+c.row.revision&&
-        row.updated_at===c.row.updated_at);
+      return dependentMemo=createContentReadMemo(source);
     }
     function automaticallyInvalidatedCard(key,ns){
       if(lineage)return lineageInvalidatedCard(key,ns);
@@ -292,13 +246,10 @@ export function beginContentWriteSafety(db, operation) {
       const reachesTarget=ref=>sourceTargets(ref).some(target=>ownTarget(ns,target))||ref.type==='receipt'&&exists('raw_receipt_lineage')&&
         db.prepare('SELECT conversation_id,message_id,start,end FROM raw_receipt_lineage WHERE receipt_id=?').all(ref.receiptId)
           .some(row=>ownTarget(ns,{kind:'raw',key:row.conversation_id,messageId:row.message_id,start:row.start,end:row.end}));
-      if(!contributors.some(reachesTarget)&&!memoryInvalidation(key,ns,change))return false;
+      if(!contributors.some(reachesTarget))return false;
       withContentSuppressionCeilingsInside(db,ceilings,()=>{for(const ref of contributors){
         const targets=sourceTargets(ref),own=targets.some(target=>ownTarget(ns,target));
-        if(!own){
-          const memo=dependentReadMemo(publicNs);
-          if(!sourceReadSafety(db,{identity,namespace:publicNs,ref,memo}).allowed)fail('evidence_unavailable');continue;
-        }
+        if(!own){if(!sourceReadSafety(db,{identity,namespace:publicNs,ref,memo:dependentReadMemo()}).allowed)fail('evidence_unavailable');continue;}
         // Exempt the terminal contributor only. A receipt's surviving parent,
         // or any other contributor, still observes every pre-operation fact.
         for(const target of targets)if(!ownTarget(ns,target)){
@@ -330,13 +281,7 @@ export function beginContentWriteSafety(db, operation) {
       // Stable presentation rows are positive evidence when an older body's
       // closure was unknown. They cannot grant completeness or serving access.
       if(!changedBindings.has(key))for(const ref of cardContributorsInside(db,key))targets.push(...sourceTargets(ref));
-      if(!targets.some(target=>ownTarget(ns,target))) {
-        if(!memoryInvalidation(key,ns,change))return false;
-        const publicNs={...ns,projectId:ns.projectId||null}, memo=dependentReadMemo(publicNs);
-        loadCardBodyContributorsInside(db,identity,publicNs,key,{
-          validateSource:ref=>sourceReadSafety(db,{identity,namespace:publicNs,ref,memo}).allowed });
-        return true;
-      }
+      if(!targets.some(target=>ownTarget(ns,target)))return false;
       // A receipt-only Card can be invalidated once per changed Memory. Native
       // sessions retain only the net Card update, so reconstruct every step from
       // its newly inserted effects and canonical source transitions. An unchanged
@@ -373,13 +318,7 @@ export function beginContentWriteSafety(db, operation) {
       if(!source||!origin||origin.deleted||!ns||JSON.stringify(boundary(namespace(origin)))!==JSON.stringify(boundary(ns)))fail('evidence_unavailable');
       sourceAuthority.assertReceipts(ns,[{client:origin.client,sessionId:origin.session_key,eventId:source.message_id,role:source.role,excerpt:source.text}]);
     }
-    let validatingStoredRows = false;
-    const insertedReceipts = new Set(canonical.filter(change => change.table === 'receipts' && !change.old).map(change => change.row.id));
-    function check(kind,key,ns,revision,extra={},audit=false,attachment=false,retainedAnchor=false) {
-      // Storage FKs (including Raw origin rows) may name this transaction's
-      // new receipts even when their address was previously denied. Delivery
-      // walks run after this phase and receive no such exemption.
-      attachment ||= validatingStoredRows && kind === 'receipt' && insertedReceipts.has(key);
+    function check(kind,key,ns,revision,extra={},audit=false) {
       if(key===null||key===undefined)return;
       if(typeof key!=='string'||!key)fail('evidence_unavailable');
       const found=locate(kind,key);ns=ns??found.ns;
@@ -393,16 +332,7 @@ export function beginContentWriteSafety(db, operation) {
       if(!found.row)fail('evidence_unavailable');
       if(lineage&&kind==='card'&&automaticallyInvalidatedCard(key,ns))return;
       if(contentSuppressionReasonInside(db,ns,target))fail('evidence_unavailable');
-      const proof = [kind,key,ns,revision,extra,audit], stored = attachment || retainedAnchor;
-      const stamp=JSON.stringify([...proof,stored]);if(checked.has(stamp))return;
-      // A stored proof already validated canonical identity, Raw and facts.
-      // Promoting it to an output proof requires just the marker lookup; keep
-      // main's full S1 proof memoization without letting storage waive delivery.
-      if (kind === 'receipt' && !stored && checked.has(JSON.stringify([...proof,true]))) {
-        if (receiptDenialsInside(db, ns, [found.row], receiptDenialMemo).size) fail('evidence_unavailable');
-        checked.add(stamp); return;
-      }
-      checked.add(stamp);
+      const stamp=JSON.stringify([kind,key,ns,revision,extra,audit]);if(checked.has(stamp))return;checked.add(stamp);
       if(kind==='card'&&automaticallyInvalidatedCard(key,ns))return;
       if(kind==='memory'||kind==='card'){
         const publicNs={...ns,projectId:ns.projectId||null},ref={type:kind,namespace:publicNs,[kind==='memory'?'memoryId':'cardId']:key,revision:found.row.revision,
@@ -411,28 +341,14 @@ export function beginContentWriteSafety(db, operation) {
         // Acknowledgements may project these anchors after storage returns.
         // Validate their canonical contributors before this transaction commits.
         if(kind==='memory')for(const table of ['procedural_tags','qualification_anchors'])if(exists(table))for(const row of db.prepare('SELECT * FROM '+table+' WHERE memory_id=?').all(key)){
-          if(table==='procedural_tags'&&row.anchors)walk(JSON.parse(row.anchors),ns,'anchors',false,true);
-          if(table==='qualification_anchors')check('receipt',row.receipt_id,ns,undefined,{},false,false,true);
+          if(table==='procedural_tags'&&row.anchors)walk(JSON.parse(row.anchors),ns,'anchors');
+          if(table==='qualification_anchors')check('receipt',row.receipt_id,ns);
         }
       }else if(kind==='receipt'){
         const memory=found.parent;
         if(!memory)fail('evidence_unavailable');
         const publicNs={...ns,projectId:ns.projectId||null};
-        let denialMemo = receiptDenialMemo;
-        if (retainedAnchor || attachment && canonical.some(change => change.table === 'receipts' && !change.old && change.row.id === key)) {
-          // Attachment may retain already-denied evidence. Validate its full
-          // canonical identity/Raw/fact proof, exempting only the source markers
-          // in this private write memo. A retained anchor may also validate its
-          // parent Memory without making the anchor deliverable. Output walks
-          // receive neither exemption. Only the native private admission root
-          // may share its already-validated attachment proof below.
-          const source = { client: found.row.client, sessionId: found.row.session_id, eventId: found.row.event_id,
-            role: found.row.role, excerpt: found.row.excerpt };
-          if (createHash('sha256').update(JSON.stringify(source)).digest('hex') !== found.row.receipt_key) fail('evidence_unavailable');
-          denialMemo = { receiptDenials: new Map(receiptDenialTokens([found.row])
-            .map(token => [JSON.stringify([...boundary(publicNs), token]), false])) };
-        }
-        if(!contentReadSafety(db,{identity,namespace:publicNs,intent:'history',denialMemo,ref:{type:'memory',namespace:publicNs,memoryId:memory.id,revision:memory.revision},receipts:[found.row]}).allowed)fail('evidence_unavailable');
+        if(!contentReadSafety(db,{identity,namespace:publicNs,intent:'history',ref:{type:'memory',namespace:publicNs,memoryId:memory.id,revision:memory.revision},receipts:[found.row]}).allowed)fail('evidence_unavailable');
       }else if(kind==='submitted-note'){
         const row=found.row,publicNs={...ns,projectId:ns.projectId||null},ref={type:kind,namespace:publicNs,sourceId:key,revision:row.revision,completeness:'provided-note',
           contentIdentity:createHmac('sha256',identity.cursorSecret).update(JSON.stringify(['submitted-note-content-v1',[identity.storeId,[publicNs,row.id,row.revision,row.text]]])).digest('base64url')};
@@ -467,11 +383,11 @@ export function beginContentWriteSafety(db, operation) {
       if(table){metadataIdentity(table,key,ns);return;}
       fail('evidence_unavailable');
     }
-    function walk(node,inherited=scopes.length===1?scopes[0]:null,hint='',audit=false,retainedAnchors=false,storedAttachments=false) {
+    function walk(node,inherited=scopes.length===1?scopes[0]:null,hint='',audit=false) {
       audit ||= ['reviewEffects','transitions','conflicts'].includes(hint);
       if(!node||typeof node!=='object'||ArrayBuffer.isView(node)||seen.has(node))return;
       seen.add(node);
-      if(Array.isArray(node)){for(const child of node)walk(child,inherited,hint,audit,retainedAnchors,storedAttachments);return;}
+      if(Array.isArray(node)){for(const child of node)walk(child,inherited,hint,audit);return;}
       const ns=node.namespace??namespace(node)??inherited;
       if(lineage&&ns&&(node.cardId||node.type==='card'&&node.id)&&['title','body','content','excerpt'].some(field=>typeof node[field]==='string')) {
         const key=node.cardId??node.id,row=get('private_cards',key),publicNs={...ns,projectId:ns.projectId||null};
@@ -490,17 +406,7 @@ export function beginContentWriteSafety(db, operation) {
         if(sourceField&&node.type!=='submitted-note'&&node.type!=='raw'&&(Array.isArray(value)?value:[value]).every(key=>get('episode_sources',key))) {
           for(const key of Array.isArray(value)?value:[value])episodeSource(key,ns);continue;
         }
-        if(kind){
-          // Runtime admission carries private attachment ids until the public
-          // contract constructs its Memory-only acknowledgement. Reuse the
-          // stored-row proof only for that native root and its actual inserts;
-          // ordinary output receipt/source identities retain the serving gate.
-          const attachments = storedAttachments && kind === 'receipt' || field === 'insertedReceiptIds' && node === result && operation.method === 'admit' &&
-            operation.connection === contentSafetyConnection(db) && typeof node.deduplicated === 'boolean' &&
-            Array.isArray(value) && value.every(id => canonical.some(change => change.table === 'receipts' && !change.old &&
-              change.row.id === id && change.row.memory_id === node.memory?.id));
-          for(const key of Array.isArray(value)?value:[value])check(kind,key,ns,node.memoryRevision??node.revision??node.expectedRevision,{messageId:node.messageId,start:node.span?.start,end:node.span?.end},audit,attachments,retainedAnchors&&kind==='receipt');
-        }
+        if(kind){for(const key of Array.isArray(value)?value:[value])check(kind,key,ns,node.memoryRevision??node.revision??node.expectedRevision,{messageId:node.messageId,start:node.span?.start,end:node.span?.end},audit);}
         else if(field==='id'&&typeof value==='string')generic(value,ns,node.type==='conversation'?'conversation':hint,audit,node.revision??node.expectedRevision);
         else if(field==='entityId'&&['memory','receipt','card','submitted-note','raw'].includes(node.entityType))check(node.entityType,value,ns,node.revision,{},audit);
         else if(field==='entityId'&&node.entityType==='episode')generic(value,ns,'episode',audit);
@@ -520,7 +426,7 @@ export function beginContentWriteSafety(db, operation) {
           }
           else fail('evidence_unavailable');
         }
-        if(typeof value==='object')walk(value,ns,field==='entity'&&node.entity?.type==='memory'?'memory':field==='entity'&&node.entity?.type==='card'?'card':field,audit,retainedAnchors,storedAttachments);
+        if(typeof value==='object')walk(value,ns,field==='entity'&&node.entity?.type==='memory'?'memory':field==='entity'&&node.entity?.type==='card'?'card':field,audit);
       }
     }
     const validateRows=lineage?(_db,_ceilings,work)=>work():withContentSuppressionCeilingsInside;
@@ -540,7 +446,6 @@ export function beginContentWriteSafety(db, operation) {
       }
     }
     validateRows(db,ceilings,()=>{
-      validatingStoredRows = true;
       for(const {table,row}of canonical){
         if(lineage&&['card_body_sources','card_body_provenance','card_body_authorizations'].includes(table)) {
           // Authority rows are immutable typed records, never a request to read
@@ -560,15 +465,14 @@ export function beginContentWriteSafety(db, operation) {
         if(namespace(row)&&contentSuppressionReasonInside(db,namespace(row)))fail('evidence_unavailable');
         for(const foreign of db.prepare('PRAGMA foreign_key_list('+quote(table)+')').all()) {
           const kind=kinds[foreign.table];
-          if(kind&&foreign.to==='id'&&row[foreign.from]!=null)check(kind,row[foreign.from],ns,undefined,{},audit,
-            false,kind==='receipt'&&['qualification_anchors','procedural_tags'].includes(table));
+          if(kind&&foreign.to==='id'&&row[foreign.from]!=null)check(kind,row[foreign.from],ns,undefined,{},audit);
         }
         if(table==='episode_sources')episodeSource(row.id,ns);
         if(table==='index_memories')check('memory',row.id,ns,row.revision);
         if(table==='raw_deletion_effects'&&kinds[{memory:'memories',receipt:'receipts',card:'private_cards'}[row.entity_type]])
           check(row.entity_type,row.entity_id,ns,undefined,{},true);
         if(table==='card_operations'&&row.target_id)generic(row.target_id,ns,row.method,true);
-        if(kinds[table])check(kinds[table],row.id,ns,row.revision,{},audit,table==='receipts');
+        if(kinds[table])check(kinds[table],row.id,ns,row.revision,{},audit);
         if(['mocs','card_mocs'].includes(table))metadataIdentity(table,row.id,ns);
         for(const [column,value]of Object.entries(row)) {
           if(value===null)continue;
@@ -579,8 +483,7 @@ export function beginContentWriteSafety(db, operation) {
             continue;
           }
           const field=camel(column),kind=column==='source_id'&&table==='episode_sources'||['method_changes','role_profile_changes','role_profile_releases'].includes(table)&&['from_id','to_id','predecessor_id'].includes(column)?null:referenceKinds(field);
-          if(kind&&!jsonColumns.has(column))check(kind,value,ns,referenceRevision(column,row),{messageId:row.message_id,start:row.start,end:row.end},audit,
-            false,kind==='receipt'&&['qualification_anchors','procedural_tags'].includes(table));
+          if(kind&&!jsonColumns.has(column))check(kind,value,ns,referenceRevision(column,row),{messageId:row.message_id,start:row.start,end:row.end},audit);
           else if(['moc_id','parent_id','child_id','memory_moc_id','card_moc_id'].includes(column))mocIdentity(value,ns);
           else if((column==='from_receipt'||column==='to_receipt'))check('receipt',value,ns,undefined,{},audit);
           else if(column==='target_id'&&table==='confirmation_conflicts')check('memory',value,ns,row.target_revision);
@@ -589,11 +492,10 @@ export function beginContentWriteSafety(db, operation) {
             let parsed;try{parsed=JSON.parse(value);}catch{fail('evidence_unavailable');}
             if(column==='keep_source_ids')for(const key of parsed)episodeSource(key,ns);
             else if(['receipt_ids','previous_receipt_ids','memory_ids'].includes(column))for(const key of parsed)check(column==='memory_ids'?'memory':'receipt',key,ns,undefined,{},audit);
-            else walk(parsed,ns,column==='result'?operation.method:column,audit,table==='procedural_tags'&&column==='anchors');
+            else walk(parsed,ns,column==='result'?operation.method:column,audit);
           }
         }
       }
-      validatingStoredRows = false;
       walk(result);
     });
     function publicNamespaceForAuthority(row){return {ownerId:row.owner_id,scope:row.scope,projectId:row.project_id||null};}

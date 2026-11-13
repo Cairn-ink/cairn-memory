@@ -3,7 +3,7 @@ import { contentReadSafety } from './content-safety.mjs';
 import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { transaction } from './database.mjs';
 import { countTokens } from './model-budget.mjs';
-import { envelopeText, memoryMetadata } from './episode-reads.mjs';
+import { envelopeText, memoryMetadata, episodeReadRowsInside } from './episode-reads.mjs';
 import { episodeReadRow } from './episode-storage.mjs';
 import { sourceDigest, sourceSpan } from './procedural-storage.mjs';
 import { fail, object } from './validation.mjs';
@@ -98,13 +98,15 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
           continue;
         }
         const layout = cachedContentLayout(db), safety = Boolean(layout?.suppressionRevision);
-        const query = group === 'nextSteps' ? projected.query : contextQuery(ns, group, { rawAncestry: safety && layout.rawLineage }), rows = db.prepare(query.sql).all(...query.params)
+        const query = group === 'nextSteps' ? projected.query : contextQuery(ns, group, { rawAncestry: safety && layout.rawLineage });
+        let rows = db.prepare(query.sql).all(...query.params)
           .filter(row => !safety || (group === 'nextSteps' ? !contentSuppressionReasonInside(db, ns) : contentReadSafety(db, { namespace: ns, selectedMemory: row,
             ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed));
         if (group === 'nextSteps') for (let i=0; i<rows.length; i++) {
           assertEpisodeRead?.(ns, rows[i], projected.budget);
           rows[i] = episodeReadRow(rows[i]);
         }
+        if (group === 'nextSteps') rows = episodeReadRowsInside(db,ns,rows).rows.filter(row => JSON.parse(row.record).processing.state === 'ready');
         const identities = rows.map(row => ({ id: row.id, revision: row.revision }));
         if (expected && JSON.stringify(identities) !== JSON.stringify(expected.groups[group].identities)) fail('revision_conflict');
         let items;

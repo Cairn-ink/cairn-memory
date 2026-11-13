@@ -1,4 +1,5 @@
-import { receiptDenialsInside, contentReadSafety, receiptReadSafety, createContentReadMemo } from './content-safety.mjs';
+import { receiptDenialsInside, anchorsDeliverable, cardDeliverable } from './content-safety.mjs';
+import { contentReadSafety, receiptReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { performance } from 'node:perf_hooks';
 import { cachedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
 

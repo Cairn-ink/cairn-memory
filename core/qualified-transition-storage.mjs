@@ -19,9 +19,6 @@ export function createQualifiedTransitionStorage({ db, qualificationStorage, adv
     const member = memberRow(memory.id);
     if (!member) return null;
     const slot = slotRow(member.slot_id);
-    // Availability never substitutes for stored integrity. Withheld anchors
-    // still bind the same local slot, but cannot support a transition.
-    qualification ??= qualificationStorage.stored(memory);
     if (!qualification || !owned(slot, ns) || member.single_claim !== 1 ||
         member.bound_revision !== qualification.boundRevision ||
         member.content_digest !== qualification.contentDigest ||
@@ -32,13 +29,13 @@ export function createQualifiedTransitionStorage({ db, qualificationStorage, adv
   function bind(ns, memory, requestedSlot) {
     const qualification = qualificationStorage.inspect(memory);
     const existing = inspect(ns, memory, qualification);
+    if (!qualification) fail('qualification_missing');
+    if (!complete(qualification.slot)) fail('qualification_incomplete');
     if (existing) {
       if (requestedSlot !== null && requestedSlot !== existing.slot_id) fail('qualification_conflict');
       return { slotId: existing.slot_id, memory: { id: memory.id, revision: memory.revision },
         indexRevision: epoch(ns) };
     }
-    if (!qualification) fail('qualification_missing');
-    if (!complete(qualification.slot)) fail('qualification_incomplete');
     let slotId = requestedSlot;
     if (slotId === null) {
       slotId = randomUUID();
