@@ -155,10 +155,10 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
   const ledger = createOperationLedger(db, 'card_operations');
   const receipt = (row, effectCount = 0) => ({ id: row.id, revision: row.revision,
     state: row.state, bodyRevision: row.body_revision ?? null, effectCount });
-  function purgeCard(ns, row, state, actionId) {
+  function purgeCard(ns, row, state, actionId, timestamp = now()) {
     writeContentSuppressionInside(db, { namespace: ns, kind: 'card', key: row.id, reason: 'purge', actionId });
     db.prepare(`UPDATE private_cards SET state=?,revision=revision+1,title=NULL,body=NULL,
-      updated_at=? WHERE id=?`).run(state, now(), row.id);
+      updated_at=? WHERE id=?`).run(state, timestamp, row.id);
     db.prepare('DELETE FROM card_bindings WHERE card_id=?').run(row.id);
     db.prepare('DELETE FROM card_memory_bindings WHERE card_id=?').run(row.id);
     raw.put(row.id,[]);
@@ -382,7 +382,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
           sources: collectCardBodySourcesInside(db, identity, ns, refs,
             ref => sourceReadSafety(db, { identity, namespace: ns, ref }).allowed) });
       },
-      purge(ns, row, actionId) { purgeCard(ns, row, 'deleted', actionId); },
+      purge(ns, row, actionId, timestamp) { purgeCard(ns, row, 'deleted', actionId, timestamp); },
     }; },
     // Internal shared-read seams: caller owns scope authorization and transaction.
     cardDetailInside(ns, id, readSet, intent) { ready(); return detail(ns, card(ns, id), readSet, intent); },

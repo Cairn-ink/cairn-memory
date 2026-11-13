@@ -358,7 +358,8 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       const row = db.prepare(`SELECT * FROM private_cards WHERE ${where} AND id=?`).get(...boundary(ns), id);
       if (!row || !engineCardMetadataInside(db, ns, row)) fail('source_unavailable');
       if (row.state === 'deleted' || !deleted && row.revision !== 1) return;
-      if (deleted) writers.purge(ns, row, 'engine-retire.' + randomUUID());
+      // Tombstone debounce and claims use the maintenance pass's clock too.
+      if (deleted) writers.purge(ns, row, 'engine-retire.' + randomUUID(), timestamp);
       else db.prepare('UPDATE private_cards SET revision=revision+1,updated_at=? WHERE id=?').run(timestamp, id);
       advance(ns);
     });
@@ -382,7 +383,7 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
         WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate'
         AND json_extract(o.result,'$.origin')='engine' AND json_extract(o.result,'$.clusterKey')=?
         AND (c.title IS NOT NULL OR c.body IS NOT NULL) ORDER BY c.id`).all(...boundary(ns), cluster.key);
-      for (const row of superseded) { check(); writers.purge(ns, row, 'engine-supersede.' + randomUUID()); }
+      for (const row of superseded) { check(); writers.purge(ns, row, 'engine-supersede.' + randomUUID(), timestamp); }
       for (const ref of refs) if (db.prepare(`SELECT count(*) AS n FROM (SELECT DISTINCT c.id
         FROM card_memory_bindings b JOIN private_cards c ON c.id=b.card_id WHERE b.memory_id=?
         AND c.state IN ('draft','confirmed') LIMIT 128)`).get(ref.memoryId).n >= 128) fail('dependency_limit_reached');

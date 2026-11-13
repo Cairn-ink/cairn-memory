@@ -53,6 +53,25 @@ function worker(f, model) {
     pass: (namespace = ns) => createEngineCardMaintenance({ storage, model, now: () => clock })
       .maintain({ namespace, budget: { maxMs: 5000 } }) };
 }
+// Extra triggers violate sealed schema attestation and permanently refuse the
+// handle. Fail the intended statement without changing the fixture's layout.
+function withStatementFailure(pattern, work, beforeFailure) {
+  const prepare = DatabaseSync.prototype.prepare;
+  let injected = false, inspected = false;
+  DatabaseSync.prototype.prepare = function(sql) {
+    const connection = this, statement = prepare.call(connection, sql);
+    if (!pattern.test(sql)) return statement;
+    return { run() {
+      injected = true; beforeFailure(connection); inspected = true; throw Error('synthetic_abort');
+    } };
+  };
+  try { return work(); }
+  finally {
+    DatabaseSync.prototype.prepare = prepare;
+    assert.equal(injected, true, 'the transaction reaches the intended failure statement');
+    assert.equal(inspected, true, 'the purge completes before the injected failure');
+  }
+}
 // Copy a source verbatim into the body, including the unique marker. Remaining
 // sources are still bound even though this intentionally small output cites one.
 const copyingModel = () => scriptedConsolidator(({ input }) => {
@@ -123,13 +142,18 @@ for (const sealed of [false, true]) for (const state of ['current', 'stale', 're
 test('late failure rolls back engine text, bindings, seals, effects and bookkeeping with forget', async t => {
   const model = copyingModel(), f = await lineageFixture(t, { options: { model } }), memories = seed(f), w = worker(f, model);
   assert.equal((await w.pass()).built.length, 1);
-  const dump = () => ['private_cards', 'card_memory_bindings', 'card_body_provenance', 'card_body_sources',
-    'card_operations', 'card_effects', 'card_epochs', 'content_suppressions', 'content_identity_reservations', 'owner_suppression_epochs']
+  const dump = () => ['private_cards', 'card_memory_bindings', 'card_body_authorizations', 'card_body_provenance', 'card_body_sources',
+    'card_operations', 'card_effects', 'card_epochs', 'content_suppressions', 'content_identity_reservations', 'owner_suppression_epochs',
+    'memories', 'receipts', 'suppressed', 'namespace_epochs']
     .map(table => f.db.prepare(`SELECT * FROM ${table}`).all());
   const before = dump();
-  f.db.exec("CREATE TRIGGER synthetic_late_failure BEFORE DELETE ON receipts BEGIN SELECT RAISE(ABORT,'synthetic_abort'); END");
-  assert.equal(forget(f, memories[0]).ok, false); assert.deepEqual(dump(), before);
-  f.db.exec('DROP TRIGGER synthetic_late_failure'); ok(forget(f, memories[0])); assertNoMarker(f);
+  const failed = withStatementFailure(/^DELETE FROM receipts WHERE memory_id = \?$/, () => forget(f, memories[0]), db => {
+    assert.ok(rows({ db }).every(row => row.state === 'deleted' && row.body === null));
+    assert.equal(db.prepare('SELECT count(*) n FROM card_memory_bindings').get().n, 0);
+    assert.equal(db.prepare("SELECT count(*) n FROM card_operations WHERE method IN ('consolidateAttempt','consolidateOutcome')").get().n, 0);
+  });
+  assert.equal(failed.ok, false); assert.deepEqual(dump(), before);
+  ok(forget(f, memories[0])); assertNoMarker(f);
 });
 
 for (const sealed of [false, true]) test(`supersession erases the old Card bytes atomically: sealed=${sealed}`, async t => {
@@ -153,11 +177,13 @@ for (const sealed of [false, true]) test(`supersession erases the old Card bytes
   const cluster = { key: first.clusterKey, memories: w.storage.snapshot(ns, 512, () => {}).memories };
   const before = rows(f);
   // A failure after purge must roll back the old payload and its bindings.
-  f.db.exec("CREATE TRIGGER synthetic_publish_failure BEFORE INSERT ON private_cards BEGIN SELECT RAISE(ABORT,'synthetic_abort'); END");
-  assert.throws(() => w.storage.commit(ns, cluster, { body: 'Synthetic replacement.' }, '2026-07-01T00:00:00.000Z', () => {}));
+  assert.throws(() => withStatementFailure(/^INSERT INTO private_cards VALUES\(/, () =>
+    w.storage.commit(ns, cluster, { body: 'Synthetic replacement.' }, '2026-07-01T00:00:00.000Z', () => {}), db => {
+      assert.equal(rows({ db }).find(row => row.id === first.id).body, null);
+      assert.equal(db.prepare('SELECT count(*) n FROM card_memory_bindings WHERE card_id=?').get(first.id).n, 0);
+    }), /synthetic_abort/);
   assert.deepEqual(rows(f), before);
   assert.equal(f.db.prepare('SELECT count(*) n FROM card_memory_bindings WHERE card_id=?').get(first.id).n, memories.length);
-  f.db.exec('DROP TRIGGER synthetic_publish_failure');
   const next = await w.pass(); assert.equal(next.built.length, 1, JSON.stringify(next));
   assert.equal(next.built[0].clusterKey, first.clusterKey);
   assert.equal(next.deleted, 1, 'the rebuild counts the body it purged in this pass');

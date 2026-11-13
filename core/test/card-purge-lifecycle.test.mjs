@@ -24,16 +24,27 @@ for (const sealed of [false, true]) test(`forget falls back through candidates, 
     return memory;
   });
   const card = ok(await f.core.maintainCards({ namespace: ns, budget: { maxMs: 5000 } })).built[0]; assert.ok(card);
-  const service = configured(t, f.path, [ns], { service: true }); await prebuild(service);
+  const service = configured(t, f.path, [ns], { service: true });
   const request = configured(t, f.path, [ns]), product = await request.open();
   const projection = { readSet: [ns], types: ['memory', 'card'] };
-  for (const intent of ['current', 'history']) ok(await context.call(f.core, 'refreshContextIndex', {
-    ...projection, intent, budget: { maxItems: 1024, maxMs: 5000 },
-  }));
+  async function refreshIndexes() {
+    await prebuild(service);
+    for (const intent of ['current', 'history']) {
+      let complete = false;
+      for (let i = 0; i < 100; i++) {
+        const refreshed = ok(await context.call(f.core, 'refreshContextIndex', {
+          ...projection, intent, budget: { maxItems: 1024, maxMs: 5000 },
+        }));
+        if (refreshed.status === 'complete') { complete = true; break; }
+      }
+      assert.equal(complete, true, 'embedded lexical index finishes rebuilding');
+    }
+  }
+  await refreshIndexes();
   ok(f.core.forget({ namespace: ns, memoryId: memories[0].id, expectedRevision: memories[0].revision }));
   const row = f.db.prepare('SELECT state,title,body FROM private_cards WHERE id=?').get(card.id);
   assert.deepEqual({ ...row }, { state: 'deleted', title: null, body: null });
-  const remaining = new Set(memories.slice(1).map(memory => memory.id));
+  const calls = model.calls.length, remaining = new Set(memories.slice(1).map(memory => memory.id));
   function onlyMemories(items, packed = false) {
     assert.ok(items.length, 'remaining Memories are returned');
     for (const item of items) {
@@ -42,18 +53,15 @@ for (const sealed of [false, true]) test(`forget falls back through candidates, 
     }
   }
   for (const refreshed of [false, true]) {
+    // Forget changes the index fence. Finish lexical projection work before
+    // asserting reads; the first iteration has no post-forget Card maintenance.
+    await refreshIndexes();
     if (refreshed) {
-      await prebuild(service);
-      for (const intent of ['current', 'history']) await context.call(f.core, 'refreshContextIndex', {
-        ...projection, intent, budget: { maxItems: 1024, maxMs: 5000 },
-      });
       assert.equal(ok(await f.core.maintainCards({ namespace: ns, budget: { maxMs: 5000 } })).modelCalls, 0,
         'forget preserves the debounce');
     }
     for (const intent of ['current', 'history']) {
       const input = { ...projection, intent, query: 'Orion current state', semantic: false, deadlineMs: 5000 };
-      // Product reads run first against the pre-forget publication. Embedded
-      // reads own reconciliation internally; no explicit refresh precedes them.
       const productCandidates = ok(await product.findCandidates(input, request.token)); onlyMemories(productCandidates.items);
       onlyMemories(ok(await product.contextRead({ ...input, raw: false }, request.token)).metered.items, true);
       onlyMemories(ok(await product.fetchCandidateEvidence({ readSet: [ns], intent,
@@ -69,6 +77,7 @@ for (const sealed of [false, true]) test(`forget falls back through candidates, 
       assert.equal(call('fetchEvidence', { namespace: ns, intent, refs: [{ type: 'card', namespace: ns,
         cardId: card.id, revision: card.revision, bodyRevision: 1 }] }).ok, false);
     }
+    assert.equal(model.calls.length, calls, 'fallback reads and index refreshes do not generate a replacement');
   }
 });
 
