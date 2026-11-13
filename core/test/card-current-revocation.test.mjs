@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { openMemoryCore, openContextReader } from '../index.mjs';
 import { cardOptions } from './card-current-fixture.mjs';
-import { scopedFixture, deniedLookupSpy, ns, project, scopes, sources, ok } from './card-current-scope-fixture.mjs';
+import { scopedFixture, warmProjection, deniedLookupSpy, ns, project, scopes, sources, ok } from './card-current-scope-fixture.mjs';
 const denied = (result, code) => assert.deepEqual(result, { ok: false, error: { code, retryable: false } });
 function reader(t, f, kind, enabled, contextRead = { ...f.h.context, sources }) {
   if (kind === 'read-only') {
@@ -13,7 +13,8 @@ function reader(t, f, kind, enabled, contextRead = { ...f.h.context, sources }) 
       version: 'schema33-existing-v1', storeId: f.db.prepare('SELECT store_id FROM store_metadata').get().store_id } } : {}) });
   t.after(() => core.close()); return core;
 }
-async function warm(f) {
+async function warm(t, f) {
+  await warmProjection(t, f, scopes);
   const candidate = ok(await f.call('findCandidates', { ...f.request, limit: 1 })); assert.ok(candidate.nextCursor);
   const sourcePages = [];
   for (const source of sources) {
@@ -32,12 +33,13 @@ async function warm(f) {
   const mappings = ok(f.call('listEvidenceMappings', { namespace: project, type: 'card', mocId: f.topic.mocId, limit: 1 })); assert.ok(mappings.nextCursor);
   const exact = ok(f.call('fetchEvidence', { namespace: project, refs: [f.b], intent: 'current' }));
   const exactPersonal = ok(f.call('fetchEvidence', { namespace: ns, refs: [f.a], intent: 'history' }));
+  await warmProjection(t, f, [ns]);
   ok(await f.call('findCandidates', { ...f.request, readSet: [ns] }));
   return { candidate, sourcePages, current, history, assembly, role, personalRole, organization, mappings, exact, exactPersonal };
 }
 for (const enabled of [true, false]) for (const kind of ['ordinary', 'managed', 'read-only'])
   test(`C21 selective project revocation fences every applicable retained read; ${kind}, authoring ${enabled}`, async t => {
-    const f = scopedFixture(t), saved = await warm(f), core = reader(t, f, kind, enabled);
+    const f = scopedFixture(t), saved = await warm(t, f), core = reader(t, f, kind, enabled);
     const spy = deniedLookupSpy(f.h.state, f.deniedValues); t.after(() => spy.restore());
     f.h.revokeProject();
     const calls = [
@@ -84,7 +86,7 @@ for (const enabled of [true, false]) test(`C21 selective revocation after prepar
   const cases = ['assembly-counter', 'assembly-await', 'fetch-prepared', 'role-now', 'role-refresh', 'role-then', 'role-file', 'role-compare',
     'getCard', 'listCards', 'selectEvidence', 'fetchEvidence', 'revalidateEvidence', 'mapEvidence', 'organization-cursor', 'mapping-cursor'];
   for (const stage of cases) {
-    const f = scopedFixture(t), saved = await warm(f), core = reader(t, f, 'ordinary', enabled);
+    const f = scopedFixture(t), saved = await warm(t, f), core = reader(t, f, 'ordinary', enabled);
     let prepared = false, checks = 0, queued = false;
     const spy = deniedLookupSpy(f.h.state, f.deniedValues, sql => { if (/SELECT \* FROM private_cards WHERE/.test(sql)) prepared = true; });
     try {
