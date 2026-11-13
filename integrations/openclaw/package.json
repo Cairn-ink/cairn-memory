@@ -1,0 +1,17 @@
+{
+  "name": "@cairn-ink/openclaw-memory",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Owner-private hosted Cairn memory tools for OpenClaw",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": { "node": ">=22.16.0" },
+  "peerDependencies": { "openclaw": "2026.11.3" },
+  "files": ["src/", "lib/", "openclaw.plugin.json", "README.md"],
+  "openclaw": {
+    "extensions": ["./src/index.mjs"],
+    "compat": { "pluginApi": ">=2026.11.3" },
+    "build": { "openclawVersion": "2026.11.3" }
+  },
+  "scripts": { "test": "node testing/run.mjs test" }
+}

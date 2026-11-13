@@ -1713,5 +1713,165 @@
     "path": "packages/setup/lib/local-capture.mjs",
     "source": "temporary => open(temporary, 'wx', 0o600), JSON.stringify(request) + '\\n');",
     "reason": "Sensitive installer capture request metadata temp, exclusively created 0600 in an owner-checked 0700 directory with cleanup; canonical store/sidecar aliases refused."
+  },
+  {
+    "path": "integrations/openclaw/src/setup.mjs",
+    "source": "import { mkdir, rmdir, unlink, lstat } from \"node:fs/promises\"",
+    "reason": "Local setup inspects its private credential directory and removes only its newly created secret or empty directory on rollback; secret file I/O uses the OpenClaw SDK and never a database path."
+  },
+  {
+    "path": "integrations/openclaw/lib/private-state.mjs",
+    "source": "file = await open(",
+    "reason": "Generated shared observer dependency, identical to integrations/client/private-state.mjs. Private runtime directory handles and explicit identity/config JSON state; no database path."
+  },
+  {
+    "path": "integrations/openclaw/lib/private-state.mjs",
+    "source": "const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);",
+    "reason": "Generated shared observer dependency, identical to integrations/client/private-state.mjs. Private runtime directory handles and explicit identity/config JSON state; no database path."
+  },
+  {
+    "path": "integrations/openclaw/lib/private-state.mjs",
+    "source": "const file = await open(temporary, \"wx\", 0o600);",
+    "reason": "Generated shared observer dependency, identical to integrations/client/private-state.mjs. Private runtime directory handles and explicit identity/config JSON state; no database path."
+  },
+  {
+    "path": "integrations/openclaw/lib/private-state.mjs",
+    "source": "import { lstat, mkdir, open, link, rename, unlink, realpath, readdir } from \"node:fs/promises\"",
+    "reason": "Generated shared observer dependency, identical to integrations/client/private-state.mjs. Private runtime directory handles and explicit identity/config JSON state; no database path."
+  },
+  {
+    "path": "integrations/openclaw/lib/private-state.mjs",
+    "source": "import { constants } from \"node:fs\"",
+    "reason": "Generated shared observer dependency, identical to integrations/client/private-state.mjs. Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "integrations/openclaw/lib/control-state.mjs",
+    "source": "const value = JSON.parse(await readFile(path, \"utf8\"));",
+    "reason": "Generated shared observer dependency, identical to integrations/client/control-state.mjs. Pause/control JSON state and staging files, separate from the SQLite store."
+  },
+  {
+    "path": "integrations/openclaw/lib/control-state.mjs",
+    "source": "await writeFile(",
+    "reason": "Generated shared observer dependency, identical to integrations/client/control-state.mjs. Pause/control JSON state and staging files, separate from the SQLite store."
+  },
+  {
+    "path": "integrations/openclaw/lib/control-state.mjs",
+    "source": "await writeFile(controlPaths.legacyPause, \"paused\\n\", { mode: 0o600 });",
+    "reason": "Generated shared observer dependency, identical to integrations/client/control-state.mjs. Pause/control JSON state and staging files, separate from the SQLite store."
+  },
+  {
+    "path": "integrations/openclaw/lib/control-state.mjs",
+    "source": "import { mkdir, readFile, rename, stat, unlink, writeFile } from \"node:fs/promises\"",
+    "reason": "Generated shared observer dependency, identical to integrations/client/control-state.mjs. Pause/control JSON state and staging files, separate from the SQLite store."
+  },
+  {
+    "path": "integrations/openclaw/lib/file-lock.mjs",
+    "source": "async function readOwner(path, read = readFile) {",
+    "reason": "Generated shared observer dependency, identical to integrations/client/file-lock.mjs. Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "integrations/openclaw/lib/file-lock.mjs",
+    "source": "await writeFile(reaperOwnerPath, JSON.stringify(reaperOwner), {",
+    "reason": "Generated shared observer dependency, identical to integrations/client/file-lock.mjs. Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "integrations/openclaw/lib/file-lock.mjs",
+    "source": "isAlive = processIsAlive, validatePath = async () => {}, read = readFile, signal } = {},",
+    "reason": "Generated shared observer dependency, identical to integrations/client/file-lock.mjs. Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "integrations/openclaw/lib/file-lock.mjs",
+    "source": "await writeFile(ownerPath, JSON.stringify(owner), { mode: 0o600, flag: 'wx' });",
+    "reason": "Generated shared observer dependency, identical to integrations/client/file-lock.mjs. Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "integrations/openclaw/lib/file-lock.mjs",
+    "source": "import { link, mkdir, readFile, unlink, writeFile } from \"node:fs/promises\"",
+    "reason": "Generated shared observer dependency, identical to integrations/client/file-lock.mjs. Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "integrations/openclaw/lib/http.mjs",
+    "source": "try { file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW); }",
+    "reason": "Generated shared observer dependency, identical to integrations/client/transport-hosted.mjs. Hosted transport JSON state and exclusive staging files; no local SQLite database access."
+  },
+  {
+    "path": "integrations/openclaw/lib/http.mjs",
+    "source": "const file = await open(temporary, \"wx\", 0o600);",
+    "reason": "Generated shared observer dependency, identical to integrations/client/transport-hosted.mjs. Hosted transport JSON state and exclusive staging files; no local SQLite database access."
+  },
+  {
+    "path": "integrations/openclaw/lib/http.mjs",
+    "source": "import { lstat, mkdir, realpath, open, rename, unlink } from \"node:fs/promises\"",
+    "reason": "Generated shared observer dependency, identical to integrations/client/transport-hosted.mjs. Hosted transport JSON state and exclusive staging files; no local SQLite database access."
+  },
+  {
+    "path": "integrations/openclaw/lib/http.mjs",
+    "source": "import { constants } from \"node:fs\"",
+    "reason": "Generated shared observer dependency, identical to integrations/client/transport-hosted.mjs. Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "read: () => readFile(path, \"utf8\"),",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "await writeFile(temporaryPath, `${value}\\n`, { flag: \"wx\", mode: 0o600 });",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "read: () => readFile(keyPath, \"utf8\"),",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "const winner = (await readFile(keyPath, \"utf8\")).trim();",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "const staged = await open(temporary, \"wx\", 0o600);",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "await staged.writeFile(bytes);",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "return readFile(join(root, \"project-key\"), \"utf8\");",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "read: () => readFile(join(root, \"project-key\"), \"utf8\"),",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "boot: (await readFile(\"/proc/sys/kernel/random/boot_id\", \"utf8\")).trim(),",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "read: () => readFile(join(root, \"project-key\"), \"utf8\"),",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "import {\n  opendir,\n  open,\n  readFile,\n  readlink,\n  unlink,\n  lstat,\n  stat,\n  access,\n  realpath,\n  link,\n  mkdir,\n  writeFile,\n  rmdir,\n  rename,\n  readdir,\n} from \"node:fs/promises\"",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "import { constants } from \"node:fs\"",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "integrations/client/bundle.mjs",
+    "source": "const code = await readFile(join(source, name), 'utf8');",
+    "reason": "Build-time read of a fixed shared client module for the independent plugin dependency closure; never a database path."
   }
 ]
