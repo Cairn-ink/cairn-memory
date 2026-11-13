@@ -1512,5 +1512,27 @@ for (const lang of ['en', 'zh']) test(`macOS Codex saving outcome keeps the reas
   assert.ok(status.display.replace(/\s/g, '').includes(translator(lang)('local_capture_codex_macos').replace(/\s/g, '')));
 });
 
+for (const action of ['setup-opt-out', 'config-off']) test(`capture ${action} suppresses opt-in notices and status honors off`, async t => {
+  if (!needCache(t)) return;
+  const f = await localFixture(t);
+  let result;
+  if (action === 'setup-opt-out') result = await f.run(['setup', '--local', '--no-capture']);
+  else {
+    const setup = await f.run(['setup', '--local', '--client', 'claude']); assert.equal(setup.code, 0, setup.display);
+    assert.match(setup.display, /Claude Code local capture: on/);
+    const codex = await f.run(['setup', '--local', '--client', 'codex', '--no-capture']); assert.equal(codex.code, 0, codex.display);
+    result = await f.run(['config', '--local-capture', 'off']);
+  }
+  assert.equal(result.code, 0, result.display);
+  assert.doesNotMatch(result.display, /on by default|approve the new entries|qualification/);
+  for (const client of ['Claude Code', 'Codex']) assert.ok(result.display.includes(`${client} local capture: off (off)`));
+  for (const platform of ['linux', 'darwin', 'win32']) {
+    const status = await f.run(['status'], { platform });
+    assert.equal(status.code, 0, status.display);
+    for (const client of ['Claude Code', 'Codex']) assert.ok(status.display.includes(`${client} local capture: off (off)`));
+    assert.doesNotMatch(status.display, /local capture: blocked|approve the new entries/);
+  }
+});
+
 await Promise.all(pending);
 });

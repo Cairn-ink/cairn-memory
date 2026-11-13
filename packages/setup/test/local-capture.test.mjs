@@ -566,6 +566,23 @@ test('packed attested base-33 lineage-1 store refuses 0.6.5 after Raw open; rein
   const restored = await mcp(f, t); await searchCaptured(restored); await restored.close();
 });
 
+for (const action of ['setup-opt-out', 'config-off']) test(`packed ${action} prints only off capture status and retains it in status`, { timeout:150000 }, async t => {
+  if (!needCache(t)) return;
+  const f = await fixture(t);
+  const initial = await f.setup(['setup', '--local', '--no-capture']);
+  if (action === 'config-off') assert.match(await f.setup(['config', '--local-capture', 'on', '--client', 'claude']), /Claude Code local capture: on/);
+  const output = action === 'setup-opt-out' ? initial : await f.setup(['config', '--local-capture', 'off']);
+  assert.doesNotMatch(output, /on by default|approve the new entries|format qualification/);
+  for (const client of ['Claude Code', 'Codex']) assert.ok(output.includes(`${client} local capture: off (off)`));
+  // Simulate an unavailable retained runtime: stored off must not become blocked.
+  const settingsPath = join(f.root, 'capture-settings.json'), settings = await json(settingsPath);
+  for (const receipt of Object.values(settings.clients)) receipt.node = join(f.ws, 'missing-node');
+  await writeFile(settingsPath, JSON.stringify(settings), { mode:0o600 });
+  const status = await f.setup(['status']);
+  for (const client of ['Claude Code', 'Codex']) assert.ok(status.includes(`${client} local capture: off (off)`));
+  assert.doesNotMatch(status, /local capture: blocked|approve the new entries/);
+});
+
 for (const lang of ['en', 'zh']) test(`packed macOS Codex stays unavailable with the Claude setup hint (${lang})`, {
   timeout:150000, skip:process.platform !== 'darwin' && 'Requires the real macOS installer and engine.'
 }, async t => {

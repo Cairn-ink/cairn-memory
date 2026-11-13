@@ -178,7 +178,7 @@ export async function configureCapture(root, descriptor, selected, context, { en
     if (descriptor) await save(root, settings, descriptor.database.path);
     const installation = join(root, 'capture', client);
     let outcome;
-    if (!uninstall && !receipt.noticed) {
+    if (!uninstall && receipt.enabled && !receipt.noticed) {
       context.write(context.t('local_capture_notice', { client: client === 'claude' ? 'Claude Code' : 'Codex' }));
       if (client === 'codex') context.write(context.t('local_capture_codex_approval'));
       receipt.noticed = true; await save(root, settings, descriptor.database.path);
@@ -243,7 +243,7 @@ function showCapture(client, outcome, { write, t, platform = process.platform })
     'invalid_input','declined','source_refused','event_refused','unsafe_path','store_invalid','authority_bound','authority_changed','qualification_required','runtime_unavailable','busy','cancelled','child_unavailable','unexpected_failure']);
   const reason = waiting ? 'qualification_required' : state === 'blocked' ? (allowedReasons.has(outcome.reason) ? outcome.reason : outcome.status === 'prepared' ? 'prepared' : outcome.status === 'busy' ? 'busy' : outcome.status === 'declined' ? 'declined' : 'not_installed') : state;
   write(t('local_capture_status', { client: client === 'claude' ? 'Claude Code' : 'Codex', state, reason }));
-  if (client === 'codex') {
+  if (client === 'codex' && state !== 'off') {
     if (macCodex) write(t('local_capture_codex_macos'));
     write(t('local_capture_codex_approval'));
     if (verdict) {
@@ -258,8 +258,9 @@ function showCapture(client, outcome, { write, t, platform = process.platform })
 export async function captureStatus(root, client, context) {
   const receipt = (await captureSettings(root)).clients[client];
   if (!receipt) return; // 0.6.5 descriptors retain their established status shape.
-  let outcome = await invoke(root, receipt, ['status', '--installation', join(root, 'capture', client)], { ...context, timeout: 10000 });
-  if (!receipt.enabled && outcome.reason === 'not_installed') outcome = { status: 'disabled' };
+  const outcome = receipt.enabled ?
+    await invoke(root, receipt, ['status', '--installation', join(root, 'capture', client)], { ...context, timeout: 10000 }) :
+    { status: 'disabled' };
   showCapture(client, outcome, context);
 }
 export async function retainedCapture(root) { return Object.keys((await captureSettings(root)).clients).length > 0; }
