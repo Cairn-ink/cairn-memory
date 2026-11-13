@@ -1,4 +1,5 @@
 import { contentSafetyFacade, contentAuthorityPort } from './content-safety-boundary.mjs';
+import { dispatchCommit, hasCommitDispatcher } from './commit-dispatch.mjs';
 import { CARD_CURRENT_VERSION, CARD_CURRENT_METHODS } from './card-current-input.mjs';
 import { authorizeCardCurrentDependencies } from './card-current-facade.mjs';
 import { isStorageBusy } from './database.mjs';
@@ -78,6 +79,7 @@ export function createPrivateCardFacade(storage, options, ready, rawReader) {
           })();
         }
         const dependencies = payload.currentDependencies ? authorizeCardCurrentDependencies(options, request, authority) : null;
+        const mutate = () => {
         let finalGeneration;
         try { const final=verify(options.authority.isCurrent(grant,request));finalGeneration=final.generation;
           if(JSON.stringify(final.audit)!==JSON.stringify(verified.audit))fail('scope_changed'); }
@@ -85,8 +87,14 @@ export function createPrivateCardFacade(storage, options, ready, rawReader) {
         if (generation !== finalGeneration) fail('scope_changed');
         dependencies?.check();
         const value = storage.call(method, ns, payload, request.payloadBinding, read, { accessGeneration: finalGeneration, access: dependencies?.access, audit:verified.audit });
+        return value;
+        };
+        const deliver = value => {
         if (Buffer.byteLength(JSON.stringify({ ok: true, value }), 'utf8') > 65536) fail('context_item_too_large');
         return { ok: true, value };
+        };
+        const value = hasCommitDispatcher(storage) ? dispatchCommit(storage, mutate) : mutate();
+        return value && typeof value.then === 'function' ? value.then(deliver).catch(privateFailure) : deliver(value);
       } catch (error) { return privateFailure(error); }
     };
   }

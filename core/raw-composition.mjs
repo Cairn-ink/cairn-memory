@@ -1,4 +1,5 @@
 import { captureFacadeWithDeadline, captureInvocationDeadline } from './capture-deadline.mjs';
+import { dispatchCommit, hasCommitDispatcher } from './commit-dispatch.mjs';
 import { isRawEpochConflict, retryRawEpochConflict } from './raw-journal.mjs';
 import { createLocalRawSearch } from './local-raw-search.mjs';
 import { contentSafetyFacade } from './content-safety-boundary.mjs';
@@ -33,6 +34,12 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
     attachCapture: operation => { capture = operation; },
   });
   const deadlineMs = Object.hasOwn(input, 'captureDeadlineMs') ? input.captureDeadlineMs : undefined;
+  const commit = hasCommitDispatcher(runtime) ? (work, deadline) => dispatchCommit(runtime, work, deadline) : null;
+  const invokeCommit = work => {
+    if (!commit) return invoke(work);
+    try { const value = commit(work); return value && typeof value.then === 'function' ? value.then(success, failure) : success(value); }
+    catch (error) { return failure(error); }
+  };
   const search = searchDefault ? searchManager ?? (rawOptions.mode !== 'off' ? createLocalRawSearch(input.path, rawOptions.port, searchEmbedding) : null) : null;
   return withEngineCardDelivery(contentSafetyFacade({ ...core,
     ...(search ? search.methods : {}),
@@ -55,12 +62,16 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
         if (!registration.result()) {
           // A failed interpretation must not gain fresh retry provenance.
           if (!result.ok) registration.checkFailureDeadline();
-          registration.commitOnly();
+          if (commit) await registration.commitOnlyAsync();
+          else registration.commitOnly();
         }
         search?.schedule(request.namespace);
         return result;
       } catch (error) {
-        try { if (error.code !== 'store_closed') storage.fenceArrival(arrivalToken); } catch (fenceError) { return failure(fenceError); }
+        try { if (error.code !== 'store_closed') {
+          if (commit) await commit(() => storage.fenceArrival(arrivalToken), deadline);
+          else storage.fenceArrival(arrivalToken);
+        } } catch (fenceError) { return failure(fenceError); }
         if (isRawEpochConflict(error) || error.code === 'model_timeout') throw error;
         return failure(error);
       }
@@ -73,19 +84,23 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
         let interpretation;
         try {
           if (rawOptions.interpretation === 'host' || !registration.hasProjection) {
-            registration.commitOnly();
+            if (commit) await registration.commitOnlyAsync();
+            else registration.commitOnly();
             interpretation = success(registration.emptyOutcome());
           }
-          else if (registration.replay) interpretation = success(registration.observeReplay());
+          else if (registration.replay) interpretation = success(commit ? await registration.observeReplayAsync() : registration.observeReplay());
           else interpretation = await capture(registration.input, registration, deadline);
           registration.assertEpochCurrent();
         } catch (error) { if (isRawEpochConflict(error)) throw error; interpretation = failure(error); }
         if (!interpretation.ok) {
-          const observation = registration.observeFailedInterpretation();
+          const observation = commit ? await registration.observeFailedInterpretationAsync() : registration.observeFailedInterpretation();
           if (observation) interpretation = success(observation);
         }
         const raw = registration.result();
-        if (!raw) storage.fenceArrival(arrivalToken);
+        if (!raw) {
+          if (commit) await commit(() => storage.fenceArrival(arrivalToken), deadline);
+          else storage.fenceArrival(arrivalToken);
+        }
         if (raw) search?.schedule(request.namespace);
         return raw ? success({ raw, interpretation }) : interpretation;
       } catch (error) {
@@ -93,7 +108,10 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
         // Preparation/sealing can fail before returning a registration. Use
         // only its validated, detached arrival identity for conservative fencing.
         // Commit-time overlap already committed its fence before refusing.
-        try { if (error.code !== 'store_closed') storage.fenceArrival(arrivalToken); } catch (fenceError) { return failure(fenceError); }
+        try { if (error.code !== 'store_closed') {
+          if (commit) await commit(() => storage.fenceArrival(arrivalToken), deadline);
+          else storage.fenceArrival(arrivalToken);
+        } } catch (fenceError) { return failure(fenceError); }
         if (isRawEpochConflict(error) || error.code === 'model_timeout') throw error;
         return failure(error);
       }
@@ -104,15 +122,15 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
     listRawConversations: input => invoke(() => { runtime.ready(); return storage.listRawConversations(input); }),
     getRawUsage: input => invoke(() => { runtime.ready(); return storage.getRawUsage(input); }),
     getRawCaptureControl: input => invoke(() => { runtime.ready(); return storage.getRawCaptureControl(input); }),
-    setRawCaptureControl: input => invoke(() => { runtime.ready(); return storage.setRawCaptureControl(input); }),
+    setRawCaptureControl: input => invokeCommit(() => { runtime.ready(); return storage.setRawCaptureControl(input); }),
     ...(localControls ? {
       getLocalCaptureControl: input => invoke(() => { runtime.ready(); return storage.getLocalCaptureControl(input); }),
-      setLocalCaptureControl: input => invoke(() => { runtime.ready(); return storage.setLocalCaptureControl(input); }),
+      setLocalCaptureControl: input => invokeCommit(() => { runtime.ready(); return storage.setLocalCaptureControl(input); }),
     } : {}),
-    fenceSession: input => invoke(() => { runtime.ready(); return storage.fenceSession(input); }),
+    fenceSession: input => invokeCommit(() => { runtime.ready(); return storage.fenceSession(input); }),
     ...(deletion ? {
       previewDeleteConversation: input => invoke(() => runtime.previewDeleteConversation(input)),
-      deleteConversation: input => invoke(() => runtime.deleteConversation(input)),
+      deleteConversation: input => invokeCommit(() => runtime.deleteConversation(input)),
       listRawEffects: input => invoke(() => runtime.listRawEffects(input)),
     } : {}),
   }, { check: runtime.assertContentScope, portGuard: runtime.contentPortGuard, failure,

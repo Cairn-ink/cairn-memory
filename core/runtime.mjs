@@ -920,7 +920,7 @@ export function createMemoryRuntime(input, internal) {
     closeEpisodeNextStep(ns, input) { ready(); return episodes.closeNextStep(ns, input); },
     sessionContextSnapshot(ns, groups, expected) { ready(); return sessionContextStorage(ns, groups, expected); },
     episodeRange(ns, operation, filter, cursor) { ready(); return episodeReads(ns, operation, filter, cursor); },
-    privateCards: privateCards ? cardStorage : undefined,
+    privateCards: privateCards ? bindCommitRuntime(cardStorage, db) : undefined,
     ...(internal?.engineCards ? {
       engineCardAvailable() { ready(); return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_applicability_reviews'").get()) ||
         !input.existingStore && !input.storeFence && [18,20,21,22].includes(db.prepare('PRAGMA user_version').get().user_version); },

@@ -1,3 +1,4 @@
+import { bindCommitRuntime, hasCommitDispatcher, withCommitBinding } from './commit-dispatch.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { cardLineageItemInside, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
@@ -98,7 +99,7 @@ export function openContextCore(baseOptions, contextRead, openBase) {
         const result = await base.maintainCards(input);
         if (result.ok && result.value.built?.length && !context.productCapabilities.types.includes('card')) {
           context.close();
-          context = createContextFacade(resolve(baseOptions.path), options, { readOnly, ...busyOptions });
+          context = withCommitBinding(context, () => createContextFacade(resolve(baseOptions.path), options, { readOnly, ...busyOptions }));
         }
         return result;
       },
@@ -132,7 +133,7 @@ function createContextFacade(path, options, { readOnly, ...busyOptions }) {
       productSqlite: options.product?.sqlite,
       validateProduct: options.product ? validateContextProductLayout : undefined,
       preflight: () => { if (readOnly && !options.product?.sqlite) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path, options.product?.observer); } });
-    return initializeContextFacade(path, options, { readOnly, database });
+    return bindCommitRuntime(initializeContextFacade(path, options, { readOnly, database }), database?.db);
   } catch (error) {
     try { if (database?.db.isOpen) database.db.close(); } catch { /* Preserve the initialization refusal. */ }
     throw error;
@@ -412,7 +413,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         const time = performance.now();
         const remaining = Math.floor(deadlineAt - time);
         if (remaining < 1) throw Object.assign(new MemoryStoreError('index_unavailable'), { reason: 'timeout' });
-        maintenance = storage.reconcile({ ...projection, budget: { maxItems: 1024, maxMs: remaining } }, { isCurrent: access.check });
+        maintenance = hasCommitDispatcher(db)
+          ? await storage.reconcileAsync({ ...projection, budget: { maxItems: 1024, maxMs: remaining } }, { isCurrent: access.check })
+          : storage.reconcile({ ...projection, budget: { maxItems: 1024, maxMs: remaining } }, { isCurrent: access.check });
         diagnostics.trace.timings.maintenanceMs = performance.now() - time;
         diagnostics.trace.maintenance = maintenance.metrics;
       }
@@ -585,7 +588,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       lease = acquireSidecar(projection, access); const storage = lease.storage;
       const remaining = Math.floor(deadlineAt - performance.now());
       if (remaining < 1) { diagnostics.coverage.stops.deadline = true; fail('index_unavailable'); }
-      const maintenance = storage.reconcile({ ...projection, budget: { ...input.budget, maxMs: remaining } }, { isCurrent: access.check });
+      const maintenance = hasCommitDispatcher(db)
+        ? await storage.reconcileAsync({ ...projection, budget: { ...input.budget, maxMs: remaining } }, { isCurrent: access.check })
+        : storage.reconcile({ ...projection, budget: { ...input.budget, maxMs: remaining } }, { isCurrent: access.check });
       diagnostics.trace.maintenance = maintenance.metrics;
       access.check();
       let vectorProgress = { attempted: 0, embedded: 0 }, preflight, current = storage.state(projection);

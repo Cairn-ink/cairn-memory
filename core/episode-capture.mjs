@@ -1,3 +1,4 @@
+import { dispatchCommit, hasCommitDispatcher } from './commit-dispatch.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -90,19 +91,42 @@ function recordDraftFailure(runtime, ns, failure) {
     token: failure.token, busyTimeoutMs: remaining });
 }
 
+async function recordDraftFailureAsync(runtime, ns, failure) {
+  const deadline = performance.now() + Math.min(250, failure.busyTimeoutMs ?? 250);
+  const written = await dispatchCommit(runtime, () => runtime.failEpisodeDraft(ns, failure),
+    { remainingMs: () => Math.max(0, deadline - performance.now()) });
+  if (written?.revision !== undefined) return failure.code;
+  // Recovery may have finalized this token before a later attempt changed the
+  // episode-wide state. Read only this attempt, within the remaining budget.
+  const remaining = Math.max(0, Math.floor(deadline - performance.now()));
+  return runtime.episodeDraftOutcome(ns, { episodeId: failure.episodeId,
+    token: failure.token, busyTimeoutMs: remaining });
+}
+
 async function interpret({ runtime, ns, model, episodeId, generation, writerToken,
   trigger, watermark, staging, onPendingFailure, deadline }) {
   let owned, started = false, retryable = false;
   try {
     deadline?.check();
-    const claim = runtime.claimEpisodeDraft(ns, { episodeId, generation, writerToken,
-      trigger, watermark, deferAttempt: true }, deadline);
+    const claim = (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.claimEpisodeDraft(ns, { episodeId, generation, writerToken,
+      trigger, watermark, deferAttempt: true }, deadline), deadline) : runtime.claimEpisodeDraft(ns, { episodeId, generation, writerToken,
+      trigger, watermark, deferAttempt: true }, deadline));
     if (claim.consumed) return { id: episodeId, status: 'not-run', reason: 'consumed' };
     owned = { episodeId, token: claim.token };
     if (claim.skipReason) fail(claim.skipReason);
     if (staging === 'not-staged') fail('capacity');
     const snapshot = runtime.episodeDraftSnapshot(ns, owned);
     const planned = episodeRequest(model, snapshot);
+    if (hasCommitDispatcher(runtime)) {
+      // Match capture's host-only pre-dispatch phase. The actual provider
+      // freshness callback below still rechecks these exact prepared sources.
+      await dispatchCommit(runtime, () => {
+        runtime.assertCaptureSources(ns, planned.receipts);
+        runtime.episodeDraftSnapshot(ns, owned);
+        return runtime.startEpisodeAttempt(ns, owned, deadline);
+      }, deadline);
+      started = true;
+    }
     let checks = 0;
     const output = await callModel(model, 'interpretEpisode', system, planned.input, {
       failureCode: 'episode_failed', deadline, validateFresh: () => {
@@ -111,7 +135,7 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
         runtime.episodeDraftSnapshot(ns, owned);
         // callModel checks once during preparation and again immediately before
         // invoking the port. Consume only at that second check, with no await.
-        if (++checks === 2) {
+        if (++checks === 2 && !started) {
           runtime.startEpisodeAttempt(ns, owned, deadline);
           started = true;
         }
@@ -128,11 +152,15 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
           action: output.disposition.action, anchors: output.disposition.anchors } };
       }
       deadline?.check();
-      committed = runtime.commitEpisodeDraft(ns, { ...owned, result, sources: planned.refs,
+      committed = (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.commitEpisodeDraft(ns, { ...owned, result, sources: planned.refs,
         dispositions: planned.dispositions, priorOmitted: planned.priorOmitted,
         ...(trigger === 'batch' ? { classificationEventId: snapshot.targetEventId } : {}),
         modelMetadata: { adapter: null, model: null, profile: null, ...model.episodeMetadata,
-          promptVersion: 'interpret-episode-v1', digest: promptDigest, portVersion: 'episode-v1' } }, deadline);
+          promptVersion: 'interpret-episode-v1', digest: promptDigest, portVersion: 'episode-v1' } }, deadline), deadline) : runtime.commitEpisodeDraft(ns, { ...owned, result, sources: planned.refs,
+        dispositions: planned.dispositions, priorOmitted: planned.priorOmitted,
+        ...(trigger === 'batch' ? { classificationEventId: snapshot.targetEventId } : {}),
+        modelMetadata: { adapter: null, model: null, profile: null, ...model.episodeMetadata,
+          promptVersion: 'interpret-episode-v1', digest: promptDigest, portVersion: 'episode-v1' } }, deadline));
     } catch (error) {
       if (['invalid_input', 'invalid_text', 'episode_step_conflict'].includes(error.code)) {
         fail('invalid_model_output');
@@ -156,8 +184,10 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
       for (let tries = 0; tries <= 20; tries++) {
         const retryAt = Math.min(deadline, performance.now() + 250);
         try {
-          reportedCode = recordDraftFailure(runtime, ns, { ...owned, code: outcome,
-            busyTimeoutMs: Math.min(250, Math.max(0, deadline - performance.now())) });
+          const failure = { ...owned, code: outcome,
+            busyTimeoutMs: Math.min(250, Math.max(0, deadline - performance.now())) };
+          reportedCode = hasCommitDispatcher(runtime) ? await recordDraftFailureAsync(runtime, ns, failure)
+            : recordDraftFailure(runtime, ns, failure);
           pendingFailure = !reportedCode;
           break;
         } catch (failure) {
@@ -172,7 +202,7 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
       ? { code: 'episode_outcome_pending', retryable: false }
       : { code: error.code === 'source_excluded' ? 'source_excluded' : reportedCode, retryable } };
   } finally {
-    try { if (owned && retryable) runtime.settleEpisodeAttempt(ns, { ...owned, retryable }); }
+    try { if (owned && retryable) (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.settleEpisodeAttempt(ns, { ...owned, retryable })) : runtime.settleEpisodeAttempt(ns, { ...owned, retryable })); }
     catch (error) { if (!isStorageBusy(error)) throw error; }
   }
 }
@@ -183,7 +213,7 @@ async function auxiliary({ runtime, ns, model, episodeId, generation, trigger, d
   if (!state || (state.observed <= state.attempted && !state.unfinishedAttempt)) {
     return { id: episodeId, status: 'not-run', reason: 'no-undrafted-evidence' };
   }
-  const writer = runtime.claimEpisodeWriter(ns, { episodeId, generation }, deadline);
+  const writer = (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.claimEpisodeWriter(ns, { episodeId, generation }, deadline), deadline) : runtime.claimEpisodeWriter(ns, { episodeId, generation }, deadline));
   if (writer.processing) return { id: episodeId, status: 'processing' };
   try {
     // Acquiring the writer recovers expired attempts even when there is no new draft.
@@ -192,7 +222,7 @@ async function auxiliary({ runtime, ns, model, episodeId, generation, trigger, d
     }
     return await interpret({ runtime, ns, model, episodeId, generation, writerToken: writer.token,
       trigger, watermark: state.observed, deadline });
-  } finally { runtime.releaseEpisodeWriter(ns, { episodeId, token: writer.token }); }
+  } finally { (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.releaseEpisodeWriter(ns, { episodeId, token: writer.token })) : runtime.releaseEpisodeWriter(ns, { episodeId, token: writer.token })); }
 }
 
 export async function endEpisode({ runtime, ns, model, input }) {
@@ -220,10 +250,10 @@ export async function captureEpisodeMessages(options) {
   // Raw registration and the existing episode/admission reservation precede
   // every duplicate/processing return and any lazy provider work.
   let registered = options.rawRegistration
-    ? runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true }, options.rawRegistration) : undefined;
+    ? (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true }, options.rawRegistration)) : runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true }, options.rawRegistration)) : undefined;
   try {
     if (registered?.rawReplay) return registered.rawReplay;
-    const checked = registered ?? runtime.validateEpisodeBatch(ns, batch);
+    const checked = registered ?? (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.validateEpisodeBatch(ns, batch)) : runtime.validateEpisodeBatch(ns, batch));
     if (checked.processing) return { processing: true,
       episode: { status: 'processing' }, admission: { status: 'processing' } };
     if (checked.overlap) return { duplicate: true, overlap: true,
@@ -235,7 +265,7 @@ export async function captureEpisodeMessages(options) {
       if (pending) lazy = await auxiliary({ runtime, ns, model, episodeId: pending,
         generation: batch.generation, trigger: 'lazy', deadline: sharedDeadline });
     }
-    registered ??= runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true });
+    registered ??= (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true })) : runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true }));
     const episodeId = registered.episodeId;
     if (registered.processing) return { processing: true,
       episode: { id: episodeId, status: 'processing' }, admission: { status: 'processing' } };
@@ -259,8 +289,9 @@ export async function captureEpisodeMessages(options) {
       writerToken, trigger: 'batch', watermark: registered.position, staging: registered.staging,
       onPendingFailure: failure => { pendingFailure = failure; }, deadline: sharedDeadline });
     const deadline = startAdmission?.();
-    const claim = runtime.claimAdmission(ns, { client: batch.client, eventId: batch.eventId,
-      payloadDigest: batch.payloadDigest, leaseMs: 125000 }, sharedDeadline);
+    const claim = (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.claimAdmission(ns, { client: batch.client, eventId: batch.eventId,
+      payloadDigest: batch.payloadDigest, leaseMs: 125000 }, sharedDeadline), sharedDeadline) : runtime.claimAdmission(ns, { client: batch.client, eventId: batch.eventId,
+      payloadDigest: batch.payloadDigest, leaseMs: 125000 }, sharedDeadline));
     // Only the HMAC session identity can enter newly admitted receipts.
     snapshot.sessionId = registered.sessionKey;
     const result = await captureMessages({ ...options, deadline,
@@ -269,7 +300,9 @@ export async function captureEpisodeMessages(options) {
       // Admission has made progress since finalization exhausted its budget.
       // Try once more without another model call or another retry loop.
       try {
-        const recorded = recordDraftFailure(runtime, ns, { ...pendingFailure, busyTimeoutMs: 250 });
+        const recorded = hasCommitDispatcher(runtime)
+          ? await recordDraftFailureAsync(runtime, ns, { ...pendingFailure, busyTimeoutMs: 250 })
+          : recordDraftFailure(runtime, ns, { ...pendingFailure, busyTimeoutMs: 250 });
         episode.error = { code: recorded ?? 'episode_outcome_pending', retryable: false };
       } catch (error) {
         if (!isStorageBusy(error)) throw error;
@@ -280,15 +313,15 @@ export async function captureEpisodeMessages(options) {
         memoryIds: result.memoryIds, suppressedCount: result.suppressedCount } }
         : result.processing ? { admission: { status: 'processing' } } : {}) };
   } finally {
-    if (registered?.token) runtime.releaseEpisodeWriter(ns, { episodeId: registered.episodeId, token: registered.token });
+    if (registered?.token) (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.releaseEpisodeWriter(ns, { episodeId: registered.episodeId, token: registered.token })) : runtime.releaseEpisodeWriter(ns, { episodeId: registered.episodeId, token: registered.token }));
   }
 }
 
 export async function keepEpisodeCapture(options) {
   const { runtime, ns, keepInput, startAdmission } = options;
-  const kept = runtime.prepareEpisodeKeep(ns, keepInput);
+  const kept = (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.prepareEpisodeKeep(ns, keepInput)) : runtime.prepareEpisodeKeep(ns, keepInput));
   if (kept.failure) fail(kept.failure);
-  const claim = runtime.claimAdmission(ns, { ...kept.key, leaseMs: 125000 });
+  const claim = (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.claimAdmission(ns, { ...kept.key, leaseMs: 125000 })) : runtime.claimAdmission(ns, { ...kept.key, leaseMs: 125000 }));
   if (claim.duplicate || claim.processing) return { ...claim,
     episode: { id: keepInput.episodeId, policy: 'explicit-keep', sourceCoverage: kept.coverage },
     admission: { status: claim.duplicate ? 'completed' : 'processing', memoryIds: claim.memoryIds } };
@@ -317,7 +350,7 @@ export async function keepEpisodeCapture(options) {
       id: keepInput.episodeId, policy: 'explicit-keep', sourceCoverage: kept.coverage } };
   } catch (error) {
     const code = error instanceof MemoryStoreError ? error.code : 'storage_error';
-    try { runtime.failEpisodeKeep(ns, kept, code); } catch { /* Preserve the original failure. */ }
+    try { (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.failEpisodeKeep(ns, kept, code)) : runtime.failEpisodeKeep(ns, kept, code)); } catch { /* Preserve the original failure. */ }
     throw error;
   }
 }

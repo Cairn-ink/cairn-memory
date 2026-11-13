@@ -28,6 +28,13 @@ export function bindCommitRuntime(runtime, db) {
 }
 export const hasCommitDispatcher = value => bindings.has(value);
 export const commitBusyTimeout = value => bindings.has(value) || openingHost() ? 5 : undefined;
+export function withCommitBinding(source, work) {
+  const binding = bindings.get(source);
+  if (!binding) return work();
+  const scope = { host: binding.host, active: true };
+  try { return opening.run(scope, work); }
+  finally { scope.active = false; }
+}
 export function recordCommit(db) {
   const attempt = attempts.getStore();
   if (attempt?.db === db) attempt.commits++;

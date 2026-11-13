@@ -511,9 +511,28 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
 
   function reconcile(input, { isCurrent } = {}) {
     const m = metrics(); activeMetrics = m;
-    try { return reconcileInside(input, m, isCurrent); } finally { activeMetrics = undefined; }
+    try { return reconcileInside(input, m, isCurrent).next().value; } finally { activeMetrics = undefined; }
   }
-  function reconcileInside(input, m, isCurrent) {
+  async function reconcileAsync(input, { isCurrent } = {}) {
+    const m = metrics(), steps = reconcileInside(input, m, isCurrent, true);
+    let value;
+    for (;;) {
+      let step;
+      const previous = activeMetrics;
+      try { activeMetrics = m; step = steps.next(value); }
+      finally { activeMetrics = previous; }
+      if (step.done) return step.value;
+      // Each yielded value is one synchronous sidecar transaction. The
+      // canonical scan and any embedding remain outside its retry boundary.
+      const idle = () => {
+        if (canonical.isTransaction !== false || side.isTransaction !== false) fail('storage_transaction_active');
+      };
+      idle();
+      try { value = await step.value(); }
+      finally { idle(); }
+    }
+  }
+  function* reconcileInside(input, m, isCurrent, asynchronous = false) {
     if (readOnly) fail('invalid_input');
     const p = projection(input), budget = input.budget;
     if (!Number.isInteger(budget?.maxItems) || budget.maxItems < 1 || budget.maxItems > 1024 ||
@@ -529,38 +548,47 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     // pending buffer. Scan positions are checkpointed with those deltas, or at
     // the call's cooperative deadline; unchanged rows are never stamped/copied.
     let phase = g.phase, lastKey = g.last_key, pending = [], pendingUnits = 0;
-    function checkpoint(publish = false) {
+    function* checkpoint(publish = false) {
       if (!restarting && phase === g.phase && lastKey === g.last_key && !pending.length && !publish) return true;
-      isCurrent?.();
-      if (!matching()) return false;
-      // A matching published index is already invalidated by canonical epochs.
-      // No durable 'rebuilding' marker is needed before the first checkpoint.
-      // Complete scans atomically commit the fence, deltas, checkpoint and new
-      // publication; partial scans atomically commit an incomplete checkpoint.
-      write(() => {
-        if (durable) assertCheckpoint(durable);
-        else if (side.prepare('SELECT 1 FROM generations WHERE id=?').get(p.id)) unavailable('stale_index');
-        const fenceStarted = performance.now();
-        if (!durable) {
-          side.prepare(`INSERT INTO generations(id,store_id,format,tokenizer,representation,projection,fence,access,sequence,
+      const commit = () => {
+        isCurrent?.();
+        if (!matching()) return false;
+        // A matching published index is already invalidated by canonical epochs.
+        // No durable 'rebuilding' marker is needed before the first checkpoint.
+        // Complete scans atomically commit the fence, deltas, checkpoint and new
+        // publication; partial scans atomically commit an incomplete checkpoint.
+        write(() => {
+          if (durable) assertCheckpoint(durable);
+          else if (side.prepare('SELECT 1 FROM generations WHERE id=?').get(p.id)) unavailable('stale_index');
+          const fenceStarted = performance.now();
+          if (!durable) {
+            side.prepare(`INSERT INTO generations(id,store_id,format,tokenizer,representation,projection,fence,access,sequence,
             base_sequence,published,phase,last_key,sweep_key,checkpoint,reason) VALUES(?,?,?,?,?,?,?,?,?,?,0,0,'','',0,?)`)
-            .run(p.id, identity.storeId, SIDECAR_FORMAT, TOKENIZER_VERSION, REPRESENTATION_VERSION, p.id,
-              captured, p.access, g.sequence, g.base_sequence, g.reason);
-          side.prepare("INSERT INTO statistics VALUES(?,'',0,0,0)").run(p.id);
-          g.incarnation = side.prepare('SELECT incarnation FROM generations WHERE id=?').get(p.id).incarnation;
-        } else if (restarting) side.prepare(`UPDATE generations SET fence=?,access=?,base_sequence=?,sequence=?,
+              .run(p.id, identity.storeId, SIDECAR_FORMAT, TOKENIZER_VERSION, REPRESENTATION_VERSION, p.id,
+                captured, p.access, g.sequence, g.base_sequence, g.reason);
+            side.prepare("INSERT INTO statistics VALUES(?,'',0,0,0)").run(p.id);
+            g.incarnation = side.prepare('SELECT incarnation FROM generations WHERE id=?').get(p.id).incarnation;
+          } else if (restarting) side.prepare(`UPDATE generations SET fence=?,access=?,base_sequence=?,sequence=?,
           published=0,phase=0,last_key='',sweep_key='',reason='reconcile' WHERE id=?`)
-          .run(captured, p.access, g.base_sequence, g.sequence, p.id);
-        m.fenceSqlMs += performance.now() - fenceStarted;
-        const sqlStarted = performance.now();
-        for (const delta of pending) {
-          if (delta.row) putDocument(g, delta.stream, delta.row, delta.tokens);
-          else { removeDocument(g, delta.stream, delta.id); m.removed++; }
-        }
-        m.postingsStatisticsMs += performance.now() - sqlStarted;
-        side.prepare('UPDATE generations SET phase=?,last_key=?,published=?,checkpoint=checkpoint+1 WHERE id=?')
-          .run(phase, lastKey, Number(publish), p.id);
-      }, publish ? 'publication' : 'checkpoint');
+            .run(captured, p.access, g.base_sequence, g.sequence, p.id);
+          m.fenceSqlMs += performance.now() - fenceStarted;
+          const sqlStarted = performance.now();
+          for (const delta of pending) {
+            if (delta.row) putDocument(g, delta.stream, delta.row, delta.tokens);
+            else { removeDocument(g, delta.stream, delta.id); m.removed++; }
+          }
+          m.postingsStatisticsMs += performance.now() - sqlStarted;
+          side.prepare('UPDATE generations SET phase=?,last_key=?,published=?,checkpoint=checkpoint+1 WHERE id=?')
+            .run(phase, lastKey, Number(publish), p.id);
+        }, publish ? 'publication' : 'checkpoint');
+        return true;
+      };
+      const accepted = asynchronous ? yield () => dispatchCommit(side, () => {
+        const previous = activeMetrics;
+        try { activeMetrics = m; return commit(); }
+        finally { activeMetrics = previous; }
+      }, { remainingMs: () => Math.max(0, started + budget.maxMs - performance.now()) }) : commit();
+      if (!accepted) return false;
       g = { ...g, phase, last_key: lastKey, published: Number(publish), checkpoint: g.checkpoint + 1 };
       durable = g; restarting = false;
       pending = []; pendingUnits = 0;
@@ -592,7 +620,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
           if (m.transformed >= budget.maxItems || pending.length >= batchSize) break;
           m.transformed++;
           const text = row.eligible ? canonicalRead(() => textFor(stream, row.id, m)) : null;
-          if (pendingUnits + (text?.length ?? 0) > 2_000_000 && !checkpoint()) break;
+          if (pendingUnits + (text?.length ?? 0) > 2_000_000 && !(yield* checkpoint())) break;
           pendingUnits += text?.length ?? 0;
           const tokenizeStarted = performance.now();
           pending.push({ stream: phase, row, tokens: text === null ? { length: 0, frequencies: new Map() } : termFrequencies(text) });
@@ -610,12 +638,12 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       if (canonicalEnded && sidecarEnded && canonicalIndex === rows.length && sidecarIndex === previous.length) { phase++; lastKey = ''; }
       m.scanMs += performance.now() - scanStarted;
       if (pending.length >= batchSize || pendingUnits >= 1_980_000) {
-        if (!checkpoint(phase >= p.streams.length)) break;
+        if (!(yield* checkpoint(phase >= p.streams.length))) break;
       }
     }
     // Durable progress is bounded by 128 changed documents / 2M text units and
     // the call deadline. A killed uncommitted scan is entirely replayable.
-    if (!g.published) checkpoint(phase >= p.streams.length);
+    if (!g.published) yield* checkpoint(phase >= p.streams.length);
     m.elapsedMs = performance.now() - started;
     const ready = fresh(p, g);
     return { status: ready ? 'complete' : 'rebuilding', buildState: ready ? g.reason === 'reconcile' ? 'ready' : 'rebuilt' : 'rebuilding',
@@ -1010,7 +1038,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       .all(JSON.stringify(memories), identity.storeId, JSON.stringify(namespace), port.id, port.revision, port.dimensions, port.normalization, REPRESENTATION_VERSION));
     return rows.map(row => ({ memoryId: row.memoryId, revision: row.revision, vector: loadVector(Buffer.from(row.data, 'hex'), port) }));
   }
-  return Object.freeze({ reconcile, lexicalPage, lexical: (...args) => lexicalPage(...args).rows, cardVectors,
+  return Object.freeze({ reconcile, reconcileAsync, lexicalPage, lexical: (...args) => lexicalPage(...args).rows, cardVectors,
     refreshVectors, semanticPreflight, state, assertState, assertFile: checkFile,
     embeddingGuard: (readSet, deadlineAt) => contextEmbeddingGuard(canonical, canonicalRead, readSet, deadlineAt),
     close() { if (!closed) { closed = true; if (side.isOpen) side.close(); } } });

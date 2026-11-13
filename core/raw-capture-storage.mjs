@@ -257,6 +257,8 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       ...(hasCommitDispatcher(db) ? {
         commitOnlyAsync: () => dispatchCommit(db, commitOnly, deadline),
         observeReplayAsync: onlyRecorded => dispatchCommit(db, () => observeReplay(onlyRecorded), deadline),
+        observeFailedInterpretationAsync: () => !accepted && snapshot
+          ? dispatchCommit(db, () => observeReplay(true), deadline) : null,
       } : {}),
       result: () => { const row = accepted && rawEvent(input); return row ? JSON.parse(row.result) : null; },
       setStaging: staging => db.prepare(`UPDATE raw_capture_events SET staging=? WHERE ${where}`).run(staging, ...key(input)),
