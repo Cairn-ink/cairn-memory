@@ -457,7 +457,7 @@ test('A7 mutation proof on synthetic evidence: every command site and inserted s
   assert.equal(failed, sites.length);
 });
 
-const RAW = process.env.A7_RAW_DIR ?? '/tmp/claude-1000/a7-raw-campaign';
+const RAW = process.env.A7_RAW_DIR ?? join(tmpdir(), 'a7-raw-campaign');
 const RESULTS = new URL('../results/a7-codex-0.160.1-gpt-6-astra.json', import.meta.url).pathname;
 // The approved output policy (coordinator, 2026-10-09) is 'stable-plus-variable'.
 test('A7 mutation proof on all 51 real runs: every mutation behaves as expected', { skip: !existsSync(RAW) && `raw evidence not present at ${RAW}` }, async t => {
