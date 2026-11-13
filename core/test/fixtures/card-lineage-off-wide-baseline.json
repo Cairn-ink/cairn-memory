@@ -7064,5 +7064,27 @@
       "reference": 616,
       "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
     }
-  ]
+  ],
+  "cardStatementTexts": {
+    "deleteConversation": [
+      "DELETE FROM card_raw_mutation_context",
+      "DELETE FROM card_raw_pending_invalidations",
+      "INSERT INTO card_effects VALUES(lower(hex(randomblob(16))),?,?,?,?,?,?,?,?, (SELECT coalesce(max(ordinal),0)+1 FROM card_effects))",
+      "INSERT INTO card_epochs VALUES(?,?,?,2) ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=generation+1",
+      "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+      "INSERT OR IGNORE INTO card_raw_pending_invalidations(card_id,revision) VALUES(?,?)",
+      "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+      "UPDATE private_cards SET revision=revision+1,updated_at=?, title=CASE WHEN state='draft' THEN NULL ELSE title END,body=CASE WHEN state='draft' THEN NULL ELSE body END, state=CASE WHEN state='draft' THEN 'cancelled' ELSE state END WHERE id=?"
+    ],
+    "forget": [
+      "DELETE FROM card_raw_mutation_context",
+      "DELETE FROM card_raw_pending_invalidations",
+      "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+      "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?"
+    ],
+    "forgetEpisode": [],
+    "reject": []
+  }
 }
