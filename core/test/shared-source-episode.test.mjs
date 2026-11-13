@@ -85,13 +85,14 @@ test(`withheld Episode projects complete base invalidation ${operation}`,async t
   const target={content:forgotten,kind:operation==='reject'?'decision':'fact',confidence:.8,sourceIndices:[0]};
   const port=model({extract:()=>({items:[{content:survivor,kind:'fact',confidence:.8,sourceIndices:[0]}]}),
     interpretEpisode:request=>{
-      const field=value=>({value,anchors:[{sourceIndex:0,start:0,end:request.input.sources[0].text.length}]});
-      return {type:field('work'),language:'mixed',gist:field('Synthetic complete gist'),outcome:field('Synthetic outcome'),
+      const field=(value,index=1)=>{index=Math.min(index,request.input.sources.length-1);return {value,anchors:[{sourceIndex:index,start:0,end:request.input.sources[index].text.length}]};};
+      return {type:field('work',0),language:'mixed',gist:field('Synthetic complete gist'),outcome:field('Synthetic outcome'),
         nextStep:field('Synthetic open next step'),disposition:null};
     }});
   const f=await lineageFixture(t,{base:33,options:{...options,decisionReview:'required-v1',model:port}});
   const captured=ok(await f.core.capture(episodeInput(1,'synthetic-projection-episode',{namespace:ns,
-    messages:[{id:'synthetic-projection-message',role:'user',content:text}]})));
+    messages:[{id:'synthetic-projection-message',role:'user',content:text},
+      {id:'synthetic-independent-episode-message',role:'user',content:'Synthetic independent Episode source'}]})));
   const episodeId=captured.episode.id,b=captured.admission.memories[0];
   const request={namespace:ns,episodeId,sourceLimit:16,memoryLimit:50};
   const before=ok(f.core.getEpisode(request));assert.equal(before.episode.processing.state,'ready');assert.equal(before.episode.nextStep.status,'open');
@@ -101,9 +102,11 @@ test(`withheld Episode projects complete base invalidation ${operation}`,async t
   const ordinary=openMemoryCore({path:f.path,decisionReview:'required-v1',model:model({extract:()=>({items:[target]})})});t.after(()=>ordinary.close());
   const a=ok(await ordinary.capture({namespace:ns,client:saved.client,sessionId:saved.sessionId,eventId:'synthetic-independent-target',
     messages:[{id:saved.eventId,role:saved.role,content:saved.excerpt}]})).admission.memories[0];
+  port.extract=()=>({items:[]});
   const second=ok(await f.core.capture(episodeInput(1,'synthetic-unaffected-episode',{namespace:ns,
     messages:[{id:'synthetic-unaffected-message',role:'user',content:'Synthetic separate source'}]}))).episode.id;
   const unaffected=ok(f.core.getEpisode({...request,episodeId:second}));
+  const current=ok(f.core.getEpisode(request));
   const stored=f.db.prepare('SELECT record FROM session_episodes WHERE id=?').get(episodeId).record;
   const action={namespace:ns,memoryId:a.id,expectedRevision:a.revision};
   ok(operation.startsWith('correct')?ordinary.correct({...action,content:'Synthetic correction',kind:'fact',
@@ -114,13 +117,15 @@ test(`withheld Episode projects complete base invalidation ${operation}`,async t
   const expected={clientLabel:null,eventStart:null,eventEnd:null,eventTimeCoverage:'unknown',interpretedAt:null,type:null,language:null,
     gist:null,outcome:null,nextStep:null,anchors:{},modelMetadata:null,semanticSupport:'unassessed',editor:{},
     processing:{state:'invalidated',missing:0,expired:0,omitted:0,errorCode:null,
-      observed:before.episode.processing.observed,attempted:before.episode.processing.attempted,covered:before.episode.processing.covered}};
+      observed:current.episode.processing.observed,attempted:current.episode.processing.attempted,covered:current.episode.processing.covered}};
   for(const [field,value]of Object.entries(expected))assert.deepEqual(projected.episode[field],value,field);
-  assert.equal(projected.sources.items.length,0);assert.ok(projected.memoryLinks.items.some(link=>link.memoryId===b.id));
+  assert.deepEqual(projected.sources.items.map(source=>source.text),['Synthetic independent Episode source']);assert.ok(projected.memoryLinks.items.some(link=>link.memoryId===b.id));
   assert.deepEqual(projected.memoryLinks.items.find(link=>link.memoryId===b.id).receiptIds,[]);
   const next=ok(f.core.sessionStartContext({namespace:ns,groups:{nextSteps:true,procedural:false},maxTokens:2000,maxChars:8000}));
   assert.equal(next.groups.nextSteps.items.some(item=>item.episodeId===episodeId),false);
-  assert.deepEqual(ok(f.core.getEpisode({...request,episodeId:second})),unaffected);
+  const unchanged=ok(f.core.getEpisode({...request,episodeId:second}));
+  assert.deepEqual(unchanged.episode,unaffected.episode);
+  assert.deepEqual(unchanged.sources.items,unaffected.sources.items);
   // Compare each interpretation field with the native base invalidation seam.
   const {createEpisodeStorage}=await import('../episode-storage.mjs');
   createEpisodeStorage({db:f.db,advanceEpoch:()=>{}}).invalidateSources(ns,episodeId);

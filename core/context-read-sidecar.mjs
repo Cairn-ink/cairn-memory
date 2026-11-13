@@ -1,3 +1,4 @@
+import { cardDeliverySnapshot, cardDeliverable } from './content-safety.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { hasCardLineage, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { assertContentPort, inertContentPortValue, hasContentPortBoundary } from './content-safety-boundary.mjs';
@@ -696,7 +697,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     if (typeof query !== 'string' || !query.trim() || query.length > 4000 || query.includes('\0') || !query.isWellFormed() ||
         !Number.isSafeInteger(limit) || limit < 1 || limit > 24) fail('invalid_input');
     const p = projection(input), terms = [...new Set(tokenizeT1(query))], suppressionEpoch=safetyEpoch(p);
-    const keys=factDocuments(p); let result, pending;
+    const keys=factDocuments(p); let result, pending, candidateDeliveryMemo;
     const work=state=>sideRead(() => {
       const statistics=visibleStatistics(p,keys===null?null:factDocuments(p,state)), visible=keys===null?null:visibleDocuments(p,statistics,deadlineAt,state);
       const allowed=visible&&new Set(visible.ids);
@@ -746,12 +747,13 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
           if(keys.length)yield {refs,keys};
         },
         accept(chunk,selected){
-          const memo=createContentReadMemo(canonical), memories=new Map(selected.map(row=>
+          const memo=candidateDeliveryMemo??=cardDeliverySnapshot(canonical,[...docs.values()].map(row=>ref(p.streams[row.stream],row)));
+          const memories=new Map(selected.map(row=>
             [JSON.stringify([row.owner_id,row.scope,row.project_id,row.id]),row]));
           for(const key of chunk.keys){
             this.check(); const row=docs.get(key);
             const stream=p.streams[row.stream], item=ref(stream,row);
-            if(!candidateAllowed(item,p.intent,p.readSet,memo,memories.get(JSON.stringify([...boundary(stream.ns),row.id]))))docs.delete(key);
+            if(!candidateAllowed(item,p.intent,p.readSet,memo,memories.get(JSON.stringify([...boundary(stream.ns),row.id]))) || item.type==='card'&&!cardDeliverable(canonical,item.namespace,item.cardId,memo))docs.delete(key);
           }
         },finish:rank};
       return {rows:[],matched:0};
@@ -767,10 +769,13 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     if(result.rows.length && (hasCardLineage(canonical)||suppressionEpoch!==undefined && suppressionEpoch!=='0:0' &&
         !cachedContentSuppressionRequestInside(canonical,p.readSet[0].ownerId))) {
       // Direct internal sidecar callers have no facade's final evidence pass.
-      result.rows=canonicalRead(()=>{const memo=createContentReadMemo(canonical);
+      result.rows=canonicalRead(()=>{const memo=cardDeliverySnapshot(canonical,result.rows.map(row=>row.ref));
         const visible=result.rows.filter(({ref:item})=>candidateAllowed(item,p.intent,p.readSet,memo));
         if(hasCardLineage(canonical)&&visible.length!==result.rows.length)unavailable('stale_index');
-        return visible;});
+        return visible.filter(({ref:item})=>item.type!=='card'||cardDeliverable(canonical,item.namespace,item.cardId,memo));});
+    } else if(result.rows.some(({ref:item})=>item.type==='card')) {
+      result.rows=canonicalRead(()=>{const memo=cardDeliverySnapshot(canonical,result.rows.map(row=>row.ref));
+        return result.rows.filter(({ref:item})=>item.type!=='card'||cardDeliverable(canonical,item.namespace,item.cardId,memo));});
     }
     return result;
   }

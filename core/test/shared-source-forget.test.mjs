@@ -35,8 +35,9 @@ const kinds = [...ordinaryKinds, 'raw-53', 'raw-33'];
 const operations = ['forget', 'correct', 'reject'];
 const normalize = sql => sql.replace(/\s+/g, ' ').trim();
 const insertSQL = 'INSERT OR IGNORE INTO suppressed(owner_id,scope,project_id,fingerprint) SELECT ?,?,?,value FROM json_each(?)';
-const receiptSQL = 'SELECT r.* FROM receipts r WHERE r.memory_id=? AND EXISTS( SELECT 1 FROM memories m WHERE m.id=r.memory_id AND m.owner_id=? AND m.scope=? AND m.project_id=?)';
+const receiptSQL = 'SELECT r.id,r.receipt_key,r.client,r.session_id,r.event_id,r.role FROM receipts r WHERE r.memory_id=? AND EXISTS( SELECT 1 FROM memories m WHERE m.id=r.memory_id AND m.owner_id=? AND m.scope=? AND m.project_id=?)';
 const lookupSQL = 'SELECT s.fingerprint,1 AS denied FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value';
+const isLookup = row => row.sql === lookupSQL || row.sql.startsWith('SELECT s.owner_id,s.scope,s.project_id,s.fingerprint FROM json_each(?)') || row.sql.startsWith("SELECT 'memory' AS kind,");
 const source = (excerpt = message) => ({ client: 'synthetic', sessionId: 'synthetic-session',
   eventId: 'synthetic-message', role: 'user', excerpt });
 const otherNamespace = { ...ns, projectId: 'synthetic-other-project' };
@@ -396,7 +397,7 @@ for (const kind of kinds) for (const operation of operations) test(`shared sourc
   assert.equal(measured.rows.filter(row => row.sql === 'SELECT id FROM receipts WHERE memory_id=?').length, 0);
   assert.equal(measured.rows.filter(row => row.sql === insertSQL)[0].args[3] &&
     JSON.parse(measured.rows.find(row => row.sql === insertSQL).args[3]).length, 2);
-  assert.equal(measured.rows.some(row => row.sql === lookupSQL), false, 'no evidence lookup for simple terminal acknowledgement');
+  assert.equal(measured.rows.some(isLookup), false, 'no evidence lookup for simple terminal acknowledgement');
   if (operation === 'forget') for (const input of [{ memoryId: a.id }, { memoryId: 'synthetic-missing' }]) {
     const repeated = await trace(() => f.core.forget({ namespace: ns, expectedRevision: a.revision, ...input }));
     ok(repeated.result);
@@ -495,9 +496,11 @@ for (const kind of ordinaryKinds) test(`owner re-key preserves source denial ${k
       assert.deepEqual(markers(store, otherOwner), retained, 'same fingerprints, each in its own owner boundary');
       const measured = await trace(() => store.core.get({ namespace: otherOwner, memoryId: sibling.id }));
       assert.deepEqual(ok(measured.result).receipts, []);
-      for (const row of measured.rows.filter(row => row.sql === lookupSQL))
-        assert.deepEqual(row.args.slice(1), [otherOwner.ownerId, otherOwner.scope, otherOwner.projectId]);
-      assert.ok(measured.rows.some(row => row.sql === lookupSQL), 'withholding performs the scoped lookup');
+      for (const row of measured.rows.filter(isLookup)) {
+        if(row.sql.startsWith("SELECT 'memory'")) assert.ok(JSON.parse(row.args[0]).every(job=>job.owner===otherOwner.ownerId&&job.scope===otherOwner.scope&&job.project===(otherOwner.projectId??'')));
+        else assert.deepEqual(row.args.slice(1), [otherOwner.ownerId, otherOwner.scope, otherOwner.projectId]);
+      }
+      assert.ok(measured.rows.some(isLookup), 'withholding performs the scoped lookup');
     }
     assert.deepEqual(markers(separate), [], 'other store never required the first owner rows');
     return;
@@ -730,17 +733,14 @@ test(`context receipt lookups are batched per snapshot ${route}, markers=${marke
   for (let index = 0; index < 12; index++) assert.equal(
     JSON.stringify(value).includes('Synthetic context support ' + index + '"'), !(marked && index % 3 === 0),
     'only denied receipt excerpts are omitted');
-  const lookups = measured.rows.filter(row => row.sql === lookupSQL ||
-    row.sql.startsWith('SELECT s.owner_id,s.scope,s.project_id,s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s'));
+  const lookups = measured.rows.filter(isLookup);
   assert.equal(lookups.length, 2, 'one preparation lookup and one independent final-delivery lookup');
   assert.equal(new Set(lookups.map(row => row.snapshot)).size, 2);
   for (const lookup of lookups) {
     assert.ok(lookup.snapshot, 'lookup belongs to an actual read transaction');
-    const tokens = JSON.parse(lookup.args[0]);
-    assert.equal(tokens.length, 24, 'the complete twelve-item set is checked before projection');
-    if (multiNamespace) assert.ok(tokens.every(tuple => readSet.some(namespace => tuple[0] === namespace.ownerId &&
-      tuple[1] === namespace.scope && tuple[2] === (namespace.projectId ?? ''))));
-    else assert.deepEqual(lookup.args.slice(1), [ns.ownerId, ns.scope, ns.projectId]);
+    const jobs=JSON.parse(lookup.args[0]);
+    assert.equal(jobs.length,12,'the complete twelve-item identity set is checked before projection');
+    assert.ok(jobs.every(job=>readSet.some(namespace=>job.owner===namespace.ownerId&&job.scope===namespace.scope&&job.project===(namespace.projectId??''))));
     const plan = f.db.prepare('EXPLAIN QUERY PLAN ' + lookup.sql).all(...lookup.args);
     assert.ok(plan.some(row => /SEARCH s USING (?:COVERING )?INDEX sqlite_autoindex_suppressed_1/.test(row.detail) &&
       ['owner_id=?', 'scope=?', 'project_id=?', 'fingerprint=?'].every(part => row.detail.includes(part))));
@@ -786,7 +786,7 @@ for (const marked of [false, true]) test(`review B one lookup per snapshot with 
     }
   }
   const assertLookups = (rows, expected) => {
-    const lookups=rows.filter(row=>row.sql===lookupSQL || row.sql.startsWith('SELECT s.owner_id,s.scope,s.project_id,s.fingerprint FROM json_each(?)'));
+    const lookups=rows.filter(isLookup);
     assert.equal(lookups.length, expected);
     assert.equal(new Set(lookups.map(row=>row.snapshot)).size, expected, 'at most one statement per synchronous snapshot');
     return lookups;
@@ -854,7 +854,7 @@ test('review B full receipt pages resolve qualification and procedural tokens on
   ]) {
     const measured=await trace(call),value=ok(measured.result);
     assert.equal((value.receipts??value.items[0].receipts).length,100,name+' full page');
-    const lookups=measured.rows.filter(row=>row.sql===lookupSQL);assert.equal(lookups.length,expected,name);
+    const lookups=measured.rows.filter(isLookup);assert.equal(lookups.length,expected,name);
     assert.equal(new Set(lookups.map(row=>row.snapshot)).size,expected);
   }
 });

@@ -1049,18 +1049,21 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       if (!row || row.deleted) fail('episode_not_found');
       assertEpisodeRead?.(ns, row, projected.budget);
       if (db.prepare('SELECT 1 FROM review_hidden_episodes WHERE id=?').get(row.id)) fail('episode_not_found');
-      const linkedReceipts=db.prepare(`SELECT r.* FROM episode_memory_links l JOIN memories m ON m.id=l.memory_id
-        JOIN receipts r ON r.memory_id=m.id WHERE l.episode_id=? AND m.owner_id=? AND m.scope=? AND m.project_id=?`)
-        .all(row.id,...boundary(ns));
+      const linkRows=db.prepare(`SELECT l.* FROM episode_memory_links l CROSS JOIN memories m ON m.id=l.memory_id
+        WHERE l.episode_id=? AND l.id>? AND m.deleted=0 AND m.review_state!='awaiting'
+          AND m.owner_id=? AND m.scope=? AND m.project_id=? ORDER BY l.id LIMIT ?`)
+        .all(row.id,pages.memory.after??'',...boundary(ns),pages.memory.limit+1);
+      const linkedIds=linkRows.flatMap(link=>JSON.parse(link.receipt_ids).map(id=>[link.memory_id,id]));
+      const linkedReceipts=db.prepare(`SELECT r.* FROM json_each(?) wanted CROSS JOIN receipts r
+        ON r.id=json_extract(wanted.value,'$[1]') CROSS JOIN memories m ON m.id=r.memory_id
+        WHERE r.memory_id=json_extract(wanted.value,'$[0]') AND m.owner_id=? AND m.scope=? AND m.project_id=?`)
+        .all(JSON.stringify(linkedIds),...boundary(ns));
       const delivery=episodeReadRowsInside(db,ns,[row],linkedReceipts), memo=delivery.memo;
       row = episodeReadRow(delivery.rows[0]);
       const sources = delivery.sources.filter(source=>source.id>(pages.source.after??'')).slice(0,pages.source.limit+1).map(source => ({ id: source.id, digest: source.digest,
           originEpisodeId: source.origin_episode_id, eventId: source.event_id, messageId: source.message_id,
           role: source.role, text: source.text, truncated: !!source.truncated, receiptOrdinal: source.ordinal }));
-      const memories = db.prepare(`SELECT l.* FROM episode_memory_links l JOIN memories m ON m.id=l.memory_id
-        WHERE l.episode_id=? AND l.id>? AND m.deleted=0 AND m.review_state!='awaiting'
-          AND m.owner_id=? AND m.scope=? AND m.project_id=? ORDER BY l.id LIMIT ?`)
-        .all(row.id, pages.memory.after ?? '', ...boundary(ns), pages.memory.limit+1).filter(link => {
+      const memories = linkRows.filter(link => {
           const memory = db.prepare('SELECT * FROM memories WHERE id=?').get(link.memory_id);
           return memory && contentReadSafety(db, { namespace: ns, intent: 'history', ref: { type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision } }).allowed;
         }).map(link => ({ id: link.id, memoryId: link.memory_id,

@@ -121,7 +121,7 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
     }, deadline?.check);
   }
 
-  function inspectInside(ns, ref, view = 'decision-context') {
+  function inspectInside(ns, ref, view = 'decision-context', deliveryMemo) {
       if (!['decision-context', 'incident-proposals'].includes(view)) fail('invalid_input');
       const incident = view === 'incident-proposals';
       const sources = new Map([[ref.memoryId, source(ns, ref)]]);
@@ -156,7 +156,7 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
       return bounded(project(bounded({ root: { memoryId: ref.memoryId, revision: ref.revision },
         status: !incident && edges.some(edge => edge.relation === 'challenges-premise') ? 'reconfirmation-suggested' : 'unassessed',
         sources: [...sources.values()], edges, coverage: incident ? 'root-incident-only' : 'linked-evidence-only',
-        ...(incident ? { view: 'incident-proposals' } : {}), indexRevision: epoch(ns) })));
+        ...(incident ? { view: 'incident-proposals' } : {}), indexRevision: epoch(ns) }),deliveryMemo));
   }
 
   return { snapshot, commit, snapshotFilingEdges, restoreFilingEdges,

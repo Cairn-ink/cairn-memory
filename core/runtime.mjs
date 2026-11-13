@@ -1,3 +1,5 @@
+import { installReceiptDelivery } from './content-safety.mjs';
+import { receiptDeliverySnapshot, deliveryReceiptRows, deliveryReceiptHeaders } from './content-safety.mjs';
 import { receiptDenialsInside, anchorsDeliverable, cardDeliverable } from './content-safety.mjs';
 import { contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { captureSnapshot } from './capture-input.mjs';
@@ -72,6 +74,7 @@ export function createMemoryRuntime(input, internal) {
   const db = openDatabase(input.path, { ...(busyTimeoutMs !== undefined ? { busyTimeoutMs } : {}), privateCards: Boolean(privateCards), currentDependencies: Boolean(privateCards?.currentDependencies) || Boolean(input.contentSafety && internal?.rawCapture), methodPackages: Boolean(methodPackages), assets: Boolean(assets), roleProfiles: Boolean(roleProfiles), rawCapture: Boolean(internal?.rawCapture),
     rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore, storeFence: input.storeFence, contentSafety: input.contentSafety });
   try {
+  installReceiptDelivery(db);
   const rawLineage = createRawLineageStorage(db);
   const sourceRoots = createRawSourceRoots(db);
   const rawCards = createRawCardInvalidation(db);
@@ -207,7 +210,8 @@ export function createMemoryRuntime(input, internal) {
   function legacyDto(memory, memo) {
     if (!memory || privacyMemoryDenied(memory)) return null;
     const ns = { ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id || null };
-    const receipts = safeReceipts(ns, snapshotReceipts(ns,memory.id,memo).sort((a,b)=>a.created_at.localeCompare(b.created_at)||a.receipt_key.localeCompare(b.receipt_key)), memo);
+    memo ??= receiptSnapshot([{namespace:ns,memoryId:memory.id}],{limit:Number.MAX_SAFE_INTEGER});
+    const receipts = safeReceipts(ns, snapshotReceipts(ns,memory.id,memo,false,Number.MAX_SAFE_INTEGER).sort((a,b)=>a.created_at.localeCompare(b.created_at)||a.receipt_key.localeCompare(b.receipt_key)), memo);
     return {
       id: memory.id, content: memory.content, kind: memory.kind,
       scope: memory.scope, projectId: memory.project_id || null,
@@ -493,8 +497,8 @@ export function createMemoryRuntime(input, internal) {
     ready();
     return transaction(db, () => {
       const rows=db.prepare(`SELECT memories.*${memoryAncestry()} FROM memories WHERE ${where}
-        AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id LIMIT ?`).all(...boundary(ns),count);
-      const memo=receiptSnapshot(rows.map(row=>({namespace:ns,memoryId:row.id})));
+      AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id LIMIT ?`).all(...boundary(ns),count);
+      const memo=receiptSnapshot(rows.map(row=>({namespace:ns,memoryId:row.id})),{limit:Number.MAX_SAFE_INTEGER});
       return rows.map(row=>legacyDto(row,memo)).filter(Boolean);
     });
   }
@@ -510,7 +514,7 @@ export function createMemoryRuntime(input, internal) {
       .sort((a, b) => b.score - a.score || b.memory.updated_at.localeCompare(a.memory.updated_at)
         || a.memory.id.localeCompare(b.memory.id))
       .slice(0, count).map(({memory})=>memory);
-      const memo=receiptSnapshot(rows.map(row=>({namespace:ns,memoryId:row.id})));
+      const memo=receiptSnapshot(rows.map(row=>({namespace:ns,memoryId:row.id})),{limit:Number.MAX_SAFE_INTEGER});
       return rows.map(row=>legacyDto(row,memo)).filter(Boolean);
     });
   }
@@ -558,9 +562,8 @@ export function createMemoryRuntime(input, internal) {
         if (!stored) fail('cursor_stale');
         anchor = stored;
       }
-      const original = db.prepare('SELECT rowid AS cursor_row,* FROM receipts WHERE memory_id = ? ORDER BY created_at ASC, id ASC').all(id);
-      const memo = createContentReadMemo(db), allowed = unmarkedReceipts(ns, original, memo).filter(receipt => !anchor ||
-        receipt.created_at > anchor.createdAt || receipt.created_at === anchor.createdAt && receipt.id > anchor.id);
+      const memo = receiptSnapshot([{namespace:ns,memoryId:id}],{limit:count+1,after:anchor,positions:false});
+      const allowed = deliveryReceiptRows(db,ns,id,memo,{limit:count+1,after:anchor,cursor:true});
       const scanned = allowed.slice(0, count), receipts = safeReceipts(ns, scanned, memo), procedural = safeProcedural(ns, id, memo);
       return { receiptComplete: allowed.length <= count, receiptScan: scanned.at(-1)?.cursor_row, memory: { ...metadataDto(memory), content: memory.content },
         receipts: receipts.map(receipt => ({ id: receipt.id, client: receipt.client,
@@ -582,25 +585,13 @@ export function createMemoryRuntime(input, internal) {
     const value = proceduralStorage.inspect(id);
     return value && (!anchorsDeliverable(db, ns, id, value.anchors, memo) || !anchoredReadSafety(db, { namespace: ns, memoryId: id, anchors: value.anchors, memo }).allowed) ? null : value;
   }
-  function receiptSnapshot(entries) {
-    const memo = createContentReadMemo(db), batches = [];
-    memo.runtimeReceipts = new Map();
-    for (const ns of new Map(entries.map(entry => [JSON.stringify(boundary(internalNamespace(entry.namespace))), entry.namespace])).values()) {
-      const ids = [...new Set(entries.filter(entry => JSON.stringify(boundary(internalNamespace(entry.namespace))) === JSON.stringify(boundary(internalNamespace(ns)))).map(entry => entry.memoryId))];
-      const rows = db.prepare(`SELECT r.* FROM json_each(?) w CROSS JOIN memories m ON m.id=w.value
-        JOIN receipts r ON r.memory_id=m.id WHERE m.owner_id=? AND m.scope=? AND m.project_id=?
-        ORDER BY r.created_at,r.id`).all(JSON.stringify(ids),...boundary(internalNamespace(ns)));
-      for (const id of ids) memo.runtimeReceipts.set(JSON.stringify([boundary(internalNamespace(ns)), id]), rows.filter(row => row.memory_id === id));
-      batches.push({ namespace: ns, receipts: rows });
-    }
-    receiptDenialsInside(db, batches, undefined, memo);
-    return memo;
+  function receiptSnapshot(entries,options) {
+    return receiptDeliverySnapshot(db,entries,undefined,[],options);
   }
-  function snapshotReceipts(ns, id, memo, recent = false) {
-    const rows = memo?.runtimeReceipts?.get(JSON.stringify([boundary(internalNamespace(ns)), id]));
-    if (rows) return recent ? [...rows].sort((a,b) => b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id)) : rows;
-    return db.prepare(`SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at ${recent ? 'DESC' : 'ASC'},id`).all(id);
+  function snapshotReceipts(ns, id, memo, recent = false, limit = 101) {
+    return deliveryReceiptRows(db,ns,id,memo,{recent,limit});
   }
+
   function unmarkedReceipts(ns, receipts, memo) {
     const denied = receiptDenialsInside(db, ns, receipts, memo);
     return receipts.filter(receipt => !denied.has(receipt.receipt_key));
@@ -610,19 +601,20 @@ export function createMemoryRuntime(input, internal) {
     return receipts.filter(receipt => !denied.has(receipt.receipt_key) && receiptReadSafety(db, { namespace: ns, receipt, memo }).allowed);
   }
   const receiptPageOffsets = new WeakMap();
-  function receiptPage(ns, row, offset, count, recent = false, memo = createContentReadMemo(db)) {
-    const original = count === 0 ? [] : snapshotReceipts(ns, row.id, memo, recent);
-    const allowed = unmarkedReceipts(ns, original, memo);
-    // Cursor offsets retain the existing physical coordinate, but only allowed
-    // rows participate in pagination, caps, or the most-recent choice.
-    const positions = new Map(original.map((receipt, index) => [receipt, index + 1]));
-    const remaining = allowed.filter(receipt => positions.get(receipt) > offset), scanned = remaining.slice(0, count);
+  function receiptPage(ns, row, offset, count, recent = false, memo) {
+    memo ??= receiptSnapshot([{namespace:ns,memoryId:row.id}],{limit:count+1,recent,offset});
+    const headers = deliveryReceiptHeaders(db,ns,row.id,memo);
+    const original = recent ? [...headers].sort((a,b)=>b.created_at.localeCompare(a.created_at)||a.id.localeCompare(b.id)) : headers;
+    const state=memo.deliveryMemoryStates.get(JSON.stringify([...boundary(ns),row.id]));
+    const positions = new Map(original.map(receipt=>[receipt.id,receipt.position]));
+    const allowed = count === 0 ? [] : deliveryReceiptRows(db,ns,row.id,memo,{offset,limit:count+1,recent});
+    const remaining = allowed, scanned = remaining.slice(0,count);
     const rows = safeReceipts(ns, scanned, memo);
     if (!row || !contentReadSafety(db, { identity, namespace: ns, intent: 'history', memo,
       ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision }, receipts: rows }).allowed) fail('revision_conflict');
     const result = rows.map(receipt => ({ id: receipt.id, client: receipt.client, sessionId: receipt.session_id, eventId: receipt.event_id,
       role: receipt.role, excerpt: receipt.excerpt, createdAt: receipt.created_at }));
-    receiptPageOffsets.set(result, { offsets: rows.map(receipt => receipt === allowed.at(-1) ? original.length : positions.get(receipt)), end: scanned.length === remaining.length ? original.length : positions.get(scanned.at(-1)) ?? offset });
+    receiptPageOffsets.set(result, { offsets: rows.map(receipt => receipt === scanned.at(-1) && remaining.length<=count && state.complete ? state.total : positions.get(receipt.id)), end: scanned.length === remaining.length && state.complete ? state.total : positions.get(scanned.at(-1)?.id) ?? offset });
     return result;
   }
   function receiptPrefix(ns, row, offset, count, memo) { return receiptPage(ns, row, offset, count, false, memo); }
@@ -650,12 +642,12 @@ export function createMemoryRuntime(input, internal) {
       memoryId: row.id, revision: row.revision }, receipts: original }).allowed) fail('revision_conflict');
     return evidence;
   }
-  function projectRationale(value) {
+  function projectRationale(value, existingMemo) {
     const sources = value.sources, entries = sources.map(source => {
       const row = db.prepare('SELECT owner_id,scope,project_id FROM memories WHERE id=?').get(source.memory.id);
       return { namespace: {ownerId:row.owner_id,scope:row.scope,projectId:row.project_id || null}, memoryId:source.memory.id };
     });
-    const memo = receiptSnapshot(entries), delivered = new Set();
+    const memo = existingMemo ?? receiptSnapshot(entries), delivered = new Set();
     const projected = sources.map((source,index) => {
       const entry = entries[index], rows = snapshotReceipts(entry.namespace, entry.memoryId, memo);
       const ids = new Set(unmarkedReceipts(entry.namespace, rows, memo).map(row => row.id));
@@ -700,7 +692,7 @@ export function createMemoryRuntime(input, internal) {
         fetchPageIdentities.set(page, memoryContentIdentity(row));
         return page;
       }
-      const memo = receiptSnapshot([{ namespace: ns, memoryId: row.id }]);
+      const memo = receiptSnapshot([{ namespace: ns, memoryId: row.id }],{limit:101,offset});
       const memory = detailDto(row);
       const receipts = receiptPrefix(ns, row, offset, 101, memo), positions = receiptPageOffsets.get(receipts);
       return { memory, receipts, receiptOffsets: positions.offsets, receiptEnd: positions.end, epoch: currentEpoch,
@@ -709,19 +701,19 @@ export function createMemoryRuntime(input, internal) {
     }, undefined, { deferred: true });
   }
 
-  function usageSnapshot(entries, mode) {
+  function usageSnapshot(entries, mode, options) {
     const expanded = [...entries];
     if (mode === 'rationale-evidence') for (const entry of entries) {
       const ns = entry.namespace;
       const ids = db.prepare(`SELECT e.from_id,e.to_id FROM rationale_edges e
-        JOIN memories a ON a.id=e.from_id JOIN memories b ON b.id=e.to_id
+        CROSS JOIN memories a ON a.id=e.from_id CROSS JOIN memories b ON b.id=e.to_id
         WHERE a.owner_id=? AND a.scope=? AND a.project_id=? AND b.owner_id=a.owner_id
           AND b.scope=a.scope AND b.project_id=a.project_id AND (e.from_id=? OR e.to_id=? OR
-          e.to_id IN (SELECT from_id FROM rationale_edges WHERE to_id=? AND relation='supports-decision'))`)
+          e.to_id IN (SELECT from_id FROM rationale_edges WHERE to_id=? AND relation='supports-decision')) LIMIT 121`)
         .all(...boundary(ns), entry.memoryId, entry.memoryId, entry.memoryId);
       for (const row of ids) for (const memoryId of [row.from_id,row.to_id]) expanded.push({namespace:ns,memoryId});
     }
-    return receiptSnapshot(expanded);
+    return receiptSnapshot(expanded,options);
   }
   function readUsageEvidence(ns, row, mode, memo = usageSnapshot([{namespace:ns,memoryId:row.id}], mode)) {
     return { ...readSourceEvidence(row, memo), ...(mode === 'rationale-evidence' ? {
@@ -732,10 +724,10 @@ export function createMemoryRuntime(input, internal) {
   // token packing below use detached projections; finalization owns a new read.
   function prepareRecall(entries, includeQualification, contextMode) {
     ready();
-    const pages = new Map();
+    const pages = new Map(), recentPages=new Map();
     const stamp = (ns,id) => JSON.stringify([boundary(internalNamespace(ns)),id]);
     readTransaction(db, () => {
-      const memo = usageSnapshot(entries, contextMode);
+      const memo = usageSnapshot(entries, contextMode,{limit:203,includeRecent:!isSourceContext(contextMode)});
       for (const entry of entries) {
         const ns = entry.namespace, row = currentRow(ns,entry.memoryId);
         if (!safeMemory(ns,row) || row.revision !== entry.revision) fail('revision_conflict');
@@ -744,7 +736,8 @@ export function createMemoryRuntime(input, internal) {
           try { pages.set(stamp(ns,row.id),{source:readUsageEvidence(ns,row,contextMode,memo),epoch:currentEpoch}); }
           catch (error) { if(error.code!=='context_item_too_large')throw error; pages.set(stamp(ns,row.id),{oversized:true}); }
         } else {
-          const receipts = receiptPrefix(ns,row,0,Infinity,memo), positions = receiptPageOffsets.get(receipts);
+          const receipts = receiptPrefix(ns,row,0,202,memo), positions = receiptPageOffsets.get(receipts);
+          recentPages.set(stamp(ns,row.id),receiptRecent(ns,row,202,memo));
           pages.set(stamp(ns,row.id),{memory:detailDto(row),receipts,receiptOffsets:positions.offsets,
             receiptEnd:positions.end,epoch:currentEpoch,
             ...(includeQualification ? {qualification:safeQualification(ns,row,memo)} : {})});
@@ -766,7 +759,7 @@ export function createMemoryRuntime(input, internal) {
         },
         recentReceipts(ns,ref,count) {
           const page=pages.get(stamp(ns,ref.memoryId));
-          return [...page.receipts].sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||a.id.localeCompare(b.id)).slice(0,count);
+          return recentPages.get(stamp(ns,ref.memoryId)).slice(0,count);
         },
     };
   }
@@ -828,7 +821,7 @@ export function createMemoryRuntime(input, internal) {
         if (epoch(namespace) !== indexRevision || cachedContentLayout(db)?.suppressionRevision && suppressionEpoch !== undefined && suppressionEpoch !== contentSuppressionRequestFenceInside(db, namespace.ownerId)) fail('index_revision_conflict');
       }
       const entries = (isSourceContext(contextMode) ? candidates : selected.map(index => candidates[index]));
-      const memo = isSourceContext(contextMode) ? usageSnapshot(entries, contextMode) : receiptSnapshot(entries);
+      const memo = isSourceContext(contextMode) ? usageSnapshot(entries, contextMode) : receiptDeliverySnapshot(db,entries,undefined,[],{limit:203,includeRecent:entries.some(entry=>entry.receiptOrder==='recent')});
       if (isSourceContext(contextMode)) {
         const sources = rows.map((row, index) => {
           const source = readUsageEvidence(candidates[index].namespace, row, contextMode, memo);

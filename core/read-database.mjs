@@ -1,3 +1,4 @@
+import { installReceiptDelivery } from './content-safety.mjs';
 import { bindContentSafetyConnection, attestContentSafety, installedContentLayout } from './content-safety-schema.mjs';
 import { assertNoCardCurrentDependencies } from './card-current-schema.mjs';
 import { assertNoRoleProfiles } from './role-profile-schema.mjs';
@@ -42,6 +43,7 @@ export function openReadDatabase(path, options = {}) {
     if (productSqlite) productSqlite.openingFailure(error);
     throw error;
   }
+  installReceiptDelivery(native);
   let db = native;
   nativeObserver?.openDiagnostic?.mark('canonicalNative');
   try {

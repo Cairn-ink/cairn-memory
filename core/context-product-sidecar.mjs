@@ -1,3 +1,4 @@
+import { cardDeliverySnapshot, cardDeliverable, createContentReadMemo } from './content-safety.mjs';
 import { sidecarAttestationFile, readAttestedSidecarMetadata, sidecarAttestationDigest, validSidecarAttestation, writeSidecarAttestation } from './context-product-sidecar-attestation.mjs';
 import { reserveSidecarHandle, sidecarHandleGuard } from './context-product-handles.mjs';
 import { hasCardLineage, cardLineageNamespaceInside } from './card-lineage.mjs';
@@ -1307,9 +1308,9 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     if(proof)return proof.visible?.counts??null;
     return read(()=>suppressionRequest(p,publication,visible=>visible?.counts??null));
   }
-  function cardCandidateAllowed(ref, p) {
+  function cardCandidateAllowed(ref, p, safetyMemo) {
     return contextCardEligible(canonical,identity,features,ref.namespace,
-      {id:ref.cardId,revision:ref.revision,body_revision:ref.bodyRevision},p.intent,{readSet:p.readSet});
+      {id:ref.cardId,revision:ref.revision,body_revision:ref.bodyRevision},p.intent,{readSet:p.readSet,safetyMemo});
   }
   function lexicalSuppressed(p,publication,query,limit,visible) {
     const terms=[...new Set(tokenizeT1(query))],generation=storageKey(publication.generation.id),ss=streams(p),documents=[];
@@ -1347,6 +1348,8 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       for(const {ref}of memory)if(decisions.get(ref))checked.add(ref);
       for(let i=documents.length-1;i>=0;i--)if(decisions.get(documents[i].ref)===false)documents.splice(i,1);
     }
+    const deliveryMemo=cardDeliverySnapshot(canonical,documents.map(document=>document.ref));
+    for(let i=documents.length-1;i>=0;i--)if(documents[i].ref.type==='card'&&!cardDeliverable(canonical,documents[i].ref.namespace,documents[i].ref.cardId,deliveryMemo))documents.splice(i,1);
     const df=new Map(terms.map(term=>[term,documents.filter(d=>d.frequencies.has(term)).length]));
     const N=visible.unknown?documents.length:Object.values(visible.counts.byType).reduce((n,c)=>n+c.eligible,0);
     const totalLength=visible.unknown?documents.reduce((n,d)=>n+d.length,0):visible.counts.totalTokenLength;
@@ -1355,7 +1358,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     const memory=pending.filter(({ref})=>ref.type==='memory');
     const allowed=memoryCandidatesAllowedInside(canonical,memory.map(d=>d.ref),p,identity);
     const decisions=new Map(memory.map((d,i)=>[d.ref,allowed[i]]));
-    for(const {ref}of pending)if(ref.type==='card')decisions.set(ref,cardCandidateAllowed(ref,p));
+    for(const {ref}of pending)if(ref.type==='card')decisions.set(ref,cardCandidateAllowed(ref,p,deliveryMemo));
     const rows=ranked.filter(({ref})=>decisions.get(ref)!==false);
     return {rows,matched:documents.length,counts:visible.counts,filtered:visible.filtered};
   }
@@ -1397,7 +1400,8 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
           if(rows.length<128)break;after=rows.at(-1).doc;
         }
       }
-      return {rows:ranked,matched};
+      const deliveryMemo=cardDeliverySnapshot(canonical,ranked.map(row=>row.ref));
+      return {rows:ranked.filter(({ref})=>ref.type!=='card'||cardDeliverable(canonical,ref.namespace,ref.cardId,deliveryMemo)),matched};
     }));
   }
 

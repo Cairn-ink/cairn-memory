@@ -418,7 +418,146 @@ export function cardDeliverable(db, ns, id, memo) {
   return receiptDenialsInside(db, ns, rows, memo).size === 0;
 }
 export function anchorsDeliverable(db, ns, memoryId, anchors, memo) {
-  const rows = anchors.map(anchor => db.prepare('SELECT * FROM receipts WHERE memory_id=? AND id=?')
+  const rows = anchors.map(anchor => db.prepare('SELECT receipt_key,client,session_id,event_id,role FROM receipts WHERE memory_id=? AND id=?')
     .get(memoryId, anchor.receiptId)).filter(Boolean);
   return receiptDenialsInside(db, ns, rows, memo).size === 0;
+}
+
+// Pure connection-local SQL helper. Registration changes no stored data and
+// takes no engine input other than the four canonical address columns.
+const receiptDeliveryConnections=new WeakSet();
+export function installReceiptDelivery(db) {
+  db=contentSafetyConnection(db);
+  if(receiptDeliveryConnections.has(db))return;
+  db.function('receipt_address_v1',{deterministic:true},(client,session,event,role)=>
+    'rs1:a:'+createHash('sha256').update(JSON.stringify(['receipt-source-address-v1',client,session,event,role])).digest('hex'));
+  receiptDeliveryConnections.add(db);
+}
+
+// One marker statement for the selected snapshot. The index walk filters
+// identities before each cap; no excerpt is read here. Additional tokens cover
+// Cards and anchors, which need only a denial decision, not source text.
+export function receiptDeliverySnapshot(db, entries, memo = createContentReadMemo(db), additional = [], options = {}) {
+  installReceiptDelivery(db);
+  const cache=memo.deliveryHeaders??=new Map(), states=memo.deliveryMemoryStates??=new Map();
+  const jobs=[...new Map(entries.map(entry=>{
+    const ns=entry.namespace,key=JSON.stringify([...boundary(ns),entry.memoryId]);
+    let after=options.after;
+    if(!after&&options.offset>0)after=db.prepare(`SELECT r.created_at AS createdAt,r.id FROM receipts r INDEXED BY memory_receipts
+      CROSS JOIN memories m ON m.id=r.memory_id WHERE r.memory_id=? AND m.owner_id=? AND m.scope=? AND m.project_id=?
+      ORDER BY r.created_at,r.id LIMIT 1 OFFSET ?`).get(entry.memoryId,...boundary(ns),options.offset-1);
+    const total=db.prepare(`SELECT count(*) AS n FROM receipts r INDEXED BY memory_receipts
+      CROSS JOIN memories m ON m.id=r.memory_id WHERE r.memory_id=? AND m.owner_id=? AND m.scope=? AND m.project_id=?`)
+      .get(entry.memoryId,...boundary(ns)).n;
+    return [key,{key,owner:ns.ownerId,scope:ns.scope,project:ns.projectId??'',id:entry.memoryId,total,offset:options.offset??0,
+      limit:options.limit??101,afterTime:after?.createdAt??'',afterId:after?.id??'',
+      positions:options.positions===false?0:1}];
+  })).values()].filter(job=>!cache.has(job.key));
+  const batches=[...additional];
+  // Read only existing anchors of these selected Memories. This private union
+  // warms their tokens without making qualification/tag inspection a reader.
+  for(const job of jobs){
+    const ns={ownerId:job.owner,scope:job.scope,projectId:job.project};
+    const anchors=db.prepare(`SELECT r.receipt_key,r.client,r.session_id,r.event_id,r.role
+      FROM qualification_anchors q CROSS JOIN receipts r ON r.id=q.receipt_id
+      CROSS JOIN memories m ON m.id=q.memory_id AND m.id=r.memory_id
+      WHERE q.memory_id=? AND m.owner_id=? AND m.scope=? AND m.project_id=? UNION
+      SELECT r.receipt_key,r.client,r.session_id,r.event_id,r.role
+      FROM procedural_tags p CROSS JOIN json_each(p.anchors) a
+      CROSS JOIN receipts r ON r.id=json_extract(a.value,'$.receiptId')
+      CROSS JOIN memories m ON m.id=p.memory_id AND m.id=r.memory_id
+      WHERE p.memory_id=? AND m.owner_id=? AND m.scope=? AND m.project_id=?`)
+      .all(job.id,...boundary(ns),job.id,...boundary(ns));
+    batches.push({namespace:ns,receipts:anchors});
+  }
+  const tokens=[...new Map(batches.flatMap(batch=>receiptDenialTokens(batch.receipts).map(token=>{
+    const tuple=[...boundary(batch.namespace),token];return [JSON.stringify(tuple),tuple];
+  }))).values()].filter(tuple=>!memo.receiptDenials?.has(JSON.stringify(tuple)));
+  if(!jobs.length&&!tokens.length)return memo;
+  const order=options.idOrder?'candidate.id':options.recent?'candidate.created_at DESC,candidate.id':'candidate.created_at,candidate.id';
+  const index=options.idOrder?'capture_memory_receipts':'memory_receipts';
+  const memorySQL=`SELECT 'memory' AS kind,j.value AS input,
+    CASE WHEN r.id IS NOT NULL THEN json_object('id',r.id,'memory_id',r.memory_id,'receipt_key',r.receipt_key,
+      'client',r.client,'session_id',r.session_id,'event_id',r.event_id,'role',r.role,'created_at',r.created_at,
+      'position',CASE WHEN json_extract(j.value,'$.positions')=0 THEN 0 ELSE
+        json_extract(j.value,'$.offset')+(SELECT count(*) FROM receipts previous INDEXED BY memory_receipts
+         WHERE previous.memory_id=r.memory_id AND (previous.created_at,previous.id)<=(r.created_at,r.id)
+           AND (previous.created_at,previous.id)>(json_extract(j.value,'$.afterTime'),json_extract(j.value,'$.afterId'))) END) END AS payload,
+    json_extract(j.value,'$.total') AS total
+    FROM json_each(?) j CROSS JOIN memories m ON m.id=json_extract(j.value,'$.id')
+    LEFT JOIN receipts r INDEXED BY sqlite_autoindex_receipts_1 ON r.id IN (
+      SELECT candidate.id FROM receipts candidate INDEXED BY ${index} WHERE candidate.memory_id=m.id
+        AND (candidate.created_at,candidate.id)>(json_extract(j.value,'$.afterTime'),json_extract(j.value,'$.afterId'))
+        AND NOT EXISTS(SELECT 1 FROM suppressed si WHERE si.owner_id=json_extract(j.value,'$.owner')
+          AND si.scope=json_extract(j.value,'$.scope') AND si.project_id=json_extract(j.value,'$.project')
+          AND si.fingerprint='rs1:i:'||candidate.receipt_key)
+        AND NOT EXISTS(SELECT 1 FROM suppressed sa WHERE sa.owner_id=json_extract(j.value,'$.owner')
+          AND sa.scope=json_extract(j.value,'$.scope') AND sa.project_id=json_extract(j.value,'$.project')
+          AND sa.fingerprint=receipt_address_v1(candidate.client,candidate.session_id,candidate.event_id,candidate.role))
+      ORDER BY ${order} LIMIT ?)
+    WHERE m.owner_id=json_extract(j.value,'$.owner') AND m.scope=json_extract(j.value,'$.scope')
+      AND m.project_id=json_extract(j.value,'$.project')
+`;
+  const recentJobs=options.includeRecent?jobs.map(job=>({...job,key:job.key+':recent'})):[];
+  const recentSQL=options.includeRecent?memorySQL.replace('ORDER BY '+order,'ORDER BY candidate.created_at DESC,candidate.id'):'';
+  const rows=db.prepare(memorySQL+(recentSQL?' UNION ALL '+recentSQL:'')+` UNION ALL SELECT 'token',t.value,NULL,s.fingerprint IS NOT NULL
+    FROM json_each(?) t LEFT JOIN suppressed s ON s.owner_id=json_extract(t.value,'$[0]')
+      AND s.scope=json_extract(t.value,'$[1]') AND s.project_id=json_extract(t.value,'$[2]')
+      AND s.fingerprint=json_extract(t.value,'$[3]')`).all(JSON.stringify(jobs),options.limit??101,
+      ...(recentSQL?[JSON.stringify(recentJobs),options.limit??101]:[]),JSON.stringify(tokens));
+  const denials=memo.receiptDenials??=new Map();
+  for(const job of [...jobs,...recentJobs]){cache.set(job.key,[]);states.set(job.key,{total:0,complete:true,after:options.after});}
+  for(const row of rows){
+    const input=JSON.parse(row.input);
+    if(row.kind==='token'){denials.set(JSON.stringify(input),!!row.total);continue;}
+    const headers=cache.get(input.key);if(row.payload)headers.push(JSON.parse(row.payload));
+    states.set(input.key,{total:row.total,complete:false,after:options.after,recent:!!options.recent});
+  }
+  for(const job of [...jobs,...recentJobs]){
+    const headers=cache.get(job.key);
+    headers.sort(job.key.endsWith(':recent')?(a,b)=>b.created_at.localeCompare(a.created_at)||a.id.localeCompare(b.id):options.idOrder?(a,b)=>a.id.localeCompare(b.id):options.recent?
+      (a,b)=>b.created_at.localeCompare(a.created_at)||a.id.localeCompare(b.id):
+      (a,b)=>a.created_at.localeCompare(b.created_at)||a.id.localeCompare(b.id));
+    states.get(job.key).complete=headers.length<job.limit;
+    const ns={ownerId:job.owner,scope:job.scope,projectId:job.project};
+    for(const header of headers)for(const token of receiptDenialTokens([header]))denials.set(JSON.stringify([...boundary(ns),token]),false);
+  }
+  return memo;
+}
+export function deliveryReceiptHeaders(db, ns, id, memo) {
+  const key=JSON.stringify([...boundary(ns),id]);
+  if(!memo.deliveryHeaders?.has(key))receiptDeliverySnapshot(db,[{namespace:ns,memoryId:id}],memo);
+  return memo.deliveryHeaders.get(key)??[];
+}
+export function deliveryReceiptRows(db, ns, id, memo, {limit=101,offset=0,after,recent=false,idOrder=false,cursor=false}={}) {
+  let headers=recent&&memo.deliveryHeaders?.has(JSON.stringify([...boundary(ns),id])+':recent')?
+    memo.deliveryHeaders.get(JSON.stringify([...boundary(ns),id])+':recent'):deliveryReceiptHeaders(db,ns,id,memo);
+  if(recent)headers=[...headers].sort((a,b)=>b.created_at.localeCompare(a.created_at)||a.id.localeCompare(b.id));
+  if(idOrder)headers=[...headers].sort((a,b)=>a.id.localeCompare(b.id));
+  const selected=headers.filter(row=>(offset===0||row.position>offset)&&(!after||row.created_at>after.createdAt||row.created_at===after.createdAt&&row.id>after.id)).slice(0,limit);
+  // The canonical candidate batch already read its first seventeen rows.
+  // Reuse those exact rows in this transaction; fetch only identities that a
+  // withheld prefix moved beyond that page. No serving proof crosses an await.
+  const candidate=memo.evidenceMemories?.get(JSON.stringify([boundary(ns),id]));
+  const cached=!cursor&&candidate?JSON.parse(candidate.batch_receipts):[];
+  const byId=new Map(cached.map(row=>[row.id,row]));
+  const missing=selected.filter(row=>!byId.has(row.id));
+  // Selected ids are themselves keyset ordered and capped. Each text read is
+  // at most 64 rows and at most cap+1 rows are read for the whole Memory.
+  for(let start=0;start<missing.length;start+=64){
+    const ids=missing.slice(start,start+64).map(row=>row.id);
+    for(const {cursor_row,...row}of db.prepare(`SELECT r.rowid AS cursor_row,r.* FROM json_each(?) wanted
+      CROSS JOIN receipts r ON r.id=wanted.value WHERE r.memory_id=?`).all(JSON.stringify(ids),id))
+      byId.set(row.id,cursor?{cursor_row,...row}:row);
+  }
+  return selected.map(header=>byId.get(header.id)).filter(Boolean);
+}
+
+export function cardDeliverySnapshot(db, refs, memo = createContentReadMemo(db)) {
+  const batches=[];
+  for(const ns of new Map(refs.filter(ref=>ref.type==='card').map(ref=>[JSON.stringify(boundary(ref.namespace)),ref.namespace])).values()){
+    const ids=refs.filter(ref=>ref.type==='card'&&JSON.stringify(boundary(ref.namespace))===JSON.stringify(boundary(ns))).map(ref=>ref.cardId);
+    batches.push({namespace:ns,receipts:cardReceiptTokens(db,ns,ids)});
+  }
+  return receiptDeliverySnapshot(db,[],memo,batches);
 }

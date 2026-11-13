@@ -72,7 +72,7 @@ export function suppressReceiptsInside(db, ns, memoryId, options, ids, denyShare
   const packaged = installedContentLayout(db).suppressionRevision;
   if (!packaged && !denySharedSource) return;
   const rows = receiptSnapshot ?? db.prepare(denySharedSource
-    ? `SELECT r.* FROM receipts r WHERE r.memory_id=? AND EXISTS(
+    ? `SELECT r.id,r.receipt_key,r.client,r.session_id,r.event_id,r.role FROM receipts r WHERE r.memory_id=? AND EXISTS(
       SELECT 1 FROM memories m WHERE m.id=r.memory_id AND m.owner_id=? AND m.scope=? AND m.project_id=?)`
     : 'SELECT id FROM receipts WHERE memory_id=?').all(memoryId, ...(denySharedSource ? boundary(ns) : []));
   if (denySharedSource) db.prepare(`INSERT OR IGNORE INTO suppressed(owner_id,scope,project_id,fingerprint)

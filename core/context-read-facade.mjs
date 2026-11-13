@@ -316,8 +316,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     return read(() => {
       const result = page(ranking, position, limit);
       const safetyMemo=prepareReadMemo(input,result.items.map(candidate=>candidate.ref));
-      for (const candidate of result.items) evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet,
-        {safetyMemo,batchRefs:result.items.map(candidate=>candidate.ref),legacyEvidence:Boolean(options.sources)});
+      result.items=result.items.filter(candidate=>evidence.itemsInside(candidate.ref.namespace,[candidate.ref],input.intent,input.readSet,
+        {safetyMemo,batchRefs:result.items.map(candidate=>candidate.ref),legacyEvidence:Boolean(options.sources)}).length);
       if (!options.sources) return result;
       assertSourcesInside(input, ranking.sourceState, 'cursor_stale');
       const budget = sourceBudget(Infinity);
@@ -469,7 +469,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           const safetyMemo=createContentReadMemo(db);
           candidateItems=candidateItems.filter(candidate=>{
             if(!contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId}))return true;
-            try {evidence.itemsInside(candidate.ref.namespace,[candidate.ref],input.intent,input.readSet,{safetyMemo,batchRefs:candidateItems.map(candidate=>candidate.ref)});return true;}
+            try {return evidence.itemsInside(candidate.ref.namespace,[candidate.ref],input.intent,input.readSet,{safetyMemo,batchRefs:candidateItems.map(candidate=>candidate.ref)}).length>0;}
             catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
           });
         }
@@ -669,7 +669,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           const { type, ref, state, origin } = item;
           const sourceRows = type === 'memory' && item.provenance.sourceAccess === 'available' ?
             (safetyMemo?.evidenceReceipts?.get(JSON.stringify([[ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId??''],ref.memoryId])) ??
-              db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id').all(ref.memoryId))
+              db.prepare(`SELECT r.* FROM json_each(?) wanted CROSS JOIN receipts r ON r.id=wanted.value WHERE r.memory_id=?`).all(JSON.stringify(item.provenance.receiptMetadata.map(receipt=>receipt.receiptId)),ref.memoryId))
               .filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)).slice(0,16) : [];
           const date = receiptEventDate(sourceRows);
           const sources = sourceRows.map((row, index) => {

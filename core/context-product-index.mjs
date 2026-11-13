@@ -148,7 +148,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         if (!item) { unavailable++; continue; }
         const sourceRows=item.type==='memory' && item.provenance.sourceAccess==='available'
           ? (safetyMemo?.evidenceReceipts?.get(JSON.stringify([[ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId??''],ref.memoryId])) ??
-            db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id').all(ref.memoryId))
+            db.prepare(`SELECT r.* FROM json_each(?) wanted CROSS JOIN receipts r ON r.id=wanted.value WHERE r.memory_id=?`).all(JSON.stringify(item.provenance.receiptMetadata.map(receipt=>receipt.receiptId)),ref.memoryId))
             .filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)).slice(0,16):[];
         const date=receiptEventDate(sourceRows);
         const sources=sourceRows.map((row,index)=>{

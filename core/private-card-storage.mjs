@@ -1,4 +1,4 @@
-import { cardDeliverable, cardReceiptTokens, receiptDenialsInside } from './content-safety.mjs';
+import { cardDeliverable, cardReceiptTokens, receiptDenialsInside, receiptDeliverySnapshot } from './content-safety.mjs';
 import { contentSuppressionRequestInside, hasContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { assertContentOutput, assertContentScopes } from './content-safety-boundary.mjs';
@@ -289,8 +289,8 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     const { encode: cursorEncode, decode: cursorDecode } = method === 'listCards' ? cardCursor : legacyCursor;
     const cursor = cursorDecode(input.cursor, expected, ns);
     if (method === 'getSource') {
-      if (input.source.type === 'receipt' && !cardSourceDeliverable(ns,input.source)) fail('source_unavailable');
       const row = resolve(ns, input.source), parts = [];
+      if (input.source.type === 'receipt' && !cardSourceDeliverable(ns,input.source)) fail('source_unavailable');
       let start = cursor?.after ?? 0;
       if (!Number.isSafeInteger(start) || start < 0 || start >= row.text.length ||
           (start > 0 && /[\uDC00-\uDFFF]/.test(row.text[start]))) fail('invalid_cursor');
@@ -319,6 +319,9 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
       const after = typeof cursor?.after === 'number' ? db.prepare(`SELECT id FROM private_cards WHERE ${where} AND rowid=?`)
         .get(...boundary(ns), cursor.after)?.id : cursor?.after ?? '';
       if (after === undefined) fail('cursor_stale');
+      const candidateIds=db.prepare(`SELECT id FROM private_cards WHERE ${where} AND state IN (${input.states.map(()=>'?').join(',')}) AND id>? ORDER BY id LIMIT ?`)
+        .all(...boundary(ns),...input.states,after,hasCardLineage(db)?1024:count+1).map(row=>row.id);
+      receiptDeliverySnapshot(db,[],memo,[{namespace:ns,receipts:cardReceiptTokens(db,ns,candidateIds)}]);
       if (hasCardLineage(db)) {
         const probe = db.prepare(`SELECT rowid AS cursor_row,id,revision,state,body_revision,created_at,updated_at,confirmed_at
           FROM private_cards WHERE ${where} AND state=? AND id>? ORDER BY id LIMIT ?`);

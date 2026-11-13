@@ -1,5 +1,5 @@
 import { cachedContentLayout } from './content-safety-schema.mjs';
-import { contentReadSafety } from './content-safety.mjs';
+import { contentReadSafety, receiptDeliverySnapshot, createContentReadMemo, anchorsDeliverable } from './content-safety.mjs';
 import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { transaction } from './database.mjs';
 import { countTokens } from './model-budget.mjs';
@@ -66,16 +66,17 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
     return { episodeId: row.id, revision: row.revision, client: row.client, nextStep,
       semanticSupport: 'unassessed', sources };
   }
-  function sourcedMemory(ns, row, group) {
+  function sourcedMemory(ns, row, group, memo) {
     if (!db.prepare(`SELECT 1 FROM index_read_memories WHERE owner_id=? AND scope=? AND project_id=? AND id=? AND revision=?`)
       .get(ns.ownerId, ns.scope, ns.projectId, row.id, row.revision)) fail('index_revision_conflict');
     let evidence;
-    try { evidence = readSourceEvidence(row); }
+    try { evidence = readSourceEvidence(row,memo); }
     catch (error) {
       if (error.code === 'context_item_too_large') return { memory: memoryMetadata(row, decisionReview), tooLarge: true };
       throw error;
     }
-    const tag = group === 'procedural' ? proceduralStorage.inspect(row.id) : null;
+    let tag = group === 'procedural' ? proceduralStorage.inspect(row.id) : null;
+    if(tag&&!anchorsDeliverable(db,ns,row.id,tag.anchors,memo))tag=null;
     if (tag?.procedural) for (const anchor of tag.anchors) {
       const receipt = evidence.receipts.find(r => r.id === anchor.receiptId);
       if (!receipt || sourceDigest(receipt.excerpt) !== anchor.digest) fail('storage_error');
@@ -92,25 +93,31 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
       if (expected && expected.indexRevision !== current) fail('index_revision_conflict');
       if (groups.procedural || groups.background) indexStorage.assertAvailable(ns);
       const result = { indexRevision: current, groups: {} };
+      const selected=new Map(),sharedMemo=createContentReadMemo(db),memoryEntries=[];
+      const layout=cachedContentLayout(db),safety=Boolean(layout?.suppressionRevision);
+      for(const group of requestedNames(groups))if(groups[group]){
+        const query=group==='nextSteps'?projected.query:contextQuery(ns,group,{rawAncestry:safety&&layout.rawLineage});
+        const rows=db.prepare(query.sql).all(...query.params);selected.set(group,rows);
+        if(group!=='nextSteps')for(const row of rows)memoryEntries.push({namespace:ns,memoryId:row.id});
+      }
+      const episodeTokens=episodeReadRowsInside(db,ns,selected.get('nextSteps')??[],[],{memo:sharedMemo,defer:true});
+      receiptDeliverySnapshot(db,memoryEntries,sharedMemo,[{namespace:ns,receipts:episodeTokens.receipts}],{limit:101});
       for (const group of requestedNames(groups)) {
         if (!groups[group]) {
           result.groups[group] = { identities: [], items: [] };
           continue;
         }
-        const layout = cachedContentLayout(db), safety = Boolean(layout?.suppressionRevision);
-        const query = group === 'nextSteps' ? projected.query : contextQuery(ns, group, { rawAncestry: safety && layout.rawLineage });
-        let rows = db.prepare(query.sql).all(...query.params)
-          .filter(row => !safety || (group === 'nextSteps' ? !contentSuppressionReasonInside(db, ns) : contentReadSafety(db, { namespace: ns, selectedMemory: row,
+        let rows = selected.get(group)          .filter(row => !safety || (group === 'nextSteps' ? !contentSuppressionReasonInside(db, ns) : contentReadSafety(db, { namespace: ns, selectedMemory: row,
             ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed));
         if (group === 'nextSteps') for (let i=0; i<rows.length; i++) {
           assertEpisodeRead?.(ns, rows[i], projected.budget);
           rows[i] = episodeReadRow(rows[i]);
         }
-        if (group === 'nextSteps') rows = episodeReadRowsInside(db,ns,rows).rows.filter(row => JSON.parse(row.record).processing.state === 'ready');
+        if (group === 'nextSteps') rows = episodeReadRowsInside(db,ns,rows,[],{memo:sharedMemo}).rows.filter(row => JSON.parse(row.record).processing.state === 'ready');
         const identities = rows.map(row => ({ id: row.id, revision: row.revision }));
         if (expected && JSON.stringify(identities) !== JSON.stringify(expected.groups[group].identities)) fail('revision_conflict');
         let items;
-        try { items = rows.slice(0, 12).map(row => group === 'nextSteps' ? step(row) : sourcedMemory(ns, row, group)); }
+        try { items = rows.slice(0, 12).map(row => group === 'nextSteps' ? step(row) : sourcedMemory(ns, row, group, sharedMemo)); }
         catch (error) {
           if (expected && error.code !== 'index_revision_conflict') fail('revision_conflict');
           throw error;
