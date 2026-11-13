@@ -13,7 +13,7 @@ const owners = new WeakMap();
 export const localRawSearchManager = port => owners.get(port) ?? null;
 
 /** Bounded, non-overlapping maintenance turns, owned by the core. */
-export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
+export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { semanticDisabledReason = 'disabled' } = {}) {
   const embeddingPolicy = embedder ? rawEmbeddingPolicy(policy) : null;
   const entries = new Map();
   let timer, running, closing, closed = false, unsupported = false, next = 0;
@@ -101,8 +101,8 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
       entry.readers.set(result.candidates[0].proof, reader);
       while (entry.readers.size > 8) entry.readers.delete(entry.readers.keys().next().value);
     }
-    entry.semantic = result.semantic;
-    return result;
+    entry.semantic = embedder ? result.semantic : Object.freeze({ state: 'bm25-only', reason: semanticDisabledReason });
+    return embedder ? result : Object.freeze({ ...result, semantic: entry.semantic });
   }
   async function call(method, input) {
     try {
@@ -112,7 +112,7 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}) {
       arm();
       const service = await serviceFor(entry);
       return success(await (method === 'status' ? service.status().then(status => ({ ...status,
-        semantic: entry.semantic ?? { state: 'bm25-only', reason: embedder ? 'partial_coverage' : 'disabled' },
+        semantic: entry.semantic ?? { state: 'bm25-only', reason: embedder ? 'partial_coverage' : semanticDisabledReason },
         embeddingBudget: embedder ? { scope: 'process', sharedWith: 'memory',
           maxRequests: embeddingPolicy.maxRequests, maxUsd: embeddingPolicy.maxUsd } : null })) : method === 'maintain'
         ? maintain(entry, service) : search(entry, service, request)));

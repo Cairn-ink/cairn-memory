@@ -37,10 +37,18 @@ export function json(text) {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw Error(); return parsed;
   } catch { fail('configuration_conflict'); }
 }
-export async function nativeSnapshot(path) {
+// Clients own their config directories and may make them readable by others.
+// Only the directory resolved in this request gets the client policy.
+// A client name alone cannot relax unrelated settings or Cairn-owned paths.
+export async function nativeDirectory(path, request) {
+  const clientDirectory = ['claude-code','codex'].includes(request?.client) &&
+    absolute(request.clientConfigPath) && path === dirname(request.clientConfigPath);
+  return directory(path,!clientDirectory);
+}
+export async function nativeSnapshot(path, request) {
   let file;
   try {
-    if (!absolute(path)) fail('unsafe_path'); await directory(dirname(path),true);
+    if (!absolute(path)) fail('unsafe_path'); await nativeDirectory(dirname(path),request);
     let initial;
     try { initial = await lstat(path); } catch (error) { if (error.code === 'ENOENT') return { text:'',identity:null }; throw error; }
     if (!initial.isFile() || initial.isSymbolicLink() || initial.uid !== process.getuid() || initial.nlink !== 1 || (initial.mode & 0o022) || initial.size > 1048576) fail('unsafe_path');
@@ -53,14 +61,14 @@ export async function nativeSnapshot(path) {
   finally { await file?.close(); }
 }
 export const sameSnapshot = (a,b) => a.text === b.text && JSON.stringify(a.identity) === JSON.stringify(b.identity);
-export async function nativeWrite(path, text, before) {
+export async function nativeWrite(path, text, before, request) {
   const temporary = path + '.cairn-local-' + randomUUID() + '.tmp'; let file;
   try {
     file = await open(temporary,'wx',before.mode ?? 0o600); await file.writeFile(text); await file.sync(); await file.close(); file = undefined;
     await notifyWrite(path,'native-before-publication');
-    if (!sameSnapshot(before,await nativeSnapshot(path))) fail('configuration_changed');
+    if (!sameSnapshot(before,await nativeSnapshot(path,request))) fail('configuration_changed');
     await rename(temporary,path); await syncDirectory(dirname(path)); await notifyWrite(path,'native-published');
-    if ((await nativeSnapshot(path)).text !== text) fail('configuration_changed');
+    if ((await nativeSnapshot(path,request)).text !== text) fail('configuration_changed');
   } finally { await file?.close(); await unlink(temporary).catch(error => { if (error.code !== 'ENOENT') throw error; }); }
 }
 const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";

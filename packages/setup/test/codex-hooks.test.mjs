@@ -53,7 +53,7 @@ async function fixture(t,{answers=[''],args,config='',hooks,paired=false,claudeP
     `process.env.FAKE_STATE=${JSON.stringify(statePath)};process.env.FAKE_CALLS=${JSON.stringify(calls)};\n${source}`;
   // Freeze native-shaped schema/serde strings in this fake executable so the
   // production format collector (rather than a version-only seam) decides.
-  const evidenceVersion=['0.162.0','0.163.0','0.164.0','0.165.0','0.166.0'].includes(state.version)?state.version:'0.160.1';
+  const evidenceVersion=['0.162.0','0.163.0','0.164.0','0.165.0','0.166.0','0.167.0','0.167.2'].includes(state.version)?state.version:'0.160.1';
   const evidence=JSON.parse(await readFile(new URL(`../../../integrations/codex/test/fixtures/binary-${evidenceVersion}/format.json`,import.meta.url)));
   const embedded='\n/*\n'+Object.values(evidence.hooks).map(value=>JSON.stringify(value,null,2)).join('\n')+'\n'+SERDE_MARKERS.join('\n')+'\n*/\n';
   await writeFile(join(bin,'codex'),`#!${process.execPath}\n${command}${nativeBinary?'':embedded}`,{mode:0o755});
@@ -952,7 +952,7 @@ test('CX-5 app-server format verdict controls recall independently of install-ti
   assert.match(status.stdout,/Find memories when you ask: on for verified hosts only/);
 });
 
-for (const version of ['0.163.0','0.164.0','0.165.0','0.166.0']) test(`Q07 installed capture and recall on native ${version} records`,async t=>{
+for (const version of ['0.163.0','0.164.0','0.165.0','0.166.0','0.167.0','0.167.2']) test(`Q07 installed capture and recall on native ${version} records`,async t=>{
   const f=await memoryRuntime(t,{state:{version}}); f.host.kind='app-server';
   const file=new URL(`../../../integrations/codex/test/fixtures/native-rollout-${version}-hooks-recall.jsonl`,import.meta.url);
   let text=await readFile(file,'utf8'); const originalId=JSON.parse(text.split('\n')[0]).payload.id;

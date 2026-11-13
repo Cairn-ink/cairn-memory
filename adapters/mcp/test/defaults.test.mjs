@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { parseConfiguration } from '../cli.mjs';
 import { createCairnServer } from '../server.mjs';
@@ -16,13 +17,16 @@ const namespace = { ownerId: 'synthetic-default-owner', scope: 'personal', proje
 test('CLI defaults, opt-outs and help advertise preferred reads', () => {
   const base = ['--db', '/synthetic/store.sqlite', '--owner', namespace.ownerId];
   assert.equal(parseConfiguration(base).contextRead, 'context-read-v1');
+  assert.equal(parseConfiguration(base).rawSemantic, undefined);
+  assert.equal(parseConfiguration([...base, '--raw-semantic']).rawSemantic, true);
+  assert.equal(parseConfiguration([...base, '--raw-semantic', '--no-context-semantic']).contextSemantic, false);
   assert.equal(parseConfiguration([...base, '--no-context-read']).contextRead, false);
   assert.equal(parseConfiguration([...base, '--no-raw']).raw, false);
   assert.equal(parseConfiguration([...base, '--no-context-semantic']).contextSemantic, false);
   assert.throws(() => parseConfiguration([...base, '--no-context-read', '--context-read', 'context-read-v1']));
   const result = spawnSync(process.execPath, [new URL('../cli.mjs', import.meta.url).pathname, '--help'], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
-  for (const name of ['--no-context-read', '--no-raw', 'find_memory_candidates', 'read_memory_context']) assert.ok(result.stdout.includes(name));
+  for (const name of ['--no-context-read', '--no-raw', '--raw-semantic', 'find_memory_candidates', 'read_memory_context']) assert.ok(result.stdout.includes(name));
 });
 test('keyless server starts with context tools, and explicit off removes them', async t => {
   const workspace = createTestWorkspace(t);
@@ -106,4 +110,10 @@ test('automatic embedding refresh supports a Raw-free Memory-only store; semanti
     }
     await client.close(); await server.close();
   }
+});
+
+// Public defaults and setup disclosure must explain both transmission and opt-out.
+test('defaults text discloses semantic sends and explicit Raw opt-in', () => {
+  const text = readFileSync(new URL('../../../docs/defaults.md',import.meta.url),'utf8');
+  for (const literal of ['Raw document and query embeddings are both off','raw_semantic_not_enabled','--raw-semantic','--no-context-semantic','memories and search text','estimated US$1 per server run']) assert.ok(text.includes(literal),literal);
 });

@@ -13,13 +13,19 @@ export function removeReviewedRoleHelpAdditions(help) {
   const defaults = 'Defaults: Raw retention and Raw search maintenance are on (--no-raw disables retention).\n' +
     'Preferred memory reads: find_memory_candidates and read_memory_context (contextRead is on).\n' +
     '--no-context-read removes these tools; --no-context-semantic keeps reads BM25-only.\n' +
-    'OPENAI_API_KEY automatically selects bounded OpenAI embeddings when present.\n' +
+    "With OPENAI_API_KEY available to the Cairn MCP server, memories and search text\n" +
+    "go to OpenAI for semantic search, up to an estimated US$1 per server run.\n" +
+    "Saved conversations are sent only with --raw-semantic or an explicit\n" +
+    "--context-embedder configuration. Raw document and query embeddings are off by default.\n" +
+    "To keep everything on this computer, don't give the server a key.\n" +
+    "--no-context-semantic only turns off embeddings; with a key, recall and other\n" +
+    "model features still send memory text to OpenAI.\n" +
     'See docs/defaults.md for costs, options and every default.\n\n';
   if (help.includes('Defaults:')) {
     assert.equal(help.split(defaults).length, 2, 'exact default help block appears once');
     assert.ok(help.startsWith('Cairn Memory — local stdio MCP developer preview\n\n' + defaults), 'default help position');
     help = help.replace(defaults, '');
-    const current = '  cairn-memory --db ABS --owner ID [--project ID] [--context-read context-read-v1 | --no-context-read] [--context-read-personal]\n' +
+    const current = '  cairn-memory --db ABS --owner ID [--project ID] [--context-read context-read-v1 | --no-context-read] [--context-read-personal] [--raw-semantic]\n' +
       '    [--context-read-sources relations-one-hop-v1,moc-v1]\n' +
       '    [--context-embedder openai --context-embed-model MODEL --context-embed-dimensions N --context-embed-max-requests N --context-embed-max-usd X]';
     const legacy = '  cairn-memory --db ABS --owner ID [--project ID] --context-read context-read-v1 [--context-read-personal]\n' +
@@ -29,6 +35,8 @@ export function removeReviewedRoleHelpAdditions(help) {
     help = help.replace(current, legacy);
     const currentContext = 'fetch_memory_candidate_evidence and read_memory_context by default. Read sets are fixed at startup; personal\n' +
       'reads require project scope and --context-read-personal. Semantic defaults on with OPENAI_API_KEY; otherwise reads use BM25.\n' +
+      'Raw needs --raw-semantic or an explicit --context-embedder group for document\n' +
+      'and query embedding. --no-context-semantic overrides both.\n' +
       'Background turns refresh configured embeddings. Explicit provider overrides\n' +
       'require all five provider options together. Hosted uses rrf-k10.';
     const legacyContext = 'fetch_memory_candidate_evidence only. Read sets are fixed at startup; personal\n' +
@@ -89,8 +97,10 @@ export function withReviewedReadDefaults(probe) {
   }
   for (const index of [1, 2]) {
     const { ok, mode, ...check } = JSON.parse(expected.cli.stdout[index]);
-    expected.cli.stdout[index] = JSON.stringify({ ok, mode, raw: false, rawSearch: false, contextRead: false, ...check }, null, 2);
+    expected.cli.stdout[index] = JSON.stringify({ ok, mode, raw: false, rawSearch: false, rawSemantic: false, rawSemanticReason: 'raw_semantic_not_enabled', contextRead: false, ...check }, null, 2);
   }
+  const { ok: contextOk, mode: contextMode, contextRead, ...contextCheck } = JSON.parse(expected.cli.stdout[3]);
+  expected.cli.stdout[3] = JSON.stringify({ ok: contextOk, mode: contextMode, contextRead, rawSemantic: false, rawSemanticReason: 'raw_semantic_not_enabled', ...contextCheck });
   expected.cli.parse = JSON.stringify({ ...JSON.parse(expected.cli.parse), contextRead: false, raw: false });
   return expected;
 }

@@ -53,6 +53,8 @@ test('C06 pinned independent 94c1076f wire fixtures, controlled identity/clock/e
   const diagnostics = expected.contextHost.assembly._meta['ink.cairn/context-read-diagnostics'];
   expected.contextHost.assembly._meta['ink.cairn/context-read-diagnostics'] =
     insertAfter(diagnostics, 'trace', { coverage: { raw: 'unavailable' } });
+  // Raw semantic search is opt-in; the check now says that it isn't enabled.
+  expected.checkConfig = insertAfter(expected.checkConfig, 'contextRead', { rawSemantic: false, rawSemanticReason: 'raw_semantic_not_enabled' });
   const compare = actual => assert.equal(actual, JSON.stringify(expected, null, 2) + '\n');
   const actual = readFileSync(report, 'utf8');
   compare(actual);
