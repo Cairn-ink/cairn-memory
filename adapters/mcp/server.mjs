@@ -642,7 +642,7 @@ function startContextMaintenance(core, access, { cards = false, semantic = true,
   const { readSet } = access;
   const capabilities = core.getContextReadCapabilities?.();
   let types = capabilities?.ok ? capabilities.value.types : ['memory'];
-  let closed = false, active, timer;
+  let closed = false, active, timer, nextProjection = 0;
   const arm = () => {
     if (closed) return;
     timer = setTimeout(() => {
@@ -655,8 +655,14 @@ function startContextMaintenance(core, access, { cards = false, semantic = true,
           if (!pass.ok || pass.value.state === 'refused') return;
         }
         if (cards) { const current = core.getContextReadCapabilities?.(); if (current?.ok) types = current.value.types; }
+        // Sidecar generations include the exact type set. Refreshing the
+        // combined Memory/Card projection never embeds a Memory-only reader's
+        // generation (Raw stores also install Card tables). Rotate through
+        // the bounded public current projections without retaining requests.
+        const projections = semantic && types.length > 1 ? [types, ['memory'], ['card']] : [types];
+        const selectedTypes = projections[nextProjection++ % projections.length];
         const refresh = () => access.call(core, 'refreshContextIndex', {
-          readSet, types, intent: 'current', budget: { maxItems: 16, maxMs: 1000 },
+          readSet, types: selectedTypes, intent: 'current', budget: { maxItems: 16, maxMs: 1000 },
         });
         if (!closed && access.call && (semantic || cards)) await (run ? run(refresh, 1000) : refresh());
       }).catch(() => {}).finally(() => { active = null; arm(); });
