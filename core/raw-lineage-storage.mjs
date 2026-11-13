@@ -251,7 +251,13 @@ function* writerReceiptInputs(db, check, ns, receipts) {
       if(keys.length) {
         check();
         const filter=eligible&&receiptEncoding.get(db)==='UTF-8'?predicate:'',args=filter?[wanted]:[];
-        const inputs=db.prepare(`SELECT r.*,wanted.key AS wanted_entry,
+        const cursorColumns=filter?',CAST(r.created_at AS BLOB) AS receipt_created_at_bytes,CAST(r.id AS BLOB) AS receipt_id_bytes':'';
+        const output=row=>{
+          if(!filter)return row;
+          const {receipt_created_at_bytes,receipt_id_bytes,...receipt}=row;
+          return receipt;
+        };
+        const inputs=db.prepare(`SELECT r.*${cursorColumns},wanted.key AS wanted_entry,
           json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted
           FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN (
             SELECT rowid FROM receipts INDEXED BY memory_receipts
@@ -265,19 +271,21 @@ function* writerReceiptInputs(db, check, ns, receipts) {
         }
         for(const [entry,memory] of keys.entries()) {
           const rows=byMemory.get(entry)??[];
-          yield* rows.slice(0,sourceReceiptPageSize);
+          yield* rows.slice(0,sourceReceiptPageSize).map(output);
           if(rows.length<=sourceReceiptPageSize)continue;
           // The witness counts filtered rows; both pages use the same predicate.
-          // NUL-free UTF-8 cursor keys round-trip unchanged; writers use UUID/ISO.
+          // Keep the stored UTF-8 bytes: decoded TEXT may replace bytes or truncate NUL.
           // (created_at,id) is total because id is UNIQUE, including ties.
           let receiptAfter=rows[sourceReceiptPageSize-1];
           while(true) {
             check();
-            const page=db.prepare(`SELECT r.*,? AS memory_revision,? AS memory_deleted FROM receipts r INDEXED BY memory_receipts
-              WHERE memory_id=? AND (created_at,id)>(?,?)${filter} ORDER BY created_at,id LIMIT 5`)
-              .all(memory.revision,memory.deleted,memory.id,receiptAfter.created_at,receiptAfter.id,...args);
+            const seek=filter?'(CAST(? AS TEXT),CAST(? AS TEXT))':'(?,?)';
+            const cursor=filter?[receiptAfter.receipt_created_at_bytes,receiptAfter.receipt_id_bytes]:[receiptAfter.created_at,receiptAfter.id];
+            const page=db.prepare(`SELECT r.*${cursorColumns},? AS memory_revision,? AS memory_deleted FROM receipts r INDEXED BY memory_receipts
+              WHERE memory_id=? AND (created_at,id)>${seek}${filter} ORDER BY created_at,id LIMIT 5`)
+              .all(memory.revision,memory.deleted,memory.id,...cursor,...args);
             const next=page.slice(0,sourceReceiptPageSize);
-            yield* next;
+            yield* next.map(output);
             if(page.length<=sourceReceiptPageSize)break;
             receiptAfter=next.at(-1);
           }
