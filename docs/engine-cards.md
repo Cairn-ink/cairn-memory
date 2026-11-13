@@ -97,10 +97,16 @@ deleted, its revision advances, and its live source bindings are removed.
 Raw conversation deletion and episode forgetting run the same purge for each
 Memory their cascade terminally forgets. In a mixed cascade, terminal forgets
 run before receipt removal from surviving Memories: a shared engine Card is
-purged and unbound first, while other Cards of a surviving Memory are only
-staled by its revision change. This changes the order of Memory and Card effects
+purged and unbound first, while other engine Cards of a surviving Memory are
+staled by its revision change, including Cards bound through a retained receipt
+from another conversation. Earlier sealed-store validation could roll back that
+deletion; it now accepts the trigger's exact invalidation steps while keeping
+the stale text unavailable to reads. This changes the order of Memory and Card effects
 in that mixed case; returned counts stay the same and Raw effects retain plan
-order. Episode forgetting without Raw roots still terminally forgets every linked
+order. Suppression facts are also written in forget-first order. A pending review
+conflict or held transition linking the forgotten and surviving Memories is
+dropped with reason `forgotten`; previously it was `stale_evidence` when the
+surviving Memory sorted first. Episode forgetting without Raw roots still terminally forgets every linked
 Memory.
 A user can also delete an engine Card with `deleteKnowledgeCard`, which erases
 its title and body on both sealed and unsealed stores.

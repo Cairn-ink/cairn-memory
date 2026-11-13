@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compareWideTraces, assertWidePins, summary, ledgerAdditionSummary, compareWideTables,
-  currentReceiptWalkSQLTexts, reconstructWideTrace, currentAdditionSummary, validateSqlAdditions, hash, cardFamilySQL, forgettingMethods, assertArchivedCardStatementTexts } from '../testing/card-lineage-off-wide-compare.mjs';
+  currentReceiptWalkSQLTexts, reconstructWideTrace, currentAdditionSummary, validateSqlAdditions, hash, cardFamilySQL, forgettingMethods,
+  assertArchivedCardStatementTexts, validateCardStatementTexts, normalizeSQL, wideArchiveMode } from '../testing/card-lineage-off-wide-compare.mjs';
 
 const row = (sql, method = 'exec', bindings = []) => [sql, method, bindings];
 const ns = ['synthetic-owner', 'personal', ''];
@@ -225,6 +226,9 @@ const reviewedCardText = 'UPDATE private_cards SET revision=revision+1 WHERE id=
 for (const mode of ['archive', 'pins']) {
   for (const [name, method, sql, lists] of [
     ['extra binding delete in forget', 'forget', 'DELETE FROM card_memory_bindings WHERE card_id=?', {}],
+    ['extra replace in forget', 'forget', 'REPLACE INTO private_cards(id) VALUES(?)', {}],
+    ['extra insert or replace in forget', 'forget', 'INSERT OR REPLACE INTO card_epochs VALUES(?)', {}],
+    ['extra upsert in forget', 'forget', 'INSERT INTO card_epochs VALUES(?) ON CONFLICT(owner_id) DO UPDATE SET generation=2', {}],
     ['extra Card update in deleteConversation', 'deleteConversation', reviewedCardText, {}],
     ['one character changed in listed text', 'forget', reviewedCardText + ' ', { forget: [reviewedCardText] }],
     ['text listed for another method', 'forget', reviewedCardText, { deleteConversation: [reviewedCardText] }],
@@ -275,15 +279,60 @@ test('archive card-family: list equality covers the union of workloads', () => {
 });
 test('card-family classifier covers target tables, schema probes and Card operation joins', () => {
   for (const sql of ['INSERT INTO card_effects VALUES(?)', 'INSERT OR IGNORE INTO card_epochs VALUES(?)',
+    'REPLACE INTO private_cards(id) VALUES(?)', 'REPLACE INTO card_effects VALUES(?)',
+    'INSERT OR REPLACE INTO private_cards(id) VALUES(?)', 'INSERT OR REPLACE INTO card_epochs VALUES(?)',
+    'INSERT INTO private_cards(id) VALUES(?) ON CONFLICT(id) DO UPDATE SET revision=2',
+    'INSERT INTO card_epochs VALUES(?) ON CONFLICT(owner_id) DO UPDATE SET generation=2',
     'UPDATE private_cards SET revision=2', 'DELETE FROM card_memory_bindings WHERE card_id=?',
     'UPDATE main."card_effects" SET ordinal=2', 'DELETE FROM [card_bindings]',
     'WITH wanted AS (SELECT 1) DELETE FROM card_bindings WHERE card_id=?',
     "SELECT 1 FROM sqlite_schema WHERE name IN ('other','private_cards')",
     "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'", 'SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id'])
     assert.equal(cardFamilySQL(row(sql)), true, sql);
-  for (const sql of ['UPDATE memories SET deleted=1', "SELECT 1 FROM sqlite_master WHERE name='memories'", 'DELETE FROM card1'])
+  for (const sql of ['UPDATE memories SET deleted=1', "SELECT 1 FROM sqlite_master WHERE name='memories'", 'DELETE FROM card1',
+    'SELECT * FROM private_cards WHERE id=?', 'SELECT 1 FROM card_memory_bindings WHERE card_id=? LIMIT 1'])
     assert.equal(cardFamilySQL(row(sql)), false, sql);
 });
+
+for (const padded of [false, true]) test(`reviewed text list rejects a purge text even without a matching ledger row, padded=${padded}`, () => {
+  const sql = padded ? '\n  SELECT  1 FROM sqlite_master WHERE type=\'table\' AND name=\'card_memory_bindings\'  ' : additions[0][0];
+  const f = fixture(); f.cardStatementTexts = { forget: [sql] };
+  // An extra listed copy used to bypass the purge ledger in pins mode.
+  f.parts[2][2].splice(-1, 0, row(sql, 'get')); f.current = trace(f.parts);
+  assert.throws(() => assertWidePins(f.key, f.current, f.sqlAdditions, pinned(f), f.sqlAdditionMethods, f.cardStatementTexts),
+    { code: 'ERR_ASSERTION', message: /cannot hide purge-family statements/ });
+  assert.throws(() => validateCardStatementTexts(f.cardStatementTexts),
+    { code: 'ERR_ASSERTION', message: /cannot hide purge-family statements/ });
+});
+for (const padded of [false, true]) test(`reviewed text list rejects a normalized ledger duplicate, padded=${padded}`, () => {
+  // Keep this text outside the purge recognizer to exercise the independent
+  // ledger-text check rather than succeeding through its purge rejection.
+  const sql = padded ? '\n UPDATE  private_cards SET revision=revision+1 WHERE id=?  ' : reviewedCardText;
+  assert.equal(normalizeSQL(sql), normalizeSQL(reviewedCardText));
+  assert.throws(() => validateCardStatementTexts({ forget: [sql] }, [{ statement: row(reviewedCardText) }]),
+    { code: 'ERR_ASSERTION', message: /cannot duplicate ledger statement texts/ });
+});
+test('a generic table probe stays distinct from every literal-name ledger probe after normalization', () => {
+  const generic = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?";
+  const f = fixture(); validateCardStatementTexts({ forget: [generic] }, f.sqlAdditions);
+  for (const entry of f.sqlAdditions) assert.notEqual(normalizeSQL(generic), normalizeSQL(entry.statement[0]));
+  assert.equal(cardFamilySQL(row(generic, 'get', ['card_memory_bindings'])), true);
+});
+test('archive card-family: an empty archive collection cannot pass list equality', () => {
+  assert.throws(() => assertArchivedCardStatementTexts([], {}),
+    { code: 'ERR_ASSERTION', message: /needs at least one trace/ });
+});
+for (const setting of [undefined, '0', '1', 'true']) {
+  test(`wide archive policy compares an available archive, setting=${setting}`, () => {
+    assert.equal(wideArchiveMode(true, setting), 'archive');
+  });
+  for (const cause of ['missing revision', 'unreadable archive'])
+    test(`wide archive policy handles ${cause}, setting=${setting}`, () => {
+      if (setting === '1') assert.throws(() => wideArchiveMode(false, setting),
+        { code: 'ERR_ASSERTION', message: /archive revision not available/ });
+      else assert.equal(wideArchiveMode(false, setting), 'pins');
+    });
+}
 for (const mode of ['archive', 'pins']) test(`${mode} card-family: a listed forgetting method needs no ledger rows or addition-method entry`, () => {
   const current = trace([['reject', success, [row(reviewedCardText, 'run', ['synthetic-card'])]]]);
   const f = { key: 'workload:23', current, archived: structuredClone(current), sqlAdditions: [], sqlAdditionMethods: [],

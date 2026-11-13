@@ -12,6 +12,9 @@ import { beginContentWriteSafety } from '../content-write-safety.mjs';
 import { contentSafetyInventory } from '../content-safety-migration.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 import { transaction } from '../database.mjs';
+import { createMemoryRuntime } from '../runtime.mjs';
+import { batch } from '../testing/episode-helpers.mjs';
+import { request, splitRaw } from '../testing/raw-capture-fixtures.mjs';
 
 const timestamp = '2026-06-01T00:00:00.000Z';
 const modes = ['sealed', 'without lineage', 'suppression without lineage'];
@@ -187,9 +190,9 @@ for (const mode of modes) test(`engine stale ordinary write: causal capture reti
   await assertStaleAndRebuild(f, w, before, [target], [replacement.id]);
 });
 
-function publish(f, memories) {
+function publish(f, memories, key = 'moc:synthetic-ordinary') {
   const s = createEngineCardStorage({ db: f.db, identity: f.identity, ready() {} }), ids = new Set(memories.map(m => m.id));
-  return s.commit(ns, { key: 'moc:synthetic-ordinary', memories: s.snapshot(ns, 512, () => {}).memories.filter(m => ids.has(m.id)) },
+  return s.commit(ns, { key, memories: s.snapshot(ns, 512, () => {}).memories.filter(m => ids.has(m.id)) },
     { body: 'Synthetic retained ordinary engine body.' }, timestamp, () => {});
 }
 // Observe namespace and binding faults without disabling native schema guards.
@@ -328,4 +331,102 @@ test('source operation explains a shared Card by forget first and a sibling Card
   assert.equal(row(f, survivor.id).revision, survivor.revision + 1);
   assert.deepEqual(effects(f, survivor.id).map(e => e.kind), ['evidence_invalidated']);
   assert.equal(memoryRow(f, second.id).confidence, .9);
+});
+
+function rawLinkedEpisode(f, memories, sessionId) {
+  const runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+  try {
+    // Match the existing Raw deletion fixtures: reserve the episode in the Raw
+    // root's session and link already captured Memories without new extraction.
+    const input = { ...batch('synthetic-linked-event', 'Synthetic linked evidence.', sessionId), client: 'claude-code' };
+    const { episodeId } = runtime.reserveEpisodeBatch(ns, input);
+    const claim = runtime.claimAdmission(ns, { ...input, leaseMs: 125000 });
+    runtime.finishAdmission(ns, { ...input, token: claim.token, items: [] });
+    for (const memory of memories) {
+      const ids = f.db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(memory.id).map(row => row.id);
+      f.db.prepare('INSERT INTO episode_memory_links VALUES(?,?,?,?,?,?)')
+        .run('synthetic-link-' + memory.id, episodeId, memory.id, input.eventId, memory.revision, JSON.stringify(ids));
+    }
+    return f.db.prepare('SELECT * FROM session_episodes WHERE id=?').get(episodeId);
+  } finally { runtime.close(); }
+}
+
+for (const route of ['deleteConversation', 'forgetEpisode']) for (const mixed of [false, true])
+test(`sealed ${route} stales an engine Card bound through a different retained receipt, mixed=${mixed}`, async t => {
+  const content = 'Synthetic retained ordinary evidence';
+  let items = [content];
+  const f = await lineageFixture(t, { base: 33, raw: true, options: { model: { contextWindow: 8192, countTokens: () => 1,
+    extract: () => ({ items: items.map(content => ({ content, kind: 'fact', confidence: .8, sourceIndices: [0] })) }),
+  } } });
+  const capture = async (sessionId, eventId) => ok(await f.core.captureRaw(request(
+    splitRaw('Synthetic Raw source ' + eventId, { id: eventId })[0], { namespace: ns, client: 'claude-code', sessionId, eventId })));
+  const independent = await capture('synthetic-retained-root', 'synthetic-retained-event');
+  const first = ok(independent.interpretation).admission.memories[0];
+  const rD = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(first.id);
+  // Deterministic earliest receipt even when both captures share a millisecond.
+  f.db.prepare('UPDATE receipts SET created_at=? WHERE id=?').run('2026-01-01T00:00:00.000Z', rD.id);
+  rD.created_at = '2026-01-01T00:00:00.000Z';
+  items = mixed ? [content, 'Synthetic terminal ordinary evidence'] : [content];
+  const removed = await capture('synthetic-removed-root', 'synthetic-removed-event');
+  const admitted = ok(removed.interpretation).admission.memories;
+  assert.equal(admitted.length, mixed ? 2 : 1);
+  assert.ok(admitted.some(memory => memory.id === first.id), 'second capture deduplicates the retained Memory');
+  const ma = ok(f.core.get({ namespace: ns, memoryId: first.id })).memory;
+  const mb = admitted.find(memory => memory.id !== ma.id);
+  const rC = f.db.prepare('SELECT * FROM receipts WHERE memory_id=? AND id!=?').get(ma.id, rD.id);
+  assert.ok(rC); assert.ok(rD.created_at < rC.created_at);
+  const survivor = publish(f, [ma], 'moc:synthetic-retained-receipt');
+  const purged = mixed ? publish(f, [ma, mb], 'moc:synthetic-mixed-receipt') : null;
+  const before = row(f, survivor.id), bindings = f.db.prepare('SELECT * FROM card_memory_bindings WHERE card_id=?').all(survivor.id);
+  assert.equal(bindings.length, 1); assert.equal(bindings[0].receipt_id, rD.id);
+  const sources = f.db.prepare('SELECT * FROM card_body_sources WHERE card_id=? ORDER BY source_key').all(survivor.id);
+  for (const conversationId of [independent.raw.conversationId, removed.raw.conversationId])
+    assert.ok(sources.some(source => source.source_kind === 'raw' && source.source_key === conversationId), 'sealed closure includes both Raw roots');
+  const keptReceipt = f.db.prepare('SELECT * FROM receipts WHERE id=?').get(rD.id);
+  if (route === 'deleteConversation') {
+    const raw = f.db.prepare('SELECT * FROM raw_conversations WHERE id=?').get(removed.raw.conversationId);
+    const result = ok(f.core.deleteConversation({ namespace: ns, conversationId: raw.id, expectedRevision: raw.revision,
+      actionId: 'synthetic-other-receipt-delete' }));
+    assert.deepEqual([result.forgottenMemories, result.retainedMemories, result.removedReceipts], [mixed ? 1 : 0, 1, mixed ? 2 : 1]);
+  } else {
+    const episode = rawLinkedEpisode(f, admitted, 'synthetic-removed-root');
+    assert.ok(f.db.prepare('SELECT 1 FROM raw_conversations WHERE client=? AND session_key=?')
+      .get(episode.client, episode.session_key), 'episode forgetting uses the Raw-root path');
+    assert.equal(ok(f.core.forgetEpisode({ namespace: ns, episodeId: episode.id, expectedRevision: episode.revision })).forgotten, true);
+  }
+  const retained = ok(f.core.get({ namespace: ns, memoryId: ma.id }));
+  assert.equal(retained.memory.revision, ma.revision + 1); assert.equal(retained.memory.content, content);
+  assert.deepEqual(f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(ma.id), [keptReceipt]);
+  assert.equal(retained.receipts.length, 1); assert.equal(retained.receipts[0].eventId, 'synthetic-retained-event');
+  assert.equal(f.db.prepare('SELECT 1 FROM receipts WHERE id=?').get(rC.id), undefined);
+  assert.equal(f.db.prepare('SELECT 1 FROM raw_conversations WHERE id=?').get(removed.raw.conversationId), undefined);
+  const stale = row(f, survivor.id);
+  assert.equal(stale.revision, before.revision + 1); assert.equal(stale.state, before.state);
+  assert.equal(stale.title, before.title); assert.equal(stale.body, before.body);
+  assert.deepEqual({ ...stale, revision: before.revision, updated_at: before.updated_at }, before,
+    'only the trigger revision and timestamp changed on the retained Card');
+  assert.equal(stale.updated_at, memoryRow(f, ma.id).updated_at);
+  assert.deepEqual(f.db.prepare('SELECT * FROM card_memory_bindings WHERE card_id=?').all(survivor.id), bindings);
+  assert.deepEqual(f.db.prepare('SELECT * FROM card_body_sources WHERE card_id=? ORDER BY source_key').all(survivor.id), sources);
+  assert.deepEqual(effects(f, survivor.id).map(effect => [effect.kind, effect.revision, effect.action_id]),
+    [['evidence_invalidated', before.revision + 1, 'memory-revision-' + ma.id + '-' + retained.memory.revision]]);
+  assert.equal(ok(f.call('getCard', { cardId: survivor.id })).card, null);
+  assert.ok(ok(f.call('listCards', { states: ['confirmed'] })).cards.every(card => card.id !== survivor.id));
+  assert.equal(JSON.stringify(ok(f.call('mapEvidence', { type: 'card' }))).includes(survivor.id), false);
+  for (const intent of ['current', 'history']) {
+    const selected = ok(f.call('selectEvidence', { intent, query: 'Synthetic', types: ['memory', 'card'], limit: 24 }));
+    assert.ok(selected.items.some(item => item.ref.memoryId === ma.id));
+    assert.ok(selected.items.every(item => item.ref.cardId !== survivor.id));
+    const fetched = f.call('fetchEvidence', { intent, refs: [{ type: 'card', namespace: ns, cardId: survivor.id,
+      revision: stale.revision, bodyRevision: stale.body_revision }] });
+    assert.equal(fetched.ok, false); assert.equal(fetched.error.code, 'evidence_unavailable');
+  }
+  if (mixed) {
+    assert.equal(memoryRow(f, mb.id).deleted, 1);
+    const deleted = row(f, purged.id);
+    assert.equal(deleted.state, 'deleted'); assert.equal(deleted.title, null); assert.equal(deleted.body, null);
+    assert.equal(deleted.revision, purged.revision + 1);
+    assert.equal(f.db.prepare('SELECT count(*) n FROM card_memory_bindings WHERE card_id=?').get(purged.id).n, 0);
+    assert.deepEqual(effects(f, purged.id).map(effect => effect.kind), ['card_deleted']);
+  }
 });

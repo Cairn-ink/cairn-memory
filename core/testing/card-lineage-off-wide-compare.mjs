@@ -43,7 +43,7 @@ const identifier = '(?:"[^"]+"|`[^`]+`|\\[[^\\]]+\\]|[a-z_][a-z_0-9]*)';
 const qualifiedIdentifier = `(${identifier}(?:\\s*\\.\\s*${identifier})?)`;
 const cardTable = name => /^(?:private_cards|card_[a-z_]+)$/i.test(name);
 const tableName = name => name.split(/\s*\.\s*/).at(-1).replace(/^["`\[]|["`\]]$/g, '');
-const cardWrite = new RegExp(`\\b(?:INSERT(?:\\s+OR\\s+\\w+)?\\s+INTO|UPDATE(?:\\s+OR\\s+\\w+)?|DELETE\\s+FROM)\\s+${qualifiedIdentifier}`, 'i');
+const cardWrite = new RegExp(`\\b(?:(?:INSERT(?:\\s+OR\\s+\\w+)?|REPLACE)\\s+INTO|UPDATE(?:\\s+OR\\s+\\w+)?|DELETE\\s+FROM)\\s+${qualifiedIdentifier}`, 'i');
 const schemaRead = new RegExp(`\\b(?:FROM|JOIN)\\s+${qualifiedIdentifier}`, 'gi');
 const cardJoin = new RegExp(`\\bJOIN\\s+${qualifiedIdentifier}`, 'gi');
 export function cardFamilySQL([sql, , bindings = []]) {
@@ -55,13 +55,25 @@ export function cardFamilySQL([sql, , bindings = []]) {
     ([...sql.matchAll(/['"`]((?:private_cards|card_[a-z_]+))['"`]/gi)].length > 0 || bindings.some(value => typeof value === 'string' && cardTable(value)));
 }
 
-export function validateCardStatementTexts(texts = {}) {
+export function validateCardStatementTexts(texts = {}, entries = []) {
   assert.ok(texts && typeof texts === 'object' && !Array.isArray(texts), 'cardStatementTexts is a method map');
+  const ledgerTexts = new Set(entries.map(entry => normalizeSQL(entry.statement[0])));
   for (const [method, list] of Object.entries(texts)) {
     assert.ok(forgettingMethods.has(method) && Array.isArray(list) && list.every(sql => typeof sql === 'string' && sql.length > 0),
       'reviewed card texts are exact nonempty strings for forgetting methods');
     assert.deepEqual(list, [...new Set(list)].sort(), 'reviewed card texts are sorted and unique');
+    for (const sql of list) {
+      const normalized = normalizeSQL(sql);
+      assert.ok(!purgeAdditionSQL([normalized]), 'reviewed card texts cannot hide purge-family statements');
+      assert.ok(!ledgerTexts.has(normalized), 'reviewed card texts cannot duplicate ledger statement texts');
+    }
   }
+}
+
+// Keep the environment lookup at the gate boundary so this policy is pure.
+export function wideArchiveMode(available, requireArchive) {
+  assert.ok(available || requireArchive !== '1', 'archive revision not available (CAIRN_REQUIRE_WIDE_ARCHIVE=1)');
+  return available ? 'archive' : 'pins';
 }
 
 export function archivedCardStatementTexts(archived) {
@@ -74,8 +86,9 @@ export function archivedCardStatementTexts(archived) {
 // A single fixture list covers all workload traces, so the gate checks their
 // archive union after comparing the individual traces. Pure comparisons default
 // to checking their one supplied archive, including unused list entries.
-export function assertArchivedCardStatementTexts(archives, texts = {}) {
-  validateCardStatementTexts(texts);
+export function assertArchivedCardStatementTexts(archives, texts = {}, entries = []) {
+  validateCardStatementTexts(texts, entries);
+  assert.ok(archives.length > 0, 'archived card text comparison needs at least one trace');
   const observed = archives.map(archivedCardStatementTexts);
   for (const method of forgettingMethods) assert.deepEqual(
     [...new Set(observed.flatMap(map => map[method]))].sort(), texts[method] ?? [],
@@ -174,7 +187,7 @@ export function reconstructWideTrace(key, archived, entries = [], sqlAdditionMet
 // entire trace, compare full rows in their reviewed calls, and reject leftovers.
 // It also returns the precise positions to subtract for receipt count checks.
 export function currentAdditionSummary(key, current, entries = [], sqlAdditionMethods = [], cardStatementTexts = {}) {
-  validateSqlAdditions(entries, sqlAdditionMethods); validateCardStatementTexts(cardStatementTexts); checkCallRanges(current);
+  validateSqlAdditions(entries, sqlAdditionMethods); validateCardStatementTexts(cardStatementTexts, entries); checkCallRanges(current);
   const wanted = orderedEntries(key, entries), positions = new Set(), listedPositions = new Set(), calls = [];
   const texts = new Set(entries.map(entry => entry.statement[0]));
   const isAddition = row => purgeAdditionSQL(row) || texts.has(row[0]);
@@ -219,6 +232,8 @@ export function currentAdditionSummary(key, current, entries = [], sqlAdditionMe
       // Known pins-mode limit: another copy of an already listed exact text
       // passes this classifier. Archive exact comparison and the workload SQL
       // hash still catch it; this reviewed list intentionally has no counts.
+      // Plain Card-table SELECTs without a card_operations join also remain
+      // outside this classifier; archive comparison and SQL hashes cover them.
       if (cardFamilySQL(statement) && !positions.has(index)) assert.ok((cardStatementTexts[method] ?? []).includes(statement[0]),
         `${method} has an unreviewed card-family statement`);
     }
@@ -260,8 +275,8 @@ export function compareWideTables(current, archived, removedRows = []) {
 }
 
 export function compareWideTraces({ key, current, archived, sqlAdditions = [], sqlAdditionMethods = [], cardStatementTexts = {}, checkArchivedCardTexts = true, receiptWalk = false }) {
-  validateCardStatementTexts(cardStatementTexts);
-  if (checkArchivedCardTexts) assertArchivedCardStatementTexts([archived], cardStatementTexts);
+  validateCardStatementTexts(cardStatementTexts, sqlAdditions);
+  if (checkArchivedCardTexts) assertArchivedCardStatementTexts([archived], cardStatementTexts, sqlAdditions);
   const reconstructed = reconstructWideTrace(key, archived, sqlAdditions, sqlAdditionMethods);
   const { positions } = currentAdditionSummary(key, current, sqlAdditions, sqlAdditionMethods, cardStatementTexts);
   assert.deepEqual(current.effectWitnesses, archived.effectWitnesses, 'complete effect witnesses, including rolled-back writes');

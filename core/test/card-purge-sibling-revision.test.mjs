@@ -38,7 +38,7 @@ function admit(f, label, receipts) {
   return ok(f.core.admit({ namespace: ns, memory: { content, kind: 'fact' },
     receipts: receipts ?? [receipt(label, content)] })).memory;
 }
-const memoryRow = (f, id) => f.db.prepare('SELECT revision,content,updated_at,deleted FROM memories WHERE id=?').get(id);
+const memoryRow = (f, id) => f.db.prepare('SELECT * FROM memories WHERE id=?').get(id);
 const rowBytes = row => Buffer.from(JSON.stringify(row), 'utf8');
 const cardRow = (f, id) => f.db.prepare('SELECT state,title,body FROM private_cards WHERE id=?').get(id);
 const forget = (f, id, revision) => {
@@ -61,7 +61,12 @@ async function cards(f, groups) {
     const output = await f.model.consolidate({ input: { memories } });
     const value = validateConsolidation(output, memories, f.model);
     assert.ok(value);
-    const card = storage.commit(ns, { key: 'moc:synthetic-part-' + index, memories }, value,
+    const cluster = { key: 'moc:synthetic-part-' + index, memories };
+    // Maintenance claims before committing; that path installs the Card layout
+    // on an ordinary store before the publication queries touch Card tables.
+    const attempt = storage.claim(ns, cluster, '2026-06-01T00:00:00.000Z', () => {});
+    assert.ok(attempt);
+    const card = storage.commit(ns, cluster, value,
       '2026-06-01T00:00:00.000Z', () => {});
     assert.ok(card);
     assert.equal(cardRow(f, card.id).state, 'confirmed');
@@ -69,6 +74,7 @@ async function cards(f, groups) {
     assert.equal(cardRow(f, card.id).body, value.body);
     assert.deepEqual(f.db.prepare('SELECT DISTINCT memory_id FROM card_memory_bindings WHERE card_id=? ORDER BY memory_id')
       .all(card.id).map(row => row.memory_id), group.map(memory => memory.id).sort());
+    storage.finish(ns, attempt, 'succeeded', '2026-06-01T00:00:00.000Z');
     built.push(card);
   }
   assert.deepEqual(storage.cards(ns).map(card => [card.id, card.status]).sort(),
@@ -109,18 +115,28 @@ for (const sealed of [false, true]) {
 
   test(`conversation deletion preserves an unrelated Card sibling; receipt removal increments a retained Memory revision exactly once (existing behaviour): sealed=${sealed}`, async t => {
     const f = await fixture(t, sealed, { raw: true });
+    f.model.extract = () => ({ items: ['A', 'C'].map(label => ({ content: `Synthetic evidence ${label}.`,
+      kind: 'fact', confidence: .8, sourceIndices: [0] })) });
     const part = splitRaw('Synthetic evidence A. Synthetic evidence C.', { id: 'synthetic-message' })[0];
     const captured = ok(await f.core.captureRaw(request(part, { namespace: ns, client: 'codex',
       sessionId: 'synthetic-source', eventId: 'synthetic-capture' })));
-    assert.deepEqual(ok(captured.interpretation).admission.memories, []);
-    const source = excerpt => ({ client: 'codex', sessionId: 'synthetic-source',
-      eventId: part.id, role: 'user', excerpt });
-    const a = admit(f, 'A', [source('Synthetic evidence A.')]);
+    const admitted = ok(captured.interpretation).admission.memories;
+    assert.equal(admitted.length, 2);
+    const a = admitted.find(memory => memoryRow(f, memory.id).content === 'Synthetic evidence A.');
+    const originalC = admitted.find(memory => memoryRow(f, memory.id).content === 'Synthetic evidence C.');
+    assert.ok(a); assert.ok(originalC);
     const b = admit(f, 'B');
-    const c = admit(f, 'C', [source('Synthetic evidence C.'), receipt('independent', 'Synthetic evidence C.')]);
+    f.model.extract = () => ({ items: [{ content: 'Synthetic evidence C.', kind: 'fact', confidence: .8, sourceIndices: [0] }] });
+    const independent = ok(await f.core.captureRaw(request(splitRaw('Synthetic independent evidence C.',
+      { id: 'synthetic-independent-message' })[0], { namespace: ns, client: 'codex',
+      sessionId: 'synthetic-independent-source', eventId: 'synthetic-independent-capture' })));
+    const repeated = ok(independent.interpretation).admission.memories;
+    assert.equal(repeated.length, 1); assert.equal(repeated[0].id, originalC.id);
+    const c = repeated[0];
     const [card] = await cards(f, [[a, b, c]]);
     const beforeA = memoryRow(f, a.id), beforeB = memoryRow(f, b.id), beforeC = memoryRow(f, c.id);
-    const retainedReceipt = f.db.prepare("SELECT * FROM receipts WHERE memory_id=? AND client='synthetic'").get(c.id);
+    const retainedReceipt = f.db.prepare('SELECT * FROM receipts WHERE memory_id=? AND event_id=?')
+      .get(c.id, 'synthetic-independent-message');
     assert.ok(retainedReceipt);
     assert.equal(f.db.prepare("SELECT count(*) n FROM receipts WHERE memory_id=? AND client='codex'").get(b.id).n, 0);
     assert.equal(f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(c.id).n, 2);

@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "a59ce985108b3ec7edfbab79bd7b0c093ef9ffcd767bc9a246820ad69084445e",
-  "bytes": 1372569,
+  "sha256": "d45b6ff0642c3b77c6bd25c04d05f9bb2af80ecd27e929bc6f5e3202ea61008b",
+  "bytes": 1372759,
   "files": [
     "LICENSE",
     "README.md",
@@ -796,7 +796,7 @@
     "core/engine-card-maintenance.mjs": "344be021200c394feef5d81139cd86b574f0fbeb8e2a010420ddee2e92880013",
     "core/engine-card-output.mjs": "e986baf3361382893c30c792862f68571a814d14acda22ef1ffa18dca11863f0",
     "core/engine-card-storage.mjs": "caff201014dfb9a1bc4be534b604862cc2e1be35e16b14be1e9e69d5617ff9ce",
-    "docs/engine-cards.md": "f0ca0ea283cdc47435c89e12eecf035fca5289491c4a7256dae06c824614ddab",
+    "docs/engine-cards.md": "9064cf0eb9229ee5322608f5a706293f9f1fb274691578ed9f60165dfb297721",
     "bin/cairn-memory.mjs": "7c24872a106de8d06c0a66499002f46aa8894b588b005ac9d39a50df4e586981",
     "README.md": "c69cc385f74cfc658b2e3a00dd842ea84fe595a6ecdf9f9cda9b16049b6dc588",
     "THIRD_PARTY_NOTICES.md": "f53d69106bd47f5c23acf119a83d3adc61ddcdcaf4ec908a1cf4f6cee9e4f23c",
