@@ -3,14 +3,17 @@ export const DEFAULT_ENDPOINT = "https://cairn.ink";
 export const TOOLS = ["cairn_recall_memory", "cairn_remember_memory", "cairn_forget_memory"];
 export const OFF_SWITCH = "openclaw cairn auto-recall off";
 export const DEFAULT_TIMEOUT_MS = 5000;
+export const PAUSE_NOTICE = "While saving is paused, Cairn recall in OpenClaw is off, including when you ask for it; resume to use it.";
+export const WINDOWS_NOTICE = "Cairn recall does not run on a native Windows Gateway yet, so use WSL2.";
 export const RECALL_PROMPT = recallPrompt();
 // OpenClaw recommended-setup: timeout + setup grace + 1500 ms preflight + 1500 ms settlement.
 export function worstCaseBlockingMs(timeoutMs = DEFAULT_TIMEOUT_MS, setupGraceTimeoutMs = 0) {
   if (!Number.isInteger(timeoutMs) || timeoutMs < 250 || !Number.isInteger(setupGraceTimeoutMs) || setupGraceTimeoutMs < 0) throw new Error("cairn_setup_conflict");
   return timeoutMs + setupGraceTimeoutMs + 3000;
 }
-export function recallPrompt(timeoutMs = DEFAULT_TIMEOUT_MS, setupGraceTimeoutMs = 0) {
-  return `Turn on automatic recall? It runs extra calls to your model before each reply in direct chats, using your usage; it can add up to about ${worstCaseBlockingMs(timeoutMs, setupGraceTimeoutMs) / 1000} s. [Y/n]`;
+export function recallPrompt(timeoutMs = DEFAULT_TIMEOUT_MS, setupGraceTimeoutMs = 0, cliTimeoutMs) {
+  const cli = cliTimeoutMs ? ` CLI-backend models can add up to about ${worstCaseBlockingMs(cliTimeoutMs, setupGraceTimeoutMs) / 1000} s.` : "";
+  return `Turn on automatic recall? It runs extra calls to your model before each reply in direct chats, using your usage; it can add up to about ${worstCaseBlockingMs(timeoutMs, setupGraceTimeoutMs) / 1000} s.${cli} [Y/n]`;
 }
 export const configSchema = {
   type: "object", additionalProperties: false,
@@ -54,10 +57,49 @@ export function defaultRecallTools(draft, registration) {
   if (["memory-core", "none"].includes(selected.toLowerCase())) return ["memory_search", "memory_get"];
   throw new Error("cairn_memory_provider_unresolved");
 }
+// Ported from OpenClaw 2026.11.3 dist/config-CMGCj_3o.mjs:26-37 and
+// dist/types-DgEaE0BK.mjs ACTIVE_MEMORY_RESERVED_TOOLS_ALLOW. Neither the
+// configured-list normalizer nor its reserved set is exported by plugin-sdk.
+const RESERVED_RECALL_TOOLS = new Set([
+  "*", "agents_list", "apply_patch", "browser", "canvas", "cron", "edit", "exec", "gateway",
+  "heartbeat_respond", "heartbeat_response", "image", "image_generate", "message", "music_generate",
+  "nodes", "pdf", "process", "read", "session_status", "sessions_history", "sessions_list",
+  "sessions_send", "sessions_spawn", "sessions_yield", "subagents", "tts", "progress_card",
+  "video_generate", "web_fetch", "web_search", "write",
+]);
+export function normalizeRecallTools(values) {
+  const names = (Array.isArray(values) ? values : []).filter((name) => typeof name === "string")
+    .map((name) => name.trim().toLowerCase()).filter(Boolean);
+  return [...new Set(names)].filter((name) => !name.startsWith("group:") && !RESERVED_RECALL_TOOLS.has(name)).slice(0, 32);
+}
+export function mergedRecallTools(draft, registration) {
+  const literal = draft.plugins?.entries?.["active-memory"]?.config?.toolsAllow ?? [];
+  const effective = normalizeRecallTools(literal);
+  const previous = effective.length ? effective : defaultRecallTools(draft, registration);
+  const merged = [...literal, ...previous.filter((name) => !effective.includes(name))];
+  if (!normalizeRecallTools(merged).includes(TOOLS[0])) merged.push(TOOLS[0]);
+  const result = normalizeRecallTools(merged);
+  // The host caps the effective list at 32. Refuse rather than silently lose a
+  // provider tool or report Cairn enabled when its addition would be truncated.
+  if (![...previous, TOOLS[0]].every((name) => result.includes(name))) throw new Error("cairn_setup_conflict");
+  return merged;
+}
+export function activeMemoryEnabled(draft) {
+  const entry = draft.plugins?.entries?.["active-memory"];
+  return !!entry && entry.enabled !== false && entry.config?.enabled !== false;
+}
 export function activeMemoryBudget(draft, timeoutMs) {
   const existing = draft.plugins?.entries?.["active-memory"]?.config;
-  return { timeoutMs: existing && Object.hasOwn(existing, "timeoutMs") ? existing.timeoutMs : timeoutMs,
-    setupGraceTimeoutMs: existing && Object.hasOwn(existing, "setupGraceTimeoutMs") ? existing.setupGraceTimeoutMs : 0 };
+  // OpenClaw config-CMGCj_3o.mjs:98-109,166-170: retain host defaults,
+  // including the runtime-dependent CLI default, when setup leaves keys absent.
+  const raw = !activeMemoryEnabled(draft) && !Object.hasOwn(existing ?? {}, "timeoutMs") ? timeoutMs : existing?.timeoutMs;
+  const parsedString = typeof raw === "string" && /^[+-]?\d+$/.test(raw.trim()) ? Number(raw) : NaN;
+  const parsed = typeof raw === "number" ? raw : Number.isSafeInteger(parsedString) ? parsedString : NaN;
+  const effective = Math.min(120000, Math.max(250, Math.floor(Number.isFinite(parsed) && parsed > 0 ? parsed : 15000)));
+  const grace = existing?.setupGraceTimeoutMs;
+  return { timeoutMs: effective,
+    setupGraceTimeoutMs: Math.min(30000, Math.max(0, Math.floor(typeof grace === "number" && Number.isFinite(grace) ? grace : 0))),
+    ...(raw == null ? { cliTimeoutMs: 45000 } : {}) };
 }
 export function removeAutomaticRecall(draft) {
   const config = draft.plugins?.entries?.["active-memory"]?.config;
@@ -83,15 +125,18 @@ export function mergeSetup(draft, { endpoint, provider, secretPath, automatic, t
   }
   policy[key] = [...new Set([...(policy[key] ?? []), ...TOOLS])];
   if (!automatic) return;
+  const wasEnabled = activeMemoryEnabled(draft);
+  const toolsAllow = mergedRecallTools(draft, memoryRegistration);
   const active = draft.plugins.entries["active-memory"] ??= {};
   const config = active.config ??= {};
   for (const key of ["agents", "toolsAllow"]) if (Object.hasOwn(config, key) &&
     (!Array.isArray(config[key]) || !config[key].every((x) => typeof x === "string"))) throw new Error("cairn_setup_conflict");
   const append = (values, name) => values.includes(name) ? values : [...values, name];
-  config.toolsAllow = append(config.toolsAllow ?? defaultRecallTools(draft, memoryRegistration), TOOLS[0]);
+  config.toolsAllow = toolsAllow;
   config.agents = append(config.agents ?? [], "main");
   for (const [key, value] of Object.entries({ mode: "always", allowedChatTypes: ["direct"], queryMode: "message", timeoutMs, setupGraceTimeoutMs: 0 })) {
-    if (!Object.hasOwn(config, key)) config[key] = value;
+    if (!wasEnabled && !Object.hasOwn(config, key)) config[key] = value;
   }
+  if (config.enabled === false) config.enabled = true;
   active.enabled = true;
 }

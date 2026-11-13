@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { readSecretFile } from "openclaw/plugin-sdk/secret-file";
 import { runSetup } from "../src/setup.mjs";
 import { createTerminal } from "../src/terminal.mjs";
-import { configSchema, DEFAULT_TIMEOUT_MS, defaultRecallTools, endpointOrigin, mergeSetup, removeAutomaticRecall, OFF_SWITCH, PLUGIN_ID, RECALL_PROMPT, recallPrompt, TOOLS } from "../src/config.mjs";
+import { configSchema, DEFAULT_TIMEOUT_MS, PAUSE_NOTICE, WINDOWS_NOTICE, activeMemoryBudget, normalizeRecallTools, defaultRecallTools, endpointOrigin, mergeSetup, removeAutomaticRecall, OFF_SWITCH, PLUGIN_ID, RECALL_PROMPT, recallPrompt, TOOLS } from "../src/config.mjs";
 import { checkCredential } from "../src/hosted.mjs";
 import { fakeCloud, TOKEN } from "./cloud.mjs";
 async function fixture(t, initial = {}) {
@@ -49,6 +49,7 @@ test("setup validates before writes, asks exact cost prompt default yes, persist
   assert.equal(await runSetup(f.api, { io: f.io }), true);
   assert.equal(f.asks[1].hidden, true); assert.equal(f.asks[2].prompt, RECALL_PROMPT);
   assert.equal(f.output[f.output.indexOf(RECALL_PROMPT) + 1], OFF_SWITCH);
+  assert.ok(f.output.includes(PAUSE_NOTICE));
   const raw = await readFile(f.configPath, "utf8"); assert.ok(!raw.includes(TOKEN));
   const config = JSON.parse(raw), entry = config.plugins.entries[PLUGIN_ID];
   assert.equal(entry.config.token.source, "file"); assert.equal(entry.config.token.id, "value");
@@ -222,4 +223,70 @@ test("unknown provider without a loaded capability refuses setup before writing"
   assert.equal(await readFile(f.configPath, "utf8"), f.initialBytes);
   assert.deepEqual(await readdir(f.root), ["openclaw.json"]);
   assert.ok(f.output.some((line) => line.startsWith("Cannot determine")));
+});
+
+const setupOptions = { endpoint: "https://cairn.ink", provider: "cairn-test", secretPath: "/synthetic/token", automatic: true, timeoutMs: 5000 };
+for (const literal of [[], ["*"], ["group:memory"], [" READ ", "exec", "group:any", "*"], [" MEMORY_SEARCH ", "*", "group:memory", "read"]]) {
+  test(`setup preserves effective recall and literal entries for ${JSON.stringify(literal)}`, () => {
+    const draft = { plugins: { entries: { "active-memory": { enabled: true, config: { toolsAllow: [...literal] } } } } };
+    mergeSetup(draft, setupOptions);
+    const result = draft.plugins.entries["active-memory"].config.toolsAllow;
+    assert.deepEqual(result.slice(0, literal.length), literal);
+    assert.deepEqual(normalizeRecallTools(result), normalizeRecallTools(literal).length ? ["memory_search", TOOLS[0]] : ["memory_search", "memory_get", TOOLS[0]]);
+  });
+}
+for (const literal of [[], ["*"], ["group:memory"], ["read"]]) {
+  test(`unresolved provider with ignored tools ${JSON.stringify(literal)} refuses before any secret write`, async (t) => {
+    const f = await fixture(t, { plugins: { slots: { memory: "custom-memory" }, entries: {
+      "active-memory": { enabled: true, config: { toolsAllow: literal } },
+    } } });
+    assert.equal(await runSetup(f.api, { io: f.io }), false);
+    assert.equal(await readFile(f.configPath, "utf8"), f.initialBytes);
+    assert.deepEqual(await readdir(f.root), ["openclaw.json"]);
+    assert.ok(f.output.some((line) => line.startsWith("Cannot determine")));
+  });
+}
+test("full effective tool list refuses rather than truncate a tool or omit Cairn", () => {
+  const draft = { plugins: { entries: { "active-memory": { config: { toolsAllow: Array.from({ length: 32 }, (_, i) => `custom_${i}`) } } } } };
+  assert.throws(() => mergeSetup(draft, setupOptions), /cairn_setup_conflict/);
+});
+test("enabled Active Memory retains all absent settings and discloses host and CLI default budgets", async (t) => {
+  const f = await fixture(t, { agents: { defaults: { model: "claude-cli/opus" } }, plugins: { entries: { "active-memory": { enabled: true, config: { toolsAllow: ["memory_search"], agents: ["work"] } } } } });
+  assert.equal(await runSetup(f.api, { io: f.io }), true);
+  const active = JSON.parse(await readFile(f.configPath)).plugins.entries["active-memory"];
+  assert.deepEqual(active, { enabled: true, config: { toolsAllow: ["memory_search", TOOLS[0]], agents: ["work", "main"] } });
+  assert.equal(f.asks[2].prompt, recallPrompt(15000, 0, 45000));
+  assert.match(f.asks[2].prompt, /about 18 s.*about 48 s/);
+  assert.ok(f.output.some((line) => line.includes("45000 ms") && line.includes("48000 ms")));
+});
+for (const entry of [{ enabled: false, config: {} }, { enabled: true, config: { enabled: false } }]) {
+  test(`turning Active Memory on fills absent defaults for ${JSON.stringify(entry)}`, async (t) => {
+    const innerWasOff = entry.config.enabled === false;
+    const f = await fixture(t, { plugins: { entries: { "active-memory": structuredClone(entry) } } });
+    assert.equal(await runSetup(f.api, { io: f.io }), true);
+    const active = JSON.parse(await readFile(f.configPath)).plugins.entries["active-memory"];
+    assert.equal(active.enabled, true);
+    assert.notEqual(active.config.enabled, false);
+    assert.equal(active.config.mode, "always"); assert.equal(active.config.queryMode, "message");
+    assert.equal(active.config.timeoutMs, 5000); assert.equal(active.config.setupGraceTimeoutMs, 0);
+    assert.equal(f.asks[2].prompt, RECALL_PROMPT);
+    assert.equal(f.output.includes("Automatic recall had been turned off globally and is now on."), innerWasOff);
+  });
+}
+test("native Windows setup prints the recall limitation", async (t) => {
+  const f = await fixture(t);
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  try {
+    Object.defineProperty(process, "platform", { value: "win32" });
+    f.answers[0] = "invalid";
+    assert.equal(await runSetup(f.api, { io: f.io }), false);
+    assert.ok(f.output.includes(WINDOWS_NOTICE));
+  } finally { Object.defineProperty(process, "platform", original); }
+});
+test("budget follows OpenClaw normalization without writing effective defaults", () => {
+  const draft = { plugins: { entries: { "active-memory": { enabled: true, config: { timeoutMs: "20000", setupGraceTimeoutMs: 30000 } } } } };
+  assert.deepEqual(activeMemoryBudget(draft, 5000), { timeoutMs: 20000, setupGraceTimeoutMs: 30000 });
+  draft.plugins.entries["active-memory"].enabled = false;
+  draft.plugins.entries["active-memory"].config.timeoutMs = null;
+  assert.deepEqual(activeMemoryBudget(draft, 5000), { timeoutMs: 15000, setupGraceTimeoutMs: 30000, cliTimeoutMs: 45000 });
 });

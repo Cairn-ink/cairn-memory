@@ -57,7 +57,7 @@ export async function openclawModules() {
   await visit('hosted-pause.mjs');
   return [...names].sort();
 }
-export async function bundleClient({ check = false, target = destination, modules = Object.keys(CLIENT_MODULES) } = {}) {
+export async function bundleClient({ check = false, target = destination, modules = Object.keys(CLIENT_MODULES), openclaw = false } = {}) {
   const schemas = await schemaModule();
   const schemaPath = join(source, 'hosted-schemas.mjs');
   if (check) {
@@ -91,7 +91,7 @@ export async function bundleClient({ check = false, target = destination, module
       let actual;
       try { actual = await readFile(join(target, output)); }
       catch (error) { if (error.code !== 'ENOENT') throw error; }
-      if (!actual?.equals(expected)) throw new Error(`client_bundle_stale: ${output}; run node integrations/client/bundle.mjs`);
+      if (!actual?.equals(expected)) throw new Error(`client_bundle_stale: ${output}; run node integrations/client/bundle.mjs${openclaw ? ' --openclaw' : ''}`);
     } else await writeFile(join(target, output), expected);
   }
 }
@@ -100,7 +100,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try {
     if (process.argv.slice(2).some(arg => !['--check', '--openclaw'].includes(arg))) throw new Error('unexpected_arguments');
     await bundleClient({ check: process.argv.includes('--check'), ...(process.argv.includes('--openclaw') ? {
-      target: fileURLToPath(new URL('../openclaw/lib/', import.meta.url)), modules: await openclawModules(),
+      target: fileURLToPath(new URL('../openclaw/lib/', import.meta.url)), modules: await openclawModules(), openclaw: true,
     } : {}) });
     console.log('Client bundle matches shared source.');
   } catch (error) { console.error(error.message); process.exitCode = 1; }

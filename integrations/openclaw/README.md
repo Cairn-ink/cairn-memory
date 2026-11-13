@@ -18,13 +18,17 @@ openclaw cairn auto-recall off
 
 Press Enter for yes. Automatic recall runs **extra calls to your model before each eligible direct-chat reply**, using your model usage; Cairn recall quota also applies. A fresh setup uses a 5-second recall-work budget and OpenClaw's documented **8-second** worst-case block: `timeoutMs + setupGraceTimeoutMs + 3000`, including up to 1500 ms preflight and 1500 ms settlement. The question uses the existing effective timeout and setup grace when already configured. Turn Cairn automatic recall off with **`openclaw cairn auto-recall off`**, then restart the Gateway and start a new session. This removes only `cairn_recall_memory` from Active Memory's `toolsAllow`; Active Memory stays enabled and existing tools and agent grants remain. See OpenClaw `docs/concepts/active-memory/recommended-setup.md:42–75`.
 
+While saving is paused, Cairn recall in OpenClaw is off, including when you ask for it; resume to use it.
+
+Cairn recall does not run on a native Windows Gateway yet, so use WSL2.
+
 Set another recall-work budget during setup:
 
 ```sh
 openclaw cairn setup --active-memory-timeout-ms 2500
 ```
 
-The plugin option `activeMemoryTimeoutMs` defaults to `5000` (range 250–120000). Setup uses it only when Active Memory has no `timeoutMs`; it supplies `setupGraceTimeoutMs: 0` only when absent. With no existing grace, a 2500 ms budget shows 5.5 s and a 12000 ms budget shows 15 s. Existing timeout and grace values always win. A concurrent budget change during setup refuses publication so the accepted disclosure cannot silently become stale. Change `plugins.entries.active-memory.config.timeoutMs` for the live budget; the plugin option supplies the next setup default.
+The plugin option `activeMemoryTimeoutMs` defaults to `5000` (range 250–120000). When setup turns Active Memory on, it uses this option only when `timeoutMs` is absent and supplies `setupGraceTimeoutMs: 0` only when absent. With no existing grace, a 2500 ms budget shows 5.5 s and a 12000 ms budget shows 15 s. Already-enabled entries keep OpenClaw’s defaults: 15000 ms without an explicit timeout, or 45000 ms for CLI-backend models (18 s or 48 s worst-case blocking with no grace). Setup discloses both runtime possibilities when no explicit timeout is retained. Existing timeout and grace values always win. A concurrent budget change during setup refuses publication so the accepted disclosure cannot silently become stale. Change `plugins.entries.active-memory.config.timeoutMs` for the live budget; the plugin option supplies the next setup default.
 
 ## Configuration and credentials
 
@@ -77,7 +81,7 @@ A representative configuration follows. `SECRET_FILE` is a placeholder for the a
 }
 ```
 
-Answering no leaves the entire existing Active Memory entry unchanged and does not create one. Answering yes enables it, appends `main` to existing agents and `cairn_recall_memory` to existing `toolsAllow`, and fills only absent `mode`, `queryMode`, `timeoutMs`, `setupGraceTimeoutMs` and `allowedChatTypes` keys. Existing broader chat types remain audience-gated. When `toolsAllow` is absent, setup consults the selected provider's SDK `recallToolNames`, preserving those tools alongside ours. The documented built-in fallback is `memory_search` plus `memory_get`; LanceDB's is `memory_recall`. An unknown provider without a loaded capability refuses setup before writing, rather than guessing. See `docs/concepts/active-memory/memory-tools.md:11–25` and `openclaw/plugin-sdk/memory-host-core`.
+Answering no leaves the entire existing Active Memory entry unchanged and does not create one. Answering yes enables both its outer and inner switches, appends `main` to existing agents and adds `cairn_recall_memory` to `toolsAllow`. An already-enabled entry keeps all other settings, including absent keys and OpenClaw’s default behavior. Only when setup turns Active Memory on does it fill absent `mode`, `queryMode`, `timeoutMs`, `setupGraceTimeoutMs` and `allowedChatTypes` keys with the defaults above. Existing broader chat types remain audience-gated. When `toolsAllow` is absent or OpenClaw filters every entry out (including empty lists, `*`, `group:*` and reserved core tools), setup keeps the literal entries and consults the selected provider's SDK `recallToolNames`, preserving those tools alongside ours. The documented built-in fallback is `memory_search` plus `memory_get`; LanceDB's is `memory_recall`. An unknown provider without a loaded capability refuses setup before writing, rather than guessing. See `docs/concepts/active-memory/memory-tools.md:11–25` and `openclaw/plugin-sdk/memory-host-core`.
 
 Setup merges grants with the existing main-agent policy. When `allow` already exists, it extends that array; otherwise it extends `alsoAllow`. It preserves profiles and denies and refuses a scope containing both fields. OpenClaw policy restrictions still apply: an `allow` list cannot restore a tool excluded by the selected profile, and a deny still wins. Adjust restrictive layered policy explicitly if needed. See `docs/concepts/active-memory/memory-tools.md:11–44,104–109`.
 
