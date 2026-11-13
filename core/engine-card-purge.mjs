@@ -1,11 +1,17 @@
 import { createPrivateCardStorage } from './private-card-storage.mjs';
 import { requireSuppressionTransaction } from './content-suppression-storage.mjs';
 
+// Cache only a successful table probe, independently for each open handle.
+const memoryBindingTables = new WeakSet();
+
 // The caller owns the forget/suppression transaction. Do not use serving
 // eligibility here: stale bodies and older rebuild rows must also be erased.
 export function purgeEngineCardsInside(db, ns, actionId, memoryId) {
   requireSuppressionTransaction(db);
-  if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_memory_bindings'").get()) return;
+  if (!memoryBindingTables.has(db)) {
+    if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_memory_bindings'").get()) return;
+    memoryBindingTables.add(db);
+  }
   const rows = db.prepare(`SELECT c.* FROM private_cards c
     JOIN card_operations o ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)=
       (c.owner_id,c.scope,c.project_id,c.id,c.id)

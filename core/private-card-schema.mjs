@@ -2,12 +2,19 @@
 export const PRIVATE_CARD_SCHEMA_VERSION = 21;
 export const CARD_DEPENDENCY_LIMIT = 128;
 
+// Presence is stable for an open handle; absence may precede an explicit
+// layout installation on that same handle. Never memoize rows or a miss.
+const operationsTables = new WeakSet();
+
 // The caller owns the canonical forget/erasure transaction. Old attempts did
 // not retain their full source set, so an opaque legacy fingerprint cannot be
 // proved independent of a forgotten source and must be removed conservatively.
 export function purgeEngineCardOperationsInside(db, ns, memoryId) {
   if (!db.isTransaction) throw new Error('storage_error');
-  if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_operations'").get()) return;
+  if (!operationsTables.has(db)) {
+    if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_operations'").get()) return;
+    operationsTables.add(db);
+  }
   const selection = memoryId === undefined ? '' : ` AND (target_id=?
     OR json_type(result,'$.sourceRevisions') IS NOT 'array'
     OR EXISTS(SELECT 1 FROM json_each(result,'$.sourceRevisions')
