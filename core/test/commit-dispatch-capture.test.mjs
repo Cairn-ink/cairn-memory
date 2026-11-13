@@ -1,17 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { openMemoryCore } from '../contract.mjs';
 import { createCommitDispatcher } from '../commit-dispatch.mjs';
 import { holdWriteLock } from '../../adapters/mcp/test/local-shared-support.mjs';
-import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
-import { transaction } from '../database.mjs';
-import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 
 const ns = { ownerId: 'synthetic-commit-owner', scope: 'personal', projectId: null };
 const text = 'Synthetic cobalt telescope preference';
-const receipt = { client: 'synthetic', sessionId: 'session', eventId: 'message', role: 'user', excerpt: text };
 const request = client => ({ namespace: ns, client, sessionId: 'session', eventId: 'batch',
   messages: [{ id: 'message', role: 'user', content: text }] });
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
@@ -22,21 +19,30 @@ function fixture(t, { path, raw = false, stage = 'extract', holdMs = 3000, after
   const workspace = createTestWorkspace(t, { prefix: 'commit-capture-' });
   path ??= join(workspace.path, 'store.sqlite');
   const calls = { extract: 0, classify: 0 }, states = []; let lock, changed;
+  let holder;
   const lockOnce = async () => {
+    if (afterLock) {
+      holder = new DatabaseSync(path); holder.exec('BEGIN IMMEDIATE');
+      changed = Promise.resolve(); return;
+    }
     lock = await holdWriteLock(t, path, holdMs);
     changed = lock.exited.then(async ([code, signal]) => {
       assert.equal(code, 0); assert.equal(signal, null);
-      if (afterLock) await afterLock({ path, writer });
     });
     changed.catch(() => {});
   };
   const model = { contextWindow: 8192, countTokens: () => 1,
     async extract() { calls.extract++; if (stage === 'extract') await lockOnce(); return extraction(); },
     async classify(value) { calls.classify++; if (stage === 'classify') await lockOnce(); return placement(value); } };
-  const host = createCommitDispatcher({ random: () => 1, onAwait: state => states.push(state) });
+  const host = createCommitDispatcher({ random: () => 1, onAwait: state => states.push(state), onBackoff() {
+    if (!holder?.isTransaction) return;
+    holder.exec('ROLLBACK');
+    // Commit the competing control synchronously before another attempt runs.
+    afterLock({ path, writer });
+  } });
   const core = host.open(() => openMemoryCore({ path, model, raw, rawSearch: false, ...options }));
   const writer = openMemoryCore({ path, raw, rawSearch: false });
-  workspace.defer(() => { core.close(); writer.close(); });
+  workspace.defer(() => { if (holder?.isTransaction) holder.exec('ROLLBACK'); holder?.close(); core.close(); writer.close(); });
   return { path, core, writer, host, calls, states,
     settled: () => changed, run: budget => host.run(() => core.capture(request(raw ? 'codex' : 'synthetic')),
       budget === undefined ? {} : { deadlineAt: performance.now() + budget }) };
@@ -99,21 +105,5 @@ test('forget committed during placement backoff refuses with the existing index 
   assert.equal((await f.core.get({ namespace: ns, memoryId: forgotten })).ok, false, 'retry must never resurrect forgotten content');
 });
 
-test('source suppression committed during admission backoff refuses the existing prepared source', async t => {
-  const safety = safetyFixture(t); await safety.migrate();
-  let source;
-  const f = fixture(t, { path: safety.path, holdMs: 400, afterLock: () => {
-    const db = safety.connect();
-    try { transaction(db, () => writeContentSuppressionInside(db, { namespace: ns, kind: 'receipt', key: source,
-      reason: 'user_forget', actionId: 'synthetic-backoff-suppression' })); } finally { db.close(); }
-  } });
-  const memory = ok(await f.core.admit({ namespace: ns, memory: { content: 'Synthetic source anchor', kind: 'fact' }, receipts: [receipt] })).memory;
-  const db = safety.connect();
-  try { source = db.prepare('SELECT id FROM receipts WHERE memory_id=?').get(memory.id).id; } finally { db.close(); }
-  const result = await f.run(); await f.settled();
-  assert.deepEqual(result, { ok: false, error: { code: 'source_excluded', retryable: false } },
-    'suppression guard must rerun during admission backoff');
-  assert.equal(f.calls.extract, 1); assert.equal(f.calls.classify, 0);
-  const visible = ok(await f.core.list({ namespace: ns })).memories;
-  assert.ok(visible.every(row => row.id === memory.id), 'suppressed source cannot admit a new Memory');
-});
+// The source-suppression case lives in commit-dispatch-suppression.test.mjs.
+// Its in-process holder commits the fact before releasing the admission lock.
