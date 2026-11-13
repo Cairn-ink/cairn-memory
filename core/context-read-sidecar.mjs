@@ -385,7 +385,11 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
           if(`${row.epoch_hi}:${row.epoch_lo}`!==proof.epoch)fail('evidence_unavailable');
           memory=row.epoch??1;
         }else memory=canonical.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch??1;
-        return {memory,...(p.types.includes('card') ? { card: canonical.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1, ...cardDependencyFence(canonical, ns, p.readSet), ...cardLineageNamespaceInside(canonical,ns) } : {})};
+        // Host publications retain this owner epoch in the generation fence.
+        // A retry's fresh request account cannot replace the selection proof.
+        const retained = hasCommitDispatcher(side)
+          ? { suppression: contentSuppressionFenceInside(canonical, ns.ownerId) } : {};
+        return {memory,...retained,...(p.types.includes('card') ? { card: canonical.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1, ...cardDependencyFence(canonical, ns, p.readSet), ...cardLineageNamespaceInside(canonical,ns) } : {})};
       });
       if(candidateWorklist) {
         let chunk=first, rows=selected;
@@ -543,7 +547,10 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       checkpoint: durable?.checkpoint ?? 0, sequence: (durable?.sequence ?? 0) + 1,
       base_sequence: durable?.published ? durable.sequence : durable?.base_sequence ?? 0,
       reason: durable ? 'reconcile' : rebuildReason ?? 'missing' } : durable;
-    const matching = () => captured === JSON.stringify(fence(p));
+    const selectedOwnerEpochs = hasCommitDispatcher(side) ? JSON.parse(captured).map(value => value.suppression) : null;
+    const matching = () => captured === JSON.stringify(fence(p, selectedOwnerEpochs ? values => {
+      if (values.some((value, index) => value.suppression !== selectedOwnerEpochs[index])) fail('evidence_unavailable');
+    } : undefined));
     // Merge two ordered metadata streams. Only changed tuples enter the bounded
     // pending buffer. Scan positions are checkpointed with those deltas, or at
     // the call's cooperative deadline; unchanged rows are never stamped/copied.
