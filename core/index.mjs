@@ -10,9 +10,14 @@ import './raw-search-maintenance.mjs';
 import './raw-search-retrieval.mjs';
 import {
   fail, identifier, limit, memoryInput, namespace, object, revision,
+  normalizeBoundedText as normalizeBoundedTextWithGuard,
 } from "./validation.mjs";
 
-export { MemoryStoreError, normalizeBoundedText, normalizedTextLength } from "./validation.mjs";
+export { MemoryStoreError, normalizedTextLength } from "./validation.mjs";
+/** Public one-argument form: callers cannot change the raw-length guard. */
+export function normalizeBoundedText(value) {
+  return normalizeBoundedTextWithGuard(value);
+}
 export { openMemoryCore } from "./contract.mjs";
 export { openMemoryReader } from './memory-reader.mjs';
 export { openContextReader } from './context-reader.mjs';

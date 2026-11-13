@@ -139,6 +139,7 @@ export function createMemoryRuntime(input, internal) {
     return epoch(ns);
   }
 
+  // admitMutation retains its existing-row content-safety check too.
   function isSuppressed(ns, value) {
     if(db.prepare(`SELECT 1 FROM suppressed WHERE ${where} AND fingerprint = ?`).get(...boundary(ns),value))return true;
     if(cachedContentLayout(db)?.suppressionRevision){
@@ -888,6 +889,7 @@ export function createMemoryRuntime(input, internal) {
         return { rows, epoch: current };
       }, undefined, { deferred: true });
     },
+    isSuppressed(ns, value) { ready(); return readTransaction(db, () => isSuppressed(ns, value)); },
     isAwaiting(ns, id) { ready(); return activeRow(ns, id)?.review_state === 'awaiting'; },
     resolveReview(ns, action, input) { ready(); return resolveReview(ns, action, input); },
     prepareEpisodeKeep(ns,input) { ready(); return episodes.prepareKeep(ns,input); },
