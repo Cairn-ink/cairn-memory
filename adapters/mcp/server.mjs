@@ -281,7 +281,17 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
     return disposing;
   };
   try {
-  if (!core.list({ namespace: binding, limit: 1 }).ok) {
+  let configurationReady;
+  const listed = core.list({ namespace: binding, limit: 1 });
+  if (listed && typeof listed.then === 'function') {
+    configurationReady = (async () => {
+      const result = await listed;
+      if (!result.ok) throw new Error('invalid_mcp_configuration');
+    })();
+    // Construction stays synchronous for the SDK's discovery factory.
+    // connect owns and observes the asynchronous validation.
+    void configurationReady.catch(() => {});
+  } else if (!listed.ok) {
     throw new Error('invalid_mcp_configuration');
   }
   const server = new McpServer({ name: 'cairn-memory', version: '0.1.0' }, {
@@ -323,6 +333,10 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
         + 'It sends bounded memory content to the configured provider and may incur charges. It does not prove a failed capture batch, '
         + 're-extract sources, settle currentness or grant authority from remembered consent.' : ''),
   });
+  if (configurationReady) {
+    const connect = server.connect.bind(server);
+    server.connect = async (...args) => { await configurationReady; return connect(...args); };
+  }
   server.server.onclose = dispose;
   const close = server.close.bind(server);
   server.close = async () => {
@@ -488,9 +502,9 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
     ({ content, kind, procedural }) => core.admit({ namespace: binding, memory: { content, kind }, receipts: [receipt(content, client, sessionId)],
       ...(procedural === undefined ? {} : { procedural }) }));
   if (episodesAccess) {
-    const episodeAction = (method, input, run = args => core[method](args)) => {
+    const episodeAction = async (method, input, run = args => core[method](args)) => {
       if (readClient !== undefined) {
-        const inspected = core.getEpisode({ namespace: binding, episodeId: input.episodeId });
+        const inspected = await core.getEpisode({ namespace: binding, episodeId: input.episodeId });
         if (!inspected.ok) return inspected;
         if (inspected.value.episode.client !== readClient) return error('episode_not_found');
       }
@@ -550,8 +564,8 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
       z.strictObject({ episodeId: id, sourceLimit: pageLimit.optional(), sourceCursor: cursor.optional(),
         memoryLimit: pageLimit.optional(), memoryCursor: cursor.optional(), policyLimit: pageLimit.optional(),
         policyCursor: cursor.optional(), keepLimit: pageLimit.optional(), keepCursor: cursor.optional() }),
-      input => {
-        const result = core.getEpisode({ namespace: binding, ...input });
+      async input => {
+        const result = await core.getEpisode({ namespace: binding, ...input });
         return result.ok && readClient !== undefined && result.value.episode.client !== readClient ? error('episode_not_found') : result;
       }, true);
     tool('read_session_start_context',
